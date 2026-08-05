@@ -245,6 +245,7 @@ export async function buildCampaignAudiencePreviewPayload(
     query: baseQuery,
     statuses: params.statuses,
     now: params.now,
+    includeAnonymized: true,
   });
 
   const totalPages = firstPage.pagination.totalPages;
@@ -263,6 +264,7 @@ export async function buildCampaignAudiencePreviewPayload(
       },
       statuses: params.statuses,
       now: params.now,
+      includeAnonymized: true,
     });
     collected.push(...nextPage.items);
     currentPage += 1;

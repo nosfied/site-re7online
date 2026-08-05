@@ -1091,6 +1091,7 @@ export default function AppCrmContactsPage() {
                   ? `${formatNumber(contacts.pagination.total)} contato(s) encontrados`
                   : "Carregando contatos"}
               </span>
+              <span className="text-xs theme-soft">Registros anonimizados ficam ocultos por padrao.</span>
               {contacts ? (
                 <span>
                   Pagina {contacts.pagination.page} de {Math.max(contacts.pagination.totalPages, 1)}

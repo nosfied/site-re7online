@@ -390,6 +390,7 @@ export async function buildCrmContactsPayload(
     query: CrmContactsQuery;
     statuses: CrmStatusConfig[];
     now?: Date;
+    includeAnonymized?: boolean;
   }
 ): Promise<CrmContactsPayload> {
   const q = normalizeOptionalText(params.query.q);
@@ -402,6 +403,8 @@ export async function buildCrmContactsPayload(
   const page = normalizePage(params.query.page);
   const limit = normalizeLimit(params.query.limit);
   const statusLabelById = buildStatusLabelMap(params.statuses);
+  const includeAnonymized = params.includeAnonymized === true;
+  const requiresPostFilter = hasConversation !== null || optOut !== null || !includeAnonymized;
 
   const baseWhere = buildLeadWhere({
     clientId: params.clientId,
@@ -413,10 +416,10 @@ export async function buildCrmContactsPayload(
   });
 
   const candidateTake =
-    hasConversation !== null || optOut !== null
+    requiresPostFilter
       ? Math.min(MAX_LIMIT * 20, Math.max(limit * page * 4, limit))
       : limit;
-  const candidateSkip = hasConversation !== null || optOut !== null ? 0 : (page - 1) * limit;
+  const candidateSkip = requiresPostFilter ? 0 : (page - 1) * limit;
 
   const [totalBeforePostFilter, leads] = await Promise.all([
     prisma.lead.count({ where: baseWhere }),
@@ -462,7 +465,7 @@ export async function buildCrmContactsPayload(
       pagination: {
         page,
         limit,
-        total: hasConversation !== null || optOut !== null ? 0 : totalBeforePostFilter,
+        total: requiresPostFilter ? 0 : totalBeforePostFilter,
         totalPages: 0,
         hasNextPage: false,
         hasPreviousPage: page > 1,
@@ -681,17 +684,14 @@ export async function buildCrmContactsPayload(
       } satisfies CrmContactListItem;
     })
     .filter((item) => {
+      if (!includeAnonymized && item.isAnonymized) return false;
       if (hasConversation !== null && item.hasConversation !== hasConversation) return false;
       if (optOut !== null && item.activeOptOut !== optOut) return false;
       return true;
     });
 
-  const total =
-    hasConversation !== null || optOut !== null ? allItems.length : totalBeforePostFilter;
-  const pagedItems =
-    hasConversation !== null || optOut !== null
-      ? allItems.slice((page - 1) * limit, page * limit)
-      : allItems;
+  const total = requiresPostFilter ? allItems.length : totalBeforePostFilter;
+  const pagedItems = requiresPostFilter ? allItems.slice((page - 1) * limit, page * limit) : allItems;
   const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
 
   return {
@@ -899,6 +899,7 @@ export async function buildCrmContactDetailPayload(
   const activeOptOut = getOptOutCanonicalCandidates(lead).some((candidate) => activeOptOuts.has(candidate));
   const templateCandidate = buildTemplateCandidate(lead, activeOptOut);
   const isAnonymized = isAnonymizedContactRecord(lead, contact, identity);
+  if (isAnonymized) return null;
   const displayName =
     normalizeOptionalText(lead.name) ??
     normalizeOptionalText(identity?.displayName) ??

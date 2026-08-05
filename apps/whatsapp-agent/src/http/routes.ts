@@ -7157,6 +7157,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           phone: true,
           waId: true,
           waIdCanonical: true,
+          externalUserHash: true,
           status: true,
           updatedAt: true,
         },
@@ -7164,6 +7165,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const seen = new Set<string>();
       const items = leads
         .map((lead) => {
+          if (
+            [
+              lead.waId,
+              lead.waIdCanonical,
+              lead.externalUserHash,
+              lead.name,
+              lead.phone,
+            ].some(isAnonymizedCampaignMarker)
+          ) {
+            return null;
+          }
           const phone = String(lead.phone ?? lead.waIdCanonical ?? lead.waId ?? "").replace(/\D/g, "");
           if (!phone || seen.has(phone)) return null;
           seen.add(phone);

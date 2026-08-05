@@ -51,6 +51,7 @@ let overrideAdmin: TestUser;
 let leadId = "";
 let instagramLeadId = "";
 let otherTenantLeadId = "";
+let anonymizedLeadId = "";
 let leadConversationId = "";
 
 function getErrorCode(payload: ErrorPayload) {
@@ -434,6 +435,23 @@ test.before(async () => {
       status: "OPEN",
     },
   });
+  const anonymizedLead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: `anon:${prefix}:waid`,
+      waIdCanonical: `anon:${prefix}:waid`,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Usuario Anonimizado",
+      phone: "551188887777",
+      company: "Empresa Anonimizada",
+      email: "anonimizado@example.test",
+      city: "Curitiba",
+      status: "QUALIFIED",
+    },
+    select: { id: true },
+  });
+  anonymizedLeadId = anonymizedLead.id;
   const otherTenantLead = await prisma.lead.create({
     data: {
       tenantId: governmentClientId,
@@ -612,6 +630,7 @@ test("CRM contacts read model lists tenant-scoped leads with safe identifiers", 
       hasValidWhatsappIdentity: boolean;
       canStartWhatsappTemplateCandidate: boolean;
       templateSendBlockedReason: string | null;
+      isAnonymized: boolean;
     }>;
   }>("GET", "/app/crm/contacts?limit=20", businessAgent);
 
@@ -630,10 +649,15 @@ test("CRM contacts read model lists tenant-scoped leads with safe identifiers", 
   assert.match(whatsapp.lastProtocol ?? "", /^CVT-[0-9A-F]{12}$/);
   assert.equal(whatsapp.lastConversationStatus, "WAITING");
   assert.equal(whatsapp.activeOptOut, true);
+  assert.equal(whatsapp.isAnonymized, false);
   assert.equal(whatsapp.canStartWhatsappTemplateCandidate, false);
   assert.equal(whatsapp.templateSendBlockedReason, "opt_out");
   assert.match(whatsapp.phoneDisplay ?? "", /^\d{4}\*{5}\d{4}$/);
-  assert.doesNotMatch(JSON.stringify(response.body), /rawPayload|hash:/);
+  assert.equal(response.body.items.some((item) => item.leadId === anonymizedLeadId), false);
+  assert.doesNotMatch(
+    JSON.stringify(response.body),
+    /rawPayload|hash:|Usuario Anonimizado|Empresa Anonimizada|anonimizado@example\.test|551188887777/
+  );
 
   const instagram = response.body.items.find((item) => item.leadId === instagramLeadId);
   assert.ok(instagram);
@@ -744,6 +768,14 @@ test("CRM contact detail is tenant-scoped and returns safe related conversations
   );
   assert.equal(foreign.status, 404);
   assert.equal(getErrorCode(foreign.body), "contact_not_found");
+
+  const anonymized = await request<ErrorPayload>(
+    "GET",
+    `/app/crm/contacts/${encodeURIComponent(anonymizedLeadId)}`,
+    businessAgent
+  );
+  assert.equal(anonymized.status, 404);
+  assert.equal(getErrorCode(anonymized.body), "contact_not_found");
 });
 
 test("CRM contact mutation routes update safe fields and audit without exposing forbidden payloads", async () => {
