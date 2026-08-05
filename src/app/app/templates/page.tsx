@@ -27,6 +27,7 @@ import {
   updateAppCannedReply,
 } from "@/lib/appClientApi";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
+import { FeedbackToast } from "@/components/ui/FeedbackToast";
 
 type TemplateRequestFormState = {
   name: string;
@@ -1070,18 +1071,8 @@ export default function AppTemplatesPage() {
       title="Modelos de mensagem"
       subtitle="Templates aprovados pela Meta para campanhas e retomadas fora da janela de 24h."
     >
-      <div className="fixed right-4 top-4 z-[70] grid w-[min(28rem,calc(100vw-2rem))] gap-2">
-        {error ? (
-          <p className="rounded-xl border border-red-400/30 bg-red-900/80 p-3 text-sm text-red-100 shadow-2xl backdrop-blur">
-            {error}
-          </p>
-        ) : null}
-        {success ? (
-          <p className="rounded-xl border border-emerald-400/30 bg-emerald-900/80 p-3 text-sm text-emerald-100 shadow-2xl backdrop-blur">
-            {success}
-          </p>
-        ) : null}
-      </div>
+      <FeedbackToast message={success} onClose={() => setSuccess(null)} />
+      <FeedbackToast message={error} variant="error" onClose={() => setError(null)} />
       {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}
 
       <div className="grid min-w-0 gap-4">
@@ -1267,7 +1258,18 @@ export default function AppTemplatesPage() {
                     />
                   </label>
                   {cannedError ? (
-                    <p className="rounded-lg border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">{cannedError}</p>
+                    <button
+                      type="button"
+                      onClick={() => setCannedError(null)}
+                      className="flex w-full cursor-pointer items-start justify-between gap-3 rounded-lg border border-red-400/30 bg-red-900/30 p-3 text-left text-sm text-red-100 hover:bg-red-900/40"
+                      aria-label="Fechar aviso"
+                      title="Fechar aviso"
+                    >
+                      <span className="min-w-0">{cannedError}</span>
+                      <span className="shrink-0 text-lg leading-none opacity-85" aria-hidden="true">
+                        ×
+                      </span>
+                    </button>
                   ) : null}
                   <div className="flex flex-wrap justify-end gap-2">
                     {cannedForm.id ? (
