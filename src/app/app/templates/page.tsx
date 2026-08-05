@@ -5,20 +5,26 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import {
   AppApiError,
+  AppCannedReplyItem,
   AppSession,
   AppTemplateItem,
   AppTemplateRequestItem,
   cancelAppTemplateRequest,
   clearAppSession,
+  createAppCannedReply,
   createAppTemplateRequest,
+  disableAppCannedReply,
   disableAppTemplate,
+  enableAppCannedReply,
   enableAppTemplate,
+  listAppCannedReplies,
   listAppTemplateRequests,
   listAppTemplates,
   loadAppSession,
   saveAppSession,
   syncAppTemplate,
   syncAppTemplates,
+  updateAppCannedReply,
 } from "@/lib/appClientApi";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
@@ -36,6 +42,20 @@ const EMPTY_FORM: TemplateRequestFormState = {
   language: "pt_BR",
   variableDetails: [],
   category: "UTILITY",
+};
+
+type CannedReplyFormState = {
+  id: string | null;
+  title: string;
+  body: string;
+  category: string;
+};
+
+const EMPTY_CANNED_FORM: CannedReplyFormState = {
+  id: null,
+  title: "",
+  body: "",
+  category: "",
 };
 
 const CATEGORY_OPTIONS = ["MARKETING", "UTILITY", "AUTHENTICATION"] as const;
@@ -447,6 +467,12 @@ export default function AppTemplatesPage() {
   const [session, setSession] = useState<AppSession | null>(null);
   const [templates, setTemplates] = useState<AppTemplateItem[]>([]);
   const [requests, setRequests] = useState<AppTemplateRequestItem[]>([]);
+  const [cannedReplies, setCannedReplies] = useState<AppCannedReplyItem[]>([]);
+  const [canManageCannedReplies, setCanManageCannedReplies] = useState(false);
+  const [cannedForm, setCannedForm] = useState<CannedReplyFormState>(EMPTY_CANNED_FORM);
+  const [cannedSubmitting, setCannedSubmitting] = useState(false);
+  const [cannedActionId, setCannedActionId] = useState<string | null>(null);
+  const [cannedError, setCannedError] = useState<string | null>(null);
   const [form, setForm] = useState<TemplateRequestFormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -462,6 +488,7 @@ export default function AppTemplatesPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [languageFilter, setLanguageFilter] = useState("all");
   const [campaignUseFilter, setCampaignUseFilter] = useState("all");
+  const [cannedSearch, setCannedSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -477,6 +504,15 @@ export default function AppTemplatesPage() {
     return warnings;
   }, [form.category, form.content]);
   const catalogItems = useMemo(() => buildCatalogItems(templates, requests), [templates, requests]);
+  const filteredCannedReplies = useMemo(() => {
+    const query = cannedSearch.trim().toLowerCase();
+    return cannedReplies.filter((reply) => {
+      if (!query) return true;
+      return [reply.title, reply.body, reply.category ?? "", reply.active ? "ativa" : "inativa"].some((value) =>
+        value.toLowerCase().includes(query)
+      );
+    });
+  }, [cannedReplies, cannedSearch]);
   const approvedTemplatesCount = useMemo(
     () => catalogItems.filter((item) => item.status.toLowerCase() === "approved").length,
     [catalogItems]
@@ -587,17 +623,21 @@ export default function AppTemplatesPage() {
 
   const loadData = useCallback(
     async (activeSession: AppSession) => {
-      const [templatesResponse, requestsResponse] = await Promise.all([
+      const [templatesResponse, requestsResponse, cannedResponse] = await Promise.all([
         listAppTemplates(activeSession),
         listAppTemplateRequests(activeSession),
+        listAppCannedReplies(activeSession, { includeInactive: true }),
       ]);
       const nextTemplates = sortTemplates(templatesResponse.items);
       const nextRequests = requestsResponse.items;
       setTemplates(nextTemplates);
       setRequests(nextRequests);
+      setCannedReplies(cannedResponse.items);
+      setCanManageCannedReplies(cannedResponse.permissions.canManage);
       return {
         templates: nextTemplates,
         requests: nextRequests,
+        cannedReplies: cannedResponse.items,
       };
     },
     []
@@ -938,6 +978,90 @@ export default function AppTemplatesPage() {
     }
   }, [handleUnauthorized, loadData, session]);
 
+  const handleEditCannedReply = useCallback((reply: AppCannedReplyItem) => {
+    setCannedForm({
+      id: reply.id,
+      title: reply.title,
+      body: reply.body,
+      category: reply.category ?? "",
+    });
+    setCannedError(null);
+  }, []);
+
+  const handleCancelCannedEdit = useCallback(() => {
+    setCannedForm(EMPTY_CANNED_FORM);
+    setCannedError(null);
+  }, []);
+
+  const handleSubmitCannedReply = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!session || !canManageCannedReplies) return;
+      const title = cannedForm.title.trim();
+      const body = cannedForm.body.trim();
+      const category = cannedForm.category.trim();
+      if (!title || !body) {
+        setCannedError("Preencha titulo e texto da mensagem pronta.");
+        return;
+      }
+      setCannedSubmitting(true);
+      setCannedError(null);
+      setError(null);
+      setSuccess(null);
+      try {
+        if (cannedForm.id) {
+          await updateAppCannedReply(session, cannedForm.id, { title, body, category });
+          setSuccess("Mensagem pronta atualizada.");
+        } else {
+          await createAppCannedReply(session, { title, body, category });
+          setSuccess("Mensagem pronta criada.");
+        }
+        setCannedForm(EMPTY_CANNED_FORM);
+        await loadData(session);
+      } catch (err) {
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setCannedError(typed.message || typed.details || "Nao foi possivel salvar a mensagem pronta.");
+      } finally {
+        setCannedSubmitting(false);
+      }
+    },
+    [canManageCannedReplies, cannedForm, handleUnauthorized, loadData, session]
+  );
+
+  const handleToggleCannedReply = useCallback(
+    async (reply: AppCannedReplyItem) => {
+      if (!session || !canManageCannedReplies) return;
+      setCannedActionId(reply.id);
+      setCannedError(null);
+      setError(null);
+      setSuccess(null);
+      try {
+        if (reply.active) {
+          await disableAppCannedReply(session, reply.id);
+          setSuccess("Mensagem pronta inativada.");
+        } else {
+          await enableAppCannedReply(session, reply.id);
+          setSuccess("Mensagem pronta reativada.");
+        }
+        await loadData(session);
+      } catch (err) {
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setCannedError(typed.message || typed.details || "Nao foi possivel alterar a mensagem pronta.");
+      } finally {
+        setCannedActionId(null);
+      }
+    },
+    [canManageCannedReplies, handleUnauthorized, loadData, session]
+  );
+
   if (!session) return null;
 
   return (
@@ -1012,6 +1136,166 @@ export default function AppTemplatesPage() {
               <p className="mt-1 text-2xl font-semibold">{card.value}</p>
             </div>
           ))}
+        </section>
+
+        <section className="rounded-xl border border-white/10 bg-white/5">
+          <div className="border-b border-white/10 p-3 sm:p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold">Mensagens prontas</h2>
+                <p className="mt-1 max-w-3xl text-xs leading-relaxed text-white/60">
+                  Textos internos para respostas rápidas dentro da janela de atendimento. Não são templates Meta e não reabrem conversa fora da janela de 24h.
+                </p>
+              </div>
+              <label className="grid min-w-[min(100%,20rem)] gap-1 text-xs text-white/70">
+                Buscar
+                <input
+                  value={cannedSearch}
+                  onChange={(event) => setCannedSearch(event.target.value)}
+                  placeholder="Título, categoria ou texto"
+                  className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                />
+              </label>
+            </div>
+            <p className="mt-3 rounded-lg border border-amber-300/20 bg-amber-900/15 px-3 py-2 text-xs text-amber-100">
+              A cobrança depende da categoria, país, entrega e política vigente da Meta.
+            </p>
+          </div>
+
+          <div className="grid gap-4 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.7fr)] sm:p-4">
+            <div className="space-y-2">
+              {filteredCannedReplies.length === 0 ? (
+                <p className="rounded-lg border border-white/10 bg-re7-navy/50 p-3 text-sm text-white/65">
+                  Nenhuma mensagem pronta encontrada.
+                </p>
+              ) : (
+                filteredCannedReplies.map((reply) => (
+                  <article
+                    key={reply.id}
+                    className={`rounded-lg border p-3 ${
+                      reply.active
+                        ? "border-white/10 bg-re7-navy/50"
+                        : "border-slate-400/15 bg-slate-900/30 opacity-75"
+                    }`}
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-sm font-semibold text-white">{reply.title}</h3>
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                            reply.active ? "bg-emerald-400/10 text-emerald-100" : "bg-slate-400/10 text-slate-200"
+                          }`}>
+                            {reply.active ? "Ativa" : "Inativa"}
+                          </span>
+                          {reply.category ? (
+                            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/65">
+                              {reply.category}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-white/75">{reply.body}</p>
+                        <p className="mt-2 text-[11px] text-white/45">Atualizada em {formatDateTime(reply.updatedAt)}</p>
+                      </div>
+                      {canManageCannedReplies ? (
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditCannedReply(reply)}
+                            disabled={cannedSubmitting || cannedActionId === reply.id}
+                            className="rounded-lg border border-white/15 px-2.5 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleToggleCannedReply(reply)}
+                            disabled={cannedSubmitting || cannedActionId === reply.id}
+                            className="rounded-lg border border-white/15 px-2.5 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {cannedActionId === reply.id
+                              ? "Salvando..."
+                              : reply.active
+                                ? "Inativar"
+                                : "Reativar"}
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+
+            <aside className="rounded-lg border border-white/10 bg-re7-navy/60 p-4">
+              {canManageCannedReplies ? (
+                <form onSubmit={handleSubmitCannedReply} className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">
+                      {cannedForm.id ? "Editar mensagem pronta" : "Nova mensagem pronta"}
+                    </h3>
+                    <p className="mt-1 text-xs text-white/55">
+                      Operadores poderão usar apenas mensagens ativas no Inbox.
+                    </p>
+                  </div>
+                  <label className="grid gap-1 text-xs text-white/70">
+                    Título
+                    <input
+                      value={cannedForm.title}
+                      onChange={(event) => setCannedForm((current) => ({ ...current, title: event.target.value }))}
+                      maxLength={80}
+                      className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs text-white/70">
+                    Categoria interna
+                    <input
+                      value={cannedForm.category}
+                      onChange={(event) => setCannedForm((current) => ({ ...current, category: event.target.value }))}
+                      maxLength={48}
+                      placeholder="ex: Saudação, Financeiro, Suporte"
+                      className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs text-white/70">
+                    Texto
+                    <textarea
+                      value={cannedForm.body}
+                      onChange={(event) => setCannedForm((current) => ({ ...current, body: event.target.value }))}
+                      rows={6}
+                      maxLength={2000}
+                      className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                    />
+                  </label>
+                  {cannedError ? (
+                    <p className="rounded-lg border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">{cannedError}</p>
+                  ) : null}
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {cannedForm.id ? (
+                      <button
+                        type="button"
+                        onClick={handleCancelCannedEdit}
+                        disabled={cannedSubmitting}
+                        className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Cancelar
+                      </button>
+                    ) : null}
+                    <button
+                      type="submit"
+                      disabled={cannedSubmitting}
+                      className="rounded-lg bg-re7-orange px-3 py-2 text-xs font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {cannedSubmitting ? "Salvando..." : cannedForm.id ? "Salvar alterações" : "Criar mensagem pronta"}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white/65">
+                  Você pode consultar mensagens prontas ativas. A criação e manutenção ficam disponíveis para administradores e supervisores.
+                </div>
+              )}
+            </aside>
+          </div>
         </section>
 
         <section className="rounded-xl border border-white/10 bg-white/5">

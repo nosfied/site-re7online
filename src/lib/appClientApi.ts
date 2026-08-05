@@ -608,6 +608,27 @@ export type AppChatbotFlowItem = {
   updatedAt: string;
 };
 
+export type AppCannedReplyItem = {
+  id: string;
+  title: string;
+  body: string;
+  active: boolean;
+  category: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string | null;
+  updatedBy: string | null;
+};
+
+export type AppCannedRepliesResponse = {
+  ok: true;
+  tenantId: string;
+  items: AppCannedReplyItem[];
+  permissions: {
+    canManage: boolean;
+  };
+};
+
 export type AppKnowledgeBaseStatus = "draft" | "published" | "archived";
 
 export type AppKnowledgeBaseCollection = {
@@ -2007,6 +2028,29 @@ export async function sendAppConversationTemplate(
   });
 }
 
+export async function sendAppConversationCannedReply(
+  session: AppSession,
+  waId: string,
+  cannedReplyId: string
+): Promise<AppConversationOperationalPayload & {
+  message: {
+    messageId: string;
+    status: string;
+    metaMessageId: string | null;
+    createdAt: string;
+    type: string;
+    bodyText: string | null;
+    source: "canned_reply";
+    cannedReplyId: string;
+    cannedReplyTitle: string;
+  };
+}> {
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/send-canned-reply`, {
+    method: "POST",
+    body: JSON.stringify({ cannedReplyId }),
+  });
+}
+
 export async function sendAppConversationMedia(
   session: AppSession,
   waId: string,
@@ -3376,6 +3420,55 @@ export async function listAppTemplates(
   session: AppSession
 ): Promise<{ ok: true; count: number; items: AppTemplateItem[] }> {
   return requestAppJson(session, "/app/templates");
+}
+
+export async function listAppCannedReplies(
+  session: AppSession,
+  options?: { includeInactive?: boolean }
+): Promise<AppCannedRepliesResponse> {
+  const params = new URLSearchParams();
+  if (options?.includeInactive) params.set("includeInactive", "true");
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return requestAppJson(session, `/app/canned-replies${suffix}`);
+}
+
+export async function createAppCannedReply(
+  session: AppSession,
+  payload: { title: string; body: string; category?: string }
+): Promise<{ ok: true; item: AppCannedReplyItem }> {
+  return requestAppJson(session, "/app/canned-replies", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppCannedReply(
+  session: AppSession,
+  replyId: string,
+  payload: { title?: string; body?: string; category?: string }
+): Promise<{ ok: true; item: AppCannedReplyItem }> {
+  return requestAppJson(session, `/app/canned-replies/${encodeURIComponent(replyId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function disableAppCannedReply(
+  session: AppSession,
+  replyId: string
+): Promise<{ ok: true; item: AppCannedReplyItem }> {
+  return requestAppJson(session, `/app/canned-replies/${encodeURIComponent(replyId)}/disable`, {
+    method: "POST",
+  });
+}
+
+export async function enableAppCannedReply(
+  session: AppSession,
+  replyId: string
+): Promise<{ ok: true; item: AppCannedReplyItem }> {
+  return requestAppJson(session, `/app/canned-replies/${encodeURIComponent(replyId)}/enable`, {
+    method: "POST",
+  });
 }
 
 export async function listAppTemplateRequests(

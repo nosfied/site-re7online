@@ -30,6 +30,7 @@ import {
   fetchAppDepartments,
   fetchAppLeadNotes,
   fetchAppTenantSummary,
+  listAppCannedReplies,
   listAppTemplates,
   sendAppConversationMedia,
   fetchAppUsers,
@@ -40,6 +41,7 @@ import {
   releaseAppConversationToGeneral,
   saveAppSession,
   fetchAppConversationMedia,
+  sendAppConversationCannedReply,
   sendAppConversationMessage,
   sendAppConversationTemplate,
   transferAppConversation,
@@ -52,6 +54,7 @@ import {
   subscribeAppPush,
   unsubscribeAppPush,
   type AppApiError,
+  type AppCannedReplyItem,
   type AppTemplateItem,
   type CrmBusinessStatusConfig,
   type AppPushStatus,
@@ -1851,6 +1854,13 @@ export default function AppInboxPage() {
   const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
+  const [cannedModalOpen, setCannedModalOpen] = useState(false);
+  const [cannedRepliesLoading, setCannedRepliesLoading] = useState(false);
+  const [cannedReplies, setCannedReplies] = useState<AppCannedReplyItem[]>([]);
+  const [cannedReplySearch, setCannedReplySearch] = useState("");
+  const [selectedCannedReplyId, setSelectedCannedReplyId] = useState("");
+  const [sendingCannedReply, setSendingCannedReply] = useState(false);
+  const [cannedReplyError, setCannedReplyError] = useState<string | null>(null);
   const [queuedMessageCount, setQueuedMessageCount] = useState(0);
   const [conversationAction, setConversationAction] = useState<string | null>(null);
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("ALL");
@@ -2050,10 +2060,18 @@ export default function AppInboxPage() {
     setTemplateError(null);
   }, []);
 
+  const handleCloseCannedModal = useCallback(() => {
+    setCannedModalOpen(false);
+    setCannedReplySearch("");
+    setSelectedCannedReplyId("");
+    setCannedReplyError(null);
+  }, []);
+
   useEffect(() => {
     handleCloseContactTimeline();
     handleCloseTemplateModal();
-  }, [handleCloseContactTimeline, handleCloseTemplateModal, selectedConversationWaId]);
+    handleCloseCannedModal();
+  }, [handleCloseCannedModal, handleCloseContactTimeline, handleCloseTemplateModal, selectedConversationWaId]);
 
   const dismissInboxFeedback = useCallback(() => {
     setError(null);
@@ -3818,6 +3836,20 @@ export default function AppInboxPage() {
     [selectedTemplateId, usableInboxTemplates]
   );
   const selectedTemplateVariableKeys = useMemo(() => getTemplateVariableKeys(selectedTemplate), [selectedTemplate]);
+  const filteredCannedReplies = useMemo(() => {
+    const query = cannedReplySearch.trim().toLowerCase();
+    return cannedReplies.filter((reply) => {
+      if (!reply.active) return false;
+      if (!query) return true;
+      return [reply.title, reply.body, reply.category ?? ""].some((value) =>
+        value.toLowerCase().includes(query)
+      );
+    });
+  }, [cannedReplies, cannedReplySearch]);
+  const selectedCannedReply = useMemo(
+    () => filteredCannedReplies.find((reply) => reply.id === selectedCannedReplyId) ?? null,
+    [filteredCannedReplies, selectedCannedReplyId]
+  );
   const isHydratingSelectedTimeline =
     Boolean(selectedConversationWaId) &&
     loadingMessages &&
@@ -4517,6 +4549,153 @@ export default function AppInboxPage() {
     }
   };
 
+  const loadCannedReplies = useCallback(async () => {
+    if (!session) return;
+    setCannedRepliesLoading(true);
+    setCannedReplyError(null);
+    try {
+      const response = await listAppCannedReplies(session);
+      setCannedReplies(response.items.filter((reply) => reply.active));
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setCannedReplyError(typed.message || "Falha ao carregar mensagens prontas.");
+    } finally {
+      setCannedRepliesLoading(false);
+    }
+  }, [handleUnauthorized, session]);
+
+  const handleOpenCannedModal = useCallback(() => {
+    if (!selectedConversationWaId || !selectedConversation) return;
+    if (!selectedConversationSupportsTemplateOutbound) {
+      setError("Mensagens prontas estao disponiveis apenas para conversas WhatsApp nesta etapa.");
+      setErrorDetails(null);
+      return;
+    }
+    if (!canReply) {
+      setError("Assuma a conversa para usar mensagem pronta.");
+      setErrorDetails(null);
+      return;
+    }
+    setCannedModalOpen(true);
+    setCannedReplyError(null);
+    if (cannedReplies.length === 0) {
+      void loadCannedReplies();
+    }
+  }, [
+    canReply,
+    cannedReplies.length,
+    loadCannedReplies,
+    selectedConversation,
+    selectedConversationSupportsTemplateOutbound,
+    selectedConversationWaId,
+  ]);
+
+  const handleInsertCannedReply = useCallback(
+    (reply: AppCannedReplyItem) => {
+      setMessageDraft(reply.body);
+      setSuccess("Mensagem pronta inserida. Revise antes de enviar.");
+      handleCloseCannedModal();
+      focusComposer();
+    },
+    [focusComposer, handleCloseCannedModal]
+  );
+
+  const handleSendCannedReply = async () => {
+    if (!session || !selectedConversationWaId || !selectedConversation || !selectedCannedReply) return;
+    if (!templateComposerEnabled) {
+      setCannedReplyError("Assuma uma conversa WhatsApp para enviar mensagem pronta.");
+      return;
+    }
+    setSendingCannedReply(true);
+    setCannedReplyError(null);
+    setError(null);
+    setErrorDetails(null);
+    try {
+      const response = await sendAppConversationCannedReply(
+        session,
+        selectedConversationWaId,
+        selectedCannedReply.id
+      );
+      shouldScrollToBottomRef.current = true;
+      const outboundMessage: InboxMessageItem = {
+        direction: "OUTBOUND",
+        type: response.message.type,
+        status: response.message.status,
+        intent: null,
+        bodyText: response.message.bodyText,
+        media: null,
+        templateName: null,
+        templateLang: null,
+        requestId: null,
+        messageId: response.message.messageId,
+        metaMessageId: response.message.metaMessageId,
+        errorBody: null,
+        createdAt: response.message.createdAt,
+      };
+      setMessages((prev) => {
+        const nextMessages = mergeMessagesByIdentity(prev, [outboundMessage]);
+        timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
+        return nextMessages;
+      });
+      setMessagesConversationKey(getConversationIdentity(selectedConversation));
+      setConversations((prev) =>
+        dedupeConversationsByIdentity(
+          prev.map((item) =>
+            getConversationIdentity(item) === getConversationIdentity(selectedConversation)
+              ? {
+                  ...applyConversationOperationalPayload(item, response),
+                  lastMessage: {
+                    direction: "OUTBOUND",
+                    type: response.message.type,
+                    status: response.message.status,
+                    messageId: response.message.messageId,
+                    bodyText: response.message.bodyText,
+                    templateName: null,
+                    createdAt: response.message.createdAt,
+                  },
+                  lastOutboundAt: response.message.createdAt,
+                  updatedAt: response.message.createdAt,
+                }
+              : item
+          ),
+          isBusinessTenant
+        )
+      );
+      markConversationIdentitiesAsRead(
+        [
+          response.waIdCanonical,
+          response.waId,
+          ...getConversationIdentityCandidates(selectedConversation),
+        ],
+        response.message.createdAt,
+        selectedConversation.waId
+      );
+      setSuccess("Mensagem pronta enviada.");
+      handleCloseCannedModal();
+    } catch (err) {
+      const typed = err as { status?: number; message?: string; details?: string; payload?: unknown };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const payload = typed.payload as { error?: { code?: string; message?: string } } | null | undefined;
+      const code = payload?.error?.code;
+      setCannedReplyError(
+        code === "window_closed"
+          ? "A janela de atendimento está fechada. Use um template aprovado."
+          : typed.message || "Falha ao enviar mensagem pronta."
+      );
+      setErrorDetails(typed.details || null);
+    } finally {
+      setSendingCannedReply(false);
+      focusComposer();
+    }
+  };
+
   const handleToggleAudioRecording = async () => {
     if (!selectedConversationWaId) return;
     if (!selectedConversationSupportsOutbound || !selectedConversationSupportsMediaOutbound) {
@@ -5104,6 +5283,154 @@ export default function AppInboxPage() {
                           className="rounded-lg bg-[#20b15a] px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {sendingTemplate ? "Enviando..." : "Enviar modelo"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+      {cannedModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-3 py-6">
+          <section className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-950 shadow-2xl">
+            <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold">Mensagens prontas</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Textos internos do tenant para agilizar respostas dentro da janela de atendimento.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseCannedModal}
+                disabled={sendingCannedReply}
+                className="rounded-xl border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Fechar
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
+                <section className="space-y-3">
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+                    A cobrança depende da categoria, país, entrega e política vigente da Meta.
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={cannedReplySearch}
+                      onChange={(event) => setCannedReplySearch(event.target.value)}
+                      placeholder="Buscar por título, categoria ou texto"
+                      className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#20b15a]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void loadCannedReplies()}
+                      disabled={cannedRepliesLoading || sendingCannedReply}
+                      className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {cannedRepliesLoading ? "Atualizando..." : "Atualizar"}
+                    </button>
+                  </div>
+                  {cannedRepliesLoading ? (
+                    <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                      Carregando mensagens prontas...
+                    </p>
+                  ) : null}
+                  {!cannedRepliesLoading && filteredCannedReplies.length === 0 ? (
+                    <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                      Nenhuma mensagem pronta ativa encontrada.
+                    </p>
+                  ) : null}
+                  <div className="space-y-2">
+                    {filteredCannedReplies.map((reply) => {
+                      const selected = reply.id === selectedCannedReplyId;
+                      return (
+                        <button
+                          key={reply.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCannedReplyId(reply.id);
+                            setCannedReplyError(null);
+                          }}
+                          disabled={sendingCannedReply}
+                          className={`w-full rounded-lg border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                            selected
+                              ? "border-[#20b15a] bg-emerald-50 shadow-[0_0_0_2px_rgba(32,177,90,0.16)]"
+                              : "border-slate-200 bg-white hover:bg-slate-50"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold text-slate-950">{reply.title}</span>
+                            {reply.category ? (
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                                {reply.category}
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-xs leading-relaxed text-slate-600">
+                            {reply.body}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  {!selectedCannedReply ? (
+                    <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white px-4 text-center text-sm text-slate-500">
+                      Selecione uma mensagem pronta para revisar antes de usar.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-950">{selectedCannedReply.title}</h3>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Mensagem interna. Não substitui template aprovado quando a janela estiver fechada.
+                        </p>
+                      </div>
+                      <div>
+                        <p className="mb-2 text-xs font-semibold uppercase text-slate-500">Prévia</p>
+                        <div className="rounded-2xl border border-emerald-200 bg-[#e6ffdc] px-4 py-3 text-sm leading-relaxed text-slate-900 shadow-sm">
+                          <p className="whitespace-pre-wrap break-words">{selectedCannedReply.body}</p>
+                        </div>
+                      </div>
+                      {cannedReplyError ? (
+                        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                          <p>{cannedReplyError}</p>
+                          {cannedReplyError.includes("janela de atendimento") ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleCloseCannedModal();
+                                handleOpenTemplateModal();
+                              }}
+                              className="mt-2 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                            >
+                              Enviar modelo aprovado
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleInsertCannedReply(selectedCannedReply)}
+                          disabled={sendingCannedReply}
+                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Inserir no campo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleSendCannedReply()}
+                          disabled={sendingCannedReply || !selectedCannedReply}
+                          className="rounded-lg bg-[#20b15a] px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {sendingCannedReply ? "Enviando..." : "Enviar mensagem pronta"}
                         </button>
                       </div>
                     </div>
@@ -6157,6 +6484,21 @@ export default function AppInboxPage() {
                 className="flex h-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:rounded-xl max-[1366px]:px-2.5 max-[1366px]:text-xs max-md:h-11"
               >
                 Modelo
+              </button>
+              <button
+                type="button"
+                disabled={
+                  !selectedConversationWaId ||
+                  !templateComposerEnabled ||
+                  isHydratingSelectedTimeline ||
+                  sendingCannedReply
+                }
+                onClick={handleOpenCannedModal}
+                title="Usar mensagem pronta"
+                aria-label="Usar mensagem pronta"
+                className="flex h-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:rounded-xl max-[1366px]:px-2.5 max-[1366px]:text-xs max-md:h-11"
+              >
+                Prontas
               </button>
               <button
                 type="button"

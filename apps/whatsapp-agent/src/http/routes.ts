@@ -24,6 +24,14 @@ import {
   type AiAssistantIntentCatalogItem,
 } from "../config/tenantConfig.js";
 import {
+  CannedReplyValidationError,
+  createCannedReply,
+  getCannedReply,
+  listCannedReplies,
+  setCannedReplyActive,
+  updateCannedReply,
+} from "../config/cannedReplies.js";
+import {
   applyAiAssistantConfigToTenant,
   applyAiIntentQualificationToTenant,
   resolveAiAssistantConfigSettings,
@@ -4933,6 +4941,365 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     req.method === "POST" &&
     pathname.startsWith("/app/conversation/") &&
     pathname.split("/").length === 5 &&
+    pathname.endsWith("/send-canned-reply")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, httpError("bad_request", "Invalid conversation id"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const cannedReplyId = typeof body.cannedReplyId === "string" ? body.cannedReplyId.trim() : "";
+      if (!cannedReplyId) {
+        json(res, 400, httpError("bad_request", "Mensagem pronta obrigatoria."));
+        return;
+      }
+
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_send_canned_reply",
+      });
+      const conversationRow = resolvedConversation.winner;
+      if (!conversationRow) {
+        json(res, 404, httpError("conversation_not_found", "Conversa nao encontrada."));
+        return;
+      }
+      const resolvedChannel = serializeInboxChannelFields(conversationRow).channel;
+      const currentConversation = await loadInboxConversationState(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: resolvedConversation.resolvedWaId,
+        channel: resolvedChannel,
+      });
+      if (!currentConversation) {
+        json(res, 404, httpError("conversation_not_found", "Conversa nao encontrada."));
+        return;
+      }
+      if (isConversationOutboundBlocked(conversationRow) || resolvedChannel !== "whatsapp") {
+        await persistEvent({
+          clientId: client.id,
+          conversationId: conversationRow.id,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          eventName: "inbox.canned_reply.blocked",
+          requestId,
+          payloadJson: {
+            source: "canned_reply",
+            cannedReplyId,
+            reason: resolvedChannel === "whatsapp" ? "channel_outbound_not_enabled" : "unsupported_channel",
+          },
+        });
+        json(res, 409, httpError("unsupported_channel", "Mensagem pronta esta disponivel apenas para WhatsApp nesta etapa."));
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: currentConversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/send-canned-reply",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: currentConversation.departmentId ?? conversationRow.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, httpError("forbidden", "Conversa fora do seu departamento."));
+        return;
+      }
+      if (
+        currentConversation.mode !== "HUMAN" ||
+        !canManageOwnedConversation(clientAuth.role, currentConversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/send-canned-reply",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: currentConversation.mode !== "HUMAN" ? "not_human_mode" : "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 409, httpError("conversation_not_assigned", "Assuma a conversa antes de responder manualmente."));
+        return;
+      }
+      if (!isWindowOpen(currentConversation, Date.now())) {
+        await persistEvent({
+          clientId: client.id,
+          conversationId: conversationRow.id,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          eventName: "inbox.canned_reply.blocked",
+          requestId,
+          payloadJson: {
+            source: "canned_reply",
+            conversationId: conversationRow.id,
+            cannedReplyId,
+            reason: "window_closed",
+            windowOpenAtSend: false,
+          },
+        });
+        json(res, 409, { error: buildWindowClosedError(currentConversation.window.expiresAt) });
+        return;
+      }
+
+      const identityCandidates = Array.from(
+        new Set([resolvedConversation.resolvedWaId, resolvedConversation.resolvedWaIdCanonical].filter(Boolean))
+      );
+      const [lead, contact] = await Promise.all([
+        prisma.lead.findFirst({
+          where: {
+            tenantId: client.id,
+            OR: [{ waId: { in: identityCandidates } }, { waIdCanonical: { in: identityCandidates } }],
+          },
+          orderBy: { updatedAt: "desc" },
+          select: {
+            waId: true,
+            waIdCanonical: true,
+            externalUserHash: true,
+            name: true,
+            phone: true,
+          },
+        }),
+        prisma.contact.findFirst({
+          where: {
+            clientId: client.id,
+            waId: { in: identityCandidates },
+          },
+          orderBy: { updatedAt: "desc" },
+          select: {
+            waId: true,
+            externalUserHash: true,
+            name: true,
+          },
+        }),
+      ]);
+      if (
+        [
+          lead?.waId,
+          lead?.waIdCanonical,
+          lead?.externalUserHash,
+          lead?.name,
+          lead?.phone,
+          contact?.waId,
+          contact?.externalUserHash,
+          contact?.name,
+        ].some(isAnonymizedCampaignMarker)
+      ) {
+        await persistEvent({
+          clientId: client.id,
+          conversationId: conversationRow.id,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          eventName: "inbox.canned_reply.blocked",
+          requestId,
+          payloadJson: {
+            source: "canned_reply",
+            conversationId: conversationRow.id,
+            cannedReplyId,
+            reason: "anonymized_contact",
+            windowOpenAtSend: currentConversation.window.isOpen === true,
+          },
+        });
+        json(res, 409, httpError("anonymized_contact", "Contato anonimizado nao pode receber envio ativo."));
+        return;
+      }
+
+      const optOutIdentity = normalizeOptOutWaId(resolvedConversation.resolvedWaIdCanonical || resolvedConversation.resolvedWaId);
+      const optOuts = optOutIdentity
+        ? await filterOptedOutCampaignRecipients(prisma, {
+            clientId: client.id,
+            waIds: [optOutIdentity.waIdCanonical],
+          })
+        : { allowed: [], blocked: [] };
+      if (optOuts.blocked.length > 0) {
+        await persistEvent({
+          clientId: client.id,
+          conversationId: conversationRow.id,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          eventName: "inbox.canned_reply.blocked",
+          requestId,
+          payloadJson: {
+            source: "canned_reply",
+            conversationId: conversationRow.id,
+            cannedReplyId,
+            reason: "active_send_blocked",
+            windowOpenAtSend: currentConversation.window.isOpen === true,
+          },
+        });
+        json(res, 409, httpError("active_send_blocked", "Contato bloqueado para envio ativo."));
+        return;
+      }
+
+      const cannedReply = await getCannedReply({
+        prisma,
+        clientId: client.id,
+        replyId: cannedReplyId,
+      });
+      if (!cannedReply || !cannedReply.active) {
+        await persistEvent({
+          clientId: client.id,
+          conversationId: conversationRow.id,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          eventName: "inbox.canned_reply.blocked",
+          requestId,
+          payloadJson: {
+            source: "canned_reply",
+            conversationId: conversationRow.id,
+            cannedReplyId,
+            reason: cannedReply ? "canned_reply_inactive" : "canned_reply_not_found",
+            windowOpenAtSend: true,
+          },
+        });
+        json(res, cannedReply ? 409 : 404, httpError(cannedReply ? "canned_reply_inactive" : "canned_reply_not_found", "Mensagem pronta indisponivel."));
+        return;
+      }
+
+      const result = await adminSendMessage({
+        waId: resolvedConversation.resolvedWaId,
+        text: cannedReply.body,
+        clientKey: client.clientKey,
+        clientId: client.id,
+        requestId,
+        source: "canned_reply",
+        cannedReplyId: cannedReply.id,
+      });
+      if (!result.ok || result.status === "FAILED") {
+        const failedReason = result.ok ? "message_send_failed" : result.error;
+        await persistEvent({
+          clientId: client.id,
+          conversationId: conversationRow.id,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          eventName: "inbox.canned_reply.failed",
+          requestId,
+          payloadJson: {
+            source: "canned_reply",
+            conversationId: conversationRow.id,
+            cannedReplyId: cannedReply.id,
+            reason: failedReason,
+            windowOpenAtSend: true,
+          },
+        });
+        if (!result.ok && result.error === "window_closed" && "errorPayload" in result && result.errorPayload) {
+          json(res, result.statusCode, { error: result.errorPayload });
+          return;
+        }
+        json(res, result.ok ? 502 : result.statusCode, httpError(result.ok ? "message_send_failed" : result.error, "Falha ao enviar mensagem pronta."));
+        return;
+      }
+      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const conversation = await ensureConversationOperationalState(prisma, {
+        clientId: client.id,
+        defaults,
+        conversation: {
+          ...currentConversation,
+          mode: "HUMAN" as const,
+          status:
+            currentConversation.assignedUserId && currentConversation.status === ConversationOperationalStatus.WAITING
+              ? ConversationOperationalStatus.IN_PROGRESS
+              : currentConversation.status,
+          lastOutboundAt: result.createdAt,
+          lastOutboundMessageId: result.messageId,
+        },
+      });
+      await Promise.all([
+        prisma.conversation.updateMany({
+          where: { id: conversationRow.id, clientId: client.id },
+          data: { lastOutboundAt: new Date(result.createdAt) },
+        }),
+        prisma.conversationRuntimeState.updateMany({
+          where: { clientId: client.id, waId: currentConversation.waId },
+          data: {
+            lastOutboundAt: new Date(result.createdAt),
+            lastOutboundMessageId: result.messageId,
+            status:
+              currentConversation.assignedUserId && currentConversation.status === ConversationOperationalStatus.WAITING
+                ? ConversationOperationalStatus.IN_PROGRESS
+                : currentConversation.status,
+          },
+        }),
+      ]);
+      await persistEvent({
+        clientId: client.id,
+        conversationId: conversationRow.id,
+        waId: resolvedConversation.resolvedWaId,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        eventName: "inbox.canned_reply.sent",
+        requestId,
+        payloadJson: {
+          source: "canned_reply",
+          conversationId: conversationRow.id,
+          cannedReplyId: cannedReply.id,
+          windowOpenAtSend: true,
+        },
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? resolvedConversation.resolvedWaId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        ...serializeInboxChannelFields(resolvedConversation.winner ?? undefined),
+        message: {
+          messageId: result.messageId,
+          status: result.status,
+          metaMessageId: result.metaMessageId,
+          createdAt: result.createdAt,
+          type: "TEXT",
+          bodyText: cannedReply.body,
+          source: "canned_reply",
+          cannedReplyId: cannedReply.id,
+          cannedReplyTitle: cannedReply.title,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.send_canned_reply.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
     pathname.endsWith("/send")
   ) {
     const prisma = getPrisma();
@@ -7186,6 +7553,148 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.crm.settings.get.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (pathname === "/app/canned-replies" || pathname.startsWith("/app/canned-replies/")) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const parts = pathname.split("/");
+      const replyId = parts.length >= 4 ? decodeURIComponent(parts[3] ?? "").trim() : "";
+      const action = parts.length >= 5 ? parts[4] ?? "" : "";
+      const canManage = isAdminOrSupervisorRole(clientAuth.role);
+
+      if (req.method === "GET" && pathname === "/app/canned-replies") {
+        const includeInactive = canManage && query.includeInactive === "true";
+        const items = await listCannedReplies({
+          prisma,
+          clientId: client.id,
+          includeInactive,
+        });
+        json(res, 200, {
+          ok: true,
+          tenantId: client.clientKey,
+          items,
+          permissions: {
+            canManage,
+          },
+        });
+        return;
+      }
+
+      if (req.method === "POST" && pathname === "/app/canned-replies") {
+        if (!canManage) {
+          json(res, 403, httpError("forbidden", "Only supervisor or admin can manage canned replies."));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const reply = await createCannedReply({
+          prisma,
+          clientId: client.id,
+          input: body as Record<string, unknown>,
+          userId: clientAuth.userId,
+        });
+        await persistEvent({
+          clientId: client.id,
+          eventName: "canned_reply.created",
+          requestId,
+          payloadJson: {
+            source: "canned_reply",
+            cannedReplyId: reply.id,
+            active: reply.active,
+          },
+        });
+        json(res, 201, { ok: true, item: reply });
+        return;
+      }
+
+      if (req.method === "PATCH" && parts.length === 4 && replyId) {
+        if (!canManage) {
+          json(res, 403, httpError("forbidden", "Only supervisor or admin can manage canned replies."));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const reply = await updateCannedReply({
+          prisma,
+          clientId: client.id,
+          replyId,
+          input: body as Record<string, unknown>,
+          userId: clientAuth.userId,
+        });
+        if (!reply) {
+          json(res, 404, httpError("canned_reply_not_found", "Mensagem pronta nao encontrada."));
+          return;
+        }
+        await persistEvent({
+          clientId: client.id,
+          eventName: "canned_reply.updated",
+          requestId,
+          payloadJson: {
+            source: "canned_reply",
+            cannedReplyId: reply.id,
+            active: reply.active,
+          },
+        });
+        json(res, 200, { ok: true, item: reply });
+        return;
+      }
+
+      if (req.method === "POST" && parts.length === 5 && replyId && (action === "enable" || action === "disable")) {
+        if (!canManage) {
+          json(res, 403, httpError("forbidden", "Only supervisor or admin can manage canned replies."));
+          return;
+        }
+        const reply = await setCannedReplyActive({
+          prisma,
+          clientId: client.id,
+          replyId,
+          active: action === "enable",
+          userId: clientAuth.userId,
+        });
+        if (!reply) {
+          json(res, 404, httpError("canned_reply_not_found", "Mensagem pronta nao encontrada."));
+          return;
+        }
+        await persistEvent({
+          clientId: client.id,
+          eventName: action === "enable" ? "canned_reply.enabled" : "canned_reply.disabled",
+          requestId,
+          payloadJson: {
+            source: "canned_reply",
+            cannedReplyId: reply.id,
+            active: reply.active,
+          },
+        });
+        json(res, 200, { ok: true, item: reply });
+        return;
+      }
+
+      json(res, 404, httpError("not_found", "Not found"));
+    } catch (error) {
+      if (error instanceof CannedReplyValidationError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
+      logger.error({
+        event: "app.canned_replies.error",
         message: (error as Error).message,
         requestId,
       });
@@ -25846,6 +26355,8 @@ async function adminSendMessage(params: {
   clientKey: string;
   clientId: string;
   requestId: string;
+  source?: "admin_inbox" | "canned_reply";
+  cannedReplyId?: string | null;
 }): Promise<
   | {
       ok: true;
@@ -25856,9 +26367,6 @@ async function adminSendMessage(params: {
     }
   | { ok: false; statusCode: number; error: string; errorPayload?: { code: string; message: string; details: string } }
 > {
-  if (!env.outboundEnabled) {
-    return { ok: false, statusCode: 503, error: "outbound_disabled" };
-  }
   const nowMs = Date.now();
   const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
   if (conversation && !isWindowOpen(conversation, nowMs)) {
@@ -25890,6 +26398,7 @@ async function adminSendMessage(params: {
       waId: maskWaId(params.waId),
       clientKey: params.clientKey,
       requestId: params.requestId,
+      outboundEnabled: env.outboundEnabled,
     });
     return { ok: false, statusCode: 503, error: "tenant_outbound_credentials_missing" };
   }
@@ -25917,7 +26426,8 @@ async function adminSendMessage(params: {
     metaMessageId: sendResult.messageId ?? null,
     errorBody: sendResult.errorBody ?? null,
     rawPayload: {
-      source: "admin_inbox",
+      source: params.source ?? "admin_inbox",
+      cannedReplyId: params.cannedReplyId ?? null,
       status: sendResult.status ?? null,
       errorBody: sendResult.errorBody ?? null,
     },

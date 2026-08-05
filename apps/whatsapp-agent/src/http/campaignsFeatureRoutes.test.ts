@@ -17,6 +17,8 @@ import { setTemplateReviewNotificationSenderForTests } from "../templates/templa
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "campaigns-feature-route-test-secret";
 process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || "campaigns-feature-route-test-admin-token";
+process.env.WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || "campaigns-feature-route-test-token";
+process.env.WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "campaigns-feature-route-test-phone";
 
 type TestResponse<T = unknown> = {
   status: number;
@@ -53,6 +55,8 @@ let governmentClientId = "";
 let overrideClientId = "";
 let killSwitchClientId = "";
 let businessAdmin: TestUser;
+let businessSupervisor: TestUser;
+let businessAgent: TestUser;
 let governmentAdmin: TestUser;
 let overrideAdmin: TestUser;
 let killSwitchAdmin: TestUser;
@@ -352,6 +356,16 @@ test.before(async () => {
     clientId: businessClientId,
     role: "ADMIN",
     suffix: "business-admin",
+  });
+  businessSupervisor = await createUser({
+    clientId: businessClientId,
+    role: "SUPERVISOR",
+    suffix: "business-supervisor",
+  });
+  businessAgent = await createUser({
+    clientId: businessClientId,
+    role: "AGENT",
+    suffix: "business-agent",
   });
   governmentAdmin = await createUser({
     clientId: governmentClientId,
@@ -726,7 +740,7 @@ test("inbox template send uses approved active template and updates timeline saf
     variables: { "1": "Maria" },
   });
 
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 200, JSON.stringify(response.body));
   assert.equal(response.body.ok, true);
   assert.equal(response.body.message.type, "TEMPLATE");
   assert.equal(response.body.message.status, "SENT");
@@ -854,7 +868,7 @@ test("inbox template send blocks opt-out, inactive templates, missing variables 
     templateId: template.id,
     variables: { "1": "Maria" },
   });
-  assert.equal(optOut.status, 409);
+  assert.equal(optOut.status, 409, JSON.stringify(optOut.body));
   assert.equal(getErrorCode(optOut.body), "active_send_blocked");
 
   assert.equal(metaCalls, 0);
@@ -977,7 +991,7 @@ test("inbox template send blocks unsafe conversations and records Meta failure w
   const failed = await request<ErrorPayload>("POST", `/app/conversation/${activeWaId}/send-template`, businessAdmin, {
     templateId: approved.id,
   });
-  assert.equal(failed.status, 502);
+  assert.equal(failed.status, 502, JSON.stringify(failed.body));
   assert.equal(getErrorCode(failed.body), "template_send_failed");
 
   const sentCount = await prisma.outboundMessage.count({
@@ -996,6 +1010,417 @@ test("inbox template send blocks unsafe conversations and records Meta failure w
     where: { clientId: businessClientId, waId: activeWaId, eventName: "inbox.template.failed" },
   });
   assert.equal(JSON.stringify(failedEvent.payloadJson).includes(activeWaId), false);
+});
+
+test("canned replies are tenant scoped and managed by admin or supervisor", async () => {
+  const agentCreate = await request<ErrorPayload>("POST", "/app/canned-replies", businessAgent, {
+    title: "Saudacao",
+    body: "Ola, tudo bem?",
+  });
+  assert.equal(agentCreate.status, 403);
+  assert.equal(getErrorCode(agentCreate.body), "forbidden");
+
+  const created = await request<{ ok: true; item: { id: string; title: string; active: boolean } }>(
+    "POST",
+    "/app/canned-replies?clientId=malicious",
+    businessAdmin,
+    {
+      title: "Saudacao",
+      category: "Atendimento",
+      body: "Ola, tudo bem?",
+    }
+  );
+  assert.equal(created.status, 201);
+  assert.equal(created.body.item.title, "Saudacao");
+  assert.equal(created.body.item.active, true);
+
+  const supervisorUpdate = await request<{ ok: true; item: { title: string } }>(
+    "PATCH",
+    `/app/canned-replies/${created.body.item.id}`,
+    businessSupervisor,
+    {
+      title: "Saudacao revisada",
+      category: "Atendimento",
+      body: "Ola, tudo bem? Como posso ajudar?",
+    }
+  );
+  assert.equal(supervisorUpdate.status, 200);
+  assert.equal(supervisorUpdate.body.item.title, "Saudacao revisada");
+
+  const agentList = await request<{ ok: true; items: Array<{ id: string }>; permissions: { canManage: boolean } }>(
+    "GET",
+    "/app/canned-replies?includeInactive=true",
+    businessAgent
+  );
+  assert.equal(agentList.status, 200);
+  assert.equal(agentList.body.permissions.canManage, false);
+  assert.ok(agentList.body.items.some((item) => item.id === created.body.item.id));
+
+  const crossTenant = await request<ErrorPayload>("PATCH", `/app/canned-replies/${created.body.item.id}`, overrideAdmin, {
+    title: "Nao deve alterar",
+    body: "Tenant errado",
+  });
+  assert.equal(crossTenant.status, 404);
+  assert.equal(getErrorCode(crossTenant.body), "canned_reply_not_found");
+
+  const disabled = await request<{ ok: true; item: { active: boolean } }>(
+    "POST",
+    `/app/canned-replies/${created.body.item.id}/disable`,
+    businessAdmin
+  );
+  assert.equal(disabled.status, 200);
+  assert.equal(disabled.body.item.active, false);
+
+  const agentAfterDisable = await request<{ ok: true; items: Array<{ id: string }> }>(
+    "GET",
+    "/app/canned-replies?includeInactive=true",
+    businessAgent
+  );
+  assert.equal(agentAfterDisable.status, 200);
+  assert.equal(agentAfterDisable.body.items.some((item) => item.id === created.body.item.id), false);
+
+  const adminWithInactive = await request<{ ok: true; items: Array<{ id: string }> }>(
+    "GET",
+    "/app/canned-replies?includeInactive=true",
+    businessAdmin
+  );
+  assert.equal(adminWithInactive.status, 200);
+  assert.equal(adminWithInactive.body.items.some((item) => item.id === created.body.item.id), true);
+});
+
+test("inbox canned reply sends only in open owned WhatsApp conversations", async (t) => {
+  const waId = "5541991177811";
+  const created = await request<{ ok: true; item: { id: string; title: string; body: string } }>(
+    "POST",
+    "/app/canned-replies",
+    businessAdmin,
+    {
+      title: "Resposta rapida",
+      category: "Suporte",
+      body: "Obrigado pelo contato. Vou verificar.",
+    }
+  );
+  assert.equal(created.status, 201);
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    create: {
+      clientId: businessClientId,
+      businessToken: "test-canned-token",
+      phoneNumberId: `phone-canned-${safeTemplatePrefix}`,
+      rawPayload: {},
+    },
+    update: {
+      businessToken: "test-canned-token",
+      phoneNumberId: `phone-canned-${safeTemplatePrefix}`,
+      rawPayload: {},
+    },
+  });
+  const conversation = await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      conversationKey: `${prefix}-business:${waId}`,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      mode: "HUMAN",
+      status: "IN_PROGRESS",
+      assignedUserId: businessAdmin.id,
+      assignedTo: businessAdmin.name,
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  const metaPayloads: unknown[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaPayloads.push(JSON.parse(String(init?.body ?? "{}")));
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.canned.${safeTemplatePrefix}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const response = await request<{
+    ok: true;
+    message: {
+      type: string;
+      status: string;
+      bodyText: string;
+      source: string;
+      cannedReplyId: string;
+      metaMessageId: string | null;
+    };
+  }>("POST", `/app/conversation/${waId}/send-canned-reply?clientId=malicious`, businessAdmin, {
+    cannedReplyId: created.body.item.id,
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.message.type, "TEXT");
+  assert.equal(response.body.message.status, "SENT");
+  assert.equal(response.body.message.bodyText, created.body.item.body);
+  assert.equal(response.body.message.source, "canned_reply");
+  assert.equal(response.body.message.cannedReplyId, created.body.item.id);
+  assert.equal(response.body.message.metaMessageId, `wamid.canned.${safeTemplatePrefix}`);
+  assert.equal(metaPayloads.length, 1);
+  assert.equal((metaPayloads[0] as { to?: string; text?: { body?: string } }).to, waId);
+  assert.equal((metaPayloads[0] as { text?: { body?: string } }).text?.body, created.body.item.body);
+
+  const outbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, waId, messageId: { startsWith: "admin.send." } },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.equal(outbound.type, "TEXT");
+  assert.equal(outbound.status, "SENT");
+  assert.equal(outbound.bodyText, created.body.item.body);
+  assert.equal((outbound.rawPayload as Record<string, unknown>).source, "canned_reply");
+  assert.equal((outbound.rawPayload as Record<string, unknown>).cannedReplyId, created.body.item.id);
+  assert.equal(JSON.stringify(outbound.rawPayload).includes(waId), false);
+
+  const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+  });
+  assert.equal(runtime.mode, "HUMAN");
+  assert.equal(runtime.status, "IN_PROGRESS");
+  assert.equal(runtime.assignedUserId, businessAdmin.id);
+  assert.equal(runtime.lastOutboundMessageId, outbound.messageId);
+
+  const event = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, conversationId: conversation.id, eventName: "inbox.canned_reply.sent" },
+  });
+  assert.equal((event.payloadJson as Record<string, unknown>).source, "canned_reply");
+  assert.equal(JSON.stringify(event.payloadJson).includes(waId), false);
+});
+
+test("inbox canned reply blocks closed, inactive, opt-out and anonymized conversations", async () => {
+  const closedWaId = "5541991177812";
+  const inactiveWaId = "5541991177813";
+  const optOutWaId = "5541991177814";
+  const markedWaId = "5541991177815";
+  const deletedWaId = "5541991177816";
+  const created = await request<{ ok: true; item: { id: string } }>("POST", "/app/canned-replies", businessAdmin, {
+    title: "Operacional",
+    body: "Mensagem operacional.",
+  });
+  assert.equal(created.status, 201);
+  const inactive = await request<{ ok: true; item: { id: string } }>("POST", "/app/canned-replies", businessAdmin, {
+    title: "Inativa",
+    body: "Mensagem inativa.",
+  });
+  assert.equal(inactive.status, 201);
+  await request("POST", `/app/canned-replies/${inactive.body.item.id}/disable`, businessAdmin);
+
+  for (const [waId, windowIsOpen, extra] of [
+    [closedWaId, false, {}],
+    [inactiveWaId, true, {}],
+    [optOutWaId, true, {}],
+    [markedWaId, true, {}],
+    [deletedWaId, true, { deletedAt: new Date("2026-01-02T10:00:00.000Z") }],
+  ] as Array<[string, boolean, Record<string, Date>]>) {
+    await prisma.conversation.create({
+      data: {
+        clientId: businessClientId,
+        waId,
+        waIdCanonical: waId,
+        channel: "whatsapp",
+        provider: "meta",
+        windowIsOpen,
+        windowExpiresAt: new Date("2026-01-01T10:00:00.000Z"),
+        lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+        ...extra,
+      },
+    });
+    await prisma.conversationRuntimeState.create({
+      data: {
+        clientId: businessClientId,
+        waId,
+        waIdCanonical: waId,
+        conversationKey: `${prefix}-business:${waId}`,
+        channel: "whatsapp",
+        provider: "meta",
+        windowIsOpen,
+        windowExpiresAt: windowIsOpen ? new Date(Date.now() + 60 * 60 * 1000) : new Date("2026-01-01T10:00:00.000Z"),
+        mode: "HUMAN",
+        status: "IN_PROGRESS",
+        assignedUserId: businessAdmin.id,
+        assignedTo: businessAdmin.name,
+        lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+      },
+    });
+  }
+  await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: markedWaId,
+      waIdCanonical: markedWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Usuario Anonimizado",
+      phone: markedWaId,
+      status: "CANNED_REPLY_TEST",
+    },
+  });
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: optOutWaId,
+    channel: "whatsapp",
+    source: "test",
+    reason: "test",
+    requestedAt: new Date("2026-01-02T10:00:00.000Z"),
+  });
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    create: {
+      clientId: businessClientId,
+      businessToken: "test-canned-token",
+      phoneNumberId: `phone-canned-${safeTemplatePrefix}`,
+      rawPayload: {},
+    },
+    update: {
+      businessToken: "test-canned-token",
+      phoneNumberId: `phone-canned-${safeTemplatePrefix}`,
+      rawPayload: {},
+    },
+  });
+
+  const closed = await request<ErrorPayload>("POST", `/app/conversation/${closedWaId}/send-canned-reply`, businessAdmin, {
+    cannedReplyId: created.body.item.id,
+  });
+  assert.equal(closed.status, 409);
+  assert.equal(getErrorCode(closed.body), "window_closed");
+
+  const disabled = await request<ErrorPayload>("POST", `/app/conversation/${inactiveWaId}/send-canned-reply`, businessAdmin, {
+    cannedReplyId: inactive.body.item.id,
+  });
+  assert.equal(disabled.status, 409);
+  assert.equal(getErrorCode(disabled.body), "canned_reply_inactive");
+
+  const optOut = await request<ErrorPayload>("POST", `/app/conversation/${optOutWaId}/send-canned-reply`, businessAdmin, {
+    cannedReplyId: created.body.item.id,
+  });
+  assert.equal(optOut.status, 409);
+  assert.equal(getErrorCode(optOut.body), "active_send_blocked");
+
+  const marked = await request<ErrorPayload>("POST", `/app/conversation/${markedWaId}/send-canned-reply`, businessAdmin, {
+    cannedReplyId: created.body.item.id,
+  });
+  assert.equal(marked.status, 409);
+  assert.equal(getErrorCode(marked.body), "anonymized_contact");
+
+  const deleted = await request<ErrorPayload>("POST", `/app/conversation/${deletedWaId}/send-canned-reply`, businessAdmin, {
+    cannedReplyId: created.body.item.id,
+  });
+  assert.equal(deleted.status, 404);
+  assert.equal(getErrorCode(deleted.body), "conversation_not_found");
+});
+
+test("inbox canned reply records safe failure without sent event", async (t) => {
+  const waId = "5541991177817";
+  const created = await request<{ ok: true; item: { id: string } }>("POST", "/app/canned-replies", businessAdmin, {
+    title: "Falha Meta",
+    body: "Teste de falha.",
+  });
+  assert.equal(created.status, 201);
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    create: {
+      clientId: businessClientId,
+      businessToken: "test-canned-token",
+      phoneNumberId: `phone-canned-${safeTemplatePrefix}`,
+      rawPayload: {},
+    },
+    update: {
+      businessToken: "test-canned-token",
+      phoneNumberId: `phone-canned-${safeTemplatePrefix}`,
+      rawPayload: {},
+    },
+  });
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      conversationKey: `${prefix}-business:${waId}`,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      mode: "HUMAN",
+      status: "IN_PROGRESS",
+      assignedUserId: businessAdmin.id,
+      assignedTo: businessAdmin.name,
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      return new Response(JSON.stringify({ error: { message: "Meta unavailable" } }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const failed = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send-canned-reply`, businessAdmin, {
+    cannedReplyId: created.body.item.id,
+  });
+  assert.equal(failed.status, 502);
+  assert.equal(getErrorCode(failed.body), "message_send_failed");
+
+  const outbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, waId, messageId: { startsWith: "admin.send." } },
+  });
+  assert.equal(outbound.status, "FAILED");
+  assert.equal((outbound.rawPayload as Record<string, unknown>).source, "canned_reply");
+
+  const sentCount = await prisma.event.count({
+    where: { clientId: businessClientId, waId, eventName: "inbox.canned_reply.sent" },
+  });
+  assert.equal(sentCount, 0);
+  const failedEvent = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, waId, eventName: "inbox.canned_reply.failed" },
+  });
+  assert.equal(JSON.stringify(failedEvent.payloadJson).includes(waId), false);
 });
 
 test("template routes require auth and bulk sync fails safely without Meta config", async () => {
