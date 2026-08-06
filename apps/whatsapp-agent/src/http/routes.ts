@@ -134,6 +134,11 @@ import {
   buildMetaUsageEventPayload,
   recordMetaUsageLedgerEvent,
 } from "../billing/metaUsageLedger.js";
+import {
+  evaluateMetaUsageThresholdAlerts,
+  getTenantMetaUsageSummary,
+  parseMetaUsageMonth,
+} from "../billing/metaUsageSummary.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
 import {
   normalizeUserRole,
@@ -10170,6 +10175,52 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.campaigns.audience_preview.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/usage/meta/summary") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Forbidden"));
+        return;
+      }
+      const month = parseMetaUsageMonth(typeof query.month === "string" ? query.month : null);
+      if (!month) {
+        json(res, 400, httpError("invalid_month", "Month must use YYYY-MM format"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const summary = await getTenantMetaUsageSummary({
+        prisma,
+        clientId: client.id,
+        tenantKey: client.clientKey,
+        month,
+      });
+      const alerts = await evaluateMetaUsageThresholdAlerts({
+        prisma,
+        clientId: client.id,
+        summary,
+      });
+      json(res, 200, { ok: true, summary, alerts });
+    } catch (error) {
+      logger.error({
+        event: "app.usage.meta.summary.error",
         message: (error as Error).message,
         requestId,
       });
