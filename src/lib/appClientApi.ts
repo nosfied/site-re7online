@@ -294,6 +294,30 @@ export type AppCampaignAudiencePreviewResponse = {
   generatedAt: string;
 };
 
+export type AppMetaCostPreview = {
+  source: "campaign" | "manual_campaign_send" | "inbox_template" | "canned_reply" | "inbox_text" | "unknown";
+  messageKind: "template" | "canned_reply" | "free_text" | "unknown";
+  metaCategory: "service" | "utility" | "marketing" | "authentication" | "unknown";
+  country: "BR" | "unknown";
+  recipientCount: number;
+  eligibleCount: number;
+  blockedCount: number;
+  unitCostUsd: number | null;
+  estimatedCostUsd: number | null;
+  estimatedBillable: boolean | "unknown";
+  unknownCostCount: number;
+  billingRule: string;
+  rateCardVersion: string;
+  windowOpenAtSend: boolean | "unknown";
+  policyMode: "alert_only" | "block_at_limit" | null;
+  monthlyLimitUsd: number | null;
+  currentMonthUsageUsd: number | null;
+  projectedMonthUsageUsd: number | null;
+  usagePercentAfterSend: number | null;
+  warningLevel: "none" | "info" | "warning" | "danger";
+  notes: string[];
+};
+
 export type AppCampaignDraftRecipient = {
   leadId: string;
   displayName: string | null;
@@ -3080,6 +3104,26 @@ export async function fetchAppCampaignAudiencePreview(
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return requestAppJson(session, `/app/campaigns/audience-preview${suffix}`);
+}
+
+export async function fetchAppMetaUsagePreview(
+  session: AppSession,
+  payload: {
+    source: "campaign" | "manual_campaign_send" | "inbox_template" | "canned_reply" | "inbox_text";
+    messageKind: "template" | "canned_reply" | "free_text";
+    templateId?: string | null;
+    templateCategory?: string | null;
+    recipientCount?: number | null;
+    eligibleCount?: number | null;
+    blockedCount?: number | null;
+    windowOpenAtSend?: boolean | "unknown" | null;
+    country?: "BR" | "unknown" | null;
+  }
+): Promise<{ ok: true; preview: AppMetaCostPreview }> {
+  return requestAppJson(session, "/app/usage/meta/preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function fetchAppCrmContactDetail(

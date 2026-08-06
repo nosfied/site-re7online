@@ -618,6 +618,99 @@ test("meta usage summary is tenant scoped, role protected and sanitized", async 
   assert.equal(otherTenant.body.alerts.skipped, true);
 });
 
+test("meta usage cost preview validates tenant template and returns sanitized estimate", async () => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `usage_preview_${safeTemplatePrefix}`,
+      category: "MARKETING",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso {{1}}",
+    },
+  });
+  const otherTemplate = await prisma.template.create({
+    data: {
+      clientId: overrideClientId,
+      name: `usage_preview_other_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Outro",
+    },
+  });
+
+  const unauth = await requestUnauth<ErrorPayload>("POST", "/app/usage/meta/preview", {
+    source: "campaign",
+    messageKind: "template",
+    templateId: template.id,
+    recipientCount: 1,
+  });
+  assert.equal(unauth.status, 401);
+  assert.equal(getErrorCode(unauth.body), "missing_token");
+
+  const response = await request<{
+    ok: true;
+    preview: {
+      source: string;
+      messageKind: string;
+      metaCategory: string;
+      recipientCount: number;
+      eligibleCount: number;
+      blockedCount: number;
+      unitCostUsd: number | null;
+      estimatedCostUsd: number | null;
+      warningLevel: string;
+      notes: string[];
+    };
+  }>("POST", "/app/usage/meta/preview?clientId=malicious", businessAgent, {
+    source: "campaign",
+    messageKind: "template",
+    templateId: template.id,
+    recipientCount: 12,
+    eligibleCount: 10,
+    blockedCount: 2,
+    windowOpenAtSend: "unknown",
+  });
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.preview.metaCategory, "marketing");
+  assert.equal(response.body.preview.unitCostUsd, 0.0625);
+  assert.equal(response.body.preview.estimatedCostUsd, 0.625);
+  assert.equal(response.body.preview.blockedCount, 2);
+  assert.equal(response.body.preview.warningLevel, "warning");
+  assert.equal(response.body.preview.notes.some((note) => note.includes("Marketing")), true);
+  const serialized = JSON.stringify(response.body);
+  assert.equal(serialized.includes("5584999999999"), false);
+  assert.equal(serialized.includes("bodyText"), false);
+  assert.equal(serialized.includes("rawPayload"), false);
+  assert.equal(serialized.includes("token"), false);
+
+  const crossTenant = await request<ErrorPayload>("POST", "/app/usage/meta/preview", businessAdmin, {
+    source: "campaign",
+    messageKind: "template",
+    templateId: otherTemplate.id,
+    recipientCount: 1,
+    eligibleCount: 1,
+  });
+  assert.equal(crossTenant.status, 404);
+  assert.equal(getErrorCode(crossTenant.body), "template_not_found");
+
+  const service = await request<{
+    ok: true;
+    preview: { metaCategory: string; unitCostUsd: number | null; estimatedCostUsd: number | null; notes: string[] };
+  }>("POST", "/app/usage/meta/preview", businessAgent, {
+    source: "canned_reply",
+    messageKind: "canned_reply",
+    recipientCount: 1,
+    eligibleCount: 1,
+  });
+  assert.equal(service.status, 200, JSON.stringify(service.body));
+  assert.equal(service.body.preview.metaCategory, "service");
+  assert.equal(JSON.stringify(service.body).includes("grátis"), false);
+  assert.equal(JSON.stringify(service.body).includes("gratuito"), false);
+});
+
 test("template catalog is tenant scoped and exposes campaign usage safely", async () => {
   await prisma.template.createMany({
     data: [

@@ -28,6 +28,7 @@ import {
   fetchAppConversations,
   fetchAppCrmStatuses,
   fetchAppDepartments,
+  fetchAppMetaUsagePreview,
   fetchAppLeadNotes,
   fetchAppTenantSummary,
   listAppCannedReplies,
@@ -55,6 +56,7 @@ import {
   unsubscribeAppPush,
   type AppApiError,
   type AppCannedReplyItem,
+  type AppMetaCostPreview,
   type AppTemplateItem,
   type CrmBusinessStatusConfig,
   type AppPushStatus,
@@ -1805,6 +1807,30 @@ function getTemplateVariableKeys(template: AppTemplateItem | null) {
     .filter((key) => /^\d+$/.test(key));
 }
 
+function formatMetaUsd(value: number | null) {
+  if (value === null) return "Valor a confirmar";
+  return `US$ ${value.toLocaleString("pt-BR", {
+    minimumFractionDigits: value >= 1 ? 2 : 4,
+    maximumFractionDigits: 4,
+  })}`;
+}
+
+function InboxCostPreview({ preview }: { preview: AppMetaCostPreview | null }) {
+  if (!preview) return null;
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <span>Categoria: <strong className="uppercase">{preview.metaCategory}</strong></span>
+        <span>Unitário: <strong>{formatMetaUsd(preview.unitCostUsd)}</strong></span>
+        <span>Estimado: <strong>{formatMetaUsd(preview.estimatedCostUsd)}</strong></span>
+      </div>
+      <p className="mt-2">
+        Estimativa sujeita à entrega, categoria, país e política vigente da Meta.
+      </p>
+    </div>
+  );
+}
+
 function buildInboxErrorToast(error: string | null, errorDetails: string | null, leadError: string | null) {
   if (error && errorDetails && !error.includes(errorDetails)) {
     return `${error}\n${errorDetails}`;
@@ -1852,6 +1878,7 @@ export default function AppInboxPage() {
   const [templateItems, setTemplateItems] = useState<AppTemplateItem[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
+  const [templateCostPreview, setTemplateCostPreview] = useState<AppMetaCostPreview | null>(null);
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [cannedModalOpen, setCannedModalOpen] = useState(false);
@@ -3836,6 +3863,32 @@ export default function AppInboxPage() {
     [selectedTemplateId, usableInboxTemplates]
   );
   const selectedTemplateVariableKeys = useMemo(() => getTemplateVariableKeys(selectedTemplate), [selectedTemplate]);
+  useEffect(() => {
+    if (!session || !templateModalOpen || !selectedTemplate) {
+      setTemplateCostPreview(null);
+      return;
+    }
+    let cancelled = false;
+    fetchAppMetaUsagePreview(session, {
+      source: "inbox_template",
+      messageKind: "template",
+      templateId: selectedTemplate.id,
+      recipientCount: 1,
+      eligibleCount: 1,
+      blockedCount: 0,
+      windowOpenAtSend: "unknown",
+      country: "BR",
+    })
+      .then((response) => {
+        if (!cancelled) setTemplateCostPreview(response.preview);
+      })
+      .catch(() => {
+        if (!cancelled) setTemplateCostPreview(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTemplate, session, templateModalOpen]);
   const filteredCannedReplies = useMemo(() => {
     const query = cannedReplySearch.trim().toLowerCase();
     return cannedReplies.filter((reply) => {
@@ -5228,6 +5281,7 @@ export default function AppInboxPage() {
                           Modelo aprovado para envio ativo pelo WhatsApp.
                         </p>
                       </div>
+                      <InboxCostPreview preview={templateCostPreview} />
                       {selectedTemplateVariableKeys.length > 0 ? (
                         <div className="space-y-2">
                           <p className="text-xs font-semibold uppercase text-slate-500">Variáveis</p>
@@ -5316,7 +5370,7 @@ export default function AppInboxPage() {
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
                 <section className="space-y-3">
                   <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
-                    A cobrança depende da categoria, país, entrega e política vigente da Meta.
+                    Mensagem pronta é enviada como texto livre/service. A cobrança depende da entrega e da política vigente da Meta.
                   </div>
                   <div className="flex items-center gap-2">
                     <input

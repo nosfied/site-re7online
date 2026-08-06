@@ -1149,7 +1149,7 @@ export default function AppTemplatesPage() {
               </label>
             </div>
             <p className="mt-3 rounded-lg border border-amber-300/20 bg-amber-900/15 px-3 py-2 text-xs text-amber-100">
-              A cobrança depende da categoria, país, entrega e política vigente da Meta.
+              Mensagem pronta é enviada como texto livre/service. A cobrança depende da entrega e da política vigente da Meta.
             </p>
           </div>
 

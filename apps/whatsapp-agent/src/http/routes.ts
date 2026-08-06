@@ -134,10 +134,12 @@ import {
   buildMetaUsageEventPayload,
   recordMetaUsageLedgerEvent,
 } from "../billing/metaUsageLedger.js";
+import { buildMetaCostPreview, type MetaCostPreviewInput } from "../billing/metaUsagePreview.js";
 import {
   evaluateMetaUsageThresholdAlerts,
   getTenantMetaUsageSummary,
   parseMetaUsageMonth,
+  resolveTenantMetaUsagePolicy,
 } from "../billing/metaUsageSummary.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
 import {
@@ -10221,6 +10223,91 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.usage.meta.summary.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/usage/meta/preview") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const sourceRaw = String(body.source ?? "unknown");
+      const messageKindRaw = String(body.messageKind ?? "unknown");
+      const source = normalizeMetaPreviewSource(sourceRaw);
+      const messageKind = normalizeMetaPreviewMessageKind(messageKindRaw);
+      if (source === "unknown" || messageKind === "unknown") {
+        json(res, 400, httpError("invalid_preview_input", "Invalid preview input"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+
+      const templateId = typeof body.templateId === "string" ? body.templateId.trim() : "";
+      let templateCategory: string | null = null;
+      let templateName: string | null = null;
+      if (templateId) {
+        const template = await prisma.template.findFirst({
+          where: { id: templateId, clientId: client.id },
+          select: {
+            id: true,
+            name: true,
+            category: true,
+            status: true,
+          },
+        });
+        if (!template) {
+          json(res, 404, httpError("template_not_found", "Template not found"));
+          return;
+        }
+        templateCategory = template.category ?? null;
+        templateName = template.name;
+      } else if (typeof body.templateCategory === "string") {
+        templateCategory = body.templateCategory;
+      }
+
+      const policy = await resolveTenantMetaUsagePolicy({ prisma, clientId: client.id });
+      const month = parseMetaUsageMonth(null);
+      const summary =
+        isAdminOrSupervisorRole(clientAuth.role) && month
+          ? await getTenantMetaUsageSummary({
+              prisma,
+              clientId: client.id,
+              tenantKey: client.clientKey,
+              month,
+              policy,
+            })
+          : null;
+      const preview = buildMetaCostPreview({
+        source,
+        messageKind,
+        templateCategory,
+        templateName,
+        recipientCount: normalizeMetaPreviewCount(body.recipientCount),
+        eligibleCount: normalizeMetaPreviewCount(body.eligibleCount),
+        blockedCount: normalizeMetaPreviewCount(body.blockedCount),
+        windowOpenAtSend: normalizeMetaPreviewWindow(body.windowOpenAtSend),
+        country: body.country === "unknown" ? "unknown" : "BR",
+        policy: isAdminOrSupervisorRole(clientAuth.role) ? policy : null,
+        summary,
+      } satisfies MetaCostPreviewInput);
+      json(res, 200, { ok: true, preview });
+    } catch (error) {
+      logger.error({
+        event: "app.usage.meta.preview.error",
         message: (error as Error).message,
         requestId,
       });
@@ -22775,6 +22862,41 @@ function isAdminRole(role: string | null | undefined) {
 
 function isAdminOrSupervisorRole(role: string | null | undefined) {
   return isAdminRole(role) || isSupervisorRole(role);
+}
+
+function normalizeMetaPreviewSource(value: string) {
+  switch (value) {
+    case "campaign":
+    case "manual_campaign_send":
+    case "inbox_template":
+    case "canned_reply":
+    case "inbox_text":
+      return value;
+    default:
+      return "unknown";
+  }
+}
+
+function normalizeMetaPreviewMessageKind(value: string) {
+  switch (value) {
+    case "template":
+    case "canned_reply":
+    case "free_text":
+      return value;
+    default:
+      return "unknown";
+  }
+}
+
+function normalizeMetaPreviewCount(value: unknown) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+}
+
+function normalizeMetaPreviewWindow(value: unknown) {
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  return "unknown";
 }
 
 function canManageAnyConversation(role: string | null | undefined) {

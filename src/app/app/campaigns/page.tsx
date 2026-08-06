@@ -6,6 +6,7 @@ import AppShell from "@/components/app/AppShell";
 import { buildReplayFormFromCampaign, getFriendlyCampaignError } from "@/lib/campaignDrafts";
 import {
   AppCampaignAudiencePreviewResponse,
+  AppMetaCostPreview,
   AppSession,
   AppTemplateItem,
   CrmBusinessStatusConfig,
@@ -17,6 +18,7 @@ import {
   exportAppCampaignConsumptionCsv,
   fetchAppCampaignAudiencePreview,
   fetchAppCrmStatuses,
+  fetchAppMetaUsagePreview,
   getAppCampaign,
   listAppCampaigns,
   listAppTemplates,
@@ -237,6 +239,83 @@ function buildTemplatePreview(content: string, values: string[]) {
   );
 }
 
+function formatUsd(value: number | null) {
+  if (value === null) return "Valor a confirmar";
+  return `US$ ${value.toLocaleString("pt-BR", {
+    minimumFractionDigits: value >= 1 ? 2 : 4,
+    maximumFractionDigits: 4,
+  })}`;
+}
+
+function countManualRecipientsInput(input: string) {
+  return Array.from(
+    new Set(
+      input
+        .split(/[\n,;]+/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  ).length;
+}
+
+function CostPreviewCard({ preview, loading, emptyText }: {
+  preview: AppMetaCostPreview | null;
+  loading?: boolean;
+  emptyText: string;
+}) {
+  const toneClass =
+    preview?.warningLevel === "danger"
+      ? "border-red-300/30 bg-red-950/20 text-red-100"
+      : preview?.warningLevel === "warning"
+        ? "border-amber-300/30 bg-amber-950/20 text-amber-100"
+        : "border-re7-sky/25 bg-re7-sky/10 text-sky-100";
+  if (loading) {
+    return (
+      <div className="rounded-md border border-white/10 bg-white/5 p-3 text-xs text-white/65">
+        Calculando estimativa Meta...
+      </div>
+    );
+  }
+  if (!preview) {
+    return (
+      <div className="rounded-md border border-white/10 bg-white/5 p-3 text-xs text-white/65">
+        {emptyText}
+      </div>
+    );
+  }
+  return (
+    <div className={`rounded-md border p-3 text-xs ${toneClass}`}>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <div>
+          <p className="uppercase tracking-wide opacity-70">Categoria</p>
+          <p className="mt-1 font-semibold uppercase">{preview.metaCategory}</p>
+        </div>
+        <div>
+          <p className="uppercase tracking-wide opacity-70">Unitário estimado</p>
+          <p className="mt-1 font-semibold">{formatUsd(preview.unitCostUsd)}</p>
+        </div>
+        <div>
+          <p className="uppercase tracking-wide opacity-70">Total estimado</p>
+          <p className="mt-1 font-semibold">{formatUsd(preview.estimatedCostUsd)}</p>
+        </div>
+      </div>
+      <p className="mt-2 opacity-80">
+        {preview.eligibleCount} elegíveis entram na estimativa; {preview.blockedCount} bloqueados ficam fora.
+      </p>
+      {preview.usagePercentAfterSend !== null ? (
+        <p className="mt-1 opacity-80">
+          Uso mensal projetado: {preview.usagePercentAfterSend}% do limite configurado.
+        </p>
+      ) : null}
+      <ul className="mt-2 list-disc space-y-1 pl-4 opacity-85">
+        {preview.notes.slice(0, 3).map((note) => (
+          <li key={note}>{note}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function getStatusClasses(status: string) {
   switch (status) {
     case "draft":
@@ -432,6 +511,9 @@ export default function AppCampaignsPage() {
   const [form, setForm] = useState<CampaignFormState>(EMPTY_FORM);
   const [audienceFilters, setAudienceFilters] = useState<AudiencePreviewFilters>(EMPTY_AUDIENCE_FILTERS);
   const [audiencePreview, setAudiencePreview] = useState<AppCampaignAudiencePreviewResponse | null>(null);
+  const [audienceCostPreview, setAudienceCostPreview] = useState<AppMetaCostPreview | null>(null);
+  const [manualCostPreview, setManualCostPreview] = useState<AppMetaCostPreview | null>(null);
+  const [costPreviewLoading, setCostPreviewLoading] = useState(false);
   const [audiencePage, setAudiencePage] = useState(1);
   const [loadingAudiencePreview, setLoadingAudiencePreview] = useState(false);
   const [audiencePreviewError, setAudiencePreviewError] = useState<string | null>(null);
@@ -598,6 +680,69 @@ export default function AppCampaignsPage() {
     () => audiencePreview?.items.filter((item) => item.eligible) ?? [],
     [audiencePreview]
   );
+
+  const manualRecipientCount = useMemo(
+    () => countManualRecipientsInput(form.recipientsInput),
+    [form.recipientsInput]
+  );
+
+  useEffect(() => {
+    if (!session || !form.templateId || !audiencePreview) {
+      setAudienceCostPreview(null);
+      return;
+    }
+    let cancelled = false;
+    setCostPreviewLoading(true);
+    fetchAppMetaUsagePreview(session, {
+      source: "campaign",
+      messageKind: "template",
+      templateId: form.templateId,
+      recipientCount: audiencePreview.summary.total,
+      eligibleCount: audiencePreview.summary.eligible,
+      blockedCount: audiencePreview.summary.blocked,
+      windowOpenAtSend: "unknown",
+      country: "BR",
+    })
+      .then((response) => {
+        if (!cancelled) setAudienceCostPreview(response.preview);
+      })
+      .catch(() => {
+        if (!cancelled) setAudienceCostPreview(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCostPreviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [audiencePreview, form.templateId, session]);
+
+  useEffect(() => {
+    if (!session || !form.templateId || manualRecipientCount === 0 || !manualSendOpen) {
+      setManualCostPreview(null);
+      return;
+    }
+    let cancelled = false;
+    fetchAppMetaUsagePreview(session, {
+      source: "manual_campaign_send",
+      messageKind: "template",
+      templateId: form.templateId,
+      recipientCount: manualRecipientCount,
+      eligibleCount: manualRecipientCount,
+      blockedCount: 0,
+      windowOpenAtSend: "unknown",
+      country: "BR",
+    })
+      .then((response) => {
+        if (!cancelled) setManualCostPreview(response.preview);
+      })
+      .catch(() => {
+        if (!cancelled) setManualCostPreview(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.templateId, manualRecipientCount, manualSendOpen, session]);
 
   const campaignStats = useMemo(() => {
     return campaigns.reduce(
@@ -1511,6 +1656,17 @@ export default function AppCampaignsPage() {
                     Este template está classificado como MARKETING pela Meta. Revise política, consentimento e custos antes de enviar.
                   </div>
                 ) : null}
+                <div className="lg:col-span-3">
+                  <CostPreviewCard
+                    preview={audienceCostPreview}
+                    loading={costPreviewLoading}
+                    emptyText={
+                      form.templateId
+                        ? "A estimativa será exibida após a prévia de audiência."
+                        : "Selecione um modelo para estimar custo."
+                    }
+                  />
+                </div>
                 {templateVariableLabels.length > 0 ? (
                   <div className="grid gap-3 rounded-md border border-re7-sky/20 bg-re7-sky/10 p-3 lg:col-span-3">
                     <div>
@@ -1808,6 +1964,16 @@ export default function AppCampaignsPage() {
                     Digite um número por linha, com código do país e DDD, somente números. Exemplo: 5584999999999.
                   </span>
                 </label>
+                <div className="lg:col-span-2">
+                  <CostPreviewCard
+                    preview={manualCostPreview}
+                    emptyText={
+                      form.templateId
+                        ? "Informe pelo menos um número para estimar o custo preliminar."
+                        : "Selecione um modelo e informe números para estimar custo."
+                    }
+                  />
+                </div>
                 {formError ? (
                   <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100 lg:col-span-2">
                     {formError}
