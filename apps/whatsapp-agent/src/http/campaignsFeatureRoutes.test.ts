@@ -476,6 +476,109 @@ test("campaign draft routes require authentication", async () => {
   assert.equal(getErrorCode(discard.body), "missing_token");
 });
 
+test("queue assignment settings are tenant scoped and admin protected", async () => {
+  const unauth = await requestUnauth<ErrorPayload>("GET", "/app/settings/queue-assignment");
+  assert.equal(unauth.status, 401);
+
+  const agent = await request<ErrorPayload>("GET", "/app/settings/queue-assignment", businessAgent);
+  assert.equal(agent.status, 403);
+
+  const supervisor = await request<{
+    ok: boolean;
+    policy: { enabled: boolean; mode: string };
+    permissions: { canUpdate: boolean };
+  }>("GET", "/app/settings/queue-assignment", businessSupervisor);
+  assert.equal(supervisor.status, 200);
+  assert.equal(supervisor.body.ok, true);
+  assert.equal(supervisor.body.policy.enabled, false);
+  assert.equal(supervisor.body.policy.mode, "manual");
+  assert.equal(supervisor.body.permissions.canUpdate, false);
+
+  const supervisorUpdate = await request<ErrorPayload>("PUT", "/app/settings/queue-assignment", businessSupervisor, {
+    enabled: true,
+    mode: "round_robin",
+    scope: "department",
+  });
+  assert.equal(supervisorUpdate.status, 403);
+
+  const invalid = await request<ErrorPayload>("PUT", "/app/settings/queue-assignment", businessAdmin, {
+    enabled: true,
+    mode: "round_robin",
+    scope: "department",
+    maxActivePerAgent: 0,
+  });
+  assert.equal(invalid.status, 400);
+  assert.equal(getErrorCode(invalid.body), "invalid_max_active");
+
+  const saved = await request<{
+    ok: boolean;
+    tenantId: string;
+    policy: {
+      enabled: boolean;
+      mode: string;
+      scope: string;
+      maxActivePerAgent: number | null;
+      includeSupervisors: boolean;
+      requireOnline: boolean;
+      notifyAssignedOnly: boolean;
+      lastAssignedUserIdByScope?: unknown;
+    };
+    effectiveMode: string;
+    warnings: string[];
+    permissions: { canUpdate: boolean };
+  }>("PUT", "/app/settings/queue-assignment", businessAdmin, {
+    enabled: true,
+    mode: "round_robin",
+    scope: "department",
+    maxActivePerAgent: 3,
+    includeSupervisors: false,
+    requireOnline: true,
+    notifyAssignedOnly: true,
+    clientId: overrideClientId,
+  });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.ok, true);
+  assert.match(saved.body.tenantId, /business$/);
+  assert.equal(saved.body.policy.enabled, true);
+  assert.equal(saved.body.policy.mode, "round_robin");
+  assert.equal(saved.body.policy.scope, "department");
+  assert.equal(saved.body.policy.maxActivePerAgent, 3);
+  assert.equal(saved.body.policy.includeSupervisors, false);
+  assert.equal(saved.body.policy.requireOnline, true);
+  assert.equal(saved.body.policy.notifyAssignedOnly, true);
+  assert.equal(saved.body.policy.lastAssignedUserIdByScope, undefined);
+  assert.equal(saved.body.effectiveMode, "round_robin");
+  assert.ok(saved.body.warnings.some((warning) => warning.includes("Presenca online")));
+  assert.equal(saved.body.permissions.canUpdate, true);
+
+  const override = await request<{
+    policy: { enabled: boolean; mode: string };
+  }>("GET", "/app/settings/queue-assignment", overrideAdmin);
+  assert.equal(override.status, 200);
+  assert.equal(override.body.policy.enabled, false);
+  assert.equal(override.body.policy.mode, "manual");
+
+  const config = await prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: businessClientId },
+    select: { config: true },
+  });
+  const queuePolicy = (config?.config as { queueAssignmentPolicy?: { mode?: string; maxActivePerAgent?: number } })
+    ?.queueAssignmentPolicy;
+  assert.equal(queuePolicy?.mode, "round_robin");
+  assert.equal(queuePolicy?.maxActivePerAgent, 3);
+
+  const event = await prisma.event.findFirst({
+    where: { clientId: businessClientId, eventName: "queue.assignment.policy_updated" },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.ok(event);
+  const payload = event.payloadJson as Record<string, unknown>;
+  assert.equal(payload.mode, "round_robin");
+  assert.equal(payload.scope, "department");
+  assert.equal(payload.maxActivePerAgent, 3);
+  assert.ok(!JSON.stringify(payload).includes(overrideClientId));
+});
+
 test("meta usage summary is tenant scoped, role protected and sanitized", async () => {
   await prisma.tenantOperationalConfig.upsert({
     where: { clientId: businessClientId },

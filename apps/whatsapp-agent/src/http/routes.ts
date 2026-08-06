@@ -146,6 +146,13 @@ import {
   parseMetaUsageMonth,
   resolveTenantMetaUsagePolicy,
 } from "../billing/metaUsageSummary.js";
+import {
+  getQueueAssignmentPolicyWarnings,
+  parseQueueAssignmentPolicyInput,
+  resolveQueueAssignmentPolicy,
+  saveQueueAssignmentPolicy,
+  toPublicQueueAssignmentPolicy,
+} from "../queue/assignmentPolicy.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
 import {
   normalizeUserRole,
@@ -5883,6 +5890,84 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
       });
       json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (pathname === "/app/settings/queue-assignment" && (req.method === "GET" || req.method === "PUT")) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can view queue assignment settings."));
+        return;
+      }
+      if (req.method === "PUT" && !isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can update queue assignment settings."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+
+      if (req.method === "GET") {
+        const { policy } = await resolveQueueAssignmentPolicy({
+          prisma,
+          clientId: client.id,
+        });
+        const publicPolicy = toPublicQueueAssignmentPolicy(policy);
+        json(res, 200, {
+          ok: true,
+          tenantId: client.clientKey,
+          policy: publicPolicy,
+          effectiveMode: publicPolicy.enabled ? publicPolicy.mode : "manual",
+          warnings: getQueueAssignmentPolicyWarnings(publicPolicy),
+          permissions: {
+            canUpdate: isAdminRole(clientAuth.role),
+          },
+        });
+        return;
+      }
+
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const parsed = parseQueueAssignmentPolicyInput(body);
+      if (!parsed.ok) {
+        json(res, parsed.status, httpError(parsed.code, parsed.message));
+        return;
+      }
+      const saved = await saveQueueAssignmentPolicy({
+        prisma,
+        clientId: client.id,
+        actorUserId: clientAuth.userId,
+        requestId,
+        policy: parsed.policy,
+      });
+      const publicPolicy = toPublicQueueAssignmentPolicy(saved.policy);
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        policy: publicPolicy,
+        effectiveMode: publicPolicy.enabled ? publicPolicy.mode : "manual",
+        warnings: getQueueAssignmentPolicyWarnings(publicPolicy),
+        permissions: {
+          canUpdate: true,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.queue_assignment.settings.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
     }
     return;
   }

@@ -1,7 +1,7 @@
 import { ConversationOperationalStatus, Prisma, type PrismaClient } from "@prisma/client";
 
-type QueueAssignmentMode = "manual" | "round_robin" | "least_active";
-type QueueAssignmentScope = "tenant" | "department";
+export type QueueAssignmentMode = "manual" | "round_robin" | "least_active";
+export type QueueAssignmentScope = "tenant" | "department";
 
 export type QueueAssignmentPolicy = {
   enabled: boolean;
@@ -13,6 +13,12 @@ export type QueueAssignmentPolicy = {
   notifyAssignedOnly: boolean;
   lastAssignedUserIdByScope: Record<string, string>;
 };
+
+export type PublicQueueAssignmentPolicy = Omit<QueueAssignmentPolicy, "lastAssignedUserIdByScope">;
+
+export type QueueAssignmentPolicyValidationResult =
+  | { ok: true; policy: PublicQueueAssignmentPolicy }
+  | { ok: false; status: number; code: string; message: string };
 
 export type BalancedQueueAssignmentResult =
   | { applied: false; reason: "manual" | "already_assigned" | "status_not_waiting" | "no_policy" | "no_eligible_agent" }
@@ -55,10 +61,11 @@ function normalizePolicy(value: unknown): QueueAssignmentPolicy {
       .map(([key, userId]) => [key.trim(), typeof userId === "string" ? userId.trim() : ""])
       .filter(([key, userId]) => key && userId)
   );
-  const maxActive =
+  const rawMaxActive =
     typeof value.maxActivePerAgent === "number" && Number.isFinite(value.maxActivePerAgent)
-      ? Math.max(0, Math.floor(value.maxActivePerAgent))
+      ? Math.floor(value.maxActivePerAgent)
       : null;
+  const maxActive = rawMaxActive && rawMaxActive > 0 ? rawMaxActive : null;
   return {
     enabled: value.enabled === true,
     mode: normalizeMode(value.mode),
@@ -73,6 +80,90 @@ function normalizePolicy(value: unknown): QueueAssignmentPolicy {
 
 export function getDefaultQueueAssignmentPolicy() {
   return { ...DEFAULT_QUEUE_ASSIGNMENT_POLICY, lastAssignedUserIdByScope: {} };
+}
+
+export function toPublicQueueAssignmentPolicy(policy: QueueAssignmentPolicy): PublicQueueAssignmentPolicy {
+  const effectiveMode = policy.enabled ? policy.mode : "manual";
+  return {
+    enabled: policy.enabled,
+    mode: effectiveMode,
+    scope: policy.scope,
+    maxActivePerAgent: policy.maxActivePerAgent,
+    includeSupervisors: policy.includeSupervisors,
+    requireOnline: policy.requireOnline,
+    notifyAssignedOnly: policy.notifyAssignedOnly,
+  };
+}
+
+export function parseQueueAssignmentPolicyInput(input: unknown): QueueAssignmentPolicyValidationResult {
+  if (!isRecord(input)) {
+    return { ok: false, status: 400, code: "bad_request", message: "Queue assignment policy is required." };
+  }
+
+  const enabled = input.enabled === true;
+  const mode = normalizeMode(input.mode);
+  if (enabled && mode === "manual") {
+    return {
+      ok: false,
+      status: 400,
+      code: "invalid_assignment_mode",
+      message: "Select round_robin or least_active when automatic assignment is enabled.",
+    };
+  }
+  if (input.mode !== undefined && normalizeMode(input.mode) !== input.mode) {
+    return {
+      ok: false,
+      status: 400,
+      code: "invalid_assignment_mode",
+      message: "Invalid queue assignment mode.",
+    };
+  }
+  if (input.scope !== undefined && normalizeScope(input.scope) !== input.scope) {
+    return {
+      ok: false,
+      status: 400,
+      code: "invalid_assignment_scope",
+      message: "Invalid queue assignment scope.",
+    };
+  }
+
+  let maxActivePerAgent: number | null = null;
+  if (input.maxActivePerAgent !== undefined && input.maxActivePerAgent !== null && input.maxActivePerAgent !== "") {
+    if (
+      typeof input.maxActivePerAgent !== "number" ||
+      !Number.isInteger(input.maxActivePerAgent) ||
+      input.maxActivePerAgent < 1
+    ) {
+      return {
+        ok: false,
+        status: 400,
+        code: "invalid_max_active",
+        message: "maxActivePerAgent must be a positive integer or null.",
+      };
+    }
+    maxActivePerAgent = input.maxActivePerAgent;
+  }
+
+  return {
+    ok: true,
+    policy: {
+      enabled,
+      mode: enabled ? mode : "manual",
+      scope: normalizeScope(input.scope),
+      maxActivePerAgent,
+      includeSupervisors: input.includeSupervisors !== false,
+      requireOnline: input.requireOnline === true,
+      notifyAssignedOnly: input.notifyAssignedOnly === true,
+    },
+  };
+}
+
+export function getQueueAssignmentPolicyWarnings(policy: PublicQueueAssignmentPolicy): string[] {
+  const warnings: string[] = [];
+  if (policy.enabled && policy.requireOnline) {
+    warnings.push("Presenca online ainda nao e medida automaticamente. Com essa opcao ativa, a atribuicao automatica nao seleciona atendentes.");
+  }
+  return warnings;
 }
 
 function getScopeKey(policy: QueueAssignmentPolicy, departmentId?: string | null) {
@@ -141,6 +232,53 @@ export async function resolveQueueAssignmentPolicy(params: {
     policy: normalizePolicy(config?.queueAssignmentPolicy),
     config,
   };
+}
+
+export async function saveQueueAssignmentPolicy(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  actorUserId: string;
+  requestId: string;
+  policy: PublicQueueAssignmentPolicy;
+}): Promise<{ policy: QueueAssignmentPolicy; config: Record<string, unknown> }> {
+  const current = await resolveQueueAssignmentPolicy({
+    prisma: params.prisma,
+    clientId: params.clientId,
+  });
+  const previousConfig = current.config ?? {};
+  const nextPolicy: QueueAssignmentPolicy = {
+    ...params.policy,
+    lastAssignedUserIdByScope: current.policy.lastAssignedUserIdByScope,
+  };
+  const config = {
+    ...previousConfig,
+    queueAssignmentPolicy: nextPolicy,
+  } satisfies Prisma.InputJsonObject;
+
+  await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    create: { clientId: params.clientId, config },
+    update: { config },
+  });
+
+  await recordQueueAssignmentEvent({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    requestId: `${params.requestId}:policy-updated`,
+    eventName: "queue.assignment.policy_updated",
+    payload: {
+      actorUserId: params.actorUserId,
+      enabled: nextPolicy.enabled,
+      mode: nextPolicy.enabled ? nextPolicy.mode : "manual",
+      scope: nextPolicy.scope,
+      maxActivePerAgent: nextPolicy.maxActivePerAgent,
+      includeSupervisors: nextPolicy.includeSupervisors,
+      requireOnline: nextPolicy.requireOnline,
+      notifyAssignedOnly: nextPolicy.notifyAssignedOnly,
+    },
+  });
+
+  return { policy: nextPolicy, config };
 }
 
 export async function applyBalancedQueueAssignment(params: {

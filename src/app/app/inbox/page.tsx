@@ -1742,6 +1742,27 @@ function isConversationAssignedToCurrentUser(
   return Boolean(item?.assignedUserId && item.assignedUserId === currentUserId);
 }
 
+function getConversationAssignmentLabel(
+  item: Pick<InboxConversationItem, "assignedUserId" | "assignedUserName" | "assignedTo"> | null,
+  currentUserId?: string | null
+) {
+  if (!item?.assignedUserId) return null;
+  if (currentUserId && item.assignedUserId === currentUserId) return "Atribuída a você";
+  if (item.assignedUserName) return `Atribuída a ${item.assignedUserName}`;
+  return "Atribuída";
+}
+
+function getConversationAssignmentBadgeClass(isMine: boolean, isActive: boolean) {
+  if (isMine) {
+    return isActive
+      ? "border-emerald-200/35 bg-emerald-400/25 text-emerald-50"
+      : "border-emerald-300/25 bg-emerald-500/14 text-emerald-100";
+  }
+  return isActive
+    ? "border-white/25 bg-white/16 text-white/85"
+    : "border-white/15 bg-white/8 text-white/62";
+}
+
 function isAppAdmin(session: AppSession | null) {
   return session?.user.role === "ADMIN";
 }
@@ -5828,6 +5849,8 @@ export default function AppInboxPage() {
               const phoneLine = getConversationSecondaryIdentifier(item, label);
               const leadTemperatureLabel = getLeadTemperatureLabel(item);
               const operationalDurationLabel = getConversationOperationalDurationLabel(item);
+              const assignmentLabel = getConversationAssignmentLabel(item, session?.user.id);
+              const assignedToCurrentUser = isConversationAssignedToCurrentUser(item, session?.user.id ?? "");
               return (
                 <div
                   key={conversationIdentity}
@@ -5914,6 +5937,17 @@ export default function AppInboxPage() {
                       {getConversationStatusLabelForItem(item)}
                     </span>
                     <span className="truncate">{item.departmentName || "Sem setor"}</span>
+                    {assignmentLabel ? (
+                      <span
+                        className={`max-w-32 shrink-0 truncate rounded-full border px-2 py-0.5 text-[10px] font-semibold max-[1440px]:max-w-24 ${getConversationAssignmentBadgeClass(
+                          assignedToCurrentUser,
+                          isVisuallyActive
+                        )}`}
+                        title={assignmentLabel}
+                      >
+                        {assignmentLabel}
+                      </span>
+                    ) : null}
                     {operationalDurationLabel ? (
                       <span className="shrink-0 whitespace-nowrap text-[10px] uppercase tracking-[0.08em] text-white/42">
                         {operationalDurationLabel}
@@ -5987,11 +6021,9 @@ export default function AppInboxPage() {
                   {getConversationModeLabel(selectedConversation)}
                   {" • "}
                   {getConversationStatusLabelForItem(selectedConversation)}
-	                  {selectedConversation.assignedUserName
-	                    ? ` • ${selectedConversation.assignedUserName}`
-	                    : selectedConversation.assignedTo
-	                      ? ` • ${selectedConversation.assignedTo}`
-	                      : ""}
+	                  {getConversationAssignmentLabel(selectedConversation, session.user.id)
+	                    ? ` • ${getConversationAssignmentLabel(selectedConversation, session.user.id)}`
+	                    : ""}
 	                  {selectedConversation.protocol ? ` • Protocolo ${selectedConversation.protocol}` : ""}
 	                  {getConversationOperationalDurationLabel(selectedConversation)
 	                    ? ` • ${getConversationOperationalDurationLabel(selectedConversation)}`

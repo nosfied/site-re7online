@@ -1344,6 +1344,30 @@ export type AppCrmCampaignRecipient = {
   updatedAt: string;
 };
 
+export type AppQueueAssignmentMode = "manual" | "round_robin" | "least_active";
+export type AppQueueAssignmentScope = "tenant" | "department";
+
+export type AppQueueAssignmentPolicy = {
+  enabled: boolean;
+  mode: AppQueueAssignmentMode;
+  scope: AppQueueAssignmentScope;
+  maxActivePerAgent: number | null;
+  includeSupervisors: boolean;
+  requireOnline: boolean;
+  notifyAssignedOnly: boolean;
+};
+
+export type AppQueueAssignmentSettingsResponse = {
+  ok: true;
+  tenantId: string;
+  policy: AppQueueAssignmentPolicy;
+  effectiveMode: AppQueueAssignmentMode;
+  warnings: string[];
+  permissions: {
+    canUpdate: boolean;
+  };
+};
+
 export type AppTenantSummary = {
   id: string;
   name: string;
@@ -2421,6 +2445,22 @@ export async function fetchAppDepartments(
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return requestAppJson(session, `/app/departments${suffix}`);
+}
+
+export async function fetchAppQueueAssignmentSettings(
+  session: AppSession
+): Promise<AppQueueAssignmentSettingsResponse> {
+  return requestAppJson(session, "/app/settings/queue-assignment");
+}
+
+export async function updateAppQueueAssignmentSettings(
+  session: AppSession,
+  policy: AppQueueAssignmentPolicy
+): Promise<AppQueueAssignmentSettingsResponse> {
+  return requestAppJson(session, "/app/settings/queue-assignment", {
+    method: "PUT",
+    body: JSON.stringify(policy),
+  });
 }
 
 export async function fetchAppTenantSummary(

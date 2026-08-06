@@ -30,6 +30,7 @@ O Inbox concentra conversas operacionais por tenant. O fluxo atual inclui:
 - resposta livre quando a janela do canal permite;
 - envio de modelo aprovado pelo WhatsApp quando a janela livre esta fechada;
 - uso de mensagens prontas ativas quando permitido;
+- indicacao visual de conversas atribuidas ao operador atual ou a outro responsavel;
 - exibicao de outbound de modelo como mensagem na timeline, com badge `Template` e nome do modelo;
 - preservacao de isolamento entre tenants.
 
@@ -132,6 +133,12 @@ Superficies atuais:
 - read models operacionais de CRM e Inbox.
 
 Relatorios amplos de auditoria LGPD ou pack visual com screenshots devem ser tratados como proximo passo documental, nao como funcionalidade implicita.
+
+## Distribuicao de fila
+
+A distribuicao balanceada usa os modelos operacionais existentes: `Conversation`, `ConversationRuntimeState`, `ConversationAssignment`, usuarios ativos, setor e `TenantOperationalConfig.config.queueAssignmentPolicy`.
+
+O padrao permanece manual quando a policy esta ausente ou desativada. A configuracao fica em `/app/settings/queue`, e deve ser ativada por tenant somente com decisao operacional, smoke controlado e acompanhamento. A UI nao aceita `clientId` arbitrario vindo do frontend.
 
 ## RBAC e multitenancy
 

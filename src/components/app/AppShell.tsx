@@ -204,6 +204,13 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "Setores", government: "Departamentos" },
   },
   {
+    href: "/app/settings/queue",
+    icon: "⇄",
+    group: "administration",
+    minRole: "SUPERVISOR",
+    labels: { business: "Fila", government: "Fila" },
+  },
+  {
     href: "/app/settings/crm",
     icon: "📌",
     group: "administration",

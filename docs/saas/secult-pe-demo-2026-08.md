@@ -23,7 +23,7 @@ Nao prometer funcionalidades fora do estado atual do produto. Pontos em backlog 
 | 0-5 min | Abertura | Objetivo da reuniao, escopo da demonstracao, limites de envio real e premissas de seguranca. |
 | 5-10 min | Visao geral | Converta como SaaS multitenant: canais, Inbox, CRM, templates, mensagens prontas, campanhas e relatorios. |
 | 10-22 min | Inbox | Listagem de conversas, filtros, timeline, janela de atendimento, assumir atendimento, resposta livre e modelo aprovado. |
-| 22-30 min | Fila e claim | Conversas em fila, assumir, liberar, transferir para usuario ou setor, preservando responsavel e departamento. |
+| 22-30 min | Fila e claim | Conversas em fila, assumir, liberar, transferir para usuario ou setor, preservando responsavel e departamento; mostrar a configuracao de distribuicao sem ativar policy real. |
 | 30-38 min | Modelos e mensagens prontas | Diferenca entre modelo aprovado Meta e mensagem pronta; quando usar cada um; preview e regra de janela. |
 | 38-45 min | CRM | Cadastro do contato, nome de atendimento, empresa/cidade/email quando aplicavel, status e bloqueio de envio ativo. |
 | 45-50 min | Relatorios | Campanhas, uso Meta estimativo, usuarios ativos/inativos e limites atuais de relatorios. |
@@ -56,9 +56,9 @@ Backlog: acao rapida de retificacao com texto orientado e auditoria.
 
 ### 2. Fila equilibrada para nao sobrecarregar um atendente
 
-Resposta: hoje ha fila, assumir atendimento, liberar e transferir por usuario/setor. A base tecnica de distribuicao balanceada foi preparada para funcionar de forma opcional por tenant/departamento, com modos manual, round-robin e menor carga ativa. O padrao continua manual e nenhuma ativacao deve ocorrer sem configuracao explicita e smoke controlado.
+Resposta: hoje ha fila, assumir atendimento, liberar e transferir por usuario/setor. A base tecnica de distribuicao balanceada foi preparada para funcionar de forma opcional por tenant/departamento, com modos manual, round-robin e menor carga ativa. A configuracao fica em `/app/settings/queue`, e o padrao continua manual. Nenhuma ativacao deve ocorrer sem configuracao explicita e smoke controlado.
 
-Backlog: tela/admin de configuracao, runbook de ativacao e acompanhamento de carga por agente.
+Backlog: runbook de ativacao e acompanhamento de carga por agente.
 
 ### 3. Registro de hora de login/logout
 
@@ -94,7 +94,7 @@ Resposta: o modelo atual suporta multiplos usuarios com perfil ADMIN ou SUPERVIS
 - Claim: existe acao manual de assumir atendimento.
 - Release: existe liberacao para automacao ou fila geral, conforme regra de tela.
 - Transferencia: existe transferencia para usuario e setor.
-- Assignment: `assignedUserId`, `departmentId` e `queueId` sao usados no runtime; a foundation 87O.2 reaproveita esses campos e `ConversationAssignment`.
+- Assignment: `assignedUserId`, `departmentId` e `queueId` sao usados no runtime; a foundation 87O.2 reaproveita esses campos e `ConversationAssignment`, e a 87O.3 adiciona configuracao por tenant em `/app/settings/queue`.
 - Multi-gestor: UI de usuarios aceita `ADMIN` e `SUPERVISOR`; limite aplicado e de usuarios ativos por tenant.
 - CRM: edicao segura de nome, empresa, email e cidade ja existe em `/app/crm`.
 - Sessao: login/logout existem e erros de sessao expirada/substituida/revogada sao tratados.
@@ -115,6 +115,7 @@ Resposta: o modelo atual suporta multiplos usuarios com perfil ADMIN ou SUPERVIS
 - Nao enviar mensagem real.
 - Nao criar campanha real.
 - Nao submeter modelo a Meta.
+- Nao ativar distribuicao automatica de fila durante a demonstracao sem autorizacao.
 - Nao alterar credenciais, tenants ou canais.
 - Nao expor dados pessoais em tela compartilhada.
 - Nao executar anonimizacao ou hard delete.
