@@ -56,9 +56,9 @@ Backlog: acao rapida de retificacao com texto orientado e auditoria.
 
 ### 2. Fila equilibrada para nao sobrecarregar um atendente
 
-Resposta: hoje ha fila, assumir atendimento, liberar e transferir por usuario/setor. A distribuicao automatica balanceada deve ser tratada como evolucao de assignment, preferencialmente round-robin ou menor carga ativa, nao como ordenacao alfabetica.
+Resposta: hoje ha fila, assumir atendimento, liberar e transferir por usuario/setor. A base tecnica de distribuicao balanceada foi preparada para funcionar de forma opcional por tenant/departamento, com modos manual, round-robin e menor carga ativa. O padrao continua manual e nenhuma ativacao deve ocorrer sem configuracao explicita e smoke controlado.
 
-Backlog: balanced assignment por tenant/departamento.
+Backlog: tela/admin de configuracao, runbook de ativacao e acompanhamento de carga por agente.
 
 ### 3. Registro de hora de login/logout
 
@@ -94,7 +94,7 @@ Resposta: o modelo atual suporta multiplos usuarios com perfil ADMIN ou SUPERVIS
 - Claim: existe acao manual de assumir atendimento.
 - Release: existe liberacao para automacao ou fila geral, conforme regra de tela.
 - Transferencia: existe transferencia para usuario e setor.
-- Assignment: `assignedUserId`, `departmentId` e `queueId` sao usados no runtime.
+- Assignment: `assignedUserId`, `departmentId` e `queueId` sao usados no runtime; a foundation 87O.2 reaproveita esses campos e `ConversationAssignment`.
 - Multi-gestor: UI de usuarios aceita `ADMIN` e `SUPERVISOR`; limite aplicado e de usuarios ativos por tenant.
 - CRM: edicao segura de nome, empresa, email e cidade ja existe em `/app/crm`.
 - Sessao: login/logout existem e erros de sessao expirada/substituida/revogada sao tratados.

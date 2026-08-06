@@ -10,7 +10,7 @@ Itens abaixo respondem a demandas levantadas pela SECULT-PE, mas nao devem ser p
 
 | Prioridade | Item | Descricao | Risco se implementar sem desenho |
 | --- | --- | --- | --- |
-| P1 | Balanced assignment | Distribuicao automatica por round-robin ou menor carga ativa, respeitando tenant, setor, usuarios ativos e capacidade. | Sobrecarga indevida, disputa de claim, quebra de fila/departamento. |
+| P1 | Balanced assignment | Foundation implementada para policy opcional por tenant/departamento com modos manual, round-robin e menor carga ativa. Falta UI/admin de configuracao e ativacao controlada por tenant. | Sobrecarga indevida, disputa de claim, quebra de fila/departamento. |
 | P1 | Agent presence/session audit | Registro operacional de login, logout, expiracao, sessao substituida e atividade recente. | Confusao com controle oficial de ponto e risco trabalhista/compliance. |
 | P2 | Contact social/display name polish | Refinar UX para nome de atendimento/nome social, mantendo historico minimizado e sem expor nome anterior indevido. | Reintroducao de dado sensivel ou conflito com anonimização. |
 | P2 | Report filters active/inactive agents | Padronizar relatorios para ocultar inativos por default e permitir historico quando autorizado. | Relatorio inconsistente ou exclusao indevida de evidencias historicas. |
@@ -21,6 +21,9 @@ Itens abaixo respondem a demandas levantadas pela SECULT-PE, mas nao devem ser p
 
 ### Balanced assignment
 
+- Status 87O.2: foundation backend reaproveitando `ConversationRuntimeState`, `ConversationAssignment`, usuarios ativos, departamento e `TenantOperationalConfig.config.queueAssignmentPolicy`.
+- Default permanece manual quando a policy esta ausente, desabilitada ou em modo `manual`.
+- Nenhum tenant existente deve ser ativado sem configuracao explicita e smoke controlado.
 - Usar apenas tenant da sessao.
 - Considerar departamento/fila.
 - Considerar somente usuarios ativos.
@@ -28,6 +31,7 @@ Itens abaixo respondem a demandas levantadas pela SECULT-PE, mas nao devem ser p
 - Registrar evento auditavel de atribuicao automatica.
 - Evitar atribuicao quando houver ambiguidade.
 - Ter testes de concorrencia ou idempotencia minima.
+- Pendencias: tela/admin de configuracao, runbook de ativacao, telemetria de carga por agente e decisao sobre notificacao de atribuido.
 
 ### Agent presence/session audit
 

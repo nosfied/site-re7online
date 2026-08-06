@@ -11,6 +11,7 @@ import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/default
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import { resolveMetaContactDisplayName, upsertMetaContactIdentity } from "./metaContactProfile.js";
 import { guardAgainstAnonymizedIdentityRehydration } from "../privacy/anonymizedIdentityGuard.js";
+import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
 
 export const MESSENGER_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
@@ -361,7 +362,13 @@ export async function persistMessengerInboundEvent(params: {
         queueId: operationalRoute.queueId,
         closedAt: null,
       },
-      select: { id: true },
+      select: {
+        id: true,
+        assignedUserId: true,
+        departmentId: true,
+        queueId: true,
+        status: true,
+      },
     }),
     prisma.inboundMessage.create({
       data: {
@@ -428,6 +435,21 @@ export async function persistMessengerInboundEvent(params: {
   });
   latency?.duration("persistenceDb", persistenceDbStartedAt);
   latency?.duration("persistence", persistenceStartedAt);
+  const assignment = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: conversation.id,
+    runtimeStateId: runtimeState.id,
+    waId: syntheticWaId,
+    waIdCanonical: syntheticWaId,
+    departmentId: runtimeState.departmentId ?? operationalRoute.departmentId,
+    queueId: runtimeState.queueId ?? operationalRoute.queueId,
+    status: runtimeState.status,
+    assignedUserId: runtimeState.assignedUserId,
+    requestId,
+    source: "messenger.inbound",
+  });
+  const assignedUserId = assignment.applied ? assignment.selectedUserId : runtimeState.assignedUserId ?? null;
 
   logPersistence({
     event: "messenger.inbound_persistence.persisted",
@@ -448,7 +470,7 @@ export async function persistMessengerInboundEvent(params: {
     waIdCanonical: syntheticWaId,
     mode: "HUMAN",
     handoffStatus: "none",
-    assignedUserId: null,
+    assignedUserId,
     departmentId: operationalRoute.departmentId,
     message: {
       direction: "INBOUND",

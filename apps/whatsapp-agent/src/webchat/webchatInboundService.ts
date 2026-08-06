@@ -23,6 +23,7 @@ import {
 import { logger } from "../logger/logger.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import { guardAgainstAnonymizedIdentityRehydration } from "../privacy/anonymizedIdentityGuard.js";
+import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
 
 const MESSAGE_RATE_LIMIT_WINDOW_MS = 60_000;
 const MESSAGE_RATE_LIMIT_MAX = 20;
@@ -1074,7 +1075,15 @@ export async function createWebchatInboundMessage(params: {
         queueId: defaults.queue.id,
         closedAt: null,
       },
-      select: { id: true, mode: true, handoffStatus: true, assignedUserId: true, departmentId: true, status: true },
+      select: {
+        id: true,
+        mode: true,
+        handoffStatus: true,
+        assignedUserId: true,
+        departmentId: true,
+        queueId: true,
+        status: true,
+      },
     });
     const inboundRecord = await tx.inboundMessage.create({
       data: {
@@ -1146,6 +1155,21 @@ export async function createWebchatInboundMessage(params: {
     });
     return [conversationRecord, runtimeRecord, inboundRecord, contactRecord] as const;
   });
+  const assignment = await applyBalancedQueueAssignment({
+    prisma: params.prisma,
+    clientId: session.clientId,
+    conversationId: conversation.id,
+    runtimeStateId: runtimeState.id,
+    waId: syntheticWaId,
+    waIdCanonical: syntheticWaId,
+    departmentId: runtimeState.departmentId ?? defaults.department.id,
+    queueId: runtimeState.queueId ?? defaults.queue.id,
+    status: runtimeState.status,
+    assignedUserId: runtimeState.assignedUserId,
+    requestId: params.requestId,
+    source: "webchat.inbound",
+  });
+  const assignedUserId = assignment.applied ? assignment.selectedUserId : runtimeState.assignedUserId ?? null;
 
   const publish = params.publishRealtimeEvent ?? publishRealtimeEvent;
   publish({
@@ -1160,7 +1184,7 @@ export async function createWebchatInboundMessage(params: {
         : runtimeState.handoffStatus === HandoffStatus.ACTIVE
           ? "active"
           : "none",
-    assignedUserId: runtimeState.assignedUserId ?? null,
+    assignedUserId,
     departmentId: runtimeState.departmentId ?? defaults.department.id,
     message: {
       direction: "INBOUND",

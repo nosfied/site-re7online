@@ -13,6 +13,7 @@ import {
   isWhatsAppMultichannelShadowWriteEnabled,
   safeApplyWhatsAppMultichannelShadow,
 } from "../channels/whatsappMultichannelShadowWrite.js";
+import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
 
 function maskWaIdForLog(value: string) {
   const raw = String(value ?? "").trim();
@@ -212,6 +213,38 @@ export async function persistConversationWindow(params: {
       waId: params.waId,
       phoneNumberId: params.phoneNumberId,
     });
+  }
+  if (params.lastInboundAt && !isInboundAfterSoftDelete) {
+    const runtimeState = await prisma.conversationRuntimeState.findFirst({
+      where: {
+        clientId: params.clientId,
+        OR: [{ waId: params.waId }, { waIdCanonical }],
+      },
+      select: {
+        id: true,
+        assignedUserId: true,
+        departmentId: true,
+        queueId: true,
+        status: true,
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (runtimeState) {
+      await applyBalancedQueueAssignment({
+        prisma,
+        clientId: params.clientId,
+        conversationId: conversation.id,
+        runtimeStateId: runtimeState.id,
+        waId: params.waId,
+        waIdCanonical,
+        departmentId: runtimeState.departmentId ?? resolvedDepartmentId,
+        queueId: runtimeState.queueId ?? null,
+        status: runtimeState.status,
+        assignedUserId: runtimeState.assignedUserId,
+        requestId: params.requestId,
+        source: "whatsapp.conversation_window",
+      });
+    }
   }
   if (isInboundAfterSoftDelete && existing && params.lastInboundAt) {
     const client = await prisma.client.findUnique({

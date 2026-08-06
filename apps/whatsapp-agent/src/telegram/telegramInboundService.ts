@@ -4,6 +4,7 @@ import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/default
 import { encryptMessengerExternalUserRef } from "../channels/messengerOutbound.js";
 import { getFeatures } from "../features/clientFeatures.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
+import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
 import {
   hasConfiguredTelegramToken,
   markTelegramWebhookReplay,
@@ -315,7 +316,13 @@ export async function persistTelegramInboundMessage(params: {
         queueId: defaults.queue.id,
         closedAt: null,
       },
-      select: { id: true },
+      select: {
+        id: true,
+        assignedUserId: true,
+        departmentId: true,
+        queueId: true,
+        status: true,
+      },
     });
     const inboundRecord = await tx.inboundMessage.create({
       data: {
@@ -412,6 +419,21 @@ export async function persistTelegramInboundMessage(params: {
     });
     return [conversationRecord, runtimeRecord, inboundRecord, contactRecord] as const;
   });
+  const assignment = await applyBalancedQueueAssignment({
+    prisma: params.prisma,
+    clientId: account.clientId,
+    conversationId: conversation.id,
+    runtimeStateId: runtimeState.id,
+    waId: syntheticWaId,
+    waIdCanonical: syntheticWaId,
+    departmentId: runtimeState.departmentId ?? defaults.department.id,
+    queueId: runtimeState.queueId ?? defaults.queue.id,
+    status: runtimeState.status,
+    assignedUserId: runtimeState.assignedUserId,
+    requestId: params.requestId,
+    source: "telegram.inbound",
+  });
+  const assignedUserId = assignment.applied ? assignment.selectedUserId : runtimeState.assignedUserId ?? null;
 
   const publish = params.publishRealtimeEvent ?? publishRealtimeEvent;
   publish({
@@ -421,7 +443,7 @@ export async function persistTelegramInboundMessage(params: {
     waIdCanonical: syntheticWaId,
     mode: "HUMAN",
     handoffStatus: "none",
-    assignedUserId: null,
+    assignedUserId,
     departmentId: defaults.department.id,
     message: {
       direction: "INBOUND",
