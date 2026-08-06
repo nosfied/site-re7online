@@ -101,6 +101,10 @@ import {
 } from "../services/outboundTemplateService.js";
 import { resolveTenantOutboundCredentials } from "./tenantCredentials.js";
 import {
+  buildMetaUsageEventPayload,
+  recordMetaUsageLedgerEvent,
+} from "../billing/metaUsageLedger.js";
+import {
   ConversationIntent,
   ConversationState,
 } from "../conversation/conversation.types.js";
@@ -1644,6 +1648,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   }) => {
     try {
       if (!tenantClientId) return;
+      const metaUsage = buildMetaUsageEventPayload({
+        outboundMessageId: params.messageId,
+        source: "bot",
+        messageKind: "template",
+        templateName: params.templateName,
+        templateCategory: "utility",
+        status: params.status,
+        windowOpenAtSend: false,
+        waId: params.waId,
+      });
       await persistOutboundMessage({
         clientId: tenantClientId,
         phoneNumberId: phoneNumberId ?? undefined,
@@ -1659,6 +1673,26 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         rawPayload: {
           templateName: params.templateName,
           templateLang: params.templateLang,
+          metaUsage,
+        },
+      });
+      await recordMetaUsageLedgerEvent({
+        prisma,
+        clientId: tenantClientId,
+        waId: params.waId,
+        waIdCanonical: canonicalizeBrazilWaId(params.waId),
+        messageId: params.messageId,
+        requestId: `meta-usage:${params.messageId}:${metaUsage.deliveryStatus}`,
+        eventName: metaUsage.deliveryStatus === "sent" ? "meta.usage.estimated" : "meta.usage.updated",
+        input: {
+          outboundMessageId: params.messageId,
+          source: "bot",
+          messageKind: "template",
+          templateName: params.templateName,
+          templateCategory: "utility",
+          status: params.status,
+          windowOpenAtSend: false,
+          waId: params.waId,
         },
       });
     } catch (error) {
@@ -1686,6 +1720,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         reason: params.reason,
         policy: params.policy,
       });
+      const metaUsage = buildMetaUsageEventPayload({
+        outboundMessageId: params.messageId,
+        source: "bot",
+        messageKind: params.type === MessageType.TEMPLATE ? "template" : "free_text",
+        templateName: params.templateName ?? null,
+        templateCategory: params.type === MessageType.TEMPLATE ? "utility" : "service",
+        status: MessageStatus.FAILED,
+        windowOpenAtSend: params.type === MessageType.TEMPLATE ? false : null,
+        waId: params.waId,
+      });
       await persistOutboundMessage({
         clientId: tenantClientId,
         phoneNumberId: phoneNumberId ?? undefined,
@@ -1702,6 +1746,26 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           policy: params.policy,
           templateName: params.templateName ?? undefined,
           templateLang: params.templateLang ?? undefined,
+          metaUsage,
+        },
+      });
+      await recordMetaUsageLedgerEvent({
+        prisma,
+        clientId: tenantClientId,
+        waId: params.waId,
+        waIdCanonical: canonicalizeBrazilWaId(params.waId),
+        messageId: params.messageId,
+        requestId: `meta-usage:${params.messageId}:${metaUsage.deliveryStatus}`,
+        eventName: "meta.usage.updated",
+        input: {
+          outboundMessageId: params.messageId,
+          source: "bot",
+          messageKind: params.type === MessageType.TEMPLATE ? "template" : "free_text",
+          templateName: params.templateName ?? null,
+          templateCategory: params.type === MessageType.TEMPLATE ? "utility" : "service",
+          status: MessageStatus.FAILED,
+          windowOpenAtSend: params.type === MessageType.TEMPLATE ? false : null,
+          waId: params.waId,
         },
       });
     } catch (error) {
@@ -1724,6 +1788,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   }) => {
     try {
       if (!tenantClientId) return;
+      const metaUsage = buildMetaUsageEventPayload({
+        outboundMessageId: params.messageId,
+        source: "bot",
+        messageKind: "free_text",
+        templateCategory: "service",
+        status: params.status,
+        windowOpenAtSend: true,
+        waId: params.waId,
+      });
       await persistOutboundMessage({
         clientId: tenantClientId,
         phoneNumberId: phoneNumberId ?? undefined,
@@ -1737,6 +1810,25 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         errorBody: params.errorBody,
         rawPayload: {
           bodyText: params.bodyText,
+          metaUsage,
+        },
+      });
+      await recordMetaUsageLedgerEvent({
+        prisma,
+        clientId: tenantClientId,
+        waId: params.waId,
+        waIdCanonical: canonicalizeBrazilWaId(params.waId),
+        messageId: params.messageId,
+        requestId: `meta-usage:${params.messageId}:${metaUsage.deliveryStatus}`,
+        eventName: metaUsage.deliveryStatus === "sent" ? "meta.usage.estimated" : "meta.usage.updated",
+        input: {
+          outboundMessageId: params.messageId,
+          source: "bot",
+          messageKind: "free_text",
+          templateCategory: "service",
+          status: params.status,
+          windowOpenAtSend: true,
+          waId: params.waId,
         },
       });
     } catch (error) {
@@ -2641,6 +2733,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             waIdCanonical: true,
             messageId: true,
             metaMessageId: true,
+            type: true,
+            templateName: true,
             errorBody: true,
             rawPayload: true,
           },
@@ -2685,26 +2779,94 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           outbound.errorBody ||
           null;
 
+        const nextRawPayload = {
+          ...currentRaw,
+          metaStatus: {
+            lastStatus: item.status,
+            conversationId:
+              typeof item.conversation?.id === "string" ? item.conversation.id : null,
+            conversationOriginType,
+            pricingCategory,
+            pricingBillable,
+            pricingModel,
+            lastStatusAt: item.timestamp,
+            statusDetail: item.status_detail,
+            errorData: item.error_data,
+            errors: item.errors,
+            metaMessageId: item.id,
+          },
+        };
+        const currentMetaUsage =
+          currentRaw.metaUsage &&
+          typeof currentRaw.metaUsage === "object" &&
+          !Array.isArray(currentRaw.metaUsage)
+            ? (currentRaw.metaUsage as Record<string, unknown>)
+            : null;
+        const rawSource = typeof currentRaw.source === "string" ? currentRaw.source : null;
+        const source =
+          rawSource === "admin_inbox"
+            ? "inbox_text"
+            : rawSource ?? (typeof currentMetaUsage?.source === "string" ? currentMetaUsage.source : "unknown");
+        const templateCategory =
+          pricingCategory ||
+          (typeof currentRaw.templateCategory === "string"
+            ? currentRaw.templateCategory
+            : typeof currentMetaUsage?.metaCategory === "string"
+              ? currentMetaUsage.metaCategory
+              : null);
+        const conversationId =
+          typeof currentRaw.conversationId === "string" ? currentRaw.conversationId : null;
+        const campaignId =
+          typeof currentRaw.campaignId === "string" ? currentRaw.campaignId : null;
+        const metaUsage = buildMetaUsageEventPayload({
+          outboundMessageId: outbound.messageId,
+          conversationId,
+          campaignId,
+          source,
+          messageKind: outbound.type === MessageType.TEMPLATE ? "template" : source === "canned_reply" ? "canned_reply" : "free_text",
+          templateName: outbound.templateName,
+          templateCategory,
+          sentAt: null,
+          deliveredAt: normalizeStatusTimestamp(item.timestamp),
+          status: item.status,
+          windowOpenAtSend:
+            typeof currentRaw.windowOpenAtSend === "boolean" ? currentRaw.windowOpenAtSend : null,
+          waId: outbound.waId,
+          waIdCanonical: outbound.waIdCanonical,
+        });
+
         await prisma.outboundMessage.update({
           where: { id: outbound.id },
           data: {
             rawPayload: {
-              ...currentRaw,
-              metaStatus: {
-                lastStatus: item.status,
-                conversationId:
-                  typeof item.conversation?.id === "string" ? item.conversation.id : null,
-                conversationOriginType,
-                pricingCategory,
-                pricingBillable,
-                pricingModel,
-                lastStatusAt: item.timestamp,
-                statusDetail: item.status_detail,
-                errorData: item.error_data,
-                errors: item.errors,
-                metaMessageId: item.id,
-              },
+              ...nextRawPayload,
+              metaUsage,
             } as Prisma.InputJsonValue,
+          },
+        });
+        await recordMetaUsageLedgerEvent({
+          prisma,
+          clientId: outbound.clientId,
+          conversationId,
+          waId: outbound.waId,
+          waIdCanonical: outbound.waIdCanonical ?? canonicalizeBrazilWaId(outbound.waId),
+          messageId: outbound.messageId,
+          requestId: `meta-usage:${outbound.messageId ?? item.id}:${metaUsage.deliveryStatus}`,
+          eventName: "meta.usage.updated",
+          input: {
+            outboundMessageId: outbound.messageId,
+            conversationId,
+            campaignId,
+            source,
+            messageKind: outbound.type === MessageType.TEMPLATE ? "template" : source === "canned_reply" ? "canned_reply" : "free_text",
+            templateName: outbound.templateName,
+            templateCategory,
+            deliveredAt: normalizeStatusTimestamp(item.timestamp),
+            status: item.status,
+            windowOpenAtSend:
+              typeof currentRaw.windowOpenAtSend === "boolean" ? currentRaw.windowOpenAtSend : null,
+            waId: outbound.waId,
+            waIdCanonical: outbound.waIdCanonical,
           },
         });
         publishRealtimeEvent({

@@ -7,6 +7,11 @@ import { logger } from "../logger/logger.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
 import { sendTemplate } from "../services/outboundTemplateService.js";
 import { renderTemplateBody } from "../templates/templateRendering.js";
+import {
+  buildMetaUsageEventPayload,
+  type MetaUsageSource,
+  recordMetaUsageLedgerEvent,
+} from "../billing/metaUsageLedger.js";
 import type { CampaignTemplateComponents } from "./campaignService.js";
 import {
   resolveCampaignRecipientConversationTarget,
@@ -30,6 +35,7 @@ export type StartCampaignRunParams = {
   waIds: string[];
   components?: CampaignTemplateComponents;
   componentsByWaId?: Record<string, CampaignTemplateComponents>;
+  source?: Extract<MetaUsageSource, "campaign" | "manual_campaign_send">;
 };
 
 function sleep(ms: number) {
@@ -69,8 +75,9 @@ async function runCampaignInBackground(
       name: params.templateName,
       language,
     },
-    select: { content: true },
+    select: { content: true, category: true },
   });
+  const usageSource = params.source ?? "campaign";
   const requestedWaIds = Array.from(new Set(params.waIds.map((waId) => waId.trim()).filter(Boolean)));
   const filteredRecipients = await filterOptedOutCampaignRecipients(prisma, {
     clientId: params.clientId,
@@ -244,6 +251,20 @@ async function runCampaignInBackground(
               conversationId: resolvedRecipient.conversationId ?? null,
             })
           : null;
+        const usagePayload = buildMetaUsageEventPayload({
+          outboundMessageId: messageId,
+          conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
+          campaignId: params.campaignId,
+          source: usageSource,
+          messageKind: "template",
+          templateName: params.templateName,
+          templateCategory: templateForRendering?.category ?? null,
+          sentAt: deliveredAt,
+          status,
+          windowOpenAtSend: null,
+          waId,
+          waIdCanonical,
+        });
         await persistOutboundMessage({
           clientId: params.clientId,
           phoneNumberId,
@@ -266,6 +287,30 @@ async function runCampaignInBackground(
             components: components ?? null,
             recipientResolution: resolutionSummary,
             conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
+            metaUsage: usagePayload,
+          },
+        });
+        await recordMetaUsageLedgerEvent({
+          prisma,
+          clientId: params.clientId,
+          conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
+          waId,
+          waIdCanonical,
+          messageId,
+          requestId: `meta-usage:${messageId}:${usagePayload.deliveryStatus}`,
+          input: {
+            outboundMessageId: messageId,
+            conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
+            campaignId: params.campaignId,
+            source: usageSource,
+            messageKind: "template",
+            templateName: params.templateName,
+            templateCategory: templateForRendering?.category ?? null,
+            sentAt: deliveredAt,
+            status,
+            windowOpenAtSend: null,
+            waId,
+            waIdCanonical,
           },
         });
         await persistEvent({

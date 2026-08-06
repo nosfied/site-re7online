@@ -130,6 +130,10 @@ import {
   sendTemplateReviewNotification,
 } from "../templates/templateReviewNotification.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
+import {
+  buildMetaUsageEventPayload,
+  recordMetaUsageLedgerEvent,
+} from "../billing/metaUsageLedger.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
 import {
   normalizeUserRole,
@@ -4375,6 +4379,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
       const createdAt = new Date();
       const status = sendResult.ok ? MessageStatus.SENT : MessageStatus.FAILED;
+      const usagePayload = buildMetaUsageEventPayload({
+        outboundMessageId: messageId,
+        conversationId: conversationRow.id,
+        source: "inbox_template",
+        messageKind: "template",
+        templateName: template.name,
+        templateCategory: template.category,
+        sentAt: createdAt,
+        status,
+        windowOpenAtSend,
+        waId: resolvedConversation.resolvedWaId,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+      });
       await persistOutboundMessage({
         clientId: client.id,
         phoneNumberId,
@@ -4398,7 +4415,30 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           templateLanguage: template.language,
           windowOpenAtSend,
           components: components ?? null,
+          metaUsage: usagePayload,
           status: sendResult.status ?? null,
+        },
+      });
+      await recordMetaUsageLedgerEvent({
+        prisma,
+        clientId: client.id,
+        conversationId: conversationRow.id,
+        waId: resolvedConversation.resolvedWaId,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        messageId,
+        requestId: `meta-usage:${messageId}:${usagePayload.deliveryStatus}`,
+        input: {
+          outboundMessageId: messageId,
+          conversationId: conversationRow.id,
+          source: "inbox_template",
+          messageKind: "template",
+          templateName: template.name,
+          templateCategory: template.category,
+          sentAt: createdAt,
+          status,
+          windowOpenAtSend,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
         },
       });
       if (!sendResult.ok) {
@@ -25532,6 +25572,7 @@ async function createScopedCampaign(params: {
     templateName: params.templateName,
     waIds: params.waIds,
     components: params.components,
+    source: "manual_campaign_send",
   });
   await persistCampaignDraftSeed({
     clientId: params.clientId,
@@ -26413,6 +26454,18 @@ async function adminSendMessage(params: {
   const tenants = await getTenants();
   const phoneNumberId =
     credentials.phoneNumberId || tenants[params.clientKey]?.metaPhoneNumberId || undefined;
+  const usageSource = params.source === "canned_reply" ? "canned_reply" : "inbox_text";
+  const usageKind = params.source === "canned_reply" ? "canned_reply" : "free_text";
+  const usagePayload = buildMetaUsageEventPayload({
+    outboundMessageId: messageId,
+    source: usageSource,
+    messageKind: usageKind,
+    templateCategory: "service",
+    sentAt: createdAt,
+    status,
+    windowOpenAtSend: conversation ? true : null,
+    waId: params.waId,
+  });
 
   const outboundInserted = await persistOutboundMessage({
     clientId: params.clientId,
@@ -26428,8 +26481,26 @@ async function adminSendMessage(params: {
     rawPayload: {
       source: params.source ?? "admin_inbox",
       cannedReplyId: params.cannedReplyId ?? null,
+      metaUsage: usagePayload,
       status: sendResult.status ?? null,
       errorBody: sendResult.errorBody ?? null,
+    },
+  });
+  await recordMetaUsageLedgerEvent({
+    prisma: getPrisma(),
+    clientId: params.clientId,
+    waId: params.waId,
+    messageId,
+    requestId: `meta-usage:${messageId}:${usagePayload.deliveryStatus}`,
+    input: {
+      outboundMessageId: messageId,
+      source: usageSource,
+      messageKind: usageKind,
+      templateCategory: "service",
+      sentAt: createdAt,
+      status,
+      windowOpenAtSend: conversation ? true : null,
+      waId: params.waId,
     },
   });
 

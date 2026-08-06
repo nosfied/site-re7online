@@ -758,6 +758,14 @@ test("inbox template send uses approved active template and updates timeline saf
   assert.equal(outbound.templateName, template.name);
   assert.equal((outbound.rawPayload as Record<string, unknown>).source, "inbox_template");
   assert.equal(JSON.stringify(outbound.rawPayload).includes(waId), false);
+  const outboundUsage = (outbound.rawPayload as Record<string, unknown>).metaUsage as Record<string, unknown>;
+  assert.equal(outboundUsage.source, "inbox_template");
+  assert.equal(outboundUsage.messageKind, "template");
+  assert.equal(outboundUsage.metaCategory, "utility");
+  assert.equal(outboundUsage.windowOpenAtSend, false);
+  assert.equal(outboundUsage.estimatedBillable, true);
+  assert.equal(outboundUsage.waIdLast4, waId.slice(-4));
+  assert.equal(JSON.stringify(outboundUsage).includes(waId), false);
 
   const updatedConversation = await prisma.conversation.findUniqueOrThrow({ where: { id: conversation.id } });
   assert.ok(updatedConversation.lastOutboundAt);
@@ -773,6 +781,15 @@ test("inbox template send uses approved active template and updates timeline saf
     where: { clientId: businessClientId, conversationId: conversation.id, eventName: "inbox.template.sent" },
   });
   assert.equal((event.payloadJson as Record<string, unknown>).templateName, template.name);
+  const usageEvent = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, conversationId: conversation.id, eventName: "meta.usage.estimated" },
+  });
+  const usagePayload = usageEvent.payloadJson as Record<string, unknown>;
+  assert.equal(usagePayload.source, "inbox_template");
+  assert.equal(usagePayload.metaCategory, "utility");
+  assert.equal(usagePayload.billingRule, "utility_billable");
+  assert.equal(usagePayload.estimatedMetaUnitCostUsd, 0.008);
+  assert.equal(JSON.stringify(usagePayload).includes(waId), false);
 });
 
 test("inbox template send blocks opt-out, inactive templates, missing variables and cross tenant template", async (t) => {
@@ -1197,6 +1214,13 @@ test("inbox canned reply sends only in open owned WhatsApp conversations", async
   assert.equal((outbound.rawPayload as Record<string, unknown>).source, "canned_reply");
   assert.equal((outbound.rawPayload as Record<string, unknown>).cannedReplyId, created.body.item.id);
   assert.equal(JSON.stringify(outbound.rawPayload).includes(waId), false);
+  const outboundUsage = (outbound.rawPayload as Record<string, unknown>).metaUsage as Record<string, unknown>;
+  assert.equal(outboundUsage.source, "canned_reply");
+  assert.equal(outboundUsage.messageKind, "canned_reply");
+  assert.equal(outboundUsage.metaCategory, "service");
+  assert.equal(outboundUsage.billingRule, "current_service_free");
+  assert.equal(outboundUsage.estimatedBillable, false);
+  assert.equal(JSON.stringify(outboundUsage).includes(waId), false);
 
   const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({
     where: { clientId_waId: { clientId: businessClientId, waId } },
@@ -1211,6 +1235,14 @@ test("inbox canned reply sends only in open owned WhatsApp conversations", async
   });
   assert.equal((event.payloadJson as Record<string, unknown>).source, "canned_reply");
   assert.equal(JSON.stringify(event.payloadJson).includes(waId), false);
+  const usageEvent = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, eventName: "meta.usage.estimated", messageId: outbound.messageId },
+  });
+  const usagePayload = usageEvent.payloadJson as Record<string, unknown>;
+  assert.equal(usagePayload.source, "canned_reply");
+  assert.equal(usagePayload.metaCategory, "service");
+  assert.equal(usagePayload.billingRule, "current_service_free");
+  assert.equal(JSON.stringify(usagePayload).includes(waId), false);
 });
 
 test("inbox canned reply blocks closed, inactive, opt-out and anonymized conversations", async () => {
@@ -3486,6 +3518,26 @@ test("campaign recipient bridge does not cross tenants and skips ambiguous match
   assert.ok(ambiguousEvent);
   assert.equal((ambiguousEvent.payloadJson as { reason?: string }).reason, "ambiguous");
   assert.equal(JSON.stringify(ambiguousEvent.payloadJson).includes(ambiguousInput), false);
+  const usageEvents = await prisma.event.findMany({
+    where: {
+      clientId: businessClientId,
+      eventName: "meta.usage.estimated",
+      messageId: {
+        in: [`campaign.${crossTenant.body.campaign.id}.1`, `campaign.${ambiguous.body.campaign.id}.1`],
+      },
+    },
+    orderBy: { messageId: "asc" },
+  });
+  assert.equal(usageEvents.length, 2);
+  for (const event of usageEvents) {
+    const payload = event.payloadJson as Record<string, unknown>;
+    assert.equal(payload.source, "manual_campaign_send");
+    assert.equal(payload.messageKind, "template");
+    assert.equal(payload.metaCategory, "utility");
+    assert.equal(payload.campaignId === crossTenant.body.campaign.id || payload.campaignId === ambiguous.body.campaign.id, true);
+    assert.equal(JSON.stringify(payload).includes(otherTenantWaId), false);
+    assert.equal(JSON.stringify(payload).includes(ambiguousInput), false);
+  }
 });
 
 test("campaign draft send blocks mapped recipients without value or fallback", async () => {
