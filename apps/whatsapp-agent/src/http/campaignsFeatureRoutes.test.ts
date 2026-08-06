@@ -711,6 +711,162 @@ test("meta usage cost preview validates tenant template and returns sanitized es
   assert.equal(JSON.stringify(service.body).includes("gratuito"), false);
 });
 
+test("meta usage monthly report exposes sanitized JSON and CSV", async () => {
+  await prisma.outboundMessage.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        waId: "5584999993333",
+        waIdCanonical: "5584999993333",
+        messageId: `${prefix}.report.business.delivered`,
+        type: "TEMPLATE",
+        status: "SENT",
+        bodyText: "Nao deve aparecer no relatorio",
+        metaMessageId: `${prefix}.meta.secret`,
+        rawPayload: {
+          providerToken: "token-nao-deve-vazar",
+          metaMessageId: `${prefix}.meta.secret`,
+          metaUsage: {
+            source: "campaign",
+            messageKind: "template",
+            direction: "outbound",
+            metaCategory: "utility",
+            deliveryStatus: "delivered",
+            estimatedBillable: true,
+            estimatedMetaUnitCostUsd: 0.008,
+            estimatedMetaCostUsd: 0.008,
+            billingRule: "utility_billable",
+            rateCardVersion: "meta-br-planning-2026-08",
+            waIdLast4: "3333",
+            waIdLength: 13,
+          },
+        },
+        createdAt: new Date("2026-09-03T10:00:00.000Z"),
+      },
+      {
+        clientId: businessClientId,
+        waId: "5584999994444",
+        waIdCanonical: "5584999994444",
+        messageId: `${prefix}.report.business.pending`,
+        type: "TEXT",
+        status: "SENT",
+        bodyText: "Tambem nao deve aparecer",
+        rawPayload: {
+          metaUsage: {
+            source: "inbox_text",
+            messageKind: "free_text",
+            direction: "outbound",
+            metaCategory: "service",
+            deliveryStatus: "sent",
+            estimatedBillable: false,
+            estimatedMetaUnitCostUsd: 0,
+            estimatedMetaCostUsd: null,
+            billingRule: "current_service_free",
+            rateCardVersion: "meta-br-planning-2026-08",
+            waIdLast4: "4444",
+            waIdLength: 13,
+          },
+        },
+        createdAt: new Date("2026-09-03T10:01:00.000Z"),
+      },
+      {
+        clientId: overrideClientId,
+        waId: "5584999995555",
+        waIdCanonical: "5584999995555",
+        messageId: `${prefix}.report.override`,
+        type: "TEMPLATE",
+        status: "SENT",
+        rawPayload: {
+          metaUsage: {
+            source: "manual_campaign_send",
+            messageKind: "template",
+            direction: "outbound",
+            metaCategory: "marketing",
+            deliveryStatus: "delivered",
+            estimatedBillable: true,
+            estimatedMetaUnitCostUsd: 0.0625,
+            estimatedMetaCostUsd: 7,
+            billingRule: "marketing_billable",
+            rateCardVersion: "meta-br-planning-2026-08",
+            waIdLast4: "5555",
+            waIdLength: 13,
+          },
+        },
+        createdAt: new Date("2026-09-03T10:02:00.000Z"),
+      },
+    ],
+  });
+
+  const unauth = await requestUnauth<ErrorPayload>("GET", "/app/usage/meta/report?month=2026-09");
+  assert.equal(unauth.status, 401);
+  assert.equal(getErrorCode(unauth.body), "missing_token");
+
+  const agent = await request<ErrorPayload>("GET", "/app/usage/meta/report?month=2026-09", businessAgent);
+  assert.equal(agent.status, 403);
+  assert.equal(getErrorCode(agent.body), "forbidden");
+
+  const invalidMonth = await request<ErrorPayload>("GET", "/app/usage/meta/report?month=2026-00", businessAdmin);
+  assert.equal(invalidMonth.status, 400);
+  assert.equal(getErrorCode(invalidMonth.body), "invalid_month");
+
+  const jsonReport = await request<{
+    ok: true;
+    reportType: string;
+    month: string;
+    summary: {
+      totalOutboundWithUsage: number;
+      deliveredBillableCount: number;
+      deliveredEstimatedCostUsd: number;
+      sentPendingCount: number;
+    };
+    byCategory: Record<string, { deliveredBillableCount: number }>;
+    bySource: Record<string, { sentPendingCount: number }>;
+  }>("GET", "/app/usage/meta/report?month=2026-09&clientId=malicious", businessAdmin);
+  assert.equal(jsonReport.status, 200, JSON.stringify(jsonReport.body));
+  assert.equal(jsonReport.body.ok, true);
+  assert.equal(jsonReport.body.reportType, "meta_usage_monthly");
+  assert.equal(jsonReport.body.month, "2026-09");
+  assert.equal(jsonReport.body.summary.totalOutboundWithUsage, 2);
+  assert.equal(jsonReport.body.summary.deliveredBillableCount, 1);
+  assert.equal(jsonReport.body.summary.deliveredEstimatedCostUsd, 0.008);
+  assert.equal(jsonReport.body.summary.sentPendingCount, 1);
+  assert.equal(jsonReport.body.byCategory.utility.deliveredBillableCount, 1);
+  assert.equal(jsonReport.body.byCategory.marketing.deliveredBillableCount, 0);
+  assert.equal(jsonReport.body.bySource.inbox_text.sentPendingCount, 1);
+  const serialized = JSON.stringify(jsonReport.body);
+  assert.equal(serialized.includes("5584999993333"), false);
+  assert.equal(serialized.includes("3333"), false);
+  assert.equal(serialized.includes("Nao deve aparecer"), false);
+  assert.equal(serialized.includes("bodyText"), false);
+  assert.equal(serialized.includes("rawPayload"), false);
+  assert.equal(serialized.includes("metaMessageId"), false);
+  assert.equal(serialized.includes("token-nao-deve-vazar"), false);
+
+  const csv = await requestText("GET", "/app/usage/meta/report.csv?month=2026-09", businessSupervisor);
+  assert.equal(csv.status, 200);
+  assert.match(csv.contentType ?? "", /text\/csv/);
+  assert.match(
+    csv.text,
+    /^month,groupType,groupKey,source,metaCategory,deliveryStatus,messageKind,deliveredBillableCount,deliveredEstimatedCostUsd,billableUnknownCostCount,sentPendingCount,failedCount,nonBillableCount,rateCardVersion,billingRule,notes\n/
+  );
+  assert.match(csv.text, /2026-09,category,utility,,utility,,/);
+  assert.equal(csv.text.includes("5584999993333"), false);
+  assert.equal(csv.text.includes("3333"), false);
+  assert.equal(csv.text.includes("Nao deve aparecer"), false);
+  assert.equal(csv.text.includes("rawPayload"), false);
+  assert.equal(csv.text.includes("metaMessageId"), false);
+  assert.equal(csv.text.includes("token"), false);
+
+  const otherTenant = await request<{
+    ok: true;
+    summary: { totalOutboundWithUsage: number; deliveredBillableCount: number; deliveredEstimatedCostUsd: number };
+  }>("GET", "/app/usage/meta/report?month=2026-09", overrideAdmin);
+  assert.equal(otherTenant.status, 200, JSON.stringify(otherTenant.body));
+  assert.equal(otherTenant.body.summary.totalOutboundWithUsage, 1);
+  assert.equal(otherTenant.body.summary.deliveredBillableCount, 1);
+  assert.equal(otherTenant.body.summary.deliveredEstimatedCostUsd, 7);
+});
+
 test("template catalog is tenant scoped and exposes campaign usage safely", async () => {
   await prisma.template.createMany({
     data: [

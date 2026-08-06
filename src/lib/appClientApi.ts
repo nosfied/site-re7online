@@ -318,6 +318,61 @@ export type AppMetaCostPreview = {
   notes: string[];
 };
 
+export type AppMetaUsageReportBucket = {
+  deliveredBillableCount: number;
+  deliveredEstimatedCostUsd: number;
+  billableUnknownCostCount: number;
+  sentPendingCount: number;
+  failedCount: number;
+  nonBillableCount: number;
+  totalOutboundWithUsage: number;
+};
+
+export type AppMetaUsageMonthlyReport = {
+  ok: true;
+  reportType: "meta_usage_monthly";
+  tenantKey: string | null;
+  tenantName: string | null;
+  month: string;
+  generatedAt: string;
+  currency: "USD";
+  rateCardVersion: string;
+  isEstimate: true;
+  disclaimer: string;
+  summary: {
+    totalOutboundWithUsage: number;
+    deliveredBillableCount: number;
+    deliveredEstimatedCostUsd: number;
+    billableUnknownCostCount: number;
+    sentPendingCount: number;
+    failedCount: number;
+    nonBillableCount: number;
+    unknownCategoryCount: number;
+    currentPolicyMode: "alert_only" | "block_at_limit";
+    policyEnabled: boolean;
+    monthlyLimitUsd: number | null;
+    monthlyMessageLimit: number | null;
+    usagePercentUsd: number | null;
+    usagePercentMessages: number | null;
+    thresholdReached: number | null;
+    limitExceeded: boolean;
+  };
+  byCategory: Record<string, AppMetaUsageReportBucket>;
+  bySource: Record<string, AppMetaUsageReportBucket>;
+  byStatus: Record<string, AppMetaUsageReportBucket>;
+  policy: {
+    enabled: boolean;
+    mode: "alert_only" | "block_at_limit";
+    monthlyLimitUsd: number | null;
+    monthlyMessageLimit: number | null;
+    alertThresholds: number[];
+    includeEstimatedSent: boolean;
+    includeDeliveredOnly: boolean;
+    source: "db" | "default";
+  };
+  notes: string[];
+};
+
 export type AppCampaignDraftRecipient = {
   leadId: string;
   displayName: string | null;
@@ -3123,6 +3178,28 @@ export async function fetchAppMetaUsagePreview(
   return requestAppJson(session, "/app/usage/meta/preview", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchAppMetaUsageMonthlyReport(
+  session: AppSession,
+  month?: string | null
+): Promise<AppMetaUsageMonthlyReport> {
+  const params = new URLSearchParams();
+  if (month?.trim()) params.set("month", month.trim());
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return requestAppJson(session, `/app/usage/meta/report${suffix}`);
+}
+
+export async function downloadAppMetaUsageMonthlyReportCsv(
+  session: AppSession,
+  month?: string | null
+) {
+  const params = new URLSearchParams();
+  if (month?.trim()) params.set("month", month.trim());
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return requestAppBlob(session, `/app/usage/meta/report.csv${suffix}`, {
+    timeoutMs: 20000,
   });
 }
 
