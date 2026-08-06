@@ -6,6 +6,10 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 
 | Documento | Status | Uso |
 | --- | --- | --- |
+| `docs/saas/CONVERTA_PRODUCT_STATE_2026-08.md` | atual | Fotografia documental do produto, canais, Inbox, CRM, campanhas, templates, LGPD, uso Meta e limites |
+| `docs/saas/CONVERTA_OPERATOR_GUIDE.md` | atual | Guia de uso operacional para Inbox, templates, mensagens prontas, campanhas, opt-out, anonimizacao e custos Meta |
+| `docs/saas/lgpd-anonymization-policy.md` | atual | Politica operacional LGPD: soft delete, anonimizacao, opt-out, bloqueio de reidratacao e limites |
+| `docs/saas/META_USAGE_COST_CONTROL.md` | atual | Controle estimativo de uso Meta: ledger, resumo, preview, relatorio mensal, limites e alertas |
 | `docs/saas/PRODUCT_MAP_CURRENT.md` | atual | Fotografia atual do produto e modulos |
 | `docs/saas/MARKET_PROFILE_ARCHITECTURE.md` | atual | Arquitetura oficial de Core Platform, Market Profiles, Feature Packs, Tenant Configuration e capabilities |
 | `docs/saas/BUSINESS_CAPABILITY_DESIGN.md` | atual | Contrato das capabilities do mercado privado e plano para substituir o ultimo filtro business por capability |
@@ -31,6 +35,9 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 
 | Documento | Status | Uso |
 | --- | --- | --- |
+| `docs/bids/CONVERTA_PUBLIC_BID_EVIDENCE_MATRIX.md` | atual | Matriz reutilizavel de evidencias para editais publicos, propostas, PoCs e diligencias |
+| `docs/bids/2026/secult-pe/READINESS_NOTES.md` | atual | Notas de prontidao SECULT-PE com gates, riscos e proximos passos |
+| `docs/bids/2026/cra-pr/READINESS_NOTES.md` | atual | Notas de prontidao CRA-PR com volume ativo/receptivo, Utility-only, riscos Meta e proximos passos |
 | `docs/saas/BID_COMPLIANCE_MATRIX.md` | atual | Matriz mestre de aderencia por requisito, reutilizavel em editais, propostas e PoC |
 | `docs/saas/LICITABLE_VERSION_1_0_CHECKLIST.md` | atual | Checklist executivo para declarar a Versao Licitavel 1.0 |
 | `docs/saas/DOCUMENTATION_INVENTORY.md` | atual | Inventario consolidado dos documentos SaaS e lacunas documentais |
