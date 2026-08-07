@@ -538,6 +538,52 @@ test("executeChatbotFlow merges selected option context", () => {
   );
 });
 
+test("executeChatbotFlow applies selected option routing", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "menu",
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Escolha",
+        options: [
+          {
+            label: "Duvidas tecnicas",
+            next: "handoff_tecnico",
+            departmentId: "department_technical",
+            queueId: "queue_technical",
+            context: { area: "duvidas_tecnicas" },
+          },
+        ],
+      },
+      handoff_tecnico: {
+        type: "handoff",
+        text: "Vou encaminhar.",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_option_routing",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_option_routing",
+      chatbotActive: true,
+      chatbotNodeId: "menu",
+      departmentId: "department_general",
+      queueId: "queue_general",
+    }),
+    inboundText: "1",
+    nowIso: "2026-08-07T12:00:00.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.departmentId, "department_technical");
+  assert.equal(result.state.queueId, "queue_technical");
+  assert.match(result.pendingHandoff?.summary ?? "", /Área: Duvidas Tecnicas/);
+});
+
 test("buildHandoffSummary skips sensitive context values", () => {
   const summary = buildHandoffSummary({
     servico: "revisao",

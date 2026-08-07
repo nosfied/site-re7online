@@ -3,6 +3,8 @@ import { ConversationState, FlowContext } from "../conversation/conversation.typ
 export type ChatbotFlowMetadata = {
   context?: FlowContext;
   tags?: string[];
+  departmentId?: string | null;
+  queueId?: string | null;
 };
 
 export type ChatbotMenuOption = Record<string, unknown> & ChatbotFlowMetadata & {
@@ -167,9 +169,13 @@ function normalizeTags(value: unknown): string[] | undefined {
 function getNodeMetadata(rawNode: Record<string, unknown>): ChatbotFlowMetadata {
   const context = normalizeContext(rawNode.context);
   const tags = normalizeTags(rawNode.tags);
+  const departmentId = getNonEmptyString(rawNode.departmentId);
+  const queueId = getNonEmptyString(rawNode.queueId);
   return {
     ...(context ? { context } : {}),
     ...(tags ? { tags } : {}),
+    ...(departmentId ? { departmentId } : {}),
+    ...(queueId ? { queueId } : {}),
   };
 }
 
@@ -555,6 +561,17 @@ function mergeFlowMetadata(
         tags: addedTags,
       });
     }
+  }
+
+  if (params.metadata.departmentId || params.metadata.queueId) {
+    const nextDepartmentId = params.metadata.departmentId ?? nextState.departmentId ?? null;
+    nextState = {
+      ...nextState,
+      departmentId: nextDepartmentId,
+      queueId:
+        params.metadata.queueId ??
+        (nextDepartmentId === (nextState.departmentId ?? null) ? nextState.queueId ?? null : null),
+    };
   }
 
   return nextState;
