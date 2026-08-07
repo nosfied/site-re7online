@@ -15650,7 +15650,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ? (body.embeddedSignup as Record<string, unknown>)
           : null;
       const replaceExistingMetaIdentity = body.replaceExistingMetaIdentity === true;
-      const redirectUri = normalizeMetaEmbeddedSignupRedirectUri(body.redirectUri);
+      const redirectUri =
+        body.redirectUri === "" ? "" : normalizeMetaEmbeddedSignupRedirectUri(body.redirectUri);
 
       const tenants = await getTenants();
       const tenant = tenants[tenantId];

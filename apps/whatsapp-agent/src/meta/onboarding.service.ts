@@ -354,9 +354,8 @@ export async function exchangeEmbeddedSignupCode(
     client_secret: appSecret,
     code,
   });
-  const redirectUri = params.redirectUri?.trim();
-  if (redirectUri) {
-    query.set("redirect_uri", redirectUri);
+  if (typeof params.redirectUri === "string") {
+    query.set("redirect_uri", params.redirectUri.trim());
   }
   const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/oauth/access_token?${query.toString()}`;
   const response = await fetch(url, {

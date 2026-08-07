@@ -475,13 +475,9 @@ export default function TenantOnboardingPage() {
     });
 
     try {
-      const redirectUri =
-        typeof window !== "undefined"
-          ? `${window.location.origin}${window.location.pathname}`
-          : null;
       const response = await onboardingExchangeCode(connection, tenantId, {
         code: code.trim(),
-        redirectUri,
+        redirectUri: "",
         replaceExistingMetaIdentity: reconnectMode,
         embeddedSignup: {
           wabaId: wabaId.trim() || null,
