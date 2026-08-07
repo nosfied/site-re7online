@@ -5903,7 +5903,7 @@ export default function AppInboxPage() {
                         }`
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start justify-between gap-2 overflow-hidden">
                     <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-center gap-1.5">
                         <span
@@ -5913,49 +5913,59 @@ export default function AppInboxPage() {
                         >
                           <ConversationChannelLogo item={item} className="h-full w-full" />
                         </span>
-                        <p className={`truncate text-sm font-semibold ${isVisuallyActive || unread ? "text-white" : "text-white/90"}`}>
+                        <p className={`min-w-0 truncate text-sm font-semibold ${isVisuallyActive || unread ? "text-white" : "text-white/90"}`}>
                           {label}
                         </p>
                         {isBusinessTenant && leadTemperatureLabel ? (
-                          <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${getLeadTemperatureClass(item)}`}>
+                          <span className={`max-w-20 shrink-0 truncate rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${getLeadTemperatureClass(item)}`}>
                             {leadTemperatureLabel}
                           </span>
                         ) : null}
                       </div>
                       {phoneLine ? (
-                        <p className={`mt-0.5 text-xs ${isVisuallyActive ? "text-white/75" : "text-white/55"}`}>
+                        <p className={`mt-0.5 truncate text-xs ${isVisuallyActive ? "text-white/75" : "text-white/55"}`}>
                           {phoneLine}
                         </p>
                       ) : null}
                     </div>
-                    <span className={`shrink-0 whitespace-nowrap text-[11px] max-[1440px]:text-[10px] ${isVisuallyActive ? "text-white/70" : "text-white/45"}`}>
+                    <span className={`max-w-24 shrink-0 truncate whitespace-nowrap text-right text-[11px] max-[1440px]:max-w-20 max-[1440px]:text-[10px] ${isVisuallyActive ? "text-white/70" : "text-white/45"}`}>
                       {formatDateTime(item.updatedAt)}
                     </span>
                   </div>
-                  <div className={`mt-2 flex min-w-0 items-center gap-2 text-[11px] max-[1440px]:mt-1.5 max-[1440px]:gap-1.5 max-[1440px]:text-[10px] ${isVisuallyActive ? "text-white/78" : "text-white/58"}`}>
-                    <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 max-[1440px]:px-1.5 ${getConversationStatusClassForItem(item)}`}>
-                      {getConversationStatusLabelForItem(item)}
-                    </span>
-                    <span className="truncate">{item.departmentName || "Sem setor"}</span>
-                    {assignmentLabel ? (
+                  <div className={`mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-[11px] max-[1440px]:mt-1.5 max-[1440px]:gap-1.5 max-[1440px]:text-[10px] ${isVisuallyActive ? "text-white/78" : "text-white/58"}`}>
+                    <div className="flex min-w-0 items-center gap-2 overflow-hidden max-[1440px]:gap-1.5">
                       <span
-                        className={`max-w-32 shrink-0 truncate rounded-full border px-2 py-0.5 text-[10px] font-semibold max-[1440px]:max-w-24 ${getConversationAssignmentBadgeClass(
-                          assignedToCurrentUser,
-                          isVisuallyActive
-                        )}`}
-                        title={assignmentLabel}
+                        className={`max-w-24 shrink-0 truncate whitespace-nowrap rounded-full px-2 py-0.5 max-[1440px]:max-w-20 max-[1440px]:px-1.5 ${getConversationStatusClassForItem(item)}`}
+                        title={getConversationStatusLabelForItem(item)}
                       >
-                        {assignmentLabel}
+                        {getConversationStatusLabelForItem(item)}
                       </span>
-                    ) : null}
-                    {operationalDurationLabel ? (
-                      <span className="shrink-0 whitespace-nowrap text-[10px] uppercase tracking-[0.08em] text-white/42">
-                        {operationalDurationLabel}
+                      <span className="min-w-0 truncate" title={item.departmentName || "Sem setor"}>
+                        {item.departmentName || "Sem setor"}
                       </span>
-                    ) : null}
+                      {assignmentLabel ? (
+                        <span
+                          className={`max-w-28 shrink truncate rounded-full border px-2 py-0.5 text-[10px] font-semibold max-[1440px]:max-w-20 ${getConversationAssignmentBadgeClass(
+                            assignedToCurrentUser,
+                            isVisuallyActive
+                          )}`}
+                          title={assignmentLabel}
+                        >
+                          {assignmentLabel}
+                        </span>
+                      ) : null}
+                      {operationalDurationLabel ? (
+                        <span
+                          className="max-w-24 shrink-0 truncate whitespace-nowrap text-[10px] uppercase tracking-[0.08em] text-white/42 max-[1440px]:max-w-16"
+                          title={operationalDurationLabel}
+                        >
+                          {operationalDurationLabel}
+                        </span>
+                      ) : null}
+                    </div>
                     {unread ? (
                       <span
-                        className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#20b15a] px-1 text-[10px] font-bold leading-none text-white shadow-[0_0_0_2px_rgba(32,177,90,0.2)]"
+                        className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#20b15a] px-1 text-[10px] font-bold leading-none text-white shadow-[0_0_0_2px_rgba(32,177,90,0.2)]"
                         aria-label={`${unreadCount} mensagem nao lida`}
                       >
                         {unreadCount}
