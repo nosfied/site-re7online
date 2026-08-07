@@ -32,6 +32,7 @@ type EnrichOnboardingParams = {
   businessPortfolioId?: string | null;
   wabaId?: string | null;
   phoneNumberId?: string | null;
+  displayPhoneNumber?: string | null;
 };
 
 export class MetaOnboardingExchangeError extends Error {
@@ -97,6 +98,17 @@ function summarizeExchangePayload(payload: ExchangeResponse) {
     wabaId: wabaCandidates[0] ?? null,
     phoneNumberId: phoneNumberCandidates[0] ?? null,
   };
+}
+
+function normalizeComparablePhone(value: string | null | undefined) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+function isSameDisplayedPhone(left: string | null | undefined, right: string | null | undefined) {
+  const leftDigits = normalizeComparablePhone(left);
+  const rightDigits = normalizeComparablePhone(right);
+  if (!leftDigits || !rightDigits) return false;
+  return leftDigits === rightDigits;
 }
 
 async function fetchMetaGraphJson(params: {
@@ -257,7 +269,7 @@ export async function enrichMetaOnboardingResult(
   let businessId = params.businessId ?? null;
   let businessPortfolioId = params.businessPortfolioId ?? null;
   let wabaId = params.wabaId ?? null;
-  const phoneNumberId = params.phoneNumberId ?? null;
+  let phoneNumberId = params.phoneNumberId ?? null;
   const rawPayload: Record<string, unknown> = {};
 
   if (phoneNumberId && (!wabaId || !businessId || !businessPortfolioId)) {
@@ -287,6 +299,115 @@ export async function enrichMetaOnboardingResult(
       businessPortfolioId = businessPortfolioId ?? summary.businessPortfolioId;
     } catch (error) {
       rawPayload.phoneNumberError =
+        error instanceof MetaOnboardingExchangeError
+          ? {
+              message: error.message,
+              status: error.status ?? null,
+              errorBody: error.errorBody ?? null,
+            }
+          : { message: (error as Error).message };
+    }
+  }
+
+  if (!phoneNumberId && !wabaId && params.displayPhoneNumber) {
+    try {
+      const businessesPayload = await fetchMetaGraphJson({
+        path: "me/businesses",
+        accessToken,
+        query: {
+          fields: "id,name,verification_status",
+        },
+      });
+      rawPayload.businesses = businessesPayload;
+      const businesses = Array.isArray(businessesPayload.data)
+        ? (businessesPayload.data as Array<Record<string, unknown>>)
+        : [];
+      const matches: Array<{
+        businessId: string;
+        wabaId: string;
+        phoneNumberId: string;
+        phonePayload: Record<string, unknown>;
+      }> = [];
+
+      for (const business of businesses) {
+        const graphBusinessId = typeof business.id === "string" ? business.id.trim() : "";
+        if (!graphBusinessId) continue;
+        for (const edge of [
+          "owned_whatsapp_business_accounts",
+          "client_whatsapp_business_accounts",
+        ]) {
+          const wabasPayload = await fetchMetaGraphJson({
+            path: `${encodeURIComponent(graphBusinessId)}/${edge}`,
+            accessToken,
+            query: {
+              fields: "id,name,account_review_status,business_verification_status",
+            },
+          });
+          rawPayload[edge] = wabasPayload;
+          const wabas = Array.isArray(wabasPayload.data)
+            ? (wabasPayload.data as Array<Record<string, unknown>>)
+            : [];
+          for (const waba of wabas) {
+            const graphWabaId = typeof waba.id === "string" ? waba.id.trim() : "";
+            if (!graphWabaId) continue;
+            const phonesPayload = await fetchMetaGraphJson({
+              path: `${encodeURIComponent(graphWabaId)}/phone_numbers`,
+              accessToken,
+              query: {
+                fields: [
+                  "id",
+                  "display_phone_number",
+                  "verified_name",
+                  "code_verification_status",
+                  "name_status",
+                  "new_name_status",
+                  "account_mode",
+                ].join(","),
+              },
+            });
+            rawPayload[`${edge}_${graphWabaId}_phone_numbers`] = phonesPayload;
+            const phones = Array.isArray(phonesPayload.data)
+              ? (phonesPayload.data as Array<Record<string, unknown>>)
+              : [];
+            for (const phone of phones) {
+              const graphPhoneNumberId = typeof phone.id === "string" ? phone.id.trim() : "";
+              const graphDisplayPhone =
+                typeof phone.display_phone_number === "string"
+                  ? phone.display_phone_number
+                  : "";
+              if (
+                graphPhoneNumberId &&
+                isSameDisplayedPhone(params.displayPhoneNumber, graphDisplayPhone)
+              ) {
+                matches.push({
+                  businessId: graphBusinessId,
+                  wabaId: graphWabaId,
+                  phoneNumberId: graphPhoneNumberId,
+                  phonePayload: phone,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      const uniqueMatches = Array.from(
+        new Map(matches.map((match) => [`${match.wabaId}:${match.phoneNumberId}`, match])).values()
+      );
+      rawPayload.displayPhoneResolution = {
+        attempted: true,
+        matchCount: uniqueMatches.length,
+      };
+      if (uniqueMatches.length === 1) {
+        const match = uniqueMatches[0];
+        businessId = businessId ?? match.businessId;
+        businessPortfolioId = businessPortfolioId ?? match.businessId;
+        wabaId = match.wabaId;
+        phoneNumberId = match.phoneNumberId;
+        rawPayload.phoneNumber = match.phonePayload;
+      }
+    } catch (error) {
+      rawPayload.displayPhoneResolutionError =
         error instanceof MetaOnboardingExchangeError
           ? {
               message: error.message,

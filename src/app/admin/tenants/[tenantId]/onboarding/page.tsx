@@ -479,6 +479,7 @@ export default function TenantOnboardingPage() {
         embeddedSignup: {
           wabaId: wabaId.trim() || null,
           phoneNumberId: phoneNumberId.trim() || null,
+          displayPhoneNumber: displayPhoneNumber.trim() || null,
           businessId: businessId.trim() || null,
           businessPortfolioId: businessPortfolioId.trim() || null,
           raw: rawPayload ?? null,

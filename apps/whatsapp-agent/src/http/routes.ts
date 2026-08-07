@@ -15688,18 +15688,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           embeddedSignupInput?.businessPortfolioId
         );
         const manualWabaId = normalizeOptionalString(embeddedSignupInput?.wabaId);
+        const embeddedDisplayPhoneNumber =
+          normalizeOptionalString(embeddedSignupInput?.displayPhoneNumber) ??
+          normalizeOptionalString(body.displayPhoneNumber);
         const candidatePhoneNumberId =
           normalizeOptionalString(embeddedSignupInput?.phoneNumberId) ??
           exchange.phoneNumberId;
         const enriched =
           exchange.businessToken &&
-          candidatePhoneNumberId
+          (candidatePhoneNumberId || embeddedDisplayPhoneNumber)
             ? await enrichMetaOnboardingResult({
                 businessToken: exchange.businessToken,
                 businessId: exchange.businessId,
                 businessPortfolioId: exchange.businessPortfolioId,
                 wabaId: exchange.wabaId,
                 phoneNumberId: candidatePhoneNumberId,
+                displayPhoneNumber: embeddedDisplayPhoneNumber,
               })
             : null;
         const finalBusinessId =
@@ -15725,11 +15729,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 ),
                 wabaId: normalizeOptionalString(embeddedSignupInput.wabaId),
                 phoneNumberId: normalizeOptionalString(embeddedSignupInput.phoneNumberId),
+                displayPhoneNumber: embeddedDisplayPhoneNumber,
                 raw: embeddedSignupInput.raw ?? null,
               }
             : null,
         };
-        const displayPhoneNumber = extractTenantDisplayPhoneFromRawPayload(rawPayload);
+        const displayPhoneNumber =
+          embeddedDisplayPhoneNumber ?? extractTenantDisplayPhoneFromRawPayload(rawPayload);
         const phoneNumberChanged =
           Boolean(previousMetaConfig?.phoneNumberId) &&
           Boolean(finalPhoneNumberId) &&

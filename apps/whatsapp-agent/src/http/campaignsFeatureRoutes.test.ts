@@ -809,6 +809,136 @@ test("admin onboarding code exchange sends canonical manual oauth redirect uri f
   }
 });
 
+test("admin onboarding code exchange resolves WABA by displayed phone when OAuth omits ids", async () => {
+  const dbOnlyClientKey = `${prefix}-db-only-code-display-resolution`;
+  const client = await prisma.client.create({
+    data: {
+      clientKey: dbOnlyClientKey,
+      name: "DB Only Display Resolution Tenant",
+      profile: "business",
+      features: {},
+    },
+    select: { id: true },
+  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.hostname !== "graph.facebook.com") {
+      return originalFetch(input, init);
+    }
+    if (url.pathname.endsWith("/oauth/access_token")) {
+      return new Response(
+        JSON.stringify({
+          access_token: `${prefix}-business-token-display`,
+          token_type: "bearer",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (url.pathname.endsWith("/me/businesses")) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: `${prefix}-portfolio-display`, name: "Portfolio" }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (url.pathname.endsWith(`/${prefix}-portfolio-display/owned_whatsapp_business_accounts`)) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: `${prefix}-waba-display`, name: "WABA" }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (url.pathname.endsWith(`/${prefix}-portfolio-display/client_whatsapp_business_accounts`)) {
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.pathname.endsWith(`/${prefix}-waba-display/phone_numbers`)) {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: `${prefix}-phone-display`,
+              display_phone_number: "+55 84 9459-6848",
+              verified_name: "Converta DEMO",
+              code_verification_status: "EXPIRED",
+              name_status: "AVAILABLE_WITHOUT_REVIEW",
+              account_mode: "LIVE",
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (url.pathname.endsWith(`/${prefix}-waba-display/subscribed_apps`)) {
+      assert.equal(init?.method, "POST");
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({ error: { message: "unexpected graph request" } }), {
+      status: 500,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const response = await requestSuperadmin<{
+      success: boolean;
+      businessTokenStored: boolean;
+      phoneNumberId: string | null;
+      wabaId: string | null;
+      businessId: string | null;
+      businessPortfolioId: string | null;
+      warning?: string | null;
+    }>(
+      "POST",
+      `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}/onboarding/exchange-code`,
+      {
+        code: "valid-display-resolution-code",
+        redirectUri: `https://converta.re7online.com/admin/tenants/${encodeURIComponent(
+          dbOnlyClientKey
+        )}/onboarding`,
+        embeddedSignup: {
+          displayPhoneNumber: "55 84 9459-6848",
+          raw: { code: "redacted-in-test" },
+        },
+      }
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.success, true);
+    assert.equal(response.body.businessTokenStored, true);
+    assert.equal(response.body.phoneNumberId, `${prefix}-phone-display`);
+    assert.equal(response.body.wabaId, `${prefix}-waba-display`);
+    assert.equal(response.body.businessId, `${prefix}-portfolio-display`);
+    assert.equal(response.body.businessPortfolioId, `${prefix}-portfolio-display`);
+    assert.equal(response.body.warning, "Meta reportou code_verification_status=EXPIRED.");
+
+    const metaConfig = await prisma.tenantMetaConfig.findUnique({
+      where: { clientId: client.id },
+      select: { phoneNumberId: true, wabaId: true, businessToken: true },
+    });
+    assert.equal(metaConfig?.phoneNumberId, `${prefix}-phone-display`);
+    assert.equal(metaConfig?.wabaId, `${prefix}-waba-display`);
+    assert.equal(metaConfig?.businessToken, `${prefix}-business-token-display`);
+
+    const phoneNumber = await prisma.waPhoneNumber.findUnique({
+      where: { phoneNumberId: `${prefix}-phone-display` },
+      select: { clientId: true, display: true },
+    });
+    assert.equal(phoneNumber?.clientId, client.id);
+    assert.equal(phoneNumber?.display, "55 84 9459-6848");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("meta usage summary is tenant scoped, role protected and sanitized", async () => {
   await prisma.tenantOperationalConfig.upsert({
     where: { clientId: businessClientId },

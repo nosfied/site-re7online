@@ -558,6 +558,7 @@ export type TenantOnboardingExchangePayload = {
     businessPortfolioId?: string | null;
     wabaId?: string | null;
     phoneNumberId?: string | null;
+    displayPhoneNumber?: string | null;
     raw?: unknown;
   };
 };
