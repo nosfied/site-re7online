@@ -14,12 +14,13 @@ import {
 } from "@/lib/whatsappAdminApi";
 import {
   EmbeddedSignupCaptureEntry,
+  buildMetaEmbeddedSignupOAuthUrl,
   extractMetaCodeFromUnknownPayload,
   extractEmbeddedSignupData,
+  getRuntimeMetaEmbeddedSignupConfigId,
   loadMetaEmbeddedSignupSdk,
   readEmbeddedSignupQuery,
   safeParseEventData,
-  startMetaEmbeddedSignup,
 } from "@/lib/metaEmbeddedSignup";
 
 type OnboardingStatus = "idle" | "processing" | "success" | "error";
@@ -349,24 +350,17 @@ export default function TenantOnboardingPage() {
     }, 60000);
 
     try {
-      const response = await startMetaEmbeddedSignup();
-      const debugPayload = buildDebugPayload(response);
-      appendEntry({
-        timestamp: new Date().toISOString(),
-        source: "fb.callback",
-        raw: response,
-        parsed: debugPayload,
-      });
-      applyCapturedData(response);
-      const capturedCode = extractMetaCodeFromUnknownPayload(response);
-      if (capturedCode) {
-        debugLog("code captured via callback", { code: maskSensitiveValue(capturedCode) });
-      }
-      setPopupClosed(true);
-      refreshLocationState("query");
+      const redirectUri = `${window.location.origin}${window.location.pathname}`;
+      const configId = getRuntimeMetaEmbeddedSignupConfigId(window);
+      window.location.assign(
+        buildMetaEmbeddedSignupOAuthUrl({
+          configId,
+          redirectUri,
+          state: tenantId,
+        })
+      );
     } catch (error) {
       setErrorMessage((error as Error).message);
-    } finally {
       setStarting(false);
     }
   };
@@ -477,7 +471,10 @@ export default function TenantOnboardingPage() {
     try {
       const response = await onboardingExchangeCode(connection, tenantId, {
         code: code.trim(),
-        redirectUri: "",
+        redirectUri:
+          typeof window !== "undefined"
+            ? `${window.location.origin}${window.location.pathname}`
+            : null,
         replaceExistingMetaIdentity: reconnectMode,
         embeddedSignup: {
           wabaId: wabaId.trim() || null,
@@ -802,7 +799,7 @@ export default function TenantOnboardingPage() {
               <button
                 type="button"
                 onClick={handleStart}
-                disabled={!sdkReady || starting}
+                disabled={starting}
                 className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {starting ? "Abrindo..." : reconnectMode ? "Iniciar nova conexao" : "Iniciar conexao"}
@@ -832,7 +829,7 @@ export default function TenantOnboardingPage() {
                   sdkReady ? "bg-emerald-500/20 text-emerald-200" : "bg-amber-500/20 text-amber-200"
                 }`}
               >
-                SDK {sdkReady ? "carregado" : "pendente"}
+                OAuth {sdkReady ? "pronto" : "manual"}
               </span>
             </div>
 

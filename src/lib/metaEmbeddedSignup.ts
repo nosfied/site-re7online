@@ -222,6 +222,32 @@ export function saveRuntimeMetaEmbeddedSignupConfigId(configId: string, win: Win
   return normalized;
 }
 
+export function buildMetaEmbeddedSignupOAuthUrl(options: {
+  configId?: string | null;
+  redirectUri: string;
+  state?: string | null;
+}) {
+  const configId = options.configId?.trim() || META_EMBEDDED_SIGNUP_CONFIG_ID;
+  const redirectUri = options.redirectUri.trim();
+  if (!configId) {
+    throw new Error("Config ID do Embedded Signup nao configurado.");
+  }
+  if (!redirectUri) {
+    throw new Error("Redirect URI do Embedded Signup nao configurado.");
+  }
+
+  const url = new URL(`https://www.facebook.com/${META_SDK_VERSION}/dialog/oauth`);
+  url.searchParams.set("client_id", META_EMBEDDED_SIGNUP_APP_ID);
+  url.searchParams.set("redirect_uri", redirectUri);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("config_id", configId);
+  url.searchParams.set("override_default_response_type", "true");
+  if (options.state?.trim()) {
+    url.searchParams.set("state", options.state.trim());
+  }
+  return url.toString();
+}
+
 export async function startMetaEmbeddedSignup(options?: { configId?: string | null }): Promise<unknown> {
   if (!window.FB) {
     throw new Error("Facebook SDK ainda nao carregou.");

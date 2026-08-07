@@ -746,7 +746,7 @@ test("admin onboarding manual bind supports db-only clients", async () => {
   assert.equal(detail.body.tenant.displayPhoneNumber, "55 84 9***-0000");
 });
 
-test("admin onboarding code exchange sends empty sdk redirect uri for db-only clients", async () => {
+test("admin onboarding code exchange sends canonical manual oauth redirect uri for db-only clients", async () => {
   const dbOnlyClientKey = `${prefix}-db-only-code-exchange`;
   const client = await prisma.client.create({
     data: {
@@ -775,6 +775,9 @@ test("admin onboarding code exchange sends empty sdk redirect uri for db-only cl
   }) as typeof fetch;
 
   try {
+    const redirectUri = `https://converta.re7online.com/admin/tenants/${encodeURIComponent(
+      dbOnlyClientKey
+    )}/onboarding`;
     const response = await requestSuperadmin<{
       success: boolean;
       businessTokenStored: boolean;
@@ -783,7 +786,7 @@ test("admin onboarding code exchange sends empty sdk redirect uri for db-only cl
       `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}/onboarding/exchange-code`,
       {
         code: "valid-test-code",
-        redirectUri: "",
+        redirectUri: `${redirectUri}?metaConfigId=1050567334003366`,
       }
     );
 
@@ -794,8 +797,7 @@ test("admin onboarding code exchange sends empty sdk redirect uri for db-only cl
     const metaRequestUrl = capturedUrl as URL;
     assert.equal(metaRequestUrl.pathname.endsWith("/oauth/access_token"), true);
     assert.equal(metaRequestUrl.searchParams.get("code"), "valid-test-code");
-    assert.equal(metaRequestUrl.searchParams.has("redirect_uri"), true);
-    assert.equal(metaRequestUrl.searchParams.get("redirect_uri"), "");
+    assert.equal(metaRequestUrl.searchParams.get("redirect_uri"), redirectUri);
 
     const metaConfig = await prisma.tenantMetaConfig.findUnique({
       where: { clientId: client.id },
