@@ -551,6 +551,7 @@ export type AdminTemplateRequestItem = {
 
 export type TenantOnboardingExchangePayload = {
   code: string;
+  redirectUri?: string | null;
   replaceExistingMetaIdentity?: boolean;
   embeddedSignup?: {
     businessId?: string | null;

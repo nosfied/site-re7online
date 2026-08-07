@@ -13,12 +13,12 @@ import {
   revokeContactOptOut,
 } from "../campaigns/optOutRegistry.js";
 import { getPrisma } from "../db.js";
-import { setTemplateReviewNotificationSenderForTests } from "../templates/templateReviewNotification.js";
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "campaigns-feature-route-test-secret";
 process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || "campaigns-feature-route-test-admin-token";
 process.env.WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || "campaigns-feature-route-test-token";
 process.env.WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "campaigns-feature-route-test-phone";
+process.env.META_APP_SECRET = process.env.META_APP_SECRET || "campaigns-feature-route-test-meta-secret";
 
 type TestResponse<T = unknown> = {
   status: number;
@@ -49,6 +49,7 @@ let tempRoot = "";
 let server: Server;
 let baseUrl = "";
 let handleRequest: typeof import("./routes.js").handleRequest;
+let setTemplateReviewNotificationSenderForTests: typeof import("../templates/templateReviewNotification.js").setTemplateReviewNotificationSenderForTests;
 
 let businessClientId = "";
 let governmentClientId = "";
@@ -417,6 +418,9 @@ test.before(async () => {
   });
 
   handleRequest = (await import("./routes.js")).handleRequest;
+  setTemplateReviewNotificationSenderForTests = (
+    await import("../templates/templateReviewNotification.js")
+  ).setTemplateReviewNotificationSenderForTests;
   server = createServer((req, res) => {
     void handleRequest(req, res);
   });
@@ -740,6 +744,69 @@ test("admin onboarding manual bind supports db-only clients", async () => {
   assert.equal(detail.status, 200);
   assert.equal(detail.body.tenant.metaPhoneNumberId, `${prefix}-phone-db-only`);
   assert.equal(detail.body.tenant.displayPhoneNumber, "55 84 9***-0000");
+});
+
+test("admin onboarding code exchange sends canonical redirect uri for db-only clients", async () => {
+  const dbOnlyClientKey = `${prefix}-db-only-code-exchange`;
+  const client = await prisma.client.create({
+    data: {
+      clientKey: dbOnlyClientKey,
+      name: "DB Only Code Exchange Tenant",
+      profile: "business",
+      features: {},
+    },
+    select: { id: true },
+  });
+  const originalFetch = globalThis.fetch;
+  let capturedUrl: URL | null = null;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.hostname !== "graph.facebook.com") {
+      return originalFetch(input, init);
+    }
+    capturedUrl = url;
+    return new Response(
+      JSON.stringify({
+        access_token: `${prefix}-business-token`,
+        token_type: "bearer",
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+  }) as typeof fetch;
+
+  try {
+    const redirectUri = `https://converta.re7online.com/admin/tenants/${encodeURIComponent(
+      dbOnlyClientKey
+    )}/onboarding`;
+    const response = await requestSuperadmin<{
+      success: boolean;
+      businessTokenStored: boolean;
+    }>(
+      "POST",
+      `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}/onboarding/exchange-code`,
+      {
+        code: "valid-test-code",
+        redirectUri: `${redirectUri}?metaConfigId=1050567334003366`,
+      }
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.success, true);
+    assert.equal(response.body.businessTokenStored, true);
+    assert.ok(capturedUrl);
+    const metaRequestUrl = capturedUrl as URL;
+    assert.equal(metaRequestUrl.pathname.endsWith("/oauth/access_token"), true);
+    assert.equal(metaRequestUrl.searchParams.get("code"), "valid-test-code");
+    assert.equal(metaRequestUrl.searchParams.get("redirect_uri"), redirectUri);
+
+    const metaConfig = await prisma.tenantMetaConfig.findUnique({
+      where: { clientId: client.id },
+      select: { businessToken: true },
+    });
+    assert.equal(metaConfig?.businessToken, `${prefix}-business-token`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("meta usage summary is tenant scoped, role protected and sanitized", async () => {

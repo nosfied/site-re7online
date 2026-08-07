@@ -5,6 +5,7 @@ const META_EMBEDDED_SIGNUP_APP_ID =
 
 type ExchangeCodeParams = {
   code: string;
+  redirectUri?: string | null;
 };
 
 type ExchangeResponse = {
@@ -343,15 +344,20 @@ export async function exchangeEmbeddedSignupCode(
   if (!code) {
     throw new MetaOnboardingExchangeError("Code is required", 400);
   }
-  if (!env.META_APP_SECRET) {
+  const appSecret = env.META_APP_SECRET || process.env.META_APP_SECRET || "";
+  if (!appSecret) {
     throw new MetaOnboardingExchangeError("META_APP_SECRET is not configured", 500);
   }
 
   const query = new URLSearchParams({
     client_id: META_EMBEDDED_SIGNUP_APP_ID,
-    client_secret: env.META_APP_SECRET,
+    client_secret: appSecret,
     code,
   });
+  const redirectUri = params.redirectUri?.trim();
+  if (redirectUri) {
+    query.set("redirect_uri", redirectUri);
+  }
   const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/oauth/access_token?${query.toString()}`;
   const response = await fetch(url, {
     method: "GET",

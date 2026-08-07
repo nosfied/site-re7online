@@ -15650,6 +15650,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ? (body.embeddedSignup as Record<string, unknown>)
           : null;
       const replaceExistingMetaIdentity = body.replaceExistingMetaIdentity === true;
+      const redirectUri = normalizeMetaEmbeddedSignupRedirectUri(body.redirectUri);
 
       const tenants = await getTenants();
       const tenant = tenants[tenantId];
@@ -15680,7 +15681,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             phoneNumberId: true,
           },
         });
-        const exchange = await exchangeEmbeddedSignupCode({ code });
+        const exchange = await exchangeEmbeddedSignupCode({ code, redirectUri });
         const manualBusinessId = normalizeOptionalString(embeddedSignupInput?.businessId);
         const manualBusinessPortfolioId = normalizeOptionalString(
           embeddedSignupInput?.businessPortfolioId
@@ -20342,6 +20343,27 @@ function normalizeOptionalString(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed || null;
+}
+
+function normalizeMetaEmbeddedSignupRedirectUri(value: unknown) {
+  const raw = normalizeOptionalString(value);
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    const isLocalhost =
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1") &&
+      env.ENV !== "production";
+    const isAllowedProductionHost =
+      url.protocol === "https:" &&
+      (url.hostname === "converta.re7online.com" || url.hostname === "admin.re7online.com") &&
+      url.pathname.startsWith("/admin/");
+    if (!isAllowedProductionHost && !isLocalhost) return null;
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 function parseClientProfile(value: unknown): ClientProfile {
