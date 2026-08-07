@@ -6,6 +6,8 @@ Status: roteiro de demonstracao e treinamento. Este documento nao altera runtime
 
 SECULT-PE solicitou demonstracao/treinamento via Meet para aproximadamente 20 pessoas. A demonstracao deve apresentar o Converta como SaaS de atendimento omnichannel com WhatsApp Oficial/Meta, Inbox humano, fluxos de chatbot, CRM operacional, modelos aprovados, mensagens prontas, campanhas controladas, LGPD e controle estimativo de custo Meta.
 
+Usar preferencialmente o tenant `demo-converta` para a apresentacao. O roteiro pode ser tematico SECULT-PE, mas os dados em tela devem ser ficticios, sanitizados e nao vinculados a pessoas, fornecedores, proponentes, servidores ou bases reais da SECULT-PE.
+
 Nao prometer funcionalidades fora do estado atual do produto. Pontos em backlog devem ser apresentados como evolucao planejada, nao como entrega ja disponivel.
 
 ## Objetivo da reuniao
@@ -33,7 +35,7 @@ Nao prometer funcionalidades fora do estado atual do produto. Pontos em backlog 
 ## Fluxo de demonstracao recomendado
 
 1. Abrir `/app/inbox`.
-2. Mostrar conversa receptiva existente ou ambiente de demonstracao sanitizado.
+2. Mostrar conversa receptiva ficticia no tenant `demo-converta` ou ambiente de demonstracao sanitizado.
 3. Explicar estados: na fila, em atendimento, aguardando cliente e fechado.
 4. Demonstrar o conceito de assumir atendimento sem enviar mensagem real.
 5. Abrir modal de modelo aprovado sem concluir envio.
@@ -45,6 +47,7 @@ Nao prometer funcionalidades fora do estado atual do produto. Pontos em backlog 
 11. Abrir `/app/campaigns`.
 12. Mostrar previa de audiencia e rascunho sem clicar em envio real.
 13. Explicar relatorio mensal Meta como estimativa operacional.
+14. Se for demonstrar fila balanceada, mostrar `/app/settings/queue` sem salvar alteracao e explicar que a policy so deve ser ativada no tenant de demo apos smoke controlado.
 
 ## Respostas padrao as solicitacoes SECULT
 
@@ -118,6 +121,7 @@ Resposta: o modelo atual suporta multiplos usuarios com perfil ADMIN ou SUPERVIS
 - Nao ativar distribuicao automatica de fila durante a demonstracao sem autorizacao.
 - Nao alterar credenciais, tenants ou canais.
 - Nao expor dados pessoais em tela compartilhada.
+- Nao usar dados reais da SECULT-PE no tenant de demonstracao.
 - Nao executar anonimizacao ou hard delete.
 - Nao prometer funcionalidades registradas como backlog.
 

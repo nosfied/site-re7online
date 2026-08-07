@@ -8,6 +8,10 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | --- | --- | --- |
 | `docs/saas/CONVERTA_PRODUCT_STATE_2026-08.md` | atual | Fotografia documental do produto, canais, Inbox, CRM, campanhas, templates, LGPD, uso Meta e limites |
 | `docs/saas/CONVERTA_OPERATOR_GUIDE.md` | atual | Guia de uso operacional para Inbox, templates, mensagens prontas, campanhas, opt-out, anonimizacao e custos Meta |
+| `docs/saas/DEMO_TENANT_READINESS.md` | atual | Readiness do tenant generico `demo-converta`, auditoria de configuracoes e checker somente leitura |
+| `docs/saas/DEMO_TENANT_PROVISIONING_CHECKLIST.md` | atual | Checklist manual de provisionamento seguro do tenant de demonstracao |
+| `docs/saas/DEMO_TENANT_DATA_POLICY.md` | atual | Politica de dados ficticios, sanitizacao e limites para demonstracoes |
+| `docs/saas/DEMO_PRESENTATION_SCRIPT_SECULT_PE.md` | atual | Roteiro tematico SECULT-PE usando tenant generico de demonstracao |
 | `docs/saas/secult-pe-demo-2026-08.md` | atual | Roteiro de demonstracao/treinamento SECULT-PE e respostas operacionais as solicitacoes levantadas |
 | `docs/saas/SECULT_PE_BACKLOG.md` | backlog | Backlog SECULT-PE: balanceamento de fila, auditoria de sessao, nome social, relatorios, reconnect e retificacao |
 | `docs/saas/lgpd-anonymization-policy.md` | atual | Politica operacional LGPD: soft delete, anonimizacao, opt-out, bloqueio de reidratacao e limites |
