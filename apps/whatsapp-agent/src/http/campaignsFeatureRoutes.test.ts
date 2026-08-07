@@ -208,6 +208,25 @@ async function requestAdmin<T = unknown>(
   };
 }
 
+async function requestSuperadmin<T = unknown>(
+  method: string,
+  route: string,
+  body?: unknown
+): Promise<TestResponse<T>> {
+  const response = await fetch(`${baseUrl}${route}`, {
+    method,
+    headers: {
+      "x-admin-token": process.env.ADMIN_TOKEN ?? "",
+      ...(body !== undefined ? { "content-type": "application/json" } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  return {
+    status: response.status,
+    body: (await response.json()) as T,
+  };
+}
+
 async function cleanup() {
   const clients = await prisma.client.findMany({
     where: {
@@ -577,6 +596,43 @@ test("queue assignment settings are tenant scoped and admin protected", async ()
   assert.equal(payload.scope, "department");
   assert.equal(payload.maxActivePerAgent, 3);
   assert.ok(!JSON.stringify(payload).includes(overrideClientId));
+});
+
+test("admin tenants summary includes db-only clients without activity", async () => {
+  const dbOnlyClientKey = `${prefix}-db-only-summary`;
+  await prisma.client.create({
+    data: {
+      clientKey: dbOnlyClientKey,
+      name: "DB Only Summary Tenant",
+      profile: "business",
+      features: {},
+    },
+  });
+
+  const response = await requestSuperadmin<{
+    ok: boolean;
+    tenants: Array<{
+      tenantId: string;
+      clientKey: string;
+      name: string;
+      lastMessageAt: string | null;
+      counts: {
+        inbound: { received: number };
+        outbound: { sent_text: number; sent_template: number; failed: number };
+      };
+    }>;
+  }>("GET", "/admin/tenants/summary?range=24h");
+
+  assert.equal(response.status, 200);
+  const item = response.body.tenants.find((tenant) => tenant.clientKey === dbOnlyClientKey);
+  assert.ok(item);
+  assert.equal(item.tenantId, dbOnlyClientKey);
+  assert.equal(item.name, "DB Only Summary Tenant");
+  assert.equal(item.lastMessageAt, null);
+  assert.equal(item.counts.inbound.received, 0);
+  assert.equal(item.counts.outbound.sent_text, 0);
+  assert.equal(item.counts.outbound.sent_template, 0);
+  assert.equal(item.counts.outbound.failed, 0);
 });
 
 test("meta usage summary is tenant scoped, role protected and sanitized", async () => {

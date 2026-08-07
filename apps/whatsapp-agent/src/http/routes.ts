@@ -14946,11 +14946,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const quotaPeriod = `${to.getUTCFullYear()}-${String(to.getUTCMonth() + 1).padStart(2, "0")}`;
 
         const tenants = await getTenants();
-        const tenantKeys = Object.keys(tenants);
+        const legacyTenantKeys = Object.keys(tenants);
         const clients = await prisma.client.findMany({
-          where: { clientKey: { in: tenantKeys } },
           select: { id: true, clientKey: true, name: true },
+          orderBy: { createdAt: "desc" },
         });
+        const tenantKeys = Array.from(
+          new Set([...legacyTenantKeys, ...clients.map((client) => client.clientKey)])
+        );
         const clientIds = clients.map((client) => client.id);
         const planLimitsByTenantKey = new Map<string, PlanLimitsSettings>();
         await Promise.all(
@@ -26438,7 +26441,8 @@ async function resolveAdminAuth(
   token: string
 ): Promise<{ role: "superadmin"; clientId: null; clientKey: null } | { role: "tenant"; clientId: string; clientKey: string } | null> {
   if (!token) return null;
-  if (env.ADMIN_TOKEN && token === env.ADMIN_TOKEN) {
+  const adminToken = env.ADMIN_TOKEN || process.env.ADMIN_TOKEN || "";
+  if (adminToken && token === adminToken) {
     return { role: "superadmin", clientId: null, clientKey: null };
   }
   const client = await prisma.client.findFirst({
