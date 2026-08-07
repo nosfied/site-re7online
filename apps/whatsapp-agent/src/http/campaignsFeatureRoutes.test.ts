@@ -308,6 +308,13 @@ async function cleanup() {
       },
     },
   });
+  await prisma.tenantMetaConfig.deleteMany({
+    where: {
+      clientId: {
+        in: clientIds,
+      },
+    },
+  });
   await prisma.user.deleteMany({
     where: {
       clientId: {
@@ -671,6 +678,68 @@ test("admin tenant detail opens db-only clients with a safe default tenant view"
   assert.equal(response.body.tenant.handoffAttendantWaid, "");
   assert.equal(response.body.tenant.defaultLanguage, "pt_BR");
   assert.deepEqual(response.body.tenant.channelAccounts, []);
+});
+
+test("admin onboarding manual bind supports db-only clients", async () => {
+  const dbOnlyClientKey = `${prefix}-db-only-onboarding`;
+  const client = await prisma.client.create({
+    data: {
+      clientKey: dbOnlyClientKey,
+      name: "DB Only Onboarding Tenant",
+      profile: "business",
+      features: {},
+    },
+    select: { id: true },
+  });
+
+  const response = await requestSuperadmin<{
+    success: boolean;
+    phoneNumberId: string | null;
+    phoneMappingAction?: string | null;
+  }>(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}/onboarding/manual-bind`,
+    {
+      phoneNumberId: `${prefix}-phone-db-only`,
+      displayPhoneNumber: "55 84 9***-0000",
+      wabaId: `${prefix}-waba-db-only`,
+      businessId: `${prefix}-business-db-only`,
+      businessPortfolioId: `${prefix}-portfolio-db-only`,
+    }
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(response.body.phoneNumberId, `${prefix}-phone-db-only`);
+  assert.equal(response.body.phoneMappingAction, "created");
+
+  const metaConfig = await prisma.tenantMetaConfig.findUnique({
+    where: { clientId: client.id },
+    select: {
+      phoneNumberId: true,
+      wabaId: true,
+      businessId: true,
+      businessPortfolioId: true,
+    },
+  });
+  assert.equal(metaConfig?.phoneNumberId, `${prefix}-phone-db-only`);
+  assert.equal(metaConfig?.wabaId, `${prefix}-waba-db-only`);
+  assert.equal(metaConfig?.businessId, `${prefix}-business-db-only`);
+  assert.equal(metaConfig?.businessPortfolioId, `${prefix}-portfolio-db-only`);
+
+  const phoneNumber = await prisma.waPhoneNumber.findUnique({
+    where: { phoneNumberId: `${prefix}-phone-db-only` },
+    select: { clientId: true, display: true },
+  });
+  assert.equal(phoneNumber?.clientId, client.id);
+  assert.equal(phoneNumber?.display, "55 84 9***-0000");
+
+  const detail = await requestSuperadmin<{
+    tenant: { metaPhoneNumberId: string; displayPhoneNumber?: string };
+  }>("GET", `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}`);
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.tenant.metaPhoneNumberId, `${prefix}-phone-db-only`);
+  assert.equal(detail.body.tenant.displayPhoneNumber, "55 84 9***-0000");
 });
 
 test("meta usage summary is tenant scoped, role protected and sanitized", async () => {

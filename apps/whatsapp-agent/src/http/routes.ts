@@ -15392,7 +15392,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         ? {
             id: client.clientKey,
             name: client.name,
-            metaPhoneNumberId: "",
+            metaPhoneNumberId:
+              normalizeOptionalString(client.metaConfig?.phoneNumberId) ??
+              normalizeOptionalString(client.phoneNumbers[0]?.phoneNumberId) ??
+              "",
             allowlist: [],
             handoffAttendantWaid: "",
             defaultLanguage: "pt_BR",
@@ -15578,10 +15581,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
       const tenants = await getTenants();
       const tenant = tenants[tenantId];
-      if (!tenant) {
-        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
-        return;
-      }
 
       const client = await prisma.client.findUnique({
         where: { clientKey: tenantId },
@@ -15781,10 +15780,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             displayPhoneNumber,
           });
           phoneMappingAction = syncResult.action;
-          tenantUpdate = await saveTenantPatch(tenantId, {
-            metaPhoneNumberId: finalPhoneNumberId,
-            ...(displayPhoneNumber ? { displayPhoneNumber } : {}),
-          });
+          if (tenant) {
+            tenantUpdate = await saveTenantPatch(tenantId, {
+              metaPhoneNumberId: finalPhoneNumberId,
+              ...(displayPhoneNumber ? { displayPhoneNumber } : {}),
+            });
+          }
         }
         const wabaSubscription = await trySubscribeMetaWabaToApp({
           tenantId,
@@ -15881,10 +15882,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
       const tenants = await getTenants();
       const tenant = tenants[tenantId];
-      if (!tenant) {
-        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
-        return;
-      }
 
       const client = await prisma.client.findUnique({
         where: { clientKey: tenantId },
@@ -15906,7 +15903,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       const configuredPhoneNumberId =
         normalizeOptionalString(tenantMetaConfig?.phoneNumberId) ??
-        normalizeOptionalString(tenant.metaPhoneNumberId);
+        normalizeOptionalString(tenant?.metaPhoneNumberId);
       const requestedPhoneNumberId =
         normalizeOptionalString(body.phoneNumberId) ?? configuredPhoneNumberId;
       if (!requestedPhoneNumberId) {
@@ -15957,10 +15954,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             phoneNumberId: requestedPhoneNumberId,
             displayPhoneNumber,
           });
-          await saveTenantPatch(tenantId, {
-            metaPhoneNumberId: requestedPhoneNumberId,
-            displayPhoneNumber,
-          });
+          if (tenant) {
+            await saveTenantPatch(tenantId, {
+              metaPhoneNumberId: requestedPhoneNumberId,
+              displayPhoneNumber,
+            });
+          }
         }
         const wabaSubscription = await trySubscribeMetaWabaToApp({
           tenantId,
@@ -16075,10 +16074,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
       const tenants = await getTenants();
       const tenant = tenants[tenantId];
-      if (!tenant) {
-        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
-        return;
-      }
 
       const client = await prisma.client.findUnique({
         where: { clientKey: tenantId },
@@ -16162,10 +16157,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           phoneNumberId,
           displayPhoneNumber,
         });
-        const tenantUpdate = await saveTenantPatch(tenantId, {
-          metaPhoneNumberId: phoneNumberId,
-          ...(displayPhoneNumber ? { displayPhoneNumber } : {}),
-        });
+        const tenantUpdate = tenant
+          ? await saveTenantPatch(tenantId, {
+              metaPhoneNumberId: phoneNumberId,
+              ...(displayPhoneNumber ? { displayPhoneNumber } : {}),
+            })
+          : null;
         const wabaSubscription = await trySubscribeMetaWabaToApp({
           tenantId,
           clientKey: client.clientKey,
@@ -16184,7 +16181,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           businessId,
           businessPortfolioId,
           phoneMappingAction: syncResult.action,
-          fieldsChanged: tenantUpdate.fieldsChanged,
+          fieldsChanged: tenantUpdate?.fieldsChanged ?? [],
           wabaSubscription,
         });
 
