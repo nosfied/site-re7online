@@ -5,8 +5,10 @@ import {
   EmbeddedSignupCaptureEntry,
   META_EMBEDDED_SIGNUP_APP_ID,
   META_EMBEDDED_SIGNUP_CONFIG_ID,
+  getRuntimeMetaEmbeddedSignupConfigId,
   loadMetaEmbeddedSignupSdk,
   readEmbeddedSignupQuery,
+  saveRuntimeMetaEmbeddedSignupConfigId,
   safeParseEventData,
   startMetaEmbeddedSignup,
 } from "@/lib/metaEmbeddedSignup";
@@ -16,6 +18,7 @@ export default function MetaEmbeddedSignupDebugPage() {
   const [entries, setEntries] = useState<EmbeddedSignupCaptureEntry[]>([]);
   const [starting, setStarting] = useState(false);
   const [runtimeUrl, setRuntimeUrl] = useState("");
+  const [configId, setConfigId] = useState(META_EMBEDDED_SIGNUP_CONFIG_ID);
   const [sdkReady, setSdkReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
   const [popupOpened, setPopupOpened] = useState(false);
@@ -85,6 +88,7 @@ export default function MetaEmbeddedSignupDebugPage() {
   useEffect(() => {
     const defaultRuntimeUrl = `${window.location.origin}/admin/meta-embedded-signup`;
     setRuntimeUrl(defaultRuntimeUrl);
+    setConfigId(getRuntimeMetaEmbeddedSignupConfigId(window));
     refreshLocationState("query");
   }, [refreshLocationState]);
 
@@ -180,7 +184,8 @@ export default function MetaEmbeddedSignupDebugPage() {
       refreshLocationState("query");
     }, 60000);
 
-    startMetaEmbeddedSignup()
+    const activeConfigId = saveRuntimeMetaEmbeddedSignupConfigId(configId, window);
+    startMetaEmbeddedSignup({ configId: activeConfigId })
       .then((response) => {
         appendEntry({
           timestamp: new Date().toISOString(),
@@ -206,7 +211,7 @@ export default function MetaEmbeddedSignupDebugPage() {
         <header>
           <h1 className="text-2xl font-bold">Meta Embedded Signup Debug v2</h1>
           <p className="mt-1 text-sm text-white/70">
-            app_id={META_EMBEDDED_SIGNUP_APP_ID} • config_id={META_EMBEDDED_SIGNUP_CONFIG_ID} • SDK v19.0
+            app_id={META_EMBEDDED_SIGNUP_APP_ID} • config_id={configId || META_EMBEDDED_SIGNUP_CONFIG_ID} • SDK v19.0
           </p>
         </header>
 
@@ -220,6 +225,18 @@ export default function MetaEmbeddedSignupDebugPage() {
                 onChange={(event) => setRuntimeUrl(event.target.value)}
                 placeholder="https://converta.re7online.com/admin/meta-embedded-signup"
               />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Config ID do Embedded Signup</span>
+              <input
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 font-mono text-white outline-none focus:border-re7-sky"
+                value={configId}
+                onChange={(event) => setConfigId(event.target.value.replace(/\D/g, ""))}
+                placeholder={META_EMBEDDED_SIGNUP_CONFIG_ID}
+              />
+              <span className="text-xs text-white/50">
+                Pode ser sobrescrito por <code>?metaConfigId=...</code>; fica salvo neste navegador.
+              </span>
             </label>
             <div className="flex flex-wrap items-center gap-3">
               <button

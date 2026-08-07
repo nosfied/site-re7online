@@ -1,6 +1,15 @@
-export const META_EMBEDDED_SIGNUP_APP_ID = "2074361376674006";
-export const META_EMBEDDED_SIGNUP_CONFIG_ID = "1261464002116286";
+const DEFAULT_META_EMBEDDED_SIGNUP_APP_ID = "2074361376674006";
+const DEFAULT_META_EMBEDDED_SIGNUP_CONFIG_ID = "1261464002116286";
 const META_SDK_VERSION = "v19.0";
+const CONFIG_ID_STORAGE_KEY = "meta_embedded_signup_config_id_override";
+
+export const META_EMBEDDED_SIGNUP_APP_ID =
+  process.env.NEXT_PUBLIC_META_EMBEDDED_SIGNUP_APP_ID?.trim() ||
+  DEFAULT_META_EMBEDDED_SIGNUP_APP_ID;
+
+export const META_EMBEDDED_SIGNUP_CONFIG_ID =
+  process.env.NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID?.trim() ||
+  DEFAULT_META_EMBEDDED_SIGNUP_CONFIG_ID;
 
 declare global {
   interface Window {
@@ -187,16 +196,47 @@ export async function loadMetaEmbeddedSignupSdk(): Promise<void> {
   });
 }
 
-export async function startMetaEmbeddedSignup(): Promise<unknown> {
+export function getRuntimeMetaEmbeddedSignupConfigId(win: Window = window) {
+  try {
+    const fromQuery = new URLSearchParams(win.location.search)
+      .get("metaConfigId")
+      ?.trim();
+    if (fromQuery) {
+      win.localStorage.setItem(CONFIG_ID_STORAGE_KEY, fromQuery);
+      return fromQuery;
+    }
+    return win.localStorage.getItem(CONFIG_ID_STORAGE_KEY)?.trim() || META_EMBEDDED_SIGNUP_CONFIG_ID;
+  } catch {
+    return META_EMBEDDED_SIGNUP_CONFIG_ID;
+  }
+}
+
+export function saveRuntimeMetaEmbeddedSignupConfigId(configId: string, win: Window = window) {
+  const normalized = configId.trim();
+  if (!normalized) return META_EMBEDDED_SIGNUP_CONFIG_ID;
+  try {
+    win.localStorage.setItem(CONFIG_ID_STORAGE_KEY, normalized);
+  } catch {
+    // Storage can be unavailable in restricted browser modes; the caller can still pass the value directly.
+  }
+  return normalized;
+}
+
+export async function startMetaEmbeddedSignup(options?: { configId?: string | null }): Promise<unknown> {
   if (!window.FB) {
     throw new Error("Facebook SDK ainda nao carregou.");
+  }
+
+  const configId = options?.configId?.trim() || getRuntimeMetaEmbeddedSignupConfigId();
+  if (!configId) {
+    throw new Error("Config ID do Embedded Signup nao configurado.");
   }
 
   return new Promise((resolve) => {
     window.FB?.login(
       (response) => resolve(response),
       {
-        config_id: META_EMBEDDED_SIGNUP_CONFIG_ID,
+        config_id: configId,
         response_type: "code",
         override_default_response_type: true,
         extras: {
