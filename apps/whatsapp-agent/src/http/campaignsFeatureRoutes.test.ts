@@ -746,6 +746,55 @@ test("admin onboarding manual bind supports db-only clients", async () => {
   assert.equal(detail.body.tenant.displayPhoneNumber, "55 84 9***-0000");
 });
 
+test("admin onboarding manual bind rejects phone conflicts without partial meta config", async () => {
+  const ownerClientKey = `${prefix}-db-only-phone-owner`;
+  const targetClientKey = `${prefix}-db-only-phone-conflict`;
+  const owner = await prisma.client.create({
+    data: {
+      clientKey: ownerClientKey,
+      name: "DB Only Phone Owner",
+      profile: "business",
+      features: {},
+    },
+    select: { id: true },
+  });
+  const target = await prisma.client.create({
+    data: {
+      clientKey: targetClientKey,
+      name: "DB Only Phone Conflict",
+      profile: "business",
+      features: {},
+    },
+    select: { id: true },
+  });
+  await prisma.waPhoneNumber.create({
+    data: {
+      clientId: owner.id,
+      phoneNumberId: `${prefix}-phone-conflict`,
+      display: "55 84 9***-1111",
+    },
+  });
+
+  const response = await requestSuperadmin(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(targetClientKey)}/onboarding/manual-bind`,
+    {
+      phoneNumberId: `${prefix}-phone-conflict`,
+      displayPhoneNumber: "55 84 9***-1111",
+      wabaId: `${prefix}-waba-conflict`,
+      businessId: `${prefix}-business-conflict`,
+      businessPortfolioId: `${prefix}-portfolio-conflict`,
+    }
+  );
+
+  assert.equal(response.status, 409);
+  const targetMetaConfig = await prisma.tenantMetaConfig.findUnique({
+    where: { clientId: target.id },
+    select: { phoneNumberId: true, wabaId: true, businessId: true, businessPortfolioId: true },
+  });
+  assert.equal(targetMetaConfig, null);
+});
+
 test("admin onboarding code exchange sends canonical manual oauth redirect uri for db-only clients", async () => {
   const dbOnlyClientKey = `${prefix}-db-only-code-exchange`;
   const client = await prisma.client.create({

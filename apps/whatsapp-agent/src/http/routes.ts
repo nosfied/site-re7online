@@ -16136,6 +16136,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               : null,
         };
 
+        const syncResult = await syncTenantPhoneNumberMapping({
+          clientId: client.id,
+          phoneNumberId,
+          displayPhoneNumber,
+        });
+
         await prisma.tenantMetaConfig.upsert({
           where: { clientId: client.id },
           update: {
@@ -16156,11 +16162,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           },
         });
 
-        const syncResult = await syncTenantPhoneNumberMapping({
-          clientId: client.id,
-          phoneNumberId,
-          displayPhoneNumber,
-        });
         const tenantUpdate = tenant
           ? await saveTenantPatch(tenantId, {
               metaPhoneNumberId: phoneNumberId,
