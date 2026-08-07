@@ -15378,11 +15378,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       const tenants = await getTenants();
-      const tenant = tenants[tenantId];
-      if (!tenant) {
-        json(res, 404, { error: "tenant_not_found" });
-        return;
-      }
       const client = await prisma.client.findUnique({
         where: { clientKey: tenantId },
         include: {
@@ -15393,6 +15388,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           },
         },
       });
+      const tenant = tenants[tenantId] ?? (client
+        ? {
+            id: client.clientKey,
+            name: client.name,
+            metaPhoneNumberId: "",
+            allowlist: [],
+            handoffAttendantWaid: "",
+            defaultLanguage: "pt_BR",
+            channelAccounts: [],
+          }
+        : null);
+      if (!tenant) {
+        json(res, 404, { error: "tenant_not_found" });
+        return;
+      }
       const phone = client?.phoneNumbers[0] ?? null;
       const resolvedManualHandoff = client
         ? await resolveManualHandoffTemplate({

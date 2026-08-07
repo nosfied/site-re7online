@@ -635,6 +635,44 @@ test("admin tenants summary includes db-only clients without activity", async ()
   assert.equal(item.counts.outbound.failed, 0);
 });
 
+test("admin tenant detail opens db-only clients with a safe default tenant view", async () => {
+  const dbOnlyClientKey = `${prefix}-db-only-detail`;
+  await prisma.client.create({
+    data: {
+      clientKey: dbOnlyClientKey,
+      name: "DB Only Detail Tenant",
+      profile: "business",
+      features: {},
+    },
+  });
+
+  const response = await requestSuperadmin<{
+    ok: boolean;
+    tenantId: string;
+    client: { clientKey: string; status: string; profile?: string } | null;
+    tenant: {
+      id: string;
+      name: string;
+      metaPhoneNumberId: string;
+      allowlist: string[];
+      handoffAttendantWaid: string;
+      defaultLanguage: string;
+      channelAccounts?: unknown[];
+    };
+  }>("GET", `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}`);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.tenantId, dbOnlyClientKey);
+  assert.equal(response.body.client?.clientKey, dbOnlyClientKey);
+  assert.equal(response.body.tenant.id, dbOnlyClientKey);
+  assert.equal(response.body.tenant.name, "DB Only Detail Tenant");
+  assert.equal(response.body.tenant.metaPhoneNumberId, "");
+  assert.deepEqual(response.body.tenant.allowlist, []);
+  assert.equal(response.body.tenant.handoffAttendantWaid, "");
+  assert.equal(response.body.tenant.defaultLanguage, "pt_BR");
+  assert.deepEqual(response.body.tenant.channelAccounts, []);
+});
+
 test("meta usage summary is tenant scoped, role protected and sanitized", async () => {
   await prisma.tenantOperationalConfig.upsert({
     where: { clientId: businessClientId },
