@@ -15653,10 +15653,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
       const tenants = await getTenants();
       const tenant = tenants[tenantId];
-      if (!tenant) {
-        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
-        return;
-      }
 
       const client = await prisma.client.findUnique({
         where: { clientKey: tenantId },
