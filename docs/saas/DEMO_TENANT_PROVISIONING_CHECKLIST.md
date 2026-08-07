@@ -111,6 +111,15 @@ cd apps/whatsapp-agent
 npm run demo:readiness -- --tenant demo-converta
 ```
 
+Para planejar provisionamento sem escrita:
+
+```bash
+cd apps/whatsapp-agent
+npm run demo:provision -- --tenant demo-converta
+```
+
+O comando `demo:provision` e dry-run por padrao. A execucao com `--apply` so pode ocorrer apos autorizacao explicita e deve ser limitada ao tenant `demo-converta`.
+
 Conferir:
 
 - nenhum `FAIL` impeditivo;

@@ -52,6 +52,7 @@
     "webhooks:dispatch": "node --import tsx scripts/webhooks-dispatch.ts",
     "demo:seed": "node scripts/seed-demo.mjs",
     "demo:readiness": "node --import tsx scripts/demo-tenant-readiness.ts",
+    "demo:provision": "node --import tsx scripts/provision-demo-tenant.ts",
     "demo:seed:boa-esperanca-poc": "node scripts/seed-boa-esperanca-poc.mjs",
     "demo:status:boa-esperanca-poc": "node scripts/seed-boa-esperanca-poc.mjs status",
     "demo:seed:re7-screenshots": "node scripts/seed-re7-demo-screenshots.mjs",
