@@ -5305,6 +5305,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                   contextualMode: resolvedReplyContext.mode,
                   replyToKind: resolvedReplyContext.replyToKind,
                   replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
+                  replyToType: resolvedReplyContext.previewType,
                   replyToMetaMessagePresent: true,
                 }
               : {}),
@@ -5378,6 +5379,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             outboundMessageId: result.messageId,
             replyToKind: resolvedReplyContext.replyToKind,
             replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
+            replyToType: resolvedReplyContext.previewType,
             replyToMetaMessagePresent: true,
             mode: resolvedReplyContext.mode,
           },
@@ -5652,6 +5654,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             outboundMessageId: result.messageId,
             replyToKind: resolvedReplyContext.replyToKind,
             replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
+            replyToType: resolvedReplyContext.previewType,
             replyToMetaMessagePresent: true,
             mode: resolvedReplyContext.mode,
             reason: "message_send_failed",
@@ -5699,6 +5702,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             outboundMessageId: result.messageId,
             replyToKind: resolvedReplyContext.replyToKind,
             replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
+            replyToType: resolvedReplyContext.previewType,
             replyToMetaMessagePresent: true,
             mode: resolvedReplyContext.mode,
           },
@@ -27002,6 +27006,7 @@ function serializeContextualReplyPayload(reply: ResolvedInboxContextualReply | n
     replyToInternalMessageId: reply.replyToInternalMessageId,
     replyToMetaMessagePresent: true,
     previewType: reply.previewType,
+    replyToType: reply.previewType,
     mode: reply.mode,
   };
 }

@@ -1818,6 +1818,37 @@ test("inbox text contextual reply resolves internal message references safely", 
       bodyText: "Mensagem antiga sem Meta ID",
     },
   });
+  const mediaInboundMessages = await Promise.all(
+    (["AUDIO", "IMAGE", "VIDEO", "DOCUMENT", "LOCATION"] as const).map((type) =>
+      prisma.inboundMessage.create({
+        data: {
+          clientId: businessClientId,
+          waId,
+          waIdCanonical: waId,
+          messageId: `wamid.inbound.${type.toLowerCase()}.${safeTemplatePrefix}`,
+          type,
+          bodyText: null,
+          allowlistHit: true,
+          rawPayload:
+            type === "LOCATION"
+              ? { location: { latitude: -5.7945, longitude: -35.211 } }
+              : { media: { mediaId: `media-${type.toLowerCase()}-${safeTemplatePrefix}` } },
+        },
+      })
+    )
+  );
+  const outboundMedia = await prisma.outboundMessage.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      messageId: `previous.outbound.media.${safeTemplatePrefix}`,
+      metaMessageId: `wamid.previous.media.${safeTemplatePrefix}`,
+      type: "IMAGE",
+      status: "SENT",
+      rawPayload: { media: { mediaId: `out-media-${safeTemplatePrefix}` } },
+    },
+  });
 
   const originalFetch = globalThis.fetch;
   const metaPayloads: unknown[] = [];
@@ -1932,6 +1963,52 @@ test("inbox text contextual reply resolves internal message references safely", 
   assert.equal(normalSend.status, 200, JSON.stringify(normalSend.body));
   assert.equal((metaPayloads[4] as { context?: unknown }).context, undefined);
 
+  for (const mediaInbound of mediaInboundMessages) {
+    const payloadIndex: number = metaPayloads.length;
+    const mediaReply = await request<{
+      ok: true;
+      message: { status: string; replyTo: { kind: string; id: string; previewType: string; mode: string } };
+    }>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+      text: `Resposta para ${mediaInbound.type.toLowerCase()}.`,
+      replyTo: { kind: "inbound", id: mediaInbound.id },
+    });
+    assert.equal(mediaReply.status, 200, JSON.stringify(mediaReply.body));
+    assert.deepEqual(mediaReply.body.message.replyTo, {
+      kind: "inbound",
+      id: mediaInbound.id,
+      previewType: mediaInbound.type,
+      mode: "reply",
+    });
+    assert.equal(
+      (metaPayloads[payloadIndex] as { context?: { message_id?: string } }).context?.message_id,
+      mediaInbound.messageId
+    );
+  }
+
+  const mediaRectificationPayloadIndex = metaPayloads.length;
+  const mediaRectification = await request<{
+    ok: true;
+    message: { status: string; replyTo: { kind: string; id: string; previewType: string; mode: string } };
+  }>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+    text: "A imagem correta e a segunda.",
+    replyTo: { kind: "outbound", id: outboundMedia.id, mode: "rectify" },
+  });
+  assert.equal(mediaRectification.status, 200, JSON.stringify(mediaRectification.body));
+  assert.deepEqual(mediaRectification.body.message.replyTo, {
+    kind: "outbound",
+    id: outboundMedia.id,
+    previewType: "IMAGE",
+    mode: "rectify",
+  });
+  assert.equal(
+    (metaPayloads[mediaRectificationPayloadIndex] as { context?: { message_id?: string } }).context?.message_id,
+    outboundMedia.metaMessageId
+  );
+  assert.equal(
+    (metaPayloads[mediaRectificationPayloadIndex] as { text?: { body?: string } }).text?.body,
+    "Retificacao: A imagem correta e a segunda."
+  );
+
   const persisted = await prisma.outboundMessage.findFirstOrThrow({
     where: { clientId: businessClientId, waId, messageId: inboundReply.body.message.messageId },
   });
@@ -1940,6 +2017,7 @@ test("inbox text contextual reply resolves internal message references safely", 
   assert.equal(contextualReply.replyToInternalMessageId, inbound.id);
   assert.equal(contextualReply.replyToMetaMessagePresent, true);
   assert.equal(contextualReply.mode, "reply");
+  assert.equal(contextualReply.replyToType, "TEXT");
   assert.equal(JSON.stringify(contextualReply).includes("wamid."), false);
   assert.equal(JSON.stringify(contextualReply).includes(waId), false);
 
@@ -1971,7 +2049,7 @@ test("inbox text contextual reply resolves internal message references safely", 
   });
   assert.equal(missingMeta.status, 409);
   assert.equal(getErrorCode(missingMeta.body), "reply_context_unavailable");
-  assert.equal(metaPayloads.length, 5);
+  assert.equal(metaPayloads.length, 11);
 });
 
 test("inbox template send blocks opt-out, inactive templates, missing variables and cross tenant template", async (t) => {
