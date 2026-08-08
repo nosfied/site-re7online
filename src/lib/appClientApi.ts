@@ -2095,7 +2095,7 @@ export async function sendAppConversationMessage(
   session: AppSession,
   waId: string,
   text: string,
-  replyTo?: { kind: "inbound" | "outbound"; id: string } | null
+  replyTo?: { kind: "inbound" | "outbound"; id: string; mode?: "reply" | "rectify" } | null
 ): Promise<AppConversationOperationalPayload & {
   message: {
     messageId: string;
@@ -2137,7 +2137,7 @@ export async function sendAppConversationCannedReply(
   session: AppSession,
   waId: string,
   cannedReplyId: string,
-  replyTo?: { kind: "inbound" | "outbound"; id: string } | null
+  replyTo?: { kind: "inbound" | "outbound"; id: string; mode?: "reply" | "rectify" } | null
 ): Promise<AppConversationOperationalPayload & {
   message: {
     messageId: string;

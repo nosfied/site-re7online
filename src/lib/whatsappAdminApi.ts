@@ -52,6 +52,7 @@ export type InboxMessageItem = {
     kind: "inbound" | "outbound";
     id: string;
     previewType?: string | null;
+    mode?: "reply" | "rectify" | string | null;
     previewBody?: string | null;
     previewDirection?: "INBOUND" | "OUTBOUND" | string | null;
   } | null;

@@ -35,6 +35,14 @@ Conversas com dados anonimizados nao devem aparecer no uso normal. Se um contato
 
 Quando a interface indicar janela fechada, use modelo aprovado. Nao use mensagem pronta como alternativa para burlar a regra.
 
+## Responder e retificar mensagens
+
+No Inbox, `Responder` cita uma mensagem anterior para manter contexto. Use quando a nova resposta depende diretamente de uma pergunta, documento, imagem ou informacao ja enviada na conversa.
+
+`Retificar` deve ser usado apenas para corrigir ou esclarecer uma mensagem enviada anteriormente pelo operador ou pelo sistema. A retificacao cria uma nova mensagem, enviada com indicacao explicita de retificacao, e nao altera nem apaga a mensagem original, o historico, o identificador Meta ou os registros de auditoria.
+
+Editar mensagem original nao faz parte do fluxo operacional. Quando houver erro em uma comunicacao ja enviada, envie uma retificacao clara em vez de tentar modificar o registro anterior.
+
 ## Modelos aprovados
 
 Antes de enviar um modelo:

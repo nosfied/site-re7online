@@ -425,13 +425,32 @@ function getReplyPreviewText(item: InboxMessageItem) {
   return `[${getMessageContentLabel(item)}]`;
 }
 
-function buildReplyTarget(item: InboxMessageItem): InboxReplyTarget | null {
+function isRectificationText(text: string) {
+  return /^retifica[cç][aã]o\s*:/i.test(text.trim());
+}
+
+function withRectificationPrefix(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed || isRectificationText(trimmed)) return trimmed;
+  return `Retificacao: ${trimmed}`;
+}
+
+function buildOutgoingTextForReplyMode(text: string, mode: InboxReplyMode) {
+  return mode === "rectify" ? withRectificationPrefix(text) : text.trim();
+}
+
+function getContextualModeLabel(mode: InboxReplyMode) {
+  return mode === "rectify" ? "Retificando mensagem enviada" : "Respondendo";
+}
+
+function buildReplyTarget(item: InboxMessageItem, mode: InboxReplyMode = "reply"): InboxReplyTarget | null {
   const kind = getMessageReplyKind(item);
   const id = getMessageReplyId(item);
   if (!kind || !id) return null;
   return {
     kind,
     id,
+    mode,
     preview: getReplyPreviewText(item),
     direction: item.direction,
     type: item.type,
@@ -857,9 +876,12 @@ type PendingOutgoingMessage = {
   replyTo: InboxReplyTarget | null;
 };
 
+type InboxReplyMode = "reply" | "rectify";
+
 type InboxReplyTarget = {
   kind: "inbound" | "outbound";
   id: string;
+  mode: InboxReplyMode;
   preview: string;
   direction: "INBOUND" | "OUTBOUND";
   type: string;
@@ -4290,7 +4312,7 @@ export default function AppInboxPage() {
             session,
             next.waId,
             next.text,
-            next.replyTo ? { kind: next.replyTo.kind, id: next.replyTo.id } : null
+            next.replyTo ? { kind: next.replyTo.kind, id: next.replyTo.id, mode: next.replyTo.mode } : null
           );
           const requestMs = performance.now() - requestStartedAt;
           const uiStartedAt = performance.now();
@@ -4313,6 +4335,7 @@ export default function AppInboxPage() {
                     kind: next.replyTo.kind,
                     id: next.replyTo.id,
                     previewType: next.replyTo.type,
+                    mode: next.replyTo.mode,
                     previewBody: next.replyTo.preview,
                     previewDirection: next.replyTo.direction,
                   }
@@ -4401,10 +4424,12 @@ export default function AppInboxPage() {
     }
     const text = messageDraft.trim();
     if (!text) return;
+    const outgoingText = buildOutgoingTextForReplyMode(text, replyTarget?.mode ?? "reply");
+    if (!outgoingText) return;
     const queuedMessage: PendingOutgoingMessage = {
       waId: selectedConversationWaId,
       conversationKey: getConversationIdentity(selectedConversation),
-      text,
+      text: outgoingText,
       replyTo: replyTarget,
     };
     setMessageDraft("");
@@ -4550,7 +4575,11 @@ export default function AppInboxPage() {
   const handlePrimarySend = async () => {
     if (selectedMediaFile) {
       if (replyTarget) {
-        setError("Resposta contextual com anexo ainda nao esta disponivel. Cancele a citacao ou envie uma mensagem de texto.");
+        setError(
+          replyTarget.mode === "rectify"
+            ? "Retificacao com anexo ainda nao esta disponivel. Cancele a retificacao ou envie uma mensagem de texto."
+            : "Resposta contextual com anexo ainda nao esta disponivel. Cancele a citacao ou envie uma mensagem de texto."
+        );
         setErrorDetails(null);
         return;
       }
@@ -4592,7 +4621,11 @@ export default function AppInboxPage() {
       return;
     }
     if (replyTarget) {
-      setError("Resposta contextual com modelo aprovado ainda nao esta disponivel. Cancele a citacao para enviar um modelo.");
+      setError(
+        replyTarget.mode === "rectify"
+          ? "Retificacao com modelo aprovado ainda nao esta disponivel. Cancele a retificacao para enviar um modelo."
+          : "Resposta contextual com modelo aprovado ainda nao esta disponivel. Cancele a citacao para enviar um modelo."
+      );
       setErrorDetails(null);
       return;
     }
@@ -4771,7 +4804,7 @@ export default function AppInboxPage() {
         session,
         selectedConversationWaId,
         selectedCannedReply.id,
-        replyTarget ? { kind: replyTarget.kind, id: replyTarget.id } : null
+        replyTarget ? { kind: replyTarget.kind, id: replyTarget.id, mode: replyTarget.mode } : null
       );
       shouldScrollToBottomRef.current = true;
       const outboundMessage: InboxMessageItem = {
@@ -4791,6 +4824,7 @@ export default function AppInboxPage() {
               kind: replyTarget.kind,
               id: replyTarget.id,
               previewType: replyTarget.type,
+              mode: replyTarget.mode,
               previewBody: replyTarget.preview,
               previewDirection: replyTarget.direction,
             }
@@ -6482,6 +6516,10 @@ export default function AppInboxPage() {
                 const statusTicks = renderMessageStatusTicks(item);
                 const shouldAutoLoadMedia = index >= Math.max(messages.length - 8, 0);
                 const replyOption = buildReplyTarget(item);
+                const rectifyOption =
+                  item.direction === "OUTBOUND" && item.metaMessageId?.trim()
+                    ? buildReplyTarget(item, "rectify")
+                    : null;
                 const isUnreadAnchor = unreadAnchorMessageIdentity
                   ? unreadAnchorMessageIdentity === messageIdentity
                   : unreadSeparatorIndex === index;
@@ -6510,9 +6548,19 @@ export default function AppInboxPage() {
                         } ${item.media?.kind === "audio" ? "min-w-[19rem]" : ""}`}
                       >
                         {item.replyTo ? (
-                          <div className="mb-2 rounded-lg border-l-4 border-emerald-500/60 bg-white/55 px-3 py-2 text-xs text-slate-700">
+                          <div
+                            className={`mb-2 rounded-lg border-l-4 bg-white/55 px-3 py-2 text-xs text-slate-700 ${
+                              item.replyTo.mode === "rectify"
+                                ? "border-amber-500/70"
+                                : "border-emerald-500/60"
+                            }`}
+                          >
                             <p className="font-semibold text-slate-800">
-                              Respondendo a {item.replyTo.previewDirection === "OUTBOUND" ? "mensagem enviada" : "mensagem recebida"}
+                              {item.replyTo.mode === "rectify"
+                                ? "Retificacao de mensagem enviada"
+                                : `Respondendo a ${
+                                    item.replyTo.previewDirection === "OUTBOUND" ? "mensagem enviada" : "mensagem recebida"
+                                  }`}
                             </p>
                             <p className="mt-0.5 line-clamp-2 break-words">{getTimelineReplyPreview(item)}</p>
                           </div>
@@ -6557,16 +6605,33 @@ export default function AppInboxPage() {
                         ) : null}
                         <div className="mt-2 flex items-center justify-end gap-1 text-[11px] text-slate-600">
                           {replyOption && selectedConversationSupportsTemplateOutbound ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setReplyTarget(replyOption);
-                                focusComposer();
-                              }}
-                              className="mr-auto rounded-full border border-slate-300/70 bg-white/60 px-2 py-0.5 font-semibold text-slate-700 transition hover:bg-white"
-                            >
-                              Responder
-                            </button>
+                            <div className="mr-auto flex flex-wrap items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReplyTarget(replyOption);
+                                  focusComposer();
+                                }}
+                                className="rounded-full border border-slate-300/70 bg-white/60 px-2 py-0.5 font-semibold text-slate-700 transition hover:bg-white"
+                              >
+                                Responder
+                              </button>
+                              {rectifyOption ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReplyTarget(rectifyOption);
+                                    if (!messageDraft.trim()) {
+                                      setMessageDraft("Retificacao: ");
+                                    }
+                                    focusComposer();
+                                  }}
+                                  className="rounded-full border border-amber-300/80 bg-amber-50/80 px-2 py-0.5 font-semibold text-amber-800 transition hover:bg-amber-50"
+                                >
+                                  Retificar
+                                </button>
+                              ) : null}
+                            </div>
                           ) : null}
                           <span>{formatDateTime(item.createdAt)}</span>
                           {statusTicks}
@@ -6622,19 +6687,31 @@ export default function AppInboxPage() {
               </div>
             ) : null}
             {replyTarget ? (
-              <div className="mb-2 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950">
+              <div
+                className={`mb-2 flex items-start gap-3 rounded-xl border px-3 py-2 text-xs ${
+                  replyTarget.mode === "rectify"
+                    ? "border-amber-200 bg-amber-50 text-amber-950"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-950"
+                }`}
+              >
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">
-                    Respondendo a {replyTarget.direction === "OUTBOUND" ? "mensagem enviada" : "mensagem recebida"}
+                    {replyTarget.mode === "rectify"
+                      ? getContextualModeLabel(replyTarget.mode)
+                      : `Respondendo a ${replyTarget.direction === "OUTBOUND" ? "mensagem enviada" : "mensagem recebida"}`}
                   </p>
                   <p className="mt-0.5 line-clamp-2 break-words">{replyTarget.preview}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setReplyTarget(null)}
-                  className="shrink-0 rounded-full px-2 py-0.5 text-sm font-bold text-emerald-900 hover:bg-emerald-100"
-                  aria-label="Cancelar resposta contextual"
-                  title="Cancelar resposta contextual"
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-sm font-bold ${
+                    replyTarget.mode === "rectify"
+                      ? "text-amber-900 hover:bg-amber-100"
+                      : "text-emerald-900 hover:bg-emerald-100"
+                  }`}
+                  aria-label={replyTarget.mode === "rectify" ? "Cancelar retificacao" : "Cancelar resposta contextual"}
+                  title={replyTarget.mode === "rectify" ? "Cancelar retificacao" : "Cancelar resposta contextual"}
                 >
                   ×
                 </button>

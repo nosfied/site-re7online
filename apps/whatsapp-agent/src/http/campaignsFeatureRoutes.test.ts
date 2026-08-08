@@ -1824,7 +1824,14 @@ test("inbox text contextual reply resolves internal message references safely", 
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     if (url.startsWith("https://graph.facebook.com/")) {
-      metaPayloads.push(JSON.parse(String(init?.body ?? "{}")));
+      const payload = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      metaPayloads.push(payload);
+      if (String((payload.text as Record<string, unknown> | undefined)?.body ?? "").includes("Falha controlada")) {
+        return new Response(JSON.stringify({ error: { message: "Context rejected" } }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify({ messages: [{ id: `wamid.reply.${metaPayloads.length}` }] }), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -1848,7 +1855,7 @@ test("inbox text contextual reply resolves internal message references safely", 
     replyTo: { kind: "inbound", id: inbound.id },
   });
   assert.equal(inboundReply.status, 200, JSON.stringify(inboundReply.body));
-  assert.deepEqual(inboundReply.body.message.replyTo, { kind: "inbound", id: inbound.id, previewType: "TEXT" });
+  assert.deepEqual(inboundReply.body.message.replyTo, { kind: "inbound", id: inbound.id, previewType: "TEXT", mode: "reply" });
   assert.equal((metaPayloads[0] as { context?: { message_id?: string } }).context?.message_id, inbound.messageId);
 
   const outboundReply = await request<{
@@ -1864,8 +1871,66 @@ test("inbox text contextual reply resolves internal message references safely", 
     }
   );
   assert.equal(outboundReply.status, 200, JSON.stringify(outboundReply.body));
-  assert.deepEqual(outboundReply.body.message.replyTo, { kind: "outbound", id: outbound.id, previewType: "TEMPLATE" });
+  assert.deepEqual(outboundReply.body.message.replyTo, { kind: "outbound", id: outbound.id, previewType: "TEMPLATE", mode: "reply" });
   assert.equal((metaPayloads[1] as { context?: { message_id?: string } }).context?.message_id, outbound.metaMessageId);
+
+  const rectification = await request<{
+    ok: true;
+    message: {
+      messageId: string;
+      status: string;
+      replyTo: { kind: string; id: string; previewType: string; mode: string };
+    };
+  }>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+    text: "O prazo correto e sexta-feira.",
+    replyTo: { kind: "outbound", id: outbound.id, mode: "rectify" },
+  });
+  assert.equal(rectification.status, 200, JSON.stringify(rectification.body));
+  assert.deepEqual(rectification.body.message.replyTo, { kind: "outbound", id: outbound.id, previewType: "TEMPLATE", mode: "rectify" });
+  assert.equal((metaPayloads[2] as { context?: { message_id?: string } }).context?.message_id, outbound.metaMessageId);
+  assert.equal((metaPayloads[2] as { text?: { body?: string } }).text?.body, "Retificacao: O prazo correto e sexta-feira.");
+
+  const persistedRectification = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, waId, messageId: rectification.body.message.messageId },
+  });
+  assert.equal(persistedRectification.bodyText, "Retificacao: O prazo correto e sexta-feira.");
+  const rectificationPayload = (persistedRectification.rawPayload as Record<string, unknown>).contextualReply as Record<string, unknown>;
+  assert.equal(rectificationPayload.mode, "rectify");
+  assert.equal(rectificationPayload.replyToInternalMessageId, outbound.id);
+  assert.equal(JSON.stringify(rectificationPayload).includes("wamid."), false);
+  assert.equal(JSON.stringify(rectificationPayload).includes(waId), false);
+
+  const inboundRectification = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+    text: "Nao deve enviar",
+    replyTo: { kind: "inbound", id: inbound.id, mode: "rectify" },
+  });
+  assert.equal(inboundRectification.status, 409);
+  assert.equal(getErrorCode(inboundRectification.body), "reply_context_invalid_target");
+  assert.equal(metaPayloads.length, 3);
+
+  const failedRectification = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+    text: "Falha controlada de contexto",
+    replyTo: { kind: "outbound", id: outbound.id, mode: "rectify" },
+  });
+  assert.equal(failedRectification.status, 502);
+  assert.equal(getErrorCode(failedRectification.body), "message_send_failed");
+  assert.equal(metaPayloads.length, 4);
+  assert.equal((metaPayloads[3] as { context?: { message_id?: string } }).context?.message_id, outbound.metaMessageId);
+  assert.equal((metaPayloads[3] as { text?: { body?: string } }).text?.body, "Retificacao: Falha controlada de contexto");
+
+  const failedEvent = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, conversationId: conversation.id, eventName: "inbox.reply.failed" },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.equal((failedEvent.payloadJson as Record<string, unknown>).mode, "rectify");
+  assert.equal(JSON.stringify(failedEvent.payloadJson).includes("wamid."), false);
+  assert.equal(JSON.stringify(failedEvent.payloadJson).includes(waId), false);
+
+  const normalSend = await request<{ ok: true; message: { status: string } }>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+    text: "Mensagem simples sem citacao.",
+  });
+  assert.equal(normalSend.status, 200, JSON.stringify(normalSend.body));
+  assert.equal((metaPayloads[4] as { context?: unknown }).context, undefined);
 
   const persisted = await prisma.outboundMessage.findFirstOrThrow({
     where: { clientId: businessClientId, waId, messageId: inboundReply.body.message.messageId },
@@ -1874,6 +1939,7 @@ test("inbox text contextual reply resolves internal message references safely", 
   assert.equal(contextualReply.replyToKind, "inbound");
   assert.equal(contextualReply.replyToInternalMessageId, inbound.id);
   assert.equal(contextualReply.replyToMetaMessagePresent, true);
+  assert.equal(contextualReply.mode, "reply");
   assert.equal(JSON.stringify(contextualReply).includes("wamid."), false);
   assert.equal(JSON.stringify(contextualReply).includes(waId), false);
 
@@ -1905,7 +1971,7 @@ test("inbox text contextual reply resolves internal message references safely", 
   });
   assert.equal(missingMeta.status, 409);
   assert.equal(getErrorCode(missingMeta.body), "reply_context_unavailable");
-  assert.equal(metaPayloads.length, 2);
+  assert.equal(metaPayloads.length, 5);
 });
 
 test("inbox template send blocks opt-out, inactive templates, missing variables and cross tenant template", async (t) => {

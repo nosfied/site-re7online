@@ -5300,6 +5300,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             cannedReplyId: cannedReply.id,
             reason: failedReason,
             windowOpenAtSend: true,
+            ...(resolvedReplyContext
+              ? {
+                  contextualMode: resolvedReplyContext.mode,
+                  replyToKind: resolvedReplyContext.replyToKind,
+                  replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
+                  replyToMetaMessagePresent: true,
+                }
+              : {}),
           },
         });
         if (!result.ok && result.error === "window_closed" && "errorPayload" in result && result.errorPayload) {
@@ -5371,6 +5379,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             replyToKind: resolvedReplyContext.replyToKind,
             replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
             replyToMetaMessagePresent: true,
+            mode: resolvedReplyContext.mode,
           },
         });
       }
@@ -5390,7 +5399,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           metaMessageId: result.metaMessageId,
           createdAt: result.createdAt,
           type: "TEXT",
-          bodyText: cannedReply.body,
+          bodyText: buildContextualOutboundText(cannedReply.body, resolvedReplyContext?.mode ?? "reply"),
           source: "canned_reply",
           cannedReplyId: cannedReply.id,
           cannedReplyTitle: cannedReply.title,
@@ -5644,12 +5653,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             replyToKind: resolvedReplyContext.replyToKind,
             replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
             replyToMetaMessagePresent: true,
+            mode: resolvedReplyContext.mode,
             reason: "message_send_failed",
           },
         });
         json(res, 502, {
           error: "message_send_failed",
-          message: "Falha ao enviar resposta contextual.",
+          message:
+            resolvedReplyContext.mode === "rectify"
+              ? "Falha ao enviar retificacao."
+              : "Falha ao enviar resposta contextual.",
         });
         return;
       }
@@ -5687,6 +5700,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             replyToKind: resolvedReplyContext.replyToKind,
             replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
             replyToMetaMessagePresent: true,
+            mode: resolvedReplyContext.mode,
           },
         });
       }
@@ -25572,6 +25586,7 @@ async function buildConversationDetailPayload(
               kind: contextualReply.kind,
               id: contextualReply.id,
               previewType: contextualReply.previewType,
+              mode: contextualReply.mode,
               previewBody: null as string | null,
               previewDirection: null as string | null,
             }
@@ -26935,6 +26950,7 @@ function applyAiIntentQualificationToTenantView<T extends Record<string, unknown
 type InboxContextualReplyInput = {
   kind: "inbound" | "outbound";
   id: string;
+  mode: "reply" | "rectify";
 };
 
 type ResolvedInboxContextualReply = {
@@ -26942,7 +26958,22 @@ type ResolvedInboxContextualReply = {
   replyToInternalMessageId: string;
   replyToMetaMessageId: string;
   previewType: MessageType;
+  mode: "reply" | "rectify";
 };
+
+function normalizeInboxContextualReplyMode(value: unknown): "reply" | "rectify" | null {
+  if (value == null) return "reply";
+  const mode = String(value).trim().toLowerCase();
+  if (mode === "reply" || mode === "rectify") return mode;
+  return null;
+}
+
+function buildContextualOutboundText(text: string, mode: "reply" | "rectify") {
+  const trimmed = text.trim();
+  if (mode !== "rectify") return trimmed;
+  if (/^retifica[cç][aã]o\s*:/i.test(trimmed)) return trimmed;
+  return `Retificacao: ${trimmed}`;
+}
 
 function parseInboxContextualReplyInput(value: unknown):
   | { ok: true; replyTo: InboxContextualReplyInput | null }
@@ -26954,10 +26985,14 @@ function parseInboxContextualReplyInput(value: unknown):
   const record = value as Record<string, unknown>;
   const kind = String(record.kind ?? "").trim().toLowerCase();
   const id = String(record.id ?? "").trim();
+  const mode = normalizeInboxContextualReplyMode(record.mode ?? record.contextualMode);
   if ((kind !== "inbound" && kind !== "outbound") || !id) {
     return { ok: false, code: "reply_context_invalid", message: "Referencia de resposta invalida." };
   }
-  return { ok: true, replyTo: { kind, id } };
+  if (!mode) {
+    return { ok: false, code: "reply_context_invalid", message: "Modo de resposta contextual invalido." };
+  }
+  return { ok: true, replyTo: { kind, id, mode } };
 }
 
 function serializeContextualReplyPayload(reply: ResolvedInboxContextualReply | null) {
@@ -26967,6 +27002,7 @@ function serializeContextualReplyPayload(reply: ResolvedInboxContextualReply | n
     replyToInternalMessageId: reply.replyToInternalMessageId,
     replyToMetaMessagePresent: true,
     previewType: reply.previewType,
+    mode: reply.mode,
   };
 }
 
@@ -26976,6 +27012,7 @@ function serializeContextualReplyForClient(reply: ResolvedInboxContextualReply |
     kind: reply.replyToKind,
     id: reply.replyToInternalMessageId,
     previewType: reply.previewType,
+    mode: reply.mode,
   };
 }
 
@@ -26984,6 +27021,7 @@ function extractContextualReplyPayload(rawPayload: unknown):
       kind: "inbound" | "outbound";
       id: string;
       previewType: string | null;
+      mode: "reply" | "rectify";
     }
   | null {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return null;
@@ -26997,6 +27035,7 @@ function extractContextualReplyPayload(rawPayload: unknown):
     kind,
     id,
     previewType: String(record.previewType ?? "").trim() || null,
+    mode: record.mode === "rectify" ? "rectify" : "reply",
   };
 }
 
@@ -27013,6 +27052,14 @@ async function resolveInboxContextualReply(
   | { ok: false; status: number; code: string; message: string }
 > {
   const createdAtWhere = params.historyVisibleAfter ? { createdAt: { gt: params.historyVisibleAfter } } : {};
+  if (params.replyTo.mode === "rectify" && params.replyTo.kind !== "outbound") {
+    return {
+      ok: false,
+      status: 409,
+      code: "reply_context_invalid_target",
+      message: "Retificacao disponivel apenas para mensagens enviadas.",
+    };
+  }
   const sharedWhere = {
     clientId: params.clientId,
     id: params.replyTo.id,
@@ -27037,6 +27084,7 @@ async function resolveInboxContextualReply(
         replyToInternalMessageId: inbound.id,
         replyToMetaMessageId: inbound.messageId,
         previewType: inbound.type,
+        mode: params.replyTo.mode,
       },
     };
   }
@@ -27058,6 +27106,7 @@ async function resolveInboxContextualReply(
       replyToInternalMessageId: outbound.id,
       replyToMetaMessageId: outbound.metaMessageId,
       previewType: outbound.type,
+      mode: params.replyTo.mode,
     },
   };
 }
@@ -27117,9 +27166,10 @@ async function adminSendMessage(params: {
     return { ok: false, statusCode: 503, error: "tenant_outbound_credentials_missing" };
   }
 
+  const outboundText = buildContextualOutboundText(params.text, params.reply?.mode ?? "reply");
   const sendResult = await sendTextMessage(
     params.waId,
-    params.text,
+    outboundText,
     {
       accessToken: credentials.accessToken,
       phoneNumberId: credentials.phoneNumberId,
@@ -27152,7 +27202,7 @@ async function adminSendMessage(params: {
     messageId,
     type: "TEXT",
     status,
-    bodyText: params.text,
+    bodyText: outboundText,
     requestId: params.requestId,
     metaMessageId: sendResult.messageId ?? null,
     errorBody: sendResult.errorBody ?? null,
