@@ -37,13 +37,15 @@ Quando a interface indicar janela fechada, use modelo aprovado. Nao use mensagem
 
 ## Marcar mensagem como referencia
 
-No Inbox, `Marcar` seleciona uma mensagem anterior como referencia contextual da proxima mensagem. Use quando a nova comunicacao depende de uma pergunta, documento, imagem, audio, modelo ou informacao ja enviada na conversa.
+No Inbox, o icone `Marcar mensagem` seleciona uma mensagem anterior como referencia contextual da proxima mensagem. Use quando a nova comunicacao depende de uma pergunta, documento, imagem, audio, modelo ou informacao ja enviada na conversa.
 
 Marcar nao define a intencao da nova mensagem. O operador escreve livremente e pode usar a referencia para responder, corrigir, complementar ou esclarecer. O Converta nao adiciona prefixos automaticos como resposta ou retificacao.
 
 Ao clicar no bloco de `Referencia` em uma mensagem enviada com marcacao, a timeline tenta rolar ate a mensagem original e destaca a bolha correspondente. Se a mensagem original nao estiver carregada no historico atual, a interface informa que a referencia nao esta disponivel naquele momento.
 
-Editar mensagem original nao faz parte do fluxo operacional. Quando houver erro em uma comunicacao ja enviada, envie uma nova mensagem clara usando `Marcar`, sem tentar modificar o registro anterior.
+Editar mensagem original nao faz parte do fluxo operacional. Quando houver erro em uma comunicacao ja enviada, envie uma nova mensagem clara usando essa marcacao, sem tentar modificar o registro anterior.
+
+Os baloes priorizam conteudo, horario, status, autoria humana e referencias. O canal da conversa fica no contexto do atendimento e nao e repetido em cada mensagem.
 
 ## Modelos aprovados
 

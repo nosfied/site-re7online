@@ -5,6 +5,7 @@ type SendResult = {
   status?: number;
   messageId?: string;
   errorBody?: string;
+  requestDiagnostic?: WhatsAppTextMessageRequestDiagnostic;
 };
 
 type TenantSendCredentials = {
@@ -37,16 +38,27 @@ export type UploadMediaResult =
 
 export type SendMediaKind = "image" | "document" | "audio" | "video";
 
-export async function sendTextMessage(
+type WhatsAppTextMessagePayload = {
+  messaging_product: "whatsapp";
+  to: string;
+  context?: { message_id: string };
+  type: "text";
+  text: { body: string };
+};
+
+export type WhatsAppTextMessageRequestDiagnostic = {
+  messageType: "text";
+  contextPresent: boolean;
+  contextMessageIdPresent: boolean;
+  replyToOriginalType: string | null;
+};
+
+export function buildWhatsAppTextMessagePayload(
   to: string,
   body: string,
-  credentials?: TenantSendCredentials,
   options?: { replyToMetaMessageId?: string | null }
-): Promise<SendResult> {
-  const phoneNumberId = credentials?.phoneNumberId?.trim() || env.WHATSAPP_PHONE_NUMBER_ID;
-  const accessToken = credentials?.accessToken?.trim() || env.WHATSAPP_ACCESS_TOKEN;
-  const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${phoneNumberId}/messages`;
-  const payload = {
+): WhatsAppTextMessagePayload {
+  return {
     messaging_product: "whatsapp",
     to,
     ...(options?.replyToMetaMessageId
@@ -55,6 +67,33 @@ export async function sendTextMessage(
     type: "text",
     text: { body },
   };
+}
+
+export function buildWhatsAppTextMessageRequestDiagnostic(
+  payload: WhatsAppTextMessagePayload,
+  options?: { replyToOriginalType?: string | null }
+): WhatsAppTextMessageRequestDiagnostic {
+  return {
+    messageType: payload.type,
+    contextPresent: Boolean(payload.context),
+    contextMessageIdPresent: Boolean(payload.context?.message_id),
+    replyToOriginalType: options?.replyToOriginalType ?? null,
+  };
+}
+
+export async function sendTextMessage(
+  to: string,
+  body: string,
+  credentials?: TenantSendCredentials,
+  options?: { replyToMetaMessageId?: string | null; replyToOriginalType?: string | null }
+): Promise<SendResult> {
+  const phoneNumberId = credentials?.phoneNumberId?.trim() || env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = credentials?.accessToken?.trim() || env.WHATSAPP_ACCESS_TOKEN;
+  const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${phoneNumberId}/messages`;
+  const payload = buildWhatsAppTextMessagePayload(to, body, options);
+  const requestDiagnostic = buildWhatsAppTextMessageRequestDiagnostic(payload, {
+    replyToOriginalType: options?.replyToOriginalType ?? null,
+  });
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
@@ -80,14 +119,14 @@ export async function sendTextMessage(
         // ignore parse errors
       }
 
-      return { ok: true, status: response.status, messageId };
+      return { ok: true, status: response.status, messageId, requestDiagnostic };
     }
 
     const errorText = await response.text().catch(() => "");
-    return { ok: false, status: response.status, errorBody: errorText.slice(0, 500) };
+    return { ok: false, status: response.status, errorBody: errorText.slice(0, 500), requestDiagnostic };
   } catch {
     clearTimeout(timeout);
-    return { ok: false };
+    return { ok: false, requestDiagnostic };
   }
 }
 

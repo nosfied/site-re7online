@@ -27286,7 +27286,10 @@ async function adminSendMessage(params: {
       accessToken: credentials.accessToken,
       phoneNumberId: credentials.phoneNumberId,
     },
-    { replyToMetaMessageId: params.reply?.replyToMetaMessageId ?? null }
+    {
+      replyToMetaMessageId: params.reply?.replyToMetaMessageId ?? null,
+      replyToOriginalType: params.reply?.previewType ?? null,
+    }
   );
   const status = sendResult.ok ? "SENT" : "FAILED";
   const messageId = `admin.send.${params.requestId}`;
@@ -27330,6 +27333,9 @@ async function adminSendMessage(params: {
         : {}),
       cannedReplyId: params.cannedReplyId ?? null,
       ...(params.reply ? { contextualReply: serializeContextualReplyPayload(params.reply) } : {}),
+      ...(params.reply && sendResult.requestDiagnostic
+        ? { contextualReplyProviderRequest: sendResult.requestDiagnostic }
+        : {}),
       metaUsage: usagePayload,
       status: sendResult.status ?? null,
       errorBody: sendResult.errorBody ?? null,

@@ -1988,7 +1988,7 @@ test("inbox text contextual reply resolves internal message references safely", 
     const payloadIndex: number = metaPayloads.length;
     const mediaReply = await request<{
       ok: true;
-      message: { status: string; replyTo: { kind: string; id: string; previewType: string; mode: string } };
+      message: { messageId: string; status: string; replyTo: { kind: string; id: string; previewType: string; mode: string } };
     }>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
       text: `Resposta para ${mediaInbound.type.toLowerCase()}.`,
       replyTo: { kind: "inbound", id: mediaInbound.id },
@@ -2010,6 +2010,27 @@ test("inbox text contextual reply resolves internal message references safely", 
         (metaPayloads[payloadIndex] as { context?: { message_id?: string } }).context?.message_id,
         mediaId
       );
+      const persistedAudioReply = await prisma.outboundMessage.findFirstOrThrow({
+        where: { clientId: businessClientId, waId, messageId: mediaReply.body.message.messageId },
+      });
+      const audioContextualReply = (persistedAudioReply.rawPayload as Record<string, unknown>).contextualReply as Record<
+        string,
+        unknown
+      >;
+      const audioProviderRequest = (persistedAudioReply.rawPayload as Record<string, unknown>)
+        .contextualReplyProviderRequest as Record<string, unknown>;
+      assert.equal(audioContextualReply.originalType, "AUDIO");
+      assert.equal(audioContextualReply.contextRequested, true);
+      assert.equal(audioContextualReply.contextResolved, true);
+      assert.equal(audioContextualReply.contextAttached, true);
+      assert.deepEqual(audioProviderRequest, {
+        messageType: "text",
+        contextPresent: true,
+        contextMessageIdPresent: true,
+        replyToOriginalType: "AUDIO",
+      });
+      assert.equal(JSON.stringify(audioProviderRequest).includes("wamid."), false);
+      assert.equal(JSON.stringify(audioProviderRequest).includes(waId), false);
     }
   }
 

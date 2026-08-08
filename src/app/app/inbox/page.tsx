@@ -6610,17 +6610,10 @@ export default function AppInboxPage() {
                             <p className="mt-0.5 line-clamp-2 break-words">{getTimelineReplyPreview(item)}</p>
                           </button>
                         ) : null}
-                        <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase text-slate-500/80">
-                          <ConversationChannelLogo item={selectedConversation} className="h-3.5 w-3.5" />
-                          <span>
-                            {item.direction === "INBOUND" ? "Recebida" : "Enviada"} via{" "}
-                            {getConversationChannelLabel(selectedConversation)}
-                          </span>
-                        </div>
                         {item.direction === "OUTBOUND" &&
                         item.actor?.source === "human_inbox" &&
                         item.actor.displayName ? (
-                          <p className="mb-1 text-[11px] font-semibold text-slate-700">
+                          <p className="mb-1 text-[11px] font-medium leading-none text-slate-500">
                             {item.actor.displayName}
                           </p>
                         ) : null}
@@ -6655,19 +6648,36 @@ export default function AppInboxPage() {
                             <span>Modelo: {item.templateName}</span>
                           </div>
                         ) : null}
-                        <div className="mt-2 flex items-center justify-end gap-1 text-[11px] text-slate-600">
+                        <div className="mt-2 flex items-center justify-end gap-1.5 text-[11px] text-slate-600">
                           {replyOption && selectedConversationSupportsTemplateOutbound ? (
-                            <div className="mr-auto flex flex-wrap items-center gap-1">
+                            <div className="mr-auto flex items-center">
                               <button
                                 type="button"
                                 onClick={() => {
                                   setReplyTarget(replyOption);
                                   focusComposer();
                                 }}
-                                className="rounded-full border border-slate-300/70 bg-white/60 px-2 py-0.5 font-semibold text-slate-700 transition hover:bg-white"
-                                title="Marcar esta mensagem como referencia da proxima"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-300/70 bg-white/55 text-slate-600 transition hover:bg-white hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+                                title="Marcar mensagem"
+                                aria-label="Marcar mensagem"
                               >
-                                Marcar
+                                <svg
+                                  aria-hidden="true"
+                                  viewBox="0 0 24 24"
+                                  className="h-3.5 w-3.5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <path d="M3 11c0-3.3 2.7-6 6-6h2" />
+                                  <path d="M3 11c0 3.3 2.7 6 6 6h1" />
+                                  <path d="m8 8 3 3-3 3" />
+                                  <path d="M14 7h7" />
+                                  <path d="M14 12h7" />
+                                  <path d="M14 17h5" />
+                                </svg>
                               </button>
                             </div>
                           ) : null}
