@@ -4540,12 +4540,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         where: { id: clientAuth.userId, clientId: client.id },
         select: { name: true },
       });
+      const persistedOutbound = await prisma.outboundMessage.findUnique({
+        where: {
+          clientId_messageId: {
+            clientId: client.id,
+            messageId,
+          },
+        },
+        select: { id: true },
+      });
       json(res, 200, {
         ...payload,
         waId: payload.waId ?? resolvedConversation.resolvedWaId,
         waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         message: {
           messageId,
+          internalMessageId: persistedOutbound?.id ?? null,
           status,
           metaMessageId: sendResult.metaMessageId ?? null,
           createdAt: createdAt.toISOString(),
@@ -5321,6 +5331,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                   replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
                   replyToType: resolvedReplyContext.previewType,
                   replyToMetaMessagePresent: true,
+                  ...buildContextualReplyDiagnosticPayload(resolvedReplyContext),
                 }
               : {}),
           },
@@ -5395,6 +5406,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
             replyToType: resolvedReplyContext.previewType,
             replyToMetaMessagePresent: true,
+            ...buildContextualReplyDiagnosticPayload(resolvedReplyContext),
             mode: resolvedReplyContext.mode,
           },
         });
@@ -5415,6 +5427,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         ...serializeInboxChannelFields(resolvedConversation.winner ?? undefined),
         message: {
           messageId: result.messageId,
+          internalMessageId:
+            resolvedChannel === "whatsapp" && "internalMessageId" in result ? result.internalMessageId : null,
           status: result.status,
           metaMessageId: result.metaMessageId,
           createdAt: result.createdAt,
@@ -5680,16 +5694,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
             replyToType: resolvedReplyContext.previewType,
             replyToMetaMessagePresent: true,
+            ...buildContextualReplyDiagnosticPayload(resolvedReplyContext),
             mode: resolvedReplyContext.mode,
             reason: "message_send_failed",
           },
         });
         json(res, 502, {
           error: "message_send_failed",
-          message:
-            resolvedReplyContext.mode === "rectify"
-              ? "Falha ao enviar retificacao."
-              : "Falha ao enviar resposta contextual.",
+          message: "Falha ao enviar mensagem com referencia.",
         });
         return;
       }
@@ -5732,6 +5744,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
             replyToType: resolvedReplyContext.previewType,
             replyToMetaMessagePresent: true,
+            ...buildContextualReplyDiagnosticPayload(resolvedReplyContext),
             mode: resolvedReplyContext.mode,
           },
         });
@@ -5756,6 +5769,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               ),
         message: {
           messageId: result.messageId,
+          internalMessageId: "internalMessageId" in result ? result.internalMessageId : null,
           status: result.status,
           metaMessageId: result.metaMessageId,
           createdAt: result.createdAt,
@@ -6003,6 +6017,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         message: {
           messageId: result.messageId,
+          internalMessageId: result.internalMessageId,
           status: result.status,
           metaMessageId: result.metaMessageId,
           createdAt: result.createdAt,
@@ -27031,11 +27046,9 @@ function normalizeInboxContextualReplyMode(value: unknown): "reply" | "rectify" 
   return null;
 }
 
-function buildContextualOutboundText(text: string, mode: "reply" | "rectify") {
+function buildContextualOutboundText(text: string, _mode: "reply" | "rectify") {
   const trimmed = text.trim();
-  if (mode !== "rectify") return trimmed;
-  if (/^retifica[cç][aã]o\s*:/i.test(trimmed)) return trimmed;
-  return `Retificacao: ${trimmed}`;
+  return trimmed;
 }
 
 function parseInboxContextualReplyInput(value: unknown):
@@ -27066,6 +27079,10 @@ function serializeContextualReplyPayload(reply: ResolvedInboxContextualReply | n
     replyToMetaMessagePresent: true,
     previewType: reply.previewType,
     replyToType: reply.previewType,
+    originalType: reply.previewType,
+    contextRequested: true,
+    contextResolved: true,
+    contextAttached: true,
     mode: reply.mode,
   };
 }
@@ -27077,6 +27094,15 @@ function serializeContextualReplyForClient(reply: ResolvedInboxContextualReply |
     id: reply.replyToInternalMessageId,
     previewType: reply.previewType,
     mode: reply.mode,
+  };
+}
+
+function buildContextualReplyDiagnosticPayload(reply: ResolvedInboxContextualReply) {
+  return {
+    originalType: reply.previewType,
+    contextRequested: true,
+    contextResolved: true,
+    contextAttached: true,
   };
 }
 
@@ -27144,14 +27170,6 @@ async function resolveInboxContextualReply(
   | { ok: false; status: number; code: string; message: string }
 > {
   const createdAtWhere = params.historyVisibleAfter ? { createdAt: { gt: params.historyVisibleAfter } } : {};
-  if (params.replyTo.mode === "rectify" && params.replyTo.kind !== "outbound") {
-    return {
-      ok: false,
-      status: 409,
-      code: "reply_context_invalid_target",
-      message: "Retificacao disponivel apenas para mensagens enviadas.",
-    };
-  }
   const sharedWhere = {
     clientId: params.clientId,
     id: params.replyTo.id,
@@ -27218,6 +27236,7 @@ async function adminSendMessage(params: {
       ok: true;
       status: "SENT" | "FAILED";
       messageId: string;
+      internalMessageId: string | null;
       metaMessageId: string | null;
       createdAt: string;
     }
@@ -27355,6 +27374,16 @@ async function adminSendMessage(params: {
     });
   }
 
+  const persistedOutbound = await getPrisma().outboundMessage.findUnique({
+    where: {
+      clientId_messageId: {
+        clientId: params.clientId,
+        messageId,
+      },
+    },
+    select: { id: true },
+  });
+
   logger.info({
     event: sendResult.ok ? "admin.conversation.send.sent" : "admin.conversation.send.failed",
     waId: maskWaId(params.waId),
@@ -27369,6 +27398,7 @@ async function adminSendMessage(params: {
     ok: true,
     status,
     messageId,
+    internalMessageId: persistedOutbound?.id ?? null,
     metaMessageId: sendResult.messageId ?? null,
     createdAt,
   };
@@ -27901,6 +27931,7 @@ async function adminSendMediaMessage(params: {
       ok: true;
       status: "SENT" | "FAILED";
       messageId: string;
+      internalMessageId: string | null;
       metaMessageId: string | null;
       createdAt: string;
       mediaType: "IMAGE" | "DOCUMENT" | "AUDIO" | "VIDEO";
@@ -28119,10 +28150,21 @@ async function adminSendMediaMessage(params: {
     };
   }
 
+  const persistedOutbound = await getPrisma().outboundMessage.findUnique({
+    where: {
+      clientId_messageId: {
+        clientId: params.clientId,
+        messageId,
+      },
+    },
+    select: { id: true },
+  });
+
   return {
     ok: true,
     status,
     messageId,
+    internalMessageId: persistedOutbound?.id ?? null,
     metaMessageId: sendResult.messageId ?? null,
     createdAt,
     mediaType: prismaType,

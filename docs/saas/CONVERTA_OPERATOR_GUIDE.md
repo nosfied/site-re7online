@@ -35,13 +35,15 @@ Conversas com dados anonimizados nao devem aparecer no uso normal. Se um contato
 
 Quando a interface indicar janela fechada, use modelo aprovado. Nao use mensagem pronta como alternativa para burlar a regra.
 
-## Responder e retificar mensagens
+## Marcar mensagem como referencia
 
-No Inbox, `Responder` cita uma mensagem anterior para manter contexto. Use quando a nova resposta depende diretamente de uma pergunta, documento, imagem ou informacao ja enviada na conversa.
+No Inbox, `Marcar` seleciona uma mensagem anterior como referencia contextual da proxima mensagem. Use quando a nova comunicacao depende de uma pergunta, documento, imagem, audio, modelo ou informacao ja enviada na conversa.
 
-`Retificar` deve ser usado apenas para corrigir ou esclarecer uma mensagem enviada anteriormente pelo operador ou pelo sistema. A retificacao cria uma nova mensagem, enviada com indicacao explicita de retificacao, e nao altera nem apaga a mensagem original, o historico, o identificador Meta ou os registros de auditoria.
+Marcar nao define a intencao da nova mensagem. O operador escreve livremente e pode usar a referencia para responder, corrigir, complementar ou esclarecer. O Converta nao adiciona prefixos automaticos como resposta ou retificacao.
 
-Editar mensagem original nao faz parte do fluxo operacional. Quando houver erro em uma comunicacao ja enviada, envie uma retificacao clara em vez de tentar modificar o registro anterior.
+Ao clicar no bloco de `Referencia` em uma mensagem enviada com marcacao, a timeline tenta rolar ate a mensagem original e destaca a bolha correspondente. Se a mensagem original nao estiver carregada no historico atual, a interface informa que a referencia nao esta disponivel naquele momento.
+
+Editar mensagem original nao faz parte do fluxo operacional. Quando houver erro em uma comunicacao ja enviada, envie uma nova mensagem clara usando `Marcar`, sem tentar modificar o registro anterior.
 
 ## Modelos aprovados
 

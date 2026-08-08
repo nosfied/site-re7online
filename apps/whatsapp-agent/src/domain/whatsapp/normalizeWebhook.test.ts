@@ -2,6 +2,53 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeWebhook } from "./normalizeWebhook.js";
 
+test("normalizeWebhook preserva messages[].id como messageId para text e audio", () => {
+  const result = normalizeWebhook({
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              messages: [
+                {
+                  id: "wamid.text.context",
+                  from: "5511999999999",
+                  timestamp: "1776816000",
+                  type: "text",
+                  text: { body: "texto de teste" },
+                },
+                {
+                  id: "wamid.audio.context",
+                  from: "5511999999999",
+                  timestamp: "1776816001",
+                  type: "audio",
+                  audio: {
+                    id: "media-audio-context",
+                    mime_type: "audio/ogg",
+                    sha256: "audio-sha",
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.messages.length, 2);
+  const textMessage = result.messages[0]!;
+  const audioMessage = result.messages[1]!;
+  assert.equal(textMessage.type, "text");
+  assert.equal(textMessage.messageId, "wamid.text.context");
+  assert.equal(textMessage.raw?.id, "wamid.text.context");
+  assert.equal(audioMessage.type, "audio");
+  assert.equal(audioMessage.messageId, "wamid.audio.context");
+  assert.equal(audioMessage.raw?.id, "wamid.audio.context");
+  const audioMedia = audioMessage.raw?.media as Record<string, unknown> | undefined;
+  assert.equal(audioMedia?.mediaId, "media-audio-context");
+});
+
 test("normalizeWebhook extrai metadados de image", () => {
   const result = normalizeWebhook({
     entry: [

@@ -419,6 +419,14 @@ function getMessageReplyId(item: InboxMessageItem) {
   return item.internalMessageId?.trim() || null;
 }
 
+function canMarkMessageAsReference(item: InboxMessageItem) {
+  if (!getMessageReplyId(item)) return false;
+  const kind = getMessageReplyKind(item);
+  if (kind === "inbound") return Boolean(item.messageId?.trim());
+  if (kind === "outbound") return Boolean(item.metaMessageId?.trim());
+  return false;
+}
+
 function getReplyPreviewText(item: InboxMessageItem) {
   const text = item.bodyText?.replace(/\s+/g, " ").trim();
   if (text) return text.length > 120 ? `${text.slice(0, 117)}...` : text;
@@ -430,6 +438,7 @@ function buildOutgoingTextForReplyMode(text: string, _mode: InboxReplyMode) {
 }
 
 function buildReplyTarget(item: InboxMessageItem, mode: InboxReplyMode = "reply"): InboxReplyTarget | null {
+  if (!canMarkMessageAsReference(item)) return null;
   const kind = getMessageReplyKind(item);
   const id = getMessageReplyId(item);
   if (!kind || !id) return null;
@@ -2012,6 +2021,7 @@ export default function AppInboxPage() {
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [unreadSeparatorIndex, setUnreadSeparatorIndex] = useState<number | null>(null);
   const [unreadAnchorMessageIdentity, setUnreadAnchorMessageIdentity] = useState<string | null>(null);
+  const [highlightedReferenceId, setHighlightedReferenceId] = useState<string | null>(null);
   const [readState, setReadState] = useState<InboxReadState>(EMPTY_READ_STATE);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
@@ -2051,6 +2061,7 @@ export default function AppInboxPage() {
   const selectedConversationIdentityCandidatesRef = useRef<string[]>([]);
   const refreshConversationListRef = useRef<((activeSession: AppSession) => Promise<void>) | null>(null);
   const timelineCacheRef = useRef(new Map<string, InboxMessageItem[]>());
+  const highlightedReferenceTimeoutRef = useRef<number | null>(null);
   const renderedPriorityLogKeysRef = useRef(new Set<string>());
   const sortedLogSignatureRef = useRef<string | null>(null);
 
@@ -2526,6 +2537,39 @@ export default function AppInboxPage() {
         onComplete?.();
       });
     });
+  }, []);
+
+  const handleReferenceNavigation = useCallback((messageId: string) => {
+    const targetId = messageId.trim();
+    if (!targetId) return;
+    const node = timelineRef.current;
+    const escapedTargetId =
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(targetId)
+        : targetId.replace(/["\\]/g, "\\$&");
+    const target = node?.querySelector<HTMLElement>(`[data-internal-message-id="${escapedTargetId}"]`);
+    if (!node || !target) {
+      setError("Mensagem original nao esta carregada.");
+      setErrorDetails(null);
+      return;
+    }
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedReferenceId(targetId);
+    if (highlightedReferenceTimeoutRef.current) {
+      window.clearTimeout(highlightedReferenceTimeoutRef.current);
+    }
+    highlightedReferenceTimeoutRef.current = window.setTimeout(() => {
+      setHighlightedReferenceId((current) => (current === targetId ? null : current));
+      highlightedReferenceTimeoutRef.current = null;
+    }, 1800);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (highlightedReferenceTimeoutRef.current) {
+        window.clearTimeout(highlightedReferenceTimeoutRef.current);
+      }
+    };
   }, []);
 
   const focusComposer = useCallback(() => {
@@ -4315,6 +4359,7 @@ export default function AppInboxPage() {
               templateLang: null,
               requestId: null,
               messageId: response.message.messageId,
+              internalMessageId: response.message.internalMessageId ?? null,
               metaMessageId: response.message.metaMessageId,
               actor: response.message.actor ?? {
                 source: "human_inbox",
@@ -4490,6 +4535,7 @@ export default function AppInboxPage() {
           templateLang: null,
           requestId: null,
           messageId: response.message.messageId,
+          internalMessageId: response.message.internalMessageId ?? null,
           metaMessageId: response.message.metaMessageId,
           actor: response.message.actor ?? {
             source: "human_inbox",
@@ -4666,6 +4712,7 @@ export default function AppInboxPage() {
         templateLang: response.message.templateLang,
         requestId: null,
         messageId: response.message.messageId,
+        internalMessageId: response.message.internalMessageId ?? null,
         metaMessageId: response.message.metaMessageId,
         actor: response.message.actor ?? {
           source: "human_inbox",
@@ -4813,6 +4860,7 @@ export default function AppInboxPage() {
         templateLang: null,
         requestId: null,
         messageId: response.message.messageId,
+        internalMessageId: response.message.internalMessageId ?? null,
         metaMessageId: response.message.metaMessageId,
         actor: response.message.actor ?? {
           source: "human_inbox",
@@ -6516,6 +6564,9 @@ export default function AppInboxPage() {
                 const statusTicks = renderMessageStatusTicks(item);
                 const shouldAutoLoadMedia = index >= Math.max(messages.length - 8, 0);
                 const replyOption = buildReplyTarget(item);
+                const internalMessageId = getMessageReplyId(item);
+                const isHighlightedReference =
+                  Boolean(internalMessageId) && highlightedReferenceId === internalMessageId;
                 const isUnreadAnchor = unreadAnchorMessageIdentity
                   ? unreadAnchorMessageIdentity === messageIdentity
                   : unreadSeparatorIndex === index;
@@ -6536,22 +6587,28 @@ export default function AppInboxPage() {
                     ) : null}
                     <div
                       data-message-index={index}
+                      data-internal-message-id={internalMessageId ?? undefined}
                       className={`flex ${item.direction === "INBOUND" ? "justify-start" : "justify-end"}`}
                     >
                       <article
-                        className={`wa-bubble ${
+                        className={`wa-bubble transition ${
                           item.direction === "INBOUND" ? "wa-bubble-inbound" : "wa-bubble-outbound"
-                        } ${item.media?.kind === "audio" ? "min-w-[19rem]" : ""}`}
+                        } ${item.media?.kind === "audio" ? "min-w-[19rem]" : ""} ${
+                          isHighlightedReference ? "ring-2 ring-amber-400 ring-offset-2 ring-offset-[#efe6d7]" : ""
+                        }`}
                       >
                         {item.replyTo ? (
-                          <div
-                            className="mb-2 rounded-lg border-l-4 border-emerald-500/60 bg-white/55 px-3 py-2 text-xs text-slate-700"
+                          <button
+                            type="button"
+                            onClick={() => handleReferenceNavigation(item.replyTo?.id ?? "")}
+                            className="mb-2 block w-full rounded-lg border-l-4 border-emerald-500/60 bg-white/55 px-3 py-2 text-left text-xs text-slate-700 transition hover:bg-white/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+                            title="Ir para a mensagem marcada"
                           >
                             <p className="font-semibold text-slate-800">
                               Referencia
                             </p>
                             <p className="mt-0.5 line-clamp-2 break-words">{getTimelineReplyPreview(item)}</p>
-                          </div>
+                          </button>
                         ) : null}
                         <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase text-slate-500/80">
                           <ConversationChannelLogo item={selectedConversation} className="h-3.5 w-3.5" />
@@ -6608,8 +6665,9 @@ export default function AppInboxPage() {
                                   focusComposer();
                                 }}
                                 className="rounded-full border border-slate-300/70 bg-white/60 px-2 py-0.5 font-semibold text-slate-700 transition hover:bg-white"
+                                title="Marcar esta mensagem como referencia da proxima"
                               >
-                                Responder
+                                Marcar
                               </button>
                             </div>
                           ) : null}
@@ -6672,7 +6730,7 @@ export default function AppInboxPage() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">
-                    {`Respondendo a ${replyTarget.direction === "OUTBOUND" ? "mensagem enviada" : "mensagem recebida"}`}
+                    Mensagem marcada
                   </p>
                   <p className="mt-0.5 line-clamp-2 break-words">{replyTarget.preview}</p>
                 </div>
@@ -6680,8 +6738,8 @@ export default function AppInboxPage() {
                   type="button"
                   onClick={() => setReplyTarget(null)}
                   className="shrink-0 rounded-full px-2 py-0.5 text-sm font-bold text-emerald-900 hover:bg-emerald-100"
-                  aria-label="Cancelar resposta contextual"
-                  title="Cancelar resposta contextual"
+                  aria-label="Remover mensagem marcada"
+                  title="Remover mensagem marcada"
                 >
                   ×
                 </button>

@@ -2099,6 +2099,7 @@ export async function sendAppConversationMessage(
 ): Promise<AppConversationOperationalPayload & {
   message: {
     messageId: string;
+    internalMessageId?: string | null;
     status: string;
     metaMessageId: string | null;
     createdAt: string;
@@ -2119,6 +2120,7 @@ export async function sendAppConversationTemplate(
 ): Promise<AppConversationOperationalPayload & {
   message: {
     messageId: string;
+    internalMessageId?: string | null;
     status: string;
     metaMessageId: string | null;
     createdAt: string;
@@ -2143,6 +2145,7 @@ export async function sendAppConversationCannedReply(
 ): Promise<AppConversationOperationalPayload & {
   message: {
     messageId: string;
+    internalMessageId?: string | null;
     status: string;
     metaMessageId: string | null;
     createdAt: string;
@@ -2169,6 +2172,7 @@ export async function sendAppConversationMedia(
 ): Promise<AppConversationOperationalPayload & {
   message: {
     messageId: string;
+    internalMessageId?: string | null;
     status: string;
     metaMessageId: string | null;
     createdAt: string;
