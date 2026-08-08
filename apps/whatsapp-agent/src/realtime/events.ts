@@ -1,4 +1,6 @@
 export type InboxRealtimeMessage = {
+  internalMessageId?: string | null;
+  messageKind?: "inbound" | "outbound" | string | null;
   direction: "INBOUND";
   type: string;
   status: "RECEIVED";

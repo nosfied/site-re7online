@@ -4427,6 +4427,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         errorBody: sendResult.errorBody ?? null,
         rawPayload: {
           source: "inbox_template",
+          actor: {
+            source: "human_inbox",
+            userId: clientAuth.userId,
+          },
           conversationId: conversationRow.id,
           templateId: template.id,
           templateName: template.name,
@@ -4532,6 +4536,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientKey: client.clientKey,
         conversation: nextConversation ?? currentConversation,
       });
+      const actorUser = await prisma.user.findFirst({
+        where: { id: clientAuth.userId, clientId: client.id },
+        select: { name: true },
+      });
       json(res, 200, {
         ...payload,
         waId: payload.waId ?? resolvedConversation.resolvedWaId,
@@ -4545,6 +4553,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           bodyText,
           templateName: template.name,
           templateLang: template.language,
+          actor: {
+            source: "human_inbox",
+            userId: clientAuth.userId,
+            displayName: actorUser?.name ?? null,
+          },
         },
       });
     } catch (error) {
@@ -5283,6 +5296,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "canned_reply",
         cannedReplyId: cannedReply.id,
+        actorUserId: clientAuth.userId,
         reply: resolvedReplyContext,
       });
       if (!result.ok || result.status === "FAILED") {
@@ -5390,6 +5404,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientKey: client.clientKey,
         conversation,
       });
+      const actorUser = await prisma.user.findFirst({
+        where: { id: clientAuth.userId, clientId: client.id },
+        select: { name: true },
+      });
       json(res, 200, {
         ...payload,
         waId: payload.waId ?? resolvedConversation.resolvedWaId,
@@ -5406,6 +5424,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           cannedReplyId: cannedReply.id,
           cannedReplyTitle: cannedReply.title,
           replyTo: serializeContextualReplyForClient(resolvedReplyContext),
+          actor: {
+            source: "human_inbox",
+            userId: clientAuth.userId,
+            displayName: actorUser?.name ?? null,
+          },
         },
       });
     } catch (error) {
@@ -5626,6 +5649,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                   clientKey: client.clientKey,
                   clientId: client.id,
                   requestId,
+                  actorUserId: clientAuth.userId,
                   reply: resolvedReplyContext,
                 });
       if (!result.ok) {
@@ -5687,6 +5711,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientKey: client.clientKey,
         conversation,
       });
+      const actorUser = await prisma.user.findFirst({
+        where: { id: clientAuth.userId, clientId: client.id },
+        select: { name: true },
+      });
       if (resolvedReplyContext) {
         await persistEvent({
           clientId: client.id,
@@ -5732,6 +5760,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           metaMessageId: result.metaMessageId,
           createdAt: result.createdAt,
           replyTo: serializeContextualReplyForClient(resolvedReplyContext),
+          actor: {
+            source: "human_inbox",
+            userId: clientAuth.userId,
+            displayName: actorUser?.name ?? null,
+          },
         },
       });
     } catch (error) {
@@ -5890,6 +5923,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientKey: client.clientKey,
         clientId: client.id,
         requestId,
+        actorUserId: clientAuth.userId,
         mimeType: body.file.mimeType,
         fileName: body.file.fileName,
         caption: body.caption,
@@ -5959,6 +5993,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientKey: client.clientKey,
         conversation,
       });
+      const actorUser = await prisma.user.findFirst({
+        where: { id: clientAuth.userId, clientId: client.id },
+        select: { name: true },
+      });
       json(res, 200, {
         ...payload,
         waId: payload.waId ?? resolvedConversation.resolvedWaId,
@@ -5971,6 +6009,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           type: result.mediaType,
           bodyText: result.bodyText,
           media: result.media,
+          actor: {
+            source: "human_inbox",
+            userId: clientAuth.userId,
+            displayName: actorUser?.name ?? null,
+          },
         },
       });
     } catch (error) {
@@ -25521,6 +25564,20 @@ async function buildConversationDetailPayload(
     }),
   ]);
   params.latency?.duration("detailMessageQuery", messageQueryStartedAt);
+  const actorUserIds = Array.from(
+    new Set(
+      outbound
+        .map((item) => extractOutboundActorPayload(item.rawPayload)?.userId ?? null)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+  const actorUsers = actorUserIds.length
+    ? await prisma.user.findMany({
+        where: { clientId: params.clientId, id: { in: actorUserIds } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const actorDisplayNameByUserId = new Map(actorUsers.map((item) => [item.id, item.name]));
   const operationalLookupsStartedAt = channelLatencyNow();
   const operationalLookups = await loadConversationOperationalLookups(prisma, {
     clientId: params.clientId,
@@ -25558,6 +25615,7 @@ async function buildConversationDetailPayload(
     ...outbound.map((item) => {
       const metaStatus = extractMetaStatus(item.rawPayload);
       const contextualReply = extractContextualReplyPayload(item.rawPayload);
+      const actor = extractOutboundActorPayload(item.rawPayload);
       return {
         internalMessageId: item.id,
         messageKind: "outbound",
@@ -25595,6 +25653,7 @@ async function buildConversationDetailPayload(
               previewDirection: null as string | null,
             }
           : null,
+        actor: serializeOutboundActorForClient(actor, actorDisplayNameByUserId),
         rawPayload: params.includeRaw ? item.rawPayload : undefined,
       };
     }),
@@ -27044,6 +27103,34 @@ function extractContextualReplyPayload(rawPayload: unknown):
   };
 }
 
+function extractOutboundActorPayload(rawPayload: unknown):
+  | {
+      source: string;
+      userId: string | null;
+    }
+  | null {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return null;
+  const actor = (rawPayload as Record<string, unknown>).actor;
+  if (!actor || typeof actor !== "object" || Array.isArray(actor)) return null;
+  const record = actor as Record<string, unknown>;
+  const source = String(record.source ?? "").trim();
+  const userId = String(record.userId ?? "").trim();
+  if (source !== "human_inbox" || !userId) return null;
+  return { source, userId };
+}
+
+function serializeOutboundActorForClient(
+  actor: ReturnType<typeof extractOutboundActorPayload>,
+  displayNameByUserId: Map<string, string>
+) {
+  if (!actor?.userId) return null;
+  return {
+    source: actor.source,
+    userId: actor.userId,
+    displayName: displayNameByUserId.get(actor.userId) ?? "Usuario nao disponivel",
+  };
+}
+
 async function resolveInboxContextualReply(
   prisma: ReturnType<typeof getPrisma>,
   params: {
@@ -27122,6 +27209,7 @@ async function adminSendMessage(params: {
   clientKey: string;
   clientId: string;
   requestId: string;
+  actorUserId?: string | null;
   source?: "admin_inbox" | "canned_reply";
   cannedReplyId?: string | null;
   reply?: ResolvedInboxContextualReply | null;
@@ -27213,6 +27301,14 @@ async function adminSendMessage(params: {
     errorBody: sendResult.errorBody ?? null,
     rawPayload: {
       source: params.source ?? "admin_inbox",
+      ...(params.actorUserId
+        ? {
+            actor: {
+              source: "human_inbox",
+              userId: params.actorUserId,
+            },
+          }
+        : {}),
       cannedReplyId: params.cannedReplyId ?? null,
       ...(params.reply ? { contextualReply: serializeContextualReplyPayload(params.reply) } : {}),
       metaUsage: usagePayload,
@@ -27795,6 +27891,7 @@ async function adminSendMediaMessage(params: {
   clientKey: string;
   clientId: string;
   requestId: string;
+  actorUserId?: string | null;
   mimeType: string;
   fileName?: string | null;
   caption?: string | null;
@@ -27983,6 +28080,14 @@ async function adminSendMediaMessage(params: {
         localSize: storedMedia?.size ?? null,
       },
       source: "admin_inbox_media",
+      ...(params.actorUserId
+        ? {
+            actor: {
+              source: "human_inbox",
+              userId: params.actorUserId,
+            },
+          }
+        : {}),
       status: sendResult.status ?? null,
       errorBody: sendResult.errorBody ?? null,
     },

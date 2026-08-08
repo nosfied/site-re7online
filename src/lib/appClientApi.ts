@@ -2103,6 +2103,7 @@ export async function sendAppConversationMessage(
     metaMessageId: string | null;
     createdAt: string;
     replyTo?: InboxMessageItem["replyTo"];
+    actor?: InboxMessageItem["actor"];
   };
 }> {
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/send`, {
@@ -2125,6 +2126,7 @@ export async function sendAppConversationTemplate(
     bodyText: string | null;
     templateName: string;
     templateLang: string | null;
+    actor?: InboxMessageItem["actor"];
   };
 }> {
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/send-template`, {
@@ -2150,6 +2152,7 @@ export async function sendAppConversationCannedReply(
     cannedReplyId: string;
     cannedReplyTitle: string;
     replyTo?: InboxMessageItem["replyTo"];
+    actor?: InboxMessageItem["actor"];
   };
 }> {
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/send-canned-reply`, {
@@ -2179,6 +2182,7 @@ export async function sendAppConversationMedia(
       hasDownload: boolean;
       downloadUrl?: string;
     } | null;
+    actor?: InboxMessageItem["actor"];
   };
 }> {
   const formData = new FormData();

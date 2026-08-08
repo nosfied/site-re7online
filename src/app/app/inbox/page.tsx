@@ -425,22 +425,8 @@ function getReplyPreviewText(item: InboxMessageItem) {
   return `[${getMessageContentLabel(item)}]`;
 }
 
-function isRectificationText(text: string) {
-  return /^retifica[cç][aã]o\s*:/i.test(text.trim());
-}
-
-function withRectificationPrefix(text: string) {
-  const trimmed = text.trim();
-  if (!trimmed || isRectificationText(trimmed)) return trimmed;
-  return `Retificacao: ${trimmed}`;
-}
-
-function buildOutgoingTextForReplyMode(text: string, mode: InboxReplyMode) {
-  return mode === "rectify" ? withRectificationPrefix(text) : text.trim();
-}
-
-function getContextualModeLabel(mode: InboxReplyMode) {
-  return mode === "rectify" ? "Retificando mensagem enviada" : "Respondendo";
+function buildOutgoingTextForReplyMode(text: string, _mode: InboxReplyMode) {
+  return text.trim();
 }
 
 function buildReplyTarget(item: InboxMessageItem, mode: InboxReplyMode = "reply"): InboxReplyTarget | null {
@@ -4330,6 +4316,11 @@ export default function AppInboxPage() {
               requestId: null,
               messageId: response.message.messageId,
               metaMessageId: response.message.metaMessageId,
+              actor: response.message.actor ?? {
+                source: "human_inbox",
+                userId: session.user.id,
+                displayName: session.user.name || session.user.email || null,
+              },
               replyTo: next.replyTo
                 ? {
                     kind: next.replyTo.kind,
@@ -4500,6 +4491,11 @@ export default function AppInboxPage() {
           requestId: null,
           messageId: response.message.messageId,
           metaMessageId: response.message.metaMessageId,
+          actor: response.message.actor ?? {
+            source: "human_inbox",
+            userId: session.user.id,
+            displayName: session.user.name || session.user.email || null,
+          },
           errorBody: null,
           createdAt: response.message.createdAt,
         };
@@ -4576,9 +4572,7 @@ export default function AppInboxPage() {
     if (selectedMediaFile) {
       if (replyTarget) {
         setError(
-          replyTarget.mode === "rectify"
-            ? "Retificacao com anexo ainda nao esta disponivel. Cancele a retificacao ou envie uma mensagem de texto."
-            : "Resposta contextual com anexo ainda nao esta disponivel. Cancele a citacao ou envie uma mensagem de texto."
+          "Resposta contextual com anexo ainda nao esta disponivel. Cancele a citacao ou envie uma mensagem de texto."
         );
         setErrorDetails(null);
         return;
@@ -4621,11 +4615,7 @@ export default function AppInboxPage() {
       return;
     }
     if (replyTarget) {
-      setError(
-        replyTarget.mode === "rectify"
-          ? "Retificacao com modelo aprovado ainda nao esta disponivel. Cancele a retificacao para enviar um modelo."
-          : "Resposta contextual com modelo aprovado ainda nao esta disponivel. Cancele a citacao para enviar um modelo."
-      );
+      setError("Resposta contextual com modelo aprovado ainda nao esta disponivel. Cancele a citacao para enviar um modelo.");
       setErrorDetails(null);
       return;
     }
@@ -4677,6 +4667,11 @@ export default function AppInboxPage() {
         requestId: null,
         messageId: response.message.messageId,
         metaMessageId: response.message.metaMessageId,
+        actor: response.message.actor ?? {
+          source: "human_inbox",
+          userId: session.user.id,
+          displayName: session.user.name || session.user.email || null,
+        },
         errorBody: null,
         createdAt: response.message.createdAt,
       };
@@ -4819,6 +4814,11 @@ export default function AppInboxPage() {
         requestId: null,
         messageId: response.message.messageId,
         metaMessageId: response.message.metaMessageId,
+        actor: response.message.actor ?? {
+          source: "human_inbox",
+          userId: session.user.id,
+          displayName: session.user.name || session.user.email || null,
+        },
         replyTo: replyTarget
           ? {
               kind: replyTarget.kind,
@@ -6516,10 +6516,6 @@ export default function AppInboxPage() {
                 const statusTicks = renderMessageStatusTicks(item);
                 const shouldAutoLoadMedia = index >= Math.max(messages.length - 8, 0);
                 const replyOption = buildReplyTarget(item);
-                const rectifyOption =
-                  item.direction === "OUTBOUND" && item.metaMessageId?.trim()
-                    ? buildReplyTarget(item, "rectify")
-                    : null;
                 const isUnreadAnchor = unreadAnchorMessageIdentity
                   ? unreadAnchorMessageIdentity === messageIdentity
                   : unreadSeparatorIndex === index;
@@ -6549,18 +6545,10 @@ export default function AppInboxPage() {
                       >
                         {item.replyTo ? (
                           <div
-                            className={`mb-2 rounded-lg border-l-4 bg-white/55 px-3 py-2 text-xs text-slate-700 ${
-                              item.replyTo.mode === "rectify"
-                                ? "border-amber-500/70"
-                                : "border-emerald-500/60"
-                            }`}
+                            className="mb-2 rounded-lg border-l-4 border-emerald-500/60 bg-white/55 px-3 py-2 text-xs text-slate-700"
                           >
                             <p className="font-semibold text-slate-800">
-                              {item.replyTo.mode === "rectify"
-                                ? "Retificacao de mensagem enviada"
-                                : `Respondendo a ${
-                                    item.replyTo.previewDirection === "OUTBOUND" ? "mensagem enviada" : "mensagem recebida"
-                                  }`}
+                              Referencia
                             </p>
                             <p className="mt-0.5 line-clamp-2 break-words">{getTimelineReplyPreview(item)}</p>
                           </div>
@@ -6572,6 +6560,13 @@ export default function AppInboxPage() {
                             {getConversationChannelLabel(selectedConversation)}
                           </span>
                         </div>
+                        {item.direction === "OUTBOUND" &&
+                        item.actor?.source === "human_inbox" &&
+                        item.actor.displayName ? (
+                          <p className="mb-1 text-[11px] font-semibold text-slate-700">
+                            {item.actor.displayName}
+                          </p>
+                        ) : null}
                         {item.bodyText ? (
                           <p className="wa-bubble-text text-sm leading-relaxed">
                             {item.bodyText}
@@ -6616,21 +6611,6 @@ export default function AppInboxPage() {
                               >
                                 Responder
                               </button>
-                              {rectifyOption ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setReplyTarget(rectifyOption);
-                                    if (!messageDraft.trim()) {
-                                      setMessageDraft("Retificacao: ");
-                                    }
-                                    focusComposer();
-                                  }}
-                                  className="rounded-full border border-amber-300/80 bg-amber-50/80 px-2 py-0.5 font-semibold text-amber-800 transition hover:bg-amber-50"
-                                >
-                                  Retificar
-                                </button>
-                              ) : null}
                             </div>
                           ) : null}
                           <span>{formatDateTime(item.createdAt)}</span>
@@ -6688,30 +6668,20 @@ export default function AppInboxPage() {
             ) : null}
             {replyTarget ? (
               <div
-                className={`mb-2 flex items-start gap-3 rounded-xl border px-3 py-2 text-xs ${
-                  replyTarget.mode === "rectify"
-                    ? "border-amber-200 bg-amber-50 text-amber-950"
-                    : "border-emerald-200 bg-emerald-50 text-emerald-950"
-                }`}
+                className="mb-2 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950"
               >
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">
-                    {replyTarget.mode === "rectify"
-                      ? getContextualModeLabel(replyTarget.mode)
-                      : `Respondendo a ${replyTarget.direction === "OUTBOUND" ? "mensagem enviada" : "mensagem recebida"}`}
+                    {`Respondendo a ${replyTarget.direction === "OUTBOUND" ? "mensagem enviada" : "mensagem recebida"}`}
                   </p>
                   <p className="mt-0.5 line-clamp-2 break-words">{replyTarget.preview}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setReplyTarget(null)}
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-sm font-bold ${
-                    replyTarget.mode === "rectify"
-                      ? "text-amber-900 hover:bg-amber-100"
-                      : "text-emerald-900 hover:bg-emerald-100"
-                  }`}
-                  aria-label={replyTarget.mode === "rectify" ? "Cancelar retificacao" : "Cancelar resposta contextual"}
-                  title={replyTarget.mode === "rectify" ? "Cancelar retificacao" : "Cancelar resposta contextual"}
+                  className="shrink-0 rounded-full px-2 py-0.5 text-sm font-bold text-emerald-900 hover:bg-emerald-100"
+                  aria-label="Cancelar resposta contextual"
+                  title="Cancelar resposta contextual"
                 >
                   ×
                 </button>

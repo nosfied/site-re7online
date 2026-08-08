@@ -56,6 +56,11 @@ export type InboxMessageItem = {
     previewBody?: string | null;
     previewDirection?: "INBOUND" | "OUTBOUND" | string | null;
   } | null;
+  actor?: {
+    source: string;
+    userId?: string | null;
+    displayName?: string | null;
+  } | null;
   errorBody: string | null;
   createdAt: string;
 };

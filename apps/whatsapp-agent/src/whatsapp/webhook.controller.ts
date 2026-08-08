@@ -1556,6 +1556,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         wasInserted: inserted,
       });
       if (inserted) {
+        const insertedMessage = await getPrisma().inboundMessage.findUnique({
+          where: {
+            clientId_messageId: {
+              clientId: tenantClientId,
+              messageId: params.messageId,
+            },
+          },
+          select: { id: true },
+        });
         const createdAt = (params.occurredAt ?? new Date()).toISOString();
         const realtimeConversation = await storage.getConversation(params.waId, tenantClientKey);
         const realtimeHandoffStatus =
@@ -1573,6 +1582,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           assignedUserId: realtimeConversation?.assignedUserId ?? null,
           departmentId: realtimeConversation?.departmentId ?? null,
           message: {
+            internalMessageId: insertedMessage?.id ?? null,
+            messageKind: "inbound",
             direction: "INBOUND",
             type: params.type,
             status: "RECEIVED",

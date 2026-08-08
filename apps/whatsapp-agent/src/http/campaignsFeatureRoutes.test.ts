@@ -1880,6 +1880,7 @@ test("inbox text contextual reply resolves internal message references safely", 
       messageId: string;
       status: string;
       replyTo: { kind: string; id: string; previewType: string };
+      actor: { source: string; userId: string; displayName: string | null };
     };
   }>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
     text: "Envie RG e CPF.",
@@ -1887,6 +1888,11 @@ test("inbox text contextual reply resolves internal message references safely", 
   });
   assert.equal(inboundReply.status, 200, JSON.stringify(inboundReply.body));
   assert.deepEqual(inboundReply.body.message.replyTo, { kind: "inbound", id: inbound.id, previewType: "TEXT", mode: "reply" });
+  assert.deepEqual(inboundReply.body.message.actor, {
+    source: "human_inbox",
+    userId: businessAdmin.id,
+    displayName: businessAdmin.name,
+  });
   assert.equal((metaPayloads[0] as { context?: { message_id?: string } }).context?.message_id, inbound.messageId);
 
   const outboundReply = await request<{
@@ -2012,6 +2018,10 @@ test("inbox text contextual reply resolves internal message references safely", 
   const persisted = await prisma.outboundMessage.findFirstOrThrow({
     where: { clientId: businessClientId, waId, messageId: inboundReply.body.message.messageId },
   });
+  const actorPayload = (persisted.rawPayload as Record<string, unknown>).actor as Record<string, unknown>;
+  assert.equal(actorPayload.source, "human_inbox");
+  assert.equal(actorPayload.userId, businessAdmin.id);
+  assert.equal(JSON.stringify(actorPayload).includes(waId), false);
   const contextualReply = (persisted.rawPayload as Record<string, unknown>).contextualReply as Record<string, unknown>;
   assert.equal(contextualReply.replyToKind, "inbound");
   assert.equal(contextualReply.replyToInternalMessageId, inbound.id);
@@ -2020,6 +2030,28 @@ test("inbox text contextual reply resolves internal message references safely", 
   assert.equal(contextualReply.replyToType, "TEXT");
   assert.equal(JSON.stringify(contextualReply).includes("wamid."), false);
   assert.equal(JSON.stringify(contextualReply).includes(waId), false);
+
+  const detail = await request<{
+    ok: true;
+    items: Array<{
+      internalMessageId: string;
+      messageKind: string;
+      direction: string;
+      messageId: string;
+      actor: { source: string; userId: string; displayName: string | null } | null;
+    }>;
+  }>("GET", `/app/conversation/${waId}`, businessAdmin);
+  assert.equal(detail.status, 200, JSON.stringify(detail.body));
+  const inboundDetail = detail.body.items.find((message) => message.internalMessageId === inbound.id);
+  assert.equal(inboundDetail?.messageKind, "inbound");
+  assert.equal(inboundDetail?.messageId, inbound.messageId);
+  const outboundDetail = detail.body.items.find((message) => message.internalMessageId === persisted.id);
+  assert.equal(outboundDetail?.messageKind, "outbound");
+  assert.deepEqual(outboundDetail?.actor, {
+    source: "human_inbox",
+    userId: businessAdmin.id,
+    displayName: businessAdmin.name,
+  });
 
   const event = await prisma.event.findFirstOrThrow({
     where: { clientId: businessClientId, conversationId: conversation.id, eventName: "inbox.reply.sent" },
@@ -2458,6 +2490,7 @@ test("inbox canned reply sends only in open owned WhatsApp conversations", async
       source: string;
       cannedReplyId: string;
       metaMessageId: string | null;
+      actor: { source: string; userId: string; displayName: string | null };
     };
   }>("POST", `/app/conversation/${waId}/send-canned-reply?clientId=malicious`, businessAdmin, {
     cannedReplyId: created.body.item.id,
@@ -2471,6 +2504,11 @@ test("inbox canned reply sends only in open owned WhatsApp conversations", async
   assert.equal(response.body.message.source, "canned_reply");
   assert.equal(response.body.message.cannedReplyId, created.body.item.id);
   assert.equal(response.body.message.metaMessageId, `wamid.canned.${safeTemplatePrefix}`);
+  assert.deepEqual(response.body.message.actor, {
+    source: "human_inbox",
+    userId: businessAdmin.id,
+    displayName: businessAdmin.name,
+  });
   assert.equal(metaPayloads.length, 1);
   assert.equal((metaPayloads[0] as { to?: string; text?: { body?: string } }).to, waId);
   assert.equal((metaPayloads[0] as { text?: { body?: string } }).text?.body, created.body.item.body);
@@ -2485,6 +2523,10 @@ test("inbox canned reply sends only in open owned WhatsApp conversations", async
   assert.equal(outbound.bodyText, created.body.item.body);
   assert.equal((outbound.rawPayload as Record<string, unknown>).source, "canned_reply");
   assert.equal((outbound.rawPayload as Record<string, unknown>).cannedReplyId, created.body.item.id);
+  const actorPayload = (outbound.rawPayload as Record<string, unknown>).actor as Record<string, unknown>;
+  assert.equal(actorPayload.source, "human_inbox");
+  assert.equal(actorPayload.userId, businessAdmin.id);
+  assert.equal(JSON.stringify(actorPayload).includes(waId), false);
   const contextualReply = (outbound.rawPayload as Record<string, unknown>).contextualReply as Record<string, unknown>;
   assert.equal(contextualReply.replyToKind, "inbound");
   assert.equal(contextualReply.replyToInternalMessageId, replyInbound.id);
