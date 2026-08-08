@@ -2094,18 +2094,20 @@ export async function fetchAppConversationTimeline(
 export async function sendAppConversationMessage(
   session: AppSession,
   waId: string,
-  text: string
+  text: string,
+  replyTo?: { kind: "inbound" | "outbound"; id: string } | null
 ): Promise<AppConversationOperationalPayload & {
   message: {
     messageId: string;
     status: string;
     metaMessageId: string | null;
     createdAt: string;
+    replyTo?: InboxMessageItem["replyTo"];
   };
 }> {
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/send`, {
     method: "POST",
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, ...(replyTo ? { replyTo } : {}) }),
   });
 }
 
@@ -2134,7 +2136,8 @@ export async function sendAppConversationTemplate(
 export async function sendAppConversationCannedReply(
   session: AppSession,
   waId: string,
-  cannedReplyId: string
+  cannedReplyId: string,
+  replyTo?: { kind: "inbound" | "outbound"; id: string } | null
 ): Promise<AppConversationOperationalPayload & {
   message: {
     messageId: string;
@@ -2146,11 +2149,12 @@ export async function sendAppConversationCannedReply(
     source: "canned_reply";
     cannedReplyId: string;
     cannedReplyTitle: string;
+    replyTo?: InboxMessageItem["replyTo"];
   };
 }> {
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/send-canned-reply`, {
     method: "POST",
-    body: JSON.stringify({ cannedReplyId }),
+    body: JSON.stringify({ cannedReplyId, ...(replyTo ? { replyTo } : {}) }),
   });
 }
 

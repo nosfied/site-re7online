@@ -410,6 +410,41 @@ function getMessageContentLabel(item: InboxMessageItem) {
   }
 }
 
+function getMessageReplyKind(item: InboxMessageItem): "inbound" | "outbound" | null {
+  if (item.messageKind === "inbound" || item.messageKind === "outbound") return item.messageKind;
+  return item.direction === "INBOUND" ? "inbound" : item.direction === "OUTBOUND" ? "outbound" : null;
+}
+
+function getMessageReplyId(item: InboxMessageItem) {
+  return item.internalMessageId?.trim() || null;
+}
+
+function getReplyPreviewText(item: InboxMessageItem) {
+  const text = item.bodyText?.replace(/\s+/g, " ").trim();
+  if (text) return text.length > 120 ? `${text.slice(0, 117)}...` : text;
+  return `[${getMessageContentLabel(item)}]`;
+}
+
+function buildReplyTarget(item: InboxMessageItem): InboxReplyTarget | null {
+  const kind = getMessageReplyKind(item);
+  const id = getMessageReplyId(item);
+  if (!kind || !id) return null;
+  return {
+    kind,
+    id,
+    preview: getReplyPreviewText(item),
+    direction: item.direction,
+    type: item.type,
+  };
+}
+
+function getTimelineReplyPreview(item: InboxMessageItem) {
+  const preview = item.replyTo?.previewBody?.replace(/\s+/g, " ").trim();
+  if (preview) return preview.length > 120 ? `${preview.slice(0, 117)}...` : preview;
+  const previewType = item.replyTo?.previewType?.trim();
+  return previewType ? `[${previewType}]` : "Mensagem anterior";
+}
+
 function getConversationPreviewText(item: InboxConversationItem) {
   if (!item.lastMessage) return "Sem mensagem recente.";
   if (item.lastMessage.bodyText?.trim()) return item.lastMessage.bodyText;
@@ -819,6 +854,15 @@ type PendingOutgoingMessage = {
   waId: string;
   conversationKey: string;
   text: string;
+  replyTo: InboxReplyTarget | null;
+};
+
+type InboxReplyTarget = {
+  kind: "inbound" | "outbound";
+  id: string;
+  preview: string;
+  direction: "INBOUND" | "OUTBOUND";
+  type: string;
 };
 
 type PendingUnreadScrollTarget = {
@@ -1889,6 +1933,7 @@ export default function AppInboxPage() {
   const [savingLeadName, setSavingLeadName] = useState(false);
   const [savingLeadNote, setSavingLeadNote] = useState(false);
   const [messageDraft, setMessageDraft] = useState("");
+  const [replyTarget, setReplyTarget] = useState<InboxReplyTarget | null>(null);
   const [selectedMediaFile, setSelectedMediaFile] = useState<File | null>(null);
   const [audioRecordingState, setAudioRecordingState] = useState<"idle" | "recording" | "stopping">(
     "idle"
@@ -2044,6 +2089,7 @@ export default function AppInboxPage() {
     setLeadNotes([]);
     setLeadError(null);
     setMessageDraft("");
+    setReplyTarget(null);
     setSelectedMediaFile(null);
     setShowEmojiPicker(false);
     setAudioRecordingState("idle");
@@ -2119,6 +2165,7 @@ export default function AppInboxPage() {
     handleCloseContactTimeline();
     handleCloseTemplateModal();
     handleCloseCannedModal();
+    setReplyTarget(null);
   }, [handleCloseCannedModal, handleCloseContactTimeline, handleCloseTemplateModal, selectedConversationWaId]);
 
   const dismissInboxFeedback = useCallback(() => {
@@ -4239,7 +4286,12 @@ export default function AppInboxPage() {
         try {
           const latencyStartedAt = performance.now();
           const requestStartedAt = performance.now();
-          const response = await sendAppConversationMessage(session, next.waId, next.text);
+          const response = await sendAppConversationMessage(
+            session,
+            next.waId,
+            next.text,
+            next.replyTo ? { kind: next.replyTo.kind, id: next.replyTo.id } : null
+          );
           const requestMs = performance.now() - requestStartedAt;
           const uiStartedAt = performance.now();
           shouldScrollToBottomRef.current = true;
@@ -4256,6 +4308,15 @@ export default function AppInboxPage() {
               requestId: null,
               messageId: response.message.messageId,
               metaMessageId: response.message.metaMessageId,
+              replyTo: next.replyTo
+                ? {
+                    kind: next.replyTo.kind,
+                    id: next.replyTo.id,
+                    previewType: next.replyTo.type,
+                    previewBody: next.replyTo.preview,
+                    previewDirection: next.replyTo.direction,
+                  }
+                : response.message.replyTo ?? null,
               errorBody: null,
               createdAt: response.message.createdAt,
             };
@@ -4300,6 +4361,9 @@ export default function AppInboxPage() {
             uiMergeMs: Math.round(performance.now() - uiStartedAt),
             totalMs: Math.round(performance.now() - latencyStartedAt),
           });
+          if (selectedConversationWaId === next.waId) {
+            setReplyTarget(null);
+          }
         } catch (err) {
           const typed = err as { status?: number; message?: string; details?: string };
           if (typed.status === 401) {
@@ -4308,6 +4372,7 @@ export default function AppInboxPage() {
           }
           if (selectedConversationWaId === next.waId) {
             setMessageDraft((current) => (current.trim() ? `${current}\n${next.text}` : next.text));
+            setReplyTarget(next.replyTo);
           }
           setError(typed.message || "Falha ao enviar mensagem.");
           setErrorDetails(typed.details || null);
@@ -4340,8 +4405,10 @@ export default function AppInboxPage() {
       waId: selectedConversationWaId,
       conversationKey: getConversationIdentity(selectedConversation),
       text,
+      replyTo: replyTarget,
     };
     setMessageDraft("");
+    setReplyTarget(null);
     setError(null);
     setErrorDetails(null);
     outgoingQueueRef.current.push(queuedMessage);
@@ -4482,6 +4549,11 @@ export default function AppInboxPage() {
 
   const handlePrimarySend = async () => {
     if (selectedMediaFile) {
+      if (replyTarget) {
+        setError("Resposta contextual com anexo ainda nao esta disponivel. Cancele a citacao ou envie uma mensagem de texto.");
+        setErrorDetails(null);
+        return;
+      }
       await handleSendMedia();
       return;
     }
@@ -4519,6 +4591,11 @@ export default function AppInboxPage() {
       setErrorDetails(null);
       return;
     }
+    if (replyTarget) {
+      setError("Resposta contextual com modelo aprovado ainda nao esta disponivel. Cancele a citacao para enviar um modelo.");
+      setErrorDetails(null);
+      return;
+    }
     setTemplateModalOpen(true);
     setTemplateError(null);
     if (templateItems.length === 0) {
@@ -4527,6 +4604,7 @@ export default function AppInboxPage() {
   }, [
     canReply,
     loadInboxTemplates,
+    replyTarget,
     selectedConversation,
     selectedConversationSupportsTemplateOutbound,
     selectedConversationWaId,
@@ -4692,7 +4770,8 @@ export default function AppInboxPage() {
       const response = await sendAppConversationCannedReply(
         session,
         selectedConversationWaId,
-        selectedCannedReply.id
+        selectedCannedReply.id,
+        replyTarget ? { kind: replyTarget.kind, id: replyTarget.id } : null
       );
       shouldScrollToBottomRef.current = true;
       const outboundMessage: InboxMessageItem = {
@@ -4707,6 +4786,15 @@ export default function AppInboxPage() {
         requestId: null,
         messageId: response.message.messageId,
         metaMessageId: response.message.metaMessageId,
+        replyTo: replyTarget
+          ? {
+              kind: replyTarget.kind,
+              id: replyTarget.id,
+              previewType: replyTarget.type,
+              previewBody: replyTarget.preview,
+              previewDirection: replyTarget.direction,
+            }
+          : response.message.replyTo ?? null,
         errorBody: null,
         createdAt: response.message.createdAt,
       };
@@ -4749,6 +4837,7 @@ export default function AppInboxPage() {
         selectedConversation.waId
       );
       setSuccess("Mensagem pronta enviada.");
+      setReplyTarget(null);
       handleCloseCannedModal();
     } catch (err) {
       const typed = err as { status?: number; message?: string; details?: string; payload?: unknown };
@@ -6392,6 +6481,7 @@ export default function AppInboxPage() {
                 const messageIdentity = getMessageIdentity(item);
                 const statusTicks = renderMessageStatusTicks(item);
                 const shouldAutoLoadMedia = index >= Math.max(messages.length - 8, 0);
+                const replyOption = buildReplyTarget(item);
                 const isUnreadAnchor = unreadAnchorMessageIdentity
                   ? unreadAnchorMessageIdentity === messageIdentity
                   : unreadSeparatorIndex === index;
@@ -6419,6 +6509,14 @@ export default function AppInboxPage() {
                           item.direction === "INBOUND" ? "wa-bubble-inbound" : "wa-bubble-outbound"
                         } ${item.media?.kind === "audio" ? "min-w-[19rem]" : ""}`}
                       >
+                        {item.replyTo ? (
+                          <div className="mb-2 rounded-lg border-l-4 border-emerald-500/60 bg-white/55 px-3 py-2 text-xs text-slate-700">
+                            <p className="font-semibold text-slate-800">
+                              Respondendo a {item.replyTo.previewDirection === "OUTBOUND" ? "mensagem enviada" : "mensagem recebida"}
+                            </p>
+                            <p className="mt-0.5 line-clamp-2 break-words">{getTimelineReplyPreview(item)}</p>
+                          </div>
+                        ) : null}
                         <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase text-slate-500/80">
                           <ConversationChannelLogo item={selectedConversation} className="h-3.5 w-3.5" />
                           <span>
@@ -6458,6 +6556,18 @@ export default function AppInboxPage() {
                           </div>
                         ) : null}
                         <div className="mt-2 flex items-center justify-end gap-1 text-[11px] text-slate-600">
+                          {replyOption && selectedConversationSupportsTemplateOutbound ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReplyTarget(replyOption);
+                                focusComposer();
+                              }}
+                              className="mr-auto rounded-full border border-slate-300/70 bg-white/60 px-2 py-0.5 font-semibold text-slate-700 transition hover:bg-white"
+                            >
+                              Responder
+                            </button>
+                          ) : null}
                           <span>{formatDateTime(item.createdAt)}</span>
                           {statusTicks}
                         </div>
@@ -6509,6 +6619,25 @@ export default function AppInboxPage() {
             {selectedConversation && !selectedConversationSupportsOutbound ? (
               <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-900">
                 {selectedConversationOutboundDisabledMessage}
+              </div>
+            ) : null}
+            {replyTarget ? (
+              <div className="mb-2 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">
+                    Respondendo a {replyTarget.direction === "OUTBOUND" ? "mensagem enviada" : "mensagem recebida"}
+                  </p>
+                  <p className="mt-0.5 line-clamp-2 break-words">{replyTarget.preview}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReplyTarget(null)}
+                  className="shrink-0 rounded-full px-2 py-0.5 text-sm font-bold text-emerald-900 hover:bg-emerald-100"
+                  aria-label="Cancelar resposta contextual"
+                  title="Cancelar resposta contextual"
+                >
+                  ×
+                </button>
               </div>
             ) : null}
             <div className="relative flex items-center gap-2 max-[1440px]:gap-1.5">

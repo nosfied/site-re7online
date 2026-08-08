@@ -239,6 +239,13 @@ async function cleanup() {
   });
   const clientIds = clients.map((client) => client.id);
   if (clientIds.length === 0) return;
+  await prisma.inboundMessage.deleteMany({
+    where: {
+      clientId: {
+        in: clientIds,
+      },
+    },
+  });
   await prisma.outboundMessage.deleteMany({
     where: {
       clientId: {
@@ -1618,7 +1625,6 @@ test("inbox template send uses approved active template and updates timeline saf
       lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
     },
   });
-
   const freeText = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
     text: "Mensagem livre fora da janela",
   });
@@ -1702,6 +1708,206 @@ test("inbox template send uses approved active template and updates timeline saf
   assert.equal(JSON.stringify(usagePayload).includes(waId), false);
 });
 
+test("inbox text contextual reply resolves internal message references safely", async (t) => {
+  const waId = "5541991177807";
+  const otherWaId = "5541991177808";
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    create: {
+      clientId: businessClientId,
+      businessToken: "test-reply-token",
+      phoneNumberId: `phone-reply-${safeTemplatePrefix}`,
+      rawPayload: {},
+    },
+    update: {
+      businessToken: "test-reply-token",
+      phoneNumberId: `phone-reply-${safeTemplatePrefix}`,
+      rawPayload: {},
+    },
+  });
+  const conversation = await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      conversationKey: `${prefix}-business:${waId}`,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      mode: "HUMAN",
+      status: "IN_PROGRESS",
+      assignedUserId: businessAdmin.id,
+      assignedTo: businessAdmin.name,
+    },
+  });
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId: otherWaId,
+      waIdCanonical: otherWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: true,
+    },
+  });
+  const inbound = await prisma.inboundMessage.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      messageId: `wamid.inbound.${safeTemplatePrefix}`,
+      type: "TEXT",
+      bodyText: "Qual documento devo enviar?",
+      allowlistHit: true,
+    },
+  });
+  const outbound = await prisma.outboundMessage.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      messageId: `previous.outbound.${safeTemplatePrefix}`,
+      metaMessageId: `wamid.previous.${safeTemplatePrefix}`,
+      type: "TEMPLATE",
+      status: "SENT",
+      templateName: "boas_vindas",
+    },
+  });
+  const otherConversationInbound = await prisma.inboundMessage.create({
+    data: {
+      clientId: businessClientId,
+      waId: otherWaId,
+      waIdCanonical: otherWaId,
+      messageId: `wamid.other.${safeTemplatePrefix}`,
+      type: "TEXT",
+      bodyText: "Mensagem de outra conversa",
+      allowlistHit: true,
+    },
+  });
+  const otherTenantInbound = await prisma.inboundMessage.create({
+    data: {
+      clientId: governmentClientId,
+      waId,
+      waIdCanonical: waId,
+      messageId: `wamid.gov.${safeTemplatePrefix}`,
+      type: "TEXT",
+      bodyText: "Mensagem de outro tenant",
+      allowlistHit: true,
+    },
+  });
+  const outboundWithoutMeta = await prisma.outboundMessage.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      messageId: `previous.outbound.no-meta.${safeTemplatePrefix}`,
+      type: "TEXT",
+      status: "SENT",
+      bodyText: "Mensagem antiga sem Meta ID",
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  const metaPayloads: unknown[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaPayloads.push(JSON.parse(String(init?.body ?? "{}")));
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.reply.${metaPayloads.length}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const inboundReply = await request<{
+    ok: true;
+    message: {
+      messageId: string;
+      status: string;
+      replyTo: { kind: string; id: string; previewType: string };
+    };
+  }>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+    text: "Envie RG e CPF.",
+    replyTo: { kind: "inbound", id: inbound.id },
+  });
+  assert.equal(inboundReply.status, 200, JSON.stringify(inboundReply.body));
+  assert.deepEqual(inboundReply.body.message.replyTo, { kind: "inbound", id: inbound.id, previewType: "TEXT" });
+  assert.equal((metaPayloads[0] as { context?: { message_id?: string } }).context?.message_id, inbound.messageId);
+
+  const outboundReply = await request<{
+    ok: true;
+    message: { status: string; replyTo: { kind: string; id: string; previewType: string } };
+  }>(
+    "POST",
+    `/app/conversation/${waId}/send`,
+    businessAdmin,
+    {
+      text: "Complementando a mensagem anterior.",
+      replyTo: { kind: "outbound", id: outbound.id },
+    }
+  );
+  assert.equal(outboundReply.status, 200, JSON.stringify(outboundReply.body));
+  assert.deepEqual(outboundReply.body.message.replyTo, { kind: "outbound", id: outbound.id, previewType: "TEMPLATE" });
+  assert.equal((metaPayloads[1] as { context?: { message_id?: string } }).context?.message_id, outbound.metaMessageId);
+
+  const persisted = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, waId, messageId: inboundReply.body.message.messageId },
+  });
+  const contextualReply = (persisted.rawPayload as Record<string, unknown>).contextualReply as Record<string, unknown>;
+  assert.equal(contextualReply.replyToKind, "inbound");
+  assert.equal(contextualReply.replyToInternalMessageId, inbound.id);
+  assert.equal(contextualReply.replyToMetaMessagePresent, true);
+  assert.equal(JSON.stringify(contextualReply).includes("wamid."), false);
+  assert.equal(JSON.stringify(contextualReply).includes(waId), false);
+
+  const event = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, conversationId: conversation.id, eventName: "inbox.reply.sent" },
+    orderBy: { createdAt: "asc" },
+  });
+  assert.equal((event.payloadJson as Record<string, unknown>).replyToInternalMessageId, inbound.id);
+  assert.equal(JSON.stringify(event.payloadJson).includes("wamid."), false);
+  assert.equal(JSON.stringify(event.payloadJson).includes(waId), false);
+
+  const crossConversation = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+    text: "Nao deve enviar",
+    replyTo: { kind: "inbound", id: otherConversationInbound.id },
+  });
+  assert.equal(crossConversation.status, 404);
+  assert.equal(getErrorCode(crossConversation.body), "reply_context_not_found");
+
+  const crossTenant = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+    text: "Nao deve enviar",
+    replyTo: { kind: "inbound", id: otherTenantInbound.id },
+  });
+  assert.equal(crossTenant.status, 404);
+  assert.equal(getErrorCode(crossTenant.body), "reply_context_not_found");
+
+  const missingMeta = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+    text: "Nao deve enviar",
+    replyTo: { kind: "outbound", id: outboundWithoutMeta.id },
+  });
+  assert.equal(missingMeta.status, 409);
+  assert.equal(getErrorCode(missingMeta.body), "reply_context_unavailable");
+  assert.equal(metaPayloads.length, 2);
+});
+
 test("inbox template send blocks opt-out, inactive templates, missing variables and cross tenant template", async (t) => {
   const waId = "5541991177802";
   const template = await prisma.template.create({
@@ -1749,7 +1955,6 @@ test("inbox template send blocks opt-out, inactive templates, missing variables 
       lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
     },
   });
-
   const originalFetch = globalThis.fetch;
   let metaCalls = 0;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -2071,6 +2276,17 @@ test("inbox canned reply sends only in open owned WhatsApp conversations", async
       lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
     },
   });
+  const replyInbound = await prisma.inboundMessage.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      messageId: `wamid.canned.reply.${safeTemplatePrefix}`,
+      type: "TEXT",
+      bodyText: "Mensagem para resposta pronta",
+      allowlistHit: true,
+    },
+  });
 
   const originalFetch = globalThis.fetch;
   const metaPayloads: unknown[] = [];
@@ -2101,6 +2317,7 @@ test("inbox canned reply sends only in open owned WhatsApp conversations", async
     };
   }>("POST", `/app/conversation/${waId}/send-canned-reply?clientId=malicious`, businessAdmin, {
     cannedReplyId: created.body.item.id,
+    replyTo: { kind: "inbound", id: replyInbound.id },
   });
 
   assert.equal(response.status, 200);
@@ -2113,6 +2330,7 @@ test("inbox canned reply sends only in open owned WhatsApp conversations", async
   assert.equal(metaPayloads.length, 1);
   assert.equal((metaPayloads[0] as { to?: string; text?: { body?: string } }).to, waId);
   assert.equal((metaPayloads[0] as { text?: { body?: string } }).text?.body, created.body.item.body);
+  assert.equal((metaPayloads[0] as { context?: { message_id?: string } }).context?.message_id, replyInbound.messageId);
 
   const outbound = await prisma.outboundMessage.findFirstOrThrow({
     where: { clientId: businessClientId, waId, messageId: { startsWith: "admin.send." } },
@@ -2123,6 +2341,10 @@ test("inbox canned reply sends only in open owned WhatsApp conversations", async
   assert.equal(outbound.bodyText, created.body.item.body);
   assert.equal((outbound.rawPayload as Record<string, unknown>).source, "canned_reply");
   assert.equal((outbound.rawPayload as Record<string, unknown>).cannedReplyId, created.body.item.id);
+  const contextualReply = (outbound.rawPayload as Record<string, unknown>).contextualReply as Record<string, unknown>;
+  assert.equal(contextualReply.replyToKind, "inbound");
+  assert.equal(contextualReply.replyToInternalMessageId, replyInbound.id);
+  assert.equal(contextualReply.replyToMetaMessagePresent, true);
   assert.equal(JSON.stringify(outbound.rawPayload).includes(waId), false);
   const outboundUsage = (outbound.rawPayload as Record<string, unknown>).metaUsage as Record<string, unknown>;
   assert.equal(outboundUsage.source, "canned_reply");

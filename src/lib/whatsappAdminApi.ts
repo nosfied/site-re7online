@@ -20,6 +20,8 @@ export type TenantSummaryItem = {
 };
 
 export type InboxMessageItem = {
+  internalMessageId?: string | null;
+  messageKind?: "inbound" | "outbound" | string | null;
   direction: "INBOUND" | "OUTBOUND";
   type: string;
   status: string;
@@ -46,6 +48,13 @@ export type InboxMessageItem = {
   requestId: string | null;
   messageId: string | null;
   metaMessageId: string | null;
+  replyTo?: {
+    kind: "inbound" | "outbound";
+    id: string;
+    previewType?: string | null;
+    previewBody?: string | null;
+    previewDirection?: "INBOUND" | "OUTBOUND" | string | null;
+  } | null;
   errorBody: string | null;
   createdAt: string;
 };

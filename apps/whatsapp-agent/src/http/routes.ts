@@ -5013,6 +5013,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const body = await readJsonBody(req, res);
       if (!body) return;
+      const parsedReplyTo = parseInboxContextualReplyInput((body as Record<string, unknown>).replyTo);
+      if (!parsedReplyTo.ok) {
+        json(res, 400, httpError(parsedReplyTo.code, parsedReplyTo.message));
+        return;
+      }
       const cannedReplyId = typeof body.cannedReplyId === "string" ? body.cannedReplyId.trim() : "";
       if (!cannedReplyId) {
         json(res, 400, httpError("bad_request", "Mensagem pronta obrigatoria."));
@@ -5128,6 +5133,33 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 409, { error: buildWindowClosedError(currentConversation.window.expiresAt) });
         return;
       }
+      if (parsedReplyTo.replyTo && (conversationRow.deletedAt || conversationRow.anonymizedAt)) {
+        json(res, 409, httpError("reply_context_unavailable", "Mensagem citada indisponivel para esta conversa."));
+        return;
+      }
+      const replyContext = parsedReplyTo.replyTo
+        ? await resolveInboxContextualReply(prisma, {
+            clientId: client.id,
+            detailWaIds: Array.from(
+              new Set(
+                [
+                  ...buildWaIdLookup(waId).variants,
+                  waId,
+                  resolvedConversation.resolvedWaId,
+                  resolvedConversation.resolvedWaIdCanonical,
+                  ...resolvedConversation.matchedWaIds,
+                ].filter(Boolean)
+              )
+            ),
+            historyVisibleAfter: conversationRow.historyVisibleAfter,
+            replyTo: parsedReplyTo.replyTo,
+          })
+        : null;
+      if (replyContext && !replyContext.ok) {
+        json(res, replyContext.status, httpError(replyContext.code, replyContext.message));
+        return;
+      }
+      const resolvedReplyContext = replyContext?.ok ? replyContext.reply : null;
 
       const identityCandidates = Array.from(
         new Set([resolvedConversation.resolvedWaId, resolvedConversation.resolvedWaIdCanonical].filter(Boolean))
@@ -5251,6 +5283,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "canned_reply",
         cannedReplyId: cannedReply.id,
+        reply: resolvedReplyContext,
       });
       if (!result.ok || result.status === "FAILED") {
         const failedReason = result.ok ? "message_send_failed" : result.error;
@@ -5322,6 +5355,25 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           windowOpenAtSend: true,
         },
       });
+      if (resolvedReplyContext) {
+        await persistEvent({
+          clientId: client.id,
+          conversationId: conversationRow.id,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          eventName: "inbox.reply.sent",
+          requestId,
+          messageId: result.messageId,
+          payloadJson: {
+            source: "canned_reply",
+            conversationId: conversationRow.id,
+            outboundMessageId: result.messageId,
+            replyToKind: resolvedReplyContext.replyToKind,
+            replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
+            replyToMetaMessagePresent: true,
+          },
+        });
+      }
       const payload = await buildConversationActionPayload(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
@@ -5342,6 +5394,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           source: "canned_reply",
           cannedReplyId: cannedReply.id,
           cannedReplyTitle: cannedReply.title,
+          replyTo: serializeContextualReplyForClient(resolvedReplyContext),
         },
       });
     } catch (error) {
@@ -5372,6 +5425,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const body = await readJsonBody(req, res);
       if (!body) return;
+      const parsedReplyTo = parseInboxContextualReplyInput((body as Record<string, unknown>).replyTo);
+      if (!parsedReplyTo.ok) {
+        json(res, 400, { error: parsedReplyTo.code, message: parsedReplyTo.message });
+        return;
+      }
       const text = String(body.text ?? "").trim();
       if (!text) {
         json(res, 400, { error: "bad_request" });
@@ -5475,6 +5533,43 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 409, { error: buildWindowClosedError(currentConversation.window.expiresAt) });
         return;
       }
+      if (parsedReplyTo.replyTo && resolvedChannel !== "whatsapp") {
+        json(res, 409, {
+          error: "reply_context_unsupported_channel",
+          message: "Resposta contextual esta disponivel apenas para WhatsApp nesta etapa.",
+        });
+        return;
+      }
+      if (parsedReplyTo.replyTo && (resolvedConversation.winner?.deletedAt || resolvedConversation.winner?.anonymizedAt)) {
+        json(res, 409, {
+          error: "reply_context_unavailable",
+          message: "Mensagem citada indisponivel para esta conversa.",
+        });
+        return;
+      }
+      const replyContext = parsedReplyTo.replyTo
+        ? await resolveInboxContextualReply(prisma, {
+            clientId: client.id,
+            detailWaIds: Array.from(
+              new Set(
+                [
+                  ...buildWaIdLookup(waId).variants,
+                  waId,
+                  resolvedConversation.resolvedWaId,
+                  resolvedConversation.resolvedWaIdCanonical,
+                  ...resolvedConversation.matchedWaIds,
+                ].filter(Boolean)
+              )
+            ),
+            historyVisibleAfter: resolvedConversation.winner?.historyVisibleAfter ?? null,
+            replyTo: parsedReplyTo.replyTo,
+          })
+        : null;
+      if (replyContext && !replyContext.ok) {
+        json(res, replyContext.status, { error: replyContext.code, message: replyContext.message });
+        return;
+      }
+      const resolvedReplyContext = replyContext?.ok ? replyContext.reply : null;
       const result =
         resolvedChannel === "messenger"
           ? await adminSendMessengerMessage({
@@ -5520,6 +5615,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                   clientKey: client.clientKey,
                   clientId: client.id,
                   requestId,
+                  reply: resolvedReplyContext,
                 });
       if (!result.ok) {
         if (result.error === "window_closed" && "errorPayload" in result && result.errorPayload) {
@@ -5529,6 +5625,31 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, result.statusCode, {
           error: result.error,
           message: "message" in result ? result.message : undefined,
+        });
+        return;
+      }
+      if (resolvedReplyContext && result.status === "FAILED") {
+        await persistEvent({
+          clientId: client.id,
+          conversationId: resolvedConversation.winner?.id ?? null,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          eventName: "inbox.reply.failed",
+          requestId,
+          messageId: result.messageId,
+          payloadJson: {
+            source: "admin_inbox",
+            conversationId: resolvedConversation.winner?.id ?? null,
+            outboundMessageId: result.messageId,
+            replyToKind: resolvedReplyContext.replyToKind,
+            replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
+            replyToMetaMessagePresent: true,
+            reason: "message_send_failed",
+          },
+        });
+        json(res, 502, {
+          error: "message_send_failed",
+          message: "Falha ao enviar resposta contextual.",
         });
         return;
       }
@@ -5550,6 +5671,25 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientKey: client.clientKey,
         conversation,
       });
+      if (resolvedReplyContext) {
+        await persistEvent({
+          clientId: client.id,
+          conversationId: resolvedConversation.winner?.id ?? null,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          eventName: "inbox.reply.sent",
+          requestId,
+          messageId: result.messageId,
+          payloadJson: {
+            source: "admin_inbox",
+            conversationId: resolvedConversation.winner?.id ?? null,
+            outboundMessageId: result.messageId,
+            replyToKind: resolvedReplyContext.replyToKind,
+            replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
+            replyToMetaMessagePresent: true,
+          },
+        });
+      }
       json(res, 200, {
         ...payload,
         waId: payload.waId ?? resolvedConversation.resolvedWaId,
@@ -5573,6 +5713,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           status: result.status,
           metaMessageId: result.metaMessageId,
           createdAt: result.createdAt,
+          replyTo: serializeContextualReplyForClient(resolvedReplyContext),
         },
       });
     } catch (error) {
@@ -23557,6 +23698,8 @@ async function resolveConversationTarget(
       lastInboundAt: true,
       lastOutboundAt: true,
       historyVisibleAfter: true,
+      deletedAt: true,
+      anonymizedAt: true,
     },
   });
   const sortedMatches = matches.sort((left, right) => compareConversationLookupPriority(left, right));
@@ -25326,6 +25469,7 @@ async function buildConversationDetailPayload(
       orderBy: { createdAt: params.order },
       take: params.limit,
       select: {
+        id: true,
         createdAt: true,
         messageId: true,
         type: true,
@@ -25343,6 +25487,7 @@ async function buildConversationDetailPayload(
       orderBy: { createdAt: params.order },
       take: params.limit,
       select: {
+        id: true,
         createdAt: true,
         messageId: true,
         type: true,
@@ -25368,6 +25513,8 @@ async function buildConversationDetailPayload(
 
   const items = [
     ...inbound.map((item) => ({
+      internalMessageId: item.id,
+      messageKind: "inbound",
       direction: "INBOUND",
       type: item.type,
       status: "RECEIVED",
@@ -25392,7 +25539,10 @@ async function buildConversationDetailPayload(
     })),
     ...outbound.map((item) => {
       const metaStatus = extractMetaStatus(item.rawPayload);
+      const contextualReply = extractContextualReplyPayload(item.rawPayload);
       return {
+        internalMessageId: item.id,
+        messageKind: "outbound",
         direction: "OUTBOUND",
         type: item.type,
         status: normalizeInboxMessageStatus(metaStatus.lastStatus, item.status),
@@ -25417,6 +25567,15 @@ async function buildConversationDetailPayload(
           stringifyCampaignError(metaStatus.errorData) ||
           stringifyCampaignError(metaStatus.errors),
         createdAt: item.createdAt,
+        replyTo: contextualReply
+          ? {
+              kind: contextualReply.kind,
+              id: contextualReply.id,
+              previewType: contextualReply.previewType,
+              previewBody: null as string | null,
+              previewDirection: null as string | null,
+            }
+          : null,
         rawPayload: params.includeRaw ? item.rawPayload : undefined,
       };
     }),
@@ -25432,6 +25591,30 @@ async function buildConversationDetailPayload(
       return params.order === "asc" ? aTs - bTs : bTs - aTs;
     })
     .slice(0, params.limit);
+
+  const messageByInternalRef = new Map(
+    items.map((item) => [
+      `${item.messageKind}:${item.internalMessageId}`,
+      {
+        direction: item.direction,
+        type: item.type,
+        bodyText: item.bodyText,
+        templateName: item.templateName,
+      },
+    ])
+  );
+  for (const item of items) {
+    if (!("replyTo" in item) || !item.replyTo) continue;
+    const original = messageByInternalRef.get(`${item.replyTo.kind}:${item.replyTo.id}`);
+    if (!original) continue;
+    item.replyTo.previewBody = getTimelineMessageBody(
+      original.type,
+      original.bodyText,
+      original.templateName,
+      null
+    );
+    item.replyTo.previewDirection = original.direction;
+  }
 
   const tenantsStartedAt = channelLatencyNow();
   const tenant = (await getTenants())[params.clientKey];
@@ -26749,6 +26932,136 @@ function applyAiIntentQualificationToTenantView<T extends Record<string, unknown
   return withoutQualification;
 }
 
+type InboxContextualReplyInput = {
+  kind: "inbound" | "outbound";
+  id: string;
+};
+
+type ResolvedInboxContextualReply = {
+  replyToKind: "inbound" | "outbound";
+  replyToInternalMessageId: string;
+  replyToMetaMessageId: string;
+  previewType: MessageType;
+};
+
+function parseInboxContextualReplyInput(value: unknown):
+  | { ok: true; replyTo: InboxContextualReplyInput | null }
+  | { ok: false; code: string; message: string } {
+  if (value == null) return { ok: true, replyTo: null };
+  if (typeof value !== "object" || Array.isArray(value)) {
+    return { ok: false, code: "reply_context_invalid", message: "Referencia de resposta invalida." };
+  }
+  const record = value as Record<string, unknown>;
+  const kind = String(record.kind ?? "").trim().toLowerCase();
+  const id = String(record.id ?? "").trim();
+  if ((kind !== "inbound" && kind !== "outbound") || !id) {
+    return { ok: false, code: "reply_context_invalid", message: "Referencia de resposta invalida." };
+  }
+  return { ok: true, replyTo: { kind, id } };
+}
+
+function serializeContextualReplyPayload(reply: ResolvedInboxContextualReply | null) {
+  if (!reply) return null;
+  return {
+    replyToKind: reply.replyToKind,
+    replyToInternalMessageId: reply.replyToInternalMessageId,
+    replyToMetaMessagePresent: true,
+    previewType: reply.previewType,
+  };
+}
+
+function serializeContextualReplyForClient(reply: ResolvedInboxContextualReply | null) {
+  if (!reply) return null;
+  return {
+    kind: reply.replyToKind,
+    id: reply.replyToInternalMessageId,
+    previewType: reply.previewType,
+  };
+}
+
+function extractContextualReplyPayload(rawPayload: unknown):
+  | {
+      kind: "inbound" | "outbound";
+      id: string;
+      previewType: string | null;
+    }
+  | null {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return null;
+  const contextualReply = (rawPayload as Record<string, unknown>).contextualReply;
+  if (!contextualReply || typeof contextualReply !== "object" || Array.isArray(contextualReply)) return null;
+  const record = contextualReply as Record<string, unknown>;
+  const kind = String(record.replyToKind ?? "").trim().toLowerCase();
+  const id = String(record.replyToInternalMessageId ?? "").trim();
+  if ((kind !== "inbound" && kind !== "outbound") || !id) return null;
+  return {
+    kind,
+    id,
+    previewType: String(record.previewType ?? "").trim() || null,
+  };
+}
+
+async function resolveInboxContextualReply(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    detailWaIds: string[];
+    historyVisibleAfter?: Date | null;
+    replyTo: InboxContextualReplyInput;
+  }
+): Promise<
+  | { ok: true; reply: ResolvedInboxContextualReply }
+  | { ok: false; status: number; code: string; message: string }
+> {
+  const createdAtWhere = params.historyVisibleAfter ? { createdAt: { gt: params.historyVisibleAfter } } : {};
+  const sharedWhere = {
+    clientId: params.clientId,
+    id: params.replyTo.id,
+    ...createdAtWhere,
+    OR: [{ waIdCanonical: { in: params.detailWaIds } }, { waId: { in: params.detailWaIds } }],
+  };
+  if (params.replyTo.kind === "inbound") {
+    const inbound = await prisma.inboundMessage.findFirst({
+      where: sharedWhere,
+      select: { id: true, messageId: true, type: true },
+    });
+    if (!inbound) {
+      return { ok: false, status: 404, code: "reply_context_not_found", message: "Mensagem citada nao encontrada." };
+    }
+    if (!inbound.messageId?.trim()) {
+      return { ok: false, status: 409, code: "reply_context_unavailable", message: "Mensagem citada sem referencia valida para resposta." };
+    }
+    return {
+      ok: true,
+      reply: {
+        replyToKind: "inbound",
+        replyToInternalMessageId: inbound.id,
+        replyToMetaMessageId: inbound.messageId,
+        previewType: inbound.type,
+      },
+    };
+  }
+
+  const outbound = await prisma.outboundMessage.findFirst({
+    where: sharedWhere,
+    select: { id: true, metaMessageId: true, type: true },
+  });
+  if (!outbound) {
+    return { ok: false, status: 404, code: "reply_context_not_found", message: "Mensagem citada nao encontrada." };
+  }
+  if (!outbound.metaMessageId?.trim()) {
+    return { ok: false, status: 409, code: "reply_context_unavailable", message: "Mensagem citada sem referencia valida para resposta." };
+  }
+  return {
+    ok: true,
+    reply: {
+      replyToKind: "outbound",
+      replyToInternalMessageId: outbound.id,
+      replyToMetaMessageId: outbound.metaMessageId,
+      previewType: outbound.type,
+    },
+  };
+}
+
 async function adminSendMessage(params: {
   waId: string;
   text: string;
@@ -26757,6 +27070,7 @@ async function adminSendMessage(params: {
   requestId: string;
   source?: "admin_inbox" | "canned_reply";
   cannedReplyId?: string | null;
+  reply?: ResolvedInboxContextualReply | null;
 }): Promise<
   | {
       ok: true;
@@ -26803,10 +27117,15 @@ async function adminSendMessage(params: {
     return { ok: false, statusCode: 503, error: "tenant_outbound_credentials_missing" };
   }
 
-  const sendResult = await sendTextMessage(params.waId, params.text, {
-    accessToken: credentials.accessToken,
-    phoneNumberId: credentials.phoneNumberId,
-  });
+  const sendResult = await sendTextMessage(
+    params.waId,
+    params.text,
+    {
+      accessToken: credentials.accessToken,
+      phoneNumberId: credentials.phoneNumberId,
+    },
+    { replyToMetaMessageId: params.reply?.replyToMetaMessageId ?? null }
+  );
   const status = sendResult.ok ? "SENT" : "FAILED";
   const messageId = `admin.send.${params.requestId}`;
   const createdAt = new Date().toISOString();
@@ -26840,6 +27159,7 @@ async function adminSendMessage(params: {
     rawPayload: {
       source: params.source ?? "admin_inbox",
       cannedReplyId: params.cannedReplyId ?? null,
+      ...(params.reply ? { contextualReply: serializeContextualReplyPayload(params.reply) } : {}),
       metaUsage: usagePayload,
       status: sendResult.status ?? null,
       errorBody: sendResult.errorBody ?? null,

@@ -40,7 +40,8 @@ export type SendMediaKind = "image" | "document" | "audio" | "video";
 export async function sendTextMessage(
   to: string,
   body: string,
-  credentials?: TenantSendCredentials
+  credentials?: TenantSendCredentials,
+  options?: { replyToMetaMessageId?: string | null }
 ): Promise<SendResult> {
   const phoneNumberId = credentials?.phoneNumberId?.trim() || env.WHATSAPP_PHONE_NUMBER_ID;
   const accessToken = credentials?.accessToken?.trim() || env.WHATSAPP_ACCESS_TOKEN;
@@ -48,6 +49,9 @@ export async function sendTextMessage(
   const payload = {
     messaging_product: "whatsapp",
     to,
+    ...(options?.replyToMetaMessageId
+      ? { context: { message_id: options.replyToMetaMessageId } }
+      : {}),
     type: "text",
     text: { body },
   };
