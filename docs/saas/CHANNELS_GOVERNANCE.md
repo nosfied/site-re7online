@@ -14,6 +14,10 @@ The Converta channel model uses:
 
 ## WhatsApp
 
+Arquitetura atual: WhatsApp usa principalmente `TenantMetaConfig` e
+`WaPhoneNumber`. `ChannelAccount` pode existir no futuro para unificacao
+multicanal, mas nao e requisito operacional de WhatsApp hoje.
+
 ### Tenant Resolution
 
 Primary resolution is DB-first:
@@ -45,6 +49,22 @@ WhatsApp does not use `externalAccountIds` alias mapping in the same way as Meta
 - `TenantMetaConfig`
 - `tenants.json` fallback
 - Meta Cloud API webhook and send endpoints
+
+### Readiness
+
+Minimum healthy state:
+
+- active `Client`;
+- `TenantMetaConfig.businessToken` present;
+- `TenantMetaConfig.phoneNumberId` present;
+- matching `WaPhoneNumber.phoneNumberId` owned by the same `Client`;
+- valid token and webhook delivery verified operationally.
+
+WABA is important for subscription and onboarding robustness. `businessId` and
+`businessPortfolioId` are useful metadata, but missing values are not structural
+failures by themselves. Legacy env/global and tenants JSON fallback paths remain
+compatibility paths and should be treated as operational warnings, not automatic
+failures.
 
 ## Messenger / Facebook
 

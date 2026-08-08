@@ -65,7 +65,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | `docs/RUNBOOK_WHATSAPP_AGENT.md` | atual | Deploy, migration, retencao e operacao principal |
 | `docs/DEPLOY_TOPOLOGY_RE7.md` | parcialmente atual | Topologia de deploy; validar sempre que PM2/VPS/Vercel mudarem |
 | `docs/DEPLOY_LOG.md` | atual como historico | Registro historico, nao fonte primaria de arquitetura |
-| `docs/onboarding.md` | parcialmente atual | Onboarding ainda descreve DB + `tenants.json`, coerente hoje |
+| `docs/onboarding.md` | atual | Onboarding Meta/WhatsApp, readiness, partial bind e recuperacao operacional |
 | `docs/smoke-template-fallback.md` | parcialmente atual | Smoke especifico de template fallback |
 
 ## Arquitetura E Historico

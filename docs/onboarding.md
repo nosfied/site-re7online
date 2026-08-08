@@ -56,6 +56,9 @@ O console interno suporta dois caminhos de ativação do WhatsApp por tenant.
 Considere um tenant realmente conectado somente quando todos os pontos abaixo
 estiverem coerentes:
 
+- `Client` existe e esta ativo.
+- `TenantMetaConfig.businessToken` esta presente quando o tenant usa
+  credenciais proprias.
 - `TenantMetaConfig.phoneNumberId` aponta para o `phoneNumberId` correto.
 - `tenants.json -> metaPhoneNumberId` aponta para o mesmo `phoneNumberId`.
 - `WaPhoneNumber.phoneNumberId` existe e esta mapeado para o `Client` do tenant.
@@ -70,6 +73,39 @@ Nao trate apenas o status visual verde no Business Manager como prova de
 inbound operacional. O numero pode estar registrado na Cloud API e ainda assim
 nao entregar mensagens ao Converta se a WABA nao estiver inscrita no app ou se
 o app/token nao tiver acesso ao ativo correto.
+
+### Meta tenant readiness
+
+Use o readiness somente leitura antes de diagnosticar ou liberar um tenant:
+
+```bash
+cd apps/whatsapp-agent
+npm run meta:readiness -- --tenant <tenant-key>
+```
+
+Estados:
+
+- `OK`: `Client` ativo, `TenantMetaConfig` com token e `phoneNumberId`, e
+  `WaPhoneNumber` correspondente ao mesmo tenant.
+- `PARTIAL`: token e/ou telefone existem, mas a conexao ainda esta incompleta,
+  por exemplo sem WABA confirmada localmente. Pode nao impedir outbound, mas
+  exige validacao operacional.
+- `WARN`: estado valido com aspecto a revisar, como `businessId` ausente,
+  `businessPortfolioId` ausente, `ChannelAccount` WhatsApp inexistente ou
+  fallback legado disponivel.
+- `WAITING_EXTERNAL`: etapa depende da Meta ou de validacao externa que nao
+  esta persistida de forma deterministica no banco.
+- `FAIL`: tenant inexistente/inativo, token ausente, `phoneNumberId` ausente,
+  `WaPhoneNumber` ausente, ownership cruzado ou configuracao estruturalmente
+  inconsistente.
+
+O readiness nao chama Graph API, nao valida subscription WABA em tempo real, nao
+mostra token, telefone completo, `rawPayload`, `bodyText` ou IDs externos crus.
+`businessId` e `businessPortfolioId` sao metadata recomendada, mas ausencia
+deles nao e `FAIL` por si so para WhatsApp no modelo atual.
+
+Para WhatsApp, `ChannelAccount` nao e requisito no modelo atual. A identidade
+tecnica principal e `TenantMetaConfig` + `WaPhoneNumber`.
 
 ### Troca de numero conectado
 
@@ -98,6 +134,49 @@ Ao trocar de numero, nunca reaproveite como evidencia operacional:
 
 O criterio final e uma mensagem nova recebida pelo endpoint `/webhook` e
 persistida no tenant correto.
+
+### Partial bind
+
+Reconheca como partial bind qualquer estado em que parte da identidade Meta foi
+persistida, mas o onboarding ainda nao fechou todos os pontos operacionais.
+Exemplos:
+
+- token salvo com `phoneNumberId`, mas sem WABA confirmada;
+- WABA conhecida, mas subscription nao comprovada;
+- onboarding interrompido apos code exchange;
+- display name ou revisao externa pendente na Meta;
+- metadata de Business/Portfolio ainda incompleta.
+
+Procedimento:
+
+1) Nao repetir Embedded Signup indiscriminadamente.
+2) Nao editar banco manualmente.
+3) Nao mover numero entre tenants sem diagnostico de ownership.
+4) Rodar `npm run meta:readiness -- --tenant <tenant-key>`.
+5) Validar no painel Meta se o numero, WABA e app pertencem ao mesmo contexto.
+6) Identificar a etapa que falhou: code exchange, enrich, phone mapping, WABA
+   subscription ou registro Cloud API.
+7) Corrigir pelo console interno ou procedimento oficialmente suportado.
+
+### Recuperacao / rebinding emergencial
+
+Este e um procedimento excepcional de recuperacao operacional, nao uma
+funcionalidade normal de troca de numero entre tenants.
+
+Antes de qualquer acao:
+
+- registrar estado anterior de forma sanitizada;
+- identificar o tenant atual do `WaPhoneNumber`;
+- confirmar `TenantMetaConfig` do tenant alvo;
+- confirmar WABA/phone no painel Meta;
+- verificar conflito de ownership;
+- obter autorizacao explicita;
+- garantir que nao ha cross-tenant acidental;
+- validar readiness depois da recuperacao.
+
+Nao documente nem repita manobras pontuais como padrao de produto. O caminho
+normal e onboarding pelo console, vinculo manual suportado ou recuperacao
+operacional revisada.
 
 ### Cenário A — número/WABA já está no portfólio da Re7/Reset
 

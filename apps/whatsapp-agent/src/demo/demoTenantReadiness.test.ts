@@ -56,12 +56,12 @@ test("buildReadinessSummary escalates WARN and FAIL consistently", () => {
 
   assert.deepEqual(buildReadinessSummary(checks), {
     overallStatus: "WARN",
-    summary: { OK: 1, WARN: 1, FAIL: 0 },
+    summary: { OK: 1, INFO: 0, WARN: 1, PARTIAL: 0, WAITING_EXTERNAL: 0, FAIL: 0 },
   });
 
   checks.push({ id: "c", label: "C", status: "FAIL", message: "fail" });
   assert.deepEqual(buildReadinessSummary(checks), {
     overallStatus: "FAIL",
-    summary: { OK: 1, WARN: 1, FAIL: 1 },
+    summary: { OK: 1, INFO: 0, WARN: 1, PARTIAL: 0, WAITING_EXTERNAL: 0, FAIL: 1 },
   });
 });

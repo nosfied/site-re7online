@@ -20,6 +20,21 @@ O produto deve ser apresentado como solucao de atendimento, roteamento, chatbot/
 
 A disponibilidade final depende da configuracao do tenant, permissao do canal e credenciais operacionais autorizadas.
 
+### Readiness Meta/WhatsApp
+
+O estado saudavel minimo de WhatsApp por tenant usa a arquitetura atual:
+
+- `Client` ativo;
+- `TenantMetaConfig.businessToken` presente;
+- `TenantMetaConfig.phoneNumberId` presente;
+- `WaPhoneNumber.phoneNumberId` correspondente ao mesmo `Client`;
+- token valido e webhook entregue pela Meta ao Converta.
+
+`ChannelAccount` nao e requisito WhatsApp no modelo atual. Para
+Instagram/Messenger, `ChannelAccount`, aliases e secrets continuam sendo a base
+principal. `businessId` e `businessPortfolioId` sao metadata recomendada, mas
+nao bloqueiam sozinhos a prontidao WhatsApp.
+
 ## Inbox
 
 O Inbox concentra conversas operacionais por tenant. O fluxo atual inclui:

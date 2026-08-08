@@ -26,6 +26,13 @@ cd apps/whatsapp-agent
 npm run demo:readiness -- --tenant demo-converta --json
 ```
 
+Para diagnostico Meta/WhatsApp reutilizavel em qualquer tenant, use:
+
+```bash
+cd apps/whatsapp-agent
+npm run meta:readiness -- --tenant <tenant-key>
+```
+
 O checker:
 
 - usa somente o tenant informado;
@@ -33,7 +40,7 @@ O checker:
 - nao escreve em banco;
 - nao imprime token, payload cru, telefone completo, corpo de mensagem ou identificador externo completo;
 - mascara identificadores tecnicos com ultimos 4 digitos e tamanho;
-- retorna checks `OK`, `WARN` ou `FAIL`;
+- retorna checks `OK`, `INFO`, `WARN`, `PARTIAL`, `WAITING_EXTERNAL` ou `FAIL`;
 - pode retornar `WARN` sem impedir build ou deploy.
 
 ## Auditoria Da Base Atual
@@ -61,6 +68,10 @@ O campo `Client.features` armazena overrides JSON. O produto tambem usa perfil/c
 ### 6. ChannelAccount WhatsApp
 
 `ChannelAccount` e o modelo multicanal para contas de canal. Para WhatsApp, parte do runtime ainda depende de `TenantMetaConfig` e `WaPhoneNumber`. Portanto, ausencia de `ChannelAccount` WhatsApp vira `WARN`, nao falha automatica, se a configuracao Meta minima existir.
+
+O readiness generico Meta/WhatsApp foi extraido para reaproveitamento e o
+readiness do demo o consome. Isso evita manter checkers paralelos com criterios
+divergentes.
 
 ### 7. Usuarios por tenant
 
@@ -125,6 +136,31 @@ Um tenant pronto para demonstracao deve ter:
 - CRM ficticio;
 - politicas opcionais documentadas;
 - nenhum dado real sensivel em massa de apresentacao.
+
+## Estado Subsequente Do demo-converta
+
+Estado operacional conhecido apos provisionamento e testes controlados:
+
+- tenant ativo;
+- usuarios demo criados;
+- leads e conversas de teste/ficticios;
+- mensagens prontas configuradas;
+- chatbot flow configurado;
+- queue assignment configurado para demonstracao;
+- `TenantMetaConfig` presente;
+- token presente, sem exposicao do valor;
+- `WaPhoneNumber` presente;
+- WABA presente;
+- `ChannelAccount` WhatsApp ausente, sem ser requisito do modelo atual;
+- `businessId`/`businessPortfolioId` ausentes, tratados como `WARN`;
+- templates ainda dependem de sincronizacao/aprovacao conforme estado Meta.
+
+`demo-converta` e tenant permanente de demonstracao do produto. Ele nao e tenant
+oficial SECULT-PE.
+
+Quando o display name ou outro passo depender da Meta, classifique como
+pendencia externa/operacional. Nao reexecute onboarding, code exchange ou troca
+de numero sem diagnostico e autorizacao explicita.
 
 ## Limites
 

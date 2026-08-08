@@ -51,7 +51,9 @@ function printHuman(report: Awaited<ReturnType<typeof buildDemoTenantReadinessRe
   console.log(`Demo tenant readiness: ${report.tenantKey}`);
   console.log(`Generated at: ${report.generatedAt}`);
   console.log(`Overall: ${report.overallStatus}`);
-  console.log(`Summary: OK=${report.summary.OK} WARN=${report.summary.WARN} FAIL=${report.summary.FAIL}`);
+  console.log(
+    `Summary: OK=${report.summary.OK} INFO=${report.summary.INFO} WARN=${report.summary.WARN} PARTIAL=${report.summary.PARTIAL} WAITING_EXTERNAL=${report.summary.WAITING_EXTERNAL} FAIL=${report.summary.FAIL}`
+  );
   console.log("");
   for (const check of report.checks) {
     console.log(`[${check.status}] ${check.label}: ${check.message}`);
@@ -73,7 +75,7 @@ function buildFailureReport(tenantKey: string, error: unknown): DemoTenantReadin
     tenantKey,
     generatedAt: new Date().toISOString(),
     overallStatus: "FAIL",
-    summary: { OK: 0, WARN: 0, FAIL: 1 },
+    summary: { OK: 0, INFO: 0, WARN: 0, PARTIAL: 0, WAITING_EXTERNAL: 0, FAIL: 1 },
     checks: [
       {
         id: "database",

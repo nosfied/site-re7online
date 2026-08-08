@@ -1,6 +1,10 @@
 import type { PrismaClient } from "@prisma/client";
+import {
+  buildMetaTenantReadinessReport,
+  type MetaTenantReadinessStatus,
+} from "../meta/metaTenantReadiness.js";
 
-export type ReadinessStatus = "OK" | "WARN" | "FAIL";
+export type ReadinessStatus = MetaTenantReadinessStatus;
 
 export type DemoTenantReadinessCheck = {
   id: string;
@@ -102,13 +106,24 @@ export function summarizeOperationalConfig(configValue: unknown) {
 }
 
 export function buildReadinessSummary(checks: DemoTenantReadinessCheck[]) {
-  const summary = {
+  const summary: Record<ReadinessStatus, number> = {
     OK: countStatus(checks, "OK"),
+    INFO: countStatus(checks, "INFO"),
     WARN: countStatus(checks, "WARN"),
+    PARTIAL: countStatus(checks, "PARTIAL"),
+    WAITING_EXTERNAL: countStatus(checks, "WAITING_EXTERNAL"),
     FAIL: countStatus(checks, "FAIL"),
   };
   const overallStatus: ReadinessStatus =
-    summary.FAIL > 0 ? "FAIL" : summary.WARN > 0 ? "WARN" : "OK";
+    summary.FAIL > 0
+      ? "FAIL"
+      : summary.PARTIAL > 0
+        ? "PARTIAL"
+        : summary.WAITING_EXTERNAL > 0
+          ? "WAITING_EXTERNAL"
+          : summary.WARN > 0
+            ? "WARN"
+            : "OK";
   return { summary, overallStatus };
 }
 
@@ -185,9 +200,7 @@ export async function buildDemoTenantReadinessReport(params: {
 
   const [
     operationalConfig,
-    metaConfig,
-    waPhoneNumbers,
-    channelAccounts,
+    metaReadiness,
     templates,
     users,
     departments,
@@ -200,35 +213,11 @@ export async function buildDemoTenantReadinessReport(params: {
       where: { clientId: client.id },
       select: { config: true, schemaVersion: true, updatedAt: true },
     }),
-    params.prisma.tenantMetaConfig.findUnique({
-      where: { clientId: client.id },
-      select: {
-        businessId: true,
-        businessPortfolioId: true,
-        wabaId: true,
-        phoneNumberId: true,
-        updatedAt: true,
-      },
-    }),
-    params.prisma.waPhoneNumber.findMany({
-      where: { clientId: client.id },
-      select: { phoneNumberId: true, display: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    params.prisma.channelAccount.findMany({
-      where: { clientId: client.id },
-      select: {
-        channel: true,
-        provider: true,
-        channelAccountId: true,
-        enabled: true,
-        runtimeEnabled: true,
-        inboundPersistenceEnabled: true,
-        outboundEnabled: true,
-        status: true,
-        tokenStatus: true,
-      },
-      orderBy: { updatedAt: "desc" },
+    buildMetaTenantReadinessReport({
+      prisma: params.prisma,
+      tenantKey: params.tenantKey,
+      now: params.now,
+      legacyFallbacksAvailable: true,
     }),
     params.prisma.template.findMany({
       where: { clientId: client.id },
@@ -281,63 +270,13 @@ export async function buildDemoTenantReadinessReport(params: {
     },
   });
 
-  pushCheck(checks, {
-    id: "meta_config",
-    label: "TenantMetaConfig",
-    status: metaConfig?.phoneNumberId && metaConfig.wabaId ? "OK" : "FAIL",
-    message:
-      metaConfig?.phoneNumberId && metaConfig.wabaId
-        ? "Configuracao Meta minima encontrada."
-        : "Configuracao Meta minima ausente ou incompleta.",
-    details: {
-      businessId: maskSensitiveIdentifier(metaConfig?.businessId),
-      businessPortfolioId: maskSensitiveIdentifier(metaConfig?.businessPortfolioId),
-      wabaId: maskSensitiveIdentifier(metaConfig?.wabaId),
-      phoneNumberId: maskSensitiveIdentifier(metaConfig?.phoneNumberId),
-      updatedAt: metaConfig?.updatedAt?.toISOString() ?? null,
-    },
-  });
-
-  pushCheck(checks, {
-    id: "wa_phone_number",
-    label: "WaPhoneNumber",
-    status: waPhoneNumbers.length > 0 ? "OK" : "FAIL",
-    message:
-      waPhoneNumbers.length > 0
-        ? "Numero WhatsApp vinculado ao tenant encontrado."
-        : "Nenhum numero WhatsApp vinculado ao tenant.",
-    details: {
-      count: waPhoneNumbers.length,
-      numbers: waPhoneNumbers.slice(0, 3).map((number) => ({
-        phoneNumberId: maskSensitiveIdentifier(number.phoneNumberId),
-        display: maskSensitiveIdentifier(number.display),
-      })),
-    },
-  });
-
-  const whatsappAccounts = channelAccounts.filter((account) => account.channel === "whatsapp");
-  pushCheck(checks, {
-    id: "channel_accounts",
-    label: "ChannelAccount",
-    status: whatsappAccounts.length > 0 ? "OK" : "WARN",
-    message:
-      whatsappAccounts.length > 0
-        ? "Conta de canal WhatsApp encontrada no modelo multicanal."
-        : "Sem ChannelAccount WhatsApp; verificar se este tenant usa apenas TenantMetaConfig/WaPhoneNumber.",
-    details: {
-      total: channelAccounts.length,
-      whatsapp: whatsappAccounts.map((account) => ({
-        provider: account.provider,
-        channelAccountId: maskSensitiveIdentifier(account.channelAccountId),
-        enabled: account.enabled,
-        runtimeEnabled: account.runtimeEnabled,
-        inboundPersistenceEnabled: account.inboundPersistenceEnabled,
-        outboundEnabled: account.outboundEnabled,
-        status: account.status,
-        tokenStatus: account.tokenStatus,
-      })),
-    },
-  });
+  for (const check of metaReadiness.checks) {
+    pushCheck(checks, {
+      ...check,
+      id: `meta_${check.id}`,
+      label: `Meta WhatsApp - ${check.label}`,
+    });
+  }
 
   const approvedTemplates = templates.filter((template) => template.status.toLowerCase() === "approved");
   pushCheck(checks, {

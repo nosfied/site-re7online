@@ -67,6 +67,21 @@ Confirmar por canal seguro:
 - webhook funcional;
 - nenhuma credencial exposta em logs ou docs.
 
+Validacao somente leitura:
+
+```bash
+cd apps/whatsapp-agent
+npm run meta:readiness -- --tenant demo-converta
+```
+
+Interpretacao:
+
+- `ChannelAccount` WhatsApp ausente nao bloqueia o modelo atual.
+- `businessId`/`businessPortfolioId` ausentes sao ponto de atencao, nao falha
+  estrutural isolada.
+- `PARTIAL` exige diagnostico antes de acao; nao repetir onboarding por impulso.
+- qualquer mudanca de numero/WABA precisa de autorizacao explicita.
+
 ## Gate 6 - Templates
 
 Preparar modelos aprovados neutros:
@@ -124,6 +139,7 @@ Conferir:
 
 - nenhum `FAIL` impeditivo;
 - `WARN` revisados e aceitos;
+- `PARTIAL` diagnosticado e aceito ou corrigido por fluxo suportado;
 - nenhum dado pessoal no output;
 - nenhum envio executado pelo readiness.
 
