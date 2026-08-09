@@ -106,6 +106,21 @@ O Converta exibe estimativas para apoiar decisao operacional. Use essas informac
 
 O operador nao deve prometer valor definitivo ao cliente final com base apenas na previsao local.
 
+## Central de Relatorios
+
+Em `Relatorios`, os filtros globais de periodo, canal, atendente, setor e deduplicacao ficam no topo e afetam as abas operacionais de conversas, SLA e atendentes. A aba `Visao geral` resume o recorte atual sem alterar as formulas existentes.
+
+As abas disponiveis sao:
+
+- `Visao geral`: indicadores principais do periodo selecionado.
+- `Conversas`: volume por canal, setor e amostra de protocolos.
+- `SLA`: tempos e risco operacional calculados pelas metricas existentes.
+- `Atendentes`: separa mensagens humanas enviadas de conversas atribuidas.
+- `Acessos/Sessoes`: auditoria de autenticacao com filtros locais proprios.
+- `Exportacoes`: CSV de conversas, CSV de sessoes e impressao/PDF consolidado.
+
+Os filtros de `Acessos/Sessoes` sao locais dessa aba e nao alteram o recorte global das conversas.
+
 ## Relatorio Acessos/Sessoes
 
 Em `Relatorios`, a secao `Acessos/Sessoes` mostra trilha operacional de autenticacao por tenant. Ela usa sessoes observadas pela aplicacao e permite consultar login, logout explicito, substituicao de sessao, renovacao, expiracao e ultima atividade observada.

@@ -143,6 +143,7 @@ O relatorio e estimativo e nao substitui demonstrativo oficial da Meta.
 Superficies atuais:
 
 - exportacao CSV de campanhas;
+- workspace `/app/reports` organizado em abas internas de visao geral, conversas, SLA, atendentes, acessos/sessoes e exportacoes, mantendo filtros globais separados dos filtros locais de sessoes;
 - relatorio `Acessos/Sessoes` baseado em `AppAuthSession`, com filtros por periodo, usuario, perfil, status e export CSV sanitizado;
 - relatorio de atividade dos atendentes baseado em mensagens outbound humanas com autoria persistida no momento do envio;
 - relatorio de conversas atribuidas por atendente baseado em distribuicao operacional de `ConversationRuntimeState`/`ConversationAssignment`;

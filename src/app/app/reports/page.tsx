@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
@@ -48,6 +48,17 @@ const REPORT_CHANNELS = [
 
 const AGENT_ACTIVITY_HISTORY_NOTE =
   "Mensagens por atendente utiliza autoria persistida no momento do envio; mensagens historicas anteriores a captura de autoria podem nao ser atribuiveis.";
+
+type ReportsTab = "overview" | "conversations" | "sla" | "agents" | "sessions" | "exports";
+
+const REPORT_TABS: Array<{ id: ReportsTab; label: string; description: string }> = [
+  { id: "overview", label: "Visão geral", description: "Resumo executivo do periodo" },
+  { id: "conversations", label: "Conversas", description: "Volume, canais, setores e protocolos" },
+  { id: "sla", label: "SLA", description: "Tempos e risco operacional" },
+  { id: "agents", label: "Atendentes", description: "Atividade humana e atribuicao" },
+  { id: "sessions", label: "Acessos/Sessões", description: "Auditoria de autenticacao" },
+  { id: "exports", label: "Exportações", description: "CSV e impressao/PDF" },
+];
 
 function canAccessReports(role: string) {
   const normalized = role.trim().toUpperCase();
@@ -121,6 +132,93 @@ function getSlaOperational(report: ConversationReportResponse | null) {
   );
 }
 
+function getSessionStatusTone(status: AppSessionAuditStatus) {
+  if (status === "OPEN") return "border-sky-300/25 bg-sky-500/10 text-sky-100";
+  if (status === "EXPIRED") return "border-amber-300/25 bg-amber-500/10 text-amber-100";
+  return "border-emerald-300/20 bg-emerald-500/10 text-emerald-100";
+}
+
+function getReportStatusTone(status?: string | null) {
+  const normalized = String(status ?? "").trim().toUpperCase();
+  if (normalized === "WAITING") return "border-amber-300/25 bg-amber-500/10 text-amber-100";
+  if (normalized === "IN_PROGRESS") return "border-sky-300/25 bg-sky-500/10 text-sky-100";
+  if (normalized === "WAITING_USER") return "border-teal-300/25 bg-teal-500/10 text-teal-100";
+  if (normalized === "CLOSED") return "border-white/15 bg-white/10 text-white/70";
+  return "border-white/15 bg-white/5 text-white/65";
+}
+
+function ReportBadge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "info" | "ok" | "warn" | "risk" }) {
+  const toneClass =
+    tone === "info"
+      ? "border-sky-300/25 bg-sky-500/10 text-sky-100"
+      : tone === "ok"
+        ? "border-emerald-300/25 bg-emerald-500/10 text-emerald-100"
+        : tone === "warn"
+          ? "border-amber-300/25 bg-amber-500/10 text-amber-100"
+          : tone === "risk"
+            ? "border-rose-300/25 bg-rose-500/10 text-rose-100"
+            : "border-white/15 bg-white/5 text-white/70";
+  return (
+    <span className={`inline-flex w-fit items-center rounded-full border px-2.5 py-1 text-xs font-medium ${toneClass}`}>
+      {children}
+    </span>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  detail,
+  tone = "neutral",
+}: {
+  label: string;
+  value: ReactNode;
+  detail?: string;
+  tone?: "neutral" | "info" | "ok" | "warn" | "risk";
+}) {
+  const toneClass =
+    tone === "info"
+      ? "border-sky-300/20 bg-sky-500/10"
+      : tone === "ok"
+        ? "border-emerald-300/20 bg-emerald-500/10"
+        : tone === "warn"
+          ? "border-amber-300/20 bg-amber-500/10"
+          : tone === "risk"
+            ? "border-rose-300/20 bg-rose-500/10"
+            : "border-white/10 bg-white/5";
+  return (
+    <article className={`min-w-0 rounded-lg border p-3 ${toneClass}`}>
+      <p className="truncate text-xs font-medium uppercase tracking-wide text-white/55">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
+      {detail ? <p className="mt-1 text-xs leading-relaxed text-white/55">{detail}</p> : null}
+    </article>
+  );
+}
+
+function ReportSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-white/10 bg-white/5">
+      <div className="border-b border-white/10 px-4 py-3">
+        <h2 className="text-sm font-semibold text-white">{title}</h2>
+        {description ? <p className="mt-1 max-w-3xl text-xs leading-relaxed text-white/55">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function EmptyState({ children }: { children: ReactNode }) {
+  return <p className="p-4 text-sm text-white/65">{children}</p>;
+}
+
 function escapeHtml(value: string | number | null | undefined) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -159,6 +257,7 @@ export default function AppReportsPage() {
   const [sessionPage, setSessionPage] = useState(1);
   const [retentionDays, setRetentionDays] = useState<number | null>(null);
   const [tenant, setTenant] = useState<AppTenantSummary | null>(null);
+  const [activeTab, setActiveTab] = useState<ReportsTab>("overview");
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -178,6 +277,20 @@ export default function AppReportsPage() {
     setSession(stored);
     saveAppSession(stored);
   }, [router]);
+
+  useEffect(() => {
+    const rawTab = new URLSearchParams(window.location.search).get("tab");
+    if (REPORT_TABS.some((item) => item.id === rawTab)) {
+      setActiveTab(rawTab as ReportsTab);
+    }
+  }, []);
+
+  const handleTabChange = useCallback((tab: ReportsTab) => {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", tab);
+    window.history.replaceState(null, "", `${url.pathname}?${url.searchParams.toString()}`);
+  }, []);
 
   const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || success), () => {
       setError(null);
@@ -605,6 +718,15 @@ export default function AppReportsPage() {
 
   const canFilterDepartment = isAdminRole(session.user.role);
   const slaOperational = getSlaOperational(report);
+  const periodLabel =
+    periodMode === "custom"
+      ? `${formatDateTime(dateTimeLocalToIso(customFrom))} a ${formatDateTime(dateTimeLocalToIso(customTo))}`
+      : RANGE_LABELS[range];
+  const channelLabel = REPORT_CHANNELS.find((item) => item.value === channel)?.label ?? "Todos";
+  const departmentLabel = departmentId ? departments.find((item) => item.id === departmentId)?.name ?? departmentId : "Todos";
+  const userLabel = userId ? userNameById.get(userId) ?? userId : "Todos";
+  const hasGlobalFilters = channel || userId || departmentId || dedupe || periodMode === "custom";
+  const assignedConversations = report?.assignedConversationsByAgent ?? report?.byAgent ?? [];
 
   return (
     <AppShell
@@ -616,15 +738,43 @@ export default function AppReportsPage() {
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
 
       {retentionDays !== null && retentionDays < 30 ? (
-        <section className="rounded-xl border border-amber-300/30 bg-amber-500/10 p-3 text-sm text-amber-50 sm:p-4">
+        <section className="rounded-lg border border-amber-300/30 bg-amber-500/10 p-3 text-sm text-amber-50">
           A retencao LGPD esta configurada para {retentionDays} dia
-          {retentionDays === 1 ? "" : "s"}. Relatorios e historico operacional podem ficar reduzidos
-          quando a retencao for executada.
+          {retentionDays === 1 ? "" : "s"}. Relatorios e historico operacional podem ficar reduzidos quando a retencao for executada.
         </section>
       ) : null}
 
       <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-        <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="flex flex-col gap-3 border-b border-white/10 pb-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-white/45">Contexto global</p>
+            <h2 className="mt-1 text-lg font-semibold text-white">{periodLabel}</h2>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <ReportBadge tone="info">Canal: {channelLabel}</ReportBadge>
+              <ReportBadge tone="neutral">Setor: {departmentLabel}</ReportBadge>
+              <ReportBadge tone="neutral">Atendente: {userLabel}</ReportBadge>
+              {dedupe ? <ReportBadge tone="warn">Duplicados desconsiderados</ReportBadge> : null}
+            </div>
+          </div>
+          {hasGlobalFilters ? (
+            <button
+              type="button"
+              onClick={() => {
+                setPeriodMode("preset");
+                setRange("7d");
+                setChannel("");
+                setUserId("");
+                setDepartmentId("");
+                setDedupe(false);
+              }}
+              className="w-fit rounded-md border border-white/15 px-3 py-2 text-sm text-white/75 hover:bg-white/10 hover:text-white"
+            >
+              Limpar filtros
+            </button>
+          ) : null}
+        </div>
+
+        <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <label className="grid gap-1 text-sm">
             <span className="text-white/70">Tipo de periodo</span>
             <select
@@ -636,22 +786,21 @@ export default function AppReportsPage() {
               <option value="custom">Periodo exato</option>
             </select>
           </label>
-
           {periodMode === "preset" ? (
-          <label className="grid gap-1 text-sm">
-            <span className="text-white/70">Periodo rapido</span>
-            <select
-              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-              value={range}
-              onChange={(event) => setRange(event.target.value as ConversationReportRange)}
-            >
-              {REPORT_RANGES.map((item) => (
-                <option key={item} value={item}>
-                  {RANGE_LABELS[item]}
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Periodo rapido</span>
+              <select
+                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                value={range}
+                onChange={(event) => setRange(event.target.value as ConversationReportRange)}
+              >
+                {REPORT_RANGES.map((item) => (
+                  <option key={item} value={item}>
+                    {RANGE_LABELS[item]}
+                  </option>
+                ))}
+              </select>
+            </label>
           ) : (
             <>
               <label className="grid gap-1 text-sm">
@@ -674,7 +823,6 @@ export default function AppReportsPage() {
               </label>
             </>
           )}
-
           <label className="grid gap-1 text-sm">
             <span className="text-white/70">Canal</span>
             <select
@@ -689,7 +837,6 @@ export default function AppReportsPage() {
               ))}
             </select>
           </label>
-
           <label className="grid gap-1 text-sm">
             <span className="text-white/70">Atendente</span>
             <select
@@ -705,7 +852,6 @@ export default function AppReportsPage() {
               ))}
             </select>
           </label>
-
           <label className="grid gap-1 text-sm">
             <span className="text-white/70">Setor</span>
             <select
@@ -723,7 +869,6 @@ export default function AppReportsPage() {
               ))}
             </select>
           </label>
-
           <div className="flex items-end">
             <label className="flex min-h-10 w-full items-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm text-white/80">
               <input
@@ -735,404 +880,443 @@ export default function AppReportsPage() {
               Desconsiderar duplicados
             </label>
           </div>
-
-          <div className="flex items-end gap-2 sm:col-span-2 xl:col-span-4">
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={exporting}
-              className="min-w-0 flex-1 rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-2 text-sm text-white hover:bg-re7-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {exporting ? "Exportando..." : "Exportar CSV"}
-            </button>
-            <button
-              type="button"
-              onClick={handleGeneratePdf}
-              disabled={!report}
-              className="min-w-0 flex-1 rounded-md border border-emerald-300/30 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Gerar PDF
-            </button>
-          </div>
         </div>
       </section>
 
-      {loading ? <p className="text-sm text-white/70">Carregando relatorios...</p> : null}
+      <nav
+        aria-label="Seções de relatórios"
+        role="tablist"
+        className="flex gap-2 overflow-x-auto rounded-xl border border-white/10 bg-white/5 p-2"
+      >
+        {REPORT_TABS.map((tab) => {
+          const selected = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              aria-controls={`reports-panel-${tab.id}`}
+              id={`reports-tab-${tab.id}`}
+              onClick={() => handleTabChange(tab.id)}
+              className={`min-w-[11rem] rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-re7-sky/70 ${
+                selected
+                  ? "border-re7-sky/40 bg-re7-sky/15 text-white"
+                  : "border-transparent text-white/65 hover:border-white/10 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <span className="block text-sm font-semibold">{tab.label}</span>
+              <span className="mt-0.5 block text-xs text-white/50">{tab.description}</span>
+            </button>
+          );
+        })}
+      </nav>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">Conversas</p>
-          <p className="mt-2 text-2xl font-semibold">{report?.totalConversations ?? "-"}</p>
-        </article>
-        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">Primeira resposta media</p>
-          <p className="mt-2 text-2xl font-semibold">
-            {formatSeconds(report?.avgFirstResponseTimeSec ?? null)}
-          </p>
-        </article>
-        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">Resolucao media</p>
-          <p className="mt-2 text-2xl font-semibold">
-            {formatSeconds(report?.avgResolutionTimeSec ?? null)}
-          </p>
-        </article>
-        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">Automatizados</p>
-          <p className="mt-2 text-2xl font-semibold">{report?.automatedConversations ?? "-"}</p>
-        </article>
-        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">Transferencias humano</p>
-          <p className="mt-2 text-2xl font-semibold">{report?.humanTransferCount ?? "-"}</p>
-        </article>
-        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">Fora do SLA</p>
-          <p className="mt-2 text-2xl font-semibold">{report?.slaBreaches ?? "-"}</p>
-        </article>
-      </section>
+      {loading ? (
+        <section className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/65">
+          Carregando relatorios sem limpar o contexto da pagina...
+        </section>
+      ) : null}
 
-      <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-        <div className="flex flex-col gap-2 border-b border-white/10 pb-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h2 className="text-base font-semibold">Acessos/Sessoes</h2>
-            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-white/55">
-              Auditoria operacional de autenticacao. Nao e controle de ponto, jornada ou comprovacao
-              de presenca laboral. Fechar o navegador, desligar o computador ou perder internet nao gera
-              logout deterministico; ultima atividade observada indica apenas atividade autenticada vista
-              pela aplicacao.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleExportSessions}
-            disabled={exportingSessions}
-            className="rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-2 text-sm text-white hover:bg-re7-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {exportingSessions ? "Exportando..." : "Exportar CSV"}
-          </button>
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <label className="grid gap-1 text-sm">
-            <span className="text-white/70">Inicio do login</span>
-            <input
-              type="datetime-local"
-              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-              value={sessionFrom}
-              onChange={(event) => setSessionFrom(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-white/70">Fim do login</span>
-            <input
-              type="datetime-local"
-              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-              value={sessionTo}
-              onChange={(event) => setSessionTo(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-white/70">Usuario</span>
-            <select
-              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-              value={sessionUserId}
-              onChange={(event) => setSessionUserId(event.target.value)}
-            >
-              <option value="">Todos</option>
-              {users.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name} ({item.role})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-white/70">Perfil</span>
-            <select
-              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-              value={sessionRole}
-              onChange={(event) => setSessionRole(event.target.value)}
-            >
-              {SESSION_ROLE_FILTERS.map((item) => (
-                <option key={item.value || "all"} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-white/70">Status</span>
-            <select
-              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-              value={sessionStatus}
-              onChange={(event) => setSessionStatus(event.target.value as "" | AppSessionAuditStatus)}
-            >
-              {SESSION_STATUS_FILTERS.map((item) => (
-                <option key={item.value || "all"} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <p className="mt-3 text-xs text-white/50">
-          Periodo filtrado por sessoes iniciadas no intervalo. Sessoes vencidas aparecem como
-          expiradas sem inferir logout por lastSeenAt.
-        </p>
-        {sessionsLoading ? <p className="mt-4 text-sm text-white/70">Carregando acessos/sessoes...</p> : null}
-        <div className="mt-4 overflow-x-auto rounded-lg border border-white/10">
-          {sessionReport?.items.length ? (
-            <table className="w-full min-w-[980px] text-sm">
-              <thead className="bg-white/10 text-left">
-                <tr>
-                  <th className="px-3 py-2">Usuario</th>
-                  <th className="px-3 py-2">Perfil</th>
-                  <th className="px-3 py-2">Login</th>
-                  <th className="px-3 py-2">Encerramento</th>
-                  <th className="px-3 py-2">Motivo</th>
-                  <th className="px-3 py-2">Duracao observada</th>
-                  <th className="px-3 py-2">Ultima atividade observada</th>
-                  <th className="px-3 py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessionReport.items.map((item) => (
-                  <tr key={item.id} className="border-t border-white/10">
-                    <td className="px-3 py-2">{item.userName}</td>
-                    <td className="px-3 py-2 text-white/70">{item.role}</td>
-                    <td className="px-3 py-2">{formatDateTime(item.loginAt)}</td>
-                    <td className="px-3 py-2">{item.endedAt ? formatDateTime(item.endedAt) : "-"}</td>
-                    <td className="px-3 py-2 text-white/70">{item.endReasonLabel}</td>
-                    <td className="px-3 py-2">{formatObservedDuration(item.durationObservedSec)}</td>
-                    <td className="px-3 py-2">{formatDateTime(item.lastSeenAt)}</td>
-                    <td className="px-3 py-2">
-                      <span className="rounded-full border border-white/10 bg-white/10 px-2 py-1 text-xs">
-                        {item.statusLabel}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="p-4 text-sm text-white/60">Nenhuma sessao encontrada no periodo selecionado.</p>
-          )}
-        </div>
-        {sessionReport ? (
-          <div className="mt-3 flex flex-col gap-2 text-xs text-white/55 sm:flex-row sm:items-center sm:justify-between">
-            <span>
-              Total: {sessionReport.total} sessoes observadas. Pagina {sessionReport.page} de{" "}
-              {sessionReport.totalPages}.
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="rounded-md border border-white/15 px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={sessionPage <= 1}
-                onClick={() => setSessionPage((current) => Math.max(1, current - 1))}
-              >
-                Anterior
-              </button>
-              <button
-                type="button"
-                className="rounded-md border border-white/15 px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={sessionPage >= sessionReport.totalPages}
-                onClick={() => setSessionPage((current) => Math.min(sessionReport.totalPages, current + 1))}
-              >
-                Proxima
-              </button>
+      <div
+        role="tabpanel"
+        id={`reports-panel-${activeTab}`}
+        aria-labelledby={`reports-tab-${activeTab}`}
+        className="grid gap-4"
+      >
+        {activeTab === "overview" ? (
+          <>
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <KpiCard label="Conversas" value={report?.totalConversations ?? "-"} tone="info" detail="Total no periodo e filtros atuais." />
+              <KpiCard label="Em atendimento" value={slaOperational.inProgress} tone="info" detail="Conversas em andamento no recorte." />
+              <KpiCard label="Aguardando" value={slaOperational.waitingFirstResponse} tone="warn" detail="Sem primeira resposta registrada." />
+              <KpiCard label="Fechadas" value={slaOperational.closed} tone="neutral" detail="Conversas encerradas no read model atual." />
+              <KpiCard label="Primeira resposta média" value={formatSeconds(report?.avgFirstResponseTimeSec ?? null)} tone="ok" />
+              <KpiCard label="Resolução média" value={formatSeconds(report?.avgResolutionTimeSec ?? null)} tone="ok" />
+              <KpiCard
+                label="Fora do SLA"
+                value={report?.slaBreaches ?? "-"}
+                tone={(report?.slaBreaches ?? 0) > 0 ? "risk" : "ok"}
+                detail="Usa a formula atual do relatorio."
+              />
+              <KpiCard label="Transferências humano" value={report?.humanTransferCount ?? "-"} tone="neutral" />
+            </section>
+            <section className="rounded-lg border border-sky-300/20 bg-sky-500/10 p-3 text-sm text-sky-50">
+              A visao geral resume o periodo selecionado. As abas detalham conversas, SLA, atendentes, sessoes e exportacoes sem alterar as metricas originais.
+            </section>
+          </>
+        ) : null}
+
+        {activeTab === "conversations" ? (
+          <>
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <KpiCard label="Volume" value={report?.totalConversations ?? "-"} tone="info" />
+              <KpiCard label="Automatizadas" value={report?.automatedConversations ?? "-"} tone="neutral" />
+              <KpiCard label="Canais" value={report?.byChannel?.length ?? 0} tone="neutral" />
+              <KpiCard label="Setores" value={report?.byDepartment.length ?? 0} tone="neutral" />
+            </section>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <ReportSection title="Por canal" description="Distribuicao de conversas por canal no periodo.">
+                {report?.byChannel?.length ? (
+                  <table className="w-full text-sm">
+                    <thead className="bg-white/10 text-left">
+                      <tr>
+                        <th className="px-3 py-2">Canal</th>
+                        <th className="px-3 py-2 text-right">Conversas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.byChannel.map((item) => (
+                        <tr key={item.channel} className="border-t border-white/10">
+                          <td className="px-3 py-2">{item.channelName}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{item.conversations}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <EmptyState>Nenhum dado por canal no periodo selecionado.</EmptyState>
+                )}
+              </ReportSection>
+              <ReportSection title="Por setor" description="Distribuicao operacional por departamento.">
+                {report?.byDepartment.length ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[560px] text-sm">
+                      <thead className="bg-white/10 text-left">
+                        <tr>
+                          <th className="px-3 py-2">Departamento</th>
+                          <th className="px-3 py-2 text-right">Conversas</th>
+                          <th className="px-3 py-2 text-right">Tempo medio</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {report.byDepartment.map((item) => (
+                          <tr key={item.departmentId ?? "__none__"} className="border-t border-white/10">
+                            <td className="px-3 py-2">{item.departmentName ?? "Sem setor / legado"}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{item.conversations}</td>
+                            <td className="px-3 py-2 text-right">{formatSeconds(item.avgResponseTimeSec)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <EmptyState>Nenhum dado por setor no periodo selecionado.</EmptyState>
+                )}
+              </ReportSection>
             </div>
+            <ReportSection title="Protocolos" description="Amostra dos primeiros 100 protocolos do recorte atual.">
+              {report?.conversations?.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[760px] text-sm">
+                    <thead className="bg-white/10 text-left">
+                      <tr>
+                        <th className="px-3 py-2">Protocolo</th>
+                        <th className="px-3 py-2">Canal</th>
+                        <th className="px-3 py-2">Setor</th>
+                        <th className="px-3 py-2">Status</th>
+                        <th className="px-3 py-2">Inicio</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.conversations.slice(0, 100).map((item) => (
+                        <tr key={item.conversationId} className="border-t border-white/10">
+                          <td className="px-3 py-2 font-mono text-xs">{item.protocol}</td>
+                          <td className="px-3 py-2">{item.channelName}</td>
+                          <td className="px-3 py-2">{item.departmentName ?? "-"}</td>
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex rounded-full border px-2 py-1 text-xs ${getReportStatusTone(item.status)}`}>
+                              {item.status ?? "-"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">{formatDateTime(item.startedAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState>Nenhum protocolo no periodo selecionado.</EmptyState>
+              )}
+            </ReportSection>
+          </>
+        ) : null}
+
+        {activeTab === "sla" ? (
+          <>
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <KpiCard label="Aguardando primeira resposta" value={slaOperational.waitingFirstResponse} tone="warn" />
+              <KpiCard label="Em atendimento" value={slaOperational.inProgress} tone="info" />
+              <KpiCard label="Aguardando cliente" value={slaOperational.waitingUser} tone="neutral" />
+              <KpiCard label="Fechados" value={slaOperational.closed} tone="neutral" />
+              <KpiCard label="Média primeira resposta" value={formatSeconds(slaOperational.avgFirstResponseTimeSec)} tone="ok" />
+              <KpiCard label="Média resolução" value={formatSeconds(slaOperational.avgResolutionTimeSec)} tone="ok" />
+              <KpiCard
+                label="Breaches"
+                value={report?.slaBreaches ?? "-"}
+                tone={(report?.slaBreaches ?? 0) > 0 ? "risk" : "ok"}
+                detail="Mantem a formula existente."
+              />
+            </section>
+            <section className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white/65">
+              SLA por responsavel nao e inferido nesta tela. Sem snapshot confiavel do responsavel no evento de SLA, essa leitura permanece fora do escopo.
+            </section>
+          </>
+        ) : null}
+
+        {activeTab === "agents" ? (
+          <>
+            <ReportSection
+              title="Atividade dos atendentes"
+              description="Mensagens enviadas por atendente. Considera apenas mensagens humanas com autoria persistida no envio."
+            >
+              {report?.agentMessageActivity?.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[520px] text-sm">
+                    <thead className="bg-white/10 text-left">
+                      <tr>
+                        <th className="px-3 py-2">Atendente</th>
+                        <th className="px-3 py-2">User ID</th>
+                        <th className="px-3 py-2 text-right">Mensagens enviadas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.agentMessageActivity.map((item) => (
+                        <tr key={item.userId} className="border-t border-white/10">
+                          <td className="px-3 py-2">{item.userName ?? userNameById.get(item.userId) ?? "-"}</td>
+                          <td className="px-3 py-2 font-mono text-xs">{item.userId}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{item.outboundMessages}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState>Nenhuma mensagem com autoria registrada neste periodo.</EmptyState>
+              )}
+            </ReportSection>
+            <section className="rounded-lg border border-sky-300/20 bg-sky-500/10 p-3 text-sm text-sky-50">
+              {AGENT_ACTIVITY_HISTORY_NOTE}
+            </section>
+            <ReportSection
+              title="Conversas atribuídas por atendente"
+              description="Reflete atribuicao/ownership operacional, nao quantidade de mensagens enviadas."
+            >
+              {assignedConversations.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] text-sm">
+                    <thead className="bg-white/10 text-left">
+                      <tr>
+                        <th className="px-3 py-2">Atendente</th>
+                        <th className="px-3 py-2">User ID</th>
+                        <th className="px-3 py-2 text-right">Conversas atribuidas</th>
+                        <th className="px-3 py-2 text-right">Tempo medio de resposta</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {assignedConversations.map((item) => (
+                        <tr key={item.userId} className="border-t border-white/10">
+                          <td className="px-3 py-2">{userNameById.get(item.userId) ?? "-"}</td>
+                          <td className="px-3 py-2 font-mono text-xs">{item.userId}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{item.conversations}</td>
+                          <td className="px-3 py-2 text-right">{formatSeconds(item.avgResponseTimeSec)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState>Nenhuma atribuicao registrada no periodo.</EmptyState>
+              )}
+            </ReportSection>
+          </>
+        ) : null}
+
+        {activeTab === "sessions" ? (
+          <ReportSection
+            title="Acessos/Sessões"
+            description="Sessões refletem autenticação e atividade observada. Não representam controle de jornada."
+          >
+            <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-5">
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">Inicio do login</span>
+                <input
+                  type="datetime-local"
+                  className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={sessionFrom}
+                  onChange={(event) => setSessionFrom(event.target.value)}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">Fim do login</span>
+                <input
+                  type="datetime-local"
+                  className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={sessionTo}
+                  onChange={(event) => setSessionTo(event.target.value)}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">Usuario</span>
+                <select
+                  className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={sessionUserId}
+                  onChange={(event) => setSessionUserId(event.target.value)}
+                >
+                  <option value="">Todos</option>
+                  {users.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} ({item.role})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">Perfil</span>
+                <select
+                  className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={sessionRole}
+                  onChange={(event) => setSessionRole(event.target.value)}
+                >
+                  {SESSION_ROLE_FILTERS.map((item) => (
+                    <option key={item.value || "all"} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">Status</span>
+                <select
+                  className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={sessionStatus}
+                  onChange={(event) => setSessionStatus(event.target.value as "" | AppSessionAuditStatus)}
+                >
+                  {SESSION_STATUS_FILTERS.map((item) => (
+                    <option key={item.value || "all"} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p className="px-4 pb-3 text-xs text-white/50">
+              Periodo filtrado por sessoes iniciadas no intervalo. Sessoes vencidas aparecem como expiradas sem inferir logout por lastSeenAt.
+            </p>
+            {sessionsLoading ? <p className="px-4 pb-3 text-sm text-white/70">Carregando acessos/sessoes...</p> : null}
+            <div className="overflow-x-auto border-t border-white/10">
+              {sessionReport?.items.length ? (
+                <table className="w-full min-w-[980px] text-sm">
+                  <thead className="bg-white/10 text-left">
+                    <tr>
+                      <th className="px-3 py-2">Usuario</th>
+                      <th className="px-3 py-2">Perfil</th>
+                      <th className="px-3 py-2">Login</th>
+                      <th className="px-3 py-2">Encerramento</th>
+                      <th className="px-3 py-2">Motivo</th>
+                      <th className="px-3 py-2">Duracao observada</th>
+                      <th className="px-3 py-2">Ultima atividade observada</th>
+                      <th className="px-3 py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessionReport.items.map((item) => (
+                      <tr key={item.id} className="border-t border-white/10">
+                        <td className="px-3 py-2">{item.userName}</td>
+                        <td className="px-3 py-2 text-white/70">{item.role}</td>
+                        <td className="px-3 py-2">{formatDateTime(item.loginAt)}</td>
+                        <td className="px-3 py-2">{item.endedAt ? formatDateTime(item.endedAt) : "-"}</td>
+                        <td className="px-3 py-2 text-white/70">{item.endReasonLabel}</td>
+                        <td className="px-3 py-2">{formatObservedDuration(item.durationObservedSec)}</td>
+                        <td className="px-3 py-2">{formatDateTime(item.lastSeenAt)}</td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-flex rounded-full border px-2 py-1 text-xs ${getSessionStatusTone(item.status)}`}>
+                            {item.statusLabel}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <EmptyState>Nenhuma sessao encontrada no periodo selecionado.</EmptyState>
+              )}
+            </div>
+            {sessionReport ? (
+              <div className="flex flex-col gap-2 border-t border-white/10 px-4 py-3 text-xs text-white/55 sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  Total: {sessionReport.total} sessoes observadas. Pagina {sessionReport.page} de {sessionReport.totalPages}.
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md border border-white/15 px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={sessionPage <= 1}
+                    onClick={() => setSessionPage((current) => Math.max(1, current - 1))}
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-white/15 px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={sessionPage >= sessionReport.totalPages}
+                    onClick={() => setSessionPage((current) => Math.min(sessionReport.totalPages, current + 1))}
+                  >
+                    Proxima
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </ReportSection>
+        ) : null}
+
+        {activeTab === "exports" ? (
+          <div className="grid gap-4 lg:grid-cols-3">
+            <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <h2 className="text-sm font-semibold">CSV de conversas</h2>
+              <p className="mt-1 text-xs leading-relaxed text-white/55">
+                Exporta o recorte operacional de conversas com os filtros globais atuais.
+              </p>
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={exporting}
+                className="mt-4 w-full rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-2 text-sm text-white hover:bg-re7-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {exporting ? "Exportando..." : "Exportar CSV de conversas"}
+              </button>
+            </section>
+            <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <h2 className="text-sm font-semibold">CSV de acessos/sessões</h2>
+              <p className="mt-1 text-xs leading-relaxed text-white/55">
+                Exporta auditoria de autenticacao conforme filtros locais da aba Acessos/Sessões.
+              </p>
+              <button
+                type="button"
+                onClick={handleExportSessions}
+                disabled={exportingSessions}
+                className="mt-4 w-full rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-2 text-sm text-white hover:bg-re7-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {exportingSessions ? "Exportando..." : "Exportar CSV de sessões"}
+              </button>
+            </section>
+            <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <h2 className="text-sm font-semibold">Impressão/PDF</h2>
+              <p className="mt-1 text-xs leading-relaxed text-white/55">
+                Mantem a janela de impressao atual com o relatorio consolidado. Redesign completo do PDF fica fora desta sprint.
+              </p>
+              <button
+                type="button"
+                onClick={handleGeneratePdf}
+                disabled={!report}
+                className="mt-4 w-full rounded-md border border-emerald-300/30 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Gerar PDF
+              </button>
+            </section>
           </div>
         ) : null}
-      </section>
-
-      <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-        <div className="mb-3">
-          <h2 className="text-sm font-semibold">SLA operacional</h2>
-          <p className="text-xs text-white/55">
-            Visao gerencial calculada a partir da Conversation, RuntimeState e metricas existentes.
-          </p>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          <article className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs uppercase tracking-wide text-white/50">Aguardando primeira resposta</p>
-            <p className="mt-2 text-2xl font-semibold">{slaOperational.waitingFirstResponse}</p>
-          </article>
-          <article className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs uppercase tracking-wide text-white/50">Em atendimento</p>
-            <p className="mt-2 text-2xl font-semibold">{slaOperational.inProgress}</p>
-          </article>
-          <article className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs uppercase tracking-wide text-white/50">Aguardando cliente</p>
-            <p className="mt-2 text-2xl font-semibold">{slaOperational.waitingUser}</p>
-          </article>
-          <article className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs uppercase tracking-wide text-white/50">Fechados</p>
-            <p className="mt-2 text-2xl font-semibold">{slaOperational.closed}</p>
-          </article>
-          <article className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs uppercase tracking-wide text-white/50">Media primeira resposta</p>
-            <p className="mt-2 text-2xl font-semibold">{formatSeconds(slaOperational.avgFirstResponseTimeSec)}</p>
-          </article>
-          <article className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs uppercase tracking-wide text-white/50">Media resolucao</p>
-            <p className="mt-2 text-2xl font-semibold">{formatSeconds(slaOperational.avgResolutionTimeSec)}</p>
-          </article>
-        </div>
-      </section>
-
-      <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
-        <div className="border-b border-white/10 px-4 py-3">
-          <h2 className="text-sm font-semibold">Protocolos</h2>
-        </div>
-        {report?.conversations?.length ? (
-          <table className="w-full min-w-[780px] text-sm">
-            <thead className="bg-white/10 text-left">
-              <tr>
-                <th className="px-3 py-2">Protocolo</th>
-                <th className="px-3 py-2">Canal</th>
-                <th className="px-3 py-2">Setor</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Inicio</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.conversations.slice(0, 100).map((item) => (
-                <tr key={item.conversationId} className="border-t border-white/10">
-                  <td className="px-3 py-2 font-mono text-xs">{item.protocol}</td>
-                  <td className="px-3 py-2">{item.channelName}</td>
-                  <td className="px-3 py-2">{item.departmentName ?? "-"}</td>
-                  <td className="px-3 py-2">{item.status ?? "-"}</td>
-                  <td className="px-3 py-2">{formatDateTime(item.startedAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="p-4 text-sm text-white/70">Nenhum protocolo no periodo selecionado.</p>
-        )}
-      </section>
-
-      <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
-        <div className="border-b border-white/10 px-4 py-3">
-          <h2 className="text-sm font-semibold">Por canal</h2>
-        </div>
-        {report?.byChannel?.length ? (
-          <table className="w-full min-w-[420px] text-sm">
-            <thead className="bg-white/10 text-left">
-              <tr>
-                <th className="px-3 py-2">Canal</th>
-                <th className="px-3 py-2">Conversas</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.byChannel.map((item) => (
-                <tr key={item.channel} className="border-t border-white/10">
-                  <td className="px-3 py-2">{item.channelName}</td>
-                  <td className="px-3 py-2">{item.conversations}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="p-4 text-sm text-white/70">Nenhum dado por canal no periodo selecionado.</p>
-        )}
-      </section>
-
-      <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
-        <div className="border-b border-white/10 px-4 py-3">
-          <h2 className="text-sm font-semibold">Por setor</h2>
-        </div>
-        {report?.byDepartment.length ? (
-          <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-white/10 text-left">
-              <tr>
-                <th className="px-3 py-2">Departamento</th>
-                <th className="px-3 py-2">ID</th>
-                <th className="px-3 py-2">Conversas</th>
-                <th className="px-3 py-2">Tempo medio de resposta</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.byDepartment.map((item) => (
-                <tr key={item.departmentId ?? "__none__"} className="border-t border-white/10">
-                  <td className="px-3 py-2">{item.departmentName ?? "-"}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{item.departmentId ?? "-"}</td>
-                  <td className="px-3 py-2">{item.conversations}</td>
-                  <td className="px-3 py-2">{formatSeconds(item.avgResponseTimeSec)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="p-4 text-sm text-white/70">Nenhum dado por setor no periodo selecionado.</p>
-        )}
-      </section>
-
-      <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
-        <div className="border-b border-white/10 px-4 py-3">
-          <h2 className="text-sm font-semibold">Atividade dos atendentes</h2>
-          <p className="mt-1 max-w-3xl text-xs text-white/60">{AGENT_ACTIVITY_HISTORY_NOTE}</p>
-        </div>
-        {report?.agentMessageActivity?.length ? (
-          <table className="w-full min-w-[520px] text-sm">
-            <thead className="bg-white/10 text-left">
-              <tr>
-                <th className="px-3 py-2">Atendente</th>
-                <th className="px-3 py-2">User ID</th>
-                <th className="px-3 py-2">Mensagens enviadas</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.agentMessageActivity.map((item) => (
-                <tr key={item.userId} className="border-t border-white/10">
-                  <td className="px-3 py-2">{item.userName ?? userNameById.get(item.userId) ?? "-"}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{item.userId}</td>
-                  <td className="px-3 py-2">{item.outboundMessages}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="p-4 text-sm text-white/70">
-            Nenhuma mensagem humana atribuivel no periodo selecionado.
-          </p>
-        )}
-      </section>
-
-      <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
-        <div className="border-b border-white/10 px-4 py-3">
-          <h2 className="text-sm font-semibold">Conversas atribuídas por atendente</h2>
-          <p className="mt-1 max-w-3xl text-xs text-white/60">
-            Baseado na atribuicao operacional da conversa. Mede distribuicao e responsabilidade atual/historica,
-            nao mensagens efetivamente enviadas.
-          </p>
-        </div>
-        {(report?.assignedConversationsByAgent ?? report?.byAgent ?? []).length ? (
-          <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-white/10 text-left">
-              <tr>
-                <th className="px-3 py-2">Atendente</th>
-                <th className="px-3 py-2">User ID</th>
-                <th className="px-3 py-2">Conversas atribuidas</th>
-                <th className="px-3 py-2">Tempo medio de resposta</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(report?.assignedConversationsByAgent ?? report?.byAgent ?? []).map((item) => (
-                <tr key={item.userId} className="border-t border-white/10">
-                  <td className="px-3 py-2">{userNameById.get(item.userId) ?? "-"}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{item.userId}</td>
-                  <td className="px-3 py-2">{item.conversations}</td>
-                  <td className="px-3 py-2">{formatSeconds(item.avgResponseTimeSec)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="p-4 text-sm text-white/70">
-            Nenhuma conversa atribuida por atendente no periodo selecionado.
-          </p>
-        )}
-      </section>
+      </div>
     </AppShell>
   );
 }
