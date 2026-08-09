@@ -547,10 +547,10 @@ test("support hub uses configured support tenant and isolates requester conversa
     assert.equal(agent.status, 403);
     assert.equal(getErrorCode(agent.body), "forbidden");
 
-    await prisma.chatbotFlow.create({
+    const genericEntryFlow = await prisma.chatbotFlow.create({
       data: {
         clientId: supportClientId,
-        name: "Support entry flow",
+        name: "Generic support tenant entry flow",
         isActive: true,
         entryPoint: true,
         definition: {
@@ -558,9 +558,63 @@ test("support hub uses configured support tenant and isolates requester conversa
           nodes: {
             handoff: {
               type: "handoff",
-              text: "Vamos encaminhar para a equipe de suporte.",
-              handoffSummary: "Solicitacao aberta pelo hub de suporte.",
+              text: "Fluxo generico que nao deve ser usado automaticamente pelo suporte.",
+              handoffSummary: "Fluxo generico.",
             },
+          },
+        },
+      },
+    });
+    const dedicatedSupportFlow = await prisma.chatbotFlow.create({
+      data: {
+        clientId: supportClientId,
+        name: "Dedicated support channel flow",
+        isActive: true,
+        entryPoint: false,
+        definition: {
+          start: "handoff",
+          nodes: {
+            handoff: {
+              type: "handoff",
+              text: "Vamos encaminhar para a equipe de suporte dedicado.",
+              handoffSummary: "Solicitacao aberta pelo hub de suporte dedicado.",
+            },
+          },
+        },
+      },
+    });
+    const otherTenantFlow = await prisma.chatbotFlow.create({
+      data: {
+        clientId: governmentClientId,
+        name: "Other tenant support flow",
+        isActive: true,
+        entryPoint: true,
+        definition: {
+          start: "handoff",
+          nodes: {
+            handoff: {
+              type: "handoff",
+              text: "Fluxo de outro tenant.",
+              handoffSummary: "Fluxo de outro tenant.",
+            },
+          },
+        },
+      },
+    });
+    await prisma.tenantOperationalConfig.upsert({
+      where: { clientId: supportClientId },
+      update: {
+        config: {
+          supportChannel: {
+            chatbotFlowId: dedicatedSupportFlow.id,
+          },
+        },
+      },
+      create: {
+        clientId: supportClientId,
+        config: {
+          supportChannel: {
+            chatbotFlowId: dedicatedSupportFlow.id,
           },
         },
       },
@@ -612,7 +666,8 @@ test("support hub uses configured support tenant and isolates requester conversa
       },
       select: { bodyText: true },
     });
-    assert.match(chatbotReply?.bodyText ?? "", /equipe de suporte/i);
+    assert.match(chatbotReply?.bodyText ?? "", /suporte dedicado/i);
+    assert.doesNotMatch(chatbotReply?.bodyText ?? "", /Fluxo generico/i);
 
     const resumed = await request<{
       ok: true;
@@ -674,6 +729,26 @@ test("support hub uses configured support tenant and isolates requester conversa
       where: { clientId: supportClientId, waId: supportConversation.waId },
       data: { closedAt: new Date(), status: "CLOSED" },
     });
+    const chatbotRepliesBeforeInvalidFlow = await prisma.outboundMessage.count({
+      where: {
+        clientId: supportClientId,
+        channel: "support",
+        rawPayload: {
+          path: ["source"],
+          equals: "support_chatbot",
+        },
+      },
+    });
+    await prisma.tenantOperationalConfig.update({
+      where: { clientId: supportClientId },
+      data: {
+        config: {
+          supportChannel: {
+            chatbotFlowId: otherTenantFlow.id,
+          },
+        },
+      },
+    });
     const reopened = await request<{
       ok: true;
       resumed: boolean;
@@ -684,6 +759,83 @@ test("support hub uses configured support tenant and isolates requester conversa
     assert.equal(reopened.status, 200, JSON.stringify(reopened.body));
     assert.equal(reopened.body.resumed, false);
     assert.notEqual(reopened.body.conversation.supportRef, created.body.conversation.supportRef);
+    const latestSupportConversation = await prisma.conversation.findFirst({
+      where: { clientId: supportClientId, channel: "support", provider: "converta" },
+      orderBy: [{ createdAt: "desc" }],
+      select: { waId: true },
+    });
+    assert.ok(latestSupportConversation);
+    const invalidFlowRuntime = await prisma.conversationRuntimeState.findFirst({
+      where: { clientId: supportClientId, waId: latestSupportConversation.waId, channel: "support" },
+      select: { mode: true, status: true, flow: true, chatbotActive: true },
+    });
+    assert.equal(invalidFlowRuntime?.mode, "HUMAN");
+    assert.equal(invalidFlowRuntime?.status, "WAITING");
+    assert.equal(invalidFlowRuntime?.flow, null);
+    assert.equal(invalidFlowRuntime?.chatbotActive, false);
+    assert.equal(
+      await prisma.outboundMessage.count({
+        where: {
+          clientId: supportClientId,
+          channel: "support",
+          rawPayload: {
+            path: ["source"],
+            equals: "support_chatbot",
+          },
+        },
+      }),
+      chatbotRepliesBeforeInvalidFlow
+    );
+
+    await prisma.conversation.updateMany({
+      where: { clientId: supportClientId, channel: "support", closedAt: null },
+      data: { closedAt: new Date() },
+    });
+    await prisma.conversationRuntimeState.updateMany({
+      where: { clientId: supportClientId, channel: "support", closedAt: null },
+      data: { closedAt: new Date(), status: "CLOSED" },
+    });
+    await prisma.tenantOperationalConfig.update({
+      where: { clientId: supportClientId },
+      data: { config: {} },
+    });
+    const noConfig = await request<{
+      ok: true;
+      resumed: boolean;
+      conversation: { supportRef: string };
+    }>("POST", "/app/support/conversations", businessSupervisor, {
+      text: "Chamado sem flow dedicado configurado.",
+    });
+    assert.equal(noConfig.status, 200, JSON.stringify(noConfig.body));
+    assert.equal(noConfig.body.resumed, false);
+    const noConfigConversation = await prisma.conversation.findFirst({
+      where: { clientId: supportClientId, channel: "support", provider: "converta", closedAt: null },
+      orderBy: [{ createdAt: "desc" }],
+      select: { waId: true },
+    });
+    assert.ok(noConfigConversation);
+    const noConfigRuntime = await prisma.conversationRuntimeState.findFirst({
+      where: { clientId: supportClientId, waId: noConfigConversation.waId, channel: "support" },
+      select: { mode: true, status: true, flow: true, chatbotActive: true },
+    });
+    assert.equal(noConfigRuntime?.mode, "HUMAN");
+    assert.equal(noConfigRuntime?.status, "WAITING");
+    assert.equal(noConfigRuntime?.flow, null);
+    assert.equal(noConfigRuntime?.chatbotActive, false);
+    assert.equal(
+      await prisma.outboundMessage.count({
+        where: {
+          clientId: supportClientId,
+          channel: "support",
+          rawPayload: {
+            path: ["source"],
+            equals: "support_chatbot",
+          },
+        },
+      }),
+      chatbotRepliesBeforeInvalidFlow
+    );
+    assert.ok(genericEntryFlow.id);
   } finally {
     env.PLATFORM_SUPPORT_TENANT_KEY = originalSupportTenantKey;
   }

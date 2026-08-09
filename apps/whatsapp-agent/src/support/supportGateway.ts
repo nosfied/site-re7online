@@ -33,6 +33,12 @@ export type SupportGatewayResult<T> =
   | ({ ok: true } & T)
   | { ok: false; status: 400 | 403 | 404 | 409 | 429 | 503; error: string; message: string };
 
+type SupportRouting = {
+  department: { id: string; name: string };
+  queue: { id: string; name: string; departmentId: string };
+  chatbotFlowId: string | null;
+};
+
 function normalizeText(input: unknown, maxLength = MAX_MESSAGE_LENGTH) {
   if (typeof input !== "string") return "";
   return input.trim().replace(/\r\n/g, "\n").replace(/\r/g, "\n").slice(0, maxLength);
@@ -80,6 +86,82 @@ function buildConversationKey(conversationId: string, sourceHash: string) {
 function isAllowedRequesterRole(role: SupportRole) {
   const normalized = String(role ?? "").trim().toUpperCase();
   return normalized === "ADMIN" || normalized === "SUPERVISOR";
+}
+
+function readSupportChannelConfig(config: unknown) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) return {};
+  const supportChannel = (config as { supportChannel?: unknown }).supportChannel;
+  if (!supportChannel || typeof supportChannel !== "object" || Array.isArray(supportChannel)) return {};
+  const raw = supportChannel as Record<string, unknown>;
+  return {
+    chatbotFlowId: typeof raw.chatbotFlowId === "string" ? normalizeText(raw.chatbotFlowId, 160) : null,
+    departmentId: typeof raw.departmentId === "string" ? normalizeText(raw.departmentId, 160) : null,
+    queueId: typeof raw.queueId === "string" ? normalizeText(raw.queueId, 160) : null,
+    useEntryPointFallback: raw.useEntryPointFallback === true,
+  };
+}
+
+async function resolveSupportRouting(
+  prisma: PrismaClient,
+  params: {
+    clientId: string;
+    client: { features: unknown };
+  }
+): Promise<SupportRouting> {
+  const defaults = await ensureDefaultOperationalDepartmentAndQueue(prisma, params.clientId);
+  const operationalConfig = await prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const supportChannel = readSupportChannelConfig(operationalConfig?.config);
+  const configuredDepartment = supportChannel.departmentId
+    ? await prisma.department.findFirst({
+        where: { id: supportChannel.departmentId, clientId: params.clientId, isActive: true },
+        select: { id: true, name: true },
+      })
+    : null;
+  const department = configuredDepartment ?? defaults.department;
+  const configuredQueue = supportChannel.queueId
+    ? await prisma.queue.findFirst({
+        where: {
+          id: supportChannel.queueId,
+          clientId: params.clientId,
+          departmentId: department.id,
+        },
+        select: { id: true, name: true, departmentId: true },
+      })
+    : null;
+  const queue = configuredQueue ?? (
+    configuredDepartment
+      ? await prisma.queue.findFirst({
+          where: { clientId: params.clientId, departmentId: configuredDepartment.id },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: { id: true, name: true, departmentId: true },
+        })
+      : null
+  ) ?? defaults.queue;
+
+  const chatbotEnabled = getFeatures(params.client).chatbot;
+  if (!chatbotEnabled) return { department, queue, chatbotFlowId: null };
+
+  const configuredFlow = supportChannel.chatbotFlowId
+    ? await prisma.chatbotFlow.findFirst({
+        where: { id: supportChannel.chatbotFlowId, clientId: params.clientId, isActive: true },
+        select: { id: true },
+      })
+    : null;
+  if (configuredFlow) return { department, queue, chatbotFlowId: configuredFlow.id };
+
+  if (supportChannel.useEntryPointFallback) {
+    const entryPointFlow = await prisma.chatbotFlow.findFirst({
+      where: { clientId: params.clientId, isActive: true, entryPoint: true },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      select: { id: true },
+    });
+    if (entryPointFlow) return { department, queue, chatbotFlowId: entryPointFlow.id };
+  }
+
+  return { department, queue, chatbotFlowId: null };
 }
 
 async function resolveSupportTenant(
@@ -251,6 +333,7 @@ async function persistSupportInboundMessage(
     requester: SupportRequester;
     conversation: { id: string; waId: string };
     text: string;
+    mode?: "BOT" | "HUMAN";
   }
 ) {
   const now = new Date();
@@ -326,7 +409,7 @@ async function persistSupportInboundMessage(
     clientId: params.supportClient.id,
     waId: params.conversation.waId,
     waIdCanonical: params.conversation.waId,
-    mode: "BOT",
+    mode: params.mode ?? "HUMAN",
     handoffStatus: "none",
     assignedUserId: null,
     departmentId: null,
@@ -456,15 +539,11 @@ export async function openSupportConversation(params: {
   const requesterLabel = buildRequesterLabel(params.requester);
   const waId = buildSupportWaId(sourceHash, `${params.requestId}:${now.toISOString()}`);
   const conversationHash = buildSupportConversationHash(sourceHash, waId);
-  const defaults = await ensureDefaultOperationalDepartmentAndQueue(params.prisma, supportTenant.client.id);
-  const chatbotEnabled = getFeatures(supportTenant.client).chatbot;
-  const activeEntryFlow = chatbotEnabled
-    ? await params.prisma.chatbotFlow.findFirst({
-        where: { clientId: supportTenant.client.id, isActive: true, entryPoint: true },
-        select: { id: true },
-      })
-    : null;
-  const startsInAutomation = Boolean(activeEntryFlow);
+  const routing = await resolveSupportRouting(params.prisma, {
+    clientId: supportTenant.client.id,
+    client: supportTenant.client,
+  });
+  const startsInAutomation = Boolean(routing.chatbotFlowId);
   const conversation = await params.prisma.$transaction(async (tx) => {
     const existingContact = await tx.contact.findFirst({
       where: {
@@ -570,7 +649,7 @@ export async function openSupportConversation(params: {
         channelAccountId: SUPPORT_CHANNEL_ACCOUNT_ID,
         externalUserHash: conversationHash,
         externalUserRef: sourceHash,
-        departmentId: defaults.department.id,
+        departmentId: routing.department.id,
         windowIsOpen: true,
         lastInboundAt: now,
       },
@@ -603,13 +682,21 @@ export async function openSupportConversation(params: {
         handoffStatus: HandoffStatus.NONE,
         mode: startsInAutomation ? "BOT" : "HUMAN",
         status: startsInAutomation ? ConversationOperationalStatus.WAITING_USER : ConversationOperationalStatus.WAITING,
-        departmentId: defaults.department.id,
-        queueId: defaults.queue.id,
+        departmentId: routing.department.id,
+        queueId: routing.queue.id,
+        flow: routing.chatbotFlowId ? `chatbot:${routing.chatbotFlowId}` : null,
+        chatbotActive: startsInAutomation,
         answers: {
           supportHub: {
             sourceTenantHash: shortHash(params.requester.clientId, 16),
             requesterHash: shortHash(params.requester.userId, 16),
             requesterRole: params.requester.role,
+            routing: {
+              mode: startsInAutomation ? "dedicated_chatbot" : "human",
+              departmentId: shortHash(routing.department.id, 16),
+              queueId: shortHash(routing.queue.id, 16),
+              chatbotFlowId: routing.chatbotFlowId ? shortHash(routing.chatbotFlowId, 16) : null,
+            },
           },
         } satisfies Prisma.InputJsonValue,
       },
@@ -639,6 +726,7 @@ export async function openSupportConversation(params: {
     requester: params.requester,
     conversation,
     text,
+    mode: startsInAutomation ? "BOT" : "HUMAN",
   });
   return {
     ok: true,

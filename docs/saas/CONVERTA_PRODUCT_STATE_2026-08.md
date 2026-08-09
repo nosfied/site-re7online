@@ -60,7 +60,7 @@ O frontend nunca envia tenant destino, `clientId`, WABA ou identificador de cana
 
 A identidade do solicitante no tenant de suporte e sintetica e deterministica, baseada em hash interno. O rotulo operacional pode exibir nome amigavel do tenant e usuario solicitante, mas nao transporta telefone, email, CRM, token, SID, IP ou payload sensivel do tenant origem.
 
-O atendimento da equipe da plataforma ocorre no Inbox normal do tenant de suporte, com chatbot, handoff, fila, protocolo e eventos ja existentes. O MVP suporta texto apenas; anexos, visao administrativa de todos os chamados do tenant cliente e SLA especifico de suporte permanecem evolucoes futuras.
+O atendimento da equipe da plataforma ocorre no Inbox normal do tenant de suporte, com chatbot, handoff, fila, protocolo e eventos ja existentes. O canal `support` pode usar um flow dedicado via `TenantOperationalConfig.config.supportChannel.chatbotFlowId`; sem flow dedicado valido, a conversa cai no modo humano e nao usa automaticamente o `entryPoint` geral do tenant. O MVP suporta texto apenas; anexos, visao administrativa de todos os chamados do tenant cliente e SLA especifico de suporte permanecem evolucoes futuras.
 
 ## CRM operacional
 

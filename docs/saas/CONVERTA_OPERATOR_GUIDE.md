@@ -31,6 +31,8 @@ ADMIN e SUPERVISOR podem abrir e acompanhar suporte da plataforma em `Suporte`. 
 
 Cada usuario ve seus proprios chamados no MVP. Se ja houver chamado ativo para o mesmo tenant e usuario, a tela retoma a conversa ativa; se o chamado anterior foi encerrado, uma nova abertura cria outra conversa. O destino do suporte e resolvido pelo backend via `PLATFORM_SUPPORT_TENANT_KEY`; a interface nao escolhe tenant, WABA, telefone ou `clientId` de destino.
 
+O tenant de suporte pode ter roteamento proprio em `TenantOperationalConfig.config.supportChannel`, apontando para um `chatbotFlowId` ativo do mesmo tenant e, opcionalmente, departamento/fila. Sem flow dedicado valido, o chamado entra em modo humano na fila configurada ou na fila operacional padrao; o `entryPoint` geral do tenant so deve ser usado se isso for explicitamente configurado.
+
 O suporte aceita apenas texto nesta etapa. Anexos ficam para evolucao futura. A conversa aparece para a equipe da plataforma no Inbox do tenant de suporte, usando identidade sintetica e rotulo seguro com tenant e usuario solicitante. Nao copie telefone, email, token, SID, IP ou dados de CRM do tenant origem para o atendimento.
 
 ## Texto livre, modelo aprovado e mensagem pronta
