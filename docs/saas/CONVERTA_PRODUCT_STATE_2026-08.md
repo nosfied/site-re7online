@@ -62,6 +62,12 @@ A identidade do solicitante no tenant de suporte e sintetica e deterministica, b
 
 O atendimento da equipe da plataforma ocorre no Inbox normal do tenant de suporte, com chatbot, handoff, fila, protocolo e eventos ja existentes. O canal `support` pode usar um flow dedicado via `TenantOperationalConfig.config.supportChannel.chatbotFlowId`; sem flow dedicado valido, a conversa cai no modo humano e nao usa automaticamente o `entryPoint` geral do tenant. O MVP suporta texto apenas; anexos, visao administrativa de todos os chamados do tenant cliente e SLA especifico de suporte permanecem evolucoes futuras.
 
+## Training Center
+
+O Training Center em `/app/training` fornece uma base autenticada de aprendizagem para todos os perfis do app. Ele reutiliza a sessao do Converta e publica catalogo de videos, PDFs e links por manifest versionado.
+
+Nao ha CMS, banco, schema novo ou upload pela UI nesta fundacao. Arquivos grandes ficam fora do Git, em storage local configurado por `TRAINING_CONTENT_ROOT` ou mecanismo operacional equivalente. O backend serve conteudo apenas por `contentId`, valida o manifest, bloqueia traversal, paths absolutos e escape por symlink, e entrega MP4 com suporte a range e PDF inline/download.
+
 ## CRM operacional
 
 O CRM atual e um read model seguro de contatos/leads por tenant. Ele exibe dados minimizados e operacionais, como nome exibivel, identificador seguro, canal, classificacao, empresa quando houver, ultima conversa, status da conversa, ultima atualizacao, bloqueio de envio ativo e origem importada.

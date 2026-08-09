@@ -35,6 +35,16 @@ O tenant de suporte pode ter roteamento proprio em `TenantOperationalConfig.conf
 
 O suporte aceita apenas texto nesta etapa. Anexos ficam para evolucao futura. A conversa aparece para a equipe da plataforma no Inbox do tenant de suporte, usando identidade sintetica e rotulo seguro com tenant e usuario solicitante. Nao copie telefone, email, token, SID, IP ou dados de CRM do tenant origem para o atendimento.
 
+## Treinamentos
+
+Todos os usuarios autenticados podem acessar `Suporte > Treinamentos`. A area exibe materiais oficiais publicados pela equipe da plataforma, separados por tema, como videos curtos e guias em PDF. O conteudo e somente leitura.
+
+O catalogo de treinamentos e versionado no codigo e referencia arquivos por `contentId`. A interface nunca envia caminho de arquivo. O backend resolve o material dentro do diretorio configurado por `TRAINING_CONTENT_ROOT`, bloqueia paths arbitrarios e entrega apenas formatos permitidos, como MP4 e PDF.
+
+Quando o storage nao estiver configurado ou o arquivo ainda nao estiver publicado, a tela mostra uma mensagem amigavel e nao quebra a navegacao do operador.
+
+Para publicar material novo, a equipe tecnica atualiza o manifest versionado, copia o arquivo correspondente para o storage operacional configurado e valida o acesso pelo `contentId`. Arquivos grandes de video ou PDF nao devem ser commitados no repositorio.
+
 ## Texto livre, modelo aprovado e mensagem pronta
 
 | Recurso | Quando usar | Limite principal |

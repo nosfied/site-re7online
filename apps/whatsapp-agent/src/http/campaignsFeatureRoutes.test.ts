@@ -169,6 +169,26 @@ async function requestText(
   };
 }
 
+async function requestRaw(
+  method: string,
+  route: string,
+  user: TestUser,
+  headers?: Record<string, string>
+): Promise<{ status: number; text: string; headers: Headers }> {
+  const response = await fetch(`${baseUrl}${route}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${authToken(user)}`,
+      ...(headers ?? {}),
+    },
+  });
+  return {
+    status: response.status,
+    text: await response.text(),
+    headers: response.headers,
+  };
+}
+
 async function requestUnauth<T = unknown>(
   method: string,
   route: string,
@@ -531,6 +551,108 @@ test("campaign draft routes require authentication", async () => {
   const discard = await requestUnauth<ErrorPayload>("POST", "/app/campaigns/example/discard");
   assert.equal(discard.status, 401);
   assert.equal(getErrorCode(discard.body), "missing_token");
+});
+
+test("training center serves authenticated catalog and safe training content", async () => {
+  const previousRoot = process.env.TRAINING_CONTENT_ROOT;
+  try {
+    delete process.env.TRAINING_CONTENT_ROOT;
+    const unauth = await requestUnauth<ErrorPayload>("GET", "/app/training/catalog");
+    assert.equal(unauth.status, 401);
+    assert.equal(getErrorCode(unauth.body), "missing_token");
+    const unauthContent = await requestUnauth<ErrorPayload>("GET", "/app/training/content/intro-platform-guide");
+    assert.equal(unauthContent.status, 401);
+    assert.equal(getErrorCode(unauthContent.body), "missing_token");
+
+    const unavailableCatalog = await request<{
+      ok: true;
+      storageConfigured: boolean;
+      sections: Array<{ items: Array<{ id: string; path?: string; streamUrl?: string; available: boolean }> }>;
+    }>("GET", "/app/training/catalog", businessAgent);
+    assert.equal(unavailableCatalog.status, 200, JSON.stringify(unavailableCatalog.body));
+    assert.equal(unavailableCatalog.body.storageConfigured, false);
+    assert.ok(unavailableCatalog.body.sections.some((section) => section.items.length > 0));
+    assert.equal(unavailableCatalog.body.sections[0]?.items[0]?.available, false);
+    assert.equal("path" in (unavailableCatalog.body.sections[0]?.items[0] ?? {}), false);
+
+    const storageMissing = await request<ErrorPayload>(
+      "GET",
+      "/app/training/content/intro-platform-guide",
+      businessAgent
+    );
+    assert.equal(storageMissing.status, 503);
+    assert.equal(getErrorCode(storageMissing.body), "training_storage_unavailable");
+
+    const root = path.join(tempRoot, "training-content");
+    await fs.mkdir(path.join(root, "getting-started"), { recursive: true });
+    await fs.writeFile(path.join(root, "getting-started", "intro-platform-guide.pdf"), "%PDF-1.4\ntraining\n");
+    await fs.writeFile(path.join(root, "getting-started", "intro-platform.mp4"), "0123456789abcdef");
+    process.env.TRAINING_CONTENT_ROOT = root;
+
+    const catalog = await request<{
+      ok: true;
+      storageConfigured: boolean;
+      sections: Array<{ items: Array<{ id: string; path?: string; streamUrl?: string; downloadUrl?: string; available: boolean }> }>;
+    }>("GET", "/app/training/catalog", businessAgent);
+    assert.equal(catalog.status, 200, JSON.stringify(catalog.body));
+    assert.equal(catalog.body.storageConfigured, true);
+    const pdfItem = catalog.body.sections.flatMap((section) => section.items).find((item) => item.id === "intro-platform-guide");
+    assert.equal(pdfItem?.available, true);
+    assert.equal("path" in (pdfItem ?? {}), false);
+    assert.equal(pdfItem?.streamUrl, "/app/training/content/intro-platform-guide");
+    assert.equal(pdfItem?.downloadUrl, "/app/training/content/intro-platform-guide/download");
+
+    const traversal = await request<ErrorPayload>("GET", "/app/training/content/..%2Fsecret", businessAgent);
+    assert.equal(traversal.status, 404);
+    assert.equal(getErrorCode(traversal.body), "training_content_not_found");
+
+    const missing = await request<ErrorPayload>("GET", "/app/training/content/inbox-operator-guide", businessAgent);
+    assert.equal(missing.status, 404);
+    assert.equal(getErrorCode(missing.body), "training_content_unavailable");
+
+    const pdfInline = await requestRaw("GET", "/app/training/content/intro-platform-guide", businessAgent);
+    assert.equal(pdfInline.status, 200);
+    assert.match(pdfInline.headers.get("content-type") ?? "", /^application\/pdf/);
+    assert.match(pdfInline.headers.get("content-disposition") ?? "", /^inline; filename="intro-platform-guide\.pdf"/);
+    assert.match(pdfInline.text, /^%PDF-1\.4/);
+
+    const pdfDownload = await requestRaw("GET", "/app/training/content/intro-platform-guide/download", businessAgent);
+    assert.equal(pdfDownload.status, 200);
+    assert.match(pdfDownload.headers.get("content-disposition") ?? "", /^attachment; filename="intro-platform-guide\.pdf"/);
+
+    const videoRange = await requestRaw(
+      "GET",
+      "/app/training/content/intro-platform-video",
+      businessAgent,
+      { range: "bytes=2-5" }
+    );
+    assert.equal(videoRange.status, 206);
+    assert.equal(videoRange.headers.get("accept-ranges"), "bytes");
+    assert.equal(videoRange.headers.get("content-range"), "bytes 2-5/16");
+    assert.equal(videoRange.text, "2345");
+
+    const invalidRange = await requestRaw(
+      "GET",
+      "/app/training/content/intro-platform-video",
+      businessAgent,
+      { range: "bytes=99-120" }
+    );
+    assert.equal(invalidRange.status, 416);
+    assert.equal(invalidRange.headers.get("content-range"), "bytes */16");
+
+    await fs.mkdir(path.join(root, "reports"), { recursive: true });
+    await fs.writeFile(path.join(tempRoot, "outside-training.pdf"), "%PDF-1.4\noutside\n");
+    await fs.symlink(path.join(tempRoot, "outside-training.pdf"), path.join(root, "reports", "reports-guide.pdf"));
+    const symlinkEscape = await request<ErrorPayload>("GET", "/app/training/content/reports-guide", businessAgent);
+    assert.equal(symlinkEscape.status, 404);
+    assert.equal(getErrorCode(symlinkEscape.body), "training_content_not_found");
+  } finally {
+    if (previousRoot === undefined) {
+      delete process.env.TRAINING_CONTENT_ROOT;
+    } else {
+      process.env.TRAINING_CONTENT_ROOT = previousRoot;
+    }
+  }
 });
 
 test("support hub uses configured support tenant and isolates requester conversations", async () => {

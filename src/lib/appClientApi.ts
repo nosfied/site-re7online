@@ -100,6 +100,38 @@ export type AppSupportConversationDetail = {
   messages: AppSupportMessage[];
 };
 
+export type AppTrainingItemType = "video" | "pdf" | "link";
+
+export type AppTrainingCatalogItem = {
+  id: string;
+  type: AppTrainingItemType;
+  title: string;
+  description?: string;
+  contentId?: string;
+  url?: string;
+  durationLabel?: string;
+  updatedAt?: string;
+  tags?: string[];
+  downloadable?: boolean;
+  available: boolean;
+  streamUrl?: string;
+  downloadUrl?: string;
+};
+
+export type AppTrainingCatalogSection = {
+  id: string;
+  title: string;
+  description?: string;
+  items: AppTrainingCatalogItem[];
+};
+
+export type AppTrainingCatalogResponse = {
+  ok: true;
+  version: number;
+  storageConfigured: boolean;
+  sections: AppTrainingCatalogSection[];
+};
+
 export type AppInstagramBusinessStatus = {
   channelAccountId: string | null;
   externalAccountIds: string[];
@@ -2268,6 +2300,27 @@ export async function sendAppSupportConversationMessage(
   return requestAppJson(session, `/app/support/conversations/${encodeURIComponent(supportRef)}/messages`, {
     method: "POST",
     body: JSON.stringify({ text }),
+  });
+}
+
+export async function fetchAppTrainingCatalog(
+  session: AppSession
+): Promise<AppTrainingCatalogResponse> {
+  return requestAppJson(session, "/app/training/catalog");
+}
+
+export async function fetchAppTrainingContent(
+  session: AppSession,
+  contentId: string,
+  options?: { download?: boolean }
+): Promise<{
+  blob: Blob;
+  contentType: string | null;
+  fileName: string | null;
+}> {
+  const suffix = options?.download ? "/download" : "";
+  return requestAppBlob(session, `/app/training/content/${encodeURIComponent(contentId)}${suffix}`, {
+    timeoutMs: 60000,
   });
 }
 

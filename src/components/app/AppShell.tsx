@@ -505,14 +505,30 @@ export default function AppShell({
           {activeSession.user.name || activeSession.user.email}
         </p>
       </div>
-      {canViewAdministration ? (
-        <Link
-          href="/app/support"
-          className="theme-nav-link h-8 rounded-md border px-2.5 py-2 text-xs font-semibold leading-none min-[1441px]:h-9 min-[1441px]:text-sm"
+      <details className="relative shrink-0">
+        <summary
+          className={`${getOverflowTriggerClasses(
+            pathname === "/app/support" || pathname.startsWith("/app/support/") ||
+              pathname === "/app/training" || pathname.startsWith("/app/training/")
+          )} cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden`}
+          title="Abrir suporte"
         >
           Suporte
-        </Link>
-      ) : null}
+          <span aria-hidden="true" className={getOverflowTriggerIconClasses()}>
+            ▾
+          </span>
+        </summary>
+        <div className="theme-surface-strong absolute right-0 top-[calc(100%+0.45rem)] z-[80] grid min-w-48 gap-1 rounded-lg border p-1.5 text-left shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+          <Link href="/app/training" className={getOverflowLinkClasses(pathname === "/app/training")}>
+            Treinamentos
+          </Link>
+          {canViewAdministration ? (
+            <Link href="/app/support" className={getOverflowLinkClasses(pathname === "/app/support")}>
+              Abrir chamado
+            </Link>
+          ) : null}
+        </div>
+      </details>
       <button
         type="button"
         onClick={handleLogout}

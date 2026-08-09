@@ -138,6 +138,11 @@ import {
   buildMetaUsageEventPayload,
   recordMetaUsageLedgerEvent,
 } from "../billing/metaUsageLedger.js";
+import {
+  parseTrainingRange,
+  resolveTrainingContent,
+  serializeTrainingCatalog,
+} from "../training/trainingContent.js";
 import { buildMetaCostPreview, type MetaCostPreviewInput } from "../billing/metaUsagePreview.js";
 import {
   buildMonthlyMetaUsageCsv,
@@ -1878,6 +1883,126 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
     setValidatedClientAuth(req, validation.auth);
+  }
+
+  if (pathname === "/app/training/catalog" && req.method === "GET") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      json(res, 200, serializeTrainingCatalog());
+    } catch (error) {
+      logger.error({
+        event: "app.training.catalog.error",
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  const trainingContentMatch = pathname.match(/^\/app\/training\/content\/([^/]+)(\/download)?$/);
+  if (trainingContentMatch && req.method === "GET") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      let contentId = "";
+      try {
+        contentId = decodeURIComponent(trainingContentMatch[1] ?? "").trim();
+      } catch {
+        json(res, 404, httpError("training_content_not_found", "Material nao encontrado."));
+        return;
+      }
+      const download = Boolean(trainingContentMatch[2]);
+      const resolved = await resolveTrainingContent(contentId);
+      if (!resolved.ok) {
+        json(res, resolved.status, httpError(resolved.error, resolved.message));
+        return;
+      }
+      const lastModified = resolved.stat.mtime.toUTCString();
+      const disposition = download ? "attachment" : "inline";
+      const headers: Record<string, string> = {
+        "Content-Type": resolved.mimeType,
+        "Cache-Control": "private, max-age=300",
+        "Content-Disposition": `${disposition}; filename="${resolved.fileName}"`,
+        "Last-Modified": lastModified,
+      };
+      if (resolved.item.type === "video") {
+        headers["Accept-Ranges"] = "bytes";
+        const range = parseTrainingRange(req.headers.range, resolved.stat.size);
+        if (range && !range.ok) {
+          res.writeHead(416, {
+            "Content-Range": `bytes */${resolved.stat.size}`,
+            "Cache-Control": "private, no-store",
+          });
+          res.end();
+          return;
+        }
+        if (range?.ok) {
+          const contentLength = range.end - range.start + 1;
+          res.writeHead(206, {
+            ...headers,
+            "Content-Length": String(contentLength),
+            "Content-Range": `bytes ${range.start}-${range.end}/${resolved.stat.size}`,
+          });
+          createReadStream(resolved.absolutePath, { start: range.start, end: range.end })
+            .on("error", (error) => {
+              logger.error({
+                event: "app.training.content.stream_error",
+                requestId,
+                contentId: resolved.item.id,
+                message: (error as Error).message,
+              });
+              if (!res.writableEnded) res.destroy(error as Error);
+            })
+            .pipe(res);
+          return;
+        }
+      }
+      res.writeHead(200, {
+        ...headers,
+        "Content-Length": String(resolved.stat.size),
+      });
+      createReadStream(resolved.absolutePath)
+        .on("error", (error) => {
+          logger.error({
+            event: "app.training.content.stream_error",
+            requestId,
+            contentId: resolved.item.id,
+            message: (error as Error).message,
+          });
+          if (!res.writableEnded) res.destroy(error as Error);
+        })
+        .pipe(res);
+    } catch (error) {
+      logger.error({
+        event: "app.training.content.error",
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
   }
 
   if (pathname === "/app/support/conversations" || pathname.startsWith("/app/support/conversations/")) {
