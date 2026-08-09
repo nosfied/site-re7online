@@ -809,16 +809,56 @@ test("support hub uses configured support tenant and isolates requester conversa
         handoffStatus: "ACTIVE",
         status: "IN_PROGRESS",
         assignedUserId: supportAdmin.id,
+        windowIsOpen: false,
+        windowExpiresAt: new Date(Date.now() - 60_000),
       },
     });
-    const supportReply = await request<{
-      ok: true;
-      message: { bodyText: string | null; status: string };
-    }>("POST", `/app/conversation/${encodeURIComponent(supportConversation.waId)}/send`, supportAdmin, {
-      text: "Recebemos sua solicitacao.",
+    await prisma.conversation.update({
+      where: { id: supportConversation.id },
+      data: {
+        windowIsOpen: false,
+        windowExpiresAt: new Date(Date.now() - 60_000),
+      },
     });
-    assert.equal(supportReply.status, 200, JSON.stringify(supportReply.body));
-    assert.equal(supportReply.body.message.status, "SENT");
+    const originalFetch = globalThis.fetch;
+    let externalFetchCalls = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.startsWith(baseUrl)) return originalFetch(input, init);
+      externalFetchCalls += 1;
+      throw new Error("support channel reply must not call external Graph API");
+    }) as typeof fetch;
+    try {
+      const supportReply = await request<{
+        ok: true;
+        message: { bodyText: string | null; metaMessageId: string | null; status: string };
+      }>("POST", `/app/conversation/${encodeURIComponent(supportConversation.waId)}/send`, supportAdmin, {
+        text: "Recebemos sua solicitacao.",
+      });
+      assert.equal(supportReply.status, 200, JSON.stringify(supportReply.body));
+      assert.equal(supportReply.body.message.status, "SENT");
+      assert.equal(supportReply.body.message.metaMessageId, null);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+    assert.equal(externalFetchCalls, 0);
+
+    const supportOutbound = await prisma.outboundMessage.findFirst({
+      where: {
+        clientId: supportClientId,
+        waId: supportConversation.waId,
+        channel: "support",
+        provider: "converta",
+        rawPayload: {
+          path: ["source"],
+          equals: "support_inbox",
+        },
+      },
+      orderBy: [{ createdAt: "desc" }],
+      select: { bodyText: true, metaMessageId: true, rawPayload: true },
+    });
+    assert.equal(supportOutbound?.bodyText, "Recebemos sua solicitacao.");
+    assert.equal(supportOutbound?.metaMessageId, null);
 
     const detail = await request<{
       ok: true;

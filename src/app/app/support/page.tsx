@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
@@ -89,6 +89,7 @@ export default function SupportPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState<{ message: string; variant?: "success" | "error" | "warning" } | null>(null);
+  const timelineRef = useRef<HTMLDivElement | null>(null);
 
   const selectedConversation = useMemo(
     () => conversations.find((item) => item.supportRef === selectedRef) ?? null,
@@ -160,8 +161,14 @@ export default function SupportPage() {
     };
   }, [handleUnauthorized, loadConversation, selectedRef, session]);
 
+  useEffect(() => {
+    const timeline = timelineRef.current;
+    if (!timeline) return;
+    timeline.scrollTo({ top: timeline.scrollHeight, behavior: "smooth" });
+  }, [messages.length, selectedRef]);
+
   const handleOpenConversation = async () => {
-    if (!session || sending) return;
+    if (!session || sending || !newMessage.trim()) return;
     setSending(true);
     try {
       const response = await openAppSupportConversation(session, newMessage);
@@ -184,7 +191,7 @@ export default function SupportPage() {
   };
 
   const handleSendReply = async () => {
-    if (!session || !selectedRef || sending) return;
+    if (!session || !selectedRef || sending || !replyDraft.trim()) return;
     setSending(true);
     try {
       const response = await sendAppSupportConversationMessage(session, selectedRef, replyDraft);
@@ -201,6 +208,13 @@ export default function SupportPage() {
     } finally {
       setSending(false);
     }
+  };
+
+  const handleReplyKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.nativeEvent.isComposing || event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    if (!selectedConversation || selectedConversation.status === "closed" || sending || !replyDraft.trim()) return;
+    void handleSendReply();
   };
 
   if (!session) {
@@ -223,8 +237,8 @@ export default function SupportPage() {
         onClose={() => setToast(null)}
       />
 
-      <div className="grid gap-4 lg:grid-cols-[330px_minmax(0,1fr)]">
-        <section className="theme-surface-strong rounded-lg border p-4">
+      <div className="grid min-h-0 gap-4 lg:h-[calc(100dvh-14rem)] lg:grid-cols-[330px_minmax(0,1fr)]">
+        <section className="theme-surface-strong min-h-0 overflow-y-auto rounded-lg border p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-base font-bold">Chamados</h2>
@@ -289,7 +303,7 @@ export default function SupportPage() {
           </div>
         </section>
 
-        <section className="theme-surface-strong grid min-h-[620px] grid-rows-[auto_minmax(0,1fr)_auto] rounded-lg border">
+        <section className="theme-surface-strong grid min-h-[520px] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border lg:min-h-0">
           <header className="border-b border-white/10 px-4 py-3">
             {selectedConversation ? (
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -307,7 +321,7 @@ export default function SupportPage() {
             )}
           </header>
 
-          <div className="min-h-0 overflow-y-auto px-4 py-4">
+          <div ref={timelineRef} className="min-h-0 overflow-y-auto px-4 py-4">
             {!selectedConversation ? (
               <div className="flex h-full items-center justify-center text-center">
                 <p className="theme-muted max-w-sm text-sm">
@@ -329,9 +343,12 @@ export default function SupportPage() {
               <textarea
                 value={replyDraft}
                 onChange={(event) => setReplyDraft(event.target.value)}
+                onKeyDown={handleReplyKeyDown}
                 disabled={!selectedConversation || selectedConversation.status === "closed"}
                 rows={3}
                 maxLength={4000}
+                aria-label="Mensagem para o suporte"
+                title="Enter envia. Shift+Enter quebra linha."
                 placeholder={
                   selectedConversation?.status === "closed"
                     ? "Este chamado foi encerrado."

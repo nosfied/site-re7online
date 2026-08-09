@@ -5874,10 +5874,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         return;
       }
-      if (
-        (!resolvedChannel || resolvedChannel === "whatsapp") &&
-        !isWindowOpen(currentConversation, Date.now())
-      ) {
+      if (resolvedChannel === "whatsapp" && !isWindowOpen(currentConversation, Date.now())) {
         json(res, 409, { error: buildWindowClosedError(currentConversation.window.expiresAt) });
         return;
       }
