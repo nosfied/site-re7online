@@ -25666,6 +25666,10 @@ async function buildConversationDetailPayload(
               mode: contextualReply.mode,
               previewBody: null as string | null,
               previewDirection: null as string | null,
+              previewMedia: null as
+                | (NonNullable<ReturnType<typeof buildInboxMessageMedia>> & { messageId?: string | null })
+                | null,
+              previewLocation: null as ReturnType<typeof extractMessageLocation>,
             }
           : null,
         actor: serializeOutboundActorForClient(actor, actorDisplayNameByUserId),
@@ -25693,6 +25697,13 @@ async function buildConversationDetailPayload(
         type: item.type,
         bodyText: item.bodyText,
         templateName: item.templateName,
+        media: item.media
+          ? {
+              ...item.media,
+              messageId: item.messageId ?? null,
+            }
+          : null,
+        location: item.location ?? null,
       },
     ])
   );
@@ -25707,6 +25718,8 @@ async function buildConversationDetailPayload(
       null
     );
     item.replyTo.previewDirection = original.direction;
+    item.replyTo.previewMedia = original.media;
+    item.replyTo.previewLocation = original.location;
   }
 
   const tenantsStartedAt = channelLatencyNow();

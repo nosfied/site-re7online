@@ -55,6 +55,8 @@ export type InboxMessageItem = {
     mode?: "reply" | "rectify" | string | null;
     previewBody?: string | null;
     previewDirection?: "INBOUND" | "OUTBOUND" | string | null;
+    previewMedia?: (NonNullable<InboxMessageItem["media"]> & { messageId?: string | null }) | null;
+    previewLocation?: InboxMessageItem["location"];
   } | null;
   actor?: {
     source: string;

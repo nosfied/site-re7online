@@ -1831,8 +1831,29 @@ test("inbox text contextual reply resolves internal message references safely", 
           allowlistHit: true,
           rawPayload:
             type === "LOCATION"
-              ? { location: { latitude: -5.7945, longitude: -35.211 } }
-              : { media: { mediaId: `media-${type.toLowerCase()}-${safeTemplatePrefix}` } },
+              ? {
+                  location: {
+                    latitude: -5.7945,
+                    longitude: -35.211,
+                    name: "Sala de atendimento",
+                    address: "Endereco sanitizado",
+                  },
+                }
+              : {
+                  media: {
+                    mediaId: `media-${type.toLowerCase()}-${safeTemplatePrefix}`,
+                    mimeType:
+                      type === "AUDIO"
+                        ? "audio/ogg"
+                        : type === "IMAGE"
+                          ? "image/jpeg"
+                          : type === "VIDEO"
+                            ? "video/mp4"
+                            : "application/pdf",
+                    fileName: type === "DOCUMENT" ? "orientacoes.pdf" : undefined,
+                    caption: type === "IMAGE" ? "Imagem de referencia" : undefined,
+                  },
+                },
         },
       })
     )
@@ -1984,6 +2005,7 @@ test("inbox text contextual reply resolves internal message references safely", 
   assert.equal(normalSend.status, 200, JSON.stringify(normalSend.body));
   assert.equal((metaPayloads[5] as { context?: unknown }).context, undefined);
 
+  const mediaReplyMessageIds = new Map<string, string>();
   for (const mediaInbound of mediaInboundMessages) {
     const payloadIndex: number = metaPayloads.length;
     const mediaReply = await request<{
@@ -1994,6 +2016,7 @@ test("inbox text contextual reply resolves internal message references safely", 
       replyTo: { kind: "inbound", id: mediaInbound.id },
     });
     assert.equal(mediaReply.status, 200, JSON.stringify(mediaReply.body));
+    mediaReplyMessageIds.set(mediaInbound.type, mediaReply.body.message.messageId);
     assert.deepEqual(mediaReply.body.message.replyTo, {
       kind: "inbound",
       id: mediaInbound.id,
@@ -2086,6 +2109,28 @@ test("inbox text contextual reply resolves internal message references safely", 
       direction: string;
       messageId: string;
       actor: { source: string; userId: string; displayName: string | null } | null;
+      replyTo?: {
+        kind: string;
+        id: string;
+        previewType: string | null;
+        previewBody?: string | null;
+        previewDirection?: string | null;
+        previewMedia?: {
+          kind: string;
+          mimeType?: string;
+          fileName?: string;
+          caption?: string;
+          hasDownload: boolean;
+          downloadUrl?: string;
+          messageId?: string | null;
+        } | null;
+        previewLocation?: {
+          latitude: number;
+          longitude: number;
+          name: string | null;
+          address: string | null;
+        } | null;
+      } | null;
     }>;
   }>("GET", `/app/conversation/${waId}`, businessAdmin);
   assert.equal(detail.status, 200, JSON.stringify(detail.body));
@@ -2099,6 +2144,56 @@ test("inbox text contextual reply resolves internal message references safely", 
     userId: businessAdmin.id,
     displayName: businessAdmin.name,
   });
+  const imageReplyDetail = detail.body.items.find((message) => message.messageId === mediaReplyMessageIds.get("IMAGE"));
+  assert.equal(imageReplyDetail?.replyTo?.previewType, "IMAGE");
+  assert.equal(imageReplyDetail?.replyTo?.previewMedia?.kind, "image");
+  assert.equal(imageReplyDetail?.replyTo?.previewMedia?.caption, "Imagem de referencia");
+  assert.equal(imageReplyDetail?.replyTo?.previewMedia?.mimeType, "image/jpeg");
+  assert.equal(imageReplyDetail?.replyTo?.previewMedia?.hasDownload, true);
+  assert.equal(imageReplyDetail?.replyTo?.previewMedia?.messageId?.startsWith("wamid.inbound.image."), true);
+  assert.equal(Boolean(imageReplyDetail?.replyTo?.previewMedia?.downloadUrl), true);
+
+  const audioReplyDetail = detail.body.items.find((message) => message.messageId === mediaReplyMessageIds.get("AUDIO"));
+  assert.equal(audioReplyDetail?.replyTo?.previewMedia?.kind, "audio");
+  assert.equal(audioReplyDetail?.replyTo?.previewMedia?.mimeType, "audio/ogg");
+
+  const videoReplyDetail = detail.body.items.find((message) => message.messageId === mediaReplyMessageIds.get("VIDEO"));
+  assert.equal(videoReplyDetail?.replyTo?.previewMedia?.kind, "video");
+  assert.equal(videoReplyDetail?.replyTo?.previewMedia?.mimeType, "video/mp4");
+
+  const documentReplyDetail = detail.body.items.find(
+    (message) => message.messageId === mediaReplyMessageIds.get("DOCUMENT")
+  );
+  assert.equal(documentReplyDetail?.replyTo?.previewMedia?.kind, "document");
+  assert.equal(documentReplyDetail?.replyTo?.previewMedia?.fileName, "orientacoes.pdf");
+  assert.equal(documentReplyDetail?.replyTo?.previewMedia?.mimeType, "application/pdf");
+
+  const locationReplyDetail = detail.body.items.find(
+    (message) => message.messageId === mediaReplyMessageIds.get("LOCATION")
+  );
+  assert.equal(locationReplyDetail?.replyTo?.previewType, "LOCATION");
+  assert.equal(locationReplyDetail?.replyTo?.previewLocation?.name, "Sala de atendimento");
+  assert.equal(locationReplyDetail?.replyTo?.previewLocation?.address, "Endereco sanitizado");
+  assert.equal(locationReplyDetail?.replyTo?.previewMedia ?? null, null);
+
+  const compactDetail = await request<{
+    ok: true;
+    items: Array<{
+      messageId: string;
+      replyTo?: {
+        previewType?: string | null;
+        previewBody?: string | null;
+        previewMedia?: unknown;
+        previewLocation?: unknown;
+      } | null;
+    }>;
+  }>("GET", `/app/conversation/${waId}?limit=1&order=desc`, businessAdmin);
+  assert.equal(compactDetail.status, 200, JSON.stringify(compactDetail.body));
+  assert.equal(compactDetail.body.items.length, 1);
+  assert.equal(compactDetail.body.items[0]?.replyTo?.previewType, "IMAGE");
+  assert.equal(compactDetail.body.items[0]?.replyTo?.previewBody ?? null, null);
+  assert.equal(compactDetail.body.items[0]?.replyTo?.previewMedia ?? null, null);
+  assert.equal(compactDetail.body.items[0]?.replyTo?.previewLocation ?? null, null);
 
   const event = await prisma.event.findFirstOrThrow({
     where: { clientId: businessClientId, conversationId: conversation.id, eventName: "inbox.reply.sent" },

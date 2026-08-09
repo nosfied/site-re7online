@@ -433,6 +433,12 @@ function getReplyPreviewText(item: InboxMessageItem) {
   return `[${getMessageContentLabel(item)}]`;
 }
 
+function getTruncatedReferenceText(value: string | null | undefined, maxLength = 72) {
+  const text = value?.replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
+}
+
 function buildOutgoingTextForReplyMode(text: string, _mode: InboxReplyMode) {
   return text.trim();
 }
@@ -449,6 +455,13 @@ function buildReplyTarget(item: InboxMessageItem, mode: InboxReplyMode = "reply"
     preview: getReplyPreviewText(item),
     direction: item.direction,
     type: item.type,
+    media: item.media
+      ? {
+          ...item.media,
+          messageId: item.messageId ?? null,
+        }
+      : null,
+    location: item.location ?? null,
   };
 }
 
@@ -457,6 +470,13 @@ function getTimelineReplyPreview(item: InboxMessageItem) {
   if (preview) return preview.length > 120 ? `${preview.slice(0, 117)}...` : preview;
   const previewType = item.replyTo?.previewType?.trim();
   return previewType ? `[${previewType}]` : "Mensagem anterior";
+}
+
+function getReferenceMediaFallbackLabel(kind: NonNullable<InboxMessageItem["media"]>["kind"]) {
+  if (kind === "image") return "Imagem";
+  if (kind === "video") return "Video";
+  if (kind === "audio") return "Audio";
+  return "Documento";
 }
 
 function getConversationPreviewText(item: InboxConversationItem) {
@@ -737,6 +757,156 @@ function MediaBubble({
   );
 }
 
+function MessageReferencePreview({
+  session,
+  waId,
+  item,
+}: {
+  session: AppSession | null;
+  waId: string | null;
+  item: InboxMessageItem;
+}) {
+  const replyTo = item.replyTo;
+  const media = replyTo?.previewMedia ?? null;
+  const location = replyTo?.previewLocation ?? null;
+  const imageMessageId = media?.kind === "image" ? media.messageId?.trim() || null : null;
+  const imageCacheKey = getMediaCacheKey(imageMessageId, media?.kind);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
+  const imageUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (imageUrlRef.current) {
+      URL.revokeObjectURL(imageUrlRef.current);
+      imageUrlRef.current = null;
+    }
+    setImageUrl(null);
+    setImageFailed(false);
+
+    if (!session || !waId || !media?.hasDownload || media.kind !== "image" || !imageMessageId || !imageCacheKey) {
+      return;
+    }
+
+    const cachedBlob = mediaBlobCache.get(imageCacheKey);
+    if (cachedBlob) {
+      const objectUrl = URL.createObjectURL(cachedBlob);
+      imageUrlRef.current = objectUrl;
+      setImageUrl(objectUrl);
+      return;
+    }
+    const lastNotFoundAt = mediaNotFoundCache.get(imageCacheKey);
+    if (lastNotFoundAt && Date.now() - lastNotFoundAt < MEDIA_NOT_FOUND_TTL_MS) {
+      setImageFailed(true);
+      return;
+    }
+
+    let cancelled = false;
+    void fetchAppConversationMedia(session, waId, imageMessageId)
+      .then((response) => {
+        if (cancelled) return;
+        const objectUrl = URL.createObjectURL(response.blob);
+        imageUrlRef.current = objectUrl;
+        mediaBlobCache.set(imageCacheKey, response.blob);
+        mediaNotFoundCache.delete(imageCacheKey);
+        setImageUrl(objectUrl);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if ((err as { status?: number }).status === 404) {
+          mediaNotFoundCache.set(imageCacheKey, Date.now());
+        }
+        setImageFailed(true);
+      });
+
+    return () => {
+      cancelled = true;
+      if (imageUrlRef.current) {
+        URL.revokeObjectURL(imageUrlRef.current);
+        imageUrlRef.current = null;
+      }
+    };
+  }, [imageCacheKey, imageMessageId, media?.hasDownload, media?.kind, session, waId]);
+
+  useEffect(() => {
+    return () => {
+      if (imageUrlRef.current) {
+        URL.revokeObjectURL(imageUrlRef.current);
+        imageUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  if (media) {
+    const text =
+      getTruncatedReferenceText(media.caption) ||
+      getTruncatedReferenceText(media.fileName) ||
+      getTruncatedReferenceText(replyTo?.previewBody) ||
+      getReferenceMediaFallbackLabel(media.kind);
+
+    if (media.kind === "image") {
+      return (
+        <div className="mt-1 flex min-w-0 items-center gap-2">
+          {imageUrl && !imageFailed ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imageUrl}
+              alt="Imagem referenciada"
+              className="h-12 w-12 shrink-0 rounded-md border border-black/10 object-cover"
+            />
+          ) : (
+            <span
+              aria-label="Imagem referenciada"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-slate-100 text-[10px] font-bold text-slate-600"
+            >
+              IMG
+            </span>
+          )}
+          {text && text !== "Imagem" ? <span className="line-clamp-2 min-w-0 break-words">{text}</span> : null}
+        </div>
+      );
+    }
+
+    const marker = media.kind === "video" ? "PLAY" : media.kind === "audio" ? "AUD" : "DOC";
+    const ariaLabel =
+      media.kind === "video"
+        ? "Video referenciado"
+        : media.kind === "audio"
+          ? "Audio referenciado"
+          : "Documento referenciado";
+    return (
+      <div className="mt-1 flex min-w-0 items-center gap-2">
+        <span
+          aria-label={ariaLabel}
+          className="flex h-8 w-10 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-slate-100 text-[10px] font-bold text-slate-600"
+        >
+          {marker}
+        </span>
+        <span className="line-clamp-1 min-w-0 break-all">{text}</span>
+      </div>
+    );
+  }
+
+  if (location) {
+    const text =
+      getTruncatedReferenceText(location.name) ||
+      getTruncatedReferenceText(location.address) ||
+      "Localizacao compartilhada";
+    return (
+      <div className="mt-1 flex min-w-0 items-center gap-2">
+        <span
+          aria-label="Localizacao referenciada"
+          className="flex h-8 w-10 shrink-0 items-center justify-center rounded-md border border-sky-300 bg-sky-50 text-[10px] font-bold text-sky-700"
+        >
+          PIN
+        </span>
+        <span className="line-clamp-1 min-w-0 break-words">{text}</span>
+      </div>
+    );
+  }
+
+  return <p className="mt-0.5 line-clamp-2 break-words">{getTimelineReplyPreview(item)}</p>;
+}
+
 function getConversationIdentity(item: Pick<InboxConversationItem, "waId" | "waIdCanonical">) {
   return item.waIdCanonical ?? item.waId;
 }
@@ -880,6 +1050,8 @@ type InboxReplyTarget = {
   preview: string;
   direction: "INBOUND" | "OUTBOUND";
   type: string;
+  media?: (NonNullable<InboxMessageItem["media"]> & { messageId?: string | null }) | null;
+  location?: InboxMessageItem["location"];
 };
 
 type PendingUnreadScrollTarget = {
@@ -4374,6 +4546,8 @@ export default function AppInboxPage() {
                     mode: next.replyTo.mode,
                     previewBody: next.replyTo.preview,
                     previewDirection: next.replyTo.direction,
+                    previewMedia: next.replyTo.media ?? null,
+                    previewLocation: next.replyTo.location ?? null,
                   }
                 : response.message.replyTo ?? null,
               errorBody: null,
@@ -4875,6 +5049,8 @@ export default function AppInboxPage() {
               mode: replyTarget.mode,
               previewBody: replyTarget.preview,
               previewDirection: replyTarget.direction,
+              previewMedia: replyTarget.media ?? null,
+              previewLocation: replyTarget.location ?? null,
             }
           : response.message.replyTo ?? null,
         errorBody: null,
@@ -6615,7 +6791,7 @@ export default function AppInboxPage() {
                             <p className="font-semibold text-slate-800">
                               Referencia
                             </p>
-                            <p className="mt-0.5 line-clamp-2 break-words">{getTimelineReplyPreview(item)}</p>
+                            <MessageReferencePreview session={session} waId={selectedConversationWaId} item={item} />
                           </button>
                         ) : null}
                         {senderLabel ? (
