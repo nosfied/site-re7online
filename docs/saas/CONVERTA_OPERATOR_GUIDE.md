@@ -121,6 +121,8 @@ As abas disponiveis sao:
 
 Os filtros de `Acessos/Sessoes` sao locais dessa aba e nao alteram o recorte global das conversas.
 
+O PDF gerado em `Exportacoes` e um relatorio gerencial agregado: identifica tenant, periodo, filtros aplicados, data/hora de geracao, resumo executivo, conversas, SLA, atendentes e resumo de acessos/sessoes. Ele nao substitui os CSVs quando a necessidade for auditoria linha a linha ou conferencia detalhada.
+
 ## Relatorio Acessos/Sessoes
 
 Em `Relatorios`, a secao `Acessos/Sessoes` mostra trilha operacional de autenticacao por tenant. Ela usa sessoes observadas pela aplicacao e permite consultar login, logout explicito, substituicao de sessao, renovacao, expiracao e ultima atividade observada.

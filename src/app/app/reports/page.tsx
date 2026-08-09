@@ -219,6 +219,46 @@ function EmptyState({ children }: { children: ReactNode }) {
   return <p className="p-4 text-sm text-white/65">{children}</p>;
 }
 
+function printEmptyRow(columns: number, message = "Sem dados no periodo.") {
+  return `<tr><td colspan="${columns}" class="empty">${escapeHtml(message)}</td></tr>`;
+}
+
+function printTableRows(rows: Array<Array<string | number | null | undefined>>, columns: number, emptyMessage?: string) {
+  if (!rows.length) return printEmptyRow(columns, emptyMessage);
+  return rows
+    .map(
+      (row) => `
+        <tr>
+          ${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}
+        </tr>`
+    )
+    .join("");
+}
+
+function printMetricCards(cards: Array<{ label: string; value: string | number; tone?: "neutral" | "info" | "ok" | "warn" | "risk" }>) {
+  return cards
+    .map(
+      (card) => `
+        <div class="metric metric-${card.tone ?? "neutral"}">
+          <span>${escapeHtml(card.label)}</span>
+          <strong>${escapeHtml(card.value)}</strong>
+        </div>`
+    )
+    .join("");
+}
+
+function averageObservedDuration(items: AppSessionAuditReport["items"]) {
+  const durations = items
+    .map((item) => item.durationObservedSec)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (!durations.length) return null;
+  return Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length);
+}
+
+function countSessionReason(items: AppSessionAuditReport["items"], reason: string) {
+  return items.filter((item) => item.endReason === reason).length;
+}
+
 function escapeHtml(value: string | number | null | undefined) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -526,7 +566,7 @@ export default function AppReportsPage() {
       setError("Carregue um relatorio antes de gerar o PDF.");
       return;
     }
-    const tenantName = tenant?.name || session.user.clientId;
+    const tenantName = tenant?.name || "Tenant autenticado";
     const departmentLabel = departmentId
       ? departments.find((item) => item.id === departmentId)?.name ?? departmentId
       : "Todos";
@@ -536,163 +576,284 @@ export default function AppReportsPage() {
       periodMode === "custom"
         ? `${formatDateTime(report.periodFrom)} a ${formatDateTime(report.periodTo)}`
         : RANGE_LABELS[range];
-    const byDepartmentRows = report.byDepartment.length
-      ? report.byDepartment
-          .map(
-            (item) => `
-              <tr>
-                <td>${escapeHtml(item.departmentName ?? "-")}</td>
-                <td>${escapeHtml(item.conversations)}</td>
-                <td>${escapeHtml(formatSeconds(item.avgResponseTimeSec))}</td>
-              </tr>`
-          )
-          .join("")
-      : `<tr><td colspan="3">Nenhum dado por setor.</td></tr>`;
-    const agentActivityRows = report.agentMessageActivity?.length
-      ? report.agentMessageActivity
-          .map(
-            (item) => `
-              <tr>
-                <td>${escapeHtml(item.userName ?? userNameById.get(item.userId) ?? item.userId)}</td>
-                <td>${escapeHtml(item.outboundMessages)}</td>
-              </tr>`
-          )
-          .join("")
-      : `<tr><td colspan="2">Nenhuma mensagem humana atribuivel no periodo selecionado.</td></tr>`;
-    const assignedConversationRows = (report.assignedConversationsByAgent ?? report.byAgent).length
-      ? (report.assignedConversationsByAgent ?? report.byAgent)
-          .map(
-            (item) => `
-              <tr>
-                <td>${escapeHtml(userNameById.get(item.userId) ?? item.userId)}</td>
-                <td>${escapeHtml(item.conversations)}</td>
-                <td>${escapeHtml(formatSeconds(item.avgResponseTimeSec))}</td>
-              </tr>`
-          )
-          .join("")
-      : `<tr><td colspan="3">Nenhuma conversa atribuida por atendente no periodo selecionado.</td></tr>`;
-    const byChannelRows = report.byChannel?.length
-      ? report.byChannel
-          .map(
-            (item) => `
-              <tr>
-                <td>${escapeHtml(item.channelName)}</td>
-                <td>${escapeHtml(item.conversations)}</td>
-              </tr>`
-          )
-          .join("")
-      : `<tr><td colspan="2">Nenhum dado por canal.</td></tr>`;
     const slaOperational = getSlaOperational(report);
-    const slaRows = [
-      ["Aguardando primeira resposta", slaOperational.waitingFirstResponse],
-      ["Em atendimento", slaOperational.inProgress],
-      ["Aguardando cliente", slaOperational.waitingUser],
-      ["Fechados", slaOperational.closed],
-      ["Tempo medio de primeira resposta", formatSeconds(slaOperational.avgFirstResponseTimeSec)],
-      ["Tempo medio de resolucao", formatSeconds(slaOperational.avgResolutionTimeSec)],
-    ]
-      .map(
-        ([label, value]) => `
-          <tr>
-            <td>${escapeHtml(label)}</td>
-            <td>${escapeHtml(value)}</td>
-          </tr>`
-      )
-      .join("");
-    const protocolRows = report.conversations?.length
-      ? report.conversations
-          .slice(0, 100)
-          .map(
-            (item) => `
-              <tr>
-                <td>${escapeHtml(item.protocol)}</td>
-                <td>${escapeHtml(item.channelName)}</td>
-                <td>${escapeHtml(item.departmentName ?? "-")}</td>
-                <td>${escapeHtml(item.status ?? "-")}</td>
-                <td>${escapeHtml(formatDateTime(item.startedAt))}</td>
-              </tr>`
-          )
-          .join("")
-      : `<tr><td colspan="5">Nenhum protocolo no periodo selecionado.</td></tr>`;
+    const assignedConversationRows = report.assignedConversationsByAgent ?? report.byAgent;
+    const filters = [
+      ["Periodo", periodLabel],
+      channel ? ["Canal", channelLabel] : null,
+      departmentId ? ["Setor", departmentLabel] : null,
+      userId ? ["Atendente", userLabel] : null,
+      dedupe ? ["Duplicados", "Desconsiderados"] : null,
+    ].filter((item): item is string[] => Boolean(item));
+    const sessionFilters = [
+      ["Periodo", `${formatDateTime(sessionReport?.periodFrom ?? dateTimeLocalToIso(sessionFrom))} a ${formatDateTime(sessionReport?.periodTo ?? dateTimeLocalToIso(sessionTo))}`],
+      sessionUserId ? ["Usuario", userNameById.get(sessionUserId) ?? "Usuario filtrado"] : null,
+      sessionRole ? ["Perfil", sessionRole] : null,
+      sessionStatus ? ["Status", SESSION_STATUS_FILTERS.find((item) => item.value === sessionStatus)?.label ?? sessionStatus] : null,
+    ].filter((item): item is string[] => Boolean(item));
+    const sessionItems = sessionReport?.items ?? [];
+    const sessionOpenCount = sessionItems.filter((item) => item.status === "OPEN").length;
+    const sessionClosedCount = sessionItems.filter((item) => item.status === "CLOSED").length;
+    const sessionExpiredCount = sessionItems.filter((item) => item.status === "EXPIRED").length;
+    const sessionRenewedCount = countSessionReason(sessionItems, "session_renewed");
+    const sessionRevokedCount = sessionItems.filter((item) => item.endedAt && item.endReason !== "logout" && item.endReason !== "session_renewed").length;
+    const sessionAverageDuration = averageObservedDuration(sessionItems);
+    const includeSessionDetails = Boolean(sessionUserId && sessionItems.length);
+    const htmlGeneratedAt = formatDateTime(new Date().toISOString());
+    const filterRows = printTableRows(filters, 2);
+    const sessionFilterRows = printTableRows(sessionFilters, 2);
+    const byChannelRows = printTableRows(
+      (report.byChannel ?? []).map((item) => [item.channelName, item.conversations]),
+      2,
+      "Sem dados por canal no periodo."
+    );
+    const byDepartmentRows = printTableRows(
+      report.byDepartment.map((item) => [item.departmentName ?? "Sem setor / legado", item.conversations, formatSeconds(item.avgResponseTimeSec)]),
+      3,
+      "Sem dados por setor no periodo."
+    );
+    const statusRows = printTableRows(
+      [
+        ["Aguardando primeira resposta", slaOperational.waitingFirstResponse],
+        ["Em atendimento", slaOperational.inProgress],
+        ["Aguardando cliente", slaOperational.waitingUser],
+        ["Fechadas", slaOperational.closed],
+      ],
+      2
+    );
+    const slaRows = printTableRows(
+      [
+        ["Tempo medio de primeira resposta", formatSeconds(slaOperational.avgFirstResponseTimeSec), "Formula atual do relatorio"],
+        ["Tempo medio de resolucao", formatSeconds(slaOperational.avgResolutionTimeSec), "Formula atual do relatorio"],
+        ["Fora do SLA", report.slaBreaches, (report.slaBreaches ?? 0) > 0 ? "Risco" : "Regular"],
+      ],
+      3
+    );
+    const agentActivityRows = printTableRows(
+      (report.agentMessageActivity ?? []).map((item) => [
+        item.userName ?? userNameById.get(item.userId) ?? "Atendente sem nome",
+        item.outboundMessages,
+      ]),
+      2,
+      "Nenhuma mensagem humana atribuivel no periodo selecionado."
+    );
+    const assignedRows = printTableRows(
+      assignedConversationRows.map((item) => [
+        userNameById.get(item.userId) ?? "Atendente sem nome",
+        item.conversations,
+        formatSeconds(item.avgResponseTimeSec),
+      ]),
+      3,
+      "Nenhuma conversa atribuida por atendente no periodo selecionado."
+    );
+    const protocolRows = printTableRows(
+      (report.conversations ?? []).slice(0, 12).map((item) => [
+        item.protocol,
+        item.channelName,
+        item.departmentName ?? "-",
+        item.status ?? "-",
+        formatDateTime(item.startedAt),
+      ]),
+      5,
+      "Sem protocolos no periodo."
+    );
+    const sessionDetailRows = printTableRows(
+      sessionItems.map((item) => [
+        item.userName,
+        item.role,
+        formatDateTime(item.loginAt),
+        item.endedAt ? formatDateTime(item.endedAt) : "-",
+        item.endReasonLabel,
+        formatObservedDuration(item.durationObservedSec),
+        item.statusLabel,
+      ]),
+      7,
+      "Sem sessoes no periodo."
+    );
+    const executiveCards = printMetricCards([
+      { label: "Conversas", value: report.totalConversations, tone: "info" },
+      { label: "Fechadas", value: slaOperational.closed, tone: "neutral" },
+      { label: "Em atendimento", value: slaOperational.inProgress, tone: "info" },
+      { label: "Aguardando", value: slaOperational.waitingFirstResponse, tone: "warn" },
+      { label: "Primeira resposta media", value: formatSeconds(report.avgFirstResponseTimeSec), tone: "ok" },
+      { label: "Resolucao media", value: formatSeconds(report.avgResolutionTimeSec), tone: "ok" },
+      { label: "Fora do SLA", value: report.slaBreaches, tone: report.slaBreaches > 0 ? "risk" : "ok" },
+    ]);
+    const sessionCards = printMetricCards([
+      { label: "Total filtrado", value: sessionReport?.total ?? "-", tone: "info" },
+      { label: "Abertas carregadas", value: sessionOpenCount, tone: "info" },
+      { label: "Encerradas carregadas", value: sessionClosedCount, tone: "ok" },
+      { label: "Expiradas carregadas", value: sessionExpiredCount, tone: "warn" },
+      { label: "Renovadas carregadas", value: sessionRenewedCount, tone: "neutral" },
+      { label: "Revogadas carregadas", value: sessionRevokedCount, tone: "neutral" },
+      { label: "Duracao observada media", value: formatSeconds(sessionAverageDuration), tone: "neutral" },
+    ]);
     const html = `<!doctype html>
       <html lang="pt-BR">
         <head>
           <meta charset="utf-8" />
-          <title>Relatorio de conversas - Converta</title>
+          <title>Relatorio Operacional - Converta</title>
           <style>
             @page { size: A4; margin: 16mm; }
             * { box-sizing: border-box; }
-            body { margin: 0; font-family: Arial, sans-serif; color: #102033; background: #fff; }
-            header { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 2px solid #0ea5e9; padding-bottom: 16px; }
+            html { background: #f8fafc; }
+            body { margin: 0; font-family: Arial, sans-serif; color: #102033; background: #fff; line-height: 1.35; }
+            .page { max-width: 1040px; margin: 0 auto; padding: 22px; }
+            header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; border-bottom: 2px solid #0ea5e9; padding-bottom: 16px; }
             .brand { display: flex; align-items: center; gap: 14px; }
             .brand img { width: 150px; height: auto; }
             .eyebrow { margin: 0 0 4px; color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
-            h1 { margin: 0; font-size: 22px; color: #0f172a; }
+            h1 { margin: 0; font-size: 24px; color: #0f172a; }
+            .subtitle { margin: 6px 0 0; color: #475569; font-size: 12px; }
             .generated { text-align: right; color: #64748b; font-size: 11px; }
-            .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 20px; margin: 18px 0; padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; font-size: 12px; }
-            .meta strong { color: #0f172a; }
-	            .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0; }
-            .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; background: #fff; }
-            .card span { display: block; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; }
-            .card strong { display: block; margin-top: 8px; font-size: 20px; color: #0f172a; }
-            h2 { margin: 20px 0 8px; font-size: 15px; color: #0f172a; }
-            table { width: 100%; border-collapse: collapse; font-size: 12px; }
-            th { text-align: left; background: #0f2742; color: #fff; padding: 8px; }
-            td { border-bottom: 1px solid #e2e8f0; padding: 8px; }
-            footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 10px; }
+            .meta-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 12px; margin: 18px 0; }
+            .panel { border: 1px solid #dbe4ef; border-radius: 12px; background: #fff; padding: 12px; break-inside: avoid; page-break-inside: avoid; }
+            .panel-muted { background: #f8fafc; }
+            .label { color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+            .value { margin-top: 4px; font-size: 15px; font-weight: 700; color: #0f172a; }
+            .filters { width: 100%; border-collapse: collapse; font-size: 11px; }
+            .filters td { border-bottom: 1px solid #e2e8f0; padding: 5px 0; }
+            .filters td:first-child { width: 34%; color: #64748b; font-weight: 700; }
+            .section { margin-top: 18px; break-inside: avoid; page-break-inside: avoid; }
+            .section-break { break-before: page; page-break-before: always; }
+            .section-header { margin-bottom: 8px; }
+            h2 { margin: 0; font-size: 16px; color: #0f172a; }
+            .section-description { margin: 4px 0 0; color: #64748b; font-size: 11px; }
+            .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+            .metric { min-height: 66px; border: 1px solid #dbe4ef; border-left: 4px solid #94a3b8; border-radius: 10px; padding: 10px; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+            .metric span { display: block; color: #64748b; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+            .metric strong { display: block; margin-top: 7px; font-size: 18px; color: #0f172a; }
+            .metric-info { border-left-color: #0ea5e9; }
+            .metric-ok { border-left-color: #10b981; }
+            .metric-warn { border-left-color: #f59e0b; }
+            .metric-risk { border-left-color: #ef4444; }
+            .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; break-inside: auto; page-break-inside: auto; }
+            thead { display: table-header-group; }
+            tr { break-inside: avoid; page-break-inside: avoid; }
+            th { text-align: left; background: #eef6fc; color: #0f2742; border-bottom: 1px solid #bfd4e5; padding: 7px; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+            td { border-bottom: 1px solid #e2e8f0; padding: 7px; vertical-align: top; }
+            .empty { color: #64748b; font-style: italic; }
+            .note { margin-top: 8px; border-left: 3px solid #0ea5e9; background: #f8fafc; color: #475569; padding: 8px 10px; font-size: 10.5px; }
+            .footer { margin-top: 22px; padding-top: 12px; border-top: 1px solid #dbe4ef; color: #64748b; font-size: 10px; break-inside: avoid; page-break-inside: avoid; }
             .print-actions { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; margin: 0 0 16px; padding: 10px 0; background: rgba(255, 255, 255, .94); backdrop-filter: blur(8px); }
             .print-actions button { border: 0; border-radius: 8px; background: #0f2742; color: #fff; cursor: pointer; font-size: 13px; font-weight: 700; padding: 10px 14px; }
             .print-actions button:hover { background: #123a62; }
             @media print {
+              html, body { background: #fff; }
+              .page { max-width: none; padding: 0; }
               .print-actions { display: none; }
+              .section { margin-top: 14px; }
+              .metrics { grid-template-columns: repeat(4, 1fr); }
+            }
+            @media screen and (max-width: 760px) {
+              .meta-grid, .two-col { grid-template-columns: 1fr; }
+              .metrics { grid-template-columns: repeat(2, 1fr); }
             }
           </style>
         </head>
         <body>
-          <div class="print-actions">
-            <button type="button" onclick="window.print()">Imprimir ou salvar em PDF</button>
-          </div>
-          <header>
-            <div class="brand">
-              <img src="${window.location.origin}/images/converta-logo-dark.png" alt="Converta" />
-              <div>
-                <p class="eyebrow">Relatorio operacional</p>
-                <h1>Conversas iniciadas por clientes/leads</h1>
-              </div>
+          <main class="page">
+            <div class="print-actions">
+              <button type="button" onclick="window.print()">Imprimir / Salvar PDF</button>
             </div>
-            <div class="generated">Gerado em<br /><strong>${escapeHtml(formatDateTime(new Date().toISOString()))}</strong></div>
-          </header>
-          <section class="meta">
-            <div><strong>Tenant:</strong> ${escapeHtml(tenantName)}</div>
-            <div><strong>Telefone:</strong> ${escapeHtml(tenant?.phoneDisplay ?? "-")}</div>
-            <div><strong>Periodo:</strong> ${escapeHtml(periodLabel)}</div>
-            <div><strong>Duplicados:</strong> ${dedupe ? "desconsiderados" : "incluidos"}</div>
-            <div><strong>Canal:</strong> ${escapeHtml(channelLabel)}</div>
-            <div><strong>Setor:</strong> ${escapeHtml(departmentLabel)}</div>
-            <div><strong>Atendente:</strong> ${escapeHtml(userLabel)}</div>
-          </section>
-          <section class="cards">
-            <div class="card"><span>Conversas</span><strong>${escapeHtml(report.totalConversations)}</strong></div>
-            <div class="card"><span>Primeira resposta media</span><strong>${escapeHtml(formatSeconds(report.avgFirstResponseTimeSec))}</strong></div>
-            <div class="card"><span>Resolucao media</span><strong>${escapeHtml(formatSeconds(report.avgResolutionTimeSec))}</strong></div>
-            <div class="card"><span>Automatizados</span><strong>${escapeHtml(report.automatedConversations ?? 0)}</strong></div>
-            <div class="card"><span>Transferencias humano</span><strong>${escapeHtml(report.humanTransferCount ?? 0)}</strong></div>
-            <div class="card"><span>Fora do SLA</span><strong>${escapeHtml(report.slaBreaches)}</strong></div>
-          </section>
-          <h2>SLA operacional</h2>
-          <table><thead><tr><th>Indicador</th><th>Valor</th></tr></thead><tbody>${slaRows}</tbody></table>
-          <h2>Protocolos de atendimento</h2>
-          <table><thead><tr><th>Protocolo</th><th>Canal</th><th>Setor</th><th>Status</th><th>Inicio</th></tr></thead><tbody>${protocolRows}</tbody></table>
-          <h2>Por canal</h2>
-          <table><thead><tr><th>Canal</th><th>Conversas</th></tr></thead><tbody>${byChannelRows}</tbody></table>
-          <h2>Por setor</h2>
-          <table><thead><tr><th>Setor</th><th>Conversas</th><th>Tempo medio de resposta</th></tr></thead><tbody>${byDepartmentRows}</tbody></table>
-          <h2>Atividade dos atendentes</h2>
-          <p>${escapeHtml(AGENT_ACTIVITY_HISTORY_NOTE)}</p>
-          <table><thead><tr><th>Atendente</th><th>Mensagens enviadas</th></tr></thead><tbody>${agentActivityRows}</tbody></table>
-          <h2>Distribuicao operacional</h2>
-          <table><thead><tr><th>Atendente</th><th>Conversas atribuidas</th><th>Tempo medio de resposta</th></tr></thead><tbody>${assignedConversationRows}</tbody></table>
-          <footer>Converta - Central Inteligente de Atendimento e Vendas. Relatorio gerado para uso operacional interno.</footer>
+            <header>
+              <div class="brand">
+                <img src="${window.location.origin}/images/converta-logo-dark.png" alt="Converta" />
+                <div>
+                  <p class="eyebrow">Converta</p>
+                  <h1>Relatório Operacional</h1>
+                  <p class="subtitle">Resumo gerencial para acompanhamento interno de atendimento.</p>
+                </div>
+              </div>
+              <div class="generated">Gerado em<br /><strong>${escapeHtml(htmlGeneratedAt)}</strong></div>
+            </header>
+
+            <section class="meta-grid">
+              <div class="panel panel-muted">
+                <div class="label">Tenant</div>
+                <div class="value">${escapeHtml(tenantName)}</div>
+              </div>
+              <div class="panel panel-muted">
+                <div class="label">Filtros aplicados</div>
+                <table class="filters"><tbody>${filterRows}</tbody></table>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-header">
+                <h2>Resumo executivo</h2>
+                <p class="section-description">KPIs principais do recorte selecionado, usando as metricas operacionais ja existentes.</p>
+              </div>
+              <div class="metrics">${executiveCards}</div>
+            </section>
+
+            <section class="section">
+              <div class="section-header">
+                <h2>Conversas</h2>
+                <p class="section-description">Volume por status operacional, canal e setor. O CSV permanece como fonte de detalhe completo.</p>
+              </div>
+              <div class="two-col">
+                <div>
+                  <table><thead><tr><th>Status</th><th>Conversas</th></tr></thead><tbody>${statusRows}</tbody></table>
+                </div>
+                <div>
+                  <table><thead><tr><th>Canal</th><th>Conversas</th></tr></thead><tbody>${byChannelRows}</tbody></table>
+                </div>
+              </div>
+              <div class="section" style="margin-top: 12px;">
+                <table><thead><tr><th>Setor</th><th>Conversas</th><th>Tempo medio de resposta</th></tr></thead><tbody>${byDepartmentRows}</tbody></table>
+              </div>
+              <div class="note">Protocolos abaixo sao uma amostra curta para conferencia visual. Use CSV para analise detalhada.</div>
+              <table style="margin-top: 8px;"><thead><tr><th>Protocolo</th><th>Canal</th><th>Setor</th><th>Status</th><th>Inicio</th></tr></thead><tbody>${protocolRows}</tbody></table>
+            </section>
+
+            <section class="section">
+              <div class="section-header">
+                <h2>SLA</h2>
+                <p class="section-description">Indicadores de primeira resposta, resolucao e violacoes observadas no periodo.</p>
+              </div>
+              <table><thead><tr><th>Indicador</th><th>Valor</th><th>Leitura</th></tr></thead><tbody>${slaRows}</tbody></table>
+            </section>
+
+            <section class="section section-break">
+              <div class="section-header">
+                <h2>Atendentes</h2>
+                <p class="section-description">Atividade humana e distribuicao operacional sao leituras separadas.</p>
+              </div>
+              <h3 class="label">Mensagens enviadas por atendente</h3>
+              <table><thead><tr><th>Atendente</th><th>Mensagens enviadas</th></tr></thead><tbody>${agentActivityRows}</tbody></table>
+              <div class="note">Mensagens anteriores a captura de autoria podem nao ser atribuiveis a um atendente.</div>
+              <h3 class="label" style="margin-top: 14px;">Conversas atribuídas por atendente</h3>
+              <table><thead><tr><th>Atendente</th><th>Conversas atribuidas</th><th>Tempo medio de resposta</th></tr></thead><tbody>${assignedRows}</tbody></table>
+            </section>
+
+            <section class="section">
+              <div class="section-header">
+                <h2>Acessos/Sessões</h2>
+                <p class="section-description">Resumo da auditoria de autenticacao no periodo filtrado para sessoes.</p>
+              </div>
+              <div class="panel panel-muted">
+                <div class="label">Filtros de sessoes</div>
+                <table class="filters"><tbody>${sessionFilterRows}</tbody></table>
+              </div>
+              <div class="metrics">${sessionCards}</div>
+              <div class="note">Total filtrado vem do endpoint de auditoria. A distribuicao por status usa as sessoes carregadas na tela; use CSV para detalhe completo.</div>
+              <div class="note">Registros de sessao representam autenticacao e atividade observada na plataforma e nao constituem controle de jornada.</div>
+              ${includeSessionDetails ? `
+                <div class="section">
+                  <div class="section-header">
+                    <h2>Detalhe de sessões filtradas</h2>
+                    <p class="section-description">Incluido porque ha filtro especifico de usuario. Para extracao completa, use CSV.</p>
+                  </div>
+                  <table><thead><tr><th>Usuario</th><th>Perfil</th><th>Login</th><th>Encerramento</th><th>Motivo</th><th>Duracao observada</th><th>Status</th></tr></thead><tbody>${sessionDetailRows}</tbody></table>
+                </div>` : ""}
+            </section>
+
+            <footer class="footer">
+              Converta - relatorio operacional interno. Gerado para ${escapeHtml(tenantName)} em ${escapeHtml(htmlGeneratedAt)}. Documento estimativo e gerencial; CSVs permanecem como exportacao detalhada.
+            </footer>
+          </main>
         </body>
       </html>`;
     const popup = window.open("", "_blank", "width=960,height=720");
@@ -1303,7 +1464,7 @@ export default function AppReportsPage() {
             <section className="rounded-xl border border-white/10 bg-white/5 p-4">
               <h2 className="text-sm font-semibold">Impressão/PDF</h2>
               <p className="mt-1 text-xs leading-relaxed text-white/55">
-                Mantem a janela de impressao atual com o relatorio consolidado. Redesign completo do PDF fica fora desta sprint.
+                Abre um relatorio gerencial com resumo, conversas, SLA, atendentes e acessos/sessoes para imprimir ou salvar em PDF.
               </p>
               <button
                 type="button"
@@ -1311,7 +1472,7 @@ export default function AppReportsPage() {
                 disabled={!report}
                 className="mt-4 w-full rounded-md border border-emerald-300/30 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Gerar PDF
+                Imprimir / Salvar PDF
               </button>
             </section>
           </div>

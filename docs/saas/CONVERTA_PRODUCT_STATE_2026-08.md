@@ -144,6 +144,7 @@ Superficies atuais:
 
 - exportacao CSV de campanhas;
 - workspace `/app/reports` organizado em abas internas de visao geral, conversas, SLA, atendentes, acessos/sessoes e exportacoes, mantendo filtros globais separados dos filtros locais de sessoes;
+- impressao/PDF gerencial em `/app/reports`, com cabecalho, filtros aplicados, resumo executivo, conversas, SLA, atendentes e resumo de acessos/sessoes, preservando CSV como exportacao detalhada;
 - relatorio `Acessos/Sessoes` baseado em `AppAuthSession`, com filtros por periodo, usuario, perfil, status e export CSV sanitizado;
 - relatorio de atividade dos atendentes baseado em mensagens outbound humanas com autoria persistida no momento do envio;
 - relatorio de conversas atribuidas por atendente baseado em distribuicao operacional de `ConversationRuntimeState`/`ConversationAssignment`;
