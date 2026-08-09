@@ -73,6 +73,7 @@ export type Env = {
   SMTP_USER: string;
   SMTP_PASS: string;
   SMTP_FROM: string;
+  PLATFORM_SUPPORT_TENANT_KEY: string;
   STORAGE_MODE: "json" | "hybrid" | "postgres";
   STORAGE_MODE_SET: boolean;
   CLIENT_KEY: string;
@@ -257,6 +258,7 @@ export function getEnv(): Env {
   const SMTP_USER = process.env.SMTP_USER ?? "";
   const SMTP_PASS = process.env.SMTP_PASS ?? "";
   const SMTP_FROM = process.env.SMTP_FROM ?? "";
+  const PLATFORM_SUPPORT_TENANT_KEY = process.env.PLATFORM_SUPPORT_TENANT_KEY ?? "";
   const STORAGE_MODE_SET = Boolean(process.env.STORAGE_MODE?.trim());
   const STORAGE_MODE = toStorageMode(process.env.STORAGE_MODE);
   const CLIENT_KEY = process.env.CLIENT_KEY ?? "";
@@ -367,6 +369,7 @@ export function getEnv(): Env {
     SMTP_USER,
     SMTP_PASS,
     SMTP_FROM,
+    PLATFORM_SUPPORT_TENANT_KEY,
     STORAGE_MODE,
     STORAGE_MODE_SET,
     CLIENT_KEY,

@@ -25,6 +25,14 @@ No Inbox, o operador deve:
 
 Conversas com dados anonimizados nao devem aparecer no uso normal. Se um contato tiver sido minimizado por LGPD, nao se deve tentar restaurar nome, numero, historico ou contexto anterior.
 
+## Suporte da plataforma
+
+ADMIN e SUPERVISOR podem abrir e acompanhar suporte da plataforma em `Suporte`. O fluxo cria ou retoma uma `Conversation` no tenant de suporte configurado pela plataforma, com protocolo normal do Converta. Nao existe modulo paralelo de ticket ou case.
+
+Cada usuario ve seus proprios chamados no MVP. Se ja houver chamado ativo para o mesmo tenant e usuario, a tela retoma a conversa ativa; se o chamado anterior foi encerrado, uma nova abertura cria outra conversa. O destino do suporte e resolvido pelo backend via `PLATFORM_SUPPORT_TENANT_KEY`; a interface nao escolhe tenant, WABA, telefone ou `clientId` de destino.
+
+O suporte aceita apenas texto nesta etapa. Anexos ficam para evolucao futura. A conversa aparece para a equipe da plataforma no Inbox do tenant de suporte, usando identidade sintetica e rotulo seguro com tenant e usuario solicitante. Nao copie telefone, email, token, SID, IP ou dados de CRM do tenant origem para o atendimento.
+
 ## Texto livre, modelo aprovado e mensagem pronta
 
 | Recurso | Quando usar | Limite principal |

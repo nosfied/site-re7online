@@ -526,6 +526,7 @@ function getChannelEmptyStateLabel(channel: ConversationChannelFilter) {
   if (channel === "whatsapp") return "WhatsApp";
   if (channel === "webchat") return "Webchat";
   if (channel === "telegram") return "Telegram";
+  if (channel === "support") return "Suporte";
   return "Todos os canais";
 }
 
@@ -1033,6 +1034,7 @@ const CONVERSATION_CHANNEL_FILTERS: Array<{ value: InboxChannel; label: string }
   { value: "messenger", label: "Facebook/Messenger" },
   { value: "webchat", label: "Webchat" },
   { value: "telegram", label: "Telegram" },
+  { value: "support", label: "Suporte" },
 ];
 
 const CONVERSATION_QUICK_FILTERS = [
@@ -1816,7 +1818,13 @@ function getConversationStatusClassForItem(
 
 function getConversationChannel(item: Pick<InboxConversationItem, "channel"> | null): InboxChannel {
   const channel = String(item?.channel ?? "").trim().toLowerCase();
-  if (channel === "messenger" || channel === "instagram" || channel === "webchat" || channel === "telegram") {
+  if (
+    channel === "messenger" ||
+    channel === "instagram" ||
+    channel === "webchat" ||
+    channel === "telegram" ||
+    channel === "support"
+  ) {
     return channel;
   }
   return "whatsapp";
@@ -1832,6 +1840,8 @@ function getConversationChannelLabel(item: Pick<InboxConversationItem, "channel"
       return "Webchat";
     case "telegram":
       return "Telegram";
+    case "support":
+      return "Suporte";
     default:
       return "WhatsApp";
   }
@@ -1847,6 +1857,8 @@ function getConversationChannelBadgeClass(item: Pick<InboxConversationItem, "cha
       return "border-sky-300/40 bg-white";
     case "telegram":
       return "border-[#229ED9]/25 bg-white";
+    case "support":
+      return "border-violet-300/40 bg-white";
     default:
       return "border-[#25D366]/25 bg-white";
   }
@@ -1907,6 +1919,16 @@ function ConversationChannelLogo({
           <path
             fill="#fff"
             d="M24.7 9.1 21.9 22c-.2.9-.8 1.1-1.6.7l-4.4-3.2-2.1 2c-.2.2-.4.4-.9.4l.3-4.5 8.2-7.4c.4-.3-.1-.5-.5-.2l-10.1 6.4-4.4-1.4c-1-.3-1-.9.2-1.3l17.1-6.6c.8-.3 1.5.2 1.2 1.2z"
+          />
+        </svg>
+      );
+    case "support":
+      return (
+        <svg viewBox="0 0 32 32" aria-hidden="true" className={className}>
+          <circle cx="16" cy="16" r="16" fill="#7C3AED" />
+          <path
+            fill="#fff"
+            d="M10 9.5A3.5 3.5 0 0 1 13.5 6h5A3.5 3.5 0 0 1 22 9.5v3A3.5 3.5 0 0 1 18.5 16h-1.7l-3.4 2.6A.8.8 0 0 1 12.1 18v-2H10a3.5 3.5 0 0 1-3.5-3.5v-3A3.5 3.5 0 0 1 10 9.5Zm2.5 11A2.5 2.5 0 0 1 15 18h6a2.5 2.5 0 0 1 2.5 2.5v1A2.5 2.5 0 0 1 21 24h-1.8l-2.8 2.1a.7.7 0 0 1-1.1-.6V24H15a2.5 2.5 0 0 1-2.5-2.5v-1Z"
           />
         </svg>
       );

@@ -69,7 +69,7 @@ export type InboxMessageItem = {
   createdAt: string;
 };
 
-export type InboxChannel = "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram";
+export type InboxChannel = "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "support";
 
 export type InboxConversationContinuation = {
   protocol: string;
@@ -246,7 +246,7 @@ export type HandoffLeadNotificationRecipient = {
 
 export type MediaHandoffPolicy = {
   enabled: boolean;
-  channels: Array<"whatsapp" | "messenger" | "instagram" | "webchat" | "telegram">;
+  channels: Array<"whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "support">;
   behavior: "notify_and_reply" | "notify_only" | "reply_only" | "ignore";
   customerNoticeText: string;
   attendantSummaryText: string;
@@ -329,7 +329,7 @@ export type ConversationReportByDepartmentItem = {
 };
 
 export type ConversationReportByChannelItem = {
-  channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "unknown";
+  channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "support" | "unknown";
   channelName: string;
   conversations: number;
 };
@@ -338,7 +338,7 @@ export type ConversationReportConversationItem = {
   conversationId: string;
   protocol: string;
   waId: string;
-  channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "unknown";
+  channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "support" | "unknown";
   channelName: string;
   departmentId: string | null;
   departmentName: string | null;
@@ -354,7 +354,7 @@ export type ConversationReportResponse = {
   periodFrom?: string | null;
   periodTo?: string | null;
   dedupe?: boolean;
-  channel?: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | null;
+  channel?: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "support" | null;
   userId: string | null;
   departmentId: string | null;
   queueId?: string | null;

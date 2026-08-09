@@ -73,6 +73,33 @@ export type AppPushStatus = {
   subscriptions: number;
 };
 
+export type AppSupportConversation = {
+  supportRef: string;
+  protocol: string;
+  status: "active" | "closed" | string;
+  mode: string | null;
+  handoffStatus: "none" | "pending" | "active" | string;
+  createdAt: string;
+  updatedAt: string;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+};
+
+export type AppSupportMessage = {
+  id: string;
+  direction: "INBOUND" | "OUTBOUND";
+  bodyText: string | null;
+  createdAt: string;
+  status: string;
+  actorName: string | null;
+};
+
+export type AppSupportConversationDetail = {
+  ok: true;
+  conversation: AppSupportConversation;
+  messages: AppSupportMessage[];
+};
+
 export type AppInstagramBusinessStatus = {
   channelAccountId: string | null;
   externalAccountIds: string[];
@@ -2208,6 +2235,40 @@ export async function fetchAppConversationTimeline(
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/timeline${suffix}`);
+}
+
+export async function fetchAppSupportConversations(
+  session: AppSession
+): Promise<{ ok: true; conversations: AppSupportConversation[] }> {
+  return requestAppJson(session, "/app/support/conversations");
+}
+
+export async function openAppSupportConversation(
+  session: AppSession,
+  text: string
+): Promise<{ ok: true; conversation: AppSupportConversation; resumed: boolean }> {
+  return requestAppJson(session, "/app/support/conversations", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+}
+
+export async function fetchAppSupportConversation(
+  session: AppSession,
+  supportRef: string
+): Promise<AppSupportConversationDetail> {
+  return requestAppJson(session, `/app/support/conversations/${encodeURIComponent(supportRef)}`);
+}
+
+export async function sendAppSupportConversationMessage(
+  session: AppSession,
+  supportRef: string,
+  text: string
+): Promise<AppSupportConversationDetail> {
+  return requestAppJson(session, `/app/support/conversations/${encodeURIComponent(supportRef)}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
 }
 
 export async function sendAppConversationMessage(

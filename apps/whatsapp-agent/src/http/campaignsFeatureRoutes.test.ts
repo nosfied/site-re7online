@@ -45,6 +45,7 @@ const originalCwd = process.cwd();
 const prefix = `campaigns-feature-${process.pid}-${Date.now()}`;
 const safeTemplatePrefix = prefix.replace(/[^a-z0-9_]/gi, "_").toLowerCase();
 const businessAdminToken = `${prefix}-business-admin-token`;
+process.env.PLATFORM_SUPPORT_TENANT_KEY = process.env.PLATFORM_SUPPORT_TENANT_KEY || `${prefix}-support`;
 
 let tempRoot = "";
 let server: Server;
@@ -56,12 +57,14 @@ let businessClientId = "";
 let governmentClientId = "";
 let overrideClientId = "";
 let killSwitchClientId = "";
+let supportClientId = "";
 let businessAdmin: TestUser;
 let businessSupervisor: TestUser;
 let businessAgent: TestUser;
 let governmentAdmin: TestUser;
 let overrideAdmin: TestUser;
 let killSwitchAdmin: TestUser;
+let supportAdmin: TestUser;
 
 function getErrorCode(payload: ErrorPayload) {
   return typeof payload.error === "string" ? payload.error : payload.error?.code;
@@ -382,16 +385,27 @@ test.before(async () => {
     },
     select: { id: true, clientKey: true },
   });
+  const supportClient = await prisma.client.create({
+    data: {
+      clientKey: `${prefix}-support`,
+      name: "Campaigns Feature Support",
+      profile: "business",
+      features: { chatbot: true },
+    },
+    select: { id: true, clientKey: true },
+  });
 
   businessClientId = businessClient.id;
   governmentClientId = governmentClient.id;
   overrideClientId = overrideClient.id;
   killSwitchClientId = killSwitchClient.id;
+  supportClientId = supportClient.id;
   await writeTenants([
     businessClient.clientKey,
     governmentClient.clientKey,
     overrideClient.clientKey,
     killSwitchClient.clientKey,
+    supportClient.clientKey,
   ]);
 
   businessAdmin = await createUser({
@@ -423,6 +437,11 @@ test.before(async () => {
     clientId: killSwitchClientId,
     role: "ADMIN",
     suffix: "kill-switch-admin",
+  });
+  supportAdmin = await createUser({
+    clientId: supportClientId,
+    role: "ADMIN",
+    suffix: "support-admin",
   });
 
   handleRequest = (await import("./routes.js")).handleRequest;
@@ -512,6 +531,162 @@ test("campaign draft routes require authentication", async () => {
   const discard = await requestUnauth<ErrorPayload>("POST", "/app/campaigns/example/discard");
   assert.equal(discard.status, 401);
   assert.equal(getErrorCode(discard.body), "missing_token");
+});
+
+test("support hub uses configured support tenant and isolates requester conversations", async () => {
+  const { env } = await import("../config/env.js");
+  const originalSupportTenantKey = env.PLATFORM_SUPPORT_TENANT_KEY;
+  try {
+    env.PLATFORM_SUPPORT_TENANT_KEY = "";
+    const unavailable = await request<ErrorPayload>("GET", "/app/support/conversations", businessAdmin);
+    assert.equal(unavailable.status, 503);
+    assert.equal(getErrorCode(unavailable.body), "support_unavailable");
+    env.PLATFORM_SUPPORT_TENANT_KEY = `${prefix}-support`;
+
+    const agent = await request<ErrorPayload>("GET", "/app/support/conversations", businessAgent);
+    assert.equal(agent.status, 403);
+    assert.equal(getErrorCode(agent.body), "forbidden");
+
+    await prisma.chatbotFlow.create({
+      data: {
+        clientId: supportClientId,
+        name: "Support entry flow",
+        isActive: true,
+        entryPoint: true,
+        definition: {
+          start: "handoff",
+          nodes: {
+            handoff: {
+              type: "handoff",
+              text: "Vamos encaminhar para a equipe de suporte.",
+              handoffSummary: "Solicitacao aberta pelo hub de suporte.",
+            },
+          },
+        },
+      },
+    });
+
+    const created = await request<{
+      ok: true;
+      resumed: boolean;
+      conversation: { supportRef: string; protocol: string; status: string };
+    }>("POST", "/app/support/conversations", businessAdmin, {
+      text: "Preciso de ajuda com a configuracao.",
+      clientId: governmentClientId,
+      supportTenant: `${prefix}-government`,
+    });
+    assert.equal(created.status, 200, JSON.stringify(created.body));
+    assert.equal(created.body.resumed, false);
+    assert.match(created.body.conversation.protocol, /^CVT-/);
+    assert.ok(created.body.conversation.supportRef);
+
+    const supportConversation = await prisma.conversation.findFirst({
+      where: {
+        clientId: supportClientId,
+        channel: "support",
+        provider: "converta",
+      },
+      select: { id: true, waId: true, externalUserHash: true },
+    });
+    assert.ok(supportConversation);
+    assert.ok(supportConversation.waId.startsWith("support:"));
+
+    const sourceConversation = await prisma.conversation.findFirst({
+      where: {
+        clientId: businessClientId,
+        channel: "support",
+      },
+      select: { id: true },
+    });
+    assert.equal(sourceConversation, null);
+
+    const chatbotReply = await prisma.outboundMessage.findFirst({
+      where: {
+        clientId: supportClientId,
+        waId: supportConversation.waId,
+        channel: "support",
+        rawPayload: {
+          path: ["source"],
+          equals: "support_chatbot",
+        },
+      },
+      select: { bodyText: true },
+    });
+    assert.match(chatbotReply?.bodyText ?? "", /equipe de suporte/i);
+
+    const resumed = await request<{
+      ok: true;
+      resumed: boolean;
+      conversation: { supportRef: string };
+    }>("POST", "/app/support/conversations", businessAdmin, {
+      text: "Complementando o chamado.",
+    });
+    assert.equal(resumed.status, 200, JSON.stringify(resumed.body));
+    assert.equal(resumed.body.resumed, true);
+    assert.equal(resumed.body.conversation.supportRef, created.body.conversation.supportRef);
+
+    await prisma.conversationRuntimeState.updateMany({
+      where: { clientId: supportClientId, waId: supportConversation.waId },
+      data: {
+        mode: "HUMAN",
+        handoffStatus: "ACTIVE",
+        status: "IN_PROGRESS",
+        assignedUserId: supportAdmin.id,
+      },
+    });
+    const supportReply = await request<{
+      ok: true;
+      message: { bodyText: string | null; status: string };
+    }>("POST", `/app/conversation/${encodeURIComponent(supportConversation.waId)}/send`, supportAdmin, {
+      text: "Recebemos sua solicitacao.",
+    });
+    assert.equal(supportReply.status, 200, JSON.stringify(supportReply.body));
+    assert.equal(supportReply.body.message.status, "SENT");
+
+    const detail = await request<{
+      ok: true;
+      messages: Array<{ direction: string; bodyText: string | null }>;
+    }>("GET", `/app/support/conversations/${encodeURIComponent(created.body.conversation.supportRef)}`, businessAdmin);
+    assert.equal(detail.status, 200, JSON.stringify(detail.body));
+    assert.ok(detail.body.messages.some((item) => item.direction === "OUTBOUND" && item.bodyText === "Recebemos sua solicitacao."));
+
+    const otherUserDetail = await request<ErrorPayload>(
+      "GET",
+      `/app/support/conversations/${encodeURIComponent(created.body.conversation.supportRef)}`,
+      businessSupervisor
+    );
+    assert.equal(otherUserDetail.status, 404);
+    assert.equal(getErrorCode(otherUserDetail.body), "support_conversation_not_found");
+
+    const otherTenantDetail = await request<ErrorPayload>(
+      "GET",
+      `/app/support/conversations/${encodeURIComponent(created.body.conversation.supportRef)}`,
+      governmentAdmin
+    );
+    assert.equal(otherTenantDetail.status, 404);
+    assert.equal(getErrorCode(otherTenantDetail.body), "support_conversation_not_found");
+
+    await prisma.conversation.update({
+      where: { id: supportConversation.id },
+      data: { closedAt: new Date() },
+    });
+    await prisma.conversationRuntimeState.updateMany({
+      where: { clientId: supportClientId, waId: supportConversation.waId },
+      data: { closedAt: new Date(), status: "CLOSED" },
+    });
+    const reopened = await request<{
+      ok: true;
+      resumed: boolean;
+      conversation: { supportRef: string };
+    }>("POST", "/app/support/conversations", businessAdmin, {
+      text: "Novo chamado depois do encerramento.",
+    });
+    assert.equal(reopened.status, 200, JSON.stringify(reopened.body));
+    assert.equal(reopened.body.resumed, false);
+    assert.notEqual(reopened.body.conversation.supportRef, created.body.conversation.supportRef);
+  } finally {
+    env.PLATFORM_SUPPORT_TENANT_KEY = originalSupportTenantKey;
+  }
 });
 
 test("queue assignment settings are tenant scoped and admin protected", async () => {

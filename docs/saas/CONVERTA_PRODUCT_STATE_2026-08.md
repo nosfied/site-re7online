@@ -52,6 +52,16 @@ O Inbox concentra conversas operacionais por tenant. O fluxo atual inclui:
 
 Conversas removidas da operacao visivel ou anonimizadas nao devem voltar ao Inbox por reidratacao de dados antigos.
 
+## Support Hub
+
+O Support Hub permite que ADMIN e SUPERVISOR abram suporte com a equipe da plataforma sem criar `SupportTicket`, `Case`, fila paralela ou timeline paralela. A unidade continua sendo `Conversation`, criada no tenant de suporte configurado por `PLATFORM_SUPPORT_TENANT_KEY`.
+
+O frontend nunca envia tenant destino, `clientId`, WABA ou identificador de canal. O backend resolve tenant origem e usuario pela sessao, valida RBAC, resolve o tenant de suporte configurado e cria ou retoma uma conversa ativa por tenant origem + usuario. Conversas encerradas permanecem historicas e uma nova abertura cria nova `Conversation`.
+
+A identidade do solicitante no tenant de suporte e sintetica e deterministica, baseada em hash interno. O rotulo operacional pode exibir nome amigavel do tenant e usuario solicitante, mas nao transporta telefone, email, CRM, token, SID, IP ou payload sensivel do tenant origem.
+
+O atendimento da equipe da plataforma ocorre no Inbox normal do tenant de suporte, com chatbot, handoff, fila, protocolo e eventos ja existentes. O MVP suporta texto apenas; anexos, visao administrativa de todos os chamados do tenant cliente e SLA especifico de suporte permanecem evolucoes futuras.
+
 ## CRM operacional
 
 O CRM atual e um read model seguro de contatos/leads por tenant. Ele exibe dados minimizados e operacionais, como nome exibivel, identificador seguro, canal, classificacao, empresa quando houver, ultima conversa, status da conversa, ultima atualizacao, bloqueio de envio ativo e origem importada.

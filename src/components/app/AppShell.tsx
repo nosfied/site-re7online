@@ -505,6 +505,14 @@ export default function AppShell({
           {activeSession.user.name || activeSession.user.email}
         </p>
       </div>
+      {canViewAdministration ? (
+        <Link
+          href="/app/support"
+          className="theme-nav-link h-8 rounded-md border px-2.5 py-2 text-xs font-semibold leading-none min-[1441px]:h-9 min-[1441px]:text-sm"
+        >
+          Suporte
+        </Link>
+      ) : null}
       <button
         type="button"
         onClick={handleLogout}

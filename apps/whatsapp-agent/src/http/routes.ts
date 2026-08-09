@@ -299,6 +299,13 @@ import { createWebchatInboundMessage } from "../webchat/webchatInboundService.js
 import { createWebchatOutboundMessage } from "../webchat/webchatOutboundService.js";
 import { listWebchatMessages } from "../webchat/webchatPollingService.js";
 import {
+  createSupportAgentOutboundMessage,
+  getSupportConversation,
+  listSupportConversations,
+  openSupportConversation,
+  sendSupportConversationMessage,
+} from "../support/supportGateway.js";
+import {
   AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
   AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
   AI_ASSISTANT_GLOBAL_TOPIC_TERMS,
@@ -447,7 +454,7 @@ function escapeHtml(value: string) {
 
 function normalizeConversationRouteId(input: string) {
   const raw = input.trim();
-  if (/^(messenger|instagram|webchat):[a-f0-9]{16,64}$/i.test(raw)) {
+  if (/^(messenger|instagram|webchat|support):[a-f0-9:]{16,128}$/i.test(raw)) {
     return raw.toLowerCase();
   }
   return normalizeWaId(raw);
@@ -1871,6 +1878,118 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
     setValidatedClientAuth(req, validation.auth);
+  }
+
+  if (pathname === "/app/support/conversations" || pathname.startsWith("/app/support/conversations/")) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const [client, user] = await Promise.all([
+        prisma.client.findUnique({
+          where: { id: clientAuth.clientId },
+          select: { id: true, clientKey: true, name: true, status: true },
+        }),
+        prisma.user.findFirst({
+          where: { id: clientAuth.userId, clientId: clientAuth.clientId, isActive: true },
+          select: { id: true, name: true, role: true },
+        }),
+      ]);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!user) {
+        json(res, 401, httpError("unauthorized", "Sessao invalida."));
+        return;
+      }
+      const requester = {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        tenantName: client.name,
+        userId: user.id,
+        userName: user.name,
+        role: user.role,
+      };
+      if (pathname === "/app/support/conversations" && req.method === "GET") {
+        const result = await listSupportConversations({
+          prisma,
+          supportTenantKey: env.PLATFORM_SUPPORT_TENANT_KEY,
+          requester,
+        });
+        if (!result.ok) {
+          json(res, result.status, httpError(result.error, result.message));
+          return;
+        }
+        json(res, 200, result);
+        return;
+      }
+      if (pathname === "/app/support/conversations" && req.method === "POST") {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const result = await openSupportConversation({
+          prisma,
+          supportTenantKey: env.PLATFORM_SUPPORT_TENANT_KEY,
+          requestId,
+          requester,
+          text: (body as Record<string, unknown>).text,
+        });
+        if (!result.ok) {
+          json(res, result.status, httpError(result.error, result.message));
+          return;
+        }
+        json(res, 200, result);
+        return;
+      }
+      const supportMessageMatch = pathname.match(/^\/app\/support\/conversations\/([^/]+)\/messages$/);
+      if (supportMessageMatch && req.method === "POST") {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const result = await sendSupportConversationMessage({
+          prisma,
+          supportTenantKey: env.PLATFORM_SUPPORT_TENANT_KEY,
+          requestId,
+          requester,
+          supportRef: decodeURIComponent(supportMessageMatch[1] ?? ""),
+          text: (body as Record<string, unknown>).text,
+        });
+        if (!result.ok) {
+          json(res, result.status, httpError(result.error, result.message));
+          return;
+        }
+        json(res, 200, result);
+        return;
+      }
+      const supportDetailMatch = pathname.match(/^\/app\/support\/conversations\/([^/]+)$/);
+      if (supportDetailMatch && req.method === "GET") {
+        const result = await getSupportConversation({
+          prisma,
+          supportTenantKey: env.PLATFORM_SUPPORT_TENANT_KEY,
+          requester,
+          supportRef: decodeURIComponent(supportDetailMatch[1] ?? ""),
+        });
+        if (!result.ok) {
+          json(res, result.status, httpError(result.error, result.message));
+          return;
+        }
+        json(res, 200, result);
+        return;
+      }
+      json(res, 404, httpError("not_found", "Endpoint not found"));
+      return;
+    } catch (error) {
+      logger.error({
+        event: "app.support.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
   }
 
   if (req.method === "GET" && pathname === "/app/api-keys") {
@@ -5703,6 +5822,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                   requestId,
                   source: resolvedConversation.winner ?? undefined,
                 })
+              : resolvedChannel === "support"
+                ? await createSupportAgentOutboundMessage({
+                    prisma,
+                    waId: resolvedConversation.resolvedWaId,
+                    text,
+                    clientKey: client.clientKey,
+                    clientId: client.id,
+                    requestId,
+                    actorUserId: clientAuth.userId,
+                  })
               : resolvedChannel === "telegram"
                 ? await createTelegramOutboundMessage({
                     prisma,
@@ -20103,7 +20232,7 @@ function parseQuery(parsed: URL) {
   return query;
 }
 
-type ReportChannelFilter = "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | null;
+type ReportChannelFilter = "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "support" | null;
 
 function normalizeReportChannelFilter(rawValue: unknown): ReportChannelFilter {
   const normalized = String(rawValue ?? "").trim().toLowerCase();
@@ -20111,7 +20240,8 @@ function normalizeReportChannelFilter(rawValue: unknown): ReportChannelFilter {
     normalized === "messenger" ||
     normalized === "instagram" ||
     normalized === "webchat" ||
-    normalized === "telegram"
+    normalized === "telegram" ||
+    normalized === "support"
     ? normalized
     : null;
 }
@@ -20122,6 +20252,7 @@ function normalizeReportChannelLabel(rawValue?: string | null) {
   if (channel === "instagram") return { channel: "instagram" as const, channelName: "Instagram" };
   if (channel === "webchat") return { channel: "webchat" as const, channelName: "Webchat" };
   if (channel === "telegram") return { channel: "telegram" as const, channelName: "Telegram" };
+  if (channel === "support") return { channel: "support" as const, channelName: "Suporte" };
   if (channel === "whatsapp" || !channel) return { channel: "whatsapp" as const, channelName: "WhatsApp" };
   return { channel: "unknown" as const, channelName: "Desconhecido" };
 }
@@ -20607,7 +20738,7 @@ function buildConversationReportChannelSummary(metrics: Array<{ conversation: { 
   const byChannel = new Map<
     string,
     {
-      channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "unknown";
+      channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "support" | "unknown";
       channelName: string;
       conversations: number;
     }
@@ -24177,7 +24308,7 @@ async function resolveConversationTarget(
   }
 ) {
   const exactRawWaId = params.rawWaId.trim();
-  const syntheticRawWaId = /^(messenger|instagram|webchat):[a-f0-9]{16,64}$/i.test(exactRawWaId)
+  const syntheticRawWaId = /^(messenger|instagram|webchat|support):[a-f0-9:]{16,128}$/i.test(exactRawWaId)
     ? exactRawWaId.toLowerCase()
     : null;
   const lookup = buildWaIdLookup(params.rawWaId);
@@ -24671,7 +24802,7 @@ async function buildAppDashboardOverview(
 
 type ConversationListFilters = {
   status: ConversationOperationalStatus | null;
-  channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | null;
+  channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "support" | null;
   departmentId: string | null;
   assignedUserId: string | null;
   unassigned: boolean;
@@ -24827,7 +24958,8 @@ function normalizeConversationChannelFilter(value: unknown): ConversationListFil
     normalized === "messenger" ||
     normalized === "instagram" ||
     normalized === "webchat" ||
-    normalized === "telegram"
+    normalized === "telegram" ||
+    normalized === "support"
     ? normalized
     : null;
 }
@@ -24843,6 +24975,7 @@ function serializeInboxChannelFields(source?: {
     channel === "instagram" ||
     channel === "webchat" ||
     channel === "telegram" ||
+    channel === "support" ||
     channel === "whatsapp"
       ? channel
       : "whatsapp";
@@ -24863,7 +24996,8 @@ function isConversationOutboundBlocked(source?: { channel?: string | null } | nu
     channel !== "messenger" &&
     channel !== "instagram" &&
     channel !== "webchat" &&
-    channel !== "telegram"
+    channel !== "telegram" &&
+    channel !== "support"
   );
 }
 
@@ -24897,6 +25031,7 @@ function getConversationChannelOutboundEnabled(
   if (channelFields.channel === "webchat") {
     return features?.webchat === true && features?.webchatOutbound === true;
   }
+  if (channelFields.channel === "support") return true;
   return false;
 }
 

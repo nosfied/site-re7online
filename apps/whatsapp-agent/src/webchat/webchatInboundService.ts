@@ -524,7 +524,7 @@ async function resolveProtocolLookup(params: {
   };
 }
 
-async function runWebchatChatbotFlow(params: {
+export async function runWebchatChatbotFlow(params: {
   prisma: PrismaClient;
   requestId: string;
   clientId: string;
@@ -533,6 +533,7 @@ async function runWebchatChatbotFlow(params: {
   conversationId: string;
   waId: string;
   text: string;
+  channel?: "webchat" | "support";
   channelAccountId: string;
   externalUserHash: string;
   sessionId: string;
@@ -541,12 +542,14 @@ async function runWebchatChatbotFlow(params: {
   publishRealtimeEvent?: typeof publishRealtimeEvent;
 }) {
   if (!getFeatures(params.client).chatbot) return;
+  const channel = params.channel ?? "webchat";
+  const eventPrefix = channel === "support" ? "support" : "webchat";
 
   const runtimeState = await params.prisma.conversationRuntimeState.findFirst({
     where: {
       clientId: params.clientId,
       waId: params.waId,
-      channel: "webchat",
+      channel,
       provider: "converta",
       channelAccountId: params.channelAccountId,
     },
@@ -606,8 +609,8 @@ async function runWebchatChatbotFlow(params: {
 
   const validated = validateChatbotFlowDefinition(flow.definition);
   if (!validated.ok) {
-    logger.error({
-      event: "webchat.chatbot.definition.invalid",
+      logger.error({
+      event: `${eventPrefix}.chatbot.definition.invalid`,
       clientId: params.clientId,
       clientKey: params.clientKey,
       flowId: flow.id,
@@ -631,7 +634,7 @@ async function runWebchatChatbotFlow(params: {
   for (const event of result.events ?? []) {
     logger.info({
       ...event,
-      channel: "webchat",
+      channel,
       clientId: params.clientId,
       clientKey: params.clientKey,
       requestId: params.requestId,
@@ -695,7 +698,7 @@ async function runWebchatChatbotFlow(params: {
       })}`
     : outboundText;
   const outboundMessageId = outboundBodyText
-    ? `webchat.chatbot.${params.requestId}.${shortHash(`${params.waId}:${outboundAt.toISOString()}`, 16)}`
+    ? `${eventPrefix}.chatbot.${params.requestId}.${shortHash(`${params.waId}:${outboundAt.toISOString()}`, 16)}`
     : null;
   const nextAnswers = protocolLookup?.ok
     ? {
@@ -714,7 +717,7 @@ async function runWebchatChatbotFlow(params: {
       where: {
         clientId: params.clientId,
         waId: params.waId,
-        channel: "webchat",
+        channel,
         provider: "converta",
         channelAccountId: params.channelAccountId,
       },
@@ -759,7 +762,7 @@ async function runWebchatChatbotFlow(params: {
           waId: params.waId,
           waIdCanonical: params.waId,
           messageId: outboundMessageId,
-          channel: "webchat",
+          channel,
           provider: "converta",
           channelAccountId: params.channelAccountId,
           externalUserHash: params.externalUserHash,
@@ -773,7 +776,8 @@ async function runWebchatChatbotFlow(params: {
           metaMessageId: null,
           errorBody: null,
           rawPayload: {
-            source: "webchat_chatbot",
+            source: channel === "support" ? "support_chatbot" : "webchat_chatbot",
+            channel,
             flowId: flow.id,
             siteId: params.channelAccountId,
             sessionId: params.sessionId,
@@ -795,7 +799,7 @@ async function runWebchatChatbotFlow(params: {
         where: {
           clientId: params.clientId,
           waId: params.waId,
-          channel: "webchat",
+          channel,
           channelAccountId: params.channelAccountId,
         },
         data: { lastOutboundAt: outboundAt },
@@ -824,7 +828,7 @@ async function runWebchatChatbotFlow(params: {
         waIdCanonical: params.waId,
         messageId: outboundMessageId ?? undefined,
         requestId: params.requestId,
-        eventName: protocolLookup ? "webchat.protocol.lookup" : pendingHandoff ? "webchat.chatbot.handoff_triggered" : "webchat.chatbot.handled",
+        eventName: protocolLookup ? `${eventPrefix}.protocol.lookup` : pendingHandoff ? `${eventPrefix}.chatbot.handoff_triggered` : `${eventPrefix}.chatbot.handled`,
         payloadJson: {
           flowId: flow.id,
           nodeId: result.state.chatbotNodeId ?? null,
