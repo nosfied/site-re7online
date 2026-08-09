@@ -2139,6 +2139,7 @@ export default function AppInboxPage() {
   const [savingLeadNote, setSavingLeadNote] = useState(false);
   const [messageDraft, setMessageDraft] = useState("");
   const [replyTarget, setReplyTarget] = useState<InboxReplyTarget | null>(null);
+  const [openMessageActionsId, setOpenMessageActionsId] = useState<string | null>(null);
   const [selectedMediaFile, setSelectedMediaFile] = useState<File | null>(null);
   const [audioRecordingState, setAudioRecordingState] = useState<"idle" | "recording" | "stopping">(
     "idle"
@@ -2308,6 +2309,7 @@ export default function AppInboxPage() {
     setContactTimelineItems([]);
     setContactTimelineCursor(null);
     setContactTimelineError(null);
+    setOpenMessageActionsId(null);
   }, []);
 
   const loadContactTimeline = useCallback(
@@ -2373,7 +2375,26 @@ export default function AppInboxPage() {
     handleCloseTemplateModal();
     handleCloseCannedModal();
     setReplyTarget(null);
+    setOpenMessageActionsId(null);
   }, [handleCloseCannedModal, handleCloseContactTimeline, handleCloseTemplateModal, selectedConversationWaId]);
+
+  useEffect(() => {
+    if (!openMessageActionsId) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-message-actions-root]")) return;
+      setOpenMessageActionsId(null);
+    };
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setOpenMessageActionsId(null);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openMessageActionsId]);
 
   const dismissInboxFeedback = useCallback(() => {
     setError(null);
@@ -6778,6 +6799,22 @@ export default function AppInboxPage() {
                     : item.actor?.source === "human_inbox"
                       ? item.actor.displayName
                       : null;
+                const messageActions =
+                  replyOption && selectedConversationSupportsTemplateOutbound
+                    ? [
+                        {
+                          id: "mark",
+                          label: "Marcar mensagem",
+                          onSelect: () => {
+                            setReplyTarget(replyOption);
+                            setOpenMessageActionsId(null);
+                            focusComposer();
+                          },
+                        },
+                      ]
+                    : [];
+                const hasMessageActions = messageActions.length > 0;
+                const messageActionsOpen = openMessageActionsId === messageIdentity;
                 return (
                   <Fragment key={messageIdentity}>
                     {isUnreadAnchor ? (
@@ -6799,12 +6836,89 @@ export default function AppInboxPage() {
                       className={`flex ${item.direction === "INBOUND" ? "justify-start" : "justify-end"}`}
                     >
                       <article
-                        className={`wa-bubble transition ${
+                        className={`wa-bubble relative transition ${
                           item.direction === "INBOUND" ? "wa-bubble-inbound" : "wa-bubble-outbound"
-                        } ${item.media?.kind === "audio" ? "min-w-[19rem]" : ""} ${
+                        } ${hasMessageActions ? "pr-9" : ""} ${item.media?.kind === "audio" ? "min-w-[19rem]" : ""} ${
                           isHighlightedReference ? "ring-2 ring-amber-400 ring-offset-2 ring-offset-[#efe6d7]" : ""
                         }`}
                       >
+                        {hasMessageActions ? (
+                          <div
+                            className="absolute right-1.5 top-1.5 z-20"
+                            data-message-actions-root="true"
+                          >
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setOpenMessageActionsId((current) =>
+                                  current === messageIdentity ? null : messageIdentity
+                                );
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "ArrowDown") {
+                                  event.preventDefault();
+                                  setOpenMessageActionsId(messageIdentity);
+                                }
+                              }}
+                              className={`message-actions-trigger inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-300/60 bg-white/65 text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 ${
+                                messageActionsOpen ? "opacity-100" : ""
+                              }`}
+                              title="Ações da mensagem"
+                              aria-label="Ações da mensagem"
+                              aria-haspopup="menu"
+                              aria-expanded={messageActionsOpen}
+                            >
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 24 24"
+                                className="h-3.5 w-3.5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="m6 9 6 6 6-6" />
+                              </svg>
+                            </button>
+                            {messageActionsOpen ? (
+                              <div
+                                role="menu"
+                                aria-label="Ações da mensagem"
+                                className="absolute right-0 top-7 min-w-44 rounded-lg border border-slate-200 bg-white p-1 text-sm text-slate-800 shadow-xl"
+                              >
+                                {messageActions.map((action) => (
+                                  <button
+                                    key={action.id}
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      action.onSelect();
+                                    }}
+                                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left font-medium transition hover:bg-slate-100 focus:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+                                  >
+                                    <svg
+                                      aria-hidden="true"
+                                      viewBox="0 0 24 24"
+                                      className="h-4 w-4 text-slate-500"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <path d="m9 14-5-5 5-5" />
+                                      <path d="M4 9h10a6 6 0 0 1 6 6v1" />
+                                    </svg>
+                                    <span>{action.label}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                         {item.replyTo ? (
                           <button
                             type="button"
@@ -6854,38 +6968,10 @@ export default function AppInboxPage() {
                             <span>Modelo: {item.templateName}</span>
                           </div>
                         ) : null}
-                        <div className="mt-2 flex items-center justify-end gap-1.5 text-[11px] text-slate-600">
-                          {replyOption && selectedConversationSupportsTemplateOutbound ? (
-                            <div className="mr-auto flex items-center">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setReplyTarget(replyOption);
-                                  focusComposer();
-                                }}
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-300/70 bg-white/55 text-slate-600 transition hover:bg-white hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
-                                title="Marcar mensagem"
-                                aria-label="Marcar mensagem"
-                              >
-                                <svg
-                                  aria-hidden="true"
-                                  viewBox="0 0 24 24"
-                                  className="h-3.5 w-3.5"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <path d="m9 14-5-5 5-5" />
-                                  <path d="M4 9h10a6 6 0 0 1 6 6v1" />
-                                </svg>
-                              </button>
-                            </div>
-                          ) : null}
-                          <span>{formatDateTime(item.createdAt)}</span>
-                          {statusTicks}
-                        </div>
+	                        <div className="mt-2 flex items-center justify-end gap-1.5 text-[11px] text-slate-600">
+	                          <span>{formatDateTime(item.createdAt)}</span>
+	                          {statusTicks}
+	                        </div>
                       </article>
                     </div>
                   </Fragment>

@@ -886,6 +886,21 @@ html {
     color: rgba(68, 61, 53, 0.72);
   }
 
+  .message-actions-trigger {
+    opacity: 0.72;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .message-actions-trigger {
+      opacity: 0;
+    }
+
+    .wa-bubble:hover .message-actions-trigger,
+    .wa-bubble:focus-within .message-actions-trigger {
+      opacity: 0.82;
+    }
+  }
+
   .wa-composer-shell {
     background: linear-gradient(180deg, rgba(244, 236, 224, 0.98), rgba(237, 228, 215, 0.94));
   }
