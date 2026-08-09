@@ -13,6 +13,7 @@ import {
   revokeContactOptOut,
 } from "../campaigns/optOutRegistry.js";
 import { getPrisma } from "../db.js";
+import { MessageStatus, MessageType } from "@prisma/client";
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "campaigns-feature-route-test-secret";
 process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || "campaigns-feature-route-test-admin-token";
@@ -1597,6 +1598,218 @@ test("session audit report is tenant scoped, role protected and sanitized", asyn
   assert.doesNotMatch(csv.text, /sensitive-ip-hash/i);
   assert.doesNotMatch(csv.text, /Sensitive browser/i);
   assert.doesNotMatch(csv.text, new RegExp(otherTenantSessionId));
+});
+
+test("conversation reports separate human message activity from assignment metrics", async () => {
+  const periodFrom = new Date("2030-02-01T00:00:00.000Z");
+  const periodTo = new Date("2030-02-02T00:00:00.000Z");
+  const conversationA = await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId: `${prefix}-report-wa-a`,
+      waIdCanonical: `${prefix}-report-wa-a`,
+      channel: "whatsapp",
+      provider: "meta",
+      createdAt: new Date("2030-02-01T08:00:00.000Z"),
+    },
+    select: { id: true, waId: true },
+  });
+  const conversationB = await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId: `${prefix}-report-wa-b`,
+      waIdCanonical: `${prefix}-report-wa-b`,
+      channel: "whatsapp",
+      provider: "meta",
+      createdAt: new Date("2030-02-01T09:00:00.000Z"),
+    },
+    select: { id: true, waId: true },
+  });
+  await prisma.conversationMetrics.createMany({
+    data: [
+      {
+        conversationId: conversationA.id,
+        clientId: businessClientId,
+        startedAt: new Date("2030-02-01T08:00:00.000Z"),
+        firstResponseTimeSec: 30,
+        totalResponseTimeSec: 60,
+        responseCount: 2,
+        resolutionTimeSec: 300,
+      },
+      {
+        conversationId: conversationB.id,
+        clientId: businessClientId,
+        startedAt: new Date("2030-02-01T09:00:00.000Z"),
+        firstResponseTimeSec: 45,
+        totalResponseTimeSec: 90,
+        responseCount: 3,
+        resolutionTimeSec: 600,
+      },
+    ],
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId: conversationA.waId,
+      waIdCanonical: conversationA.waId,
+      channel: "whatsapp",
+      provider: "meta",
+      mode: "HUMAN",
+      status: "IN_PROGRESS",
+      assignedUserId: businessSupervisor.id,
+      assignedTo: businessSupervisor.name,
+      assignedAt: new Date("2030-02-01T08:05:00.000Z"),
+      assignments: {
+        create: {
+          toUserId: businessSupervisor.id,
+          assignedAt: new Date("2030-02-01T08:05:00.000Z"),
+        },
+      },
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId: conversationB.waId,
+      waIdCanonical: conversationB.waId,
+      channel: "whatsapp",
+      provider: "meta",
+      mode: "HUMAN",
+      status: "WAITING",
+      assignedUserId: businessSupervisor.id,
+      assignedTo: businessSupervisor.name,
+      assignedAt: new Date("2030-02-01T09:05:00.000Z"),
+      assignments: {
+        create: {
+          toUserId: businessSupervisor.id,
+          assignedAt: new Date("2030-02-01T09:05:00.000Z"),
+        },
+      },
+    },
+  });
+  await prisma.outboundMessage.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        waId: conversationA.waId,
+        waIdCanonical: conversationA.waId,
+        messageId: `${prefix}-human-agent-1`,
+        type: MessageType.TEXT,
+        status: MessageStatus.SENT,
+        bodyText: "human message one",
+        rawPayload: { actor: { source: "human_inbox", userId: businessAgent.id } },
+        createdAt: new Date("2030-02-01T10:00:00.000Z"),
+      },
+      {
+        clientId: businessClientId,
+        waId: conversationA.waId,
+        waIdCanonical: conversationA.waId,
+        messageId: `${prefix}-human-agent-2`,
+        type: MessageType.TEXT,
+        status: MessageStatus.SENT,
+        bodyText: "human message two",
+        rawPayload: { actor: { source: "human_inbox", userId: businessAgent.id } },
+        createdAt: new Date("2030-02-01T10:10:00.000Z"),
+      },
+      {
+        clientId: businessClientId,
+        waId: conversationB.waId,
+        waIdCanonical: conversationB.waId,
+        messageId: `${prefix}-human-supervisor-1`,
+        type: MessageType.TEXT,
+        status: MessageStatus.SENT,
+        bodyText: "human message three",
+        rawPayload: { actor: { source: "human_inbox", userId: businessSupervisor.id } },
+        createdAt: periodFrom,
+      },
+      {
+        clientId: businessClientId,
+        waId: conversationA.waId,
+        waIdCanonical: conversationA.waId,
+        messageId: `${prefix}-outside-period`,
+        type: MessageType.TEXT,
+        status: MessageStatus.SENT,
+        bodyText: "outside period",
+        rawPayload: { actor: { source: "human_inbox", userId: businessAgent.id } },
+        createdAt: new Date("2030-01-31T23:59:59.000Z"),
+      },
+      {
+        clientId: businessClientId,
+        waId: conversationA.waId,
+        waIdCanonical: conversationA.waId,
+        messageId: `${prefix}-bot-message`,
+        type: MessageType.TEXT,
+        status: MessageStatus.SENT,
+        bodyText: "bot message",
+        rawPayload: { actor: { source: "bot", userId: businessAgent.id } },
+        createdAt: new Date("2030-02-01T10:20:00.000Z"),
+      },
+      {
+        clientId: businessClientId,
+        waId: conversationA.waId,
+        waIdCanonical: conversationA.waId,
+        messageId: `${prefix}-campaign-message`,
+        type: MessageType.TEMPLATE,
+        status: MessageStatus.SENT,
+        bodyText: "campaign message",
+        rawPayload: { source: "campaign" },
+        createdAt: new Date("2030-02-01T10:30:00.000Z"),
+      },
+      {
+        clientId: businessClientId,
+        waId: conversationA.waId,
+        waIdCanonical: conversationA.waId,
+        messageId: `${prefix}-historical-no-actor`,
+        type: MessageType.TEXT,
+        status: MessageStatus.SENT,
+        bodyText: "historical message",
+        rawPayload: { source: "admin_inbox" },
+        createdAt: new Date("2030-02-01T10:40:00.000Z"),
+      },
+      {
+        clientId: governmentClientId,
+        waId: `${prefix}-other-tenant-wa`,
+        waIdCanonical: `${prefix}-other-tenant-wa`,
+        messageId: `${prefix}-other-tenant-message`,
+        type: MessageType.TEXT,
+        status: MessageStatus.SENT,
+        bodyText: "other tenant message",
+        rawPayload: { actor: { source: "human_inbox", userId: businessAgent.id } },
+        createdAt: new Date("2030-02-01T10:50:00.000Z"),
+      },
+    ],
+  });
+
+  const response = await request<{
+    ok: true;
+    agentMessageActivity: Array<{ userId: string; userName: string | null; outboundMessages: number }>;
+    assignedConversationsByAgent: Array<{ userId: string; conversations: number; avgResponseTimeSec: number | null }>;
+    byAgent: Array<{ userId: string; conversations: number; avgResponseTimeSec: number | null }>;
+    notes: string[];
+  }>(
+    "GET",
+    `/app/reports/conversations?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&clientId=malicious`,
+    businessAdmin
+  );
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  const activityByUser = new Map(
+    response.body.agentMessageActivity.map((item) => [item.userId, item.outboundMessages])
+  );
+  assert.equal(activityByUser.get(businessAgent.id), 2);
+  assert.equal(activityByUser.get(businessSupervisor.id), 1);
+  assert.equal(activityByUser.has(governmentAdmin.id), false);
+  assert.equal(response.body.agentMessageActivity.length, 2);
+
+  const assignmentsByUser = new Map(
+    response.body.assignedConversationsByAgent.map((item) => [item.userId, item.conversations])
+  );
+  assert.equal(assignmentsByUser.get(businessSupervisor.id), 2);
+  assert.equal(assignmentsByUser.has(businessAgent.id), false);
+  assert.deepEqual(response.body.byAgent, response.body.assignedConversationsByAgent);
+  assert.equal(
+    response.body.notes.some((note) => note.includes("mensagens historicas anteriores")),
+    true
+  );
 });
 
 test("auth session events are persisted with sanitized payloads", async () => {

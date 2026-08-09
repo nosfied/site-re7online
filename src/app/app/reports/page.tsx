@@ -46,6 +46,9 @@ const REPORT_CHANNELS = [
   { value: "instagram", label: "Instagram" },
 ] as const;
 
+const AGENT_ACTIVITY_HISTORY_NOTE =
+  "Mensagens por atendente utiliza autoria persistida no momento do envio; mensagens historicas anteriores a captura de autoria podem nao ser atribuiveis.";
+
 function canAccessReports(role: string) {
   const normalized = role.trim().toUpperCase();
   return normalized === "SUPERVISOR" || normalized === "ADMIN";
@@ -432,8 +435,19 @@ export default function AppReportsPage() {
           )
           .join("")
       : `<tr><td colspan="3">Nenhum dado por setor.</td></tr>`;
-    const byAgentRows = report.byAgent.length
-      ? report.byAgent
+    const agentActivityRows = report.agentMessageActivity?.length
+      ? report.agentMessageActivity
+          .map(
+            (item) => `
+              <tr>
+                <td>${escapeHtml(item.userName ?? userNameById.get(item.userId) ?? item.userId)}</td>
+                <td>${escapeHtml(item.outboundMessages)}</td>
+              </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="2">Nenhuma mensagem humana atribuivel no periodo selecionado.</td></tr>`;
+    const assignedConversationRows = (report.assignedConversationsByAgent ?? report.byAgent).length
+      ? (report.assignedConversationsByAgent ?? report.byAgent)
           .map(
             (item) => `
               <tr>
@@ -443,7 +457,7 @@ export default function AppReportsPage() {
               </tr>`
           )
           .join("")
-      : `<tr><td colspan="3">Nenhum dado por atendente.</td></tr>`;
+      : `<tr><td colspan="3">Nenhuma conversa atribuida por atendente no periodo selecionado.</td></tr>`;
     const byChannelRows = report.byChannel?.length
       ? report.byChannel
           .map(
@@ -560,8 +574,11 @@ export default function AppReportsPage() {
           <table><thead><tr><th>Canal</th><th>Conversas</th></tr></thead><tbody>${byChannelRows}</tbody></table>
           <h2>Por setor</h2>
           <table><thead><tr><th>Setor</th><th>Conversas</th><th>Tempo medio de resposta</th></tr></thead><tbody>${byDepartmentRows}</tbody></table>
-          <h2>Por atendente</h2>
-          <table><thead><tr><th>Atendente</th><th>Conversas</th><th>Tempo medio de resposta</th></tr></thead><tbody>${byAgentRows}</tbody></table>
+          <h2>Atividade dos atendentes</h2>
+          <p>${escapeHtml(AGENT_ACTIVITY_HISTORY_NOTE)}</p>
+          <table><thead><tr><th>Atendente</th><th>Mensagens enviadas</th></tr></thead><tbody>${agentActivityRows}</tbody></table>
+          <h2>Distribuicao operacional</h2>
+          <table><thead><tr><th>Atendente</th><th>Conversas atribuidas</th><th>Tempo medio de resposta</th></tr></thead><tbody>${assignedConversationRows}</tbody></table>
           <footer>Converta - Central Inteligente de Atendimento e Vendas. Relatorio gerado para uso operacional interno.</footer>
         </body>
       </html>`;
@@ -1052,20 +1069,55 @@ export default function AppReportsPage() {
 
       <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
         <div className="border-b border-white/10 px-4 py-3">
-          <h2 className="text-sm font-semibold">Por atendente</h2>
+          <h2 className="text-sm font-semibold">Atividade dos atendentes</h2>
+          <p className="mt-1 max-w-3xl text-xs text-white/60">{AGENT_ACTIVITY_HISTORY_NOTE}</p>
         </div>
-        {report?.byAgent.length ? (
+        {report?.agentMessageActivity?.length ? (
+          <table className="w-full min-w-[520px] text-sm">
+            <thead className="bg-white/10 text-left">
+              <tr>
+                <th className="px-3 py-2">Atendente</th>
+                <th className="px-3 py-2">User ID</th>
+                <th className="px-3 py-2">Mensagens enviadas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.agentMessageActivity.map((item) => (
+                <tr key={item.userId} className="border-t border-white/10">
+                  <td className="px-3 py-2">{item.userName ?? userNameById.get(item.userId) ?? "-"}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{item.userId}</td>
+                  <td className="px-3 py-2">{item.outboundMessages}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="p-4 text-sm text-white/70">
+            Nenhuma mensagem humana atribuivel no periodo selecionado.
+          </p>
+        )}
+      </section>
+
+      <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
+        <div className="border-b border-white/10 px-4 py-3">
+          <h2 className="text-sm font-semibold">Conversas atribuídas por atendente</h2>
+          <p className="mt-1 max-w-3xl text-xs text-white/60">
+            Baseado na atribuicao operacional da conversa. Mede distribuicao e responsabilidade atual/historica,
+            nao mensagens efetivamente enviadas.
+          </p>
+        </div>
+        {(report?.assignedConversationsByAgent ?? report?.byAgent ?? []).length ? (
           <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-white/10 text-left">
               <tr>
                 <th className="px-3 py-2">Atendente</th>
                 <th className="px-3 py-2">User ID</th>
-                <th className="px-3 py-2">Conversas</th>
+                <th className="px-3 py-2">Conversas atribuidas</th>
                 <th className="px-3 py-2">Tempo medio de resposta</th>
               </tr>
             </thead>
             <tbody>
-              {report.byAgent.map((item) => (
+              {(report?.assignedConversationsByAgent ?? report?.byAgent ?? []).map((item) => (
                 <tr key={item.userId} className="border-t border-white/10">
                   <td className="px-3 py-2">{userNameById.get(item.userId) ?? "-"}</td>
                   <td className="px-3 py-2 font-mono text-xs">{item.userId}</td>
@@ -1076,7 +1128,9 @@ export default function AppReportsPage() {
             </tbody>
           </table>
         ) : (
-          <p className="p-4 text-sm text-white/70">Nenhum dado por atendente no periodo selecionado.</p>
+          <p className="p-4 text-sm text-white/70">
+            Nenhuma conversa atribuida por atendente no periodo selecionado.
+          </p>
         )}
       </section>
     </AppShell>

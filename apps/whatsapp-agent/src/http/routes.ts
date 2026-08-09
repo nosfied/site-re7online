@@ -8880,8 +8880,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             avgResolutionTimeSec: null,
           },
           slaBreaches: 0,
+          agentMessageActivity: [],
+          assignedConversationsByAgent: [],
           byAgent: [],
           byDepartment: [],
+          notes: [
+            "Mensagens por atendente utiliza autoria persistida no momento do envio; mensagens historicas anteriores a captura de autoria podem nao ser atribuiveis.",
+          ],
         });
         return;
       }
@@ -8914,6 +8919,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const filteredMetrics = dedupe
         ? dedupeConversationReportMetrics(userFilteredMetrics, reportData.leadIdentityByWaId)
         : userFilteredMetrics;
+      const agentMessageActivity = await loadConversationReportAgentMessageActivity(prisma, {
+        clientId: client.id,
+        since: range.since,
+        until: range.until,
+        requestedUserId: requestedUserId || null,
+        allowedWaIds:
+          requestedDepartmentId || requestedQueueId || channelFilter
+            ? Array.from(new Set(queueFilteredMetrics.map((item) => item.conversation.waId)))
+            : null,
+      });
       json(
         res,
         200,
@@ -8930,6 +8945,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           stateByWaId: reportData.stateByWaId,
           slaConfig: reportData.slaConfig,
           departmentNameById: reportData.departmentNameById,
+          agentMessageActivity,
         })
       );
       logger.info({
@@ -20222,6 +20238,65 @@ async function loadConversationReportData(
   };
 }
 
+async function loadConversationReportAgentMessageActivity(
+  prisma: ReturnType<typeof getPrisma>,
+  options: {
+    clientId: string;
+    since: Date;
+    until?: Date | null;
+    requestedUserId: string | null;
+    allowedWaIds?: string[] | null;
+  }
+) {
+  const waIdFilter = options.allowedWaIds ? Array.from(new Set(options.allowedWaIds)) : null;
+  if (waIdFilter && !waIdFilter.length) return [];
+  const outboundMessages = await prisma.outboundMessage.findMany({
+    where: {
+      clientId: options.clientId,
+      status: MessageStatus.SENT,
+      createdAt: {
+        gte: options.since,
+        ...(options.until ? { lte: options.until } : {}),
+      },
+      ...(waIdFilter ? { waId: { in: waIdFilter } } : {}),
+    },
+    select: {
+      rawPayload: true,
+    },
+  });
+  const countsByUserId = new Map<string, number>();
+  for (const outbound of outboundMessages) {
+    const actor = extractOutboundActorPayload(outbound.rawPayload);
+    if (!actor?.userId) continue;
+    if (options.requestedUserId && actor.userId !== options.requestedUserId) continue;
+    countsByUserId.set(actor.userId, (countsByUserId.get(actor.userId) ?? 0) + 1);
+  }
+  if (!countsByUserId.size) return [];
+  const users = await prisma.user.findMany({
+    where: {
+      clientId: options.clientId,
+      id: { in: Array.from(countsByUserId.keys()) },
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+  const userNameById = new Map(users.map((user) => [user.id, user.name]));
+  return Array.from(countsByUserId.entries())
+    .map(([userId, outboundMessages]) => ({
+      userId,
+      userName: userNameById.get(userId) ?? null,
+      outboundMessages,
+    }))
+    .sort((left, right) => {
+      if (right.outboundMessages !== left.outboundMessages) {
+        return right.outboundMessages - left.outboundMessages;
+      }
+      return (left.userName ?? left.userId).localeCompare(right.userName ?? right.userId);
+    });
+}
+
 function buildConversationReportSummary(options: {
   rangeKey: "1d" | "7d" | "30d" | "month" | "custom";
   periodFrom: Date;
@@ -20250,6 +20325,7 @@ function buildConversationReportSummary(options: {
   stateByWaId: ReturnType<typeof buildReportRuntimeStateMap>;
   slaConfig: { firstResponseLimitSec: number; resolutionTimeLimitSec: number } | null;
   departmentNameById: Map<string, string>;
+  agentMessageActivity: Array<{ userId: string; userName: string | null; outboundMessages: number }>;
 }) {
   const totalConversations = options.filteredMetrics.length;
   const firstResponseValues = options.filteredMetrics
@@ -20292,14 +20368,14 @@ function buildConversationReportSummary(options: {
     })),
     options.filteredMetrics.map((item) => options.stateByWaId.get(item.conversation.waId) ?? {})
   );
-  const byAgentMap = new Map<
+  const assignedConversationsByAgentMap = new Map<
     string,
     { userId: string; conversations: number; totalResponseTimeSec: number; responseCount: number }
   >();
   for (const item of options.filteredMetrics) {
     const assignedUserIds = options.stateByWaId.get(item.conversation.waId)?.assignedUserIds ?? [];
     for (const assignedUserId of assignedUserIds) {
-      const current = byAgentMap.get(assignedUserId) ?? {
+      const current = assignedConversationsByAgentMap.get(assignedUserId) ?? {
         userId: assignedUserId,
         conversations: 0,
         totalResponseTimeSec: 0,
@@ -20308,7 +20384,7 @@ function buildConversationReportSummary(options: {
       current.conversations += 1;
       current.totalResponseTimeSec += item.totalResponseTimeSec ?? 0;
       current.responseCount += item.responseCount ?? 0;
-      byAgentMap.set(assignedUserId, current);
+      assignedConversationsByAgentMap.set(assignedUserId, current);
     }
   }
   const byDepartmentMap = new Map<
@@ -20361,6 +20437,12 @@ function buildConversationReportSummary(options: {
       closedAt: "closedAt" in item && item.closedAt instanceof Date ? item.closedAt.toISOString() : null,
     };
   });
+  const assignedConversationsByAgent = Array.from(assignedConversationsByAgentMap.values()).map((item) => ({
+    userId: item.userId,
+    conversations: item.conversations,
+    avgResponseTimeSec:
+      item.responseCount > 0 ? Math.round(item.totalResponseTimeSec / item.responseCount) : null,
+  }));
   return {
     ok: true,
     range: options.rangeKey,
@@ -20378,12 +20460,9 @@ function buildConversationReportSummary(options: {
     avgResolutionTimeSec,
     slaOperational,
     slaBreaches,
-    byAgent: Array.from(byAgentMap.values()).map((item) => ({
-      userId: item.userId,
-      conversations: item.conversations,
-      avgResponseTimeSec:
-        item.responseCount > 0 ? Math.round(item.totalResponseTimeSec / item.responseCount) : null,
-    })),
+    agentMessageActivity: options.agentMessageActivity,
+    assignedConversationsByAgent,
+    byAgent: assignedConversationsByAgent,
     byDepartment: Array.from(byDepartmentMap.values()).map((item) => ({
       departmentId: item.departmentId,
       departmentName: item.departmentName,
@@ -20393,6 +20472,9 @@ function buildConversationReportSummary(options: {
     })),
     byChannel: buildConversationReportChannelSummary(options.filteredMetrics),
     conversations,
+    notes: [
+      "Mensagens por atendente utiliza autoria persistida no momento do envio; mensagens historicas anteriores a captura de autoria podem nao ser atribuiveis.",
+    ],
   };
 }
 

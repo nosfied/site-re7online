@@ -313,6 +313,12 @@ export type ConversationReportByAgentItem = {
   avgResponseTimeSec: number | null;
 };
 
+export type ConversationReportAgentMessageActivityItem = {
+  userId: string;
+  userName: string | null;
+  outboundMessages: number;
+};
+
 export type ConversationReportByDepartmentItem = {
   departmentId: string | null;
   departmentName: string | null;
@@ -364,10 +370,13 @@ export type ConversationReportResponse = {
     avgResolutionTimeSec: number | null;
   };
   slaBreaches: number;
+  agentMessageActivity?: ConversationReportAgentMessageActivityItem[];
+  assignedConversationsByAgent?: ConversationReportByAgentItem[];
   byAgent: ConversationReportByAgentItem[];
   byDepartment: ConversationReportByDepartmentItem[];
   byChannel?: ConversationReportByChannelItem[];
   conversations?: ConversationReportConversationItem[];
+  notes?: string[];
 };
 
 export type OpsMetricLabels = Record<string, string>;

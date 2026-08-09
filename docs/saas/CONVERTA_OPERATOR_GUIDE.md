@@ -124,6 +124,16 @@ Campos principais:
 
 O CSV segue a mesma minimizacao da tela: nao exporta token, IP bruto, hash de IP, user agent, fingerprint ou identificadores de dispositivo.
 
+## Relatorio Atividade dos atendentes
+
+Em `Relatorios`, a secao `Atividade dos atendentes` conta mensagens outbound enviadas por humanos no periodo selecionado. A fonte e a autoria persistida no momento do envio em `OutboundMessage.rawPayload.actor.userId`.
+
+Essa metrica nao conta bot, automacao, campanha, mensagem pronta sem autoria preservada ou historico antigo sem ator. Mensagens historicas anteriores a captura de autoria podem nao ser atribuiveis.
+
+A secao `Conversas atribuidas por atendente` tem outro significado: ela mede distribuicao operacional de conversas por `ConversationRuntimeState` e `ConversationAssignment`. Nao use essa secao como produtividade individual nem como substituto de mensagens realmente enviadas.
+
+Fechamentos por atendente e SLA por responsavel so devem ser usados quando houver evidencia confiavel de snapshot no momento do fechamento ou da atribuicao. Na ausencia desse snapshot, ficam como melhoria P2 e nao devem ser inferidos por responsavel atual.
+
 ## O que nao fazer
 
 - Nao enviar campanhas sem revisar audiencia.
