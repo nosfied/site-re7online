@@ -3325,6 +3325,210 @@ test("inbox canned reply sends only in open owned WhatsApp conversations", async
   assert.equal(JSON.stringify(usagePayload).includes(waId), false);
 });
 
+test("agent signature is tenant-scoped and applies only to human text and canned replies", async (t) => {
+  const waId = "5541991177881";
+  const templateWaId = "5541991177882";
+  const canned = await request<{ ok: true; item: { id: string; body: string } }>(
+    "POST",
+    "/app/canned-replies",
+    businessAdmin,
+    {
+      title: "Assinada",
+      body: "Vou verificar sua solicitacao.",
+    }
+  );
+  assert.equal(canned.status, 201);
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `signed_template_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Ola {{1}}, seu atendimento continua.",
+    },
+  });
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    create: {
+      clientId: businessClientId,
+      businessToken: "test-agent-signature-token",
+      phoneNumberId: `phone-signature-${safeTemplatePrefix}`,
+      rawPayload: {},
+    },
+    update: {
+      businessToken: "test-agent-signature-token",
+      phoneNumberId: `phone-signature-${safeTemplatePrefix}`,
+      rawPayload: {},
+    },
+  });
+  t.after(async () => {
+    const existing = await prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: businessClientId },
+      select: { config: true },
+    });
+    const existingConfig =
+      existing?.config && typeof existing.config === "object" && !Array.isArray(existing.config)
+        ? (existing.config as Record<string, unknown>)
+        : {};
+    await prisma.tenantOperationalConfig.upsert({
+      where: { clientId: businessClientId },
+      create: {
+        clientId: businessClientId,
+        config: { agentSignature: { enabled: false, mode: "user_name", format: "bold_line" } },
+      },
+      update: {
+        config: { ...existingConfig, agentSignature: { enabled: false, mode: "user_name", format: "bold_line" } },
+      },
+    });
+  });
+
+  for (const currentWaId of [waId, templateWaId]) {
+    await prisma.conversation.create({
+      data: {
+        clientId: businessClientId,
+        waId: currentWaId,
+        waIdCanonical: currentWaId,
+        channel: "whatsapp",
+        provider: "meta",
+        windowIsOpen: true,
+        windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+      },
+    });
+    await prisma.conversationRuntimeState.create({
+      data: {
+        clientId: businessClientId,
+        waId: currentWaId,
+        waIdCanonical: currentWaId,
+        conversationKey: `${prefix}-business:${currentWaId}`,
+        channel: "whatsapp",
+        provider: "meta",
+        windowIsOpen: true,
+        windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        mode: "HUMAN",
+        status: "IN_PROGRESS",
+        assignedUserId: businessAdmin.id,
+        assignedTo: businessAdmin.name,
+        lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+      },
+    });
+  }
+
+  const defaultSettings = await request<{
+    ok: true;
+    settings: { enabled: boolean; mode: string; format: string };
+    permissions: { canUpdate: boolean };
+  }>("GET", "/app/settings/agent-signature", businessSupervisor);
+  assert.equal(defaultSettings.status, 200);
+  assert.equal(defaultSettings.body.settings.enabled, false);
+  assert.equal(defaultSettings.body.permissions.canUpdate, false);
+
+  const agentSettings = await request<ErrorPayload>("GET", "/app/settings/agent-signature", businessAgent);
+  assert.equal(agentSettings.status, 403);
+
+  const updatedSettings = await request<{
+    ok: true;
+    settings: { enabled: boolean; mode: string; format: string };
+  }>("PUT", "/app/settings/agent-signature?clientId=malicious", businessAdmin, {
+    enabled: true,
+    mode: "ignored",
+    format: "ignored",
+  });
+  assert.equal(updatedSettings.status, 200);
+  assert.deepEqual(updatedSettings.body.settings, { enabled: true, mode: "user_name", format: "bold_line" });
+
+  const governmentSettings = await request<{ ok: true; settings: { enabled: boolean } }>(
+    "GET",
+    "/app/settings/agent-signature",
+    governmentAdmin
+  );
+  assert.equal(governmentSettings.status, 200);
+  assert.equal(governmentSettings.body.settings.enabled, false);
+
+  const originalFetch = globalThis.fetch;
+  const metaPayloads: unknown[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaPayloads.push(JSON.parse(String(init?.body ?? "{}")));
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.signature.${metaPayloads.length}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const freeText = await request<{
+    ok: true;
+    message: {
+      bodyText: string;
+      agentSignatureApplied: boolean;
+      agentSignatureFormat: string | null;
+    };
+  }>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+    text: "Ola, vou verificar.",
+  });
+  assert.equal(freeText.status, 200, JSON.stringify(freeText.body));
+  assert.equal(freeText.body.message.bodyText, `*${businessAdmin.name}*\nOla, vou verificar.`);
+  assert.equal(freeText.body.message.agentSignatureApplied, true);
+  assert.equal(freeText.body.message.agentSignatureFormat, "bold_line");
+  assert.equal((metaPayloads[0] as { text?: { body?: string } }).text?.body, freeText.body.message.bodyText);
+
+  const cannedResponse = await request<{
+    ok: true;
+    message: {
+      bodyText: string;
+      agentSignatureApplied: boolean;
+      agentSignatureFormat: string | null;
+    };
+  }>("POST", `/app/conversation/${waId}/send-canned-reply`, businessAdmin, {
+    cannedReplyId: canned.body.item.id,
+  });
+  assert.equal(cannedResponse.status, 200, JSON.stringify(cannedResponse.body));
+  assert.equal(cannedResponse.body.message.bodyText, `*${businessAdmin.name}*\n${canned.body.item.body}`);
+  assert.equal(cannedResponse.body.message.agentSignatureApplied, true);
+  assert.equal((metaPayloads[1] as { text?: { body?: string } }).text?.body, cannedResponse.body.message.bodyText);
+
+  const storedCanned = await request<{ ok: true; items: Array<{ id: string; body: string }> }>(
+    "GET",
+    "/app/canned-replies",
+    businessAdmin
+  );
+  assert.equal(storedCanned.body.items.find((item) => item.id === canned.body.item.id)?.body, canned.body.item.body);
+
+  const templateResponse = await request<{
+    ok: true;
+    message: {
+      bodyText: string;
+      agentSignatureApplied?: boolean;
+    };
+  }>("POST", `/app/conversation/${templateWaId}/send-template`, businessAdmin, {
+    templateId: template.id,
+    variables: { "1": "Maria" },
+  });
+  assert.equal(templateResponse.status, 200, JSON.stringify(templateResponse.body));
+  assert.equal(templateResponse.body.message.bodyText, "Ola Maria, seu atendimento continua.");
+  assert.equal(templateResponse.body.message.agentSignatureApplied ?? false, false);
+  assert.equal((metaPayloads[2] as { template?: { name?: string } }).template?.name, template.name);
+
+  const signedOutbounds = await prisma.outboundMessage.findMany({
+    where: { clientId: businessClientId, waId, messageId: { startsWith: "admin.send." } },
+    orderBy: { createdAt: "asc" },
+  });
+  assert.equal(signedOutbounds.length, 2);
+  for (const outbound of signedOutbounds) {
+    const rawPayload = outbound.rawPayload as Record<string, unknown>;
+    assert.equal(rawPayload.agentSignatureApplied, true);
+    assert.equal(rawPayload.agentSignatureFormat, "bold_line");
+    assert.equal(JSON.stringify(rawPayload).includes(businessAdmin.email), false);
+  }
+});
+
 test("inbox canned reply blocks closed, inactive, opt-out and anonymized conversations", async () => {
   const closedWaId = "5541991177812";
   const inactiveWaId = "5541991177813";

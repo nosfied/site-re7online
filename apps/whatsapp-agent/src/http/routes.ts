@@ -36,6 +36,7 @@ import {
   applyAiIntentQualificationToTenant,
   resolveAiAssistantConfigSettings,
   resolveAiIntentQualificationSettings,
+  resolveAgentSignatureSettings,
   resolveCrmBusinessStatuses,
   resolveAutomationFlagsSettings,
   resolveFollowUpSettings,
@@ -45,6 +46,7 @@ import {
   resolvePlanLimitsSettings,
   saveAiAssistantConfigSettings,
   saveAiIntentQualificationSettings,
+  saveAgentSignatureSettings,
   saveAutomationFlagsSettings,
   saveCrmBusinessStatuses,
   saveFollowUpSettings,
@@ -53,11 +55,13 @@ import {
   savePlanLimitsSettings,
   type AiAssistantConfigSettings,
   type AiIntentQualificationSettings,
+  type AgentSignatureSettings,
   type AutomationFlagsSettings,
   type HandoffLeadNotificationSettings,
   type FollowUpSettings,
   type PlanLimitsSettings,
 } from "../config/tenantOperationalConfig.js";
+import { applyAgentSignature } from "../inbox/agentSignature.js";
 import { checkRateLimit } from "./rateLimit.js";
 import {
   fetchMediaContent,
@@ -5483,10 +5487,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           metaMessageId: result.metaMessageId,
           createdAt: result.createdAt,
           type: "TEXT",
-          bodyText: buildContextualOutboundText(cannedReply.body, resolvedReplyContext?.mode ?? "reply"),
+          bodyText: result.bodyText,
           source: "canned_reply",
           cannedReplyId: cannedReply.id,
           cannedReplyTitle: cannedReply.title,
+          agentSignatureApplied: result.agentSignatureApplied,
+          agentSignatureFormat: result.agentSignatureFormat,
           replyTo: serializeContextualReplyForClient(resolvedReplyContext),
           actor: {
             source: "human_inbox",
@@ -5823,6 +5829,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           status: result.status,
           metaMessageId: result.metaMessageId,
           createdAt: result.createdAt,
+          bodyText: "bodyText" in result ? result.bodyText : null,
+          agentSignatureApplied: "agentSignatureApplied" in result ? result.agentSignatureApplied : false,
+          agentSignatureFormat: "agentSignatureFormat" in result ? result.agentSignatureFormat : null,
           replyTo: serializeContextualReplyForClient(resolvedReplyContext),
           actor: {
             source: "human_inbox",
@@ -6231,6 +6240,96 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.queue_assignment.settings.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (pathname === "/app/settings/agent-signature" && (req.method === "GET" || req.method === "PUT")) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can view agent signature settings."));
+        return;
+      }
+      if (req.method === "PUT" && !isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can update agent signature settings."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+
+      if (req.method === "GET") {
+        const { settings, source } = await resolveAgentSignatureSettings({
+          prisma,
+          clientId: client.id,
+        });
+        json(res, 200, {
+          ok: true,
+          tenantId: client.clientKey,
+          settings,
+          source,
+          preview: {
+            bodyText: "*Maria*\nOla, como posso ajudar?",
+          },
+          permissions: {
+            canUpdate: isAdminRole(clientAuth.role),
+          },
+        });
+        return;
+      }
+
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const record = body as Record<string, unknown>;
+      const settings: AgentSignatureSettings = {
+        enabled: record.enabled === true,
+        mode: "user_name",
+        format: "bold_line",
+      };
+      const saved = await saveAgentSignatureSettings({
+        prisma,
+        clientId: client.id,
+        settings,
+      });
+      await persistEvent({
+        clientId: client.id,
+        requestId: `${requestId}:agent-signature-updated`,
+        eventName: "agent_signature.settings_updated",
+        payloadJson: {
+          actorUserId: clientAuth.userId,
+          enabled: saved.settings.enabled,
+          mode: saved.settings.mode,
+          format: saved.settings.format,
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        settings: saved.settings,
+        source: "db",
+        preview: {
+          bodyText: "*Maria*\nOla, como posso ajudar?",
+        },
+        permissions: {
+          canUpdate: true,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.agent_signature.settings.error",
         message: (error as Error).message,
         requestId,
       });
@@ -26002,6 +26101,8 @@ async function buildConversationDetailPayload(
             }
           : null,
         actor: serializeOutboundActorForClient(actor, actorDisplayNameByUserId),
+        agentSignatureApplied: extractOutboundAgentSignatureMetadata(item.rawPayload).applied,
+        agentSignatureFormat: extractOutboundAgentSignatureMetadata(item.rawPayload).format,
         rawPayload: params.includeRaw ? item.rawPayload : undefined,
       };
     }),
@@ -27487,6 +27588,19 @@ function extractOutboundActorPayload(rawPayload: unknown):
   return { source, userId };
 }
 
+function extractOutboundAgentSignatureMetadata(rawPayload: unknown): {
+  applied: boolean;
+  format: "bold_line" | null;
+} {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return { applied: false, format: null };
+  }
+  const record = rawPayload as Record<string, unknown>;
+  const applied = record.agentSignatureApplied === true;
+  const format = record.agentSignatureFormat === "bold_line" ? "bold_line" : null;
+  return { applied, format: applied ? format : null };
+}
+
 function serializeOutboundActorForClient(
   actor: ReturnType<typeof extractOutboundActorPayload>,
   displayNameByUserId: Map<string, string>
@@ -27581,6 +27695,9 @@ async function adminSendMessage(params: {
       internalMessageId: string | null;
       metaMessageId: string | null;
       createdAt: string;
+      bodyText: string;
+      agentSignatureApplied: boolean;
+      agentSignatureFormat: "bold_line" | null;
     }
   | { ok: false; statusCode: number; error: string; errorPayload?: { code: string; message: string; details: string } }
 > {
@@ -27621,9 +27738,29 @@ async function adminSendMessage(params: {
   }
 
   const outboundText = buildContextualOutboundText(params.text, params.reply?.mode ?? "reply");
+  const [actorUser, agentSignatureSettings] = params.actorUserId
+    ? await Promise.all([
+        getPrisma().user.findFirst({
+          where: { id: params.actorUserId, clientId: params.clientId, isActive: true },
+          select: { name: true },
+        }),
+        resolveAgentSignatureSettings({
+          prisma: getPrisma(),
+          clientId: params.clientId,
+        }),
+      ])
+    : [null, null] as const;
+  const signedBody = applyAgentSignature({
+    bodyText: outboundText,
+    actorDisplayName: actorUser?.name ?? null,
+    settings: agentSignatureSettings?.settings ?? null,
+  });
+  if (!signedBody.ok) {
+    return { ok: false, statusCode: 400, error: "message_too_long" };
+  }
   const sendResult = await sendTextMessage(
     params.waId,
-    outboundText,
+    signedBody.bodyText,
     {
       accessToken: credentials.accessToken,
       phoneNumberId: credentials.phoneNumberId,
@@ -27659,7 +27796,7 @@ async function adminSendMessage(params: {
     messageId,
     type: "TEXT",
     status,
-    bodyText: outboundText,
+    bodyText: signedBody.bodyText,
     requestId: params.requestId,
     metaMessageId: sendResult.messageId ?? null,
     errorBody: sendResult.errorBody ?? null,
@@ -27673,6 +27810,8 @@ async function adminSendMessage(params: {
             },
           }
         : {}),
+      agentSignatureApplied: signedBody.signatureApplied,
+      agentSignatureFormat: signedBody.signatureFormat,
       cannedReplyId: params.cannedReplyId ?? null,
       ...(params.reply ? { contextualReply: serializeContextualReplyPayload(params.reply) } : {}),
       ...(params.reply && sendResult.requestDiagnostic
@@ -27749,6 +27888,9 @@ async function adminSendMessage(params: {
     internalMessageId: persistedOutbound?.id ?? null,
     metaMessageId: sendResult.messageId ?? null,
     createdAt,
+    bodyText: signedBody.bodyText,
+    agentSignatureApplied: signedBody.signatureApplied,
+    agentSignatureFormat: signedBody.signatureFormat,
   };
 }
 

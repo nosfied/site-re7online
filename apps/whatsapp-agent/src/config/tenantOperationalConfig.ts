@@ -21,6 +21,7 @@ export type TenantOperationalConfigValue = {
   templates?: {
     manualHandoff?: string;
   };
+  agentSignature?: AgentSignatureSettings;
   followUp?: FollowUpSettings;
   handoffLeadNotification?: HandoffLeadNotificationSettings;
   mediaHandoffPolicy?: TenantMediaHandoffPolicy;
@@ -129,6 +130,17 @@ export type ResolvedAiIntentQualificationSettings = {
   source: TenantOperationalConfigSource;
 };
 
+export type AgentSignatureSettings = {
+  enabled: boolean;
+  mode: "user_name";
+  format: "bold_line";
+};
+
+export type ResolvedAgentSignatureSettings = {
+  settings: AgentSignatureSettings;
+  source: TenantOperationalConfigSource;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -161,6 +173,23 @@ function normalizeTemplateLang(input: unknown, fallback?: string | null) {
   const fallbackValue = typeof fallback === "string" ? fallback.trim() : "";
   if (/^[a-z]{2}_[A-Z]{2}$/.test(fallbackValue)) return fallbackValue;
   return env.OUTBOUND_TEMPLATE_DEFAULT_LANG;
+}
+
+export function getDefaultAgentSignatureSettings(): AgentSignatureSettings {
+  return {
+    enabled: false,
+    mode: "user_name",
+    format: "bold_line",
+  };
+}
+
+export function normalizeAgentSignatureSettings(input: unknown): AgentSignatureSettings {
+  const record = isRecord(input) ? input : {};
+  return {
+    enabled: record.enabled === true,
+    mode: "user_name",
+    format: "bold_line",
+  };
 }
 
 function normalizeFollowUpSettings(input: unknown, fallbackTenant?: Pick<TenantConfig, "defaultLanguage"> | null): FollowUpSettings {
@@ -408,6 +437,9 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
       config.templates = { manualHandoff };
     }
   }
+  if (Object.prototype.hasOwnProperty.call(value, "agentSignature")) {
+    config.agentSignature = normalizeAgentSignatureSettings(value.agentSignature);
+  }
   if (Object.prototype.hasOwnProperty.call(value, "followUp")) {
     config.followUp = normalizeFollowUpSettings(value.followUp);
   }
@@ -451,6 +483,63 @@ export async function resolveCrmBusinessStatuses(params: {
   return {
     statuses: normalizeCrmBusinessStatuses(params.tenant?.crmBusinessStatuses),
     source: "json_fallback",
+  };
+}
+
+export async function resolveAgentSignatureSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+}): Promise<ResolvedAgentSignatureSettings> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const dbConfig = parseOperationalConfig(record?.config);
+  return {
+    settings: dbConfig.agentSignature ?? getDefaultAgentSignatureSettings(),
+    source: dbConfig.agentSignature ? "db" : "json_fallback",
+  };
+}
+
+export async function saveAgentSignatureSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  settings: Partial<AgentSignatureSettings>;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const currentSettings = parseOperationalConfig(existing?.config).agentSignature ?? getDefaultAgentSignatureSettings();
+  const nextSettings = normalizeAgentSignatureSettings({
+    ...currentSettings,
+    ...params.settings,
+  });
+  const nextConfig = {
+    ...existingConfig,
+    agentSignature: nextSettings,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+    },
+  });
+  return {
+    record: saved,
+    settings: nextSettings,
   };
 }
 

@@ -63,6 +63,8 @@ export type InboxMessageItem = {
     userId?: string | null;
     displayName?: string | null;
   } | null;
+  agentSignatureApplied?: boolean;
+  agentSignatureFormat?: "bold_line" | string | null;
   errorBody: string | null;
   createdAt: string;
 };

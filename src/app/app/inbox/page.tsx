@@ -428,9 +428,25 @@ function canMarkMessageAsReference(item: InboxMessageItem) {
 }
 
 function getReplyPreviewText(item: InboxMessageItem) {
-  const text = item.bodyText?.replace(/\s+/g, " ").trim();
+  const text = getMessageBodyTextForDisplay(item).replace(/\s+/g, " ").trim();
   if (text) return text.length > 120 ? `${text.slice(0, 117)}...` : text;
   return `[${getMessageContentLabel(item)}]`;
+}
+
+function sanitizeAgentSignatureDisplayName(value: string | null | undefined) {
+  const collapsed = value?.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim() ?? "";
+  if (!collapsed) return null;
+  const sanitized = collapsed.replace(/[*_~`]+/g, "").trim();
+  return sanitized || null;
+}
+
+function getMessageBodyTextForDisplay(item: InboxMessageItem) {
+  const bodyText = item.bodyText ?? "";
+  if (!item.agentSignatureApplied || item.agentSignatureFormat !== "bold_line") return bodyText;
+  const displayName = sanitizeAgentSignatureDisplayName(item.actor?.displayName ?? null);
+  if (!displayName) return bodyText;
+  const prefix = `*${displayName}*\n`;
+  return bodyText.startsWith(prefix) ? bodyText.slice(prefix.length) : bodyText;
 }
 
 function getTruncatedReferenceText(value: string | null | undefined, maxLength = 72) {
@@ -4525,7 +4541,9 @@ export default function AppInboxPage() {
               type: "TEXT",
               status: response.message.status,
               intent: null,
-              bodyText: next.text,
+              bodyText: response.message.bodyText ?? next.text,
+              agentSignatureApplied: response.message.agentSignatureApplied ?? false,
+              agentSignatureFormat: response.message.agentSignatureFormat ?? null,
               media: null,
               templateName: null,
               templateLang: null,
@@ -4571,7 +4589,7 @@ export default function AppInboxPage() {
                         type: "TEXT",
                         status: response.message.status,
                         messageId: response.message.messageId,
-                        bodyText: next.text,
+                        bodyText: response.message.bodyText ?? next.text,
                         templateName: null,
                         createdAt: response.message.createdAt,
                       },
@@ -4881,6 +4899,8 @@ export default function AppInboxPage() {
         status: response.message.status,
         intent: null,
         bodyText: response.message.bodyText,
+        agentSignatureApplied: response.message.agentSignatureApplied ?? false,
+        agentSignatureFormat: response.message.agentSignatureFormat ?? null,
         media: null,
         templateName: response.message.templateName,
         templateLang: response.message.templateLang,
@@ -4914,6 +4934,8 @@ export default function AppInboxPage() {
                     status: response.message.status,
                     messageId: response.message.messageId,
                     bodyText: response.message.bodyText,
+                    agentSignatureApplied: response.message.agentSignatureApplied ?? false,
+                    agentSignatureFormat: response.message.agentSignatureFormat ?? null,
                     templateName: response.message.templateName,
                     createdAt: response.message.createdAt,
                   },
@@ -5029,6 +5051,8 @@ export default function AppInboxPage() {
         status: response.message.status,
         intent: null,
         bodyText: response.message.bodyText,
+        agentSignatureApplied: response.message.agentSignatureApplied ?? false,
+        agentSignatureFormat: response.message.agentSignatureFormat ?? null,
         media: null,
         templateName: null,
         templateLang: null,
@@ -6799,9 +6823,9 @@ export default function AppInboxPage() {
                             {senderLabel}
                           </p>
                         ) : null}
-                        {item.bodyText ? (
+                        {getMessageBodyTextForDisplay(item) ? (
                           <p className="wa-bubble-text text-sm leading-relaxed">
-                            {item.bodyText}
+                            {getMessageBodyTextForDisplay(item)}
                           </p>
                         ) : item.media || item.location ? null : isUnsupportedMessage(item) ? (
                           <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-900">

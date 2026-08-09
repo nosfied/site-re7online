@@ -70,6 +70,21 @@ No Inbox:
 - o envio exige clique explicito;
 - com janela fechada, a interface orienta usar modelo aprovado.
 
+## Assinatura do atendente
+
+Em `Configuracoes > Atendimento`, administradores podem ativar a assinatura do atendente por tenant. Por padrao, ela fica desativada.
+
+Quando ativa, mensagens humanas de texto e mensagens prontas enviadas pelo Inbox recebem o nome profissional do atendente no inicio do texto enviado ao cliente:
+
+```text
+*Maria*
+Ola, como posso ajudar?
+```
+
+Essa assinatura faz parte da mesma mensagem enviada pelo WhatsApp. Ela nao cria mensagem adicional, nao altera mensagens antigas e nao se aplica automaticamente a modelos Meta, bot, automacoes ou campanhas.
+
+O nome do atendente e dado pessoal. Use apenas o nome profissional cadastrado e ative o recurso conforme a politica operacional do tenant.
+
 ## Campanhas
 
 Campanhas devem seguir o fluxo seguro:

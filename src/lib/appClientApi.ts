@@ -40,6 +40,25 @@ export type AppSession = {
   profile: AppProfile;
 };
 
+export type AppAgentSignatureSettings = {
+  enabled: boolean;
+  mode: "user_name";
+  format: "bold_line";
+};
+
+export type AppAgentSignatureSettingsResponse = {
+  ok: true;
+  tenantId: string;
+  settings: AppAgentSignatureSettings;
+  source: "db" | "json_fallback";
+  preview: {
+    bodyText: string;
+  };
+  permissions: {
+    canUpdate: boolean;
+  };
+};
+
 export type AppInboxReadState = {
   lastReadAtByConversationKey: Record<string, string>;
   manuallyUnreadByConversationKey: Record<string, boolean>;
@@ -2203,6 +2222,9 @@ export async function sendAppConversationMessage(
     status: string;
     metaMessageId: string | null;
     createdAt: string;
+    bodyText?: string | null;
+    agentSignatureApplied?: boolean;
+    agentSignatureFormat?: "bold_line" | string | null;
     replyTo?: InboxMessageItem["replyTo"];
     actor?: InboxMessageItem["actor"];
   };
@@ -2228,6 +2250,8 @@ export async function sendAppConversationTemplate(
     bodyText: string | null;
     templateName: string;
     templateLang: string | null;
+    agentSignatureApplied?: boolean;
+    agentSignatureFormat?: "bold_line" | string | null;
     actor?: InboxMessageItem["actor"];
   };
 }> {
@@ -2254,6 +2278,8 @@ export async function sendAppConversationCannedReply(
     source: "canned_reply";
     cannedReplyId: string;
     cannedReplyTitle: string;
+    agentSignatureApplied?: boolean;
+    agentSignatureFormat?: "bold_line" | string | null;
     replyTo?: InboxMessageItem["replyTo"];
     actor?: InboxMessageItem["actor"];
   };
@@ -2572,6 +2598,22 @@ export async function updateAppQueueAssignmentSettings(
   return requestAppJson(session, "/app/settings/queue-assignment", {
     method: "PUT",
     body: JSON.stringify(policy),
+  });
+}
+
+export async function fetchAppAgentSignatureSettings(
+  session: AppSession
+): Promise<AppAgentSignatureSettingsResponse> {
+  return requestAppJson(session, "/app/settings/agent-signature");
+}
+
+export async function updateAppAgentSignatureSettings(
+  session: AppSession,
+  settings: AppAgentSignatureSettings
+): Promise<AppAgentSignatureSettingsResponse> {
+  return requestAppJson(session, "/app/settings/agent-signature", {
+    method: "PUT",
+    body: JSON.stringify(settings),
   });
 }
 

@@ -45,6 +45,7 @@ O Inbox concentra conversas operacionais por tenant. O fluxo atual inclui:
 - resposta livre quando a janela do canal permite;
 - envio de modelo aprovado pelo WhatsApp quando a janela livre esta fechada;
 - uso de mensagens prontas ativas quando permitido;
+- assinatura opcional do atendente em mensagens humanas de texto e mensagens prontas, desativada por padrao e configurada por tenant;
 - indicacao visual de conversas atribuidas ao operador atual ou a outro responsavel;
 - exibicao de outbound de modelo como mensagem na timeline, com badge `Template` e nome do modelo;
 - preservacao de isolamento entre tenants.
@@ -108,6 +109,8 @@ O fluxo atual permite:
 - busca e insercao no campo do Inbox;
 - envio explicito apenas quando a janela do canal permitir;
 - bloqueio quando a conversa estiver fechada, anonima, removida da operacao, em opt-out ou em canal incompatavel.
+
+Quando a assinatura do atendente esta ativa em `TenantOperationalConfig.config.agentSignature`, o texto enviado ao cliente inclui o nome profissional do operador no inicio da mensagem pronta. O conteudo armazenado da mensagem pronta nao e alterado.
 
 ## Opt-out e bloqueio de envio ativo
 
