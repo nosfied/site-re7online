@@ -6570,6 +6570,14 @@ export default function AppInboxPage() {
                 const isUnreadAnchor = unreadAnchorMessageIdentity
                   ? unreadAnchorMessageIdentity === messageIdentity
                   : unreadSeparatorIndex === index;
+                const senderLabel =
+                  item.direction === "INBOUND"
+                    ? selectedConversation
+                      ? getConversationLabel(selectedConversation)
+                      : null
+                    : item.actor?.source === "human_inbox"
+                      ? item.actor.displayName
+                      : null;
                 return (
                   <Fragment key={messageIdentity}>
                     {isUnreadAnchor ? (
@@ -6610,11 +6618,9 @@ export default function AppInboxPage() {
                             <p className="mt-0.5 line-clamp-2 break-words">{getTimelineReplyPreview(item)}</p>
                           </button>
                         ) : null}
-                        {item.direction === "OUTBOUND" &&
-                        item.actor?.source === "human_inbox" &&
-                        item.actor.displayName ? (
+                        {senderLabel ? (
                           <p className="mb-1 text-[11px] font-medium leading-none text-slate-500">
-                            {item.actor.displayName}
+                            {senderLabel}
                           </p>
                         ) : null}
                         {item.bodyText ? (
@@ -6671,12 +6677,8 @@ export default function AppInboxPage() {
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
                                 >
-                                  <path d="M3 11c0-3.3 2.7-6 6-6h2" />
-                                  <path d="M3 11c0 3.3 2.7 6 6 6h1" />
-                                  <path d="m8 8 3 3-3 3" />
-                                  <path d="M14 7h7" />
-                                  <path d="M14 12h7" />
-                                  <path d="M14 17h5" />
+                                  <path d="m9 14-5-5 5-5" />
+                                  <path d="M4 9h10a6 6 0 0 1 6 6v1" />
                                 </svg>
                               </button>
                             </div>
