@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
+import { APP_AUTH_SESSION_TTL_MS, getEffectiveAppAuthSessionExpiresAt } from "../auth/sessionPolicy.js";
 
-export type SessionAuditStatus = "OPEN" | "CLOSED";
+export type SessionAuditStatus = "OPEN" | "CLOSED" | "EXPIRED";
 
 export type SessionAuditFilters = {
   clientId: string;
@@ -51,6 +52,7 @@ export function normalizeSessionAuditStatus(input: unknown): SessionAuditStatus 
   if (!value) return null;
   if (value === "OPEN" || value === "ACTIVE") return "OPEN";
   if (value === "CLOSED") return "CLOSED";
+  if (value === "EXPIRED") return "EXPIRED";
   return null;
 }
 
@@ -66,6 +68,8 @@ export function buildSessionEndReasonLabel(reason: string | null | undefined) {
   if (!normalized) return "Encerramento nao registrado";
   if (normalized === "logout") return "Logout explicito";
   if (normalized === "replaced_by_new_login") return "Substituida por novo login";
+  if (normalized === "session_renewed") return "Renovada";
+  if (normalized === "session_expired") return "Expirada";
   if (normalized === "password_reset") return "Revogada apos redefinicao de senha";
   return normalized.replace(/[_-]+/g, " ");
 }
@@ -89,21 +93,38 @@ function normalizeLimit(input?: number | null) {
   return Math.min(MAX_LIMIT, Math.floor(value));
 }
 
-function buildWhere(params: SessionAuditFilters): Prisma.AppAuthSessionWhereInput {
-  return {
-    clientId: params.clientId,
-    createdAt: {
-      gte: params.from,
-      lte: params.to,
+function buildWhere(params: SessionAuditFilters, now = new Date()): Prisma.AppAuthSessionWhereInput {
+  const legacyExpiryCutoff = new Date(now.getTime() - APP_AUTH_SESSION_TTL_MS);
+  const and: Prisma.AppAuthSessionWhereInput[] = [
+    {
+      clientId: params.clientId,
+      createdAt: {
+        gte: params.from,
+        lte: params.to,
+      },
     },
-    ...(params.userId ? { userId: params.userId } : {}),
-    ...(params.role ? { user: { role: params.role } } : {}),
-    ...(params.status === "OPEN"
-      ? { revokedAt: null }
-      : params.status === "CLOSED"
-        ? { revokedAt: { not: null } }
-        : {}),
-  };
+  ];
+  if (params.userId) and.push({ userId: params.userId });
+  if (params.role) and.push({ user: { role: params.role } });
+  if (params.status === "OPEN") {
+    and.push({ revokedAt: null }, { expiresAt: { gt: now } }, { createdAt: { gt: legacyExpiryCutoff } });
+  } else if (params.status === "CLOSED") {
+    and.push(
+      { revokedAt: { not: null } },
+      { OR: [{ revokeReason: null }, { revokeReason: { not: "session_expired" } }] }
+    );
+  } else if (params.status === "EXPIRED") {
+    and.push({
+      OR: [
+        { revokeReason: "session_expired" },
+        {
+          revokedAt: null,
+          OR: [{ expiresAt: { lte: now } }, { createdAt: { lte: legacyExpiryCutoff } }],
+        },
+      ],
+    });
+  }
+  return { AND: and };
 }
 
 export async function buildSessionAuditReport(
@@ -112,7 +133,8 @@ export async function buildSessionAuditReport(
 ): Promise<SessionAuditReportResponse> {
   const page = normalizePage(params.page);
   const limit = normalizeLimit(params.limit);
-  const where = buildWhere(params);
+  const now = new Date();
+  const where = buildWhere(params, now);
   const [total, sessions] = await Promise.all([
     prisma.appAuthSession.count({ where }),
     prisma.appAuthSession.findMany({
@@ -124,6 +146,7 @@ export async function buildSessionAuditReport(
         id: true,
         userId: true,
         createdAt: true,
+        expiresAt: true,
         lastSeenAt: true,
         revokedAt: true,
         revokeReason: true,
@@ -138,7 +161,12 @@ export async function buildSessionAuditReport(
     }),
   ]);
   const items = sessions.map((session): SessionAuditReportItem => {
-    const status: SessionAuditStatus = session.revokedAt ? "CLOSED" : "OPEN";
+    const effectiveExpiresAt = getEffectiveAppAuthSessionExpiresAt({
+      createdAt: session.createdAt,
+      expiresAt: session.expiresAt,
+    });
+    const isExpired = session.revokeReason === "session_expired" || (!session.revokedAt && effectiveExpiresAt <= now);
+    const status: SessionAuditStatus = isExpired ? "EXPIRED" : session.revokedAt ? "CLOSED" : "OPEN";
     const reasonLabel = buildSessionEndReasonLabel(session.revokeReason);
     return {
       id: session.id,
@@ -150,7 +178,7 @@ export async function buildSessionAuditReport(
       endReason: session.revokeReason ?? null,
       endReasonLabel: reasonLabel,
       status,
-      statusLabel: status === "OPEN" ? "Aberta" : "Encerrada",
+      statusLabel: status === "OPEN" ? "Aberta" : status === "EXPIRED" ? "Expirada" : "Encerrada",
       durationObservedSec: formatObservedDurationSeconds(session.createdAt, session.revokedAt),
       lastSeenAt: session.lastSeenAt?.toISOString() ?? null,
     };
@@ -171,7 +199,7 @@ export async function buildSessionAuditReport(
       "Relatorio de auditoria operacional de acesso/sessao; nao e controle de ponto.",
       "Sessoes abertas nao significam presenca online ou jornada de trabalho.",
       "Ultima atividade observada vem de atividade autenticada vista pela aplicacao.",
-      "Sessoes antigas sem encerramento registrado nao recebem logout inferido.",
+      "Sessoes expiradas sem request posterior sao exibidas como expiradas sem inventar logout.",
     ],
   };
 }

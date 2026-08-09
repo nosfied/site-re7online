@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  APP_AUTH_SESSION_EXPIRES_AT,
+  APP_AUTH_SESSION_TTL_MS,
+  APP_AUTH_SESSION_TTL_SECONDS,
   PASSWORD_RESET_TTL_MS,
   buildPasswordResetEmail,
   buildPasswordResetUrlFromBase,
@@ -9,10 +10,24 @@ import {
   buildSessionExpiredMessage,
   hashSensitiveValue,
 } from "./appSessionService.js";
+import { buildAppAuthSessionExpiresAt, getEffectiveAppAuthSessionExpiresAt } from "./sessionPolicy.js";
 
-test("session governance uses permanent app sessions and 30 minute reset tokens", () => {
-  assert.equal(APP_AUTH_SESSION_EXPIRES_AT.toISOString(), "9999-12-31T23:59:59.999Z");
+test("session governance uses 12 hour app sessions and 30 minute reset tokens", () => {
+  assert.equal(APP_AUTH_SESSION_TTL_SECONDS, 12 * 60 * 60);
+  assert.equal(APP_AUTH_SESSION_TTL_MS, 12 * 60 * 60 * 1000);
   assert.equal(PASSWORD_RESET_TTL_MS, 30 * 60 * 1000);
+});
+
+test("session policy builds 12 hour expiration and caps legacy permanent sessions", () => {
+  const createdAt = new Date("2030-01-01T00:00:00.000Z");
+  assert.equal(buildAppAuthSessionExpiresAt(createdAt).toISOString(), "2030-01-01T12:00:00.000Z");
+  assert.equal(
+    getEffectiveAppAuthSessionExpiresAt({
+      createdAt,
+      expiresAt: new Date("9999-12-31T23:59:59.999Z"),
+    }).toISOString(),
+    "2030-01-01T12:00:00.000Z"
+  );
 });
 
 test("session rejection messages distinguish replaced and expired sessions", () => {

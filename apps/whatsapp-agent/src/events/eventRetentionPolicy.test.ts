@@ -11,6 +11,8 @@ test("classifyEventRetentionPolicy preserves privacy and handoff audit events", 
   assert.equal(classifyEventRetentionPolicy("auth.login"), "CRITICAL");
   assert.equal(classifyEventRetentionPolicy("auth.logout"), "CRITICAL");
   assert.equal(classifyEventRetentionPolicy("auth.session_replaced"), "CRITICAL");
+  assert.equal(classifyEventRetentionPolicy("auth.session_renewed"), "CRITICAL");
+  assert.equal(classifyEventRetentionPolicy("auth.session_expired"), "CRITICAL");
   assert.equal(classifyEventRetentionPolicy("ai.orchestrator.handoff_activated"), "CRITICAL");
   assert.equal(classifyEventRetentionPolicy("events.retention.compacted"), "CRITICAL");
 });

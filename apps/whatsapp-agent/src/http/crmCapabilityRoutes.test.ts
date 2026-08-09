@@ -6,8 +6,8 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { APP_AUTH_SESSION_EXPIRES_AT } from "../auth/appSessionService.js";
 import { issueClientAuthToken } from "../auth/clientAuth.js";
+import { buildAppAuthSessionExpiresAt } from "../auth/sessionPolicy.js";
 import { normalizeOptOutWaId } from "../campaigns/optOutRegistry.js";
 import { getPrisma } from "../db.js";
 
@@ -109,7 +109,7 @@ async function createUser(params: {
       id: `${user.id}-session`,
       clientId: user.clientId,
       userId: user.id,
-      expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
+      expiresAt: buildAppAuthSessionExpiresAt(),
     },
   });
   return user;

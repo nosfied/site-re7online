@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
 import { env } from "../config/env.js";
+import { APP_AUTH_SESSION_TTL_SECONDS, buildAppAuthSessionExpiresAt } from "./sessionPolicy.js";
 
 const TOKEN_VERSION = 1;
-export const CLIENT_AUTH_TOKEN_EXPIRES_AT_SECONDS = 253402300799;
+export { APP_AUTH_SESSION_TTL_SECONDS };
 
 type ClientAuthTokenPayload = {
   sub: string;
@@ -71,8 +72,9 @@ export function verifyPassword(password: string, passwordHash: string | null | u
   }
 }
 
-export function issueClientAuthToken(user: ClientAuthUser, sessionId: string) {
+export function issueClientAuthToken(user: ClientAuthUser, sessionId: string, expiresAt?: Date) {
   const now = Math.floor(Date.now() / 1000);
+  const tokenExpiresAt = expiresAt ?? buildAppAuthSessionExpiresAt(new Date(now * 1000));
   const payload: ClientAuthTokenPayload = {
     sub: user.id,
     clientId: user.clientId,
@@ -81,7 +83,7 @@ export function issueClientAuthToken(user: ClientAuthUser, sessionId: string) {
     role: user.role,
     sid: sessionId,
     iat: now,
-    exp: CLIENT_AUTH_TOKEN_EXPIRES_AT_SECONDS,
+    exp: Math.floor(tokenExpiresAt.getTime() / 1000),
     typ: "client-auth",
     ver: TOKEN_VERSION,
   };
@@ -103,7 +105,7 @@ export type ClientAuthTokenVerification =
         | "token_expired";
     };
 
-export function verifyClientAuthTokenDetailed(token: string): ClientAuthTokenVerification {
+export function verifyClientAuthTokenDetailed(token: string, now = new Date()): ClientAuthTokenVerification {
   const [encodedHeader, encodedPayload, signature] = token.split(".");
   if (!encodedHeader || !encodedPayload || !signature) return { ok: false, reason: "malformed" };
   const unsignedToken = `${encodedHeader}.${encodedPayload}`;
@@ -129,6 +131,9 @@ export function verifyClientAuthTokenDetailed(token: string): ClientAuthTokenVer
       !payload.sid
     ) {
       return { ok: false, reason: "invalid_payload" };
+    }
+    if (!Number.isFinite(payload.exp) || payload.exp <= Math.floor(now.getTime() / 1000)) {
+      return { ok: false, reason: "token_expired" };
     }
     return { ok: true, payload };
   } catch {

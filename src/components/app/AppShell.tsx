@@ -9,7 +9,10 @@ import {
   AppSession,
   clearAppSession,
   fetchAppTenantSummary,
+  getAppSessionRemainingMs,
   logoutAppSession,
+  renewAppSession,
+  saveAppSession,
   unsubscribeAppPush,
 } from "@/lib/appClientApi";
 import {
@@ -41,6 +44,8 @@ type NavItem = {
 
 const DIRECT_OPERATION_NAV_LIMIT = 4;
 const DIRECT_ADMINISTRATION_NAV_LIMIT = 3;
+const SESSION_WARNING_THRESHOLD_MS = 60 * 1000;
+const APP_SESSION_STORAGE_KEYS = new Set(["wa_app_session_session_v1", "wa_app_session_local_v1"]);
 
 function getLinkClasses(active: boolean) {
   return `inline-flex h-8 min-w-0 shrink-0 items-center justify-center whitespace-nowrap rounded-md border px-2.5 text-xs leading-none transition lg:h-8 lg:px-2.5 lg:text-xs min-[1441px]:h-9 min-[1441px]:px-3 min-[1441px]:text-sm ${
@@ -70,6 +75,13 @@ function isSupervisorRole(role: string) {
 
 function isAdminRole(role: string) {
   return role.trim().toUpperCase() === "ADMIN";
+}
+
+function formatCountdown(ms: number | null) {
+  const totalSeconds = Math.max(0, Math.ceil((ms ?? 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 const APP_NAV_ITEMS: NavItem[] = [
@@ -263,18 +275,27 @@ export default function AppShell({
   const router = useRouter();
   const [showBrandModal, setShowBrandModal] = useState(false);
   const [showMainMenuSubmenu, setShowMainMenuSubmenu] = useState(false);
+  const [activeSession, setActiveSession] = useState(session);
+  const [remainingMs, setRemainingMs] = useState<number | null>(() => getAppSessionRemainingMs(session));
+  const [renewingSession, setRenewingSession] = useState(false);
+  const [renewError, setRenewError] = useState<string | null>(null);
   const [tenantSummary, setTenantSummary] = useState<{
     name: string;
     phoneDisplay: string | null;
     profile: AppProfile;
   } | null>(null);
-  const canViewAdministration = isSupervisorRole(session.user.role) || isAdminRole(session.user.role);
-  const capabilities = getTenantCapabilities(session);
-  const profile = tenantSummary?.profile ?? getAppProfile(session);
+  const canViewAdministration = isSupervisorRole(activeSession.user.role) || isAdminRole(activeSession.user.role);
+  const capabilities = getTenantCapabilities(activeSession);
+  const profile = tenantSummary?.profile ?? getAppProfile(activeSession);
+
+  useEffect(() => {
+    setActiveSession(session);
+    setRemainingMs(getAppSessionRemainingMs(session));
+  }, [session]);
 
   useEffect(() => {
     let cancelled = false;
-    fetchAppTenantSummary(session)
+    fetchAppTenantSummary(activeSession)
       .then((response) => {
         if (cancelled) return;
         setTenantSummary({
@@ -289,7 +310,42 @@ export default function AppShell({
     return () => {
       cancelled = true;
     };
-  }, [session]);
+  }, [activeSession]);
+
+  useEffect(() => {
+    const refreshRemaining = () => {
+      const nextRemaining = getAppSessionRemainingMs(activeSession);
+      setRemainingMs(nextRemaining);
+      if (nextRemaining !== null && nextRemaining <= 0) {
+        clearAppSession();
+        router.replace("/app/login");
+      }
+    };
+    refreshRemaining();
+    const timer = window.setInterval(refreshRemaining, 1000);
+    return () => window.clearInterval(timer);
+  }, [activeSession, router]);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key || !APP_SESSION_STORAGE_KEYS.has(event.key)) return;
+      let current: AppSession | null = null;
+      try {
+        current = event.newValue ? JSON.parse(event.newValue) as AppSession : null;
+      } catch {
+        current = null;
+      }
+      if (current?.token) {
+        setActiveSession(current);
+        setRemainingMs(getAppSessionRemainingMs(current));
+        setRenewError(null);
+        return;
+      }
+      router.replace("/app/login");
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [router]);
 
   const handleLogout = () => {
     void (async () => {
@@ -300,8 +356,8 @@ export default function AppShell({
         if (subscription) {
           await subscription.unsubscribe();
         }
-        await logoutAppSession(session, endpoint).catch(() => null);
-        await unsubscribeAppPush(session, endpoint).catch(() => null);
+        await logoutAppSession(activeSession, endpoint).catch(() => null);
+        await unsubscribeAppPush(activeSession, endpoint).catch(() => null);
       } catch {
         // Logout must remain fail-open even if the browser denies service worker access.
       } finally {
@@ -311,10 +367,34 @@ export default function AppShell({
     })();
   };
 
+  const handleRenewSession = () => {
+    if (renewingSession) return;
+    setRenewingSession(true);
+    setRenewError(null);
+    void renewAppSession(activeSession)
+      .then((response) => {
+        const nextSession: AppSession = {
+          ...activeSession,
+          token: response.token,
+          expiresAt: response.expiresAt,
+          user: response.user,
+          features: response.features,
+          profile: response.profile,
+        };
+        saveAppSession(nextSession);
+        setActiveSession(nextSession);
+        setRemainingMs(getAppSessionRemainingMs(nextSession));
+      })
+      .catch((error: { message?: string }) => {
+        setRenewError(error.message || "Nao foi possivel renovar a sessao. Faca login novamente.");
+      })
+      .finally(() => setRenewingSession(false));
+  };
+
   const visibleNavItems = APP_NAV_ITEMS.filter((item) => {
     if (item.profiles && !item.profiles.includes(profile)) return false;
     if (item.feature && !capabilities[item.feature]) return false;
-    if (item.minRole === "ADMIN" && !isAdminRole(session.user.role)) return false;
+    if (item.minRole === "ADMIN" && !isAdminRole(activeSession.user.role)) return false;
     if (item.minRole === "SUPERVISOR" && !canViewAdministration) return false;
     return true;
   });
@@ -415,7 +495,7 @@ export default function AppShell({
           </>
         ) : null}
         <p className="theme-muted truncate text-xs leading-tight lg:text-sm">
-          {session.user.name || session.user.email}
+          {activeSession.user.name || activeSession.user.email}
         </p>
       </div>
       <button
@@ -500,7 +580,7 @@ export default function AppShell({
             </p>
             <h2 className="mt-1 text-lg font-bold">Menu principal</h2>
             <p className="theme-muted mt-1 text-sm">
-              Opcoes disponiveis para {session.user.name || session.user.email}.
+              Opcoes disponiveis para {activeSession.user.name || activeSession.user.email}.
             </p>
           </div>
           <button
@@ -516,6 +596,46 @@ export default function AppShell({
           {renderMainMenuGroup(administrationItems, "Administracao")}
         </div>
       </div>
+  ) : null;
+  const showSessionWarning =
+    remainingMs !== null && remainingMs > 0 && remainingMs <= SESSION_WARNING_THRESHOLD_MS;
+  const sessionRenewalModal = showSessionWarning ? (
+    <div className="theme-modal-backdrop fixed inset-0 z-[120] flex items-center justify-center px-4 backdrop-blur-sm">
+      <div className="theme-surface-strong w-full max-w-md rounded-2xl border p-5 shadow-[0_24px_90px_rgba(0,0,0,0.28)]">
+        <p className="theme-soft text-xs font-semibold uppercase leading-none tracking-[0.16em]">
+          Sessao
+        </p>
+        <h2 className="mt-2 text-xl font-bold">Sua sessão está prestes a expirar.</h2>
+        <p className="theme-muted mt-2 text-sm">
+          Sua sessão expira em breve. Continue conectado agora ou encerre o acesso.
+        </p>
+        <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center">
+          <span className="text-3xl font-bold tabular-nums">{formatCountdown(remainingMs)}</span>
+        </div>
+        {renewError ? (
+          <p className="mt-3 rounded-lg border border-red-400/40 bg-red-500/15 px-3 py-2 text-sm text-red-100">
+            {renewError}
+          </p>
+        ) : null}
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={handleRenewSession}
+            disabled={renewingSession}
+            className="rounded-lg bg-re7-orange px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {renewingSession ? "Renovando..." : "Continuar conectado"}
+          </button>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="theme-nav-link rounded-lg border px-4 py-2.5 text-sm font-semibold"
+          >
+            Sair
+          </button>
+        </div>
+      </div>
+    </div>
   ) : null;
 
   if (fullScreen) {
@@ -571,6 +691,7 @@ export default function AppShell({
           <section className="order-1 min-h-0 min-w-0 max-w-full overflow-hidden md:order-none">{children}</section>
         </div>
         {brandModal}
+        {sessionRenewalModal}
       </main>
     );
   }
@@ -632,6 +753,7 @@ export default function AppShell({
       </div>
 
       {brandModal}
+      {sessionRenewalModal}
     </main>
   );
 }

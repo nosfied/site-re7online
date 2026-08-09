@@ -6,8 +6,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { ConversationOperationalStatus, HandoffStatus } from "@prisma/client";
-import { APP_AUTH_SESSION_EXPIRES_AT } from "../auth/appSessionService.js";
 import { issueClientAuthToken } from "../auth/clientAuth.js";
+import { buildAppAuthSessionExpiresAt } from "../auth/sessionPolicy.js";
 import { getPrisma } from "../db.js";
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "simae-25-users-acceptance-secret";
@@ -107,7 +107,7 @@ async function createSessionUser(params: {
       id: `${user.id}-session`,
       clientId: user.clientId,
       userId: user.id,
-      expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
+      expiresAt: buildAppAuthSessionExpiresAt(),
     },
   });
   return user;
@@ -120,10 +120,10 @@ async function ensureAppSession(user: TestUser) {
       id: `${user.id}-session`,
       clientId: user.clientId,
       userId: user.id,
-      expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
+      expiresAt: buildAppAuthSessionExpiresAt(),
     },
     update: {
-      expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
+      expiresAt: buildAppAuthSessionExpiresAt(),
     },
   });
 }

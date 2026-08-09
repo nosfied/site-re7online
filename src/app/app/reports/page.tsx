@@ -81,6 +81,7 @@ const SESSION_STATUS_FILTERS: Array<{ value: "" | AppSessionAuditStatus; label: 
   { value: "", label: "Todas" },
   { value: "OPEN", label: "Abertas" },
   { value: "CLOSED", label: "Encerradas" },
+  { value: "EXPIRED", label: "Expiradas" },
 ];
 
 function toDateTimeLocalValue(date: Date) {
@@ -856,8 +857,8 @@ export default function AppReportsPage() {
           </label>
         </div>
         <p className="mt-3 text-xs text-white/50">
-          Periodo filtrado por sessoes iniciadas no intervalo. Sessoes antigas sem encerramento
-          registrado permanecem como abertas; nenhum encerramento e inferido por lastSeenAt.
+          Periodo filtrado por sessoes iniciadas no intervalo. Sessoes vencidas aparecem como
+          expiradas sem inferir logout por lastSeenAt.
         </p>
         {sessionsLoading ? <p className="mt-4 text-sm text-white/70">Carregando acessos/sessoes...</p> : null}
         <div className="mt-4 overflow-x-auto rounded-lg border border-white/10">

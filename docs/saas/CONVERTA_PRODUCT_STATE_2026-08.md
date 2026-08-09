@@ -148,7 +148,7 @@ Superficies atuais:
 - eventos auditaveis de campanhas, templates, opt-out, ledger e privacidade;
 - read models operacionais de CRM e Inbox.
 
-`Acessos/Sessoes` e auditoria operacional de autenticacao. Nao e controle de ponto, jornada ou presenca laboral. A fonte primaria e `AppAuthSession`; `Event` registra trilha complementar `auth.*` para login, logout e revogacoes futuras. Sessoes antigas sem `revokedAt` permanecem abertas/sem encerramento registrado, sem inferencia por `lastSeenAt`.
+`Acessos/Sessoes` e auditoria operacional de autenticacao. Nao e controle de ponto, jornada ou presenca laboral. A fonte primaria e `AppAuthSession`; `Event` registra trilha complementar `auth.*` para login, logout, renovacao, expiracao e revogacoes futuras. Sessoes possuem TTL absoluto de 12 horas, sem sliding expiration. `lastSeenAt` permanece apenas como ultima atividade observada. Sessoes vencidas sem `revokedAt` podem ser exibidas como expiradas sem inventar logout.
 
 Relatorios amplos de auditoria LGPD ou pack visual com screenshots devem ser tratados como proximo passo documental, nao como funcionalidade implicita.
 

@@ -7,8 +7,14 @@ import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
 import { hashPassword, verifyClientAuthTokenDetailed } from "./clientAuth.js";
 import { normalizeUserRole, type ClientAuthContext } from "./clientAuthMiddleware.js";
+import {
+  APP_AUTH_SESSION_TTL_MS,
+  APP_AUTH_SESSION_TTL_SECONDS,
+  buildAppAuthSessionExpiresAt,
+  isAppAuthSessionExpired,
+} from "./sessionPolicy.js";
 
-export const APP_AUTH_SESSION_EXPIRES_AT = new Date("9999-12-31T23:59:59.999Z");
+export { APP_AUTH_SESSION_TTL_MS, APP_AUTH_SESSION_TTL_SECONDS };
 export const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 
 export type AppSessionRejectReason =
@@ -22,6 +28,30 @@ export type AppSessionRejectReason =
 
 export type AppSessionValidation =
   | { ok: true; auth: ClientAuthContext }
+  | { ok: false; reason: AppSessionRejectReason };
+
+export type AppSessionRenewal =
+  | {
+      ok: true;
+      session: { id: string; expiresAt: Date };
+      user: {
+        id: string;
+        clientId: string;
+        name: string;
+        email: string;
+        role: string;
+        departmentId: string | null;
+        departmentName: string | null;
+        client: {
+          id: string;
+          clientKey: string;
+          name: string;
+          status: string;
+          features: unknown;
+          profile: string | null;
+        };
+      };
+    }
   | { ok: false; reason: AppSessionRejectReason };
 
 function getBearerToken(req: IncomingMessage) {
@@ -46,6 +76,45 @@ export function hashSensitiveValue(value: string) {
 
 function hashResetToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+async function markExpiredAppSession(params: {
+  clientId: string;
+  userId: string;
+  sessionId: string;
+  role?: string | null;
+  tx?: Prisma.TransactionClient;
+}) {
+  const prisma = params.tx ?? getPrisma();
+  const now = new Date();
+  const revoked = await prisma.appAuthSession.updateMany({
+    where: {
+      id: params.sessionId,
+      clientId: params.clientId,
+      userId: params.userId,
+      revokedAt: null,
+    },
+    data: {
+      revokedAt: now,
+      revokeReason: "session_expired",
+    },
+  });
+  if (revoked.count > 0) {
+    await prisma.event.create({
+      data: {
+        clientId: params.clientId,
+        eventName: "auth.session_expired",
+        requestId: `auth.session_expired:${params.sessionId}`,
+        payloadJson: {
+          userId: params.userId,
+          role: params.role ?? null,
+          sessionId: params.sessionId,
+          reason: "session_expired",
+        },
+      },
+    });
+  }
+  return revoked.count;
 }
 
 export function buildSessionExpiredMessage(reason: AppSessionRejectReason) {
@@ -93,6 +162,7 @@ export async function createExclusiveAppSession(params: {
 }) {
   const prisma = getPrisma();
   const now = new Date();
+  const expiresAt = buildAppAuthSessionExpiresAt(now);
   const userAgent = String(params.req.headers["user-agent"] ?? "").slice(0, 500) || null;
   const ipHash = hashSensitiveValue(getRequestIp(params.req));
   const result = await prisma.$transaction(async (tx) => {
@@ -123,7 +193,7 @@ export async function createExclusiveAppSession(params: {
         userId: params.userId,
         userAgent,
         ipHash,
-        expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
+        expiresAt,
       },
       select: {
         id: true,
@@ -194,6 +264,7 @@ export async function validateAppSessionFromRequest(
       id: true,
       revokedAt: true,
       revokeReason: true,
+      createdAt: true,
       expiresAt: true,
       lastSeenAt: true,
       user: {
@@ -216,10 +287,27 @@ export async function validateAppSessionFromRequest(
       reason:
         session.revokeReason === "replaced_by_new_login"
           ? "session_replaced"
+          : session.revokeReason === "session_expired"
+            ? "session_expired"
           : "session_revoked",
     };
   }
   const now = new Date();
+  if (
+    isAppAuthSessionExpired({
+      createdAt: session.createdAt,
+      expiresAt: session.expiresAt,
+      now,
+    })
+  ) {
+    await markExpiredAppSession({
+      clientId: payload.clientId,
+      userId: payload.sub,
+      sessionId: session.id,
+      role: session.user.role,
+    });
+    return { ok: false, reason: "session_expired" };
+  }
   if (!session.user.isActive || session.user.client.status !== "ACTIVE") {
     return { ok: false, reason: "session_revoked" };
   }
@@ -239,6 +327,238 @@ export async function validateAppSessionFromRequest(
       sessionId: payload.sid,
     },
   };
+}
+
+export async function renewAppSessionFromRequest(
+  req: IncomingMessage
+): Promise<AppSessionRenewal> {
+  const token = getBearerToken(req);
+  if (!token) return { ok: false, reason: "missing_token" };
+  const tokenResult = verifyClientAuthTokenDetailed(token);
+  if (!tokenResult.ok) {
+    return {
+      ok: false,
+      reason: tokenResult.reason === "token_expired" ? "token_expired" : "invalid_token",
+    };
+  }
+  const payload = tokenResult.payload;
+  const prisma = getPrisma();
+  const now = new Date();
+  const userAgent = String(req.headers["user-agent"] ?? "").slice(0, 500) || null;
+  const ipHash = hashSensitiveValue(getRequestIp(req));
+  const currentSession = await prisma.appAuthSession.findFirst({
+    where: {
+      id: payload.sid,
+      clientId: payload.clientId,
+      userId: payload.sub,
+    },
+    select: {
+      id: true,
+      clientId: true,
+      userId: true,
+      createdAt: true,
+      revokedAt: true,
+      revokeReason: true,
+      expiresAt: true,
+      user: {
+        select: {
+          id: true,
+          clientId: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          departmentId: true,
+          department: { select: { name: true } },
+          client: {
+            select: {
+              id: true,
+              clientKey: true,
+              name: true,
+              status: true,
+              features: true,
+              profile: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!currentSession) return { ok: false, reason: "session_not_found" };
+  if (currentSession.revokedAt) {
+    if (currentSession.revokeReason === "session_renewed") {
+      const replacement = await prisma.appAuthSession.findFirst({
+        where: {
+          clientId: payload.clientId,
+          userId: payload.sub,
+          revokedAt: null,
+          id: { not: currentSession.id },
+          createdAt: { gte: currentSession.createdAt },
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: {
+          id: true,
+          createdAt: true,
+          expiresAt: true,
+        },
+      });
+      if (
+        replacement &&
+        !isAppAuthSessionExpired({
+          createdAt: replacement.createdAt,
+          expiresAt: replacement.expiresAt,
+          now,
+        }) &&
+        currentSession.user.isActive &&
+        currentSession.user.client.status === "ACTIVE"
+      ) {
+        return {
+          ok: true,
+          session: { id: replacement.id, expiresAt: replacement.expiresAt },
+          user: {
+            id: currentSession.user.id,
+            clientId: currentSession.user.clientId,
+            name: currentSession.user.name,
+            email: currentSession.user.email,
+            role: currentSession.user.role,
+            departmentId: currentSession.user.departmentId,
+            departmentName: currentSession.user.department?.name ?? null,
+            client: currentSession.user.client,
+          },
+        };
+      }
+    }
+    return {
+      ok: false,
+      reason:
+        currentSession.revokeReason === "replaced_by_new_login"
+          ? "session_replaced"
+          : currentSession.revokeReason === "session_expired"
+            ? "session_expired"
+          : "session_revoked",
+    };
+  }
+  if (
+    isAppAuthSessionExpired({
+      createdAt: currentSession.createdAt,
+      expiresAt: currentSession.expiresAt,
+      now,
+    })
+  ) {
+    await markExpiredAppSession({
+      clientId: payload.clientId,
+      userId: payload.sub,
+      sessionId: currentSession.id,
+      role: currentSession.user.role,
+    });
+    return { ok: false, reason: "session_expired" };
+  }
+  if (!currentSession.user.isActive || currentSession.user.client.status !== "ACTIVE") {
+    return { ok: false, reason: "session_revoked" };
+  }
+
+  return prisma.$transaction(async (tx): Promise<AppSessionRenewal> => {
+    const renewedAt = new Date();
+    const revoked = await tx.appAuthSession.updateMany({
+      where: {
+        id: currentSession.id,
+        clientId: payload.clientId,
+        userId: payload.sub,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: renewedAt,
+        revokeReason: "session_renewed",
+      },
+    });
+    if (revoked.count === 0) {
+      const reloaded = await tx.appAuthSession.findUnique({
+        where: { id: currentSession.id },
+        select: { revokeReason: true },
+      });
+      if (reloaded?.revokeReason === "session_renewed") {
+        const replacement = await tx.appAuthSession.findFirst({
+          where: {
+            clientId: payload.clientId,
+            userId: payload.sub,
+            revokedAt: null,
+            id: { not: currentSession.id },
+            createdAt: { gte: currentSession.createdAt },
+          },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          select: {
+            id: true,
+            createdAt: true,
+            expiresAt: true,
+          },
+        });
+        if (
+          replacement &&
+          !isAppAuthSessionExpired({
+            createdAt: replacement.createdAt,
+            expiresAt: replacement.expiresAt,
+            now: renewedAt,
+          })
+        ) {
+          return {
+            ok: true,
+            session: { id: replacement.id, expiresAt: replacement.expiresAt },
+            user: {
+              id: currentSession.user.id,
+              clientId: currentSession.user.clientId,
+              name: currentSession.user.name,
+              email: currentSession.user.email,
+              role: currentSession.user.role,
+              departmentId: currentSession.user.departmentId,
+              departmentName: currentSession.user.department?.name ?? null,
+              client: currentSession.user.client,
+            },
+          };
+        }
+      }
+      return { ok: false, reason: "session_revoked" };
+    }
+    const nextSession = await tx.appAuthSession.create({
+      data: {
+        clientId: payload.clientId,
+        userId: payload.sub,
+        userAgent,
+        ipHash,
+        expiresAt: buildAppAuthSessionExpiresAt(renewedAt),
+      },
+      select: {
+        id: true,
+        expiresAt: true,
+      },
+    });
+    await tx.event.create({
+      data: {
+        clientId: payload.clientId,
+        eventName: "auth.session_renewed",
+        requestId: `auth.session_renewed:${currentSession.id}`,
+        payloadJson: {
+          userId: payload.sub,
+          role: currentSession.user.role,
+          oldSessionId: currentSession.id,
+          newSessionId: nextSession.id,
+        },
+      },
+    });
+    return {
+      ok: true,
+      session: nextSession,
+      user: {
+        id: currentSession.user.id,
+        clientId: currentSession.user.clientId,
+        name: currentSession.user.name,
+        email: currentSession.user.email,
+        role: currentSession.user.role,
+        departmentId: currentSession.user.departmentId,
+        departmentName: currentSession.user.department?.name ?? null,
+        client: currentSession.user.client,
+      },
+    };
+  });
 }
 
 export async function revokeAppSession(params: {

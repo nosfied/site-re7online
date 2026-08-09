@@ -163,6 +163,7 @@ import {
   buildSessionExpiredMessage,
   createExclusiveAppSession,
   hashSensitiveValue,
+  renewAppSessionFromRequest,
   requestPasswordReset,
   resetPasswordWithToken,
   revokeAppSession,
@@ -1452,7 +1453,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           email: user.email,
           role: user.role,
         },
-        session.id
+        session.id,
+        session.expiresAt
       );
 
       logger.info({
@@ -1466,6 +1468,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       json(res, 200, {
         ok: true,
         token,
+        expiresAt: session.expiresAt.toISOString(),
         user: {
           id: user.id,
           name: user.name,
@@ -1526,7 +1529,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           email: user.email,
           role: user.role,
         },
-        session.id
+        session.id,
+        session.expiresAt
       );
 
       logger.info({
@@ -1541,6 +1545,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       json(res, 200, {
         ok: true,
         token,
+        expiresAt: session.expiresAt.toISOString(),
         user: {
           id: user.id,
           name: user.name,
@@ -1647,6 +1652,45 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
     }
     json(res, 200, { ok: true });
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/auth/renew") {
+    const renewal = await renewAppSessionFromRequest(req);
+    if (!renewal.ok) {
+      json(res, 401, {
+        error: renewal.reason,
+        message: buildSessionExpiredMessage(renewal.reason),
+      });
+      return;
+    }
+    const token = issueClientAuthToken(
+      {
+        id: renewal.user.id,
+        clientId: renewal.user.clientId,
+        name: renewal.user.name,
+        email: renewal.user.email,
+        role: renewal.user.role,
+      },
+      renewal.session.id,
+      renewal.session.expiresAt
+    );
+    json(res, 200, {
+      ok: true,
+      token,
+      expiresAt: renewal.session.expiresAt.toISOString(),
+      user: {
+        id: renewal.user.id,
+        name: renewal.user.name,
+        email: renewal.user.email,
+        clientId: renewal.user.clientId,
+        role: renewal.user.role,
+        departmentId: renewal.user.departmentId,
+        departmentName: renewal.user.departmentName,
+      },
+      features: resolveTenantCapabilities(renewal.user.client),
+      profile: getClientProfile(renewal.user.client),
+    });
     return;
   }
 

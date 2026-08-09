@@ -5,8 +5,8 @@ import type { AddressInfo } from "node:net";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { APP_AUTH_SESSION_EXPIRES_AT } from "../auth/appSessionService.js";
 import { hashPassword, issueClientAuthToken } from "../auth/clientAuth.js";
+import { buildAppAuthSessionExpiresAt } from "../auth/sessionPolicy.js";
 import {
   filterOptedOutCampaignRecipients,
   recordContactOptOut,
@@ -117,7 +117,7 @@ async function createUser(params: {
       id: `${user.id}-session`,
       clientId: user.clientId,
       userId: user.id,
-      expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
+      expiresAt: buildAppAuthSessionExpiresAt(),
     },
   });
   return user;
@@ -1392,6 +1392,8 @@ test("session audit report is tenant scoped, role protected and sanitized", asyn
   const openSessionId = `${businessAdmin.id}-session-audit-open`;
   const logoutSessionId = `${businessSupervisor.id}-session-audit-logout`;
   const replacedSessionId = `${businessAgent.id}-session-audit-replaced`;
+  const renewedSessionId = `${businessAgent.id}-session-audit-renewed`;
+  const expiredSessionId = `${businessAgent.id}-session-audit-expired`;
   const otherTenantSessionId = `${governmentAdmin.id}-session-audit-cross-tenant`;
   await prisma.appAuthSession.createMany({
     data: [
@@ -1401,7 +1403,7 @@ test("session audit report is tenant scoped, role protected and sanitized", asyn
         userId: businessAdmin.id,
         createdAt: new Date("2030-01-10T08:00:00.000Z"),
         lastSeenAt: new Date("2030-01-10T08:05:00.000Z"),
-        expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
+        expiresAt: buildAppAuthSessionExpiresAt(new Date("2030-01-10T08:00:00.000Z")),
         userAgent: "Sensitive browser details",
         ipHash: "sensitive-ip-hash",
       },
@@ -1413,7 +1415,7 @@ test("session audit report is tenant scoped, role protected and sanitized", asyn
         lastSeenAt: new Date("2030-01-10T09:10:00.000Z"),
         revokedAt: new Date("2030-01-10T09:30:00.000Z"),
         revokeReason: "logout",
-        expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
+        expiresAt: buildAppAuthSessionExpiresAt(new Date("2030-01-10T09:00:00.000Z")),
         userAgent: "Sensitive browser details",
         ipHash: "sensitive-ip-hash",
       },
@@ -1425,7 +1427,29 @@ test("session audit report is tenant scoped, role protected and sanitized", asyn
         lastSeenAt: new Date("2030-01-10T10:20:00.000Z"),
         revokedAt: new Date("2030-01-10T10:45:00.000Z"),
         revokeReason: "replaced_by_new_login",
-        expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
+        expiresAt: buildAppAuthSessionExpiresAt(new Date("2030-01-10T10:00:00.000Z")),
+        userAgent: "Sensitive browser details",
+        ipHash: "sensitive-ip-hash",
+      },
+      {
+        id: renewedSessionId,
+        clientId: businessClientId,
+        userId: businessAgent.id,
+        createdAt: new Date("2030-01-10T11:00:00.000Z"),
+        lastSeenAt: new Date("2030-01-10T11:15:00.000Z"),
+        revokedAt: new Date("2030-01-10T11:30:00.000Z"),
+        revokeReason: "session_renewed",
+        expiresAt: buildAppAuthSessionExpiresAt(new Date("2030-01-10T11:00:00.000Z")),
+        userAgent: "Sensitive browser details",
+        ipHash: "sensitive-ip-hash",
+      },
+      {
+        id: expiredSessionId,
+        clientId: businessClientId,
+        userId: businessAgent.id,
+        createdAt: new Date("2020-01-10T08:00:00.000Z"),
+        lastSeenAt: new Date("2020-01-10T08:20:00.000Z"),
+        expiresAt: buildAppAuthSessionExpiresAt(new Date("2020-01-10T08:00:00.000Z")),
         userAgent: "Sensitive browser details",
         ipHash: "sensitive-ip-hash",
       },
@@ -1433,9 +1457,9 @@ test("session audit report is tenant scoped, role protected and sanitized", asyn
         id: otherTenantSessionId,
         clientId: governmentClientId,
         userId: governmentAdmin.id,
-        createdAt: new Date("2030-01-10T11:00:00.000Z"),
-        lastSeenAt: new Date("2030-01-10T11:20:00.000Z"),
-        expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
+        createdAt: new Date("2030-01-10T12:00:00.000Z"),
+        lastSeenAt: new Date("2030-01-10T12:20:00.000Z"),
+        expiresAt: buildAppAuthSessionExpiresAt(new Date("2030-01-10T12:00:00.000Z")),
         userAgent: "Sensitive browser details",
         ipHash: "sensitive-ip-hash",
       },
@@ -1480,7 +1504,7 @@ test("session audit report is tenant scoped, role protected and sanitized", asyn
     businessAdmin
   );
   assert.equal(admin.status, 200, JSON.stringify(admin.body));
-  assert.equal(admin.body.total, 3);
+  assert.equal(admin.body.total, 4);
   assert.equal(admin.body.items.some((item) => item.id === otherTenantSessionId), false);
   assert.equal(admin.body.items.some((item) => item.ipHash || item.userAgent), false);
   assert.equal(admin.body.notes.some((note) => note.includes("nao e controle de ponto")), true);
@@ -1501,13 +1525,17 @@ test("session audit report is tenant scoped, role protected and sanitized", asyn
   const replacedItem = admin.body.items.find((item) => item.id === replacedSessionId);
   assert.equal(replacedItem?.endReasonLabel, "Substituida por novo login");
 
+  const renewedItem = admin.body.items.find((item) => item.id === renewedSessionId);
+  assert.equal(renewedItem?.status, "CLOSED");
+  assert.equal(renewedItem?.endReasonLabel, "Renovada");
+
   const supervisor = await request<{ ok: true; total: number }>(
     "GET",
     `/app/reports/sessions?from=${from.toISOString()}&to=${to.toISOString()}`,
     businessSupervisor
   );
   assert.equal(supervisor.status, 200, JSON.stringify(supervisor.body));
-  assert.equal(supervisor.body.total, 3);
+  assert.equal(supervisor.body.total, 4);
 
   const filteredByUser = await request<{ ok: true; total: number; items: Array<{ id: string }> }>(
     "GET",
@@ -1524,7 +1552,7 @@ test("session audit report is tenant scoped, role protected and sanitized", asyn
     businessAdmin
   );
   assert.equal(filteredByRole.status, 200, JSON.stringify(filteredByRole.body));
-  assert.equal(filteredByRole.body.total, 1);
+  assert.equal(filteredByRole.body.total, 2);
   assert.equal(filteredByRole.body.items[0]?.role, "AGENT");
 
   const filteredClosed = await request<{ ok: true; total: number }>(
@@ -1533,7 +1561,21 @@ test("session audit report is tenant scoped, role protected and sanitized", asyn
     businessAdmin
   );
   assert.equal(filteredClosed.status, 200, JSON.stringify(filteredClosed.body));
-  assert.equal(filteredClosed.body.total, 2);
+  assert.equal(filteredClosed.body.total, 3);
+
+  const expiredFrom = new Date("2020-01-10T00:00:00.000Z");
+  const expiredTo = new Date("2020-01-11T00:00:00.000Z");
+  const filteredExpired = await request<{ ok: true; total: number; items: Array<{ id: string; status: string; statusLabel: string; endedAt: string | null; endReasonLabel: string }> }>(
+    "GET",
+    `/app/reports/sessions?from=${expiredFrom.toISOString()}&to=${expiredTo.toISOString()}&status=EXPIRED`,
+    businessAdmin
+  );
+  assert.equal(filteredExpired.status, 200, JSON.stringify(filteredExpired.body));
+  assert.equal(filteredExpired.body.total, 1);
+  assert.equal(filteredExpired.body.items[0]?.id, expiredSessionId);
+  assert.equal(filteredExpired.body.items[0]?.status, "EXPIRED");
+  assert.equal(filteredExpired.body.items[0]?.statusLabel, "Expirada");
+  assert.equal(filteredExpired.body.items[0]?.endedAt, null);
 
   const crossTenantUser = await request<ErrorPayload>(
     "GET",
@@ -1620,6 +1662,130 @@ test("auth session events are persisted with sanitized payloads", async () => {
   assert.equal(serialized.includes("session-event-password"), false);
   assert.equal(serialized.includes("Sensitive browser"), false);
   assert.equal(serialized.includes("ipHash"), false);
+  assert.equal(events.some((event) => event.waId || event.messageId), false);
+});
+
+test("auth sessions expire, do not slide on lastSeen and can be explicitly renewed", async () => {
+  const email = `${prefix}-session-ttl-user@example.test`;
+  const user = await prisma.user.create({
+    data: {
+      clientId: businessClientId,
+      name: "Session TTL User",
+      email,
+      passwordHash: hashPassword("session-ttl-password"),
+      role: "SUPERVISOR",
+      isActive: true,
+    },
+    select: {
+      id: true,
+      clientId: true,
+      name: true,
+      email: true,
+      role: true,
+    },
+  });
+
+  const login = await requestUnauth<{
+    ok: true;
+    token: string;
+    expiresAt: string;
+  }>("POST", "/auth/login", {
+    email,
+    password: "session-ttl-password",
+  });
+  assert.equal(login.status, 200, JSON.stringify(login.body));
+  const [, encodedPayload] = login.body.token.split(".");
+  const jwtPayload = JSON.parse(
+    Buffer.from((encodedPayload ?? "").replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")
+  ) as { sid: string; exp: number };
+  assert.equal(Math.floor(new Date(login.body.expiresAt).getTime() / 1000), jwtPayload.exp);
+
+  const sessionBeforeActivity = await prisma.appAuthSession.findUniqueOrThrow({
+    where: { id: jwtPayload.sid },
+    select: { expiresAt: true, lastSeenAt: true },
+  });
+  await prisma.appAuthSession.update({
+    where: { id: jwtPayload.sid },
+    data: { lastSeenAt: new Date(Date.now() - 6 * 60 * 1000) },
+  });
+  const activity = await fetch(`${baseUrl}/app/campaigns`, {
+    headers: { authorization: `Bearer ${login.body.token}` },
+  });
+  assert.equal(activity.status, 200);
+  const sessionAfterActivity = await prisma.appAuthSession.findUniqueOrThrow({
+    where: { id: jwtPayload.sid },
+    select: { expiresAt: true, lastSeenAt: true },
+  });
+  assert.equal(sessionAfterActivity.expiresAt.toISOString(), sessionBeforeActivity.expiresAt.toISOString());
+  assert.ok(sessionAfterActivity.lastSeenAt.getTime() > sessionBeforeActivity.lastSeenAt.getTime());
+
+  const renew = await fetch(`${baseUrl}/auth/renew`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${login.body.token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ userId: "ignored", clientId: "ignored", sid: "ignored" }),
+  });
+  const renewBody = (await renew.json()) as { ok: true; token: string; expiresAt: string };
+  assert.equal(renew.status, 200, JSON.stringify(renewBody));
+  const [, renewedPayload] = renewBody.token.split(".");
+  const renewedJwtPayload = JSON.parse(
+    Buffer.from((renewedPayload ?? "").replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")
+  ) as { sid: string; exp: number };
+  assert.notEqual(renewedJwtPayload.sid, jwtPayload.sid);
+  assert.equal(Math.floor(new Date(renewBody.expiresAt).getTime() / 1000), renewedJwtPayload.exp);
+
+  const oldSession = await prisma.appAuthSession.findUniqueOrThrow({
+    where: { id: jwtPayload.sid },
+    select: { revokedAt: true, revokeReason: true },
+  });
+  assert.ok(oldSession.revokedAt);
+  assert.equal(oldSession.revokeReason, "session_renewed");
+
+  const activeSessions = await prisma.appAuthSession.count({
+    where: { clientId: businessClientId, userId: user.id, revokedAt: null },
+  });
+  assert.equal(activeSessions, 1);
+
+  const expiredSessionId = `${user.id}-expired-session`;
+  const expiredToken = issueClientAuthToken(user, expiredSessionId, buildAppAuthSessionExpiresAt());
+  const expiredCreatedAt = new Date(Date.now() - 13 * 60 * 60 * 1000);
+  await prisma.appAuthSession.create({
+    data: {
+      id: expiredSessionId,
+      clientId: businessClientId,
+      userId: user.id,
+      createdAt: expiredCreatedAt,
+      lastSeenAt: expiredCreatedAt,
+      expiresAt: new Date(Date.now() - 60 * 1000),
+    },
+  });
+  const expiredRequest = await fetch(`${baseUrl}/app/campaigns`, {
+    headers: { authorization: `Bearer ${expiredToken}` },
+  });
+  const expiredBody = (await expiredRequest.json()) as ErrorPayload;
+  assert.equal(expiredRequest.status, 401);
+  assert.equal(getErrorCode(expiredBody), "session_expired");
+  const expiredSession = await prisma.appAuthSession.findUniqueOrThrow({
+    where: { id: expiredSessionId },
+    select: { revokedAt: true, revokeReason: true, lastSeenAt: true },
+  });
+  assert.ok(expiredSession.revokedAt);
+  assert.equal(expiredSession.revokeReason, "session_expired");
+  assert.equal(expiredSession.lastSeenAt.toISOString(), expiredCreatedAt.toISOString());
+
+  const events = await prisma.event.findMany({
+    where: {
+      clientId: businessClientId,
+      eventName: { in: ["auth.session_renewed", "auth.session_expired"] },
+    },
+    select: { eventName: true, payloadJson: true, waId: true, messageId: true },
+  });
+  assert.equal(events.some((event) => event.eventName === "auth.session_renewed"), true);
+  assert.equal(events.some((event) => event.eventName === "auth.session_expired"), true);
+  const serialized = JSON.stringify(events);
+  assert.equal(serialized.includes("session-ttl-password"), false);
   assert.equal(events.some((event) => event.waId || event.messageId), false);
 });
 

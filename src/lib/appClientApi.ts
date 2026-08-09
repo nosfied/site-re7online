@@ -34,6 +34,7 @@ export type AppSessionUser = {
 export type AppSession = {
   baseUrl: string;
   token: string;
+  expiresAt?: string;
   user: AppSessionUser;
   features: TenantCapabilities;
   profile: AppProfile;
@@ -373,7 +374,7 @@ export type AppMetaUsageMonthlyReport = {
   notes: string[];
 };
 
-export type AppSessionAuditStatus = "OPEN" | "CLOSED";
+export type AppSessionAuditStatus = "OPEN" | "CLOSED" | "EXPIRED";
 
 export type AppSessionAuditItem = {
   id: string;
@@ -1429,7 +1430,7 @@ function normalizeBaseUrl(input: string) {
   }
 }
 
-function decodeClientAuthToken(token: string): Partial<AppSessionUser> & { sid?: string } {
+function decodeClientAuthToken(token: string): Partial<AppSessionUser> & { sid?: string; exp?: number } {
   try {
     const [, payload] = token.split(".");
     if (!payload) return {};
@@ -1443,6 +1444,7 @@ function decodeClientAuthToken(token: string): Partial<AppSessionUser> & { sid?:
       sid: string;
       departmentId?: string | null;
       departmentName?: string | null;
+      exp?: number;
     }>;
     return {
       id: typeof parsed.sub === "string" ? parsed.sub : undefined,
@@ -1451,6 +1453,7 @@ function decodeClientAuthToken(token: string): Partial<AppSessionUser> & { sid?:
       clientId: typeof parsed.clientId === "string" ? parsed.clientId : undefined,
       role: typeof parsed.role === "string" ? parsed.role : undefined,
       sid: typeof parsed.sid === "string" ? parsed.sid : undefined,
+      exp: typeof parsed.exp === "number" ? parsed.exp : undefined,
       departmentId: typeof parsed.departmentId === "string" ? parsed.departmentId : undefined,
       departmentName: typeof parsed.departmentName === "string" ? parsed.departmentName : undefined,
     };
@@ -1486,6 +1489,12 @@ function parseStoredSession(raw: string | null): AppSession | null {
     return {
       baseUrl: normalizeBaseUrl(String(parsed.baseUrl || getDefaultBaseUrl())),
       token,
+      expiresAt:
+        typeof parsed.expiresAt === "string" && parsed.expiresAt.trim()
+          ? parsed.expiresAt
+          : tokenUser.exp
+            ? new Date(tokenUser.exp * 1000).toISOString()
+            : "",
       user: resolvedUser,
       features: getTenantCapabilities(parsed as Partial<AppSession>),
       profile: getAppProfile(parsed as Partial<AppSession>),
@@ -1519,13 +1528,34 @@ export function clearAppSession() {
   localStorage.removeItem(LOCAL_KEY);
 }
 
+function getCurrentStoredSessionForRequest(session: AppSession) {
+  const stored = loadAppSession();
+  if (stored?.token && stored.user.id === session.user.id && stored.user.clientId === session.user.clientId) {
+    return stored;
+  }
+  return session;
+}
+
+export function getAppSessionExpiresAt(session: AppSession | null): Date | null {
+  if (!session?.expiresAt) return null;
+  const date = new Date(session.expiresAt);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+export function getAppSessionRemainingMs(session: AppSession | null, now = new Date()) {
+  const expiresAt = getAppSessionExpiresAt(session);
+  if (!expiresAt) return null;
+  return expiresAt.getTime() - now.getTime();
+}
+
 async function requestAppJson<T>(
   session: AppSession,
   path: string,
   init?: RequestInit & { timeoutMs?: number }
 ): Promise<T> {
-  const baseUrl = normalizeBaseUrl(session.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl();
-  const token = session.token.trim();
+  const currentSession = getCurrentStoredSessionForRequest(session);
+  const baseUrl = normalizeBaseUrl(currentSession.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl();
+  const token = currentSession.token.trim();
   if (!token) {
     const error = new Error("Sessao invalida. Faca login novamente.") as AppApiError;
     error.status = 401;
@@ -1600,6 +1630,7 @@ async function requestAppJson<T>(
     error.details = details;
     error.payload = payload;
     if (res.status === 401) {
+      clearAppSession();
       if (errorCode === "session_replaced") {
         error.message = "Sua sessao foi encerrada porque houve um novo login em outro dispositivo.";
       } else if (errorCode === "session_revoked") {
@@ -1639,8 +1670,9 @@ async function requestAppText(
   path: string,
   init?: RequestInit & { timeoutMs?: number }
 ): Promise<string> {
-  const baseUrl = normalizeBaseUrl(session.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl();
-  const token = session.token.trim();
+  const currentSession = getCurrentStoredSessionForRequest(session);
+  const baseUrl = normalizeBaseUrl(currentSession.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl();
+  const token = currentSession.token.trim();
   if (!token) {
     const error = new Error("Sessao invalida. Faca login novamente.") as AppApiError;
     error.status = 401;
@@ -1714,7 +1746,10 @@ async function requestAppText(
     error.errorCode = errorCode;
     error.details = details;
     error.payload = payload;
-    if (res.status === 401) error.message = "Sessao expirada. Faca login novamente.";
+    if (res.status === 401) {
+      clearAppSession();
+      error.message = "Sessao expirada. Faca login novamente.";
+    }
     if (res.status === 403) error.message = "Sem permissao (403).";
     if (res.status >= 500 && !errorCode && !details) {
       error.message = "Erro no servidor (5xx).";
@@ -1734,8 +1769,9 @@ async function requestAppBlob(
   contentType: string | null;
   fileName: string | null;
 }> {
-  const baseUrl = normalizeBaseUrl(session.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl();
-  const token = session.token.trim();
+  const currentSession = getCurrentStoredSessionForRequest(session);
+  const baseUrl = normalizeBaseUrl(currentSession.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl();
+  const token = currentSession.token.trim();
   if (!token) {
     const error = new Error("Sessao invalida. Faca login novamente.") as AppApiError;
     error.status = 401;
@@ -1789,6 +1825,10 @@ async function requestAppBlob(
     }
     const error = new Error(message) as AppApiError;
     error.status = res.status;
+    if (res.status === 401) {
+      clearAppSession();
+      error.message = "Sessao expirada. Faca login novamente.";
+    }
     throw error;
   }
 
@@ -1806,7 +1846,7 @@ export async function loginAppUser(
   email: string,
   password: string
 ): Promise<
-  | { ok: true; token: string; user: AppSessionUser; features: TenantCapabilities; profile: AppProfile; mfaRequired?: false }
+  | { ok: true; token: string; expiresAt: string; user: AppSessionUser; features: TenantCapabilities; profile: AppProfile; mfaRequired?: false }
   | {
       ok: true;
       mfaRequired: true;
@@ -1898,6 +1938,7 @@ export async function loginAppUser(
   return {
     ...payload,
     token: payload.token,
+    expiresAt: String(payload.expiresAt ?? ""),
     mfaRequired: false,
     features: getTenantCapabilities({ features: payload.features ?? undefined }),
     profile: getAppProfile({ profile: payload.profile ?? undefined }),
@@ -1917,7 +1958,7 @@ export async function loginAppUser(
 export async function verifyAppMfaLoginChallenge(
   challengeToken: string,
   code: string
-): Promise<{ ok: true; token: string; user: AppSessionUser; features: TenantCapabilities; profile: AppProfile }> {
+): Promise<{ ok: true; token: string; expiresAt: string; user: AppSessionUser; features: TenantCapabilities; profile: AppProfile }> {
   const baseUrl = normalizeBaseUrl(getDefaultBaseUrl()) || getDefaultBaseUrl();
   const res = await fetch(`${baseUrl}/auth/mfa/verify`, {
     method: "POST",
@@ -1944,6 +1985,7 @@ export async function verifyAppMfaLoginChallenge(
   const payload = (await res.json()) as {
     ok: true;
     token: string;
+    expiresAt?: string;
     user: AppSessionUser;
     features?: Partial<TenantCapabilities> | null;
     profile?: AppProfile | null;
@@ -1951,6 +1993,7 @@ export async function verifyAppMfaLoginChallenge(
   const tokenUser = decodeClientAuthToken(payload.token);
   return {
     ...payload,
+    expiresAt: String(payload.expiresAt ?? ""),
     features: getTenantCapabilities({ features: payload.features ?? undefined }),
     profile: getAppProfile({ profile: payload.profile ?? undefined }),
     user: {
@@ -2018,6 +2061,31 @@ export function logoutAppSession(
     body: JSON.stringify({ endpoint: endpoint ?? null }),
     timeoutMs: 3000,
   });
+}
+
+export async function renewAppSession(
+  session: AppSession
+): Promise<{ ok: true; token: string; expiresAt: string; user: AppSessionUser; features: TenantCapabilities; profile: AppProfile }> {
+  const response = await requestAppJson<{
+    ok: true;
+    token: string;
+    expiresAt: string;
+    user: AppSessionUser;
+    features?: Partial<TenantCapabilities> | null;
+    profile?: AppProfile | null;
+  }>(session, "/auth/renew", {
+    method: "POST",
+    body: JSON.stringify({}),
+    timeoutMs: 5000,
+  });
+  return {
+    ok: true,
+    token: response.token,
+    expiresAt: response.expiresAt,
+    user: response.user,
+    features: getTenantCapabilities({ features: response.features ?? undefined }),
+    profile: getAppProfile({ profile: response.profile ?? undefined }),
+  };
 }
 
 export async function fetchAppConversations(

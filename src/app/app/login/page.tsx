@@ -77,6 +77,7 @@ export default function AppLoginPage() {
       const session: AppSession = {
         baseUrl: process.env.NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL || "/agent-api",
         token: response.token,
+        expiresAt: response.expiresAt,
         user: response.user,
         features: response.features,
         profile: response.profile,
@@ -109,6 +110,7 @@ export default function AppLoginPage() {
       const session: AppSession = {
         baseUrl: process.env.NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL || "/agent-api",
         token: response.token,
+        expiresAt: response.expiresAt,
         user: response.user,
         features: response.features,
         profile: response.profile,

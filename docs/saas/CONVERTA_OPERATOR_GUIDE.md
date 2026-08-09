@@ -108,9 +108,11 @@ O operador nao deve prometer valor definitivo ao cliente final com base apenas n
 
 ## Relatorio Acessos/Sessoes
 
-Em `Relatorios`, a secao `Acessos/Sessoes` mostra trilha operacional de autenticacao por tenant. Ela usa sessoes observadas pela aplicacao e permite consultar login, logout explicito, substituicao de sessao, revogacao e ultima atividade observada.
+Em `Relatorios`, a secao `Acessos/Sessoes` mostra trilha operacional de autenticacao por tenant. Ela usa sessoes observadas pela aplicacao e permite consultar login, logout explicito, substituicao de sessao, renovacao, expiracao e ultima atividade observada.
 
-Esta secao nao e controle de ponto, folha de ponto, jornada de trabalho ou comprovacao de presenca laboral. Fechar navegador, desligar computador ou perder internet nao gera logout deterministico. Quando uma sessao antiga nao possui encerramento registrado, o Converta nao preenche logout artificialmente.
+As sessoes do Converta possuem TTL absoluto de 12 horas. No ultimo minuto, a interface solicita renovacao explicita com `Continuar conectado`; essa acao encerra a sessao atual como `Renovada` e cria uma nova sessao com mais 12 horas. Nao existe sliding expiration: atividade e `lastSeenAt` nao estendem a sessao automaticamente.
+
+Esta secao nao e controle de ponto, folha de ponto, jornada de trabalho ou comprovacao de presenca laboral. Fechar navegador, desligar computador ou perder internet nao gera logout deterministico. Quando uma sessao vence sem request posterior, o relatorio pode exibi-la como `Expirada`, sem preencher logout artificialmente.
 
 Campos principais:
 
