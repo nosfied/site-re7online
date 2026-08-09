@@ -6,8 +6,8 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 
 | Documento | Status | Uso |
 | --- | --- | --- |
-| `docs/saas/CONVERTA_PRODUCT_STATE_2026-08.md` | atual | Fotografia documental do produto, canais, Inbox, CRM, campanhas, templates, LGPD, uso Meta e limites |
-| `docs/saas/CONVERTA_OPERATOR_GUIDE.md` | atual | Guia de uso operacional para Inbox, templates, mensagens prontas, campanhas, opt-out, anonimizacao e custos Meta |
+| `docs/saas/CONVERTA_PRODUCT_STATE_2026-08.md` | atual | Fotografia documental do produto, canais, Inbox, CRM, campanhas, templates, relatorios de acesso/sessao, LGPD, uso Meta e limites |
+| `docs/saas/CONVERTA_OPERATOR_GUIDE.md` | atual | Guia de uso operacional para Inbox, templates, mensagens prontas, campanhas, relatorio Acessos/Sessoes, opt-out, anonimizacao e custos Meta |
 | `docs/saas/DEMO_TENANT_READINESS.md` | atual | Readiness do tenant generico `demo-converta`, auditoria de configuracoes e checker somente leitura |
 | `docs/saas/DEMO_TENANT_PROVISIONING_CHECKLIST.md` | atual | Checklist manual de provisionamento seguro do tenant de demonstracao |
 | `docs/saas/DEMO_TENANT_DATA_POLICY.md` | atual | Politica de dados ficticios, sanitizacao e limites para demonstracoes |

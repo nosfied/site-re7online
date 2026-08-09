@@ -7,11 +7,15 @@ import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/F
 import {
   AppApiError,
   AppSession,
+  AppSessionAuditReport,
+  AppSessionAuditStatus,
   clearAppSession,
   exportAppConversationReportCsv,
+  exportAppSessionAuditReportCsv,
   fetchAppConversationReport,
   fetchAppDepartments,
   fetchAppRetentionConfig,
+  fetchAppSessionAuditReport,
   fetchAppTenantSummary,
   fetchAppUsers,
   loadAppSession,
@@ -61,6 +65,23 @@ function formatSeconds(value: number | null) {
   const remainingMinutes = minutes % 60;
   return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }
+
+function formatObservedDuration(value: number | null) {
+  return value === null || value === undefined ? "Em aberto" : formatSeconds(value);
+}
+
+const SESSION_ROLE_FILTERS = [
+  { value: "", label: "Todos" },
+  { value: "ADMIN", label: "ADMIN" },
+  { value: "SUPERVISOR", label: "SUPERVISOR" },
+  { value: "AGENT", label: "AGENT" },
+] as const;
+
+const SESSION_STATUS_FILTERS: Array<{ value: "" | AppSessionAuditStatus; label: string }> = [
+  { value: "", label: "Todas" },
+  { value: "OPEN", label: "Abertas" },
+  { value: "CLOSED", label: "Encerradas" },
+];
 
 function toDateTimeLocalValue(date: Date) {
   const offsetMs = date.getTimezoneOffset() * 60 * 1000;
@@ -120,9 +141,18 @@ export default function AppReportsPage() {
   const [departmentId, setDepartmentId] = useState("");
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [exportingSessions, setExportingSessions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [report, setReport] = useState<ConversationReportResponse | null>(null);
+  const [sessionReport, setSessionReport] = useState<AppSessionAuditReport | null>(null);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionFrom, setSessionFrom] = useState(() => toDateTimeLocalValue(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
+  const [sessionTo, setSessionTo] = useState(() => toDateTimeLocalValue(new Date()));
+  const [sessionUserId, setSessionUserId] = useState("");
+  const [sessionRole, setSessionRole] = useState("");
+  const [sessionStatus, setSessionStatus] = useState<"" | AppSessionAuditStatus>("");
+  const [sessionPage, setSessionPage] = useState(1);
   const [retentionDays, setRetentionDays] = useState<number | null>(null);
   const [tenant, setTenant] = useState<AppTenantSummary | null>(null);
 
@@ -240,6 +270,55 @@ export default function AppReportsPage() {
     };
   }, [channel, customFrom, customTo, dedupe, departmentId, handleUnauthorized, periodMode, range, router, session, userId]);
 
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    const fromIso = dateTimeLocalToIso(sessionFrom);
+    const toIso = dateTimeLocalToIso(sessionTo);
+    if (!fromIso || !toIso || Date.parse(fromIso) > Date.parse(toIso)) {
+      setSessionReport(null);
+      setError("Informe um periodo valido para Acessos/Sessoes.");
+      return;
+    }
+    setSessionsLoading(true);
+    fetchAppSessionAuditReport(session, {
+      from: fromIso,
+      to: toIso,
+      userId: sessionUserId || null,
+      role: sessionRole || null,
+      status: sessionStatus || null,
+      page: sessionPage,
+      limit: 25,
+    })
+      .then((response) => {
+        if (!cancelled) setSessionReport(response);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        if (typed.status === 403) {
+          router.replace("/app/inbox");
+          return;
+        }
+        setSessionReport(null);
+        setError(typed.message || "Falha ao carregar acessos/sessoes.");
+      })
+      .finally(() => {
+        if (!cancelled) setSessionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [handleUnauthorized, router, session, sessionFrom, sessionPage, sessionRole, sessionStatus, sessionTo, sessionUserId]);
+
+  useEffect(() => {
+    setSessionPage(1);
+  }, [sessionFrom, sessionRole, sessionStatus, sessionTo, sessionUserId]);
+
   const userNameById = useMemo(
     () => new Map(users.map((item) => [item.id, item.name])),
     [users]
@@ -281,6 +360,47 @@ export default function AppReportsPage() {
       setError(typed.message || "Falha ao exportar CSV.");
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportSessions = async () => {
+    if (!session) return;
+    const fromIso = dateTimeLocalToIso(sessionFrom);
+    const toIso = dateTimeLocalToIso(sessionTo);
+    if (!fromIso || !toIso || Date.parse(fromIso) > Date.parse(toIso)) {
+      setError("Informe um periodo valido para exportar Acessos/Sessoes.");
+      return;
+    }
+    setExportingSessions(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const csv = await exportAppSessionAuditReportCsv(session, {
+        from: fromIso,
+        to: toIso,
+        userId: sessionUserId || null,
+        role: sessionRole || null,
+        status: sessionStatus || null,
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "session-audit.csv";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setSuccess("CSV de acessos/sessoes exportado com sucesso.");
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(typed.message || "Falha ao exportar acessos/sessoes.");
+    } finally {
+      setExportingSessions(false);
     }
   };
 
@@ -650,6 +770,160 @@ export default function AppReportsPage() {
           <p className="text-xs uppercase tracking-wide text-white/50">Fora do SLA</p>
           <p className="mt-2 text-2xl font-semibold">{report?.slaBreaches ?? "-"}</p>
         </article>
+      </section>
+
+      <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+        <div className="flex flex-col gap-2 border-b border-white/10 pb-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-base font-semibold">Acessos/Sessoes</h2>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-white/55">
+              Auditoria operacional de autenticacao. Nao e controle de ponto, jornada ou comprovacao
+              de presenca laboral. Fechar o navegador, desligar o computador ou perder internet nao gera
+              logout deterministico; ultima atividade observada indica apenas atividade autenticada vista
+              pela aplicacao.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleExportSessions}
+            disabled={exportingSessions}
+            className="rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-2 text-sm text-white hover:bg-re7-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {exportingSessions ? "Exportando..." : "Exportar CSV"}
+          </button>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <label className="grid gap-1 text-sm">
+            <span className="text-white/70">Inicio do login</span>
+            <input
+              type="datetime-local"
+              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+              value={sessionFrom}
+              onChange={(event) => setSessionFrom(event.target.value)}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-white/70">Fim do login</span>
+            <input
+              type="datetime-local"
+              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+              value={sessionTo}
+              onChange={(event) => setSessionTo(event.target.value)}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-white/70">Usuario</span>
+            <select
+              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+              value={sessionUserId}
+              onChange={(event) => setSessionUserId(event.target.value)}
+            >
+              <option value="">Todos</option>
+              {users.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name} ({item.role})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-white/70">Perfil</span>
+            <select
+              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+              value={sessionRole}
+              onChange={(event) => setSessionRole(event.target.value)}
+            >
+              {SESSION_ROLE_FILTERS.map((item) => (
+                <option key={item.value || "all"} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-white/70">Status</span>
+            <select
+              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+              value={sessionStatus}
+              onChange={(event) => setSessionStatus(event.target.value as "" | AppSessionAuditStatus)}
+            >
+              {SESSION_STATUS_FILTERS.map((item) => (
+                <option key={item.value || "all"} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <p className="mt-3 text-xs text-white/50">
+          Periodo filtrado por sessoes iniciadas no intervalo. Sessoes antigas sem encerramento
+          registrado permanecem como abertas; nenhum encerramento e inferido por lastSeenAt.
+        </p>
+        {sessionsLoading ? <p className="mt-4 text-sm text-white/70">Carregando acessos/sessoes...</p> : null}
+        <div className="mt-4 overflow-x-auto rounded-lg border border-white/10">
+          {sessionReport?.items.length ? (
+            <table className="w-full min-w-[980px] text-sm">
+              <thead className="bg-white/10 text-left">
+                <tr>
+                  <th className="px-3 py-2">Usuario</th>
+                  <th className="px-3 py-2">Perfil</th>
+                  <th className="px-3 py-2">Login</th>
+                  <th className="px-3 py-2">Encerramento</th>
+                  <th className="px-3 py-2">Motivo</th>
+                  <th className="px-3 py-2">Duracao observada</th>
+                  <th className="px-3 py-2">Ultima atividade observada</th>
+                  <th className="px-3 py-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sessionReport.items.map((item) => (
+                  <tr key={item.id} className="border-t border-white/10">
+                    <td className="px-3 py-2">{item.userName}</td>
+                    <td className="px-3 py-2 text-white/70">{item.role}</td>
+                    <td className="px-3 py-2">{formatDateTime(item.loginAt)}</td>
+                    <td className="px-3 py-2">{item.endedAt ? formatDateTime(item.endedAt) : "-"}</td>
+                    <td className="px-3 py-2 text-white/70">{item.endReasonLabel}</td>
+                    <td className="px-3 py-2">{formatObservedDuration(item.durationObservedSec)}</td>
+                    <td className="px-3 py-2">{formatDateTime(item.lastSeenAt)}</td>
+                    <td className="px-3 py-2">
+                      <span className="rounded-full border border-white/10 bg-white/10 px-2 py-1 text-xs">
+                        {item.statusLabel}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="p-4 text-sm text-white/60">Nenhuma sessao encontrada no periodo selecionado.</p>
+          )}
+        </div>
+        {sessionReport ? (
+          <div className="mt-3 flex flex-col gap-2 text-xs text-white/55 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Total: {sessionReport.total} sessoes observadas. Pagina {sessionReport.page} de{" "}
+              {sessionReport.totalPages}.
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="rounded-md border border-white/15 px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={sessionPage <= 1}
+                onClick={() => setSessionPage((current) => Math.max(1, current - 1))}
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-white/15 px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={sessionPage >= sessionReport.totalPages}
+                onClick={() => setSessionPage((current) => Math.min(sessionReport.totalPages, current + 1))}
+              >
+                Proxima
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">

@@ -324,6 +324,12 @@ import {
   parseConversationReportRange,
 } from "../reports/conversationReportPeriod.js";
 import { buildConversationSlaOperationalSummary } from "../reports/conversationSlaSummary.js";
+import {
+  buildSessionAuditCsv,
+  buildSessionAuditReport,
+  normalizeSessionAuditRole,
+  normalizeSessionAuditStatus,
+} from "../reports/sessionAuditReport.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import {
   getPushStatus,
@@ -8580,6 +8586,181 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       403,
       httpError("managed_by_internal_admin", "Flows do chatbot sao gerenciados no console interno.")
     );
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/reports/sessions") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can view reports."));
+        return;
+      }
+      const period = parseSessionAuditPeriod(query);
+      if (!period) {
+        json(res, 400, httpError("invalid_period", "Invalid period"));
+        return;
+      }
+      const roleParam = typeof query.role === "string" ? query.role.trim() : "";
+      const role = roleParam ? normalizeSessionAuditRole(roleParam) : null;
+      if (roleParam && !role) {
+        json(res, 400, httpError("invalid_role", "Invalid role"));
+        return;
+      }
+      const statusParam = typeof query.status === "string" ? query.status.trim() : "";
+      const status = statusParam ? normalizeSessionAuditStatus(statusParam) : null;
+      if (statusParam && !status) {
+        json(res, 400, httpError("invalid_status", "Invalid status"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "reports",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
+      if (requestedUserId) {
+        const user = await prisma.user.findFirst({
+          where: { id: requestedUserId, clientId: client.id },
+          select: { id: true },
+        });
+        if (!user) {
+          json(res, 400, httpError("user_not_found", "User not found"));
+          return;
+        }
+      }
+      const report = await buildSessionAuditReport(prisma, {
+        clientId: client.id,
+        from: period.from,
+        to: period.to,
+        userId: requestedUserId || null,
+        role,
+        status,
+        page: parsePositiveInteger(query.page),
+        limit: parsePositiveInteger(query.limit),
+      });
+      json(res, 200, report);
+      logger.info({
+        event: "app.reports.sessions.viewed",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+        filterUserId: requestedUserId || null,
+        filterRole: role,
+        filterStatus: status,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.reports.sessions.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/reports/sessions/export") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can view reports."));
+        return;
+      }
+      const period = parseSessionAuditPeriod(query);
+      if (!period) {
+        json(res, 400, httpError("invalid_period", "Invalid period"));
+        return;
+      }
+      const roleParam = typeof query.role === "string" ? query.role.trim() : "";
+      const role = roleParam ? normalizeSessionAuditRole(roleParam) : null;
+      if (roleParam && !role) {
+        json(res, 400, httpError("invalid_role", "Invalid role"));
+        return;
+      }
+      const statusParam = typeof query.status === "string" ? query.status.trim() : "";
+      const status = statusParam ? normalizeSessionAuditStatus(statusParam) : null;
+      if (statusParam && !status) {
+        json(res, 400, httpError("invalid_status", "Invalid status"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "reports",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
+      if (requestedUserId) {
+        const user = await prisma.user.findFirst({
+          where: { id: requestedUserId, clientId: client.id },
+          select: { id: true },
+        });
+        if (!user) {
+          json(res, 400, httpError("user_not_found", "User not found"));
+          return;
+        }
+      }
+      const report = await buildSessionAuditReport(prisma, {
+        clientId: client.id,
+        from: period.from,
+        to: period.to,
+        userId: requestedUserId || null,
+        role,
+        status,
+        page: 1,
+        limit: 100,
+      });
+      const safeClientKey = client.clientKey.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
+      res.writeHead(200, {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename=\"session-audit-${safeClientKey}.csv\"`,
+      });
+      res.end(buildSessionAuditCsv(report));
+      logger.info({
+        event: "app.reports.sessions.exported",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+        filterUserId: requestedUserId || null,
+        filterRole: role,
+        filterStatus: status,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.reports.sessions_export.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
     return;
   }
 
@@ -22168,6 +22349,28 @@ async function getScopedClientById(
     where: { id: clientId },
     select: { id: true, clientKey: true, status: true, features: true, profile: true },
   });
+}
+
+function parsePositiveInteger(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1) return null;
+  return Math.floor(parsed);
+}
+
+function parseSessionAuditDate(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function parseSessionAuditPeriod(query: Record<string, unknown>) {
+  const now = new Date();
+  const defaultFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const from = parseSessionAuditDate(query.from) ?? defaultFrom;
+  const to = parseSessionAuditDate(query.to) ?? now;
+  if (from.getTime() > to.getTime()) return null;
+  return { from, to };
 }
 
 async function requireSchedulingAppAccess(

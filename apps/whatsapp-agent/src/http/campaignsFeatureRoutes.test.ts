@@ -6,7 +6,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { APP_AUTH_SESSION_EXPIRES_AT } from "../auth/appSessionService.js";
-import { issueClientAuthToken } from "../auth/clientAuth.js";
+import { hashPassword, issueClientAuthToken } from "../auth/clientAuth.js";
 import {
   filterOptedOutCampaignRecipients,
   recordContactOptOut,
@@ -1384,6 +1384,243 @@ test("meta usage monthly report exposes sanitized JSON and CSV", async () => {
   assert.equal(otherTenant.body.summary.totalOutboundWithUsage, 1);
   assert.equal(otherTenant.body.summary.deliveredBillableCount, 1);
   assert.equal(otherTenant.body.summary.deliveredEstimatedCostUsd, 7);
+});
+
+test("session audit report is tenant scoped, role protected and sanitized", async () => {
+  const from = new Date("2030-01-10T00:00:00.000Z");
+  const to = new Date("2030-01-11T00:00:00.000Z");
+  const openSessionId = `${businessAdmin.id}-session-audit-open`;
+  const logoutSessionId = `${businessSupervisor.id}-session-audit-logout`;
+  const replacedSessionId = `${businessAgent.id}-session-audit-replaced`;
+  const otherTenantSessionId = `${governmentAdmin.id}-session-audit-cross-tenant`;
+  await prisma.appAuthSession.createMany({
+    data: [
+      {
+        id: openSessionId,
+        clientId: businessClientId,
+        userId: businessAdmin.id,
+        createdAt: new Date("2030-01-10T08:00:00.000Z"),
+        lastSeenAt: new Date("2030-01-10T08:05:00.000Z"),
+        expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
+        userAgent: "Sensitive browser details",
+        ipHash: "sensitive-ip-hash",
+      },
+      {
+        id: logoutSessionId,
+        clientId: businessClientId,
+        userId: businessSupervisor.id,
+        createdAt: new Date("2030-01-10T09:00:00.000Z"),
+        lastSeenAt: new Date("2030-01-10T09:10:00.000Z"),
+        revokedAt: new Date("2030-01-10T09:30:00.000Z"),
+        revokeReason: "logout",
+        expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
+        userAgent: "Sensitive browser details",
+        ipHash: "sensitive-ip-hash",
+      },
+      {
+        id: replacedSessionId,
+        clientId: businessClientId,
+        userId: businessAgent.id,
+        createdAt: new Date("2030-01-10T10:00:00.000Z"),
+        lastSeenAt: new Date("2030-01-10T10:20:00.000Z"),
+        revokedAt: new Date("2030-01-10T10:45:00.000Z"),
+        revokeReason: "replaced_by_new_login",
+        expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
+        userAgent: "Sensitive browser details",
+        ipHash: "sensitive-ip-hash",
+      },
+      {
+        id: otherTenantSessionId,
+        clientId: governmentClientId,
+        userId: governmentAdmin.id,
+        createdAt: new Date("2030-01-10T11:00:00.000Z"),
+        lastSeenAt: new Date("2030-01-10T11:20:00.000Z"),
+        expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
+        userAgent: "Sensitive browser details",
+        ipHash: "sensitive-ip-hash",
+      },
+    ],
+  });
+
+  const unauth = await requestUnauth<ErrorPayload>(
+    "GET",
+    `/app/reports/sessions?from=${from.toISOString()}&to=${to.toISOString()}`
+  );
+  assert.equal(unauth.status, 401);
+
+  const agent = await request<ErrorPayload>(
+    "GET",
+    `/app/reports/sessions?from=${from.toISOString()}&to=${to.toISOString()}`,
+    businessAgent
+  );
+  assert.equal(agent.status, 403);
+
+  const admin = await request<{
+    ok: true;
+    total: number;
+    items: Array<{
+      id: string;
+      userId: string;
+      userName: string;
+      role: string;
+      loginAt: string;
+      endedAt: string | null;
+      endReason: string | null;
+      endReasonLabel: string;
+      status: string;
+      durationObservedSec: number | null;
+      lastSeenAt: string | null;
+      ipHash?: string;
+      userAgent?: string;
+    }>;
+    notes: string[];
+  }>(
+    "GET",
+    `/app/reports/sessions?from=${from.toISOString()}&to=${to.toISOString()}&clientId=malicious`,
+    businessAdmin
+  );
+  assert.equal(admin.status, 200, JSON.stringify(admin.body));
+  assert.equal(admin.body.total, 3);
+  assert.equal(admin.body.items.some((item) => item.id === otherTenantSessionId), false);
+  assert.equal(admin.body.items.some((item) => item.ipHash || item.userAgent), false);
+  assert.equal(admin.body.notes.some((note) => note.includes("nao e controle de ponto")), true);
+
+  const openItem = admin.body.items.find((item) => item.id === openSessionId);
+  assert.equal(openItem?.status, "OPEN");
+  assert.equal(openItem?.endedAt, null);
+  assert.equal(openItem?.durationObservedSec, null);
+  assert.equal(openItem?.endReasonLabel, "Encerramento nao registrado");
+  assert.equal(openItem?.lastSeenAt, "2030-01-10T08:05:00.000Z");
+
+  const logoutItem = admin.body.items.find((item) => item.id === logoutSessionId);
+  assert.equal(logoutItem?.status, "CLOSED");
+  assert.equal(logoutItem?.endReason, "logout");
+  assert.equal(logoutItem?.endReasonLabel, "Logout explicito");
+  assert.equal(logoutItem?.durationObservedSec, 1800);
+
+  const replacedItem = admin.body.items.find((item) => item.id === replacedSessionId);
+  assert.equal(replacedItem?.endReasonLabel, "Substituida por novo login");
+
+  const supervisor = await request<{ ok: true; total: number }>(
+    "GET",
+    `/app/reports/sessions?from=${from.toISOString()}&to=${to.toISOString()}`,
+    businessSupervisor
+  );
+  assert.equal(supervisor.status, 200, JSON.stringify(supervisor.body));
+  assert.equal(supervisor.body.total, 3);
+
+  const filteredByUser = await request<{ ok: true; total: number; items: Array<{ id: string }> }>(
+    "GET",
+    `/app/reports/sessions?from=${from.toISOString()}&to=${to.toISOString()}&userId=${businessSupervisor.id}`,
+    businessAdmin
+  );
+  assert.equal(filteredByUser.status, 200, JSON.stringify(filteredByUser.body));
+  assert.equal(filteredByUser.body.total, 1);
+  assert.equal(filteredByUser.body.items[0]?.id, logoutSessionId);
+
+  const filteredByRole = await request<{ ok: true; total: number; items: Array<{ role: string }> }>(
+    "GET",
+    `/app/reports/sessions?from=${from.toISOString()}&to=${to.toISOString()}&role=AGENT`,
+    businessAdmin
+  );
+  assert.equal(filteredByRole.status, 200, JSON.stringify(filteredByRole.body));
+  assert.equal(filteredByRole.body.total, 1);
+  assert.equal(filteredByRole.body.items[0]?.role, "AGENT");
+
+  const filteredClosed = await request<{ ok: true; total: number }>(
+    "GET",
+    `/app/reports/sessions?from=${from.toISOString()}&to=${to.toISOString()}&status=CLOSED`,
+    businessAdmin
+  );
+  assert.equal(filteredClosed.status, 200, JSON.stringify(filteredClosed.body));
+  assert.equal(filteredClosed.body.total, 2);
+
+  const crossTenantUser = await request<ErrorPayload>(
+    "GET",
+    `/app/reports/sessions?from=${from.toISOString()}&to=${to.toISOString()}&userId=${governmentAdmin.id}`,
+    businessAdmin
+  );
+  assert.equal(crossTenantUser.status, 400);
+  assert.equal(getErrorCode(crossTenantUser.body), "user_not_found");
+
+  const csv = await requestText(
+    "GET",
+    `/app/reports/sessions/export?from=${from.toISOString()}&to=${to.toISOString()}`,
+    businessAdmin
+  );
+  assert.equal(csv.status, 200, csv.text);
+  assert.match(csv.contentType ?? "", /text\/csv/);
+  assert.match(csv.text, /duracao_observada_segundos/);
+  assert.match(csv.text, /Logout explicito/);
+  assert.doesNotMatch(csv.text, /sensitive-ip-hash/i);
+  assert.doesNotMatch(csv.text, /Sensitive browser/i);
+  assert.doesNotMatch(csv.text, new RegExp(otherTenantSessionId));
+});
+
+test("auth session events are persisted with sanitized payloads", async () => {
+  const email = `${prefix}-session-event-user@example.test`;
+  await prisma.user.create({
+    data: {
+      clientId: businessClientId,
+      name: "Session Event User",
+      email,
+      passwordHash: hashPassword("session-event-password"),
+      role: "SUPERVISOR",
+      isActive: true,
+    },
+  });
+
+  const firstLogin = await requestUnauth<{
+    ok: true;
+    token: string;
+  }>("POST", "/auth/login", {
+    email,
+    password: "session-event-password",
+  });
+  assert.equal(firstLogin.status, 200, JSON.stringify(firstLogin.body));
+
+  const secondLogin = await requestUnauth<{
+    ok: true;
+    token: string;
+  }>("POST", "/auth/login", {
+    email,
+    password: "session-event-password",
+  });
+  assert.equal(secondLogin.status, 200, JSON.stringify(secondLogin.body));
+
+  const logout = await fetch(`${baseUrl}/auth/logout`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${secondLogin.body.token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({}),
+  });
+  assert.equal(logout.status, 200);
+
+  const events = await prisma.event.findMany({
+    where: {
+      clientId: businessClientId,
+      eventName: {
+        in: ["auth.login", "auth.logout", "auth.session_replaced"],
+      },
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      eventName: true,
+      payloadJson: true,
+      waId: true,
+      messageId: true,
+    },
+  });
+  assert.equal(events.filter((event) => event.eventName === "auth.login").length, 2);
+  assert.equal(events.filter((event) => event.eventName === "auth.session_replaced").length, 1);
+  assert.equal(events.filter((event) => event.eventName === "auth.logout").length, 1);
+  const serialized = JSON.stringify(events);
+  assert.equal(serialized.includes("session-event-password"), false);
+  assert.equal(serialized.includes("Sensitive browser"), false);
+  assert.equal(serialized.includes("ipHash"), false);
+  assert.equal(events.some((event) => event.waId || event.messageId), false);
 });
 
 test("template catalog is tenant scoped and exposes campaign usage safely", async () => {

@@ -20,6 +20,7 @@ const CRITICAL_PREFIXES = [
   "events.retention.",
   "handoff.",
   "assignment.",
+  "auth.",
   "security.",
   "login.",
   "quota.",

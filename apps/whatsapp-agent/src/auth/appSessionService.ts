@@ -96,6 +96,10 @@ export async function createExclusiveAppSession(params: {
   const userAgent = String(params.req.headers["user-agent"] ?? "").slice(0, 500) || null;
   const ipHash = hashSensitiveValue(getRequestIp(params.req));
   const result = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.findFirst({
+      where: { id: params.userId, clientId: params.clientId },
+      select: { role: true },
+    });
     const revoked = await tx.appAuthSession.updateMany({
       where: {
         clientId: params.clientId,
@@ -124,6 +128,33 @@ export async function createExclusiveAppSession(params: {
       select: {
         id: true,
         expiresAt: true,
+      },
+    });
+    if (revoked.count > 0) {
+      await tx.event.create({
+        data: {
+          clientId: params.clientId,
+          eventName: "auth.session_replaced",
+          requestId: `auth.session_replaced:${session.id}`,
+          payloadJson: {
+            userId: params.userId,
+            role: user?.role ?? null,
+            sessionId: session.id,
+            replacedCount: revoked.count,
+          },
+        },
+      });
+    }
+    await tx.event.create({
+      data: {
+        clientId: params.clientId,
+        eventName: "auth.login",
+        requestId: `auth.login:${session.id}`,
+        payloadJson: {
+          userId: params.userId,
+          role: user?.role ?? null,
+          sessionId: session.id,
+        },
       },
     });
     return { session, replaced: revoked.count, revokedPush: push };
@@ -216,17 +247,40 @@ export async function revokeAppSession(params: {
   sessionId: string;
   reason: string;
 }) {
-  const result = await getPrisma().appAuthSession.updateMany({
-    where: {
-      id: params.sessionId,
-      clientId: params.clientId,
-      userId: params.userId,
-      revokedAt: null,
-    },
-    data: {
-      revokedAt: new Date(),
-      revokeReason: params.reason,
-    },
+  const prisma = getPrisma();
+  const result = await prisma.$transaction(async (tx) => {
+    const revoked = await tx.appAuthSession.updateMany({
+      where: {
+        id: params.sessionId,
+        clientId: params.clientId,
+        userId: params.userId,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+        revokeReason: params.reason,
+      },
+    });
+    if (revoked.count > 0) {
+      const user = await tx.user.findFirst({
+        where: { id: params.userId, clientId: params.clientId },
+        select: { role: true },
+      });
+      await tx.event.create({
+        data: {
+          clientId: params.clientId,
+          eventName: params.reason === "logout" ? "auth.logout" : "auth.session_revoked",
+          requestId: `auth.session_revoked:${params.sessionId}:${params.reason}`,
+          payloadJson: {
+            userId: params.userId,
+            role: user?.role ?? null,
+            sessionId: params.sessionId,
+            reason: params.reason,
+          },
+        },
+      });
+    }
+    return revoked;
   });
   logger.info({
     event: "auth.session.revoked",
@@ -258,6 +312,25 @@ export async function revokeAllUserSessionsAndPush(params: {
       },
     });
     const push = await revokeUserPushSubscriptions({ ...params, tx });
+    if (sessions.count > 0) {
+      const user = await tx.user.findFirst({
+        where: { id: params.userId, clientId: params.clientId },
+        select: { role: true },
+      });
+      await tx.event.create({
+        data: {
+          clientId: params.clientId,
+          eventName: "auth.session_revoked",
+          requestId: `auth.session_revoked:${params.userId}:${params.reason}:${crypto.randomUUID()}`,
+          payloadJson: {
+            userId: params.userId,
+            role: user?.role ?? null,
+            reason: params.reason,
+            revokedCount: sessions.count,
+          },
+        },
+      });
+    }
     return { sessions: sessions.count, push };
   });
   logger.info({
@@ -600,7 +673,7 @@ export async function resetPasswordWithToken(params: {
       },
       data: { usedAt: new Date() },
     });
-    await tx.appAuthSession.updateMany({
+    const revokedSessions = await tx.appAuthSession.updateMany({
       where: {
         clientId: record.clientId,
         userId: record.userId,
@@ -611,6 +684,21 @@ export async function resetPasswordWithToken(params: {
         revokeReason: "password_reset",
       },
     });
+    if (revokedSessions.count > 0) {
+      await tx.event.create({
+        data: {
+          clientId: record.clientId,
+          eventName: "auth.session_revoked",
+          requestId: `auth.session_revoked:${record.userId}:password_reset:${crypto.randomUUID()}`,
+          payloadJson: {
+            userId: record.userId,
+            role: null,
+            reason: "password_reset",
+            revokedCount: revokedSessions.count,
+          },
+        },
+      });
+    }
     await revokeUserPushSubscriptions({
       clientId: record.clientId,
       userId: record.userId,

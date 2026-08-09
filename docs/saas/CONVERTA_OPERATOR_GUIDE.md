@@ -106,6 +106,22 @@ O Converta exibe estimativas para apoiar decisao operacional. Use essas informac
 
 O operador nao deve prometer valor definitivo ao cliente final com base apenas na previsao local.
 
+## Relatorio Acessos/Sessoes
+
+Em `Relatorios`, a secao `Acessos/Sessoes` mostra trilha operacional de autenticacao por tenant. Ela usa sessoes observadas pela aplicacao e permite consultar login, logout explicito, substituicao de sessao, revogacao e ultima atividade observada.
+
+Esta secao nao e controle de ponto, folha de ponto, jornada de trabalho ou comprovacao de presenca laboral. Fechar navegador, desligar computador ou perder internet nao gera logout deterministico. Quando uma sessao antiga nao possui encerramento registrado, o Converta nao preenche logout artificialmente.
+
+Campos principais:
+
+- `Login`: quando a sessao foi criada.
+- `Encerramento`: quando houve revogacao deterministica, como logout explicito.
+- `Motivo`: humanizacao do motivo tecnico real, sem transformar tudo em logout.
+- `Duracao observada`: calculada somente quando login e encerramento existem.
+- `Ultima atividade observada`: atividade autenticada vista pela aplicacao, nao presenca online.
+
+O CSV segue a mesma minimizacao da tela: nao exporta token, IP bruto, hash de IP, user agent, fingerprint ou identificadores de dispositivo.
+
 ## O que nao fazer
 
 - Nao enviar campanhas sem revisar audiencia.

@@ -373,6 +373,38 @@ export type AppMetaUsageMonthlyReport = {
   notes: string[];
 };
 
+export type AppSessionAuditStatus = "OPEN" | "CLOSED";
+
+export type AppSessionAuditItem = {
+  id: string;
+  userId: string;
+  userName: string;
+  role: string;
+  loginAt: string;
+  endedAt: string | null;
+  endReason: string | null;
+  endReasonLabel: string;
+  status: AppSessionAuditStatus;
+  statusLabel: string;
+  durationObservedSec: number | null;
+  lastSeenAt: string | null;
+};
+
+export type AppSessionAuditReport = {
+  ok: true;
+  periodFrom: string;
+  periodTo: string;
+  userId: string | null;
+  role: string | null;
+  status: AppSessionAuditStatus | null;
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  items: AppSessionAuditItem[];
+  notes: string[];
+};
+
 export type AppCampaignDraftRecipient = {
   leadId: string;
   displayName: string | null;
@@ -2970,6 +3002,30 @@ export async function fetchAppConversationReport(
   return requestAppJson(session, `/app/reports/conversations?${query.toString()}`);
 }
 
+export async function fetchAppSessionAuditReport(
+  session: AppSession,
+  params: {
+    from?: string | null;
+    to?: string | null;
+    userId?: string | null;
+    role?: string | null;
+    status?: AppSessionAuditStatus | null;
+    page?: number | null;
+    limit?: number | null;
+  }
+): Promise<AppSessionAuditReport> {
+  const query = new URLSearchParams();
+  if (params.from) query.set("from", params.from);
+  if (params.to) query.set("to", params.to);
+  if (params.userId) query.set("userId", params.userId);
+  if (params.role) query.set("role", params.role);
+  if (params.status) query.set("status", params.status);
+  if (params.page) query.set("page", String(params.page));
+  if (params.limit) query.set("limit", String(params.limit));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestAppJson(session, `/app/reports/sessions${suffix}`);
+}
+
 export async function fetchAppDashboardOverview(
   session: AppSession,
   filters?: {
@@ -3044,6 +3100,26 @@ export async function exportAppConversationReportCsv(
   if (params.channel) query.set("channel", params.channel);
   if (params.queueId) query.set("queueId", params.queueId);
   return requestAppText(session, `/app/reports/conversations/export?${query.toString()}`);
+}
+
+export async function exportAppSessionAuditReportCsv(
+  session: AppSession,
+  params: {
+    from?: string | null;
+    to?: string | null;
+    userId?: string | null;
+    role?: string | null;
+    status?: AppSessionAuditStatus | null;
+  }
+) {
+  const query = new URLSearchParams();
+  if (params.from) query.set("from", params.from);
+  if (params.to) query.set("to", params.to);
+  if (params.userId) query.set("userId", params.userId);
+  if (params.role) query.set("role", params.role);
+  if (params.status) query.set("status", params.status);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestAppText(session, `/app/reports/sessions/export${suffix}`);
 }
 
 export async function fetchAppInstagramBusinessStatus(
