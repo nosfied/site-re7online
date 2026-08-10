@@ -13,7 +13,7 @@ import {
   revokeContactOptOut,
 } from "../campaigns/optOutRegistry.js";
 import { getPrisma } from "../db.js";
-import { MessageStatus, MessageType } from "@prisma/client";
+import { MessageStatus, MessageType, TrainingContentStatus, TrainingContentType } from "@prisma/client";
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "campaigns-feature-route-test-secret";
 process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || "campaigns-feature-route-test-admin-token";
@@ -44,6 +44,7 @@ const prisma = getPrisma();
 const originalCwd = process.cwd();
 const prefix = `campaigns-feature-${process.pid}-${Date.now()}`;
 const safeTemplatePrefix = prefix.replace(/[^a-z0-9_]/gi, "_").toLowerCase();
+const trainingContentPrefix = `campaigns-${process.pid}`;
 const businessAdminToken = `${prefix}-business-admin-token`;
 process.env.PLATFORM_SUPPORT_TENANT_KEY = process.env.PLATFORM_SUPPORT_TENANT_KEY || `${prefix}-support`;
 
@@ -253,6 +254,13 @@ async function requestSuperadmin<T = unknown>(
 }
 
 async function cleanup() {
+  await prisma.trainingContent.deleteMany({
+    where: {
+      contentId: {
+        startsWith: trainingContentPrefix,
+      },
+    },
+  });
   const clients = await prisma.client.findMany({
     where: {
       clientKey: {
@@ -555,12 +563,27 @@ test("campaign draft routes require authentication", async () => {
 
 test("training center serves authenticated catalog and safe training content", async () => {
   const previousRoot = process.env.TRAINING_CONTENT_ROOT;
+  const pdfContentId = `${trainingContentPrefix}-intro-guide`;
+  const videoContentId = `${trainingContentPrefix}-intro-video`;
+  const draftContentId = `${trainingContentPrefix}-draft-guide`;
+  const symlinkContentId = `${trainingContentPrefix}-symlink-guide`;
+  const pdfStorageKey = "11111111-1111-4111-8111-111111111111.pdf";
+  const videoStorageKey = "22222222-2222-4222-8222-222222222222.mp4";
+  const draftStorageKey = "33333333-3333-4333-8333-333333333333.pdf";
+  const symlinkStorageKey = "44444444-4444-4444-8444-444444444444.pdf";
   try {
     delete process.env.TRAINING_CONTENT_ROOT;
+    await prisma.trainingContent.deleteMany({
+      where: {
+        contentId: {
+          in: [pdfContentId, videoContentId, draftContentId, symlinkContentId],
+        },
+      },
+    });
     const unauth = await requestUnauth<ErrorPayload>("GET", "/app/training/catalog");
     assert.equal(unauth.status, 401);
     assert.equal(getErrorCode(unauth.body), "missing_token");
-    const unauthContent = await requestUnauth<ErrorPayload>("GET", "/app/training/content/intro-platform-guide");
+    const unauthContent = await requestUnauth<ErrorPayload>("GET", `/app/training/content/${pdfContentId}`);
     assert.equal(unauthContent.status, 401);
     assert.equal(getErrorCode(unauthContent.body), "missing_token");
 
@@ -571,22 +594,85 @@ test("training center serves authenticated catalog and safe training content", a
     }>("GET", "/app/training/catalog", businessAgent);
     assert.equal(unavailableCatalog.status, 200, JSON.stringify(unavailableCatalog.body));
     assert.equal(unavailableCatalog.body.storageConfigured, false);
-    assert.ok(unavailableCatalog.body.sections.some((section) => section.items.length > 0));
-    assert.equal(unavailableCatalog.body.sections[0]?.items[0]?.available, false);
-    assert.equal("path" in (unavailableCatalog.body.sections[0]?.items[0] ?? {}), false);
+
+    await prisma.trainingContent.createMany({
+      data: [
+        {
+          contentId: pdfContentId,
+          type: TrainingContentType.PDF,
+          title: "Guia de introducao",
+          description: "Material publicado para operadores.",
+          category: "Primeiros passos",
+          sortOrder: 1,
+          status: TrainingContentStatus.PUBLISHED,
+          storageKey: pdfStorageKey,
+          originalFilename: "intro-platform-guide.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 18,
+          downloadable: true,
+          publishedAt: new Date(),
+        },
+        {
+          contentId: videoContentId,
+          type: TrainingContentType.VIDEO,
+          title: "Video de introducao",
+          category: "Primeiros passos",
+          sortOrder: 2,
+          status: TrainingContentStatus.PUBLISHED,
+          storageKey: videoStorageKey,
+          originalFilename: "intro-platform.mp4",
+          mimeType: "video/mp4",
+          sizeBytes: 16,
+          downloadable: false,
+          publishedAt: new Date(),
+        },
+        {
+          contentId: draftContentId,
+          type: TrainingContentType.PDF,
+          title: "Rascunho interno",
+          category: "Primeiros passos",
+          sortOrder: 3,
+          status: TrainingContentStatus.DRAFT,
+          storageKey: draftStorageKey,
+          originalFilename: "draft-guide.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 18,
+          downloadable: false,
+        },
+      ],
+    });
+
+    const unavailableCatalogWithItems = await request<{
+      ok: true;
+      storageConfigured: boolean;
+      sections: Array<{ items: Array<{ id: string; path?: string; streamUrl?: string; available: boolean }> }>;
+    }>("GET", "/app/training/catalog", businessAgent);
+    assert.equal(unavailableCatalogWithItems.status, 200, JSON.stringify(unavailableCatalogWithItems.body));
+    assert.equal(unavailableCatalogWithItems.body.storageConfigured, false);
+    const unavailablePdf = unavailableCatalogWithItems.body.sections
+      .flatMap((section) => section.items)
+      .find((item) => item.id === pdfContentId);
+    assert.equal(unavailablePdf?.available, false);
+    assert.equal("path" in (unavailablePdf ?? {}), false);
+    assert.equal(
+      unavailableCatalogWithItems.body.sections
+        .flatMap((section) => section.items)
+        .some((item) => item.id === draftContentId),
+      false
+    );
 
     const storageMissing = await request<ErrorPayload>(
       "GET",
-      "/app/training/content/intro-platform-guide",
+      `/app/training/content/${pdfContentId}`,
       businessAgent
     );
     assert.equal(storageMissing.status, 503);
     assert.equal(getErrorCode(storageMissing.body), "training_storage_unavailable");
 
     const root = path.join(tempRoot, "training-content");
-    await fs.mkdir(path.join(root, "getting-started"), { recursive: true });
-    await fs.writeFile(path.join(root, "getting-started", "intro-platform-guide.pdf"), "%PDF-1.4\ntraining\n");
-    await fs.writeFile(path.join(root, "getting-started", "intro-platform.mp4"), "0123456789abcdef");
+    await fs.mkdir(root, { recursive: true });
+    await fs.writeFile(path.join(root, pdfStorageKey), "%PDF-1.4\ntraining\n");
+    await fs.writeFile(path.join(root, videoStorageKey), "0000ftypisomdemo");
     process.env.TRAINING_CONTENT_ROOT = root;
 
     const catalog = await request<{
@@ -596,57 +682,203 @@ test("training center serves authenticated catalog and safe training content", a
     }>("GET", "/app/training/catalog", businessAgent);
     assert.equal(catalog.status, 200, JSON.stringify(catalog.body));
     assert.equal(catalog.body.storageConfigured, true);
-    const pdfItem = catalog.body.sections.flatMap((section) => section.items).find((item) => item.id === "intro-platform-guide");
+    const pdfItem = catalog.body.sections.flatMap((section) => section.items).find((item) => item.id === pdfContentId);
     assert.equal(pdfItem?.available, true);
     assert.equal("path" in (pdfItem ?? {}), false);
-    assert.equal(pdfItem?.streamUrl, "/app/training/content/intro-platform-guide");
-    assert.equal(pdfItem?.downloadUrl, "/app/training/content/intro-platform-guide/download");
+    assert.equal(pdfItem?.streamUrl, `/app/training/content/${pdfContentId}`);
+    assert.equal(pdfItem?.downloadUrl, `/app/training/content/${pdfContentId}/download`);
 
     const traversal = await request<ErrorPayload>("GET", "/app/training/content/..%2Fsecret", businessAgent);
     assert.equal(traversal.status, 404);
     assert.equal(getErrorCode(traversal.body), "training_content_not_found");
 
-    const missing = await request<ErrorPayload>("GET", "/app/training/content/inbox-operator-guide", businessAgent);
-    assert.equal(missing.status, 404);
-    assert.equal(getErrorCode(missing.body), "training_content_unavailable");
+    const draft = await request<ErrorPayload>("GET", `/app/training/content/${draftContentId}`, businessAgent);
+    assert.equal(draft.status, 404);
+    assert.equal(getErrorCode(draft.body), "training_content_not_found");
 
-    const pdfInline = await requestRaw("GET", "/app/training/content/intro-platform-guide", businessAgent);
+    const missing = await request<ErrorPayload>("GET", "/app/training/content/missing-guide", businessAgent);
+    assert.equal(missing.status, 404);
+    assert.equal(getErrorCode(missing.body), "training_content_not_found");
+
+    const pdfInline = await requestRaw("GET", `/app/training/content/${pdfContentId}`, businessAgent);
     assert.equal(pdfInline.status, 200);
     assert.match(pdfInline.headers.get("content-type") ?? "", /^application\/pdf/);
     assert.match(pdfInline.headers.get("content-disposition") ?? "", /^inline; filename="intro-platform-guide\.pdf"/);
     assert.match(pdfInline.text, /^%PDF-1\.4/);
 
-    const pdfDownload = await requestRaw("GET", "/app/training/content/intro-platform-guide/download", businessAgent);
+    const pdfDownload = await requestRaw("GET", `/app/training/content/${pdfContentId}/download`, businessAgent);
     assert.equal(pdfDownload.status, 200);
     assert.match(pdfDownload.headers.get("content-disposition") ?? "", /^attachment; filename="intro-platform-guide\.pdf"/);
 
     const videoRange = await requestRaw(
       "GET",
-      "/app/training/content/intro-platform-video",
+      `/app/training/content/${videoContentId}`,
       businessAgent,
       { range: "bytes=2-5" }
     );
     assert.equal(videoRange.status, 206);
     assert.equal(videoRange.headers.get("accept-ranges"), "bytes");
     assert.equal(videoRange.headers.get("content-range"), "bytes 2-5/16");
-    assert.equal(videoRange.text, "2345");
+    assert.equal(videoRange.text, "00ft");
 
     const invalidRange = await requestRaw(
       "GET",
-      "/app/training/content/intro-platform-video",
+      `/app/training/content/${videoContentId}`,
       businessAgent,
       { range: "bytes=99-120" }
     );
     assert.equal(invalidRange.status, 416);
     assert.equal(invalidRange.headers.get("content-range"), "bytes */16");
 
-    await fs.mkdir(path.join(root, "reports"), { recursive: true });
+    await prisma.trainingContent.create({
+      data: {
+        contentId: symlinkContentId,
+        type: TrainingContentType.PDF,
+        title: "Guia com symlink",
+        category: "Seguranca",
+        status: TrainingContentStatus.PUBLISHED,
+        storageKey: symlinkStorageKey,
+        originalFilename: "symlink-guide.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 18,
+        publishedAt: new Date(),
+      },
+    });
     await fs.writeFile(path.join(tempRoot, "outside-training.pdf"), "%PDF-1.4\noutside\n");
-    await fs.symlink(path.join(tempRoot, "outside-training.pdf"), path.join(root, "reports", "reports-guide.pdf"));
-    const symlinkEscape = await request<ErrorPayload>("GET", "/app/training/content/reports-guide", businessAgent);
+    await fs.symlink(path.join(tempRoot, "outside-training.pdf"), path.join(root, symlinkStorageKey));
+    const symlinkEscape = await request<ErrorPayload>("GET", `/app/training/content/${symlinkContentId}`, businessAgent);
     assert.equal(symlinkEscape.status, 404);
     assert.equal(getErrorCode(symlinkEscape.body), "training_content_not_found");
   } finally {
+    await prisma.trainingContent.deleteMany({
+      where: {
+        contentId: {
+          in: [pdfContentId, videoContentId, draftContentId, symlinkContentId],
+        },
+      },
+    });
+    if (previousRoot === undefined) {
+      delete process.env.TRAINING_CONTENT_ROOT;
+    } else {
+      process.env.TRAINING_CONTENT_ROOT = previousRoot;
+    }
+  }
+});
+
+test("admin training content CRUD is superadmin-only and keeps app catalog published-only", async () => {
+  const previousRoot = process.env.TRAINING_CONTENT_ROOT;
+  const root = path.join(tempRoot, "training-admin-content");
+  try {
+    process.env.TRAINING_CONTENT_ROOT = root;
+    await fs.mkdir(root, { recursive: true });
+    await prisma.trainingContent.deleteMany({
+      where: {
+        contentId: {
+          startsWith: trainingContentPrefix,
+        },
+      },
+    });
+
+    const unauth = await requestUnauth<ErrorPayload>("GET", "/admin/training");
+    assert.equal(unauth.status, 401);
+
+    const tenantAdmin = await requestAdmin<ErrorPayload>("GET", "/admin/training");
+    assert.equal(tenantAdmin.status, 403);
+
+    const form = new FormData();
+    form.set("title", `${trainingContentPrefix} Admin material`);
+    form.set("description", "Material gerenciado pelo console interno.");
+    form.set("category", "Operacao");
+    form.set("type", "PDF");
+    form.set("sortOrder", "7");
+    form.set("status", "DRAFT");
+    form.set("downloadable", "true");
+    form.set("file", new Blob(["%PDF-1.4\nadmin\n"], { type: "application/pdf" }), "admin-material.pdf");
+
+    const createResponse = await fetch(`${baseUrl}/admin/training`, {
+      method: "POST",
+      headers: {
+        "x-admin-token": process.env.ADMIN_TOKEN ?? "",
+      },
+      body: form,
+    });
+    assert.equal(createResponse.status, 201);
+    const created = (await createResponse.json()) as {
+      ok: true;
+      item: { id: string; contentId: string; status: string; storageKey?: string; previewUrl: string };
+    };
+    assert.equal(created.ok, true);
+    assert.equal(created.item.status, "DRAFT");
+    assert.equal("storageKey" in created.item, false);
+
+    const draftCatalog = await request<{
+      ok: true;
+      sections: Array<{ items: Array<{ id: string }> }>;
+    }>("GET", "/app/training/catalog", businessAgent);
+    assert.equal(draftCatalog.status, 200, JSON.stringify(draftCatalog.body));
+    assert.equal(
+      draftCatalog.body.sections.flatMap((section) => section.items).some((item) => item.id === created.item.contentId),
+      false
+    );
+
+    const publish = await requestSuperadmin<{ ok: true; item: { status: string } }>(
+      "POST",
+      `/admin/training/${encodeURIComponent(created.item.id)}/publish`
+    );
+    assert.equal(publish.status, 200, JSON.stringify(publish.body));
+    assert.equal(publish.body.item.status, "PUBLISHED");
+
+    const publishedCatalog = await request<{
+      ok: true;
+      sections: Array<{ items: Array<{ id: string; streamUrl: string; downloadUrl?: string }> }>;
+    }>("GET", "/app/training/catalog", businessAgent);
+    assert.equal(publishedCatalog.status, 200, JSON.stringify(publishedCatalog.body));
+    const publishedItem = publishedCatalog.body.sections
+      .flatMap((section) => section.items)
+      .find((item) => item.id === created.item.contentId);
+    assert.equal(publishedItem?.streamUrl, `/app/training/content/${created.item.contentId}`);
+    assert.equal(publishedItem?.downloadUrl, `/app/training/content/${created.item.contentId}/download`);
+
+    const preview = await fetch(`${baseUrl}${created.item.previewUrl}`, {
+      headers: {
+        "x-admin-token": process.env.ADMIN_TOKEN ?? "",
+      },
+    });
+    assert.equal(preview.status, 200);
+    assert.match(preview.headers.get("content-type") ?? "", /^application\/pdf/);
+
+    const patch = await requestSuperadmin<{ ok: true; item: { title: string; sortOrder: number } }>(
+      "PATCH",
+      `/admin/training/${encodeURIComponent(created.item.id)}`,
+      {
+        title: `${trainingContentPrefix} Admin material updated`,
+        category: "Operacao",
+        sortOrder: 3,
+        status: "PUBLISHED",
+        downloadable: true,
+      }
+    );
+    assert.equal(patch.status, 200, JSON.stringify(patch.body));
+    assert.equal(patch.body.item.sortOrder, 3);
+
+    const deleteResponse = await requestSuperadmin<{ ok: true }>(
+      "DELETE",
+      `/admin/training/${encodeURIComponent(created.item.id)}`
+    );
+    assert.equal(deleteResponse.status, 200, JSON.stringify(deleteResponse.body));
+    assert.equal(deleteResponse.body.ok, true);
+
+    const list = await requestSuperadmin<{ ok: true; items: Array<{ id: string }> }>("GET", "/admin/training");
+    assert.equal(list.status, 200, JSON.stringify(list.body));
+    assert.equal(list.body.items.some((item) => item.id === created.item.id), false);
+  } finally {
+    await prisma.trainingContent.deleteMany({
+      where: {
+        contentId: {
+          startsWith: trainingContentPrefix,
+        },
+      },
+    });
     if (previousRoot === undefined) {
       delete process.env.TRAINING_CONTENT_ROOT;
     } else {

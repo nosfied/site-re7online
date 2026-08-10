@@ -39,11 +39,11 @@ O suporte aceita apenas texto nesta etapa. Anexos ficam para evolucao futura. A 
 
 Todos os usuarios autenticados podem acessar `Suporte > Treinamentos`. A area exibe materiais oficiais publicados pela equipe da plataforma, separados por tema, como videos curtos e guias em PDF. O conteudo e somente leitura.
 
-O catalogo de treinamentos e versionado no codigo e referencia arquivos por `contentId`. A interface nunca envia caminho de arquivo. O backend resolve o material dentro do diretorio configurado por `TRAINING_CONTENT_ROOT`, bloqueia paths arbitrarios e entrega apenas formatos permitidos, como MP4 e PDF.
+O catalogo de treinamentos e administrado no console interno da RE7ONLINE em `/admin/training`. A equipe autorizada pode criar, editar, publicar, despublicar, ordenar, visualizar, substituir arquivo e excluir conteudos sem SSH, Git ou deploy. A interface nunca envia caminho de arquivo. O backend resolve o material por `contentId` dentro do diretorio configurado por `TRAINING_CONTENT_ROOT`, bloqueia paths arbitrarios e entrega apenas formatos permitidos, como MP4 e PDF.
 
 Quando o storage nao estiver configurado ou o arquivo ainda nao estiver publicado, a tela mostra uma mensagem amigavel e nao quebra a navegacao do operador.
 
-Para publicar material novo, a equipe tecnica atualiza o manifest versionado, copia o arquivo correspondente para o storage operacional configurado e valida o acesso pelo `contentId`. Arquivos grandes de video ou PDF nao devem ser commitados no repositorio.
+Para publicar material novo, a equipe interna usa `Admin > Treinamentos > Adicionar treinamento`, informa metadados, envia PDF ou MP4 e publica explicitamente. Arquivos grandes de video ou PDF nao devem ser commitados no repositorio.
 
 ## Texto livre, modelo aprovado e mensagem pronta
 

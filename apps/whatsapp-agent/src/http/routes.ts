@@ -140,9 +140,22 @@ import {
 } from "../billing/metaUsageLedger.js";
 import {
   parseTrainingRange,
-  resolveTrainingContent,
-  serializeTrainingCatalog,
 } from "../training/trainingContent.js";
+import {
+  createTrainingContentAdmin,
+  deleteTrainingContentAdmin,
+  listTrainingContentAdmin,
+  parseTrainingContentJsonInput,
+  replaceTrainingContentFileAdmin,
+  resolveTrainingContentByAdminId,
+  resolveTrainingContentFromDb,
+  serializeTrainingCatalogFromDb,
+  trainingContentErrorBody,
+  TrainingContentError,
+  TRAINING_UPLOAD_MAX_BYTES,
+  updateTrainingContentAdmin,
+  type TrainingFileUpload,
+} from "../training/trainingContentAdmin.js";
 import { buildMetaCostPreview, type MetaCostPreviewInput } from "../billing/metaUsagePreview.js";
 import {
   buildMonthlyMetaUsageCsv,
@@ -1908,7 +1921,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
-      json(res, 200, serializeTrainingCatalog());
+      json(res, 200, await serializeTrainingCatalogFromDb(prisma));
     } catch (error) {
       logger.error({
         event: "app.training.catalog.error",
@@ -1943,11 +1956,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       const download = Boolean(trainingContentMatch[2]);
-      const resolved = await resolveTrainingContent(contentId);
-      if (!resolved.ok) {
-        json(res, resolved.status, httpError(resolved.error, resolved.message));
-        return;
-      }
+      const resolved = await resolveTrainingContentFromDb({ prisma, contentId });
       const lastModified = resolved.stat.mtime.toUTCString();
       const disposition = download ? "attachment" : "inline";
       const headers: Record<string, string> = {
@@ -1956,7 +1965,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         "Content-Disposition": `${disposition}; filename="${resolved.fileName}"`,
         "Last-Modified": lastModified,
       };
-      if (resolved.item.type === "video") {
+      if (resolved.item.type === "VIDEO") {
         headers["Accept-Ranges"] = "bytes";
         const range = parseTrainingRange(req.headers.range, resolved.stat.size);
         if (range && !range.ok) {
@@ -2004,6 +2013,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         })
         .pipe(res);
     } catch (error) {
+      if (error instanceof TrainingContentError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
       logger.error({
         event: "app.training.content.error",
         requestId,
@@ -12010,6 +12023,169 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         metrics.timing("db_duration", dbDurationMs, { module: "admin", operation: "select_1", status: "error" });
         metrics.timing("dependency_duration", dbDurationMs, { dependency: "db", module: "admin", operation: "select_1", status: "error" });
         json(res, 200, { ok: true, db: false });
+      }
+      return;
+    }
+
+    if (pathname === "/admin/training" && req.method === "GET") {
+      if (requireSuperadmin()) return;
+      try {
+        json(res, 200, await listTrainingContentAdmin(prisma));
+      } catch (error) {
+        logger.error({
+          event: "admin.training.list.error",
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (pathname === "/admin/training" && req.method === "POST") {
+      if (requireSuperadmin()) return;
+      const body = await readTrainingMultipartBody(req, res);
+      if (!body) return;
+      try {
+        json(res, 201, await createTrainingContentAdmin(prisma, body.fields, body.file));
+      } catch (error) {
+        if (error instanceof TrainingContentError) {
+          json(res, error.status, trainingContentErrorBody(error));
+          return;
+        }
+        logger.error({
+          event: "admin.training.create.error",
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    const adminTrainingContentMatch = pathname.match(/^\/admin\/training\/([^/]+)\/content$/);
+    if (adminTrainingContentMatch && req.method === "GET") {
+      if (requireSuperadmin()) return;
+      try {
+        const id = decodeURIComponent(adminTrainingContentMatch[1] ?? "");
+        const download = query.download === "1" || query.download === "true";
+        const resolved = await resolveTrainingContentByAdminId({ prisma, id });
+        const headers: Record<string, string> = {
+          "Content-Type": resolved.mimeType,
+          "Cache-Control": "private, no-store",
+          "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${resolved.fileName}"`,
+          "Last-Modified": resolved.stat.mtime.toUTCString(),
+        };
+        if (resolved.item.type === "VIDEO") {
+          headers["Accept-Ranges"] = "bytes";
+          const range = parseTrainingRange(req.headers.range, resolved.stat.size);
+          if (range && !range.ok) {
+            res.writeHead(416, {
+              "Content-Range": `bytes */${resolved.stat.size}`,
+              "Cache-Control": "private, no-store",
+            });
+            res.end();
+            return;
+          }
+          if (range?.ok) {
+            const contentLength = range.end - range.start + 1;
+            res.writeHead(206, {
+              ...headers,
+              "Content-Length": String(contentLength),
+              "Content-Range": `bytes ${range.start}-${range.end}/${resolved.stat.size}`,
+            });
+            createReadStream(resolved.absolutePath, { start: range.start, end: range.end }).pipe(res);
+            return;
+          }
+        }
+        res.writeHead(200, {
+          ...headers,
+          "Content-Length": String(resolved.stat.size),
+        });
+        createReadStream(resolved.absolutePath).pipe(res);
+      } catch (error) {
+        if (error instanceof TrainingContentError) {
+          json(res, error.status, trainingContentErrorBody(error));
+          return;
+        }
+        logger.error({
+          event: "admin.training.content.error",
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    const adminTrainingFileMatch = pathname.match(/^\/admin\/training\/([^/]+)\/file$/);
+    if (adminTrainingFileMatch && req.method === "POST") {
+      if (requireSuperadmin()) return;
+      const body = await readTrainingMultipartBody(req, res);
+      if (!body) return;
+      try {
+        const id = decodeURIComponent(adminTrainingFileMatch[1] ?? "");
+        json(res, 200, await replaceTrainingContentFileAdmin(prisma, id, body.file));
+      } catch (error) {
+        if (error instanceof TrainingContentError) {
+          json(res, error.status, trainingContentErrorBody(error));
+          return;
+        }
+        logger.error({
+          event: "admin.training.replace_file.error",
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    const adminTrainingStatusMatch = pathname.match(/^\/admin\/training\/([^/]+)\/(publish|unpublish)$/);
+    if (adminTrainingStatusMatch && req.method === "POST") {
+      if (requireSuperadmin()) return;
+      try {
+        const id = decodeURIComponent(adminTrainingStatusMatch[1] ?? "");
+        const status = adminTrainingStatusMatch[2] === "publish" ? "PUBLISHED" : "DRAFT";
+        json(res, 200, await updateTrainingContentAdmin(prisma, id, { status }));
+      } catch (error) {
+        if (error instanceof TrainingContentError) {
+          json(res, error.status, trainingContentErrorBody(error));
+          return;
+        }
+        logger.error({
+          event: "admin.training.status.error",
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    const adminTrainingItemMatch = pathname.match(/^\/admin\/training\/([^/]+)$/);
+    if (adminTrainingItemMatch && (req.method === "PATCH" || req.method === "DELETE")) {
+      if (requireSuperadmin()) return;
+      try {
+        const id = decodeURIComponent(adminTrainingItemMatch[1] ?? "");
+        if (req.method === "DELETE") {
+          json(res, 200, await deleteTrainingContentAdmin(prisma, id));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        json(res, 200, await updateTrainingContentAdmin(prisma, id, parseTrainingContentJsonInput(body)));
+      } catch (error) {
+        if (error instanceof TrainingContentError) {
+          json(res, error.status, trainingContentErrorBody(error));
+          return;
+        }
+        logger.error({
+          event: "admin.training.update.error",
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
       }
       return;
     }
@@ -27558,6 +27734,53 @@ async function readMultipartBody(req: IncomingMessage, res: ServerResponse) {
       caption: typeof captionValue === "string" && captionValue.trim() ? captionValue.trim() : null,
       file,
     };
+  } catch {
+    json(res, 400, { error: "invalid_body", message: "Payload multipart invalido." });
+    return null;
+  }
+}
+
+async function readTrainingMultipartBody(req: IncomingMessage, res: ServerResponse) {
+  const contentLength = Number.parseInt(String(req.headers["content-length"] ?? ""), 10);
+  if (Number.isFinite(contentLength) && contentLength > TRAINING_UPLOAD_MAX_BYTES + 1024 * 1024) {
+    json(res, 413, { error: "training_file_too_large", message: "Arquivo grande demais." });
+    return null;
+  }
+  const contentType = String(req.headers["content-type"] ?? "");
+  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  const boundary = (boundaryMatch?.[1] ?? boundaryMatch?.[2] ?? "").trim();
+  if (!boundary) {
+    json(res, 400, { error: "invalid_body", message: "Payload multipart invalido." });
+    return null;
+  }
+
+  try {
+    const request = new Request("http://localhost/admin-training-upload", {
+      method: req.method ?? "POST",
+      headers: req.headers as HeadersInit,
+      body: Readable.toWeb(req) as BodyInit,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+    const formData = await request.formData();
+    const fields: Record<string, unknown> = {};
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) continue;
+      fields[key] = value;
+    }
+    const fileValue = formData.get("file");
+    let file: TrainingFileUpload | null = null;
+    if (fileValue instanceof File) {
+      if (fileValue.size > TRAINING_UPLOAD_MAX_BYTES) {
+        json(res, 413, { error: "training_file_too_large", message: "Arquivo grande demais." });
+        return null;
+      }
+      file = {
+        fileName: fileValue.name.trim() || null,
+        mimeType: fileValue.type.trim() || "application/octet-stream",
+        content: Buffer.from(await fileValue.arrayBuffer()),
+      };
+    }
+    return { fields, file };
   } catch {
     json(res, 400, { error: "invalid_body", message: "Payload multipart invalido." });
     return null;

@@ -47,6 +47,16 @@ enum ConversationOperationalStatus {
   CLOSED
 }
 
+enum TrainingContentType {
+  VIDEO
+  PDF
+}
+
+enum TrainingContentStatus {
+  DRAFT
+  PUBLISHED
+}
+
 model Client {
   id         String          @id @default(uuid())
   clientKey  String          @unique
@@ -446,6 +456,30 @@ model Event {
   @@index([clientId, eventName, createdAt])
   @@index([clientId, waIdCanonical, createdAt])
   @@unique([clientId, eventName, requestId])
+}
+
+model TrainingContent {
+  id                String                @id @default(uuid())
+  contentId         String                @unique
+  type              TrainingContentType
+  title             String
+  description       String?
+  category          String
+  sortOrder         Int                   @default(0)
+  status            TrainingContentStatus @default(DRAFT)
+  storageKey        String                @unique
+  originalFilename  String
+  mimeType          String
+  sizeBytes         Int
+  downloadable      Boolean               @default(false)
+  publishedAt       DateTime?
+  createdByUserId   String?
+  updatedByUserId   String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([status])
+  @@index([category, sortOrder])
 }
 
 model RetentionConfig {

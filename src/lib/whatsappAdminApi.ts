@@ -714,6 +714,39 @@ export type AdminConnection = {
 
 export type AdminApiError = Error & { status?: number };
 
+export type AdminTrainingContentType = "VIDEO" | "PDF";
+export type AdminTrainingContentStatus = "DRAFT" | "PUBLISHED";
+
+export type AdminTrainingContentItem = {
+  id: string;
+  contentId: string;
+  type: AdminTrainingContentType;
+  title: string;
+  description: string | null;
+  category: string;
+  sortOrder: number;
+  status: AdminTrainingContentStatus;
+  originalFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  downloadable: boolean;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  previewUrl: string;
+  downloadUrl: string;
+};
+
+export type AdminTrainingContentPayload = {
+  title: string;
+  description?: string;
+  category: string;
+  type: AdminTrainingContentType;
+  sortOrder: number;
+  status: AdminTrainingContentStatus;
+  downloadable: boolean;
+};
+
 const STORAGE_KEY = "wa_admin_connection_v1";
 const SESSION_TOKEN_KEY = "wa_admin_token_session_v1";
 const LOCAL_TOKEN_KEY = "wa_admin_token_local_v1";
@@ -936,8 +969,177 @@ async function requestText(
   return res.text();
 }
 
+async function requestFormJson<T>(
+  connection: AdminConnection,
+  path: string,
+  formData: FormData,
+  init?: RequestInit
+): Promise<T> {
+  const baseUrl = normalizeBaseUrl(connection.baseUrl);
+  if (!baseUrl) {
+    const error = new Error("Base URL invalida. Use http(s)://... ou /agent-api.") as AdminApiError;
+    error.status = 400;
+    throw error;
+  }
+  const adminToken = connection.adminToken.trim();
+  if (!adminToken) {
+    const error = new Error("Informe o X-Admin-Token.") as AdminApiError;
+    error.status = 400;
+    throw error;
+  }
+  const res = await fetch(`${baseUrl}${path}`, {
+    ...init,
+    method: init?.method ?? "POST",
+    headers: {
+      "X-Admin-Token": adminToken,
+      ...(init?.headers ?? {}),
+    },
+    body: formData,
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    try {
+      const body = (await res.json()) as { message?: string; error?: string };
+      message = body.message || body.error || message;
+    } catch {
+      // noop
+    }
+    const error = new Error(message) as AdminApiError;
+    error.status = res.status;
+    if (res.status === 401) error.message = "Token invalido (401).";
+    if (res.status === 403) error.message = "Sem permissao (403).";
+    if (res.status >= 500) error.message = "Erro no servidor (5xx).";
+    throw error;
+  }
+  return (await res.json()) as T;
+}
+
+async function requestAdminBlob(
+  connection: AdminConnection,
+  path: string
+): Promise<{ blob: Blob; contentType: string | null; fileName: string | null }> {
+  const baseUrl = normalizeBaseUrl(connection.baseUrl);
+  if (!baseUrl) {
+    const error = new Error("Base URL invalida. Use http(s)://... ou /agent-api.") as AdminApiError;
+    error.status = 400;
+    throw error;
+  }
+  const adminToken = connection.adminToken.trim();
+  if (!adminToken) {
+    const error = new Error("Informe o X-Admin-Token.") as AdminApiError;
+    error.status = 400;
+    throw error;
+  }
+  const res = await fetch(`${baseUrl}${path}`, {
+    headers: { "X-Admin-Token": adminToken },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const error = new Error(res.status >= 500 ? "Erro no servidor (5xx)." : `Request failed (${res.status})`) as AdminApiError;
+    error.status = res.status;
+    if (res.status === 401) error.message = "Token invalido (401).";
+    if (res.status === 403) error.message = "Sem permissao (403).";
+    throw error;
+  }
+  const disposition = res.headers.get("content-disposition");
+  const fileNameMatch = disposition?.match(/filename="([^"]+)"/i);
+  return {
+    blob: await res.blob(),
+    contentType: res.headers.get("content-type"),
+    fileName: fileNameMatch?.[1] ?? null,
+  };
+}
+
 export async function testAdminConnection(connection: AdminConnection) {
   return requestJson<{ ok: boolean }>(connection, "/admin/health");
+}
+
+function trainingPayloadToFormData(payload: AdminTrainingContentPayload, file?: File | null) {
+  const formData = new FormData();
+  formData.set("title", payload.title);
+  formData.set("description", payload.description ?? "");
+  formData.set("category", payload.category);
+  formData.set("type", payload.type);
+  formData.set("sortOrder", String(payload.sortOrder));
+  formData.set("status", payload.status);
+  formData.set("downloadable", String(payload.downloadable));
+  if (file) formData.set("file", file);
+  return formData;
+}
+
+export async function fetchAdminTrainingContent(
+  connection: AdminConnection
+): Promise<{ ok: true; items: AdminTrainingContentItem[] }> {
+  return requestJson(connection, "/admin/training");
+}
+
+export async function createAdminTrainingContent(
+  connection: AdminConnection,
+  payload: AdminTrainingContentPayload,
+  file: File
+): Promise<{ ok: true; item: AdminTrainingContentItem }> {
+  return requestFormJson(connection, "/admin/training", trainingPayloadToFormData(payload, file));
+}
+
+export async function updateAdminTrainingContent(
+  connection: AdminConnection,
+  itemId: string,
+  payload: Omit<AdminTrainingContentPayload, "type">
+): Promise<{ ok: true; item: AdminTrainingContentItem }> {
+  return requestJson(connection, `/admin/training/${encodeURIComponent(itemId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function publishAdminTrainingContent(
+  connection: AdminConnection,
+  itemId: string
+): Promise<{ ok: true; item: AdminTrainingContentItem }> {
+  return requestJson(connection, `/admin/training/${encodeURIComponent(itemId)}/publish`, {
+    method: "POST",
+  });
+}
+
+export async function unpublishAdminTrainingContent(
+  connection: AdminConnection,
+  itemId: string
+): Promise<{ ok: true; item: AdminTrainingContentItem }> {
+  return requestJson(connection, `/admin/training/${encodeURIComponent(itemId)}/unpublish`, {
+    method: "POST",
+  });
+}
+
+export async function replaceAdminTrainingContentFile(
+  connection: AdminConnection,
+  itemId: string,
+  file: File
+): Promise<{ ok: true; item: AdminTrainingContentItem }> {
+  const formData = new FormData();
+  formData.set("file", file);
+  return requestFormJson(connection, `/admin/training/${encodeURIComponent(itemId)}/file`, formData);
+}
+
+export async function deleteAdminTrainingContent(
+  connection: AdminConnection,
+  itemId: string
+): Promise<{ ok: true }> {
+  return requestJson(connection, `/admin/training/${encodeURIComponent(itemId)}`, {
+    method: "DELETE",
+  });
+}
+
+export function buildAdminTrainingContentUrl(connection: AdminConnection, path: string) {
+  const baseUrl = normalizeBaseUrl(connection.baseUrl);
+  return `${baseUrl}${path}`;
+}
+
+export async function fetchAdminTrainingContentBlob(
+  connection: AdminConnection,
+  itemId: string
+): Promise<{ blob: Blob; contentType: string | null; fileName: string | null }> {
+  return requestAdminBlob(connection, `/admin/training/${encodeURIComponent(itemId)}/content`);
 }
 
 export async function fetchTenantsSummary(

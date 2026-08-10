@@ -64,9 +64,9 @@ O atendimento da equipe da plataforma ocorre no Inbox normal do tenant de suport
 
 ## Training Center
 
-O Training Center em `/app/training` fornece uma base autenticada de aprendizagem para todos os perfis do app. Ele reutiliza a sessao do Converta e publica catalogo de videos, PDFs e links por manifest versionado.
+O Training Center em `/app/training` fornece uma base autenticada de aprendizagem para todos os perfis do app. Ele reutiliza a sessao do Converta e publica catalogo global de videos MP4 e PDFs cadastrados pela equipe interna da plataforma.
 
-Nao ha CMS, banco, schema novo ou upload pela UI nesta fundacao. Arquivos grandes ficam fora do Git, em storage local configurado por `TRAINING_CONTENT_ROOT` ou mecanismo operacional equivalente. O backend serve conteudo apenas por `contentId`, valida o manifest, bloqueia traversal, paths absolutos e escape por symlink, e entrega MP4 com suporte a range e PDF inline/download.
+O console interno `/admin/training` administra criacao, edicao, publicacao, despublicacao, ordenacao, upload, substituicao de arquivo, preview e exclusao. A fonte canonica do catalogo e `TrainingContent`; arquivos grandes ficam fora do Git, em storage local configurado por `TRAINING_CONTENT_ROOT` ou mecanismo operacional equivalente. O backend serve conteudo apenas por `contentId`, nao expoe `storageKey`, bloqueia traversal, paths absolutos e escape por symlink, e entrega MP4 com suporte a range e PDF inline/download.
 
 ## CRM operacional
 
