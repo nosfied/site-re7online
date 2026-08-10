@@ -152,6 +152,7 @@ Gaps:
 | `.data` | tar diario local por 14 dias | manter local + copiar offsite. |
 | Midia/upload | dentro de `.data` quando local | object storage futuro + politica de backup/retencao. |
 | Training Center | `TRAINING_CONTENT_ROOT`, quando configurado localmente | incluir no backup de arquivos operacionais ou migrar para object storage com retencao. |
+| Support Hub attachments | `SUPPORT_ATTACHMENT_ROOT`, quando configurado localmente | incluir no backup de arquivos operacionais e aplicar retencao alinhada a `Conversation`/suporte; nao reutilizar storage de treinamento. |
 | `.env` | nao formal | copia criptografada e acesso restrito. |
 | Nginx | nao formal | export de sites available/enabled e configs relevantes. |
 | PM2/ecosystem | `ecosystem.config.cjs` no repo | `pm2 save`/dump documentado e ecosystem versionado. |

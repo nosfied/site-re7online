@@ -190,6 +190,43 @@ async function requestRaw(
   };
 }
 
+async function requestMultipart<T = unknown>(
+  route: string,
+  user: TestUser,
+  form: FormData
+): Promise<TestResponse<T>> {
+  const response = await fetch(`${baseUrl}${route}`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${authToken(user)}`,
+    },
+    body: form,
+  });
+  return {
+    status: response.status,
+    body: (await response.json()) as T,
+  };
+}
+
+async function requestBlob(
+  method: string,
+  route: string,
+  user: TestUser
+): Promise<{ status: number; contentType: string | null; disposition: string | null; bytes: Uint8Array }> {
+  const response = await fetch(`${baseUrl}${route}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${authToken(user)}`,
+    },
+  });
+  return {
+    status: response.status,
+    contentType: response.headers.get("content-type"),
+    disposition: response.headers.get("content-disposition"),
+    bytes: new Uint8Array(await response.arrayBuffer()),
+  };
+}
+
 async function requestUnauth<T = unknown>(
   method: string,
   route: string,
@@ -890,8 +927,12 @@ test("admin training content CRUD is superadmin-only and keeps app catalog publi
 test("support hub uses configured support tenant and isolates requester conversations", async () => {
   const { env } = await import("../config/env.js");
   const originalSupportTenantKey = env.PLATFORM_SUPPORT_TENANT_KEY;
+  const originalSupportAttachmentRoot = env.SUPPORT_ATTACHMENT_ROOT;
+  const supportAttachmentRoot = path.join(tempRoot, "support-attachments");
   try {
     env.PLATFORM_SUPPORT_TENANT_KEY = "";
+    env.SUPPORT_ATTACHMENT_ROOT = supportAttachmentRoot;
+    await fs.mkdir(supportAttachmentRoot, { recursive: true });
     const unavailable = await request<ErrorPayload>("GET", "/app/support/conversations", businessAdmin);
     assert.equal(unavailable.status, 503);
     assert.equal(getErrorCode(unavailable.body), "support_unavailable");
@@ -1141,10 +1182,100 @@ test("support hub uses configured support tenant and isolates requester conversa
 
     const detail = await request<{
       ok: true;
-      messages: Array<{ direction: string; bodyText: string | null }>;
+      messages: Array<{
+        direction: string;
+        type?: string;
+        bodyText: string | null;
+        media?: { kind: string; ref: string; mimeType: string; sizeBytes: number; fileName?: string | null; url?: string } | null;
+      }>;
     }>("GET", `/app/support/conversations/${encodeURIComponent(created.body.conversation.supportRef)}`, businessAdmin);
     assert.equal(detail.status, 200, JSON.stringify(detail.body));
     assert.ok(detail.body.messages.some((item) => item.direction === "OUTBOUND" && item.bodyText === "Recebemos sua solicitacao."));
+
+    const oneByOnePng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l2t0XQAAAABJRU5ErkJggg==",
+      "base64"
+    );
+    const uploadForm = new FormData();
+    uploadForm.set("caption", "Print do erro no suporte");
+    uploadForm.set("file", new Blob([oneByOnePng], { type: "image/png" }), "erro-suporte.png");
+    const upload = await requestMultipart<{
+      ok: true;
+      messages: Array<{
+        direction: string;
+        type?: string;
+        bodyText: string | null;
+        media?: { kind: string; ref: string; mimeType: string; sizeBytes: number; fileName?: string | null; url?: string } | null;
+      }>;
+    }>(`/app/support/conversations/${encodeURIComponent(created.body.conversation.supportRef)}/attachments`, businessAdmin, uploadForm);
+    assert.equal(upload.status, 200, JSON.stringify(upload.body));
+    const imageMessage = upload.body.messages.find((item) => item.direction === "INBOUND" && item.type === "IMAGE");
+    assert.ok(imageMessage?.media);
+    assert.equal(imageMessage.media.kind, "image");
+    assert.equal(imageMessage.media.mimeType, "image/png");
+    assert.equal(imageMessage.media.fileName, "erro-suporte.png");
+    assert.equal("storageKey" in imageMessage.media, false);
+    assert.equal("url" in imageMessage.media && Boolean(imageMessage.media.url), false);
+
+    const storedSupportImage = await prisma.inboundMessage.findFirst({
+      where: {
+        clientId: supportClientId,
+        waId: supportConversation.waId,
+        channel: "support",
+        type: "IMAGE",
+      },
+      select: { messageId: true, rawPayload: true },
+    });
+    assert.ok(storedSupportImage?.messageId);
+    const raw = storedSupportImage.rawPayload as Record<string, unknown>;
+    assert.equal(raw.source, "support_hub");
+    assert.equal(typeof raw.supportAttachment, "object");
+    assert.equal(JSON.stringify(raw).includes("erro-suporte.png"), true);
+    assert.equal(JSON.stringify(raw).includes(oneByOnePng.toString("base64")), false);
+
+    const sourceAttachment = await requestBlob(
+      "GET",
+      `/app/support/conversations/${encodeURIComponent(created.body.conversation.supportRef)}/attachments/${encodeURIComponent(imageMessage.media.ref)}`,
+      businessAdmin
+    );
+    assert.equal(sourceAttachment.status, 200);
+    assert.match(sourceAttachment.contentType ?? "", /^image\/png/);
+    assert.match(sourceAttachment.disposition ?? "", /^inline/);
+    assert.equal(Buffer.compare(Buffer.from(sourceAttachment.bytes), oneByOnePng), 0);
+
+    const inboxAttachment = await requestBlob(
+      "GET",
+      `/app/conversation/${encodeURIComponent(supportConversation.waId)}/messages/${encodeURIComponent(storedSupportImage.messageId)}/media`,
+      supportAdmin
+    );
+    assert.equal(inboxAttachment.status, 200);
+    assert.match(inboxAttachment.contentType ?? "", /^image\/png/);
+    assert.equal(Buffer.compare(Buffer.from(inboxAttachment.bytes), oneByOnePng), 0);
+
+    const agentForm = new FormData();
+    agentForm.set("file", new Blob([oneByOnePng], { type: "image/png" }), "agent.png");
+    const agentUpload = await requestMultipart<ErrorPayload>(
+      `/app/support/conversations/${encodeURIComponent(created.body.conversation.supportRef)}/attachments`,
+      businessAgent,
+      agentForm
+    );
+    assert.equal(agentUpload.status, 403);
+
+    const spoofForm = new FormData();
+    spoofForm.set("file", new Blob(["not an image"], { type: "image/png" }), "spoof.png");
+    const spoofUpload = await requestMultipart<ErrorPayload>(
+      `/app/support/conversations/${encodeURIComponent(created.body.conversation.supportRef)}/attachments`,
+      businessAdmin,
+      spoofForm
+    );
+    assert.equal(spoofUpload.status, 400);
+
+    const otherTenantAttachment = await requestBlob(
+      "GET",
+      `/app/support/conversations/${encodeURIComponent(created.body.conversation.supportRef)}/attachments/${encodeURIComponent(imageMessage.media.ref)}`,
+      governmentAdmin
+    );
+    assert.equal(otherTenantAttachment.status, 404);
 
     const otherUserDetail = await request<ErrorPayload>(
       "GET",
@@ -1279,6 +1410,7 @@ test("support hub uses configured support tenant and isolates requester conversa
     assert.ok(genericEntryFlow.id);
   } finally {
     env.PLATFORM_SUPPORT_TENANT_KEY = originalSupportTenantKey;
+    env.SUPPORT_ATTACHMENT_ROOT = originalSupportAttachmentRoot;
   }
 });
 

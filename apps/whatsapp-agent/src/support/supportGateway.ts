@@ -12,6 +12,15 @@ import { publishRealtimeEvent } from "../realtime/hub.js";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import { getFeatures } from "../features/clientFeatures.js";
 import { runWebchatChatbotFlow } from "../webchat/webchatInboundService.js";
+import {
+  extractSupportAttachmentMetadata,
+  removeSupportAttachmentFile,
+  resolveSupportAttachmentFile,
+  storeSupportImageAttachment,
+  supportAttachmentToJson,
+  type SupportAttachmentMetadata,
+  type SupportAttachmentUpload,
+} from "./supportAttachments.js";
 
 const SUPPORT_CHANNEL = "support";
 const SUPPORT_PROVIDER = "converta";
@@ -446,6 +455,126 @@ async function persistSupportInboundMessage(
   });
 }
 
+async function persistSupportInboundAttachmentMessage(
+  prisma: PrismaClient,
+  params: {
+    requestId: string;
+    supportClient: { id: string; clientKey: string; features: unknown; profile: unknown };
+    requester: SupportRequester;
+    conversation: { id: string; waId: string };
+    caption: string | null;
+    attachment: SupportAttachmentMetadata;
+    mode?: "BOT" | "HUMAN";
+  }
+) {
+  const now = new Date();
+  const sourceHash = buildSourceHash(params.requester);
+  const messageId = `support.inbound.image.${params.requestId}.${shortHash(`${params.conversation.waId}:${now.toISOString()}`, 12)}`;
+  const mediaPayload = {
+    mediaId: params.attachment.attachmentRef,
+    mimeType: params.attachment.mimeType,
+    fileName: params.attachment.originalFilename,
+    caption: params.caption,
+    sizeBytes: params.attachment.sizeBytes,
+    width: params.attachment.width,
+    height: params.attachment.height,
+    source: "support_attachment",
+  } satisfies Prisma.InputJsonValue;
+  await prisma.$transaction(async (tx) => {
+    await tx.inboundMessage.create({
+      data: {
+        clientId: params.supportClient.id,
+        phoneNumberId: null,
+        waId: params.conversation.waId,
+        waIdCanonical: params.conversation.waId,
+        messageId,
+        channel: SUPPORT_CHANNEL,
+        provider: SUPPORT_PROVIDER,
+        channelAccountId: SUPPORT_CHANNEL_ACCOUNT_ID,
+        externalUserHash: sourceHash,
+        externalUserRef: sourceHash,
+        externalMessageId: messageId,
+        legacyWaId: null,
+        type: MessageType.IMAGE,
+        bodyText: params.caption,
+        allowlistHit: false,
+        requestId: params.requestId,
+        createdAt: now,
+        rawPayload: {
+          source: "support_hub",
+          requesterRole: params.requester.role,
+          sourceTenantHash: shortHash(params.requester.clientId, 16),
+          requesterHash: shortHash(params.requester.userId, 16),
+          messageLength: params.caption?.length ?? 0,
+          media: mediaPayload,
+          supportAttachment: supportAttachmentToJson(params.attachment, params.caption),
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+    await tx.conversation.update({
+      where: { id: params.conversation.id },
+      data: { lastInboundAt: now, updatedAt: now },
+    });
+    await tx.conversationRuntimeState.updateMany({
+      where: {
+        clientId: params.supportClient.id,
+        waId: params.conversation.waId,
+        channel: SUPPORT_CHANNEL,
+        provider: SUPPORT_PROVIDER,
+      },
+      data: {
+        lastInboundAt: now,
+        lastInboundMessageId: messageId,
+        closedAt: null,
+      },
+    });
+    await tx.event.create({
+      data: {
+        clientId: params.supportClient.id,
+        conversationId: params.conversation.id,
+        waId: params.conversation.waId,
+        waIdCanonical: params.conversation.waId,
+        messageId,
+        requestId: params.requestId,
+        eventName: "support.attachment.sent",
+        payloadJson: {
+          source: "support_hub",
+          type: "image",
+          mimeType: params.attachment.mimeType,
+          sizeBytes: params.attachment.sizeBytes,
+          sourceTenantHash: shortHash(params.requester.clientId, 16),
+          requesterHash: shortHash(params.requester.userId, 16),
+          conversationHash: shortHash(params.conversation.id, 16),
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+  });
+  publishRealtimeEvent({
+    type: "message.created",
+    clientId: params.supportClient.id,
+    waId: params.conversation.waId,
+    waIdCanonical: params.conversation.waId,
+    mode: params.mode ?? "HUMAN",
+    handoffStatus: "none",
+    assignedUserId: null,
+    departmentId: null,
+    message: {
+      direction: "INBOUND",
+      type: MessageType.IMAGE,
+      status: "RECEIVED",
+      intent: null,
+      bodyText: params.caption,
+      templateName: null,
+      templateLang: null,
+      requestId: params.requestId,
+      messageId,
+      metaMessageId: null,
+      errorBody: null,
+      createdAt: now.toISOString(),
+    },
+  });
+}
+
 export async function listSupportConversations(params: {
   prisma: PrismaClient;
   supportTenantKey: string;
@@ -773,10 +902,22 @@ export async function getSupportConversation(params: {
 export type SupportMessage = {
   id: string;
   direction: "INBOUND" | "OUTBOUND";
+  type: "TEXT" | "IMAGE" | "AUDIO" | "VIDEO" | "DOCUMENT" | "LOCATION" | "TEMPLATE" | "UNKNOWN" | string;
   bodyText: string | null;
   createdAt: string;
   status: string;
   actorName: string | null;
+  media: {
+    kind: "image";
+    ref: string;
+    mimeType: string;
+    fileName: string | null;
+    caption: string | null;
+    sizeBytes: number;
+    width: number | null;
+    height: number | null;
+    url: string;
+  } | null;
 };
 
 async function listSupportMessages(
@@ -788,7 +929,7 @@ async function listSupportMessages(
     prisma.inboundMessage.findMany({
       where: { clientId: supportClientId, waId, channel: SUPPORT_CHANNEL },
       orderBy: { createdAt: "asc" },
-      select: { id: true, messageId: true, bodyText: true, createdAt: true },
+      select: { id: true, messageId: true, type: true, bodyText: true, createdAt: true, rawPayload: true },
     }),
     prisma.outboundMessage.findMany({
       where: { clientId: supportClientId, waId, channel: SUPPORT_CHANNEL },
@@ -821,10 +962,12 @@ async function listSupportMessages(
     ...inbound.map((item) => ({
       id: item.id,
       direction: "INBOUND" as const,
+      type: item.type,
       bodyText: item.bodyText,
       createdAt: item.createdAt.toISOString(),
       status: "RECEIVED",
       actorName: null,
+      media: serializeSupportAttachmentForClient(item.rawPayload),
     })),
     ...outbound.map((item) => {
       const raw = item.rawPayload;
@@ -837,13 +980,31 @@ async function listSupportMessages(
       return {
         id: item.id,
         direction: "OUTBOUND" as const,
+        type: "TEXT",
         bodyText: item.bodyText,
         createdAt: item.createdAt.toISOString(),
         status: item.status,
         actorName: typeof userId === "string" ? actorNameById.get(userId) ?? null : null,
+        media: null,
       };
     }),
   ].sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
+}
+
+function serializeSupportAttachmentForClient(rawPayload: unknown): SupportMessage["media"] {
+  const attachment = extractSupportAttachmentMetadata(rawPayload);
+  if (!attachment) return null;
+  return {
+    kind: "image",
+    ref: attachment.attachmentRef,
+    mimeType: attachment.mimeType,
+    fileName: attachment.originalFilename,
+    caption: attachment.caption,
+    sizeBytes: attachment.sizeBytes,
+    width: attachment.width,
+    height: attachment.height,
+    url: "",
+  };
 }
 
 export async function sendSupportConversationMessage(params: {
@@ -882,6 +1043,114 @@ export async function sendSupportConversationMessage(params: {
     text,
   });
   return getSupportConversation(params);
+}
+
+export async function sendSupportConversationAttachment(params: {
+  prisma: PrismaClient;
+  supportTenantKey: string;
+  requestId: string;
+  requester: SupportRequester;
+  supportRef: string;
+  caption: unknown;
+  file: SupportAttachmentUpload;
+  attachmentRoot: string;
+}): Promise<SupportGatewayResult<{ conversation: Awaited<ReturnType<typeof serializeSupportConversation>>; messages: SupportMessage[] }>> {
+  if (!isAllowedRequesterRole(params.requester.role)) {
+    return { ok: false, status: 403, error: "forbidden", message: "Apenas administradores e supervisores podem abrir suporte." };
+  }
+  const captionRaw = typeof params.caption === "string" ? params.caption : "";
+  const caption = normalizeText(captionRaw);
+  if (captionRaw.length > MAX_MESSAGE_LENGTH) {
+    return { ok: false, status: 400, error: "support_message_too_long", message: "Mensagem muito longa." };
+  }
+  const supportTenant = await resolveSupportTenant(params.prisma, params.supportTenantKey);
+  if (!supportTenant.ok) return supportTenant;
+  const sourceHash = buildSourceHash(params.requester);
+  const conversation = await resolveSupportConversationByRef(params.prisma, {
+    supportClientId: supportTenant.client.id,
+    sourceHash,
+    supportRef: params.supportRef,
+  });
+  if (!conversation) {
+    return { ok: false, status: 404, error: "support_conversation_not_found", message: "Chamado nao encontrado." };
+  }
+  if (conversation.closedAt) {
+    return { ok: false, status: 409, error: "support_conversation_closed", message: "Este chamado foi encerrado. Abra um novo chamado." };
+  }
+  const attachment = await storeSupportImageAttachment({
+    root: params.attachmentRoot,
+    clientId: supportTenant.client.id,
+    conversationId: conversation.id,
+    file: params.file,
+  });
+  try {
+    await persistSupportInboundAttachmentMessage(params.prisma, {
+      requestId: params.requestId,
+      supportClient: supportTenant.client,
+      requester: params.requester,
+      conversation,
+      caption: caption || null,
+      attachment,
+    });
+  } catch (error) {
+    await removeSupportAttachmentFile({
+      root: params.attachmentRoot,
+      clientId: supportTenant.client.id,
+      conversationId: conversation.id,
+      storageKey: attachment.storageKey,
+    });
+    throw error;
+  }
+  return getSupportConversation(params);
+}
+
+export async function resolveSupportConversationAttachment(params: {
+  prisma: PrismaClient;
+  supportTenantKey: string;
+  requester: SupportRequester;
+  supportRef: string;
+  attachmentRef: string;
+  attachmentRoot: string;
+}) {
+  if (!isAllowedRequesterRole(params.requester.role)) {
+    return { ok: false as const, status: 403 as const, error: "forbidden", message: "Apenas administradores e supervisores podem abrir suporte." };
+  }
+  const supportTenant = await resolveSupportTenant(params.prisma, params.supportTenantKey);
+  if (!supportTenant.ok) return supportTenant;
+  const sourceHash = buildSourceHash(params.requester);
+  const conversation = await resolveSupportConversationByRef(params.prisma, {
+    supportClientId: supportTenant.client.id,
+    sourceHash,
+    supportRef: params.supportRef,
+  });
+  if (!conversation) {
+    return { ok: false as const, status: 404 as const, error: "support_conversation_not_found", message: "Chamado nao encontrado." };
+  }
+  const message = await params.prisma.inboundMessage.findFirst({
+    where: {
+      clientId: supportTenant.client.id,
+      waId: conversation.waId,
+      channel: SUPPORT_CHANNEL,
+      provider: SUPPORT_PROVIDER,
+      type: MessageType.IMAGE,
+      rawPayload: {
+        path: ["supportAttachment", "attachmentRef"],
+        equals: params.attachmentRef,
+      },
+    },
+    select: { rawPayload: true },
+  });
+  const metadata = extractSupportAttachmentMetadata(message?.rawPayload);
+  if (!metadata || metadata.attachmentRef !== params.attachmentRef) {
+    return { ok: false as const, status: 404 as const, error: "support_attachment_not_found", message: "Imagem nao encontrada." };
+  }
+  const file = await resolveSupportAttachmentFile({
+    root: params.attachmentRoot,
+    clientId: supportTenant.client.id,
+    conversationId: conversation.id,
+    metadata,
+  });
+  return { ok: true as const, metadata, file };
 }
 
 export async function createSupportAgentOutboundMessage(params: {

@@ -88,10 +88,22 @@ export type AppSupportConversation = {
 export type AppSupportMessage = {
   id: string;
   direction: "INBOUND" | "OUTBOUND";
+  type?: string;
   bodyText: string | null;
   createdAt: string;
   status: string;
   actorName: string | null;
+  media?: {
+    kind: "image";
+    ref: string;
+    mimeType: string;
+    fileName: string | null;
+    caption: string | null;
+    sizeBytes: number;
+    width: number | null;
+    height: number | null;
+    url?: string;
+  } | null;
 };
 
 export type AppSupportConversationDetail = {
@@ -2301,6 +2313,39 @@ export async function sendAppSupportConversationMessage(
     method: "POST",
     body: JSON.stringify({ text }),
   });
+}
+
+export async function sendAppSupportConversationAttachment(
+  session: AppSession,
+  supportRef: string,
+  file: File,
+  caption?: string
+): Promise<AppSupportConversationDetail> {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (caption?.trim()) {
+    formData.append("caption", caption.trim());
+  }
+  return requestAppJson(session, `/app/support/conversations/${encodeURIComponent(supportRef)}/attachments`, {
+    method: "POST",
+    body: formData,
+    timeoutMs: 30000,
+  });
+}
+
+export async function fetchAppSupportAttachment(
+  session: AppSession,
+  supportRef: string,
+  attachmentRef: string
+): Promise<{
+  blob: Blob;
+  contentType: string | null;
+  fileName: string | null;
+}> {
+  return requestAppBlob(
+    session,
+    `/app/support/conversations/${encodeURIComponent(supportRef)}/attachments/${encodeURIComponent(attachmentRef)}`
+  );
 }
 
 export async function fetchAppTrainingCatalog(

@@ -33,7 +33,11 @@ Cada usuario ve seus proprios chamados no MVP. Se ja houver chamado ativo para o
 
 O tenant de suporte pode ter roteamento proprio em `TenantOperationalConfig.config.supportChannel`, apontando para um `chatbotFlowId` ativo do mesmo tenant e, opcionalmente, departamento/fila. Sem flow dedicado valido, o chamado entra em modo humano na fila configurada ou na fila operacional padrao; o `entryPoint` geral do tenant so deve ser usado se isso for explicitamente configurado.
 
-O suporte aceita apenas texto nesta etapa. Anexos ficam para evolucao futura. A conversa aparece para a equipe da plataforma no Inbox do tenant de suporte, usando identidade sintetica e rotulo seguro com tenant e usuario solicitante. Nao copie telefone, email, token, SID, IP ou dados de CRM do tenant origem para o atendimento.
+O suporte aceita texto e prints/imagens enviados pelo solicitante. Use `Anexar imagem` ou cole um print no campo da conversa. O MVP permite uma imagem por envio, nos formatos PNG, JPEG/JPG ou WebP, ate 8 MB, com legenda opcional. Envie varias mensagens sucessivas se precisar anexar mais de uma evidencia.
+
+A conversa aparece para a equipe da plataforma no Inbox do tenant de suporte, usando identidade sintetica e rotulo seguro com tenant e usuario solicitante. Nao copie telefone, email, token, SID, IP ou dados de CRM do tenant origem para o atendimento. Evite anexar prints com credenciais, tokens, dados bancarios ou informacoes pessoais alem do necessario para diagnostico.
+
+O operador do suporte visualiza a imagem no Inbox e responde por texto. Envio de imagem do suporte para o cliente ainda nao faz parte desta etapa.
 
 ## Treinamentos
 

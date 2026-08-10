@@ -321,8 +321,17 @@ import {
   getSupportConversation,
   listSupportConversations,
   openSupportConversation,
+  resolveSupportConversationAttachment,
+  sendSupportConversationAttachment,
   sendSupportConversationMessage,
 } from "../support/supportGateway.js";
+import {
+  extractSupportAttachmentMetadata,
+  resolveSupportAttachmentFile,
+  streamSupportAttachment,
+  SupportAttachmentError,
+  SUPPORT_ATTACHMENT_MAX_BYTES,
+} from "../support/supportAttachments.js";
 import {
   AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
   AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
@@ -2111,6 +2120,57 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 200, result);
         return;
       }
+      const supportAttachmentUploadMatch = pathname.match(/^\/app\/support\/conversations\/([^/]+)\/attachments$/);
+      if (supportAttachmentUploadMatch && req.method === "POST") {
+        const contentLength = Number.parseInt(String(req.headers["content-length"] ?? ""), 10);
+        if (Number.isFinite(contentLength) && contentLength > SUPPORT_ATTACHMENT_MAX_BYTES + 1024 * 1024) {
+          json(res, 413, httpError("support_attachment_too_large", "Imagem grande demais."));
+          return;
+        }
+        const body = await readMultipartBody(req, res);
+        if (!body) return;
+        if (!body.file || body.file.content.length <= 0) {
+          json(res, 400, httpError("support_attachment_invalid", "Selecione uma imagem valida."));
+          return;
+        }
+        const result = await sendSupportConversationAttachment({
+          prisma,
+          supportTenantKey: env.PLATFORM_SUPPORT_TENANT_KEY,
+          requestId,
+          requester,
+          supportRef: decodeURIComponent(supportAttachmentUploadMatch[1] ?? ""),
+          caption: body.caption,
+          file: body.file,
+          attachmentRoot: env.SUPPORT_ATTACHMENT_ROOT,
+        });
+        if (!result.ok) {
+          json(res, result.status, httpError(result.error, result.message));
+          return;
+        }
+        json(res, 200, result);
+        return;
+      }
+      const supportAttachmentViewMatch = pathname.match(/^\/app\/support\/conversations\/([^/]+)\/attachments\/([^/]+)$/);
+      if (supportAttachmentViewMatch && req.method === "GET") {
+        const result = await resolveSupportConversationAttachment({
+          prisma,
+          supportTenantKey: env.PLATFORM_SUPPORT_TENANT_KEY,
+          requester,
+          supportRef: decodeURIComponent(supportAttachmentViewMatch[1] ?? ""),
+          attachmentRef: decodeURIComponent(supportAttachmentViewMatch[2] ?? ""),
+          attachmentRoot: env.SUPPORT_ATTACHMENT_ROOT,
+        });
+        if (!result.ok) {
+          json(res, result.status, httpError(result.error, result.message));
+          return;
+        }
+        streamSupportAttachment({
+          res,
+          absolutePath: result.file.absolutePath,
+          metadata: result.metadata,
+        });
+        return;
+      }
       const supportDetailMatch = pathname.match(/^\/app\/support\/conversations\/([^/]+)$/);
       if (supportDetailMatch && req.method === "GET") {
         const result = await getSupportConversation({
@@ -2129,6 +2189,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       json(res, 404, httpError("not_found", "Endpoint not found"));
       return;
     } catch (error) {
+      if (error instanceof SupportAttachmentError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
       logger.error({
         event: "app.support.error",
         message: (error as Error).message,
@@ -5066,6 +5130,30 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (!mediaMessage) {
         json(res, 404, { error: "media_not_found" });
         return;
+      }
+
+      const supportAttachment = extractSupportAttachmentMetadata(mediaMessage.rawPayload);
+      if (resolvedConversation.winner?.channel === "support" && supportAttachment) {
+        try {
+          const resolved = await resolveSupportAttachmentFile({
+            root: env.SUPPORT_ATTACHMENT_ROOT,
+            clientId: client.id,
+            conversationId: resolvedConversation.winner.id,
+            metadata: supportAttachment,
+          });
+          streamSupportAttachment({
+            res,
+            absolutePath: resolved.absolutePath,
+            metadata: supportAttachment,
+          });
+          return;
+        } catch (error) {
+          if (error instanceof SupportAttachmentError) {
+            json(res, error.status, { error: error.code, message: error.message });
+            return;
+          }
+          throw error;
+        }
       }
 
       const mediaId = extractRawMediaId(mediaMessage.rawPayload);
