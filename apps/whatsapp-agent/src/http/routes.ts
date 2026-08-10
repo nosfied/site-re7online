@@ -5071,10 +5071,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "app_conversation_media_department_check",
       });
-      const scopedConversation = materializeConversationOperationalState(
-        await runtimeStorage.getConversation(resolvedConversation.resolvedWaId, client.clientKey),
-        await ensureDefaultDepartmentAndQueue(prisma, client.id)
-      );
+      const scopedConversation = await loadInboxConversationState(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: resolvedConversation.resolvedWaId,
+        channel: resolvedConversation.winner?.channel ?? null,
+      });
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
