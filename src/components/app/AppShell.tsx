@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import ThemeSelector from "@/components/ThemeSelector";
 import {
   AppSession,
@@ -67,6 +67,12 @@ function getOverflowTriggerClasses(active: boolean) {
 
 function getOverflowTriggerIconClasses() {
   return "flex h-4 w-4 items-center justify-center rounded-full border border-current/20 bg-re7-sky/15 text-[12px] font-black leading-none text-current";
+}
+
+function getHelpTriggerClasses(active: boolean) {
+  return `inline-flex h-8 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md border px-2.5 text-xs font-semibold leading-none shadow-sm transition min-[1441px]:h-9 min-[1441px]:px-3 min-[1441px]:text-sm ${
+    active ? "theme-nav-link-active" : "theme-nav-link"
+  }`;
 }
 
 function isSupervisorRole(role: string) {
@@ -282,10 +288,12 @@ export default function AppShell({
   const router = useRouter();
   const [showBrandModal, setShowBrandModal] = useState(false);
   const [showMainMenuSubmenu, setShowMainMenuSubmenu] = useState(false);
+  const [showHelpMenu, setShowHelpMenu] = useState(false);
   const [activeSession, setActiveSession] = useState(session);
   const [remainingMs, setRemainingMs] = useState<number | null>(() => getAppSessionRemainingMs(session));
   const [renewingSession, setRenewingSession] = useState(false);
   const [renewError, setRenewError] = useState<string | null>(null);
+  const helpMenuRef = useRef<HTMLDivElement | null>(null);
   const [tenantSummary, setTenantSummary] = useState<{
     name: string;
     phoneDisplay: string | null;
@@ -299,6 +307,29 @@ export default function AppShell({
     setActiveSession(session);
     setRemainingMs(getAppSessionRemainingMs(session));
   }, [session]);
+
+  useEffect(() => {
+    setShowHelpMenu(false);
+    setShowMainMenuSubmenu(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!showHelpMenu) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && helpMenuRef.current?.contains(target)) return;
+      setShowHelpMenu(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowHelpMenu(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showHelpMenu]);
 
   useEffect(() => {
     let cancelled = false;
@@ -490,8 +521,77 @@ export default function AppShell({
 
   const navGroupClasses = "theme-surface grid min-w-0 max-w-full gap-1 rounded-lg border px-2 py-1.5 lg:px-1.5 min-[1441px]:px-2";
   const navLinksClasses = "flex min-w-0 max-w-full flex-nowrap items-center justify-start gap-1 overflow-visible";
+  const helpMenuActive =
+    pathname === "/app/support" || pathname.startsWith("/app/support/") ||
+    pathname === "/app/training" || pathname.startsWith("/app/training/");
+  const helpActions = (
+    <div ref={helpMenuRef} className="relative z-[70] shrink-0 justify-self-start">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={showHelpMenu}
+        aria-controls="app-help-support-menu"
+        onClick={() => setShowHelpMenu((current) => !current)}
+        className={`${getHelpTriggerClasses(helpMenuActive)} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-sky`}
+      >
+        <span
+          aria-hidden="true"
+          className="flex h-4 w-4 items-center justify-center rounded-full border border-current/25 bg-re7-sky/15 text-[11px] font-black leading-none"
+        >
+          ?
+        </span>
+        <span className="hidden sm:inline">Ajuda e suporte</span>
+        <span className="sm:hidden">Ajuda</span>
+        <span aria-hidden="true" className={getOverflowTriggerIconClasses()}>
+          ▾
+        </span>
+      </button>
+      {showHelpMenu ? (
+        <div
+          id="app-help-support-menu"
+          role="menu"
+          className="theme-surface-strong absolute left-0 top-[calc(100%+0.45rem)] z-[90] grid w-[min(22rem,calc(100vw-2rem))] gap-1 rounded-lg border p-1.5 text-left shadow-[0_18px_50px_rgba(0,0,0,0.22)] max-lg:left-auto max-lg:right-0"
+        >
+          <Link
+            href="/app/training"
+            role="menuitem"
+            onClick={() => setShowHelpMenu(false)}
+            className="theme-nav-link flex min-w-0 items-start gap-3 rounded-md border border-transparent px-3 py-3 text-sm transition hover:border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-sky"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-re7-sky/12 text-lg leading-none">
+              🎓
+            </span>
+            <span className="min-w-0">
+              <span className="block font-semibold leading-tight">Treinamentos</span>
+              <span className="theme-muted mt-1 block text-xs leading-snug">
+                Vídeos e materiais para aprender a usar o Converta.
+              </span>
+            </span>
+          </Link>
+          {canViewAdministration ? (
+            <Link
+              href="/app/support"
+              role="menuitem"
+              onClick={() => setShowHelpMenu(false)}
+              className="theme-nav-link flex min-w-0 items-start gap-3 rounded-md border border-transparent px-3 py-3 text-sm transition hover:border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-sky"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-re7-orange/15 text-lg leading-none">
+                ☎
+              </span>
+              <span className="min-w-0">
+                <span className="block font-semibold leading-tight">Abrir chamado</span>
+                <span className="theme-muted mt-1 block text-xs leading-snug">
+                  Fale diretamente com nossa equipe de suporte.
+                </span>
+              </span>
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
   const userActions = (
-    <div className="flex min-w-0 items-center justify-end gap-1.5 lg:flex-col lg:items-end lg:gap-1">
+    <div className="flex min-w-0 items-center justify-end gap-2">
       <div className="min-w-0 text-right">
         {tenantSummary ? (
           <>
@@ -505,34 +605,10 @@ export default function AppShell({
           {activeSession.user.name || activeSession.user.email}
         </p>
       </div>
-      <details className="relative shrink-0">
-        <summary
-          className={`${getOverflowTriggerClasses(
-            pathname === "/app/support" || pathname.startsWith("/app/support/") ||
-              pathname === "/app/training" || pathname.startsWith("/app/training/")
-          )} cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden`}
-          title="Abrir suporte"
-        >
-          Suporte
-          <span aria-hidden="true" className={getOverflowTriggerIconClasses()}>
-            ▾
-          </span>
-        </summary>
-        <div className="theme-surface-strong absolute right-0 top-[calc(100%+0.45rem)] z-[80] grid min-w-48 gap-1 rounded-lg border p-1.5 text-left shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-          <Link href="/app/training" className={getOverflowLinkClasses(pathname === "/app/training")}>
-            Treinamentos
-          </Link>
-          {canViewAdministration ? (
-            <Link href="/app/support" className={getOverflowLinkClasses(pathname === "/app/support")}>
-              Abrir chamado
-            </Link>
-          ) : null}
-        </div>
-      </details>
       <button
         type="button"
         onClick={handleLogout}
-      className="h-8 rounded-md bg-re7-orange px-2.5 text-xs font-semibold leading-none text-white shadow-sm hover:brightness-110 min-[1441px]:h-9 min-[1441px]:text-sm"
+        className="h-8 shrink-0 rounded-md bg-re7-orange px-2.5 text-xs font-semibold leading-none text-white shadow-sm hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-orange min-[1441px]:h-9 min-[1441px]:text-sm"
       >
         Sair
       </button>
@@ -731,7 +807,7 @@ export default function AppShell({
     <main className="theme-bg theme-workspace min-h-screen overflow-x-hidden px-3 py-3 sm:px-4 lg:px-5">
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-2.5">
         <header className="theme-surface-strong theme-shadow fixed left-3 right-3 top-[calc(0.5rem+var(--safe-top))] z-50 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border px-3 py-1.5 backdrop-blur sm:left-4 sm:right-4 sm:w-[calc(100%-2rem)] lg:left-5 lg:right-5 lg:top-2 lg:w-[calc(100%-2.5rem)]">
-          <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[82px_minmax(0,1fr)_124px] lg:items-center lg:gap-2 min-[1441px]:grid-cols-[128px_minmax(0,1fr)_160px] min-[1441px]:gap-3">
+          <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[82px_minmax(0,1fr)_minmax(150px,auto)] lg:items-center lg:gap-2 min-[1441px]:grid-cols-[128px_minmax(0,1fr)_minmax(190px,auto)] min-[1441px]:gap-3">
             <div className="flex min-w-0 items-center justify-between gap-2 lg:flex lg:justify-center">
               {logoButton}
               <div className="min-w-0 lg:hidden">
@@ -739,7 +815,7 @@ export default function AppShell({
               </div>
             </div>
 
-            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-center lg:justify-center lg:gap-2 min-[1441px]:grid-cols-[auto_auto_auto] min-[1441px]:gap-3">
+            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] lg:items-center lg:justify-center lg:gap-2 min-[1441px]:grid-cols-[auto_auto_auto_auto] min-[1441px]:gap-3">
               <div className={navGroupClasses}>
                 <p className="theme-soft text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em]">
                   Operacao
@@ -758,10 +834,11 @@ export default function AppShell({
                   </div>
                 </div>
               ) : null}
+              {helpActions}
               <ThemeSelector variant="switch" className="justify-self-start" />
             </div>
 
-            <div className="hidden min-w-0 overflow-hidden lg:block">{userActions}</div>
+            <div className="hidden min-w-0 lg:block">{userActions}</div>
           </div>
         </header>
         {!hideTitleBar ? (
