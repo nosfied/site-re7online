@@ -547,6 +547,61 @@ Limites:
 - nao substitui alerta externo/persistente;
 - nao executa restore automaticamente.
 
+### 2026-08 - Persistent Content Backup Hardening
+
+Status: implantado em producao como rotina operacional local, sem schema, sem alteracao de dados funcionais, sem alteracao de tenant/env do app e sem reload de runtime.
+
+Motivo:
+
+- o Converta passou a ter conteudo persistente fora do PostgreSQL;
+- `TRAINING_CONTENT_ROOT=/opt/re7online/content/training` armazena materiais do Training Center;
+- `SUPPORT_ATTACHMENT_ROOT=/opt/re7online/content/support-attachments` armazena anexos do Support Hub;
+- o cron legado `backup-data.sh` cobria apenas `.data` e nao cobria esses diretorios.
+
+Artefato operacional em producao:
+
+- `/usr/local/sbin/re7-converta-backup`;
+- cron em `/etc/cron.d/re7-converta-backup`;
+- destino local `/opt/re7online/backups/converta-persistent`;
+- logs em `/opt/re7online/backups/converta-persistent/logs/backup.log`;
+- snapshot atual apontado por `/opt/re7online/backups/converta-persistent/latest`.
+
+O que a rotina cobre:
+
+- PostgreSQL via `pg_dump -Fc` no container `wa-agent-postgres`;
+- validacao do dump por `pg_restore --list`;
+- manifest JSON por snapshot;
+- checksums SHA-256;
+- `/opt/re7online/content/training`;
+- `/opt/re7online/content/support-attachments`;
+- snapshots incrementais por `rsync --link-dest` para deduplicacao local;
+- lock por `flock`;
+- guarda de espaco livre minimo;
+- retencao local: 7 diarios, 4 semanais e 3 mensais.
+
+Agendamento atual:
+
+```text
+40 2 * * * deploy /usr/local/sbin/re7-converta-backup >> /opt/re7online/backups/converta-persistent/logs/cron.log 2>&1
+```
+
+Validacao inicial em producao:
+
+- dump PostgreSQL criado em formato custom;
+- `pg_restore --list` executado com sucesso;
+- checksum validado;
+- restore temporario de arquivos executado em `/tmp` e removido;
+- contagens restauradas bateram com o snapshot;
+- nenhum restore foi aplicado ao banco de producao.
+
+Limites atuais:
+
+- offsite ainda nao configurado;
+- backup criptografado de `.env`, Nginx, PM2 e inventario de certificados permanece pendente;
+- nao ha PITR/WAL archiving;
+- restore completo em banco isolado deve continuar como drill periodico separado;
+- o cron legado de `.data` permanece ativo por compatibilidade, mas nao substitui esta rotina.
+
 ### 78M - Load Test Design
 
 - desenhar carga por Inbox, Public API, Search, Webchat e Telegram;
