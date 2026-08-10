@@ -20,6 +20,7 @@ import {
   type AppProfile,
   type TenantCapabilities,
 } from "@/lib/appFeatures";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 
 export type AppSessionUser = {
   id: string;
@@ -1647,7 +1648,7 @@ async function requestAppJson<T>(
   const baseUrl = normalizeBaseUrl(currentSession.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl();
   const token = currentSession.token.trim();
   if (!token) {
-    const error = new Error("Sessao invalida. Faca login novamente.") as AppApiError;
+    const error = new Error(getAppErrorUxMessage({ status: 401 })) as AppApiError;
     error.status = 401;
     throw error;
   }
@@ -1721,33 +1722,24 @@ async function requestAppJson<T>(
     error.payload = payload;
     if (res.status === 401) {
       clearAppSession();
-      if (errorCode === "session_replaced") {
-        error.message = "Sua sessao foi encerrada porque houve um novo login em outro dispositivo.";
-      } else if (errorCode === "session_revoked") {
-        error.message = "Sessao encerrada. Faca login novamente.";
-      } else if (errorCode === "session_expired" || errorCode === "token_expired") {
-        error.message = "Sessao expirada. Faca login novamente.";
-      } else {
-        error.message = "Sessao invalida. Faca login novamente.";
-      }
+      error.message = getAppErrorUxMessage({ status: res.status, errorCode });
     }
-    if (res.status === 403) error.message = "Sem permissao (403).";
+    if (res.status === 403) error.message = getAppErrorUxMessage({ status: res.status, errorCode });
     if (res.status === 413) {
       error.message = "Arquivo muito grande para envio. Tente uma imagem menor ou compacte o documento.";
       error.errorCode = error.errorCode || "payload_too_large";
     }
     if (errorCode === "feature_disabled" || errorCode === "feature_not_enabled") {
-      error.message = "Este modulo nao esta disponivel para este perfil.";
+      error.message = getAppErrorUxMessage({ status: res.status, errorCode });
     }
     if (errorCode === "window_closed") {
-      error.message =
-        "Janela possivelmente fechada. Envie primeiro um template aprovado pela Meta para reabrir a conversa.";
+      error.message = getAppErrorUxMessage({ status: res.status, errorCode });
       error.details =
         details ||
-        "A conversa esta fora da janela de 24 horas para texto livre. Use um template aprovado e, apos a resposta do cliente, retome o atendimento manual.";
+        "A conversa está fora da janela de 24 horas para texto livre. Use um modelo aprovado e, após a resposta do cliente, retome o atendimento manual.";
     }
     if (res.status >= 500 && !errorCode && !details) {
-      error.message = "Erro no servidor (5xx).";
+      error.message = getAppErrorUxMessage({ status: res.status, errorCode });
     }
     throw error;
   }
@@ -1764,7 +1756,7 @@ async function requestAppText(
   const baseUrl = normalizeBaseUrl(currentSession.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl();
   const token = currentSession.token.trim();
   if (!token) {
-    const error = new Error("Sessao invalida. Faca login novamente.") as AppApiError;
+    const error = new Error(getAppErrorUxMessage({ status: 401 })) as AppApiError;
     error.status = 401;
     throw error;
   }
@@ -1826,7 +1818,7 @@ async function requestAppText(
         (typeof body.error === "string" ? body.error : "") ||
         message;
       if (body.error === "feature_disabled" || body.error === "feature_not_enabled") {
-        message = "Este modulo nao esta disponivel para este perfil.";
+        message = getAppErrorUxMessage({ status: res.status, errorCode: body.error });
       }
     } catch {
       // noop
@@ -1838,11 +1830,11 @@ async function requestAppText(
     error.payload = payload;
     if (res.status === 401) {
       clearAppSession();
-      error.message = "Sessao expirada. Faca login novamente.";
+      error.message = getAppErrorUxMessage({ status: res.status, errorCode });
     }
-    if (res.status === 403) error.message = "Sem permissao (403).";
+    if (res.status === 403) error.message = getAppErrorUxMessage({ status: res.status, errorCode });
     if (res.status >= 500 && !errorCode && !details) {
-      error.message = "Erro no servidor (5xx).";
+      error.message = getAppErrorUxMessage({ status: res.status, errorCode });
     }
     throw error;
   }
@@ -1863,7 +1855,7 @@ async function requestAppBlob(
   const baseUrl = normalizeBaseUrl(currentSession.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl();
   const token = currentSession.token.trim();
   if (!token) {
-    const error = new Error("Sessao invalida. Faca login novamente.") as AppApiError;
+    const error = new Error(getAppErrorUxMessage({ status: 401 })) as AppApiError;
     error.status = 401;
     throw error;
   }
@@ -1908,7 +1900,7 @@ async function requestAppBlob(
         (typeof body.error === "string" ? body.error : "") ||
         message;
       if (body.error === "feature_disabled" || body.error === "feature_not_enabled") {
-        message = "Este modulo nao esta disponivel para este perfil.";
+        message = getAppErrorUxMessage({ status: res.status, errorCode: body.error });
       }
     } catch {
       // noop
@@ -1917,8 +1909,10 @@ async function requestAppBlob(
     error.status = res.status;
     if (res.status === 401) {
       clearAppSession();
-      error.message = "Sessao expirada. Faca login novamente.";
+      error.message = getAppErrorUxMessage({ status: res.status });
     }
+    if (res.status === 403) error.message = getAppErrorUxMessage({ status: res.status });
+    if (res.status >= 500) error.message = getAppErrorUxMessage({ status: res.status });
     throw error;
   }
 
@@ -1992,7 +1986,7 @@ export async function loginAppUser(
     error.status = res.status;
     if (res.status === 401) error.message = "Email ou senha invalidos.";
     if (res.status === 409) error.message = "Email ambiguo entre clientes.";
-    if (res.status >= 500) error.message = "Erro no servidor (5xx).";
+    if (res.status >= 500) error.message = getAppErrorUxMessage({ status: res.status });
     throw error;
   }
 
@@ -2057,7 +2051,7 @@ export async function verifyAppMfaLoginChallenge(
     cache: "no-store",
   });
   if (!res.ok) {
-    let message = `MFA failed (${res.status})`;
+    let message = "Não foi possível validar o código de verificação.";
     try {
       const body = (await res.json()) as { error?: string; message?: string };
       message = body.message || body.error || message;
@@ -2066,9 +2060,9 @@ export async function verifyAppMfaLoginChallenge(
     }
     const error = new Error(message) as AppApiError;
     error.status = res.status;
-    if (res.status === 400) error.message = "Informe o codigo MFA.";
-    if (res.status === 401) error.message = "Codigo MFA invalido ou expirado.";
-    if (res.status >= 500) error.message = "Erro no servidor (5xx).";
+    if (res.status === 400) error.message = "Informe o código de verificação.";
+    if (res.status === 401) error.message = "Código de verificação inválido ou expirado.";
+    if (res.status >= 500) error.message = getAppErrorUxMessage({ status: res.status });
     throw error;
   }
 
@@ -2108,7 +2102,7 @@ export async function requestAppPasswordReset(email: string): Promise<{ ok: true
     cache: "no-store",
   });
   if (!res.ok) {
-    throw new Error("Nao foi possivel solicitar a recuperacao agora.");
+    throw new Error("Não foi possível solicitar a recuperação agora.");
   }
   return (await res.json()) as { ok: true; message: string };
 }
@@ -2133,7 +2127,7 @@ export async function resetAppPassword(
       (typeof body?.error === "object" && typeof body.error.message === "string"
         ? body.error.message
         : "") ||
-      "Nao foi possivel alterar a senha.";
+      "Não foi possível alterar a senha.";
     throw new Error(message);
   }
   return {

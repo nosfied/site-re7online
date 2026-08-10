@@ -19,6 +19,7 @@ import {
 } from "@/lib/appClientApi";
 import { addAppRealtimeListener } from "@/lib/appRealtime";
 import { getAppProfile, type AppProfile } from "@/lib/appFeatures";
+import { getConversationStatusUxLabel } from "@/lib/appUxLabels";
 import type {
   AdminDepartmentItem,
   AdminUserItem,
@@ -27,10 +28,10 @@ import type {
 
 const STATUS_OPTIONS: Array<{ value: "" | ConversationOperationalStatus; label: string }> = [
   { value: "", label: "Todos" },
-  { value: "WAITING", label: "Aguardando" },
+  { value: "WAITING", label: "Aguardando atendimento" },
   { value: "IN_PROGRESS", label: "Em atendimento" },
-  { value: "WAITING_USER", label: "Aguardando cliente" },
-  { value: "CLOSED", label: "Finalizadas" },
+  { value: "WAITING_USER", label: "Aguardando resposta do cliente" },
+  { value: "CLOSED", label: "Encerrados" },
 ];
 
 function canAccessDashboard(role: string) {
@@ -87,16 +88,7 @@ function formatElapsed(value: string | null, now: number) {
 }
 
 function getStatusLabel(status: ConversationOperationalStatus) {
-  switch (status) {
-    case "WAITING":
-      return "Aguardando";
-    case "IN_PROGRESS":
-      return "Em atendimento";
-    case "WAITING_USER":
-      return "Aguardando cliente";
-    case "CLOSED":
-      return "Finalizada";
-  }
+  return getConversationStatusUxLabel(status);
 }
 
 function getStatusTone(status: ConversationOperationalStatus) {
@@ -123,17 +115,17 @@ function getQueueAgeTone(waitingSince: string | null, now: number) {
 function getProfileLabels(profile: AppProfile) {
   if (profile === "government") {
     return {
-      people: "Cidadaos",
+      people: "Cidadãos",
       reports: "Indicadores",
       queue: "Demandas",
-      dashboardSubtitle: "Supervisao das demandas e indicadores quase em tempo real.",
+      dashboardSubtitle: "Acompanhe filas, responsáveis e indicadores quase em tempo real.",
     };
   }
   return {
     people: "Clientes",
-    reports: "Relatorios",
+    reports: "Relatórios",
     queue: "Fila operacional",
-    dashboardSubtitle: "Supervisao da fila operacional e indicadores quase em tempo real.",
+    dashboardSubtitle: "Acompanhe filas, responsáveis e indicadores quase em tempo real.",
   };
 }
 
@@ -402,11 +394,11 @@ export default function AppDashboardPage() {
     return (
       <AppShell
         session={session}
-        title="Dashboard"
-        subtitle="Visao operacional e supervisao de atendimento."
+        title="Painel"
+        subtitle="Visão operacional dos atendimentos."
       >
         <section className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/75">
-          Este modulo esta disponivel apenas para supervisores e administradores.
+          Este módulo está disponível apenas para supervisores e administradores.
         </section>
       </AppShell>
     );
@@ -422,7 +414,7 @@ export default function AppDashboardPage() {
   return (
     <AppShell
       session={session}
-      title="Dashboard"
+      title="Painel"
       subtitle={labels.dashboardSubtitle}
     >
       <FeedbackToast message={success} {...toastHandlers} />
@@ -462,7 +454,7 @@ export default function AppDashboardPage() {
             </select>
           </label>
           <label className="grid gap-1 text-sm">
-            <span className="text-white/70">Status</span>
+            <span className="text-white/70">Situação</span>
             <select
               value={status}
               onChange={(event) => setStatus(event.target.value as "" | ConversationOperationalStatus)}
@@ -493,17 +485,17 @@ export default function AppDashboardPage() {
       {showDashboardContent ? (
         <>
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <KpiCard label="Atendimentos Ativos" value={openConversations} tone={openConversations > 0 ? "ok" : "neutral"} />
+            <KpiCard label="Atendimentos ativos" value={openConversations} tone={openConversations > 0 ? "ok" : "neutral"} />
             <KpiCard label={labels.queue} value={kpis?.waiting} tone={(kpis?.waiting ?? 0) > 0 ? "warning" : "neutral"} />
-            <KpiCard label="Em Atendimento" value={kpis?.active} tone={(kpis?.active ?? 0) > 0 ? "ok" : "neutral"} />
-            <KpiCard label="Aguardando Cliente" value={kpis?.waitingUser} tone={(kpis?.waitingUser ?? 0) > 0 ? "warning" : "neutral"} />
-            <KpiCard label="Finalizados Hoje" value={kpis?.closedToday} tone={(kpis?.closedToday ?? 0) > 0 ? "ok" : "neutral"} />
+            <KpiCard label="Em atendimento" value={kpis?.active} tone={(kpis?.active ?? 0) > 0 ? "ok" : "neutral"} />
+            <KpiCard label="Aguardando cliente" value={kpis?.waitingUser} tone={(kpis?.waitingUser ?? 0) > 0 ? "warning" : "neutral"} />
+            <KpiCard label="Encerrados hoje" value={kpis?.closedToday} tone={(kpis?.closedToday ?? 0) > 0 ? "ok" : "neutral"} />
           </section>
 
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label={labels.reports}>
-            <KpiCard label="Tempo medio 1a resposta" value={formatSeconds(kpis?.avgFirstResponseTimeSec ?? null)} />
-            <KpiCard label="Tempo medio resolucao" value={formatSeconds(kpis?.avgResolutionTimeSec ?? null)} />
-            <KpiCard label="Violacoes SLA" value={kpis?.slaBreaches} tone={(kpis?.slaBreaches ?? 0) > 0 ? "critical" : "neutral"} />
+            <KpiCard label="Tempo médio da 1ª resposta" value={formatSeconds(kpis?.avgFirstResponseTimeSec ?? null)} />
+            <KpiCard label="Tempo médio até encerrar" value={formatSeconds(kpis?.avgResolutionTimeSec ?? null)} />
+            <KpiCard label="Prazos excedidos" value={kpis?.slaBreaches} tone={(kpis?.slaBreaches ?? 0) > 0 ? "critical" : "neutral"} />
             <KpiCard label={`Total de ${labels.people}`} value={kpis?.totalConversations} />
           </section>
 
@@ -518,12 +510,12 @@ export default function AppDashboardPage() {
             <thead className="bg-white/10 text-left">
               <tr>
                 <th className="px-3 py-2">Contato</th>
-                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Situação</th>
                 <th className="px-3 py-2">Setor</th>
                 <th className="px-3 py-2">Atendente</th>
-                <th className="px-3 py-2">Ultima interacao</th>
+                <th className="px-3 py-2">Última interação</th>
                 <th className="px-3 py-2">Tempo em fila</th>
-                <th className="px-3 py-2 text-right">Acoes</th>
+                <th className="px-3 py-2 text-right">Ações</th>
               </tr>
             </thead>
             <tbody>

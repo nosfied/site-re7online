@@ -89,7 +89,7 @@ export default function AppLoginPage() {
       router.replace("/app/inbox");
     } catch (err) {
       const typed = err as { message?: string };
-      setError(typed.message || "Nao foi possivel entrar. Verifique sua conexao e tente novamente.");
+      setError(typed.message || "Não foi possível entrar. Verifique sua conexão e tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -122,7 +122,7 @@ export default function AppLoginPage() {
       router.replace("/app/inbox");
     } catch (err) {
       const typed = err as { message?: string };
-      setError(typed.message || "Nao foi possivel validar o codigo MFA.");
+      setError(typed.message || "Não foi possível validar o código de verificação.");
     } finally {
       setLoading(false);
     }
@@ -210,13 +210,13 @@ export default function AppLoginPage() {
         {!checkingSession && mfaChallenge ? (
           <form className="grid gap-3 sm:gap-4" onSubmit={handleMfaSubmit}>
             <div className="rounded-md border border-white/10 bg-black/10 p-3 text-sm">
-              <p className="font-semibold">Verificacao MFA</p>
+              <p className="font-semibold">Verificação em duas etapas</p>
               <p className="theme-muted mt-1">
-                Informe o codigo do autenticador para {mfaChallenge.userName}. O desafio expira em poucos minutos.
+                Informe o código do autenticador para {mfaChallenge.userName}. Esta etapa expira em poucos minutos.
               </p>
             </div>
             <label className="grid gap-1 text-sm">
-              <span className="theme-muted">Codigo de 6 digitos</span>
+              <span className="theme-muted">Código de 6 dígitos</span>
               <input
                 inputMode="numeric"
                 autoComplete="one-time-code"

@@ -124,7 +124,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     href: "/app/inbox",
     icon: "📥",
     group: "operation",
-    labels: { business: "Inbox", government: "Atendimento" },
+    labels: { business: "Caixa de entrada", government: "Atendimento" },
   },
   {
     href: "/app/dashboard",
@@ -132,7 +132,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     group: "operation",
     feature: "dashboard",
     minRole: "SUPERVISOR",
-    labels: { business: "Dashboard", government: "Dashboard" },
+    labels: { business: "Painel", government: "Painel" },
   },
   {
     href: "/app/operations",
@@ -161,7 +161,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     icon: "🧾",
     group: "operation",
     feature: "templates",
-    labels: { business: "Templates", government: "Templates" },
+    labels: { business: "Modelos", government: "Modelos" },
   },
   {
     href: "/app/chatbot",
@@ -169,7 +169,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     group: "operation",
     feature: "chatbot",
     minRole: "SUPERVISOR",
-    labels: { business: "Automacao", government: "Configuracoes" },
+    labels: { business: "Automação", government: "Configurações" },
   },
   {
     href: "/app/knowledge-base",
@@ -217,7 +217,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     group: "operation",
     feature: "webchat",
     minRole: "SUPERVISOR",
-    labels: { business: "Webchat", government: "Webchat" },
+    labels: { business: "Chat do site", government: "Chat do site" },
   },
   {
     href: "/app/telegram",
@@ -233,14 +233,14 @@ const APP_NAV_ITEMS: NavItem[] = [
     group: "operation",
     feature: "reports",
     minRole: "SUPERVISOR",
-    labels: { business: "Relatorios", government: "Indicadores" },
+    labels: { business: "Relatórios", government: "Indicadores" },
   },
   {
     href: "/app/settings/users",
     icon: "👤",
     group: "administration",
     minRole: "SUPERVISOR",
-    labels: { business: "Usuarios", government: "Usuarios" },
+    labels: { business: "Usuários", government: "Usuários" },
   },
   {
     href: "/app/settings/departments",
@@ -293,7 +293,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     group: "administration",
     feature: "mfa",
     minRole: "SUPERVISOR",
-    labels: { business: "Seguranca", government: "Seguranca" },
+    labels: { business: "Segurança", government: "Segurança" },
   },
   {
     href: "/app/settings/privacy",
@@ -473,7 +473,7 @@ export default function AppShell({
         setRemainingMs(getAppSessionRemainingMs(nextSession));
       })
       .catch((error: { message?: string }) => {
-        setRenewError(error.message || "Nao foi possivel renovar a sessao. Faca login novamente.");
+        setRenewError(error.message || "Não foi possível renovar a sessão. Faça login novamente.");
       })
       .finally(() => setRenewingSession(false));
   };
@@ -670,7 +670,7 @@ export default function AppShell({
     <button
       type="button"
       onClick={() => router.push("/app/inbox")}
-      title="Abrir inbox"
+      title="Abrir caixa de entrada"
       className="relative m-0 flex h-[82px] w-[195px] shrink-0 items-center justify-center overflow-visible p-0 sm:h-[95px] sm:w-[213px] lg:h-[66px] lg:w-[154px] min-[1441px]:h-[109px] min-[1441px]:w-[247px]"
     >
       <Image
@@ -735,11 +735,11 @@ export default function AppShell({
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="theme-soft text-xs font-semibold uppercase leading-none tracking-[0.16em]">
-              Navegacao
+              Navegação
             </p>
             <h2 className="mt-1 text-lg font-bold">Menu principal</h2>
             <p className="theme-muted mt-1 text-sm">
-              Opcoes disponiveis para {activeSession.user.name || activeSession.user.email}.
+              Opções disponíveis para {activeSession.user.name || activeSession.user.email}.
             </p>
           </div>
           <button
@@ -751,8 +751,8 @@ export default function AppShell({
           </button>
         </div>
         <div className="grid gap-5">
-          {renderMainMenuGroup(operationItems, "Operacao")}
-          {renderMainMenuGroup(administrationItems, "Administracao")}
+          {renderMainMenuGroup(operationItems, "Operação")}
+          {renderMainMenuGroup(administrationItems, "Administração")}
         </div>
       </div>
   ) : null;
@@ -762,7 +762,7 @@ export default function AppShell({
     <div className="theme-modal-backdrop fixed inset-0 z-[120] flex items-center justify-center px-4 backdrop-blur-sm">
       <div className="theme-surface-strong w-full max-w-md rounded-2xl border p-5 shadow-[0_24px_90px_rgba(0,0,0,0.28)]">
         <p className="theme-soft text-xs font-semibold uppercase leading-none tracking-[0.16em]">
-          Sessao
+          Sessão
         </p>
         <h2 className="mt-2 text-xl font-bold">Sua sessão está prestes a expirar.</h2>
         <p className="theme-muted mt-2 text-sm">
@@ -870,7 +870,7 @@ export default function AppShell({
             <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-center lg:justify-center lg:gap-2 min-[1441px]:grid-cols-[auto_auto_auto] min-[1441px]:gap-3">
               <div className={navGroupClasses}>
                 <p className="theme-soft text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em]">
-                  Operacao
+                  Operação
                 </p>
                 <div className={navLinksClasses}>
                   {renderNavLinks(operationItems, directNavLimits.operation, "operacao")}
@@ -879,7 +879,7 @@ export default function AppShell({
               {administrationItems.length > 0 ? (
                 <div className={navGroupClasses}>
                   <p className="theme-soft text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em]">
-                    Administracao
+                    Administração
                   </p>
                   <div className={navLinksClasses}>
                     {renderNavLinks(administrationItems, directNavLimits.administration, "administracao")}

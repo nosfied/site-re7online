@@ -12,6 +12,25 @@ Status: guia operacional para uso interno e treinamento. Este documento nao alte
 - Use mensagens prontas apenas como texto operacional, nao como modelo Meta.
 - Nao tente contornar bloqueios LGPD, opt-out ou permissao.
 
+## Linguagem operacional
+
+A interface operacional deve priorizar termos simples para quem atende:
+
+| Termo tecnico | Texto para operador |
+| --- | --- |
+| Inbox | Caixa de entrada |
+| Dashboard | Painel |
+| Template | Modelo aprovado ou modelo de mensagem |
+| Webchat | Chat do site |
+| Status da conversa | Situacao do atendimento |
+| Timeline | Historico |
+| Claim | Assumir atendimento |
+| Assignment | Responsavel ou atribuicao |
+| Lead sem cadastro completo | Contato |
+| MFA | Verificacao em duas etapas |
+
+Os nomes tecnicos continuam validos em codigo, eventos, APIs, logs sanitizados e documentacao tecnica. A troca acima vale para rotulos, avisos, botoes, mensagens vazias e erros vistos pelo operador.
+
 ## Inbox
 
 No Inbox, o operador deve:

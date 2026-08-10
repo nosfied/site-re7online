@@ -7,6 +7,12 @@ import ThemeSelector from "@/components/ThemeSelector";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import { isSelectableDepartment } from "@/lib/departments";
 import {
+  getAppErrorUxMessage,
+  getChannelFallbackContactLabel,
+  getChannelUxLabel,
+  getConversationStatusUxLabel,
+} from "@/lib/appUxLabels";
+import {
   addAppRealtimeListener,
   canUserReceiveTargetedNotification,
   handleRealtimeNotificationCandidate,
@@ -225,20 +231,7 @@ function getMediaCacheKey(messageId: string | null, mediaKind?: string | null) {
 function getConversationLabel(item: InboxConversationItem) {
   if (item.leadName) return item.leadName;
   if (item.leadPhone) return item.leadPhone;
-  switch (getConversationChannel(item)) {
-    case "instagram":
-      return "Instagram User";
-    case "messenger":
-      return "Messenger User";
-    case "whatsapp":
-      return "WhatsApp User";
-    case "webchat":
-      return "Webchat User";
-    case "telegram":
-      return "Telegram User";
-    default:
-      return "Sem nome";
-  }
+  return getChannelFallbackContactLabel(getConversationChannel(item));
 }
 
 function isPhoneLikeConversationIdentifier(value?: string | null) {
@@ -402,9 +395,9 @@ function getMessageContentLabel(item: InboxMessageItem) {
     case "DOCUMENT":
       return "Documento";
     case "TEMPLATE":
-      return "Template";
+      return "Modelo de mensagem";
     case "UNKNOWN":
-      return "Mensagem nao suportada pela API oficial do WhatsApp.";
+      return "Mensagem não suportada pelo WhatsApp.";
     default:
       return "Mensagem";
   }
@@ -512,19 +505,19 @@ function getConversationPreviewText(item: InboxConversationItem) {
     case "DOCUMENT":
       return `Documento ${directionLabel}`;
     case "TEMPLATE":
-      return "Template enviado";
+      return "Modelo enviado";
     case "UNKNOWN":
-      return "Mensagem nao suportada.";
+      return "Mensagem não suportada.";
     default:
       return `Mensagem ${directionLabelFemale}`;
   }
 }
 
 function getChannelEmptyStateLabel(channel: ConversationChannelFilter) {
-  if (channel === "messenger") return "Facebook/Messenger";
+  if (channel === "messenger") return "Messenger";
   if (channel === "instagram") return "Instagram";
   if (channel === "whatsapp") return "WhatsApp";
-  if (channel === "webchat") return "Webchat";
+  if (channel === "webchat") return "Chat do site";
   if (channel === "telegram") return "Telegram";
   if (channel === "support") return "Suporte";
   return "Todos os canais";
@@ -608,7 +601,7 @@ function MediaBubble({
     }
     const lastNotFoundAt = mediaNotFoundCache.get(mediaCacheKey);
     if (lastNotFoundAt && Date.now() - lastNotFoundAt < MEDIA_NOT_FOUND_TTL_MS) {
-      setError("Midia indisponivel.");
+      setError("Mídia indisponível.");
       return;
     }
     setLoading(true);
@@ -627,9 +620,9 @@ function MediaBubble({
     } catch (err) {
       if ((err as { status?: number }).status === 404) {
         mediaNotFoundCache.set(mediaCacheKey, Date.now());
-        setError("Midia indisponivel.");
+        setError("Mídia indisponível.");
       } else {
-        setError("Falha ao carregar midia.");
+        setError("Falha ao carregar mídia.");
       }
     } finally {
       setLoading(false);
@@ -1010,13 +1003,13 @@ function mergeReadStatePreservingLocal(current: InboxReadState, incoming: InboxR
 const QUICK_EMOJIS = ["😀", "😂", "😍", "❤️", "🙏", "👍", "👋", "👏", "🔥", "✅"];
 const CONVERSATION_FILTERS = [
   { value: "ALL", label: "Todas" },
-  { value: "WAITING", label: "Na fila" },
+  { value: "WAITING", label: "Aguardando" },
   { value: "AUTOMATION", label: "Automação" },
   { value: "IN_PROGRESS", label: "Em atendimento" },
   { value: "WAITING_USER", label: "Aguardando cliente" },
-  { value: "CLOSED", label: "Finalizadas" },
+  { value: "CLOSED", label: "Encerradas" },
   { value: "MINE", label: "Minhas" },
-  { value: "UNASSIGNED", label: "Nao atribuidas" },
+  { value: "UNASSIGNED", label: "Sem responsável" },
 ] as const;
 
 type ConversationFilter = (typeof CONVERSATION_FILTERS)[number]["value"];
@@ -1031,8 +1024,8 @@ type ConversationChannelFilter = "ALL" | InboxChannel;
 const CONVERSATION_CHANNEL_FILTERS: Array<{ value: InboxChannel; label: string }> = [
   { value: "whatsapp", label: "WhatsApp" },
   { value: "instagram", label: "Instagram" },
-  { value: "messenger", label: "Facebook/Messenger" },
-  { value: "webchat", label: "Webchat" },
+  { value: "messenger", label: "Messenger" },
+  { value: "webchat", label: "Chat do site" },
   { value: "telegram", label: "Telegram" },
   { value: "support", label: "Suporte" },
 ];
@@ -1519,11 +1512,11 @@ async function prepareMediaFileForUpload(file: File) {
     image = await loadImageForCompression(file);
   } catch {
     if (isHeicOrHeifImage(file)) {
-      throw Object.assign(new Error("Nao foi possivel converter esta foto do iPhone para envio."), {
-        details: "Tente selecionar a foto novamente, salvar como JPEG ou enviar pelo app Fotos em modo Mais compativel.",
+      throw Object.assign(new Error("Não foi possível converter esta foto do iPhone para envio."), {
+        details: "Tente selecionar a foto novamente, salvar como JPEG ou enviar pelo app Fotos em modo Mais compatível.",
       });
     }
-    throw Object.assign(new Error("Nao foi possivel preparar esta imagem para envio."), {
+    throw Object.assign(new Error("Não foi possível preparar esta imagem para envio."), {
       details: "Tente outra imagem ou compacte o arquivo antes de enviar.",
     });
   }
@@ -1767,15 +1760,15 @@ function isAutomationQueueConversation(
 function getConversationStatusLabel(status: ConversationOperationalStatus | null) {
   switch (status) {
     case "WAITING":
-      return "Na fila";
+      return getConversationStatusUxLabel(status);
     case "IN_PROGRESS":
-      return "Em atendimento";
+      return getConversationStatusUxLabel(status);
     case "WAITING_USER":
-      return "Aguardando cliente";
+      return getConversationStatusUxLabel(status);
     case "CLOSED":
-      return "Finalizada";
+      return getConversationStatusUxLabel(status);
     default:
-      return "Sem andamento";
+      return getConversationStatusUxLabel(status);
   }
 }
 
@@ -1790,8 +1783,8 @@ function getConversationModeLabel(
   item: Pick<InboxConversationItem, "mode" | "handoffStatus"> | null
 ) {
   if (!item) return "Sem modo";
-  if (item.handoffStatus === "active" || item.handoffStatus === "pending") return "Modo humano";
-  return item.mode === "HUMAN" ? "Modo humano" : "Modo automacao";
+  if (item.handoffStatus === "active" || item.handoffStatus === "pending") return "Atendimento humano";
+  return item.mode === "HUMAN" ? "Atendimento humano" : "Automação ativa";
 }
 
 function getConversationStatusClass(status: ConversationOperationalStatus | null) {
@@ -1831,20 +1824,7 @@ function getConversationChannel(item: Pick<InboxConversationItem, "channel"> | n
 }
 
 function getConversationChannelLabel(item: Pick<InboxConversationItem, "channel"> | null) {
-  switch (getConversationChannel(item)) {
-    case "messenger":
-      return "Facebook/Messenger";
-    case "instagram":
-      return "Instagram";
-    case "webchat":
-      return "Webchat";
-    case "telegram":
-      return "Telegram";
-    case "support":
-      return "Suporte";
-    default:
-      return "WhatsApp";
-  }
+  return getChannelUxLabel(getConversationChannel(item));
 }
 
 function canSendInboxText(
@@ -1867,7 +1847,7 @@ function canSendInboxTemplate(channel: InboxChannel) {
 function getInboxTextOutboundDisabledMessage(channel: InboxChannel) {
   switch (channel) {
     case "webchat":
-      return "Envio por Webchat ainda não está habilitado neste canal.";
+      return "Envio pelo Chat do site ainda não está habilitado neste canal.";
     case "telegram":
       return "Envio por Telegram ainda não está habilitado neste canal.";
     case "instagram":
@@ -1875,7 +1855,7 @@ function getInboxTextOutboundDisabledMessage(channel: InboxChannel) {
     case "support":
       return "Envio interno de suporte indisponível neste atendimento.";
     case "messenger":
-      return "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
+      return "Envio pelo Messenger ainda não está habilitado neste canal.";
     default:
       return "Envio indisponível neste canal.";
   }
@@ -1883,10 +1863,10 @@ function getInboxTextOutboundDisabledMessage(channel: InboxChannel) {
 
 function getInboxMediaOutboundDisabledMessage(channel: InboxChannel) {
   if (channel === "support") return "Envio de mídia ainda não está habilitado para suporte interno.";
-  if (channel === "webchat") return "Envio de mídia ainda não está habilitado para Webchat.";
+  if (channel === "webchat") return "Envio de mídia ainda não está habilitado para Chat do site.";
   if (channel === "telegram") return "Envio de mídia ainda não está habilitado para Telegram.";
   if (channel === "instagram") return "Envio de mídia ainda não está habilitado para Instagram.";
-  if (channel === "messenger") return "Envio de mídia ainda não está habilitado para Facebook/Messenger.";
+  if (channel === "messenger") return "Envio de mídia ainda não está habilitado para Messenger.";
   return "Envio de mídia ainda não está habilitado para este canal.";
 }
 
@@ -2129,7 +2109,7 @@ function getTemplateBodyPreview(content: string | null | undefined) {
 
 function renderTemplatePreview(content: string | null | undefined, variables: Record<string, string>) {
   const body = getTemplateBodyPreview(content);
-  if (!body) return "Conteudo do modelo indisponivel.";
+  if (!body) return "Conteúdo do modelo indisponível.";
   return body.replace(/\{\{\s*(\d+)\s*\}\}/g, (match, key: string) => {
     const value = variables[key]?.trim();
     return value || match;
@@ -2167,10 +2147,12 @@ function InboxCostPreview({ preview }: { preview: AppMetaCostPreview | null }) {
 }
 
 function buildInboxErrorToast(error: string | null, errorDetails: string | null, leadError: string | null) {
+  const friendlyError = error ? getAppErrorUxMessage({ message: error }) : null;
+  const friendlyLeadError = leadError ? getAppErrorUxMessage({ message: leadError }) : null;
   if (error && errorDetails && !error.includes(errorDetails)) {
-    return `${error}\n${errorDetails}`;
+    return `${friendlyError}\n${errorDetails}`;
   }
-  return error ?? leadError;
+  return friendlyError ?? friendlyLeadError;
 }
 
 export default function AppInboxPage() {
@@ -2823,7 +2805,7 @@ export default function AppInboxPage() {
         : targetId.replace(/["\\]/g, "\\$&");
     const target = node?.querySelector<HTMLElement>(`[data-internal-message-id="${escapedTargetId}"]`);
     if (!node || !target) {
-      setError("Mensagem original nao esta carregada.");
+      setError("Mensagem original não está carregada.");
       setErrorDetails(null);
       return;
     }
@@ -4492,7 +4474,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setLeadError(typed.message || "Falha ao atualizar status do lead.");
+      setLeadError(typed.message || "Falha ao atualizar andamento do contato.");
     } finally {
       setSavingLeadStatus(false);
     }
@@ -4887,7 +4869,7 @@ export default function AppInboxPage() {
     if (selectedMediaFile) {
       if (replyTarget) {
         setError(
-          "Resposta contextual com anexo ainda nao esta disponivel. Cancele a citacao ou envie uma mensagem de texto."
+          "Mensagem marcada com anexo ainda não está disponível. Remova a marcação ou envie uma mensagem de texto."
         );
         setErrorDetails(null);
         return;
@@ -4920,7 +4902,7 @@ export default function AppInboxPage() {
   const handleOpenTemplateModal = useCallback(() => {
     if (!selectedConversationWaId || !selectedConversation) return;
     if (!selectedConversationSupportsTemplateOutbound) {
-      setError("Envio de modelo pelo Inbox esta disponivel apenas para WhatsApp.");
+      setError("Envio de modelo está disponível apenas para conversas do WhatsApp.");
       setErrorDetails(null);
       return;
     }
@@ -4930,7 +4912,7 @@ export default function AppInboxPage() {
       return;
     }
     if (replyTarget) {
-      setError("Resposta contextual com modelo aprovado ainda nao esta disponivel. Cancele a citacao para enviar um modelo.");
+      setError("Ainda não é possível enviar modelo com mensagem marcada. Remova a marcação para enviar o modelo.");
       setErrorDetails(null);
       return;
     }
@@ -4957,7 +4939,7 @@ export default function AppInboxPage() {
     }
     const missingKeys = selectedTemplateVariableKeys.filter((key) => !templateVariables[key]?.trim());
     if (missingKeys.length > 0) {
-      setTemplateError("Preencha todas as variaveis obrigatorias.");
+      setTemplateError("Preencha todas as variáveis obrigatórias.");
       return;
     }
     setSendingTemplate(true);
@@ -5208,7 +5190,7 @@ export default function AppInboxPage() {
       const code = payload?.error?.code;
       setCannedReplyError(
         code === "window_closed"
-          ? "A janela de atendimento está fechada. Use um template aprovado."
+          ? "A janela de atendimento está fechada. Use um modelo aprovado."
           : typed.message || "Falha ao enviar mensagem pronta."
       );
       setErrorDetails(typed.details || null);
@@ -5243,7 +5225,7 @@ export default function AppInboxPage() {
 
     if (audioRecordingState !== "idle" || sendingMessage || selectedMediaFile) return;
     if (typeof window === "undefined" || !window.navigator.mediaDevices?.getUserMedia) {
-      setError("Gravacao de audio nao suportada neste navegador.");
+      setError("Gravação de áudio não suportada neste navegador.");
       setErrorDetails(null);
       return;
     }
@@ -5253,7 +5235,7 @@ export default function AppInboxPage() {
       setErrorDetails(null);
       const mimeType = getSupportedRecordingMimeType();
       if (!mimeType) {
-        setError("Este navegador nao grava audio em formato compativel com o WhatsApp.");
+        setError("Este navegador não grava áudio em formato compatível com o WhatsApp.");
         setErrorDetails("Use upload de arquivo de audio ou tente outro navegador.");
         return;
       }
@@ -5279,7 +5261,7 @@ export default function AppInboxPage() {
         mediaStreamRef.current = null;
         setAudioRecordingState("idle");
         if (!blob.size) {
-          setError("Nao foi possivel capturar o audio.");
+          setError("Não foi possível capturar o áudio.");
           setErrorDetails(null);
           return;
         }
@@ -5295,7 +5277,7 @@ export default function AppInboxPage() {
       mediaRecorderRef.current = null;
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
-      setError("Nao foi possivel iniciar a gravacao de audio.");
+      setError("Não foi possível iniciar a gravação de áudio.");
       setErrorDetails(typed.message ?? null);
     }
   };
@@ -5334,7 +5316,7 @@ export default function AppInboxPage() {
   const handleReleaseConversation = async () => {
     if (!session || !selectedConversationWaId) return;
     const confirmed = window.confirm(
-      "Liberar para automacao remove esta conversa da operacao humana.\n\nEla nao podera ser acessada ou visualizada no inbox, a menos que o numero volte a entrar em contato.\n\nDeseja continuar?"
+      "Liberar para automação remove esta conversa da operação humana.\n\nEla não poderá ser acessada ou visualizada na caixa de entrada, a menos que o número volte a entrar em contato.\n\nDeseja continuar?"
     );
     if (!confirmed) return;
     setConversationAction("release");
@@ -5599,7 +5581,7 @@ export default function AppInboxPage() {
       setStatusActionDraft(
         selectedConversation ? getConversationOperationalStatus(selectedConversation) ?? "" : ""
       );
-      setError(typed.message || "Falha ao atualizar status da conversa.");
+      setError(typed.message || "Falha ao atualizar situação do atendimento.");
     } finally {
       setConversationAction(null);
     }
@@ -5639,8 +5621,8 @@ export default function AppInboxPage() {
   return (
     <AppShell
       session={session}
-      title="Inbox"
-      subtitle="Atendimentos WhatsApp, Facebook/Messenger, Instagram e Webchat em uma fila operacional."
+      title="Caixa de entrada"
+      subtitle="Atendimentos do WhatsApp, Messenger, Instagram, Chat do site e Suporte em uma só fila."
       fullScreen
     >
       <FeedbackToast
@@ -5659,7 +5641,7 @@ export default function AppInboxPage() {
               <div className="min-w-0">
                 <h2 className="text-base font-semibold">Enviar modelo aprovado</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Use um template aprovado para continuar o atendimento pelo WhatsApp.
+                  Use um modelo aprovado para continuar o atendimento pelo WhatsApp.
                 </p>
               </div>
               <button
@@ -5696,7 +5678,7 @@ export default function AppInboxPage() {
                     ) : null}
                     {!templatesLoading && usableInboxTemplates.length === 0 ? (
                       <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
-                        Nenhum modelo aprovado e ativo disponível para envio pelo Inbox.
+                        Nenhum modelo aprovado e ativo disponível para envio por aqui.
                       </p>
                     ) : null}
                     <div className="space-y-2">
@@ -5823,7 +5805,7 @@ export default function AppInboxPage() {
               <div className="min-w-0">
                 <h2 className="text-base font-semibold">Mensagens prontas</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Textos internos do tenant para agilizar respostas dentro da janela de atendimento.
+                  Textos prontos da sua organização para agilizar respostas dentro da janela de atendimento.
                 </p>
               </div>
               <button
@@ -5839,7 +5821,7 @@ export default function AppInboxPage() {
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
                 <section className="space-y-3">
                   <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
-                    Mensagem pronta é enviada como texto livre/service. A cobrança depende da entrega e da política vigente da Meta.
+                    Mensagem pronta é enviada como texto comum. A cobrança depende da entrega e da política vigente da Meta.
                   </div>
                   <div className="flex items-center gap-2">
                     <input
@@ -5912,7 +5894,7 @@ export default function AppInboxPage() {
                       <div>
                         <h3 className="text-sm font-semibold text-slate-950">{selectedCannedReply.title}</h3>
                         <p className="mt-1 text-xs text-slate-500">
-                          Mensagem interna. Não substitui template aprovado quando a janela estiver fechada.
+                          Mensagem interna. Não substitui modelo aprovado quando a janela estiver fechada.
                         </p>
                       </div>
                       <div>
@@ -6414,7 +6396,7 @@ export default function AppInboxPage() {
                     {unread ? (
                       <span
                         className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#20b15a] px-1 text-[10px] font-bold leading-none text-white shadow-[0_0_0_2px_rgba(32,177,90,0.2)]"
-                        aria-label={`${unreadCount} mensagem nao lida`}
+                        aria-label={`${unreadCount} mensagem não lida`}
                       >
                         {unreadCount}
                       </span>
@@ -6716,7 +6698,7 @@ export default function AppInboxPage() {
                   className="w-full rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs [@media(max-height:760px)]:py-0.5"
                 >
                   <option value="" disabled>
-                    Status
+                    Situação
                   </option>
                   {CONVERSATION_FILTERS.filter((item) =>
                     ["IN_PROGRESS", "WAITING_USER", "CLOSED"].includes(item.value)
@@ -6792,8 +6774,8 @@ export default function AppInboxPage() {
             {showMoreActions ? (
               <p className="mt-2 text-xs text-slate-600 max-md:hidden">
                 {selectedConversation?.assignedAt
-                  ? `Conversa em andamento desde ${formatDateTime(selectedConversation.assignedAt)}.`
-                  : "Ajuste status, atendente e setor conforme o andamento do atendimento."}
+                  ? `Atendimento em andamento desde ${formatDateTime(selectedConversation.assignedAt)}.`
+                  : "Ajuste situação, atendente e setor conforme o andamento do atendimento."}
               </p>
             ) : null}
           </div>
@@ -6809,7 +6791,7 @@ export default function AppInboxPage() {
                     Selecione uma conversa
                   </p>
                   <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                    A timeline omnichannel, histórico e ações do atendimento aparecem aqui.
+                    O histórico e as ações do atendimento aparecem aqui.
                   </p>
                 </div>
               </div>
@@ -6877,11 +6859,11 @@ export default function AppInboxPage() {
                       <div
                         data-unread-anchor="true"
                         className="flex items-center gap-3 py-1"
-                        aria-label="Mensagens nao lidas"
+                        aria-label="Mensagens não lidas"
                       >
                         <span className="h-px flex-1 bg-emerald-500/35" />
                         <span className="rounded-full border border-emerald-500/35 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
-                          Mensagens nao lidas
+                          Mensagens não lidas
                         </span>
                         <span className="h-px flex-1 bg-emerald-500/35" />
                       </div>
@@ -6999,9 +6981,9 @@ export default function AppInboxPage() {
                           </p>
                         ) : item.media || item.location ? null : isUnsupportedMessage(item) ? (
                           <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                            <p className="font-semibold">Mensagem nao suportada</p>
+                            <p className="font-semibold">Mensagem não suportada</p>
                             <p className="mt-1 text-xs leading-relaxed">
-                              A API oficial do WhatsApp informou este item como tipo nao suportado e nao enviou dados para download.
+                              O WhatsApp informou que este tipo de mensagem não está disponível para visualização.
                             </p>
                           </div>
                         ) : (
@@ -7019,7 +7001,7 @@ export default function AppInboxPage() {
                         {item.templateName ? (
                           <div className="wa-bubble-meta mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
                             <span className="rounded-full border border-emerald-500/25 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-800">
-                              Template
+                              Modelo
                             </span>
                             <span>Modelo: {item.templateName}</span>
                           </div>
@@ -7279,7 +7261,7 @@ export default function AppInboxPage() {
           <div className="min-h-0 flex-1 overflow-y-auto">
             {!selectedLead ? (
               <p className="px-4 py-4 text-sm text-white/70">
-                Esta conversa ainda nao entrou no fluxo de cadastro do contato.
+                Esta conversa ainda não tem cadastro de contato.
               </p>
             ) : (
               <>
@@ -7370,7 +7352,7 @@ export default function AppInboxPage() {
                       className="min-h-20 w-full rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky max-[1440px]:min-h-16 max-[1440px]:rounded-lg max-[1440px]:px-2.5 max-[1440px]:py-1.5 max-[1440px]:text-xs"
                       value={noteDraft}
                       onChange={(event) => setNoteDraft(event.target.value)}
-                      placeholder="Add nota"
+                      placeholder="Adicionar nota"
                       disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadNote}
                     />
                     <button
@@ -7379,7 +7361,7 @@ export default function AppInboxPage() {
                       onClick={handleAddLeadNote}
                       className="whitespace-nowrap rounded-xl bg-re7-orange px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 max-[1440px]:rounded-lg max-[1440px]:px-2.5 max-[1440px]:text-xs"
                     >
-                      {savingLeadNote ? "Salvando..." : "Add nota"}
+                      {savingLeadNote ? "Salvando..." : "Adicionar nota"}
                     </button>
                   </div>
                 </section>
