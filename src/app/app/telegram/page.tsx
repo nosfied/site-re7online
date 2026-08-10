@@ -19,6 +19,7 @@ import {
   updateAppTelegramAccount,
 } from "@/lib/appClientApi";
 import { hasCapability } from "@/lib/appFeatures";
+import { getAppErrorUxMessage, getConnectionStatusUxLabel } from "@/lib/appUxLabels";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 type TelegramForm = {
@@ -57,15 +58,15 @@ function canManageTelegram(role: string) {
 }
 
 function normalizeError(error: AppApiError, fallback: string) {
-  if (error.status === 401) return "Sessao expirada. Faca login novamente.";
-  if (error.status === 403) return "Seu perfil nao tem permissao para gerenciar Telegram.";
-  if (error.errorCode === "feature_not_enabled") return "Telegram nao esta habilitado para este tenant.";
-  if (error.errorCode === "duplicate_telegram_account") return "Ja existe uma conta Telegram com estes dados.";
+  if (error.status === 401) return "Sessão expirada. Faça login novamente.";
+  if (error.status === 403) return "Seu perfil não tem permissão para gerenciar Telegram.";
+  if (error.errorCode === "feature_not_enabled") return "Telegram não está habilitado para esta organização.";
+  if (error.errorCode === "duplicate_telegram_account") return "Já existe uma conta Telegram com estes dados.";
   if (error.errorCode === "channel_account_secret_key_missing") {
-    return "A chave de criptografia de tokens nao esta configurada no backend.";
+    return "A chave de criptografia dos acessos não está configurada no servidor.";
   }
-  if (error.errorCode?.endsWith("_not_found")) return "A conta selecionada nao pertence a este tenant ou nao existe.";
-  return error.message || fallback;
+  if (error.errorCode?.endsWith("_not_found")) return "A conta selecionada não pertence a esta organização ou não existe.";
+  return getAppErrorUxMessage({ ...error, fallback });
 }
 
 function accountToForm(account: AppTelegramAccount): TelegramForm {
@@ -108,7 +109,7 @@ function TokenPill({ configured }: { configured: boolean }) {
           : "border-amber-300/30 bg-amber-500/15 text-amber-100"
       }`}
     >
-      {configured ? "Token criptografado" : "Token pendente"}
+      {configured ? "Acesso criptografado" : "Acesso pendente"}
     </span>
   );
 }
@@ -154,7 +155,7 @@ export default function TelegramPage() {
           router.replace("/app/inbox");
           return;
         }
-        setError(normalizeError(typed, "Nao foi possivel carregar Telegram."));
+      setError(normalizeError(typed, "Não foi possível carregar o Telegram."));
       } finally {
         setLoading(false);
       }
@@ -188,11 +189,11 @@ export default function TelegramPage() {
       return;
     }
     if (!form.channelAccountId.trim() && !form.botUsername.trim() && !form.botId.trim()) {
-      setError("Informe username, bot id ou channelAccountId.");
+      setError("Informe usuário, ID do bot ou código interno do canal.");
       return;
     }
     if (!editing && !form.token.trim()) {
-      setError("Informe o token do bot na criacao.");
+      setError("Informe o acesso do bot na criação.");
       return;
     }
     setSaving(true);
@@ -220,7 +221,7 @@ export default function TelegramPage() {
       setForm(EMPTY_FORM);
       setSuccess(editing ? "Conta Telegram atualizada." : "Conta Telegram criada.");
     } catch (err) {
-      setError(normalizeError(err as AppApiError, "Nao foi possivel salvar Telegram."));
+      setError(normalizeError(err as AppApiError, "Não foi possível salvar o Telegram."));
     } finally {
       setSaving(false);
     }
@@ -230,7 +231,7 @@ export default function TelegramPage() {
     if (!session) return;
     const token = rotateTokenById[account.id]?.trim() ?? "";
     if (!token) {
-      setError("Informe o novo token antes de rotacionar.");
+      setError("Informe o novo acesso antes de trocar.");
       return;
     }
     setSaving(true);
@@ -240,9 +241,9 @@ export default function TelegramPage() {
       const response = await rotateAppTelegramToken(session, account.id, token);
       setAccounts((current) => current.map((item) => (item.id === response.account.id ? response.account : item)));
       setRotateTokenById((current) => ({ ...current, [account.id]: "" }));
-      setSuccess("Token do Telegram rotacionado.");
+      setSuccess("Acesso do Telegram trocado.");
     } catch (err) {
-      setError(normalizeError(err as AppApiError, "Nao foi possivel rotacionar o token."));
+      setError(normalizeError(err as AppApiError, "Não foi possível trocar o acesso."));
     } finally {
       setSaving(false);
     }
@@ -257,7 +258,7 @@ export default function TelegramPage() {
       const response = await fetchAppTelegramDiagnostics(session, account.id);
       setDiagnostics(response.diagnostics.message);
     } catch (err) {
-      setError(normalizeError(err as AppApiError, "Nao foi possivel carregar diagnostico."));
+      setError(normalizeError(err as AppApiError, "Não foi possível carregar o diagnóstico."));
     }
   };
 
@@ -267,7 +268,7 @@ export default function TelegramPage() {
     <AppShell
       session={session}
       title="Telegram"
-      subtitle="Cadastro tenant-scoped de bots. Webhook, Bot API e mensagens ainda nao fazem parte deste modulo."
+      subtitle="Cadastro de bots por organização. Recebimento, envio e mensagens ainda não fazem parte deste módulo."
     >
       <FeedbackToast variant={error ? "error" : "success"} message={error || success || ""} {...toastHandlers} />
 
@@ -277,7 +278,7 @@ export default function TelegramPage() {
             <div>
               <h2 className="text-base font-semibold">Bots cadastrados</h2>
               <p className="theme-muted text-sm">
-                {activeAccounts.length} ativo(s). Tokens ficam criptografados em ChannelAccountSecret.
+                {activeAccounts.length} ativo(s). Tokens ficam criptografados e não são exibidos depois de salvos.
               </p>
             </div>
             <button
@@ -293,7 +294,7 @@ export default function TelegramPage() {
             {loading ? (
               <p className="theme-muted text-sm">Carregando Telegram...</p>
             ) : accounts.length === 0 ? (
-              <p className="theme-muted text-sm">Nenhum bot Telegram configurado neste tenant.</p>
+              <p className="theme-muted text-sm">Nenhum bot Telegram configurado nesta organização.</p>
             ) : (
               accounts.map((account) => (
                 <article key={account.id} className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
@@ -301,7 +302,7 @@ export default function TelegramPage() {
                     <div>
                       <h3 className="font-semibold">{account.displayName || account.channelAccountId}</h3>
                       <p className="theme-muted text-sm">
-                        {account.botUsername ? `@${account.botUsername}` : "username nao informado"} ·{" "}
+                        {account.botUsername ? `@${account.botUsername}` : "usuário não informado"} ·{" "}
                         {account.botId || account.channelAccountId}
                       </p>
                     </div>
@@ -311,9 +312,9 @@ export default function TelegramPage() {
                     </div>
                   </div>
                   <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
-                    <span className="theme-muted">Webhook: {account.webhookStatus}</span>
-                    <span className="theme-muted">Inbound: {account.inboundPersistenceEnabled ? "preparado" : "off"}</span>
-                    <span className="theme-muted">Outbound: {account.outboundEnabled ? "preparado" : "off"}</span>
+                    <span className="theme-muted">Integração de recebimento: {getConnectionStatusUxLabel(account.webhookStatus)}</span>
+                    <span className="theme-muted">Recebimento: {account.inboundPersistenceEnabled ? "preparado" : "inativo"}</span>
+                    <span className="theme-muted">Envio: {account.outboundEnabled ? "preparado" : "inativo"}</span>
                     <span className="theme-muted">Atualizado: {formatDateTime(account.updatedAt)}</span>
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -329,12 +330,12 @@ export default function TelegramPage() {
                       className="theme-button-secondary rounded-md px-3 py-2 text-sm"
                       onClick={() => void handleDiagnostics(account)}
                     >
-                      Diagnostico
+                      Diagnóstico
                     </button>
                     <input
                       type="password"
                       className="theme-input min-w-[220px] rounded-md px-3 py-2 text-sm"
-                      placeholder="Novo token do bot"
+                      placeholder="Novo acesso do bot"
                       value={rotateTokenById[account.id] ?? ""}
                       onChange={(event) =>
                         setRotateTokenById((current) => ({ ...current, [account.id]: event.target.value }))
@@ -346,7 +347,7 @@ export default function TelegramPage() {
                       onClick={() => void handleRotate(account)}
                       disabled={saving}
                     >
-                      Rotacionar token
+                      Trocar token
                     </button>
                   </div>
                 </article>
@@ -389,7 +390,7 @@ export default function TelegramPage() {
               />
             </label>
             <label className="text-sm">
-              Channel account ID
+              Código interno do canal
               <input
                 className="theme-input mt-1 w-full rounded-md px-3 py-2"
                 value={form.channelAccountId}
@@ -397,7 +398,7 @@ export default function TelegramPage() {
               />
             </label>
             <label className="text-sm md:col-span-2">
-              {editing ? "Token apenas por rotacao" : "Token do bot"}
+              {editing ? "Acesso apenas por troca" : "Acesso do bot"}
               <input
                 className="theme-input mt-1 w-full rounded-md px-3 py-2"
                 type="password"
@@ -407,7 +408,7 @@ export default function TelegramPage() {
               />
             </label>
             <label className="text-sm">
-              Status
+              Situação
               <select
                 className="theme-input mt-1 w-full rounded-md px-3 py-2"
                 value={form.status}
@@ -417,18 +418,18 @@ export default function TelegramPage() {
               >
                 <option value="pending">Pendente</option>
                 <option value="connected">Conectado</option>
-                <option value="disabled">Desabilitado</option>
-                <option value="error">Erro</option>
+                <option value="disabled">Inativo</option>
+                <option value="error">Com problema</option>
               </select>
             </label>
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             {[
               ["enabled", "Ativo"],
-              ["runtimeEnabled", "Runtime preparado"],
-              ["inboundPersistenceEnabled", "Inbound preparado"],
-              ["outboundEnabled", "Outbound preparado"],
-              ["handoffEnabled", "Handoff"],
+              ["runtimeEnabled", "Atendimento preparado"],
+              ["inboundPersistenceEnabled", "Recebimento preparado"],
+              ["outboundEnabled", "Envio preparado"],
+              ["handoffEnabled", "Encaminhamento para humano"],
             ].map(([key, label]) => (
               <label key={key} className="flex items-center gap-2 text-sm">
                 <input
@@ -449,7 +450,7 @@ export default function TelegramPage() {
               onClick={() => void handleSave()}
               disabled={saving}
             >
-              {editing ? "Salvar alteracoes" : "Criar bot"}
+              {editing ? "Salvar alterações" : "Criar bot"}
             </button>
             <button
               type="button"

@@ -14,6 +14,11 @@ import {
   saveAppSession,
   updateAppQueueAssignmentSettings,
 } from "@/lib/appClientApi";
+import {
+  getAppErrorUxMessage,
+  getQueueAssignmentModeUxLabel,
+  getQueueAssignmentScopeUxLabel,
+} from "@/lib/appUxLabels";
 
 function canAccessQueueSettings(role: string) {
   const normalized = role.trim().toUpperCase();
@@ -37,12 +42,12 @@ function getDefaultPolicy(): AppQueueAssignmentPolicy {
 }
 
 function normalizeQueueSettingsError(error: AppApiError, fallback: string) {
-  if (error.status === 401) return "Sessao expirada. Faca login novamente.";
-  if (error.status === 403) return "Sem permissao para alterar a distribuicao da fila.";
-  if (error.errorCode === "invalid_assignment_mode") return "Selecione um modo automatico valido.";
-  if (error.errorCode === "invalid_assignment_scope") return "Selecione um escopo valido.";
+  if (error.status === 401) return "Sessão expirada. Faça login novamente.";
+  if (error.status === 403) return "Sem permissão para alterar a distribuição de atendimentos.";
+  if (error.errorCode === "invalid_assignment_mode") return "Selecione um modo automático válido.";
+  if (error.errorCode === "invalid_assignment_scope") return "Selecione um escopo válido.";
   if (error.errorCode === "invalid_max_active") return "O limite por atendente deve ser um inteiro positivo.";
-  return error.message || fallback;
+  return getAppErrorUxMessage({ ...error, fallback });
 }
 
 function PolicyBadge({ label, tone = "default" }: { label: string; tone?: "default" | "success" | "warning" }) {
@@ -122,7 +127,7 @@ export default function AppSettingsQueuePage() {
           router.replace("/app/inbox");
           return;
         }
-        setError(normalizeQueueSettingsError(typed, "Falha ao carregar configuracao de fila."));
+        setError(normalizeQueueSettingsError(typed, "Não foi possível carregar a configuração de distribuição."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -139,9 +144,7 @@ export default function AppSettingsQueuePage() {
 
   const readOnly = useMemo(() => !session || !canManageQueueSettings(session.user.role) || !canUpdate, [canUpdate, session]);
   const effectiveModeLabel = policy.enabled
-    ? policy.mode === "round_robin"
-      ? "Round-robin"
-      : "Menor carga"
+    ? getQueueAssignmentModeUxLabel(policy.mode)
     : "Manual";
 
   const updatePolicy = (patch: Partial<AppQueueAssignmentPolicy>) => {
@@ -180,14 +183,14 @@ export default function AppSettingsQueuePage() {
     try {
       const response = await updateAppQueueAssignmentSettings(session, payload);
       applyResponse(response);
-      setSuccess("Configuracao de distribuicao da fila salva.");
+      setSuccess("Configuração de distribuição de atendimentos salva.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setError(normalizeQueueSettingsError(typed, "Falha ao salvar configuracao de fila."));
+      setError(normalizeQueueSettingsError(typed, "Não foi possível salvar a configuração de distribuição."));
     } finally {
       setSaving(false);
     }
@@ -206,8 +209,8 @@ export default function AppSettingsQueuePage() {
   return (
     <AppShell
       session={session}
-      title="Distribuição da fila"
-      subtitle="Configure a atribuição automática de novas conversas sem alterar claim, transferência ou fechamento."
+      title="Distribuição de atendimentos"
+      subtitle="Configure como novas conversas podem ser distribuídas sem alterar assumir atendimento, transferência ou fechamento."
     >
       <FeedbackToast message={success} {...toastHandlers} />
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
@@ -215,16 +218,16 @@ export default function AppSettingsQueuePage() {
       <section className="rounded-xl border border-white/10 bg-white/5 p-3 md:p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Política operacional</p>
-            <h2 className="mt-1 text-lg font-semibold text-white">Fila do tenant</h2>
+            <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Preferência operacional</p>
+            <h2 className="mt-1 text-lg font-semibold text-white">Fila da organização</h2>
             <p className="mt-1 max-w-3xl text-sm leading-relaxed text-white/65">
-              Esta configuração é por tenant e não afeta outros clientes. Com a política desativada, o atendimento
+              Esta configuração é por organização e não afeta outros clientes. Com a política desativada, o atendimento
               permanece manual e os operadores continuam usando assumir, liberar e transferir conversa.
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
             <PolicyBadge label={effectiveModeLabel} tone={policy.enabled ? "success" : "default"} />
-            <PolicyBadge label={policy.scope === "department" ? "Por setor" : "Tenant inteiro"} />
+            <PolicyBadge label={getQueueAssignmentScopeUxLabel(policy.scope)} />
             {readOnly ? <PolicyBadge label="Somente leitura" tone="warning" /> : null}
           </div>
         </div>
@@ -238,9 +241,9 @@ export default function AppSettingsQueuePage() {
             <div className="space-y-4">
               <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/50 px-3 py-3">
                 <span>
-                  <span className="block text-sm font-semibold text-white">Atribuição automática</span>
+                  <span className="block text-sm font-semibold text-white">Distribuição automática</span>
                   <span className="mt-0.5 block text-xs text-white/60">
-                    Quando ativa, novas conversas elegíveis podem ser atribuídas a atendentes do mesmo tenant.
+                    Quando ativa, novas conversas elegíveis podem ser atribuídas a atendentes da mesma organização.
                   </span>
                 </span>
                 <button
@@ -248,7 +251,7 @@ export default function AppSettingsQueuePage() {
                   onClick={() => updatePolicy({ enabled: !policy.enabled })}
                   disabled={readOnly || saving}
                   aria-pressed={policy.enabled}
-                  aria-label={policy.enabled ? "Desativar atribuicao automatica" : "Ativar atribuicao automatica"}
+                  aria-label={policy.enabled ? "Desativar distribuição automática" : "Ativar distribuição automática"}
                   className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full border transition ${
                     policy.enabled
                       ? "border-emerald-400/40 bg-emerald-500/25"
@@ -260,7 +263,7 @@ export default function AppSettingsQueuePage() {
                       policy.enabled ? "translate-x-8" : "translate-x-1"
                     }`}
                   >
-                    {policy.enabled ? "ON" : "OFF"}
+                    {policy.enabled ? "Sim" : "Não"}
                   </span>
                 </button>
               </label>
@@ -277,7 +280,7 @@ export default function AppSettingsQueuePage() {
                     className="rounded-md border border-white/15 bg-re7-navy px-2.5 py-2 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60 [&>option]:bg-re7-navy"
                   >
                     <option value="manual">Manual</option>
-                    <option value="round_robin">Round-robin</option>
+                    <option value="round_robin">Distribuição alternada</option>
                     <option value="least_active">Menor carga</option>
                   </select>
                 </label>
@@ -293,7 +296,7 @@ export default function AppSettingsQueuePage() {
                     className="rounded-md border border-white/15 bg-re7-navy px-2.5 py-2 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60 [&>option]:bg-re7-navy"
                   >
                     <option value="department">Respeitar setor</option>
-                    <option value="tenant">Tenant inteiro</option>
+                    <option value="tenant">Organização inteira</option>
                   </select>
                 </label>
 
@@ -322,17 +325,17 @@ export default function AppSettingsQueuePage() {
                   {
                     key: "includeSupervisors",
                     label: "Incluir supervisores elegíveis",
-                    help: "Supervisores ativos do tenant podem receber conversas quando estiverem no escopo.",
+                    help: "Supervisores ativos da organização podem receber conversas quando estiverem no escopo.",
                   },
                   {
                     key: "requireOnline",
                     label: "Exigir atendente online",
-                    help: "Sem presença online confiável, esta opção mantém a atribuição automática sem elegíveis.",
+                    help: "Sem confirmação confiável de presença online, esta opção mantém a distribuição automática sem atendentes elegíveis.",
                   },
                   {
                     key: "notifyAssignedOnly",
                     label: "Notificar apenas o responsável",
-                    help: "Preferência operacional para notificações futuras; não altera visibilidade do Inbox nesta sprint.",
+                    help: "Preferência operacional para notificações futuras; não altera a visibilidade da caixa de entrada nesta etapa.",
                   },
                 ].map((item) => (
                   <label
@@ -385,7 +388,7 @@ export default function AppSettingsQueuePage() {
                 <h3 className="text-sm font-semibold text-white">Comportamento atual</h3>
                 <p className="mt-1 text-xs leading-relaxed text-white/62">
                   Conversa continua sendo a unidade principal. A configuração usa os estados atuais de fila,
-                  responsável, setor, claim e transferência.
+                  responsável, setor, assumir atendimento e transferência.
                 </p>
               </div>
               <div className="grid gap-2 text-xs text-white/65">
@@ -394,7 +397,7 @@ export default function AppSettingsQueuePage() {
                 </div>
                 <div className="rounded-md border border-white/10 bg-white/5 p-2">
                   <span className="font-semibold text-white">Escopo:</span>{" "}
-                  {policy.scope === "department" ? "setor da conversa" : "tenant inteiro"}
+                  {policy.scope === "department" ? "setor da conversa" : "organização inteira"}
                 </div>
                 <div className="rounded-md border border-white/10 bg-white/5 p-2">
                   <span className="font-semibold text-white">Limite:</span>{" "}

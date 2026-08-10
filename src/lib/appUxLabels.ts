@@ -174,3 +174,114 @@ export function getBooleanUxLabel(value: boolean | null | undefined) {
   if (value === null || value === undefined) return "-";
   return value ? "Sim" : "Não";
 }
+
+export function getUserRoleUxLabel(role: string | null | undefined) {
+  switch (String(role ?? "").trim().toUpperCase()) {
+    case "ADMIN":
+      return "Administrador";
+    case "SUPERVISOR":
+      return "Supervisor";
+    case "AGENT":
+      return "Atendente";
+    case "SUPERADMIN":
+      return "Administrador interno";
+    default:
+      return role?.trim() || "-";
+  }
+}
+
+export function getSessionAuditStatusUxLabel(status: string | null | undefined) {
+  switch (String(status ?? "").trim().toUpperCase()) {
+    case "OPEN":
+      return "Ativa";
+    case "CLOSED":
+      return "Encerrada";
+    case "EXPIRED":
+      return "Expirada";
+    default:
+      return status?.trim() || "-";
+  }
+}
+
+export function getSessionEndReasonUxLabel(reason: string | null | undefined, fallback?: string | null) {
+  switch (String(reason ?? "").trim().toLowerCase()) {
+    case "logout":
+      return "Saída";
+    case "session_expired":
+    case "expired":
+      return "Sessão expirada";
+    case "replaced_by_new_login":
+      return "Substituída por novo acesso";
+    case "session_renewed":
+    case "renewal":
+      return "Renovada";
+    case "revoked":
+    case "session_revoked":
+      return "Revogada";
+    case "admin_revoked":
+      return "Revogada por administrador";
+    case "":
+      return fallback?.trim() || "Em aberto";
+    default:
+      return fallback?.trim() || reason?.trim() || "Em aberto";
+  }
+}
+
+export function getQueueAssignmentModeUxLabel(mode: string | null | undefined) {
+  switch (String(mode ?? "").trim().toLowerCase()) {
+    case "round_robin":
+      return "Distribuição alternada";
+    case "least_active":
+      return "Menor carga";
+    case "manual":
+    default:
+      return "Manual";
+  }
+}
+
+export function getQueueAssignmentScopeUxLabel(scope: string | null | undefined) {
+  switch (String(scope ?? "").trim().toLowerCase()) {
+    case "department":
+      return "Por setor";
+    case "tenant":
+      return "Organização inteira";
+    default:
+      return scope?.trim() || "-";
+  }
+}
+
+export function getConnectionStatusUxLabel(status: string | boolean | null | undefined) {
+  if (typeof status === "boolean") return status ? "Ativo" : "Inativo";
+  switch (String(status ?? "").trim().toLowerCase()) {
+    case "active":
+    case "enabled":
+      return "Ativo";
+    case "inactive":
+    case "disabled":
+      return "Inativo";
+    case "connected":
+      return "Conectado";
+    case "configured":
+      return "Configurado";
+    case "disconnected":
+      return "Desconectado";
+    case "pending":
+    case "loading":
+      return "Pendente";
+    case "error":
+    case "failed":
+      return "Com problema";
+    case "ready":
+    case "available":
+      return "Pronto";
+    case "blocked":
+    case "incompatible_token_or_review_blocked":
+      return "Bloqueado";
+    case "missing":
+      return "Pendente";
+    case "unknown":
+      return "Não confirmado";
+    default:
+      return status?.trim() || "-";
+  }
+}

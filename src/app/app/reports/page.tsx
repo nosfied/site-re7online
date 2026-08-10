@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
+  getConversationStatusUxLabel,
+  getSessionAuditStatusUxLabel,
+  getSessionEndReasonUxLabel,
+  getUserRoleUxLabel,
+  getAppErrorUxMessage,
+} from "@/lib/appUxLabels";
+import {
   AppApiError,
   AppSession,
   AppSessionAuditReport,
@@ -32,11 +39,11 @@ import type {
 const REPORT_RANGES: ConversationReportRange[] = ["1d", "7d", "30d", "month"];
 
 const RANGE_LABELS: Record<ConversationReportRange, string> = {
-  "1d": "Ultimas 24 horas",
-  "7d": "Ultimos 7 dias",
-  "30d": "Ultimos 30 dias",
-  month: "Mes fechado anterior",
-  custom: "Periodo exato",
+  "1d": "Últimas 24 horas",
+  "7d": "Últimos 7 dias",
+  "30d": "Últimos 30 dias",
+  month: "Mês fechado anterior",
+  custom: "Período exato",
 };
 
 const REPORT_CHANNELS = [
@@ -47,17 +54,17 @@ const REPORT_CHANNELS = [
 ] as const;
 
 const AGENT_ACTIVITY_HISTORY_NOTE =
-  "Mensagens por atendente utiliza autoria persistida no momento do envio; mensagens historicas anteriores a captura de autoria podem nao ser atribuiveis.";
+  "Mensagens por atendente usa a autoria registrada no momento do envio; mensagens históricas anteriores à captura de autoria podem não ser atribuíveis.";
 
 type ReportsTab = "overview" | "conversations" | "sla" | "agents" | "sessions" | "exports";
 
 const REPORT_TABS: Array<{ id: ReportsTab; label: string; description: string }> = [
-  { id: "overview", label: "Visão geral", description: "Resumo executivo do periodo" },
+  { id: "overview", label: "Visão geral", description: "Resumo executivo do período" },
   { id: "conversations", label: "Conversas", description: "Volume, canais, setores e protocolos" },
-  { id: "sla", label: "SLA", description: "Tempos e risco operacional" },
-  { id: "agents", label: "Atendentes", description: "Atividade humana e atribuicao" },
-  { id: "sessions", label: "Acessos/Sessões", description: "Auditoria de autenticacao" },
-  { id: "exports", label: "Exportações", description: "CSV e impressao/PDF" },
+  { id: "sla", label: "SLA de atendimento", description: "Tempos e pontos de atenção" },
+  { id: "agents", label: "Atendentes", description: "Atividade humana e atribuição" },
+  { id: "sessions", label: "Acessos/Sessões", description: "Auditoria de autenticação" },
+  { id: "exports", label: "Exportações", description: "CSV e impressão/PDF" },
 ];
 
 function canAccessReports(role: string) {
@@ -86,9 +93,9 @@ function formatObservedDuration(value: number | null) {
 
 const SESSION_ROLE_FILTERS = [
   { value: "", label: "Todos" },
-  { value: "ADMIN", label: "ADMIN" },
-  { value: "SUPERVISOR", label: "SUPERVISOR" },
-  { value: "AGENT", label: "AGENT" },
+  { value: "ADMIN", label: "Administrador" },
+  { value: "SUPERVISOR", label: "Supervisor" },
+  { value: "AGENT", label: "Atendente" },
 ] as const;
 
 const SESSION_STATUS_FILTERS: Array<{ value: "" | AppSessionAuditStatus; label: string }> = [
@@ -219,7 +226,7 @@ function EmptyState({ children }: { children: ReactNode }) {
   return <p className="p-4 text-sm text-white/65">{children}</p>;
 }
 
-function printEmptyRow(columns: number, message = "Sem dados no periodo.") {
+function printEmptyRow(columns: number, message = "Não há dados para o período selecionado.") {
   return `<tr><td colspan="${columns}" class="empty">${escapeHtml(message)}</td></tr>`;
 }
 
@@ -354,7 +361,7 @@ export default function AppReportsPage() {
           handleUnauthorized();
           return;
         }
-        setError(typed.message || "Falha ao carregar filtros do relatorio.");
+        setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível carregar os filtros do relatório." }));
       });
     return () => {
       cancelled = true;
@@ -386,7 +393,7 @@ export default function AppReportsPage() {
     if (periodMode === "custom" && (!fromIso || !toIso || Date.parse(fromIso) > Date.parse(toIso))) {
       setLoading(false);
       setReport(null);
-      setError("Informe um periodo exato valido.");
+      setError("Informe um período exato válido.");
       return;
     }
     fetchAppConversationReport(session, {
@@ -416,7 +423,7 @@ export default function AppReportsPage() {
           router.replace("/app/inbox");
           return;
         }
-        setError(typed.message || "Falha ao carregar relatorio.");
+        setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível carregar o relatório." }));
         setReport(null);
       })
       .finally(() => {
@@ -434,7 +441,7 @@ export default function AppReportsPage() {
     const toIso = dateTimeLocalToIso(sessionTo);
     if (!fromIso || !toIso || Date.parse(fromIso) > Date.parse(toIso)) {
       setSessionReport(null);
-      setError("Informe um periodo valido para Acessos/Sessoes.");
+      setError("Informe um período válido para Acessos/Sessões.");
       return;
     }
     setSessionsLoading(true);
@@ -462,7 +469,7 @@ export default function AppReportsPage() {
           return;
         }
         setSessionReport(null);
-        setError(typed.message || "Falha ao carregar acessos/sessoes.");
+        setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível carregar acessos/sessões." }));
       })
       .finally(() => {
         if (!cancelled) setSessionsLoading(false);
@@ -514,7 +521,7 @@ export default function AppReportsPage() {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Falha ao exportar CSV.");
+      setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível exportar o CSV." }));
     } finally {
       setExporting(false);
     }
@@ -525,7 +532,7 @@ export default function AppReportsPage() {
     const fromIso = dateTimeLocalToIso(sessionFrom);
     const toIso = dateTimeLocalToIso(sessionTo);
     if (!fromIso || !toIso || Date.parse(fromIso) > Date.parse(toIso)) {
-      setError("Informe um periodo valido para exportar Acessos/Sessoes.");
+      setError("Informe um período válido para exportar Acessos/Sessões.");
       return;
     }
     setExportingSessions(true);
@@ -548,14 +555,14 @@ export default function AppReportsPage() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      setSuccess("CSV de acessos/sessoes exportado com sucesso.");
+      setSuccess("CSV de acessos/sessões exportado com sucesso.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Falha ao exportar acessos/sessoes.");
+      setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível exportar acessos/sessões." }));
     } finally {
       setExportingSessions(false);
     }
@@ -563,10 +570,10 @@ export default function AppReportsPage() {
 
   const handleGeneratePdf = () => {
     if (!session || !report) {
-      setError("Carregue um relatorio antes de gerar o PDF.");
+      setError("Carregue um relatório antes de gerar o PDF.");
       return;
     }
-    const tenantName = tenant?.name || "Tenant autenticado";
+    const tenantName = tenant?.name || "Organização autenticada";
     const departmentLabel = departmentId
       ? departments.find((item) => item.id === departmentId)?.name ?? departmentId
       : "Todos";
@@ -579,17 +586,17 @@ export default function AppReportsPage() {
     const slaOperational = getSlaOperational(report);
     const assignedConversationRows = report.assignedConversationsByAgent ?? report.byAgent;
     const filters = [
-      ["Periodo", periodLabel],
+      ["Período", periodLabel],
       channel ? ["Canal", channelLabel] : null,
       departmentId ? ["Setor", departmentLabel] : null,
       userId ? ["Atendente", userLabel] : null,
       dedupe ? ["Duplicados", "Desconsiderados"] : null,
     ].filter((item): item is string[] => Boolean(item));
     const sessionFilters = [
-      ["Periodo", `${formatDateTime(sessionReport?.periodFrom ?? dateTimeLocalToIso(sessionFrom))} a ${formatDateTime(sessionReport?.periodTo ?? dateTimeLocalToIso(sessionTo))}`],
-      sessionUserId ? ["Usuario", userNameById.get(sessionUserId) ?? "Usuario filtrado"] : null,
-      sessionRole ? ["Perfil", sessionRole] : null,
-      sessionStatus ? ["Status", SESSION_STATUS_FILTERS.find((item) => item.value === sessionStatus)?.label ?? sessionStatus] : null,
+      ["Período", `${formatDateTime(sessionReport?.periodFrom ?? dateTimeLocalToIso(sessionFrom))} a ${formatDateTime(sessionReport?.periodTo ?? dateTimeLocalToIso(sessionTo))}`],
+      sessionUserId ? ["Usuário", userNameById.get(sessionUserId) ?? "Usuário filtrado"] : null,
+      sessionRole ? ["Perfil", getUserRoleUxLabel(sessionRole)] : null,
+      sessionStatus ? ["Situação", SESSION_STATUS_FILTERS.find((item) => item.value === sessionStatus)?.label ?? getSessionAuditStatusUxLabel(sessionStatus)] : null,
     ].filter((item): item is string[] => Boolean(item));
     const sessionItems = sessionReport?.items ?? [];
     const sessionOpenCount = sessionItems.filter((item) => item.status === "OPEN").length;
@@ -605,12 +612,12 @@ export default function AppReportsPage() {
     const byChannelRows = printTableRows(
       (report.byChannel ?? []).map((item) => [item.channelName, item.conversations]),
       2,
-      "Sem dados por canal no periodo."
+      "Não há dados por canal no período selecionado."
     );
     const byDepartmentRows = printTableRows(
       report.byDepartment.map((item) => [item.departmentName ?? "Sem setor / legado", item.conversations, formatSeconds(item.avgResponseTimeSec)]),
       3,
-      "Sem dados por setor no periodo."
+      "Não há dados por setor no período selecionado."
     );
     const statusRows = printTableRows(
       [
@@ -623,9 +630,9 @@ export default function AppReportsPage() {
     );
     const slaRows = printTableRows(
       [
-        ["Tempo medio de primeira resposta", formatSeconds(slaOperational.avgFirstResponseTimeSec), "Formula atual do relatorio"],
-        ["Tempo medio de resolucao", formatSeconds(slaOperational.avgResolutionTimeSec), "Formula atual do relatorio"],
-        ["Fora do SLA", report.slaBreaches, (report.slaBreaches ?? 0) > 0 ? "Risco" : "Regular"],
+        ["Tempo médio de primeira resposta", formatSeconds(slaOperational.avgFirstResponseTimeSec), "Fórmula atual do relatório"],
+        ["Tempo médio de resolução", formatSeconds(slaOperational.avgResolutionTimeSec), "Fórmula atual do relatório"],
+        ["Pontos fora do SLA de atendimento", report.slaBreaches, (report.slaBreaches ?? 0) > 0 ? "Atenção" : "Regular"],
       ],
       3
     );
@@ -635,7 +642,7 @@ export default function AppReportsPage() {
         item.outboundMessages,
       ]),
       2,
-      "Nenhuma mensagem humana atribuivel no periodo selecionado."
+      "Nenhuma mensagem humana atribuível no período selecionado."
     );
     const assignedRows = printTableRows(
       assignedConversationRows.map((item) => [
@@ -644,40 +651,40 @@ export default function AppReportsPage() {
         formatSeconds(item.avgResponseTimeSec),
       ]),
       3,
-      "Nenhuma conversa atribuida por atendente no periodo selecionado."
+      "Nenhuma conversa atribuída por atendente no período selecionado."
     );
     const protocolRows = printTableRows(
       (report.conversations ?? []).slice(0, 12).map((item) => [
         item.protocol,
         item.channelName,
         item.departmentName ?? "-",
-        item.status ?? "-",
+        getConversationStatusUxLabel(item.status as Parameters<typeof getConversationStatusUxLabel>[0]),
         formatDateTime(item.startedAt),
       ]),
       5,
-      "Sem protocolos no periodo."
+      "Não há protocolos no período selecionado."
     );
     const sessionDetailRows = printTableRows(
       sessionItems.map((item) => [
         item.userName,
-        item.role,
+        getUserRoleUxLabel(item.role),
         formatDateTime(item.loginAt),
         item.endedAt ? formatDateTime(item.endedAt) : "-",
-        item.endReasonLabel,
+        getSessionEndReasonUxLabel(item.endReason, item.endReasonLabel),
         formatObservedDuration(item.durationObservedSec),
-        item.statusLabel,
+        getSessionAuditStatusUxLabel(item.status),
       ]),
       7,
-      "Sem sessoes no periodo."
+      "Não há sessões no período selecionado."
     );
     const executiveCards = printMetricCards([
       { label: "Conversas", value: report.totalConversations, tone: "info" },
       { label: "Fechadas", value: slaOperational.closed, tone: "neutral" },
       { label: "Em atendimento", value: slaOperational.inProgress, tone: "info" },
       { label: "Aguardando", value: slaOperational.waitingFirstResponse, tone: "warn" },
-      { label: "Primeira resposta media", value: formatSeconds(report.avgFirstResponseTimeSec), tone: "ok" },
-      { label: "Resolucao media", value: formatSeconds(report.avgResolutionTimeSec), tone: "ok" },
-      { label: "Fora do SLA", value: report.slaBreaches, tone: report.slaBreaches > 0 ? "risk" : "ok" },
+      { label: "Primeira resposta média", value: formatSeconds(report.avgFirstResponseTimeSec), tone: "ok" },
+      { label: "Resolução média", value: formatSeconds(report.avgResolutionTimeSec), tone: "ok" },
+      { label: "Pontos fora do SLA", value: report.slaBreaches, tone: report.slaBreaches > 0 ? "risk" : "ok" },
     ]);
     const sessionCards = printMetricCards([
       { label: "Total filtrado", value: sessionReport?.total ?? "-", tone: "info" },
@@ -686,13 +693,13 @@ export default function AppReportsPage() {
       { label: "Expiradas carregadas", value: sessionExpiredCount, tone: "warn" },
       { label: "Renovadas carregadas", value: sessionRenewedCount, tone: "neutral" },
       { label: "Revogadas carregadas", value: sessionRevokedCount, tone: "neutral" },
-      { label: "Duracao observada media", value: formatSeconds(sessionAverageDuration), tone: "neutral" },
+      { label: "Duração observada média", value: formatSeconds(sessionAverageDuration), tone: "neutral" },
     ]);
     const html = `<!doctype html>
       <html lang="pt-BR">
         <head>
           <meta charset="utf-8" />
-          <title>Relatorio Operacional - Converta</title>
+          <title>Relatório operacional - Converta</title>
           <style>
             @page { size: A4; margin: 16mm; }
             * { box-sizing: border-box; }
@@ -771,7 +778,7 @@ export default function AppReportsPage() {
 
             <section class="meta-grid">
               <div class="panel panel-muted">
-                <div class="label">Tenant</div>
+                <div class="label">Organização</div>
                 <div class="value">${escapeHtml(tenantName)}</div>
               </div>
               <div class="panel panel-muted">
@@ -791,11 +798,11 @@ export default function AppReportsPage() {
             <section class="section">
               <div class="section-header">
                 <h2>Conversas</h2>
-                <p class="section-description">Volume por status operacional, canal e setor. O CSV permanece como fonte de detalhe completo.</p>
+                <p class="section-description">Volume por situação do atendimento, canal e setor. O CSV permanece como fonte de detalhe completo.</p>
               </div>
               <div class="two-col">
                 <div>
-                  <table><thead><tr><th>Status</th><th>Conversas</th></tr></thead><tbody>${statusRows}</tbody></table>
+                  <table><thead><tr><th>Situação</th><th>Conversas</th></tr></thead><tbody>${statusRows}</tbody></table>
                 </div>
                 <div>
                   <table><thead><tr><th>Canal</th><th>Conversas</th></tr></thead><tbody>${byChannelRows}</tbody></table>
@@ -804,14 +811,14 @@ export default function AppReportsPage() {
               <div class="section" style="margin-top: 12px;">
                 <table><thead><tr><th>Setor</th><th>Conversas</th><th>Tempo medio de resposta</th></tr></thead><tbody>${byDepartmentRows}</tbody></table>
               </div>
-              <div class="note">Protocolos abaixo sao uma amostra curta para conferencia visual. Use CSV para analise detalhada.</div>
-              <table style="margin-top: 8px;"><thead><tr><th>Protocolo</th><th>Canal</th><th>Setor</th><th>Status</th><th>Inicio</th></tr></thead><tbody>${protocolRows}</tbody></table>
+              <div class="note">Protocolos abaixo são uma amostra curta para conferência visual. Use CSV para análise detalhada.</div>
+              <table style="margin-top: 8px;"><thead><tr><th>Protocolo</th><th>Canal</th><th>Setor</th><th>Situação</th><th>Início</th></tr></thead><tbody>${protocolRows}</tbody></table>
             </section>
 
             <section class="section">
               <div class="section-header">
                 <h2>SLA</h2>
-                <p class="section-description">Indicadores de primeira resposta, resolucao e violacoes observadas no periodo.</p>
+                <p class="section-description">Indicadores de primeira resposta, resolução e pontos de atenção observados no período.</p>
               </div>
               <table><thead><tr><th>Indicador</th><th>Valor</th><th>Leitura</th></tr></thead><tbody>${slaRows}</tbody></table>
             </section>
@@ -823,42 +830,42 @@ export default function AppReportsPage() {
               </div>
               <h3 class="label">Mensagens enviadas por atendente</h3>
               <table><thead><tr><th>Atendente</th><th>Mensagens enviadas</th></tr></thead><tbody>${agentActivityRows}</tbody></table>
-              <div class="note">Mensagens anteriores a captura de autoria podem nao ser atribuiveis a um atendente.</div>
+              <div class="note">Mensagens anteriores à captura de autoria podem não ser atribuíveis a um atendente.</div>
               <h3 class="label" style="margin-top: 14px;">Conversas atribuídas por atendente</h3>
-              <table><thead><tr><th>Atendente</th><th>Conversas atribuidas</th><th>Tempo medio de resposta</th></tr></thead><tbody>${assignedRows}</tbody></table>
+              <table><thead><tr><th>Atendente</th><th>Conversas atribuídas</th><th>Tempo médio de resposta</th></tr></thead><tbody>${assignedRows}</tbody></table>
             </section>
 
             <section class="section">
               <div class="section-header">
                 <h2>Acessos/Sessões</h2>
-                <p class="section-description">Resumo da auditoria de autenticacao no periodo filtrado para sessoes.</p>
+                <p class="section-description">Resumo da auditoria de autenticação no período filtrado para sessões.</p>
               </div>
               <div class="panel panel-muted">
-                <div class="label">Filtros de sessoes</div>
+                <div class="label">Filtros de sessões</div>
                 <table class="filters"><tbody>${sessionFilterRows}</tbody></table>
               </div>
               <div class="metrics">${sessionCards}</div>
-              <div class="note">Total filtrado vem do endpoint de auditoria. A distribuicao por status usa as sessoes carregadas na tela; use CSV para detalhe completo.</div>
-              <div class="note">Registros de sessao representam autenticacao e atividade observada na plataforma e nao constituem controle de jornada.</div>
+              <div class="note">Total filtrado vem do relatório de auditoria. A distribuição por situação usa as sessões carregadas na tela; use CSV para detalhe completo.</div>
+              <div class="note">Registros de sessão representam autenticação e atividade observada na plataforma e não constituem controle de jornada.</div>
               ${includeSessionDetails ? `
                 <div class="section">
                   <div class="section-header">
                     <h2>Detalhe de sessões filtradas</h2>
-                    <p class="section-description">Incluido porque ha filtro especifico de usuario. Para extracao completa, use CSV.</p>
+                    <p class="section-description">Incluído porque há filtro específico de usuário. Para extração completa, use CSV.</p>
                   </div>
-                  <table><thead><tr><th>Usuario</th><th>Perfil</th><th>Login</th><th>Encerramento</th><th>Motivo</th><th>Duracao observada</th><th>Status</th></tr></thead><tbody>${sessionDetailRows}</tbody></table>
+                  <table><thead><tr><th>Usuário</th><th>Perfil</th><th>Entrada</th><th>Encerramento</th><th>Motivo</th><th>Duração observada</th><th>Situação</th></tr></thead><tbody>${sessionDetailRows}</tbody></table>
                 </div>` : ""}
             </section>
 
             <footer class="footer">
-              Converta - relatorio operacional interno. Gerado para ${escapeHtml(tenantName)} em ${escapeHtml(htmlGeneratedAt)}. Documento estimativo e gerencial; CSVs permanecem como exportacao detalhada.
+              Converta - relatório operacional interno. Gerado para ${escapeHtml(tenantName)} em ${escapeHtml(htmlGeneratedAt)}. Documento estimativo e gerencial; CSVs permanecem como exportação detalhada.
             </footer>
           </main>
         </body>
       </html>`;
     const popup = window.open("", "_blank", "width=960,height=720");
     if (!popup) {
-      setError("Nao foi possivel abrir a janela do PDF. Verifique o bloqueador de pop-ups.");
+      setError("Não foi possível abrir a janela do PDF. Verifique o bloqueador de pop-ups.");
       return;
     }
     popup.document.open();
@@ -892,7 +899,7 @@ export default function AppReportsPage() {
   return (
     <AppShell
       session={session}
-      title="Relatorios"
+      title="Relatórios"
       subtitle="Acompanhe tempos de resposta e volume de atendimento do seu time."
     >
       <FeedbackToast message={success} {...toastHandlers} />
@@ -900,8 +907,8 @@ export default function AppReportsPage() {
 
       {retentionDays !== null && retentionDays < 30 ? (
         <section className="rounded-lg border border-amber-300/30 bg-amber-500/10 p-3 text-sm text-amber-50">
-          A retencao LGPD esta configurada para {retentionDays} dia
-          {retentionDays === 1 ? "" : "s"}. Relatorios e historico operacional podem ficar reduzidos quando a retencao for executada.
+          A retenção LGPD está configurada para {retentionDays} dia
+          {retentionDays === 1 ? "" : "s"}. Relatórios e histórico operacional podem ficar reduzidos quando a retenção for executada.
         </section>
       ) : null}
 
@@ -937,19 +944,19 @@ export default function AppReportsPage() {
 
         <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <label className="grid gap-1 text-sm">
-            <span className="text-white/70">Tipo de periodo</span>
+            <span className="text-white/70">Tipo de período</span>
             <select
               className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
               value={periodMode}
               onChange={(event) => setPeriodMode(event.target.value as "preset" | "custom")}
             >
-              <option value="preset">Periodo rapido</option>
-              <option value="custom">Periodo exato</option>
+              <option value="preset">Período rápido</option>
+              <option value="custom">Período exato</option>
             </select>
           </label>
           {periodMode === "preset" ? (
             <label className="grid gap-1 text-sm">
-              <span className="text-white/70">Periodo rapido</span>
+              <span className="text-white/70">Período rápido</span>
               <select
                 className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                 value={range}
@@ -965,7 +972,7 @@ export default function AppReportsPage() {
           ) : (
             <>
               <label className="grid gap-1 text-sm">
-                <span className="text-white/70">Inicio exato</span>
+                <span className="text-white/70">Início exato</span>
                 <input
                   type="datetime-local"
                   className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
@@ -1008,7 +1015,7 @@ export default function AppReportsPage() {
               <option value="">Todos</option>
               {users.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.name} ({item.role})
+                  {item.name} ({getUserRoleUxLabel(item.role)})
                 </option>
               ))}
             </select>
@@ -1075,7 +1082,7 @@ export default function AppReportsPage() {
 
       {loading ? (
         <section className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/65">
-          Carregando relatorios sem limpar o contexto da pagina...
+          Carregando relatórios sem limpar o contexto da página...
         </section>
       ) : null}
 
@@ -1088,22 +1095,22 @@ export default function AppReportsPage() {
         {activeTab === "overview" ? (
           <>
             <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <KpiCard label="Conversas" value={report?.totalConversations ?? "-"} tone="info" detail="Total no periodo e filtros atuais." />
+              <KpiCard label="Conversas" value={report?.totalConversations ?? "-"} tone="info" detail="Total no período e filtros atuais." />
               <KpiCard label="Em atendimento" value={slaOperational.inProgress} tone="info" detail="Conversas em andamento no recorte." />
               <KpiCard label="Aguardando" value={slaOperational.waitingFirstResponse} tone="warn" detail="Sem primeira resposta registrada." />
               <KpiCard label="Fechadas" value={slaOperational.closed} tone="neutral" detail="Conversas encerradas no read model atual." />
               <KpiCard label="Primeira resposta média" value={formatSeconds(report?.avgFirstResponseTimeSec ?? null)} tone="ok" />
               <KpiCard label="Resolução média" value={formatSeconds(report?.avgResolutionTimeSec ?? null)} tone="ok" />
               <KpiCard
-                label="Fora do SLA"
+                label="Pontos fora do SLA"
                 value={report?.slaBreaches ?? "-"}
                 tone={(report?.slaBreaches ?? 0) > 0 ? "risk" : "ok"}
-                detail="Usa a formula atual do relatorio."
+                detail="Usa a fórmula atual do relatório."
               />
               <KpiCard label="Transferências humano" value={report?.humanTransferCount ?? "-"} tone="neutral" />
             </section>
             <section className="rounded-lg border border-sky-300/20 bg-sky-500/10 p-3 text-sm text-sky-50">
-              A visao geral resume o periodo selecionado. As abas detalham conversas, SLA, atendentes, sessoes e exportacoes sem alterar as metricas originais.
+              A visão geral resume o período selecionado. As abas detalham conversas, SLA de atendimento, atendentes, sessões e exportações sem alterar as métricas originais.
             </section>
           </>
         ) : null}
@@ -1117,7 +1124,7 @@ export default function AppReportsPage() {
               <KpiCard label="Setores" value={report?.byDepartment.length ?? 0} tone="neutral" />
             </section>
             <div className="grid gap-4 xl:grid-cols-2">
-              <ReportSection title="Por canal" description="Distribuicao de conversas por canal no periodo.">
+              <ReportSection title="Por canal" description="Distribuição de conversas por canal no período.">
                 {report?.byChannel?.length ? (
                   <table className="w-full text-sm">
                     <thead className="bg-white/10 text-left">
@@ -1136,18 +1143,18 @@ export default function AppReportsPage() {
                     </tbody>
                   </table>
                 ) : (
-                  <EmptyState>Nenhum dado por canal no periodo selecionado.</EmptyState>
+                  <EmptyState>Não há dados por canal no período selecionado.</EmptyState>
                 )}
               </ReportSection>
-              <ReportSection title="Por setor" description="Distribuicao operacional por departamento.">
+              <ReportSection title="Por setor" description="Distribuição operacional por setor.">
                 {report?.byDepartment.length ? (
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[560px] text-sm">
                       <thead className="bg-white/10 text-left">
                         <tr>
-                          <th className="px-3 py-2">Departamento</th>
+                          <th className="px-3 py-2">Setor</th>
                           <th className="px-3 py-2 text-right">Conversas</th>
-                          <th className="px-3 py-2 text-right">Tempo medio</th>
+                          <th className="px-3 py-2 text-right">Tempo médio</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1162,7 +1169,7 @@ export default function AppReportsPage() {
                     </table>
                   </div>
                 ) : (
-                  <EmptyState>Nenhum dado por setor no periodo selecionado.</EmptyState>
+                  <EmptyState>Não há dados por setor no período selecionado.</EmptyState>
                 )}
               </ReportSection>
             </div>
@@ -1175,8 +1182,8 @@ export default function AppReportsPage() {
                         <th className="px-3 py-2">Protocolo</th>
                         <th className="px-3 py-2">Canal</th>
                         <th className="px-3 py-2">Setor</th>
-                        <th className="px-3 py-2">Status</th>
-                        <th className="px-3 py-2">Inicio</th>
+                        <th className="px-3 py-2">Situação</th>
+                        <th className="px-3 py-2">Início</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1187,7 +1194,7 @@ export default function AppReportsPage() {
                           <td className="px-3 py-2">{item.departmentName ?? "-"}</td>
                           <td className="px-3 py-2">
                             <span className={`inline-flex rounded-full border px-2 py-1 text-xs ${getReportStatusTone(item.status)}`}>
-                              {item.status ?? "-"}
+                              {getConversationStatusUxLabel(item.status as Parameters<typeof getConversationStatusUxLabel>[0])}
                             </span>
                           </td>
                           <td className="px-3 py-2">{formatDateTime(item.startedAt)}</td>
@@ -1197,7 +1204,7 @@ export default function AppReportsPage() {
                   </table>
                 </div>
               ) : (
-                <EmptyState>Nenhum protocolo no periodo selecionado.</EmptyState>
+                <EmptyState>Nenhum protocolo no período selecionado.</EmptyState>
               )}
             </ReportSection>
           </>
@@ -1213,10 +1220,10 @@ export default function AppReportsPage() {
               <KpiCard label="Média primeira resposta" value={formatSeconds(slaOperational.avgFirstResponseTimeSec)} tone="ok" />
               <KpiCard label="Média resolução" value={formatSeconds(slaOperational.avgResolutionTimeSec)} tone="ok" />
               <KpiCard
-                label="Breaches"
+                label="Pontos fora do SLA"
                 value={report?.slaBreaches ?? "-"}
                 tone={(report?.slaBreaches ?? 0) > 0 ? "risk" : "ok"}
-                detail="Mantem a formula existente."
+                detail="Mantém a fórmula existente."
               />
             </section>
             <section className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white/65">
@@ -1237,7 +1244,7 @@ export default function AppReportsPage() {
                     <thead className="bg-white/10 text-left">
                       <tr>
                         <th className="px-3 py-2">Atendente</th>
-                        <th className="px-3 py-2">User ID</th>
+                        <th className="px-3 py-2">Código interno</th>
                         <th className="px-3 py-2 text-right">Mensagens enviadas</th>
                       </tr>
                     </thead>
@@ -1253,7 +1260,7 @@ export default function AppReportsPage() {
                   </table>
                 </div>
               ) : (
-                <EmptyState>Nenhuma mensagem com autoria registrada neste periodo.</EmptyState>
+                <EmptyState>Nenhuma mensagem com autoria registrada neste período.</EmptyState>
               )}
             </ReportSection>
             <section className="rounded-lg border border-sky-300/20 bg-sky-500/10 p-3 text-sm text-sky-50">
@@ -1261,7 +1268,7 @@ export default function AppReportsPage() {
             </section>
             <ReportSection
               title="Conversas atribuídas por atendente"
-              description="Reflete atribuicao/ownership operacional, nao quantidade de mensagens enviadas."
+              description="Reflete a distribuição operacional de conversas, não a quantidade de mensagens enviadas."
             >
               {assignedConversations.length ? (
                 <div className="overflow-x-auto">
@@ -1269,9 +1276,9 @@ export default function AppReportsPage() {
                     <thead className="bg-white/10 text-left">
                       <tr>
                         <th className="px-3 py-2">Atendente</th>
-                        <th className="px-3 py-2">User ID</th>
-                        <th className="px-3 py-2 text-right">Conversas atribuidas</th>
-                        <th className="px-3 py-2 text-right">Tempo medio de resposta</th>
+                        <th className="px-3 py-2">Código interno</th>
+                        <th className="px-3 py-2 text-right">Conversas atribuídas</th>
+                        <th className="px-3 py-2 text-right">Tempo médio de resposta</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1287,7 +1294,7 @@ export default function AppReportsPage() {
                   </table>
                 </div>
               ) : (
-                <EmptyState>Nenhuma atribuicao registrada no periodo.</EmptyState>
+                <EmptyState>Nenhuma atribuição registrada no período.</EmptyState>
               )}
             </ReportSection>
           </>
@@ -1300,7 +1307,7 @@ export default function AppReportsPage() {
           >
             <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-5">
               <label className="grid gap-1 text-sm">
-                <span className="text-white/70">Inicio do login</span>
+                <span className="text-white/70">Início do acesso</span>
                 <input
                   type="datetime-local"
                   className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
@@ -1318,7 +1325,7 @@ export default function AppReportsPage() {
                 />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="text-white/70">Usuario</span>
+                <span className="text-white/70">Usuário</span>
                 <select
                   className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                   value={sessionUserId}
@@ -1327,7 +1334,7 @@ export default function AppReportsPage() {
                   <option value="">Todos</option>
                   {users.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.name} ({item.role})
+                  {item.name} ({getUserRoleUxLabel(item.role)})
                     </option>
                   ))}
                 </select>
@@ -1347,7 +1354,7 @@ export default function AppReportsPage() {
                 </select>
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="text-white/70">Status</span>
+                <span className="text-white/70">Situação</span>
                 <select
                   className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                   value={sessionStatus}
@@ -1362,37 +1369,37 @@ export default function AppReportsPage() {
               </label>
             </div>
             <p className="px-4 pb-3 text-xs text-white/50">
-              Periodo filtrado por sessoes iniciadas no intervalo. Sessoes vencidas aparecem como expiradas sem inferir logout por lastSeenAt.
+              Período filtrado por sessões iniciadas no intervalo. Sessões vencidas aparecem como expiradas sem inferir saída por última atividade observada.
             </p>
-            {sessionsLoading ? <p className="px-4 pb-3 text-sm text-white/70">Carregando acessos/sessoes...</p> : null}
+            {sessionsLoading ? <p className="px-4 pb-3 text-sm text-white/70">Carregando acessos/sessões...</p> : null}
             <div className="overflow-x-auto border-t border-white/10">
               {sessionReport?.items.length ? (
                 <table className="w-full min-w-[980px] text-sm">
                   <thead className="bg-white/10 text-left">
                     <tr>
-                      <th className="px-3 py-2">Usuario</th>
+                      <th className="px-3 py-2">Usuário</th>
                       <th className="px-3 py-2">Perfil</th>
-                      <th className="px-3 py-2">Login</th>
+                      <th className="px-3 py-2">Entrada</th>
                       <th className="px-3 py-2">Encerramento</th>
                       <th className="px-3 py-2">Motivo</th>
-                      <th className="px-3 py-2">Duracao observada</th>
+                      <th className="px-3 py-2">Duração observada</th>
                       <th className="px-3 py-2">Ultima atividade observada</th>
-                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2">Situação</th>
                     </tr>
                   </thead>
                   <tbody>
                     {sessionReport.items.map((item) => (
                       <tr key={item.id} className="border-t border-white/10">
                         <td className="px-3 py-2">{item.userName}</td>
-                        <td className="px-3 py-2 text-white/70">{item.role}</td>
+                        <td className="px-3 py-2 text-white/70">{getUserRoleUxLabel(item.role)}</td>
                         <td className="px-3 py-2">{formatDateTime(item.loginAt)}</td>
                         <td className="px-3 py-2">{item.endedAt ? formatDateTime(item.endedAt) : "-"}</td>
-                        <td className="px-3 py-2 text-white/70">{item.endReasonLabel}</td>
+                        <td className="px-3 py-2 text-white/70">{getSessionEndReasonUxLabel(item.endReason, item.endReasonLabel)}</td>
                         <td className="px-3 py-2">{formatObservedDuration(item.durationObservedSec)}</td>
                         <td className="px-3 py-2">{formatDateTime(item.lastSeenAt)}</td>
                         <td className="px-3 py-2">
                           <span className={`inline-flex rounded-full border px-2 py-1 text-xs ${getSessionStatusTone(item.status)}`}>
-                            {item.statusLabel}
+                            {getSessionAuditStatusUxLabel(item.status)}
                           </span>
                         </td>
                       </tr>
@@ -1400,13 +1407,13 @@ export default function AppReportsPage() {
                   </tbody>
                 </table>
               ) : (
-                <EmptyState>Nenhuma sessao encontrada no periodo selecionado.</EmptyState>
+                <EmptyState>Nenhuma sessão encontrada no período selecionado.</EmptyState>
               )}
             </div>
             {sessionReport ? (
               <div className="flex flex-col gap-2 border-t border-white/10 px-4 py-3 text-xs text-white/55 sm:flex-row sm:items-center sm:justify-between">
                 <span>
-                  Total: {sessionReport.total} sessoes observadas. Pagina {sessionReport.page} de {sessionReport.totalPages}.
+                  Total: {sessionReport.total} sessões observadas. Página {sessionReport.page} de {sessionReport.totalPages}.
                 </span>
                 <div className="flex gap-2">
                   <button
@@ -1423,7 +1430,7 @@ export default function AppReportsPage() {
                     disabled={sessionPage >= sessionReport.totalPages}
                     onClick={() => setSessionPage((current) => Math.min(sessionReport.totalPages, current + 1))}
                   >
-                    Proxima
+                    Próxima
                   </button>
                 </div>
               </div>
@@ -1450,7 +1457,7 @@ export default function AppReportsPage() {
             <section className="rounded-xl border border-white/10 bg-white/5 p-4">
               <h2 className="text-sm font-semibold">CSV de acessos/sessões</h2>
               <p className="mt-1 text-xs leading-relaxed text-white/55">
-                Exporta auditoria de autenticacao conforme filtros locais da aba Acessos/Sessões.
+                Exporta auditoria de autenticação conforme filtros locais da aba Acessos/Sessões.
               </p>
               <button
                 type="button"
@@ -1464,7 +1471,7 @@ export default function AppReportsPage() {
             <section className="rounded-xl border border-white/10 bg-white/5 p-4">
               <h2 className="text-sm font-semibold">Impressão/PDF</h2>
               <p className="mt-1 text-xs leading-relaxed text-white/55">
-                Abre um relatorio gerencial com resumo, conversas, SLA, atendentes e acessos/sessoes para imprimir ou salvar em PDF.
+                Abre um relatório gerencial com resumo, conversas, SLA de atendimento, atendentes e acessos/sessões para imprimir ou salvar em PDF.
               </p>
               <button
                 type="button"

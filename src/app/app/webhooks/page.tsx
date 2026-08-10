@@ -19,6 +19,7 @@ import {
   updateAppWebhookEndpoint,
 } from "@/lib/appClientApi";
 import { hasCapability } from "@/lib/appFeatures";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 function canManageWebhooks(role: string) {
@@ -57,13 +58,19 @@ function SecretStatusPill({ status }: { status?: string }) {
 
 function DeliveryStatusPill({ status }: { status: string }) {
   const normalized = status.toLowerCase();
+  const label =
+    normalized === "sent" || normalized === "delivered"
+      ? "Entregue"
+      : normalized === "failed" || normalized === "dead_letter"
+        ? "Com problema"
+        : "Pendente";
   const tone =
     normalized === "sent" || normalized === "delivered"
       ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
       : normalized === "failed" || normalized === "dead_letter"
         ? "border-rose-400/30 bg-rose-500/15 text-rose-100"
         : "border-amber-300/30 bg-amber-500/15 text-amber-100";
-  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>{status}</span>;
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>{label}</span>;
 }
 
 export default function AppWebhooksPage() {
@@ -135,7 +142,7 @@ export default function AppWebhooksPage() {
           router.replace("/app/inbox");
           return;
         }
-        setError(typed.message || "Nao foi possivel carregar webhooks.");
+        setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível carregar as integrações de recebimento." }));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -148,11 +155,11 @@ export default function AppWebhooksPage() {
   const handleCreate = async () => {
     if (!session) return;
     if (!name.trim()) {
-      setError("Informe um nome para o endpoint.");
+      setError("Informe um nome para a integração.");
       return;
     }
     if (!url.trim()) {
-      setError("Informe uma URL HTTPS para o endpoint.");
+      setError("Informe uma URL HTTPS para a integração.");
       return;
     }
     setSaving(true);
@@ -165,14 +172,14 @@ export default function AppWebhooksPage() {
       setCreatedSecret(response.secret);
       setName("");
       setUrl("");
-      setSuccess("Endpoint criado.");
+      setSuccess("Integração criada.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Nao foi possivel criar o webhook.");
+      setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível criar a integração de recebimento." }));
     } finally {
       setSaving(false);
     }
@@ -186,14 +193,14 @@ export default function AppWebhooksPage() {
     try {
       const response = await updateAppWebhookEndpoint(session, endpoint.id, { active: !endpoint.active });
       setEndpoints((current) => current.map((item) => (item.id === response.endpoint.id ? response.endpoint : item)));
-      setSuccess(response.endpoint.active ? "Endpoint ativado." : "Endpoint desativado.");
+      setSuccess(response.endpoint.active ? "Integração ativada." : "Integração desativada.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Nao foi possivel atualizar o webhook.");
+      setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível atualizar a integração." }));
     } finally {
       setUpdatingId(null);
     }
@@ -216,7 +223,7 @@ export default function AppWebhooksPage() {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Nao foi possivel rotacionar o segredo.");
+      setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível trocar o segredo." }));
     } finally {
       setUpdatingId(null);
     }
@@ -233,7 +240,7 @@ export default function AppWebhooksPage() {
   const handleSaveEdit = async (endpoint: AppWebhookEndpoint) => {
     if (!session) return;
     if (!editingName.trim() || !editingUrl.trim()) {
-      setError("Informe nome e URL para atualizar o endpoint.");
+      setError("Informe nome e URL para atualizar a integração.");
       return;
     }
     setUpdatingId(endpoint.id);
@@ -246,14 +253,14 @@ export default function AppWebhooksPage() {
       });
       setEndpoints((current) => current.map((item) => (item.id === response.endpoint.id ? response.endpoint : item)));
       setEditingId(null);
-      setSuccess("Endpoint atualizado.");
+      setSuccess("Integração atualizada.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Nao foi possivel atualizar o webhook.");
+      setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível atualizar a integração." }));
     } finally {
       setUpdatingId(null);
     }
@@ -272,8 +279,8 @@ export default function AppWebhooksPage() {
   return (
     <AppShell
       session={session}
-      title="Webhooks"
-      subtitle="Endpoints tenant-scoped para integracoes externas. Entregas automaticas ainda nao estao habilitadas."
+      title="Integrações de recebimento"
+      subtitle="URLs de integração por organização. Entregas automáticas ainda não estão habilitadas."
     >
       <FeedbackToast
         message={error || success}
@@ -288,8 +295,8 @@ export default function AppWebhooksPage() {
         <article className="theme-surface min-w-0 rounded-xl border p-4">
           <div className="flex min-w-0 items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-base font-semibold text-white">Novo endpoint</h2>
-              <p className="mt-1 text-sm text-white/60">Use URL HTTPS publica. O segredo e exibido uma unica vez.</p>
+              <h2 className="text-base font-semibold text-white">Nova integração</h2>
+              <p className="mt-1 text-sm text-white/60">Use URL HTTPS pública. O segredo é exibido uma única vez.</p>
             </div>
             <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white/70">
               {activeEndpoints.length} ativo{activeEndpoints.length === 1 ? "" : "s"}
@@ -300,7 +307,7 @@ export default function AppWebhooksPage() {
             <div className="mt-4 rounded-lg border border-amber-300/30 bg-amber-500/15 p-3">
               <p className="text-sm font-semibold text-amber-100">Copie agora</p>
               <p className="mt-1 text-xs text-amber-100/80">
-                Este segredo nao sera exibido novamente apos sair desta tela.
+                Este segredo não será exibido novamente após sair desta tela.
               </p>
               <code className="mt-3 block max-w-full overflow-x-auto rounded-md bg-black/30 px-3 py-2 text-xs text-white">
                 {createdSecret}
@@ -337,7 +344,7 @@ export default function AppWebhooksPage() {
               disabled={saving}
               className="theme-nav-link-active mt-2 rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {saving ? "Criando..." : "Criar endpoint"}
+              {saving ? "Criando..." : "Criar integração"}
             </button>
           </div>
         </article>
@@ -345,7 +352,7 @@ export default function AppWebhooksPage() {
         <article className="theme-surface min-w-0 rounded-xl border p-4">
           <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-base font-semibold text-white">Endpoints</h2>
+              <h2 className="text-base font-semibold text-white">Integrações</h2>
               <p className="mt-1 text-sm text-white/60">
                 {supportedEvents.length} evento{supportedEvents.length === 1 ? "" : "s"} planejado
                 {supportedEvents.length === 1 ? "" : "s"} para disparo futuro.
@@ -354,9 +361,9 @@ export default function AppWebhooksPage() {
           </div>
 
           {loading ? (
-            <p className="mt-6 text-sm text-white/60">Carregando webhooks...</p>
+            <p className="mt-6 text-sm text-white/60">Carregando integrações...</p>
           ) : endpoints.length === 0 ? (
-            <p className="mt-6 text-sm text-white/60">Nenhum endpoint configurado para este tenant.</p>
+            <p className="mt-6 text-sm text-white/60">Nenhuma integração configurada para esta organização.</p>
           ) : (
             <div className="mt-4 grid gap-3">
               {endpoints.map((endpoint) => (
@@ -425,7 +432,7 @@ export default function AppWebhooksPage() {
                             disabled={updatingId === endpoint.id}
                             className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
                           >
-                            Rotacionar segredo
+                            Trocar segredo
                           </button>
                         </div>
                       </div>
@@ -433,7 +440,7 @@ export default function AppWebhooksPage() {
                         <span>Criado em {formatDateTime(endpoint.createdAt)}</span>
                         <span>
                           {endpoint.signingSecretRotatedAt
-                            ? `Segredo rotacionado em ${formatDateTime(endpoint.signingSecretRotatedAt)}`
+                            ? `Segredo trocado em ${formatDateTime(endpoint.signingSecretRotatedAt)}`
                             : `Atualizado em ${formatDateTime(endpoint.updatedAt)}`}
                         </span>
                       </div>
@@ -448,7 +455,7 @@ export default function AppWebhooksPage() {
 
       <section className="mt-4 grid gap-4 xl:grid-cols-2">
         <article className="theme-surface min-w-0 rounded-xl border p-4">
-          <h2 className="text-base font-semibold text-white">Deliveries</h2>
+          <h2 className="text-base font-semibold text-white">Entregas</h2>
           {deliveries.length === 0 ? (
             <p className="mt-4 text-sm text-white/60">Nenhuma entrega registrada.</p>
           ) : (
@@ -459,7 +466,7 @@ export default function AppWebhooksPage() {
                     <span className="font-mono text-xs text-white/60">{delivery.eventType}</span>
                     <DeliveryStatusPill status={delivery.status} />
                   </div>
-                  <p className="mt-2 font-mono text-[11px] text-white/45">payloadHash {delivery.payloadHash}</p>
+                  <p className="mt-2 font-mono text-[11px] text-white/45">Código seguro do conteúdo {delivery.payloadHash}</p>
                   <p className="mt-1 text-xs text-white/45">{formatDateTime(delivery.createdAt)}</p>
                 </div>
               ))}
@@ -468,7 +475,7 @@ export default function AppWebhooksPage() {
         </article>
 
         <article className="theme-surface min-w-0 rounded-xl border p-4">
-          <h2 className="text-base font-semibold text-white">Attempts</h2>
+          <h2 className="text-base font-semibold text-white">Tentativas</h2>
           {attempts.length === 0 ? (
             <p className="mt-4 text-sm text-white/60">Nenhuma tentativa registrada.</p>
           ) : (

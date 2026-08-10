@@ -22,6 +22,7 @@ import {
   updateAppWebchatSite,
   upsertAppWebchatSettings,
 } from "@/lib/appClientApi";
+import { getAppErrorUxMessage, getConnectionStatusUxLabel } from "@/lib/appUxLabels";
 
 type TabKey = "sites" | "settings" | "domains" | "session";
 
@@ -101,12 +102,12 @@ function canManageWebchat(role: string) {
 }
 
 function normalizeError(error: AppApiError, fallback: string) {
-  if (error.status === 401) return "Sessao expirada. Faca login novamente.";
-  if (error.status === 403) return "Seu perfil nao tem permissao para gerenciar webchat.";
-  if (error.errorCode === "feature_not_enabled") return "Webchat nao esta habilitado para este tenant.";
-  if (error.errorCode === "duplicate_webchat_record") return "Ja existe um registro de webchat com estes dados.";
-  if (error.errorCode?.endsWith("_not_found")) return "O registro selecionado nao pertence a este tenant ou nao existe.";
-  return error.message || fallback;
+  if (error.status === 401) return "Sessão expirada. Faça login novamente.";
+  if (error.status === 403) return "Seu perfil não tem permissão para gerenciar o chat do site.";
+  if (error.errorCode === "feature_not_enabled") return "Chat do site não está habilitado para esta organização.";
+  if (error.errorCode === "duplicate_webchat_record") return "Já existe um registro de chat do site com estes dados.";
+  if (error.errorCode?.endsWith("_not_found")) return "O registro selecionado não pertence a esta organização ou não existe.";
+  return getAppErrorUxMessage({ ...error, fallback });
 }
 
 function StatusPill({ status, active }: { status?: string; active?: boolean }) {
@@ -184,7 +185,7 @@ export default function WebchatPage() {
           handleUnauthorized();
           return;
         }
-        setError(normalizeError(typed, "Nao foi possivel carregar webchat."));
+        setError(normalizeError(typed, "Não foi possível carregar o chat do site."));
       } finally {
         setLoading(false);
       }
@@ -230,7 +231,7 @@ export default function WebchatPage() {
       setSiteForm(SITE_EMPTY);
       await loadWebchat(session);
     } catch (err) {
-      setError(normalizeError(err as AppApiError, "Nao foi possivel salvar o site."));
+      setError(normalizeError(err as AppApiError, "Não foi possível salvar o site."));
     } finally {
       setSaving(false);
     }
@@ -254,10 +255,10 @@ export default function WebchatPage() {
         collectPhone: settingsForm.collectPhone,
         allowAnonymous: settingsForm.allowAnonymous,
       });
-      setSuccess("Configuracoes atualizadas.");
+      setSuccess("Configurações atualizadas.");
       await loadWebchat(session);
     } catch (err) {
-      setError(normalizeError(err as AppApiError, "Nao foi possivel salvar as configuracoes."));
+      setError(normalizeError(err as AppApiError, "Não foi possível salvar as configurações."));
     } finally {
       setSaving(false);
     }
@@ -275,15 +276,15 @@ export default function WebchatPage() {
       };
       if (domainForm.id) {
         await updateAppWebchatAllowedDomain(session, domainForm.id, payload);
-        setSuccess("Dominio atualizado.");
+        setSuccess("Domínio atualizado.");
       } else {
         await createAppWebchatAllowedDomain(session, payload);
-        setSuccess("Dominio criado.");
+        setSuccess("Domínio criado.");
       }
       setDomainForm({ ...DOMAIN_EMPTY, siteId: domainForm.siteId });
       await loadWebchat(session);
     } catch (err) {
-      setError(normalizeError(err as AppApiError, "Nao foi possivel salvar o dominio."));
+      setError(normalizeError(err as AppApiError, "Não foi possível salvar o domínio."));
     } finally {
       setSaving(false);
     }
@@ -318,15 +319,15 @@ export default function WebchatPage() {
             session: payload.session,
             visitor: payload.visitor,
             site: payload.site,
-            tenant: payload.tenant,
+            organization: payload.tenant,
           },
           null,
           2
         ),
       }));
-      setSuccess("Sessao publica criada.");
+      setSuccess("Sessão pública criada.");
     } catch (err) {
-      setError((err as Error).message || "Nao foi possivel criar a sessao.");
+      setError((err as Error).message || "Não foi possível criar a sessão.");
     } finally {
       setSaving(false);
     }
@@ -349,15 +350,15 @@ export default function WebchatPage() {
             session: payload.session,
             visitor: payload.visitor,
             site: payload.site,
-            tenant: payload.tenant,
+            organization: payload.tenant,
           },
           null,
           2
         ),
       }));
-      setSuccess("Sessao publica recuperada.");
+      setSuccess("Sessão pública recuperada.");
     } catch (err) {
-      setError((err as Error).message || "Nao foi possivel recuperar a sessao.");
+      setError((err as Error).message || "Não foi possível recuperar a sessão.");
     } finally {
       setSaving(false);
     }
@@ -368,8 +369,8 @@ export default function WebchatPage() {
   return (
     <AppShell
       session={session}
-      title="Webchat"
-      subtitle="Sites, configuracoes e dominios permitidos por tenant."
+      title="Chat do site"
+      subtitle="Sites, configurações e domínios permitidos por organização."
     >
       <div className="space-y-4">
         <FeedbackToast message={success} variant="success" {...toastHandlers} />
@@ -378,16 +379,16 @@ export default function WebchatPage() {
         <section className="grid gap-3 md:grid-cols-3">
           <Metric label="Sites" value={sites.length} />
           <Metric label="Sites ativos" value={activeSites} />
-          <Metric label="Dominios ativos" value={activeDomains} />
+          <Metric label="Domínios ativos" value={activeDomains} />
         </section>
 
         <section className="rounded-lg border theme-surface p-2">
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
             {[
               ["sites", "Sites"],
-              ["settings", "Configuracoes"],
-              ["domains", "Dominios"],
-              ["session", "Sessao"],
+              ["settings", "Configurações"],
+              ["domains", "Domínios"],
+              ["session", "Sessão"],
             ].map(([key, label]) => (
               <button
                 key={key}
@@ -400,7 +401,7 @@ export default function WebchatPage() {
           </div>
         </section>
 
-        {loading ? <p className="theme-muted">Carregando webchat...</p> : null}
+        {loading ? <p className="theme-muted">Carregando chat do site...</p> : null}
 
         {tab === "sites" ? (
           <TwoColumn>
@@ -425,7 +426,7 @@ export default function WebchatPage() {
 
         {tab === "settings" ? (
           <TwoColumn>
-            <Panel title="Configuracoes">
+            <Panel title="Configurações">
               <SelectInput
                 label="Site"
                 value={settingsForm.siteId}
@@ -434,20 +435,20 @@ export default function WebchatPage() {
               />
               <TextArea label="Mensagem inicial" value={settingsForm.welcomeMessage} onChange={(welcomeMessage) => setSettingsForm((prev) => ({ ...prev, welcomeMessage }))} />
               <div className="grid gap-3 md:grid-cols-2">
-                <TextInput label="Cor primaria" value={settingsForm.primaryColor} onChange={(primaryColor) => setSettingsForm((prev) => ({ ...prev, primaryColor }))} />
+                <TextInput label="Cor primária" value={settingsForm.primaryColor} onChange={(primaryColor) => setSettingsForm((prev) => ({ ...prev, primaryColor }))} />
                 <TextInput label="Cor de destaque" value={settingsForm.accentColor} onChange={(accentColor) => setSettingsForm((prev) => ({ ...prev, accentColor }))} />
               </div>
-              <TextInput label="Posicao" value={settingsForm.position} onChange={(position) => setSettingsForm((prev) => ({ ...prev, position }))} />
+              <TextInput label="Posição" value={settingsForm.position} onChange={(position) => setSettingsForm((prev) => ({ ...prev, position }))} />
               <CheckInput label="Coletar nome" checked={settingsForm.collectName} onChange={(collectName) => setSettingsForm((prev) => ({ ...prev, collectName }))} />
               <CheckInput label="Coletar email" checked={settingsForm.collectEmail} onChange={(collectEmail) => setSettingsForm((prev) => ({ ...prev, collectEmail }))} />
               <CheckInput label="Coletar telefone" checked={settingsForm.collectPhone} onChange={(collectPhone) => setSettingsForm((prev) => ({ ...prev, collectPhone }))} />
-              <CheckInput label="Permitir anonimo" checked={settingsForm.allowAnonymous} onChange={(allowAnonymous) => setSettingsForm((prev) => ({ ...prev, allowAnonymous }))} />
+              <CheckInput label="Permitir anônimo" checked={settingsForm.allowAnonymous} onChange={(allowAnonymous) => setSettingsForm((prev) => ({ ...prev, allowAnonymous }))} />
               <button className="theme-button-primary h-10 rounded-md px-4 text-sm" disabled={saving || !settingsForm.siteId} onClick={saveSettings}>
                 {saving ? "Salvando..." : "Salvar"}
               </button>
             </Panel>
-            <Panel title="Configuracoes salvas">
-              <ListEmpty visible={!settings.length} label="Nenhuma configuracao cadastrada." />
+            <Panel title="Configurações salvas">
+              <ListEmpty visible={!settings.length} label="Nenhuma configuração cadastrada." />
               {settings.map((item) => {
                 const site = sites.find((candidate) => candidate.id === item.siteId);
                 return (
@@ -462,21 +463,21 @@ export default function WebchatPage() {
 
         {tab === "domains" ? (
           <TwoColumn>
-            <Panel title={domainForm.id ? "Editar dominio" : "Novo dominio"}>
+            <Panel title={domainForm.id ? "Editar domínio" : "Novo domínio"}>
               <SelectInput
                 label="Site"
                 value={domainForm.siteId}
                 onChange={(siteId) => setDomainForm((prev) => ({ ...prev, siteId }))}
                 options={sites.map((site) => ({ value: site.id, label: site.name }))}
               />
-              <TextInput label="Dominio" value={domainForm.domain} onChange={(domain) => setDomainForm((prev) => ({ ...prev, domain }))} />
+              <TextInput label="Domínio" value={domainForm.domain} onChange={(domain) => setDomainForm((prev) => ({ ...prev, domain }))} />
               <CheckInput label="Ativo" checked={domainForm.active} onChange={(active) => setDomainForm((prev) => ({ ...prev, active }))} />
               <button className="theme-button-primary h-10 rounded-md px-4 text-sm" disabled={saving || !domainForm.siteId || !domainForm.domain.trim()} onClick={saveDomain}>
                 {saving ? "Salvando..." : "Salvar"}
               </button>
             </Panel>
-            <Panel title="Dominios permitidos">
-              <ListEmpty visible={!domains.length} label="Nenhum dominio cadastrado." />
+            <Panel title="Domínios permitidos">
+              <ListEmpty visible={!domains.length} label="Nenhum domínio cadastrado." />
               {domains.map((domain) => {
                 const site = sites.find((candidate) => candidate.id === domain.siteId);
                 return (
@@ -491,29 +492,29 @@ export default function WebchatPage() {
 
         {tab === "session" ? (
           <TwoColumn>
-            <Panel title="Teste tecnico de sessao">
+            <Panel title="Teste técnico de sessão">
               <SelectInput
                 label="Site"
                 value={sessionTest.siteId}
                 onChange={(siteId) => setSessionTest((prev) => ({ ...prev, siteId }))}
-                options={sites.map((site) => ({ value: site.id, label: `${site.name} (${site.status})` }))}
+                options={sites.map((site) => ({ value: site.id, label: `${site.name} (${getConnectionStatusUxLabel(site.status)})` }))}
               />
               <TextInput label="Nome do visitante" value={sessionTest.visitorName} onChange={(visitorName) => setSessionTest((prev) => ({ ...prev, visitorName }))} />
               <TextInput label="Email do visitante" value={sessionTest.visitorEmail} onChange={(visitorEmail) => setSessionTest((prev) => ({ ...prev, visitorEmail }))} />
               <TextInput label="Telefone do visitante" value={sessionTest.visitorPhone} onChange={(visitorPhone) => setSessionTest((prev) => ({ ...prev, visitorPhone }))} />
               <button className="theme-button-primary h-10 rounded-md px-4 text-sm" disabled={saving || !sessionTest.siteId} onClick={createSession}>
-                {saving ? "Processando..." : "Criar sessao"}
+                {saving ? "Processando..." : "Criar sessão"}
               </button>
-              <TextArea label="Token" value={sessionTest.token} onChange={(token) => setSessionTest((prev) => ({ ...prev, token }))} />
+              <TextArea label="Código da sessão" value={sessionTest.token} onChange={(token) => setSessionTest((prev) => ({ ...prev, token }))} />
               <button className="theme-button-secondary h-10 rounded-md px-4 text-sm" disabled={saving || !sessionTest.token.trim()} onClick={restoreSession}>
-                Recuperar sessao
+                Recuperar sessão
               </button>
             </Panel>
             <Panel title="Resultado seguro">
               {sessionTest.result ? (
                 <pre className="max-h-96 overflow-auto rounded-md border theme-card p-3 text-xs theme-text">{sessionTest.result}</pre>
               ) : (
-                <ListEmpty visible label="Nenhuma sessao testada." />
+                <ListEmpty visible label="Nenhuma sessão testada." />
               )}
             </Panel>
           </TwoColumn>
@@ -623,7 +624,7 @@ function SelectInput({
 function StatusSelect({ value, onChange }: { value: AppWebchatSiteStatus; onChange: (value: AppWebchatSiteStatus) => void }) {
   return (
     <label className="block text-sm theme-text">
-      <span className="theme-muted">Status</span>
+      <span className="theme-muted">Situação</span>
       <select className="mt-1 w-full rounded-md border theme-input px-3 py-2" value={value} onChange={(event) => onChange(event.target.value as AppWebchatSiteStatus)}>
         <option value="active">Ativo</option>
         <option value="inactive">Inativo</option>

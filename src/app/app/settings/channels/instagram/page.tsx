@@ -16,6 +16,7 @@ import {
   validateAppInstagramBusinessConnection,
   type AppInstagramBusinessStatus,
 } from "@/lib/appClientApi";
+import { getAppErrorUxMessage, getConnectionStatusUxLabel } from "@/lib/appUxLabels";
 
 function canManageChannels(role: string) {
   const normalized = role.trim().toUpperCase();
@@ -49,12 +50,12 @@ function CapabilityPill({
 }) {
   const display =
     value === "incompatible_token_or_review_blocked"
-      ? "incompatible/review blocked"
+      ? "bloqueado pela revisão"
       : value === "available"
-        ? "available"
+        ? "disponível"
         : value === "blocked"
-          ? "blocked"
-          : "unknown";
+          ? "bloqueado"
+          : "não confirmado";
   return (
     <StatusPill
       label={`${label}: ${display}`}
@@ -75,9 +76,9 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
 function formatValidationPendingItem(item: { stage: string; message: string }) {
   if (item.stage === "conversations_capability") {
     return {
-      label: "Instagram Direct capability",
+      label: "Permissão de conversas do Instagram Direct",
       message:
-        "A identidade Instagram foi validada, mas a Meta ainda nao liberou a capability de conversas/mensagens para este app ou estado de review.",
+        "A identidade Instagram foi validada, mas a Meta ainda não liberou a permissão de conversas/mensagens para este app ou estado de revisão.",
     };
   }
   return {
@@ -146,7 +147,7 @@ function AppInstagramChannelSettingsContent() {
           handleUnauthorized();
           return;
         }
-        setError(typed.message || "Nao foi possivel carregar a conexao Instagram.");
+        setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível carregar a conexão do Instagram." }));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -159,10 +160,10 @@ function AppInstagramChannelSettingsContent() {
   useEffect(() => {
     const result = searchParams.get("instagramConnect");
     if (result === "success") {
-      setSuccess("Instagram Business conectado. Valide a conexao para confirmar permissoes e capability.");
+      setSuccess("Instagram Business conectado. Valide a conexão para confirmar permissões e liberação de conversas.");
     }
     if (result === "error") {
-      setError("A conexao Instagram nao foi concluida.");
+      setError("A conexão do Instagram não foi concluída.");
     }
   }, [searchParams]);
 
@@ -181,7 +182,7 @@ function AppInstagramChannelSettingsContent() {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Nao foi possivel iniciar o login Instagram Business.");
+      setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível iniciar a conexão do Instagram Business." }));
       setConnecting(false);
     }
   }, [handleUnauthorized, session]);
@@ -199,7 +200,7 @@ function AppInstagramChannelSettingsContent() {
       if (response.validation.ok) {
         setSuccess("Instagram Business validado com sucesso.");
       } else {
-        setWarning("Instagram conectado, com pendencias de capability da Meta. Veja os detalhes abaixo.");
+        setWarning("Instagram conectado, com pendências de liberação pela Meta. Veja os detalhes abaixo.");
       }
     } catch (err) {
       const typed = err as AppApiError;
@@ -207,7 +208,7 @@ function AppInstagramChannelSettingsContent() {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Nao foi possivel validar a conexao Instagram.");
+      setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível validar a conexão do Instagram." }));
     } finally {
       setValidating(false);
     }
@@ -221,7 +222,7 @@ function AppInstagramChannelSettingsContent() {
     <AppShell
       session={session}
       title="Instagram Business"
-      subtitle="Connect Instagram for review-ready messaging validation."
+      subtitle="Conecte o Instagram e valide se as mensagens diretas estão prontas para uso."
     >
       {error ? (
         <FeedbackToast
@@ -250,13 +251,12 @@ function AppInstagramChannelSettingsContent() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wide text-re7-orange">
-                Meta Review Readiness
+                Revisão Meta
               </p>
-              <h1 className="mt-2 text-2xl font-semibold text-white">Instagram Business Login</h1>
+              <h1 className="mt-2 text-2xl font-semibold text-white">Conexão do Instagram Business</h1>
               <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/70">
-                Use this screen during App Review to show the reviewer how a business connects its
-                Instagram account, grants permissions and validates the connection before receiving
-                Direct messages in the Converta inbox.
+                Use esta tela para conectar a conta do Instagram, conceder permissões e validar a conexão antes de
+                receber mensagens diretas na caixa de entrada do Converta.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -266,7 +266,7 @@ function AppInstagramChannelSettingsContent() {
                 disabled={connecting || loading}
                 className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {connecting ? "Opening..." : "Connect Instagram Business"}
+                {connecting ? "Abrindo..." : "Conectar Instagram Business"}
               </button>
               <button
                 type="button"
@@ -274,7 +274,7 @@ function AppInstagramChannelSettingsContent() {
                 disabled={validating || loading}
                 className="rounded-md border border-white/20 px-4 py-2 text-sm font-semibold text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {validating ? "Validating..." : "Validate connection"}
+                {validating ? "Validando..." : "Validar conexão"}
               </button>
             </div>
           </div>
@@ -282,26 +282,26 @@ function AppInstagramChannelSettingsContent() {
 
         <section className="grid gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Connection</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Conexão</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <StatusPill
-                label={`token ${status?.tokenStatus ?? "loading"}`}
+                label={`Acesso: ${getConnectionStatusUxLabel(status?.tokenStatus ?? "loading")}`}
                 tone={getTokenTone(status?.tokenStatus)}
               />
               <StatusPill
-                label={status?.enabled ? "enabled" : "disabled"}
+                label={status?.enabled ? "Ativo" : "Inativo"}
                 tone={status?.enabled ? "success" : "warning"}
               />
-              <StatusPill label="outbound disabled" tone="warning" />
+              <StatusPill label="Envio ativo indisponível" tone="warning" />
             </div>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Account</p>
-            <p className="mt-3 text-lg font-semibold text-white">{status?.username ? `@${status.username}` : "Not confirmed"}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Conta</p>
+            <p className="mt-3 text-lg font-semibold text-white">{status?.username ? `@${status.username}` : "Não confirmada"}</p>
             <p className="mt-1 break-all font-mono text-xs text-white/55">{status?.channelAccountId || "-"}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Review scopes</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Permissões para revisão</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <StatusPill label="instagram_business_basic" />
               <StatusPill label="instagram_business_manage_messages" />
@@ -310,39 +310,39 @@ function AppInstagramChannelSettingsContent() {
         </section>
 
         <section className="grid gap-3 md:grid-cols-2">
-          <DetailRow label="Redirect URI for Meta panel" value={redirectUri} />
-          <DetailRow label="Webhook callback" value="https://converta.re7online.com/agent-api/meta/webhook" />
-          <DetailRow label="Webhook actor alias" value={status?.externalAccountIds?.join(", ")} />
-          <DetailRow label="Facebook Page ID" value={status?.facebookPageId} />
+          <DetailRow label="URL de retorno para o painel Meta" value={redirectUri} />
+          <DetailRow label="Integração de recebimento (Webhook)" value="https://converta.re7online.com/agent-api/meta/webhook" />
+          <DetailRow label="Identidade técnica do recebimento" value={status?.externalAccountIds?.join(", ")} />
+          <DetailRow label="ID técnico da Página do Facebook" value={status?.facebookPageId} />
         </section>
 
         {validation ? (
           <section className="rounded-xl border border-white/10 bg-white/5 p-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-white">Validation result</h2>
-                <p className="mt-1 text-sm text-white/60">Checked at {validation.checkedAt}</p>
+                <h2 className="text-lg font-semibold text-white">Resultado da validação</h2>
+                <p className="mt-1 text-sm text-white/60">Verificado em {validation.checkedAt}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <StatusPill label={validation.ok ? "ready" : "pending"} tone={validation.ok ? "success" : "warning"} />
-                <CapabilityPill label="conversations" value={validation.capabilities.conversations} />
-                <CapabilityPill label="messages" value={validation.capabilities.messages} />
+                <StatusPill label={validation.ok ? "Pronto" : "Pendente"} tone={validation.ok ? "success" : "warning"} />
+                <CapabilityPill label="Conversas" value={validation.capabilities.conversations} />
+                <CapabilityPill label="Mensagens" value={validation.capabilities.messages} />
               </div>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
-                <p className="text-sm font-semibold text-white">Instagram Business Login token</p>
+                <p className="text-sm font-semibold text-white">Acesso do Instagram Business</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <StatusPill
-                    label={validation.tokenDiagnostics?.instagramBusinessToken.present ? "present" : "missing"}
+                    label={validation.tokenDiagnostics?.instagramBusinessToken.present ? "Presente" : "Pendente"}
                     tone={validation.tokenDiagnostics?.instagramBusinessToken.present ? "success" : "warning"}
                   />
                   <StatusPill
                     label={
                       validation.tokenDiagnostics?.instagramBusinessToken.identityValidated
-                        ? "identity validated"
-                        : "identity pending"
+                        ? "Identidade validada"
+                        : "Identidade pendente"
                     }
                     tone={
                       validation.tokenDiagnostics?.instagramBusinessToken.identityValidated ? "success" : "warning"
@@ -351,69 +351,69 @@ function AppInstagramChannelSettingsContent() {
                   <StatusPill
                     label={
                       validation.tokenDiagnostics?.instagramBusinessToken.scopesValidated
-                        ? "scopes returned"
-                        : "scopes not returned"
+                        ? "Permissões retornadas"
+                        : "Permissões pendentes"
                     }
                     tone={validation.tokenDiagnostics?.instagramBusinessToken.scopesValidated ? "success" : "warning"}
                   />
                 </div>
                 <p className="mt-2 text-xs text-white/55">
-                  Source: {validation.tokenDiagnostics?.instagramBusinessToken.source ?? "none"} · length:{" "}
+                  Diagnóstico técnico: origem {validation.tokenDiagnostics?.instagramBusinessToken.source ?? "nenhuma"} · tamanho{" "}
                   {validation.tokenDiagnostics?.instagramBusinessToken.tokenLength ?? 0} · prefix:{" "}
                   {validation.tokenDiagnostics?.instagramBusinessToken.tokenPrefix ?? "-"}
                 </p>
               </div>
 
               <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
-                <p className="text-sm font-semibold text-white">Page / Messenger token validation</p>
+                <p className="text-sm font-semibold text-white">Validação do acesso da Página/Messenger</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <StatusPill
-                    label={validation.tokenDiagnostics?.pageToken.present ? "present" : "missing"}
+                    label={validation.tokenDiagnostics?.pageToken.present ? "Presente" : "Pendente"}
                     tone={validation.tokenDiagnostics?.pageToken.present ? "success" : "warning"}
                   />
                   <StatusPill
                     label={
                       validation.tokenDiagnostics?.pageToken.debugValidated
-                        ? "debug_token valid"
-                        : "debug_token not used"
+                        ? "Validação técnica OK"
+                        : "Validação técnica não usada"
                     }
                     tone={validation.tokenDiagnostics?.pageToken.debugValidated ? "success" : "warning"}
                   />
                 </div>
                 <p className="mt-2 text-xs text-white/55">
-                  Page token is only required for the legacy Messenger/Page validation path.
+                  O acesso da Página só é necessário para o caminho legado de validação Messenger/Página.
                 </p>
               </div>
 
               <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3 md:col-span-2">
-                <p className="text-sm font-semibold text-white">Conversations capability</p>
+                <p className="text-sm font-semibold text-white">Liberação de conversas</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <CapabilityPill label="conversations" value={validation.capabilities.conversations} />
-                  <CapabilityPill label="messages" value={validation.capabilities.messages} />
+                  <CapabilityPill label="Conversas" value={validation.capabilities.conversations} />
+                  <CapabilityPill label="Mensagens" value={validation.capabilities.messages} />
                 </div>
                 <p className="mt-2 text-xs text-white/55">
-                  If this remains incompatible/review blocked while identity is validated, the token exists but Meta
-                  has not released the conversations capability for this app/review state.
+                  Se continuar bloqueado pela revisão com identidade validada, o acesso existe, mas a Meta ainda não
+                  liberou conversas para este app ou estado de revisão.
                 </p>
               </div>
 
               <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
-                <p className="text-sm font-semibold text-white">Granted scopes</p>
+                <p className="text-sm font-semibold text-white">Permissões concedidas</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {validation.grantedScopes.length ? (
                     validation.grantedScopes.map((scope) => <StatusPill key={scope} label={scope} tone="success" />)
                   ) : (
-                    <p className="text-sm text-white/55">No scopes returned.</p>
+                    <p className="text-sm text-white/55">Nenhuma permissão retornada.</p>
                   )}
                 </div>
               </div>
               <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
-                <p className="text-sm font-semibold text-white">Missing scopes</p>
+                <p className="text-sm font-semibold text-white">Permissões pendentes</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {validation.missingScopes.length ? (
                     validation.missingScopes.map((scope) => <StatusPill key={scope} label={scope} tone="danger" />)
                   ) : (
-                    <StatusPill label="none" tone="success" />
+                    <StatusPill label="Nenhuma" tone="success" />
                   )}
                 </div>
               </div>
@@ -421,7 +421,7 @@ function AppInstagramChannelSettingsContent() {
 
             {validation.errors.length ? (
               <div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-500/10 p-3">
-                <p className="text-sm font-semibold text-amber-100">Pending items</p>
+                <p className="text-sm font-semibold text-amber-100">Itens pendentes</p>
                 <ul className="mt-2 space-y-2 text-sm text-amber-50/85">
                   {validation.errors.map((item, index) => {
                     const formatted = formatValidationPendingItem(item);
@@ -438,14 +438,14 @@ function AppInstagramChannelSettingsContent() {
         ) : null}
 
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
-          <h2 className="text-lg font-semibold text-white">Reviewer script</h2>
+          <h2 className="text-lg font-semibold text-white">Roteiro de validação</h2>
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-white/70">
-            <li>Log in to Converta.</li>
-            <li>Open Settings, Channels, Instagram Business.</li>
-            <li>Click Connect Instagram Business.</li>
-            <li>Grant Instagram permissions in Meta Business Login.</li>
-            <li>Return to this page and validate the connection.</li>
-            <li>Send a real Instagram Direct message to confirm webhook payload and inbox persistence.</li>
+            <li>Entre no Converta.</li>
+            <li>Abra Configurações, Canais, Instagram Business.</li>
+            <li>Clique em Conectar Instagram Business.</li>
+            <li>Conceda as permissões no login da Meta.</li>
+            <li>Volte para esta página e valide a conexão.</li>
+            <li>Envie uma mensagem controlada pelo Instagram Direct para confirmar recebimento e persistência.</li>
           </ol>
         </section>
       </div>

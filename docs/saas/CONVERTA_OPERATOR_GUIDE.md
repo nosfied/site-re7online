@@ -20,15 +20,33 @@ A interface operacional deve priorizar termos simples para quem atende:
 | --- | --- |
 | Inbox | Caixa de entrada |
 | Dashboard | Painel |
+| Reports | Relatórios |
+| Settings | Configurações |
 | Template | Modelo aprovado ou modelo de mensagem |
 | Template Meta | Modelo aprovado pela Meta |
 | Canned reply | Mensagem pronta |
 | Webchat | Chat do site |
+| Webhook | Integração de recebimento |
 | Status | Situacao |
 | Status da conversa | Situacao do atendimento |
 | Timeline | Historico |
+| Session | Sessão |
+| Last seen | Última atividade observada |
+| Duration | Duração observada |
+| Login | Entrada |
+| Logout | Saída |
 | Claim | Assumir atendimento |
 | Assignment | Responsavel ou atribuicao |
+| Queue assignment | Distribuição de atendimentos |
+| Round-robin | Distribuição alternada |
+| Least active | Menor carga |
+| Tenant | Organização ou cliente |
+| Channel | Canal |
+| ChannelAccount | Canal configurado |
+| Provider | Provedor |
+| Token | Acesso ou credencial mascarada |
+| Payload | Conteúdo técnico sanitizado |
+| Endpoint | URL de integração |
 | Lead sem cadastro completo | Contato |
 | Lead | Contato ou cadastro |
 | Campaign | Campanha |
