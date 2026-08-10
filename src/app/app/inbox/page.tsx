@@ -1847,6 +1847,49 @@ function getConversationChannelLabel(item: Pick<InboxConversationItem, "channel"
   }
 }
 
+function canSendInboxText(
+  channel: InboxChannel,
+  item: Pick<InboxConversationItem, "channelOutboundEnabled"> | null
+) {
+  if (channel === "whatsapp") return true;
+  if (channel === "support") return true;
+  return item?.channelOutboundEnabled === true;
+}
+
+function canSendInboxMedia(channel: InboxChannel) {
+  return channel === "whatsapp";
+}
+
+function canSendInboxTemplate(channel: InboxChannel) {
+  return channel === "whatsapp";
+}
+
+function getInboxTextOutboundDisabledMessage(channel: InboxChannel) {
+  switch (channel) {
+    case "webchat":
+      return "Envio por Webchat ainda não está habilitado neste canal.";
+    case "telegram":
+      return "Envio por Telegram ainda não está habilitado neste canal.";
+    case "instagram":
+      return "Envio por Instagram ainda não está habilitado neste canal.";
+    case "support":
+      return "Envio interno de suporte indisponível neste atendimento.";
+    case "messenger":
+      return "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
+    default:
+      return "Envio indisponível neste canal.";
+  }
+}
+
+function getInboxMediaOutboundDisabledMessage(channel: InboxChannel) {
+  if (channel === "support") return "Envio de mídia ainda não está habilitado para suporte interno.";
+  if (channel === "webchat") return "Envio de mídia ainda não está habilitado para Webchat.";
+  if (channel === "telegram") return "Envio de mídia ainda não está habilitado para Telegram.";
+  if (channel === "instagram") return "Envio de mídia ainda não está habilitado para Instagram.";
+  if (channel === "messenger") return "Envio de mídia ainda não está habilitado para Facebook/Messenger.";
+  return "Envio de mídia ainda não está habilitado para este canal.";
+}
+
 function getConversationChannelBadgeClass(item: Pick<InboxConversationItem, "channel"> | null) {
   switch (getConversationChannel(item)) {
     case "messenger":
@@ -4176,26 +4219,16 @@ export default function AppInboxPage() {
     [selectedConversation, session]
   );
   const selectedConversationChannel = getConversationChannel(selectedConversation);
-  const selectedConversationSupportsOutbound =
-    selectedConversationChannel === "whatsapp" ||
-    (selectedConversationChannel === "messenger" &&
-      selectedConversation?.channelOutboundEnabled === true) ||
-    (selectedConversationChannel === "instagram" &&
-      selectedConversation?.channelOutboundEnabled === true) ||
-    (selectedConversationChannel === "webchat" &&
-      selectedConversation?.channelOutboundEnabled === true) ||
-    (selectedConversationChannel === "telegram" &&
-      selectedConversation?.channelOutboundEnabled === true);
-  const selectedConversationSupportsMediaOutbound = selectedConversationChannel === "whatsapp";
-  const selectedConversationSupportsTemplateOutbound = selectedConversationChannel === "whatsapp";
+  const selectedConversationSupportsOutbound = canSendInboxText(
+    selectedConversationChannel,
+    selectedConversation
+  );
+  const selectedConversationSupportsMediaOutbound = canSendInboxMedia(selectedConversationChannel);
+  const selectedConversationSupportsTemplateOutbound = canSendInboxTemplate(selectedConversationChannel);
   const selectedConversationOutboundDisabledMessage =
-    selectedConversationChannel === "webchat"
-      ? "Envio por Webchat ainda não está habilitado neste canal."
-      : selectedConversationChannel === "telegram"
-      ? "Envio por Telegram ainda não está habilitado neste canal."
-      : selectedConversationChannel === "instagram"
-      ? "Envio por Instagram ainda não está habilitado neste canal."
-      : "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
+    getInboxTextOutboundDisabledMessage(selectedConversationChannel);
+  const selectedConversationMediaOutboundDisabledMessage =
+    getInboxMediaOutboundDisabledMessage(selectedConversationChannel);
   const composerEnabled = canReply && selectedConversationSupportsOutbound;
   const templateComposerEnabled = canReply && selectedConversationSupportsTemplateOutbound;
   const usableInboxTemplates = useMemo(
@@ -4720,7 +4753,7 @@ export default function AppInboxPage() {
         setError(
           !selectedConversationSupportsOutbound
             ? selectedConversationOutboundDisabledMessage
-            : "Envio de midia ainda nao esta habilitado para Webchat."
+            : selectedConversationMediaOutboundDisabledMessage
         );
         setErrorDetails(null);
         return;
@@ -4836,6 +4869,7 @@ export default function AppInboxPage() {
       focusComposer,
       handleUnauthorized,
       selectedConversation,
+      selectedConversationMediaOutboundDisabledMessage,
       selectedConversationOutboundDisabledMessage,
       selectedConversationSupportsMediaOutbound,
       selectedConversationSupportsOutbound,
@@ -5190,7 +5224,7 @@ export default function AppInboxPage() {
       setError(
         !selectedConversationSupportsOutbound
           ? selectedConversationOutboundDisabledMessage
-          : "Envio de audio ainda nao esta habilitado para Webchat."
+          : selectedConversationMediaOutboundDisabledMessage
       );
       setErrorDetails(null);
       return;
