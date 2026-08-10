@@ -44,8 +44,37 @@ type NavItem = {
 
 const DIRECT_OPERATION_NAV_LIMIT = 4;
 const DIRECT_ADMINISTRATION_NAV_LIMIT = 3;
+const COMPACT_OPERATION_NAV_LIMIT = 2;
+const COMPACT_ADMINISTRATION_NAV_LIMIT = 1;
+const NARROW_OPERATION_NAV_LIMIT = 1;
+const NARROW_ADMINISTRATION_NAV_LIMIT = 1;
 const SESSION_WARNING_THRESHOLD_MS = 60 * 1000;
 const APP_SESSION_STORAGE_KEYS = new Set(["wa_app_session_session_v1", "wa_app_session_local_v1"]);
+
+function getDirectNavLimits(width: number) {
+  if (width < 1024) {
+    return {
+      operation: DIRECT_OPERATION_NAV_LIMIT,
+      administration: DIRECT_ADMINISTRATION_NAV_LIMIT,
+    };
+  }
+  if (width < 1200) {
+    return {
+      operation: NARROW_OPERATION_NAV_LIMIT,
+      administration: NARROW_ADMINISTRATION_NAV_LIMIT,
+    };
+  }
+  if (width < 1441) {
+    return {
+      operation: COMPACT_OPERATION_NAV_LIMIT,
+      administration: COMPACT_ADMINISTRATION_NAV_LIMIT,
+    };
+  }
+  return {
+    operation: DIRECT_OPERATION_NAV_LIMIT,
+    administration: DIRECT_ADMINISTRATION_NAV_LIMIT,
+  };
+}
 
 function getLinkClasses(active: boolean) {
   return `inline-flex h-8 min-w-0 shrink-0 items-center justify-center whitespace-nowrap rounded-md border px-2.5 text-xs leading-none transition lg:h-8 lg:px-2.5 lg:text-xs min-[1441px]:h-9 min-[1441px]:px-3 min-[1441px]:text-sm ${
@@ -293,6 +322,10 @@ export default function AppShell({
   const [remainingMs, setRemainingMs] = useState<number | null>(() => getAppSessionRemainingMs(session));
   const [renewingSession, setRenewingSession] = useState(false);
   const [renewError, setRenewError] = useState<string | null>(null);
+  const [directNavLimits, setDirectNavLimits] = useState(() => ({
+    operation: DIRECT_OPERATION_NAV_LIMIT,
+    administration: DIRECT_ADMINISTRATION_NAV_LIMIT,
+  }));
   const helpMenuRef = useRef<HTMLDivElement | null>(null);
   const [tenantSummary, setTenantSummary] = useState<{
     name: string;
@@ -312,6 +345,22 @@ export default function AppShell({
     setShowHelpMenu(false);
     setShowMainMenuSubmenu(false);
   }, [pathname]);
+
+  useEffect(() => {
+    let frame = 0;
+    const updateDirectNavLimits = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        setDirectNavLimits(getDirectNavLimits(window.innerWidth));
+      });
+    };
+    updateDirectNavLimits();
+    window.addEventListener("resize", updateDirectNavLimits);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateDirectNavLimits);
+    };
+  }, []);
 
   useEffect(() => {
     if (!showHelpMenu) return;
@@ -525,7 +574,7 @@ export default function AppShell({
     pathname === "/app/support" || pathname.startsWith("/app/support/") ||
     pathname === "/app/training" || pathname.startsWith("/app/training/");
   const helpActions = (
-    <div ref={helpMenuRef} className="relative z-[70] shrink-0 justify-self-start">
+    <div ref={helpMenuRef} className="relative z-[70] flex min-w-0 shrink-0 justify-end">
       <button
         type="button"
         aria-haspopup="menu"
@@ -550,7 +599,7 @@ export default function AppShell({
         <div
           id="app-help-support-menu"
           role="menu"
-          className="theme-surface-strong absolute left-0 top-[calc(100%+0.45rem)] z-[90] grid w-[min(22rem,calc(100vw-2rem))] gap-1 rounded-lg border p-1.5 text-left shadow-[0_18px_50px_rgba(0,0,0,0.22)] max-lg:left-auto max-lg:right-0"
+          className="theme-surface-strong absolute right-0 top-[calc(100%+0.45rem)] z-[90] grid w-[min(22rem,calc(100vw-2rem))] gap-1 rounded-lg border p-1.5 text-left shadow-[0_18px_50px_rgba(0,0,0,0.22)]"
         >
           <Link
             href="/app/training"
@@ -591,27 +640,30 @@ export default function AppShell({
     </div>
   );
   const userActions = (
-    <div className="flex min-w-0 items-center justify-end gap-2">
-      <div className="min-w-0 text-right">
-        {tenantSummary ? (
-          <>
-            <p className="theme-muted truncate text-xs leading-tight">{tenantSummary.name}</p>
-            {tenantSummary.phoneDisplay ? (
-              <p className="theme-soft truncate text-xs leading-tight">{tenantSummary.phoneDisplay}</p>
-            ) : null}
-          </>
-        ) : null}
-        <p className="theme-muted truncate text-xs leading-tight lg:text-sm">
-          {activeSession.user.name || activeSession.user.email}
-        </p>
+    <div className="grid min-w-0 justify-items-end gap-1">
+      <div className="flex min-w-0 items-center justify-end gap-2">
+        <div className="min-w-0 text-right">
+          {tenantSummary ? (
+            <>
+              <p className="theme-muted truncate text-xs leading-tight">{tenantSummary.name}</p>
+              {tenantSummary.phoneDisplay ? (
+                <p className="theme-soft truncate text-xs leading-tight">{tenantSummary.phoneDisplay}</p>
+              ) : null}
+            </>
+          ) : null}
+          <p className="theme-muted truncate text-xs leading-tight lg:text-sm">
+            {activeSession.user.name || activeSession.user.email}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="h-8 shrink-0 rounded-md bg-re7-orange px-2.5 text-xs font-semibold leading-none text-white shadow-sm hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-orange min-[1441px]:h-9 min-[1441px]:text-sm"
+        >
+          Sair
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={handleLogout}
-        className="h-8 shrink-0 rounded-md bg-re7-orange px-2.5 text-xs font-semibold leading-none text-white shadow-sm hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-orange min-[1441px]:h-9 min-[1441px]:text-sm"
-      >
-        Sair
-      </button>
+      {helpActions}
     </div>
   );
   const logoButton = (
@@ -807,7 +859,7 @@ export default function AppShell({
     <main className="theme-bg theme-workspace min-h-screen overflow-x-hidden px-3 py-3 sm:px-4 lg:px-5">
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-2.5">
         <header className="theme-surface-strong theme-shadow fixed left-3 right-3 top-[calc(0.5rem+var(--safe-top))] z-50 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border px-3 py-1.5 backdrop-blur sm:left-4 sm:right-4 sm:w-[calc(100%-2rem)] lg:left-5 lg:right-5 lg:top-2 lg:w-[calc(100%-2.5rem)]">
-          <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[82px_minmax(0,1fr)_minmax(150px,auto)] lg:items-center lg:gap-2 min-[1441px]:grid-cols-[128px_minmax(0,1fr)_minmax(190px,auto)] min-[1441px]:gap-3">
+          <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[82px_minmax(0,1fr)_minmax(190px,auto)] lg:items-center lg:gap-2 min-[1441px]:grid-cols-[128px_minmax(0,1fr)_minmax(230px,auto)] min-[1441px]:gap-3">
             <div className="flex min-w-0 items-center justify-between gap-2 lg:flex lg:justify-center">
               {logoButton}
               <div className="min-w-0 lg:hidden">
@@ -815,13 +867,13 @@ export default function AppShell({
               </div>
             </div>
 
-            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] lg:items-center lg:justify-center lg:gap-2 min-[1441px]:grid-cols-[auto_auto_auto_auto] min-[1441px]:gap-3">
+            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-center lg:justify-center lg:gap-2 min-[1441px]:grid-cols-[auto_auto_auto] min-[1441px]:gap-3">
               <div className={navGroupClasses}>
                 <p className="theme-soft text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em]">
                   Operacao
                 </p>
                 <div className={navLinksClasses}>
-                  {renderNavLinks(operationItems, DIRECT_OPERATION_NAV_LIMIT, "operacao")}
+                  {renderNavLinks(operationItems, directNavLimits.operation, "operacao")}
                 </div>
               </div>
               {administrationItems.length > 0 ? (
@@ -830,11 +882,10 @@ export default function AppShell({
                     Administracao
                   </p>
                   <div className={navLinksClasses}>
-                    {renderNavLinks(administrationItems, DIRECT_ADMINISTRATION_NAV_LIMIT, "administracao")}
+                    {renderNavLinks(administrationItems, directNavLimits.administration, "administracao")}
                   </div>
                 </div>
               ) : null}
-              {helpActions}
               <ThemeSelector variant="switch" className="justify-self-start" />
             </div>
 
