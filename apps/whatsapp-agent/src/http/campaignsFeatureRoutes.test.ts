@@ -860,6 +860,53 @@ test("support hub uses configured support tenant and isolates requester conversa
     assert.equal(supportOutbound?.bodyText, "Recebemos sua solicitacao.");
     assert.equal(supportOutbound?.metaMessageId, null);
 
+    const inboxDetail = await request<{
+      ok: true;
+      channel: string;
+      provider: string;
+      protocol: string | null;
+      channelOutboundEnabled: boolean;
+      items: Array<{
+        direction: string;
+        bodyText: string | null;
+        type: string | null;
+        metaMessageId: string | null;
+      }>;
+    }>("GET", `/app/conversation/${encodeURIComponent(supportConversation.waId)}`, supportAdmin);
+    assert.equal(inboxDetail.status, 200, JSON.stringify(inboxDetail.body));
+    assert.equal(inboxDetail.body.channel, "support");
+    assert.equal(inboxDetail.body.provider, "converta");
+    assert.equal(inboxDetail.body.channelOutboundEnabled, true);
+    assert.match(inboxDetail.body.protocol ?? "", /^CVT-/);
+    assert.ok(
+      inboxDetail.body.items.some(
+        (item) => item.direction === "INBOUND" && item.bodyText === "Preciso de ajuda com a configuracao."
+      )
+    );
+    assert.ok(
+      inboxDetail.body.items.some(
+        (item) =>
+          item.direction === "OUTBOUND" &&
+          item.bodyText === "Recebemos sua solicitacao." &&
+          item.metaMessageId === null
+      )
+    );
+
+    const inboxTimeline = await request<{
+      ok: true;
+      contact: { waId: string; waIdCanonical: string; phone: string };
+      items: Array<{ kind: string; direction?: string; body?: string | null }>;
+    }>("GET", `/app/conversation/${encodeURIComponent(supportConversation.waId)}/timeline`, supportAdmin);
+    assert.equal(inboxTimeline.status, 200, JSON.stringify(inboxTimeline.body));
+    assert.equal(inboxTimeline.body.contact.waId, supportConversation.waId);
+    assert.equal(inboxTimeline.body.contact.waIdCanonical, supportConversation.waId);
+    assert.equal(inboxTimeline.body.contact.phone, supportConversation.waId);
+    assert.ok(
+      inboxTimeline.body.items.some(
+        (item) => item.kind === "message" && item.direction === "OUTBOUND" && item.body === "Recebemos sua solicitacao."
+      )
+    );
+
     const detail = await request<{
       ok: true;
       messages: Array<{ direction: string; bodyText: string | null }>;

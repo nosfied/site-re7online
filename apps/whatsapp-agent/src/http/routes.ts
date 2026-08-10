@@ -640,6 +640,15 @@ async function loadInboxConversationState(
   params: { clientId: string; clientKey: string; waId: string; channel: string | null }
 ): Promise<ConversationState | null> {
   const isWebchat = params.channel === "webchat" || params.waId.startsWith("webchat:");
+  const isSupport = params.channel === "support" || params.waId.startsWith("support:");
+  if (isSupport) {
+    const dbStates = await loadInboxConversationStatesFromDb(prisma, {
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      candidates: [{ waId: params.waId, waIdCanonical: params.waId, channel: params.channel }],
+    });
+    return dbStates.get(params.waId) ?? null;
+  }
   try {
     const state = await runtimeStorage.getConversation(params.waId, params.clientKey);
     if (state) return state;
@@ -4238,7 +4247,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       const scopedConversation = materializeConversationOperationalState(
-        await runtimeStorage.getConversation(resolvedConversation.resolvedWaId, client.clientKey),
+        await loadInboxConversationState(prisma, {
+          clientId: client.id,
+          clientKey: client.clientKey,
+          waId: resolvedConversation.resolvedWaId,
+          channel: serializeInboxChannelFields(resolvedConversation.winner ?? undefined).channel,
+        }),
         await ensureDefaultDepartmentAndQueue(prisma, client.id)
       );
       if (
@@ -4343,7 +4357,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const routeOperationalStateStartedAt = channelLatencyNow();
       const scopedConversation = materializeConversationOperationalState(
-        await runtimeStorage.getConversation(resolvedConversation.resolvedWaId, client.clientKey),
+        await loadInboxConversationState(prisma, {
+          clientId: client.id,
+          clientKey: client.clientKey,
+          waId: resolvedConversation.resolvedWaId,
+          channel: serializeInboxChannelFields(resolvedConversation.winner ?? undefined).channel,
+        }),
         await ensureDefaultDepartmentAndQueue(prisma, client.id)
       );
       latency.duration("routeOperationalState", routeOperationalStateStartedAt);
@@ -26186,7 +26205,12 @@ async function buildConversationDetailPayload(
   const runtimeConversationStartedAt = channelLatencyNow();
   const conversation = resolved.winner
     ? materializeConversationOperationalState(
-        await runtimeStorage.getConversation(resolved.resolvedWaId, params.clientKey),
+        await loadInboxConversationState(prisma, {
+          clientId: params.clientId,
+          clientKey: params.clientKey,
+          waId: resolved.resolvedWaId,
+          channel: serializeInboxChannelFields(resolved.winner).channel,
+        }),
         defaults
       )
     : null;
