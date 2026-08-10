@@ -21,12 +21,21 @@ A interface operacional deve priorizar termos simples para quem atende:
 | Inbox | Caixa de entrada |
 | Dashboard | Painel |
 | Template | Modelo aprovado ou modelo de mensagem |
+| Template Meta | Modelo aprovado pela Meta |
+| Canned reply | Mensagem pronta |
 | Webchat | Chat do site |
+| Status | Situacao |
 | Status da conversa | Situacao do atendimento |
 | Timeline | Historico |
 | Claim | Assumir atendimento |
 | Assignment | Responsavel ou atribuicao |
 | Lead sem cadastro completo | Contato |
+| Lead | Contato ou cadastro |
+| Campaign | Campanha |
+| Audience | Publico |
+| Recipient | Destinatario |
+| Opt-out | Bloqueado para comunicacoes |
+| Source | Origem |
 | MFA | Verificacao em duas etapas |
 
 Os nomes tecnicos continuam validos em codigo, eventos, APIs, logs sanitizados e documentacao tecnica. A troca acima vale para rotulos, avisos, botoes, mensagens vazias e erros vistos pelo operador.

@@ -91,3 +91,86 @@ export function getAppErrorUxMessage(input: {
   if (input.status && input.status >= 500) return "Não foi possível concluir esta ação. Tente novamente.";
   return rawMessage || input.fallback || "Não foi possível concluir esta ação. Tente novamente.";
 }
+
+export function getMetaTemplateCategoryUxLabel(category: string | null | undefined) {
+  const normalized = String(category ?? "").trim().toUpperCase();
+  switch (normalized) {
+    case "MARKETING":
+      return "Marketing";
+    case "UTILITY":
+      return "Utilidade";
+    case "AUTHENTICATION":
+      return "Autenticação";
+    case "SERVICE":
+      return "Atendimento";
+    default:
+      return normalized || "-";
+  }
+}
+
+export function getMetaTemplateStatusUxLabel(status: string | null | undefined) {
+  const normalized = String(status ?? "").trim().toLowerCase();
+  switch (normalized) {
+    case "requested":
+    case "review_started":
+      return "Em análise pela Re7online";
+    case "adjustment_requested":
+      return "Ajustes solicitados";
+    case "internal_approved":
+      return "Aprovado internamente";
+    case "submitted_to_meta":
+      return "Enviado para a Meta";
+    case "approved_meta":
+    case "meta_approved":
+      return "Aprovado pela Meta";
+    case "rejected_meta":
+    case "meta_rejected":
+      return "Rejeitado pela Meta";
+    case "submitting":
+    case "pending":
+    case "meta_pending":
+      return "Em análise";
+    case "approved":
+      return "Aprovado";
+    case "rejected":
+      return "Rejeitado";
+    case "failed":
+      return "Falha";
+    case "cancelled":
+      return "Cancelado";
+    case "paused":
+      return "Pausado";
+    case "disabled":
+      return "Desativado";
+    case "in_appeal":
+      return "Em recurso";
+    case "draft":
+      return "Rascunho";
+    default:
+      return status?.trim() || "-";
+  }
+}
+
+export function getCampaignStatusUxLabel(status: string | null | undefined) {
+  switch (String(status ?? "").trim().toLowerCase()) {
+    case "draft":
+      return "Rascunho em revisão";
+    case "sending":
+      return "Enviando...";
+    case "completed":
+      return "Concluída";
+    case "blocked":
+      return "Bloqueada por limite";
+    case "cancelled":
+      return "Descartada";
+    case "failed":
+      return "Falha";
+    default:
+      return "Situação desconhecida";
+  }
+}
+
+export function getBooleanUxLabel(value: boolean | null | undefined) {
+  if (value === null || value === undefined) return "-";
+  return value ? "Sim" : "Não";
+}

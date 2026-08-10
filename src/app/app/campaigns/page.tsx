@@ -26,6 +26,7 @@ import {
   saveAppSession,
   sendAppCampaignDraft,
 } from "@/lib/appClientApi";
+import { getBooleanUxLabel, getCampaignStatusUxLabel, getMetaTemplateCategoryUxLabel } from "@/lib/appUxLabels";
 import { CampaignItem, formatDateTime, normalizeWaIdList } from "@/lib/whatsappAdminApi";
 
 type CampaignFormState = {
@@ -107,7 +108,7 @@ const CAMPAIGN_CENTER_TABS: Array<{ id: CampaignCenterTab; label: string }> = [
   { id: "create", label: "Criar campanha" },
   { id: "drafts", label: "Rascunhos" },
   { id: "sent", label: "Enviadas" },
-  { id: "blocked", label: "Bloqueadas/Falhas" },
+  { id: "blocked", label: "Bloqueadas e falhas" },
   { id: "all", label: "Todas" },
 ];
 
@@ -288,7 +289,7 @@ function CostPreviewCard({ preview, loading, emptyText }: {
       <div className="grid gap-2 sm:grid-cols-3">
         <div>
           <p className="uppercase tracking-wide opacity-70">Categoria</p>
-          <p className="mt-1 font-semibold uppercase">{preview.metaCategory}</p>
+          <p className="mt-1 font-semibold">{getMetaTemplateCategoryUxLabel(preview.metaCategory)}</p>
         </div>
         <div>
           <p className="uppercase tracking-wide opacity-70">Unitário estimado</p>
@@ -336,33 +337,18 @@ function getStatusClasses(status: string) {
 }
 
 function getStatusLabel(status: string) {
-  switch (status) {
-    case "draft":
-      return "Rascunho em revisão";
-    case "sending":
-      return "Enviando...";
-    case "completed":
-      return "Concluida";
-    case "blocked":
-      return "Bloqueada por limite";
-    case "cancelled":
-      return "Descartada";
-    case "failed":
-      return "Erro";
-    default:
-      return status || "Status desconhecido";
-  }
+  return getCampaignStatusUxLabel(status);
 }
 
 function formatRelativeTime(date: string) {
   const value = new Date(date).getTime();
   if (!Number.isFinite(value)) return formatDateTime(date);
   const diffSeconds = Math.max(Math.floor((Date.now() - value) / 1000), 0);
-  if (diffSeconds < 60) return `ha ${diffSeconds} segundo${diffSeconds === 1 ? "" : "s"}`;
+  if (diffSeconds < 60) return `há ${diffSeconds} segundo${diffSeconds === 1 ? "" : "s"}`;
   const diffMinutes = Math.floor(diffSeconds / 60);
-  if (diffMinutes < 60) return `ha ${diffMinutes} minuto${diffMinutes === 1 ? "" : "s"}`;
+  if (diffMinutes < 60) return `há ${diffMinutes} minuto${diffMinutes === 1 ? "" : "s"}`;
   const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `ha ${diffHours} hora${diffHours === 1 ? "" : "s"}`;
+  if (diffHours < 24) return `há ${diffHours} hora${diffHours === 1 ? "" : "s"}`;
   return formatDateTime(date);
 }
 
@@ -436,7 +422,7 @@ function getCampaignConfidence(campaign: CampaignItem) {
   }
   if (totalRecipients > 0 && deliveredOrRead >= totalRecipients) {
     return {
-      label: `Entregue para ${totalRecipients}/${totalRecipients} destinatarios`,
+      label: `Entregue para ${totalRecipients}/${totalRecipients} destinatários`,
       icon: "OK",
       classes: "border-emerald-400/30 bg-emerald-900/20 text-emerald-100",
     };
@@ -449,8 +435,7 @@ function getCampaignConfidence(campaign: CampaignItem) {
 }
 
 function formatBillingValue(value: boolean | null) {
-  if (value === null) return "-";
-  return value ? "sim" : "nao";
+  return getBooleanUxLabel(value);
 }
 
 function formatCampaignRecipientReference(value: string) {
@@ -791,7 +776,7 @@ export default function AppCampaignsPage() {
         .catch((err: { status?: number; message?: string }) => {
           if (err.status === 401) throw err;
           setCrmStatuses([]);
-          setCrmStatusesWarning("Não foi possível carregar os status CRM. O filtro ficou em todos os status.");
+          setCrmStatusesWarning("Não foi possível carregar as situações do CRM. O filtro ficou em todos os status.");
         }),
     ])
       .catch((err: { status?: number; message?: string }) => {
@@ -961,7 +946,7 @@ export default function AppCampaignsPage() {
       return;
     }
     if (!templateId && !templateName) {
-      const message = "Selecione um template aprovado antes de continuar.";
+      const message = "Selecione um modelo aprovado antes de continuar.";
       setFormError(`Erro ao criar campanha: ${message}`);
       showToast("error", "Envio imediato incompleto", message);
       return;
@@ -979,7 +964,7 @@ export default function AppCampaignsPage() {
       return;
     }
     const confirmed = window.confirm(
-      "Esta ação usa o envio imediato manual e pode enviar templates para os números informados. O fluxo recomendado é criar um rascunho pela audiência CRM. Deseja continuar?"
+      "Esta ação usa o envio imediato manual e pode enviar modelos para os números informados. O fluxo recomendado é criar um rascunho pela audiência CRM. Deseja continuar?"
     );
     if (!confirmed) return;
 
@@ -1006,7 +991,7 @@ export default function AppCampaignsPage() {
       showToast(
         "success",
         "Envio imediato processado",
-        "Confira o status na campanha e no Inbox, quando houver conversa associada."
+        "Confira a situação na campanha e na caixa de entrada, quando houver conversa associada."
       );
     } catch (err) {
       const typed = err as { status?: number; message?: string };
@@ -1014,7 +999,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      const message = typed.message || "Erro ao criar campanha. Verifique template e destinatários.";
+      const message = typed.message || "Erro ao criar campanha. Verifique modelo e destinatários.";
       setFormError(message);
       showToast("error", "Envio imediato não processado", message);
     } finally {
@@ -1135,7 +1120,7 @@ export default function AppCampaignsPage() {
           handleUnauthorized();
           return;
         }
-        setAudiencePreviewError(typed.message || "Nao foi possivel gerar a previa de audiencia.");
+        setAudiencePreviewError(typed.message || "Não foi possível gerar a prévia do público.");
       } finally {
         setLoadingAudiencePreview(false);
       }
@@ -1162,7 +1147,7 @@ export default function AppCampaignsPage() {
     const templateId = form.templateId.trim();
 
     if (!templateId) {
-      const message = "Selecione um template aprovado antes de criar o rascunho.";
+      const message = "Selecione um modelo aprovado antes de criar o rascunho.";
       setAudiencePreviewError(message);
       showToast("error", "Rascunho incompleto", message);
       return;
@@ -1222,7 +1207,7 @@ export default function AppCampaignsPage() {
   const handleSendDraftCampaign = async () => {
     if (!session || !selectedCampaign || selectedCampaign.status !== "draft") return;
     const confirmed = window.confirm(
-      "Esta acao iniciara o envio de template aprovado para os contatos elegiveis deste rascunho. Contatos com envio ativo bloqueado, anonimizados, sem WhatsApp valido ou duplicados serao revalidados e ignorados antes do envio."
+      "Esta ação iniciará o envio de modelo aprovado para os contatos elegíveis deste rascunho. Contatos com envio ativo bloqueado, anonimizados, sem WhatsApp válido ou duplicados serão revalidados e ignorados antes do envio."
     );
     if (!confirmed) return;
     setSendingDraft(true);
@@ -1282,14 +1267,14 @@ export default function AppCampaignsPage() {
       showToast(
         "warning",
         "Campanha carregada para reuso",
-        "O template original não está disponível para campanha. Selecione um modelo ativo antes de criar novo rascunho ou usar envio imediato."
+        "O modelo original não está disponível para campanha. Selecione um modelo ativo antes de criar novo rascunho ou usar envio imediato."
       );
       return;
     }
     showToast(
       "info",
       "Campanha carregada para reuso no envio imediato manual",
-      "Revise números, template e variáveis antes de enviar."
+      "Revise números, modelo e variáveis antes de enviar."
     );
   };
 
@@ -1301,7 +1286,7 @@ export default function AppCampaignsPage() {
     <AppShell
       session={session}
       title="Campanhas"
-      subtitle="Crie campanhas com templates aprovados pela Meta, usando contatos elegíveis do CRM."
+      subtitle="Crie campanhas com modelos aprovados pela Meta, usando contatos elegíveis do CRM."
     >
       <div className="fixed right-4 top-4 z-[90] grid w-[min(30rem,calc(100vw-2rem))] gap-2">
         {error ? (
@@ -1348,7 +1333,7 @@ export default function AppCampaignsPage() {
           <div className="max-w-5xl">
             <h2 className="text-base font-semibold">Central de Campanhas</h2>
             <p className="mt-2 text-sm leading-6 text-white/70">
-              Crie campanhas com templates aprovados pela Meta, usando contatos elegíveis do CRM.
+              Crie campanhas com modelos aprovados pela Meta, usando contatos elegíveis do CRM.
               Antes do envio, a plataforma valida bloqueio de envio ativo, contatos anonimizados,
               WhatsApp válido, duplicidades e variáveis obrigatórias.
             </p>
@@ -1357,7 +1342,7 @@ export default function AppCampaignsPage() {
             {[
               "Escolha a audiência",
               "Valide elegíveis",
-              "Escolha o template",
+              "Escolha o modelo",
               "Mapeie variáveis",
               "Crie rascunho",
               "Revise e envie",
@@ -1434,7 +1419,7 @@ export default function AppCampaignsPage() {
         </div>
         <div className="grid gap-3 p-3">
           <p className="rounded-md border border-sky-300/25 bg-sky-900/20 p-3 text-sm text-sky-100">
-            Esta previa nao envia mensagens e nao cria campanha. Ela apenas valida contatos do CRM para uso futuro em campanhas com template aprovado.
+            Esta prévia não envia mensagens e não cria campanha. Ela apenas valida contatos do CRM para uso futuro em campanhas com modelo aprovado.
           </p>
           <form className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_160px_150px_150px_150px_auto]" onSubmit={handleAudiencePreviewSubmit}>
             <label className="grid gap-1 text-sm">
@@ -1449,7 +1434,7 @@ export default function AppCampaignsPage() {
               />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="text-white/70">Status CRM</span>
+              <span className="text-white/70">Situação no CRM</span>
               <select
                 className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
                 value={audienceFilters.status}
@@ -1574,7 +1559,7 @@ export default function AppCampaignsPage() {
               <div className="grid gap-3 rounded-md border border-white/10 bg-white/5 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)_auto]">
                 <div className="lg:col-span-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Blocos 2 e 4</p>
-                  <h3 className="mt-1 text-sm font-semibold">Template aprovado e rascunho</h3>
+                  <h3 className="mt-1 text-sm font-semibold">Modelo aprovado e rascunho</h3>
                   <p className="mt-1 text-xs text-white/60">
                     Escolha um modelo aprovado, revise as regras e crie um rascunho. Criar rascunho não envia mensagens.
                   </p>
@@ -1589,7 +1574,7 @@ export default function AppCampaignsPage() {
                   />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="text-white/70">Template aprovado</span>
+                  <span className="text-white/70">Modelo aprovado</span>
                   <select
                     className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
                     value={form.templateId}
@@ -1614,7 +1599,7 @@ export default function AppCampaignsPage() {
                   </select>
                   {selectedTemplate ? (
                     <span className="text-xs text-white/55">
-                      Categoria efetiva: {selectedTemplateEffectiveCategory || selectedTemplate.category || "-"}
+                      Categoria na Meta: {getMetaTemplateCategoryUxLabel(selectedTemplateEffectiveCategory || selectedTemplate.category)}
                     </span>
                   ) : null}
                 </label>
@@ -1647,13 +1632,13 @@ export default function AppCampaignsPage() {
                       href="/app/templates"
                       className="mt-2 inline-flex rounded-md border border-amber-200/40 px-3 py-1.5 font-semibold hover:bg-amber-200/10"
                     >
-                      Ir para Templates
+                      Ir para Modelos
                     </a>
                   </div>
                 ) : null}
                 {selectedTemplateEffectiveCategory === "MARKETING" ? (
                   <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100 lg:col-span-3">
-                    Este template está classificado como MARKETING pela Meta. Revise política, consentimento e custos antes de enviar.
+                    Este modelo está classificado como Marketing pela Meta. Revise política, consentimento e custos antes de enviar.
                   </div>
                 ) : null}
                 <div className="lg:col-span-3">
@@ -1671,7 +1656,7 @@ export default function AppCampaignsPage() {
                   <div className="grid gap-3 rounded-md border border-re7-sky/20 bg-re7-sky/10 p-3 lg:col-span-3">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Bloco 3</p>
-                      <p className="text-sm font-semibold text-sky-100">Variáveis do template</p>
+                      <p className="text-sm font-semibold text-sky-100">Variáveis do modelo</p>
                       <p className="mt-1 text-xs text-white/60">
                         Defina como cada variável será preenchida para cada contato antes de criar o rascunho.
                       </p>
@@ -1762,7 +1747,7 @@ export default function AppCampaignsPage() {
                   </div>
                 ) : null}
                 <p className="text-xs text-white/55 lg:col-span-3">
-                  O rascunho nao envia mensagens. O envio exige revisao e acao explicita do operador.
+                  O rascunho não envia mensagens. O envio exige revisão e ação explícita do operador.
                 </p>
               </div>
               <div className="overflow-x-auto rounded-md border border-white/10">
@@ -1771,7 +1756,7 @@ export default function AppCampaignsPage() {
                     <tr>
                       <th className="px-3 py-2">Contato</th>
                       <th className="px-3 py-2">Referencia</th>
-                      <th className="px-3 py-2">Status CRM</th>
+                      <th className="px-3 py-2">Situação no CRM</th>
                       <th className="px-3 py-2">Canal</th>
                       <th className="px-3 py-2">Elegibilidade</th>
                       <th className="px-3 py-2">Ultima conversa</th>
@@ -1869,7 +1854,7 @@ export default function AppCampaignsPage() {
                   />
                 </label>
                 <label className="grid min-w-0 gap-1 text-sm">
-                  <span className="text-white/70">Template</span>
+                  <span className="text-white/70">Modelo</span>
                   <select
                     className="block w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                     value={form.templateId}
@@ -1889,12 +1874,12 @@ export default function AppCampaignsPage() {
                   >
                     <option value="">
                       {templates.length === 0
-                        ? "Nenhum modelo ativo disponivel"
+                        ? "Nenhum modelo ativo disponível"
                         : "Selecione um modelo aprovado e ativo"}
                     </option>
                     {templates.map((template) => (
                       <option key={template.id} value={template.id}>
-                        {template.name} - {template.category}
+                        {template.name} - {getMetaTemplateCategoryUxLabel(template.category)}
                       </option>
                     ))}
                   </select>
@@ -2011,7 +1996,7 @@ export default function AppCampaignsPage() {
               </div>
               <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)]">
                 <label className="grid gap-1 text-sm">
-                  <span className="text-white/70">Status</span>
+                  <span className="text-white/70">Situação</span>
                   <select
                     className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
                     value={statusFilter}
@@ -2043,10 +2028,10 @@ export default function AppCampaignsPage() {
                 <tr>
                   <th className="px-2 py-2">Ações</th>
                   <th className="px-2 py-2">Campanha</th>
-                  <th className="px-2 py-2">Status</th>
+                  <th className="px-2 py-2">Situação</th>
                   <th className="px-2 py-2 text-center">Enviadas</th>
                   <th className="px-2 py-2 text-center">Total</th>
-                  <th className="hidden px-2 py-2 lg:table-cell">Template</th>
+                  <th className="hidden px-2 py-2 lg:table-cell">Modelo</th>
                   <th className="hidden px-2 py-2 xl:table-cell">Criada em</th>
                 </tr>
               </thead>
@@ -2062,7 +2047,7 @@ export default function AppCampaignsPage() {
                   <tr>
                     <td className="px-3 py-4 text-white/70" colSpan={7}>
                       {campaigns.length === 0
-                        ? "Voce ainda nao criou nenhuma campanha."
+                        ? "Você ainda não criou nenhuma campanha."
                         : "Nenhuma campanha corresponde ao filtro."}
                     </td>
                   </tr>
@@ -2122,12 +2107,12 @@ export default function AppCampaignsPage() {
                           <span className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(campaign.status)}`}>
                             {getStatusLabel(campaign.status)}
                           </span>
-                          <span className="text-xs text-white/60">{campaign.status}</span>
+                          <span className="text-xs text-white/60">{formatRelativeTime(campaign.updatedAt)}</span>
                         </div>
                       </td>
                       <td className="px-2 py-2 text-center">{campaign.sentCount}</td>
                       <td className="px-2 py-2 text-center">{campaign.totalRecipients}</td>
-                      <td className="hidden px-2 py-2 lg:table-cell">{campaign.templateName || "(sem template)"}</td>
+                      <td className="hidden px-2 py-2 lg:table-cell">{campaign.templateName || "(sem modelo)"}</td>
                       <td className="hidden px-2 py-2 xl:table-cell">
                         <div className="flex flex-col gap-1">
                           <span>{formatDateTime(campaign.createdAt)}</span>
@@ -2179,7 +2164,7 @@ export default function AppCampaignsPage() {
                   <div>
                     <h2 className="text-sm font-semibold">Detalhe da campanha</h2>
                     <p className="mt-1 text-xs text-white/55">
-                      Revise rascunho, status, audiência e consumo sem sair da lista.
+                      Revise rascunho, situação, público e consumo sem sair da lista.
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
@@ -2219,7 +2204,7 @@ export default function AppCampaignsPage() {
                 <>
                   <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                      <p className="text-xs uppercase tracking-wide text-white/60">Status</p>
+                      <p className="text-xs uppercase tracking-wide text-white/60">Situação</p>
                       <p className={`mt-1 inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(selectedCampaign.status)}`}>
                         {getStatusLabel(selectedCampaign.status)}
                       </p>
@@ -2263,9 +2248,9 @@ export default function AppCampaignsPage() {
                   </div>
 
                   <div className="rounded-md border border-white/10 bg-white/5 p-3 text-sm text-white/70">
-                    Status da campanha e baseado na confirmacao da Meta (sent, delivered, read).
+                    A situação da campanha é baseada na confirmação da Meta.
                     Relatórios comerciais podem considerar critérios de entrega, leitura e categoria
-                    do template conforme a regra contratual aplicável.
+                    do modelo conforme a regra contratual aplicável.
                   </div>
 
                   {selectedCampaign.status === "draft" ? (
@@ -2274,7 +2259,7 @@ export default function AppCampaignsPage() {
                         <div>
                           <p className="text-sm font-semibold text-sky-100">Rascunho em revisao</p>
                           <p className="mt-1 text-xs text-sky-100/75">
-                            Este rascunho ainda nao enviou mensagens. Revise template e audiencia antes de iniciar.
+                            Este rascunho ainda não enviou mensagens. Revise modelo e público antes de iniciar.
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -2367,7 +2352,7 @@ export default function AppCampaignsPage() {
                                 <tr>
                                   <th className="px-3 py-2">Contato</th>
                                   <th className="px-3 py-2">Referência</th>
-                                  <th className="px-3 py-2">Status</th>
+                                  <th className="px-3 py-2">Situação</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -2396,7 +2381,7 @@ export default function AppCampaignsPage() {
                     <div>
                       <p className="text-sm font-semibold">Relatorio de consumo</p>
                       <p className="mt-1 text-xs text-white/60">
-                        Exporta CSV com status de entrega e criterio operacional de faturamento.
+                        Exporta CSV com situação de entrega e critério operacional de faturamento.
                       </p>
                     </div>
                     <button
@@ -2421,8 +2406,8 @@ export default function AppCampaignsPage() {
 
                   <div className="grid gap-2 md:grid-cols-2">
                     <p><span className="text-white/70">Nome:</span> {selectedCampaign.name || "(sem nome)"}</p>
-                    <p><span className="text-white/70">Template:</span> {selectedCampaign.templateName || "(sem template)"}</p>
-                    <p><span className="text-white/70">Total de destinatarios:</span> {selectedCampaign.totalRecipients}</p>
+                    <p><span className="text-white/70">Modelo:</span> {selectedCampaign.templateName || "(sem modelo)"}</p>
+                    <p><span className="text-white/70">Total de destinatários:</span> {selectedCampaign.totalRecipients}</p>
                     <p>
                       <span className="text-white/70">Atualizada em:</span> {formatDateTime(selectedCampaign.updatedAt)}
                       <span className="ml-2 text-xs text-white/60">({formatRelativeTime(selectedCampaign.updatedAt)})</span>
@@ -2435,7 +2420,7 @@ export default function AppCampaignsPage() {
 
                   <div className="rounded-md border border-white/10 bg-white/5">
                     <div className="border-b border-white/10 px-4 py-3">
-                      <h3 className="text-sm font-semibold">Status real por mensagem</h3>
+                      <h3 className="text-sm font-semibold">Situação real por mensagem</h3>
                     </div>
                     {selectedCampaign.messagesMetaStatus?.length ? (
                       <div className="overflow-x-auto">
@@ -2443,10 +2428,10 @@ export default function AppCampaignsPage() {
                           <thead className="bg-white/10 text-left">
                             <tr>
                               <th className="px-3 py-2">Referência</th>
-                              <th className="px-3 py-2">Status</th>
+                              <th className="px-3 py-2">Situação</th>
                               <th className="px-3 py-2">Categoria</th>
-                              <th className="px-3 py-2">Cobranca</th>
-                              <th className="px-3 py-2">Faturavel</th>
+                              <th className="px-3 py-2">Cobrança</th>
+                              <th className="px-3 py-2">Faturável</th>
                               <th className="px-3 py-2">Entrega</th>
                               <th className="px-3 py-2">Erro</th>
                             </tr>
@@ -2460,9 +2445,9 @@ export default function AppCampaignsPage() {
                                     {getMetaStatusLabel(item.status)}
                                   </span>
                                 </td>
-                                <td className="px-3 py-2">{item.pricingCategory || "-"}</td>
+                                <td className="px-3 py-2">{getMetaTemplateCategoryUxLabel(item.pricingCategory)}</td>
                                 <td className="px-3 py-2">{formatBillingValue(item.pricingBillable)}</td>
-                                <td className="px-3 py-2">{item.billable ? "sim" : "nao"}</td>
+                                <td className="px-3 py-2">{getBooleanUxLabel(item.billable)}</td>
                                 <td className="px-3 py-2 text-xs text-white/70">
                                   {item.deliveredAt ? formatDateTime(item.deliveredAt) : "-"}
                                 </td>
@@ -2480,7 +2465,7 @@ export default function AppCampaignsPage() {
                         </table>
                       </div>
                     ) : (
-                      <p className="px-4 py-3 text-sm text-white/70">Nenhum status detalhado da Meta disponivel ainda para esta campanha.</p>
+                      <p className="px-4 py-3 text-sm text-white/70">Nenhuma situação detalhada da Meta disponível ainda para esta campanha.</p>
                     )}
                   </div>
 

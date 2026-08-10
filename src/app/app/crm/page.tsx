@@ -23,6 +23,7 @@ import {
   updateAppCrmContactStatus,
 } from "@/lib/appClientApi";
 import { hasCapability } from "@/lib/appFeatures";
+import { getAppErrorUxMessage, getChannelUxLabel, getConversationStatusUxLabel } from "@/lib/appUxLabels";
 
 const PAGE_LIMIT = 50;
 
@@ -31,7 +32,7 @@ const CHANNEL_OPTIONS = [
   { value: "whatsapp", label: "WhatsApp" },
   { value: "instagram", label: "Instagram" },
   { value: "messenger", label: "Messenger" },
-  { value: "webchat", label: "Webchat" },
+  { value: "webchat", label: "Chat do site" },
   { value: "telegram", label: "Telegram" },
 ];
 
@@ -53,56 +54,35 @@ function formatNumber(value: number | undefined) {
 }
 
 function normalizeAppErrorMessage(error: AppApiError, fallback: string) {
-  if (error.status === 401) return "Sessao expirada. Faca login novamente.";
-  if (error.status === 403) return "CRM indisponivel para este usuario ou tenant.";
-  return error.message || fallback;
+  return getAppErrorUxMessage({
+    status: error.status,
+    errorCode: error.errorCode,
+    message: error.message,
+    fallback,
+  });
 }
 
 function getChannelLabel(channel: string | null) {
-  switch ((channel ?? "").toLowerCase()) {
-    case "whatsapp":
-      return "WhatsApp";
-    case "instagram":
-      return "Instagram";
-    case "messenger":
-      return "Messenger";
-    case "webchat":
-      return "Webchat";
-    case "telegram":
-      return "Telegram";
-    default:
-      return channel || "Canal";
-  }
+  return getChannelUxLabel(channel);
 }
 
 function getConversationStatusLabel(status: string | null) {
-  switch (status) {
-    case "WAITING":
-      return "Aguardando atendimento";
-    case "IN_PROGRESS":
-      return "Em atendimento";
-    case "WAITING_USER":
-      return "Aguardando cliente";
-    case "CLOSED":
-      return "Fechado";
-    default:
-      return status || "-";
-  }
+  return status ? getConversationStatusUxLabel(status as never) : "-";
 }
 
 function getTemplateHint(item: AppCrmContactItem) {
-  if (item.canStartWhatsappTemplateCandidate) return "Elegivel para template futuro";
+  if (item.canStartWhatsappTemplateCandidate) return "Pode receber modelo aprovado";
   switch (item.templateSendBlockedReason) {
     case "not_whatsapp":
-      return "Canal sem inicio ativo";
+      return "Canal sem envio ativo";
     case "missing_phone":
-      return "Sem telefone valido";
+      return "Sem telefone válido";
     case "opt_out":
-      return "Descadastrado";
+      return "Bloqueado para comunicações";
     case "unsupported_channel":
-      return "Canal nao suportado";
+      return "Canal não suportado";
     default:
-      return "Indisponivel";
+      return "Indisponível";
   }
 }
 
@@ -198,7 +178,6 @@ function CrmContactRow({
       </td>
       <td className="px-4 py-3">
         <div className="text-sm font-semibold text-white">{item.crmStatusLabel}</div>
-        <div className="mt-1 text-xs theme-muted">{item.crmStatus}</div>
       </td>
       <td className="px-4 py-3">
         {canOpenConversation ? (
@@ -216,7 +195,7 @@ function CrmContactRow({
           {getConversationStatusLabel(item.lastConversationStatus)}
         </div>
         <div className="mt-1 text-xs theme-muted">
-          {item.conversationsCount ? `${item.conversationsCount} conversa(s)` : "Nenhum historico"}
+          {item.conversationsCount ? `${item.conversationsCount} conversa(s)` : "Nenhum histórico"}
         </div>
       </td>
       <td className="px-4 py-3">
@@ -229,9 +208,9 @@ function CrmContactRow({
       <td className="px-4 py-3 text-right">
         <div className="flex justify-end gap-2">
           <ActionIconButton label="Abrir cadastro" icon="i" onClick={() => onOpenDetail(item)} />
-          <ActionIconButton label="Copiar referencia" icon="#" onClick={() => onCopyIdentifier(item)} />
+          <ActionIconButton label="Copiar referência" icon="#" onClick={() => onCopyIdentifier(item)} />
           <ActionIconButton
-            label="Abrir conversa no Inbox"
+            label="Abrir conversa na caixa de entrada"
             icon=">"
             onClick={() => onOpenConversation(item)}
             disabled={!canOpenConversation}
@@ -364,8 +343,8 @@ function CrmContactDetailDrawer({
   const toggleOptOut = async () => {
     if (!item) return;
     const message = item.activeOptOut
-      ? "Esta acao permitira novamente campanhas e templates aprovados para este contato, conforme as regras do canal e da Meta."
-      : "Esta acao bloqueara campanhas e templates iniciados pela empresa para este contato. O atendimento receptivo continuara permitido.";
+          ? "Esta ação permitirá novamente campanhas e modelos aprovados para este contato, conforme as regras do canal e da Meta."
+          : "Esta ação bloqueará campanhas e modelos iniciados pela empresa para este contato. O atendimento receptivo continuará permitido.";
     if (!window.confirm(message)) return;
     setActionLoading("opt-out");
     try {
@@ -446,7 +425,7 @@ function CrmContactDetailDrawer({
                 action={
                   <div className="flex items-center gap-2">
                     <ActionIconButton
-                      label="Copiar referencia"
+                      label="Copiar referência"
                       icon="#"
                       onClick={() => onCopyReference(item.phoneDisplay || item.identifierDisplay)}
                     />
@@ -546,25 +525,25 @@ function CrmContactDetailDrawer({
                 <div className="grid gap-x-5 gap-y-3 border-t border-white/10 pt-3 sm:grid-cols-2">
                   <DetailField label="Telefone/identificador" value={item.phoneDisplay || item.identifierDisplay} />
                   <DetailField label="Canal principal" value={getChannelLabel(item.channel)} />
-                  <DetailField label="Provider" value={item.provider} />
-                  <DetailField label="Classificacao CRM" value={item.crmStatusLabel} />
-                  <DetailField label="Codigo CRM" value={item.crmStatus} />
-                  <DetailField label="Lead status" value={item.leadStatus} />
+                  <DetailField label="Provedor" value={item.provider} />
+                  <DetailField label="Situação no CRM" value={item.crmStatusLabel} />
+                  <DetailField label="Código interno da situação" value={item.crmStatus} />
+                  <DetailField label="Andamento interno" value={item.leadStatus} />
                   <DetailField label="Bloqueio de envio ativo" value={item.activeOptOut ? "Ativo" : "Inativo"} />
-                  <DetailField label="Origem/importacao" value={item.importedSource} />
+                  <DetailField label="Origem/importação" value={item.importedSource} />
                   <DetailField label="Notas registradas" value={item.notesCount} />
-                  <DetailField label="Elegibilidade template" value={getTemplateHint(item)} />
+                  <DetailField label="Uso com modelo aprovado" value={getTemplateHint(item)} />
                   <DetailField label="Criado em" value={formatDateTime(item.createdAt)} />
                   <DetailField label="Atualizado em" value={formatDateTime(item.updatedAt)} />
-                  <DetailField label="Lead ID" value={item.leadId} />
-                  <DetailField label="Contact ID" value={item.contactId} />
+                  <DetailField label="ID interno do cadastro" value={item.leadId} />
+                  <DetailField label="ID interno do contato" value={item.contactId} />
                 </div>
               </DetailSection>
 
-              <DetailSection title="Preferencias e ciclo de vida">
+              <DetailSection title="Preferências e ciclo de vida">
                 <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
                   <label className="grid gap-1.5 text-sm">
-                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Classificacao CRM</span>
+                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Situação no CRM</span>
                     <select
                       value={item.crmStatus}
                       onChange={(event) => changeStatus(event.target.value)}
@@ -582,7 +561,7 @@ function CrmContactDetailDrawer({
                 </div>
                 <div className="grid gap-2 rounded-lg border border-white/10 p-3">
                   <p className="text-sm theme-muted">
-                    Impede campanhas e envio de templates iniciados pela empresa. O contato ainda podera enviar mensagens e ser atendido normalmente.
+                    Impede campanhas e envio de modelos iniciados pela empresa. O contato ainda poderá enviar mensagens e ser atendido normalmente.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <button
@@ -636,7 +615,7 @@ function CrmContactDetailDrawer({
                           </div>
                         </div>
                         <ActionIconButton
-                          label="Abrir conversa no Inbox"
+                          label="Abrir conversa na caixa de entrada"
                           icon=">"
                           onClick={() => onOpenInbox(conversation.conversationIdentity)}
                           variant="primary"
@@ -728,7 +707,7 @@ export default function AppCrmContactsPage() {
     setSession(stored);
     if (!hasCapability(stored, "crm")) {
       setLoading(false);
-      setError("CRM indisponivel para este tenant.");
+      setError("CRM indisponível para esta organização.");
       return;
     }
     let cancelled = false;
@@ -747,7 +726,7 @@ export default function AppCrmContactsPage() {
           handleUnauthorized();
           return;
         }
-        setError(normalizeAppErrorMessage(typed, "Nao foi possivel carregar contatos CRM."));
+        setError(normalizeAppErrorMessage(typed, "Não foi possível carregar os contatos."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -769,7 +748,7 @@ export default function AppCrmContactsPage() {
           handleUnauthorized();
           return;
         }
-        setError(normalizeAppErrorMessage(typed, "Nao foi possivel aplicar filtros."));
+        setError(normalizeAppErrorMessage(typed, "Não foi possível aplicar os filtros."));
       })
       .finally(() => setLoading(false));
   }, [handleUnauthorized, loadContacts, session]);
@@ -792,7 +771,7 @@ export default function AppCrmContactsPage() {
           handleUnauthorized();
           return;
         }
-        setError(normalizeAppErrorMessage(typed, "Nao foi possivel limpar filtros."));
+        setError(normalizeAppErrorMessage(typed, "Não foi possível limpar os filtros."));
       })
       .finally(() => setLoading(false));
   }, [handleUnauthorized, session]);
@@ -811,7 +790,7 @@ export default function AppCrmContactsPage() {
             handleUnauthorized();
             return;
           }
-          setError(normalizeAppErrorMessage(typed, "Nao foi possivel carregar a pagina."));
+          setError(normalizeAppErrorMessage(typed, "Não foi possível carregar a página."));
         })
         .finally(() => setLoading(false));
     },
@@ -834,7 +813,7 @@ export default function AppCrmContactsPage() {
             handleUnauthorized();
             return;
           }
-          setDetailError(normalizeAppErrorMessage(typed, "Nao foi possivel carregar o cadastro."));
+          setDetailError(normalizeAppErrorMessage(typed, "Não foi possível carregar o cadastro."));
         })
         .finally(() => setLoadingDetail(false));
     },
@@ -897,7 +876,7 @@ export default function AppCrmContactsPage() {
         const message = normalizeAppErrorMessage(typed, fallbackMessage);
         setDetailError(
           typed.errorCode === "status_not_configured"
-            ? "A classificacao selecionada nao esta ativa em Config. CRM."
+            ? "A situação selecionada não está ativa nas configurações do CRM."
             : message
         );
         setError(message);
@@ -915,7 +894,7 @@ export default function AppCrmContactsPage() {
       await mutateContactDetail(
         () => updateAppCrmContactBasics(session, leadId, payload),
         "Cadastro atualizado.",
-        "Nao foi possivel atualizar o cadastro."
+        "Não foi possível atualizar o cadastro."
       );
     },
     [mutateContactDetail, session]
@@ -926,8 +905,8 @@ export default function AppCrmContactsPage() {
       if (!session) return;
       await mutateContactDetail(
         () => updateAppCrmContactStatus(session, leadId, nextStatus),
-        "Classificacao atualizada.",
-        "Nao foi possivel atualizar a classificacao."
+        "Situação atualizada.",
+        "Não foi possível atualizar a situação."
       );
     },
     [mutateContactDetail, session]
@@ -939,7 +918,7 @@ export default function AppCrmContactsPage() {
       await mutateContactDetail(
         () => recordAppCrmContactOptOut(session, leadId),
         "Envio ativo bloqueado.",
-        "Nao foi possivel bloquear envio ativo."
+        "Não foi possível bloquear o envio ativo."
       );
     },
     [mutateContactDetail, session]
@@ -951,7 +930,7 @@ export default function AppCrmContactsPage() {
       await mutateContactDetail(
         () => revokeAppCrmContactOptOut(session, leadId),
         "Envio ativo liberado.",
-        "Nao foi possivel liberar envio ativo."
+        "Não foi possível liberar o envio ativo."
       );
     },
     [mutateContactDetail, session]
@@ -963,7 +942,7 @@ export default function AppCrmContactsPage() {
       await navigator.clipboard.writeText(value);
       setNotice("Referencia segura copiada.");
     } catch {
-      setError("Nao foi possivel copiar a referencia.");
+      setError("Não foi possível copiar a referência.");
     }
   }, []);
 
@@ -972,7 +951,7 @@ export default function AppCrmContactsPage() {
       await navigator.clipboard.writeText(value);
       setNotice("Referencia segura copiada.");
     } catch {
-      setError("Nao foi possivel copiar a referencia.");
+      setError("Não foi possível copiar a referência.");
     }
   }, []);
 
@@ -993,7 +972,7 @@ export default function AppCrmContactsPage() {
     <AppShell
       session={session}
       title="Contatos"
-      subtitle="Lista operacional de contatos e leads CRM por tenant."
+      subtitle="Lista operacional de contatos por organização."
       titleSurface="strong"
     >
       <section className="grid min-h-0 gap-4">
@@ -1091,10 +1070,10 @@ export default function AppCrmContactsPage() {
                   ? `${formatNumber(contacts.pagination.total)} contato(s) encontrados`
                   : "Carregando contatos"}
               </span>
-              <span className="text-xs theme-soft">Registros anonimizados ficam ocultos por padrao.</span>
+              <span className="text-xs theme-soft">Registros anonimizados ficam ocultos por padrão.</span>
               {contacts ? (
                 <span>
-                  Pagina {contacts.pagination.page} de {Math.max(contacts.pagination.totalPages, 1)}
+                  Página {contacts.pagination.page} de {Math.max(contacts.pagination.totalPages, 1)}
                 </span>
               ) : null}
             </div>
@@ -1104,8 +1083,8 @@ export default function AppCrmContactsPage() {
                   type="button"
                   onClick={() => goToPage(1)}
                   disabled={!contacts.pagination.hasPreviousPage || loading}
-                  title="Primeira pagina"
-                  aria-label="Primeira pagina"
+                  title="Primeira página"
+                  aria-label="Primeira página"
                   className="theme-nav-link inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {"<<"}
@@ -1114,21 +1093,21 @@ export default function AppCrmContactsPage() {
                   type="button"
                   onClick={() => goToPage(page - 1)}
                   disabled={!contacts.pagination.hasPreviousPage || loading}
-                  title="Pagina anterior"
-                  aria-label="Pagina anterior"
+                  title="Página anterior"
+                  aria-label="Página anterior"
                   className="theme-nav-link inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {"<"}
                 </button>
                 <span className="text-xs theme-muted">
-                  {formatNumber(contacts.items.length)} nesta pagina
+                  {formatNumber(contacts.items.length)} nesta página
                 </span>
                 <button
                   type="button"
                   onClick={() => goToPage(page + 1)}
                   disabled={!contacts.pagination.hasNextPage || loading}
-                  title="Proxima pagina"
-                  aria-label="Proxima pagina"
+                  title="Próxima página"
+                  aria-label="Próxima página"
                   className="theme-nav-link inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {">"}
@@ -1137,8 +1116,8 @@ export default function AppCrmContactsPage() {
                   type="button"
                   onClick={() => goToPage(Math.max(contacts.pagination.totalPages, 1))}
                   disabled={!contacts.pagination.hasNextPage || loading}
-                  title="Ultima pagina"
-                  aria-label="Ultima pagina"
+                  title="Última página"
+                  aria-label="Última página"
                   className="theme-nav-link inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {">>"}
@@ -1153,7 +1132,7 @@ export default function AppCrmContactsPage() {
           <CrmContactsSkeleton />
         ) : error && !contacts ? (
           <div className="theme-surface rounded-xl border p-8 text-center">
-            <h2 className="text-base font-semibold text-white">CRM indisponivel</h2>
+            <h2 className="text-base font-semibold text-white">CRM indisponível</h2>
             <p className="mx-auto mt-2 max-w-xl text-sm theme-muted">{error}</p>
             <button
               type="button"
@@ -1166,12 +1145,12 @@ export default function AppCrmContactsPage() {
         ) : contacts && contacts.items.length === 0 ? (
           <div className="theme-surface rounded-xl border p-8 text-center">
             <h2 className="text-base font-semibold text-white">
-              {emptyWithFilters ? "Nenhum contato encontrado" : "Nenhum contato CRM cadastrado"}
+              {emptyWithFilters ? "Nenhum contato encontrado" : "Nenhum contato cadastrado"}
             </h2>
             <p className="mx-auto mt-2 max-w-xl text-sm theme-muted">
               {emptyWithFilters
-                ? "Revise os filtros aplicados ou limpe a busca para ver toda a base disponivel."
-                : "Quando leads ou contatos forem criados pelo atendimento, importacao ou canais, eles aparecerao aqui."}
+                ? "Revise os filtros aplicados ou limpe a busca para ver toda a base disponível."
+                : "Quando contatos forem criados pelo atendimento, importação ou canais, eles aparecerão aqui."}
             </p>
           </div>
         ) : contacts ? (
@@ -1183,10 +1162,10 @@ export default function AppCrmContactsPage() {
                     <th className="px-4 py-3 font-semibold">Contato</th>
                     <th className="px-4 py-3 font-semibold">Empresa</th>
                     <th className="px-4 py-3 font-semibold">Canal</th>
-                    <th className="px-4 py-3 font-semibold">Situacao</th>
-                    <th className="px-4 py-3 font-semibold">Ultima conversa</th>
-                    <th className="px-4 py-3 font-semibold">Atualizacao</th>
-                    <th className="px-4 py-3 text-right font-semibold">Acoes</th>
+                    <th className="px-4 py-3 font-semibold">Situação</th>
+                    <th className="px-4 py-3 font-semibold">Última conversa</th>
+                    <th className="px-4 py-3 font-semibold">Atualização</th>
+                    <th className="px-4 py-3 text-right font-semibold">Ações</th>
                   </tr>
                 </thead>
                 <tbody>

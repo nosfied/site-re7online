@@ -28,6 +28,7 @@ import {
 } from "@/lib/appClientApi";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
+import { getMetaTemplateCategoryUxLabel, getMetaTemplateStatusUxLabel } from "@/lib/appUxLabels";
 
 type TemplateRequestFormState = {
   name: string;
@@ -122,32 +123,7 @@ function getStatusClasses(status: string) {
 }
 
 function getStatusLabel(status: string) {
-  switch (status.toLowerCase()) {
-    case "requested":
-    case "review_started":
-      return "Em análise pela Re7online";
-    case "adjustment_requested":
-      return "Ajustes solicitados";
-    case "internal_approved":
-      return "Aprovado internamente";
-    case "submitted_to_meta":
-      return "Submetido à Meta";
-    case "approved_meta":
-      return "Aprovado pela Meta";
-    case "rejected_meta":
-      return "Rejeitado pela Meta";
-    case "submitting":
-    case "pending":
-      return "Em analise";
-    case "approved":
-      return "Aprovado";
-    case "rejected":
-      return "Rejeitado";
-    case "failed":
-      return "Falha";
-    default:
-      return status;
-  }
+  return getMetaTemplateStatusUxLabel(status);
 }
 
 function getTemplateLifecycleBucket(status: string) {
@@ -292,10 +268,10 @@ function TemplateWhatsappPreview({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-semibold text-white/85">Prévia no WhatsApp</p>
-          <p className="mt-1 text-xs text-white/50">{templateName || "template_sem_nome"}</p>
+          <p className="mt-1 text-xs text-white/50">{templateName || "Modelo sem nome"}</p>
         </div>
         <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
-          <span className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-white/75">{category || "UTILITY"}</span>
+          <span className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-white/75">{getMetaTemplateCategoryUxLabel(category || "UTILITY")}</span>
           <span className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-white/75">{language || "pt_BR"}</span>
           <span className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-white/75">{getStatusLabel(status || "draft")}</span>
         </div>
@@ -380,7 +356,7 @@ function buildCatalogItems(templates: AppTemplateItem[], requests: AppTemplateRe
       canUseInCampaign: false,
       canUseInInbox: false,
       blockedReason: isTemplateRequestPendingLike(request.status) ? "pending_review" : "not_approved",
-      blockedReasonLabel: isTemplateRequestPendingLike(request.status) ? "Em analise" : "Nao aprovado",
+      blockedReasonLabel: isTemplateRequestPendingLike(request.status) ? "Em análise" : "Não aprovado",
       lastSyncedAt: null,
       updatedAt: request.createdAt,
       createdAt: request.createdAt,
@@ -439,10 +415,10 @@ function getTemplateReason(item: Pick<AppTemplateItem, "status" | "rejectionReas
   if (item.rejectionReason) return item.rejectionReason;
   const normalizedStatus = item.status.toLowerCase();
   if (normalizedStatus === "submitting" || normalizedStatus === "pending") {
-    return "Em analise pela Meta";
+    return "Em análise pela Meta";
   }
   if (normalizedStatus === "failed") {
-    return "Falha ao enviar para analise";
+    return "Falha ao enviar para análise";
   }
   return "-";
 }
@@ -455,7 +431,7 @@ function getTemplateRecategorizationLabel(
   }
   return {
     badge: "Recategorizado pela Meta",
-    detail: `${item.submittedCategory} -> ${item.category}`,
+    detail: `${getMetaTemplateCategoryUxLabel(item.submittedCategory)} -> ${getMetaTemplateCategoryUxLabel(item.category)}`,
   };
 }
 
@@ -497,10 +473,10 @@ export default function AppTemplatesPage() {
   const formWarnings = useMemo(() => {
     const warnings: string[] = [];
     if (form.category === "MARKETING") {
-      warnings.push("Templates de marketing exigem revisão mais criteriosa e consentimento adequado.");
+      warnings.push("Modelos de marketing exigem revisão mais criteriosa e consentimento adequado.");
     }
     if (form.category === "UTILITY" && looksPromotional(form.content)) {
-      warnings.push("O conteúdo parece promocional. Revise se UTILITY é a categoria correta.");
+      warnings.push("O conteúdo parece promocional. Revise se Utilidade é a categoria correta.");
     }
     return warnings;
   }, [form.category, form.content]);
@@ -667,7 +643,7 @@ export default function AppTemplatesPage() {
           handleUnauthorized();
           return;
         }
-        setError(err.message || "Erro ao carregar templates.");
+        setError(err.message || "Não foi possível carregar modelos de mensagem.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -734,11 +710,11 @@ export default function AppTemplatesPage() {
         isTemplateRequestPendingLike(item.status)
     );
     if (hasPendingRequest && !canReuseFailedTemplate) {
-      setFormError("Ja existe um template com esse nome em analise.");
+      setFormError("Já existe um modelo com esse nome em análise.");
       return;
     }
     if (conflictingTemplate && !canReuseFailedTemplate) {
-      setFormError("Ja existe um template com esse nome.");
+      setFormError("Já existe um modelo com esse nome.");
       return;
     }
 
@@ -764,7 +740,7 @@ export default function AppTemplatesPage() {
       setSuccess(
         response.notification?.delivered === false
           ? "Solicitação criada, mas a notificação interna por e-mail não pôde ser enviada."
-          : "Solicitação enviada para análise da Re7online. Você poderá acompanhar o status nesta tela."
+          : "Solicitação enviada para análise da Re7online. Você poderá acompanhar a situação nesta tela."
       );
     } catch (err) {
       const typed = err as AppApiError;
@@ -801,27 +777,27 @@ export default function AppTemplatesPage() {
       if (recoveredAfterReload) {
         setForm(EMPTY_FORM);
         setIsRequestDrawerOpen(false);
-        setSuccess("Solicitação enviada para análise da Re7online. Você poderá acompanhar o status nesta tela.");
+        setSuccess("Solicitação enviada para análise da Re7online. Você poderá acompanhar a situação nesta tela.");
         return;
       }
       if (isNetworkTimeoutLikeError(typed)) {
         setFormError(
-          "O envio pode ter sido concluido. Atualizando a lista para verificar o status..."
+          "O envio pode ter sido concluído. Atualizando a lista para verificar a situação..."
         );
         return;
       }
       if (typed.errorCode === "template_already_pending") {
-        setFormError("Ja existe um template com esse nome em analise.");
+        setFormError("Já existe um modelo com esse nome em análise.");
         return;
       }
       if (typed.errorCode === "template_name_exists") {
-        setFormError("Ja existe um template com esse nome.");
+        setFormError("Já existe um modelo com esse nome.");
         return;
       }
       setFormError(
         typed.message ||
           typed.details ||
-          "Nao foi possivel processar o template. Tente novamente."
+          "Não foi possível processar o modelo. Tente novamente."
       );
     } finally {
       setSubmitting(false);
@@ -864,10 +840,10 @@ export default function AppTemplatesPage() {
         setHighlightedTemplateId(response.template.id);
         setSuccess(
           categoryChanged
-            ? "Status atualizado. A Meta recategorizou este template."
+            ? "Situação atualizada. A Meta recategorizou este modelo."
             : response.template.status.toLowerCase() === "approved"
-              ? "Template reconciliado com a Meta."
-            : "Status atualizado com sucesso."
+              ? "Modelo reconciliado com a Meta."
+            : "Situação atualizada com sucesso."
         );
         window.setTimeout(() => setHighlightedTemplateId((current) => (current === response.template.id ? null : current)), 2500);
       } catch (err) {
@@ -876,7 +852,7 @@ export default function AppTemplatesPage() {
           handleUnauthorized();
           return;
         }
-        setError(typed.message || typed.details || "Erro ao atualizar status do template.");
+        setError(typed.message || typed.details || "Não foi possível atualizar a situação do modelo.");
       } finally {
         setSyncingTemplateId(null);
       }
@@ -891,7 +867,7 @@ export default function AppTemplatesPage() {
         setError("Esta solicitação já foi submetida à Meta e não pode ser cancelada por aqui.");
         return;
       }
-      if (!window.confirm("Cancelar esta solicitação de template? O registro será mantido para auditoria.")) {
+      if (!window.confirm("Cancelar esta solicitação de modelo? O registro será mantido para auditoria.")) {
         return;
       }
       setError(null);
@@ -909,7 +885,7 @@ export default function AppTemplatesPage() {
           handleUnauthorized();
           return;
         }
-        setError(typed.message || typed.details || "Nao foi possivel cancelar a solicitacao.");
+        setError(typed.message || typed.details || "Não foi possível cancelar a solicitação.");
       } finally {
         setSyncingTemplateId(null);
       }
@@ -943,7 +919,7 @@ export default function AppTemplatesPage() {
           handleUnauthorized();
           return;
         }
-        setError(typed.message || typed.details || "Nao foi possivel atualizar a disponibilidade local do modelo.");
+        setError(typed.message || typed.details || "Não foi possível atualizar a disponibilidade local do modelo.");
       } finally {
         setSyncingTemplateId(null);
       }
@@ -970,10 +946,10 @@ export default function AppTemplatesPage() {
         return;
       }
       if (typed.errorCode === "meta_config_missing") {
-        setError("Configuracao Meta ausente para sincronizar templates neste tenant.");
+        setError("Configuração Meta ausente para sincronizar modelos nesta organização.");
         return;
       }
-      setError(typed.message || typed.details || "Erro ao sincronizar templates com a Meta.");
+      setError(typed.message || typed.details || "Não foi possível sincronizar modelos com a Meta.");
     } finally {
       setSyncingAll(false);
     }
@@ -1025,7 +1001,7 @@ export default function AppTemplatesPage() {
           handleUnauthorized();
           return;
         }
-        setCannedError(typed.message || typed.details || "Nao foi possivel salvar a mensagem pronta.");
+        setCannedError(typed.message || typed.details || "Não foi possível salvar a mensagem pronta.");
       } finally {
         setCannedSubmitting(false);
       }
@@ -1055,7 +1031,7 @@ export default function AppTemplatesPage() {
           handleUnauthorized();
           return;
         }
-        setCannedError(typed.message || typed.details || "Nao foi possivel alterar a mensagem pronta.");
+        setCannedError(typed.message || typed.details || "Não foi possível alterar a mensagem pronta.");
       } finally {
         setCannedActionId(null);
       }
@@ -1069,7 +1045,7 @@ export default function AppTemplatesPage() {
     <AppShell
       session={session}
       title="Modelos de mensagem"
-      subtitle="Templates aprovados pela Meta para campanhas e retomadas fora da janela de 24h."
+      subtitle="Modelos aprovados pela Meta para campanhas e retomadas fora da janela de 24h."
     >
       <FeedbackToast message={success} onClose={() => setSuccess(null)} />
       <FeedbackToast message={error} variant="error" onClose={() => setError(null)} />
@@ -1135,7 +1111,7 @@ export default function AppTemplatesPage() {
               <div>
                 <h2 className="text-sm font-semibold">Mensagens prontas</h2>
                 <p className="mt-1 max-w-3xl text-xs leading-relaxed text-white/60">
-                  Textos internos para respostas rápidas dentro da janela de atendimento. Não são templates Meta e não reabrem conversa fora da janela de 24h.
+                  Textos internos para respostas rápidas dentro da janela de atendimento. Não são modelos Meta e não reabrem conversa fora da janela de 24h.
                 </p>
               </div>
               <label className="grid min-w-[min(100%,20rem)] gap-1 text-xs text-white/70">
@@ -1149,7 +1125,7 @@ export default function AppTemplatesPage() {
               </label>
             </div>
             <p className="mt-3 rounded-lg border border-amber-300/20 bg-amber-900/15 px-3 py-2 text-xs text-amber-100">
-              Mensagem pronta é enviada como texto livre/service. A cobrança depende da entrega e da política vigente da Meta.
+              Mensagem pronta é enviada como texto comum dentro da regra do canal. A cobrança depende da entrega e da política vigente da Meta.
             </p>
           </div>
 
@@ -1337,7 +1313,7 @@ export default function AppTemplatesPage() {
                 />
               </label>
               <label className="grid gap-1 text-xs text-white/70">
-                Status
+                Situação
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value)}
@@ -1358,7 +1334,7 @@ export default function AppTemplatesPage() {
                 >
                   <option value="all">Todas</option>
                   {categoryOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
+                    <option key={option} value={option}>{getMetaTemplateCategoryUxLabel(option)}</option>
                   ))}
                 </select>
               </label>
@@ -1411,7 +1387,7 @@ export default function AppTemplatesPage() {
                     <th className="px-3 py-2">Modelo</th>
                     <th className="px-3 py-2">Categoria</th>
                     <th className="px-3 py-2">Meta</th>
-                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Situação</th>
                     <th className="px-3 py-2">Campanha</th>
                     <th className="px-3 py-2">Atualização</th>
                     <th className="px-3 py-2">Ação</th>
@@ -1441,12 +1417,12 @@ export default function AppTemplatesPage() {
                         ) : null}
                       </td>
                       <td className="px-3 py-2">
-                        <p className="text-white/85">{item.requestedCategory || item.submittedCategory || item.category}</p>
+                        <p className="text-white/85">{getMetaTemplateCategoryUxLabel(item.requestedCategory || item.submittedCategory || item.category)}</p>
                         <p className="text-xs text-white/45">solicitada</p>
                       </td>
                       <td className="px-3 py-2">
                         <p className={item.categoryChanged ? "font-semibold text-amber-100" : "text-white/85"}>
-                          {item.effectiveCategory || item.category}
+                          {getMetaTemplateCategoryUxLabel(item.effectiveCategory || item.category)}
                         </p>
                         {item.categoryChanged ? <p className="text-xs text-amber-200">recategorizado</p> : <p className="text-xs text-white/45">efetiva</p>}
                       </td>
@@ -1519,7 +1495,7 @@ export default function AppTemplatesPage() {
             <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
               <div>
                 <h2 className="text-lg font-semibold">Detalhes do modelo</h2>
-                <p className="mt-1 text-xs text-white/55">Status, categoria, variáveis e prévia da mensagem.</p>
+                <p className="mt-1 text-xs text-white/55">Situação, categoria, variáveis e prévia da mensagem.</p>
               </div>
               <button
                 type="button"
@@ -1545,12 +1521,12 @@ export default function AppTemplatesPage() {
                       </div>
                       <p className={`mt-3 rounded-md border px-3 py-2 text-xs ${selectedItem.canUseInCampaign ? "border-emerald-300/25 bg-emerald-900/20 text-emerald-100" : "border-amber-300/25 bg-amber-900/20 text-amber-100"}`}>
                         {selectedItem.canUseInCampaign ? "Pode ser usado em campanhas." : "Ainda não pode ser usado em campanhas."}
-                        {selectedItem.locallyDisabled ? " O status Meta foi preservado; o bloqueio é apenas local." : ""}
+                        {selectedItem.locallyDisabled ? " A situação na Meta foi preservada; o bloqueio é apenas local." : ""}
                       </p>
                     </div>
                     <div className="grid gap-2 rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white/75 sm:grid-cols-2">
-                      <p><span className="block text-xs uppercase text-white/40">Categoria solicitada</span>{selectedItem.requestedCategory || selectedItem.submittedCategory || selectedItem.category}</p>
-                      <p><span className="block text-xs uppercase text-white/40">Categoria Meta/efetiva</span>{selectedItem.effectiveCategory || selectedItem.category}</p>
+                      <p><span className="block text-xs uppercase text-white/40">Categoria solicitada</span>{getMetaTemplateCategoryUxLabel(selectedItem.requestedCategory || selectedItem.submittedCategory || selectedItem.category)}</p>
+                      <p><span className="block text-xs uppercase text-white/40">Categoria na Meta</span>{getMetaTemplateCategoryUxLabel(selectedItem.effectiveCategory || selectedItem.category)}</p>
                       <p><span className="block text-xs uppercase text-white/40">Idioma</span>{selectedItem.language}</p>
                       <p><span className="block text-xs uppercase text-white/40">Atualizado</span>{formatDateTime(selectedItem.updatedAt)}</p>
                       <p><span className="block text-xs uppercase text-white/40">Última sincronização</span>{selectedItem.lastSyncedAt ? formatDateTime(selectedItem.lastSyncedAt) : "Não sincronizado"}</p>
@@ -1561,11 +1537,11 @@ export default function AppTemplatesPage() {
                         {selectedItem.categoryChanged ? (
                           <p className="font-semibold">
                             {selectedItem.categoryChangeLabel ||
-                              `A Meta classificou este template como ${selectedItem.effectiveCategory || selectedItem.category}, diferente da categoria solicitada ${selectedItem.requestedCategory || selectedItem.submittedCategory}.`}
+                              `A Meta classificou este modelo como ${getMetaTemplateCategoryUxLabel(selectedItem.effectiveCategory || selectedItem.category)}, diferente da categoria solicitada ${getMetaTemplateCategoryUxLabel(selectedItem.requestedCategory || selectedItem.submittedCategory)}.`}
                           </p>
                         ) : null}
                         {(selectedItem.effectiveCategory || selectedItem.category) === "MARKETING" ? (
-                          <p className="mt-1">Templates de Marketing podem ter custo e regras diferentes. Use com cautela.</p>
+                          <p className="mt-1">Modelos de Marketing podem ter custo e regras diferentes. Use com cautela.</p>
                         ) : null}
                       </div>
                     ) : null}
@@ -1611,7 +1587,7 @@ export default function AppTemplatesPage() {
                         <p className="text-xs font-semibold uppercase text-white/50">Disponibilidade local</p>
                         <p className="mt-2 text-sm text-white/65">
                           {selectedItem.locallyDisabled
-                            ? "Inativo no Converta. Continua no catálogo e preserva o status da Meta, mas não aparece em campanhas ou envios pela plataforma."
+                            ? "Inativo no Converta. Continua no catálogo e preserva a situação na Meta, mas não aparece em campanhas ou envios pela plataforma."
                             : "Ativo no Converta quando também estiver aprovado e com componentes válidos na Meta."}
                         </p>
                         <button
@@ -1636,7 +1612,7 @@ export default function AppTemplatesPage() {
                     language={selectedItem.language}
                     status={selectedItem.status}
                     templateName={selectedItem.displayName}
-                    emptyText="Este template não possui corpo textual registrado."
+                    emptyText="Este modelo não possui corpo textual registrado."
                   />
                 </div>
               ) : (
@@ -1690,7 +1666,7 @@ export default function AppTemplatesPage() {
                           className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none focus:border-re7-sky/50"
                         >
                           {CATEGORY_OPTIONS.map((option) => (
-                            <option key={option} value={option}>{option}</option>
+                            <option key={option} value={option}>{getMetaTemplateCategoryUxLabel(option)}</option>
                           ))}
                         </select>
                       </label>
@@ -1777,7 +1753,7 @@ export default function AppTemplatesPage() {
                         category={form.category}
                         language={form.language}
                         status="requested"
-                        templateName={form.name || "nova_solicitacao"}
+                        templateName={form.name || "Nova solicitação"}
                         emptyText="A prévia aparecerá conforme você preencher a mensagem e os exemplos das variáveis."
                       />
                     </div>
@@ -1785,7 +1761,7 @@ export default function AppTemplatesPage() {
                   <section className="rounded-lg border border-white/10 bg-white/5 p-4">
                     <p className="text-xs font-semibold uppercase text-re7-sky">5. Envio</p>
                     <p className="mt-2 text-sm text-white/65">
-                      Solicitação enviada. Acompanhe o status nesta tela.
+                      Solicitação enviada. Acompanhe a situação nesta tela.
                     </p>
                     {formError ? (
                       <p className="mt-3 rounded-lg border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">{formError}</p>
