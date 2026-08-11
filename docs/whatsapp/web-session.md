@@ -1,9 +1,10 @@
 # WhatsApp web session transport design
 
-Status: Sprint 88B audit/design only.
+Status: Sprint 88C executable foundation, not tenant-operational.
 
-No runtime is implemented in this document. It does not install Baileys, create a QR flow,
-create a session, change PM2, enable a tenant, send messages or alter production.
+This document covers the WEB_SESSION foundation. It installs a pinned Baileys dependency and
+adds storage, lifecycle, advisory lock and worker skeleton code. It does not create an admin QR
+flow, create a real session, change PM2, enable a tenant, send messages or alter production.
 
 ## Decision summary
 
@@ -315,7 +316,11 @@ Rotation:
 
 ## Dependency decision
 
-For 88C, if implementation proceeds:
+88C installs:
+
+- `@whiskeysockets/baileys@7.0.0-rc13`, pinned exactly.
+
+Operational constraints:
 
 - prefer `@whiskeysockets/baileys` pinned to a stable tagged release;
 - do not use `github:WhiskeySockets/Baileys` in production;
@@ -323,9 +328,9 @@ For 88C, if implementation proceeds:
 - set Baileys logger to silent or a strict sanitizer;
 - treat 7.x as the supported line.
 
-Local audit at 88B found:
+Local audit at 88C found:
 
-- Baileys not installed;
+- Baileys installed as a direct backend dependency;
 - no Chromium/Puppeteer dependency added by this work;
 - Node local version `v22.13.0`;
 - app TypeScript/runtime is ESM-compatible.
@@ -340,21 +345,33 @@ SECULT must remain unaffected in 88B and 88C unless separately authorized:
 - do not change WABA/Meta config;
 - do not route campaigns/templates to WEB_SESSION.
 
-## 88C implementation plan
+## 88C implementation status
 
-Recommended next sprint order:
+Implemented foundation:
 
-1. Add a small storage helper around `ChannelAccountSecret` for encrypted
-   `baileysAuthState.v1` snapshots.
-2. Add tests for encrypt/decrypt, missing key, corrupt ciphertext, tenant isolation and
-   snapshot update atomicity.
-3. Add worker skeleton with no dependency side effects unless feature/env explicitly enabled.
-4. Add advisory lock helper and tests.
-5. Add admin/readiness endpoints for account status and QR request, returning sanitized data.
-6. Install pinned Baileys only when the worker skeleton and storage contract are ready.
-7. Implement QR connect for a local/test tenant only.
-8. Persist inbound messages through a WEB_SESSION-specific persistence helper.
-9. Keep outbound disabled until inbound, disconnect and restore are validated.
-10. Add deployment runbook with PM2 process disabled by default.
+1. Shared AES-256-GCM helper for `ChannelAccountSecret` encryption/decryption.
+2. `ChannelAccountSecret.secretKind=baileysAuthState.v1` storage helper for encrypted auth
+   snapshots.
+3. Tenant/provider-scoped lookup for `channel=whatsapp` and `provider=web_session`.
+4. PostgreSQL advisory lock helper keyed by `ChannelAccount.id`.
+5. Lifecycle metadata helper for desired/observed state, reconnect counters and safe backoff.
+6. In-memory QR store with TTL; QR is intentionally not durable.
+7. Dedicated worker entrypoint `worker:whatsapp-web-session`.
+8. Eligibility gates requiring active tenant, `whatsappWebSession=true`, enabled account,
+   runtime enabled, supported account status and `desiredState=CONNECTED`.
+9. Minimal Baileys socket factory with terminal QR disabled and silent logging.
 
-Readiness for 88C: ready for storage/helper/worker skeleton; not ready for tenant activation.
+Still not implemented:
+
+- production PM2 worker activation;
+- admin QR endpoint/UI;
+- real pairing against a tenant;
+- inbound persistence;
+- outbound sending;
+- media/replies;
+- templates/campaigns;
+- billing/ledger integration;
+- tenant rollout.
+
+Readiness after 88C: ready for a first administrative connection endpoint/smoke in 88D after
+explicit tenant and environment approval; not ready for production traffic.

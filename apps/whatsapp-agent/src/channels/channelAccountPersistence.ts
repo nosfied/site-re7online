@@ -1,7 +1,12 @@
-import crypto from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import type { TenantChannelAccount } from "./tenantChannelAccount.types.js";
 import { mapDbChannelAccountToTenantAccount } from "./channelAccountDbFirst.js";
+import {
+  CHANNEL_ACCOUNT_SECRET_KEY_REF,
+  encryptChannelAccountSecret,
+  getChannelAccountSecretKey,
+  hashChannelAccountSecret,
+} from "./channelAccountSecretCrypto.js";
 
 type UpsertTenantChannelAccountParams = {
   prisma: PrismaClient;
@@ -15,22 +20,8 @@ type ReplaceTenantChannelAccountsParams = {
   accounts: TenantChannelAccount[];
 };
 
-function secretHash(value: string) {
-  return crypto.createHash("sha256").update(value, "utf8").digest("hex");
-}
-
 function getEncryptionKey() {
-  const value = process.env.CHANNEL_ACCOUNT_SECRET_KEY?.trim();
-  if (!value) return null;
-  return crypto.createHash("sha256").update(value, "utf8").digest();
-}
-
-function encryptSecret(value: string, key: Buffer) {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-  const ciphertext = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `v1:${iv.toString("base64")}:${tag.toString("base64")}:${ciphertext.toString("base64")}`;
+  return getChannelAccountSecretKey();
 }
 
 function jsonOrNull(value: unknown) {
@@ -166,7 +157,8 @@ export async function upsertTenantChannelAccountToDb(params: UpsertTenantChannel
     const encryptionKey = getEncryptionKey();
     if (!encryptionKey) throw new Error("channel_account_secret_key_missing");
     for (const secret of secrets) {
-      const encrypted = encryptSecret(secret.value, encryptionKey);
+      const encrypted = encryptChannelAccountSecret(secret.value);
+      if (!encrypted) throw new Error("channel_account_secret_key_missing");
       await params.prisma.channelAccountSecret.upsert({
         where: {
           channelAccountId_secretKind: {
@@ -177,15 +169,15 @@ export async function upsertTenantChannelAccountToDb(params: UpsertTenantChannel
         create: {
           channelAccountId: upserted.id,
           secretKind: secret.kind,
-          secretHash: secretHash(secret.value),
+          secretHash: hashChannelAccountSecret(secret.value),
           secretCiphertext: encrypted,
-          encryptionKeyRef: "CHANNEL_ACCOUNT_SECRET_KEY",
+          encryptionKeyRef: CHANNEL_ACCOUNT_SECRET_KEY_REF,
           status: "configured",
         },
         update: {
-          secretHash: secretHash(secret.value),
+          secretHash: hashChannelAccountSecret(secret.value),
           secretCiphertext: encrypted,
-          encryptionKeyRef: "CHANNEL_ACCOUNT_SECRET_KEY",
+          encryptionKeyRef: CHANNEL_ACCOUNT_SECRET_KEY_REF,
           status: "configured",
         },
       });

@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { logger } from "../logger/logger.js";
 import type { Channel, Provider } from "./channel.types.js";
@@ -11,6 +10,8 @@ import {
   setCachedChannelAccountWithSecret,
 } from "./channelAccountRuntimeCache.js";
 import { channelLatencyNow, type ChannelLatencyProfiler } from "./channelLatencyProfiler.js";
+import { decryptChannelAccountSecret } from "./channelAccountSecretCrypto.js";
+export { decryptChannelAccountSecret } from "./channelAccountSecretCrypto.js";
 
 type DbChannelAccount = {
   channel: string;
@@ -33,8 +34,6 @@ type DbChannelAccount = {
   aliases: Array<{ alias: string }>;
   secrets?: Array<{ secretKind: string; secretCiphertext: string | null; status: string }>;
 };
-
-const SECRET_PREFIX = "v1:";
 
 function normalizeIdentifier(value: unknown) {
   return typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
@@ -68,31 +67,6 @@ function dbMatchType(account: DbChannelAccount, channelAccountId: string) {
   if (account.channelAccountId === channelAccountId) return "primary" as const;
   if (account.aliases.some((alias) => alias.alias === channelAccountId)) return "alias" as const;
   return null;
-}
-
-function getSecretKey(secret = process.env.CHANNEL_ACCOUNT_SECRET_KEY ?? "") {
-  const normalized = secret.trim();
-  if (!normalized) return null;
-  return crypto.createHash("sha256").update(normalized, "utf8").digest();
-}
-
-export function decryptChannelAccountSecret(ciphertext: string | null | undefined, secret?: string) {
-  const raw = ciphertext?.trim();
-  const key = getSecretKey(secret);
-  if (!raw || !raw.startsWith(SECRET_PREFIX) || !key) return null;
-  const parts = raw.slice(SECRET_PREFIX.length).split(":");
-  if (parts.length !== 3) return null;
-  try {
-    const [ivRaw, tagRaw, encryptedRaw] = parts;
-    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(ivRaw, "base64"));
-    decipher.setAuthTag(Buffer.from(tagRaw, "base64"));
-    return Buffer.concat([
-      decipher.update(Buffer.from(encryptedRaw, "base64")),
-      decipher.final(),
-    ]).toString("utf8").trim() || null;
-  } catch {
-    return null;
-  }
 }
 
 export function mapDbChannelAccountToTenantAccount(params: {

@@ -14,16 +14,21 @@ The only operational WhatsApp transport is Meta Cloud API:
 
 ## Future transport placeholder
 
-`provider=web_session` is reserved for a future WhatsApp Web style transport. In this sprint it is a disabled foundation only:
+`provider=web_session` is reserved for a future WhatsApp Web style transport. As of Sprint 88C
+it has an executable foundation only:
 
-- no library is installed;
-- no QR code flow exists;
+- `@whiskeysockets/baileys` is installed and pinned in the backend package;
+- encrypted auth-state storage helpers exist;
+- advisory locking and a worker entrypoint exist;
+- no QR code endpoint/UI exists;
 - no session is created;
-- no worker process exists;
+- no production worker process is configured;
 - no tenant is enabled automatically;
 - no outbound send falls back from `web_session` to Meta.
 
-The tenant feature flag is `whatsappWebSession`, default `false`. Even when present, `web_session` remains unavailable until a real runtime is implemented.
+The tenant feature flag is `whatsappWebSession`, default `false`. Even when present,
+`web_session` remains unavailable for normal operations until administrative connection,
+inbound and outbound flows are implemented and explicitly enabled.
 
 ## Capability model
 
