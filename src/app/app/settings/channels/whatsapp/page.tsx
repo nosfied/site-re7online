@@ -204,7 +204,9 @@ export default function AppWhatsAppChannelSettingsPage() {
   const readOnly = useMemo(() => !session || !canUpdateChannels(session.user.role) || !canUpdate, [canUpdate, session]);
 
   const lifecycle = status?.lifecycle;
-  const currentState = lifecycle?.observedState ?? "DISCONNECTED";
+  const desiredState = lifecycle?.desiredState ?? "DISCONNECTED";
+  const observedState = lifecycle?.observedState ?? "DISCONNECTED";
+  const currentState = desiredState === "DISCONNECTED" ? "DISCONNECTED" : observedState;
   const isConfigured = Boolean(status?.configured);
   const isConnected = currentState === "CONNECTED";
   const isDisconnected = currentState === "DISCONNECTED";

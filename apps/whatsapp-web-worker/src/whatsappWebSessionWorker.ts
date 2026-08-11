@@ -273,6 +273,17 @@ async function recordWebSessionWorkerEvent(params: {
   }
 }
 
+async function isWebSessionStillRequested(params: {
+  prisma: WorkerPrismaClient;
+  accountId: string;
+}) {
+  const account = await params.prisma.channelAccount.findUnique({
+    where: { id: params.accountId },
+    select: { runtimeEnabled: true, metadata: true },
+  });
+  return Boolean(account?.runtimeEnabled && isWebSessionConnectRequested(account.metadata));
+}
+
 export function isEligibleWebSessionAccount(account: ChannelAccountRecord) {
   if (account.client.status !== "ACTIVE") return false;
   if (getFeatures(account.client).whatsappWebSession !== true) return false;
@@ -537,6 +548,10 @@ async function connectWebSessionAccount(params: {
     logger,
     onQr: async (qr) => {
       clearConnectionOpenTimer();
+      if (!await isWebSessionStillRequested({ prisma: params.prisma, accountId: params.account.id })) {
+        clearWebSessionQrForRuntime(params.account.id);
+        return;
+      }
       setWebSessionQrForRuntime({ accountId: params.account.id, qr });
       await markWebSessionRuntimeState({
         prisma: params.prisma,
@@ -652,6 +667,17 @@ async function connectWebSessionAccount(params: {
       }
       const classification = classifyWebSessionDisconnect(reason);
       clearWebSessionQrForRuntime(params.account.id);
+      if (!await isWebSessionStillRequested({ prisma: params.prisma, accountId: params.account.id })) {
+        await markWebSessionRuntimeState({
+          prisma: params.prisma,
+          accountId: params.account.id,
+          observedState: "DISCONNECTED",
+          status: "disconnected",
+          errorCode: classification,
+        });
+        await finishTerminal();
+        return;
+      }
       await markWebSessionRuntimeState({
         prisma: params.prisma,
         accountId: params.account.id,
