@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import QRCode from "qrcode";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
@@ -91,6 +92,7 @@ export default function AppWhatsAppChannelSettingsPage() {
   const [canUpdate, setCanUpdate] = useState(false);
   const [displayName, setDisplayName] = useState("WhatsApp Business");
   const [qr, setQr] = useState<string | null>(null);
+  const [qrImage, setQrImage] = useState<string | null>(null);
   const [qrExpired, setQrExpired] = useState(false);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState<string | null>(null);
@@ -154,6 +156,35 @@ export default function AppWhatsAppChannelSettingsPage() {
     };
   }, [handleUnauthorized, loadStatus, session]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!qr) {
+      setQrImage(null);
+      return;
+    }
+    QRCode.toDataURL(qr, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      scale: 7,
+      color: {
+        dark: "#06152b",
+        light: "#ffffff",
+      },
+    })
+      .then((dataUrl) => {
+        if (!cancelled) setQrImage(dataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQrImage(null);
+          setError("Código recebido, mas não foi possível gerar a imagem para leitura.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [qr]);
+
   const readOnly = useMemo(() => !session || !canUpdateChannels(session.user.role) || !canUpdate, [canUpdate, session]);
 
   const runAction = async (
@@ -172,6 +203,7 @@ export default function AppWhatsAppChannelSettingsPage() {
       if (action === "disconnect") setSuccess("Conexão interrompida sem apagar a sessão salva.");
       if (action === "reset") {
         setQr(null);
+        setQrImage(null);
         setQrExpired(false);
         setSuccess("Sessão redefinida. Uma nova conexão exigirá novo código.");
       }
@@ -341,12 +373,28 @@ export default function AppWhatsAppChannelSettingsPage() {
             </div>
             <div className="rounded-lg border border-white/10 bg-re7-navy/60 p-3">
               {qr ? (
-                <textarea
-                  readOnly
-                  value={qr}
-                  aria-label="Código efêmero de conexão WhatsApp"
-                  className="h-40 w-full resize-none rounded-md border border-white/15 bg-re7-navy p-3 font-mono text-xs text-white outline-none"
-                />
+                <div className="space-y-3">
+                  <div className="flex min-h-72 items-center justify-center rounded-md border border-white/15 bg-white p-4">
+                    {qrImage ? (
+                      <img
+                        src={qrImage}
+                        alt="Código QR efêmero para conectar WhatsApp Business"
+                        className="h-auto w-full max-w-72"
+                      />
+                    ) : (
+                      <p className="text-center text-sm text-re7-navy/70">Gerando imagem do código...</p>
+                    )}
+                  </div>
+                  <details className="rounded-md border border-white/10 bg-re7-navy/70 p-3 text-xs text-white/65">
+                    <summary className="cursor-pointer font-semibold text-white/80">Ver payload técnico</summary>
+                    <textarea
+                      readOnly
+                      value={qr}
+                      aria-label="Payload técnico efêmero de conexão WhatsApp"
+                      className="mt-3 h-24 w-full resize-none rounded-md border border-white/15 bg-re7-navy p-3 font-mono text-[11px] text-white outline-none"
+                    />
+                  </details>
+                </div>
               ) : (
                 <div className="flex min-h-40 items-center justify-center rounded-md border border-dashed border-white/15 bg-re7-navy/70 p-4 text-center text-sm text-white/60">
                   {qrExpired ? "Código expirado. Gere um novo código." : "Solicite a conexão e consulte o código quando o worker estiver ativo."}

@@ -11,12 +11,14 @@
   "dependencies": {
     "framer-motion": "^12.29.2",
     "next": "16.1.5",
+    "qrcode": "^1.5.4",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@types/dotenv": "^6.1.1",
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.20",
