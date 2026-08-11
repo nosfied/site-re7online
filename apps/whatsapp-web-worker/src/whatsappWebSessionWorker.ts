@@ -67,6 +67,14 @@ const activeConnections = new Map<string, ActiveConnection>();
 const DEFAULT_CONNECTION_OPEN_TIMEOUT_MS = 30_000;
 const STALE_ACTIVE_CONNECTING_TIMEOUT_MS = 45_000;
 
+export function connectionOpenTimeoutRuntimeState() {
+  return {
+    observedState: "RECONNECTING" as const,
+    status: "pending" as const,
+    errorCode: "connection_open_timeout",
+  };
+}
+
 function eventRequestId(account: EligibleWebSessionAccount, eventName: string) {
   return `web-session-worker:${account.id}:${eventName}:${Date.now()}`;
 }
@@ -177,9 +185,7 @@ async function reconcileActiveWebSessionConnections(prisma: WorkerPrismaClient) 
       await markWebSessionRuntimeState({
         prisma,
         accountId,
-        observedState: "ERROR",
-        status: "error",
-        errorCode: "connection_open_timeout",
+        ...connectionOpenTimeoutRuntimeState(),
       });
       logger.warn({
         event: "whatsapp.web.session.active_timeout",
@@ -290,6 +296,7 @@ async function connectWebSessionAccount(params: {
   let terminalHandled = false;
   let socket: Awaited<ReturnType<typeof createBaileysSocket>> | null = null;
   let connectionOpenTimer: ReturnType<typeof setTimeout> | null = null;
+  let closingAfterConnectionOpenTimeout = false;
   let inboundCutoverAt: Date | null = null;
   const clearConnectionOpenTimer = () => {
     if (!connectionOpenTimer) return;
@@ -337,9 +344,7 @@ async function connectWebSessionAccount(params: {
       await markWebSessionRuntimeState({
         prisma: params.prisma,
         accountId: params.account.id,
-        observedState: "ERROR",
-        status: "error",
-        errorCode: "connection_open_timeout",
+        ...connectionOpenTimeoutRuntimeState(),
       });
       await recordWebSessionWorkerEvent({
         prisma: params.prisma,
@@ -353,6 +358,7 @@ async function connectWebSessionAccount(params: {
           reason: "connection_open_timeout",
         },
       });
+      closingAfterConnectionOpenTimeout = true;
       closeSocket();
       await finishTerminal();
     })();
@@ -418,6 +424,10 @@ async function connectWebSessionAccount(params: {
     },
     onDisconnected: async (reason) => {
       clearConnectionOpenTimer();
+      if (closingAfterConnectionOpenTimeout) {
+        await finishTerminal();
+        return;
+      }
       const classification = classifyWebSessionDisconnect(reason);
       clearWebSessionQrForRuntime(params.account.id);
       await markWebSessionRuntimeState({

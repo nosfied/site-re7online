@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  connectionOpenTimeoutRuntimeState,
   isTransientConnectingState,
   isEligibleWebSessionAccount,
   listEligibleWebSessionAccounts,
@@ -86,4 +87,24 @@ test("web session worker identifies only transient active connection states", ()
   assert.equal(isTransientConnectingState(account({
     metadata: { webSession: { desiredState: "CONNECTED", observedState: "CONNECTED" } },
   }) as never), false);
+});
+
+test("web session worker keeps connection timeout retryable", () => {
+  const timeoutState = connectionOpenTimeoutRuntimeState();
+  assert.equal(timeoutState.observedState, "RECONNECTING");
+  assert.equal(timeoutState.status, "pending");
+  assert.equal(timeoutState.errorCode, "connection_open_timeout");
+  assert.equal(
+    isEligibleWebSessionAccount(account({
+      status: timeoutState.status,
+      metadata: {
+        webSession: {
+          desiredState: "CONNECTED",
+          observedState: timeoutState.observedState,
+          lastErrorCode: timeoutState.errorCode,
+        },
+      },
+    }) as never),
+    true
+  );
 });
