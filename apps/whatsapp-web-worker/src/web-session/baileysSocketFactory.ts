@@ -12,6 +12,7 @@ type BaileysSocketFactoryParams = {
 type BaileysModuleLike = {
   default?: (params: Record<string, unknown>) => BaileysSocketLike;
   makeWASocket?: (params: Record<string, unknown>) => BaileysSocketLike;
+  fetchLatestBaileysVersion?: () => Promise<{ version: unknown }>;
   Browsers?: {
     ubuntu?: (browserName: string) => unknown;
   };
@@ -41,7 +42,7 @@ export async function createBaileysSocket(params: BaileysSocketFactoryParams) {
   return createBaileysSocketFromModule(module as unknown as BaileysModuleLike, params);
 }
 
-export function createBaileysSocketFromModule(
+export async function createBaileysSocketFromModule(
   module: BaileysModuleLike,
   params: BaileysSocketFactoryParams
 ) {
@@ -52,7 +53,11 @@ export function createBaileysSocketFromModule(
   const browser =
     module.Browsers?.ubuntu?.(params.browserName ?? "Converta Web Session") ??
     ["Converta", "Chrome", "1.0.0"];
+  const version = module.fetchLatestBaileysVersion
+    ? (await module.fetchLatestBaileysVersion()).version
+    : undefined;
   const socket = makeWASocket({
+    ...(version ? { version } : {}),
     auth: params.authState as never,
     browser,
     printQRInTerminal: false,

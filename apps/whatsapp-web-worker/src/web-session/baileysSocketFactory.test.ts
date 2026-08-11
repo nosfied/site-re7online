@@ -20,11 +20,12 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
       calls.push(params);
       return socket;
     },
+    fetchLatestBaileysVersion: async () => ({ version: [2, 3000, 123456789] }),
   };
   const qrValues: string[] = [];
   let credentialsUpdated = false;
 
-  const result = createBaileysSocketFromModule(module, {
+  const result = await createBaileysSocketFromModule(module, {
     authState: { creds: "redacted" },
     browserName: "Converta Lab",
     onQr: (qr) => qrValues.push(qr),
@@ -38,6 +39,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   assert.equal(calls[0]?.printQRInTerminal, false);
   assert.equal(calls[0]?.markOnlineOnConnect, false);
   assert.equal(calls[0]?.syncFullHistory, false);
+  assert.deepEqual(calls[0]?.version, [2, 3000, 123456789]);
   assert.deepEqual(calls[0]?.browser, ["Ubuntu", "Converta Lab", "1.0.0"]);
   assert.equal(handlers.has("connection.update"), true);
   assert.equal(handlers.has("creds.update"), true);
