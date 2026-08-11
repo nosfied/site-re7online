@@ -3,6 +3,7 @@ import type { SerializedWebSessionAuthState } from "../../../whatsapp-agent/src/
 type BaileysSocketFactoryParams = {
   authState: unknown;
   browserName?: string;
+  logger?: BaileysLoggerLike;
   onQr?: (qr: string) => void;
   onConnected?: () => void;
   onDisconnected?: (reason: unknown) => void;
@@ -12,6 +13,16 @@ type BaileysSocketFactoryParams = {
   onMessagesUpdate?: (event: BaileysMessagesUpdateEvent) => Promise<void> | void;
   onSocketNode?: (event: BaileysSocketNodeEvent) => Promise<void> | void;
   onEventBatch?: (events: Record<string, unknown>) => Promise<void> | void;
+};
+
+type BaileysLoggerLike = {
+  trace?: (payload: unknown, message?: string) => void;
+  debug?: (payload: unknown, message?: string) => void;
+  info?: (payload: unknown, message?: string) => void;
+  warn?: (payload: unknown, message?: string) => void;
+  error?: (payload: unknown, message?: string) => void;
+  fatal?: (payload: unknown, message?: string) => void;
+  child?: (bindings?: unknown) => BaileysLoggerLike;
 };
 
 export type BaileysMessagesUpsertEvent = {
@@ -75,6 +86,43 @@ const silentLogger = {
   },
 };
 
+function sanitizeLogPayload(payload: unknown) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return { payloadType: typeof payload };
+  }
+  const record = payload as Record<string, unknown>;
+  const error = record.error ?? record.err ?? record.ackErr;
+  return {
+    keys: Object.keys(record).sort(),
+    errorName: error instanceof Error ? error.name : null,
+    errorMessage: error instanceof Error ? error.message : typeof error === "string" ? error : null,
+  };
+}
+
+function createBaileysLogger(logger?: BaileysLoggerLike): BaileysLoggerLike {
+  if (!logger) return silentLogger;
+  const write = (level: "warn" | "error" | "fatal") => (payload: unknown, message?: string) => {
+    logger[level]?.({
+      event: "whatsapp.web.baileys.log",
+      level,
+      message: typeof message === "string" ? message : typeof payload === "string" ? payload : null,
+      ...sanitizeLogPayload(payload),
+    });
+  };
+  return {
+    level: "warn",
+    trace() {},
+    debug() {},
+    info() {},
+    warn: write("warn"),
+    error: write("error"),
+    fatal: write("fatal"),
+    child() {
+      return createBaileysLogger(logger);
+    },
+  } as BaileysLoggerLike;
+}
+
 export async function createBaileysSocket(params: BaileysSocketFactoryParams) {
   const module = await import("@whiskeysockets/baileys");
   return createBaileysSocketFromModule(module as unknown as BaileysModuleLike, params);
@@ -100,7 +148,7 @@ export async function createBaileysSocketFromModule(
     auth: params.authState as never,
     browser,
     printQRInTerminal: false,
-    logger: silentLogger as never,
+    logger: createBaileysLogger(params.logger) as never,
     markOnlineOnConnect: true,
     syncFullHistory: false,
   });

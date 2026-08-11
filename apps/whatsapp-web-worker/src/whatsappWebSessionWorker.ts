@@ -373,6 +373,7 @@ async function connectWebSessionAccount(params: {
   }, DEFAULT_CONNECTION_OPEN_TIMEOUT_MS);
   socket = await createBaileysSocket({
     authState: auth.state,
+    logger,
     onQr: async (qr) => {
       clearConnectionOpenTimer();
       setWebSessionQrForRuntime({ accountId: params.account.id, qr });
