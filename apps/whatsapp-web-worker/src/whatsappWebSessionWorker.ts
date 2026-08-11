@@ -16,7 +16,7 @@ import {
   setWebSessionQrForRuntime,
 } from "../../whatsapp-agent/src/web-session/webSessionConnectionRuntime.js";
 import { createBaileysAuthState } from "./web-session/baileysAuthState.js";
-import { createBaileysSocket } from "./web-session/baileysSocketFactory.js";
+import { closeBaileysSocket, createBaileysSocket } from "./web-session/baileysSocketFactory.js";
 
 export type EligibleWebSessionAccount = {
   id: string;
@@ -46,6 +46,9 @@ type ChannelAccountRecord = {
 };
 
 type ActiveConnection = {
+  tenantKey: string;
+  channelAccountId: string;
+  close?: () => void;
   release: () => Promise<void>;
 };
 
@@ -124,6 +127,44 @@ export async function listEligibleWebSessionAccounts(prisma: WorkerPrismaClient)
     } satisfies EligibleWebSessionAccount));
 }
 
+export function shouldKeepActiveWebSessionConnection(account: ChannelAccountRecord) {
+  return isEligibleWebSessionAccount(account);
+}
+
+async function reconcileActiveWebSessionConnections(prisma: WorkerPrismaClient) {
+  const accountIds = Array.from(activeConnections.keys());
+  if (accountIds.length === 0) return;
+  const accounts = await prisma.channelAccount.findMany({
+    where: { id: { in: accountIds } },
+    include: {
+      client: {
+        select: {
+          id: true,
+          clientKey: true,
+          status: true,
+          features: true,
+          profile: true,
+        },
+      },
+    },
+  }) as ChannelAccountRecord[];
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+  for (const accountId of accountIds) {
+    const active = activeConnections.get(accountId);
+    if (!active) continue;
+    const account = accountById.get(accountId);
+    if (account && shouldKeepActiveWebSessionConnection(account)) continue;
+    activeConnections.delete(accountId);
+    active.close?.();
+    await active.release();
+    logger.info({
+      event: "whatsapp.web.session.active_stopped",
+      tenantKey: active.tenantKey,
+      channelAccountId: active.channelAccountId,
+    });
+  }
+}
+
 export async function runWhatsAppWebSessionWorker(params: {
   prisma?: WorkerPrismaClient;
   once?: boolean;
@@ -135,6 +176,7 @@ export async function runWhatsAppWebSessionWorker(params: {
   logger.info({ event: "whatsapp.web.worker.started" });
 
   do {
+    await reconcileActiveWebSessionConnections(prisma);
     const accounts = await listEligibleWebSessionAccounts(prisma);
     if (accounts.length === 0) {
       logger.info({ event: "whatsapp.web.worker.idle", eligibleAccounts: 0 });
@@ -158,6 +200,8 @@ export async function runWhatsAppWebSessionWorker(params: {
           observedState: account.lifecycle.observedState,
         });
         activeConnections.set(account.id, {
+          tenantKey: account.tenantKey,
+          channelAccountId: account.channelAccountId,
           release: async () => {
             await lock.release();
           },
@@ -235,7 +279,7 @@ async function connectWebSessionAccount(params: {
       channelAccountId: params.account.channelAccountId,
     },
   });
-  createBaileysSocket({
+  const socket = await createBaileysSocket({
     authState: auth.state,
     onQr: async (qr) => {
       setWebSessionQrForRuntime({ accountId: params.account.id, qr });
@@ -319,4 +363,8 @@ async function connectWebSessionAccount(params: {
     });
     await params.onTerminal();
   });
+  const active = activeConnections.get(params.account.id);
+  if (active) {
+    active.close = () => closeBaileysSocket(socket);
+  }
 }

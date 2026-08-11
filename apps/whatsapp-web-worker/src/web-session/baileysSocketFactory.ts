@@ -22,6 +22,10 @@ type BaileysSocketLike = {
   ev: {
     on: (eventName: string, handler: (...args: never[]) => unknown) => void;
   };
+  end?: (error?: Error) => void;
+  ws?: {
+    close?: () => void;
+  };
 };
 
 const silentLogger = {
@@ -74,4 +78,14 @@ export async function createBaileysSocketFromModule(
     await params.onCredentialsUpdate?.(update ?? {});
   });
   return socket;
+}
+
+export function closeBaileysSocket(socket: BaileysSocketLike) {
+  if (typeof socket.end === "function") {
+    socket.end(new Error("web_session_admin_disconnect"));
+    return;
+  }
+  if (typeof socket.ws?.close === "function") {
+    socket.ws.close();
+  }
 }

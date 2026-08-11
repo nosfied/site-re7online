@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   isEligibleWebSessionAccount,
   listEligibleWebSessionAccounts,
+  shouldKeepActiveWebSessionConnection,
 } from "./whatsappWebSessionWorker.js";
 
 function account(overrides: Record<string, unknown> = {}) {
@@ -51,4 +52,22 @@ test("web session worker finds only future eligible web session account", async 
   assert.equal(result.length, 1);
   assert.equal(result[0]?.tenantKey, "tenant-a");
   assert.equal(result[0]?.channelAccountId, "session-a");
+});
+
+test("web session worker stops active connection when admin requests disconnect", () => {
+  assert.equal(shouldKeepActiveWebSessionConnection(account() as never), true);
+  assert.equal(
+    shouldKeepActiveWebSessionConnection(account({
+      runtimeEnabled: false,
+      status: "disconnected",
+      metadata: { webSession: { desiredState: "DISCONNECTED", observedState: "DISCONNECTED" } },
+    }) as never),
+    false
+  );
+  assert.equal(
+    shouldKeepActiveWebSessionConnection(account({
+      metadata: { webSession: { desiredState: "DISCONNECTED", observedState: "DISCONNECTED" } },
+    }) as never),
+    false
+  );
 });
