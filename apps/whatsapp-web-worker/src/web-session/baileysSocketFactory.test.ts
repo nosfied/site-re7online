@@ -10,6 +10,9 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
       on(eventName: string, handler: (...args: never[]) => unknown) {
         handlers.set(eventName, handler);
       },
+      process(handler: (events: Record<string, unknown>) => unknown) {
+        handlers.set("process", handler as (...args: never[]) => unknown);
+      },
     },
   };
   const module = {
@@ -25,6 +28,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   const qrValues: string[] = [];
   let credentialsUpdated = false;
   let upsertType = "";
+  let batchKeys: string[] = [];
 
   const result = await createBaileysSocketFromModule(module, {
     authState: { creds: "redacted" },
@@ -35,6 +39,9 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
     },
     onMessagesUpsert: (event) => {
       upsertType = event.type ?? "";
+    },
+    onEventBatch: (events) => {
+      batchKeys = Object.keys(events);
     },
   });
 
@@ -48,12 +55,15 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   assert.equal(handlers.has("connection.update"), true);
   assert.equal(handlers.has("creds.update"), true);
   assert.equal(handlers.has("messages.upsert"), true);
+  assert.equal(handlers.has("process"), true);
 
   handlers.get("connection.update")?.({ qr: "qr-payload" } as never);
   await handlers.get("creds.update")?.();
   await handlers.get("messages.upsert")?.({ type: "notify", messages: [] } as never);
+  await handlers.get("process")?.({ "messages.upsert": { messages: [] } } as never);
 
   assert.deepEqual(qrValues, ["qr-payload"]);
   assert.equal(credentialsUpdated, true);
   assert.equal(upsertType, "notify");
+  assert.deepEqual(batchKeys, ["messages.upsert"]);
 });

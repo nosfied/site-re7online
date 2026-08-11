@@ -399,6 +399,19 @@ async function connectWebSessionAccount(params: {
         cutoverAt: inboundCutoverAt,
       });
     },
+    onEventBatch: async (events) => {
+      const eventNames = Object.keys(events).sort();
+      if (eventNames.length === 0) return;
+      logger.info({
+        event: "whatsapp.web.event_batch",
+        tenantKey: params.account.tenantKey,
+        channelAccountId: params.account.channelAccountId,
+        eventNames,
+        messagesUpsertCount: Array.isArray((events as { "messages.upsert"?: { messages?: unknown[] } })["messages.upsert"]?.messages)
+          ? (events as { "messages.upsert"?: { messages?: unknown[] } })["messages.upsert"]?.messages?.length
+          : null,
+      });
+    },
     onConnected: async () => {
       clearConnectionOpenTimer();
       inboundCutoverAt = new Date();

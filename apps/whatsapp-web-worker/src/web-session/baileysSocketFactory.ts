@@ -8,6 +8,7 @@ type BaileysSocketFactoryParams = {
   onDisconnected?: (reason: unknown) => void;
   onCredentialsUpdate?: (state: SerializedWebSessionAuthState) => Promise<void> | void;
   onMessagesUpsert?: (event: BaileysMessagesUpsertEvent) => Promise<void> | void;
+  onEventBatch?: (events: Record<string, unknown>) => Promise<void> | void;
 };
 
 export type BaileysMessagesUpsertEvent = {
@@ -27,6 +28,7 @@ type BaileysModuleLike = {
 type BaileysSocketLike = {
   ev: {
     on: (eventName: string, handler: (...args: never[]) => unknown) => void;
+    process?: (handler: (events: Record<string, unknown>) => unknown) => unknown;
   };
   end?: (error?: Error) => void;
   ws?: {
@@ -86,6 +88,11 @@ export async function createBaileysSocketFromModule(
   socket.ev.on("messages.upsert", async (event: BaileysMessagesUpsertEvent) => {
     await params.onMessagesUpsert?.(event ?? {});
   });
+  if (typeof socket.ev.process === "function") {
+    socket.ev.process(async (events: Record<string, unknown>) => {
+      await params.onEventBatch?.(events ?? {});
+    });
+  }
   return socket;
 }
 
