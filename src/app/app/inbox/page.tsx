@@ -1831,7 +1831,7 @@ function canSendInboxText(
   channel: InboxChannel,
   item: Pick<InboxConversationItem, "channelOutboundEnabled" | "provider"> | null
 ) {
-  if (channel === "whatsapp" && item?.provider === "web_session") return false;
+  if (channel === "whatsapp" && item?.provider === "web_session") return item.channelOutboundEnabled === true;
   if (channel === "whatsapp") return true;
   if (channel === "support") return true;
   return item?.channelOutboundEnabled === true;
@@ -1852,7 +1852,7 @@ function getInboxTextOutboundDisabledMessage(
   item?: Pick<InboxConversationItem, "provider"> | null
 ) {
   if (channel === "whatsapp" && item?.provider === "web_session") {
-    return "Envio por este canal será habilitado na próxima etapa.";
+    return "Este canal está temporariamente desconectado.";
   }
   switch (channel) {
     case "webchat":
@@ -1872,7 +1872,7 @@ function getInboxTextOutboundDisabledMessage(
 
 function getInboxMediaOutboundDisabledMessage(channel: InboxChannel, item?: Pick<InboxConversationItem, "provider"> | null) {
   if (channel === "whatsapp" && item?.provider === "web_session") {
-    return "Envio por este canal será habilitado na próxima etapa.";
+    return "Envio de mídia não está disponível para WhatsApp por sessão nesta etapa.";
   }
   if (channel === "support") return "Envio de mídia ainda não está habilitado para suporte interno.";
   if (channel === "webchat") return "Envio de mídia ainda não está habilitado para Chat do site.";

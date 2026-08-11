@@ -64,11 +64,12 @@ type BaileysModuleLike = {
   };
 };
 
-type BaileysSocketLike = {
+export type BaileysSocketLike = {
   ev: {
     on: (eventName: string, handler: (...args: never[]) => unknown) => void;
     process?: (handler: (events: Record<string, unknown>) => unknown) => unknown;
   };
+  sendMessage?: (jid: string, content: { text: string }) => Promise<unknown>;
   end?: (error?: Error) => void;
   ws?: {
     on?: (eventName: string, handler: (node: unknown) => unknown) => void;

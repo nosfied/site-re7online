@@ -6,6 +6,8 @@ import {
   isEligibleWebSessionAccount,
   listEligibleWebSessionAccounts,
   resolveWebSessionSenderJid,
+  sendTextViaActiveWebSession,
+  setActiveWebSessionConnectionForTesting,
   shouldKeepActiveWebSessionConnection,
 } from "./whatsappWebSessionWorker.js";
 
@@ -127,4 +129,81 @@ test("web session worker resolves LID sender through persisted reverse mapping",
 
   assert.equal(resolved, "5584999997784@s.whatsapp.net");
   assert.deepEqual(requested, [{ type: "lid-mapping", ids: ["123456789012345_reverse"] }]);
+});
+
+test("web session worker sends text through an active socket", async (t) => {
+  const sent: Array<{ jid: string; text: string }> = [];
+  setActiveWebSessionConnectionForTesting("account-a", {
+    tenantKey: "tenant-a",
+    channelAccountId: "session-a",
+    startedAtMs: Date.now(),
+    socket: {
+      ev: { on() {} },
+      sendMessage: async (jid, content) => {
+        sent.push({ jid, text: content.text });
+        return { key: { id: "baileys-message-id" } };
+      },
+    },
+    release: async () => {},
+  });
+  t.after(() => setActiveWebSessionConnectionForTesting("account-a", null));
+  const prisma = {
+    channelAccount: {
+      findFirst: async () => account({
+        metadata: {
+          webSession: {
+            desiredState: "CONNECTED",
+            observedState: "CONNECTED",
+          },
+        },
+      }),
+    },
+  };
+
+  const result = await sendTextViaActiveWebSession({
+    prisma: prisma as never,
+    clientId: "client-a",
+    tenantKey: "tenant-a",
+    accountId: "account-a",
+    channelAccountId: "session-a",
+    recipientWaId: "5584999997784",
+    text: "Mensagem de teste",
+    requestId: "request-a",
+  });
+
+  assert.deepEqual(result, { ok: true, externalMessageId: "baileys-message-id" });
+  assert.deepEqual(sent, [{ jid: "5584999997784@s.whatsapp.net", text: "Mensagem de teste" }]);
+});
+
+test("web session worker refuses text when no active socket is available", async () => {
+  setActiveWebSessionConnectionForTesting("account-a", null);
+  const prisma = {
+    channelAccount: {
+      findFirst: async () => account({
+        metadata: {
+          webSession: {
+            desiredState: "CONNECTED",
+            observedState: "CONNECTED",
+          },
+        },
+      }),
+    },
+  };
+
+  const result = await sendTextViaActiveWebSession({
+    prisma: prisma as never,
+    clientId: "client-a",
+    tenantKey: "tenant-a",
+    accountId: "account-a",
+    channelAccountId: "session-a",
+    recipientWaId: "5584999997784",
+    text: "Mensagem de teste",
+    requestId: "request-b",
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    statusCode: 503,
+    error: "web_session_worker_not_connected",
+  });
 });

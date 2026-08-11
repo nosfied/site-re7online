@@ -408,6 +408,10 @@ export async function persistConversationWindow(params: {
 export async function persistOutboundMessage(params: {
   clientId: string;
   phoneNumberId?: string;
+  channel?: string | null;
+  provider?: string | null;
+  channelAccountId?: string | null;
+  externalMessageId?: string | null;
   waId: string;
   waIdCanonical?: string | null;
   messageId?: string | null;
@@ -427,6 +431,10 @@ export async function persistOutboundMessage(params: {
     const data = {
       clientId: params.clientId,
       phoneNumberId: params.phoneNumberId,
+      channel: params.channel ?? undefined,
+      provider: params.provider ?? undefined,
+      channelAccountId: params.channelAccountId ?? undefined,
+      externalMessageId: params.externalMessageId ?? undefined,
       waId: params.waId,
       waIdCanonical: params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
       messageId: params.messageId ?? undefined,

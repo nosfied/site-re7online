@@ -2,6 +2,20 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { logger } from "../../whatsapp-agent/src/logger/logger.js";
 import { getWebSessionQrFromRuntime } from "../../whatsapp-agent/src/web-session/webSessionConnectionRuntime.js";
 
+export type WebSessionControlSendTextParams = {
+  clientId: string;
+  tenantKey: string;
+  accountId: string;
+  channelAccountId: string;
+  recipientWaId: string;
+  text: string;
+  requestId: string;
+};
+
+export type WebSessionControlSendTextResult =
+  | { ok: true; externalMessageId: string | null }
+  | { ok: false; statusCode: number; error: string; message?: string };
+
 function json(res: ServerResponse, status: number, body: Record<string, unknown>) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
@@ -20,32 +34,96 @@ function getQrAccountId(pathname: string) {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
+async function readJsonBody(req: IncomingMessage, maxBytes = 16_384) {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > maxBytes) throw new Error("payload_too_large");
+    chunks.push(buffer);
+  }
+  if (chunks.length === 0) return {};
+  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
+}
+
+function parseSendTextBody(body: Record<string, unknown>): WebSessionControlSendTextParams | null {
+  const clientId = typeof body.clientId === "string" ? body.clientId.trim() : "";
+  const tenantKey = typeof body.tenantKey === "string" ? body.tenantKey.trim() : "";
+  const accountId = typeof body.accountId === "string" ? body.accountId.trim() : "";
+  const channelAccountId = typeof body.channelAccountId === "string" ? body.channelAccountId.trim() : "";
+  const recipientWaId = typeof body.recipientWaId === "string" ? body.recipientWaId.trim() : "";
+  const text = typeof body.text === "string" ? body.text.trim() : "";
+  const requestId = typeof body.requestId === "string" ? body.requestId.trim() : "";
+  if (!clientId || !tenantKey || !accountId || !channelAccountId || !recipientWaId || !text || !requestId) {
+    return null;
+  }
+  return { clientId, tenantKey, accountId, channelAccountId, recipientWaId, text, requestId };
+}
+
 export function startWebSessionControlServer(params: {
   port: number;
   host?: string;
   token?: string;
+  sendText?: (params: WebSessionControlSendTextParams) => Promise<WebSessionControlSendTextResult>;
 }) {
   const host = params.host ?? "127.0.0.1";
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
-    if (req.method !== "GET") {
-      json(res, 405, { ok: false, error: "method_not_allowed" });
-      return;
-    }
     if (!hasValidToken(req, params.token)) {
       json(res, 401, { ok: false, error: "unauthorized" });
       return;
     }
-    if (url.pathname === "/health") {
+    if (url.pathname === "/health" && req.method === "GET") {
       json(res, 200, { ok: true });
       return;
     }
-    const accountId = getQrAccountId(url.pathname);
-    if (!accountId) {
+    const accountId = req.method === "GET" ? getQrAccountId(url.pathname) : null;
+    if (accountId) {
+      json(res, 200, { ok: true, qr: getWebSessionQrFromRuntime(accountId) });
+      return;
+    }
+    if (url.pathname === "/web-session/send-text" && req.method === "POST") {
+      void (async () => {
+        if (!params.sendText) {
+          json(res, 503, { ok: false, error: "send_text_unavailable" });
+          return;
+        }
+        let parsed: WebSessionControlSendTextParams | null = null;
+        try {
+          parsed = parseSendTextBody(await readJsonBody(req));
+        } catch {
+          json(res, 400, { ok: false, error: "invalid_json" });
+          return;
+        }
+        if (!parsed) {
+          json(res, 400, { ok: false, error: "bad_request" });
+          return;
+        }
+        const result = await params.sendText(parsed);
+        if (!result.ok) {
+          json(res, result.statusCode, { ok: false, error: result.error, message: result.message });
+          return;
+        }
+        json(res, 200, { ok: true, externalMessageId: result.externalMessageId });
+      })().catch((error) => {
+        logger.error({
+          event: "whatsapp.web.worker.control.send_text_error",
+          message: error instanceof Error ? error.message : "unknown_error",
+        });
+        json(res, 500, { ok: false, error: "server_error" });
+      });
+      return;
+    }
+    if (req.method !== "GET" && req.method !== "POST") {
+      json(res, 405, { ok: false, error: "method_not_allowed" });
+      return;
+    }
+    if (url.pathname !== "/health") {
       json(res, 404, { ok: false, error: "not_found" });
       return;
     }
-    json(res, 200, { ok: true, qr: getWebSessionQrFromRuntime(accountId) });
+    json(res, 405, { ok: false, error: "method_not_allowed" });
   });
   server.listen(params.port, host, () => {
     logger.info({

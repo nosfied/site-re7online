@@ -50,6 +50,16 @@ const META_CLOUD_CAPABILITIES: WhatsAppTransportCapabilities = {
   metaUsageLedger: true,
 };
 
+const WEB_SESSION_CAPABILITIES: WhatsAppTransportCapabilities = {
+  text: true,
+  media: false,
+  contextualReply: false,
+  templates: false,
+  campaigns: false,
+  metaDeliveryStatus: false,
+  metaUsageLedger: false,
+};
+
 export function normalizeWhatsAppTransportProvider(value: unknown): WhatsAppTransportProvider | null {
   return value === "meta" || value === "web_session" ? value : null;
 }
@@ -92,8 +102,8 @@ export function resolveWhatsAppTransportCapabilities(params: {
   return {
     ok: true,
     provider,
-    available: false,
-    reason: "runtime_not_implemented",
-    capabilities: { ...NO_CAPABILITIES },
+    available: true,
+    reason: "available",
+    capabilities: { ...WEB_SESSION_CAPABILITIES },
   };
 }

@@ -183,6 +183,10 @@ import {
   resetWebSession,
   serializeWebSessionStatus,
 } from "../web-session/webSessionConnectionAdmin.js";
+import {
+  createWebSessionTextOutboundMessage,
+  isWebSessionTextOutboundReady,
+} from "../web-session/webSessionOutboundService.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
 import {
   normalizeUserRole,
@@ -4565,7 +4569,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       if (resolvedChannelFields.provider === "web_session") {
-        json(res, 409, httpError("unsupported_channel", "Envio por este canal sera habilitado na proxima etapa."));
+        json(res, 409, httpError("unsupported_transport", "Templates nao estao disponiveis para WhatsApp por sessao nesta etapa."));
         return;
       }
 
@@ -5936,7 +5940,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "app_conversation_send",
       });
-      const resolvedChannel = serializeInboxChannelFields(resolvedConversation.winner ?? undefined).channel;
+      const resolvedChannelFields = serializeInboxChannelFields(resolvedConversation.winner ?? undefined);
+      const resolvedChannel = resolvedChannelFields.channel;
+      const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && resolvedChannelFields.provider === "web_session";
       if (isConversationOutboundBlocked(resolvedConversation.winner)) {
         json(res, 409, {
           error: "channel_outbound_not_enabled",
@@ -6009,8 +6015,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         return;
       }
-      if (resolvedChannel === "whatsapp" && !isWindowOpen(currentConversation, Date.now())) {
+      if (resolvedChannel === "whatsapp" && !isWebSessionWhatsApp && !isWindowOpen(currentConversation, Date.now())) {
         json(res, 409, { error: buildWindowClosedError(currentConversation.window.expiresAt) });
+        return;
+      }
+      if (parsedReplyTo.replyTo && isWebSessionWhatsApp) {
+        json(res, 409, {
+          error: "reply_context_unsupported_transport",
+          message: "Resposta contextual ainda nao esta disponivel para WhatsApp por sessao.",
+        });
         return;
       }
       if (parsedReplyTo.replyTo && resolvedChannel !== "whatsapp") {
@@ -6099,6 +6112,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                     requestId,
                     source: resolvedConversation.winner ?? undefined,
                   })
+                : isWebSessionWhatsApp
+                  ? await createWebSessionTextOutboundMessage({
+                      prisma,
+                      waId: resolvedConversation.resolvedWaId,
+                      waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+                      text,
+                      clientKey: client.clientKey,
+                      clientId: client.id,
+                      requestId,
+                      actorUserId: clientAuth.userId,
+                      source: resolvedConversation.winner ?? undefined,
+                      conversation: currentConversation,
+                    })
               : await adminSendMessage({
                   waId: resolvedConversation.resolvedWaId,
                   text,
@@ -6196,19 +6222,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waId: payload.waId ?? resolvedConversation.resolvedWaId,
         waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         ...serializeInboxChannelFields(resolvedConversation.winner ?? undefined),
-        channelOutboundEnabled:
-          resolvedChannel === "telegram"
-            ? await getTelegramConversationOutboundEnabled({
-                prisma,
-                clientId: client.id,
-                source: resolvedConversation.winner ?? undefined,
-                features: getFeatures(client),
-              })
-            : getConversationChannelOutboundEnabled(
-                (await getTenants())[client.clientKey],
-                resolvedConversation.winner ?? undefined,
-                getFeatures(client)
-              ),
+        channelOutboundEnabled: await getInboxConversationChannelOutboundEnabled({
+          prisma,
+          clientId: client.id,
+          clientKey: client.clientKey,
+          tenant: (await getTenants())[client.clientKey],
+          source: resolvedConversation.winner ?? undefined,
+          features: getFeatures(client),
+        }),
         message: {
           messageId: result.messageId,
           internalMessageId: "internalMessageId" in result ? result.internalMessageId : null,
@@ -6300,9 +6321,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "app_conversation_send_media",
       });
-      const resolvedChannel = serializeInboxChannelFields(resolvedConversation.winner ?? undefined).channel;
+      const resolvedChannelFields = serializeInboxChannelFields(resolvedConversation.winner ?? undefined);
+      const resolvedChannel = resolvedChannelFields.channel;
       if (
         isConversationOutboundBlocked(resolvedConversation.winner) ||
+        (resolvedChannel === "whatsapp" && resolvedChannelFields.provider === "web_session") ||
         resolvedChannel === "messenger" ||
         resolvedChannel === "webchat" ||
         resolvedChannel === "telegram"
@@ -6310,7 +6333,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 409, {
           error: "channel_outbound_not_enabled",
           message:
-            resolvedChannel === "webchat"
+            resolvedChannel === "whatsapp" && resolvedChannelFields.provider === "web_session"
+              ? "Envio de mídia não está disponível para WhatsApp por sessão nesta etapa."
+              : resolvedChannel === "webchat"
               ? WEBCHAT_OUTBOUND_DISABLED_MESSAGE
               : resolvedChannel === "telegram"
               ? "Envio por Telegram ainda não está habilitado neste canal."
@@ -24807,15 +24832,14 @@ async function buildConversationActionPayload(
       })
     : null;
 
-  const channelOutboundEnabled =
-    serializeInboxChannelFields(channelSource ?? undefined).channel === "telegram"
-      ? await getTelegramConversationOutboundEnabled({
-          prisma,
-          clientId: params.clientId,
-          source: channelSource,
-          features: clientFeatures,
-        })
-      : getConversationChannelOutboundEnabled(tenant, channelSource, clientFeatures);
+  const channelOutboundEnabled = await getInboxConversationChannelOutboundEnabled({
+    prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    tenant,
+    source: channelSource,
+    features: clientFeatures,
+  });
 
   return {
     ok: true,
@@ -25607,8 +25631,6 @@ function serializeInboxChannelFields(source?: {
 
 function isConversationOutboundBlocked(source?: { channel?: string | null; provider?: string | null } | null) {
   const channel = serializeInboxChannelFields(source ?? undefined).channel;
-  const provider = serializeInboxChannelFields(source ?? undefined).provider;
-  if (channel === "whatsapp" && provider === "web_session") return true;
   return (
     channel !== "whatsapp" &&
     channel !== "messenger" &&
@@ -25651,6 +25673,41 @@ function getConversationChannelOutboundEnabled(
   }
   if (channelFields.channel === "support") return true;
   return false;
+}
+
+async function getInboxConversationChannelOutboundEnabled(params: {
+  prisma: ReturnType<typeof getPrisma>;
+  clientId: string;
+  clientKey: string;
+  tenant?: { channelAccounts?: TenantChannelAccount[] };
+  source?: { channel?: string | null; provider?: string | null; channelAccountId?: string | null } | null;
+  features?: {
+    telegram?: boolean;
+    telegramOutbound?: boolean;
+    webchat?: boolean;
+    webchatOutbound?: boolean;
+    whatsappWebSession?: boolean | null;
+  } | null;
+}) {
+  const channelFields = serializeInboxChannelFields(params.source ?? undefined);
+  if (channelFields.channel === "telegram") {
+    return getTelegramConversationOutboundEnabled({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      source: params.source,
+      features: params.features,
+    });
+  }
+  if (channelFields.channel === "whatsapp" && channelFields.provider === "web_session") {
+    if (params.features?.whatsappWebSession !== true) return false;
+    return isWebSessionTextOutboundReady({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      channelAccountId: channelFields.channelAccountId,
+    });
+  }
+  return getConversationChannelOutboundEnabled(params.tenant, params.source, params.features);
 }
 
 async function getTelegramConversationOutboundEnabled(params: {
@@ -26571,15 +26628,14 @@ async function buildConversationListPayload(
             }
           : null;
 
-    const channelOutboundEnabled =
-      serializeInboxChannelFields(conversation).channel === "telegram"
-        ? await getTelegramConversationOutboundEnabled({
-            prisma,
-            clientId: params.clientId,
-            source: conversation,
-            features: clientFeatures,
-          })
-        : getConversationChannelOutboundEnabled(tenant, conversation, clientFeatures);
+    const channelOutboundEnabled = await getInboxConversationChannelOutboundEnabled({
+      prisma,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      tenant,
+      source: conversation,
+      features: clientFeatures,
+    });
 
     return {
       waId: conversation.waId,
@@ -26919,15 +26975,14 @@ async function buildConversationDetailPayload(
   const clientFeatures = getFeatures(client);
   params.latency?.duration("detailTenantConfig", tenantsStartedAt);
 
-  const channelOutboundEnabled =
-    serializeInboxChannelFields(resolved.winner ?? undefined).channel === "telegram"
-      ? await getTelegramConversationOutboundEnabled({
-          prisma,
-          clientId: params.clientId,
-          source: resolved.winner ?? undefined,
-          features: clientFeatures,
-        })
-      : getConversationChannelOutboundEnabled(tenant, resolved.winner ?? undefined, clientFeatures);
+  const channelOutboundEnabled = await getInboxConversationChannelOutboundEnabled({
+    prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    tenant,
+    source: resolved.winner ?? undefined,
+    features: clientFeatures,
+  });
 
   return {
     ok: true,

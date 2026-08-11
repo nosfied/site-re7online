@@ -67,7 +67,7 @@ test("web_session is not operationally active when feature is absent or false", 
   });
 });
 
-test("web_session remains unavailable even with a tenant-generic feature flag", () => {
+test("web_session exposes only text capability when the feature is enabled", () => {
   const decision = resolveWhatsAppTransportCapabilities({
     provider: "web_session",
     tenantFeatures: { whatsappWebSession: true },
@@ -79,9 +79,15 @@ test("web_session remains unavailable even with a tenant-generic feature flag", 
 
   assert.equal(normalizeWhatsAppTransportProvider("web_session"), "web_session");
   assert.equal(decision.ok, true);
-  assert.equal(decision.available, false);
-  assert.equal(decision.reason, "runtime_not_implemented");
+  assert.equal(decision.available, true);
+  assert.equal(decision.reason, "available");
+  assert.equal(decision.capabilities.text, true);
+  assert.equal(decision.capabilities.media, false);
+  assert.equal(decision.capabilities.contextualReply, false);
   assert.equal(decision.capabilities.templates, false);
+  assert.equal(decision.capabilities.campaigns, false);
+  assert.equal(decision.capabilities.metaDeliveryStatus, false);
+  assert.equal(decision.capabilities.metaUsageLedger, false);
   assert.equal(transport.ok, false);
 });
 

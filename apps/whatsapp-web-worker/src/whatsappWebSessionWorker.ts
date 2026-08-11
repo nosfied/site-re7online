@@ -23,6 +23,7 @@ import { createBaileysAuthState } from "./web-session/baileysAuthState.js";
 import {
   closeBaileysSocket,
   createBaileysSocket,
+  type BaileysSocketLike,
   type BaileysMessagesUpdateEvent,
   type BaileysMessagesUpsertEvent,
 } from "./web-session/baileysSocketFactory.js";
@@ -58,6 +59,7 @@ type ActiveConnection = {
   tenantKey: string;
   channelAccountId: string;
   startedAtMs: number;
+  socket?: BaileysSocketLike;
   close?: () => void;
   release: () => Promise<void>;
 };
@@ -70,6 +72,15 @@ type BaileysAuthKeysLike = {
 const activeConnections = new Map<string, ActiveConnection>();
 const DEFAULT_CONNECTION_OPEN_TIMEOUT_MS = 30_000;
 const STALE_ACTIVE_CONNECTING_TIMEOUT_MS = 45_000;
+const DEFAULT_SEND_TEXT_TIMEOUT_MS = 15_000;
+
+export function setActiveWebSessionConnectionForTesting(accountId: string, active: ActiveConnection | null) {
+  if (!active) {
+    activeConnections.delete(accountId);
+    return;
+  }
+  activeConnections.set(accountId, active);
+}
 
 export function connectionOpenTimeoutRuntimeState() {
   return {
@@ -100,6 +111,36 @@ function isLidJid(value?: string | null) {
   return Boolean(user && (server === "lid" || server === "hosted.lid"));
 }
 
+function normalizeRecipientWaIdForJid(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!/^\d{8,15}$/.test(digits)) return null;
+  return digits;
+}
+
+function extractExternalMessageId(result: unknown) {
+  const record = result && typeof result === "object" && !Array.isArray(result)
+    ? result as Record<string, unknown>
+    : {};
+  const key = record.key && typeof record.key === "object" && !Array.isArray(record.key)
+    ? record.key as Record<string, unknown>
+    : {};
+  return typeof key.id === "string" && key.id.trim() ? key.id.trim() : null;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("web_session_send_timeout")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function resolveWebSessionSenderJid(params: {
   message: BaileysInboundMessageLike;
   keys?: BaileysAuthKeysLike | null;
@@ -116,6 +157,88 @@ export async function resolveWebSessionSenderJid(params: {
   const pnUser = typeof stored[reverseKey] === "string" ? String(stored[reverseKey]).trim() : "";
   if (!/^\d+$/.test(pnUser)) return null;
   return `${pnUser}@s.whatsapp.net`;
+}
+
+export async function sendTextViaActiveWebSession(params: {
+  prisma?: WorkerPrismaClient;
+  clientId: string;
+  tenantKey: string;
+  accountId: string;
+  channelAccountId: string;
+  recipientWaId: string;
+  text: string;
+  requestId: string;
+  timeoutMs?: number;
+}) {
+  const prisma = params.prisma ?? getPrisma();
+  const text = params.text.trim();
+  const recipientDigits = normalizeRecipientWaIdForJid(params.recipientWaId);
+  if (!text || !recipientDigits) {
+    return { ok: false as const, statusCode: 400, error: "bad_request" };
+  }
+  const account = await prisma.channelAccount.findFirst({
+    where: {
+      id: params.accountId,
+      clientId: params.clientId,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId: params.channelAccountId,
+    },
+    include: {
+      client: {
+        select: {
+          id: true,
+          clientKey: true,
+          status: true,
+          features: true,
+          profile: true,
+        },
+      },
+    },
+  }) as ChannelAccountRecord | null;
+  if (!account || account.client.clientKey !== params.tenantKey) {
+    return { ok: false as const, statusCode: 404, error: "web_session_account_not_found" };
+  }
+  if (!isEligibleWebSessionAccount(account) || account.status !== "connected") {
+    return { ok: false as const, statusCode: 409, error: "web_session_not_connected" };
+  }
+  const lifecycle = readWebSessionLifecycle(account.metadata);
+  if (lifecycle.observedState !== "CONNECTED") {
+    return { ok: false as const, statusCode: 409, error: "web_session_not_connected" };
+  }
+  const active = activeConnections.get(account.id);
+  if (!active?.socket?.sendMessage) {
+    return { ok: false as const, statusCode: 503, error: "web_session_worker_not_connected" };
+  }
+  try {
+    const result = await withTimeout(
+      active.socket.sendMessage(`${recipientDigits}@s.whatsapp.net`, { text }),
+      params.timeoutMs ?? DEFAULT_SEND_TEXT_TIMEOUT_MS
+    );
+    const externalMessageId = extractExternalMessageId(result);
+    logger.info({
+      event: "whatsapp.web.outbound.sent",
+      tenantKey: params.tenantKey,
+      channelAccountId: params.channelAccountId,
+      requestId: params.requestId,
+      hasExternalMessageId: Boolean(externalMessageId),
+    });
+    return { ok: true as const, externalMessageId };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "unknown_error";
+    logger.warn({
+      event: "whatsapp.web.outbound.failed",
+      tenantKey: params.tenantKey,
+      channelAccountId: params.channelAccountId,
+      requestId: params.requestId,
+      reason,
+    });
+    return {
+      ok: false as const,
+      statusCode: reason === "web_session_send_timeout" ? 504 : 502,
+      error: reason === "web_session_send_timeout" ? "web_session_send_timeout" : "web_session_send_failed",
+    };
+  }
 }
 
 export function isTransientConnectingState(account: ChannelAccountRecord) {
@@ -565,6 +688,7 @@ async function connectWebSessionAccount(params: {
   });
   const active = activeConnections.get(params.account.id);
   if (active) {
+    active.socket = socket;
     active.close = closeSocket;
   }
 }

@@ -1714,6 +1714,167 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   });
 });
 
+test("inbox sends WhatsApp web session text through worker without Meta fallback", async (t) => {
+  const previousWorkerUrl = process.env.WHATSAPP_WEB_WORKER_CONTROL_URL;
+  const previousWorkerToken = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN;
+  const previousFetch = globalThis.fetch;
+  const waId = "5584990008842";
+  const channelAccountId = "lab-outbound-account";
+  const workerRequests: Array<Record<string, unknown>> = [];
+  const fakeWorker = createServer((req, res) => {
+    if (req.method !== "POST" || req.url !== "/web-session/send-text") {
+      res.writeHead(404, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "not_found" }));
+      return;
+    }
+    assert.equal(req.headers.authorization, "Bearer worker-test-token");
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+    req.on("end", () => {
+      workerRequests.push(JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true, externalMessageId: "baileys-test-message-id" }));
+    });
+  });
+  await new Promise<void>((resolve) => fakeWorker.listen(0, "127.0.0.1", resolve));
+  t.after(async () => {
+    await new Promise<void>((resolve, reject) => fakeWorker.close((error) => error ? reject(error) : resolve()));
+    if (previousWorkerUrl === undefined) delete process.env.WHATSAPP_WEB_WORKER_CONTROL_URL;
+    else process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = previousWorkerUrl;
+    if (previousWorkerToken === undefined) delete process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN;
+    else process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN = previousWorkerToken;
+    globalThis.fetch = previousFetch;
+    await prisma.client.update({ where: { id: businessClientId }, data: { features: {} } });
+  });
+  const address = fakeWorker.address() as AddressInfo;
+  process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = `http://127.0.0.1:${address.port}`;
+  process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN = "worker-test-token";
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      throw new Error("web_session inbox text must not call Meta Graph");
+    }
+    return previousFetch(input, init);
+  }) as typeof fetch;
+
+  await prisma.client.update({
+    where: { id: businessClientId },
+    data: { features: { whatsappWebSession: true } },
+  });
+  await prisma.channelAccount.create({
+    data: {
+      clientId: businessClientId,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId,
+      displayName: "Lab outbound",
+      enabled: true,
+      runtimeEnabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: false,
+      status: "connected",
+      tokenStatus: "configured",
+      metadata: {
+        webSession: {
+          desiredState: "CONNECTED",
+          observedState: "CONNECTED",
+          lastConnectedAt: new Date("2026-08-11T12:00:00.000Z").toISOString(),
+          lastDisconnectedAt: null,
+          lastErrorCode: null,
+          lastErrorAt: null,
+          reconnectCount: 0,
+        },
+      },
+    },
+  });
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId,
+      windowIsOpen: false,
+      windowExpiresAt: new Date("2026-01-01T10:00:00.000Z"),
+      lastInboundAt: new Date("2026-08-11T12:00:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      conversationKey: `${prefix}-business:${waId}`,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId,
+      windowIsOpen: false,
+      mode: "HUMAN",
+      status: "IN_PROGRESS",
+      assignedUserId: businessAdmin.id,
+      assignedTo: businessAdmin.name,
+      lastInboundAt: new Date("2026-08-11T12:00:00.000Z"),
+    },
+  });
+
+  const detail = await request<{ ok: true; provider: string; channelOutboundEnabled: boolean }>(
+    "GET",
+    `/app/conversation/${waId}`,
+    businessAdmin
+  );
+  assert.equal(detail.status, 200, JSON.stringify(detail.body));
+  assert.equal(detail.body.provider, "web_session");
+  assert.equal(detail.body.channelOutboundEnabled, true);
+
+  const blockedTemplate = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send-template`, businessAdmin, {
+    templateId: "template-web-session-blocked",
+  });
+  assert.equal(blockedTemplate.status, 409);
+  assert.equal(getErrorCode(blockedTemplate.body), "unsupported_transport");
+
+  const response = await request<{
+    ok: true;
+    message: { status: string; metaMessageId: string | null; bodyText: string | null };
+  }>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+    text: "Mensagem controlada web session.",
+  });
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  assert.equal(response.body.message.status, "SENT");
+  assert.equal(response.body.message.metaMessageId, null);
+  assert.equal(workerRequests.length, 1);
+  assert.equal(workerRequests[0]?.tenantKey, `${prefix}-business`);
+  assert.equal(workerRequests[0]?.channelAccountId, channelAccountId);
+  assert.equal(workerRequests[0]?.recipientWaId, waId);
+
+  const outbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: {
+      clientId: businessClientId,
+      waId,
+      provider: "web_session",
+      externalMessageId: "baileys-test-message-id",
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.equal(outbound.channel, "whatsapp");
+  assert.equal(outbound.channelAccountId, channelAccountId);
+  assert.equal(outbound.metaMessageId, null);
+  assert.equal(outbound.status, "SENT");
+  assert.equal((outbound.rawPayload as Record<string, unknown>).source, "inbox_text");
+  assert.equal((outbound.rawPayload as Record<string, unknown>).provider, "web_session");
+  assert.equal((outbound.rawPayload as Record<string, unknown>).metaUsage, undefined);
+  assert.equal(JSON.stringify(outbound.rawPayload).includes(waId), false);
+
+  const event = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, eventName: "inbox.web_session.text.sent" },
+    orderBy: { createdAt: "desc" },
+  });
+  const payload = event.payloadJson as Record<string, unknown>;
+  assert.equal(payload.provider, "web_session");
+  assert.equal(payload.waIdLast4, waId.slice(-4));
+  assert.equal(JSON.stringify(payload).includes(waId), false);
+});
+
 test("admin tenants summary includes db-only clients without activity", async () => {
   const dbOnlyClientKey = `${prefix}-db-only-summary`;
   await prisma.client.create({

@@ -1,0 +1,332 @@
+import { MessageStatus, MessageType, type PrismaClient } from "@prisma/client";
+import { applyAgentSignature } from "../inbox/agentSignature.js";
+import { persistEvent, persistOutboundMessage } from "../db/persist.js";
+import { getFeatures } from "../features/clientFeatures.js";
+import { logger } from "../logger/logger.js";
+import { recordConversationAgentOutboundMetrics } from "../metrics/conversationMetrics.js";
+import { resolveAgentSignatureSettings } from "../config/tenantOperationalConfig.js";
+import { readWebSessionLifecycle } from "./webSessionLifecycle.js";
+
+type WebSessionOutboundConversationState = {
+  assignedAt?: Date | string | null;
+  assignedUserId?: string | null;
+};
+
+type WorkerSendTextResult =
+  | { ok: true; externalMessageId: string | null }
+  | { ok: false; statusCode?: number; error?: string; message?: string };
+
+type WebSessionChannelAccount = {
+  id: string;
+  clientId: string;
+  channel: string;
+  provider: string;
+  channelAccountId: string;
+  enabled: boolean;
+  runtimeEnabled: boolean;
+  status: string;
+  metadata: unknown;
+  client: {
+    id: string;
+    clientKey: string;
+    status: string;
+    features: unknown;
+  };
+};
+
+function maskWaId(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits ? `****${digits.slice(-4)}` : "unknown";
+}
+
+function normalizeRecipientWaId(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return /^\d{8,15}$/.test(digits) ? digits : null;
+}
+
+function isWebSessionAccountConnected(account: WebSessionChannelAccount) {
+  if (account.client.status !== "ACTIVE") return false;
+  if (getFeatures(account.client).whatsappWebSession !== true) return false;
+  if (account.channel !== "whatsapp" || account.provider !== "web_session") return false;
+  if (!account.enabled || !account.runtimeEnabled) return false;
+  if (account.status !== "connected") return false;
+  return readWebSessionLifecycle(account.metadata).observedState === "CONNECTED";
+}
+
+async function findWebSessionAccount(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientKey: string;
+  channelAccountId?: string | null;
+}) {
+  const account = await params.prisma.channelAccount.findFirst({
+    where: {
+      clientId: params.clientId,
+      channel: "whatsapp",
+      provider: "web_session",
+      ...(params.channelAccountId ? { channelAccountId: params.channelAccountId } : {}),
+    },
+    include: {
+      client: {
+        select: {
+          id: true,
+          clientKey: true,
+          status: true,
+          features: true,
+        },
+      },
+    },
+    orderBy: [{ updatedAt: "desc" }],
+  }) as WebSessionChannelAccount | null;
+  if (!account || account.client.clientKey !== params.clientKey) return null;
+  return account;
+}
+
+async function callWorkerSendText(params: {
+  account: WebSessionChannelAccount;
+  tenantKey: string;
+  recipientWaId: string;
+  text: string;
+  requestId: string;
+}) {
+  const baseUrl = process.env.WHATSAPP_WEB_WORKER_CONTROL_URL?.trim();
+  if (!baseUrl) {
+    return { ok: false as const, statusCode: 503, error: "web_session_worker_unavailable" };
+  }
+  const token = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN?.trim();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 16_000);
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/web-session/send-text`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        clientId: params.account.clientId,
+        tenantKey: params.tenantKey,
+        accountId: params.account.id,
+        channelAccountId: params.account.channelAccountId,
+        recipientWaId: params.recipientWaId,
+        text: params.text,
+        requestId: params.requestId,
+      }),
+      signal: controller.signal,
+    });
+    const body = await response.json().catch(() => ({})) as WorkerSendTextResult;
+    if (!response.ok || !body.ok) {
+      const workerStatusCode = !body.ok && typeof body.statusCode === "number" ? body.statusCode : null;
+      return {
+        ok: false as const,
+        statusCode: response.status || workerStatusCode || 502,
+        error: body.ok ? "web_session_send_failed" : body.error ?? "web_session_send_failed",
+        message: body.ok ? undefined : body.message,
+      };
+    }
+    return { ok: true as const, externalMessageId: body.externalMessageId ?? null };
+  } catch (error) {
+    return {
+      ok: false as const,
+      statusCode: error instanceof Error && error.name === "AbortError" ? 504 : 502,
+      error: error instanceof Error && error.name === "AbortError"
+        ? "web_session_send_timeout"
+        : "web_session_worker_unavailable",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function isWebSessionTextOutboundReady(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientKey: string;
+  channelAccountId?: string | null;
+}) {
+  const account = await findWebSessionAccount(params);
+  return Boolean(account && isWebSessionAccountConnected(account));
+}
+
+export async function createWebSessionTextOutboundMessage(params: {
+  prisma: PrismaClient;
+  waId: string;
+  waIdCanonical?: string | null;
+  text: string;
+  clientKey: string;
+  clientId: string;
+  requestId: string;
+  actorUserId: string;
+  source?: {
+    channel?: string | null;
+    provider?: string | null;
+    channelAccountId?: string | null;
+  };
+  conversation?: WebSessionOutboundConversationState | null;
+}): Promise<
+  | {
+      ok: true;
+      status: "SENT" | "FAILED";
+      messageId: string;
+      internalMessageId: string | null;
+      metaMessageId: null;
+      createdAt: string;
+      bodyText: string;
+      agentSignatureApplied: boolean;
+      agentSignatureFormat: "bold_line" | null;
+    }
+  | { ok: false; statusCode: number; error: string; message?: string }
+> {
+  const recipientWaId = normalizeRecipientWaId(params.waIdCanonical ?? params.waId);
+  if (!recipientWaId) return { ok: false, statusCode: 400, error: "bad_request" };
+  const account = await findWebSessionAccount({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    channelAccountId: params.source?.channelAccountId ?? null,
+  });
+  if (!account) return { ok: false, statusCode: 409, error: "web_session_account_not_found" };
+  if (!isWebSessionAccountConnected(account)) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "web_session_disconnected",
+      message: "Este canal esta temporariamente desconectado.",
+    };
+  }
+
+  const [actorUser, agentSignatureSettings] = await Promise.all([
+    params.prisma.user.findFirst({
+      where: { id: params.actorUserId, clientId: params.clientId, isActive: true },
+      select: { name: true },
+    }),
+    resolveAgentSignatureSettings({
+      prisma: params.prisma,
+      clientId: params.clientId,
+    }),
+  ]);
+  const signedBody = applyAgentSignature({
+    bodyText: params.text,
+    actorDisplayName: actorUser?.name ?? null,
+    settings: agentSignatureSettings?.settings ?? null,
+  });
+  if (!signedBody.ok) {
+    return { ok: false, statusCode: 400, error: "message_too_long" };
+  }
+
+  const sendResult = await callWorkerSendText({
+    account,
+    tenantKey: params.clientKey,
+    recipientWaId,
+    text: signedBody.bodyText,
+    requestId: params.requestId,
+  });
+  const status = sendResult.ok ? MessageStatus.SENT : MessageStatus.FAILED;
+  const messageId = `web.session.send.${params.requestId}`;
+  const createdAt = new Date();
+  const rawPayload = {
+    source: "inbox_text",
+    provider: "web_session",
+    channelAccountId: account.channelAccountId,
+    externalMessageId: sendResult.ok ? sendResult.externalMessageId : null,
+    actor: {
+      source: "human_inbox",
+      userId: params.actorUserId,
+    },
+    agentSignatureApplied: signedBody.signatureApplied,
+    agentSignatureFormat: signedBody.signatureFormat,
+    status: sendResult.ok ? "sent" : "failed",
+    error: sendResult.ok ? null : sendResult.error,
+  };
+  const outboundInserted = await persistOutboundMessage({
+    clientId: params.clientId,
+    channel: "whatsapp",
+    provider: "web_session",
+    channelAccountId: account.channelAccountId,
+    externalMessageId: sendResult.ok ? sendResult.externalMessageId : null,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical ?? recipientWaId,
+    messageId,
+    type: MessageType.TEXT,
+    status,
+    bodyText: signedBody.bodyText,
+    requestId: params.requestId,
+    metaMessageId: null,
+    errorBody: sendResult.ok ? null : sendResult.error,
+    rawPayload,
+  });
+  await persistEvent({
+    clientId: params.clientId,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical ?? recipientWaId,
+    messageId,
+    requestId: `web-session-outbound:${messageId}`,
+    eventName: sendResult.ok ? "inbox.web_session.text.sent" : "inbox.web_session.text.failed",
+    payloadJson: {
+      source: "inbox_text",
+      provider: "web_session",
+      channelAccountId: account.channelAccountId,
+      outboundMessageId: messageId,
+      externalMessageIdPresent: sendResult.ok ? Boolean(sendResult.externalMessageId) : false,
+      waIdLast4: recipientWaId.slice(-4),
+      waIdLength: recipientWaId.length,
+      error: sendResult.ok ? null : sendResult.error,
+    },
+  });
+  if (sendResult.ok) {
+    await recordConversationAgentOutboundMetrics({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      waId: params.waId,
+      occurredAt: createdAt,
+      wasInserted: outboundInserted,
+      assignedAt: params.conversation?.assignedAt instanceof Date
+        ? params.conversation.assignedAt.toISOString()
+        : params.conversation?.assignedAt ?? null,
+      assignedUserId: params.conversation?.assignedUserId ?? null,
+      requestId: params.requestId,
+    });
+  }
+  logger.info({
+    event: sendResult.ok ? "whatsapp.web_session.outbound.persisted" : "whatsapp.web_session.outbound.failed",
+    tenantKey: params.clientKey,
+    channelAccountId: account.channelAccountId,
+    requestId: params.requestId,
+    waId: maskWaId(recipientWaId),
+    hasExternalMessageId: sendResult.ok ? Boolean(sendResult.externalMessageId) : false,
+    error: sendResult.ok ? null : sendResult.error,
+  });
+  if (!sendResult.ok) {
+    return {
+      ok: true,
+      status: "FAILED",
+      messageId,
+      internalMessageId: null,
+      metaMessageId: null,
+      createdAt: createdAt.toISOString(),
+      bodyText: signedBody.bodyText,
+      agentSignatureApplied: signedBody.signatureApplied,
+      agentSignatureFormat: signedBody.signatureFormat,
+    };
+  }
+  const persistedOutbound = await params.prisma.outboundMessage.findUnique({
+    where: {
+      clientId_messageId: {
+        clientId: params.clientId,
+        messageId,
+      },
+    },
+    select: { id: true },
+  });
+  return {
+    ok: true,
+    status: "SENT",
+    messageId,
+    internalMessageId: persistedOutbound?.id ?? null,
+    metaMessageId: null,
+    createdAt: createdAt.toISOString(),
+    bodyText: signedBody.bodyText,
+    agentSignatureApplied: signedBody.signatureApplied,
+    agentSignatureFormat: signedBody.signatureFormat,
+  };
+}
