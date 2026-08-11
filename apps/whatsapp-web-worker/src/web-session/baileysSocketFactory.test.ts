@@ -28,6 +28,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   };
   const qrValues: string[] = [];
   let credentialsUpdated = false;
+  let connectionUpdateSeen = false;
   let upsertType = "";
   let updateCount = 0;
   let batchKeys: string[] = [];
@@ -36,6 +37,9 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
     authState: { creds: "redacted" },
     browserName: "Converta Lab",
     onQr: (qr) => qrValues.push(qr),
+    onConnectionUpdate: () => {
+      connectionUpdateSeen = true;
+    },
     onCredentialsUpdate: () => {
       credentialsUpdated = true;
     },
@@ -71,6 +75,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   await handlers.get("process")?.({ "messages.upsert": { messages: [] } } as never);
 
   assert.deepEqual(qrValues, ["qr-payload"]);
+  assert.equal(connectionUpdateSeen, true);
   assert.equal(credentialsUpdated, true);
   assert.equal(upsertType, "notify");
   assert.equal(updateCount, 1);

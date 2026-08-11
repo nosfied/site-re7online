@@ -6,6 +6,7 @@ type BaileysSocketFactoryParams = {
   onQr?: (qr: string) => void;
   onConnected?: () => void;
   onDisconnected?: (reason: unknown) => void;
+  onConnectionUpdate?: (update: BaileysConnectionUpdateEvent) => Promise<void> | void;
   onCredentialsUpdate?: (state: SerializedWebSessionAuthState) => Promise<void> | void;
   onMessagesUpsert?: (event: BaileysMessagesUpsertEvent) => Promise<void> | void;
   onMessagesUpdate?: (event: BaileysMessagesUpdateEvent) => Promise<void> | void;
@@ -15,6 +16,14 @@ type BaileysSocketFactoryParams = {
 export type BaileysMessagesUpsertEvent = {
   type?: string;
   messages?: unknown[];
+};
+
+export type BaileysConnectionUpdateEvent = {
+  qr?: string;
+  connection?: string;
+  lastDisconnect?: unknown;
+  receivedPendingNotifications?: boolean;
+  isNewLogin?: boolean;
 };
 
 export type BaileysMessagesUpdateEvent = Array<{
@@ -85,7 +94,8 @@ export async function createBaileysSocketFromModule(
     markOnlineOnConnect: true,
     syncFullHistory: false,
   });
-  socket.ev.on("connection.update", (update: { qr?: string; connection?: string; lastDisconnect?: unknown }) => {
+  socket.ev.on("connection.update", async (update: BaileysConnectionUpdateEvent) => {
+    await params.onConnectionUpdate?.(update ?? {});
     if (update.qr) params.onQr?.(update.qr);
     if (update.connection === "open") params.onConnected?.();
     if (update.connection === "close") params.onDisconnected?.(update.lastDisconnect);

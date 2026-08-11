@@ -392,6 +392,18 @@ async function connectWebSessionAccount(params: {
       auth.mergeCredentials(update);
       await auth.save();
     },
+    onConnectionUpdate: async (update) => {
+      logger.info({
+        event: "whatsapp.web.connection.update",
+        tenantKey: params.account.tenantKey,
+        channelAccountId: params.account.channelAccountId,
+        connection: typeof update.connection === "string" ? update.connection : null,
+        receivedPendingNotifications: update.receivedPendingNotifications === true,
+        isNewLogin: update.isNewLogin === true,
+        hasQr: typeof update.qr === "string" && update.qr.length > 0,
+        hasDisconnectReason: Boolean(update.lastDisconnect),
+      });
+    },
     onMessagesUpsert: async (event) => {
       await handleWebSessionMessagesUpsert({
         prisma: params.prisma,
