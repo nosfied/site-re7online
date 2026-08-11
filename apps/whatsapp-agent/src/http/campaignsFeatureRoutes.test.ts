@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { hashPassword, issueClientAuthToken } from "../auth/clientAuth.js";
 import { buildAppAuthSessionExpiresAt } from "../auth/sessionPolicy.js";
+import { saveWebSessionAuthState } from "../web-session/webSessionAuthStore.js";
 import {
   filterOptedOutCampaignRecipients,
   recordContactOptOut,
@@ -20,6 +21,7 @@ process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || "campaigns-feature-route-te
 process.env.WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || "campaigns-feature-route-test-token";
 process.env.WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "campaigns-feature-route-test-phone";
 process.env.META_APP_SECRET = process.env.META_APP_SECRET || "campaigns-feature-route-test-meta-secret";
+process.env.CHANNEL_ACCOUNT_SECRET_KEY = process.env.CHANNEL_ACCOUNT_SECRET_KEY || "campaigns-feature-route-test-channel-secret";
 
 type TestResponse<T = unknown> = {
   status: number;
@@ -1515,6 +1517,151 @@ test("queue assignment settings are tenant scoped and admin protected", async ()
   assert.equal(payload.scope, "department");
   assert.equal(payload.maxActivePerAgent, 3);
   assert.ok(!JSON.stringify(payload).includes(overrideClientId));
+});
+
+test("whatsapp web session settings are tenant scoped and admin protected", async () => {
+  const unauth = await requestUnauth<ErrorPayload>("GET", "/app/settings/channels/whatsapp/web-session");
+  assert.equal(unauth.status, 401);
+
+  const agent = await request<ErrorPayload>("GET", "/app/settings/channels/whatsapp/web-session", businessAgent);
+  assert.equal(agent.status, 403);
+
+  const supervisor = await request<{
+    ok: boolean;
+    status: { configured: boolean; featureEnabled: boolean };
+    permissions: { canUpdate: boolean };
+  }>("GET", "/app/settings/channels/whatsapp/web-session", businessSupervisor);
+  assert.equal(supervisor.status, 200);
+  assert.equal(supervisor.body.ok, true);
+  assert.equal(supervisor.body.status.configured, false);
+  assert.equal(supervisor.body.status.featureEnabled, false);
+  assert.equal(supervisor.body.permissions.canUpdate, false);
+
+  const supervisorPrepare = await request<ErrorPayload>(
+    "POST",
+    "/app/settings/channels/whatsapp/web-session",
+    businessSupervisor,
+    { displayName: "Lab WhatsApp" }
+  );
+  assert.equal(supervisorPrepare.status, 403);
+
+  const prepared = await request<{
+    ok: boolean;
+    tenantId: string;
+    status: {
+      configured: boolean;
+      account: {
+        channel: string;
+        provider: string;
+        channelAccountId: string;
+        displayName: string;
+        runtimeEnabled: boolean;
+        status: string;
+      };
+      lifecycle: { desiredState: string; observedState: string };
+    };
+  }>("POST", "/app/settings/channels/whatsapp/web-session?clientId=malicious", businessAdmin, {
+    displayName: "Lab WhatsApp",
+    channelAccountId: "lab-account",
+    channel: "instagram",
+    provider: "meta",
+  });
+  assert.equal(prepared.status, 200);
+  assert.equal(prepared.body.ok, true);
+  assert.match(prepared.body.tenantId, /business$/);
+  assert.equal(prepared.body.status.configured, true);
+  assert.equal(prepared.body.status.account.channel, "whatsapp");
+  assert.equal(prepared.body.status.account.provider, "web_session");
+  assert.equal(prepared.body.status.account.channelAccountId, "lab-account");
+  assert.equal(prepared.body.status.account.displayName, "Lab WhatsApp");
+  assert.equal(prepared.body.status.account.runtimeEnabled, false);
+  assert.equal(prepared.body.status.account.status, "pending");
+  assert.equal(prepared.body.status.lifecycle.desiredState, "DISCONNECTED");
+  assert.equal(prepared.body.status.lifecycle.observedState, "DISCONNECTED");
+
+  const overrideStatus = await request<{
+    status: { configured: boolean };
+  }>("GET", "/app/settings/channels/whatsapp/web-session", overrideAdmin);
+  assert.equal(overrideStatus.status, 200);
+  assert.equal(overrideStatus.body.status.configured, false);
+
+  const disabledConnect = await request<ErrorPayload>(
+    "POST",
+    "/app/settings/channels/whatsapp/web-session/connect",
+    businessAdmin
+  );
+  assert.equal(disabledConnect.status, 403);
+  assert.equal(getErrorCode(disabledConnect.body), "web_session_feature_disabled");
+
+  await prisma.client.update({
+    where: { id: businessClientId },
+    data: { features: { whatsappWebSession: true } },
+  });
+  const connected = await request<{
+    status: {
+      account: { runtimeEnabled: boolean; status: string };
+      lifecycle: { desiredState: string; observedState: string };
+    };
+  }>("POST", "/app/settings/channels/whatsapp/web-session/connect", businessAdmin);
+  assert.equal(connected.status, 200);
+  assert.equal(connected.body.status.account.runtimeEnabled, true);
+  assert.equal(connected.body.status.account.status, "pending");
+  assert.equal(connected.body.status.lifecycle.desiredState, "CONNECTED");
+  assert.equal(connected.body.status.lifecycle.observedState, "CONNECTING");
+
+  const qr = await request<{
+    ok: boolean;
+    qr: string | null;
+    expired: boolean;
+    lifecycle: { observedState: string };
+  }>("GET", "/app/settings/channels/whatsapp/web-session/qr", businessAdmin);
+  assert.equal(qr.status, 200);
+  assert.equal(qr.body.ok, true);
+  assert.equal(qr.body.qr, null);
+  assert.equal(qr.body.expired, false);
+
+  const savedSecret = await saveWebSessionAuthState({
+    prisma,
+    tenantKey: `${prefix}-business`,
+    channelAccountId: "lab-account",
+    state: { creds: { me: "redacted" }, keys: {} },
+  });
+  assert.equal(savedSecret.ok, true);
+  assert.equal(
+    await prisma.channelAccountSecret.count({
+      where: {
+        channelAccount: { clientId: businessClientId, channel: "whatsapp", provider: "web_session" },
+      },
+    }),
+    1
+  );
+
+  const reset = await request<{
+    status: {
+      authState: { configured: boolean };
+      account: { runtimeEnabled: boolean; status: string };
+      lifecycle: { desiredState: string; observedState: string };
+    };
+  }>("POST", "/app/settings/channels/whatsapp/web-session/reset", businessAdmin);
+  assert.equal(reset.status, 200);
+  assert.equal(reset.body.status.authState.configured, false);
+  assert.equal(reset.body.status.account.runtimeEnabled, false);
+  assert.equal(reset.body.status.account.status, "pending");
+  assert.equal(reset.body.status.lifecycle.desiredState, "DISCONNECTED");
+  assert.equal(reset.body.status.lifecycle.observedState, "DISCONNECTED");
+  assert.equal(
+    await prisma.channelAccountSecret.count({
+      where: {
+        channelAccount: { clientId: businessClientId, channel: "whatsapp", provider: "web_session" },
+      },
+    }),
+    0
+  );
+
+  await prisma.client.update({
+    where: { id: businessClientId },
+    data: { features: {} },
+  });
 });
 
 test("admin tenants summary includes db-only clients without activity", async () => {

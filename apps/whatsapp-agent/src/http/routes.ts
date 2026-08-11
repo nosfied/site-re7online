@@ -175,6 +175,14 @@ import {
   saveQueueAssignmentPolicy,
   toPublicQueueAssignmentPolicy,
 } from "../queue/assignmentPolicy.js";
+import {
+  disconnectWebSession,
+  getWebSessionQr,
+  prepareWebSessionAccount,
+  requestWebSessionConnect,
+  resetWebSession,
+  serializeWebSessionStatus,
+} from "../web-session/webSessionConnectionAdmin.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
 import {
   normalizeUserRole,
@@ -6613,6 +6621,202 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.queue_assignment.settings.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    pathname === "/app/settings/channels/whatsapp/web-session" &&
+    (req.method === "GET" || req.method === "POST")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can view WhatsApp Web Session settings."));
+        return;
+      }
+      if (req.method === "POST" && !isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can update WhatsApp Web Session settings."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (req.method === "GET") {
+        json(res, 200, {
+          ok: true,
+          tenantId: client.clientKey,
+          status: await serializeWebSessionStatus({ prisma, client }),
+          permissions: { canUpdate: isAdminRole(clientAuth.role) },
+        });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        status: await prepareWebSessionAccount({
+          prisma,
+          client,
+          actorUserId: clientAuth.userId,
+          requestId,
+          input: body,
+        }),
+        permissions: { canUpdate: true },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.whatsapp_web_session.settings.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    pathname === "/app/settings/channels/whatsapp/web-session/connect" &&
+    req.method === "POST"
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (!isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can request WhatsApp Web Session connection."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const result = await requestWebSessionConnect({
+        prisma,
+        client,
+        actorUserId: clientAuth.userId,
+        requestId,
+      });
+      if (!result.ok) {
+        json(res, result.status, httpError(result.code, result.code));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        status: result.status,
+        permissions: { canUpdate: true },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.whatsapp_web_session.connect.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (pathname === "/app/settings/channels/whatsapp/web-session/qr" && req.method === "GET") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can view WhatsApp Web Session QR status."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      const result = await getWebSessionQr({ prisma, client });
+      if (!result.ok) {
+        json(res, result.status, httpError(result.code, result.code));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        qr: result.qr,
+        expired: result.expired,
+        lifecycle: result.lifecycle,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.whatsapp_web_session.qr.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    (pathname === "/app/settings/channels/whatsapp/web-session/disconnect" ||
+      pathname === "/app/settings/channels/whatsapp/web-session/reset") &&
+    req.method === "POST"
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (!isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can update WhatsApp Web Session connection."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      const result = pathname.endsWith("/reset")
+        ? await resetWebSession({
+            prisma,
+            client,
+            actorUserId: clientAuth.userId,
+            requestId,
+          })
+        : await disconnectWebSession({
+            prisma,
+            client,
+            actorUserId: clientAuth.userId,
+            requestId,
+          });
+      if (!result.ok) {
+        json(res, result.status, httpError(result.code, result.code));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        status: result.status,
+        permissions: { canUpdate: true },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.whatsapp_web_session.lifecycle.error",
         message: (error as Error).message,
         requestId,
       });

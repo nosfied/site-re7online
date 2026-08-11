@@ -258,6 +258,13 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "Fila", government: "Fila" },
   },
   {
+    href: "/app/settings/channels/whatsapp",
+    icon: "☏",
+    group: "administration",
+    minRole: "SUPERVISOR",
+    labels: { business: "Canais", government: "Canais" },
+  },
+  {
     href: "/app/settings/inbox",
     icon: "✍",
     group: "administration",

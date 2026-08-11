@@ -4,6 +4,8 @@ type BaileysSocketFactoryParams = {
   authState: unknown;
   browserName?: string;
   onQr?: (qr: string) => void;
+  onConnected?: () => void;
+  onDisconnected?: (reason: unknown) => void;
   onCredentialsUpdate?: (state: SerializedWebSessionAuthState) => Promise<void> | void;
 };
 
@@ -58,11 +60,13 @@ export function createBaileysSocketFromModule(
     markOnlineOnConnect: false,
     syncFullHistory: false,
   });
-  socket.ev.on("connection.update", (update: { qr?: string }) => {
+  socket.ev.on("connection.update", (update: { qr?: string; connection?: string; lastDisconnect?: unknown }) => {
     if (update.qr) params.onQr?.(update.qr);
+    if (update.connection === "open") params.onConnected?.();
+    if (update.connection === "close") params.onDisconnected?.(update.lastDisconnect);
   });
-  socket.ev.on("creds.update", async () => {
-    await params.onCredentialsUpdate?.({ updatedAt: new Date().toISOString() });
+  socket.ev.on("creds.update", async (update: SerializedWebSessionAuthState) => {
+    await params.onCredentialsUpdate?.(update ?? {});
   });
   return socket;
 }

@@ -1492,6 +1492,68 @@ export type AppQueueAssignmentSettingsResponse = {
   };
 };
 
+export type AppWhatsAppWebSessionObservedState =
+  | "DISCONNECTED"
+  | "CONNECTING"
+  | "QR_REQUIRED"
+  | "CONNECTED"
+  | "RECONNECTING"
+  | "ERROR";
+
+export type AppWhatsAppWebSessionLifecycle = {
+  desiredState: "CONNECTED" | "DISCONNECTED";
+  observedState: AppWhatsAppWebSessionObservedState;
+  lastConnectedAt: string | null;
+  lastDisconnectedAt: string | null;
+  lastErrorAt: string | null;
+  lastErrorCode: string | null;
+  reconnectCount: number;
+};
+
+export type AppWhatsAppWebSessionStatus = {
+  configured: boolean;
+  featureEnabled: boolean;
+  account: {
+    id: string;
+    channelAccountId: string;
+    displayName: string | null;
+    channel: "whatsapp";
+    provider: "web_session";
+    enabled: boolean;
+    runtimeEnabled: boolean;
+    status: string;
+    tokenStatus: string;
+    lastUpdatedAt: string;
+  } | null;
+  lifecycle: AppWhatsAppWebSessionLifecycle;
+  authState: {
+    configured: boolean;
+    secretKind: string;
+    updatedAt: string | null;
+  };
+  qr: {
+    available: boolean;
+    ttlMs: number;
+  };
+};
+
+export type AppWhatsAppWebSessionResponse = {
+  ok: true;
+  tenantId: string;
+  status: AppWhatsAppWebSessionStatus;
+  permissions: {
+    canUpdate: boolean;
+  };
+};
+
+export type AppWhatsAppWebSessionQrResponse = {
+  ok: true;
+  tenantId: string;
+  qr: string | null;
+  expired: boolean;
+  lifecycle: AppWhatsAppWebSessionLifecycle;
+};
+
 export type AppTenantSummary = {
   id: string;
   name: string;
@@ -2751,6 +2813,52 @@ export async function updateAppQueueAssignmentSettings(
   return requestAppJson(session, "/app/settings/queue-assignment", {
     method: "PUT",
     body: JSON.stringify(policy),
+  });
+}
+
+export async function fetchAppWhatsAppWebSessionStatus(
+  session: AppSession
+): Promise<AppWhatsAppWebSessionResponse> {
+  return requestAppJson(session, "/app/settings/channels/whatsapp/web-session");
+}
+
+export async function prepareAppWhatsAppWebSession(
+  session: AppSession,
+  input: { displayName?: string; channelAccountId?: string }
+): Promise<AppWhatsAppWebSessionResponse> {
+  return requestAppJson(session, "/app/settings/channels/whatsapp/web-session", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function connectAppWhatsAppWebSession(
+  session: AppSession
+): Promise<AppWhatsAppWebSessionResponse> {
+  return requestAppJson(session, "/app/settings/channels/whatsapp/web-session/connect", {
+    method: "POST",
+  });
+}
+
+export async function fetchAppWhatsAppWebSessionQr(
+  session: AppSession
+): Promise<AppWhatsAppWebSessionQrResponse> {
+  return requestAppJson(session, "/app/settings/channels/whatsapp/web-session/qr");
+}
+
+export async function disconnectAppWhatsAppWebSession(
+  session: AppSession
+): Promise<AppWhatsAppWebSessionResponse> {
+  return requestAppJson(session, "/app/settings/channels/whatsapp/web-session/disconnect", {
+    method: "POST",
+  });
+}
+
+export async function resetAppWhatsAppWebSession(
+  session: AppSession
+): Promise<AppWhatsAppWebSessionResponse> {
+  return requestAppJson(session, "/app/settings/channels/whatsapp/web-session/reset", {
+    method: "POST",
   });
 }
 

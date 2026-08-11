@@ -1,6 +1,6 @@
 # WhatsApp web session transport design
 
-Status: Sprint 88C executable foundation, not tenant-operational.
+Status: Sprint 88D administrative connection management, not tenant-operational.
 
 This document covers the WEB_SESSION foundation. It installs a pinned Baileys dependency and
 adds storage, lifecycle, advisory lock and worker skeleton code. It does not create an admin QR
@@ -340,9 +340,91 @@ Local audit at 88C/88C.2 found:
 This isolation is technical only. It does not resolve the legal review required for production
 use of the Web Session runtime or its dependency tree.
 
+## 88D connection management
+
+88D adds the first controlled administrative surface for a laboratory WEB_SESSION account.
+
+Backend endpoints, all tenant-scoped from the authenticated session:
+
+- `GET /app/settings/channels/whatsapp/web-session`
+- `POST /app/settings/channels/whatsapp/web-session`
+- `POST /app/settings/channels/whatsapp/web-session/connect`
+- `GET /app/settings/channels/whatsapp/web-session/qr`
+- `POST /app/settings/channels/whatsapp/web-session/disconnect`
+- `POST /app/settings/channels/whatsapp/web-session/reset`
+
+RBAC:
+
+- `ADMIN` can prepare, connect, disconnect and reset.
+- `SUPERVISOR` can view status and QR state.
+- `AGENT` receives `403`.
+
+The frontend page is:
+
+- `Configurações -> Canais -> WhatsApp`
+- `/app/settings/channels/whatsapp`
+
+The frontend never sends `provider` or `channel` as authority. The backend always writes:
+
+- `channel=whatsapp`
+- `provider=web_session`
+
+`connect` remains blocked unless the authenticated tenant has `features.whatsappWebSession=true`.
+The default remains disabled.
+
+### QR handling
+
+QR strings remain ephemeral:
+
+- not stored in `ChannelAccount.metadata`;
+- not stored in `ChannelAccountSecret`;
+- not written to `Event`;
+- not logged;
+- not exposed through public URLs.
+
+The worker keeps QR values in process memory. For the normal PM2 split, the worker can expose a
+local-only control bridge when configured:
+
+- worker env: `WHATSAPP_WEB_WORKER_CONTROL_PORT`
+- worker env: `WHATSAPP_WEB_WORKER_CONTROL_HOST`, default `127.0.0.1`
+- shared secret env: `WHATSAPP_WEB_WORKER_CONTROL_TOKEN`
+- agent env: `WHATSAPP_WEB_WORKER_CONTROL_URL`
+- agent env: `WHATSAPP_WEB_WORKER_CONTROL_TOKEN`
+
+The bridge endpoint is intentionally narrow:
+
+- `GET /web-session/accounts/:accountId/qr`
+
+It returns only the current in-memory QR for that worker account. If the bridge env is absent,
+the admin QR endpoint can only see QR values generated in the same process, which is useful for
+tests but not enough for a separated PM2 worker.
+
+### Worker behavior
+
+When an eligible account is requested:
+
+- worker acquires the PostgreSQL advisory lock for `ChannelAccount.id`;
+- loads encrypted `baileysAuthState.v1` when present;
+- starts Baileys socket inside `apps/whatsapp-web-worker`;
+- updates lifecycle to `CONNECTING`, `QR_REQUIRED`, `CONNECTED`, `RECONNECTING` or `ERROR`;
+- saves credential updates back to encrypted `ChannelAccountSecret`;
+- clears QR when connected or disconnected;
+- writes sanitized events without QR, full phone, auth state, token or raw Baileys payload.
+
+### Reset
+
+Reset is explicit and destructive for the WEB_SESSION credential only:
+
+- disables runtime;
+- clears current QR;
+- deletes `ChannelAccountSecret.secretKind=baileysAuthState.v1`;
+- sets desired/observed state back to disconnected/pending.
+
+It does not delete the `ChannelAccount` and does not alter Meta/WABA configuration.
+
 ## SECULT impact
 
-SECULT must remain unaffected in 88B and 88C unless separately authorized:
+SECULT must remain unaffected in 88B, 88C and 88D unless separately authorized:
 
 - do not enable `whatsappWebSession`;
 - do not create `ChannelAccount whatsapp/web_session`;
@@ -367,10 +449,17 @@ Implemented foundation:
 9. Minimal Baileys socket factory inside `apps/whatsapp-web-worker`, with terminal QR disabled
    and silent logging.
 
+Implemented in 88D:
+
+- admin status/prepare/connect/QR/disconnect/reset endpoints;
+- admin WhatsApp channel settings page;
+- worker-to-agent local QR bridge option;
+- Baileys auth-state adapter with encrypted snapshot persistence;
+- sanitized lifecycle events for connecting, QR, connected, reconnecting and disconnected states.
+
 Still not implemented:
 
 - production PM2 worker activation;
-- admin QR endpoint/UI;
 - real pairing against a tenant;
 - inbound persistence;
 - outbound sending;
@@ -379,5 +468,6 @@ Still not implemented:
 - billing/ledger integration;
 - tenant rollout.
 
-Readiness after 88C.2: ready for a first administrative connection endpoint/smoke in 88D after
-explicit tenant, environment and legal approval; not ready for production traffic.
+Readiness after 88D: ready for a separately authorized laboratory pairing attempt after
+environment, local worker bridge and PM2 worker setup are reviewed; not ready for inbound or
+production customer traffic.
