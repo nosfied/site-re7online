@@ -14,6 +14,11 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
         handlers.set("process", handler as (...args: never[]) => unknown);
       },
     },
+    ws: {
+      on(eventName: string, handler: (node: unknown) => unknown) {
+        handlers.set(eventName, handler as (...args: never[]) => unknown);
+      },
+    },
   };
   const module = {
     Browsers: {
@@ -31,6 +36,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   let connectionUpdateSeen = false;
   let upsertType = "";
   let updateCount = 0;
+  let socketNodeName = "";
   let batchKeys: string[] = [];
 
   const result = await createBaileysSocketFromModule(module, {
@@ -49,6 +55,9 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
     onMessagesUpdate: (event) => {
       updateCount = event.length;
     },
+    onSocketNode: (event) => {
+      socketNodeName = event.name;
+    },
     onEventBatch: (events) => {
       batchKeys = Object.keys(events);
     },
@@ -66,12 +75,17 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   assert.equal(handlers.has("creds.update"), true);
   assert.equal(handlers.has("messages.upsert"), true);
   assert.equal(handlers.has("messages.update"), true);
+  assert.equal(handlers.has("CB:message"), true);
+  assert.equal(handlers.has("CB:notification"), true);
+  assert.equal(handlers.has("CB:receipt"), true);
+  assert.equal(handlers.has("CB:ack,class:message"), true);
   assert.equal(handlers.has("process"), true);
 
   handlers.get("connection.update")?.({ qr: "qr-payload" } as never);
   await handlers.get("creds.update")?.();
   await handlers.get("messages.upsert")?.({ type: "notify", messages: [] } as never);
   await handlers.get("messages.update")?.([{ key: {}, update: {} }] as never);
+  await handlers.get("CB:message")?.({ tag: "message", attrs: { type: "text" }, content: [{}] } as never);
   await handlers.get("process")?.({ "messages.upsert": { messages: [] } } as never);
 
   assert.deepEqual(qrValues, ["qr-payload"]);
@@ -79,5 +93,6 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   assert.equal(credentialsUpdated, true);
   assert.equal(upsertType, "notify");
   assert.equal(updateCount, 1);
+  assert.equal(socketNodeName, "CB:message");
   assert.deepEqual(batchKeys, ["messages.upsert"]);
 });

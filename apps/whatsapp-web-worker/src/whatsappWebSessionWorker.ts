@@ -427,6 +427,18 @@ async function connectWebSessionAccount(params: {
         cutoverAt: inboundCutoverAt,
       });
     },
+    onSocketNode: async (node) => {
+      logger.info({
+        event: "whatsapp.web.socket.node",
+        tenantKey: params.account.tenantKey,
+        channelAccountId: params.account.channelAccountId,
+        name: node.name,
+        tag: node.tag,
+        type: node.type,
+        className: node.className,
+        childCount: node.childCount,
+      });
+    },
     onEventBatch: async (events) => {
       const eventNames = Object.keys(events).sort();
       if (eventNames.length === 0) return;

@@ -10,6 +10,7 @@ type BaileysSocketFactoryParams = {
   onCredentialsUpdate?: (state: SerializedWebSessionAuthState) => Promise<void> | void;
   onMessagesUpsert?: (event: BaileysMessagesUpsertEvent) => Promise<void> | void;
   onMessagesUpdate?: (event: BaileysMessagesUpdateEvent) => Promise<void> | void;
+  onSocketNode?: (event: BaileysSocketNodeEvent) => Promise<void> | void;
   onEventBatch?: (events: Record<string, unknown>) => Promise<void> | void;
 };
 
@@ -31,6 +32,14 @@ export type BaileysMessagesUpdateEvent = Array<{
   update?: Record<string, unknown>;
 }>;
 
+export type BaileysSocketNodeEvent = {
+  name: string;
+  tag?: string | null;
+  type?: string | null;
+  className?: string | null;
+  childCount: number;
+};
+
 type BaileysModuleLike = {
   default?: (params: Record<string, unknown>) => BaileysSocketLike;
   makeWASocket?: (params: Record<string, unknown>) => BaileysSocketLike;
@@ -48,6 +57,7 @@ type BaileysSocketLike = {
   };
   end?: (error?: Error) => void;
   ws?: {
+    on?: (eventName: string, handler: (node: unknown) => unknown) => void;
     close?: () => void;
   };
 };
@@ -109,12 +119,36 @@ export async function createBaileysSocketFromModule(
   socket.ev.on("messages.update", async (event: BaileysMessagesUpdateEvent) => {
     await params.onMessagesUpdate?.(Array.isArray(event) ? event : []);
   });
+  const socketNodeEvents = ["CB:message", "CB:notification", "CB:receipt", "CB:ack,class:message"];
+  if (typeof socket.ws?.on === "function") {
+    for (const eventName of socketNodeEvents) {
+      socket.ws.on(eventName, async (node: unknown) => {
+        await params.onSocketNode?.(summarizeSocketNode(eventName, node));
+      });
+    }
+  }
   if (typeof socket.ev.process === "function") {
     socket.ev.process(async (events: Record<string, unknown>) => {
       await params.onEventBatch?.(events ?? {});
     });
   }
   return socket;
+}
+
+function summarizeSocketNode(eventName: string, node: unknown): BaileysSocketNodeEvent {
+  const record = node && typeof node === "object" && !Array.isArray(node)
+    ? node as Record<string, unknown>
+    : {};
+  const attrs = record.attrs && typeof record.attrs === "object" && !Array.isArray(record.attrs)
+    ? record.attrs as Record<string, unknown>
+    : {};
+  return {
+    name: eventName,
+    tag: typeof record.tag === "string" ? record.tag : null,
+    type: typeof attrs.type === "string" ? attrs.type : null,
+    className: typeof attrs.class === "string" ? attrs.class : null,
+    childCount: Array.isArray(record.content) ? record.content.length : 0,
+  };
 }
 
 export function closeBaileysSocket(socket: BaileysSocketLike) {
