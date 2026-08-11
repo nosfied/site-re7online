@@ -23,6 +23,7 @@ import { createBaileysAuthState } from "./web-session/baileysAuthState.js";
 import {
   closeBaileysSocket,
   createBaileysSocket,
+  type BaileysMessagesUpdateEvent,
   type BaileysMessagesUpsertEvent,
 } from "./web-session/baileysSocketFactory.js";
 
@@ -399,9 +400,18 @@ async function connectWebSessionAccount(params: {
         cutoverAt: inboundCutoverAt,
       });
     },
+    onMessagesUpdate: async (event) => {
+      await handleWebSessionMessagesUpdate({
+        prisma: params.prisma,
+        account: params.account,
+        event,
+        cutoverAt: inboundCutoverAt,
+      });
+    },
     onEventBatch: async (events) => {
       const eventNames = Object.keys(events).sort();
       if (eventNames.length === 0) return;
+      const messagesUpdate = (events as { "messages.update"?: unknown })["messages.update"];
       logger.info({
         event: "whatsapp.web.event_batch",
         tenantKey: params.account.tenantKey,
@@ -410,6 +420,7 @@ async function connectWebSessionAccount(params: {
         messagesUpsertCount: Array.isArray((events as { "messages.upsert"?: { messages?: unknown[] } })["messages.upsert"]?.messages)
           ? (events as { "messages.upsert"?: { messages?: unknown[] } })["messages.upsert"]?.messages?.length
           : null,
+        messagesUpdateCount: Array.isArray(messagesUpdate) ? messagesUpdate.length : null,
       });
     },
     onConnected: async () => {
@@ -481,6 +492,44 @@ async function connectWebSessionAccount(params: {
   if (active) {
     active.close = closeSocket;
   }
+}
+
+function messagesFromUpdates(event: BaileysMessagesUpdateEvent): BaileysInboundMessageLike[] {
+  return event
+    .map((item) => {
+      const update = item.update && typeof item.update === "object" && !Array.isArray(item.update)
+        ? item.update
+        : {};
+      if (!update.message || typeof update.message !== "object") return null;
+      return {
+        key: item.key,
+        ...update,
+      } as BaileysInboundMessageLike;
+    })
+    .filter((message): message is BaileysInboundMessageLike => Boolean(message));
+}
+
+async function handleWebSessionMessagesUpdate(params: {
+  prisma: WorkerPrismaClient;
+  account: EligibleWebSessionAccount;
+  event: BaileysMessagesUpdateEvent;
+  cutoverAt?: Date | null;
+}) {
+  const messages = messagesFromUpdates(params.event);
+  logger.info({
+    event: "whatsapp.web.inbound.update_received",
+    tenantKey: params.account.tenantKey,
+    channelAccountId: params.account.channelAccountId,
+    count: params.event.length,
+    messagePayloadCount: messages.length,
+  });
+  if (messages.length === 0) return;
+  await handleWebSessionMessagesUpsert({
+    prisma: params.prisma,
+    account: params.account,
+    event: { type: "notify", messages },
+    cutoverAt: params.cutoverAt ?? null,
+  });
 }
 
 async function handleWebSessionMessagesUpsert(params: {
