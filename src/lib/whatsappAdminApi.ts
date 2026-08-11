@@ -891,8 +891,8 @@ async function requestJson<T>(
     }
     const error = new Error(message) as AdminApiError;
     error.status = res.status;
-    if (res.status === 401) error.message = "Token invalido (401).";
-    if (res.status === 403) error.message = "Sem permissao (403).";
+    if (res.status === 401) error.message = "Token inválido (401).";
+    if (res.status === 403) error.message = "Sem permissão (403).";
     if (res.status >= 500) error.message = "Erro no servidor (5xx).";
     throw error;
   }
@@ -960,8 +960,8 @@ async function requestText(
     }
     const error = new Error(message) as AdminApiError;
     error.status = res.status;
-    if (res.status === 401) error.message = "Token invalido (401).";
-    if (res.status === 403) error.message = "Sem permissao (403).";
+    if (res.status === 401) error.message = "Token inválido (401).";
+    if (res.status === 403) error.message = "Sem permissão (403).";
     if (res.status >= 500) error.message = "Erro no servidor (5xx).";
     throw error;
   }
@@ -1007,8 +1007,8 @@ async function requestFormJson<T>(
     }
     const error = new Error(message) as AdminApiError;
     error.status = res.status;
-    if (res.status === 401) error.message = "Token invalido (401).";
-    if (res.status === 403) error.message = "Sem permissao (403).";
+    if (res.status === 401) error.message = "Token inválido (401).";
+    if (res.status === 403) error.message = "Sem permissão (403).";
     if (res.status >= 500) error.message = "Erro no servidor (5xx).";
     throw error;
   }
@@ -1038,8 +1038,8 @@ async function requestAdminBlob(
   if (!res.ok) {
     const error = new Error(res.status >= 500 ? "Erro no servidor (5xx)." : `Request failed (${res.status})`) as AdminApiError;
     error.status = res.status;
-    if (res.status === 401) error.message = "Token invalido (401).";
-    if (res.status === 403) error.message = "Sem permissao (403).";
+    if (res.status === 401) error.message = "Token inválido (401).";
+    if (res.status === 403) error.message = "Sem permissão (403).";
     throw error;
   }
   const disposition = res.headers.get("content-disposition");

@@ -100,7 +100,7 @@ export default function AppLoginPage() {
     if (!mfaChallenge) return;
     const code = mfaCode.replace(/\D/g, "").slice(0, 6);
     if (code.length !== 6) {
-      setError("Informe o codigo de 6 digitos.");
+      setError("Informe o código de 6 dígitos.");
       return;
     }
     setLoading(true);
@@ -236,7 +236,7 @@ export default function AppLoginPage() {
               disabled={loading}
               className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? "Validando..." : "Validar codigo"}
+              {loading ? "Validando..." : "Validar código"}
             </button>
             <button
               type="button"

@@ -71,25 +71,25 @@ function ActionIcon({ children }: { children: ReactNode }) {
 
 function normalizeAppErrorMessage(error: AppApiError, fallback: string) {
   if (error.errorCode === "user_limit_exceeded") {
-    return "Limite de usuarios ativos contratado para este tenant foi atingido.";
+    return "Limite de usuários ativos contratado para esta organização foi atingido.";
   }
   if (error.errorCode === "user_already_exists" || error.status === 409) {
-    return "Ja existe um usuario com esse email.";
+    return "Já existe um usuário com esse email.";
   }
   if (error.errorCode === "department_required") {
     return "Selecione um setor para AGENT ou SUPERVISOR.";
   }
   if (error.errorCode === "department_not_found") {
-    return "Setor invalido para este tenant.";
+    return "Setor inválido para esta organização.";
   }
   if (error.errorCode === "invalid_role") {
-    return "Selecione um perfil valido.";
+    return "Selecione um perfil válido.";
   }
   if (error.errorCode === "weak_password") {
     return "Senha deve ter pelo menos 6 caracteres.";
   }
   if (error.status === 403) {
-    return "Sem permissao para gerenciar usuarios.";
+    return "Sem permissão para gerenciar usuários.";
   }
   return error.message || fallback;
 }
@@ -221,7 +221,7 @@ export default function AppSettingsUsersPage() {
     }
     const emailUsed = userForm.email.trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(emailUsed)) {
-      setUserError("Informe um email valido.");
+      setUserError("Informe um email válido.");
       return;
     }
     if (isDepartmentRequired(userForm.role) && !userForm.departmentId) {
@@ -245,14 +245,14 @@ export default function AppSettingsUsersPage() {
       setUserForm(EMPTY_USER_FORM);
       setShowCreateUserForm(false);
       await loadPageData(session);
-      setUserSuccess(`Usuario criado com sucesso. Email: ${emailUsed}`);
+      setUserSuccess(`Usuário criado com sucesso. Email: ${emailUsed}`);
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setUserError(normalizeAppErrorMessage(typed, "Nao foi possivel criar o usuario."));
+      setUserError(normalizeAppErrorMessage(typed, "Não foi possível criar o usuário."));
     } finally {
       setCreatingUser(false);
     }
@@ -264,15 +264,15 @@ export default function AppSettingsUsersPage() {
     if (!draft) return;
     const nextRole = String(draft.role ?? item.role).trim().toUpperCase();
     if (!USER_ROLE_OPTIONS.includes(nextRole as (typeof USER_ROLE_OPTIONS)[number])) {
-      setActionError("Selecione um perfil valido.");
+      setActionError("Selecione um perfil válido.");
       return;
     }
     if (!draft.name.trim() || !draft.email.trim()) {
-      setActionError("Nome e email sao obrigatorios.");
+      setActionError("Nome e email são obrigatórios.");
       return;
     }
     if (!/^\S+@\S+\.\S+$/.test(draft.email.trim().toLowerCase())) {
-      setActionError("Informe um email valido.");
+      setActionError("Informe um email válido.");
       return;
     }
     if (isDepartmentRequired(nextRole) && !draft.departmentId) {
@@ -308,7 +308,7 @@ export default function AppSettingsUsersPage() {
         handleUnauthorized();
         return;
       }
-      setActionError(normalizeAppErrorMessage(typed, "Nao foi possivel atualizar o usuario."));
+      setActionError(normalizeAppErrorMessage(typed, "Não foi possível atualizar o usuário."));
     } finally {
       setSavingUserId(null);
     }
@@ -340,7 +340,7 @@ export default function AppSettingsUsersPage() {
               Novo usuario
             </span>
             <p className="text-xs text-white/65 sm:text-sm">
-              Crie usuarios do tenant apenas quando necessario.
+              Crie usuários desta organização apenas quando necessário.
             </p>
           </div>
           <button
@@ -438,7 +438,7 @@ export default function AppSettingsUsersPage() {
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-white/55">
-                Reset de senha ainda nao existe no /app. A rota equivalente precisa ser criada no backend antes da UI.
+                Redefinição de senha ainda não existe no app. A rota equivalente precisa ser criada no backend antes da interface.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -470,7 +470,7 @@ export default function AppSettingsUsersPage() {
       <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold">Usuarios do tenant</h2>
+            <h2 className="text-base font-semibold">Usuários da organização</h2>
             <p className="mt-0.5 text-xs text-white/65 sm:text-sm">
               Edite os dados na linha do usuario e clique em Salvar.
             </p>

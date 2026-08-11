@@ -11,6 +11,7 @@ import {
   loadAppSession,
   saveAppSession,
 } from "@/lib/appClientApi";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 import type {
   AppApiError,
   AppSession,
@@ -26,16 +27,16 @@ type ViewerState = {
 };
 
 function getTrainingErrorMessage(error: AppApiError, fallback: string) {
-  if (error.status === 401) return "Sessao expirada. Faca login novamente.";
-  if (error.status === 403) return "Sem permissao para acessar treinamentos.";
-  if (error.errorCode === "training_storage_unavailable") return "Os materiais de treinamento ainda nao estao disponiveis.";
-  if (error.errorCode === "training_content_not_found") return "Material nao encontrado.";
-  if (error.errorCode === "training_content_unavailable") return "Material indisponivel no momento.";
-  return error.message || fallback;
+  if (error.status === 401) return "Sessão expirada. Faça login novamente.";
+  if (error.status === 403) return "Sem permissão para acessar treinamentos.";
+  if (error.errorCode === "training_storage_unavailable") return "Os materiais de treinamento ainda não estão disponíveis.";
+  if (error.errorCode === "training_content_not_found") return "Material não encontrado.";
+  if (error.errorCode === "training_content_unavailable") return "Material indisponível no momento.";
+  return getAppErrorUxMessage({ status: error.status, errorCode: error.errorCode, message: error.message, fallback });
 }
 
 function typeLabel(type: AppTrainingCatalogItem["type"]) {
-  if (type === "video") return "Video";
+  if (type === "video") return "Vídeo";
   if (type === "pdf") return "PDF";
   return "Link";
 }
@@ -82,7 +83,7 @@ export default function TrainingPage() {
         }
         setToast({
           variant: "error",
-          message: getTrainingErrorMessage(error, "Nao foi possivel carregar os treinamentos."),
+          message: getTrainingErrorMessage(error, "Não foi possível carregar os treinamentos."),
         });
       })
       .finally(() => setLoading(false));
@@ -128,7 +129,7 @@ export default function TrainingPage() {
     } catch (error) {
       const typed = error as AppApiError;
       if (typed.status === 401) handleUnauthorized();
-      else setToast({ variant: "error", message: getTrainingErrorMessage(typed, "Nao foi possivel abrir o material.") });
+      else setToast({ variant: "error", message: getTrainingErrorMessage(typed, "Não foi possível abrir o material.") });
     } finally {
       setOpeningId(null);
     }
@@ -153,7 +154,7 @@ export default function TrainingPage() {
     <AppShell
       session={session}
       title="Treinamentos"
-      subtitle="Materiais de apoio para operar o Converta com seguranca."
+      subtitle="Materiais de apoio para operar o Converta com segurança."
     >
       <FeedbackToast
         message={toast?.message ?? null}
@@ -168,9 +169,9 @@ export default function TrainingPage() {
               <p className="theme-soft text-xs font-semibold uppercase leading-none tracking-[0.16em]">
                 Centro de aprendizagem
               </p>
-              <h2 className="mt-2 text-xl font-bold">Conteudos disponiveis</h2>
+              <h2 className="mt-2 text-xl font-bold">Conteúdos disponíveis</h2>
               <p className="theme-muted mt-1 max-w-3xl text-sm leading-6">
-                Videos, guias e materiais oficiais publicados pela equipe da plataforma.
+                Vídeos, guias e materiais oficiais publicados pela equipe da plataforma.
               </p>
             </div>
             <button
@@ -182,7 +183,7 @@ export default function TrainingPage() {
                   .catch((error: AppApiError) =>
                     setToast({
                       variant: "error",
-                      message: getTrainingErrorMessage(error, "Nao foi possivel atualizar os treinamentos."),
+                      message: getTrainingErrorMessage(error, "Não foi possível atualizar os treinamentos."),
                     })
                   )
                   .finally(() => setLoading(false));
@@ -196,7 +197,7 @@ export default function TrainingPage() {
 
           {!catalog?.storageConfigured ? (
             <div className="mt-4 rounded-lg border border-amber-300/35 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-              Os materiais de treinamento estao sendo preparados para este ambiente.
+              Os materiais de treinamento estão sendo preparados para este ambiente.
             </div>
           ) : null}
         </section>
@@ -205,7 +206,7 @@ export default function TrainingPage() {
           <section className="theme-surface rounded-lg border p-6 text-sm">Carregando treinamentos...</section>
         ) : totalItems === 0 ? (
           <section className="theme-surface rounded-lg border p-6 text-sm">
-            Nenhum treinamento disponivel no momento.
+            Nenhum treinamento disponível no momento.
           </section>
         ) : (
           catalog?.sections.map((section) => (

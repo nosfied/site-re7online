@@ -385,13 +385,13 @@ function getTimelineKindClass(item: AppContactTimelineItem) {
 function getMessageContentLabel(item: InboxMessageItem) {
   switch (item.type?.toUpperCase()) {
     case "LOCATION":
-      return "Localizacao";
+      return "Localização";
     case "AUDIO":
-      return "Audio";
+      return "Áudio";
     case "IMAGE":
       return "Imagem";
     case "VIDEO":
-      return "Video";
+      return "Vídeo";
     case "DOCUMENT":
       return "Documento";
     case "TEMPLATE":
@@ -483,8 +483,8 @@ function getTimelineReplyPreview(item: InboxMessageItem) {
 
 function getReferenceMediaFallbackLabel(kind: NonNullable<InboxMessageItem["media"]>["kind"]) {
   if (kind === "image") return "Imagem";
-  if (kind === "video") return "Video";
-  if (kind === "audio") return "Audio";
+  if (kind === "video") return "Vídeo";
+  if (kind === "audio") return "Áudio";
   return "Documento";
 }
 
@@ -495,13 +495,13 @@ function getConversationPreviewText(item: InboxConversationItem) {
   const directionLabelFemale = item.lastMessage.direction === "OUTBOUND" ? "enviada" : "recebida";
   switch (item.lastMessage.type?.toUpperCase()) {
     case "LOCATION":
-      return `Localizacao ${directionLabelFemale}`;
+      return `Localização ${directionLabelFemale}`;
     case "AUDIO":
-      return `Audio ${directionLabel}`;
+      return `Áudio ${directionLabel}`;
     case "IMAGE":
       return `Imagem ${directionLabelFemale}`;
     case "VIDEO":
-      return `Video ${directionLabel}`;
+      return `Vídeo ${directionLabel}`;
     case "DOCUMENT":
       return `Documento ${directionLabel}`;
     case "TEMPLATE":
@@ -530,7 +530,7 @@ function isUnsupportedMessage(item: InboxMessageItem) {
 function LocationBubble({ location }: { location: NonNullable<InboxMessageItem["location"]> }) {
   return (
     <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-slate-800">
-      <p className="font-semibold">{location.name || "Localizacao compartilhada"}</p>
+      <p className="font-semibold">{location.name || "Localização compartilhada"}</p>
       {location.address ? <p className="mt-1 text-xs leading-relaxed text-slate-700">{location.address}</p> : null}
       <p className="mt-1 font-mono text-[11px] text-slate-600">
         {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
@@ -622,7 +622,7 @@ function MediaBubble({
         mediaNotFoundCache.set(mediaCacheKey, Date.now());
         setError("Mídia indisponível.");
       } else {
-        setError("Falha ao carregar mídia.");
+        setError("Não foi possível carregar a mídia.");
       }
     } finally {
       setLoading(false);
@@ -672,7 +672,7 @@ function MediaBubble({
       anchor.click();
       window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
     } catch {
-      setError("Falha ao baixar midia.");
+      setError("Não foi possível baixar a mídia.");
     }
   }, [item.messageId, media?.fileName, media?.hasDownload, mediaBlob, session, waId]);
 
@@ -685,9 +685,9 @@ function MediaBubble({
           {media.kind === "image"
             ? "Imagem enviada"
             : media.kind === "audio"
-              ? "Audio enviado"
+              ? "Áudio enviado"
               : media.kind === "video"
-                ? "Video enviado"
+                ? "Vídeo enviado"
                 : media.fileName
                   ? `Documento enviado (${media.fileName})`
                   : "Documento enviado"}
@@ -717,14 +717,14 @@ function MediaBubble({
             className="block w-[18rem] max-w-full min-w-[18rem]"
           />
         ) : loading ? (
-          <p className="text-xs text-slate-600">Carregando audio...</p>
+          <p className="text-xs text-slate-600">Carregando áudio...</p>
         ) : media.hasDownload ? (
           <button
             type="button"
             onClick={() => void loadMedia()}
             className="rounded-lg border border-[#d4c7b5] bg-white/80 px-3 py-2 text-sm text-slate-900"
           >
-            Carregar audio
+            Carregar áudio
           </button>
         ) : null
       ) : null}
@@ -738,14 +738,14 @@ function MediaBubble({
             className="max-h-72 w-full rounded-xl border border-black/10"
           />
         ) : loading ? (
-          <p className="text-xs text-slate-600">Carregando video...</p>
+          <p className="text-xs text-slate-600">Carregando vídeo...</p>
         ) : media.hasDownload ? (
           <button
             type="button"
             onClick={() => void loadMedia()}
             className="rounded-lg border border-[#d4c7b5] bg-white/80 px-3 py-2 text-sm text-slate-900"
           >
-            Carregar midia
+            Carregar mídia
           </button>
         ) : null
       ) : null}
@@ -879,9 +879,9 @@ function MessageReferencePreview({
     const marker = media.kind === "video" ? "PLAY" : media.kind === "audio" ? "AUD" : "DOC";
     const ariaLabel =
       media.kind === "video"
-        ? "Video referenciado"
+        ? "Vídeo referenciado"
         : media.kind === "audio"
-          ? "Audio referenciado"
+          ? "Áudio referenciado"
           : "Documento referenciado";
     return (
       <div className="mt-1 flex min-w-0 items-center gap-2">
@@ -900,11 +900,11 @@ function MessageReferencePreview({
     const text =
       getTruncatedReferenceText(location.name) ||
       getTruncatedReferenceText(location.address) ||
-      "Localizacao compartilhada";
+      "Localização compartilhada";
     return (
       <div className="mt-1 flex min-w-0 items-center gap-2">
         <span
-          aria-label="Localizacao referenciada"
+          aria-label="Localização referenciada"
           className="flex h-8 w-10 shrink-0 items-center justify-center rounded-md border border-sky-300 bg-sky-50 text-[10px] font-bold text-sky-700"
         >
           PIN
@@ -2379,7 +2379,9 @@ export default function AppInboxPage() {
           handleUnauthorized();
           return;
         }
-        setContactTimelineError((err as Error).message || "Falha ao carregar historico.");
+        setContactTimelineError(
+          getAppErrorUxMessage({ status: (err as { status?: number }).status, message: (err as Error).message, fallback: "Não foi possível carregar o histórico." })
+        );
       } finally {
         setLoadingContactTimeline(false);
       }
@@ -3456,7 +3458,13 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setError((err as { message?: string }).message || "Falha ao carregar mais conversas.");
+      setError(
+        getAppErrorUxMessage({
+          status: (err as { status?: number }).status,
+          message: (err as { message?: string }).message,
+          fallback: "Não foi possível carregar mais conversas.",
+        })
+      );
     } finally {
       setLoadingConversationsPage(false);
     }
@@ -3604,7 +3612,7 @@ export default function AppInboxPage() {
           return;
         }
         suppressNextConversationRefreshNotificationRef.current = false;
-        setError(err.message || "Falha ao carregar conversas.");
+        setError(getAppErrorUxMessage({ status: err.status, message: err.message, fallback: "Não foi possível carregar as conversas." }));
       })
       .finally(() => {
         if (!cancelled) setLoadingConversations(false);
@@ -3721,7 +3729,7 @@ export default function AppInboxPage() {
           setError(null);
           return;
         }
-        setError(err.message || "Falha ao carregar timeline.");
+        setError(getAppErrorUxMessage({ status: err.status, message: err.message, fallback: "Não foi possível carregar o histórico da conversa." }));
       })
       .finally(() => {
         if (!cancelled) setLoadingMessages(false);
@@ -3765,7 +3773,7 @@ export default function AppInboxPage() {
           setError(null);
           return;
         }
-        setError(err.message || "Falha ao carregar timeline.");
+        setError(getAppErrorUxMessage({ status: err.status, message: err.message, fallback: "Não foi possível carregar o histórico da conversa." }));
       })
       .finally(() => {
         if (!cancelled) {
@@ -4443,7 +4451,7 @@ export default function AppInboxPage() {
           handleUnauthorized();
           return;
         }
-        setLeadError(err.message || "Falha ao carregar notas do lead.");
+        setLeadError(getAppErrorUxMessage({ status: err.status, message: err.message, fallback: "Não foi possível carregar as notas do contato." }));
       })
       .finally(() => {
         if (!cancelled) setLoadingLeadNotes(false);
@@ -4474,7 +4482,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setLeadError(typed.message || "Falha ao atualizar andamento do contato.");
+      setLeadError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível atualizar o andamento do contato." }));
     } finally {
       setSavingLeadStatus(false);
     }
@@ -4506,7 +4514,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setLeadError(typed.message || "Falha ao registrar nota.");
+      setLeadError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível registrar a nota." }));
     } finally {
       setSavingLeadNote(false);
     }
@@ -4566,7 +4574,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setLeadError(typed.message || "Falha ao salvar dados do contato.");
+      setLeadError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível salvar os dados do contato." }));
     } finally {
       setSavingLeadName(false);
     }
@@ -4683,7 +4691,7 @@ export default function AppInboxPage() {
             setMessageDraft((current) => (current.trim() ? `${current}\n${next.text}` : next.text));
             setReplyTarget(next.replyTo);
           }
-          setError(typed.message || "Falha ao enviar mensagem.");
+          setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível enviar a mensagem." }));
           setErrorDetails(typed.details || null);
           break;
         }
@@ -4839,7 +4847,7 @@ export default function AppInboxPage() {
           handleUnauthorized();
           return;
         }
-        setError(typed.message || "Falha ao enviar arquivo.");
+        setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível enviar o arquivo." }));
         setErrorDetails(typed.details || null);
       } finally {
         setSendingMessage(false);
@@ -4893,7 +4901,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setTemplateError(typed.message || "Falha ao carregar modelos.");
+      setTemplateError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível carregar os modelos." }));
     } finally {
       setTemplatesLoading(false);
     }
@@ -5023,7 +5031,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setTemplateError(typed.message || "Falha ao enviar modelo.");
+      setTemplateError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível enviar o modelo." }));
       setErrorDetails(typed.details || null);
     } finally {
       setSendingTemplate(false);
@@ -5044,7 +5052,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setCannedReplyError(typed.message || "Falha ao carregar mensagens prontas.");
+      setCannedReplyError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível carregar as mensagens prontas." }));
     } finally {
       setCannedRepliesLoading(false);
     }
@@ -5053,7 +5061,7 @@ export default function AppInboxPage() {
   const handleOpenCannedModal = useCallback(() => {
     if (!selectedConversationWaId || !selectedConversation) return;
     if (!selectedConversationSupportsTemplateOutbound) {
-      setError("Mensagens prontas estao disponiveis apenas para conversas WhatsApp nesta etapa.");
+      setError("Mensagens prontas estão disponíveis apenas para conversas WhatsApp nesta etapa.");
       setErrorDetails(null);
       return;
     }
@@ -5191,7 +5199,7 @@ export default function AppInboxPage() {
       setCannedReplyError(
         code === "window_closed"
           ? "A janela de atendimento está fechada. Use um modelo aprovado."
-          : typed.message || "Falha ao enviar mensagem pronta."
+          : getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível enviar a mensagem pronta." })
       );
       setErrorDetails(typed.details || null);
     } finally {
@@ -5307,7 +5315,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Falha ao assumir conversa.");
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível assumir a conversa." }));
     } finally {
       setConversationAction(null);
     }
@@ -5330,7 +5338,7 @@ export default function AppInboxPage() {
         releasedKey ? prev.filter((item) => getConversationIdentity(item) !== releasedKey) : prev
       );
       clearSelectedConversation();
-      setSuccess("Conversa liberada para automacao.");
+      setSuccess("Conversa liberada para automação.");
       void refreshConversationList(session).catch((err) => {
         if ((err as { status?: number }).status === 401) handleUnauthorized();
       });
@@ -5340,7 +5348,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Falha ao liberar conversa.");
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível liberar a conversa." }));
     } finally {
       setConversationAction(null);
     }
@@ -5378,7 +5386,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Falha ao liberar conversa para Atendimento Geral.");
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível liberar a conversa para Atendimento Geral." }));
     } finally {
       setConversationAction(null);
     }
@@ -5452,7 +5460,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Falha ao finalizar atendimento.");
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível finalizar o atendimento." }));
     } finally {
       setConversationAction(null);
     }
@@ -5522,7 +5530,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Falha ao transferir conversa.");
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível transferir a conversa." }));
     } finally {
       setConversationAction(null);
     }
@@ -5554,7 +5562,7 @@ export default function AppInboxPage() {
       setSuccess(`Conversa transferida para o setor ${targetDepartmentName}.`);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
-      setError(typed.message || "Falha ao transferir conversa de setor.");
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível transferir a conversa de setor." }));
     } finally {
       setConversationAction(null);
     }
@@ -5581,7 +5589,7 @@ export default function AppInboxPage() {
       setStatusActionDraft(
         selectedConversation ? getConversationOperationalStatus(selectedConversation) ?? "" : ""
       );
-      setError(typed.message || "Falha ao atualizar situação do atendimento.");
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível atualizar a situação do atendimento." }));
     } finally {
       setConversationAction(null);
     }

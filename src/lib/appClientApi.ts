@@ -1984,7 +1984,7 @@ export async function loginAppUser(
     }
     const error = new Error(message) as AppApiError;
     error.status = res.status;
-    if (res.status === 401) error.message = "Email ou senha invalidos.";
+    if (res.status === 401) error.message = "Email ou senha inválidos.";
     if (res.status === 409) error.message = "Email ambiguo entre clientes.";
     if (res.status >= 500) error.message = getAppErrorUxMessage({ status: res.status });
     throw error;

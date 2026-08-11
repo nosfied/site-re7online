@@ -18,6 +18,7 @@ import {
   saveAppSession,
 } from "@/lib/appClientApi";
 import { hasCapability } from "@/lib/appFeatures";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 import type {
   AdminDepartmentItem,
   AdminUserItem,
@@ -124,10 +125,10 @@ function getLastMessagePreview(card: AppOperationsBoardCard) {
   const text = card.lastMessage?.bodyText?.trim();
   if (text) return text;
   const type = card.lastMessage?.type?.toLowerCase();
-  if (type === "location") return "Localizacao";
+  if (type === "location") return "Localização";
   if (type === "image") return "Imagem";
-  if (type === "audio") return "Audio";
-  if (type === "video") return "Video";
+  if (type === "audio") return "Áudio";
+  if (type === "video") return "Vídeo";
   if (type === "document") return "Documento";
   return "Sem mensagem recente";
 }
@@ -258,7 +259,7 @@ function OperationsCard({
 
       <div className="border-b border-white/10 py-2">
         <p className="truncate text-sm font-semibold leading-tight text-white">
-          {card.contactName || "Contato nao identificado"}
+          {card.contactName || "Contato não identificado"}
         </p>
         {card.company ? <p className="mt-0.5 truncate text-[11px] leading-tight text-white/55">{card.company}</p> : null}
         <p className="mt-1.5 line-clamp-1 text-[11px] leading-snug text-white/68">
@@ -446,7 +447,7 @@ export default function AppOperationsPage() {
           router.replace("/app/inbox");
           return;
         }
-        setError(typed.message || "Nao foi possivel carregar o quadro operacional.");
+        setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível carregar o quadro operacional." }));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -467,7 +468,7 @@ export default function AppOperationsPage() {
           handleUnauthorized();
           return;
         }
-        setError(typed.message || "Nao foi possivel aplicar filtros.");
+        setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível aplicar os filtros." }));
       })
       .finally(() => setLoading(false));
   }, [handleUnauthorized, loadBoard, session]);
@@ -499,7 +500,7 @@ export default function AppOperationsPage() {
           handleUnauthorized();
           return;
         }
-        setError(typed.message || "Nao foi possivel carregar mais conversas.");
+        setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível carregar mais conversas." }));
       } finally {
         setLoadingMore(null);
       }

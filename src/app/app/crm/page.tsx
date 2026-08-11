@@ -403,7 +403,7 @@ function CrmContactDetailDrawer({
             </div>
           ) : error && !detail ? (
             <div className="theme-surface rounded-xl border p-8 text-center">
-              <h3 className="text-base font-semibold text-white">Nao foi possivel carregar o cadastro</h3>
+              <h3 className="text-base font-semibold text-white">Não foi possível carregar o cadastro</h3>
               <p className="mt-2 text-sm theme-muted">{error}</p>
               <button
                 type="button"
@@ -477,7 +477,7 @@ function CrmContactDetailDrawer({
                         className="theme-input h-10 rounded-md border px-3 text-sm"
                         maxLength={180}
                       />
-                      {emailDraftInvalid ? <span className="text-xs text-amber-200">Informe um e-mail valido.</span> : null}
+                      {emailDraftInvalid ? <span className="text-xs text-amber-200">Informe um e-mail válido.</span> : null}
                     </label>
                     <label className="grid gap-1.5 text-sm">
                       <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Cidade</span>
@@ -582,7 +582,7 @@ function CrmContactDetailDrawer({
 
               <DetailSection title="Conversas relacionadas">
                 <p className="mt-1 text-sm theme-muted">
-                  Abertura usa a identidade operacional esperada pelo Inbox, sempre no tenant da sessao.
+                  Abertura usa a identidade operacional esperada pela caixa de entrada, sempre na organização da sessão.
                 </p>
                 <div className="mt-4 grid gap-2">
                   {conversations.length === 0 ? (

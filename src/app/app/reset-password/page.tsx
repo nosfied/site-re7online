@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
 import ThemeSelector from "@/components/ThemeSelector";
 import { resetAppPassword } from "@/lib/appClientApi";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -21,7 +22,7 @@ function ResetPasswordForm() {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!token) {
-      setError("Link de recuperacao invalido.");
+      setError("Link de recuperação inválido.");
       return;
     }
     if (password.length < 8) {
@@ -29,7 +30,7 @@ function ResetPasswordForm() {
       return;
     }
     if (password !== confirmation) {
-      setError("As senhas nao conferem.");
+      setError("As senhas não conferem.");
       return;
     }
     setLoading(true);
@@ -42,7 +43,7 @@ function ResetPasswordForm() {
       setConfirmation("");
       window.setTimeout(() => router.replace("/app/login"), 1800);
     } catch (err) {
-      setError((err as Error).message || "Nao foi possivel alterar a senha.");
+      setError(getAppErrorUxMessage({ message: (err as Error).message, fallback: "Não foi possível alterar a senha." }));
     } finally {
       setLoading(false);
     }

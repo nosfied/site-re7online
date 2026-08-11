@@ -16,18 +16,19 @@ import {
   saveAppSession,
   updateAppRetentionConfig,
 } from "@/lib/appClientApi";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 
 function isAdminRole(role: string) {
   return role.trim().toUpperCase() === "ADMIN";
 }
 
 function normalizePrivacyError(error: AppApiError, fallback: string) {
-  if (error.status === 403) return "Apenas administradores podem executar acoes LGPD.";
+  if (error.status === 403) return "Apenas administradores podem executar ações LGPD.";
   if (error.errorCode === "conversation_not_found" || error.status === 404) {
-    return "Conversa nao encontrada neste tenant.";
+    return "Conversa não encontrada nesta organização.";
   }
   if (error.errorCode === "bad_request") return error.message || fallback;
-  return error.message || fallback;
+  return getAppErrorUxMessage({ status: error.status, errorCode: error.errorCode, message: error.message, fallback });
 }
 
 export default function AppPrivacySettingsPage() {
@@ -97,7 +98,7 @@ export default function AppPrivacySettingsPage() {
           router.replace("/app/inbox");
           return;
         }
-        setError(normalizePrivacyError(typed, "Falha ao carregar configuracoes de privacidade."));
+        setError(normalizePrivacyError(typed, "Não foi possível carregar as configurações de privacidade."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -117,7 +118,7 @@ export default function AppPrivacySettingsPage() {
     if (!session) return;
     const days = Number(retentionDays);
     if (!Number.isInteger(days) || days < 1 || days > 3650) {
-      setError("Informe dias de retencao entre 1 e 3650.");
+      setError("Informe dias de retenção entre 1 e 3650.");
       return;
     }
     setSavingRetention(true);
@@ -133,7 +134,7 @@ export default function AppPrivacySettingsPage() {
         handleUnauthorized();
         return;
       }
-      setError(normalizePrivacyError(typed, "Falha ao salvar retencao."));
+      setError(normalizePrivacyError(typed, "Não foi possível salvar a retenção."));
     } finally {
       setSavingRetention(false);
     }
@@ -148,14 +149,14 @@ export default function AppPrivacySettingsPage() {
       const response = await executeAppRetention(session);
       setRetentionModalOpen(false);
       setRetentionConfirmation("");
-      setSuccess(`Retencao executada. Conversas removidas da operacao: ${response.deletedConversations}.`);
+      setSuccess(`Retenção executada. Conversas removidas da operação: ${response.deletedConversations}.`);
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setError(normalizePrivacyError(typed, "Falha ao executar retencao."));
+      setError(normalizePrivacyError(typed, "Não foi possível executar a retenção."));
     } finally {
       setExecutingRetention(false);
     }
@@ -164,7 +165,7 @@ export default function AppPrivacySettingsPage() {
   const openDeleteModal = () => {
     const target = conversationId.trim();
     if (!target) {
-      setError("Informe o waId ou ID da conversa.");
+      setError("Informe o identificador da conversa.");
       return;
     }
     setDeleteModalOpen(true);
@@ -174,7 +175,7 @@ export default function AppPrivacySettingsPage() {
     if (!session) return;
     const target = conversationId.trim();
     if (!target) {
-      setError("Informe o waId ou ID da conversa.");
+      setError("Informe o identificador da conversa.");
       return;
     }
     setDeleting(true);
@@ -184,14 +185,14 @@ export default function AppPrivacySettingsPage() {
       await deleteAppConversationData(session, target);
       setConversationId("");
       setDeleteModalOpen(false);
-      setSuccess("Conversa removida da operacao com sucesso.");
+      setSuccess("Conversa removida da operação com sucesso.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setError(normalizePrivacyError(typed, "Falha ao excluir conversa."));
+      setError(normalizePrivacyError(typed, "Não foi possível excluir a conversa."));
     } finally {
       setDeleting(false);
     }
@@ -200,7 +201,7 @@ export default function AppPrivacySettingsPage() {
   const openAnonymizeModal = () => {
     const target = conversationId.trim();
     if (!target) {
-      setError("Informe o waId ou ID da conversa.");
+      setError("Informe o identificador da conversa.");
       return;
     }
     setAnonymizeConfirmation("");
@@ -211,7 +212,7 @@ export default function AppPrivacySettingsPage() {
     if (!session) return;
     const target = conversationId.trim();
     if (!target) {
-      setError("Informe o waId ou ID da conversa.");
+      setError("Informe o identificador da conversa.");
       return;
     }
     setAnonymizing(true);
@@ -222,14 +223,14 @@ export default function AppPrivacySettingsPage() {
       setConversationId("");
       setAnonymizeModalOpen(false);
       setAnonymizeConfirmation("");
-      setSuccess("Dados anonimizados. A conversa saiu da operacao e nao sera restaurada.");
+      setSuccess("Dados anonimizados. A conversa saiu da operação e não será restaurada.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setError(normalizePrivacyError(typed, "Falha ao anonimizar conversa."));
+      setError(normalizePrivacyError(typed, "Não foi possível anonimizar a conversa."));
     } finally {
       setAnonymizing(false);
     }
@@ -243,7 +244,7 @@ export default function AppPrivacySettingsPage() {
     <AppShell
       session={session}
       title="Privacidade"
-      subtitle="Ferramentas minimas de LGPD para operacao do tenant."
+      subtitle="Ferramentas mínimas de LGPD para operação da organização."
     >
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
       <FeedbackToast message={success} variant="success" {...toastHandlers} />
@@ -253,7 +254,7 @@ export default function AppPrivacySettingsPage() {
           <div className="theme-border border-b p-3 min-[1441px]:p-4">
             <h2 className="text-base font-semibold min-[1441px]:text-lg">Dados de conversa</h2>
             <p className="theme-muted mt-0.5 text-xs min-[1441px]:mt-1 min-[1441px]:text-sm">
-              Informe o waId ou ID interno da conversa para remover da operacao ou anonimizar dados.
+              Informe o identificador da conversa para remover da operação ou anonimizar dados.
             </p>
           </div>
           <div className="space-y-3 p-3 min-[1441px]:space-y-4 min-[1441px]:p-4">
@@ -272,7 +273,7 @@ export default function AppPrivacySettingsPage() {
                 Acoes reversiveis
               </p>
               <p className="theme-muted mt-1 text-xs min-[1441px]:text-sm">
-                Exclusao remove a conversa apenas da operacao.
+                Exclusão remove a conversa apenas da operação.
               </p>
               <button
                 type="button"
@@ -280,7 +281,7 @@ export default function AppPrivacySettingsPage() {
                 disabled={loading || deleting || anonymizing}
                 className="theme-nav-link mt-2.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 min-[1441px]:mt-3 min-[1441px]:px-4 min-[1441px]:py-2 min-[1441px]:text-sm"
               >
-                {deleting ? "Excluindo..." : "Excluir da operacao"}
+                {deleting ? "Excluindo..." : "Excluir da operação"}
               </button>
             </div>
             <div className="theme-soft-danger-panel rounded-xl border p-2.5 min-[1441px]:p-3">
@@ -306,11 +307,11 @@ export default function AppPrivacySettingsPage() {
             </div>
             <p className="theme-soft text-xs leading-relaxed">
               Anonimizacao remove permanentemente os dados pessoais. Exclusao remove a conversa
-              apenas da operacao.
+              apenas da operação.
             </p>
             <p className="theme-soft text-xs leading-relaxed">
-              Apos anonimizacao, a conversa sai da operacao e nao sera restaurada. Se o contato
-              voltar, um novo atendimento sera iniciado.
+              Após anonimização, a conversa sai da operação e não será restaurada. Se o contato
+              voltar, um novo atendimento será iniciado.
             </p>
           </div>
         </section>
@@ -318,11 +319,11 @@ export default function AppPrivacySettingsPage() {
         <section className="theme-surface rounded-xl border">
           <div className="theme-border border-b p-3 min-[1441px]:p-4">
             <h2 className="text-base font-semibold min-[1441px]:text-lg">Retencao</h2>
-            <p className="theme-muted mt-0.5 text-xs min-[1441px]:mt-1 min-[1441px]:text-sm">Padrao do tenant: 90 dias.</p>
+            <p className="theme-muted mt-0.5 text-xs min-[1441px]:mt-1 min-[1441px]:text-sm">Padrão da organização: 90 dias.</p>
           </div>
           <form className="space-y-3 p-3 min-[1441px]:space-y-4 min-[1441px]:p-4" onSubmit={handleSaveRetention}>
             <label className="theme-muted block text-xs font-medium min-[1441px]:text-sm" htmlFor="retention-days">
-              Dias de retencao
+              Dias de retenção
             </label>
             <input
               id="retention-days"
@@ -334,7 +335,7 @@ export default function AppPrivacySettingsPage() {
               className="theme-select w-full rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-re7-sky/40 min-[1441px]:rounded-xl min-[1441px]:px-3 min-[1441px]:py-2 min-[1441px]:text-sm"
             />
             <p className="theme-soft-warning-panel rounded-xl border px-2.5 py-1.5 text-xs leading-relaxed min-[1441px]:px-3 min-[1441px]:py-2">
-              Valores baixos (ex: 1-7 dias) podem remover conversas ativas da operacao.
+              Valores baixos (ex: 1-7 dias) podem remover conversas ativas da operação.
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -342,7 +343,7 @@ export default function AppPrivacySettingsPage() {
                 disabled={loading || savingRetention}
                 className="rounded-lg bg-re7-sky px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-re7-sky/90 disabled:cursor-not-allowed disabled:opacity-50 min-[1441px]:px-4 min-[1441px]:py-2 min-[1441px]:text-sm"
               >
-                {savingRetention ? "Salvando..." : "Salvar retencao"}
+                {savingRetention ? "Salvando..." : "Salvar retenção"}
               </button>
               <button
                 type="button"
@@ -362,9 +363,9 @@ export default function AppPrivacySettingsPage() {
       {deleteModalOpen ? (
         <div className="theme-modal-backdrop fixed inset-0 z-[80] flex items-center justify-center px-4 backdrop-blur-sm">
           <div className="theme-surface-strong w-full max-w-md rounded-2xl border p-5 shadow-[0_24px_90px_rgba(0,0,0,0.22)]">
-            <h2 className="text-lg font-semibold">Excluir conversa da operacao</h2>
+            <h2 className="text-lg font-semibold">Excluir conversa da operação</h2>
             <p className="theme-muted mt-3 text-sm leading-relaxed">
-              Essa acao remove a conversa da operacao, mas mantem dados tecnicos para auditoria.
+              Essa ação remove a conversa da operação, mas mantém dados técnicos para auditoria.
             </p>
             <p className="theme-surface mt-3 rounded-xl border px-3 py-2 text-sm">
               {conversationId.trim()}
@@ -394,13 +395,13 @@ export default function AppPrivacySettingsPage() {
         <div className="theme-modal-backdrop fixed inset-0 z-[80] flex items-center justify-center px-4 backdrop-blur-sm">
           <div className="theme-surface-strong w-full max-w-lg rounded-2xl border border-amber-600 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.22)]">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold">Executar retencao</h2>
+              <h2 className="text-lg font-semibold">Executar retenção</h2>
               <span className="theme-soft-warning-badge rounded-full border px-2 py-0.5 text-[11px] font-semibold">
                 Acao em massa
               </span>
             </div>
             <p className="theme-muted mt-3 text-sm leading-relaxed">
-              Essa acao pode remover multiplas conversas da operacao.
+              Essa ação pode remover múltiplas conversas da operação.
             </p>
             <p className="theme-soft-warning-panel mt-2 rounded-xl border px-3 py-2 text-sm leading-relaxed">
               Valores baixos (ex: 1-7 dias) podem remover conversas ativas.
@@ -430,7 +431,7 @@ export default function AppPrivacySettingsPage() {
                 disabled={executingRetention || retentionConfirmation !== "EXECUTAR RETENÇÃO"}
                 className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {executingRetention ? "Executando..." : "Confirmar retencao"}
+                {executingRetention ? "Executando..." : "Confirmar retenção"}
               </button>
             </div>
           </div>
@@ -447,7 +448,7 @@ export default function AppPrivacySettingsPage() {
             </div>
             <p className="theme-muted mt-3 text-sm leading-relaxed">
               Essa acao remove permanentemente os dados pessoais desta conversa. Apos confirmar,
-              nao sera possivel recuperar nome, telefone ou informacoes sensiveis.
+              não será possível recuperar nome, telefone ou informações sensíveis.
             </p>
             <p className="theme-surface mt-3 rounded-xl border px-3 py-2 text-sm">
               {conversationId.trim()}
@@ -477,7 +478,7 @@ export default function AppPrivacySettingsPage() {
                 disabled={anonymizing || anonymizeConfirmation !== "ANONIMIZAR"}
                 className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {anonymizing ? "Anonimizando..." : "Confirmar anonimizacao"}
+                {anonymizing ? "Anonimizando..." : "Confirmar anonimização"}
               </button>
             </div>
           </div>

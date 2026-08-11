@@ -16,6 +16,7 @@ import {
   revokeAppPublicApiKey,
   saveAppSession,
 } from "@/lib/appClientApi";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 const DEFAULT_SCOPES: AppPublicApiScope[] = ["read", "contacts", "conversations", "messages"];
@@ -113,7 +114,7 @@ export default function AppApiKeysPage() {
           router.replace("/app/inbox");
           return;
         }
-        setError(typed.message || "Nao foi possivel carregar chaves de API.");
+        setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível carregar as chaves de integração." }));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -132,7 +133,7 @@ export default function AppApiKeysPage() {
   const handleCreate = async () => {
     if (!session) return;
     if (!name.trim()) {
-      setError("Informe um nome para identificar a integracao.");
+      setError("Informe um nome para identificar a integração.");
       return;
     }
     if (selectedScopes.length === 0) {
@@ -154,14 +155,14 @@ export default function AppApiKeysPage() {
       setExpiresAt("");
       setSelectedScopes(DEFAULT_SCOPES);
       await loadKeys(session);
-      setSuccess("Chave criada. Guarde o segredo agora; ele nao sera exibido novamente.");
+      setSuccess("Chave criada. Guarde o segredo agora; ele não será exibido novamente.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Nao foi possivel criar a chave.");
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível criar a chave." }));
     } finally {
       setCreating(false);
     }
@@ -182,7 +183,7 @@ export default function AppApiKeysPage() {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Nao foi possivel revogar a chave.");
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível revogar a chave." }));
     } finally {
       setRevokingId(null);
     }
@@ -194,7 +195,7 @@ export default function AppApiKeysPage() {
       await navigator.clipboard.writeText(createdSecret);
       setSuccess("Chave copiada.");
     } catch {
-      setError("Nao foi possivel copiar automaticamente.");
+      setError("Não foi possível copiar automaticamente.");
     }
   };
 
@@ -205,8 +206,8 @@ export default function AppApiKeysPage() {
   return (
     <AppShell
       session={session}
-      title="API publica"
-      subtitle="Chaves tenant-scoped para integracoes externas. O MVP atual libera apenas health autenticado."
+      title="Chaves de integração"
+      subtitle="Credenciais da organização para integrações externas autorizadas. A versão atual libera apenas verificação autenticada."
     >
       <FeedbackToast
         message={error || success}
@@ -223,7 +224,7 @@ export default function AppApiKeysPage() {
             <div className="min-w-0">
               <h2 className="text-base font-semibold text-white">Nova chave</h2>
               <p className="mt-1 text-sm text-white/60">
-                O segredo sera exibido uma unica vez. Armazenamos somente o hash.
+                O segredo será exibido uma única vez. Armazenamos somente a versão protegida.
               </p>
             </div>
             <span className="rounded-full border border-re7-sky/30 bg-re7-sky/10 px-3 py-1 text-xs font-semibold text-re7-sky">
@@ -235,7 +236,7 @@ export default function AppApiKeysPage() {
             <div className="mt-4 rounded-lg border border-amber-300/30 bg-amber-500/15 p-3">
               <p className="text-sm font-semibold text-amber-100">Copie agora</p>
               <p className="mt-1 text-xs text-amber-100/80">
-                Esta chave nao sera exibida novamente apos sair desta tela.
+                Esta chave não será exibida novamente após sair desta tela.
               </p>
               <code className="mt-3 block max-w-full overflow-x-auto rounded-md bg-black/30 px-3 py-2 text-xs text-white">
                 {createdSecret}
@@ -248,7 +249,7 @@ export default function AppApiKeysPage() {
 
           <div className="mt-4 grid gap-3">
             <label className="grid gap-1.5 text-sm">
-              <span className="font-semibold text-white/80">Nome da integracao</span>
+              <span className="font-semibold text-white/80">Nome da integração</span>
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
@@ -310,7 +311,7 @@ export default function AppApiKeysPage() {
           {loading ? (
             <p className="mt-6 text-sm text-white/60">Carregando chaves...</p>
           ) : keys.length === 0 ? (
-            <p className="mt-6 text-sm text-white/60">Nenhuma chave criada para este tenant.</p>
+            <p className="mt-6 text-sm text-white/60">Nenhuma chave criada para esta organização.</p>
           ) : (
             <div className="mt-4 grid gap-3">
               {keys.map((key) => (

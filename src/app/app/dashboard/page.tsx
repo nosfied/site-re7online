@@ -19,7 +19,7 @@ import {
 } from "@/lib/appClientApi";
 import { addAppRealtimeListener } from "@/lib/appRealtime";
 import { getAppProfile, type AppProfile } from "@/lib/appFeatures";
-import { getConversationStatusUxLabel } from "@/lib/appUxLabels";
+import { getAppErrorUxMessage, getConversationStatusUxLabel } from "@/lib/appUxLabels";
 import type {
   AdminDepartmentItem,
   AdminUserItem,
@@ -118,14 +118,14 @@ function getProfileLabels(profile: AppProfile) {
       people: "Cidadãos",
       reports: "Indicadores",
       queue: "Demandas",
-      dashboardSubtitle: "Acompanhe filas, responsáveis e indicadores quase em tempo real.",
+      dashboardSubtitle: "Acompanhe filas, responsáveis e indicadores atualizados quase em tempo real.",
     };
   }
   return {
     people: "Clientes",
     reports: "Relatórios",
     queue: "Fila operacional",
-    dashboardSubtitle: "Acompanhe filas, responsáveis e indicadores quase em tempo real.",
+    dashboardSubtitle: "Acompanhe filas, responsáveis e indicadores atualizados quase em tempo real.",
   };
 }
 
@@ -191,7 +191,7 @@ function KpiCard({
 
 function DashboardSkeleton() {
   return (
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Carregando dashboard">
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Carregando painel">
       {Array.from({ length: 5 }).map((_, index) => (
         <div key={index} className="rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="h-3 w-24 animate-pulse rounded bg-white/15" />
@@ -241,7 +241,7 @@ export default function AppDashboardPage() {
           handleUnauthorized();
           return;
         }
-        setError(typed.message || "Falha ao carregar dashboard.");
+        setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível carregar o painel." }));
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -281,7 +281,7 @@ export default function AppDashboardPage() {
           handleUnauthorized();
           return;
         }
-        setError(typed.message || "Falha ao carregar filtros.");
+        setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível carregar os filtros." }));
       });
     return () => {
       cancelled = true;
@@ -353,7 +353,7 @@ export default function AppDashboardPage() {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Falha ao assumir atendimento.");
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível assumir o atendimento." }));
     } finally {
       setActionKey(null);
     }
@@ -374,7 +374,7 @@ export default function AppDashboardPage() {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Falha ao encerrar atendimento.");
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível encerrar o atendimento." }));
     } finally {
       setActionKey(null);
     }

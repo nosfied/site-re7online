@@ -18,6 +18,7 @@ import {
   updateAppChatbotSettings,
   updateAppChatbotFlow,
 } from "@/lib/appClientApi";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 const DEFAULT_DEFINITION_TEXT = JSON.stringify(
@@ -61,33 +62,33 @@ function canManageNotificationSettings(role: string) {
 
 function normalizeChatbotError(error: AppApiError, fallback: string) {
   if (error.errorCode === "invalid_chatbot_definition") {
-    return error.message || "JSON invalido para o flow.";
+    return "JSON inválido para o fluxo.";
   }
   if (error.errorCode === "ai_context_missing") {
-    return error.message || "IA automatica exige configuracao previa do tenant.";
+    return "IA automática exige configuração prévia da organização.";
   }
   if (error.errorCode === "chatbot_locked_by_admin") {
-    return error.message || "Fluxo configuravel esta desativado no console interno.";
+    return "Fluxo configurável está desativado no console interno.";
   }
   if (error.errorCode === "chatbot_flow_editing_locked_by_admin") {
-    return error.message || "Criacao e edicao de flows esta bloqueada no console interno.";
+    return "Criação e edição de fluxos estão bloqueadas no console interno.";
   }
   if (error.errorCode === "ai_locked_by_admin") {
-    return error.message || "IA conversacional esta desativada no console interno.";
+    return "IA conversacional está desativada no console interno.";
   }
   if (error.errorCode === "intent_classifier_locked_by_admin") {
-    return error.message || "Classificacao por mensagem livre esta desativada no console interno.";
+    return "Classificação por mensagem livre está desativada no console interno.";
   }
   if (error.errorCode === "intent_classifier_globally_disabled") {
-    return error.message || "Classificacao por mensagem livre esta desativada no ambiente.";
+    return "Classificação por mensagem livre está desativada no ambiente.";
   }
   if (error.errorCode === "managed_by_internal_admin") {
-    return error.message || "Estas configuracoes sao gerenciadas no console interno.";
+    return "Estas configurações são gerenciadas no console interno.";
   }
   if (error.status === 403) {
-    return "Sem permissao para gerenciar flows do chatbot.";
+    return "Sem permissão para gerenciar fluxos de automação.";
   }
-  return error.message || fallback;
+  return getAppErrorUxMessage({ status: error.status, errorCode: error.errorCode, message: error.message, fallback });
 }
 
 function formatDefinitionText(definition: unknown) {
@@ -110,7 +111,7 @@ function getJsonSyntaxError(definitionText: string) {
     JSON.parse(definitionText);
     return null;
   } catch (error) {
-    return (error as Error).message || "JSON invalido.";
+    return (error as Error).message || "JSON inválido.";
   }
 }
 
@@ -415,7 +416,7 @@ export default function AppChatbotPage() {
       settings.handoffLeadNotificationEnabled &&
       recipients.filter((recipient) => recipient.isActive && /^\d{8,20}$/.test(recipient.waId)).length === 0
     ) {
-      setError("Informe pelo menos um numero ativo para receber notificacoes de novos leads.");
+      setError("Informe pelo menos um número ativo para receber notificações de novos contatos.");
       return;
     }
     setSavingNotificationSettings(true);
@@ -428,14 +429,14 @@ export default function AppChatbotPage() {
       });
       setSettings(response.settings);
       setNotificationSettingsDirty(false);
-      setSuccess("Notificacoes internas de novo lead atualizadas.");
+      setSuccess("Notificações internas de novo contato atualizadas.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setError(normalizeChatbotError(typed, "Falha ao salvar notificacoes de novo lead."));
+      setError(normalizeChatbotError(typed, "Não foi possível salvar notificações de novo contato."));
     } finally {
       setSavingNotificationSettings(false);
     }
@@ -506,7 +507,7 @@ export default function AppChatbotPage() {
           router.replace("/app/inbox");
           return;
         }
-        setError(typed.message || "Falha ao carregar flows do chatbot.");
+        setError(getAppErrorUxMessage({ status: typed.status, errorCode: typed.errorCode, message: typed.message, fallback: "Não foi possível carregar os fluxos de automação." }));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -543,23 +544,23 @@ export default function AppChatbotPage() {
   const handleCreate = async () => {
     if (!session) return;
     if (!canManageChatbot(session.user.role)) {
-      setError("Somente ADMIN pode alterar flows do chatbot.");
+      setError("Somente administrador pode alterar fluxos de automação.");
       return;
     }
     if (flowEditingLocked) {
-      setError("Criacao e edicao de flows esta bloqueada no console interno.");
+      setError("Criação e edição de fluxos estão bloqueadas no console interno.");
       return;
     }
     const trimmedName = newName.trim();
     if (!trimmedName) {
-      setError("Informe o nome do flow.");
+      setError("Informe o nome do fluxo.");
       return;
     }
     let parsedDefinition;
     try {
       parsedDefinition = parseDefinitionText(newDefinition);
     } catch {
-      setError("JSON invalido no novo flow.");
+      setError("JSON inválido no novo fluxo.");
       return;
     }
     setNewDefinition(parsedDefinition.formatted);
@@ -581,7 +582,7 @@ export default function AppChatbotPage() {
         handleUnauthorized();
         return;
       }
-      setError(normalizeChatbotError(typed, "Falha ao criar flow."));
+      setError(normalizeChatbotError(typed, "Não foi possível criar o fluxo."));
     } finally {
       setCreating(false);
     }
@@ -590,21 +591,21 @@ export default function AppChatbotPage() {
   const handleSave = async (flow: AppChatbotFlowItem) => {
     if (!session) return;
     if (flowEditingLocked) {
-      setError("Criacao e edicao de flows esta bloqueada no console interno.");
+      setError("Criação e edição de fluxos estão bloqueadas no console interno.");
       return;
     }
     const draft = drafts[flow.id];
     if (!draft) return;
     const trimmedName = draft.name.trim();
     if (!trimmedName) {
-      setError("Informe o nome do flow.");
+      setError("Informe o nome do fluxo.");
       return;
     }
     let parsedDefinition;
     try {
       parsedDefinition = parseDefinitionText(draft.definitionText);
     } catch {
-      setError("JSON invalido no flow selecionado.");
+      setError("JSON inválido no fluxo selecionado.");
       return;
     }
     setDrafts((current) => ({
@@ -632,7 +633,7 @@ export default function AppChatbotPage() {
         handleUnauthorized();
         return;
       }
-      setError(normalizeChatbotError(typed, "Falha ao atualizar flow."));
+      setError(normalizeChatbotError(typed, "Não foi possível atualizar o fluxo."));
     } finally {
       setSavingId(null);
     }
@@ -723,17 +724,17 @@ export default function AppChatbotPage() {
                 key: "disableChatbot" as const,
                 title: "Fluxo configuravel",
                 help: automationDraft.chatbotLocked
-                  ? "Bloqueado pelo console interno. O tenant nao pode reativar esta camada no /app."
-                  : "On ativa os flows personalizados criados nesta tela para este tenant.",
+                  ? "Bloqueado pelo console interno. A organização não pode reativar esta camada no app."
+                  : "Ativa os fluxos personalizados criados nesta tela para esta organização.",
               },
               {
                 key: "disableAiFallback" as const,
-                title: "Base de IA do tenant",
+                title: "Base de IA da organização",
                 help: automationDraft.aiLocked
-                  ? "Bloqueado pelo console interno. O tenant nao pode reativar esta camada no /app."
+                  ? "Bloqueado pelo console interno. A organização não pode reativar esta camada no app."
                   : automationDraft.aiConfigured
-                  ? "On libera os recursos de IA configurados para este tenant."
-                  : "Indisponivel ate existir configuracao previa de contexto para este tenant.",
+                  ? "Ativa os recursos de IA configurados para esta organização."
+                  : "Indisponível até existir configuração prévia de contexto para esta organização.",
               },
               {
                 key: "disableIntentClassifier" as const,
@@ -769,7 +770,7 @@ export default function AppChatbotPage() {
               <span className="space-y-1">
                 <span className="block font-medium text-white">IA controlada</span>
                 <span className="block text-white/60">
-                  Responde apenas perguntas simples quando o fluxo e o atendimento humano nao estiverem ativos.
+                  Responde apenas perguntas simples quando o fluxo e o atendimento humano não estiverem ativos.
                 </span>
               </span>
               <TogglePill
@@ -778,7 +779,7 @@ export default function AppChatbotPage() {
                 onToggle={() => undefined}
               />
               <label className="flex w-full max-w-xs flex-col gap-1 text-xs text-white/60">
-                Maximo por conversa
+                  Máximo por conversa
                 <input
                   type="number"
                   min={0}
@@ -793,10 +794,10 @@ export default function AppChatbotPage() {
             <div className="md:col-span-2 rounded-xl border border-white/10 bg-re7-navy/40 p-3 text-sm sm:p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <span className="block font-medium text-white">Notificacao interna de novo lead</span>
+                <span className="block font-medium text-white">Notificação interna de novo contato</span>
                   <span className="mt-1 block text-white/60">
                     Envia um aviso privado para a equipe quando o bot encaminhar um lead ao atendimento humano.
-                    A mensagem nao aparece para o cliente nem entra na timeline.
+                    A mensagem não aparece para o cliente nem entra no histórico.
                   </span>
                 </div>
                 <TogglePill
@@ -817,7 +818,7 @@ export default function AppChatbotPage() {
               </div>
               {notificationSettingsDirty ? (
                 <p className="mt-3 rounded-md border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                  Alteracoes pendentes. Clique em Salvar notificacoes para aplicar.
+                  Alterações pendentes. Clique em Salvar notificações para aplicar.
                 </p>
               ) : null}
               <div className="mt-3 space-y-2">
@@ -881,7 +882,7 @@ export default function AppChatbotPage() {
                     }
                     className="rounded-md border border-white/15 px-3 py-2 text-xs font-semibold text-white/80 transition hover:bg-white/10 disabled:opacity-50"
                   >
-                    Adicionar numero
+                    Adicionar número
                   </button>
                   <button
                     type="button"
@@ -889,28 +890,28 @@ export default function AppChatbotPage() {
                     onClick={handleSaveHandoffNotificationSettings}
                     className="rounded-md bg-re7-orange px-4 py-2 text-xs font-semibold text-white transition hover:bg-orange-500 disabled:opacity-50"
                   >
-                    {savingNotificationSettings ? "Salvando..." : "Salvar notificacoes"}
+                    {savingNotificationSettings ? "Salvando..." : "Salvar notificações"}
                   </button>
                 </div>
               </div>
             </div>
           </div>
         ) : (
-            <p className="text-sm text-white/70">Carregando configuracoes...</p>
+            <p className="text-sm text-white/70">Carregando configurações...</p>
         )}
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div className="mb-4 space-y-2">
           <span className="w-fit rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/70">
-            Novo flow
+            Novo fluxo
           </span>
           <p className="text-sm text-white/65">
-            Fluxos configuraveis sao definidos no console interno. Esta tela mostra o estado liberado para acompanhamento.
+            Fluxos configuráveis são definidos no console interno. Esta tela mostra o estado liberado para acompanhamento.
           </p>
           {flowEditingLocked || flowReadOnly ? (
             <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-              Criacao e edicao de flows bloqueadas no /app. Use o console interno para alterar.
+              Criação e edição de fluxos bloqueadas no app. Use o console interno para alterar.
             </p>
           ) : null}
         </div>
@@ -951,17 +952,17 @@ export default function AppChatbotPage() {
               disabled={!newSearch.trim()}
               className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Proximo
+              Próximo
             </button>
-            <span className="text-xs text-white/50">{countOccurrences(newDefinition, newSearch)} ocorrencia(s)</span>
+            <span className="text-xs text-white/50">{countOccurrences(newDefinition, newSearch)} ocorrência(s)</span>
           </div>
           <JsonSearchPreview text={newDefinition} query={newSearch} />
           {newJsonError ? (
             <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-              JSON invalido: {newJsonError}
+              JSON inválido: {newJsonError}
             </p>
           ) : (
-            <p className="text-xs text-emerald-200/80">JSON valido. Ao salvar, o conteudo sera reindentado automaticamente.</p>
+            <p className="text-xs text-emerald-200/80">JSON válido. Ao salvar, o conteúdo será reindentado automaticamente.</p>
           )}
           <div className="flex flex-wrap items-center gap-4 text-sm text-white/80">
             <label className="flex items-center gap-2">
@@ -1116,17 +1117,17 @@ export default function AppChatbotPage() {
                         Proximo
                       </button>
                       <span className="text-xs text-white/50">
-                        {countOccurrences(draft.definitionText, draftSearches[flow.id] ?? "")} ocorrencia(s)
+                        {countOccurrences(draft.definitionText, draftSearches[flow.id] ?? "")} ocorrência(s)
                       </span>
                     </div>
                     <JsonSearchPreview text={draft.definitionText} query={draftSearches[flow.id] ?? ""} />
                     {draftJsonErrors[flow.id] ? (
                       <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-                        JSON invalido: {draftJsonErrors[flow.id]}
+                        JSON inválido: {draftJsonErrors[flow.id]}
                       </p>
                     ) : (
                       <p className="text-xs text-emerald-200/80">
-                        JSON valido. Ao salvar, o conteudo sera reindentado automaticamente.
+                        JSON válido. Ao salvar, o conteúdo será reindentado automaticamente.
                       </p>
                     )}
                     <div className="flex flex-wrap items-center gap-4 text-sm text-white/80">

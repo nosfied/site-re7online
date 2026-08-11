@@ -16,6 +16,7 @@ import {
   saveAppSession,
   updateAppCrmSettings,
 } from "@/lib/appClientApi";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 
 const EMPTY_STATUS: CrmBusinessStatusConfig = {
   id: "",
@@ -42,9 +43,9 @@ function normalizeStatusId(input: string) {
 }
 
 function normalizeAppErrorMessage(error: AppApiError, fallback: string) {
-  if (error.status === 403) return "Seu perfil nao tem permissao para alterar definicoes do CRM.";
-  if (error.status === 401) return "Sessao expirada. Faca login novamente.";
-  return error.message || fallback;
+  if (error.status === 403) return "Seu perfil não tem permissão para alterar definições do CRM.";
+  if (error.status === 401) return "Sessão expirada. Faça login novamente.";
+  return getAppErrorUxMessage({ status: error.status, errorCode: error.errorCode, message: error.message, fallback });
 }
 
 function formatCount(count: number | undefined) {
@@ -91,7 +92,7 @@ export default function AppCrmSettingsPage() {
         handleUnauthorized();
         return;
       }
-      setError(normalizeAppErrorMessage(typed, "Nao foi possivel carregar definicoes do CRM."));
+      setError(normalizeAppErrorMessage(typed, "Não foi possível carregar definições do CRM."));
     } finally {
       setLoading(false);
     }
@@ -184,7 +185,7 @@ export default function AppCrmSettingsPage() {
         handleUnauthorized();
         return;
       }
-      setError(normalizeAppErrorMessage(typed, "Nao foi possivel salvar definicoes do CRM."));
+      setError(normalizeAppErrorMessage(typed, "Não foi possível salvar definições do CRM."));
     } finally {
       setSaving(false);
     }
@@ -208,7 +209,7 @@ export default function AppCrmSettingsPage() {
         handleUnauthorized();
         return;
       }
-      setError(normalizeAppErrorMessage(typed, "Nao foi possivel preparar os numeros."));
+      setError(normalizeAppErrorMessage(typed, "Não foi possível preparar os números."));
     } finally {
       setPreparing(false);
     }
@@ -234,7 +235,7 @@ export default function AppCrmSettingsPage() {
     <AppShell
       session={session}
       title="CRM"
-      subtitle="Defina situacoes do negocio e prepare leads para novas campanhas."
+      subtitle="Defina situações do negócio e prepare contatos para novas campanhas."
     >
       <FeedbackToast message={success} variant="success" {...toastHandlers} />
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
@@ -243,16 +244,16 @@ export default function AppCrmSettingsPage() {
         <section className="theme-surface rounded-xl border p-3 sm:p-4 min-[1441px]:rounded-2xl min-[1441px]:p-6">
           <div className="mb-3 flex flex-col gap-1.5 min-[1441px]:mb-5 min-[1441px]:gap-2">
             <span className="w-fit rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white/70 min-[1441px]:px-3 min-[1441px]:py-1 min-[1441px]:text-xs">
-              Situacao do negocio
+              Situação do negócio
             </span>
             <p className="theme-muted text-xs min-[1441px]:text-sm">
-              Use estas situacoes para organizar leads no CRM e selecionar bases para campanhas.
+              Use estas situações para organizar contatos no CRM e selecionar bases para campanhas.
             </p>
           </div>
 
           <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_150px] min-[1441px]:gap-3 min-[1441px]:md:grid-cols-[minmax(0,1fr)_180px]">
             <label className="flex flex-col gap-1.5 text-xs text-white/75 min-[1441px]:gap-2 min-[1441px]:text-sm">
-              <span>Nome da situacao</span>
+              <span>Nome da situação</span>
               <input
                 value={form.label}
                 onChange={(event) =>
@@ -278,13 +279,13 @@ export default function AppCrmSettingsPage() {
               />
             </label>
             <label className="flex flex-col gap-1.5 text-xs text-white/75 md:col-span-2 min-[1441px]:gap-2 min-[1441px]:text-sm">
-              <span>Descricao operacional</span>
+              <span>Descrição operacional</span>
               <input
                 value={form.description ?? ""}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, description: event.target.value }))
                 }
-                placeholder="Quando usar esta situacao no CRM."
+                placeholder="Quando usar esta situação no CRM."
                 className="theme-select w-full rounded-md px-2.5 py-1.5 text-xs outline-none min-[1441px]:px-3 min-[1441px]:py-2 min-[1441px]:text-sm"
               />
             </label>
@@ -315,7 +316,7 @@ export default function AppCrmSettingsPage() {
               onClick={handleAddStatus}
               className="rounded-md bg-re7-orange px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110 min-[1441px]:px-4 min-[1441px]:py-2 min-[1441px]:text-sm"
             >
-              Adicionar situacao
+              Adicionar situação
             </button>
           </div>
         </section>
@@ -324,13 +325,13 @@ export default function AppCrmSettingsPage() {
           <div className="mb-3 min-[1441px]:mb-4">
             <h2 className="text-base font-semibold min-[1441px]:text-lg">Preparar campanha</h2>
             <p className="theme-muted mt-0.5 text-xs min-[1441px]:mt-1 min-[1441px]:text-sm">
-              Filtre leads por situacao e gere uma lista de numeros, um por linha.
+              Filtre contatos por situação e gere uma lista de números, um por linha.
             </p>
           </div>
           <div className="space-y-2">
             {activeCampaignStatuses.length === 0 ? (
               <p className="theme-muted rounded-xl border border-white/10 bg-white/5 p-2.5 text-xs min-[1441px]:p-3 min-[1441px]:text-sm">
-                Nenhuma situacao ativa esta marcada para campanhas.
+                Nenhuma situação ativa está marcada para campanhas.
               </p>
             ) : (
               activeCampaignStatuses.map((status) => (
@@ -340,7 +341,7 @@ export default function AppCrmSettingsPage() {
                 >
                   <span className="min-w-0">
                     <span className="block font-semibold">{status.label}</span>
-                    <span className="theme-soft text-xs">{formatCount(counts[status.id])} lead(s)</span>
+                    <span className="theme-soft text-xs">{formatCount(counts[status.id])} contato(s)</span>
                   </span>
                   <input
                     type="checkbox"
@@ -358,7 +359,7 @@ export default function AppCrmSettingsPage() {
             )}
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 min-[1441px]:mt-4">
-            <p className="theme-muted text-xs min-[1441px]:text-sm">{formatCount(selectedCount)} lead(s) no filtro.</p>
+            <p className="theme-muted text-xs min-[1441px]:text-sm">{formatCount(selectedCount)} contato(s) no filtro.</p>
             <button
               type="button"
               onClick={handlePrepareRecipients}
@@ -424,7 +425,7 @@ export default function AppCrmSettingsPage() {
                 <div className="grid gap-2 lg:grid-cols-[130px_minmax(0,1fr)_minmax(0,1.2fr)_auto] lg:items-center min-[1441px]:gap-3 min-[1441px]:lg:grid-cols-[170px_minmax(0,1fr)_minmax(0,1.2fr)_auto]">
                   <div>
                     <p className="font-mono text-xs text-white/60">{status.id}</p>
-                    <p className="theme-soft mt-1 text-xs">{formatCount(counts[status.id])} lead(s)</p>
+                    <p className="theme-soft mt-1 text-xs">{formatCount(counts[status.id])} contato(s)</p>
                   </div>
                   <input
                     value={status.label}

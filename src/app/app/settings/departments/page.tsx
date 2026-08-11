@@ -51,13 +51,13 @@ function ActionIcon({ children }: { children: ReactNode }) {
 
 function normalizeDepartmentError(error: AppApiError, fallback: string) {
   if (error.errorCode === "department_slug_conflict" || error.status === 409) {
-    return "Ja existe um setor equivalente neste tenant.";
+    return "Já existe um setor equivalente nesta organização.";
   }
   if (error.errorCode === "bad_request") {
     return error.message || fallback;
   }
   if (error.status === 403) {
-    return "Sem permissao para gerenciar setores.";
+    return "Sem permissão para gerenciar setores.";
   }
   return error.message || fallback;
 }
@@ -136,7 +136,7 @@ export default function AppSettingsDepartmentsPage() {
           router.replace("/app/inbox");
           return;
         }
-        setError(typed.message || "Falha ao carregar setores.");
+        setError(normalizeDepartmentError(typed, "Não foi possível carregar os setores."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -186,7 +186,7 @@ export default function AppSettingsDepartmentsPage() {
         handleUnauthorized();
         return;
       }
-      setError(normalizeDepartmentError(typed, "Falha ao criar setor."));
+      setError(normalizeDepartmentError(typed, "Não foi possível criar o setor."));
     } finally {
       setCreating(false);
     }
@@ -228,7 +228,7 @@ export default function AppSettingsDepartmentsPage() {
       setError(
         normalizeDepartmentError(
           typed,
-          typeof nextIsActive === "boolean" ? "Falha ao atualizar setor." : "Falha ao salvar setor."
+          typeof nextIsActive === "boolean" ? "Não foi possível atualizar o setor." : "Não foi possível salvar o setor."
         )
       );
     } finally {
@@ -288,11 +288,11 @@ export default function AppSettingsDepartmentsPage() {
       <section className="rounded-xl border border-white/10 bg-white/5 p-2.5 md:p-3">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold">Setores do tenant</h2>
+            <h2 className="text-base font-semibold">Setores da organização</h2>
             <p className="mt-0.5 text-xs text-white/65 sm:text-sm">
               {readOnly
                 ? "Visualizacao em leitura para supervisores."
-                : "Edite o nome, ative ou desative setores conforme a operacao."}
+                : "Edite o nome, ative ou desative setores conforme a operação."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">

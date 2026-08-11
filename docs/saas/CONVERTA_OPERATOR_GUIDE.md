@@ -1,16 +1,16 @@
 # Converta Operator Guide
 
-Status: guia operacional para uso interno e treinamento. Este documento nao altera produto, dados ou configuracao.
+Status: guia operacional para uso interno e treinamento. Este documento não altera produto, dados ou configuração.
 
-## Principios
+## Princípios
 
-- Trabalhe sempre dentro do tenant correto.
-- Use o Inbox como ponto central da operacao.
+- Trabalhe sempre dentro da organização correta.
+- Use o Inbox como ponto central da operação.
 - Assuma a conversa antes de responder quando o fluxo exigir.
 - Verifique canal, janela de atendimento e bloqueios antes de iniciar contato ativo.
 - Use modelos aprovados quando a janela livre estiver fechada.
-- Use mensagens prontas apenas como texto operacional, nao como modelo Meta.
-- Nao tente contornar bloqueios LGPD, opt-out ou permissao.
+- Use mensagens prontas apenas como texto operacional, não como modelo Meta.
+- Não tente contornar bloqueios LGPD, opt-out ou permissão.
 
 ## Linguagem operacional
 
@@ -27,16 +27,19 @@ A interface operacional deve priorizar termos simples para quem atende:
 | Canned reply | Mensagem pronta |
 | Webchat | Chat do site |
 | Webhook | Integração de recebimento |
-| Status | Situacao |
-| Status da conversa | Situacao do atendimento |
-| Timeline | Historico |
+| Status | Situação |
+| Status da conversa | Situação do atendimento |
+| Timeline | Histórico |
 | Session | Sessão |
 | Last seen | Última atividade observada |
 | Duration | Duração observada |
 | Login | Entrada |
 | Logout | Saída |
+| MFA / TOTP | Verificação em duas etapas ou aplicativo autenticador |
+| Recovery codes | Códigos de recuperação |
+| API key | Chave de integração |
 | Claim | Assumir atendimento |
-| Assignment | Responsavel ou atribuicao |
+| Assignment | Responsável ou atribuição |
 | Queue assignment | Distribuição de atendimentos |
 | Round-robin | Distribuição alternada |
 | Least active | Menor carga |
@@ -50,13 +53,13 @@ A interface operacional deve priorizar termos simples para quem atende:
 | Lead sem cadastro completo | Contato |
 | Lead | Contato ou cadastro |
 | Campaign | Campanha |
-| Audience | Publico |
+| Audience | Público |
 | Recipient | Destinatario |
-| Opt-out | Bloqueado para comunicacoes |
+| Opt-out | Bloqueado para comunicações |
 | Source | Origem |
-| MFA | Verificacao em duas etapas |
+| MFA | Verificação em duas etapas |
 
-Os nomes tecnicos continuam validos em codigo, eventos, APIs, logs sanitizados e documentacao tecnica. A troca acima vale para rotulos, avisos, botoes, mensagens vazias e erros vistos pelo operador.
+Os nomes técnicos continuam válidos em código, eventos, APIs, logs sanitizados e documentação técnica. A troca acima vale para rótulos, avisos, botões, mensagens vazias e erros vistos pelo operador.
 
 ## Inbox
 
@@ -69,21 +72,21 @@ No Inbox, o operador deve:
 5. usar modelo aprovado quando o WhatsApp estiver fora da janela livre;
 6. usar mensagem pronta apenas para acelerar texto dentro da regra do canal.
 
-Conversas com dados anonimizados nao devem aparecer no uso normal. Se um contato tiver sido minimizado por LGPD, nao se deve tentar restaurar nome, numero, historico ou contexto anterior.
+Conversas com dados anonimizados não devem aparecer no uso normal. Se um contato tiver sido minimizado por LGPD, não se deve tentar restaurar nome, número, histórico ou contexto anterior.
 
 ## Suporte da plataforma
 
-ADMIN e SUPERVISOR podem abrir e acompanhar suporte da plataforma em `Suporte`. O fluxo cria ou retoma uma `Conversation` no tenant de suporte configurado pela plataforma, com protocolo normal do Converta. Nao existe modulo paralelo de ticket ou case.
+ADMIN e SUPERVISOR podem abrir e acompanhar suporte da plataforma em `Suporte`. O fluxo cria ou retoma uma `Conversation` no tenant de suporte configurado pela plataforma, com protocolo normal do Converta. Não existe módulo paralelo de ticket ou case.
 
-Cada usuario ve seus proprios chamados no MVP. Se ja houver chamado ativo para o mesmo tenant e usuario, a tela retoma a conversa ativa; se o chamado anterior foi encerrado, uma nova abertura cria outra conversa. O destino do suporte e resolvido pelo backend via `PLATFORM_SUPPORT_TENANT_KEY`; a interface nao escolhe tenant, WABA, telefone ou `clientId` de destino.
+Cada usuário vê seus próprios chamados no MVP. Se já houver chamado ativo para o mesmo tenant e usuário, a tela retoma a conversa ativa; se o chamado anterior foi encerrado, uma nova abertura cria outra conversa. O destino do suporte é resolvido pelo backend via `PLATFORM_SUPPORT_TENANT_KEY`; a interface não escolhe tenant, WABA, telefone ou `clientId` de destino.
 
-O tenant de suporte pode ter roteamento proprio em `TenantOperationalConfig.config.supportChannel`, apontando para um `chatbotFlowId` ativo do mesmo tenant e, opcionalmente, departamento/fila. Sem flow dedicado valido, o chamado entra em modo humano na fila configurada ou na fila operacional padrao; o `entryPoint` geral do tenant so deve ser usado se isso for explicitamente configurado.
+O tenant de suporte pode ter roteamento próprio em `TenantOperationalConfig.config.supportChannel`, apontando para um `chatbotFlowId` ativo do mesmo tenant e, opcionalmente, departamento/fila. Sem fluxo dedicado válido, o chamado entra em modo humano na fila configurada ou na fila operacional padrão; o `entryPoint` geral do tenant só deve ser usado se isso for explicitamente configurado.
 
 O suporte aceita texto e prints/imagens enviados pelo solicitante. Use `Anexar imagem` ou cole um print no campo da conversa. O MVP permite uma imagem por envio, nos formatos PNG, JPEG/JPG ou WebP, ate 8 MB, com legenda opcional. Envie varias mensagens sucessivas se precisar anexar mais de uma evidencia.
 
-A conversa aparece para a equipe da plataforma no Inbox do tenant de suporte, usando identidade sintetica e rotulo seguro com tenant e usuario solicitante. Nao copie telefone, email, token, SID, IP ou dados de CRM do tenant origem para o atendimento. Evite anexar prints com credenciais, tokens, dados bancarios ou informacoes pessoais alem do necessario para diagnostico.
+A conversa aparece para a equipe da plataforma no Inbox do tenant de suporte, usando identidade sintética e rótulo seguro com tenant e usuário solicitante. Não copie telefone, email, token, SID, IP ou dados de CRM do tenant origem para o atendimento. Evite anexar prints com credenciais, tokens, dados bancários ou informações pessoais além do necessário para diagnóstico.
 
-O operador do suporte visualiza a imagem no Inbox e responde por texto. Envio de imagem do suporte para o cliente ainda nao faz parte desta etapa.
+O operador do suporte visualiza a imagem no Inbox e responde por texto. Envio de imagem do suporte para o cliente ainda não faz parte desta etapa.
 
 ## Treinamentos
 
@@ -91,9 +94,9 @@ Todos os usuarios autenticados podem acessar `Suporte > Treinamentos`. A area ex
 
 O catalogo de treinamentos e administrado no console interno da RE7ONLINE em `/admin/training`. A equipe autorizada pode criar, editar, publicar, despublicar, ordenar, visualizar, substituir arquivo e excluir conteudos sem SSH, Git ou deploy. A interface nunca envia caminho de arquivo. O backend resolve o material por `contentId` dentro do diretorio configurado por `TRAINING_CONTENT_ROOT`, bloqueia paths arbitrarios e entrega apenas formatos permitidos, como MP4 e PDF.
 
-Quando o storage nao estiver configurado ou o arquivo ainda nao estiver publicado, a tela mostra uma mensagem amigavel e nao quebra a navegacao do operador.
+Quando o storage não estiver configurado ou o arquivo ainda não estiver publicado, a tela mostra uma mensagem amigável e não quebra a navegação do operador.
 
-Para publicar material novo, a equipe interna usa `Admin > Treinamentos > Adicionar treinamento`, informa metadados, envia PDF ou MP4 e publica explicitamente. Arquivos grandes de video ou PDF nao devem ser commitados no repositorio.
+Para publicar material novo, a equipe interna usa `Admin > Treinamentos > Adicionar treinamento`, informa metadados, envia PDF ou MP4 e publica explicitamente. Arquivos grandes de vídeo ou PDF não devem ser commitados no repositório.
 
 ## Texto livre, modelo aprovado e mensagem pronta
 
@@ -101,21 +104,21 @@ Para publicar material novo, a equipe interna usa `Admin > Treinamentos > Adicio
 | --- | --- | --- |
 | Texto livre | Atendimento receptivo com janela aberta | Bloqueado quando a janela estiver fechada. |
 | Modelo aprovado | Inicio ativo ou recontato permitido pelo WhatsApp | Exige modelo aprovado, ativo no Converta e variaveis preenchidas. |
-| Mensagem pronta | Respostas repetitivas dentro da operacao | Nao e modelo Meta e nao abre janela fechada. |
+| Mensagem pronta | Respostas repetitivas dentro da operação | Não é modelo Meta e não abre janela fechada. |
 
-Quando a interface indicar janela fechada, use modelo aprovado. Nao use mensagem pronta como alternativa para burlar a regra.
+Quando a interface indicar janela fechada, use modelo aprovado. Não use mensagem pronta como alternativa para burlar a regra.
 
 ## Marcar mensagem como referencia
 
 No Inbox, use o menu de acoes da mensagem para selecionar `Marcar mensagem` e transformar uma mensagem anterior em referencia contextual da proxima resposta. Use quando a nova comunicacao depende de uma pergunta, documento, imagem, audio, modelo ou informacao ja enviada na conversa.
 
-Marcar nao define a intencao da nova mensagem. O operador escreve livremente e pode usar a referencia para responder, corrigir, complementar ou esclarecer. O Converta nao adiciona prefixos automaticos como resposta ou retificacao.
+Marcar não define a intenção da nova mensagem. O operador escreve livremente e pode usar a referência para responder, corrigir, complementar ou esclarecer. O Converta não adiciona prefixos automáticos como resposta ou retificação.
 
-Ao clicar no bloco de `Referencia` em uma mensagem enviada com marcacao, a timeline tenta rolar ate a mensagem original e destaca a bolha correspondente. Se a mensagem original nao estiver carregada no historico atual, a interface informa que a referencia nao esta disponivel naquele momento.
+Ao clicar no bloco de `Referência` em uma mensagem enviada com marcação, o histórico tenta rolar até a mensagem original e destaca a bolha correspondente. Se a mensagem original não estiver carregada no histórico atual, a interface informa que a referência não está disponível naquele momento.
 
-Editar mensagem original nao faz parte do fluxo operacional. Quando houver erro em uma comunicacao ja enviada, envie uma nova mensagem clara usando essa marcacao, sem tentar modificar o registro anterior.
+Editar mensagem original não faz parte do fluxo operacional. Quando houver erro em uma comunicação já enviada, envie uma nova mensagem clara usando essa marcação, sem tentar modificar o registro anterior.
 
-Os baloes priorizam conteudo, horario, status, interlocutor discreto e referencias. O canal da conversa fica no contexto do atendimento e nao e repetido em cada mensagem.
+Os balões priorizam conteúdo, horário, situação, interlocutor discreto e referências. O canal da conversa fica no contexto do atendimento e não é repetido em cada mensagem.
 
 ## Modelos aprovados
 
@@ -127,7 +130,7 @@ Antes de enviar um modelo:
 - leia a estimativa de custo quando exibida;
 - confirme somente quando o destinatario e o contexto estiverem corretos.
 
-A cobranca depende de categoria, pais, entrega e politica vigente da Meta. A previsao local e apoio operacional, nao demonstrativo oficial.
+A cobrança depende de categoria, país, entrega e política vigente da Meta. A previsão local é apoio operacional, não demonstrativo oficial.
 
 ## Mensagens prontas
 
@@ -136,13 +139,13 @@ Mensagens prontas ficam em `Modelos de mensagem`, em secao separada dos modelos 
 No Inbox:
 
 - a acao `Prontas` abre a lista;
-- inserir no campo nao envia automaticamente;
+- inserir no campo não envia automaticamente;
 - o envio exige clique explicito;
 - com janela fechada, a interface orienta usar modelo aprovado.
 
 ## Assinatura do atendente
 
-Em `Configuracoes > Atendimento`, administradores podem ativar a assinatura do atendente por tenant. Por padrao, ela fica desativada.
+Em `Configurações > Atendimento`, administradores podem ativar a assinatura do atendente por organização. Por padrão, ela fica desativada.
 
 Quando ativa, mensagens humanas de texto e mensagens prontas enviadas pelo Inbox recebem o nome profissional do atendente no inicio do texto enviado ao cliente:
 
@@ -151,9 +154,9 @@ Quando ativa, mensagens humanas de texto e mensagens prontas enviadas pelo Inbox
 Ola, como posso ajudar?
 ```
 
-Essa assinatura faz parte da mesma mensagem enviada pelo WhatsApp. Ela nao cria mensagem adicional, nao altera mensagens antigas e nao se aplica automaticamente a modelos Meta, bot, automacoes ou campanhas.
+Essa assinatura faz parte da mesma mensagem enviada pelo WhatsApp. Ela não cria mensagem adicional, não altera mensagens antigas e não se aplica automaticamente a modelos Meta, bot, automações ou campanhas.
 
-O nome do atendente e dado pessoal. Use apenas o nome profissional cadastrado e ative o recurso conforme a politica operacional do tenant.
+O nome do atendente é dado pessoal. Use apenas o nome profissional cadastrado e ative o recurso conforme a política operacional da organização.
 
 ## Campanhas
 
@@ -166,19 +169,19 @@ Campanhas devem seguir o fluxo seguro:
 5. revisar o rascunho;
 6. enviar apenas por acao explicita.
 
-Rascunho nao dispara mensagem. Bloqueios por opt-out, contato anonimizado, duplicidade, canal incompativel ou ausencia de WhatsApp valido devem ser respeitados.
+Rascunho não dispara mensagem. Bloqueios por opt-out, contato anonimizado, duplicidade, canal incompatível ou ausência de WhatsApp válido devem ser respeitados.
 
 ## Opt-out e bloqueio de envio ativo
 
-Bloqueio de envio ativo impede campanhas, modelos e contatos iniciados pela empresa. Ele nao apaga historico e nao impede atendimento receptivo quando permitido pelo canal.
+Bloqueio de envio ativo impede campanhas, modelos e contatos iniciados pela empresa. Ele não apaga histórico e não impede atendimento receptivo quando permitido pelo canal.
 
 Se um contato solicitar descadastro, registre o bloqueio pelo fluxo operacional disponivel. A liberacao deve ocorrer apenas quando houver justificativa operacional e autorizacao adequada.
 
 ## Anonimizacao
 
-Anonimizacao remove o registro da operacao visivel e minimiza dados pessoais. Nao e inativacao simples, nao e opt-out e nao e hard delete.
+Anonimização remove o registro da operação visível e minimiza dados pessoais. Não é inativação simples, não é opt-out e não é hard delete.
 
-O operador nao deve:
+O operador não deve:
 
 - tentar recriar dados antigos manualmente;
 - copiar informacoes de conversas antigas anonimizadas;
@@ -187,15 +190,15 @@ O operador nao deve:
 
 ## Custos Meta
 
-O Converta exibe estimativas para apoiar decisao operacional. Use essas informacoes para evitar disparos desnecessarios, revisar categoria de modelo e controlar volume por tenant.
+O Converta exibe estimativas para apoiar decisão operacional. Use essas informações para evitar disparos desnecessários, revisar categoria de modelo e controlar volume por organização.
 
-O operador nao deve prometer valor definitivo ao cliente final com base apenas na previsao local.
+O operador não deve prometer valor definitivo ao cliente final com base apenas na previsão local.
 
 ## Central de Relatorios
 
 Em `Relatorios`, os filtros globais de periodo, canal, atendente, setor e deduplicacao ficam no topo e afetam as abas operacionais de conversas, SLA e atendentes. A aba `Visao geral` resume o recorte atual sem alterar as formulas existentes.
 
-As abas disponiveis sao:
+As abas disponíveis são:
 
 - `Visao geral`: indicadores principais do periodo selecionado.
 - `Conversas`: volume por canal, setor e amostra de protocolos.
@@ -204,17 +207,17 @@ As abas disponiveis sao:
 - `Acessos/Sessoes`: auditoria de autenticacao com filtros locais proprios.
 - `Exportacoes`: CSV de conversas, CSV de sessoes e impressao/PDF consolidado.
 
-Os filtros de `Acessos/Sessoes` sao locais dessa aba e nao alteram o recorte global das conversas.
+Os filtros de `Acessos/Sessões` são locais dessa aba e não alteram o recorte global das conversas.
 
-O PDF gerado em `Exportacoes` e um relatorio gerencial agregado: identifica tenant, periodo, filtros aplicados, data/hora de geracao, resumo executivo, conversas, SLA, atendentes e resumo de acessos/sessoes. Ele nao substitui os CSVs quando a necessidade for auditoria linha a linha ou conferencia detalhada.
+O PDF gerado em `Exportações` é um relatório gerencial agregado: identifica organização, período, filtros aplicados, data/hora de geração, resumo executivo, conversas, SLA, atendentes e resumo de acessos/sessões. Ele não substitui os CSVs quando a necessidade for auditoria linha a linha ou conferência detalhada.
 
 ## Relatorio Acessos/Sessoes
 
-Em `Relatorios`, a secao `Acessos/Sessoes` mostra trilha operacional de autenticacao por tenant. Ela usa sessoes observadas pela aplicacao e permite consultar login, logout explicito, substituicao de sessao, renovacao, expiracao e ultima atividade observada.
+Em `Relatórios`, a seção `Acessos/Sessões` mostra trilha operacional de autenticação por organização. Ela usa sessões observadas pela aplicação e permite consultar login, logout explícito, substituição de sessão, renovação, expiração e última atividade observada.
 
-As sessoes do Converta possuem TTL absoluto de 12 horas. No ultimo minuto, a interface solicita renovacao explicita com `Continuar conectado`; essa acao encerra a sessao atual como `Renovada` e cria uma nova sessao com mais 12 horas. Nao existe sliding expiration: atividade e `lastSeenAt` nao estendem a sessao automaticamente.
+As sessões do Converta possuem validade absoluta de 12 horas. No último minuto, a interface solicita renovação explícita com `Continuar conectado`; essa ação encerra a sessão atual como `Renovada` e cria uma nova sessão com mais 12 horas. Não existe renovação automática por atividade: atividade e `lastSeenAt` não estendem a sessão automaticamente.
 
-Esta secao nao e controle de ponto, folha de ponto, jornada de trabalho ou comprovacao de presenca laboral. Fechar navegador, desligar computador ou perder internet nao gera logout deterministico. Quando uma sessao vence sem request posterior, o relatorio pode exibi-la como `Expirada`, sem preencher logout artificialmente.
+Esta seção não é controle de ponto, folha de ponto, jornada de trabalho ou comprovação de presença laboral. Fechar navegador, desligar computador ou perder internet não gera logout determinístico. Quando uma sessão vence sem requisição posterior, o relatório pode exibi-la como `Expirada`, sem preencher logout artificialmente.
 
 Campos principais:
 
@@ -222,26 +225,26 @@ Campos principais:
 - `Encerramento`: quando houve revogacao deterministica, como logout explicito.
 - `Motivo`: humanizacao do motivo tecnico real, sem transformar tudo em logout.
 - `Duracao observada`: calculada somente quando login e encerramento existem.
-- `Ultima atividade observada`: atividade autenticada vista pela aplicacao, nao presenca online.
+- `Última atividade observada`: atividade autenticada vista pela aplicação, não presença online.
 
-O CSV segue a mesma minimizacao da tela: nao exporta token, IP bruto, hash de IP, user agent, fingerprint ou identificadores de dispositivo.
+O CSV segue a mesma minimização da tela: não exporta token, IP bruto, hash de IP, user agent, fingerprint ou identificadores de dispositivo.
 
-## Relatorio Atividade dos atendentes
+## Relatório Atividade dos atendentes
 
-Em `Relatorios`, a secao `Atividade dos atendentes` conta mensagens outbound enviadas por humanos no periodo selecionado. A fonte e a autoria persistida no momento do envio em `OutboundMessage.rawPayload.actor.userId`.
+Em `Relatórios`, a seção `Atividade dos atendentes` conta mensagens enviadas por humanos no período selecionado. A fonte é a autoria persistida no momento do envio em `OutboundMessage.rawPayload.actor.userId`.
 
-Essa metrica nao conta bot, automacao, campanha, mensagem pronta sem autoria preservada ou historico antigo sem ator. Mensagens historicas anteriores a captura de autoria podem nao ser atribuiveis.
+Essa métrica não conta bot, automação, campanha, mensagem pronta sem autoria preservada ou histórico antigo sem ator. Mensagens históricas anteriores à captura de autoria podem não ser atribuíveis.
 
-A secao `Conversas atribuidas por atendente` tem outro significado: ela mede distribuicao operacional de conversas por `ConversationRuntimeState` e `ConversationAssignment`. Nao use essa secao como produtividade individual nem como substituto de mensagens realmente enviadas.
+A seção `Conversas atribuídas por atendente` tem outro significado: ela mede distribuição operacional de conversas por `ConversationRuntimeState` e `ConversationAssignment`. Não use essa seção como produtividade individual nem como substituto de mensagens realmente enviadas.
 
-Fechamentos por atendente e SLA por responsavel so devem ser usados quando houver evidencia confiavel de snapshot no momento do fechamento ou da atribuicao. Na ausencia desse snapshot, ficam como melhoria P2 e nao devem ser inferidos por responsavel atual.
+Fechamentos por atendente e SLA por responsável só devem ser usados quando houver evidência confiável de registro no momento do fechamento ou da atribuição. Na ausência desse registro, ficam como melhoria P2 e não devem ser inferidos pelo responsável atual.
 
-## O que nao fazer
+## O que não fazer
 
-- Nao enviar campanhas sem revisar audiencia.
-- Nao clicar em `Enviar campanha` durante smoke ou treinamento.
-- Nao submeter modelo a Meta sem revisao interna.
-- Nao alterar credenciais ou canais sem autorizacao.
-- Nao registrar dados pessoais em campos de observacao quando nao for necessario.
-- Nao usar mensagens prontas para contornar janela fechada.
-- Nao tentar restaurar contato anonimizado.
+- Não enviar campanhas sem revisar audiência.
+- Não clicar em `Enviar campanha` durante smoke ou treinamento.
+- Não submeter modelo à Meta sem revisão interna.
+- Não alterar credenciais ou canais sem autorização.
+- Não registrar dados pessoais em campos de observação quando não for necessário.
+- Não usar mensagens prontas para contornar janela fechada.
+- Não tentar restaurar contato anonimizado.

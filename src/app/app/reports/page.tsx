@@ -1227,7 +1227,7 @@ export default function AppReportsPage() {
               />
             </section>
             <section className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white/65">
-              SLA por responsavel nao e inferido nesta tela. Sem snapshot confiavel do responsavel no evento de SLA, essa leitura permanece fora do escopo.
+              SLA por responsável não é inferido nesta tela. Sem registro confiável do responsável no evento de SLA, essa leitura permanece fora do escopo.
             </section>
           </>
         ) : null}

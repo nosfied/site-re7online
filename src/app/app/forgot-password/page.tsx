@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import ThemeSelector from "@/components/ThemeSelector";
 import { requestAppPasswordReset } from "@/lib/appClientApi";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 
 export default function AppForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -24,9 +25,14 @@ export default function AppForgotPasswordPage() {
     setMessage(null);
     try {
       const response = await requestAppPasswordReset(normalizedEmail);
-      setMessage(response.message || "Se existir uma conta, enviaremos instrucoes para redefinir a senha.");
+      setMessage(response.message || "Se existir uma conta, enviaremos instruções para redefinir a senha.");
     } catch (err) {
-      setError((err as Error).message || "Nao foi possivel solicitar a recuperacao agora. Tente novamente em alguns minutos.");
+      setError(
+        getAppErrorUxMessage({
+          message: (err as Error).message,
+          fallback: "Não foi possível solicitar a recuperação agora. Tente novamente em alguns minutos.",
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -60,7 +66,7 @@ export default function AppForgotPasswordPage() {
           <div className="grid gap-1">
             <h1 className="text-[0.98rem] font-semibold leading-tight sm:text-lg">Recuperar senha</h1>
             <p className="theme-muted text-[0.8rem] leading-5 sm:text-sm">
-              Informe o email de acesso. Se existir uma conta, enviaremos um link valido por 30 minutos.
+              Informe o email de acesso. Se existir uma conta, enviaremos um link válido por 30 minutos.
             </p>
           </div>
           <label className="grid gap-1 text-[0.82rem] sm:text-sm">

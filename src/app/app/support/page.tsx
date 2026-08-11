@@ -19,6 +19,7 @@ import {
   sendAppSupportConversationAttachment,
   sendAppSupportConversationMessage,
 } from "@/lib/appClientApi";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 
 const SUPPORT_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 const SUPPORT_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -39,16 +40,16 @@ function formatDateTime(value?: string | null) {
 }
 
 function getSupportErrorMessage(error: AppApiError, fallback: string) {
-  if (error.status === 401) return "Sessao expirada. Faca login novamente.";
+  if (error.status === 401) return "Sessão expirada. Faça login novamente.";
   if (error.status === 403) return "Apenas administradores e supervisores podem abrir suporte.";
-  if (error.errorCode === "support_unavailable") return "O suporte pela plataforma ainda nao esta disponivel.";
+  if (error.errorCode === "support_unavailable") return "O suporte pela plataforma ainda não está disponível.";
   if (error.errorCode === "support_message_required") return "Descreva como podemos ajudar.";
   if (error.errorCode === "support_message_too_long") return "Mensagem muito longa.";
   if (error.errorCode === "support_conversation_closed") return "Este chamado foi encerrado. Abra um novo chamado.";
-  if (error.errorCode === "support_attachment_storage_unconfigured") return "Envio de imagem ainda nao esta configurado.";
+  if (error.errorCode === "support_attachment_storage_unconfigured") return "Envio de imagem ainda não está configurado.";
   if (error.errorCode === "support_attachment_invalid") return "Use uma imagem PNG, JPEG ou WebP.";
-  if (error.errorCode === "support_attachment_too_large") return "Imagem grande demais. Use uma imagem de ate 8 MB.";
-  return error.message || fallback;
+  if (error.errorCode === "support_attachment_too_large") return "Imagem grande demais. Use uma imagem de até 8 MB.";
+  return getAppErrorUxMessage({ status: error.status, errorCode: error.errorCode, message: error.message, fallback });
 }
 
 function formatFileSize(bytes: number) {
@@ -60,7 +61,7 @@ function formatFileSize(bytes: number) {
 
 function validateSupportImageFile(file: File) {
   if (!SUPPORT_IMAGE_MIME_TYPES.has(file.type)) return "Use uma imagem PNG, JPEG ou WebP.";
-  if (file.size > SUPPORT_IMAGE_MAX_BYTES) return "Imagem grande demais. Use uma imagem de ate 8 MB.";
+  if (file.size > SUPPORT_IMAGE_MAX_BYTES) return "Imagem grande demais. Use uma imagem de até 8 MB.";
   return null;
 }
 
@@ -139,7 +140,7 @@ function MessageBubble({
         }`}
       >
         <div className="mb-1 flex items-center justify-between gap-3 text-[11px] text-white/60">
-          <span>{inbound ? "Voce" : item.actorName || "Suporte"}</span>
+          <span>{inbound ? "Você" : item.actorName || "Suporte"}</span>
           <time>{formatDateTime(item.createdAt)}</time>
         </div>
         {item.media?.kind === "image" ? (
@@ -155,7 +156,7 @@ function MessageBubble({
               </a>
             ) : imageError ? (
               <div className="rounded-md border border-amber-300/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                Imagem indisponivel.
+                Imagem indisponível.
               </div>
             ) : (
               <div className="rounded-md border border-white/10 bg-white/10 px-3 py-2 text-xs text-white/70">
@@ -234,7 +235,7 @@ export default function SupportPage() {
           handleUnauthorized();
           return;
         }
-        setToast({ variant: "error", message: getSupportErrorMessage(error, "Nao foi possivel carregar o suporte.") });
+        setToast({ variant: "error", message: getSupportErrorMessage(error, "Não foi possível carregar o suporte.") });
       })
       .finally(() => setLoading(false));
   }, [handleUnauthorized, loadConversations, router]);
@@ -248,7 +249,7 @@ export default function SupportPage() {
     loadConversation(session, selectedRef).catch((error: AppApiError) => {
       if (cancelled) return;
       if (error.status === 401) handleUnauthorized();
-      else setToast({ variant: "error", message: getSupportErrorMessage(error, "Nao foi possivel carregar o chamado.") });
+      else setToast({ variant: "error", message: getSupportErrorMessage(error, "Não foi possível carregar o chamado.") });
     });
     const timer = window.setInterval(() => {
       loadConversation(session, selectedRef).catch(() => null);
@@ -308,7 +309,7 @@ export default function SupportPage() {
     } catch (error) {
       const typed = error as AppApiError;
       if (typed.status === 401) handleUnauthorized();
-      else setToast({ variant: "error", message: getSupportErrorMessage(typed, "Nao foi possivel abrir o chamado.") });
+      else setToast({ variant: "error", message: getSupportErrorMessage(typed, "Não foi possível abrir o chamado.") });
     } finally {
       setSending(false);
     }
@@ -331,7 +332,7 @@ export default function SupportPage() {
     } catch (error) {
       const typed = error as AppApiError;
       if (typed.status === 401) handleUnauthorized();
-      else setToast({ variant: "error", message: getSupportErrorMessage(typed, "Nao foi possivel enviar a mensagem.") });
+      else setToast({ variant: "error", message: getSupportErrorMessage(typed, "Não foi possível enviar a mensagem.") });
     } finally {
       setSending(false);
     }

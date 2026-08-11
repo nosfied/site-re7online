@@ -1368,7 +1368,7 @@ export default function AppTemplatesPage() {
 
           {campaignReadyCount === 0 ? (
             <div className="m-3 rounded-lg border border-amber-300/30 bg-amber-900/20 p-3 text-sm text-amber-100 sm:m-4">
-              <p className="font-semibold">Este tenant ainda não possui modelo aprovado para envio ativo.</p>
+              <p className="font-semibold">Esta organização ainda não possui modelo aprovado para envio ativo.</p>
               <p className="mt-1 text-amber-100/80">
                 Crie uma solicitação ou sincronize modelos já aprovados para habilitar campanhas.
               </p>

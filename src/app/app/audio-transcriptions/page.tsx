@@ -15,6 +15,7 @@ import {
   saveAppSession,
 } from "@/lib/appClientApi";
 import { hasCapability } from "@/lib/appFeatures";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 function canViewAudioTranscriptions(role: string) {
@@ -34,11 +35,11 @@ function StatusPill({ status }: { status: string }) {
 }
 
 function normalizeError(error: AppApiError) {
-  if (error.status === 401) return "Sessao expirada. Faca login novamente.";
+  if (error.status === 401) return "Sessão expirada. Faça login novamente.";
   if (error.status === 403 || error.errorCode === "feature_not_enabled") {
-    return "Transcricao de audio nao esta habilitada para este tenant.";
+    return "Transcrição de áudio não está habilitada para esta organização.";
   }
-  return error.message || "Nao foi possivel carregar transcricoes.";
+  return getAppErrorUxMessage({ status: error.status, errorCode: error.errorCode, message: error.message, fallback: "Não foi possível carregar as transcrições." });
 }
 
 export default function AudioTranscriptionsPage() {
@@ -112,8 +113,8 @@ export default function AudioTranscriptionsPage() {
   return (
     <AppShell
       session={session}
-      title="Transcricoes de audio"
-      subtitle="Fundacao estrutural para consultar transcricoes e jobs futuros. Nenhum audio e processado nesta fase."
+      title="Transcrições de áudio"
+      subtitle="Base para consultar transcrições futuras. Nenhum áudio é processado nesta fase."
     >
       {error ? <FeedbackToast variant="error" message={error} {...toastHandlers} /> : null}
 
@@ -128,7 +129,7 @@ export default function AudioTranscriptionsPage() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold">Transcricoes</h2>
-            <p className="mt-1 text-sm theme-muted">Registros tenant-scoped gerados por pipelines futuros.</p>
+            <p className="mt-1 text-sm theme-muted">Registros desta organização gerados por processamentos futuros.</p>
           </div>
           <button
             type="button"
@@ -171,8 +172,8 @@ export default function AudioTranscriptionsPage() {
                       <StatusPill status={item.status} />
                     </td>
                     <td className="px-3 py-3">{item.channel}</td>
-                    <td className="px-3 py-3">{item.provider ?? "Nao definido"}</td>
-                    <td className="px-3 py-3">{item.language ?? "Nao definido"}</td>
+                    <td className="px-3 py-3">{item.provider ?? "Não definido"}</td>
+                    <td className="px-3 py-3">{item.language ?? "Não definido"}</td>
                     <td className="max-w-lg px-3 py-3">
                       <p className="line-clamp-3 text-sm">{item.transcript || "Transcript ainda indisponivel."}</p>
                       <p className="mt-1 text-xs theme-muted">Mensagem: {item.messageId}</p>
@@ -219,9 +220,9 @@ export default function AudioTranscriptionsPage() {
                     <td className="px-3 py-3">
                       <StatusPill status={item.status} />
                     </td>
-                    <td className="px-3 py-3">{item.provider ?? "Nao definido"}</td>
-                    <td className="px-3 py-3">{item.startedAt ? formatDateTime(item.startedAt) : "Nao iniciado"}</td>
-                    <td className="px-3 py-3">{item.finishedAt ? formatDateTime(item.finishedAt) : "Nao finalizado"}</td>
+                    <td className="px-3 py-3">{item.provider ?? "Não definido"}</td>
+                    <td className="px-3 py-3">{item.startedAt ? formatDateTime(item.startedAt) : "Não iniciado"}</td>
+                    <td className="px-3 py-3">{item.finishedAt ? formatDateTime(item.finishedAt) : "Não finalizado"}</td>
                     <td className="max-w-md px-3 py-3">{item.error ?? "Sem erro registrado"}</td>
                   </tr>
                 ))

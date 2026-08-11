@@ -33,7 +33,7 @@ export function getFriendlyCampaignError(error: string | null) {
 
   if (code === 132000) {
     return {
-      summary: "Quantidade de parametros do template nao confere. Ref. 132000.",
+      summary: "Quantidade de parâmetros do modelo não confere. Ref. 132000.",
       detail: details || message,
       raw: error,
     };

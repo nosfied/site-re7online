@@ -24,6 +24,7 @@ import {
   updateAppSatisfactionQuestion,
   updateAppSatisfactionSurvey,
 } from "@/lib/appClientApi";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 
 type TabKey = "questions" | "surveys" | "responses";
 
@@ -83,12 +84,12 @@ function canManageSatisfaction(role: string) {
 }
 
 function normalizeError(error: AppApiError, fallback: string) {
-  if (error.status === 401) return "Sessao expirada. Faca login novamente.";
-  if (error.status === 403) return "Seu perfil nao tem permissao para gerenciar satisfacao.";
-  if (error.errorCode === "feature_not_enabled") return "Satisfacao nao esta habilitada para este tenant.";
-  if (error.errorCode === "duplicate_satisfaction_record") return "Ja existe um registro de satisfacao com estes dados.";
-  if (error.errorCode?.endsWith("_not_found")) return "O registro selecionado nao pertence a este tenant ou nao existe.";
-  return error.message || fallback;
+  if (error.status === 401) return "Sessão expirada. Faça login novamente.";
+  if (error.status === 403) return "Seu perfil não tem permissão para gerenciar satisfação.";
+  if (error.errorCode === "feature_not_enabled") return "Satisfação não está habilitada para esta organização.";
+  if (error.errorCode === "duplicate_satisfaction_record") return "Já existe um registro de satisfação com estes dados.";
+  if (error.errorCode?.endsWith("_not_found")) return "O registro selecionado não pertence a esta organização ou não existe.";
+  return getAppErrorUxMessage({ status: error.status, errorCode: error.errorCode, message: error.message, fallback });
 }
 
 function StatusPill({ status }: { status: string }) {
@@ -160,7 +161,7 @@ export default function SatisfactionPage() {
           handleUnauthorized();
           return;
         }
-        setError(normalizeError(typed, "Nao foi possivel carregar satisfacao."));
+        setError(normalizeError(typed, "Não foi possível carregar satisfação."));
       } finally {
         setLoading(false);
       }
@@ -212,7 +213,7 @@ export default function SatisfactionPage() {
       setQuestionForm(QUESTION_EMPTY);
       await loadSatisfaction(session);
     } catch (err) {
-      setError(normalizeError(err as AppApiError, "Nao foi possivel salvar a pergunta."));
+      setError(normalizeError(err as AppApiError, "Não foi possível salvar a pergunta."));
     } finally {
       setSaving(false);
     }
@@ -242,7 +243,7 @@ export default function SatisfactionPage() {
       setSurveyForm(SURVEY_EMPTY);
       await loadSatisfaction(session);
     } catch (err) {
-      setError(normalizeError(err as AppApiError, "Nao foi possivel salvar a pesquisa."));
+      setError(normalizeError(err as AppApiError, "Não foi possível salvar a pesquisa."));
     } finally {
       setSaving(false);
     }
@@ -262,7 +263,7 @@ export default function SatisfactionPage() {
       setSuccess("Resposta registrada.");
       await loadSatisfaction(session);
     } catch (err) {
-      setError(normalizeError(err as AppApiError, "Nao foi possivel registrar a resposta."));
+      setError(normalizeError(err as AppApiError, "Não foi possível registrar a resposta."));
     } finally {
       setSaving(false);
     }
@@ -300,7 +301,7 @@ export default function SatisfactionPage() {
           ))}
         </div>
 
-        {loading ? <p className="theme-muted">Carregando satisfacao...</p> : null}
+        {loading ? <p className="theme-muted">Carregando satisfação...</p> : null}
 
         {tab === "questions" ? (
           <div className="grid gap-5 xl:grid-cols-[minmax(0,420px)_1fr]">
@@ -453,7 +454,7 @@ export default function SatisfactionPage() {
             </FormPanel>
             <ListPanel>
               {surveys.map((item) => (
-                <ListItem key={item.id} title={item.questionText} subtitle={`${item.type.toUpperCase()} - ${item.channel ?? "canal nao definido"}`}>
+                <ListItem key={item.id} title={item.questionText} subtitle={`${item.type.toUpperCase()} - ${item.channel ?? "canal não definido"}`}>
                   <StatusPill status={item.status} />
                   <button
                     type="button"

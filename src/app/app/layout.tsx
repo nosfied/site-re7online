@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     default: "Converta",
     template: "%s | Converta",
   },
-  description: "Converta — atendimento inteligente via WhatsApp com automacao, campanhas e gestao de leads.",
+  description: "Converta — atendimento inteligente via WhatsApp com automação, campanhas e gestão de contatos.",
   applicationName: "Converta",
   manifest: "/manifest.webmanifest",
   appleWebApp: {

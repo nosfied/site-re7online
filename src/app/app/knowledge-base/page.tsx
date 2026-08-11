@@ -20,6 +20,7 @@ import {
   transitionAppKnowledgeBaseArticle,
   updateAppKnowledgeBaseArticle,
 } from "@/lib/appClientApi";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 
 type ArticleForm = {
   id: string | null;
@@ -107,12 +108,12 @@ function toPayload(form: ArticleForm): AppKnowledgeBaseArticlePayload {
 }
 
 function normalizeAppErrorMessage(error: AppApiError, fallback: string) {
-  if (error.status === 401) return "Sessao expirada. Faca login novamente.";
-  if (error.status === 403) return "Seu perfil nao tem permissao para gerenciar a base de conhecimento.";
-  if (error.errorCode === "feature_not_enabled") return "A base de conhecimento nao esta habilitada para este tenant.";
-  if (error.errorCode === "knowledge_article_key_conflict") return "Ja existe um artigo com esta chave.";
-  if (error.errorCode === "knowledge_collection_key_conflict") return "Ja existe uma colecao com esta chave.";
-  return error.message || fallback;
+  if (error.status === 401) return "Sessão expirada. Faça login novamente.";
+  if (error.status === 403) return "Seu perfil não tem permissão para gerenciar a base de conhecimento.";
+  if (error.errorCode === "feature_not_enabled") return "A base de conhecimento não está habilitada para esta organização.";
+  if (error.errorCode === "knowledge_article_key_conflict") return "Já existe um artigo com esta chave.";
+  if (error.errorCode === "knowledge_collection_key_conflict") return "Já existe uma coleção com esta chave.";
+  return getAppErrorUxMessage({ status: error.status, errorCode: error.errorCode, message: error.message, fallback });
 }
 
 export default function KnowledgeBasePage() {
@@ -155,7 +156,7 @@ export default function KnowledgeBasePage() {
           handleUnauthorized();
           return;
         }
-        setError(normalizeAppErrorMessage(typed, "Nao foi possivel carregar a base de conhecimento."));
+        setError(normalizeAppErrorMessage(typed, "Não foi possível carregar a base de conhecimento."));
       } finally {
         setLoading(false);
       }
@@ -207,7 +208,7 @@ export default function KnowledgeBasePage() {
       setSuccess("Colecao criada.");
       await loadKnowledgeBase(session);
     } catch (err) {
-      setError(normalizeAppErrorMessage(err as AppApiError, "Nao foi possivel criar a colecao."));
+      setError(normalizeAppErrorMessage(err as AppApiError, "Não foi possível criar a coleção."));
     } finally {
       setSaving(false);
     }
@@ -226,7 +227,7 @@ export default function KnowledgeBasePage() {
       setSuccess(form.id ? "Artigo atualizado." : "Artigo criado.");
       await loadKnowledgeBase(session);
     } catch (err) {
-      setError(normalizeAppErrorMessage(err as AppApiError, "Nao foi possivel salvar o artigo."));
+      setError(normalizeAppErrorMessage(err as AppApiError, "Não foi possível salvar o artigo."));
     } finally {
       setSaving(false);
     }
@@ -242,7 +243,7 @@ export default function KnowledgeBasePage() {
       setSuccess(action === "publish" ? "Artigo publicado." : action === "archive" ? "Artigo arquivado." : "Artigo voltou para rascunho.");
       await loadKnowledgeBase(session);
     } catch (err) {
-      setError(normalizeAppErrorMessage(err as AppApiError, "Nao foi possivel alterar o status."));
+      setError(normalizeAppErrorMessage(err as AppApiError, "Não foi possível alterar a situação."));
     } finally {
       setSaving(false);
     }
@@ -256,7 +257,7 @@ export default function KnowledgeBasePage() {
     <AppShell
       session={session}
       title="Base de conhecimento"
-      subtitle="Artigos internos para organizar respostas, fontes e orientacoes por tenant."
+      subtitle="Artigos internos para organizar respostas, fontes e orientações por organização."
     >
       <div className="space-y-4">
         <FeedbackToast message={success} variant="success" {...toastHandlers} />

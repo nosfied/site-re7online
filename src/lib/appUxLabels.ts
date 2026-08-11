@@ -89,7 +89,7 @@ export function getAppErrorUxMessage(input: {
   if (input.status === 401) return "Sua sessão expirou. Entre novamente.";
   if (input.status === 403) return "Você não tem permissão para fazer esta ação.";
   if (input.status && input.status >= 500) return "Não foi possível concluir esta ação. Tente novamente.";
-  return rawMessage || input.fallback || "Não foi possível concluir esta ação. Tente novamente.";
+  return input.fallback || rawMessage || "Não foi possível concluir esta ação. Tente novamente.";
 }
 
 export function getMetaTemplateCategoryUxLabel(category: string | null | undefined) {

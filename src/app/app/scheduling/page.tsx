@@ -29,6 +29,7 @@ import {
   updateAppSchedulingService,
 } from "@/lib/appClientApi";
 import { hasCapability } from "@/lib/appFeatures";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 
 type TabKey = "services" | "resources" | "availability" | "appointments" | "reminders";
 
@@ -97,11 +98,11 @@ function canManageScheduling(role: string) {
 }
 
 function normalizeError(error: AppApiError, fallback: string) {
-  if (error.status === 401) return "Sessao expirada. Faca login novamente.";
-  if (error.status === 403) return "Seu perfil nao tem permissao para gerenciar agendamentos.";
-  if (error.errorCode === "feature_not_enabled") return "Agendamento nao esta habilitado para este tenant.";
-  if (error.errorCode?.endsWith("_not_found")) return "O vinculo selecionado nao pertence a este tenant ou nao existe.";
-  return error.message || fallback;
+  if (error.status === 401) return "Sessão expirada. Faça login novamente.";
+  if (error.status === 403) return "Seu perfil não tem permissão para gerenciar agendamentos.";
+  if (error.errorCode === "feature_not_enabled") return "Agendamento não está habilitado para esta organização.";
+  if (error.errorCode?.endsWith("_not_found")) return "O vínculo selecionado não pertence a esta organização ou não existe.";
+  return getAppErrorUxMessage({ status: error.status, errorCode: error.errorCode, message: error.message, fallback });
 }
 
 function toLocalDateTimeInput(value: string) {
@@ -192,7 +193,7 @@ export default function SchedulingPage() {
           handleUnauthorized();
           return;
         }
-        setError(normalizeError(typed, "Nao foi possivel carregar a agenda."));
+        setError(normalizeError(typed, "Não foi possível carregar a agenda."));
       } finally {
         setLoading(false);
       }
@@ -257,7 +258,7 @@ export default function SchedulingPage() {
       setServiceForm(SERVICE_EMPTY);
       await loadScheduling(session);
     } catch (err) {
-      setError(normalizeError(err as AppApiError, "Nao foi possivel salvar o servico."));
+      setError(normalizeError(err as AppApiError, "Não foi possível salvar o serviço."));
     } finally {
       setSaving(false);
     }
@@ -285,7 +286,7 @@ export default function SchedulingPage() {
       setResourceForm(RESOURCE_EMPTY);
       await loadScheduling(session);
     } catch (err) {
-      setError(normalizeError(err as AppApiError, "Nao foi possivel salvar o recurso."));
+      setError(normalizeError(err as AppApiError, "Não foi possível salvar o recurso."));
     } finally {
       setSaving(false);
     }
@@ -315,7 +316,7 @@ export default function SchedulingPage() {
       setAvailabilityForm(AVAILABILITY_EMPTY);
       await loadScheduling(session);
     } catch (err) {
-      setError(normalizeError(err as AppApiError, "Nao foi possivel salvar a disponibilidade."));
+      setError(normalizeError(err as AppApiError, "Não foi possível salvar a disponibilidade."));
     } finally {
       setSaving(false);
     }
@@ -347,7 +348,7 @@ export default function SchedulingPage() {
       setAppointmentForm(APPOINTMENT_EMPTY);
       await loadScheduling(session);
     } catch (err) {
-      setError(normalizeError(err as AppApiError, "Nao foi possivel salvar o compromisso."));
+      setError(normalizeError(err as AppApiError, "Não foi possível salvar o compromisso."));
     } finally {
       setSaving(false);
     }
@@ -380,7 +381,7 @@ export default function SchedulingPage() {
       setReminderForm(REMINDER_EMPTY);
       await loadScheduling(session);
     } catch (err) {
-      setError(normalizeError(err as AppApiError, "Nao foi possivel salvar o lembrete."));
+      setError(normalizeError(err as AppApiError, "Não foi possível salvar o lembrete."));
     } finally {
       setSaving(false);
     }
@@ -392,7 +393,7 @@ export default function SchedulingPage() {
     <AppShell
       session={session}
       title="Agendamentos"
-      subtitle="Servicos, recursos, disponibilidade e compromissos por tenant."
+      subtitle="Serviços, recursos, disponibilidade e compromissos por organização."
     >
       <div className="space-y-4">
         <FeedbackToast message={success} variant="success" {...toastHandlers} />
@@ -534,7 +535,7 @@ export default function SchedulingPage() {
                 ["rescheduled", "Remarcado"],
                 ["cancelled", "Cancelado"],
                 ["completed", "Concluido"],
-                ["no_show", "Nao compareceu"],
+                ["no_show", "Não compareceu"],
               ]} />
               <FormActions saving={saving} onNew={() => setAppointmentForm(APPOINTMENT_EMPTY)} onSave={saveAppointment} />
             </Panel>
@@ -627,7 +628,7 @@ export default function SchedulingPage() {
                 ]}
               />
               <TextArea
-                label="Falha/observacao"
+                label="Falha/observação"
                 value={reminderForm.error}
                 onChange={(error) => setReminderForm((prev) => ({ ...prev, error }))}
               />

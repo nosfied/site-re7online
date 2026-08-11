@@ -22,6 +22,7 @@ import {
   verifyAppMfaShadow,
 } from "@/lib/appClientApi";
 import { hasCapability } from "@/lib/appFeatures";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 function canManageSecurity(role: string) {
@@ -50,6 +51,23 @@ function Metric({ label, value }: { label: string; value: string | number }) {
       <p className="mt-2 text-2xl font-semibold">{value}</p>
     </div>
   );
+}
+
+function getMfaRuntimeReasonLabel(reason?: AppMfaRuntimeStatus["reason"] | null) {
+  switch (reason) {
+    case "mfa_disabled":
+      return "Verificação desativada";
+    case "mfa_not_required":
+      return "Verificação não exigida";
+    case "role_not_eligible":
+      return "Perfil fora da regra";
+    case "admin_required_enrolled":
+      return "Administrador já configurado";
+    case "admin_required_pending_enrollment":
+      return "Administrador precisa configurar";
+    default:
+      return "Verificação não exigida";
+  }
 }
 
 export default function SecuritySettingsPage() {
@@ -101,7 +119,7 @@ export default function SecuritySettingsPage() {
           router.replace("/app/inbox");
           return;
         }
-        setError(typed.message || "Nao foi possivel carregar seguranca.");
+        setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível carregar as configurações de segurança." }));
       } finally {
         setLoading(false);
       }
@@ -140,14 +158,14 @@ export default function SecuritySettingsPage() {
       ]);
       setRuntimeStatus(runtimeResponse.status);
       setRecoveryStatus(recoveryResponse.status);
-      setSuccess("Enrollment TOTP preparado.");
+      setSuccess("Configuração do aplicativo autenticador preparada.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Nao foi possivel iniciar enrollment MFA.");
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível iniciar a verificação em duas etapas." }));
     } finally {
       setSaving(false);
     }
@@ -175,14 +193,14 @@ export default function SecuritySettingsPage() {
           : current
       );
       setRecoveryCodes(response.recoveryCodes);
-      setSuccess(response.regenerated ? "Codigos de recuperacao regenerados." : "Codigos de recuperacao gerados.");
+      setSuccess(response.regenerated ? "Códigos de recuperação regenerados." : "Códigos de recuperação gerados.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Nao foi possivel gerar codigos de recuperacao.");
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível gerar os códigos de recuperação." }));
     } finally {
       setGeneratingRecovery(false);
     }
@@ -192,7 +210,7 @@ export default function SecuritySettingsPage() {
     if (!session) return;
     const code = shadowCode.replace(/\D/g, "").slice(0, 6);
     if (code.length !== 6) {
-      setError("Informe um codigo TOTP de 6 digitos.");
+      setError("Informe um código de 6 dígitos do aplicativo autenticador.");
       return;
     }
     setVerifying(true);
@@ -202,14 +220,14 @@ export default function SecuritySettingsPage() {
     try {
       const response = await verifyAppMfaShadow(session, code);
       setShadowResult(response.status);
-      setSuccess(response.valid ? "Codigo valido em modo teste." : "Codigo invalido em modo teste.");
+      setSuccess(response.valid ? "Código válido em modo teste." : "Código inválido em modo teste.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Nao foi possivel validar o codigo em modo teste.");
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível validar o código em modo teste." }));
     } finally {
       setVerifying(false);
     }
@@ -218,8 +236,8 @@ export default function SecuritySettingsPage() {
   const metrics = useMemo(() => {
     return {
       feature: status?.featureEnabled ? "Ativa" : "Inativa",
-      enrolled: status?.enrolled ? "Sim" : "Nao",
-      required: status?.required ? "Sim" : "Nao",
+      enrolled: status?.enrolled ? "Sim" : "Não",
+      required: status?.required ? "Sim" : "Não",
       recovery: recoveryStatus?.available ?? status?.recoveryCodes.unused ?? 0,
     };
   }, [recoveryStatus, status]);
@@ -229,26 +247,26 @@ export default function SecuritySettingsPage() {
   return (
     <AppShell
       session={session}
-      title="Seguranca"
-      subtitle="Fundacao MFA/TOTP para usuarios internos. O login ainda nao exige MFA nesta fase."
+      title="Segurança"
+      subtitle="Base da verificação em duas etapas para usuários internos. O login ainda não exige essa verificação nesta fase."
     >
       {error ? <FeedbackToast variant="error" message={error} {...toastHandlers} /> : null}
       {success ? <FeedbackToast variant="success" message={success} {...toastHandlers} /> : null}
 
       <section className="grid gap-3 md:grid-cols-4">
-        <Metric label="MFA" value={metrics.feature} />
-        <Metric label="Enrollment" value={metrics.enrolled} />
-        <Metric label="Obrigatorio" value={metrics.required} />
-        <Metric label="Recovery disponiveis" value={metrics.recovery} />
+        <Metric label="Verificação" value={metrics.feature} />
+        <Metric label="Configuração" value={metrics.enrolled} />
+        <Metric label="Obrigatório" value={metrics.required} />
+        <Metric label="Códigos disponíveis" value={metrics.recovery} />
       </section>
 
       <section className="mt-5 rounded-lg border border-white/10 bg-white/[0.03] p-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <h2 className="text-base font-semibold">MFA por autenticador</h2>
+            <h2 className="text-base font-semibold">Verificação por aplicativo autenticador</h2>
             <p className="mt-1 max-w-2xl text-sm theme-muted">
-              Esta tela prepara o segredo TOTP por usuario. A validacao do codigo, recovery codes e enforcement de login
-              entram nas proximas sprints.
+              Esta tela prepara o segredo do aplicativo autenticador por usuário. A validação do código, os códigos de recuperação
+              e a exigência no login entram nas próximas sprints.
             </p>
           </div>
           <button
@@ -257,43 +275,43 @@ export default function SecuritySettingsPage() {
             disabled={saving || loading}
             className="theme-button-primary h-10 rounded-md px-4 text-sm disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {saving ? "Preparando..." : "Iniciar enrollment"}
+            {saving ? "Preparando..." : "Iniciar configuração"}
           </button>
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2">
-          <StatusPill enabled={Boolean(status?.featureEnabled)} label={status?.featureEnabled ? "Feature ativa" : "Feature inativa"} />
+          <StatusPill enabled={Boolean(status?.featureEnabled)} label={status?.featureEnabled ? "Recurso ativo" : "Recurso inativo"} />
           <StatusPill enabled={Boolean(status?.enabled)} label={status?.enabled ? "Fator ativo" : "Fator pendente"} />
-          <StatusPill enabled={Boolean(status?.enforced)} label={status?.enforced ? "Enforcement ativo" : "Sem enforcement"} />
+          <StatusPill enabled={Boolean(status?.enforced)} label={status?.enforced ? "Exigência ativa" : "Sem exigência"} />
         </div>
 
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <div className="rounded-lg border border-white/10 bg-black/20 p-4">
-            <h3 className="text-sm font-semibold">Status do usuario</h3>
+            <h3 className="text-sm font-semibold">Situação do usuário</h3>
             <dl className="mt-3 space-y-2 text-sm">
               <div className="flex justify-between gap-3">
-                <dt className="theme-muted">Enrollment</dt>
+                <dt className="theme-muted">Configuração</dt>
                 <dd>{status?.enrolledAt ? formatDateTime(status.enrolledAt) : "Pendente"}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="theme-muted">Ultimo uso</dt>
+                <dt className="theme-muted">Último uso</dt>
                 <dd>{status?.lastUsedAt ? formatDateTime(status.lastUsedAt) : "Nunca"}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="theme-muted">Recovery codes</dt>
+                <dt className="theme-muted">Códigos de recuperação</dt>
                 <dd>
                   {recoveryStatus?.configured
                     ? `${recoveryStatus.available}/${recoveryStatus.total}`
                     : status?.recoveryCodes.configured
                       ? `${status.recoveryCodes.unused}/${status.recoveryCodes.total}`
-                      : "Nao configurado"}
+                      : "Não configurado"}
                 </dd>
               </div>
             </dl>
           </div>
 
           <div className="rounded-lg border border-white/10 bg-black/20 p-4">
-            <h3 className="text-sm font-semibold">Provisioning TOTP</h3>
+            <h3 className="text-sm font-semibold">Configuração do autenticador</h3>
             {provisioning ? (
               <div className="mt-3 space-y-3 text-sm">
                 <div>
@@ -307,7 +325,7 @@ export default function SecuritySettingsPage() {
                   </code>
                 </div>
                 <div>
-                  <p className="theme-muted">Payload QR</p>
+                  <p className="theme-muted">Conteúdo do QR Code</p>
                   <code className="mt-1 block max-h-28 overflow-auto break-all rounded-md border border-white/10 bg-black/30 p-2 text-xs">
                     {provisioning.otpauthUrl}
                   </code>
@@ -315,7 +333,7 @@ export default function SecuritySettingsPage() {
               </div>
             ) : (
               <p className="mt-3 text-sm theme-muted">
-                Nenhum payload gerado nesta sessao. Inicie o enrollment para gerar o segredo criptografado no backend.
+                Nenhum conteúdo gerado nesta sessão. Inicie a configuração para gerar o segredo protegido no backend.
               </p>
             )}
           </div>
@@ -324,9 +342,9 @@ export default function SecuritySettingsPage() {
         <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <h3 className="text-sm font-semibold">Codigos de recuperacao</h3>
+              <h3 className="text-sm font-semibold">Códigos de recuperação</h3>
               <p className="mt-1 text-sm theme-muted">
-                Gere codigos hash-only para reduzir risco de lockout futuro. Eles ainda nao sao usados no login nesta sprint.
+                Gere códigos de recuperação protegidos para reduzir risco de bloqueio futuro. Eles ainda não são usados no login nesta sprint.
               </p>
             </div>
             <button
@@ -338,8 +356,8 @@ export default function SecuritySettingsPage() {
               {generatingRecovery
                 ? "Gerando..."
                 : recoveryStatus?.configured
-                  ? "Regenerar codigos"
-                  : "Gerar codigos"}
+                  ? "Regenerar códigos"
+                  : "Gerar códigos"}
             </button>
           </div>
 
@@ -353,7 +371,7 @@ export default function SecuritySettingsPage() {
             <div className="mt-4 rounded-md border border-amber-300/20 bg-amber-500/10 p-4">
               <p className="text-sm font-semibold text-amber-100">Exibidos uma unica vez</p>
               <p className="mt-1 text-sm text-amber-100/75">
-                Armazene estes codigos agora. Depois desta tela, apenas o status sera exibido.
+                Armazene estes códigos agora. Depois desta tela, apenas a situação será exibida.
               </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {recoveryCodes.map((code) => (
@@ -367,30 +385,32 @@ export default function SecuritySettingsPage() {
         </div>
 
         <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-4">
-          <h3 className="text-sm font-semibold">Runtime shadow</h3>
+          <h3 className="text-sm font-semibold">Verificação em modo de simulação</h3>
           <p className="mt-1 text-sm theme-muted">
-            O login continua normal. Esta leitura apenas informa se MFA seria exigido pela politica atual.
+            O login continua normal. Esta leitura apenas informa se a verificação em duas etapas seria exigida pela política atual.
           </p>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
               <p className="text-xs uppercase tracking-[0.2em] theme-muted">Modo</p>
-              <p className="mt-1 text-sm font-semibold">{runtimeStatus?.mode ?? "shadow"}</p>
+              <p className="mt-1 text-sm font-semibold">Simulação</p>
             </div>
             <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
               <p className="text-xs uppercase tracking-[0.2em] theme-muted">Seria exigido</p>
-              <p className="mt-1 text-sm font-semibold">{runtimeStatus?.wouldRequireMfa ? "Sim" : "Nao"}</p>
+              <p className="mt-1 text-sm font-semibold">{runtimeStatus?.wouldRequireMfa ? "Sim" : "Não"}</p>
             </div>
             <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
               <p className="text-xs uppercase tracking-[0.2em] theme-muted">Motivo</p>
-              <p className="mt-1 break-words text-sm font-semibold">{runtimeStatus?.reason ?? "mfa_not_required"}</p>
+              <p className="mt-1 break-words text-sm font-semibold">
+                {getMfaRuntimeReasonLabel(runtimeStatus?.reason)}
+              </p>
             </div>
           </div>
         </div>
 
         <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-4">
-          <h3 className="text-sm font-semibold">Verificacao shadow</h3>
+          <h3 className="text-sm font-semibold">Verificação simulada</h3>
           <p className="mt-1 text-sm theme-muted">
-            Testa o codigo TOTP sem alterar login, sessao ou obrigatoriedade de MFA.
+            Testa o código do aplicativo autenticador sem alterar login, sessão ou obrigatoriedade.
           </p>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
@@ -413,7 +433,7 @@ export default function SecuritySettingsPage() {
               {verifying ? "Verificando..." : "Verificar em modo teste"}
             </button>
             {shadowResult ? (
-              <StatusPill enabled={shadowResult === "valid"} label={shadowResult === "valid" ? "Codigo valido" : "Codigo invalido"} />
+              <StatusPill enabled={shadowResult === "valid"} label={shadowResult === "valid" ? "Código válido" : "Código inválido"} />
             ) : null}
           </div>
         </div>

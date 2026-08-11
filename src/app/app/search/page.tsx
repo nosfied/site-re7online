@@ -14,6 +14,7 @@ import {
   saveAppSession,
 } from "@/lib/appClientApi";
 import { hasCapability } from "@/lib/appFeatures";
+import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 function canViewAdvancedSearch(role: string) {
@@ -22,14 +23,14 @@ function canViewAdvancedSearch(role: string) {
 }
 
 function normalizeError(error: AppApiError) {
-  if (error.status === 401) return "Sessao expirada. Faca login novamente.";
+  if (error.status === 401) return "Sessão expirada. Faça login novamente.";
   if (error.errorCode === "advanced_search_runtime_disabled") {
-    return "Busca textual ainda nao esta habilitada para este tenant. A tela permanece em modo diagnostico.";
+    return "Busca textual ainda não está habilitada para esta organização. A tela permanece em modo diagnóstico.";
   }
   if (error.status === 403 || error.errorCode === "feature_not_enabled") {
-    return "Busca avancada nao esta habilitada para este tenant.";
+    return "Busca avançada não está habilitada para esta organização.";
   }
-  return error.message || "Nao foi possivel carregar busca avancada.";
+  return getAppErrorUxMessage({ status: error.status, errorCode: error.errorCode, message: error.message, fallback: "Não foi possível carregar a busca avançada." });
 }
 
 type SearchFilters = {
@@ -142,7 +143,7 @@ export default function SearchPage() {
     <AppShell
       session={session}
       title="Busca avancada"
-      subtitle="Busca tenant-scoped sobre o indice operacional. Sem IA, sem semantica e sem indexacao automatica."
+      subtitle="Busca restrita à organização sobre o índice operacional. Sem IA, sem semântica e sem indexação automática."
     >
       {error ? <FeedbackToast variant="error" message={error} {...toastHandlers} /> : null}
 
@@ -154,8 +155,8 @@ export default function SearchPage() {
 
       {!runtimeEnabled ? (
         <div className="mt-5 rounded-lg border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
-          Modo diagnostico ativo. A busca textual sera liberada para tenants piloto; filtros sem texto continuam
-          disponiveis para validacao do indice.
+          Modo diagnóstico ativo. A busca textual será liberada para organizações piloto; filtros sem texto continuam
+          disponíveis para validação do índice.
         </div>
       ) : null}
 
@@ -263,8 +264,8 @@ export default function SearchPage() {
                       <p className="font-medium">{item.entityType}</p>
                       <p className="mt-1 text-xs theme-muted">{item.entityId}</p>
                     </td>
-                    <td className="px-3 py-3">{item.channel ?? "Nao definido"}</td>
-                    <td className="px-3 py-3">{item.source ?? "Nao definido"}</td>
+                    <td className="px-3 py-3">{item.channel ?? "Não definido"}</td>
+                    <td className="px-3 py-3">{item.source ?? "Não definido"}</td>
                     <td className="px-3 py-3">{item.title ?? "Sem titulo"}</td>
                     <td className="max-w-lg px-3 py-3">
                       <p className="line-clamp-3">{item.snippet ?? item.body ?? "Sem corpo indexado."}</p>
