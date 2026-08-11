@@ -8,13 +8,9 @@ import path from "node:path";
 import { hashPassword, issueClientAuthToken } from "../auth/clientAuth.js";
 import { buildAppAuthSessionExpiresAt } from "../auth/sessionPolicy.js";
 import { saveWebSessionAuthState } from "../web-session/webSessionAuthStore.js";
-import {
-  filterOptedOutCampaignRecipients,
-  recordContactOptOut,
-  revokeContactOptOut,
-} from "../campaigns/optOutRegistry.js";
 import { getPrisma } from "../db.js";
 import { MessageStatus, MessageType, TrainingContentStatus, TrainingContentType } from "@prisma/client";
+import type { ConversationState } from "../conversation/conversation.types.js";
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "campaigns-feature-route-test-secret";
 process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || "campaigns-feature-route-test-admin-token";
@@ -55,6 +51,10 @@ let server: Server;
 let baseUrl = "";
 let handleRequest: typeof import("./routes.js").handleRequest;
 let setTemplateReviewNotificationSenderForTests: typeof import("../templates/templateReviewNotification.js").setTemplateReviewNotificationSenderForTests;
+let filterOptedOutCampaignRecipients: typeof import("../campaigns/optOutRegistry.js").filterOptedOutCampaignRecipients;
+let recordContactOptOut: typeof import("../campaigns/optOutRegistry.js").recordContactOptOut;
+let revokeContactOptOut: typeof import("../campaigns/optOutRegistry.js").revokeContactOptOut;
+let runtimeStorage: typeof import("../storage/runtimeStorage.js").runtimeStorage;
 
 let businessClientId = "";
 let governmentClientId = "";
@@ -252,6 +252,41 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 3000) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   assert.fail("Timed out waiting for async condition");
+}
+
+async function seedHybridRuntimeState(
+  state: Pick<
+    ConversationState,
+    | "waId"
+    | "waIdCanonical"
+    | "firstSeenAt"
+    | "lastInboundAt"
+    | "lastOutboundAt"
+    | "window"
+    | "mode"
+    | "status"
+    | "assignedUserId"
+    | "assignedTo"
+  >
+) {
+  const clientKey = `${prefix}-business`;
+  await runtimeStorage.upsertConversation({
+    clientKey,
+    conversationKey: `${clientKey}:${state.waId}`,
+    waId: state.waId,
+    waIdCanonical: state.waIdCanonical,
+    firstSeenAt: state.firstSeenAt,
+    lastInboundAt: state.lastInboundAt,
+    lastOutboundAt: state.lastOutboundAt,
+    window: state.window,
+    handoff: { status: "active" },
+    mode: state.mode,
+    status: state.status,
+    assignedUserId: state.assignedUserId,
+    assignedTo: state.assignedTo,
+    answers: {},
+    chatbotActive: false,
+  });
 }
 
 async function requestAdmin<T = unknown>(
@@ -474,6 +509,13 @@ test.before(async () => {
     killSwitchClient.clientKey,
     supportClient.clientKey,
   ]);
+
+  ({
+    filterOptedOutCampaignRecipients,
+    recordContactOptOut,
+    revokeContactOptOut,
+  } = await import("../campaigns/optOutRegistry.js"));
+  ({ runtimeStorage } = await import("../storage/runtimeStorage.js"));
 
   businessAdmin = await createUser({
     clientId: businessClientId,
@@ -3287,6 +3329,17 @@ test("inbox template send uses approved active template and updates timeline saf
       assignedTo: businessAdmin.name,
       lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
     },
+  });
+  await seedHybridRuntimeState({
+    waId,
+    waIdCanonical: waId,
+    firstSeenAt: "2026-01-01T08:00:00.000Z",
+    lastInboundAt: "2026-01-01T08:00:00.000Z",
+    window: { isOpen: false, expiresAt: "2026-01-01T10:00:00.000Z" },
+    mode: "HUMAN",
+    status: "IN_PROGRESS",
+    assignedUserId: businessAdmin.id,
+    assignedTo: businessAdmin.name,
   });
   const freeText = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
     text: "Mensagem livre fora da janela",
@@ -6148,6 +6201,18 @@ test("campaign send resolves safe ninth digit variant to existing conversation",
       lastInboundAt: new Date("2026-01-01T09:00:00.000Z"),
       lastOutboundAt: previousOutboundAt,
     },
+  });
+  await seedHybridRuntimeState({
+    waId: conversationWaId,
+    waIdCanonical: conversationWaId,
+    firstSeenAt: "2026-01-01T09:00:00.000Z",
+    lastInboundAt: "2026-01-01T09:00:00.000Z",
+    lastOutboundAt: previousOutboundAt.toISOString(),
+    window: { isOpen: false },
+    mode: "HUMAN",
+    status: "IN_PROGRESS",
+    assignedUserId: businessAdmin.id,
+    assignedTo: businessAdmin.name,
   });
 
   const originalFetch = globalThis.fetch;

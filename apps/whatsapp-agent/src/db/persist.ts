@@ -32,6 +32,10 @@ export async function getDefaultDepartment(
 export async function persistInboundMessage(params: {
   clientId: string;
   phoneNumberId?: string;
+  channel?: string | null;
+  provider?: string | null;
+  channelAccountId?: string | null;
+  externalMessageId?: string | null;
   waId: string;
   waIdCanonical?: string | null;
   messageId: string;
@@ -44,15 +48,18 @@ export async function persistInboundMessage(params: {
   if (!params.clientId) return false;
   try {
     const prisma = getPrisma();
+    const channel = params.channel ?? "whatsapp";
+    const provider = params.provider ?? "meta";
+    const channelAccountId = params.channelAccountId ?? params.phoneNumberId ?? null;
     const anonymizedGuard = await guardAgainstAnonymizedIdentityRehydration({
       prisma,
       clientId: params.clientId,
-      channel: "whatsapp",
-      provider: "meta",
-      channelAccountId: params.phoneNumberId ?? null,
+      channel,
+      provider,
+      channelAccountId,
       waId: params.waId,
       requestId: params.requestId ?? `whatsapp-inbound:${params.messageId}`,
-      source: "whatsapp.inbound_message",
+      source: provider === "web_session" ? "whatsapp.web.inbound_message" : "whatsapp.inbound_message",
     });
     if (anonymizedGuard.blocked) return false;
 
@@ -70,6 +77,10 @@ export async function persistInboundMessage(params: {
       data: {
         clientId: params.clientId,
         phoneNumberId: params.phoneNumberId,
+        channel,
+        provider,
+        channelAccountId,
+        externalMessageId: params.externalMessageId ?? undefined,
         waId: params.waId,
         waIdCanonical: params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
         messageId: params.messageId,
@@ -105,6 +116,12 @@ export async function persistConversationWindow(params: {
   waId: string;
   waIdCanonical?: string | null;
   phoneNumberId?: string;
+  channel?: string | null;
+  provider?: string | null;
+  channelAccountId?: string | null;
+  externalUserHash?: string | null;
+  externalUserRef?: string | null;
+  legacyWaId?: string | null;
   departmentId?: string | null;
   windowIsOpen: boolean;
   windowExpiresAt?: Date | null;
@@ -116,6 +133,9 @@ export async function persistConversationWindow(params: {
   if (!params.clientId) return;
   const prisma = getPrisma();
   const waIdCanonical = params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId);
+  const channel = params.channel ?? "whatsapp";
+  const provider = params.provider ?? "meta";
+  const channelAccountId = params.channelAccountId ?? params.phoneNumberId ?? null;
   const existing = await prisma.conversation.findUnique({
     where: {
       clientId_waId: {
@@ -135,12 +155,12 @@ export async function persistConversationWindow(params: {
     await guardAgainstAnonymizedIdentityRehydration({
       prisma,
       clientId: params.clientId,
-      channel: "whatsapp",
-      provider: "meta",
-      channelAccountId: params.phoneNumberId ?? null,
+      channel,
+      provider,
+      channelAccountId,
       waId: params.waId,
       requestId: params.requestId ?? "whatsapp-conversation-window",
-      source: "whatsapp.conversation_window",
+      source: provider === "web_session" ? "whatsapp.web.conversation_window" : "whatsapp.conversation_window",
     });
     return;
   }
@@ -173,6 +193,12 @@ export async function persistConversationWindow(params: {
     update: {
       waIdCanonical,
       phoneNumberId: params.phoneNumberId,
+      channel,
+      provider,
+      channelAccountId,
+      externalUserHash: params.externalUserHash ?? undefined,
+      externalUserRef: params.externalUserRef ?? undefined,
+      legacyWaId: params.legacyWaId ?? undefined,
       windowIsOpen: params.windowIsOpen,
       windowExpiresAt: params.windowExpiresAt ?? undefined,
       lastInboundAt: params.lastInboundAt ?? undefined,
@@ -196,6 +222,12 @@ export async function persistConversationWindow(params: {
       waId: params.waId,
       waIdCanonical,
       phoneNumberId: params.phoneNumberId,
+      channel,
+      provider,
+      channelAccountId,
+      externalUserHash: params.externalUserHash ?? undefined,
+      externalUserRef: params.externalUserRef ?? undefined,
+      legacyWaId: params.legacyWaId ?? undefined,
       windowIsOpen: params.windowIsOpen,
       windowExpiresAt: params.windowExpiresAt ?? undefined,
       lastInboundAt: params.lastInboundAt ?? undefined,

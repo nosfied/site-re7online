@@ -15,8 +15,16 @@ import {
   markWebSessionRuntimeState,
   setWebSessionQrForRuntime,
 } from "../../whatsapp-agent/src/web-session/webSessionConnectionRuntime.js";
+import {
+  ingestBaileysWebSessionMessage,
+  type BaileysInboundMessageLike,
+} from "../../whatsapp-agent/src/web-session/webSessionInbound.js";
 import { createBaileysAuthState } from "./web-session/baileysAuthState.js";
-import { closeBaileysSocket, createBaileysSocket } from "./web-session/baileysSocketFactory.js";
+import {
+  closeBaileysSocket,
+  createBaileysSocket,
+  type BaileysMessagesUpsertEvent,
+} from "./web-session/baileysSocketFactory.js";
 
 export type EligibleWebSessionAccount = {
   id: string;
@@ -282,6 +290,7 @@ async function connectWebSessionAccount(params: {
   let terminalHandled = false;
   let socket: Awaited<ReturnType<typeof createBaileysSocket>> | null = null;
   let connectionOpenTimer: ReturnType<typeof setTimeout> | null = null;
+  let inboundCutoverAt: Date | null = null;
   const clearConnectionOpenTimer = () => {
     if (!connectionOpenTimer) return;
     clearTimeout(connectionOpenTimer);
@@ -376,8 +385,17 @@ async function connectWebSessionAccount(params: {
       auth.mergeCredentials(update);
       await auth.save();
     },
+    onMessagesUpsert: async (event) => {
+      await handleWebSessionMessagesUpsert({
+        prisma: params.prisma,
+        account: params.account,
+        event,
+        cutoverAt: inboundCutoverAt,
+      });
+    },
     onConnected: async () => {
       clearConnectionOpenTimer();
+      inboundCutoverAt = new Date();
       clearWebSessionQrForRuntime(params.account.id);
       await auth.save();
       await markWebSessionRuntimeState({
@@ -439,5 +457,49 @@ async function connectWebSessionAccount(params: {
   const active = activeConnections.get(params.account.id);
   if (active) {
     active.close = closeSocket;
+  }
+}
+
+async function handleWebSessionMessagesUpsert(params: {
+  prisma: WorkerPrismaClient;
+  account: EligibleWebSessionAccount;
+  event: BaileysMessagesUpsertEvent;
+  cutoverAt?: Date | null;
+}) {
+  const messages = Array.isArray(params.event.messages) ? params.event.messages : [];
+  if (params.event.type && params.event.type !== "notify") {
+    await recordWebSessionWorkerEvent({
+      prisma: params.prisma,
+      account: params.account,
+      requestSuffix: `history-ignored:${Date.now()}`,
+      eventName: "whatsapp.web.inbound.ignored",
+      payloadJson: {
+        channel: "whatsapp",
+        provider: "web_session",
+        channelAccountId: params.account.channelAccountId,
+        reason: "non_notify_upsert",
+        upsertType: params.event.type,
+        count: messages.length,
+      },
+    });
+    return;
+  }
+  for (const message of messages) {
+    const result = await ingestBaileysWebSessionMessage({
+      prisma: params.prisma,
+      clientId: params.account.clientId,
+      tenantKey: params.account.tenantKey,
+      channelAccountDbId: params.account.id,
+      channelAccountId: params.account.channelAccountId,
+      message: message as BaileysInboundMessageLike,
+      cutoverAt: params.cutoverAt ?? null,
+    });
+    logger.info({
+      event: "whatsapp.web.inbound.processed",
+      tenantKey: params.account.tenantKey,
+      channelAccountId: params.account.channelAccountId,
+      action: result.action,
+      reason: "reason" in result ? result.reason : null,
+    });
   }
 }

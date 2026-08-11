@@ -7,6 +7,12 @@ type BaileysSocketFactoryParams = {
   onConnected?: () => void;
   onDisconnected?: (reason: unknown) => void;
   onCredentialsUpdate?: (state: SerializedWebSessionAuthState) => Promise<void> | void;
+  onMessagesUpsert?: (event: BaileysMessagesUpsertEvent) => Promise<void> | void;
+};
+
+export type BaileysMessagesUpsertEvent = {
+  type?: string;
+  messages?: unknown[];
 };
 
 type BaileysModuleLike = {
@@ -76,6 +82,9 @@ export async function createBaileysSocketFromModule(
   });
   socket.ev.on("creds.update", async (update: SerializedWebSessionAuthState) => {
     await params.onCredentialsUpdate?.(update ?? {});
+  });
+  socket.ev.on("messages.upsert", async (event: BaileysMessagesUpsertEvent) => {
+    await params.onMessagesUpsert?.(event ?? {});
   });
   return socket;
 }

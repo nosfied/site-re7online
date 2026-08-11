@@ -4558,9 +4558,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, httpError("conversation_not_found", "Conversa nao encontrada."));
         return;
       }
-      const resolvedChannel = serializeInboxChannelFields(conversationRow).channel;
+      const resolvedChannelFields = serializeInboxChannelFields(conversationRow);
+      const resolvedChannel = resolvedChannelFields.channel;
       if (resolvedChannel && resolvedChannel !== "whatsapp") {
         json(res, 409, httpError("unsupported_channel", "Envio de template pelo Inbox esta disponivel apenas para WhatsApp."));
+        return;
+      }
+      if (resolvedChannelFields.provider === "web_session") {
+        json(res, 409, httpError("unsupported_channel", "Envio por este canal sera habilitado na proxima etapa."));
         return;
       }
 
@@ -25600,8 +25605,10 @@ function serializeInboxChannelFields(source?: {
   };
 }
 
-function isConversationOutboundBlocked(source?: { channel?: string | null } | null) {
+function isConversationOutboundBlocked(source?: { channel?: string | null; provider?: string | null } | null) {
   const channel = serializeInboxChannelFields(source ?? undefined).channel;
+  const provider = serializeInboxChannelFields(source ?? undefined).provider;
+  if (channel === "whatsapp" && provider === "web_session") return true;
   return (
     channel !== "whatsapp" &&
     channel !== "messenger" &&
@@ -25632,7 +25639,7 @@ function getConversationChannelOutboundEnabled(
   features?: { webchat?: boolean; webchatOutbound?: boolean } | null
 ) {
   const channelFields = serializeInboxChannelFields(source ?? undefined);
-  if (channelFields.channel === "whatsapp") return true;
+  if (channelFields.channel === "whatsapp") return channelFields.provider !== "web_session";
   if (channelFields.channel === "messenger") {
     return canSendMessengerOutbound(findTenantChannelAccountForConversation(tenant, source));
   }

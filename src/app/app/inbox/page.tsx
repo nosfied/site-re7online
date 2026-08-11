@@ -1829,22 +1829,31 @@ function getConversationChannelLabel(item: Pick<InboxConversationItem, "channel"
 
 function canSendInboxText(
   channel: InboxChannel,
-  item: Pick<InboxConversationItem, "channelOutboundEnabled"> | null
+  item: Pick<InboxConversationItem, "channelOutboundEnabled" | "provider"> | null
 ) {
+  if (channel === "whatsapp" && item?.provider === "web_session") return false;
   if (channel === "whatsapp") return true;
   if (channel === "support") return true;
   return item?.channelOutboundEnabled === true;
 }
 
-function canSendInboxMedia(channel: InboxChannel) {
+function canSendInboxMedia(channel: InboxChannel, item?: Pick<InboxConversationItem, "provider"> | null) {
+  if (channel === "whatsapp" && item?.provider === "web_session") return false;
   return channel === "whatsapp";
 }
 
-function canSendInboxTemplate(channel: InboxChannel) {
+function canSendInboxTemplate(channel: InboxChannel, item?: Pick<InboxConversationItem, "provider"> | null) {
+  if (channel === "whatsapp" && item?.provider === "web_session") return false;
   return channel === "whatsapp";
 }
 
-function getInboxTextOutboundDisabledMessage(channel: InboxChannel) {
+function getInboxTextOutboundDisabledMessage(
+  channel: InboxChannel,
+  item?: Pick<InboxConversationItem, "provider"> | null
+) {
+  if (channel === "whatsapp" && item?.provider === "web_session") {
+    return "Envio por este canal será habilitado na próxima etapa.";
+  }
   switch (channel) {
     case "webchat":
       return "Envio pelo Chat do site ainda não está habilitado neste canal.";
@@ -1861,7 +1870,10 @@ function getInboxTextOutboundDisabledMessage(channel: InboxChannel) {
   }
 }
 
-function getInboxMediaOutboundDisabledMessage(channel: InboxChannel) {
+function getInboxMediaOutboundDisabledMessage(channel: InboxChannel, item?: Pick<InboxConversationItem, "provider"> | null) {
+  if (channel === "whatsapp" && item?.provider === "web_session") {
+    return "Envio por este canal será habilitado na próxima etapa.";
+  }
   if (channel === "support") return "Envio de mídia ainda não está habilitado para suporte interno.";
   if (channel === "webchat") return "Envio de mídia ainda não está habilitado para Chat do site.";
   if (channel === "telegram") return "Envio de mídia ainda não está habilitado para Telegram.";
@@ -4213,12 +4225,18 @@ export default function AppInboxPage() {
     selectedConversationChannel,
     selectedConversation
   );
-  const selectedConversationSupportsMediaOutbound = canSendInboxMedia(selectedConversationChannel);
-  const selectedConversationSupportsTemplateOutbound = canSendInboxTemplate(selectedConversationChannel);
+  const selectedConversationSupportsMediaOutbound = canSendInboxMedia(
+    selectedConversationChannel,
+    selectedConversation
+  );
+  const selectedConversationSupportsTemplateOutbound = canSendInboxTemplate(
+    selectedConversationChannel,
+    selectedConversation
+  );
   const selectedConversationOutboundDisabledMessage =
-    getInboxTextOutboundDisabledMessage(selectedConversationChannel);
+    getInboxTextOutboundDisabledMessage(selectedConversationChannel, selectedConversation);
   const selectedConversationMediaOutboundDisabledMessage =
-    getInboxMediaOutboundDisabledMessage(selectedConversationChannel);
+    getInboxMediaOutboundDisabledMessage(selectedConversationChannel, selectedConversation);
   const composerEnabled = canReply && selectedConversationSupportsOutbound;
   const templateComposerEnabled = canReply && selectedConversationSupportsTemplateOutbound;
   const usableInboxTemplates = useMemo(
