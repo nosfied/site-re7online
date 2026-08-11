@@ -17,6 +17,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   };
   const module = {
     Browsers: {
+      macOS: (browserName: string) => ["Mac OS", browserName, "14.4.1"],
       ubuntu: (browserName: string) => ["Ubuntu", browserName, "1.0.0"],
     },
     makeWASocket: (params: Record<string, unknown>) => {
@@ -54,10 +55,9 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   assert.equal(calls[0]?.printQRInTerminal, false);
   assert.equal(calls[0]?.markOnlineOnConnect, true);
   assert.equal(calls[0]?.syncFullHistory, false);
-  assert.equal(typeof calls[0]?.shouldSyncHistoryMessage, "function");
-  assert.equal((calls[0]?.shouldSyncHistoryMessage as () => boolean)(), false);
+  assert.equal("shouldSyncHistoryMessage" in (calls[0] ?? {}), false);
   assert.deepEqual(calls[0]?.version, [2, 3000, 123456789]);
-  assert.deepEqual(calls[0]?.browser, ["Ubuntu", "Converta Lab", "1.0.0"]);
+  assert.deepEqual(calls[0]?.browser, ["Mac OS", "Desktop", "14.4.1"]);
   assert.equal(handlers.has("connection.update"), true);
   assert.equal(handlers.has("creds.update"), true);
   assert.equal(handlers.has("messages.upsert"), true);

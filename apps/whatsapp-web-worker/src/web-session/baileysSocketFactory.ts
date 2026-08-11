@@ -27,6 +27,7 @@ type BaileysModuleLike = {
   makeWASocket?: (params: Record<string, unknown>) => BaileysSocketLike;
   fetchLatestBaileysVersion?: () => Promise<{ version: unknown }>;
   Browsers?: {
+    macOS?: (browserName: string) => unknown;
     ubuntu?: (browserName: string) => unknown;
   };
 };
@@ -69,8 +70,9 @@ export async function createBaileysSocketFromModule(
     throw new Error("baileys_socket_factory_unavailable");
   }
   const browser =
+    module.Browsers?.macOS?.("Desktop") ??
     module.Browsers?.ubuntu?.(params.browserName ?? "Converta Web Session") ??
-    ["Converta", "Chrome", "1.0.0"];
+    ["Converta", "Desktop", "1.0.0"];
   const version = module.fetchLatestBaileysVersion
     ? (await module.fetchLatestBaileysVersion()).version
     : undefined;
@@ -82,7 +84,6 @@ export async function createBaileysSocketFromModule(
     logger: silentLogger as never,
     markOnlineOnConnect: true,
     syncFullHistory: false,
-    shouldSyncHistoryMessage: () => false,
   });
   socket.ev.on("connection.update", (update: { qr?: string; connection?: string; lastDisconnect?: unknown }) => {
     if (update.qr) params.onQr?.(update.qr);
