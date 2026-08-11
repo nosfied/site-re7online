@@ -56,3 +56,17 @@ If a web session runtime is added later, the intended process split is:
 - `re7-admin-front`: frontend.
 
 This sprint does not add or configure any PM2 process.
+
+## Web session design status
+
+Sprint 88B documents the persistence and worker design for `provider=web_session` without
+making it operational. See [web-session.md](./web-session.md).
+
+Current decision:
+
+- `ChannelAccount` remains the tenant-scoped account metadata record.
+- `ChannelAccountSecret` may hold the encrypted auth snapshot for the first controlled MVP.
+- A dedicated `re7-whatsapp-web-worker` must own the socket lifecycle.
+- The HTTP backend must never create a fallback from `web_session` to Meta.
+- QR, pairing and session material must be ephemeral in the UI and encrypted at rest if stored.
+- Templates, campaigns, Meta usage ledger and Meta webhooks remain Meta-only.
