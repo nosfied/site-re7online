@@ -84,20 +84,20 @@ export async function createBaileysAuthState(params: {
       await save();
     },
   };
+  const authState = {
+    creds: state.creds,
+    keys: params.module.makeCacheableSignalKeyStore?.(keyStore, params.logger) ?? keyStore,
+  };
 
   return {
-    state: {
-      creds: state.creds,
-      keys: params.module.makeCacheableSignalKeyStore?.(keyStore, params.logger) ?? keyStore,
-    },
+    state: authState,
     save,
     mergeCredentials(patch: Record<string, unknown>) {
-      state.creds = {
-        ...(state.creds && typeof state.creds === "object" && !Array.isArray(state.creds)
-          ? state.creds as Record<string, unknown>
-          : {}),
-        ...patch,
-      };
+      if (!state.creds || typeof state.creds !== "object" || Array.isArray(state.creds)) {
+        state.creds = {};
+        authState.creds = state.creds;
+      }
+      Object.assign(state.creds as Record<string, unknown>, patch);
     },
   };
 }
