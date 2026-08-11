@@ -5,6 +5,7 @@ import {
   isTransientConnectingState,
   isEligibleWebSessionAccount,
   listEligibleWebSessionAccounts,
+  resolveWebSessionSenderJid,
   shouldKeepActiveWebSessionConnection,
 } from "./whatsappWebSessionWorker.js";
 
@@ -107,4 +108,23 @@ test("web session worker keeps connection timeout retryable", () => {
     }) as never),
     true
   );
+});
+
+test("web session worker resolves LID sender through persisted reverse mapping", async () => {
+  const requested: Array<{ type: string; ids: string[] }> = [];
+  const resolved = await resolveWebSessionSenderJid({
+    message: {
+      key: { id: "m1", remoteJid: "123456789012345@lid", fromMe: false },
+      message: { conversation: "teste" },
+    },
+    keys: {
+      get: async (type, ids) => {
+        requested.push({ type, ids });
+        return { "123456789012345_reverse": "5584999997784" };
+      },
+    },
+  });
+
+  assert.equal(resolved, "5584999997784@s.whatsapp.net");
+  assert.deepEqual(requested, [{ type: "lid-mapping", ids: ["123456789012345_reverse"] }]);
 });

@@ -144,6 +144,7 @@ setPrismaForTesting(fakePrisma() as never);
 test("extractPhoneFromBaileysJid normalizes one-to-one WhatsApp JIDs only", () => {
   assert.equal(extractPhoneFromBaileysJid("5584999997784@s.whatsapp.net"), "5584999997784");
   assert.equal(extractPhoneFromBaileysJid("5584999997784:12@s.whatsapp.net"), "5584999997784");
+  assert.equal(extractPhoneFromBaileysJid("123456789012345@lid"), null);
   assert.equal(extractPhoneFromBaileysJid("120363@g.us"), null);
 });
 
@@ -197,6 +198,28 @@ test("ingestBaileysWebSessionMessage persists tenant-scoped text inbound once", 
   assert.equal(duplicate.action, "duplicate");
   assert.equal(state.inboundMessages.length, 1);
   assert.equal(state.events.some((event) => event.eventName === "whatsapp.web.inbound.duplicate"), true);
+});
+
+test("ingestBaileysWebSessionMessage accepts sender resolved from LID mapping", async () => {
+  resetState();
+
+  const result = await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    resolvedSenderJid: "5584999997784@s.whatsapp.net",
+    message: {
+      key: { id: "MSG_LID", remoteJid: "123456789012345@lid", fromMe: false },
+      messageTimestamp: 1786464000,
+      message: { conversation: "teste inbound lid" },
+    },
+  });
+
+  assert.equal(result.action, "persisted");
+  assert.equal(state.inboundMessages[0]?.waIdCanonical, "55849999997784");
+  assert.equal(state.inboundMessages[0]?.rawPayload && typeof state.inboundMessages[0].rawPayload === "object", true);
+  assert.equal((state.inboundMessages[0]?.rawPayload as Record<string, unknown>).senderJidServer, "s.whatsapp.net");
 });
 
 test("ingestBaileysWebSessionMessage ignores messages older than the connection cutover", async () => {

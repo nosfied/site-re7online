@@ -75,9 +75,18 @@ export function extractPhoneFromBaileysJid(jid?: string | null) {
   if (!value) return null;
   const [identity, server = ""] = value.split("@");
   if (!identity || !server) return null;
-  if (server !== "s.whatsapp.net" && server !== "lid") return null;
+  if (server !== "s.whatsapp.net" && server !== "hosted") return null;
   const phone = normalizeWaIdDigits(identity.split(":")[0] ?? "");
   return phone || null;
+}
+
+function pickSenderJid(params: { key: BaileysInboundKey; resolvedSenderJid?: string | null }) {
+  const candidates = [params.resolvedSenderJid, params.key.participant, params.key.remoteJid];
+  for (const candidate of candidates) {
+    const value = String(candidate ?? "").trim();
+    if (value && extractPhoneFromBaileysJid(value)) return value;
+  }
+  return String(params.key.participant ?? params.key.remoteJid ?? "");
 }
 
 export function shouldIgnoreBaileysInboundMessage(message: BaileysInboundMessageLike) {
@@ -89,7 +98,7 @@ export function shouldIgnoreBaileysInboundMessage(message: BaileysInboundMessage
   if (remoteJid.endsWith("@g.us")) return { ignore: true as const, reason: "group" };
   if (remoteJid === "status@broadcast") return { ignore: true as const, reason: "status_broadcast" };
   if (remoteJid.endsWith("@newsletter")) return { ignore: true as const, reason: "newsletter" };
-  if (!extractPhoneFromBaileysJid(key.participant ?? remoteJid)) {
+  if (!extractPhoneFromBaileysJid(pickSenderJid({ key }))) {
     return { ignore: true as const, reason: "unsupported_jid" };
   }
   if (!message.message || Object.keys(message.message).length === 0) {
@@ -140,13 +149,20 @@ export function normalizeBaileysInboundMessage(params: {
   channelAccountDbId: string;
   channelAccountId: string;
   message: BaileysInboundMessageLike;
+  resolvedSenderJid?: string | null;
 }): { ok: true; message: NormalizedWebSessionInboundMessage } | { ok: false; reason: string } {
-  const ignore = shouldIgnoreBaileysInboundMessage(params.message);
+  const ignore = shouldIgnoreBaileysInboundMessage({
+    ...params.message,
+    key: {
+      ...(params.message.key ?? {}),
+      participant: params.resolvedSenderJid ?? params.message.key?.participant,
+    },
+  });
   if (ignore.ignore) return { ok: false, reason: ignore.reason };
   const key = params.message.key ?? {};
   const message = params.message.message;
   if (!message) return { ok: false, reason: "empty_message" };
-  const senderJid = String(key.participant ?? key.remoteJid ?? "");
+  const senderJid = pickSenderJid({ key, resolvedSenderJid: params.resolvedSenderJid });
   const sender = extractPhoneFromBaileysJid(senderJid);
   if (!sender) return { ok: false, reason: "unsupported_jid" };
   const externalMessageId = String(key.id ?? "").trim();
@@ -572,6 +588,7 @@ export async function ingestBaileysWebSessionMessage(params: {
   channelAccountDbId: string;
   channelAccountId: string;
   message: BaileysInboundMessageLike;
+  resolvedSenderJid?: string | null;
   cutoverAt?: Date | null;
 }) {
   const prisma = params.prisma ?? getPrisma();

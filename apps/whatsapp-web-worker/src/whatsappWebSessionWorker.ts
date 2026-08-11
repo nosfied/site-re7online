@@ -63,6 +63,9 @@ type ActiveConnection = {
 };
 
 type WorkerPrismaClient = ReturnType<typeof getPrisma>;
+type BaileysAuthKeysLike = {
+  get?: (type: string, ids: string[]) => Promise<Record<string, unknown>>;
+};
 
 const activeConnections = new Map<string, ActiveConnection>();
 const DEFAULT_CONNECTION_OPEN_TIMEOUT_MS = 30_000;
@@ -78,6 +81,41 @@ export function connectionOpenTimeoutRuntimeState() {
 
 function eventRequestId(account: EligibleWebSessionAccount, eventName: string) {
   return `web-session-worker:${account.id}:${eventName}:${Date.now()}`;
+}
+
+function splitJid(value?: string | null) {
+  const text = String(value ?? "").trim();
+  const [identity = "", server = ""] = text.split("@");
+  const user = identity.split(":")[0] ?? "";
+  return { text, user, server };
+}
+
+function isPhoneNumberJid(value?: string | null) {
+  const { user, server } = splitJid(value);
+  return Boolean(user && (server === "s.whatsapp.net" || server === "hosted"));
+}
+
+function isLidJid(value?: string | null) {
+  const { user, server } = splitJid(value);
+  return Boolean(user && (server === "lid" || server === "hosted.lid"));
+}
+
+export async function resolveWebSessionSenderJid(params: {
+  message: BaileysInboundMessageLike;
+  keys?: BaileysAuthKeysLike | null;
+}) {
+  const key = params.message.key ?? {};
+  const direct = [key.participant, key.remoteJid].find(isPhoneNumberJid);
+  if (direct) return direct;
+
+  const lid = [key.participant, key.remoteJid].find(isLidJid);
+  if (!lid || !params.keys?.get) return null;
+  const parsed = splitJid(lid);
+  const reverseKey = `${parsed.user}_reverse`;
+  const stored = await params.keys.get("lid-mapping", [reverseKey]);
+  const pnUser = typeof stored[reverseKey] === "string" ? String(stored[reverseKey]).trim() : "";
+  if (!/^\d+$/.test(pnUser)) return null;
+  return `${pnUser}@s.whatsapp.net`;
 }
 
 export function isTransientConnectingState(account: ChannelAccountRecord) {
@@ -417,6 +455,7 @@ async function connectWebSessionAccount(params: {
         prisma: params.prisma,
         account: params.account,
         event,
+        authKeys: auth.state.keys as BaileysAuthKeysLike,
         cutoverAt: inboundCutoverAt,
       });
     },
@@ -425,6 +464,7 @@ async function connectWebSessionAccount(params: {
         prisma: params.prisma,
         account: params.account,
         event,
+        authKeys: auth.state.keys as BaileysAuthKeysLike,
         cutoverAt: inboundCutoverAt,
       });
     },
@@ -576,6 +616,7 @@ async function handleWebSessionMessagesUpdate(params: {
   prisma: WorkerPrismaClient;
   account: EligibleWebSessionAccount;
   event: BaileysMessagesUpdateEvent;
+  authKeys?: BaileysAuthKeysLike | null;
   cutoverAt?: Date | null;
 }) {
   const messages = messagesFromUpdates(params.event);
@@ -593,6 +634,7 @@ async function handleWebSessionMessagesUpdate(params: {
     prisma: params.prisma,
     account: params.account,
     event: { type: "notify", messages },
+    authKeys: params.authKeys ?? null,
     cutoverAt: params.cutoverAt ?? null,
   });
 }
@@ -601,6 +643,7 @@ async function handleWebSessionMessagesUpsert(params: {
   prisma: WorkerPrismaClient;
   account: EligibleWebSessionAccount;
   event: BaileysMessagesUpsertEvent;
+  authKeys?: BaileysAuthKeysLike | null;
   cutoverAt?: Date | null;
 }) {
   const messages = Array.isArray(params.event.messages) ? params.event.messages : [];
@@ -630,6 +673,10 @@ async function handleWebSessionMessagesUpsert(params: {
   }
   for (const message of messages) {
     try {
+      const resolvedSenderJid = await resolveWebSessionSenderJid({
+        message: message as BaileysInboundMessageLike,
+        keys: params.authKeys ?? null,
+      });
       const result = await ingestBaileysWebSessionMessage({
         prisma: params.prisma,
         clientId: params.account.clientId,
@@ -637,6 +684,7 @@ async function handleWebSessionMessagesUpsert(params: {
         channelAccountDbId: params.account.id,
         channelAccountId: params.account.channelAccountId,
         message: message as BaileysInboundMessageLike,
+        resolvedSenderJid,
         cutoverAt: params.cutoverAt ?? null,
       });
       logger.info({
