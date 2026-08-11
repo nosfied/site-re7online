@@ -216,64 +216,71 @@ export async function runWhatsAppWebSessionWorker(params: {
   logger.info({ event: "whatsapp.web.worker.started" });
 
   do {
-    await reconcileActiveWebSessionConnections(prisma);
-    const accounts = await listEligibleWebSessionAccounts(prisma);
-    if (accounts.length === 0) {
-      logger.info({ event: "whatsapp.web.worker.idle", eligibleAccounts: 0 });
-    }
-    for (const account of accounts) {
-      if (activeConnections.has(account.id)) continue;
-      const lock = await acquireWebSessionAdvisoryLock({ prisma, accountId: account.id });
-      if (!lock.acquired) {
-        logger.info({
-          event: "whatsapp.web.session.lock_skipped",
-          tenantKey: account.tenantKey,
-          channelAccountId: account.channelAccountId,
-        });
-        continue;
+    try {
+      await reconcileActiveWebSessionConnections(prisma);
+      const accounts = await listEligibleWebSessionAccounts(prisma);
+      if (accounts.length === 0) {
+        logger.info({ event: "whatsapp.web.worker.idle", eligibleAccounts: 0 });
       }
-      try {
+      for (const account of accounts) {
         if (activeConnections.has(account.id)) continue;
-        logger.info({
-          event: "whatsapp.web.session.connecting",
-          tenantKey: account.tenantKey,
-          channelAccountId: account.channelAccountId,
-          observedState: account.lifecycle.observedState,
-        });
-        activeConnections.set(account.id, {
-          tenantKey: account.tenantKey,
-          channelAccountId: account.channelAccountId,
-          startedAtMs: Date.now(),
-          release: async () => {
-            await lock.release();
-          },
-        });
-        await connectWebSessionAccount({
-          prisma,
-          account,
-          onTerminal: async () => {
-            const active = activeConnections.get(account.id);
-            activeConnections.delete(account.id);
-            await active?.release();
-          },
-        });
-      } catch (error) {
-        activeConnections.delete(account.id);
-        await lock.release();
-        await markWebSessionRuntimeState({
-          prisma,
-          accountId: account.id,
-          observedState: "ERROR",
-          status: "error",
-          errorCode: error instanceof Error ? error.message : "unknown_error",
-        });
-        logger.error({
-          event: "whatsapp.web.session.connect_error",
-          tenantKey: account.tenantKey,
-          channelAccountId: account.channelAccountId,
-          message: error instanceof Error ? error.message : "unknown_error",
-        });
+        const lock = await acquireWebSessionAdvisoryLock({ prisma, accountId: account.id });
+        if (!lock.acquired) {
+          logger.info({
+            event: "whatsapp.web.session.lock_skipped",
+            tenantKey: account.tenantKey,
+            channelAccountId: account.channelAccountId,
+          });
+          continue;
+        }
+        try {
+          if (activeConnections.has(account.id)) continue;
+          logger.info({
+            event: "whatsapp.web.session.connecting",
+            tenantKey: account.tenantKey,
+            channelAccountId: account.channelAccountId,
+            observedState: account.lifecycle.observedState,
+          });
+          activeConnections.set(account.id, {
+            tenantKey: account.tenantKey,
+            channelAccountId: account.channelAccountId,
+            startedAtMs: Date.now(),
+            release: async () => {
+              await lock.release();
+            },
+          });
+          await connectWebSessionAccount({
+            prisma,
+            account,
+            onTerminal: async () => {
+              const active = activeConnections.get(account.id);
+              activeConnections.delete(account.id);
+              await active?.release();
+            },
+          });
+        } catch (error) {
+          activeConnections.delete(account.id);
+          await lock.release();
+          await markWebSessionRuntimeState({
+            prisma,
+            accountId: account.id,
+            observedState: "ERROR",
+            status: "error",
+            errorCode: error instanceof Error ? error.message : "unknown_error",
+          });
+          logger.error({
+            event: "whatsapp.web.session.connect_error",
+            tenantKey: account.tenantKey,
+            channelAccountId: account.channelAccountId,
+            message: error instanceof Error ? error.message : "unknown_error",
+          });
+        }
       }
+    } catch (error) {
+      logger.error({
+        event: "whatsapp.web.worker.loop_error",
+        message: error instanceof Error ? error.message : "unknown_error",
+      });
     }
     if (params.once) break;
     await delay(
