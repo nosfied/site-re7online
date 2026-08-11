@@ -509,6 +509,34 @@ function messagesFromUpdates(event: BaileysMessagesUpdateEvent): BaileysInboundM
     .filter((message): message is BaileysInboundMessageLike => Boolean(message));
 }
 
+function summarizeMessageUpdates(event: BaileysMessagesUpdateEvent) {
+  const summary = {
+    fromMe: 0,
+    notFromMe: 0,
+    unknownFromMe: 0,
+    withMessage: 0,
+    withStatus: 0,
+    withReceipt: 0,
+    withRemoteJid: 0,
+  };
+  for (const item of event) {
+    const key = item.key && typeof item.key === "object" && !Array.isArray(item.key)
+      ? item.key as { fromMe?: unknown; remoteJid?: unknown }
+      : {};
+    const update = item.update && typeof item.update === "object" && !Array.isArray(item.update)
+      ? item.update
+      : {};
+    if (key.fromMe === true) summary.fromMe += 1;
+    else if (key.fromMe === false) summary.notFromMe += 1;
+    else summary.unknownFromMe += 1;
+    if (typeof key.remoteJid === "string" && key.remoteJid.trim()) summary.withRemoteJid += 1;
+    if (update.message && typeof update.message === "object") summary.withMessage += 1;
+    if (Object.prototype.hasOwnProperty.call(update, "status")) summary.withStatus += 1;
+    if (Object.prototype.hasOwnProperty.call(update, "receipt")) summary.withReceipt += 1;
+  }
+  return summary;
+}
+
 async function handleWebSessionMessagesUpdate(params: {
   prisma: WorkerPrismaClient;
   account: EligibleWebSessionAccount;
@@ -516,12 +544,14 @@ async function handleWebSessionMessagesUpdate(params: {
   cutoverAt?: Date | null;
 }) {
   const messages = messagesFromUpdates(params.event);
+  const updateSummary = summarizeMessageUpdates(params.event);
   logger.info({
     event: "whatsapp.web.inbound.update_received",
     tenantKey: params.account.tenantKey,
     channelAccountId: params.account.channelAccountId,
     count: params.event.length,
     messagePayloadCount: messages.length,
+    updateSummary,
   });
   if (messages.length === 0) return;
   await handleWebSessionMessagesUpsert({
