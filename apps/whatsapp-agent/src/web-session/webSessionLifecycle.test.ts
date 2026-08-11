@@ -36,6 +36,11 @@ test("web session lifecycle writes durable state without QR", () => {
 test("web session disconnect classification and backoff are conservative", () => {
   assert.equal(classifyWebSessionDisconnect("logged_out"), "qr_required");
   assert.equal(classifyWebSessionDisconnect("manual_disabled"), "terminal_manual");
+  assert.equal(classifyWebSessionDisconnect(new Error("web_session_admin_disconnect")), "terminal_manual");
+  assert.equal(
+    classifyWebSessionDisconnect({ error: new Error("web_session_admin_disconnect") }),
+    "terminal_manual"
+  );
   assert.equal(classifyWebSessionDisconnect("network_close"), "reconnectable");
   assert.equal(calculateWebSessionReconnectBackoff({ attempt: 2, random: () => 0.5 }), 4000);
 });

@@ -110,8 +110,24 @@ export function isWebSessionConnectRequested(metadata: unknown) {
   return readWebSessionLifecycle(metadata).desiredState === "CONNECTED";
 }
 
+function disconnectReasonText(reason: unknown): string {
+  if (typeof reason === "string") return reason;
+  if (reason instanceof Error) return reason.message;
+  if (!reason || typeof reason !== "object") return "";
+  const record = reason as Record<string, unknown>;
+  return [
+    record.message,
+    record.reason,
+    record.error,
+    record.statusCode,
+    disconnectReasonText(record.lastDisconnect),
+    disconnectReasonText(record.error),
+    disconnectReasonText(record.output),
+  ].filter((value) => value !== undefined && value !== null).join(" ");
+}
+
 export function classifyWebSessionDisconnect(reason: unknown): "reconnectable" | "qr_required" | "terminal_manual" {
-  const normalized = typeof reason === "string" ? reason.toLowerCase() : "";
+  const normalized = disconnectReasonText(reason).toLowerCase();
   if (
     normalized.includes("logout") ||
     normalized.includes("logged_out") ||
@@ -120,7 +136,11 @@ export function classifyWebSessionDisconnect(reason: unknown): "reconnectable" |
   ) {
     return "qr_required";
   }
-  if (normalized.includes("manual") || normalized.includes("disabled")) {
+  if (
+    normalized.includes("manual") ||
+    normalized.includes("disabled") ||
+    normalized.includes("admin_disconnect")
+  ) {
     return "terminal_manual";
   }
   return "reconnectable";
