@@ -5,7 +5,6 @@ import {
 } from "../bootstrap/defaultOperationalDepartment.js";
 import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
-import { runtimeStorage } from "../storage/runtimeStorage.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
 import { guardAgainstAnonymizedIdentityRehydration } from "../privacy/anonymizedIdentityGuard.js";
@@ -19,6 +18,11 @@ function maskWaIdForLog(value: string) {
   const raw = String(value ?? "").trim();
   if (raw.length <= 4) return "***";
   return `***${raw.slice(-4)}`;
+}
+
+async function getRuntimeStorage() {
+  const { runtimeStorage } = await import("../storage/runtimeStorage.js");
+  return runtimeStorage;
 }
 
 export async function getDefaultDepartment(
@@ -285,6 +289,7 @@ export async function persistConversationWindow(params: {
     });
     if (client?.clientKey) {
       const lastInboundAtIso = params.lastInboundAt.toISOString();
+      const runtimeStorage = await getRuntimeStorage();
       const currentRuntime = await runtimeStorage.getConversation(params.waId, client.clientKey);
       await runtimeStorage.upsertConversation({
         ...(currentRuntime ?? {
