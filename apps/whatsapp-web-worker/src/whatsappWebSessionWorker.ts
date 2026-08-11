@@ -477,6 +477,13 @@ async function handleWebSessionMessagesUpsert(params: {
   cutoverAt?: Date | null;
 }) {
   const messages = Array.isArray(params.event.messages) ? params.event.messages : [];
+  logger.info({
+    event: "whatsapp.web.inbound.upsert_received",
+    tenantKey: params.account.tenantKey,
+    channelAccountId: params.account.channelAccountId,
+    upsertType: params.event.type ?? null,
+    count: messages.length,
+  });
   if (params.event.type && params.event.type !== "notify") {
     await recordWebSessionWorkerEvent({
       prisma: params.prisma,
@@ -495,21 +502,31 @@ async function handleWebSessionMessagesUpsert(params: {
     return;
   }
   for (const message of messages) {
-    const result = await ingestBaileysWebSessionMessage({
-      prisma: params.prisma,
-      clientId: params.account.clientId,
-      tenantKey: params.account.tenantKey,
-      channelAccountDbId: params.account.id,
-      channelAccountId: params.account.channelAccountId,
-      message: message as BaileysInboundMessageLike,
-      cutoverAt: params.cutoverAt ?? null,
-    });
-    logger.info({
-      event: "whatsapp.web.inbound.processed",
-      tenantKey: params.account.tenantKey,
-      channelAccountId: params.account.channelAccountId,
-      action: result.action,
-      reason: "reason" in result ? result.reason : null,
-    });
+    try {
+      const result = await ingestBaileysWebSessionMessage({
+        prisma: params.prisma,
+        clientId: params.account.clientId,
+        tenantKey: params.account.tenantKey,
+        channelAccountDbId: params.account.id,
+        channelAccountId: params.account.channelAccountId,
+        message: message as BaileysInboundMessageLike,
+        cutoverAt: params.cutoverAt ?? null,
+      });
+      logger.info({
+        event: "whatsapp.web.inbound.processed",
+        tenantKey: params.account.tenantKey,
+        channelAccountId: params.account.channelAccountId,
+        action: result.action,
+        reason: "reason" in result ? result.reason : null,
+      });
+    } catch (error) {
+      logger.error({
+        event: "whatsapp.web.inbound.process_failed",
+        tenantKey: params.account.tenantKey,
+        channelAccountId: params.account.channelAccountId,
+        errorName: error instanceof Error ? error.name : "unknown_error",
+        message: error instanceof Error ? error.message : "unknown_error",
+      });
+    }
   }
 }
