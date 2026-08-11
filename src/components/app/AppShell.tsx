@@ -48,14 +48,16 @@ const COMPACT_OPERATION_NAV_LIMIT = 2;
 const COMPACT_ADMINISTRATION_NAV_LIMIT = 1;
 const NARROW_OPERATION_NAV_LIMIT = 1;
 const NARROW_ADMINISTRATION_NAV_LIMIT = 1;
+const WIDE_OPERATION_NAV_LIMIT = 3;
+const WIDE_ADMINISTRATION_NAV_LIMIT = 2;
 const SESSION_WARNING_THRESHOLD_MS = 60 * 1000;
 const APP_SESSION_STORAGE_KEYS = new Set(["wa_app_session_session_v1", "wa_app_session_local_v1"]);
 
 function getDirectNavLimits(width: number) {
   if (width < 1024) {
     return {
-      operation: DIRECT_OPERATION_NAV_LIMIT,
-      administration: DIRECT_ADMINISTRATION_NAV_LIMIT,
+      operation: NARROW_OPERATION_NAV_LIMIT,
+      administration: NARROW_ADMINISTRATION_NAV_LIMIT,
     };
   }
   if (width < 1200) {
@@ -68,6 +70,12 @@ function getDirectNavLimits(width: number) {
     return {
       operation: COMPACT_OPERATION_NAV_LIMIT,
       administration: COMPACT_ADMINISTRATION_NAV_LIMIT,
+    };
+  }
+  if (width < 1680) {
+    return {
+      operation: WIDE_OPERATION_NAV_LIMIT,
+      administration: WIDE_ADMINISTRATION_NAV_LIMIT,
     };
   }
   return {
@@ -867,7 +875,7 @@ export default function AppShell({
               </div>
             </div>
 
-            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-center lg:justify-center lg:gap-2 min-[1441px]:grid-cols-[auto_auto_auto] min-[1441px]:gap-3">
+            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-center lg:justify-center lg:gap-2 min-[1441px]:grid-cols-[minmax(0,max-content)_minmax(0,max-content)_auto] min-[1441px]:gap-3">
               <div className={navGroupClasses}>
                 <p className="theme-soft text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em]">
                   Operação
