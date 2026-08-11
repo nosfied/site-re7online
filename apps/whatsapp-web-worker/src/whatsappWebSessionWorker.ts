@@ -438,6 +438,9 @@ async function connectWebSessionAccount(params: {
         type: node.type,
         className: node.className,
         childCount: node.childCount,
+        childTags: node.childTags,
+        childAttrsKeys: node.childAttrsKeys,
+        encTypes: node.encTypes,
       });
     },
     onEventBatch: async (events) => {

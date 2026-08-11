@@ -49,6 +49,9 @@ export type BaileysSocketNodeEvent = {
   type?: string | null;
   className?: string | null;
   childCount: number;
+  childTags: string[];
+  childAttrsKeys: string[];
+  encTypes: string[];
 };
 
 type BaileysModuleLike = {
@@ -190,12 +193,39 @@ function summarizeSocketNode(eventName: string, node: unknown): BaileysSocketNod
   const attrs = record.attrs && typeof record.attrs === "object" && !Array.isArray(record.attrs)
     ? record.attrs as Record<string, unknown>
     : {};
+  const children = Array.isArray(record.content) ? record.content : [];
+  const childRecords = children.filter(
+    (child): child is Record<string, unknown> => Boolean(child) && typeof child === "object" && !Array.isArray(child)
+  );
+  const childTags = Array.from(new Set(childRecords.map((child) => child.tag).filter((tag): tag is string => typeof tag === "string"))).sort();
+  const childAttrsKeys = Array.from(new Set(
+    childRecords.flatMap((child) => {
+      const childAttrs = child.attrs && typeof child.attrs === "object" && !Array.isArray(child.attrs)
+        ? child.attrs as Record<string, unknown>
+        : {};
+      return Object.keys(childAttrs).filter((key) => !["from", "id", "participant", "recipient", "to"].includes(key));
+    })
+  )).sort();
+  const encTypes = Array.from(new Set(
+    childRecords
+      .filter((child) => child.tag === "enc")
+      .map((child) => {
+        const childAttrs = child.attrs && typeof child.attrs === "object" && !Array.isArray(child.attrs)
+          ? child.attrs as Record<string, unknown>
+          : {};
+        return childAttrs.type;
+      })
+      .filter((type): type is string => typeof type === "string")
+  )).sort();
   return {
     name: eventName,
     tag: typeof record.tag === "string" ? record.tag : null,
     type: typeof attrs.type === "string" ? attrs.type : null,
     className: typeof attrs.class === "string" ? attrs.class : null,
-    childCount: Array.isArray(record.content) ? record.content.length : 0,
+    childCount: children.length,
+    childTags,
+    childAttrsKeys,
+    encTypes,
   };
 }
 

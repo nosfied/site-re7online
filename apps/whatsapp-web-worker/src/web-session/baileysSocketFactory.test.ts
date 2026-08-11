@@ -37,6 +37,9 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   let upsertType = "";
   let updateCount = 0;
   let socketNodeName = "";
+  let socketNodeChildTags: string[] = [];
+  let socketNodeChildAttrsKeys: string[] = [];
+  let socketNodeEncTypes: string[] = [];
   let batchKeys: string[] = [];
 
   const result = await createBaileysSocketFromModule(module, {
@@ -57,6 +60,9 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
     },
     onSocketNode: (event) => {
       socketNodeName = event.name;
+      socketNodeChildTags = event.childTags;
+      socketNodeChildAttrsKeys = event.childAttrsKeys;
+      socketNodeEncTypes = event.encTypes;
     },
     onEventBatch: (events) => {
       batchKeys = Object.keys(events);
@@ -85,7 +91,14 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   await handlers.get("creds.update")?.();
   await handlers.get("messages.upsert")?.({ type: "notify", messages: [] } as never);
   await handlers.get("messages.update")?.([{ key: {}, update: {} }] as never);
-  await handlers.get("CB:message")?.({ tag: "message", attrs: { type: "text" }, content: [{}] } as never);
+  await handlers.get("CB:message")?.({
+    tag: "message",
+    attrs: { type: "text", from: "redacted@s.whatsapp.net", id: "redacted" },
+    content: [
+      { tag: "enc", attrs: { type: "pkmsg", from: "redacted@s.whatsapp.net", count: "1" } },
+      { tag: "unavailable", attrs: { jid: "redacted@s.whatsapp.net" } },
+    ],
+  } as never);
   await handlers.get("process")?.({ "messages.upsert": { messages: [] } } as never);
 
   assert.deepEqual(qrValues, ["qr-payload"]);
@@ -94,5 +107,8 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   assert.equal(upsertType, "notify");
   assert.equal(updateCount, 1);
   assert.equal(socketNodeName, "CB:message");
+  assert.deepEqual(socketNodeChildTags, ["enc", "unavailable"]);
+  assert.deepEqual(socketNodeChildAttrsKeys, ["count", "jid", "type"]);
+  assert.deepEqual(socketNodeEncTypes, ["pkmsg"]);
   assert.deepEqual(batchKeys, ["messages.upsert"]);
 });
