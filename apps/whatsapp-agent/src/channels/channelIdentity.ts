@@ -7,7 +7,7 @@ import type {
 } from "./channel.types.js";
 
 const SUPPORTED_CHANNELS = new Set<Channel>(["whatsapp", "instagram", "messenger"]);
-const SUPPORTED_PROVIDERS = new Set<Provider>(["meta"]);
+const SUPPORTED_PROVIDERS = new Set<Provider>(["meta", "web_session"]);
 
 function normalizeIdentifier(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -44,6 +44,9 @@ export function buildConversationKey(identityInput: ConversationIdentityInput) {
     throw new Error("channel_invalid");
   }
   if (!SUPPORTED_PROVIDERS.has(provider)) {
+    throw new Error("provider_invalid");
+  }
+  if (provider === "web_session" && channel !== "whatsapp") {
     throw new Error("provider_invalid");
   }
   assertPlainIdentifier("channelAccountId", channelAccountId);

@@ -941,10 +941,14 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
             !(account as TenantChannelAccount).tenantKey.trim() ||
             typeof (account as TenantChannelAccount).channelAccountId !== "string" ||
             !(account as TenantChannelAccount).channelAccountId.trim() ||
-            ((account as TenantChannelAccount).channel !== "whatsapp" &&
-              (account as TenantChannelAccount).channel !== "instagram" &&
-              (account as TenantChannelAccount).channel !== "messenger") ||
-            (account as TenantChannelAccount).provider !== "meta" ||
+            !(
+              ((account as TenantChannelAccount).provider === "meta" &&
+                ((account as TenantChannelAccount).channel === "whatsapp" ||
+                  (account as TenantChannelAccount).channel === "instagram" ||
+                  (account as TenantChannelAccount).channel === "messenger")) ||
+              ((account as TenantChannelAccount).provider === "web_session" &&
+                (account as TenantChannelAccount).channel === "whatsapp")
+            ) ||
             typeof (account as TenantChannelAccount).enabled !== "boolean"
         ))
     ) {

@@ -25,6 +25,32 @@ test("WhatsApp identity keeps legacy conversation key compatibility", () => {
   assert.doesNotThrow(() => assertValidChannelIdentity(identity));
 });
 
+test("WhatsApp web_session identity keeps channel compatibility without creating a new channel", () => {
+  const identity = toConversationIdentity({
+    tenantKey: "tenant-a",
+    channel: "whatsapp",
+    provider: "web_session",
+    channelAccountId: "session-1",
+    externalUserId: "558499049614",
+  });
+
+  assert.equal(identity.channel, "whatsapp");
+  assert.equal(identity.provider, "web_session");
+  assert.equal(identity.conversationKey, "tenant-a:558499049614");
+  assert.equal(identity.legacyWaId, "558499049614");
+  assert.throws(
+    () =>
+      buildConversationKey({
+        tenantKey: "tenant-a",
+        channel: "instagram",
+        provider: "web_session",
+        channelAccountId: "session-1",
+        externalUserId: "user-1",
+      }),
+    /provider_invalid/
+  );
+});
+
 test("Instagram identity uses channel, account and external user in key", () => {
   const key = buildConversationKey({
     tenantKey: "tenant-a",

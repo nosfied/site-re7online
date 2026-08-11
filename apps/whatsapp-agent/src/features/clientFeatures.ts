@@ -22,6 +22,7 @@ export type ClientFeatureKey =
   | "telegram"
   | "telegramInbound"
   | "telegramOutbound"
+  | "whatsappWebSession"
   | "webhooks"
   | "webhookDispatch"
   | "webhookDispatchExecute"
@@ -68,6 +69,7 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   telegram: false,
   telegramInbound: false,
   telegramOutbound: false,
+  whatsappWebSession: false,
   webhooks: false,
   webhookDispatch: false,
   webhookDispatchExecute: false,
@@ -101,6 +103,7 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   telegram: false,
   telegramInbound: false,
   telegramOutbound: false,
+  whatsappWebSession: false,
   webhooks: false,
   webhookDispatch: false,
   webhookDispatchExecute: false,
@@ -180,6 +183,8 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
     telegram: normalizeFeatureValue(input.telegram) ?? defaults.telegram,
     telegramInbound: normalizeFeatureValue(input.telegramInbound) ?? defaults.telegramInbound,
     telegramOutbound: normalizeFeatureValue(input.telegramOutbound) ?? defaults.telegramOutbound,
+    whatsappWebSession:
+      normalizeFeatureValue(input.whatsappWebSession) ?? defaults.whatsappWebSession,
     webhooks: normalizeFeatureValue(input.webhooks) ?? defaults.webhooks,
     webhookDispatch: normalizeFeatureValue(input.webhookDispatch) ?? defaults.webhookDispatch,
     webhookDispatchExecute:

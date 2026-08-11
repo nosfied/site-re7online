@@ -66,10 +66,10 @@ import { checkRateLimit } from "./rateLimit.js";
 import {
   fetchMediaContent,
   sendMediaMessage,
-  sendTextMessage,
   uploadMedia,
   type SendMediaKind,
 } from "../whatsapp/whatsapp.client.js";
+import { sendWhatsAppTextViaResolvedTransport } from "../whatsapp/outboundTransport.js";
 import { transcodeAudioToOggOpus } from "../media/audioTranscode.js";
 import { isWindowOpen } from "../conversation/conversation.service.js";
 import type { ConversationState } from "../conversation/conversation.types.js";
@@ -28352,18 +28352,16 @@ async function adminSendMessage(params: {
   if (!signedBody.ok) {
     return { ok: false, statusCode: 400, error: "message_too_long" };
   }
-  const sendResult = await sendTextMessage(
-    params.waId,
-    signedBody.bodyText,
-    {
-      accessToken: credentials.accessToken,
-      phoneNumberId: credentials.phoneNumberId,
-    },
-    {
+  const sendResult = await sendWhatsAppTextViaResolvedTransport({
+    provider: "meta",
+    to: params.waId,
+    body: signedBody.bodyText,
+    credentials,
+    options: {
       replyToMetaMessageId: params.reply?.replyToMetaMessageId ?? null,
       replyToOriginalType: params.reply?.previewType ?? null,
-    }
-  );
+    },
+  });
   const status = sendResult.ok ? "SENT" : "FAILED";
   const messageId = `admin.send.${params.requestId}`;
   const createdAt = new Date().toISOString();

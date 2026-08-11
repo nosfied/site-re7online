@@ -38,6 +38,15 @@ test("tenant feature overrides win over profile defaults", () => {
   assert.equal(hasCapability(session, "operationsBoard"), true);
 });
 
+test("WhatsApp web session feature is disabled by default and tenant-generic when exposed", () => {
+  assert.equal(getTenantCapabilities({ profile: "business" }).whatsappWebSession, false);
+  assert.equal(getTenantCapabilities({ profile: "government" }).whatsappWebSession, false);
+  assert.equal(
+    getTenantCapabilities({ profile: "business", features: { whatsappWebSession: true } }).whatsappWebSession,
+    true
+  );
+});
+
 test("invalid profile falls back to business and unknown capabilities are disabled", () => {
   const capabilities = getTenantCapabilities({ profile: "unsupported", features: { dashboard: true } });
 

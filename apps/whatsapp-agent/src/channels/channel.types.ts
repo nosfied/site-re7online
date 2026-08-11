@@ -1,6 +1,6 @@
 export type Channel = "whatsapp" | "instagram" | "messenger" | "telegram";
 
-export type Provider = "meta" | "telegram";
+export type Provider = "meta" | "telegram" | "web_session";
 
 export type NormalizedInboundEvent = {
   tenantKey: string;

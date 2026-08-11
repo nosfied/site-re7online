@@ -143,6 +143,32 @@ test("normalizeTenantChannelAccount defaults disabled flags safely", () => {
   assert.equal(isChannelHandoffEnabled(account), false);
 });
 
+test("normalizeTenantChannelAccount allows only WhatsApp web_session as disabled future transport", () => {
+  const account = validateTenantChannelAccount({
+    tenantKey: "tenant-a",
+    channel: "whatsapp",
+    provider: "web_session",
+    channelAccountId: "session-1",
+  });
+
+  assert.equal(account.provider, "web_session");
+  assert.equal(account.channel, "whatsapp");
+  assert.equal(account.enabled, false);
+  assert.equal(account.runtimeEnabled, false);
+  assert.equal(account.outboundEnabled, false);
+  assert.equal(canRunChannelRuntime(account), false);
+  assert.equal(canSendChannelOutbound(account), false);
+  assert.equal(
+    normalizeTenantChannelAccount({
+      tenantKey: "tenant-a",
+      channel: "instagram",
+      provider: "web_session",
+      channelAccountId: "session-1",
+    }),
+    null
+  );
+});
+
 test("enabled account gates automation, AI and handoff independently", () => {
   const disabled = validateTenantChannelAccount({
     tenantKey: "tenant-a",

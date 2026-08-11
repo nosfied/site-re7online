@@ -62,6 +62,11 @@ test("telegram is disabled by default for controlled rollout", () => {
   assert.equal(getFeatures({ profile: "government" }).telegramOutbound, false);
 });
 
+test("WhatsApp web session is disabled by default for controlled rollout", () => {
+  assert.equal(getFeatures({ profile: "business" }).whatsappWebSession, false);
+  assert.equal(getFeatures({ profile: "government" }).whatsappWebSession, false);
+});
+
 test("webhooks is disabled by default for controlled rollout", () => {
   assert.equal(getFeatures({ profile: "business" }).webhooks, false);
   assert.equal(getFeatures({ profile: "government" }).webhooks, false);
@@ -156,6 +161,12 @@ test("telegram can be enabled by tenant feature override", () => {
   assert.equal(hasFeature(client, "telegram"), true);
   assert.equal(hasFeature(client, "telegramInbound"), true);
   assert.equal(hasFeature(client, "telegramOutbound"), true);
+});
+
+test("WhatsApp web session can only be exposed by tenant-generic feature override", () => {
+  const client = { profile: "business", features: { whatsappWebSession: true } };
+  assert.equal(getFeatures(client).whatsappWebSession, true);
+  assert.equal(hasFeature(client, "whatsappWebSession"), true);
 });
 
 test("webhooks can be enabled by tenant feature override", () => {

@@ -6,7 +6,7 @@ import type {
 } from "./tenantChannelAccount.types.js";
 
 const CHANNELS = new Set<Channel>(["whatsapp", "instagram", "messenger"]);
-const PROVIDERS = new Set<Provider>(["meta"]);
+const PROVIDERS = new Set<Provider>(["meta", "web_session"]);
 const ACCOUNT_STATUSES = new Set<TenantChannelAccountStatus>([
   "connected",
   "disabled",
@@ -82,6 +82,12 @@ function normalizeStatus<T extends string>(value: unknown, allowed: Set<T>, fall
   return typeof value === "string" && allowed.has(value as T) ? (value as T) : fallback;
 }
 
+function isSupportedChannelProvider(channel: unknown, provider: unknown) {
+  if (!CHANNELS.has(channel as Channel) || !PROVIDERS.has(provider as Provider)) return false;
+  if (provider === "web_session") return channel === "whatsapp";
+  return provider === "meta";
+}
+
 function buildDefaultChannelAccountId(params: {
   tenantKey: string;
   channel: Channel;
@@ -100,7 +106,7 @@ export function normalizeTenantChannelAccount(input: TenantChannelAccountInput) 
   const provider = input.provider;
   const channelAccountId = sanitizeIdentifier(input.channelAccountId);
 
-  if (!tenantKey || !CHANNELS.has(channel as Channel) || !PROVIDERS.has(provider as Provider) || !channelAccountId) {
+  if (!tenantKey || !isSupportedChannelProvider(channel, provider) || !channelAccountId) {
     return null;
   }
 
