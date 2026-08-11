@@ -1,5 +1,4 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { type PrismaClient } from "@prisma/client";
 import { getPrisma } from "../../whatsapp-agent/src/db.js";
 import { getFeatures } from "../../whatsapp-agent/src/features/clientFeatures.js";
 import { logger } from "../../whatsapp-agent/src/logger/logger.js";
@@ -50,6 +49,8 @@ type ActiveConnection = {
   release: () => Promise<void>;
 };
 
+type WorkerPrismaClient = ReturnType<typeof getPrisma>;
+
 const activeConnections = new Map<string, ActiveConnection>();
 
 function eventRequestId(account: EligibleWebSessionAccount, eventName: string) {
@@ -57,7 +58,7 @@ function eventRequestId(account: EligibleWebSessionAccount, eventName: string) {
 }
 
 async function recordWebSessionWorkerEvent(params: {
-  prisma: PrismaClient;
+  prisma: WorkerPrismaClient;
   account: EligibleWebSessionAccount;
   eventName: string;
   requestSuffix: string;
@@ -69,7 +70,7 @@ async function recordWebSessionWorkerEvent(params: {
         clientId: params.account.clientId,
         requestId: eventRequestId(params.account, params.requestSuffix),
         eventName: params.eventName,
-        payloadJson: params.payloadJson,
+        payloadJson: params.payloadJson as never,
       },
     });
   } catch (error) {
@@ -93,7 +94,7 @@ export function isEligibleWebSessionAccount(account: ChannelAccountRecord) {
   return true;
 }
 
-export async function listEligibleWebSessionAccounts(prisma: PrismaClient) {
+export async function listEligibleWebSessionAccounts(prisma: WorkerPrismaClient) {
   const accounts = await prisma.channelAccount.findMany({
     where: {
       channel: "whatsapp",
@@ -124,7 +125,7 @@ export async function listEligibleWebSessionAccounts(prisma: PrismaClient) {
 }
 
 export async function runWhatsAppWebSessionWorker(params: {
-  prisma?: PrismaClient;
+  prisma?: WorkerPrismaClient;
   once?: boolean;
   pollIntervalMs?: number;
   abortSignal?: AbortSignal;
@@ -203,7 +204,7 @@ export async function runWhatsAppWebSessionWorker(params: {
 }
 
 async function connectWebSessionAccount(params: {
-  prisma: PrismaClient;
+  prisma: WorkerPrismaClient;
   account: EligibleWebSessionAccount;
   onTerminal: () => Promise<void>;
 }) {

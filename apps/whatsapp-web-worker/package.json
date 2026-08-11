@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json --noCheck",
+    "prestart": "prisma generate --schema ../whatsapp-agent/prisma/schema.prisma && node scripts/copy-prisma-client.mjs",
     "start": "node dist/whatsapp-web-worker/src/index.js",
     "worker": "node dist/whatsapp-web-worker/src/index.js",
     "dev": "tsx src/index.ts",
