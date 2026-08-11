@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ES2020",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "outDir": "dist",
+    "rootDir": "..",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "src",
+    "../whatsapp-agent/src/channels/channelAccountSecretCrypto.ts",
+    "../whatsapp-agent/src/db.ts",
+    "../whatsapp-agent/src/features/clientFeatures.ts",
+    "../whatsapp-agent/src/logger/logger.ts",
+    "../whatsapp-agent/src/web-session/**/*.ts"
+  ]
+}

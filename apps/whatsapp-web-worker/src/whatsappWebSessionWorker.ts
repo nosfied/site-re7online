@@ -1,14 +1,14 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { type PrismaClient } from "@prisma/client";
-import { getPrisma } from "../db.js";
-import { getFeatures } from "../features/clientFeatures.js";
-import { logger } from "../logger/logger.js";
+import { getPrisma } from "../../whatsapp-agent/src/db.js";
+import { getFeatures } from "../../whatsapp-agent/src/features/clientFeatures.js";
+import { logger } from "../../whatsapp-agent/src/logger/logger.js";
 import {
   calculateWebSessionReconnectBackoff,
   isWebSessionConnectRequested,
   readWebSessionLifecycle,
-} from "../web-session/webSessionLifecycle.js";
-import { acquireWebSessionAdvisoryLock } from "../web-session/webSessionAdvisoryLock.js";
+} from "../../whatsapp-agent/src/web-session/webSessionLifecycle.js";
+import { acquireWebSessionAdvisoryLock } from "../../whatsapp-agent/src/web-session/webSessionAdvisoryLock.js";
 
 export type EligibleWebSessionAccount = {
   id: string;
@@ -120,17 +120,4 @@ export async function runWhatsAppWebSessionWorker(params: {
       { signal: params.abortSignal }
     ).catch(() => undefined);
   } while (!params.abortSignal?.aborted);
-}
-
-if (process.argv[1]?.endsWith("whatsappWebSessionWorker.js")) {
-  const abortController = new AbortController();
-  process.once("SIGTERM", () => abortController.abort());
-  process.once("SIGINT", () => abortController.abort());
-  runWhatsAppWebSessionWorker({ abortSignal: abortController.signal }).catch((error) => {
-    logger.error({
-      event: "whatsapp.web.worker.error",
-      message: error instanceof Error ? error.message : "unknown_error",
-    });
-    process.exitCode = 1;
-  });
 }

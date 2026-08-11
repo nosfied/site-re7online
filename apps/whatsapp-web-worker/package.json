@@ -1,0 +1,25 @@
+{
+  "name": "whatsapp-web-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/whatsapp-web-worker/src/index.js",
+    "worker": "node dist/whatsapp-web-worker/src/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "node --import tsx --test src/whatsappWebSessionWorker.test.ts src/web-session/baileysSocketFactory.test.ts",
+    "db:generate": "prisma generate --schema ../whatsapp-agent/prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.1",
+    "@whiskeysockets/baileys": "7.0.0-rc13",
+    "dotenv": "^16.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.0",
+    "prisma": "^6.16.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3"
+  }
+}

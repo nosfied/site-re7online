@@ -1,10 +1,24 @@
-import type { SerializedWebSessionAuthState } from "./webSessionAuthStore.js";
+import type { SerializedWebSessionAuthState } from "../../../whatsapp-agent/src/web-session/webSessionAuthStore.js";
 
 type BaileysSocketFactoryParams = {
   authState: unknown;
   browserName?: string;
   onQr?: (qr: string) => void;
   onCredentialsUpdate?: (state: SerializedWebSessionAuthState) => Promise<void> | void;
+};
+
+type BaileysModuleLike = {
+  default?: (params: Record<string, unknown>) => BaileysSocketLike;
+  makeWASocket?: (params: Record<string, unknown>) => BaileysSocketLike;
+  Browsers?: {
+    ubuntu?: (browserName: string) => unknown;
+  };
+};
+
+type BaileysSocketLike = {
+  ev: {
+    on: (eventName: string, handler: (...args: never[]) => unknown) => void;
+  };
 };
 
 const silentLogger = {
@@ -22,7 +36,17 @@ const silentLogger = {
 
 export async function createBaileysSocket(params: BaileysSocketFactoryParams) {
   const module = await import("@whiskeysockets/baileys");
+  return createBaileysSocketFromModule(module as unknown as BaileysModuleLike, params);
+}
+
+export function createBaileysSocketFromModule(
+  module: BaileysModuleLike,
+  params: BaileysSocketFactoryParams
+) {
   const makeWASocket = module.default ?? module.makeWASocket;
+  if (!makeWASocket) {
+    throw new Error("baileys_socket_factory_unavailable");
+  }
   const browser =
     module.Browsers?.ubuntu?.(params.browserName ?? "Converta Web Session") ??
     ["Converta", "Chrome", "1.0.0"];

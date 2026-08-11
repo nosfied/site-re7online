@@ -316,9 +316,11 @@ Rotation:
 
 ## Dependency decision
 
-88C installs:
+88C.2 isolates:
 
-- `@whiskeysockets/baileys@7.0.0-rc13`, pinned exactly.
+- `@whiskeysockets/baileys@7.0.0-rc13`, pinned exactly, in `apps/whatsapp-web-worker`;
+- the transitive `libsignal` runtime tree in `apps/whatsapp-web-worker`;
+- no direct Baileys/libsignal runtime dependency in `apps/whatsapp-agent`.
 
 Operational constraints:
 
@@ -328,12 +330,15 @@ Operational constraints:
 - set Baileys logger to silent or a strict sanitizer;
 - treat 7.x as the supported line.
 
-Local audit at 88C found:
+Local audit at 88C/88C.2 found:
 
-- Baileys installed as a direct backend dependency;
+- Baileys isolated in the Web Session worker package;
 - no Chromium/Puppeteer dependency added by this work;
 - Node local version `v22.13.0`;
 - app TypeScript/runtime is ESM-compatible.
+
+This isolation is technical only. It does not resolve the legal review required for production
+use of the Web Session runtime or its dependency tree.
 
 ## SECULT impact
 
@@ -356,10 +361,11 @@ Implemented foundation:
 4. PostgreSQL advisory lock helper keyed by `ChannelAccount.id`.
 5. Lifecycle metadata helper for desired/observed state, reconnect counters and safe backoff.
 6. In-memory QR store with TTL; QR is intentionally not durable.
-7. Dedicated worker entrypoint `worker:whatsapp-web-session`.
+7. Dedicated worker package `apps/whatsapp-web-worker` with `worker`/`start` entrypoints.
 8. Eligibility gates requiring active tenant, `whatsappWebSession=true`, enabled account,
    runtime enabled, supported account status and `desiredState=CONNECTED`.
-9. Minimal Baileys socket factory with terminal QR disabled and silent logging.
+9. Minimal Baileys socket factory inside `apps/whatsapp-web-worker`, with terminal QR disabled
+   and silent logging.
 
 Still not implemented:
 
@@ -373,5 +379,5 @@ Still not implemented:
 - billing/ledger integration;
 - tenant rollout.
 
-Readiness after 88C: ready for a first administrative connection endpoint/smoke in 88D after
-explicit tenant and environment approval; not ready for production traffic.
+Readiness after 88C.2: ready for a first administrative connection endpoint/smoke in 88D after
+explicit tenant, environment and legal approval; not ready for production traffic.

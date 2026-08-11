@@ -14,12 +14,13 @@ The only operational WhatsApp transport is Meta Cloud API:
 
 ## Future transport placeholder
 
-`provider=web_session` is reserved for a future WhatsApp Web style transport. As of Sprint 88C
-it has an executable foundation only:
+`provider=web_session` is reserved for a future WhatsApp Web style transport. As of Sprint 88C.2
+it has an isolated executable foundation only:
 
-- `@whiskeysockets/baileys` is installed and pinned in the backend package;
+- `@whiskeysockets/baileys` is installed and pinned only in `apps/whatsapp-web-worker`;
+- `apps/whatsapp-agent` does not directly depend on Baileys or libsignal;
 - encrypted auth-state storage helpers exist;
-- advisory locking and a worker entrypoint exist;
+- advisory locking and a worker entrypoint exist in the isolated worker package;
 - no QR code endpoint/UI exists;
 - no session is created;
 - no production worker process is configured;
@@ -72,6 +73,7 @@ Current decision:
 - `ChannelAccount` remains the tenant-scoped account metadata record.
 - `ChannelAccountSecret` may hold the encrypted auth snapshot for the first controlled MVP.
 - A dedicated `re7-whatsapp-web-worker` must own the socket lifecycle.
+- Baileys-specific code and transitive libsignal dependency must remain in `apps/whatsapp-web-worker`.
 - The HTTP backend must never create a fallback from `web_session` to Meta.
 - QR, pairing and session material must be ephemeral in the UI and encrypted at rest if stored.
 - Templates, campaigns, Meta usage ledger and Meta webhooks remain Meta-only.

@@ -54,7 +54,6 @@
     "demo:readiness": "node --import tsx scripts/demo-tenant-readiness.ts",
     "demo:provision": "node --import tsx scripts/provision-demo-tenant.ts",
     "meta:readiness": "node --import tsx scripts/meta-tenant-readiness.ts",
-    "worker:whatsapp-web-session": "node dist/workers/whatsappWebSessionWorker.js",
     "demo:seed:boa-esperanca-poc": "node scripts/seed-boa-esperanca-poc.mjs",
     "demo:status:boa-esperanca-poc": "node scripts/seed-boa-esperanca-poc.mjs status",
     "demo:seed:re7-screenshots": "node scripts/seed-re7-demo-screenshots.mjs",
@@ -74,7 +73,6 @@
   "dependencies": {
     "@prisma/client": "^6.16.1",
     "@types/web-push": "^3.6.4",
-    "@whiskeysockets/baileys": "7.0.0-rc13",
     "dotenv": "^16.6.1",
     "nodemailer": "^8.0.7",
     "openai": "^6.17.0",
