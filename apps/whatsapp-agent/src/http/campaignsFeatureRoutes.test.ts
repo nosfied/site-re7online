@@ -1641,12 +1641,19 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   });
   const connected = await request<{
     status: {
-      account: { runtimeEnabled: boolean; status: string };
+      account: {
+        runtimeEnabled: boolean;
+        inboundPersistenceEnabled: boolean;
+        outboundEnabled: boolean;
+        status: string;
+      };
       lifecycle: { desiredState: string; observedState: string };
     };
   }>("POST", "/app/settings/channels/whatsapp/web-session/connect", businessAdmin);
   assert.equal(connected.status, 200);
   assert.equal(connected.body.status.account.runtimeEnabled, true);
+  assert.equal(connected.body.status.account.inboundPersistenceEnabled, true);
+  assert.equal(connected.body.status.account.outboundEnabled, false);
   assert.equal(connected.body.status.account.status, "pending");
   assert.equal(connected.body.status.lifecycle.desiredState, "CONNECTED");
   assert.equal(connected.body.status.lifecycle.observedState, "CONNECTING");
@@ -1681,13 +1688,14 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   const reset = await request<{
     status: {
       authState: { configured: boolean };
-      account: { runtimeEnabled: boolean; status: string };
+      account: { runtimeEnabled: boolean; inboundPersistenceEnabled: boolean; status: string };
       lifecycle: { desiredState: string; observedState: string };
     };
   }>("POST", "/app/settings/channels/whatsapp/web-session/reset", businessAdmin);
   assert.equal(reset.status, 200);
   assert.equal(reset.body.status.authState.configured, false);
   assert.equal(reset.body.status.account.runtimeEnabled, false);
+  assert.equal(reset.body.status.account.inboundPersistenceEnabled, false);
   assert.equal(reset.body.status.account.status, "pending");
   assert.equal(reset.body.status.lifecycle.desiredState, "DISCONNECTED");
   assert.equal(reset.body.status.lifecycle.observedState, "DISCONNECTED");

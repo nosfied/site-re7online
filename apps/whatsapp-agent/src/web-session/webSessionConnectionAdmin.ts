@@ -99,6 +99,8 @@ export async function serializeWebSessionStatus(params: {
           provider: account.provider,
           enabled: account.enabled,
           runtimeEnabled: account.runtimeEnabled,
+          inboundPersistenceEnabled: account.inboundPersistenceEnabled,
+          outboundEnabled: account.outboundEnabled,
           status: account.status,
           tokenStatus: account.tokenStatus,
           lastUpdatedAt: account.updatedAt.toISOString(),
@@ -200,6 +202,8 @@ export async function requestWebSessionConnect(params: {
     data: {
       enabled: true,
       runtimeEnabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: false,
       status: "pending",
       metadata,
     },
@@ -271,6 +275,8 @@ export async function resetWebSession(params: {
     where: { id: account.id },
     data: {
       runtimeEnabled: false,
+      inboundPersistenceEnabled: false,
+      outboundEnabled: false,
       status: "pending",
       metadata: webSessionMetadataPatch(account.metadata, {
         desiredState: "DISCONNECTED",
