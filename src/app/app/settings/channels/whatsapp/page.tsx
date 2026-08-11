@@ -97,6 +97,7 @@ export default function AppWhatsAppChannelSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState<string | null>(null);
   const [autoRefreshing, setAutoRefreshing] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || success), () => {
@@ -214,6 +215,18 @@ export default function AppWhatsAppChannelSettingsPage() {
   const canDisconnect = !readOnly && !isBusy && isConfigured && !isDisconnected;
   const canReset = !readOnly && !isBusy && isConfigured;
   const shouldAutoPoll = Boolean(session && isConfigured && (isConnecting || currentState === "CONNECTED" || currentState === "ERROR"));
+  const stateChangedAt = useMemo(() => {
+    const raw = status?.account?.lastUpdatedAt;
+    const parsed = raw ? Date.parse(raw) : NaN;
+    return Number.isFinite(parsed) ? parsed : now;
+  }, [now, status?.account?.lastUpdatedAt]);
+  const stateElapsedSeconds = Math.max(0, Math.floor((now - stateChangedAt) / 1000));
+
+  useEffect(() => {
+    if (!isConnecting) return;
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [isConnecting]);
 
   const statusHint = useMemo(() => {
     if (!status?.configured) return "Prepare o canal para iniciar a conexão.";
@@ -225,6 +238,27 @@ export default function AppWhatsAppChannelSettingsPage() {
     if (currentState === "ERROR") return "Houve erro na conexão. Redefina a sessão ou tente conectar novamente.";
     return "Conexão parada. Clique em Conectar para iniciar.";
   }, [currentState, status?.configured]);
+
+  const progressSteps = useMemo(() => {
+    const base = [
+      { key: "CONNECTING", label: "Abrindo conexão" },
+      { key: "QR_REQUIRED", label: "Código disponível" },
+      { key: "CONNECTED", label: "Conectado" },
+    ];
+    if (currentState === "RECONNECTING") {
+      return [
+        { key: "RECONNECTING", label: "Reabrindo sessão" },
+        { key: "CONNECTED", label: "Conectado" },
+      ];
+    }
+    return base;
+  }, [currentState]);
+
+  const progressIndex = useMemo(() => {
+    if (currentState === "CONNECTED") return progressSteps.length - 1;
+    const index = progressSteps.findIndex((step) => step.key === currentState);
+    return index >= 0 ? index : 0;
+  }, [currentState, progressSteps]);
 
   useEffect(() => {
     if (!session || !shouldAutoPoll) return;
@@ -403,6 +437,39 @@ export default function AppWhatsAppChannelSettingsPage() {
                 {statusHint}
               </p>
             </div>
+            {isConnecting || isConnected ? (
+              <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-white/65">
+                  <span>{isConnected ? "Conexão concluída" : `Aguardando há ${stateElapsedSeconds}s`}</span>
+                  {autoRefreshing ? <span>Verificando estado...</span> : null}
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {progressSteps.map((step, index) => {
+                    const done = index < progressIndex || currentState === "CONNECTED";
+                    const active = index === progressIndex && currentState !== "CONNECTED";
+                    return (
+                      <div
+                        key={step.key}
+                        className={`rounded-md border px-3 py-2 text-xs font-semibold ${
+                          done
+                            ? "border-emerald-300/30 bg-emerald-500/15 text-emerald-100"
+                            : active
+                              ? "border-amber-300/30 bg-amber-500/15 text-amber-100"
+                              : "border-white/10 bg-white/5 text-white/50"
+                        }`}
+                      >
+                        {step.label}
+                      </div>
+                    );
+                  })}
+                </div>
+                {isConnecting && stateElapsedSeconds > 45 ? (
+                  <p className="mt-3 text-xs leading-relaxed text-amber-100">
+                    Esta etapa está demorando mais que o esperado. A tela continuará verificando; se virar erro, tente conectar novamente.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <div className="rounded-lg border border-white/10 bg-re7-navy/60 p-3">
               {qr ? (
                 <div className="space-y-3">

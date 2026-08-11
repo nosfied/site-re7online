@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  isTransientConnectingState,
   isEligibleWebSessionAccount,
   listEligibleWebSessionAccounts,
   shouldKeepActiveWebSessionConnection,
@@ -70,4 +71,19 @@ test("web session worker stops active connection when admin requests disconnect"
     }) as never),
     false
   );
+});
+
+test("web session worker identifies only transient active connection states", () => {
+  assert.equal(isTransientConnectingState(account({
+    metadata: { webSession: { desiredState: "CONNECTED", observedState: "CONNECTING" } },
+  }) as never), true);
+  assert.equal(isTransientConnectingState(account({
+    metadata: { webSession: { desiredState: "CONNECTED", observedState: "RECONNECTING" } },
+  }) as never), true);
+  assert.equal(isTransientConnectingState(account({
+    metadata: { webSession: { desiredState: "CONNECTED", observedState: "QR_REQUIRED" } },
+  }) as never), false);
+  assert.equal(isTransientConnectingState(account({
+    metadata: { webSession: { desiredState: "CONNECTED", observedState: "CONNECTED" } },
+  }) as never), false);
 });

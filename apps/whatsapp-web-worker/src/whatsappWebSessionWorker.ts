@@ -48,6 +48,7 @@ type ChannelAccountRecord = {
 type ActiveConnection = {
   tenantKey: string;
   channelAccountId: string;
+  startedAtMs: number;
   close?: () => void;
   release: () => Promise<void>;
 };
@@ -56,9 +57,15 @@ type WorkerPrismaClient = ReturnType<typeof getPrisma>;
 
 const activeConnections = new Map<string, ActiveConnection>();
 const DEFAULT_CONNECTION_OPEN_TIMEOUT_MS = 30_000;
+const STALE_ACTIVE_CONNECTING_TIMEOUT_MS = 45_000;
 
 function eventRequestId(account: EligibleWebSessionAccount, eventName: string) {
   return `web-session-worker:${account.id}:${eventName}:${Date.now()}`;
+}
+
+export function isTransientConnectingState(account: ChannelAccountRecord) {
+  const state = readWebSessionLifecycle(account.metadata).observedState;
+  return state === "CONNECTING" || state === "RECONNECTING";
 }
 
 async function recordWebSessionWorkerEvent(params: {
@@ -154,7 +161,24 @@ async function reconcileActiveWebSessionConnections(prisma: WorkerPrismaClient) 
     const active = activeConnections.get(accountId);
     if (!active) continue;
     const account = accountById.get(accountId);
-    if (account && shouldKeepActiveWebSessionConnection(account)) continue;
+    if (account && shouldKeepActiveWebSessionConnection(account)) {
+      const staleConnecting =
+        isTransientConnectingState(account) &&
+        Date.now() - active.startedAtMs > STALE_ACTIVE_CONNECTING_TIMEOUT_MS;
+      if (!staleConnecting) continue;
+      await markWebSessionRuntimeState({
+        prisma,
+        accountId,
+        observedState: "ERROR",
+        status: "error",
+        errorCode: "connection_open_timeout",
+      });
+      logger.warn({
+        event: "whatsapp.web.session.active_timeout",
+        tenantKey: active.tenantKey,
+        channelAccountId: active.channelAccountId,
+      });
+    }
     activeConnections.delete(accountId);
     active.close?.();
     await active.release();
@@ -183,6 +207,7 @@ export async function runWhatsAppWebSessionWorker(params: {
       logger.info({ event: "whatsapp.web.worker.idle", eligibleAccounts: 0 });
     }
     for (const account of accounts) {
+      if (activeConnections.has(account.id)) continue;
       const lock = await acquireWebSessionAdvisoryLock({ prisma, accountId: account.id });
       if (!lock.acquired) {
         logger.info({
@@ -203,6 +228,7 @@ export async function runWhatsAppWebSessionWorker(params: {
         activeConnections.set(account.id, {
           tenantKey: account.tenantKey,
           channelAccountId: account.channelAccountId,
+          startedAtMs: Date.now(),
           release: async () => {
             await lock.release();
           },
