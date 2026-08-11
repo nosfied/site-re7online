@@ -96,6 +96,7 @@ export default function AppWhatsAppChannelSettingsPage() {
   const [qrExpired, setQrExpired] = useState(false);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState<string | null>(null);
+  const [autoRefreshing, setAutoRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || success), () => {
@@ -112,12 +113,26 @@ export default function AppWhatsAppChannelSettingsPage() {
     setStatus(nextStatus);
     setCanUpdate(nextCanUpdate);
     setDisplayName(nextStatus.account?.displayName || "WhatsApp Business");
+    const observedState = nextStatus.lifecycle.observedState;
+    if (observedState === "CONNECTED" || observedState === "DISCONNECTED" || observedState === "ERROR") {
+      setQr(null);
+      setQrImage(null);
+      setQrExpired(false);
+    }
   }, []);
 
   const loadStatus = useCallback(async (activeSession: AppSession) => {
     const response = await fetchAppWhatsAppWebSessionStatus(activeSession);
     applyStatus(response.status, response.permissions.canUpdate);
+    return response.status;
   }, [applyStatus]);
+
+  const loadQr = useCallback(async (activeSession: AppSession) => {
+    const response = await fetchAppWhatsAppWebSessionQr(activeSession);
+    setQr(response.qr);
+    setQrExpired(response.expired);
+    return response;
+  }, []);
 
   useEffect(() => {
     const stored = loadAppSession();
@@ -187,6 +202,63 @@ export default function AppWhatsAppChannelSettingsPage() {
 
   const readOnly = useMemo(() => !session || !canUpdateChannels(session.user.role) || !canUpdate, [canUpdate, session]);
 
+  const lifecycle = status?.lifecycle;
+  const currentState = lifecycle?.observedState ?? "DISCONNECTED";
+  const isConfigured = Boolean(status?.configured);
+  const isConnected = currentState === "CONNECTED";
+  const isDisconnected = currentState === "DISCONNECTED";
+  const isConnecting = currentState === "CONNECTING" || currentState === "QR_REQUIRED" || currentState === "RECONNECTING";
+  const isBusy = Boolean(working);
+  const canPrepare = !readOnly && !isBusy && !isConnected && !isConnecting;
+  const canConnect = !readOnly && !isBusy && isConfigured && !isConnected && !isConnecting;
+  const canDisconnect = !readOnly && !isBusy && isConfigured && !isDisconnected;
+  const canReset = !readOnly && !isBusy && isConfigured;
+  const shouldAutoPoll = Boolean(session && isConfigured && (isConnecting || currentState === "CONNECTED" || currentState === "ERROR"));
+
+  const statusHint = useMemo(() => {
+    if (!status?.configured) return "Prepare o canal para iniciar a conexão.";
+    if (currentState === "CONNECTED") return "Conexão ativa. O código foi removido e a sessão está salva.";
+    if (currentState === "CONNECTING" || currentState === "RECONNECTING") {
+      return "Conectando ao WhatsApp Business. Se um código for necessário, ele aparecerá aqui automaticamente.";
+    }
+    if (currentState === "QR_REQUIRED") return "Leia o código abaixo em Dispositivos conectados no WhatsApp Business.";
+    if (currentState === "ERROR") return "Houve erro na conexão. Redefina a sessão ou tente conectar novamente.";
+    return "Conexão parada. Clique em Conectar para iniciar.";
+  }, [currentState, status?.configured]);
+
+  useEffect(() => {
+    if (!session || !shouldAutoPoll) return;
+    let cancelled = false;
+    let running = false;
+    const tick = async () => {
+      if (running || cancelled) return;
+      running = true;
+      setAutoRefreshing(true);
+      try {
+        const nextStatus = await loadStatus(session);
+        const observedState = nextStatus.lifecycle.observedState;
+        if (observedState === "CONNECTING" || observedState === "QR_REQUIRED" || observedState === "RECONNECTING") {
+          await loadQr(session);
+        }
+      } catch (err) {
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+      } finally {
+        running = false;
+        if (!cancelled) setAutoRefreshing(false);
+      }
+    };
+    void tick();
+    const interval = window.setInterval(() => void tick(), currentState === "QR_REQUIRED" ? 2500 : 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [currentState, handleUnauthorized, loadQr, loadStatus, session, shouldAutoPoll]);
+
   const runAction = async (
     action: string,
     fn: (activeSession: AppSession) => Promise<{ status: AppWhatsAppWebSessionStatus }>
@@ -199,7 +271,7 @@ export default function AppWhatsAppChannelSettingsPage() {
       const response = await fn(session);
       applyStatus(response.status, true);
       if (action === "prepare") setSuccess("Canal WhatsApp Business preparado.");
-      if (action === "connect") setSuccess("Conexão solicitada. Aguarde o código aparecer.");
+      if (action === "connect") setSuccess("Conexão solicitada. O código aparecerá automaticamente quando estiver disponível.");
       if (action === "disconnect") setSuccess("Conexão interrompida sem apagar a sessão salva.");
       if (action === "reset") {
         setQr(null);
@@ -219,41 +291,9 @@ export default function AppWhatsAppChannelSettingsPage() {
     }
   };
 
-  const handleQr = async () => {
-    if (!session) return;
-    setWorking("qr");
-    setError(null);
-    setSuccess(null);
-    try {
-      const response = await fetchAppWhatsAppWebSessionQr(session);
-      setQr(response.qr);
-      setQrExpired(response.expired);
-      if (response.qr) {
-        setSuccess("Código efêmero carregado.");
-      } else if (response.expired) {
-        setError("Código expirado. Gere um novo código.");
-      } else {
-        setError("O código ainda não está disponível. Verifique se o worker está em execução.");
-      }
-      await loadStatus(session);
-    } catch (err) {
-      const typed = err as AppApiError;
-      if (typed.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-      setError(normalizeError(typed, "Não foi possível consultar o código."));
-    } finally {
-      setWorking(null);
-    }
-  };
-
   if (!session) {
     return <main className="min-h-screen bg-re7-navy" />;
   }
-
-  const lifecycle = status?.lifecycle;
-  const currentState = lifecycle?.observedState ?? "DISCONNECTED";
 
   return (
     <AppShell
@@ -314,7 +354,7 @@ export default function AppWhatsAppChannelSettingsPage() {
                   <button
                     type="button"
                     onClick={() => void runAction("prepare", (activeSession) => prepareAppWhatsAppWebSession(activeSession, { displayName }))}
-                    disabled={readOnly || Boolean(working)}
+                    disabled={!canPrepare}
                     className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {working === "prepare" ? "Preparando..." : "Preparar canal"}
@@ -322,23 +362,15 @@ export default function AppWhatsAppChannelSettingsPage() {
                   <button
                     type="button"
                     onClick={() => void runAction("connect", connectAppWhatsAppWebSession)}
-                    disabled={readOnly || Boolean(working) || !status?.configured}
+                    disabled={!canConnect}
                     className="rounded-md border border-emerald-300/35 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {working === "connect" ? "Solicitando..." : "Conectar"}
                   </button>
                   <button
                     type="button"
-                    onClick={() => void handleQr()}
-                    disabled={Boolean(working) || !status?.configured}
-                    className="rounded-md border border-white/20 px-4 py-2 text-sm font-semibold text-white/90 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {working === "qr" ? "Consultando..." : "Ver código"}
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => void runAction("disconnect", disconnectAppWhatsAppWebSession)}
-                    disabled={readOnly || Boolean(working) || !status?.configured}
+                    disabled={!canDisconnect}
                     className="rounded-md border border-white/20 px-4 py-2 text-sm font-semibold text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Desconectar
@@ -346,7 +378,7 @@ export default function AppWhatsAppChannelSettingsPage() {
                   <button
                     type="button"
                     onClick={() => void runAction("reset", resetAppWhatsAppWebSession)}
-                    disabled={readOnly || Boolean(working) || !status?.configured}
+                    disabled={!canReset}
                     className="rounded-md border border-red-300/30 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Redefinir sessão
@@ -354,10 +386,10 @@ export default function AppWhatsAppChannelSettingsPage() {
                   <button
                     type="button"
                     onClick={() => session && void loadStatus(session)}
-                    disabled={Boolean(working)}
+                    disabled={Boolean(working) || autoRefreshing}
                     className="rounded-md border border-white/15 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Atualizar
+                    {autoRefreshing ? "Atualizando..." : "Atualizar"}
                   </button>
                 </div>
               </>
@@ -368,7 +400,7 @@ export default function AppWhatsAppChannelSettingsPage() {
             <div>
               <h2 className="text-lg font-semibold text-white">Código de conexão</h2>
               <p className="mt-1 text-sm leading-relaxed text-white/65">
-                O código é temporário, não é salvo no banco e deve ser visto apenas por usuário autorizado.
+                {statusHint}
               </p>
             </div>
             <div className="rounded-lg border border-white/10 bg-re7-navy/60 p-3">
@@ -385,19 +417,13 @@ export default function AppWhatsAppChannelSettingsPage() {
                       <p className="text-center text-sm text-re7-navy/70">Gerando imagem do código...</p>
                     )}
                   </div>
-                  <details className="rounded-md border border-white/10 bg-re7-navy/70 p-3 text-xs text-white/65">
-                    <summary className="cursor-pointer font-semibold text-white/80">Ver payload técnico</summary>
-                    <textarea
-                      readOnly
-                      value={qr}
-                      aria-label="Payload técnico efêmero de conexão WhatsApp"
-                      className="mt-3 h-24 w-full resize-none rounded-md border border-white/15 bg-re7-navy p-3 font-mono text-[11px] text-white outline-none"
-                    />
-                  </details>
+                  <p className="text-xs leading-relaxed text-white/60">
+                    Código efêmero. Ele desaparece automaticamente ao conectar ou expirar.
+                  </p>
                 </div>
               ) : (
                 <div className="flex min-h-40 items-center justify-center rounded-md border border-dashed border-white/15 bg-re7-navy/70 p-4 text-center text-sm text-white/60">
-                  {qrExpired ? "Código expirado. Gere um novo código." : "Solicite a conexão e consulte o código quando o worker estiver ativo."}
+                  {qrExpired ? "Código expirado. Clique em Conectar para gerar um novo código." : statusHint}
                 </div>
               )}
             </div>
