@@ -529,8 +529,10 @@ export default function AppShell({
   };
 
   const renderNavLinks = (items: NavItem[], directLimit: number, label: string) => {
-    const directItems = items.slice(0, directLimit);
-    const overflowItems = items.slice(directLimit);
+    const hasOverflow = items.length > directLimit;
+    const directCount = hasOverflow ? Math.max(0, directLimit - 1) : directLimit;
+    const directItems = items.slice(0, directCount);
+    const overflowItems = items.slice(directCount);
     return (
       <>
         {directItems.map(renderTextLink)}
