@@ -12,8 +12,13 @@ type BaileysAuthModuleLike = {
 type SignalKeyData = Record<string, Record<string, unknown>>;
 
 type AuthStateLogger = {
+  trace?: (payload: unknown, message?: string) => void;
+  debug?: (payload: unknown, message?: string) => void;
   info?: (payload: unknown, message?: string) => void;
   warn?: (payload: unknown, message?: string) => void;
+  error?: (payload: unknown, message?: string) => void;
+  fatal?: (payload: unknown, message?: string) => void;
+  child?: (bindings?: unknown) => AuthStateLogger;
 };
 
 export type BaileysAuthStateScope = {
@@ -45,6 +50,27 @@ function parseStoredState(module: BaileysAuthModuleLike, value: unknown): Stored
 
 function serializeState(module: BaileysAuthModuleLike, state: StoredBaileysAuthState) {
   return JSON.parse(JSON.stringify(state, module.BufferJSON.replacer)) as Record<string, unknown>;
+}
+
+function createSignalKeyStoreLogger(logger?: AuthStateLogger): AuthStateLogger {
+  const wrapped: AuthStateLogger = {
+    trace() {},
+    debug() {},
+    info() {},
+    warn(payload, message) {
+      logger?.warn?.(payload, message);
+    },
+    error(payload, message) {
+      logger?.error?.(payload, message);
+    },
+    fatal(payload, message) {
+      logger?.fatal?.(payload, message);
+    },
+    child() {
+      return wrapped;
+    },
+  };
+  return wrapped;
 }
 
 export async function createBaileysAuthState(params: {
@@ -111,7 +137,7 @@ export async function createBaileysAuthState(params: {
   };
   const authState = {
     creds: state.creds,
-    keys: params.module.makeCacheableSignalKeyStore?.(keyStore, params.logger) ?? keyStore,
+    keys: params.module.makeCacheableSignalKeyStore?.(keyStore, createSignalKeyStoreLogger(params.logger)) ?? keyStore,
   };
 
   return {

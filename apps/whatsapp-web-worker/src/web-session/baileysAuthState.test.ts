@@ -4,6 +4,7 @@ import { createBaileysAuthState } from "./baileysAuthState.js";
 
 test("baileys auth state merges credentials without replacing the socket reference", async () => {
   let savedState: Record<string, unknown> | null = null;
+  let keyStoreLogger: { trace?: unknown } | null = null;
   const store = {
     load: async () => null,
     save: async (params: { state: Record<string, unknown> }) => {
@@ -19,6 +20,10 @@ test("baileys auth state merges credentials without replacing the socket referen
         reviver: (_key: string, value: unknown) => value,
       },
       initAuthCreds: () => ({ registered: false }),
+      makeCacheableSignalKeyStore: (_store: unknown, logger?: unknown) => {
+        keyStoreLogger = logger as { trace?: unknown };
+        return _store;
+      },
     },
     store,
     scope: { tenantKey: "tenant", channelAccountId: "web-session-default" },
@@ -29,6 +34,7 @@ test("baileys auth state merges credentials without replacing the socket referen
   await auth.save();
 
   assert.equal(auth.state.creds, socketCredsReference);
+  assert.equal(typeof keyStoreLogger?.trace, "function");
   assert.deepEqual(auth.state.creds, { registered: true, me: { id: "redacted@s.whatsapp.net" } });
   assert.deepEqual(savedState?.creds, { registered: true, me: { id: "redacted@s.whatsapp.net" } });
 });
