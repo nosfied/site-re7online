@@ -55,6 +55,7 @@ type ActiveConnection = {
 type WorkerPrismaClient = ReturnType<typeof getPrisma>;
 
 const activeConnections = new Map<string, ActiveConnection>();
+const DEFAULT_CONNECTION_OPEN_TIMEOUT_MS = 30_000;
 
 function eventRequestId(account: EligibleWebSessionAccount, eventName: string) {
   return `web-session-worker:${account.id}:${eventName}:${Date.now()}`;
@@ -252,6 +253,23 @@ async function connectWebSessionAccount(params: {
   account: EligibleWebSessionAccount;
   onTerminal: () => Promise<void>;
 }) {
+  let terminalHandled = false;
+  let socket: Awaited<ReturnType<typeof createBaileysSocket>> | null = null;
+  let connectionOpenTimer: ReturnType<typeof setTimeout> | null = null;
+  const clearConnectionOpenTimer = () => {
+    if (!connectionOpenTimer) return;
+    clearTimeout(connectionOpenTimer);
+    connectionOpenTimer = null;
+  };
+  const finishTerminal = async () => {
+    if (terminalHandled) return;
+    terminalHandled = true;
+    clearConnectionOpenTimer();
+    await params.onTerminal();
+  };
+  const closeSocket = () => {
+    if (socket) closeBaileysSocket(socket);
+  };
   const module = await import("@whiskeysockets/baileys");
   const auth = await createBaileysAuthState({
     module: module as unknown as Parameters<typeof createBaileysAuthState>[0]["module"],
@@ -279,9 +297,35 @@ async function connectWebSessionAccount(params: {
       channelAccountId: params.account.channelAccountId,
     },
   });
-  const socket = await createBaileysSocket({
+  connectionOpenTimer = setTimeout(() => {
+    void (async () => {
+      await markWebSessionRuntimeState({
+        prisma: params.prisma,
+        accountId: params.account.id,
+        observedState: "ERROR",
+        status: "error",
+        errorCode: "connection_open_timeout",
+      });
+      await recordWebSessionWorkerEvent({
+        prisma: params.prisma,
+        account: params.account,
+        requestSuffix: "connection-open-timeout",
+        eventName: "whatsapp.web_session.error",
+        payloadJson: {
+          channel: "whatsapp",
+          provider: "web_session",
+          channelAccountId: params.account.channelAccountId,
+          reason: "connection_open_timeout",
+        },
+      });
+      closeSocket();
+      await finishTerminal();
+    })();
+  }, DEFAULT_CONNECTION_OPEN_TIMEOUT_MS);
+  socket = await createBaileysSocket({
     authState: auth.state,
     onQr: async (qr) => {
+      clearConnectionOpenTimer();
       setWebSessionQrForRuntime({ accountId: params.account.id, qr });
       await markWebSessionRuntimeState({
         prisma: params.prisma,
@@ -307,6 +351,7 @@ async function connectWebSessionAccount(params: {
       await auth.save();
     },
     onConnected: async () => {
+      clearConnectionOpenTimer();
       clearWebSessionQrForRuntime(params.account.id);
       await auth.save();
       await markWebSessionRuntimeState({
@@ -328,6 +373,7 @@ async function connectWebSessionAccount(params: {
       });
     },
     onDisconnected: async (reason) => {
+      clearConnectionOpenTimer();
       const classification = classifyWebSessionDisconnect(reason);
       clearWebSessionQrForRuntime(params.account.id);
       await markWebSessionRuntimeState({
@@ -351,9 +397,10 @@ async function connectWebSessionAccount(params: {
           reason: classification,
         },
       });
-      await params.onTerminal();
+      await finishTerminal();
     },
   }).catch(async (error) => {
+    clearConnectionOpenTimer();
     await markWebSessionRuntimeState({
       prisma: params.prisma,
       accountId: params.account.id,
@@ -361,10 +408,10 @@ async function connectWebSessionAccount(params: {
       status: "error",
       errorCode: error instanceof Error ? error.message : "unknown_error",
     });
-    await params.onTerminal();
+    await finishTerminal();
   });
   const active = activeConnections.get(params.account.id);
   if (active) {
-    active.close = () => closeBaileysSocket(socket);
+    active.close = closeSocket;
   }
 }
