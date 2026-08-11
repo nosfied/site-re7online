@@ -11,6 +11,11 @@ type BaileysAuthModuleLike = {
 
 type SignalKeyData = Record<string, Record<string, unknown>>;
 
+type AuthStateLogger = {
+  info?: (payload: unknown, message?: string) => void;
+  warn?: (payload: unknown, message?: string) => void;
+};
+
 export type BaileysAuthStateScope = {
   tenantKey: string;
   channelAccountId: string;
@@ -46,7 +51,7 @@ export async function createBaileysAuthState(params: {
   module: BaileysAuthModuleLike;
   store: WebSessionAuthStore;
   scope: BaileysAuthStateScope;
-  logger?: unknown;
+  logger?: AuthStateLogger;
 }) {
   const loaded = parseStoredState(params.module, await params.store.load(params.scope));
   const state: StoredBaileysAuthState = loaded ?? {
@@ -68,19 +73,39 @@ export async function createBaileysAuthState(params: {
         const value = state.keys[type]?.[id];
         if (value !== undefined) values[id] = value;
       }
+      params.logger?.info?.({
+        event: "whatsapp.web.auth.keys_get",
+        tenantKey: params.scope.tenantKey,
+        channelAccountId: params.scope.channelAccountId,
+        keyType: type,
+        requestedCount: ids.length,
+        foundCount: Object.keys(values).length,
+      });
       return values;
     },
     set: async (data: Record<string, Record<string, unknown | null>>) => {
+      const summary: Array<{ keyType: string; setCount: number; deleteCount: number }> = [];
       for (const [type, entries] of Object.entries(data)) {
         state.keys[type] = state.keys[type] ?? {};
+        let setCount = 0;
+        let deleteCount = 0;
         for (const [id, value] of Object.entries(entries)) {
           if (value === null) {
             delete state.keys[type][id];
+            deleteCount += 1;
           } else {
             state.keys[type][id] = value;
+            setCount += 1;
           }
         }
+        summary.push({ keyType: type, setCount, deleteCount });
       }
+      params.logger?.info?.({
+        event: "whatsapp.web.auth.keys_set",
+        tenantKey: params.scope.tenantKey,
+        channelAccountId: params.scope.channelAccountId,
+        summary,
+      });
       await save();
     },
   };
@@ -93,6 +118,14 @@ export async function createBaileysAuthState(params: {
     state: authState,
     save,
     mergeCredentials(patch: Record<string, unknown>) {
+      params.logger?.info?.({
+        event: "whatsapp.web.auth.creds_update",
+        tenantKey: params.scope.tenantKey,
+        channelAccountId: params.scope.channelAccountId,
+        keys: Object.keys(patch).sort(),
+        hasMe: Boolean(patch.me),
+        registered: patch.registered === true ? true : patch.registered === false ? false : null,
+      });
       if (!state.creds || typeof state.creds !== "object" || Array.isArray(state.creds)) {
         state.creds = {};
         authState.creds = state.creds;
