@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import webPush from "web-push";
 import { Prisma } from "@prisma/client";
-import { env } from "../config/env.js";
 import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
 import type { InboxRealtimeEvent } from "../realtime/events.js";
@@ -33,6 +32,14 @@ type PushPresence = {
 
 const pushPresenceByEndpoint = new Map<string, PushPresence>();
 
+function getWebPushConfig() {
+  return {
+    publicKey: (process.env.WEB_PUSH_VAPID_PUBLIC_KEY ?? "").trim(),
+    privateKey: (process.env.WEB_PUSH_VAPID_PRIVATE_KEY ?? "").trim(),
+    subject: (process.env.WEB_PUSH_SUBJECT ?? "").trim(),
+  };
+}
+
 function rememberPushKey(key: string) {
   if (recentPushKeys.has(key)) return false;
   recentPushKeys.add(key);
@@ -45,24 +52,18 @@ function rememberPushKey(key: string) {
 }
 
 export function isWebPushConfigured() {
-  return Boolean(
-    env.WEB_PUSH_VAPID_PUBLIC_KEY.trim() &&
-      env.WEB_PUSH_VAPID_PRIVATE_KEY.trim() &&
-      env.WEB_PUSH_SUBJECT.trim()
-  );
+  const config = getWebPushConfig();
+  return Boolean(config.publicKey && config.privateKey && config.subject);
 }
 
 export function getWebPushPublicKey() {
-  return env.WEB_PUSH_VAPID_PUBLIC_KEY.trim();
+  return getWebPushConfig().publicKey;
 }
 
 function configureWebPush() {
-  if (!isWebPushConfigured()) return false;
-  webPush.setVapidDetails(
-    env.WEB_PUSH_SUBJECT,
-    env.WEB_PUSH_VAPID_PUBLIC_KEY,
-    env.WEB_PUSH_VAPID_PRIVATE_KEY
-  );
+  const config = getWebPushConfig();
+  if (!config.publicKey || !config.privateKey || !config.subject) return false;
+  webPush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
   return true;
 }
 
