@@ -52,7 +52,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   assert.equal(result, socket);
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.printQRInTerminal, false);
-  assert.equal(calls[0]?.markOnlineOnConnect, false);
+  assert.equal(calls[0]?.markOnlineOnConnect, true);
   assert.equal(calls[0]?.syncFullHistory, false);
   assert.equal(typeof calls[0]?.shouldSyncHistoryMessage, "function");
   assert.equal((calls[0]?.shouldSyncHistoryMessage as () => boolean)(), false);

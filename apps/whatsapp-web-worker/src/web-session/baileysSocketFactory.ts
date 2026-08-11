@@ -80,7 +80,7 @@ export async function createBaileysSocketFromModule(
     browser,
     printQRInTerminal: false,
     logger: silentLogger as never,
-    markOnlineOnConnect: false,
+    markOnlineOnConnect: true,
     syncFullHistory: false,
     shouldSyncHistoryMessage: () => false,
   });
