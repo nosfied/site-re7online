@@ -76,6 +76,7 @@ export async function createBaileysSocketFromModule(
     logger: silentLogger as never,
     markOnlineOnConnect: false,
     syncFullHistory: false,
+    shouldSyncHistoryMessage: () => false,
   });
   socket.ev.on("connection.update", (update: { qr?: string; connection?: string; lastDisconnect?: unknown }) => {
     if (update.qr) params.onQr?.(update.qr);
