@@ -2287,6 +2287,185 @@ test("admin tenants summary includes db-only clients without activity", async ()
   assert.equal(item.counts.outbound.failed, 0);
 });
 
+test("admin tenant provisioning creates tenant without initial channel and remains idempotent", async () => {
+  const tenantKey = `${prefix}-no-channel`;
+  const contractNotes = [
+    "Contrato: teste sem canal inicial",
+    "Vigencia: inicio pendente de confirmacao",
+    "Escopo: canais configurados posteriormente",
+  ].join("\n");
+
+  const first = await requestSuperadmin<{
+    ok: boolean;
+    tenantId: string;
+    client: { id: string; clientKey: string; status: string; profile?: string };
+    tenant: {
+      id: string;
+      name: string;
+      metaPhoneNumberId: string;
+      companyLegalName?: string;
+      companyTaxId?: string;
+      contractNotes?: string;
+      channelAccounts?: unknown[];
+    };
+    action: string;
+    initialChannel: string;
+  }>("POST", "/admin/tenants", {
+    clientKey: tenantKey,
+    name: "Tenant Sem Canal",
+    profile: "government",
+    status: "ONBOARDING",
+    companyLegalName: "Orgao Publico de Teste",
+    companyTaxId: "00.000.000/0001-00",
+    contractNotes,
+  });
+
+  assert.equal(first.status, 201);
+  assert.equal(first.body.ok, true);
+  assert.equal(first.body.action, "created");
+  assert.equal(first.body.initialChannel, "none");
+  assert.equal(first.body.tenantId, tenantKey);
+  assert.equal(first.body.client.clientKey, tenantKey);
+  assert.equal(first.body.client.status, "INACTIVE");
+  assert.equal(first.body.client.profile, "government");
+  assert.equal(first.body.tenant.metaPhoneNumberId, "");
+  assert.equal(first.body.tenant.companyLegalName, "Orgao Publico de Teste");
+  assert.equal(first.body.tenant.companyTaxId, "00.000.000/0001-00");
+  assert.equal(first.body.tenant.contractNotes, contractNotes);
+  assert.deepEqual(first.body.tenant.channelAccounts, []);
+
+  const client = await prisma.client.findUniqueOrThrow({
+    where: { clientKey: tenantKey },
+    select: {
+      id: true,
+      status: true,
+      profile: true,
+      _count: {
+        select: {
+          users: true,
+          departments: true,
+          queues: true,
+          channelAccounts: true,
+          phoneNumbers: true,
+        },
+      },
+    },
+  });
+  assert.equal(client.status, "INACTIVE");
+  assert.equal(client.profile, "government");
+  assert.deepEqual(client._count, {
+    users: 0,
+    departments: 0,
+    queues: 0,
+    channelAccounts: 0,
+    phoneNumbers: 0,
+  });
+  assert.equal(await prisma.tenantMetaConfig.count({ where: { clientId: client.id } }), 0);
+  assert.ok(await prisma.tenantOperationalConfig.findUnique({ where: { clientId: client.id } }));
+
+  const detail = await requestSuperadmin<{
+    tenant: { id: string; metaPhoneNumberId: string; channelAccounts?: unknown[] };
+  }>("GET", `/admin/tenants/${encodeURIComponent(tenantKey)}`);
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.tenant.id, tenantKey);
+  assert.equal(detail.body.tenant.metaPhoneNumberId, "");
+  assert.deepEqual(detail.body.tenant.channelAccounts, []);
+
+  const channels = await requestSuperadmin<{ channelAccounts: unknown[] }>(
+    "GET",
+    `/admin/tenants/${encodeURIComponent(tenantKey)}/channel-accounts`
+  );
+  assert.equal(channels.status, 200);
+  assert.deepEqual(channels.body.channelAccounts, []);
+
+  const second = await requestSuperadmin<{ action: string; initialChannel: string }>(
+    "POST",
+    "/admin/tenants",
+    {
+      clientKey: tenantKey,
+      name: "Tenant Sem Canal",
+      profile: "government",
+      status: "ONBOARDING",
+      companyLegalName: "Orgao Publico de Teste",
+      companyTaxId: "00.000.000/0001-00",
+      contractNotes,
+    }
+  );
+  assert.equal(second.status, 200);
+  assert.equal(second.body.action, "existing");
+  assert.equal(second.body.initialChannel, "none");
+
+  assert.equal(await prisma.client.count({ where: { clientKey: tenantKey } }), 1);
+  assert.equal(await prisma.channelAccount.count({ where: { clientId: client.id } }), 0);
+  assert.equal(await prisma.waPhoneNumber.count({ where: { clientId: client.id } }), 0);
+});
+
+test("admin tenant without channel can receive web session channel later", async () => {
+  const tenantKey = `${prefix}-future-web-session`;
+  await requestSuperadmin("POST", "/admin/tenants", {
+    clientKey: tenantKey,
+    name: "Future Web Session Tenant",
+    profile: "government",
+    status: "ONBOARDING",
+  });
+  const client = await prisma.client.findUniqueOrThrow({
+    where: { clientKey: tenantKey },
+    select: { id: true },
+  });
+
+  const response = await requestSuperadmin<{ channelAccounts: Array<{ provider: string; channel: string; channelAccountId: string }> }>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(tenantKey)}/channel-accounts`,
+    {
+      channelAccounts: [
+        {
+          channel: "whatsapp",
+          provider: "web_session",
+          channelAccountId: "web-session-default",
+          displayName: "WhatsApp por sessao",
+          status: "pending",
+          tokenStatus: "not_required",
+          enabled: false,
+        },
+      ],
+    }
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.channelAccounts.length, 1);
+  assert.equal(response.body.channelAccounts[0].channel, "whatsapp");
+  assert.equal(response.body.channelAccounts[0].provider, "web_session");
+  assert.equal(response.body.channelAccounts[0].channelAccountId, "web-session-default");
+  assert.equal(await prisma.channelAccount.count({ where: { clientId: client.id } }), 1);
+  assert.equal(await prisma.tenantMetaConfig.count({ where: { clientId: client.id } }), 0);
+  assert.equal(await prisma.waPhoneNumber.count({ where: { clientId: client.id } }), 0);
+});
+
+test("legacy admin client creation with phoneNumberId still works", async () => {
+  const tenantKey = `${prefix}-legacy-meta-create`;
+  const phoneNumberId = `${prefix}-legacy-meta-phone`;
+
+  const response = await requestSuperadmin<{ clientKey: string; phoneNumbers?: Array<{ phoneNumberId: string }> }>(
+    "POST",
+    "/admin/clients",
+    {
+      clientKey: tenantKey,
+      name: "Legacy Meta Tenant",
+      phone_number_id: phoneNumberId,
+      profile: "business",
+    }
+  );
+
+  assert.equal(response.status, 201);
+  assert.equal(response.body.clientKey, tenantKey);
+  assert.equal(response.body.phoneNumbers?.[0]?.phoneNumberId, phoneNumberId);
+  const client = await prisma.client.findUniqueOrThrow({
+    where: { clientKey: tenantKey },
+    select: { id: true },
+  });
+  assert.equal(await prisma.waPhoneNumber.count({ where: { clientId: client.id } }), 1);
+});
+
 test("admin tenant detail opens db-only clients with a safe default tenant view", async () => {
   const dbOnlyClientKey = `${prefix}-db-only-detail`;
   await prisma.client.create({

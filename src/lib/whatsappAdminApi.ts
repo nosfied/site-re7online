@@ -608,7 +608,7 @@ export type TenantOnboardingRegisterPhonePayload = {
 
 export type Channel = "whatsapp" | "instagram" | "messenger";
 
-export type Provider = "meta";
+export type Provider = "meta" | "web_session";
 
 export type TenantChannelAccount = {
   id: string;
@@ -1237,6 +1237,45 @@ export async function createAdminClient(
       profile: payload.profile,
       ...(payload.initialUser ? { initialUser: payload.initialUser } : {}),
     }),
+  });
+}
+
+export async function createAdminTenant(
+  connection: AdminConnection,
+  payload: {
+    name: string;
+    clientKey: string;
+    profile?: "business" | "government";
+    status?: "ACTIVE" | "INACTIVE" | "ONBOARDING";
+    phoneNumberId?: string;
+    displayPhoneNumber?: string;
+    companyLegalName?: string;
+    companyTradeName?: string;
+    companyTaxId?: string;
+    companyAddressStreet?: string;
+    companyAddressNumber?: string;
+    companyAddressDistrict?: string;
+    companyAddressCity?: string;
+    companyAddressState?: string;
+    companyAddressZip?: string;
+    companyAddressCountry?: string;
+    legalRepresentativeName?: string;
+    legalRepresentativePhone?: string;
+    contractPlanName?: string;
+    contractNotes?: string;
+  }
+): Promise<{
+  ok: boolean;
+  tenantId: string;
+  clientKey: string;
+  action: "created" | "updated" | "existing";
+  initialChannel: "meta_cloud" | "none";
+  client: AdminClientItem & { status?: string };
+  tenant: TenantConfigResponse["tenant"];
+}> {
+  return requestJson(connection, "/admin/tenants", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

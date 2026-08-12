@@ -4,14 +4,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
-  createAdminClient,
+  createAdminTenant,
   fetchAdminClients,
   fetchTenantsSummary,
   formatDateTime,
   formatPct,
   SummaryRange,
   TenantSummaryItem,
-  updateTenantById,
 } from "@/lib/whatsappAdminApi";
 
 const ranges: SummaryRange[] = ["1h", "24h", "7d", "30d"];
@@ -68,6 +67,7 @@ export default function TenantsSummaryPage() {
     name: "",
     clientKey: "",
     phoneNumberId: "",
+    initialChannel: "none" as "none" | "meta",
     profile: "business" as "business" | "government",
   });
 
@@ -127,6 +127,7 @@ export default function TenantsSummaryPage() {
     const name = createForm.name.trim();
     const clientKey = normalizeClientKeyInput(createForm.clientKey);
     const phoneNumberId = createForm.phoneNumberId.trim();
+    const shouldCreateMetaChannel = createForm.initialChannel === "meta";
 
     setCreateError(null);
     setCreateSuccess(null);
@@ -144,8 +145,8 @@ export default function TenantsSummaryPage() {
       setCreateError("Use apenas letras minusculas, numeros e hifen no client key.");
       return;
     }
-    if (!phoneNumberId) {
-      setCreateError("Informe o phoneNumberId inicial.");
+    if (shouldCreateMetaChannel && !phoneNumberId) {
+      setCreateError("Informe o phoneNumberId para configurar canal Meta inicial.");
       return;
     }
     if (existingClientKeys.includes(clientKey)) {
@@ -155,38 +156,28 @@ export default function TenantsSummaryPage() {
 
     setCreating(true);
     try {
-      await createAdminClient(connection, {
+      await createAdminTenant(connection, {
         name,
         clientKey,
-        phoneNumberId,
         profile: createForm.profile,
+        status: shouldCreateMetaChannel ? "ACTIVE" : "ONBOARDING",
+        ...(shouldCreateMetaChannel ? { phoneNumberId } : {}),
       });
 
-      try {
-        await updateTenantById(connection, clientKey, {
-          id: clientKey,
-          name,
-          metaPhoneNumberId: phoneNumberId,
-          maxActiveAppUsers: 5,
-          allowlist: [],
-          handoffAttendantWaid: "",
-          defaultLanguage: "pt_BR",
-          disableChatbot: true,
-          appDisableChatbot: false,
-          disableLegacyFlows: true,
-          disableAiFallback: true,
-          appDisableIntentClassifier: false,
-        });
-      } catch {
-        setCreatedTenant({ tenantId: clientKey, clientKey });
-        setCreateError("Tenant criado, mas falha ao inicializar configuracao.");
-        return;
-      }
-
       await reloadSummary();
-      setCreateSuccess("Tenant criado com sucesso. Prossiga para o onboarding.");
+      setCreateSuccess(
+        shouldCreateMetaChannel
+          ? "Tenant criado com canal inicial. Prossiga para o onboarding."
+          : "Tenant criado sem canal inicial. Configure os canais quando estiver pronto."
+      );
       setCreatedTenant({ tenantId: clientKey, clientKey });
-      setCreateForm({ name: "", clientKey: "", phoneNumberId: "", profile: "business" });
+      setCreateForm({
+        name: "",
+        clientKey: "",
+        phoneNumberId: "",
+        initialChannel: "none",
+        profile: "business",
+      });
       setShowCreateForm(false);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
@@ -278,7 +269,27 @@ export default function TenantsSummaryPage() {
                 </span>
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="text-white/70">phoneNumberId inicial</span>
+                <span className="text-white/70">Canal inicial</span>
+                <select
+                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={createForm.initialChannel}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({
+                      ...current,
+                      initialChannel: event.target.value === "meta" ? "meta" : "none",
+                      phoneNumberId: event.target.value === "meta" ? current.phoneNumberId : "",
+                    }))
+                  }
+                >
+                  <option value="none">Configurar canal depois</option>
+                  <option value="meta">Meta Cloud agora</option>
+                </select>
+                <span className="text-xs text-white/50">
+                  Tenant e canal sao etapas separadas.
+                </span>
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">phoneNumberId Meta</span>
                 <input
                   className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                   value={createForm.phoneNumberId}
@@ -289,7 +300,11 @@ export default function TenantsSummaryPage() {
                     }))
                   }
                   placeholder="1052978311228316"
+                  disabled={createForm.initialChannel !== "meta"}
                 />
+                <span className="text-xs text-white/50">
+                  Obrigatorio somente para criar canal Meta inicial.
+                </span>
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="text-white/70">Perfil do portal</span>
@@ -320,7 +335,7 @@ export default function TenantsSummaryPage() {
                   {creating ? "Criando..." : "Criar tenant"}
                 </button>
                 <p className="text-xs text-white/50">
-                  Contrato atual do backend exige: `name`, `clientKey` e `phone_number_id`.
+                  O tenant pode ser criado sem WhatsApp. Canais sao configurados depois.
                 </p>
               </div>
             </div>

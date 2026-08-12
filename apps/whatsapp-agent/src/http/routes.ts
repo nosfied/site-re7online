@@ -16251,6 +16251,204 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    if (req.method === "POST" && pathname === "/admin/tenants") {
+      if (requireSuperadmin()) return;
+      const body = await readJsonBody(req, res);
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        json(res, 400, httpError("bad_request", "Invalid tenant payload"));
+        return;
+      }
+
+      const payload = body as Record<string, unknown>;
+      const clientKey = normalizeTenantProvisioningClientKey(payload.clientKey);
+      const name = normalizeOptionalString(payload.name);
+      const phoneNumberId =
+        normalizeOptionalString(payload.phoneNumberId) ??
+        normalizeOptionalString(payload.phone_number_id);
+      const displayPhoneNumber = normalizeOptionalString(payload.displayPhoneNumber);
+      const profile = parseClientProfile(payload.profile);
+      const status = parseTenantProvisioningClientStatus(payload.status, Boolean(phoneNumberId));
+      const features = normalizeTenantProvisioningFeatures(payload.features);
+
+      if (!clientKey || !name) {
+        json(res, 400, httpError("bad_request", "clientKey and name are required"));
+        return;
+      }
+
+      const prisma = getPrisma();
+      let phoneMappingAction: "created" | "existing" | null = null;
+      let tenantPatch:
+        | { backupPath: string; fieldsChanged: string[]; tenant: Record<string, unknown> }
+        | null = null;
+
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          const existingClient = await tx.client.findUnique({
+            where: { clientKey },
+            select: { id: true, name: true, status: true, profile: true, features: true },
+          });
+
+          let client = existingClient;
+          let clientAction: "created" | "updated" | "existing" = "existing";
+          if (!client) {
+            client = await tx.client.create({
+              data: {
+                clientKey,
+                name,
+                profile,
+                status,
+                ...(features ? { features } : {}),
+              },
+              select: { id: true, name: true, status: true, profile: true, features: true },
+            });
+            clientAction = "created";
+          } else {
+            const updateData: Prisma.ClientUpdateInput = {};
+            if (client.name !== name) updateData.name = name;
+            if (getClientProfile(client) !== profile) updateData.profile = profile;
+            if (client.status !== status) updateData.status = status;
+            if (features) updateData.features = features;
+            if (Object.keys(updateData).length > 0) {
+              client = await tx.client.update({
+                where: { id: client.id },
+                data: updateData,
+                select: { id: true, name: true, status: true, profile: true, features: true },
+              });
+              clientAction = "updated";
+            }
+          }
+
+          await tx.tenantOperationalConfig.upsert({
+            where: { clientId: client.id },
+            update: {},
+            create: {
+              clientId: client.id,
+              config: {},
+            },
+          });
+
+          if (phoneNumberId) {
+            const existingPhone = await tx.waPhoneNumber.findUnique({
+              where: { phoneNumberId },
+              include: {
+                client: { select: { clientKey: true } },
+              },
+            });
+            if (existingPhone && existingPhone.clientId !== client.id) {
+              const error = new Error("phone_number_conflict") as Error & {
+                status?: number;
+                code?: string;
+                ownerClientKey?: string;
+              };
+              error.status = 409;
+              error.code = "phone_number_conflict";
+              error.ownerClientKey = existingPhone.client.clientKey;
+              throw error;
+            }
+            if (!existingPhone) {
+              await tx.waPhoneNumber.create({
+                data: {
+                  clientId: client.id,
+                  phoneNumberId,
+                  display: displayPhoneNumber ?? phoneNumberId,
+                },
+              });
+              phoneMappingAction = "created";
+            } else {
+              phoneMappingAction = "existing";
+            }
+          }
+
+          await tx.event.create({
+            data: {
+              clientId: client.id,
+              requestId: `${requestId}:admin.tenant.provisioned`,
+              eventName: "admin.tenant.provisioned",
+              payloadJson: {
+                action: clientAction,
+                clientKey,
+                profile,
+                status,
+                initialChannel: phoneNumberId ? "meta_cloud" : "none",
+                phoneNumberProvided: Boolean(phoneNumberId),
+              },
+            },
+          });
+
+          return { client, clientAction };
+        });
+
+        tenantPatch = await saveTenantPatch(
+          clientKey,
+          buildTenantProvisioningConfigPatch({
+            tenantId: clientKey,
+            name,
+            phoneNumberId,
+            displayPhoneNumber,
+            body: payload,
+          })
+        );
+
+        logger.info({
+          event: "admin.tenant.provisioned",
+          authSource: authToken.source,
+          requestId,
+          clientKey,
+          clientAction: result.clientAction,
+          profile,
+          status,
+          initialChannel: phoneNumberId ? "meta_cloud" : "none",
+          phoneNumberProvided: Boolean(phoneNumberId),
+          fieldsChanged: tenantPatch.fieldsChanged,
+        });
+
+        const redactedChannelAccounts = Array.isArray(tenantPatch.tenant.channelAccounts)
+          ? redactTenantChannelAccounts(tenantPatch.tenant.channelAccounts)
+          : [];
+
+        json(res, result.clientAction === "created" ? 201 : 200, {
+          ok: true,
+          clientKey,
+          tenantId: clientKey,
+          client: {
+            id: result.client.id,
+            clientKey,
+            name: result.client.name,
+            status: result.client.status,
+            profile: getClientProfile(result.client),
+          },
+          tenant: {
+            ...tenantPatch.tenant,
+            channelAccounts: redactedChannelAccounts,
+          },
+          source: "tenant_provisioning",
+          action: result.clientAction,
+          initialChannel: phoneNumberId ? "meta_cloud" : "none",
+          phoneMappingAction,
+          fieldsChanged: tenantPatch.fieldsChanged,
+          backupPath: tenantPatch.backupPath,
+        });
+      } catch (error) {
+        const typed = error as Error & { status?: number; code?: string; ownerClientKey?: string };
+        if (typed.code === "phone_number_conflict") {
+          json(res, 409, {
+            error: "phone_number_conflict",
+            clientKey: typed.ownerClientKey ?? null,
+          });
+          return;
+        }
+        logger.warn({
+          event: "admin.tenant.provision.rejected",
+          authSource: authToken.source,
+          requestId,
+          clientKey,
+          message: typed.message,
+        });
+        json(res, typed.status ?? 400, httpError(typed.code ?? "tenant_provision_failed", typed.message));
+      }
+      return;
+    }
+
     if (pathname === "/admin/channel-events/observed") {
       if (requireSuperadmin()) return;
 
@@ -21930,6 +22128,144 @@ function normalizeMetaEmbeddedSignupRedirectUri(value: unknown) {
 
 function parseClientProfile(value: unknown): ClientProfile {
   return value === "government" ? "government" : "business";
+}
+
+function normalizeTenantProvisioningClientKey(value: unknown) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, "-");
+  return /^[a-z0-9-]+$/.test(normalized) ? normalized : null;
+}
+
+function parseTenantProvisioningClientStatus(value: unknown, hasInitialChannel: boolean) {
+  if (value === "ACTIVE" || value === "active") return "ACTIVE" as const;
+  if (
+    value === "INACTIVE" ||
+    value === "inactive" ||
+    value === "ONBOARDING" ||
+    value === "onboarding"
+  ) {
+    return "INACTIVE" as const;
+  }
+  return hasInitialChannel ? ("ACTIVE" as const) : ("INACTIVE" as const);
+}
+
+function normalizeTenantProvisioningFeatures(value: unknown): Prisma.InputJsonObject | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const allowed = new Set([
+    "dashboard",
+    "departments",
+    "users",
+    "templates",
+    "reports",
+    "campaigns",
+    "chatbot",
+    "knowledgeBase",
+    "scheduling",
+    "schedulingReminders",
+    "schedulingRemindersShadow",
+    "schedulingRemindersSend",
+    "schedulingConfirmation",
+    "satisfaction",
+    "audioTranscription",
+    "audioTranscriptionRuntime",
+    "advancedSearch",
+    "advancedSearchRuntime",
+    "webchat",
+    "webchatOutbound",
+    "telegram",
+    "telegramInbound",
+    "telegramOutbound",
+    "whatsappWebSession",
+    "webhooks",
+    "webhookDispatch",
+    "webhookDispatchExecute",
+    "mfa",
+    "mfaRequired",
+    "mfaEnforced",
+    "sla",
+  ]);
+  const output: Record<string, boolean> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!allowed.has(key) || typeof raw !== "boolean") continue;
+    output[key] = raw;
+  }
+  return Object.keys(output).length > 0 ? (output as Prisma.InputJsonObject) : null;
+}
+
+function buildTenantProvisioningConfigPatch(params: {
+  tenantId: string;
+  name: string;
+  phoneNumberId: string | null;
+  displayPhoneNumber: string | null;
+  body: Record<string, unknown>;
+}) {
+  const patch: Record<string, unknown> = {
+    id: params.tenantId,
+    name: params.name,
+    metaPhoneNumberId: params.phoneNumberId ?? "",
+    allowlist: Array.isArray(params.body.allowlist) ? params.body.allowlist : [],
+    handoffAttendantWaid: "",
+    defaultLanguage: normalizeOptionalString(params.body.defaultLanguage) ?? "pt_BR",
+    disableChatbot: params.body.disableChatbot === false ? false : true,
+    appDisableChatbot: params.body.appDisableChatbot === true,
+    disableLegacyFlows: true,
+    disableAiFallback: true,
+    appDisableIntentClassifier: params.body.appDisableIntentClassifier === true,
+  };
+  if (params.displayPhoneNumber) patch.displayPhoneNumber = params.displayPhoneNumber;
+
+  const optionalStringFields = [
+    "companyLegalName",
+    "companyTradeName",
+    "companyTaxId",
+    "companyStateRegistration",
+    "companyMunicipalRegistration",
+    "companyWebsite",
+    "companyIndustry",
+    "companyAddressStreet",
+    "companyAddressNumber",
+    "companyAddressComplement",
+    "companyAddressDistrict",
+    "companyAddressCity",
+    "companyAddressState",
+    "companyAddressZip",
+    "companyAddressCountry",
+    "legalRepresentativeName",
+    "legalRepresentativeCpf",
+    "legalRepresentativeEmail",
+    "legalRepresentativePhone",
+    "billingContactName",
+    "billingContactEmail",
+    "billingContactPhone",
+    "billingEmail",
+    "financialContactName",
+    "financialContactEmail",
+    "financialContactPhone",
+    "technicalContactName",
+    "technicalContactEmail",
+    "technicalContactPhone",
+    "contractPlanName",
+    "contractStartDate",
+    "contractEndDate",
+    "contractPaymentMethod",
+    "contractNotes",
+  ];
+  for (const field of optionalStringFields) {
+    const normalized = normalizeOptionalString(params.body[field]);
+    if (normalized) patch[field] = normalized;
+  }
+
+  const billingDay = Number(params.body.contractBillingDay);
+  if (Number.isInteger(billingDay) && billingDay >= 1 && billingDay <= 31) {
+    patch.contractBillingDay = billingDay;
+  }
+
+  const maxActiveAppUsers = Number(params.body.maxActiveAppUsers);
+  if (Number.isInteger(maxActiveAppUsers) && maxActiveAppUsers >= 0) {
+    patch.maxActiveAppUsers = maxActiveAppUsers;
+  }
+
+  return patch;
 }
 
 function extractTenantDisplayPhoneFromRawPayload(rawPayload: unknown): string | null {

@@ -35,6 +35,7 @@ type ChannelAccountDraft = {
 };
 
 const CHANNEL_OPTIONS: Channel[] = ["whatsapp", "instagram", "messenger"];
+const PROVIDER_OPTIONS: Provider[] = ["meta", "web_session"];
 const STATUS_OPTIONS: Array<NonNullable<TenantChannelAccount["status"]>> = [
   "connected",
   "disabled",
@@ -549,7 +550,13 @@ export default function TenantChannelsPage() {
                   <span className="text-white/70">Canal</span>
                   <select
                     value={draft.channel}
-                    onChange={(event) => updateDraft(index, "channel", event.target.value as Channel)}
+                    onChange={(event) => {
+                      const channel = event.target.value as Channel;
+                      updateDraft(index, "channel", channel);
+                      if (channel !== "whatsapp" && draft.provider === "web_session") {
+                        updateDraft(index, "provider", "meta");
+                      }
+                    }}
                     className="rounded-md border border-white/10 bg-re7-navy px-3 py-2 text-white"
                   >
                     {CHANNEL_OPTIONS.map((channel) => (
@@ -564,11 +571,24 @@ export default function TenantChannelsPage() {
                   <span className="text-white/70">Provider</span>
                   <select
                     value={draft.provider}
-                    onChange={(event) => updateDraft(index, "provider", event.target.value as Provider)}
+                    onChange={(event) => {
+                      const provider = event.target.value as Provider;
+                      updateDraft(index, "provider", provider);
+                      if (provider === "web_session") {
+                        updateDraft(index, "channel", "whatsapp");
+                      }
+                    }}
                     className="rounded-md border border-white/10 bg-re7-navy px-3 py-2 text-white"
                   >
-                    <option value="meta">meta</option>
+                    {PROVIDER_OPTIONS.map((provider) => (
+                      <option key={provider} value={provider}>
+                        {provider}
+                      </option>
+                    ))}
                   </select>
+                  <span className="text-xs text-white/50">
+                    WEB_SESSION e permitido somente para WhatsApp.
+                  </span>
                 </label>
 
                 <label className="flex flex-col gap-1 text-sm">
