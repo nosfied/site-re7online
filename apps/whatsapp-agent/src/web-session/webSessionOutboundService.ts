@@ -65,6 +65,12 @@ function normalizeRecipientWaId(value: string) {
   return /^\d{8,15}$/.test(digits) ? digits : null;
 }
 
+function resolveWebSessionTransportRecipientWaId(params: { waId: string; waIdCanonical?: string | null }) {
+  // Web Session must send to the provider-observed identity. The canonical field
+  // is useful for grouping/search, but may contain legacy BR normalization variants.
+  return normalizeRecipientWaId(params.waId) ?? normalizeRecipientWaId(params.waIdCanonical ?? "");
+}
+
 function isWebSessionAccountConnected(account: WebSessionChannelAccount) {
   if (account.client.status !== "ACTIVE") return false;
   if (getFeatures(account.client).whatsappWebSession !== true) return false;
@@ -285,7 +291,7 @@ export async function createWebSessionTextOutboundMessage(params: {
       errorDetails?: string | null;
     }
 > {
-  const recipientWaId = normalizeRecipientWaId(params.waIdCanonical ?? params.waId);
+  const recipientWaId = resolveWebSessionTransportRecipientWaId(params);
   if (!recipientWaId) return { ok: false, statusCode: 400, error: "bad_request" };
   const account = await findWebSessionAccount({
     prisma: params.prisma,
@@ -533,7 +539,7 @@ export async function createWebSessionMediaOutboundMessage(params: {
       errorDetails?: string | null;
     }
 > {
-  const recipientWaId = normalizeRecipientWaId(params.waIdCanonical ?? params.waId);
+  const recipientWaId = resolveWebSessionTransportRecipientWaId(params);
   if (!recipientWaId) return { ok: false, statusCode: 400, error: "bad_request" };
   const mediaKind = detectWebSessionMediaKind(params.mimeType, params.fileName);
   if (!mediaKind) return { ok: false, statusCode: 400, error: "unsupported_media_type" };

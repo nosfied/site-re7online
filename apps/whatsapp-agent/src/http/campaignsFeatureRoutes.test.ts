@@ -1718,7 +1718,8 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
   const previousWorkerUrl = process.env.WHATSAPP_WEB_WORKER_CONTROL_URL;
   const previousWorkerToken = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN;
   const previousFetch = globalThis.fetch;
-  const waId = "5584990008842";
+  const waId = "5511940008842";
+  const legacyCanonicalWaId = "55119940008842";
   const channelAccountId = "lab-outbound-account";
   const workerRequests: Array<Record<string, unknown>> = [];
   const fakeWorker = createServer((req, res) => {
@@ -1791,7 +1792,7 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
     data: {
       clientId: businessClientId,
       waId,
-      waIdCanonical: waId,
+      waIdCanonical: legacyCanonicalWaId,
       channel: "whatsapp",
       provider: "web_session",
       channelAccountId,
@@ -1804,7 +1805,7 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
     data: {
       clientId: businessClientId,
       waId,
-      waIdCanonical: waId,
+      waIdCanonical: legacyCanonicalWaId,
       conversationKey: `${prefix}-business:${waId}`,
       channel: "whatsapp",
       provider: "web_session",
@@ -1824,7 +1825,7 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
       provider: "web_session",
       channelAccountId,
       waId,
-      waIdCanonical: waId,
+      waIdCanonical: legacyCanonicalWaId,
       messageId: `web:${channelAccountId}:quoted-inbound-1`,
       externalMessageId: "quoted-inbound-1",
       type: "IMAGE",
@@ -1874,6 +1875,7 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
   assert.equal(workerRequests[0]?.tenantKey, `${prefix}-business`);
   assert.equal(workerRequests[0]?.channelAccountId, channelAccountId);
   assert.equal(workerRequests[0]?.recipientWaId, waId);
+  assert.notEqual(workerRequests[0]?.recipientWaId, legacyCanonicalWaId);
 
   const outbound = await prisma.outboundMessage.findFirstOrThrow({
     where: {
@@ -1886,6 +1888,7 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
   });
   assert.equal(outbound.channel, "whatsapp");
   assert.equal(outbound.channelAccountId, channelAccountId);
+  assert.equal(outbound.waIdCanonical, legacyCanonicalWaId);
   assert.equal(outbound.metaMessageId, null);
   assert.equal(outbound.status, "SENT");
   assert.equal((outbound.rawPayload as Record<string, unknown>).source, "inbox_text");
