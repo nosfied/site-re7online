@@ -3187,8 +3187,25 @@ export default function AppInboxPage() {
     }
 
     let matchedConversation = false;
-    let matchedSelectedConversation = false;
     const matchedConversationKeys = new Set<string>([conversationKey, event.waId, event.waIdCanonical ?? ""]);
+    const currentMatchedConversation = conversations.find((item) => {
+      const itemKey = getConversationIdentity(item);
+      return itemKey === conversationKey || item.waId === event.waId || item.waIdCanonical === event.waIdCanonical;
+    });
+    if (currentMatchedConversation) {
+      const itemKey = getConversationIdentity(currentMatchedConversation);
+      matchedConversationKeys.add(itemKey);
+      matchedConversationKeys.add(currentMatchedConversation.waId);
+      if (currentMatchedConversation.waIdCanonical) {
+        matchedConversationKeys.add(currentMatchedConversation.waIdCanonical);
+      }
+    }
+    const matchedSelectedConversation =
+      currentMatchedConversation &&
+      conversationIdentityMatches(getConversationIdentityCandidates(currentMatchedConversation), [
+        selectedConversationKey,
+        selectedConversationWaId,
+      ]);
     setConversations((prev) => {
       const nextItems = prev.map((item) => {
         const itemKey = getConversationIdentity(item);
@@ -3203,14 +3220,6 @@ export default function AppInboxPage() {
         matchedConversationKeys.add(itemKey);
         matchedConversationKeys.add(item.waId);
         if (item.waIdCanonical) matchedConversationKeys.add(item.waIdCanonical);
-        if (
-          conversationIdentityMatches(getConversationIdentityCandidates(item), [
-            selectedConversationKey,
-            selectedConversationWaId,
-          ])
-        ) {
-          matchedSelectedConversation = true;
-        }
         const nextAssignedUserId =
           event.assignedUserId !== undefined ? event.assignedUserId : item.assignedUserId;
         return {
@@ -3296,6 +3305,7 @@ export default function AppInboxPage() {
     selectedConversationWaId,
     session,
     isBusinessTenant,
+    conversations,
   ]);
 
   useEffect(() => {
