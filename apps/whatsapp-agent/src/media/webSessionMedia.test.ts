@@ -84,6 +84,18 @@ test("validateWebSessionMedia rejects svg spoofed as image and oversize content"
   );
 });
 
+test("validateWebSessionMedia accepts audio mime parameters from WhatsApp voice notes", () => {
+  const result = validateWebSessionMedia({
+    content: Buffer.from("ogg voice note bytes"),
+    mimeType: "audio/ogg; codecs=opus",
+    fileName: null,
+    kind: "audio",
+  });
+
+  assert.equal(result.kind, "audio");
+  assert.equal(result.mimeType, "audio/ogg");
+});
+
 test("resolveWebSessionStoredMedia rejects symlinks inside storage root", async (t) => {
   const previousRoot = process.env.WEB_SESSION_MEDIA_ROOT;
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "web-session-media-symlink-"));

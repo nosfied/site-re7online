@@ -141,7 +141,8 @@ function getExtension(fileName: string | null | undefined) {
 }
 
 function normalizeMimeType(value: string | null | undefined) {
-  return String(value ?? "application/octet-stream").trim().toLowerCase() || "application/octet-stream";
+  const normalized = String(value ?? "application/octet-stream").trim().toLowerCase();
+  return normalized.split(";")[0]?.trim() || "application/octet-stream";
 }
 
 function detectImageMimeType(content: Buffer) {
