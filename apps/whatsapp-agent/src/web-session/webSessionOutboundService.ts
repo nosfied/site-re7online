@@ -251,8 +251,8 @@ export async function createWebSessionTextOutboundMessage(params: {
   clientKey: string;
   clientId: string;
   requestId: string;
-  actorUserId: string;
-  outboundSource?: "inbox_text" | "canned_reply" | "protocol_notice";
+  actorUserId?: string | null;
+  outboundSource?: "inbox_text" | "canned_reply" | "protocol_notice" | "bot";
   cannedReplyId?: string | null;
   skipAgentSignature?: boolean;
   source?: {
@@ -310,10 +310,12 @@ export async function createWebSessionTextOutboundMessage(params: {
   }
 
   const [actorUser, agentSignatureSettings] = await Promise.all([
-    params.prisma.user.findFirst({
-      where: { id: params.actorUserId, clientId: params.clientId, isActive: true },
-      select: { name: true },
-    }),
+    params.actorUserId
+      ? params.prisma.user.findFirst({
+          where: { id: params.actorUserId, clientId: params.clientId, isActive: true },
+          select: { name: true },
+        })
+      : Promise.resolve(null),
     resolveAgentSignatureSettings({
       prisma: params.prisma,
       clientId: params.clientId,
@@ -354,8 +356,8 @@ export async function createWebSessionTextOutboundMessage(params: {
     channelAccountId: account.channelAccountId,
     externalMessageId: sendResult.ok ? sendResult.externalMessageId : null,
     actor: {
-      source: "human_inbox",
-      userId: params.actorUserId,
+      source: outboundSource === "bot" ? "bot" : "human_inbox",
+      userId: outboundSource === "bot" ? null : params.actorUserId ?? null,
     },
     agentSignatureApplied: signedBody.signatureApplied,
     agentSignatureFormat: signedBody.signatureFormat,
@@ -426,7 +428,7 @@ export async function createWebSessionTextOutboundMessage(params: {
       error: sendResult.ok ? null : sendResult.error,
     },
   });
-  if (sendResult.ok) {
+  if (sendResult.ok && outboundSource !== "bot" && params.actorUserId) {
     await recordConversationAgentOutboundMetrics({
       prisma: params.prisma,
       clientId: params.clientId,

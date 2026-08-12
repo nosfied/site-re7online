@@ -2038,6 +2038,172 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
   assert.equal(JSON.stringify(protocolEvent.payloadJson).includes(protocolWaId), false);
 });
 
+test("web session inbound uses shared chatbot flow and queue handoff", async (t) => {
+  const previousWorkerUrl = process.env.WHATSAPP_WEB_WORKER_CONTROL_URL;
+  const previousWorkerToken = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN;
+  const previousFetch = globalThis.fetch;
+  const waId = "5511955557784";
+  const channelAccountId = "lab-flow-account";
+  const workerRequests: Array<Record<string, unknown>> = [];
+  const fakeWorker = createServer((req, res) => {
+    if (req.method !== "POST" || req.url !== "/web-session/send-text") {
+      res.writeHead(404, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "not_found" }));
+      return;
+    }
+    assert.equal(req.headers.authorization, "Bearer worker-flow-token");
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+    req.on("end", () => {
+      workerRequests.push(JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true, externalMessageId: `flow-worker-message-${workerRequests.length}` }));
+    });
+  });
+  await new Promise<void>((resolve) => fakeWorker.listen(0, "127.0.0.1", resolve));
+  t.after(async () => {
+    await new Promise<void>((resolve, reject) => fakeWorker.close((error) => error ? reject(error) : resolve()));
+    if (previousWorkerUrl === undefined) delete process.env.WHATSAPP_WEB_WORKER_CONTROL_URL;
+    else process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = previousWorkerUrl;
+    if (previousWorkerToken === undefined) delete process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN;
+    else process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN = previousWorkerToken;
+    globalThis.fetch = previousFetch;
+    await prisma.client.update({ where: { id: businessClientId }, data: { features: {} } });
+  });
+  const address = fakeWorker.address() as AddressInfo;
+  process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = `http://127.0.0.1:${address.port}`;
+  process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN = "worker-flow-token";
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      throw new Error("web_session chatbot must not call Meta Graph");
+    }
+    return previousFetch(input, init);
+  }) as typeof fetch;
+
+  await prisma.client.update({
+    where: { id: businessClientId },
+    data: { features: { whatsappWebSession: true } },
+  });
+  await prisma.channelAccount.create({
+    data: {
+      clientId: businessClientId,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId,
+      displayName: "Lab flow",
+      enabled: true,
+      runtimeEnabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: false,
+      status: "connected",
+      tokenStatus: "configured",
+      metadata: {
+        webSession: {
+          desiredState: "CONNECTED",
+          observedState: "CONNECTED",
+          lastConnectedAt: new Date("2026-08-11T12:00:00.000Z").toISOString(),
+        },
+      },
+    },
+  });
+  await prisma.chatbotFlow.create({
+    data: {
+      clientId: businessClientId,
+      name: "Web Session shared flow",
+      isActive: true,
+      entryPoint: true,
+      definition: {
+        start: "menu",
+        nodes: {
+          menu: {
+            type: "menu",
+            text: "Como podemos ajudar?",
+            options: [
+              { label: "Informacoes gerais", next: "info" },
+              { label: "Falar com atendente", next: "human", tags: ["handoff"] },
+            ],
+          },
+          info: { type: "text", text: "Informacoes gerais do atendimento." },
+          human: {
+            type: "handoff",
+            text: "Vou encaminhar voce para atendimento humano.",
+            handoffSummary: "Cliente solicitou atendimento humano pelo menu.",
+          },
+        },
+      },
+    },
+  });
+  const { ingestWebSessionInboundMessage } = await import("../web-session/webSessionInbound.js");
+
+  const first = await ingestWebSessionInboundMessage({
+    prisma,
+    message: {
+      provider: "web_session",
+      channel: "whatsapp",
+      clientId: businessClientId,
+      tenantKey: `${prefix}-business`,
+      channelAccountDbId: channelAccountId,
+      channelAccountId,
+      externalMessageId: "flow-inbound-1",
+      sender: waId,
+      senderCanonical: waId,
+      senderJid: `${waId}@s.whatsapp.net`,
+      timestamp: new Date("2026-08-12T12:00:00.000Z"),
+      type: MessageType.TEXT,
+      text: "oi",
+      rawPayload: { provider: "web_session", type: "text" },
+    },
+  });
+  assert.equal(first.ok, true);
+  assert.equal(workerRequests.length, 1);
+  assert.equal(workerRequests[0]?.recipientWaId, waId);
+  assert.match(String(workerRequests[0]?.text ?? ""), /Como podemos ajudar/);
+  const botRuntime = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+  });
+  assert.equal(botRuntime.provider, "web_session");
+  assert.equal(botRuntime.mode, "BOT");
+  assert.equal(botRuntime.chatbotActive, true);
+  assert.equal(botRuntime.status, null);
+
+  await ingestWebSessionInboundMessage({
+    prisma,
+    message: {
+      provider: "web_session",
+      channel: "whatsapp",
+      clientId: businessClientId,
+      tenantKey: `${prefix}-business`,
+      channelAccountDbId: channelAccountId,
+      channelAccountId,
+      externalMessageId: "flow-inbound-2",
+      sender: waId,
+      senderCanonical: waId,
+      senderJid: `${waId}@s.whatsapp.net`,
+      timestamp: new Date("2026-08-12T12:00:10.000Z"),
+      type: MessageType.TEXT,
+      text: "2",
+      rawPayload: { provider: "web_session", type: "text" },
+    },
+  });
+  assert.equal(workerRequests.length, 2);
+  assert.match(String(workerRequests[1]?.text ?? ""), /atendimento humano/);
+  const handoffRuntime = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+  });
+  assert.equal(handoffRuntime.mode, "HUMAN");
+  assert.equal(handoffRuntime.status, "WAITING");
+  assert.equal(handoffRuntime.handoffStatus, "ACTIVE");
+  assert.equal(handoffRuntime.chatbotActive, false);
+  assert.ok(handoffRuntime.departmentId);
+
+  const botOutbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, waId, provider: "web_session", externalMessageId: "flow-worker-message-1" },
+  });
+  assert.equal((botOutbound.rawPayload as Record<string, unknown>).source, "bot");
+  assert.equal(JSON.stringify(botOutbound.rawPayload).includes(waId), false);
+});
+
 test("admin tenants summary includes db-only clients without activity", async () => {
   const dbOnlyClientKey = `${prefix}-db-only-summary`;
   await prisma.client.create({

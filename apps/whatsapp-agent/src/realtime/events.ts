@@ -1,10 +1,10 @@
 export type InboxRealtimeMessage = {
   internalMessageId?: string | null;
   messageKind?: "inbound" | "outbound" | string | null;
-  direction: "INBOUND";
+  direction: "INBOUND" | "OUTBOUND";
   type: string;
-  status: "RECEIVED";
-  intent: null;
+  status: "RECEIVED" | "SENT" | "DELIVERED" | "READ" | "FAILED";
+  intent: string | null;
   bodyText: string | null;
   location?: unknown;
   media?: unknown;
