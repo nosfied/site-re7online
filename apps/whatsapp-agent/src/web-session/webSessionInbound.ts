@@ -421,8 +421,12 @@ async function ensureWebSessionRuntimeState(params: {
       assignedUserId: true,
     },
   });
-  const existingHumanMode = existing?.mode === "HUMAN" || existing?.handoffStatus === "ACTIVE" || existing?.handoffStatus === "PENDING";
-  const shouldStartBot = params.chatbotEntryPointAvailable && !existingHumanMode;
+  const existingHumanTakeover =
+    existing?.handoffStatus === "ACTIVE" ||
+    existing?.handoffStatus === "PENDING" ||
+    Boolean(existing?.assignedUserId) ||
+    existing?.status === "IN_PROGRESS";
+  const shouldStartBot = params.chatbotEntryPointAvailable && !existingHumanTakeover;
   const runtime = await params.prisma.conversationRuntimeState.upsert({
     where: {
       clientId_waId: {

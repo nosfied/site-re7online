@@ -2136,6 +2136,52 @@ test("web session inbound uses shared chatbot flow and queue handoff", async (t)
   });
   const { ingestWebSessionInboundMessage } = await import("../web-session/webSessionInbound.js");
 
+  const waitingWaId = "5511955557799";
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId: waitingWaId,
+      waIdCanonical: waitingWaId,
+      conversationKey: `${prefix}-business:${waitingWaId}`,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId,
+      firstSeenAt: new Date("2026-08-12T11:59:00.000Z"),
+      windowIsOpen: true,
+      lastInboundAt: new Date("2026-08-12T11:59:00.000Z"),
+      mode: "HUMAN",
+      status: "WAITING",
+      handoffStatus: "NONE",
+    },
+  });
+  await ingestWebSessionInboundMessage({
+    prisma,
+    message: {
+      provider: "web_session",
+      channel: "whatsapp",
+      clientId: businessClientId,
+      tenantKey: `${prefix}-business`,
+      channelAccountDbId: channelAccountId,
+      channelAccountId,
+      externalMessageId: "flow-inbound-existing-waiting",
+      sender: waitingWaId,
+      senderCanonical: waitingWaId,
+      senderJid: `${waitingWaId}@s.whatsapp.net`,
+      timestamp: new Date("2026-08-12T12:00:00.000Z"),
+      type: MessageType.TEXT,
+      text: "oi",
+      rawPayload: { provider: "web_session", type: "text" },
+    },
+  });
+  assert.equal(workerRequests.length, 1);
+  assert.match(String(workerRequests[0]?.text ?? ""), /Como podemos ajudar/);
+  const waitingRuntime = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId: waitingWaId } },
+  });
+  assert.equal(waitingRuntime.mode, "BOT");
+  assert.equal(waitingRuntime.status, null);
+  assert.equal(waitingRuntime.chatbotActive, true);
+
   const first = await ingestWebSessionInboundMessage({
     prisma,
     message: {
@@ -2156,9 +2202,9 @@ test("web session inbound uses shared chatbot flow and queue handoff", async (t)
     },
   });
   assert.equal(first.ok, true);
-  assert.equal(workerRequests.length, 1);
-  assert.equal(workerRequests[0]?.recipientWaId, waId);
-  assert.match(String(workerRequests[0]?.text ?? ""), /Como podemos ajudar/);
+  assert.equal(workerRequests.length, 2);
+  assert.equal(workerRequests[1]?.recipientWaId, waId);
+  assert.match(String(workerRequests[1]?.text ?? ""), /Como podemos ajudar/);
   const botRuntime = await prisma.conversationRuntimeState.findUniqueOrThrow({
     where: { clientId_waId: { clientId: businessClientId, waId } },
   });
@@ -2186,8 +2232,8 @@ test("web session inbound uses shared chatbot flow and queue handoff", async (t)
       rawPayload: { provider: "web_session", type: "text" },
     },
   });
-  assert.equal(workerRequests.length, 2);
-  assert.match(String(workerRequests[1]?.text ?? ""), /atendimento humano/);
+  assert.equal(workerRequests.length, 3);
+  assert.match(String(workerRequests[2]?.text ?? ""), /atendimento humano/);
   const handoffRuntime = await prisma.conversationRuntimeState.findUniqueOrThrow({
     where: { clientId_waId: { clientId: businessClientId, waId } },
   });
@@ -2198,7 +2244,7 @@ test("web session inbound uses shared chatbot flow and queue handoff", async (t)
   assert.ok(handoffRuntime.departmentId);
 
   const botOutbound = await prisma.outboundMessage.findFirstOrThrow({
-    where: { clientId: businessClientId, waId, provider: "web_session", externalMessageId: "flow-worker-message-1" },
+    where: { clientId: businessClientId, waId, provider: "web_session", externalMessageId: "flow-worker-message-2" },
   });
   assert.equal((botOutbound.rawPayload as Record<string, unknown>).source, "bot");
   assert.equal(JSON.stringify(botOutbound.rawPayload).includes(waId), false);
