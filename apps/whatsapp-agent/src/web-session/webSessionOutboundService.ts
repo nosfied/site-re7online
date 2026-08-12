@@ -3,6 +3,7 @@ import { applyAgentSignature } from "../inbox/agentSignature.js";
 import { persistEvent, persistOutboundMessage } from "../db/persist.js";
 import { getFeatures } from "../features/clientFeatures.js";
 import { logger } from "../logger/logger.js";
+import { transcodeAudioToOggOpus } from "../media/audioTranscode.js";
 import {
   detectWebSessionMediaKind,
   storeWebSessionMediaFile,
@@ -476,6 +477,32 @@ export async function createWebSessionMediaOutboundMessage(params: {
     return { ok: false, statusCode, error: "unsupported_media_type" };
   }
 
+  let uploadContent = params.content;
+  let uploadMimeType = params.mimeType;
+  let uploadFileName = params.fileName ?? null;
+
+  if (mediaKind === "audio") {
+    const transcoded = await transcodeAudioToOggOpus({
+      inputBuffer: params.content,
+      inputMimeType: params.mimeType,
+      fileName: params.fileName,
+      requestId: params.requestId,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+    });
+    if (!transcoded.ok) {
+      return {
+        ok: false,
+        statusCode: 502,
+        error: "audio_transcode_failed",
+        errorDetails: transcoded.details ?? transcoded.error,
+      };
+    }
+    uploadContent = transcoded.buffer;
+    uploadMimeType = transcoded.mimeType;
+    uploadFileName = transcoded.fileName;
+  }
+
   const account = await findWebSessionAccount({
     prisma: params.prisma,
     clientId: params.clientId,
@@ -497,9 +524,9 @@ export async function createWebSessionMediaOutboundMessage(params: {
   const stored = await storeWebSessionMediaFile({
     clientId: params.clientId,
     messageId,
-    content: params.content,
-    mimeType: params.mimeType,
-    fileName: params.fileName,
+    content: uploadContent,
+    mimeType: uploadMimeType,
+    fileName: uploadFileName,
     caption: params.caption ?? null,
     kind: mediaKind,
   });
