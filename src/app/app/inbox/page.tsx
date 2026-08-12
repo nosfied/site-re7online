@@ -6978,7 +6978,9 @@ export default function AppInboxPage() {
                               <div
                                 role="menu"
                                 aria-label="Ações da mensagem"
-                                className="absolute right-0 top-7 min-w-44 rounded-lg border border-slate-200 bg-white p-1 text-sm text-slate-800 shadow-xl"
+                                className={`absolute top-7 z-50 min-w-44 rounded-lg border border-slate-200 bg-white p-1 text-sm text-slate-800 shadow-xl ${
+                                  item.direction === "INBOUND" ? "left-0" : "right-0"
+                                }`}
                               >
                                 {messageActions.map((action) => (
                                   <button
