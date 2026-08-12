@@ -111,6 +111,7 @@ function fakePrisma() {
       },
     },
     contact: {
+      findUnique: async () => state.contacts[0] ?? null,
       upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
         const existing = state.contacts[0];
         const row = existing ? { ...existing, ...update } : { id: "contact_1", ...create };
@@ -127,6 +128,7 @@ function fakePrisma() {
       },
     },
     lead: {
+      findUnique: async () => state.leads[0] ?? null,
       upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
         const existing = state.leads[0];
         const row = existing ? { ...existing, ...update } : { id: "lead_1", ...create };
@@ -224,6 +226,42 @@ test("ingestBaileysWebSessionMessage persists tenant-scoped text inbound once", 
   assert.equal(duplicate.action, "duplicate");
   assert.equal(state.inboundMessages.length, 1);
   assert.equal(state.events.some((event) => event.eventName === "whatsapp.web.inbound.duplicate"), true);
+});
+
+test("ingestBaileysWebSessionMessage stores provider observed name only when local names are empty", async () => {
+  resetState();
+
+  await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    message: {
+      key: { id: "MSG_NAME", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      pushName: "Maria Cultura",
+      messageTimestamp: 1786464000,
+      message: { conversation: "teste inbound" },
+    },
+  });
+
+  assert.equal(state.contacts[0]?.name, "Maria Cultura");
+  assert.equal(state.leads[0]?.name, "Maria Cultura");
+
+  await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    message: {
+      key: { id: "MSG_NAME_2", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      pushName: "Nome do aparelho",
+      messageTimestamp: 1786464001,
+      message: { conversation: "nova mensagem" },
+    },
+  });
+
+  assert.equal(state.contacts[0]?.name, "Maria Cultura");
+  assert.equal(state.leads[0]?.name, "Maria Cultura");
 });
 
 test("ingestBaileysWebSessionMessage resolves inbound quoted reference to local outbound", async () => {

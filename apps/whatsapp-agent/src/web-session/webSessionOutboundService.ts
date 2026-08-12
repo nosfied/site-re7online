@@ -246,6 +246,9 @@ export async function createWebSessionTextOutboundMessage(params: {
   clientId: string;
   requestId: string;
   actorUserId: string;
+  outboundSource?: "inbox_text" | "canned_reply" | "protocol_notice";
+  cannedReplyId?: string | null;
+  skipAgentSignature?: boolean;
   source?: {
     channel?: string | null;
     provider?: string | null;
@@ -310,11 +313,18 @@ export async function createWebSessionTextOutboundMessage(params: {
       clientId: params.clientId,
     }),
   ]);
-  const signedBody = applyAgentSignature({
-    bodyText: params.text,
-    actorDisplayName: actorUser?.name ?? null,
-    settings: agentSignatureSettings?.settings ?? null,
-  });
+  const signedBody = params.skipAgentSignature
+    ? {
+        ok: true as const,
+        bodyText: params.text,
+        signatureApplied: false,
+        signatureFormat: null,
+      }
+    : applyAgentSignature({
+        bodyText: params.text,
+        actorDisplayName: actorUser?.name ?? null,
+        settings: agentSignatureSettings?.settings ?? null,
+      });
   if (!signedBody.ok) {
     return { ok: false, statusCode: 400, error: "message_too_long" };
   }
@@ -330,8 +340,10 @@ export async function createWebSessionTextOutboundMessage(params: {
   const status = sendResult.ok ? MessageStatus.SENT : MessageStatus.FAILED;
   const messageId = `web.session.send.${params.requestId}`;
   const createdAt = new Date();
+  const outboundSource = params.outboundSource ?? "inbox_text";
   const rawPayload = {
-    source: "inbox_text",
+    source: outboundSource,
+    cannedReplyId: params.cannedReplyId ?? null,
     provider: "web_session",
     channelAccountId: account.channelAccountId,
     externalMessageId: sendResult.ok ? sendResult.externalMessageId : null,
@@ -387,7 +399,8 @@ export async function createWebSessionTextOutboundMessage(params: {
     requestId: `web-session-outbound:${messageId}`,
     eventName: sendResult.ok ? "inbox.web_session.text.sent" : "inbox.web_session.text.failed",
     payloadJson: {
-      source: "inbox_text",
+      source: outboundSource,
+      cannedReplyId: params.cannedReplyId ?? null,
       provider: "web_session",
       channelAccountId: account.channelAccountId,
       outboundMessageId: messageId,

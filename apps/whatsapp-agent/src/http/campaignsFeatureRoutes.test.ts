@@ -1948,6 +1948,91 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
   assert.equal(replyPayload.replyToMetaMessagePresent, false);
   assert.equal(JSON.stringify(replyPayload).includes("quoted-inbound-1"), false);
   assert.equal(JSON.stringify(replyPayload).includes(waId), false);
+
+  const protocolWaId = "5584990008843";
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      config: {
+        protocolNotification: {
+          enabled: true,
+          trigger: "first_human_handoff",
+          includeProtocol: true,
+          messageTemplate: "Atendimento registrado. Protocolo: {{protocol}}",
+        },
+      },
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: businessClientId,
+      config: {
+        protocolNotification: {
+          enabled: true,
+          trigger: "first_human_handoff",
+          includeProtocol: true,
+          messageTemplate: "Atendimento registrado. Protocolo: {{protocol}}",
+        },
+      },
+      schemaVersion: 1,
+    },
+  });
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId: protocolWaId,
+      waIdCanonical: protocolWaId,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId,
+      windowIsOpen: false,
+      lastInboundAt: new Date("2026-08-11T12:10:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId: protocolWaId,
+      waIdCanonical: protocolWaId,
+      conversationKey: `${prefix}-business:${protocolWaId}`,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId,
+      windowIsOpen: false,
+      mode: "HUMAN",
+      status: "WAITING",
+      lastInboundAt: new Date("2026-08-11T12:10:00.000Z"),
+    },
+  });
+  const claimResponse = await request<{ ok: true; protocol: string | null; assignedUserId: string | null }>(
+    "POST",
+    `/app/conversation/${protocolWaId}/claim`,
+    businessAdmin,
+    {}
+  );
+  assert.equal(claimResponse.status, 200, JSON.stringify(claimResponse.body));
+  assert.match(claimResponse.body.protocol ?? "", /^CVT-/);
+  assert.equal(claimResponse.body.assignedUserId, businessAdmin.id);
+  assert.equal(workerRequests.length, 3);
+  assert.equal(workerRequests[2]?.recipientWaId, protocolWaId);
+  assert.equal(
+    typeof workerRequests[2]?.text === "string" && workerRequests[2].text.includes(claimResponse.body.protocol ?? ""),
+    true
+  );
+  const protocolOutbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: {
+      clientId: businessClientId,
+      waId: protocolWaId,
+      provider: "web_session",
+      externalMessageId: "baileys-test-message-id-3",
+    },
+  });
+  assert.equal((protocolOutbound.rawPayload as Record<string, unknown>).source, "protocol_notice");
+  assert.equal((protocolOutbound.rawPayload as Record<string, unknown>).agentSignatureApplied, false);
+  const protocolEvent = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, eventName: "conversation.protocol.notice.sent" },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.equal(JSON.stringify(protocolEvent.payloadJson).includes(protocolWaId), false);
 });
 
 test("admin tenants summary includes db-only clients without activity", async () => {

@@ -30,6 +30,7 @@ export type NormalizedWebSessionInboundMessage = {
   text?: string | null;
   media?: WebSessionStoredMedia | null;
   replyToExternalMessageId?: string | null;
+  providerObservedName?: string | null;
   rawPayload: Prisma.InputJsonObject;
 };
 
@@ -71,6 +72,24 @@ function maskIdentifier(value: string) {
 
 function externalUserHash(value: string) {
   return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function isAnonymizedMarker(value: unknown) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return false;
+  return (
+    normalized.startsWith("anon:") ||
+    normalized.startsWith("hash:anon:") ||
+    normalized === "usuario anonimizado" ||
+    normalized === "usuário anonimizado" ||
+    normalized.includes("******")
+  );
+}
+
+function normalizeProviderObservedName(value: unknown) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text || isAnonymizedMarker(text)) return null;
+  return text.slice(0, 160);
 }
 
 export function extractPhoneFromBaileysJid(jid?: string | null) {
@@ -263,6 +282,7 @@ export function normalizeBaileysInboundMessage(params: {
   const text = type === MessageType.TEXT ? readTextPayload(message) : readMediaCaption(message, type);
   const senderCanonical = canonicalizeBrazilWaId(sender);
   const media = params.message.webSessionMedia ?? null;
+  const providerObservedName = normalizeProviderObservedName(params.message.pushName);
   return {
     ok: true,
     message: {
@@ -282,6 +302,7 @@ export function normalizeBaileysInboundMessage(params: {
       text,
       media,
       replyToExternalMessageId: extractReplyToExternalMessageId(message),
+      providerObservedName,
       rawPayload: {
         provider: "web_session",
         channel: "whatsapp",
@@ -292,6 +313,7 @@ export function normalizeBaileysInboundMessage(params: {
         type,
         hasText: Boolean(text),
         hasReplyReference: Boolean(extractReplyToExternalMessageId(message)),
+        providerObservedNamePresent: Boolean(providerObservedName),
         ...(media
           ? {
               media: {
@@ -448,6 +470,35 @@ async function ensureWebSessionContactIdentity(params: {
   prisma: PrismaClient;
   message: NormalizedWebSessionInboundMessage;
 }) {
+  const providerObservedName = normalizeProviderObservedName(params.message.providerObservedName);
+  const [existingContact, existingLead] = await Promise.all([
+    params.prisma.contact.findUnique({
+      where: {
+        clientId_waId: {
+          clientId: params.message.clientId,
+          waId: params.message.sender,
+        },
+      },
+      select: { id: true, name: true },
+    }),
+    params.prisma.lead.findUnique({
+      where: {
+        tenantId_waId: {
+          tenantId: params.message.clientId,
+          waId: params.message.sender,
+        },
+      },
+      select: { id: true, name: true },
+    }),
+  ]);
+  const safeContactName =
+    providerObservedName && !existingContact?.name && !isAnonymizedMarker(existingContact?.name)
+      ? providerObservedName
+      : undefined;
+  const safeLeadName =
+    providerObservedName && !existingLead?.name && !isAnonymizedMarker(existingLead?.name)
+      ? providerObservedName
+      : undefined;
   const contact = await params.prisma.contact.upsert({
     where: {
       clientId_waId: {
@@ -462,10 +513,12 @@ async function ensureWebSessionContactIdentity(params: {
       externalUserHash: externalUserHash(params.message.senderCanonical),
       externalUserRef: params.message.senderCanonical,
       legacyWaId: params.message.sender,
+      ...(safeContactName ? { name: safeContactName } : {}),
     },
     create: {
       clientId: params.message.clientId,
       waId: params.message.sender,
+      ...(safeContactName ? { name: safeContactName } : {}),
       channel: "whatsapp",
       provider: "web_session",
       channelAccountId: params.message.channelAccountId,
@@ -521,11 +574,13 @@ async function ensureWebSessionContactIdentity(params: {
       externalUserRef: params.message.senderCanonical,
       legacyWaId: params.message.sender,
       contactChannelIdentityId: identity.id,
+      ...(safeLeadName ? { name: safeLeadName } : {}),
     },
     create: {
       tenantId: params.message.clientId,
       waId: params.message.sender,
       waIdCanonical: params.message.senderCanonical,
+      ...(safeLeadName ? { name: safeLeadName } : {}),
       channel: "whatsapp",
       provider: "web_session",
       channelAccountId: params.message.channelAccountId,

@@ -36,6 +36,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   let connectionUpdateSeen = false;
   let upsertType = "";
   let updateCount = 0;
+  let receiptCount = 0;
   let socketNodeName = "";
   let socketNodeChildTags: string[] = [];
   let socketNodeChildAttrsKeys: string[] = [];
@@ -57,6 +58,9 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
     },
     onMessagesUpdate: (event) => {
       updateCount = event.length;
+    },
+    onMessageReceiptUpdate: (event) => {
+      receiptCount = event.length;
     },
     onSocketNode: (event) => {
       socketNodeName = event.name;
@@ -81,6 +85,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   assert.equal(handlers.has("creds.update"), true);
   assert.equal(handlers.has("messages.upsert"), true);
   assert.equal(handlers.has("messages.update"), true);
+  assert.equal(handlers.has("message-receipt.update"), true);
   assert.equal(handlers.has("CB:message"), true);
   assert.equal(handlers.has("CB:notification"), true);
   assert.equal(handlers.has("CB:receipt"), true);
@@ -91,6 +96,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   await handlers.get("creds.update")?.();
   await handlers.get("messages.upsert")?.({ type: "notify", messages: [] } as never);
   await handlers.get("messages.update")?.([{ key: {}, update: {} }] as never);
+  await handlers.get("message-receipt.update")?.([{ key: {}, receipt: {} }] as never);
   await handlers.get("CB:message")?.({
     tag: "message",
     attrs: { type: "text", from: "redacted@s.whatsapp.net", id: "redacted" },
@@ -106,6 +112,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   assert.equal(credentialsUpdated, true);
   assert.equal(upsertType, "notify");
   assert.equal(updateCount, 1);
+  assert.equal(receiptCount, 1);
   assert.equal(socketNodeName, "CB:message");
   assert.deepEqual(socketNodeChildTags, ["enc", "unavailable"]);
   assert.deepEqual(socketNodeChildAttrsKeys, ["count", "jid", "type"]);

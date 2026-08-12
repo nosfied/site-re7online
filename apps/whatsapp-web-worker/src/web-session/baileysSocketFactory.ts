@@ -11,6 +11,7 @@ type BaileysSocketFactoryParams = {
   onCredentialsUpdate?: (state: SerializedWebSessionAuthState) => Promise<void> | void;
   onMessagesUpsert?: (event: BaileysMessagesUpsertEvent) => Promise<void> | void;
   onMessagesUpdate?: (event: BaileysMessagesUpdateEvent) => Promise<void> | void;
+  onMessageReceiptUpdate?: (event: BaileysMessageReceiptUpdateEvent) => Promise<void> | void;
   onSocketNode?: (event: BaileysSocketNodeEvent) => Promise<void> | void;
   onEventBatch?: (events: Record<string, unknown>) => Promise<void> | void;
 };
@@ -41,6 +42,11 @@ export type BaileysConnectionUpdateEvent = {
 export type BaileysMessagesUpdateEvent = Array<{
   key?: unknown;
   update?: Record<string, unknown>;
+}>;
+
+export type BaileysMessageReceiptUpdateEvent = Array<{
+  key?: unknown;
+  receipt?: Record<string, unknown>;
 }>;
 
 export type BaileysSocketNodeEvent = {
@@ -171,6 +177,9 @@ export async function createBaileysSocketFromModule(
   });
   socket.ev.on("messages.update", async (event: BaileysMessagesUpdateEvent) => {
     await params.onMessagesUpdate?.(Array.isArray(event) ? event : []);
+  });
+  socket.ev.on("message-receipt.update", async (event: BaileysMessageReceiptUpdateEvent) => {
+    await params.onMessageReceiptUpdate?.(Array.isArray(event) ? event : []);
   });
   const socketNodeEvents = ["CB:message", "CB:notification", "CB:receipt", "CB:ack,class:message"];
   if (typeof socket.ws?.on === "function") {

@@ -5511,7 +5511,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, httpError("conversation_not_found", "Conversa nao encontrada."));
         return;
       }
-      const resolvedChannel = serializeInboxChannelFields(conversationRow).channel;
+      const resolvedChannelFields = serializeInboxChannelFields(conversationRow);
+      const resolvedChannel = resolvedChannelFields.channel;
+      const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && resolvedChannelFields.provider === "web_session";
       const currentConversation = await loadInboxConversationState(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
@@ -5579,7 +5581,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 409, httpError("conversation_not_assigned", "Assuma a conversa antes de responder manualmente."));
         return;
       }
-      if (!isWindowOpen(currentConversation, Date.now())) {
+      if (!isWebSessionWhatsApp && !isWindowOpen(currentConversation, Date.now())) {
         await persistEvent({
           clientId: client.id,
           conversationId: conversationRow.id,
@@ -5618,6 +5620,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ),
             historyVisibleAfter: conversationRow.historyVisibleAfter,
             replyTo: parsedReplyTo.replyTo,
+            provider: isWebSessionWhatsApp ? "web_session" : "meta",
           })
         : null;
       if (replyContext && !replyContext.ok) {
@@ -5740,17 +5743,33 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
-      const result = await adminSendMessage({
-        waId: resolvedConversation.resolvedWaId,
-        text: cannedReply.body,
-        clientKey: client.clientKey,
-        clientId: client.id,
-        requestId,
-        source: "canned_reply",
-        cannedReplyId: cannedReply.id,
-        actorUserId: clientAuth.userId,
-        reply: resolvedReplyContext,
-      });
+      const result = isWebSessionWhatsApp
+        ? await createWebSessionTextOutboundMessage({
+            prisma,
+            waId: resolvedConversation.resolvedWaId,
+            waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+            text: cannedReply.body,
+            clientKey: client.clientKey,
+            clientId: client.id,
+            requestId,
+            actorUserId: clientAuth.userId,
+            outboundSource: "canned_reply",
+            cannedReplyId: cannedReply.id,
+            source: conversationRow,
+            conversation: currentConversation,
+            reply: asWebSessionContextualReply(resolvedReplyContext),
+          })
+        : await adminSendMessage({
+            waId: resolvedConversation.resolvedWaId,
+            text: cannedReply.body,
+            clientKey: client.clientKey,
+            clientId: client.id,
+            requestId,
+            source: "canned_reply",
+            cannedReplyId: cannedReply.id,
+            actorUserId: clientAuth.userId,
+            reply: resolvedReplyContext,
+          });
       if (!result.ok || result.status === "FAILED") {
         const failedReason = result.ok ? "message_send_failed" : result.error;
         await persistEvent({
@@ -10074,6 +10093,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         channel: resolvedConversation.winner?.channel ?? null,
         provider: resolvedConversation.winner?.provider ?? null,
+        channelAccountId: resolvedConversation.winner?.channelAccountId ?? null,
+        actorUserId: clientAuth.userId,
+        conversation: nextState,
         protocol,
       });
       const payload = await buildConversationActionPayload(prisma, {
@@ -22782,14 +22804,28 @@ function extractMetaStatus(rawPayload: unknown) {
     typed?.metaStatus && typeof typed.metaStatus === "object" && !Array.isArray(typed.metaStatus)
       ? (typed.metaStatus as Record<string, unknown>)
       : null;
+  const webSessionStatus =
+    typed?.webSessionStatus && typeof typed.webSessionStatus === "object" && !Array.isArray(typed.webSessionStatus)
+      ? (typed.webSessionStatus as Record<string, unknown>)
+      : null;
   return {
-    lastStatus: typeof metaStatus?.lastStatus === "string" ? metaStatus.lastStatus : null,
+    lastStatus:
+      typeof metaStatus?.lastStatus === "string"
+        ? metaStatus.lastStatus
+        : typeof webSessionStatus?.lastStatus === "string"
+          ? webSessionStatus.lastStatus
+          : null,
     pricingCategory:
       typeof metaStatus?.pricingCategory === "string" ? metaStatus.pricingCategory : null,
     pricingBillable:
       typeof metaStatus?.pricingBillable === "boolean" ? metaStatus.pricingBillable : null,
     pricingModel: typeof metaStatus?.pricingModel === "string" ? metaStatus.pricingModel : null,
-    lastStatusAt: typeof metaStatus?.lastStatusAt === "string" ? metaStatus.lastStatusAt : null,
+    lastStatusAt:
+      typeof metaStatus?.lastStatusAt === "string"
+        ? metaStatus.lastStatusAt
+        : typeof webSessionStatus?.lastStatusAt === "string"
+          ? webSessionStatus.lastStatusAt
+          : null,
     conversationId:
       typeof metaStatus?.conversationId === "string" ? metaStatus.conversationId : null,
     statusDetail: typeof metaStatus?.statusDetail === "string" ? metaStatus.statusDetail : null,
@@ -24938,16 +24974,25 @@ async function sendConversationProtocolNoticeIfNeeded(
     waIdCanonical?: string | null;
     channel?: string | null;
     provider?: string | null;
+    channelAccountId?: string | null;
+    actorUserId?: string | null;
+    conversation?: ConversationState | null;
     protocol: string | null;
   }
 ) {
   if (!params.protocol) return { sent: false as const, reason: "missing_protocol" as const };
+  const protocolNotification = await resolveProtocolNotificationSettings(prisma, params.clientId);
+  if (!protocolNotification.enabled) {
+    return { sent: false as const, reason: "disabled" as const };
+  }
+  if (protocolNotification.trigger !== "first_human_handoff") {
+    return { sent: false as const, reason: "unsupported_trigger" as const };
+  }
   if (params.channel && serializeInboxChannelFields({ channel: params.channel }).channel !== "whatsapp") {
     return { sent: false as const, reason: "non_whatsapp_channel" as const };
   }
-  if (params.provider && params.provider !== "meta") {
-    return { sent: false as const, reason: "non_meta_provider" as const };
-  }
+  const provider = params.provider === "web_session" ? "web_session" : params.provider === "meta" ? "meta" : null;
+  if (!provider) return { sent: false as const, reason: "unsupported_provider" as const };
   const lookup = Array.from(new Set([params.waId, params.waIdCanonical].filter(Boolean))) as string[];
   const alreadySent = await prisma.outboundMessage.findFirst({
     where: {
@@ -24960,12 +25005,50 @@ async function sendConversationProtocolNoticeIfNeeded(
   if (alreadySent) return { sent: false as const, reason: "already_sent" as const };
 
   try {
-    const result = await adminSendMessage({
-      waId: params.waId,
-      text: buildConversationProtocolNotice(params.protocol),
-      clientKey: params.clientKey,
+    const noticeText = buildProtocolNotificationText(protocolNotification, params.protocol);
+    const result =
+      provider === "web_session"
+        ? await createWebSessionTextOutboundMessage({
+            prisma,
+            waId: params.waId,
+            waIdCanonical: params.waIdCanonical ?? null,
+            text: noticeText,
+            clientKey: params.clientKey,
+            clientId: params.clientId,
+            requestId: `${params.requestId}:protocol`,
+            actorUserId: params.actorUserId ?? "",
+            outboundSource: "protocol_notice",
+            source: {
+              channel: "whatsapp",
+              provider: "web_session",
+              channelAccountId: params.channelAccountId ?? null,
+            },
+            conversation: params.conversation ?? null,
+            skipAgentSignature: true,
+          })
+        : await adminSendMessage({
+            waId: params.waId,
+            text: noticeText,
+            clientKey: params.clientKey,
+            clientId: params.clientId,
+            requestId: `${params.requestId}:protocol`,
+            source: "protocol_notice",
+            actorUserId: params.actorUserId ?? undefined,
+          });
+    await persistEvent({
       clientId: params.clientId,
-      requestId: `${params.requestId}:protocol`,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical ?? null,
+      messageId: `protocol.notice.${params.requestId}`,
+      requestId: `${params.requestId}:protocol:event`,
+      eventName: result.ok ? "conversation.protocol.notice.sent" : "conversation.protocol.notice.skipped",
+      payloadJson: {
+        source: "protocol_notice",
+        provider,
+        protocol: params.protocol,
+        status: result.ok ? result.status : null,
+        reason: result.ok ? null : result.error,
+      },
     });
     logger.info({
       event: result.ok ? "conversation.protocol.notice.sent" : "conversation.protocol.notice.skipped",
@@ -24993,6 +25076,67 @@ async function sendConversationProtocolNoticeIfNeeded(
     });
     return { sent: false as const, reason: "send_error" as const };
   }
+}
+
+type ProtocolNotificationSettings = {
+  enabled: boolean;
+  trigger: "first_human_handoff";
+  includeProtocol: boolean;
+  messageTemplate: string | null;
+};
+
+function normalizeProtocolNotificationSettings(value: unknown): ProtocolNotificationSettings {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {
+      enabled: false,
+      trigger: "first_human_handoff",
+      includeProtocol: true,
+      messageTemplate: null,
+    };
+  }
+  const source = value as Record<string, unknown>;
+  const triggerValue = typeof source.trigger === "string" ? source.trigger.trim().toLowerCase() : "";
+  const messageTemplate = typeof source.messageTemplate === "string"
+    ? source.messageTemplate.trim().slice(0, 500) || null
+    : typeof source.text === "string"
+      ? source.text.trim().slice(0, 500) || null
+      : null;
+  return {
+    enabled: source.enabled === true,
+    trigger: triggerValue === "first_human_handoff" || triggerValue === "first-human-handoff"
+      ? "first_human_handoff"
+      : "first_human_handoff",
+    includeProtocol: source.includeProtocol !== false,
+    messageTemplate,
+  };
+}
+
+async function resolveProtocolNotificationSettings(
+  prisma: ReturnType<typeof getPrisma>,
+  clientId: string
+): Promise<ProtocolNotificationSettings> {
+  const record = await prisma.tenantOperationalConfig.findUnique({
+    where: { clientId },
+    select: { config: true },
+  });
+  const config = record?.config && typeof record.config === "object" && !Array.isArray(record.config)
+    ? record.config as Record<string, unknown>
+    : {};
+  return normalizeProtocolNotificationSettings(config.protocolNotification);
+}
+
+function buildProtocolNotificationText(settings: ProtocolNotificationSettings, protocol: string) {
+  if (settings.messageTemplate) {
+    const rendered = settings.messageTemplate.replace(/\{\{\s*protocol\s*\}\}/gi, protocol);
+    if (settings.includeProtocol && !rendered.includes(protocol)) {
+      return `${rendered}\nProtocolo: ${protocol}`;
+    }
+    return rendered;
+  }
+  if (!settings.includeProtocol) {
+    return "Seu atendimento foi registrado.";
+  }
+  return buildConversationProtocolNotice(protocol);
 }
 
 function buildScopedWaIdWhere(rawWaId: string) {
@@ -27021,9 +27165,11 @@ async function buildConversationDetailPayload(
     })
     .slice(0, params.limit);
 
-	  const messageByInternalRef = new Map(
-	    items.map((item) => [
-	      `${item.messageKind}:${item.internalMessageId}`,
+  const includeRichReferencePreviews = !(params.order === "desc" && params.limit === 1 && !params.after);
+  if (includeRichReferencePreviews) {
+    const messageByInternalRef = new Map(
+      items.map((item) => [
+        `${item.messageKind}:${item.internalMessageId}`,
       {
         direction: item.direction,
         type: item.type,
@@ -27036,93 +27182,94 @@ async function buildConversationDetailPayload(
             }
           : null,
         location: item.location ?? null,
-	      },
-	    ])
-	  );
-	  const missingInboundReferenceIds = Array.from(
-	    new Set(
-	      items
-	        .filter((item) => item.replyTo?.kind === "inbound" && item.replyTo.id)
-	        .map((item) => item.replyTo!.id)
-	        .filter((id) => !messageByInternalRef.has(`inbound:${id}`))
-	    )
-	  );
-	  const missingOutboundReferenceIds = Array.from(
-	    new Set(
-	      items
-	        .filter((item) => item.replyTo?.kind === "outbound" && item.replyTo.id)
-	        .map((item) => item.replyTo!.id)
-	        .filter((id) => !messageByInternalRef.has(`outbound:${id}`))
-	    )
-	  );
-	  if (missingInboundReferenceIds.length || missingOutboundReferenceIds.length) {
-	    const referenceWhere = {
-	      clientId: params.clientId,
-	      OR: [{ waIdCanonical: { in: detailWaIds } }, { waId: { in: detailWaIds } }],
-	    };
-	    const [referencedInbound, referencedOutbound] = await Promise.all([
-	      missingInboundReferenceIds.length
-	        ? prisma.inboundMessage.findMany({
-	            where: { ...referenceWhere, id: { in: missingInboundReferenceIds } },
-	            select: { id: true, type: true, bodyText: true, rawPayload: true, messageId: true },
-	          })
-	        : [],
-	      missingOutboundReferenceIds.length
-	        ? prisma.outboundMessage.findMany({
-	            where: { ...referenceWhere, id: { in: missingOutboundReferenceIds } },
-	            select: { id: true, type: true, bodyText: true, templateName: true, rawPayload: true, messageId: true },
-	          })
-	        : [],
-	    ]);
-	    for (const original of referencedInbound) {
-	      const media = buildInboxMessageMedia({
-	        type: original.type,
-	        rawPayload: original.rawPayload,
-	        downloadUrl: original.messageId
-	          ? buildConversationMessageDownloadPath(resolved.resolvedWaId, original.messageId)
-	          : undefined,
-	      });
-	      messageByInternalRef.set(`inbound:${original.id}`, {
-	        direction: "INBOUND",
-	        type: original.type,
-	        bodyText: original.bodyText,
-	        templateName: null,
-	        media: media ? { ...media, messageId: original.messageId ?? null } : null,
-	        location: extractMessageLocation(original.rawPayload),
-	      });
-	    }
-	    for (const original of referencedOutbound) {
-	      const media = buildInboxMessageMedia({
-	        type: original.type,
-	        rawPayload: original.rawPayload,
-	        downloadUrl: original.messageId
-	          ? buildConversationMessageDownloadPath(resolved.resolvedWaId, original.messageId)
-	          : undefined,
-	      });
-	      messageByInternalRef.set(`outbound:${original.id}`, {
-	        direction: "OUTBOUND",
-	        type: original.type,
-	        bodyText: original.bodyText,
-	        templateName: original.templateName,
-	        media: media ? { ...media, messageId: original.messageId ?? null } : null,
-	        location: extractMessageLocation(original.rawPayload),
-	      });
-	    }
-	  }
-	  for (const item of items) {
-	    if (!("replyTo" in item) || !item.replyTo) continue;
-	    const original = messageByInternalRef.get(`${item.replyTo.kind}:${item.replyTo.id}`);
-	    if (!original) continue;
-	    item.replyTo.previewBody = getTimelineMessageBody(
-	      original.type,
-	      original.bodyText,
-	      original.templateName,
-	      null
-	    );
-	    item.replyTo.previewDirection = original.direction;
-	    item.replyTo.previewMedia = original.media;
-	    item.replyTo.previewLocation = original.location;
-	  }
+        },
+      ])
+    );
+    const missingInboundReferenceIds = Array.from(
+      new Set(
+        items
+          .filter((item) => item.replyTo?.kind === "inbound" && item.replyTo.id)
+          .map((item) => item.replyTo!.id)
+          .filter((id) => !messageByInternalRef.has(`inbound:${id}`))
+      )
+    );
+    const missingOutboundReferenceIds = Array.from(
+      new Set(
+        items
+          .filter((item) => item.replyTo?.kind === "outbound" && item.replyTo.id)
+          .map((item) => item.replyTo!.id)
+          .filter((id) => !messageByInternalRef.has(`outbound:${id}`))
+      )
+    );
+    if (missingInboundReferenceIds.length || missingOutboundReferenceIds.length) {
+      const referenceWhere = {
+        clientId: params.clientId,
+        OR: [{ waIdCanonical: { in: detailWaIds } }, { waId: { in: detailWaIds } }],
+      };
+      const [referencedInbound, referencedOutbound] = await Promise.all([
+        missingInboundReferenceIds.length
+          ? prisma.inboundMessage.findMany({
+              where: { ...referenceWhere, id: { in: missingInboundReferenceIds } },
+              select: { id: true, type: true, bodyText: true, rawPayload: true, messageId: true },
+            })
+          : [],
+        missingOutboundReferenceIds.length
+          ? prisma.outboundMessage.findMany({
+              where: { ...referenceWhere, id: { in: missingOutboundReferenceIds } },
+              select: { id: true, type: true, bodyText: true, templateName: true, rawPayload: true, messageId: true },
+            })
+          : [],
+      ]);
+      for (const original of referencedInbound) {
+        const media = buildInboxMessageMedia({
+          type: original.type,
+          rawPayload: original.rawPayload,
+          downloadUrl: original.messageId
+            ? buildConversationMessageDownloadPath(resolved.resolvedWaId, original.messageId)
+            : undefined,
+        });
+        messageByInternalRef.set(`inbound:${original.id}`, {
+          direction: "INBOUND",
+          type: original.type,
+          bodyText: original.bodyText,
+          templateName: null,
+          media: media ? { ...media, messageId: original.messageId ?? null } : null,
+          location: extractMessageLocation(original.rawPayload),
+        });
+      }
+      for (const original of referencedOutbound) {
+        const media = buildInboxMessageMedia({
+          type: original.type,
+          rawPayload: original.rawPayload,
+          downloadUrl: original.messageId
+            ? buildConversationMessageDownloadPath(resolved.resolvedWaId, original.messageId)
+            : undefined,
+        });
+        messageByInternalRef.set(`outbound:${original.id}`, {
+          direction: "OUTBOUND",
+          type: original.type,
+          bodyText: original.bodyText,
+          templateName: original.templateName,
+          media: media ? { ...media, messageId: original.messageId ?? null } : null,
+          location: extractMessageLocation(original.rawPayload),
+        });
+      }
+    }
+    for (const item of items) {
+      if (!("replyTo" in item) || !item.replyTo) continue;
+      const original = messageByInternalRef.get(`${item.replyTo.kind}:${item.replyTo.id}`);
+      if (!original) continue;
+      item.replyTo.previewBody = getTimelineMessageBody(
+        original.type,
+        original.bodyText,
+        original.templateName,
+        null
+      );
+      item.replyTo.previewDirection = original.direction;
+      item.replyTo.previewMedia = original.media;
+      item.replyTo.previewLocation = original.location;
+    }
+  }
 
   const tenantsStartedAt = channelLatencyNow();
   const tenant = (await getTenants())[params.clientKey];
@@ -28788,7 +28935,7 @@ async function adminSendMessage(params: {
   clientId: string;
   requestId: string;
   actorUserId?: string | null;
-  source?: "admin_inbox" | "canned_reply";
+  source?: "admin_inbox" | "canned_reply" | "protocol_notice";
   cannedReplyId?: string | null;
   reply?: ResolvedInboxContextualReply | null;
 }): Promise<
@@ -28854,11 +29001,18 @@ async function adminSendMessage(params: {
         }),
       ])
     : [null, null] as const;
-  const signedBody = applyAgentSignature({
-    bodyText: outboundText,
-    actorDisplayName: actorUser?.name ?? null,
-    settings: agentSignatureSettings?.settings ?? null,
-  });
+  const signedBody = params.source === "protocol_notice"
+    ? {
+        ok: true as const,
+        bodyText: outboundText,
+        signatureApplied: false,
+        signatureFormat: null,
+      }
+    : applyAgentSignature({
+        bodyText: outboundText,
+        actorDisplayName: actorUser?.name ?? null,
+        settings: agentSignatureSettings?.settings ?? null,
+      });
   if (!signedBody.ok) {
     return { ok: false, statusCode: 400, error: "message_too_long" };
   }

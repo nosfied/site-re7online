@@ -27,10 +27,16 @@ import {
   ingestBaileysWebSessionMessage,
   type BaileysInboundMessageLike,
 } from "../../whatsapp-agent/src/web-session/webSessionInbound.js";
+import {
+  normalizeBaileysReceiptStatus,
+  recordWebSessionOutboundReceipt,
+  type WebSessionDeliveryStatus,
+} from "../../whatsapp-agent/src/web-session/webSessionReceipts.js";
 import { createBaileysAuthState } from "./web-session/baileysAuthState.js";
 import {
   closeBaileysSocket,
   createBaileysSocket,
+  type BaileysMessageReceiptUpdateEvent,
   type BaileysSocketLike,
   type BaileysMessagesUpdateEvent,
   type BaileysMessagesUpsertEvent,
@@ -769,6 +775,11 @@ async function connectWebSessionAccount(params: {
       });
     },
     onMessagesUpdate: async (event) => {
+      await handleWebSessionOutboundStatusUpdates({
+        prisma: params.prisma,
+        account: params.account,
+        event,
+      });
       await handleWebSessionMessagesUpdate({
         prisma: params.prisma,
         account: params.account,
@@ -776,6 +787,13 @@ async function connectWebSessionAccount(params: {
         authKeys: auth.state.keys as BaileysAuthKeysLike,
         cutoverAt: inboundCutoverAt,
         socket,
+      });
+    },
+    onMessageReceiptUpdate: async (event) => {
+      await handleWebSessionReceiptUpdates({
+        prisma: params.prisma,
+        account: params.account,
+        event,
       });
     },
     onSocketNode: async (node) => {
@@ -904,6 +922,95 @@ function messagesFromUpdates(event: BaileysMessagesUpdateEvent): BaileysInboundM
       } as BaileysInboundMessageLike;
     })
     .filter((message): message is BaileysInboundMessageLike => Boolean(message));
+}
+
+function getMessageUpdateKey(item: { key?: unknown }) {
+  return item.key && typeof item.key === "object" && !Array.isArray(item.key)
+    ? item.key as { id?: unknown; fromMe?: unknown; remoteJid?: unknown }
+    : {};
+}
+
+function getReceiptExternalMessageId(item: { key?: unknown }) {
+  const key = getMessageUpdateKey(item);
+  return typeof key.id === "string" && key.id.trim() ? key.id.trim() : null;
+}
+
+function getReceiptStatusFromMessageUpdate(item: { update?: Record<string, unknown> }) {
+  const update = item.update && typeof item.update === "object" && !Array.isArray(item.update)
+    ? item.update
+    : {};
+  return normalizeBaileysReceiptStatus(update.status);
+}
+
+function getReceiptStatusFromReceiptUpdate(item: { receipt?: Record<string, unknown> }) {
+  const receipt = item.receipt && typeof item.receipt === "object" && !Array.isArray(item.receipt)
+    ? item.receipt
+    : {};
+  if (Object.keys(receipt).length > 0 && receipt.status === undefined && receipt.type === undefined) {
+    return "delivered";
+  }
+  return normalizeBaileysReceiptStatus(receipt.status ?? receipt.type);
+}
+
+async function persistWebSessionReceipt(params: {
+  prisma: WorkerPrismaClient;
+  account: EligibleWebSessionAccount;
+  externalMessageId: string | null;
+  status: WebSessionDeliveryStatus | null;
+  source: "messages.update" | "message-receipt.update";
+}) {
+  if (!params.externalMessageId || !params.status) return;
+  const result = await recordWebSessionOutboundReceipt({
+    prisma: params.prisma,
+    clientId: params.account.clientId,
+    channelAccountId: params.account.channelAccountId,
+    externalMessageId: params.externalMessageId,
+    status: params.status,
+    requestId: `web-session-receipt:${params.account.id}:${params.externalMessageId}:${params.status}`,
+  });
+  logger.info({
+    event: "whatsapp.web.receipt.processed",
+    tenantKey: params.account.tenantKey,
+    channelAccountId: params.account.channelAccountId,
+    source: params.source,
+    status: params.status,
+    updated: result.updated,
+    reason: result.updated ? null : result.reason,
+  });
+}
+
+async function handleWebSessionOutboundStatusUpdates(params: {
+  prisma: WorkerPrismaClient;
+  account: EligibleWebSessionAccount;
+  event: BaileysMessagesUpdateEvent;
+}) {
+  for (const item of params.event) {
+    const key = getMessageUpdateKey(item);
+    if (key.fromMe !== true) continue;
+    await persistWebSessionReceipt({
+      prisma: params.prisma,
+      account: params.account,
+      externalMessageId: getReceiptExternalMessageId(item),
+      status: getReceiptStatusFromMessageUpdate(item),
+      source: "messages.update",
+    });
+  }
+}
+
+async function handleWebSessionReceiptUpdates(params: {
+  prisma: WorkerPrismaClient;
+  account: EligibleWebSessionAccount;
+  event: BaileysMessageReceiptUpdateEvent;
+}) {
+  for (const item of params.event) {
+    await persistWebSessionReceipt({
+      prisma: params.prisma,
+      account: params.account,
+      externalMessageId: getReceiptExternalMessageId(item),
+      status: getReceiptStatusFromReceiptUpdate(item),
+      source: "message-receipt.update",
+    });
+  }
 }
 
 function summarizeMessageUpdates(event: BaileysMessagesUpdateEvent) {
