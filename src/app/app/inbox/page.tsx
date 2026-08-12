@@ -22,6 +22,10 @@ import {
   type AppRealtimeEvent,
 } from "@/lib/appRealtime";
 import {
+  realtimeEventTargetsSelectedConversation,
+  resolveRealtimeTimelineConversationKey,
+} from "@/lib/inboxRealtimeTimeline";
+import {
   AppInboxReadState,
   AppContactTimelineItem,
   AppSession,
@@ -3196,14 +3200,34 @@ export default function AppInboxPage() {
       return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
     });
 
-    if (selectedConversationKey === conversationKey || selectedConversationWaId === event.waId) {
+    const targetsSelectedConversation = realtimeEventTargetsSelectedConversation({
+      event,
+      selectedConversationKey,
+      selectedConversationWaId,
+      selectedConversationIdentityCandidates: selectedConversationIdentityCandidatesRef.current,
+    });
+
+    if (targetsSelectedConversation) {
+      const visibleConversationKey =
+        resolveRealtimeTimelineConversationKey({
+          event,
+          selectedConversationKey,
+          selectedConversationWaId,
+          selectedConversationIdentityCandidates: selectedConversationIdentityCandidatesRef.current,
+        }) ?? conversationKey;
       const shouldStickToBottom = isTimelineNearBottom();
       setMessages((prev) => {
         const nextMessages = mergeMessagesByIdentity(prev, [message]);
         timelineCacheRef.current.set(selectedConversationWaId ?? event.waId, nextMessages);
+        if (visibleConversationKey) {
+          timelineCacheRef.current.set(visibleConversationKey, nextMessages);
+        }
+        if (event.waIdCanonical) {
+          timelineCacheRef.current.set(event.waIdCanonical, nextMessages);
+        }
         return nextMessages;
       });
-      setMessagesConversationKey(conversationKey);
+      setMessagesConversationKey(visibleConversationKey);
       shouldScrollToBottomRef.current = shouldStickToBottom;
       if (message.direction === "INBOUND" && !isAppForegroundFocused()) {
         markConversationIdentitiesAsUnread([conversationKey, event.waId, event.waIdCanonical], event.waId);
