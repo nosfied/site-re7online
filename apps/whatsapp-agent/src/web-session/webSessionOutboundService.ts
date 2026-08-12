@@ -3,6 +3,12 @@ import { applyAgentSignature } from "../inbox/agentSignature.js";
 import { persistEvent, persistOutboundMessage } from "../db/persist.js";
 import { getFeatures } from "../features/clientFeatures.js";
 import { logger } from "../logger/logger.js";
+import {
+  detectWebSessionMediaKind,
+  storeWebSessionMediaFile,
+  validateWebSessionMedia,
+  type WebSessionMediaKind,
+} from "../media/webSessionMedia.js";
 import { recordConversationAgentOutboundMetrics } from "../metrics/conversationMetrics.js";
 import { resolveAgentSignatureSettings } from "../config/tenantOperationalConfig.js";
 import { readWebSessionLifecycle } from "./webSessionLifecycle.js";
@@ -13,6 +19,10 @@ type WebSessionOutboundConversationState = {
 };
 
 type WorkerSendTextResult =
+  | { ok: true; externalMessageId: string | null }
+  | { ok: false; statusCode?: number; error?: string; message?: string };
+
+type WorkerSendMediaResult =
   | { ok: true; externalMessageId: string | null }
   | { ok: false; statusCode?: number; error?: string; message?: string };
 
@@ -138,6 +148,70 @@ async function callWorkerSendText(params: {
   }
 }
 
+async function callWorkerSendMedia(params: {
+  account: WebSessionChannelAccount;
+  tenantKey: string;
+  recipientWaId: string;
+  mediaPath: string;
+  mediaKind: WebSessionMediaKind;
+  mimeType: string;
+  fileName: string | null;
+  caption: string | null;
+  requestId: string;
+}) {
+  const baseUrl = process.env.WHATSAPP_WEB_WORKER_CONTROL_URL?.trim();
+  if (!baseUrl) {
+    return { ok: false as const, statusCode: 503, error: "web_session_worker_unavailable" };
+  }
+  const token = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN?.trim();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25_000);
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/web-session/send-media`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        clientId: params.account.clientId,
+        tenantKey: params.tenantKey,
+        accountId: params.account.id,
+        channelAccountId: params.account.channelAccountId,
+        recipientWaId: params.recipientWaId,
+        mediaPath: params.mediaPath,
+        mediaKind: params.mediaKind,
+        mimeType: params.mimeType,
+        fileName: params.fileName,
+        caption: params.caption,
+        requestId: params.requestId,
+      }),
+      signal: controller.signal,
+    });
+    const body = await response.json().catch(() => ({})) as WorkerSendMediaResult;
+    if (!response.ok || !body.ok) {
+      const workerStatusCode = !body.ok && typeof body.statusCode === "number" ? body.statusCode : null;
+      return {
+        ok: false as const,
+        statusCode: response.status || workerStatusCode || 502,
+        error: body.ok ? "web_session_media_send_failed" : body.error ?? "web_session_media_send_failed",
+        message: body.ok ? undefined : body.message,
+      };
+    }
+    return { ok: true as const, externalMessageId: body.externalMessageId ?? null };
+  } catch (error) {
+    return {
+      ok: false as const,
+      statusCode: error instanceof Error && error.name === "AbortError" ? 504 : 502,
+      error: error instanceof Error && error.name === "AbortError"
+        ? "web_session_send_timeout"
+        : "web_session_worker_unavailable",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function isWebSessionTextOutboundReady(params: {
   prisma: PrismaClient;
   clientId: string;
@@ -175,7 +249,14 @@ export async function createWebSessionTextOutboundMessage(params: {
       agentSignatureApplied: boolean;
       agentSignatureFormat: "bold_line" | null;
     }
-  | { ok: false; statusCode: number; error: string; message?: string }
+  | {
+      ok: false;
+      statusCode: number;
+      error: string;
+      message?: string;
+      errorPayload?: { code: string; message: string; details: string };
+      errorDetails?: string | null;
+    }
 > {
   const recipientWaId = normalizeRecipientWaId(params.waIdCanonical ?? params.waId);
   if (!recipientWaId) return { ok: false, statusCode: 400, error: "bad_request" };
@@ -328,5 +409,230 @@ export async function createWebSessionTextOutboundMessage(params: {
     bodyText: signedBody.bodyText,
     agentSignatureApplied: signedBody.signatureApplied,
     agentSignatureFormat: signedBody.signatureFormat,
+  };
+}
+
+export async function createWebSessionMediaOutboundMessage(params: {
+  prisma: PrismaClient;
+  waId: string;
+  waIdCanonical?: string | null;
+  clientKey: string;
+  clientId: string;
+  requestId: string;
+  actorUserId: string;
+  mimeType: string;
+  fileName?: string | null;
+  caption?: string | null;
+  content: Buffer;
+  source?: {
+    channel?: string | null;
+    provider?: string | null;
+    channelAccountId?: string | null;
+  };
+  conversation?: WebSessionOutboundConversationState | null;
+}): Promise<
+  | {
+      ok: true;
+      status: "SENT" | "FAILED";
+      messageId: string;
+      internalMessageId: string | null;
+      metaMessageId: null;
+      createdAt: string;
+      mediaType: "IMAGE" | "DOCUMENT" | "AUDIO" | "VIDEO";
+      bodyText: string | null;
+      media: {
+        kind: "image" | "document" | "audio" | "video";
+        mimeType: string;
+        fileName: string | null;
+        caption: string | null;
+        hasDownload: boolean;
+        downloadUrl: string;
+      };
+    }
+  | {
+      ok: false;
+      statusCode: number;
+      error: string;
+      message?: string;
+      errorPayload?: { code: string; message: string; details: string };
+      errorDetails?: string | null;
+    }
+> {
+  const recipientWaId = normalizeRecipientWaId(params.waIdCanonical ?? params.waId);
+  if (!recipientWaId) return { ok: false, statusCode: 400, error: "bad_request" };
+  const mediaKind = detectWebSessionMediaKind(params.mimeType, params.fileName);
+  if (!mediaKind) return { ok: false, statusCode: 400, error: "unsupported_media_type" };
+  try {
+    validateWebSessionMedia({
+      content: params.content,
+      mimeType: params.mimeType,
+      fileName: params.fileName,
+      kind: mediaKind,
+    });
+  } catch (error) {
+    const statusCode = error instanceof Error && "status" in error && typeof (error as { status?: unknown }).status === "number"
+      ? (error as { status: number }).status
+      : 400;
+    return { ok: false, statusCode, error: "unsupported_media_type" };
+  }
+
+  const account = await findWebSessionAccount({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    channelAccountId: params.source?.channelAccountId ?? null,
+  });
+  if (!account) return { ok: false, statusCode: 409, error: "web_session_account_not_found" };
+  if (!isWebSessionAccountConnected(account)) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "web_session_disconnected",
+      message: "Este canal esta temporariamente desconectado.",
+    };
+  }
+
+  const messageId = `web.session.send_media.${params.requestId}`;
+  const createdAt = new Date();
+  const stored = await storeWebSessionMediaFile({
+    clientId: params.clientId,
+    messageId,
+    content: params.content,
+    mimeType: params.mimeType,
+    fileName: params.fileName,
+    caption: params.caption ?? null,
+    kind: mediaKind,
+  });
+  const sendResult = await callWorkerSendMedia({
+    account,
+    tenantKey: params.clientKey,
+    recipientWaId,
+    mediaPath: stored.absolutePath,
+    mediaKind: stored.kind,
+    mimeType: stored.mimeType,
+    fileName: stored.fileName,
+    caption: stored.caption,
+    requestId: params.requestId,
+  });
+  const status = sendResult.ok ? MessageStatus.SENT : MessageStatus.FAILED;
+  const prismaType =
+    stored.kind === "image"
+      ? MessageType.IMAGE
+      : stored.kind === "audio"
+        ? MessageType.AUDIO
+        : stored.kind === "video"
+          ? MessageType.VIDEO
+          : MessageType.DOCUMENT;
+  const rawPayload = {
+    type: stored.kind,
+    media: {
+      mediaId: stored.mediaId,
+      mediaRef: stored.mediaRef,
+      storageRef: stored.storageRef,
+      storageProvider: stored.storageProvider,
+      mimeType: stored.mimeType,
+      fileName: stored.fileName,
+      caption: stored.caption,
+      sizeBytes: stored.sizeBytes,
+    },
+    source: "inbox_media",
+    provider: "web_session",
+    channelAccountId: account.channelAccountId,
+    externalMessageId: sendResult.ok ? sendResult.externalMessageId : null,
+    actor: {
+      source: "human_inbox",
+      userId: params.actorUserId,
+    },
+    status: sendResult.ok ? "sent" : "failed",
+    error: sendResult.ok ? null : sendResult.error,
+  };
+  const outboundInserted = await persistOutboundMessage({
+    clientId: params.clientId,
+    channel: "whatsapp",
+    provider: "web_session",
+    channelAccountId: account.channelAccountId,
+    externalMessageId: sendResult.ok ? sendResult.externalMessageId : null,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical ?? recipientWaId,
+    messageId,
+    type: prismaType,
+    status,
+    bodyText: stored.caption,
+    requestId: params.requestId,
+    metaMessageId: null,
+    errorBody: sendResult.ok ? null : sendResult.error,
+    rawPayload,
+  });
+  await persistEvent({
+    clientId: params.clientId,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical ?? recipientWaId,
+    messageId,
+    requestId: `web-session-outbound-media:${messageId}`,
+    eventName: sendResult.ok ? "whatsapp.web.outbound.media.sent" : "whatsapp.web.outbound.media.failed",
+    payloadJson: {
+      source: "inbox_media",
+      provider: "web_session",
+      channelAccountId: account.channelAccountId,
+      outboundMessageId: messageId,
+      externalMessageIdPresent: sendResult.ok ? Boolean(sendResult.externalMessageId) : false,
+      mediaKind: stored.kind,
+      mimeType: stored.mimeType,
+      sizeBytes: stored.sizeBytes,
+      waIdLast4: recipientWaId.slice(-4),
+      waIdLength: recipientWaId.length,
+      error: sendResult.ok ? null : sendResult.error,
+    },
+  });
+  if (sendResult.ok) {
+    await recordConversationAgentOutboundMetrics({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      waId: params.waId,
+      occurredAt: createdAt,
+      wasInserted: outboundInserted,
+      assignedAt: params.conversation?.assignedAt instanceof Date
+        ? params.conversation.assignedAt.toISOString()
+        : params.conversation?.assignedAt ?? null,
+      assignedUserId: params.conversation?.assignedUserId ?? null,
+      requestId: params.requestId,
+    });
+  }
+  logger.info({
+    event: sendResult.ok ? "whatsapp.web_session.outbound_media.persisted" : "whatsapp.web_session.outbound_media.failed",
+    tenantKey: params.clientKey,
+    channelAccountId: account.channelAccountId,
+    requestId: params.requestId,
+    waId: maskWaId(recipientWaId),
+    mediaKind: stored.kind,
+    hasExternalMessageId: sendResult.ok ? Boolean(sendResult.externalMessageId) : false,
+    error: sendResult.ok ? null : sendResult.error,
+  });
+  const persistedOutbound = await params.prisma.outboundMessage.findUnique({
+    where: {
+      clientId_messageId: {
+        clientId: params.clientId,
+        messageId,
+      },
+    },
+    select: { id: true },
+  });
+  return {
+    ok: true,
+    status,
+    messageId,
+    internalMessageId: persistedOutbound?.id ?? null,
+    metaMessageId: null,
+    createdAt: createdAt.toISOString(),
+    mediaType: prismaType,
+    bodyText: stored.caption,
+    media: {
+      kind: stored.kind,
+      mimeType: stored.mimeType,
+      fileName: stored.fileName,
+      caption: stored.caption,
+      hasDownload: true,
+      downloadUrl: `/app/conversation/${encodeURIComponent(params.waId)}/messages/${encodeURIComponent(messageId)}/media`,
+    },
   };
 }

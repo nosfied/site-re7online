@@ -69,7 +69,8 @@ export type BaileysSocketLike = {
     on: (eventName: string, handler: (...args: never[]) => unknown) => void;
     process?: (handler: (events: Record<string, unknown>) => unknown) => unknown;
   };
-  sendMessage?: (jid: string, content: { text: string }) => Promise<unknown>;
+  sendMessage?: (jid: string, content: Record<string, unknown>) => Promise<unknown>;
+  updateMediaMessage?: (message: unknown) => Promise<unknown>;
   end?: (error?: Error) => void;
   ws?: {
     on?: (eventName: string, handler: (node: unknown) => unknown) => void;

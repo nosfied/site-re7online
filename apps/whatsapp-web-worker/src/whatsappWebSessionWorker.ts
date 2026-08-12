@@ -1,7 +1,15 @@
+import fs from "node:fs/promises";
+import crypto from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { getPrisma } from "../../whatsapp-agent/src/db.js";
 import { getFeatures } from "../../whatsapp-agent/src/features/clientFeatures.js";
 import { logger } from "../../whatsapp-agent/src/logger/logger.js";
+import {
+  detectWebSessionMediaKind,
+  storeWebSessionMediaFile,
+  validateWebSessionMedia,
+  type WebSessionMediaKind,
+} from "../../whatsapp-agent/src/media/webSessionMedia.js";
 import {
   calculateWebSessionReconnectBackoff,
   classifyWebSessionDisconnect,
@@ -73,6 +81,7 @@ const activeConnections = new Map<string, ActiveConnection>();
 const DEFAULT_CONNECTION_OPEN_TIMEOUT_MS = 30_000;
 const STALE_ACTIVE_CONNECTING_TIMEOUT_MS = 45_000;
 const DEFAULT_SEND_TEXT_TIMEOUT_MS = 15_000;
+const DEFAULT_SEND_MEDIA_TIMEOUT_MS = 30_000;
 
 export function setActiveWebSessionConnectionForTesting(accountId: string, active: ActiveConnection | null) {
   if (!active) {
@@ -237,6 +246,126 @@ export async function sendTextViaActiveWebSession(params: {
       ok: false as const,
       statusCode: reason === "web_session_send_timeout" ? 504 : 502,
       error: reason === "web_session_send_timeout" ? "web_session_send_timeout" : "web_session_send_failed",
+    };
+  }
+}
+
+export async function sendMediaViaActiveWebSession(params: {
+  prisma?: WorkerPrismaClient;
+  clientId: string;
+  tenantKey: string;
+  accountId: string;
+  channelAccountId: string;
+  recipientWaId: string;
+  mediaPath: string;
+  mediaKind: WebSessionMediaKind;
+  mimeType: string;
+  fileName: string | null;
+  caption: string | null;
+  requestId: string;
+  timeoutMs?: number;
+}) {
+  const prisma = params.prisma ?? getPrisma();
+  const recipientDigits = normalizeRecipientWaIdForJid(params.recipientWaId);
+  if (!recipientDigits || !params.mediaPath.trim()) {
+    return { ok: false as const, statusCode: 400, error: "bad_request" };
+  }
+  const account = await prisma.channelAccount.findFirst({
+    where: {
+      id: params.accountId,
+      clientId: params.clientId,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId: params.channelAccountId,
+    },
+    include: {
+      client: {
+        select: {
+          id: true,
+          clientKey: true,
+          status: true,
+          features: true,
+          profile: true,
+        },
+      },
+    },
+  }) as ChannelAccountRecord | null;
+  if (!account || account.client.clientKey !== params.tenantKey) {
+    return { ok: false as const, statusCode: 404, error: "web_session_account_not_found" };
+  }
+  if (!isEligibleWebSessionAccount(account) || account.status !== "connected") {
+    return { ok: false as const, statusCode: 409, error: "web_session_not_connected" };
+  }
+  const lifecycle = readWebSessionLifecycle(account.metadata);
+  if (lifecycle.observedState !== "CONNECTED") {
+    return { ok: false as const, statusCode: 409, error: "web_session_not_connected" };
+  }
+  const active = activeConnections.get(account.id);
+  if (!active?.socket?.sendMessage) {
+    return { ok: false as const, statusCode: 503, error: "web_session_worker_not_connected" };
+  }
+  let content: Buffer;
+  try {
+    content = await fs.readFile(params.mediaPath);
+    validateWebSessionMedia({
+      content,
+      mimeType: params.mimeType,
+      fileName: params.fileName,
+      kind: params.mediaKind,
+    });
+  } catch (error) {
+    logger.warn({
+      event: "whatsapp.web.outbound.media.failed",
+      tenantKey: params.tenantKey,
+      channelAccountId: params.channelAccountId,
+      requestId: params.requestId,
+      reason: error instanceof Error ? error.message : "media_read_failed",
+    });
+    return { ok: false as const, statusCode: 400, error: "web_session_media_invalid" };
+  }
+
+  const payload =
+    params.mediaKind === "image"
+      ? { image: content, mimetype: params.mimeType, caption: params.caption ?? undefined }
+      : params.mediaKind === "audio"
+        ? { audio: content, mimetype: params.mimeType, ptt: false }
+        : params.mediaKind === "video"
+          ? { video: content, mimetype: params.mimeType, caption: params.caption ?? undefined }
+          : {
+              document: content,
+              mimetype: params.mimeType,
+              fileName: params.fileName ?? "documento",
+              caption: params.caption ?? undefined,
+            };
+  try {
+    const result = await withTimeout(
+      active.socket.sendMessage(`${recipientDigits}@s.whatsapp.net`, payload),
+      params.timeoutMs ?? DEFAULT_SEND_MEDIA_TIMEOUT_MS
+    );
+    const externalMessageId = extractExternalMessageId(result);
+    logger.info({
+      event: "whatsapp.web.outbound.media.sent",
+      tenantKey: params.tenantKey,
+      channelAccountId: params.channelAccountId,
+      requestId: params.requestId,
+      mediaKind: params.mediaKind,
+      hasExternalMessageId: Boolean(externalMessageId),
+    });
+    return { ok: true as const, externalMessageId };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "unknown_error";
+    logger.warn({
+      event: "whatsapp.web.outbound.media.failed",
+      tenantKey: params.tenantKey,
+      channelAccountId: params.channelAccountId,
+      requestId: params.requestId,
+      mediaKind: params.mediaKind,
+      reason,
+    });
+    return {
+      ok: false as const,
+      statusCode: reason === "web_session_send_timeout" ? 504 : 502,
+      error: reason === "web_session_send_timeout" ? "web_session_send_timeout" : "web_session_media_send_failed",
     };
   }
 }
@@ -595,6 +724,7 @@ async function connectWebSessionAccount(params: {
         event,
         authKeys: auth.state.keys as BaileysAuthKeysLike,
         cutoverAt: inboundCutoverAt,
+        socket,
       });
     },
     onMessagesUpdate: async (event) => {
@@ -604,6 +734,7 @@ async function connectWebSessionAccount(params: {
         event,
         authKeys: auth.state.keys as BaileysAuthKeysLike,
         cutoverAt: inboundCutoverAt,
+        socket,
       });
     },
     onSocketNode: async (node) => {
@@ -762,12 +893,118 @@ function summarizeMessageUpdates(event: BaileysMessagesUpdateEvent) {
   return summary;
 }
 
+function getBaileysInboundMediaDescriptor(message: BaileysInboundMessageLike): {
+  kind: WebSessionMediaKind;
+  mimeType: string;
+  fileName: string | null;
+  caption: string | null;
+} | null {
+  const payload = message.message && typeof message.message === "object" && !Array.isArray(message.message)
+    ? message.message as Record<string, unknown>
+    : {};
+  const candidates: Array<{ key: string; kind: WebSessionMediaKind }> = [
+    { key: "imageMessage", kind: "image" },
+    { key: "audioMessage", kind: "audio" },
+    { key: "documentMessage", kind: "document" },
+    { key: "videoMessage", kind: "video" },
+  ];
+  for (const candidate of candidates) {
+    const value = payload[candidate.key];
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const record = value as Record<string, unknown>;
+    const mimeType = typeof record.mimetype === "string" ? record.mimetype.trim() : "";
+    const fileName = typeof record.fileName === "string" && record.fileName.trim() ? record.fileName.trim() : null;
+    const caption = typeof record.caption === "string" && record.caption.trim() ? record.caption.trim() : null;
+    const normalizedKind = detectWebSessionMediaKind(mimeType, fileName);
+    if (normalizedKind && normalizedKind !== candidate.kind) return null;
+    return {
+      kind: candidate.kind,
+      mimeType: mimeType || "application/octet-stream",
+      fileName,
+      caption,
+    };
+  }
+  return null;
+}
+
+async function attachInboundMedia(params: {
+  account: EligibleWebSessionAccount;
+  message: BaileysInboundMessageLike;
+  socket?: BaileysSocketLike | null;
+}) {
+  const descriptor = getBaileysInboundMediaDescriptor(params.message);
+  if (!descriptor) return params.message;
+  const module = await import("@whiskeysockets/baileys");
+  const downloadMediaMessage = (module as { downloadMediaMessage?: (...args: unknown[]) => Promise<unknown> }).downloadMediaMessage;
+  if (typeof downloadMediaMessage !== "function") {
+    logger.warn({
+      event: "whatsapp.web.inbound.media.download_failed",
+      tenantKey: params.account.tenantKey,
+      channelAccountId: params.account.channelAccountId,
+      reason: "download_media_unavailable",
+      mediaKind: descriptor.kind,
+    });
+    return params.message;
+  }
+  try {
+    const downloaded = await downloadMediaMessage(
+      params.message,
+      "buffer",
+      {},
+      {
+        logger,
+        reuploadRequest: typeof params.socket?.updateMediaMessage === "function"
+          ? params.socket.updateMediaMessage.bind(params.socket)
+          : undefined,
+      }
+    );
+    const content = Buffer.isBuffer(downloaded)
+      ? downloaded
+      : downloaded instanceof Uint8Array
+        ? Buffer.from(downloaded)
+        : null;
+    if (!content) throw new Error("download_result_not_buffer");
+    const externalMessageId = String(params.message.key?.id ?? "").trim() || crypto.randomUUID();
+    const stored = await storeWebSessionMediaFile({
+      clientId: params.account.clientId,
+      messageId: `web.inbound.${params.account.id}.${externalMessageId}`,
+      content,
+      mimeType: descriptor.mimeType,
+      fileName: descriptor.fileName,
+      caption: descriptor.caption,
+      kind: descriptor.kind,
+    });
+    logger.info({
+      event: "whatsapp.web.inbound.media.persisted",
+      tenantKey: params.account.tenantKey,
+      channelAccountId: params.account.channelAccountId,
+      mediaKind: stored.kind,
+      mimeType: stored.mimeType,
+      sizeBytes: stored.sizeBytes,
+    });
+    return {
+      ...params.message,
+      webSessionMedia: stored,
+    };
+  } catch (error) {
+    logger.warn({
+      event: "whatsapp.web.inbound.media.download_failed",
+      tenantKey: params.account.tenantKey,
+      channelAccountId: params.account.channelAccountId,
+      mediaKind: descriptor.kind,
+      reason: error instanceof Error ? error.message : "unknown_error",
+    });
+    return params.message;
+  }
+}
+
 async function handleWebSessionMessagesUpdate(params: {
   prisma: WorkerPrismaClient;
   account: EligibleWebSessionAccount;
   event: BaileysMessagesUpdateEvent;
   authKeys?: BaileysAuthKeysLike | null;
   cutoverAt?: Date | null;
+  socket?: BaileysSocketLike | null;
 }) {
   const messages = messagesFromUpdates(params.event);
   const updateSummary = summarizeMessageUpdates(params.event);
@@ -786,6 +1023,7 @@ async function handleWebSessionMessagesUpdate(params: {
     event: { type: "notify", messages },
     authKeys: params.authKeys ?? null,
     cutoverAt: params.cutoverAt ?? null,
+    socket: params.socket ?? null,
   });
 }
 
@@ -795,6 +1033,7 @@ async function handleWebSessionMessagesUpsert(params: {
   event: BaileysMessagesUpsertEvent;
   authKeys?: BaileysAuthKeysLike | null;
   cutoverAt?: Date | null;
+  socket?: BaileysSocketLike | null;
 }) {
   const messages = Array.isArray(params.event.messages) ? params.event.messages : [];
   logger.info({
@@ -827,13 +1066,18 @@ async function handleWebSessionMessagesUpsert(params: {
         message: message as BaileysInboundMessageLike,
         keys: params.authKeys ?? null,
       });
+      const preparedMessage = await attachInboundMedia({
+        account: params.account,
+        message: message as BaileysInboundMessageLike,
+        socket: params.socket ?? null,
+      });
       const result = await ingestBaileysWebSessionMessage({
         prisma: params.prisma,
         clientId: params.account.clientId,
         tenantKey: params.account.tenantKey,
         channelAccountDbId: params.account.id,
         channelAccountId: params.account.channelAccountId,
-        message: message as BaileysInboundMessageLike,
+        message: preparedMessage,
         resolvedSenderJid,
         cutoverAt: params.cutoverAt ?? null,
       });

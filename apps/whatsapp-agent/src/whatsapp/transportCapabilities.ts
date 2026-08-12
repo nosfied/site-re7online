@@ -52,7 +52,7 @@ const META_CLOUD_CAPABILITIES: WhatsAppTransportCapabilities = {
 
 const WEB_SESSION_CAPABILITIES: WhatsAppTransportCapabilities = {
   text: true,
-  media: false,
+  media: true,
   contextualReply: false,
   templates: false,
   campaigns: false,

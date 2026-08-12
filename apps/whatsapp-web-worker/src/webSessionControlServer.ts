@@ -16,6 +16,24 @@ export type WebSessionControlSendTextResult =
   | { ok: true; externalMessageId: string | null }
   | { ok: false; statusCode: number; error: string; message?: string };
 
+export type WebSessionControlSendMediaParams = {
+  clientId: string;
+  tenantKey: string;
+  accountId: string;
+  channelAccountId: string;
+  recipientWaId: string;
+  mediaPath: string;
+  mediaKind: "image" | "audio" | "document" | "video";
+  mimeType: string;
+  fileName: string | null;
+  caption: string | null;
+  requestId: string;
+};
+
+export type WebSessionControlSendMediaResult =
+  | { ok: true; externalMessageId: string | null }
+  | { ok: false; statusCode: number; error: string; message?: string };
+
 function json(res: ServerResponse, status: number, body: Record<string, unknown>) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
@@ -61,11 +79,52 @@ function parseSendTextBody(body: Record<string, unknown>): WebSessionControlSend
   return { clientId, tenantKey, accountId, channelAccountId, recipientWaId, text, requestId };
 }
 
+function parseSendMediaBody(body: Record<string, unknown>): WebSessionControlSendMediaParams | null {
+  const clientId = typeof body.clientId === "string" ? body.clientId.trim() : "";
+  const tenantKey = typeof body.tenantKey === "string" ? body.tenantKey.trim() : "";
+  const accountId = typeof body.accountId === "string" ? body.accountId.trim() : "";
+  const channelAccountId = typeof body.channelAccountId === "string" ? body.channelAccountId.trim() : "";
+  const recipientWaId = typeof body.recipientWaId === "string" ? body.recipientWaId.trim() : "";
+  const mediaPath = typeof body.mediaPath === "string" ? body.mediaPath.trim() : "";
+  const mediaKind = typeof body.mediaKind === "string" ? body.mediaKind.trim() : "";
+  const mimeType = typeof body.mimeType === "string" ? body.mimeType.trim() : "";
+  const fileName = typeof body.fileName === "string" && body.fileName.trim() ? body.fileName.trim() : null;
+  const caption = typeof body.caption === "string" && body.caption.trim() ? body.caption.trim() : null;
+  const requestId = typeof body.requestId === "string" ? body.requestId.trim() : "";
+  if (
+    !clientId ||
+    !tenantKey ||
+    !accountId ||
+    !channelAccountId ||
+    !recipientWaId ||
+    !mediaPath ||
+    !mimeType ||
+    !requestId ||
+    !["image", "audio", "document", "video"].includes(mediaKind)
+  ) {
+    return null;
+  }
+  return {
+    clientId,
+    tenantKey,
+    accountId,
+    channelAccountId,
+    recipientWaId,
+    mediaPath,
+    mediaKind: mediaKind as WebSessionControlSendMediaParams["mediaKind"],
+    mimeType,
+    fileName,
+    caption,
+    requestId,
+  };
+}
+
 export function startWebSessionControlServer(params: {
   port: number;
   host?: string;
   token?: string;
   sendText?: (params: WebSessionControlSendTextParams) => Promise<WebSessionControlSendTextResult>;
+  sendMedia?: (params: WebSessionControlSendMediaParams) => Promise<WebSessionControlSendMediaResult>;
 }) {
   const host = params.host ?? "127.0.0.1";
   const server = createServer((req, res) => {
@@ -109,6 +168,38 @@ export function startWebSessionControlServer(params: {
       })().catch((error) => {
         logger.error({
           event: "whatsapp.web.worker.control.send_text_error",
+          message: error instanceof Error ? error.message : "unknown_error",
+        });
+        json(res, 500, { ok: false, error: "server_error" });
+      });
+      return;
+    }
+    if (url.pathname === "/web-session/send-media" && req.method === "POST") {
+      void (async () => {
+        if (!params.sendMedia) {
+          json(res, 503, { ok: false, error: "send_media_unavailable" });
+          return;
+        }
+        let parsed: WebSessionControlSendMediaParams | null = null;
+        try {
+          parsed = parseSendMediaBody(await readJsonBody(req, 32_768));
+        } catch {
+          json(res, 400, { ok: false, error: "invalid_json" });
+          return;
+        }
+        if (!parsed) {
+          json(res, 400, { ok: false, error: "bad_request" });
+          return;
+        }
+        const result = await params.sendMedia(parsed);
+        if (!result.ok) {
+          json(res, result.statusCode, { ok: false, error: result.error, message: result.message });
+          return;
+        }
+        json(res, 200, { ok: true, externalMessageId: result.externalMessageId });
+      })().catch((error) => {
+        logger.error({
+          event: "whatsapp.web.worker.control.send_media_error",
           message: error instanceof Error ? error.message : "unknown_error",
         });
         json(res, 500, { ok: false, error: "server_error" });

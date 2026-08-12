@@ -3,6 +3,7 @@ import { MessageType, Prisma, type PrismaClient } from "@prisma/client";
 import { getDefaultOperationalDepartment } from "../bootstrap/defaultOperationalDepartment.js";
 import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
+import { deleteWebSessionStoredMedia, type WebSessionStoredMedia } from "../media/webSessionMedia.js";
 import { recordConversationInboundMetrics } from "../metrics/conversationMetrics.js";
 import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
@@ -27,6 +28,7 @@ export type NormalizedWebSessionInboundMessage = {
   timestamp: Date;
   type: MessageType;
   text?: string | null;
+  media?: WebSessionStoredMedia | null;
   replyToExternalMessageId?: string | null;
   rawPayload: Prisma.InputJsonObject;
 };
@@ -43,6 +45,7 @@ export type BaileysInboundMessageLike = {
   messageTimestamp?: number | LongLike | Date | string | null;
   message?: Record<string, unknown> | null;
   pushName?: string | null;
+  webSessionMedia?: WebSessionStoredMedia | null;
 };
 
 type LongLike = {
@@ -127,6 +130,20 @@ function readTextPayload(message: Record<string, unknown>) {
   return conversation ?? extendedText;
 }
 
+function readMediaCaption(message: Record<string, unknown>, type: MessageType) {
+  const key =
+    type === MessageType.IMAGE
+      ? "imageMessage"
+      : type === MessageType.VIDEO
+        ? "videoMessage"
+        : type === MessageType.DOCUMENT
+          ? "documentMessage"
+          : null;
+  if (!key) return null;
+  const media = isRecord(message[key]) ? message[key] : null;
+  return typeof media?.caption === "string" && media.caption.trim() ? media.caption.trim() : null;
+}
+
 function detectMessageType(message: Record<string, unknown>) {
   if (readTextPayload(message) !== null) return MessageType.TEXT;
   if (isRecord(message.imageMessage)) return MessageType.IMAGE;
@@ -167,8 +184,9 @@ export function normalizeBaileysInboundMessage(params: {
   if (!sender) return { ok: false, reason: "unsupported_jid" };
   const externalMessageId = String(key.id ?? "").trim();
   const type = detectMessageType(message);
-  const text = type === MessageType.TEXT ? readTextPayload(message) : null;
+  const text = type === MessageType.TEXT ? readTextPayload(message) : readMediaCaption(message, type);
   const senderCanonical = canonicalizeBrazilWaId(sender);
+  const media = params.message.webSessionMedia ?? null;
   return {
     ok: true,
     message: {
@@ -186,6 +204,7 @@ export function normalizeBaileysInboundMessage(params: {
       timestamp: timestampToDate(params.message.messageTimestamp),
       type,
       text,
+      media,
       replyToExternalMessageId: extractReplyToExternalMessageId(message),
       rawPayload: {
         provider: "web_session",
@@ -197,6 +216,20 @@ export function normalizeBaileysInboundMessage(params: {
         type,
         hasText: Boolean(text),
         hasReplyReference: Boolean(extractReplyToExternalMessageId(message)),
+        ...(media
+          ? {
+              media: {
+                mediaId: media.mediaId,
+                mediaRef: media.mediaRef,
+                storageRef: media.storageRef,
+                storageProvider: media.storageProvider,
+                mimeType: media.mimeType,
+                fileName: media.fileName,
+                caption: media.caption,
+                sizeBytes: media.sizeBytes,
+              },
+            }
+          : {}),
       },
     },
   };
@@ -230,6 +263,8 @@ async function recordInboundEvent(params: {
         provider: "web_session",
         channelAccountId: params.message?.channelAccountId ?? null,
         externalMessageId: params.message?.externalMessageId ?? null,
+        mediaKind: params.message?.media?.kind ?? null,
+        mediaStored: Boolean(params.message?.media),
         waIdSuffix: identifier?.suffix ?? null,
         waIdLength: identifier?.length ?? null,
         reason: params.reason ?? null,
@@ -440,7 +475,9 @@ export async function ingestWebSessionInboundMessage(params: {
     prisma,
     message: params.message,
     clientId: params.message.clientId,
-    eventName: "whatsapp.web.inbound.received",
+    eventName: params.message.media
+      ? "whatsapp.web.inbound.media.received"
+      : "whatsapp.web.inbound.received",
     requestId: `${requestId}:received`,
   });
 
@@ -543,6 +580,16 @@ export async function ingestWebSessionInboundMessage(params: {
         status: "RECEIVED",
         intent: null,
         bodyText: params.message.text ?? null,
+        media: params.message.media
+          ? {
+              kind: params.message.media.kind,
+              mimeType: params.message.media.mimeType,
+              fileName: params.message.media.fileName,
+              caption: params.message.media.caption,
+              hasDownload: true,
+              downloadUrl: `/app/conversation/${encodeURIComponent(params.message.sender)}/messages/${encodeURIComponent(messageId)}/media`,
+            }
+          : null,
         templateName: null,
         templateLang: null,
         requestId,
@@ -556,12 +603,15 @@ export async function ingestWebSessionInboundMessage(params: {
       prisma,
       message: params.message,
       clientId: params.message.clientId,
-      eventName: "whatsapp.web.inbound.persisted",
+      eventName: params.message.media
+        ? "whatsapp.web.inbound.media.persisted"
+        : "whatsapp.web.inbound.persisted",
       requestId: `${requestId}:persisted`,
       conversationId: conversation?.id ?? null,
     });
     return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
   } catch (error) {
+    await deleteWebSessionStoredMedia(params.message.media);
     await safeRecordInboundEvent({
       prisma,
       message: params.message,

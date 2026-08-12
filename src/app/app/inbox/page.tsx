@@ -1838,7 +1838,6 @@ function canSendInboxText(
 }
 
 function canSendInboxMedia(channel: InboxChannel, item?: Pick<InboxConversationItem, "provider"> | null) {
-  if (channel === "whatsapp" && item?.provider === "web_session") return false;
   return channel === "whatsapp";
 }
 
@@ -1871,9 +1870,6 @@ function getInboxTextOutboundDisabledMessage(
 }
 
 function getInboxMediaOutboundDisabledMessage(channel: InboxChannel, item?: Pick<InboxConversationItem, "provider"> | null) {
-  if (channel === "whatsapp" && item?.provider === "web_session") {
-    return "Envio de mídia não está disponível para WhatsApp por sessão nesta etapa.";
-  }
   if (channel === "support") return "Envio de mídia ainda não está habilitado para suporte interno.";
   if (channel === "webchat") return "Envio de mídia ainda não está habilitado para Chat do site.";
   if (channel === "telegram") return "Envio de mídia ainda não está habilitado para Telegram.";

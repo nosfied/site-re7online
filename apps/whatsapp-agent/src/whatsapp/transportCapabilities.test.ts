@@ -67,7 +67,7 @@ test("web_session is not operationally active when feature is absent or false", 
   });
 });
 
-test("web_session exposes only text capability when the feature is enabled", () => {
+test("web_session exposes text and media capability when the feature is enabled", () => {
   const decision = resolveWhatsAppTransportCapabilities({
     provider: "web_session",
     tenantFeatures: { whatsappWebSession: true },
@@ -82,7 +82,7 @@ test("web_session exposes only text capability when the feature is enabled", () 
   assert.equal(decision.available, true);
   assert.equal(decision.reason, "available");
   assert.equal(decision.capabilities.text, true);
-  assert.equal(decision.capabilities.media, false);
+  assert.equal(decision.capabilities.media, true);
   assert.equal(decision.capabilities.contextualReply, false);
   assert.equal(decision.capabilities.templates, false);
   assert.equal(decision.capabilities.campaigns, false);

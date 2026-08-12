@@ -185,8 +185,10 @@ import {
 } from "../web-session/webSessionConnectionAdmin.js";
 import {
   createWebSessionTextOutboundMessage,
+  createWebSessionMediaOutboundMessage,
   isWebSessionTextOutboundReady,
 } from "../web-session/webSessionOutboundService.js";
+import { resolveWebSessionStoredMedia } from "../media/webSessionMedia.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
 import {
   normalizeUserRole,
@@ -5176,7 +5178,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
 
       const mediaId = extractRawMediaId(mediaMessage.rawPayload);
-      const localMedia = await resolveStoredOutboundMedia(mediaMessage.rawPayload);
+      const localMedia =
+        await resolveWebSessionStoredMedia(mediaMessage.rawPayload) ??
+        await resolveStoredOutboundMedia(mediaMessage.rawPayload);
       if (localMedia) {
         const fileName = sanitizeDownloadFileName(localMedia.fileName) || `${messageId}`;
         const headers: Record<string, string> = {
@@ -6325,7 +6329,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const resolvedChannel = resolvedChannelFields.channel;
       if (
         isConversationOutboundBlocked(resolvedConversation.winner) ||
-        (resolvedChannel === "whatsapp" && resolvedChannelFields.provider === "web_session") ||
         resolvedChannel === "messenger" ||
         resolvedChannel === "webchat" ||
         resolvedChannel === "telegram"
@@ -6333,9 +6336,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 409, {
           error: "channel_outbound_not_enabled",
           message:
-            resolvedChannel === "whatsapp" && resolvedChannelFields.provider === "web_session"
-              ? "Envio de mídia não está disponível para WhatsApp por sessão nesta etapa."
-              : resolvedChannel === "webchat"
+            resolvedChannel === "webchat"
               ? WEBCHAT_OUTBOUND_DISABLED_MESSAGE
               : resolvedChannel === "telegram"
               ? "Envio por Telegram ainda não está habilitado neste canal."
@@ -6402,17 +6403,38 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
-      const result = await adminSendMediaMessage({
-        waId: resolvedConversation.resolvedWaId,
-        clientKey: client.clientKey,
-        clientId: client.id,
-        requestId,
-        actorUserId: clientAuth.userId,
-        mimeType: body.file.mimeType,
-        fileName: body.file.fileName,
-        caption: body.caption,
-        content: body.file.content,
-      });
+      const result =
+        resolvedChannel === "whatsapp" && resolvedChannelFields.provider === "web_session"
+          ? await createWebSessionMediaOutboundMessage({
+              prisma,
+              waId: resolvedConversation.resolvedWaId,
+              waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+              clientKey: client.clientKey,
+              clientId: client.id,
+              requestId,
+              actorUserId: clientAuth.userId,
+              mimeType: body.file.mimeType,
+              fileName: body.file.fileName,
+              caption: body.caption,
+              content: body.file.content,
+              source: {
+                channel: resolvedChannelFields.channel,
+                provider: resolvedChannelFields.provider,
+                channelAccountId: resolvedChannelFields.channelAccountId,
+              },
+              conversation: currentConversation,
+            })
+          : await adminSendMediaMessage({
+              waId: resolvedConversation.resolvedWaId,
+              clientKey: client.clientKey,
+              clientId: client.id,
+              requestId,
+              actorUserId: clientAuth.userId,
+              mimeType: body.file.mimeType,
+              fileName: body.file.fileName,
+              caption: body.caption,
+              content: body.file.content,
+            });
       if (!result.ok) {
         if (result.error === "window_closed" && result.errorPayload) {
           json(res, result.statusCode, { error: result.errorPayload });

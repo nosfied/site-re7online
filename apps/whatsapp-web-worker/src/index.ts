@@ -1,6 +1,10 @@
 import "dotenv/config";
 import { logger } from "../../whatsapp-agent/src/logger/logger.js";
-import { runWhatsAppWebSessionWorker, sendTextViaActiveWebSession } from "./whatsappWebSessionWorker.js";
+import {
+  runWhatsAppWebSessionWorker,
+  sendMediaViaActiveWebSession,
+  sendTextViaActiveWebSession,
+} from "./whatsappWebSessionWorker.js";
 import { startWebSessionControlServer } from "./webSessionControlServer.js";
 
 const abortController = new AbortController();
@@ -11,6 +15,7 @@ const controlServer = Number.isInteger(controlPort) && controlPort > 0
       host: process.env.WHATSAPP_WEB_WORKER_CONTROL_HOST || "127.0.0.1",
       token: process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN,
       sendText: sendTextViaActiveWebSession,
+      sendMedia: sendMediaViaActiveWebSession,
     })
   : null;
 

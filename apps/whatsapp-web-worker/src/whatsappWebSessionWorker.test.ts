@@ -1,11 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import {
   connectionOpenTimeoutRuntimeState,
   isTransientConnectingState,
   isEligibleWebSessionAccount,
   listEligibleWebSessionAccounts,
   resolveWebSessionSenderJid,
+  sendMediaViaActiveWebSession,
   sendTextViaActiveWebSession,
   setActiveWebSessionConnectionForTesting,
   shouldKeepActiveWebSessionConnection,
@@ -206,4 +210,60 @@ test("web session worker refuses text when no active socket is available", async
     statusCode: 503,
     error: "web_session_worker_not_connected",
   });
+});
+
+test("web session worker sends media through an active socket", async (t) => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "web-session-worker-media-"));
+  const mediaPath = path.join(tmpDir, "document.txt");
+  await fs.writeFile(mediaPath, "conteudo");
+  t.after(async () => {
+    setActiveWebSessionConnectionForTesting("account-a", null);
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+  const sent: Array<{ jid: string; content: Record<string, unknown> }> = [];
+  setActiveWebSessionConnectionForTesting("account-a", {
+    tenantKey: "tenant-a",
+    channelAccountId: "session-a",
+    startedAtMs: Date.now(),
+    socket: {
+      ev: { on() {} },
+      sendMessage: async (jid, content) => {
+        sent.push({ jid, content });
+        return { key: { id: "baileys-media-id" } };
+      },
+    },
+    release: async () => {},
+  });
+  const prisma = {
+    channelAccount: {
+      findFirst: async () => account({
+        metadata: {
+          webSession: {
+            desiredState: "CONNECTED",
+            observedState: "CONNECTED",
+          },
+        },
+      }),
+    },
+  };
+
+  const result = await sendMediaViaActiveWebSession({
+    prisma: prisma as never,
+    clientId: "client-a",
+    tenantKey: "tenant-a",
+    accountId: "account-a",
+    channelAccountId: "session-a",
+    recipientWaId: "5584999997784",
+    mediaPath,
+    mediaKind: "document",
+    mimeType: "text/plain",
+    fileName: "document.txt",
+    caption: null,
+    requestId: "request-media-a",
+  });
+
+  assert.deepEqual(result, { ok: true, externalMessageId: "baileys-media-id" });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]?.jid, "5584999997784@s.whatsapp.net");
+  assert.deepEqual(Object.keys(sent[0]?.content ?? {}).sort(), ["caption", "document", "fileName", "mimetype"]);
 });

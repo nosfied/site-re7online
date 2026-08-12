@@ -222,6 +222,50 @@ test("ingestBaileysWebSessionMessage accepts sender resolved from LID mapping", 
   assert.equal((state.inboundMessages[0]?.rawPayload as Record<string, unknown>).senderJidServer, "s.whatsapp.net");
 });
 
+test("ingestBaileysWebSessionMessage persists web session media references without binary payload", async () => {
+  resetState();
+
+  const result = await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    message: {
+      key: { id: "MSG_IMAGE", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      messageTimestamp: 1786464000,
+      message: {
+        imageMessage: {
+          mimetype: "image/png",
+          caption: "print da tela",
+        },
+      },
+      webSessionMedia: {
+        kind: "image",
+        mediaId: "web-session:media_1",
+        mediaRef: "media_1",
+        storageRef: "client_1/web_MSG_IMAGE-media_1.png",
+        storageProvider: "local_web_session",
+        mimeType: "image/png",
+        fileName: "print.png",
+        caption: "print da tela",
+        sizeBytes: 128,
+      },
+    },
+  });
+
+  assert.equal(result.action, "persisted");
+  assert.equal(state.inboundMessages[0]?.type, MessageType.IMAGE);
+  assert.equal(state.inboundMessages[0]?.bodyText, "print da tela");
+  const rawPayload = state.inboundMessages[0]?.rawPayload as { media?: Record<string, unknown> } | undefined;
+  assert.equal(rawPayload?.media?.mediaId, "web-session:media_1");
+  assert.equal(rawPayload?.media?.storageProvider, "local_web_session");
+  assert.equal(rawPayload?.media?.mimeType, "image/png");
+  assert.equal("content" in (rawPayload?.media ?? {}), false);
+  assert.equal("base64" in (rawPayload?.media ?? {}), false);
+  assert.equal(state.events.some((event) => event.eventName === "whatsapp.web.inbound.media.received"), true);
+  assert.equal(state.events.some((event) => event.eventName === "whatsapp.web.inbound.media.persisted"), true);
+});
+
 test("ingestBaileysWebSessionMessage ignores messages older than the connection cutover", async () => {
   resetState();
 
