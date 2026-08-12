@@ -129,5 +129,13 @@ export async function recordWebSessionOutboundReceipt(params: {
       reason: error instanceof Error ? error.message : "unknown_error",
     });
   });
-  return { updated: true as const, messageId: outbound.messageId, waId: outbound.waId, waIdCanonical: outbound.waIdCanonical };
+  return {
+    updated: true as const,
+    messageId: outbound.messageId,
+    externalMessageId: outbound.externalMessageId,
+    waId: outbound.waId,
+    waIdCanonical: outbound.waIdCanonical,
+    status: params.status,
+    updatedAt: observedAt,
+  };
 }

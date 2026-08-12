@@ -89,6 +89,7 @@ const DEFAULT_CONNECTION_OPEN_TIMEOUT_MS = 30_000;
 const STALE_ACTIVE_CONNECTING_TIMEOUT_MS = 45_000;
 const DEFAULT_SEND_TEXT_TIMEOUT_MS = 15_000;
 const DEFAULT_SEND_MEDIA_TIMEOUT_MS = 30_000;
+const DEFAULT_AGENT_RECEIPT_REALTIME_TIMEOUT_MS = 2_000;
 
 export function setActiveWebSessionConnectionForTesting(accountId: string, active: ActiveConnection | null) {
   if (!active) {
@@ -108,6 +109,81 @@ export function connectionOpenTimeoutRuntimeState() {
 
 function eventRequestId(account: EligibleWebSessionAccount, eventName: string) {
   return `web-session-worker:${account.id}:${eventName}:${Date.now()}`;
+}
+
+function getAgentInternalBaseUrl() {
+  const configured = process.env.WHATSAPP_AGENT_INTERNAL_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, "");
+  const port = process.env.WHATSAPP_AGENT_INTERNAL_PORT?.trim() || "3001";
+  return `http://127.0.0.1:${port}`;
+}
+
+function toRealtimeReceiptStatus(status: WebSessionDeliveryStatus) {
+  if (status === "sent") return "SENT" as const;
+  if (status === "delivered") return "DELIVERED" as const;
+  if (status === "read") return "READ" as const;
+  return "FAILED" as const;
+}
+
+export function buildWebSessionReceiptRealtimePayload(params: {
+  clientId: string;
+  messageId: string | null;
+  externalMessageId: string | null;
+  waId: string | null;
+  waIdCanonical: string | null;
+  status: WebSessionDeliveryStatus;
+  updatedAt: string;
+}) {
+  return {
+    clientId: params.clientId,
+    messageId: params.messageId,
+    externalMessageId: params.externalMessageId,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical,
+    status: toRealtimeReceiptStatus(params.status),
+    updatedAt: params.updatedAt,
+  };
+}
+
+async function notifyAgentWebSessionReceiptRealtime(params: {
+  account: EligibleWebSessionAccount;
+  payload: ReturnType<typeof buildWebSessionReceiptRealtimePayload>;
+}) {
+  const token = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN?.trim();
+  if (!token || !params.payload.messageId) return;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DEFAULT_AGENT_RECEIPT_REALTIME_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${getAgentInternalBaseUrl()}/internal/web-session/receipt-realtime`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(params.payload),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      logger.warn({
+        event: "whatsapp.web.receipt.realtime_notify_failed",
+        tenantKey: params.account.tenantKey,
+        channelAccountId: params.account.channelAccountId,
+        status: params.payload.status,
+        reason: `http_${response.status}`,
+      });
+    }
+  } catch (error) {
+    logger.warn({
+      event: "whatsapp.web.receipt.realtime_notify_failed",
+      tenantKey: params.account.tenantKey,
+      channelAccountId: params.account.channelAccountId,
+      status: params.payload.status,
+      reason: error instanceof Error ? error.name : "unknown_error",
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function splitJid(value?: string | null) {
@@ -968,6 +1044,20 @@ async function persistWebSessionReceipt(params: {
     status: params.status,
     requestId: `web-session-receipt:${params.account.id}:${params.externalMessageId}:${params.status}`,
   });
+  if (result.updated) {
+    await notifyAgentWebSessionReceiptRealtime({
+      account: params.account,
+      payload: buildWebSessionReceiptRealtimePayload({
+        clientId: params.account.clientId,
+        messageId: result.messageId,
+        externalMessageId: result.externalMessageId,
+        waId: result.waId,
+        waIdCanonical: result.waIdCanonical,
+        status: result.status,
+        updatedAt: result.updatedAt,
+      }),
+    });
+  }
   logger.info({
     event: "whatsapp.web.receipt.processed",
     tenantKey: params.account.tenantKey,

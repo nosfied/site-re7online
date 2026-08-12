@@ -103,6 +103,12 @@ test("recordWebSessionOutboundReceipt updates tenant-scoped Web Session outbound
   });
 
   assert.equal(result.updated, true);
+  assert.equal(result.messageId, "message_1");
+  assert.equal(result.externalMessageId, "EXT_1");
+  assert.equal(result.waId, "5584999997784");
+  assert.equal(result.waIdCanonical, "55849999997784");
+  assert.equal(result.status, "delivered");
+  assert.equal(result.updatedAt, "2026-08-12T12:00:00.000Z");
   assert.deepEqual((state.outboundMessages[0]?.rawPayload as Record<string, unknown>).webSessionStatus, {
     lastStatus: "delivered",
     lastStatusAt: "2026-08-12T12:00:00.000Z",

@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
+  buildWebSessionReceiptRealtimePayload,
   connectionOpenTimeoutRuntimeState,
   isTransientConnectingState,
   isEligibleWebSessionAccount,
@@ -94,6 +95,31 @@ test("web session worker identifies only transient active connection states", ()
   assert.equal(isTransientConnectingState(account({
     metadata: { webSession: { desiredState: "CONNECTED", observedState: "CONNECTED" } },
   }) as never), false);
+});
+
+test("web session worker builds receipt realtime payload without message content", () => {
+  const payload = buildWebSessionReceiptRealtimePayload({
+    clientId: "client-a",
+    messageId: "web.session.send.1",
+    externalMessageId: "baileys-ext-1",
+    waId: "5584999997784",
+    waIdCanonical: "55849999997784",
+    status: "read",
+    updatedAt: "2026-08-12T12:00:00.000Z",
+  });
+
+  assert.deepEqual(payload, {
+    clientId: "client-a",
+    messageId: "web.session.send.1",
+    externalMessageId: "baileys-ext-1",
+    waId: "5584999997784",
+    waIdCanonical: "55849999997784",
+    status: "READ",
+    updatedAt: "2026-08-12T12:00:00.000Z",
+  });
+  assert.equal("bodyText" in payload, false);
+  assert.equal("rawPayload" in payload, false);
+  assert.equal("token" in payload, false);
 });
 
 test("web session worker keeps connection timeout retryable", () => {

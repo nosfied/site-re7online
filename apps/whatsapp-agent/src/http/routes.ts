@@ -717,6 +717,72 @@ function getRequestOrigin(req: IncomingMessage) {
   return origin ?? null;
 }
 
+function normalizeWebSessionRealtimeReceiptStatus(value: unknown) {
+  const status = String(value ?? "").trim().toUpperCase();
+  if (status === "SENT" || status === "DELIVERED" || status === "READ" || status === "FAILED") return status;
+  return null;
+}
+
+function getBearerToken(req: IncomingMessage) {
+  const header = req.headers.authorization;
+  const value = Array.isArray(header) ? header[0] : header;
+  const match = String(value ?? "").match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() ?? "";
+}
+
+async function handleInternalWebSessionReceiptRealtime(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestId: string
+) {
+  const expectedToken = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN?.trim();
+  if (!expectedToken || getBearerToken(req) !== expectedToken) {
+    json(res, 401, { ok: false, error: "unauthorized", requestId });
+    return;
+  }
+
+  const body = await readJsonBody(req, res);
+  if (!body) return;
+
+  const clientId = typeof body.clientId === "string" ? body.clientId.trim() : "";
+  const waId = typeof body.waId === "string" ? body.waId.trim() : null;
+  const waIdCanonical = typeof body.waIdCanonical === "string" ? body.waIdCanonical.trim() : null;
+  const messageId = typeof body.messageId === "string" ? body.messageId.trim() : null;
+  const metaMessageId = typeof body.externalMessageId === "string" ? body.externalMessageId.trim() : null;
+  const status = normalizeWebSessionRealtimeReceiptStatus(body.status);
+  const updatedAt =
+    typeof body.updatedAt === "string" && !Number.isNaN(Date.parse(body.updatedAt))
+      ? body.updatedAt
+      : new Date().toISOString();
+
+  if (!clientId || !messageId || !status) {
+    json(res, 400, { ok: false, error: "invalid_receipt_realtime_payload", requestId });
+    return;
+  }
+
+  publishRealtimeEvent({
+    type: "message.status.updated",
+    clientId,
+    waId,
+    waIdCanonical: waIdCanonical ?? (waId ? canonicalizeBrazilWaId(waId) : null),
+    messageId,
+    metaMessageId,
+    status,
+    errorBody: null,
+    updatedAt,
+  });
+
+  logger.info({
+    event: "whatsapp.web_session.receipt.realtime_published",
+    requestId,
+    status,
+    messageId,
+    hasWaId: Boolean(waId),
+    waIdLast4: (waIdCanonical ?? (waId ? canonicalizeBrazilWaId(waId) : "")).slice(-4) || null,
+  });
+  json(res, 200, { ok: true, requestId });
+}
+
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
   const requestId = crypto.randomUUID();
@@ -732,6 +798,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     res.writeHead(200, { "Content-Type": "text/plain" });
     res.end("whatsapp-agent running");
     return;
+  }
+
+  if (req.method === "POST" && pathname === "/internal/web-session/receipt-realtime") {
+    return handleInternalWebSessionReceiptRealtime(req, res, requestId);
   }
 
   if (pathname.startsWith("/webchat/v1/")) {
