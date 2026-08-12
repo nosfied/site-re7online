@@ -420,7 +420,7 @@ function canMarkMessageAsReference(item: InboxMessageItem) {
   if (!getMessageReplyId(item)) return false;
   const kind = getMessageReplyKind(item);
   if (kind === "inbound") return Boolean(item.messageId?.trim());
-  if (kind === "outbound") return Boolean(item.metaMessageId?.trim());
+  if (kind === "outbound") return Boolean(item.metaMessageId?.trim() || item.messageId?.trim());
   return false;
 }
 
@@ -6892,7 +6892,7 @@ export default function AppInboxPage() {
                       ? item.actor.displayName
                       : null;
                 const messageActions =
-                  replyOption && selectedConversationSupportsTemplateOutbound
+                  replyOption && composerEnabled
                     ? [
                         {
                           id: "mark",
