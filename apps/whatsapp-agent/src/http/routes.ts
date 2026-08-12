@@ -10073,6 +10073,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waId: nextState.waId,
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         channel: resolvedConversation.winner?.channel ?? null,
+        provider: resolvedConversation.winner?.provider ?? null,
         protocol,
       });
       const payload = await buildConversationActionPayload(prisma, {
@@ -24936,12 +24937,16 @@ async function sendConversationProtocolNoticeIfNeeded(
     waId: string;
     waIdCanonical?: string | null;
     channel?: string | null;
+    provider?: string | null;
     protocol: string | null;
   }
 ) {
   if (!params.protocol) return { sent: false as const, reason: "missing_protocol" as const };
   if (params.channel && serializeInboxChannelFields({ channel: params.channel }).channel !== "whatsapp") {
     return { sent: false as const, reason: "non_whatsapp_channel" as const };
+  }
+  if (params.provider && params.provider !== "meta") {
+    return { sent: false as const, reason: "non_meta_provider" as const };
   }
   const lookup = Array.from(new Set([params.waId, params.waIdCanonical].filter(Boolean))) as string[];
   const alreadySent = await prisma.outboundMessage.findFirst({

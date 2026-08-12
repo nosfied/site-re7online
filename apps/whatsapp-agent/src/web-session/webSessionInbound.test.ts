@@ -236,6 +236,7 @@ test("ingestBaileysWebSessionMessage resolves inbound quoted reference to local 
         waIdCanonical: "55849999997784",
         externalMessageId: "OUTBOUND_EXT_1",
         type: MessageType.TEXT,
+        bodyText: "Mensagem enviada pelo Converta",
       },
     ],
   });
@@ -268,6 +269,8 @@ test("ingestBaileysWebSessionMessage resolves inbound quoted reference to local 
   assert.equal(contextualReply.contextResolved, true);
   assert.equal(JSON.stringify(contextualReply).includes("OUTBOUND_EXT_1"), false);
   assert.equal(JSON.stringify(contextualReply).includes("5584999997784"), false);
+  assert.equal(JSON.stringify(contextualReply).includes("Mensagem enviada pelo Converta"), false);
+  assert.equal("clientPreviewBody" in contextualReply, false);
 });
 
 test("ingestBaileysWebSessionMessage accepts sender resolved from LID mapping", async () => {

@@ -181,17 +181,17 @@ async function resolveInboundQuotedReference(params: {
   const [inbound, outbound] = await Promise.all([
     params.prisma.inboundMessage.findFirst({
       where: sharedWhere,
-      select: { id: true, type: true },
+      select: { id: true, type: true, bodyText: true },
     }),
     params.prisma.outboundMessage.findFirst({
       where: sharedWhere,
-      select: { id: true, type: true },
+      select: { id: true, type: true, bodyText: true },
     }),
   ]);
   const target = outbound
-    ? { kind: "outbound" as const, id: outbound.id, type: outbound.type }
+    ? { kind: "outbound" as const, id: outbound.id, type: outbound.type, bodyText: outbound.bodyText }
     : inbound
-      ? { kind: "inbound" as const, id: inbound.id, type: inbound.type }
+      ? { kind: "inbound" as const, id: inbound.id, type: inbound.type, bodyText: inbound.bodyText }
       : null;
   if (!target) {
     return {
@@ -215,6 +215,7 @@ async function resolveInboundQuotedReference(params: {
     replyToProviderMessagePresent: true,
     replyToMetaMessagePresent: false,
     previewType: target.type,
+    clientPreviewBody: buildClientQuotedReferencePreviewBody(target.bodyText),
     replyToType: target.type,
     originalType: target.type,
     contextRequested: true,
@@ -222,6 +223,17 @@ async function resolveInboundQuotedReference(params: {
     contextAttached: true,
     mode: "reply",
   } satisfies Prisma.InputJsonObject;
+}
+
+function buildClientQuotedReferencePreviewBody(bodyText: string | null | undefined) {
+  const normalized = String(bodyText ?? "").replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+  return normalized.length > 240 ? `${normalized.slice(0, 237)}...` : normalized;
+}
+
+function serializeQuotedReferenceForRawPayload(reference: Prisma.InputJsonObject) {
+  const { clientPreviewBody: _clientPreviewBody, ...rawReference } = reference;
+  return rawReference satisfies Prisma.InputJsonObject;
 }
 
 export function normalizeBaileysInboundMessage(params: {
@@ -549,7 +561,7 @@ export async function ingestWebSessionInboundMessage(params: {
     const quotedReference = await resolveInboundQuotedReference({ prisma, message: params.message });
     const rawPayload = {
       ...(params.message.rawPayload as Record<string, unknown>),
-      ...(quotedReference ? { contextualReply: quotedReference } : {}),
+      ...(quotedReference ? { contextualReply: serializeQuotedReferenceForRawPayload(quotedReference) } : {}),
     } satisfies Prisma.InputJsonObject;
     const inserted = await persistInboundMessage({
       clientId: params.message.clientId,
@@ -672,6 +684,10 @@ export async function ingestWebSessionInboundMessage(params: {
               id: quotedReference.replyToInternalMessageId,
               previewType: quotedReference.previewType,
               mode: "reply",
+              previewBody:
+                typeof quotedReference.clientPreviewBody === "string"
+                  ? quotedReference.clientPreviewBody
+                  : null,
             }
           : quotedReference
             ? {

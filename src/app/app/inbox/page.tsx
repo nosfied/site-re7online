@@ -478,6 +478,34 @@ function buildReplyTarget(item: InboxMessageItem, mode: InboxReplyMode = "reply"
   };
 }
 
+function enrichReplyPreviewFromTimeline(item: InboxMessageItem, timeline: InboxMessageItem[]) {
+  const replyTo = item.replyTo;
+  if (!replyTo?.id) return item;
+  const hasRichPreview =
+    Boolean(replyTo.previewBody?.trim()) ||
+    Boolean(replyTo.previewMedia) ||
+    Boolean(replyTo.previewLocation);
+  if (hasRichPreview) return item;
+  const original = timeline.find(
+    (candidate) => candidate.internalMessageId === replyTo.id && getMessageReplyKind(candidate) === replyTo.kind
+  );
+  if (!original) return item;
+  const enrichedReplyTo = {
+    ...replyTo,
+    previewType: replyTo.previewType ?? original.type,
+    previewBody: getReplyPreviewText(original),
+    previewDirection: original.direction,
+    previewMedia: original.media
+      ? {
+          ...original.media,
+          messageId: original.messageId ?? null,
+        }
+      : null,
+    previewLocation: original.location ?? null,
+  };
+  return { ...item, replyTo: enrichedReplyTo };
+}
+
 function getTimelineReplyPreview(item: InboxMessageItem) {
   const preview = item.replyTo?.previewBody?.replace(/\s+/g, " ").trim();
   if (preview) return preview.length > 120 ? `${preview.slice(0, 117)}...` : preview;
@@ -3217,7 +3245,8 @@ export default function AppInboxPage() {
         }) ?? conversationKey;
       const shouldStickToBottom = isTimelineNearBottom();
       setMessages((prev) => {
-        const nextMessages = mergeMessagesByIdentity(prev, [message]);
+        const enrichedMessage = enrichReplyPreviewFromTimeline(message, prev);
+        const nextMessages = mergeMessagesByIdentity(prev, [enrichedMessage]);
         timelineCacheRef.current.set(selectedConversationWaId ?? event.waId, nextMessages);
         if (visibleConversationKey) {
           timelineCacheRef.current.set(visibleConversationKey, nextMessages);
@@ -3579,7 +3608,10 @@ export default function AppInboxPage() {
     }
     const responseItems = mode === "append" ? response.items : sortMessagesAscending(response.items);
     setMessages((prev) => {
-      const nextMessages = mode === "append" ? mergeMessagesByIdentity(prev, responseItems) : responseItems;
+      const nextMessages =
+        mode === "append"
+          ? mergeMessagesByIdentity(prev, responseItems)
+          : mergeMessagesByIdentity(responseItems, prev);
       timelineCacheRef.current.set(waId, nextMessages);
       return nextMessages;
     });
@@ -3735,7 +3767,7 @@ export default function AppInboxPage() {
           const nextMessages =
             cachedMessages?.length && shouldRefreshUnreadWindow
               ? mergeMessagesByIdentity(prev, responseItems)
-              : responseItems;
+              : mergeMessagesByIdentity(responseItems, prev);
           timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
           return nextMessages;
         });
