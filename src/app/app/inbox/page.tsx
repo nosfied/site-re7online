@@ -1656,6 +1656,16 @@ function sortMessagesAscending(items: InboxMessageItem[]) {
   return [...items].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
 }
 
+function getLatestMessageTimestamp(items: InboxMessageItem[]) {
+  let latest: number | null = null;
+  for (const item of items) {
+    const timestamp = Date.parse(item.createdAt);
+    if (!Number.isFinite(timestamp)) continue;
+    if (latest === null || timestamp > latest) latest = timestamp;
+  }
+  return latest;
+}
+
 function shouldPlayInboundNotificationForConversation(
   item: Pick<InboxConversationItem, "mode" | "handoffStatus">
 ) {
@@ -2334,8 +2344,12 @@ export default function AppInboxPage() {
   const processingOutgoingRef = useRef(false);
   const detailRequestSeqRef = useRef(0);
   const selectedTimelineLastRefreshAtRef = useRef(0);
+  const selectedTimelineRequestedActivityAtRef = useRef<number | null>(null);
   const selectedConversationIdentityCandidatesRef = useRef<string[]>([]);
   const refreshConversationListRef = useRef<((activeSession: AppSession) => Promise<void>) | null>(null);
+  const refreshSelectedTimelineRef = useRef<
+    ((activeSession: AppSession, waId: string, mode?: "replace" | "append") => Promise<void>) | null
+  >(null);
   const timelineCacheRef = useRef(new Map<string, InboxMessageItem[]>());
   const highlightedReferenceTimeoutRef = useRef<number | null>(null);
   const renderedPriorityLogKeysRef = useRef(new Set<string>());
@@ -3500,28 +3514,56 @@ export default function AppInboxPage() {
       return;
     }
 
-    if (!isAppForegroundFocused()) return;
-    const waitingForUnreadAnchor =
-      pendingUnreadScrollTargetRef.current?.conversationKey === selectedConversationKey;
-    const activeConversation = sortedItems.find(
-      (item) => getConversationIdentity(item) === selectedConversationKey
-    );
-    if (activeConversation && !loadingMessages && !waitingForUnreadAnchor) {
-      markConversationIdentitiesAsRead(
-        getConversationIdentityCandidates(activeConversation),
-        getConversationActivityAt(activeConversation),
-        activeConversation.waId
-      );
-    }
-  }, [
-    buildConversationFetchOptions,
-    buildConversationNotificationRequest,
-    conversationQueryKey,
-    loadingMessages,
-    markConversationIdentitiesAsRead,
-    markConversationIdentitiesAsUnread,
-    selectedConversationKey,
-  ]);
+	    if (!isAppForegroundFocused()) return;
+	    const waitingForUnreadAnchor =
+	      pendingUnreadScrollTargetRef.current?.conversationKey === selectedConversationKey;
+	    const activeConversation = sortedItems.find(
+	      (item) => getConversationIdentity(item) === selectedConversationKey
+	    );
+	    const latestTimelineMessageTimestamp = getLatestMessageTimestamp(messages);
+	    const activeConversationTimestamp = activeConversation ? getConversationActivityTimestamp(activeConversation) : null;
+	    if (
+	      activeConversation &&
+	      selectedConversationWaId &&
+	      !loadingMessages &&
+	      !waitingForUnreadAnchor &&
+	      activeConversationTimestamp !== null &&
+	      (latestTimelineMessageTimestamp === null || activeConversationTimestamp > latestTimelineMessageTimestamp) &&
+	      selectedTimelineRequestedActivityAtRef.current !== activeConversationTimestamp
+	    ) {
+	      selectedTimelineRequestedActivityAtRef.current = activeConversationTimestamp;
+	      void refreshSelectedTimelineRef.current?.(activeSession, selectedConversationWaId, "append").catch(
+	        (err: { status?: number }) => {
+	          if (err.status === 401) {
+	            handleUnauthorized();
+	            return;
+	          }
+	          if (isConversationGoneError(err)) {
+	            clearSelectedConversation();
+	          }
+	        }
+	      );
+	    }
+	    if (activeConversation && !loadingMessages && !waitingForUnreadAnchor) {
+	      markConversationIdentitiesAsRead(
+	        getConversationIdentityCandidates(activeConversation),
+	        getConversationActivityAt(activeConversation),
+	        activeConversation.waId
+	      );
+	    }
+	  }, [
+	    buildConversationFetchOptions,
+	    buildConversationNotificationRequest,
+	    clearSelectedConversation,
+	    conversationQueryKey,
+	    handleUnauthorized,
+	    loadingMessages,
+	    markConversationIdentitiesAsRead,
+	    markConversationIdentitiesAsUnread,
+	    messages,
+	    selectedConversationKey,
+	    selectedConversationWaId,
+	  ]);
 
   const loadMoreConversations = useCallback(async () => {
     if (!session || !conversationNextCursor || loadingConversationsPage) return;
@@ -3666,10 +3708,19 @@ export default function AppInboxPage() {
         response.waId ?? waId
       );
     }
-  }, [isTimelineNearBottom, markConversationIdentitiesAsRead, messages, selectedConversationKey, selectedConversationWaId]);
+	  }, [isTimelineNearBottom, markConversationIdentitiesAsRead, messages, selectedConversationKey, selectedConversationWaId]);
 
-  useEffect(() => {
-    if (!session) return;
+	  useEffect(() => {
+	    refreshSelectedTimelineRef.current = refreshSelectedTimeline;
+	    return () => {
+	      if (refreshSelectedTimelineRef.current === refreshSelectedTimeline) {
+	        refreshSelectedTimelineRef.current = null;
+	      }
+	    };
+	  }, [refreshSelectedTimeline]);
+
+	  useEffect(() => {
+	    if (!session) return;
     let cancelled = false;
     fetchAppUsers(session)
       .then((response) => {
