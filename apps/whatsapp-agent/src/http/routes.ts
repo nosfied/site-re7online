@@ -27021,9 +27021,9 @@ async function buildConversationDetailPayload(
     })
     .slice(0, params.limit);
 
-  const messageByInternalRef = new Map(
-    items.map((item) => [
-      `${item.messageKind}:${item.internalMessageId}`,
+	  const messageByInternalRef = new Map(
+	    items.map((item) => [
+	      `${item.messageKind}:${item.internalMessageId}`,
       {
         direction: item.direction,
         type: item.type,
@@ -27036,23 +27036,93 @@ async function buildConversationDetailPayload(
             }
           : null,
         location: item.location ?? null,
-      },
-    ])
-  );
-  for (const item of items) {
-    if (!("replyTo" in item) || !item.replyTo) continue;
-    const original = messageByInternalRef.get(`${item.replyTo.kind}:${item.replyTo.id}`);
-    if (!original) continue;
-    item.replyTo.previewBody = getTimelineMessageBody(
-      original.type,
-      original.bodyText,
-      original.templateName,
-      null
-    );
-    item.replyTo.previewDirection = original.direction;
-    item.replyTo.previewMedia = original.media;
-    item.replyTo.previewLocation = original.location;
-  }
+	      },
+	    ])
+	  );
+	  const missingInboundReferenceIds = Array.from(
+	    new Set(
+	      items
+	        .filter((item) => item.replyTo?.kind === "inbound" && item.replyTo.id)
+	        .map((item) => item.replyTo!.id)
+	        .filter((id) => !messageByInternalRef.has(`inbound:${id}`))
+	    )
+	  );
+	  const missingOutboundReferenceIds = Array.from(
+	    new Set(
+	      items
+	        .filter((item) => item.replyTo?.kind === "outbound" && item.replyTo.id)
+	        .map((item) => item.replyTo!.id)
+	        .filter((id) => !messageByInternalRef.has(`outbound:${id}`))
+	    )
+	  );
+	  if (missingInboundReferenceIds.length || missingOutboundReferenceIds.length) {
+	    const referenceWhere = {
+	      clientId: params.clientId,
+	      OR: [{ waIdCanonical: { in: detailWaIds } }, { waId: { in: detailWaIds } }],
+	    };
+	    const [referencedInbound, referencedOutbound] = await Promise.all([
+	      missingInboundReferenceIds.length
+	        ? prisma.inboundMessage.findMany({
+	            where: { ...referenceWhere, id: { in: missingInboundReferenceIds } },
+	            select: { id: true, type: true, bodyText: true, rawPayload: true, messageId: true },
+	          })
+	        : [],
+	      missingOutboundReferenceIds.length
+	        ? prisma.outboundMessage.findMany({
+	            where: { ...referenceWhere, id: { in: missingOutboundReferenceIds } },
+	            select: { id: true, type: true, bodyText: true, templateName: true, rawPayload: true, messageId: true },
+	          })
+	        : [],
+	    ]);
+	    for (const original of referencedInbound) {
+	      const media = buildInboxMessageMedia({
+	        type: original.type,
+	        rawPayload: original.rawPayload,
+	        downloadUrl: original.messageId
+	          ? buildConversationMessageDownloadPath(resolved.resolvedWaId, original.messageId)
+	          : undefined,
+	      });
+	      messageByInternalRef.set(`inbound:${original.id}`, {
+	        direction: "INBOUND",
+	        type: original.type,
+	        bodyText: original.bodyText,
+	        templateName: null,
+	        media: media ? { ...media, messageId: original.messageId ?? null } : null,
+	        location: extractMessageLocation(original.rawPayload),
+	      });
+	    }
+	    for (const original of referencedOutbound) {
+	      const media = buildInboxMessageMedia({
+	        type: original.type,
+	        rawPayload: original.rawPayload,
+	        downloadUrl: original.messageId
+	          ? buildConversationMessageDownloadPath(resolved.resolvedWaId, original.messageId)
+	          : undefined,
+	      });
+	      messageByInternalRef.set(`outbound:${original.id}`, {
+	        direction: "OUTBOUND",
+	        type: original.type,
+	        bodyText: original.bodyText,
+	        templateName: original.templateName,
+	        media: media ? { ...media, messageId: original.messageId ?? null } : null,
+	        location: extractMessageLocation(original.rawPayload),
+	      });
+	    }
+	  }
+	  for (const item of items) {
+	    if (!("replyTo" in item) || !item.replyTo) continue;
+	    const original = messageByInternalRef.get(`${item.replyTo.kind}:${item.replyTo.id}`);
+	    if (!original) continue;
+	    item.replyTo.previewBody = getTimelineMessageBody(
+	      original.type,
+	      original.bodyText,
+	      original.templateName,
+	      null
+	    );
+	    item.replyTo.previewDirection = original.direction;
+	    item.replyTo.previewMedia = original.media;
+	    item.replyTo.previewLocation = original.location;
+	  }
 
   const tenantsStartedAt = channelLatencyNow();
   const tenant = (await getTenants())[params.clientKey];
