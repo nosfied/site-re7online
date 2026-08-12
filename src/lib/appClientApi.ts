@@ -2651,6 +2651,8 @@ export async function createAppUser(
     password?: string;
     role?: string;
     departmentId?: string | null;
+    departmentIds?: string[];
+    primaryDepartmentId?: string | null;
     isActive?: boolean;
   }
 ): Promise<{
@@ -2671,6 +2673,8 @@ export async function updateAppUser(
     email?: string;
     role?: string;
     departmentId?: string | null;
+    departmentIds?: string[];
+    primaryDepartmentId?: string | null;
     isActive?: boolean;
   }
 ): Promise<{
@@ -2795,6 +2799,7 @@ export async function fetchAppDepartments(
 ): Promise<{
   ok: true;
   count: number;
+  timezone?: string;
   items: AdminDepartmentItem[];
 }> {
   const params = new URLSearchParams();
@@ -3537,6 +3542,7 @@ export async function createAppDepartment(
   payload: {
     name: string;
     isActive?: boolean;
+    businessHours?: Array<{ weekday: number; startMinute: number; endMinute: number }>;
   }
 ): Promise<{
   ok: true;
@@ -3554,6 +3560,7 @@ export async function updateAppDepartment(
   payload: {
     name?: string;
     isActive?: boolean;
+    businessHours?: Array<{ weekday: number; startMinute: number; endMinute: number }>;
   }
 ): Promise<{
   ok: true;

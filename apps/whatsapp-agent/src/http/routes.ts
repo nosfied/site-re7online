@@ -176,6 +176,19 @@ import {
   toPublicQueueAssignmentPolicy,
 } from "../queue/assignmentPolicy.js";
 import {
+  DepartmentMembershipValidationError,
+  getUserDepartmentMemberships,
+  normalizeDepartmentMembershipInput,
+  syncUserDepartmentMemberships,
+  type UserDepartmentMembershipView,
+} from "../users/departmentMemberships.js";
+import {
+  DepartmentBusinessHoursValidationError,
+  parseDepartmentBusinessHoursInput,
+  replaceDepartmentBusinessHours,
+  resolveTenantOperationalTimezone,
+} from "../departments/businessHours.js";
+import {
   disconnectWebSession,
   getWebSessionQr,
   prepareWebSessionAccount,
@@ -3697,6 +3710,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         warnings,
       });
     } catch (error) {
+      if (error instanceof DepartmentMembershipValidationError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
@@ -6711,19 +6728,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           createdAt: true,
         },
       });
+      const items = await Promise.all(
+        users.map((user) =>
+          serializeAdminUserForResponse(prisma, {
+            clientId: client.id,
+            user,
+          })
+        )
+      );
       json(res, 200, {
         ok: true,
         count: users.length,
-        items: users.map((user) => ({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          departmentId: user.departmentId,
-          departmentName: user.department?.name ?? null,
-          isActive: user.isActive,
-          createdAt: user.createdAt,
-        })),
+        items,
       });
     } catch (error) {
       logger.error({
@@ -7181,16 +7197,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
       }
+      const { departmentIds, primaryDepartmentId, ...userData } = parsed.data;
       const user = await prisma.user.create({
         data: {
           clientId: client.id,
-          name: parsed.data.name as string,
-          email: parsed.data.email as string,
-          ...(parsed.data.role ? { role: parsed.data.role } : {}),
-          ...(Object.prototype.hasOwnProperty.call(parsed.data, "departmentId")
-            ? { departmentId: parsed.data.departmentId }
+          name: userData.name as string,
+          email: userData.email as string,
+          ...(userData.role ? { role: userData.role } : {}),
+          ...(Object.prototype.hasOwnProperty.call(userData, "departmentId")
+            ? { departmentId: userData.departmentId }
             : {}),
-          ...(typeof parsed.data.isActive === "boolean" ? { isActive: parsed.data.isActive } : {}),
+          ...(typeof userData.isActive === "boolean" ? { isActive: userData.isActive } : {}),
           ...(password ? { passwordHash: hashPassword(password) } : {}),
         },
         select: {
@@ -7199,10 +7216,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           email: true,
           role: true,
           departmentId: true,
+          department: { select: { name: true } },
           isActive: true,
           createdAt: true,
         },
       });
+      const departmentsToSync =
+        departmentIds ??
+        (Object.prototype.hasOwnProperty.call(userData, "departmentId")
+          ? userData.departmentId
+            ? [userData.departmentId]
+            : []
+          : undefined);
+      if (departmentsToSync) {
+        await syncUserDepartmentMemberships(prisma, {
+          clientId: client.id,
+          userId: user.id,
+          departmentIds: departmentsToSync,
+          primaryDepartmentId: primaryDepartmentId ?? userData.departmentId ?? null,
+        });
+      }
       logger.info({
         event: "user.created",
         requestId,
@@ -7227,8 +7260,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           isActive: user.isActive,
         });
       }
-      json(res, 200, { ok: true, user });
+      json(res, 200, {
+        ok: true,
+        user: await serializeAdminUserForResponse(prisma, { clientId: client.id, user }),
+      });
     } catch (error) {
+      if (error instanceof DepartmentMembershipValidationError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
@@ -7363,19 +7403,36 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
       }
+      const { departmentIds, primaryDepartmentId, ...userData } = parsed.data;
       const user = await prisma.user.update({
         where: { id: existingUser.id },
-        data: parsed.data,
+        data: userData,
         select: {
           id: true,
           name: true,
           email: true,
           role: true,
           departmentId: true,
+          department: { select: { name: true } },
           isActive: true,
           createdAt: true,
         },
       });
+      const departmentsToSync =
+        departmentIds ??
+        (Object.prototype.hasOwnProperty.call(userData, "departmentId")
+          ? userData.departmentId
+            ? [userData.departmentId]
+            : []
+          : undefined);
+      if (departmentsToSync) {
+        await syncUserDepartmentMemberships(prisma, {
+          clientId: client.id,
+          userId: user.id,
+          departmentIds: departmentsToSync,
+          primaryDepartmentId: primaryDepartmentId ?? userData.departmentId ?? null,
+        });
+      }
       logger.info({
         event: "user.updated",
         requestId,
@@ -7400,8 +7457,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           isActive: user.isActive,
         });
       }
-      json(res, 200, { ok: true, user });
+      json(res, 200, {
+        ok: true,
+        user: await serializeAdminUserForResponse(prisma, { clientId: client.id, user }),
+      });
     } catch (error) {
+      if (error instanceof DepartmentBusinessHoursValidationError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
@@ -7450,6 +7514,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }))) return;
       const includeInactive =
         clientAuth.role === "ADMIN" && parsedUrl.searchParams.get("includeInactive") === "true";
+      const timezone = await resolveTenantOperationalTimezone(prisma, client.id);
       const departments = await prisma.department.findMany({
         where: {
           clientId: client.id,
@@ -7463,12 +7528,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           slug: true,
           isActive: true,
           createdAt: true,
+          businessHours: {
+            orderBy: [{ weekday: "asc" }, { startMinute: "asc" }],
+            select: { id: true, weekday: true, startMinute: true, endMinute: true },
+          },
         },
       });
       json(res, 200, {
         ok: true,
         count: departments.length,
-        items: departments,
+        timezone,
+        items: departments.map((item) => ({
+          ...item,
+          businessHoursConfigured: item.businessHours.length > 0,
+        })),
       });
     } catch (error) {
       logger.error({
@@ -7508,11 +7581,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }))) return;
       const body = await readJsonBody(req, res);
       if (!body) return;
+      const bodyRecord = body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
       const parsed = parseDepartmentUpsertPayload(body);
       if (!parsed.ok) {
         json(res, parsed.status, httpError(parsed.code, parsed.message));
         return;
       }
+      const businessHours = "businessHours" in bodyRecord
+        ? parseDepartmentBusinessHoursInput(bodyRecord.businessHours)
+        : undefined;
       const existingBySlug = await prisma.department.findFirst({
         where: {
           clientId: client.id,
@@ -7545,6 +7622,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           createdAt: true,
         },
       });
+      if (businessHours) {
+        await replaceDepartmentBusinessHours(prisma, {
+          clientId: client.id,
+          departmentId: department.id,
+          intervals: businessHours,
+        });
+      }
       logger.info({
         event: "department.created",
         requestId,
@@ -7553,7 +7637,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         departmentId: department.id,
         isActive: department.isActive,
       });
-      json(res, 200, { ok: true, department });
+      const fullDepartment = await prisma.department.findUnique({
+        where: { id: department.id },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+          createdAt: true,
+          businessHours: {
+            orderBy: [{ weekday: "asc" }, { startMinute: "asc" }],
+            select: { id: true, weekday: true, startMinute: true, endMinute: true },
+          },
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        department: fullDepartment
+          ? { ...fullDepartment, businessHoursConfigured: fullDepartment.businessHours.length > 0 }
+          : department,
+      });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -7623,6 +7726,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const body = await readJsonBody(req, res);
       if (!body) return;
+      const bodyRecord = body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
       const parsed = parseDepartmentUpsertPayload(body, {
         requireName: false,
         currentName: existing.name,
@@ -7631,8 +7735,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, parsed.status, httpError(parsed.code, parsed.message));
         return;
       }
-      if (Object.keys(parsed.data).length === 0) {
-        json(res, 400, httpError("bad_request", "Provide name and/or isActive"));
+      const businessHours = "businessHours" in bodyRecord
+        ? parseDepartmentBusinessHoursInput(bodyRecord.businessHours)
+        : undefined;
+      if (Object.keys(parsed.data).length === 0 && businessHours === undefined) {
+        json(res, 400, httpError("bad_request", "Provide name, isActive and/or businessHours"));
         return;
       }
       if (parsed.data.slug && parsed.data.slug !== existing.slug) {
@@ -7670,6 +7777,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           createdAt: true,
         },
       });
+      if (businessHours !== undefined) {
+        await replaceDepartmentBusinessHours(prisma, {
+          clientId: client.id,
+          departmentId: department.id,
+          intervals: businessHours,
+        });
+      }
       logger.info({
         event: "department.updated",
         requestId,
@@ -7691,8 +7805,31 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           isActive: department.isActive,
         });
       }
-      json(res, 200, { ok: true, department });
+      const fullDepartment = await prisma.department.findUnique({
+        where: { id: department.id },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+          createdAt: true,
+          businessHours: {
+            orderBy: [{ weekday: "asc" }, { startMinute: "asc" }],
+            select: { id: true, weekday: true, startMinute: true, endMinute: true },
+          },
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        department: fullDepartment
+          ? { ...fullDepartment, businessHoursConfigured: fullDepartment.businessHours.length > 0 }
+          : department,
+      });
     } catch (error) {
+      if (error instanceof DepartmentBusinessHoursValidationError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
@@ -12886,7 +13023,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, emailAvailability.status, httpError(emailAvailability.code, emailAvailability.message));
           return;
         }
-        const { data } = parsed;
+        const { departmentIds, primaryDepartmentId, ...data } = parsed.data;
         const password = typeof body.password === "string" ? body.password : "";
         if (password && password.length < 6) {
           json(res, 400, httpError("weak_password", "Password must be at least 6 characters"));
@@ -12932,6 +13069,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             createdAt: true,
           },
         });
+        const departmentsToSync =
+          departmentIds ??
+          (Object.prototype.hasOwnProperty.call(data, "departmentId")
+            ? data.departmentId
+              ? [data.departmentId]
+              : []
+            : undefined);
+        if (departmentsToSync) {
+          await syncUserDepartmentMemberships(prisma, {
+            clientId: client.id,
+            userId: user.id,
+            departmentIds: departmentsToSync,
+            primaryDepartmentId: primaryDepartmentId ?? data.departmentId ?? null,
+          });
+        }
         logger.info({
           event: "user.created",
           requestId,
@@ -12954,8 +13106,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             isActive: user.isActive,
           });
         }
-        json(res, 200, { ok: true, user });
+        json(res, 200, {
+          ok: true,
+          user: await serializeAdminUserForResponse(prisma, { clientId: client.id, user }),
+        });
       } catch (error) {
+        if (error instanceof DepartmentMembershipValidationError) {
+          json(res, error.status, httpError(error.code, error.message));
+          return;
+        }
         if (
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === "P2002"
@@ -13054,19 +13213,36 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             return;
           }
         }
+        const { departmentIds, primaryDepartmentId, ...userData } = parsed.data;
         const user = await prisma.user.update({
           where: { id: existingUser.id },
-          data: parsed.data,
+          data: userData,
           select: {
             id: true,
             name: true,
             email: true,
             role: true,
             departmentId: true,
+            department: { select: { name: true } },
             isActive: true,
             createdAt: true,
           },
         });
+        const departmentsToSync =
+          departmentIds ??
+          (Object.prototype.hasOwnProperty.call(userData, "departmentId")
+            ? userData.departmentId
+              ? [userData.departmentId]
+              : []
+            : undefined);
+        if (departmentsToSync) {
+          await syncUserDepartmentMemberships(prisma, {
+            clientId: client.id,
+            userId: user.id,
+            departmentIds: departmentsToSync,
+            primaryDepartmentId: primaryDepartmentId ?? userData.departmentId ?? null,
+          });
+        }
         logger.info({
           event: "user.updated",
           requestId,
@@ -13089,8 +13265,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             isActive: user.isActive,
           });
         }
-        json(res, 200, { ok: true, user });
+        json(res, 200, {
+          ok: true,
+          user: await serializeAdminUserForResponse(prisma, { clientId: client.id, user }),
+        });
       } catch (error) {
+        if (error instanceof DepartmentMembershipValidationError) {
+          json(res, error.status, httpError(error.code, error.message));
+          return;
+        }
         if (
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === "P2002"
@@ -22520,6 +22703,8 @@ async function parseAdminUserUpsertPayload(
         email?: string;
         role?: string;
         departmentId?: string | null;
+        departmentIds?: string[];
+        primaryDepartmentId?: string | null;
         isActive?: boolean;
       };
     }
@@ -22534,6 +22719,8 @@ async function parseAdminUserUpsertPayload(
     email?: string;
     role?: string;
     departmentId?: string | null;
+    departmentIds?: string[];
+    primaryDepartmentId?: string | null;
     isActive?: boolean;
   } = {};
 
@@ -22606,11 +22793,47 @@ async function parseAdminUserUpsertPayload(
     }
   }
 
+  const hasMembershipPayload = "departmentIds" in body || "primaryDepartmentId" in body;
+  if (hasMembershipPayload) {
+    const membershipInput = normalizeDepartmentMembershipInput({
+      departmentIds: body.departmentIds,
+      primaryDepartmentId: body.primaryDepartmentId,
+      legacyDepartmentId: hasDepartment ? data.departmentId ?? null : undefined,
+    });
+    if (membershipInput.primaryDepartmentId && !membershipInput.departmentIds.includes(membershipInput.primaryDepartmentId)) {
+      return {
+        ok: false,
+        status: 400,
+        code: "primary_department_invalid",
+        message: "Primary department must be one of the selected departments",
+      };
+    }
+    if (membershipInput.departmentIds.length > 0) {
+      const departments = await prisma.department.findMany({
+        where: { clientId: options.clientId, id: { in: membershipInput.departmentIds } },
+        select: { id: true },
+      });
+      if (departments.length !== membershipInput.departmentIds.length) {
+        return {
+          ok: false,
+          status: 404,
+          code: "department_not_found",
+          message: "Department not found for this tenant",
+        };
+      }
+    }
+    data.departmentIds = membershipInput.departmentIds;
+    data.primaryDepartmentId = membershipInput.primaryDepartmentId;
+    data.departmentId = membershipInput.primaryDepartmentId;
+  }
+
   const effectiveRole =
     data.role ?? String(options.currentRole ?? "").trim().toUpperCase() ?? "";
   const effectiveDepartmentId = hasDepartment
     ? (data.departmentId ?? null)
-    : options.currentDepartmentId ?? undefined;
+    : hasMembershipPayload
+      ? data.primaryDepartmentId
+      : options.currentDepartmentId ?? undefined;
   if (
     (effectiveRole === "AGENT" || effectiveRole === "SUPERVISOR") &&
     !effectiveDepartmentId
@@ -22636,6 +22859,59 @@ async function parseAdminUserUpsertPayload(
   }
 
   return { ok: true, data };
+}
+
+function serializeUserMemberships(memberships: UserDepartmentMembershipView[]) {
+  const active = memberships.filter((item) => item.isActive);
+  const primary = active.find((item) => item.isPrimary) ?? active[0] ?? null;
+  return {
+    departmentIds: active.map((item) => item.departmentId),
+    primaryDepartmentId: primary?.departmentId ?? null,
+    memberships: active.map((item) => ({
+      departmentId: item.departmentId,
+      departmentName: item.departmentName,
+      isPrimary: item.departmentId === primary?.departmentId,
+      isActive: item.isActive,
+      source: item.source,
+    })),
+  };
+}
+
+async function serializeAdminUserForResponse(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      role: string;
+      departmentId?: string | null;
+      department?: { name: string } | null;
+      isActive?: boolean;
+      createdAt: Date;
+    };
+  }
+) {
+  const memberships = await getUserDepartmentMemberships(prisma, {
+    clientId: params.clientId,
+    userId: params.user.id,
+  });
+  const serializedMemberships = serializeUserMemberships(memberships);
+  return {
+    id: params.user.id,
+    name: params.user.name,
+    email: params.user.email,
+    role: params.user.role,
+    departmentId: serializedMemberships.primaryDepartmentId ?? params.user.departmentId ?? null,
+    departmentName:
+      memberships.find((item) => item.departmentId === serializedMemberships.primaryDepartmentId)?.departmentName ??
+      params.user.department?.name ??
+      null,
+    ...serializedMemberships,
+    isActive: params.user.isActive,
+    createdAt: params.user.createdAt,
+  };
 }
 
 async function assertGlobalUserEmailAvailable(

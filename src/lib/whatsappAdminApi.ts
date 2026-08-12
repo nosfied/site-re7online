@@ -141,6 +141,15 @@ export type AdminUserItem = {
   role: string;
   departmentId?: string | null;
   departmentName?: string | null;
+  departmentIds?: string[];
+  primaryDepartmentId?: string | null;
+  memberships?: Array<{
+    departmentId: string;
+    departmentName?: string | null;
+    isPrimary: boolean;
+    isActive: boolean;
+    source?: "membership" | "legacy" | string;
+  }>;
   isActive?: boolean;
   createdAt: string;
 };
@@ -151,6 +160,13 @@ export type AdminDepartmentItem = {
   slug?: string;
   isActive: boolean;
   createdAt: string;
+  businessHours?: Array<{
+    id?: string;
+    weekday: number;
+    startMinute: number;
+    endMinute: number;
+  }>;
+  businessHoursConfigured?: boolean;
 };
 
 export type AdminClientItem = {

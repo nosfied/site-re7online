@@ -1,4 +1,5 @@
 import { ConversationOperationalStatus, Prisma, type PrismaClient } from "@prisma/client";
+import { getEligibleUsersForDepartmentAssignment } from "../users/departmentMemberships.js";
 
 export type QueueAssignmentMode = "manual" | "round_robin" | "least_active";
 export type QueueAssignmentScope = "tenant" | "department";
@@ -306,6 +307,24 @@ export async function applyBalancedQueueAssignment(params: {
   });
   if (!config) return { applied: false, reason: "no_policy" };
   if (!policy.enabled || policy.mode === "manual") return { applied: false, reason: "manual" };
+  if (policy.scope === "department" && !params.departmentId) {
+    await recordQueueAssignmentEvent({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      conversationId: params.conversationId,
+      requestId: `${params.requestId ?? "queue-assignment"}:no-department:${params.runtimeStateId}`,
+      eventName: "queue.assignment.no_eligible_agent",
+      payload: {
+        mode: policy.mode,
+        scope: policy.scope,
+        departmentId: null,
+        eligibleCount: 0,
+        reason: "department_required",
+        source: params.source,
+      },
+    });
+    return { applied: false, reason: "no_eligible_agent" };
+  }
   if (policy.requireOnline) {
     await recordQueueAssignmentEvent({
       prisma: params.prisma,
@@ -325,17 +344,23 @@ export async function applyBalancedQueueAssignment(params: {
     return { applied: false, reason: "no_eligible_agent" };
   }
 
-  const roleFilter = policy.includeSupervisors ? { in: ["AGENT", "SUPERVISOR"] } : "AGENT";
-  const users = await params.prisma.user.findMany({
-    where: {
-      clientId: params.clientId,
-      isActive: true,
-      role: roleFilter,
-      ...(policy.scope === "department" && params.departmentId ? { departmentId: params.departmentId } : {}),
-    },
-    select: { id: true, createdAt: true },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-  });
+  const users =
+    policy.scope === "department"
+      ? await getEligibleUsersForDepartmentAssignment(params.prisma, {
+          clientId: params.clientId,
+          departmentId: params.departmentId as string,
+          includeSupervisors: policy.includeSupervisors,
+          fallbackToLegacy: true,
+        })
+      : await params.prisma.user.findMany({
+          where: {
+            clientId: params.clientId,
+            isActive: true,
+            role: policy.includeSupervisors ? { in: ["AGENT", "SUPERVISOR"] } : "AGENT",
+          },
+          select: { id: true, createdAt: true },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
 
   const activeRows = users.length
     ? await params.prisma.conversationRuntimeState.findMany({

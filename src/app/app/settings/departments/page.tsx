@@ -25,6 +25,34 @@ function canManageDepartments(role: string) {
   return role.trim().toUpperCase() === "ADMIN";
 }
 
+const WEEKDAYS = [
+  { value: 0, label: "Domingo" },
+  { value: 1, label: "Segunda-feira" },
+  { value: 2, label: "Terça-feira" },
+  { value: 3, label: "Quarta-feira" },
+  { value: 4, label: "Quinta-feira" },
+  { value: 5, label: "Sexta-feira" },
+  { value: 6, label: "Sábado" },
+];
+
+type BusinessHourDraft = {
+  weekday: number;
+  startMinute: number;
+  endMinute: number;
+};
+
+function minutesToTime(value: number) {
+  const hour = Math.floor(value / 60);
+  const minute = value % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function timeToMinutes(value: string) {
+  const [hour, minute] = value.split(":").map((item) => Number(item));
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return 0;
+  return Math.max(0, Math.min(1440, hour * 60 + minute));
+}
+
 function DepartmentBadge({
   label,
   tone = "default",
@@ -73,7 +101,10 @@ export default function AppSettingsDepartmentsPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, { name: string; isActive: boolean }>>({});
+  const [timezone, setTimezone] = useState("America/Fortaleza");
+  const [drafts, setDrafts] = useState<
+    Record<string, { name: string; isActive: boolean; businessHours: BusinessHourDraft[] }>
+  >({});
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -89,6 +120,11 @@ export default function AppSettingsDepartmentsPage() {
           {
             name: item.name,
             isActive: item.isActive,
+            businessHours: (item.businessHours ?? []).map((hour) => ({
+              weekday: hour.weekday,
+              startMinute: hour.startMinute,
+              endMinute: hour.endMinute,
+            })),
           },
         ])
       )
@@ -100,6 +136,7 @@ export default function AppSettingsDepartmentsPage() {
       const response = await fetchAppDepartments(activeSession, {
         includeInactive: canManageDepartments(activeSession.user.role),
       });
+      if (response.timezone) setTimezone(response.timezone);
       hydrateDepartments(response.items);
     },
     [hydrateDepartments]
@@ -212,6 +249,7 @@ export default function AppSettingsDepartmentsPage() {
       await updateAppDepartment(session, item.id, {
         name: nextName,
         isActive: typeof nextIsActive === "boolean" ? nextIsActive : draft.isActive,
+        businessHours: draft.businessHours,
       });
       await loadDepartments(session);
       if (typeof nextIsActive === "boolean") {
@@ -385,6 +423,126 @@ export default function AppSettingsDepartmentsPage() {
                         </button>
                       </div>
                     </label>
+                  </div>
+
+                  <div className="mt-3 rounded-lg border border-white/10 bg-re7-navy/35 p-2.5">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-semibold text-white">Horário de funcionamento</h4>
+                        <p className="text-xs text-white/55">Fuso horário: {timezone}</p>
+                      </div>
+                      {draft.businessHours.length === 0 ? (
+                        <DepartmentBadge label="Sem horário configurado" />
+                      ) : (
+                        <DepartmentBadge label={`${draft.businessHours.length} períodos`} tone="success" />
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      {WEEKDAYS.map((weekday) => {
+                        const intervals = draft.businessHours
+                          .filter((hour) => hour.weekday === weekday.value)
+                          .sort((a, b) => a.startMinute - b.startMinute);
+                        return (
+                          <div key={weekday.value} className="rounded-md border border-white/10 p-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-xs font-semibold text-white/80">{weekday.label}</span>
+                              <button
+                                type="button"
+                                disabled={readOnly}
+                                onClick={() =>
+                                  setDrafts((current) => ({
+                                    ...current,
+                                    [item.id]: {
+                                      ...current[item.id],
+                                      businessHours: [
+                                        ...current[item.id].businessHours,
+                                        { weekday: weekday.value, startMinute: 480, endMinute: 720 },
+                                      ],
+                                    },
+                                  }))
+                                }
+                                className="rounded-md border border-white/20 px-2 py-1 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Adicionar período
+                              </button>
+                            </div>
+                            {intervals.length === 0 ? (
+                              <p className="mt-2 text-xs text-white/45">Fechado ou sem período definido neste dia.</p>
+                            ) : (
+                              <div className="mt-2 space-y-1.5">
+                                {intervals.map((interval, intervalIndex) => {
+                                  const absoluteIndex = draft.businessHours.findIndex(
+                                    (hour) =>
+                                      hour.weekday === interval.weekday &&
+                                      hour.startMinute === interval.startMinute &&
+                                      hour.endMinute === interval.endMinute
+                                  );
+                                  return (
+                                    <div key={`${weekday.value}-${intervalIndex}`} className="flex flex-wrap items-center gap-2">
+                                      <input
+                                        type="time"
+                                        value={minutesToTime(interval.startMinute)}
+                                        disabled={readOnly}
+                                        onChange={(event) =>
+                                          setDrafts((current) => {
+                                            const nextHours = [...current[item.id].businessHours];
+                                            nextHours[absoluteIndex] = {
+                                              ...nextHours[absoluteIndex],
+                                              startMinute: timeToMinutes(event.target.value),
+                                            };
+                                            return {
+                                              ...current,
+                                              [item.id]: { ...current[item.id], businessHours: nextHours },
+                                            };
+                                          })
+                                        }
+                                        className="rounded-md border border-white/15 bg-re7-navy px-2 py-1 text-xs text-white disabled:opacity-50"
+                                      />
+                                      <span className="text-xs text-white/45">até</span>
+                                      <input
+                                        type="time"
+                                        value={minutesToTime(interval.endMinute)}
+                                        disabled={readOnly}
+                                        onChange={(event) =>
+                                          setDrafts((current) => {
+                                            const nextHours = [...current[item.id].businessHours];
+                                            nextHours[absoluteIndex] = {
+                                              ...nextHours[absoluteIndex],
+                                              endMinute: timeToMinutes(event.target.value),
+                                            };
+                                            return {
+                                              ...current,
+                                              [item.id]: { ...current[item.id], businessHours: nextHours },
+                                            };
+                                          })
+                                        }
+                                        className="rounded-md border border-white/15 bg-re7-navy px-2 py-1 text-xs text-white disabled:opacity-50"
+                                      />
+                                      <button
+                                        type="button"
+                                        disabled={readOnly}
+                                        onClick={() =>
+                                          setDrafts((current) => ({
+                                            ...current,
+                                            [item.id]: {
+                                              ...current[item.id],
+                                              businessHours: current[item.id].businessHours.filter((_, index) => index !== absoluteIndex),
+                                            },
+                                          }))
+                                        }
+                                        className="rounded-md border border-white/20 px-2 py-1 text-xs text-white/75 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        Remover
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">

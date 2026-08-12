@@ -28,7 +28,8 @@ const EMPTY_USER_FORM = {
   email: "",
   password: "",
   role: "AGENT",
-  departmentId: "",
+  departmentIds: [] as string[],
+  primaryDepartmentId: "",
   isActive: true,
 };
 
@@ -39,6 +40,21 @@ function canManageUsers(role: string) {
 
 function isDepartmentRequired(role: string) {
   return role === "AGENT" || role === "SUPERVISOR";
+}
+
+function getUserDepartmentIds(item: AdminUserItem) {
+  if (Array.isArray(item.departmentIds) && item.departmentIds.length > 0) return item.departmentIds;
+  return item.departmentId ? [item.departmentId] : [];
+}
+
+function getPrimaryDepartmentId(item: AdminUserItem, departmentIds = getUserDepartmentIds(item)) {
+  return item.primaryDepartmentId ?? item.departmentId ?? departmentIds[0] ?? "";
+}
+
+function toggleDepartmentId(current: string[], departmentId: string) {
+  return current.includes(departmentId)
+    ? current.filter((item) => item !== departmentId)
+    : [...current, departmentId];
 }
 
 function InfoBadge({
@@ -116,7 +132,8 @@ export default function AppSettingsUsersPage() {
         name: string;
         email: string;
         role: string;
-        departmentId: string;
+        departmentIds: string[];
+        primaryDepartmentId: string;
         isActive: boolean;
       }
     >
@@ -137,7 +154,8 @@ export default function AppSettingsUsersPage() {
             name: item.name,
             email: item.email,
             role: String(item.role || "AGENT").toUpperCase(),
-            departmentId: item.departmentId ?? "",
+            departmentIds: getUserDepartmentIds(item),
+            primaryDepartmentId: getPrimaryDepartmentId(item),
             isActive: item.isActive ?? true,
           },
         ])
@@ -224,8 +242,12 @@ export default function AppSettingsUsersPage() {
       setUserError("Informe um email válido.");
       return;
     }
-    if (isDepartmentRequired(userForm.role) && !userForm.departmentId) {
-      setUserError("Selecione um setor para AGENT ou SUPERVISOR.");
+    if (isDepartmentRequired(userForm.role) && userForm.departmentIds.length === 0) {
+      setUserError("Selecione pelo menos um setor para AGENT ou SUPERVISOR.");
+      return;
+    }
+    if (userForm.departmentIds.length > 0 && !userForm.primaryDepartmentId) {
+      setUserError("Selecione o setor principal.");
       return;
     }
     setCreatingUser(true);
@@ -239,7 +261,9 @@ export default function AppSettingsUsersPage() {
         email: emailUsed,
         password: userForm.password,
         role: userForm.role,
-        departmentId: userForm.departmentId || null,
+        departmentId: userForm.primaryDepartmentId || null,
+        departmentIds: userForm.departmentIds,
+        primaryDepartmentId: userForm.primaryDepartmentId || null,
         isActive: userForm.isActive,
       });
       setUserForm(EMPTY_USER_FORM);
@@ -275,8 +299,12 @@ export default function AppSettingsUsersPage() {
       setActionError("Informe um email válido.");
       return;
     }
-    if (isDepartmentRequired(nextRole) && !draft.departmentId) {
-      setActionError("Selecione um setor para AGENT ou SUPERVISOR.");
+    if (isDepartmentRequired(nextRole) && draft.departmentIds.length === 0) {
+      setActionError("Selecione pelo menos um setor para AGENT ou SUPERVISOR.");
+      return;
+    }
+    if (draft.departmentIds.length > 0 && !draft.primaryDepartmentId) {
+      setActionError("Selecione o setor principal.");
       return;
     }
     setSavingUserId(item.id);
@@ -287,7 +315,9 @@ export default function AppSettingsUsersPage() {
         name: draft.name.trim(),
         email: draft.email.trim().toLowerCase(),
         role: nextRole,
-        departmentId: draft.departmentId || null,
+        departmentId: draft.primaryDepartmentId || null,
+        departmentIds: draft.departmentIds,
+        primaryDepartmentId: draft.primaryDepartmentId || null,
         isActive: draft.isActive,
       });
       setUsers((current) => current.map((user) => (user.id === item.id ? response.user : user)));
@@ -297,7 +327,8 @@ export default function AppSettingsUsersPage() {
           name: response.user.name,
           email: response.user.email,
           role: response.user.role,
-          departmentId: response.user.departmentId ?? "",
+          departmentIds: getUserDepartmentIds(response.user),
+          primaryDepartmentId: getPrimaryDepartmentId(response.user),
           isActive: response.user.isActive ?? true,
         },
       }));
@@ -388,7 +419,8 @@ export default function AppSettingsUsersPage() {
                     setUserForm((current) => ({
                       ...current,
                       role: event.target.value,
-                      departmentId: isDepartmentRequired(event.target.value) ? current.departmentId : "",
+                      departmentIds: isDepartmentRequired(event.target.value) ? current.departmentIds : [],
+                      primaryDepartmentId: isDepartmentRequired(event.target.value) ? current.primaryDepartmentId : "",
                     }))
                   }
                   className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
@@ -400,24 +432,56 @@ export default function AppSettingsUsersPage() {
                   ))}
                 </select>
               </label>
-              <label className="flex flex-col gap-2 text-sm text-white/75">
-                <span>Setor</span>
-                <select
-                  value={userForm.departmentId}
-                  onChange={(event) =>
-                    setUserForm((current) => ({ ...current, departmentId: event.target.value }))
-                  }
-                  className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
-                >
-                  <option value="">-</option>
-                  {departments.map((department) => (
-                    <option key={department.id} value={department.id}>
-                      {department.name}
-                      {department.isActive ? "" : " (inativo)"}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="flex flex-col gap-2 text-sm text-white/75 xl:col-span-2">
+                <span>Departamentos operacionais</span>
+                <div className="grid min-w-0 gap-2 rounded-md border border-white/15 bg-re7-navy/70 p-2 sm:grid-cols-2">
+                  {departments.map((department) => {
+                    const checked = userForm.departmentIds.includes(department.id);
+                    return (
+                      <div key={department.id} className="flex min-w-0 items-center justify-between gap-2 rounded border border-white/10 px-2 py-1.5">
+                        <label className="flex min-w-0 items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setUserForm((current) => {
+                                const nextDepartmentIds = toggleDepartmentId(current.departmentIds, department.id);
+                                const nextPrimary =
+                                  nextDepartmentIds.length === 0
+                                    ? ""
+                                    : nextDepartmentIds.includes(current.primaryDepartmentId)
+                                      ? current.primaryDepartmentId
+                                      : nextDepartmentIds[0];
+                                return {
+                                  ...current,
+                                  departmentIds: nextDepartmentIds,
+                                  primaryDepartmentId: nextPrimary,
+                                };
+                              })
+                            }
+                          />
+                          <span className="truncate">
+                            {department.name}
+                            {department.isActive ? "" : " (inativo)"}
+                          </span>
+                        </label>
+                        <label className="flex shrink-0 items-center gap-1 text-xs text-white/60">
+                          <input
+                            type="radio"
+                            name="new-user-primary-department"
+                            checked={checked && userForm.primaryDepartmentId === department.id}
+                            disabled={!checked}
+                            onChange={() =>
+                              setUserForm((current) => ({ ...current, primaryDepartmentId: department.id }))
+                            }
+                          />
+                          Principal
+                        </label>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
               <label className="flex flex-col gap-2 text-sm text-white/75">
                 <span>Status</span>
                 <select
@@ -491,9 +555,12 @@ export default function AppSettingsUsersPage() {
             {users.map((item, index) => {
               const draft = userDrafts[item.id];
               if (!draft) return null;
-              const departmentLabel = draft.departmentId
-                ? `${departmentNameById[draft.departmentId] || draft.departmentId}`
-                : "-";
+              const departmentLabel =
+                draft.departmentIds.length > 0
+                  ? draft.departmentIds
+                      .map((departmentId) => departmentNameById[departmentId] || departmentId)
+                      .join(", ")
+                  : "-";
               return (
                 <article
                   key={item.id}
@@ -564,8 +631,11 @@ export default function AppSettingsUsersPage() {
                               [item.id]: {
                                 ...current[item.id],
                                 role: event.target.value,
-                                departmentId: isDepartmentRequired(event.target.value)
-                                  ? current[item.id].departmentId
+                                departmentIds: isDepartmentRequired(event.target.value)
+                                  ? current[item.id].departmentIds
+                                  : [],
+                                primaryDepartmentId: isDepartmentRequired(event.target.value)
+                                  ? current[item.id].primaryDepartmentId
                                   : "",
                               },
                             }))
@@ -579,30 +649,66 @@ export default function AppSettingsUsersPage() {
                           ))}
                         </select>
                       </label>
-                      <label className="flex flex-col gap-2 text-sm text-white/75">
-                        <span>Setor</span>
-                        <select
-                          value={draft.departmentId}
-                          onChange={(event) =>
-                            setUserDrafts((current) => ({
-                              ...current,
-                              [item.id]: {
-                                ...current[item.id],
-                                departmentId: event.target.value,
-                              },
-                            }))
-                          }
-                          className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
-                        >
-                          <option value="">-</option>
-                          {departments.map((department) => (
-                            <option key={department.id} value={department.id}>
-                              {department.name}
-                              {department.isActive ? "" : " (inativo)"}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                      <div className="flex flex-col gap-2 text-sm text-white/75">
+                        <span>Departamentos</span>
+                        <div className="grid min-w-0 gap-2 rounded-md border border-white/15 bg-re7-navy/70 p-2">
+                          {departments.map((department) => {
+                            const checked = draft.departmentIds.includes(department.id);
+                            return (
+                              <div key={department.id} className="flex min-w-0 items-center justify-between gap-2 rounded border border-white/10 px-2 py-1.5">
+                                <label className="flex min-w-0 items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() =>
+                                      setUserDrafts((current) => {
+                                        const currentDraft = current[item.id];
+                                        const nextDepartmentIds = toggleDepartmentId(currentDraft.departmentIds, department.id);
+                                        const nextPrimary =
+                                          nextDepartmentIds.length === 0
+                                            ? ""
+                                            : nextDepartmentIds.includes(currentDraft.primaryDepartmentId)
+                                              ? currentDraft.primaryDepartmentId
+                                              : nextDepartmentIds[0];
+                                        return {
+                                          ...current,
+                                          [item.id]: {
+                                            ...currentDraft,
+                                            departmentIds: nextDepartmentIds,
+                                            primaryDepartmentId: nextPrimary,
+                                          },
+                                        };
+                                      })
+                                    }
+                                  />
+                                  <span className="truncate">
+                                    {department.name}
+                                    {department.isActive ? "" : " (inativo)"}
+                                  </span>
+                                </label>
+                                <label className="flex shrink-0 items-center gap-1 text-xs text-white/60">
+                                  <input
+                                    type="radio"
+                                    name={`primary-department-${item.id}`}
+                                    checked={checked && draft.primaryDepartmentId === department.id}
+                                    disabled={!checked}
+                                    onChange={() =>
+                                      setUserDrafts((current) => ({
+                                        ...current,
+                                        [item.id]: {
+                                          ...current[item.id],
+                                          primaryDepartmentId: department.id,
+                                        },
+                                      }))
+                                    }
+                                  />
+                                  Principal
+                                </label>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                       <label className="flex flex-col gap-2 text-sm text-white/75">
                         <span>Status</span>
                         <select

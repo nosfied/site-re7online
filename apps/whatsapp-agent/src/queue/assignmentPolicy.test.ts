@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ConversationOperationalStatus, Prisma } from "@prisma/client";
 import { getPrisma } from "../db.js";
+import { syncUserDepartmentMemberships } from "../users/departmentMemberships.js";
 import { applyBalancedQueueAssignment } from "./assignmentPolicy.js";
 
 const prisma = getPrisma();
@@ -31,6 +32,7 @@ async function cleanup() {
   await prisma.conversationRuntimeState.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.event.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.tenantOperationalConfig.deleteMany({ where: { clientId: { in: clientIds } } });
+  await prisma.userDepartmentMembership.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.user.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.queue.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.department.deleteMany({ where: { clientId: { in: clientIds } } });
@@ -356,4 +358,119 @@ test("no eligible agent leaves conversation unassigned and records sanitized eve
   const payload = event.payloadJson as Record<string, unknown>;
   assert.equal(payload.reason, "max_active_reached");
   assert.equal(JSON.stringify(payload).includes(runtime.waId), false);
+});
+
+test("department scoped round robin uses active memberships and never falls back globally without department", async () => {
+  const client = await createClient("membership-rr");
+  const secondDepartment = await prisma.department.create({
+    data: {
+      clientId: client.id,
+      name: "Membership second",
+      slug: "membership-second",
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  const secondQueue = await prisma.queue.create({
+    data: { clientId: client.id, departmentId: secondDepartment.id, name: "Second queue" },
+    select: { id: true },
+  });
+  const agentA = await createUser({ clientId: client.id, departmentId: null, suffix: "member-a" });
+  const agentB = await createUser({ clientId: client.id, departmentId: null, suffix: "member-b" });
+  const agentC = await createUser({ clientId: client.id, departmentId: null, suffix: "member-c" });
+  await syncUserDepartmentMemberships(prisma, {
+    clientId: client.id,
+    userId: agentA.id,
+    departmentIds: [client.departmentId, secondDepartment.id],
+    primaryDepartmentId: client.departmentId,
+  });
+  await syncUserDepartmentMemberships(prisma, {
+    clientId: client.id,
+    userId: agentB.id,
+    departmentIds: [client.departmentId],
+    primaryDepartmentId: client.departmentId,
+  });
+  await syncUserDepartmentMemberships(prisma, {
+    clientId: client.id,
+    userId: agentC.id,
+    departmentIds: [secondDepartment.id],
+    primaryDepartmentId: secondDepartment.id,
+  });
+  await setPolicy(client.id, { enabled: true, mode: "round_robin", scope: "department", includeSupervisors: false });
+
+  const firstRuntime = await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "member-first",
+  });
+  const first = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: firstRuntime.conversation.id,
+    runtimeStateId: firstRuntime.runtime.id,
+    waId: firstRuntime.runtime.waId,
+    waIdCanonical: firstRuntime.runtime.waIdCanonical,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    status: firstRuntime.runtime.status,
+    assignedUserId: null,
+    requestId: "member-first",
+    source: "test",
+  });
+  assert.equal(first.applied, true);
+  assert.equal(first.eligibleCount, 2);
+  assert.ok([agentA.id, agentB.id].includes(first.selectedUserId));
+
+  const secondRuntime = await createRuntime({
+    clientId: client.id,
+    departmentId: secondDepartment.id,
+    queueId: secondQueue.id,
+    suffix: "member-second",
+  });
+  const second = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: secondRuntime.conversation.id,
+    runtimeStateId: secondRuntime.runtime.id,
+    waId: secondRuntime.runtime.waId,
+    waIdCanonical: secondRuntime.runtime.waIdCanonical,
+    departmentId: secondDepartment.id,
+    queueId: secondQueue.id,
+    status: secondRuntime.runtime.status,
+    assignedUserId: null,
+    requestId: "member-second",
+    source: "test",
+  });
+  assert.equal(second.applied, true);
+  assert.equal(second.eligibleCount, 2);
+  assert.ok([agentA.id, agentC.id].includes(second.selectedUserId));
+
+  const missingDepartmentRuntime = await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "member-missing-department",
+  });
+  const missing = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: missingDepartmentRuntime.conversation.id,
+    runtimeStateId: missingDepartmentRuntime.runtime.id,
+    waId: missingDepartmentRuntime.runtime.waId,
+    waIdCanonical: missingDepartmentRuntime.runtime.waIdCanonical,
+    departmentId: null,
+    queueId: null,
+    status: missingDepartmentRuntime.runtime.status,
+    assignedUserId: null,
+    requestId: "member-missing",
+    source: "test",
+  });
+  assert.equal(missing.applied, false);
+  assert.equal(missing.reason, "no_eligible_agent");
+  const event = await prisma.event.findFirst({
+    where: { clientId: client.id, eventName: "queue.assignment.no_eligible_agent" },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.equal((event?.payloadJson as Record<string, unknown> | undefined)?.reason, "department_required");
 });
