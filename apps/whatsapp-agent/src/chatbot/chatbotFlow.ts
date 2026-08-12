@@ -467,7 +467,10 @@ export function clearChatbotRuntime(state: ConversationState): ConversationState
 }
 
 function renderMenu(node: ChatbotMenuNode) {
-  const lines = node.options.map((option, index) => `${index + 1}. ${option.label}`);
+  const lines = node.options.map((option, index) => {
+    const explicit = parseExplicitMenuOptionNumber(option.label);
+    return explicit ? explicit.displayLine : `${index + 1}. ${option.label}`;
+  });
   return [node.text, ...lines].join("\n");
 }
 
@@ -476,7 +479,20 @@ function parseMenuSelection(text: string | null | undefined) {
   const normalized = text.trim();
   if (!/^\d+$/.test(normalized)) return null;
   const parsed = Number.parseInt(normalized, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function parseExplicitMenuOptionNumber(label: string) {
+  const match = label.match(/^(\d+)\s*([.)-])\s*(.+)$/);
+  if (!match) return null;
+  const number = Number.parseInt(match[1] ?? "", 10);
+  const separator = match[2] ?? ".";
+  const text = (match[3] ?? "").trim();
+  if (!Number.isFinite(number) || !text) return null;
+  return {
+    number,
+    displayLine: separator === "-" ? `${number} - ${text}` : `${number}${separator} ${text}`,
+  };
 }
 
 function normalizeCapturedInput(text: string | null | undefined) {
@@ -1027,7 +1043,14 @@ export function executeChatbotFlow(params: {
   }
 
   const choice = parseMenuSelection(params.inboundText);
-  if (!choice || choice > currentNode.options.length) {
+  const explicitOptionIndex =
+    choice === null
+      ? -1
+      : currentNode.options.findIndex(
+          (option) => parseExplicitMenuOptionNumber(option.label)?.number === choice
+        );
+  const selectedOptionIndex = explicitOptionIndex >= 0 ? explicitOptionIndex : (choice ?? 0) - 1;
+  if (choice === null || selectedOptionIndex < 0 || selectedOptionIndex >= currentNode.options.length) {
     return {
       handled: true,
       state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
@@ -1035,7 +1058,7 @@ export function executeChatbotFlow(params: {
     };
   }
 
-  const selectedOption = currentNode.options[choice - 1]!;
+  const selectedOption = currentNode.options[selectedOptionIndex]!;
   const events: ChatbotExecutionEvent[] = [];
   const stateWithOptionContext = mergeFlowMetadata({
     state: params.state,

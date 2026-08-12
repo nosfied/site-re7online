@@ -110,6 +110,12 @@ function fakePrisma() {
         return { id: String(row.id), name: String(row.name) };
       },
     },
+    tenantOperationalConfig: {
+      findUnique: async () => null,
+    },
+    chatbotFlow: {
+      findFirst: async () => null,
+    },
     contact: {
       findUnique: async () => state.contacts[0] ?? null,
       upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
@@ -137,17 +143,39 @@ function fakePrisma() {
       },
     },
     conversationRuntimeState: {
-      findFirst: async () => null,
+      findFirst: async () => state.runtimeStates[0] ?? null,
+      findUnique: async () => state.runtimeStates[0] ?? null,
       upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
         const existing = state.runtimeStates[0];
         const row: Record<string, unknown> = existing ? { ...existing, ...update } : { id: "runtime_1", ...create };
         state.runtimeStates[0] = row;
         return {
           id: String(row.id),
+          firstSeenAt: row.firstSeenAt instanceof Date ? row.firstSeenAt : new Date("2026-08-11T12:00:00.000Z"),
+          windowIsOpen: row.windowIsOpen === true,
+          windowExpiresAt: row.windowExpiresAt instanceof Date ? row.windowExpiresAt : null,
+          lastInboundAt: row.lastInboundAt instanceof Date ? row.lastInboundAt : null,
+          lastOutboundAt: row.lastOutboundAt instanceof Date ? row.lastOutboundAt : null,
+          lastInboundMessageId: typeof row.lastInboundMessageId === "string" ? row.lastInboundMessageId : null,
+          lastOutboundMessageId: typeof row.lastOutboundMessageId === "string" ? row.lastOutboundMessageId : null,
+          intent: typeof row.intent === "string" ? row.intent : "unknown",
+          handoffStatus: typeof row.handoffStatus === "string" ? row.handoffStatus : "NONE",
+          handoffRequestedAt: row.handoffRequestedAt instanceof Date ? row.handoffRequestedAt : null,
+          handoffActivatedAt: row.handoffActivatedAt instanceof Date ? row.handoffActivatedAt : null,
+          handoffReleasedAt: row.handoffReleasedAt instanceof Date ? row.handoffReleasedAt : null,
+          flow: row.flow ?? null,
+          flowStep: typeof row.flowStep === "string" ? row.flowStep : null,
+          chatbotNodeId: typeof row.chatbotNodeId === "string" ? row.chatbotNodeId : null,
+          chatbotActive: row.chatbotActive === true,
+          answers: row.answers && typeof row.answers === "object" ? row.answers : {},
+          mode: row.mode === "BOT" ? "BOT" : "HUMAN",
           assignedUserId: typeof row.assignedUserId === "string" ? row.assignedUserId : null,
+          assignedTo: typeof row.assignedTo === "string" ? row.assignedTo : null,
+          assignedAt: row.assignedAt instanceof Date ? row.assignedAt : null,
           departmentId: typeof row.departmentId === "string" ? row.departmentId : null,
           queueId: typeof row.queueId === "string" ? row.queueId : null,
           status: typeof row.status === "string" ? row.status : null,
+          closedAt: row.closedAt instanceof Date ? row.closedAt : null,
         };
       },
     },

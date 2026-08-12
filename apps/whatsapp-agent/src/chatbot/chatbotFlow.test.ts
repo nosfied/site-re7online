@@ -95,6 +95,57 @@ test("executeChatbotFlow starts in menu and waits for numeric answer", () => {
   assert.match(result.replyText ?? "", /1\. Atendimento/);
 });
 
+test("executeChatbotFlow preserves explicit menu option numbers", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "menu",
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Escolha",
+        options: [
+          { label: "Dúvidas técnicas", next: "technical" },
+          { label: "0 - Voltar", next: "start" },
+        ],
+      },
+      technical: {
+        type: "text",
+        text: "Encaminhando dúvidas técnicas.",
+      },
+      start: {
+        type: "text",
+        text: "Voltando ao início.",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const menu = executeChatbotFlow({
+    flowId: "flow_explicit_menu_numbers",
+    definition: validated.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-08-12T10:00:00.000Z",
+  });
+  assert.match(menu.replyText ?? "", /1\. Dúvidas técnicas/);
+  assert.match(menu.replyText ?? "", /0 - Voltar/);
+  assert.doesNotMatch(menu.replyText ?? "", /2\. 0 - Voltar/);
+
+  const selected = executeChatbotFlow({
+    flowId: "flow_explicit_menu_numbers",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_explicit_menu_numbers",
+      chatbotActive: true,
+      chatbotNodeId: "menu",
+    }),
+    inboundText: "0",
+    nowIso: "2026-08-12T10:00:01.000Z",
+  });
+  assert.equal(selected.handled, true);
+  assert.equal(selected.replyText, "Voltando ao início.");
+});
+
 test("executeChatbotFlow captures validated contact fields before menu", () => {
   const validated = validateChatbotFlowDefinition({
     start: "capture_email",
