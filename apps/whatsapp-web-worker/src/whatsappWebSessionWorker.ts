@@ -35,6 +35,7 @@ import {
   type BaileysMessagesUpdateEvent,
   type BaileysMessagesUpsertEvent,
 } from "./web-session/baileysSocketFactory.js";
+import type { WebSessionControlReplyReference } from "./webSessionControlServer.js";
 
 export type EligibleWebSessionAccount = {
   id: string;
@@ -136,6 +137,42 @@ function extractExternalMessageId(result: unknown) {
   return typeof key.id === "string" && key.id.trim() ? key.id.trim() : null;
 }
 
+function buildQuotedMessageContent(replyTo: WebSessionControlReplyReference) {
+  const text = replyTo.bodyText?.trim() || "Mensagem";
+  if (replyTo.messageType === "TEXT") return { conversation: text };
+  if (replyTo.messageType === "IMAGE") {
+    return { imageMessage: { caption: replyTo.bodyText ?? undefined, mimetype: replyTo.mimeType ?? "image/jpeg" } };
+  }
+  if (replyTo.messageType === "AUDIO") {
+    return { audioMessage: { mimetype: replyTo.mimeType ?? "audio/ogg", ptt: true } };
+  }
+  if (replyTo.messageType === "VIDEO") {
+    return { videoMessage: { caption: replyTo.bodyText ?? undefined, mimetype: replyTo.mimeType ?? "video/mp4" } };
+  }
+  return {
+    documentMessage: {
+      title: replyTo.fileName ?? "documento",
+      fileName: replyTo.fileName ?? "documento",
+      mimetype: replyTo.mimeType ?? "application/octet-stream",
+      caption: replyTo.bodyText ?? undefined,
+    },
+  };
+}
+
+function buildQuotedMessageOptions(replyTo?: WebSessionControlReplyReference | null) {
+  if (!replyTo) return undefined;
+  return {
+    quoted: {
+      key: {
+        id: replyTo.externalMessageId,
+        remoteJid: replyTo.remoteJid,
+        fromMe: replyTo.fromMe,
+      },
+      message: buildQuotedMessageContent(replyTo),
+    },
+  };
+}
+
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
   let timer: ReturnType<typeof setTimeout> | null = null;
   try {
@@ -176,6 +213,7 @@ export async function sendTextViaActiveWebSession(params: {
   channelAccountId: string;
   recipientWaId: string;
   text: string;
+  replyTo?: WebSessionControlReplyReference | null;
   requestId: string;
   timeoutMs?: number;
 }) {
@@ -221,7 +259,7 @@ export async function sendTextViaActiveWebSession(params: {
   }
   try {
     const result = await withTimeout(
-      active.socket.sendMessage(`${recipientDigits}@s.whatsapp.net`, { text }),
+      active.socket.sendMessage(`${recipientDigits}@s.whatsapp.net`, { text }, buildQuotedMessageOptions(params.replyTo)),
       params.timeoutMs ?? DEFAULT_SEND_TEXT_TIMEOUT_MS
     );
     const externalMessageId = extractExternalMessageId(result);
@@ -231,6 +269,7 @@ export async function sendTextViaActiveWebSession(params: {
       channelAccountId: params.channelAccountId,
       requestId: params.requestId,
       hasExternalMessageId: Boolean(externalMessageId),
+      hasReplyReference: Boolean(params.replyTo),
     });
     return { ok: true as const, externalMessageId };
   } catch (error) {
@@ -262,6 +301,7 @@ export async function sendMediaViaActiveWebSession(params: {
   mimeType: string;
   fileName: string | null;
   caption: string | null;
+  replyTo?: WebSessionControlReplyReference | null;
   requestId: string;
   timeoutMs?: number;
 }) {
@@ -339,7 +379,7 @@ export async function sendMediaViaActiveWebSession(params: {
             };
   try {
     const result = await withTimeout(
-      active.socket.sendMessage(`${recipientDigits}@s.whatsapp.net`, payload),
+      active.socket.sendMessage(`${recipientDigits}@s.whatsapp.net`, payload, buildQuotedMessageOptions(params.replyTo)),
       params.timeoutMs ?? DEFAULT_SEND_MEDIA_TIMEOUT_MS
     );
     const externalMessageId = extractExternalMessageId(result);
@@ -350,6 +390,7 @@ export async function sendMediaViaActiveWebSession(params: {
       requestId: params.requestId,
       mediaKind: params.mediaKind,
       hasExternalMessageId: Boolean(externalMessageId),
+      hasReplyReference: Boolean(params.replyTo),
     });
     return { ok: true as const, externalMessageId };
   } catch (error) {

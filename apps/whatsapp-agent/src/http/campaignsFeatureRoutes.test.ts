@@ -1733,7 +1733,7 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
     req.on("end", () => {
       workerRequests.push(JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>);
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true, externalMessageId: "baileys-test-message-id" }));
+      res.end(JSON.stringify({ ok: true, externalMessageId: `baileys-test-message-id-${workerRequests.length}` }));
     });
   });
   await new Promise<void>((resolve) => fakeWorker.listen(0, "127.0.0.1", resolve));
@@ -1817,6 +1817,34 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
       lastInboundAt: new Date("2026-08-11T12:00:00.000Z"),
     },
   });
+  const quotedInbound = await prisma.inboundMessage.create({
+    data: {
+      clientId: businessClientId,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId,
+      waId,
+      waIdCanonical: waId,
+      messageId: `web:${channelAccountId}:quoted-inbound-1`,
+      externalMessageId: "quoted-inbound-1",
+      type: "IMAGE",
+      bodyText: "Imagem recebida",
+      allowlistHit: true,
+      rawPayload: {
+        provider: "web_session",
+        channel: "whatsapp",
+        channelAccountId,
+        externalMessageId: "quoted-inbound-1",
+        media: {
+          mediaId: "web-session:quoted-image",
+          storageProvider: "local_web_session",
+          storageRef: "quoted/image.jpg",
+          mimeType: "image/jpeg",
+          caption: "Imagem recebida",
+        },
+      },
+    },
+  });
 
   const detail = await request<{ ok: true; provider: string; channelOutboundEnabled: boolean }>(
     "GET",
@@ -1852,7 +1880,7 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
       clientId: businessClientId,
       waId,
       provider: "web_session",
-      externalMessageId: "baileys-test-message-id",
+      externalMessageId: "baileys-test-message-id-1",
     },
     orderBy: { createdAt: "desc" },
   });
@@ -1873,6 +1901,53 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
   assert.equal(payload.provider, "web_session");
   assert.equal(payload.waIdLast4, waId.slice(-4));
   assert.equal(JSON.stringify(payload).includes(waId), false);
+
+  const replyResponse = await request<{
+    ok: true;
+    message: {
+      messageId: string;
+      status: string;
+      metaMessageId: string | null;
+      replyTo: { kind: string; id: string; previewType: string };
+    };
+  }>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+    text: "Resposta contextual web session.",
+    replyTo: { kind: "inbound", id: quotedInbound.id },
+  });
+  assert.equal(replyResponse.status, 200, JSON.stringify(replyResponse.body));
+  assert.equal(replyResponse.body.message.status, "SENT");
+  assert.equal(replyResponse.body.message.metaMessageId, null);
+  assert.deepEqual(replyResponse.body.message.replyTo, {
+    kind: "inbound",
+    id: quotedInbound.id,
+    previewType: "IMAGE",
+    mode: "reply",
+  });
+  assert.equal(workerRequests.length, 2);
+  assert.deepEqual(workerRequests[1]?.replyTo, {
+    externalMessageId: "quoted-inbound-1",
+    remoteJid: `${waId}@s.whatsapp.net`,
+    fromMe: false,
+    messageType: "IMAGE",
+    bodyText: "Imagem recebida",
+    fileName: null,
+    mimeType: "image/jpeg",
+  });
+  const replyOutbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: {
+      clientId: businessClientId,
+      waId,
+      messageId: replyResponse.body.message.messageId,
+    },
+  });
+  const replyPayload = (replyOutbound.rawPayload as Record<string, unknown>).contextualReply as Record<string, unknown>;
+  assert.equal(replyPayload.replyToKind, "inbound");
+  assert.equal(replyPayload.replyToInternalMessageId, quotedInbound.id);
+  assert.equal(replyPayload.replyToProvider, "web_session");
+  assert.equal(replyPayload.replyToProviderMessagePresent, true);
+  assert.equal(replyPayload.replyToMetaMessagePresent, false);
+  assert.equal(JSON.stringify(replyPayload).includes("quoted-inbound-1"), false);
+  assert.equal(JSON.stringify(replyPayload).includes(waId), false);
 });
 
 test("admin tenants summary includes db-only clients without activity", async () => {

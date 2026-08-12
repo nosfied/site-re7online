@@ -136,15 +136,15 @@ test("web session worker resolves LID sender through persisted reverse mapping",
 });
 
 test("web session worker sends text through an active socket", async (t) => {
-  const sent: Array<{ jid: string; text: string }> = [];
+  const sent: Array<{ jid: string; text: string; options?: Record<string, unknown> }> = [];
   setActiveWebSessionConnectionForTesting("account-a", {
     tenantKey: "tenant-a",
     channelAccountId: "session-a",
     startedAtMs: Date.now(),
     socket: {
       ev: { on() {} },
-      sendMessage: async (jid, content) => {
-        sent.push({ jid, text: content.text });
+      sendMessage: async (jid, content, options) => {
+        sent.push({ jid, text: String(content.text), options });
         return { key: { id: "baileys-message-id" } };
       },
     },
@@ -176,7 +176,65 @@ test("web session worker sends text through an active socket", async (t) => {
   });
 
   assert.deepEqual(result, { ok: true, externalMessageId: "baileys-message-id" });
-  assert.deepEqual(sent, [{ jid: "5584999997784@s.whatsapp.net", text: "Mensagem de teste" }]);
+  assert.deepEqual(sent, [{ jid: "5584999997784@s.whatsapp.net", text: "Mensagem de teste", options: undefined }]);
+});
+
+test("web session worker sends text with Baileys quoted reference", async (t) => {
+  const sent: Array<{ jid: string; content: Record<string, unknown>; options?: Record<string, unknown> }> = [];
+  setActiveWebSessionConnectionForTesting("account-a", {
+    tenantKey: "tenant-a",
+    channelAccountId: "session-a",
+    startedAtMs: Date.now(),
+    socket: {
+      ev: { on() {} },
+      sendMessage: async (jid, content, options) => {
+        sent.push({ jid, content, options });
+        return { key: { id: "baileys-reply-id" } };
+      },
+    },
+    release: async () => {},
+  });
+  t.after(() => setActiveWebSessionConnectionForTesting("account-a", null));
+  const prisma = {
+    channelAccount: {
+      findFirst: async () => account({
+        metadata: {
+          webSession: {
+            desiredState: "CONNECTED",
+            observedState: "CONNECTED",
+          },
+        },
+      }),
+    },
+  };
+
+  const result = await sendTextViaActiveWebSession({
+    prisma: prisma as never,
+    clientId: "client-a",
+    tenantKey: "tenant-a",
+    accountId: "account-a",
+    channelAccountId: "session-a",
+    recipientWaId: "5584999997784",
+    text: "Resposta contextual",
+    replyTo: {
+      externalMessageId: "INBOUND_EXT_1",
+      remoteJid: "5584999997784@s.whatsapp.net",
+      fromMe: false,
+      messageType: "AUDIO",
+      mimeType: "audio/ogg",
+    },
+    requestId: "request-reply-a",
+  });
+
+  assert.deepEqual(result, { ok: true, externalMessageId: "baileys-reply-id" });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]?.jid, "5584999997784@s.whatsapp.net");
+  assert.deepEqual(sent[0]?.content, { text: "Resposta contextual" });
+  const quoted = sent[0]?.options?.quoted as Record<string, unknown>;
+  assert.equal((quoted.key as Record<string, unknown>).id, "INBOUND_EXT_1");
+  assert.equal((quoted.key as Record<string, unknown>).remoteJid, "5584999997784@s.whatsapp.net");
+  assert.equal((quoted.key as Record<string, unknown>).fromMe, false);
+  assert.equal(Boolean((quoted.message as Record<string, unknown>).audioMessage), true);
 });
 
 test("web session worker refuses text when no active socket is available", async () => {

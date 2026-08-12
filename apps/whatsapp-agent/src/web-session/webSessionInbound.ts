@@ -154,10 +154,74 @@ function detectMessageType(message: Record<string, unknown>) {
 }
 
 function extractReplyToExternalMessageId(message: Record<string, unknown>) {
-  const extendedText = isRecord(message.extendedTextMessage) ? message.extendedTextMessage : null;
-  const contextInfo = isRecord(extendedText?.contextInfo) ? extendedText.contextInfo : null;
-  const stanzaId = typeof contextInfo?.stanzaId === "string" ? contextInfo.stanzaId.trim() : "";
-  return stanzaId || null;
+  const keys = ["extendedTextMessage", "imageMessage", "audioMessage", "videoMessage", "documentMessage"];
+  for (const key of keys) {
+    const node = isRecord(message[key]) ? message[key] : null;
+    const contextInfo = isRecord(node?.contextInfo) ? node.contextInfo : null;
+    const stanzaId = typeof contextInfo?.stanzaId === "string" ? contextInfo.stanzaId.trim() : "";
+    if (stanzaId) return stanzaId;
+  }
+  return null;
+}
+
+async function resolveInboundQuotedReference(params: {
+  prisma: PrismaClient;
+  message: NormalizedWebSessionInboundMessage;
+}) {
+  const externalMessageId = params.message.replyToExternalMessageId?.trim();
+  if (!externalMessageId) return null;
+  const sharedWhere = {
+    clientId: params.message.clientId,
+    externalMessageId,
+    OR: [
+      { waId: params.message.sender },
+      { waIdCanonical: params.message.senderCanonical },
+    ],
+  };
+  const [inbound, outbound] = await Promise.all([
+    params.prisma.inboundMessage.findFirst({
+      where: sharedWhere,
+      select: { id: true, type: true },
+    }),
+    params.prisma.outboundMessage.findFirst({
+      where: sharedWhere,
+      select: { id: true, type: true },
+    }),
+  ]);
+  const target = outbound
+    ? { kind: "outbound" as const, id: outbound.id, type: outbound.type }
+    : inbound
+      ? { kind: "inbound" as const, id: inbound.id, type: inbound.type }
+      : null;
+  if (!target) {
+    return {
+      replyToKind: "inbound" as const,
+      replyToInternalMessageId: "",
+      replyToProvider: "web_session",
+      replyToProviderMessagePresent: true,
+      replyToMetaMessagePresent: false,
+      previewType: null,
+      contextRequested: true,
+      contextResolved: false,
+      contextAttached: true,
+      referenceUnavailable: true,
+      mode: "reply",
+    } satisfies Prisma.InputJsonObject;
+  }
+  return {
+    replyToKind: target.kind,
+    replyToInternalMessageId: target.id,
+    replyToProvider: "web_session",
+    replyToProviderMessagePresent: true,
+    replyToMetaMessagePresent: false,
+    previewType: target.type,
+    replyToType: target.type,
+    originalType: target.type,
+    contextRequested: true,
+    contextResolved: true,
+    contextAttached: true,
+    mode: "reply",
+  } satisfies Prisma.InputJsonObject;
 }
 
 export function normalizeBaileysInboundMessage(params: {
@@ -482,6 +546,11 @@ export async function ingestWebSessionInboundMessage(params: {
   });
 
   try {
+    const quotedReference = await resolveInboundQuotedReference({ prisma, message: params.message });
+    const rawPayload = {
+      ...(params.message.rawPayload as Record<string, unknown>),
+      ...(quotedReference ? { contextualReply: quotedReference } : {}),
+    } satisfies Prisma.InputJsonObject;
     const inserted = await persistInboundMessage({
       clientId: params.message.clientId,
       phoneNumberId: undefined,
@@ -496,7 +565,7 @@ export async function ingestWebSessionInboundMessage(params: {
       bodyText: params.message.text,
       allowlistHit: true,
       requestId,
-      rawPayload: params.message.rawPayload,
+      rawPayload,
     });
     if (!inserted) {
       const existing = await prisma.inboundMessage.findUnique({
@@ -597,6 +666,22 @@ export async function ingestWebSessionInboundMessage(params: {
         metaMessageId: null,
         errorBody: null,
         createdAt: params.message.timestamp.toISOString(),
+        replyTo: quotedReference && quotedReference.contextResolved === true
+          ? {
+              kind: quotedReference.replyToKind,
+              id: quotedReference.replyToInternalMessageId,
+              previewType: quotedReference.previewType,
+              mode: "reply",
+            }
+          : quotedReference
+            ? {
+                kind: "inbound",
+                id: "",
+                previewType: null,
+                mode: "reply",
+                previewBody: "Mensagem original indisponivel",
+              }
+            : null,
       },
     });
     await safeRecordInboundEvent({

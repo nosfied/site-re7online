@@ -9,6 +9,7 @@ export type WebSessionControlSendTextParams = {
   channelAccountId: string;
   recipientWaId: string;
   text: string;
+  replyTo?: WebSessionControlReplyReference | null;
   requestId: string;
 };
 
@@ -27,12 +28,23 @@ export type WebSessionControlSendMediaParams = {
   mimeType: string;
   fileName: string | null;
   caption: string | null;
+  replyTo?: WebSessionControlReplyReference | null;
   requestId: string;
 };
 
 export type WebSessionControlSendMediaResult =
   | { ok: true; externalMessageId: string | null }
   | { ok: false; statusCode: number; error: string; message?: string };
+
+export type WebSessionControlReplyReference = {
+  externalMessageId: string;
+  remoteJid: string;
+  fromMe: boolean;
+  messageType: "TEXT" | "IMAGE" | "AUDIO" | "DOCUMENT" | "VIDEO";
+  bodyText?: string | null;
+  fileName?: string | null;
+  mimeType?: string | null;
+};
 
 function json(res: ServerResponse, status: number, body: Record<string, unknown>) {
   res.writeHead(status, {
@@ -72,11 +84,12 @@ function parseSendTextBody(body: Record<string, unknown>): WebSessionControlSend
   const channelAccountId = typeof body.channelAccountId === "string" ? body.channelAccountId.trim() : "";
   const recipientWaId = typeof body.recipientWaId === "string" ? body.recipientWaId.trim() : "";
   const text = typeof body.text === "string" ? body.text.trim() : "";
+  const replyTo = parseReplyReference(body.replyTo);
   const requestId = typeof body.requestId === "string" ? body.requestId.trim() : "";
   if (!clientId || !tenantKey || !accountId || !channelAccountId || !recipientWaId || !text || !requestId) {
     return null;
   }
-  return { clientId, tenantKey, accountId, channelAccountId, recipientWaId, text, requestId };
+  return { clientId, tenantKey, accountId, channelAccountId, recipientWaId, text, replyTo, requestId };
 }
 
 function parseSendMediaBody(body: Record<string, unknown>): WebSessionControlSendMediaParams | null {
@@ -90,6 +103,7 @@ function parseSendMediaBody(body: Record<string, unknown>): WebSessionControlSen
   const mimeType = typeof body.mimeType === "string" ? body.mimeType.trim() : "";
   const fileName = typeof body.fileName === "string" && body.fileName.trim() ? body.fileName.trim() : null;
   const caption = typeof body.caption === "string" && body.caption.trim() ? body.caption.trim() : null;
+  const replyTo = parseReplyReference(body.replyTo);
   const requestId = typeof body.requestId === "string" ? body.requestId.trim() : "";
   if (
     !clientId ||
@@ -115,7 +129,33 @@ function parseSendMediaBody(body: Record<string, unknown>): WebSessionControlSen
     mimeType,
     fileName,
     caption,
+    replyTo,
     requestId,
+  };
+}
+
+function parseReplyReference(value: unknown): WebSessionControlReplyReference | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const externalMessageId = typeof record.externalMessageId === "string" ? record.externalMessageId.trim() : "";
+  const remoteJid = typeof record.remoteJid === "string" ? record.remoteJid.trim() : "";
+  const messageType = typeof record.messageType === "string" ? record.messageType.trim().toUpperCase() : "";
+  if (
+    !externalMessageId ||
+    !remoteJid ||
+    !["TEXT", "IMAGE", "AUDIO", "DOCUMENT", "VIDEO"].includes(messageType) ||
+    typeof record.fromMe !== "boolean"
+  ) {
+    return null;
+  }
+  return {
+    externalMessageId,
+    remoteJid,
+    fromMe: record.fromMe,
+    messageType: messageType as WebSessionControlReplyReference["messageType"],
+    bodyText: typeof record.bodyText === "string" && record.bodyText.trim() ? record.bodyText.trim().slice(0, 500) : null,
+    fileName: typeof record.fileName === "string" && record.fileName.trim() ? record.fileName.trim().slice(0, 180) : null,
+    mimeType: typeof record.mimeType === "string" && record.mimeType.trim() ? record.mimeType.trim().slice(0, 120) : null,
   };
 }
 

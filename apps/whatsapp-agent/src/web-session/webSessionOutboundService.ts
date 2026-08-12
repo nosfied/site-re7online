@@ -27,6 +27,16 @@ type WorkerSendMediaResult =
   | { ok: true; externalMessageId: string | null }
   | { ok: false; statusCode?: number; error?: string; message?: string };
 
+export type WebSessionReplyReference = {
+  externalMessageId: string;
+  remoteJid: string;
+  fromMe: boolean;
+  messageType: "TEXT" | "IMAGE" | "AUDIO" | "DOCUMENT" | "VIDEO";
+  bodyText?: string | null;
+  fileName?: string | null;
+  mimeType?: string | null;
+};
+
 type WebSessionChannelAccount = {
   id: string;
   clientId: string;
@@ -98,6 +108,7 @@ async function callWorkerSendText(params: {
   tenantKey: string;
   recipientWaId: string;
   text: string;
+  replyTo?: WebSessionReplyReference | null;
   requestId: string;
 }) {
   const baseUrl = process.env.WHATSAPP_WEB_WORKER_CONTROL_URL?.trim();
@@ -121,6 +132,7 @@ async function callWorkerSendText(params: {
         channelAccountId: params.account.channelAccountId,
         recipientWaId: params.recipientWaId,
         text: params.text,
+        replyTo: params.replyTo ?? null,
         requestId: params.requestId,
       }),
       signal: controller.signal,
@@ -158,6 +170,7 @@ async function callWorkerSendMedia(params: {
   mimeType: string;
   fileName: string | null;
   caption: string | null;
+  replyTo?: WebSessionReplyReference | null;
   requestId: string;
 }) {
   const baseUrl = process.env.WHATSAPP_WEB_WORKER_CONTROL_URL?.trim();
@@ -185,6 +198,7 @@ async function callWorkerSendMedia(params: {
         mimeType: params.mimeType,
         fileName: params.fileName,
         caption: params.caption,
+        replyTo: params.replyTo ?? null,
         requestId: params.requestId,
       }),
       signal: controller.signal,
@@ -238,6 +252,15 @@ export async function createWebSessionTextOutboundMessage(params: {
     channelAccountId?: string | null;
   };
   conversation?: WebSessionOutboundConversationState | null;
+  reply?: {
+    replyToKind: "inbound" | "outbound";
+    replyToInternalMessageId: string;
+    replyToProvider: "web_session";
+    replyToProviderMessageId: string;
+    previewType: MessageType;
+    mode: "reply" | "rectify";
+    transportReference: WebSessionReplyReference;
+  } | null;
 }): Promise<
   | {
       ok: true;
@@ -301,6 +324,7 @@ export async function createWebSessionTextOutboundMessage(params: {
     tenantKey: params.clientKey,
     recipientWaId,
     text: signedBody.bodyText,
+    replyTo: params.reply?.transportReference ?? null,
     requestId: params.requestId,
   });
   const status = sendResult.ok ? MessageStatus.SENT : MessageStatus.FAILED;
@@ -317,6 +341,24 @@ export async function createWebSessionTextOutboundMessage(params: {
     },
     agentSignatureApplied: signedBody.signatureApplied,
     agentSignatureFormat: signedBody.signatureFormat,
+    ...(params.reply
+      ? {
+          contextualReply: {
+            replyToKind: params.reply.replyToKind,
+            replyToInternalMessageId: params.reply.replyToInternalMessageId,
+            replyToProvider: "web_session",
+            replyToProviderMessagePresent: true,
+            replyToMetaMessagePresent: false,
+            previewType: params.reply.previewType,
+            replyToType: params.reply.previewType,
+            originalType: params.reply.previewType,
+            contextRequested: true,
+            contextResolved: true,
+            contextAttached: sendResult.ok,
+            mode: params.reply.mode,
+          },
+        }
+      : {}),
     status: sendResult.ok ? "sent" : "failed",
     error: sendResult.ok ? null : sendResult.error,
   };
@@ -350,6 +392,16 @@ export async function createWebSessionTextOutboundMessage(params: {
       channelAccountId: account.channelAccountId,
       outboundMessageId: messageId,
       externalMessageIdPresent: sendResult.ok ? Boolean(sendResult.externalMessageId) : false,
+      contextualReply: params.reply
+        ? {
+            replyToKind: params.reply.replyToKind,
+            replyToInternalMessageId: params.reply.replyToInternalMessageId,
+            replyToType: params.reply.previewType,
+            replyToProvider: "web_session",
+            replyToProviderMessagePresent: true,
+            mode: params.reply.mode,
+          }
+        : null,
       waIdLast4: recipientWaId.slice(-4),
       waIdLength: recipientWaId.length,
       error: sendResult.ok ? null : sendResult.error,
@@ -431,6 +483,15 @@ export async function createWebSessionMediaOutboundMessage(params: {
     channelAccountId?: string | null;
   };
   conversation?: WebSessionOutboundConversationState | null;
+  reply?: {
+    replyToKind: "inbound" | "outbound";
+    replyToInternalMessageId: string;
+    replyToProvider: "web_session";
+    replyToProviderMessageId: string;
+    previewType: MessageType;
+    mode: "reply" | "rectify";
+    transportReference: WebSessionReplyReference;
+  } | null;
 }): Promise<
   | {
       ok: true;
@@ -539,6 +600,7 @@ export async function createWebSessionMediaOutboundMessage(params: {
     mimeType: stored.mimeType,
     fileName: stored.fileName,
     caption: stored.caption,
+    replyTo: params.reply?.transportReference ?? null,
     requestId: params.requestId,
   });
   const status = sendResult.ok ? MessageStatus.SENT : MessageStatus.FAILED;
@@ -570,6 +632,24 @@ export async function createWebSessionMediaOutboundMessage(params: {
       source: "human_inbox",
       userId: params.actorUserId,
     },
+    ...(params.reply
+      ? {
+          contextualReply: {
+            replyToKind: params.reply.replyToKind,
+            replyToInternalMessageId: params.reply.replyToInternalMessageId,
+            replyToProvider: "web_session",
+            replyToProviderMessagePresent: true,
+            replyToMetaMessagePresent: false,
+            previewType: params.reply.previewType,
+            replyToType: params.reply.previewType,
+            originalType: params.reply.previewType,
+            contextRequested: true,
+            contextResolved: true,
+            contextAttached: sendResult.ok,
+            mode: params.reply.mode,
+          },
+        }
+      : {}),
     status: sendResult.ok ? "sent" : "failed",
     error: sendResult.ok ? null : sendResult.error,
   };
@@ -603,6 +683,16 @@ export async function createWebSessionMediaOutboundMessage(params: {
       channelAccountId: account.channelAccountId,
       outboundMessageId: messageId,
       externalMessageIdPresent: sendResult.ok ? Boolean(sendResult.externalMessageId) : false,
+      contextualReply: params.reply
+        ? {
+            replyToKind: params.reply.replyToKind,
+            replyToInternalMessageId: params.reply.replyToInternalMessageId,
+            replyToType: params.reply.previewType,
+            replyToProvider: "web_session",
+            replyToProviderMessagePresent: true,
+            mode: params.reply.mode,
+          }
+        : null,
       mediaKind: stored.kind,
       mimeType: stored.mimeType,
       sizeBytes: stored.sizeBytes,

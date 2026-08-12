@@ -2509,7 +2509,8 @@ export async function sendAppConversationMedia(
   session: AppSession,
   waId: string,
   file: File,
-  caption?: string
+  caption?: string,
+  replyTo?: { kind: "inbound" | "outbound"; id: string; mode?: "reply" | "rectify" } | null
 ): Promise<AppConversationOperationalPayload & {
   message: {
     messageId: string;
@@ -2527,6 +2528,7 @@ export async function sendAppConversationMedia(
       hasDownload: boolean;
       downloadUrl?: string;
     } | null;
+    replyTo?: InboxMessageItem["replyTo"];
     actor?: InboxMessageItem["actor"];
   };
 }> {
@@ -2534,6 +2536,9 @@ export async function sendAppConversationMedia(
   formData.append("file", file);
   if (caption?.trim()) {
     formData.append("caption", caption.trim());
+  }
+  if (replyTo) {
+    formData.append("replyTo", JSON.stringify(replyTo));
   }
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/send-media`, {
     method: "POST",

@@ -15,6 +15,13 @@ export type InboxRealtimeMessage = {
   metaMessageId: null;
   errorBody: null;
   createdAt: string;
+  replyTo?: {
+    kind: "inbound" | "outbound";
+    id: string;
+    previewType?: string | null;
+    mode?: "reply" | "rectify";
+    previewBody?: string | null;
+  } | null;
 };
 
 export type InboxRealtimeEvent =

@@ -16,6 +16,7 @@ const state = {
   contacts: [] as Array<Record<string, unknown>>,
   identities: [] as Array<Record<string, unknown>>,
   leads: [] as Array<Record<string, unknown>>,
+  outboundMessages: [] as Array<Record<string, unknown>>,
   metrics: [] as Array<Record<string, unknown>>,
   departments: [] as Array<Record<string, unknown>>,
 };
@@ -28,6 +29,7 @@ function resetState(overrides: Partial<typeof state> = {}) {
   state.contacts = overrides.contacts ?? [];
   state.identities = overrides.identities ?? [];
   state.leads = overrides.leads ?? [];
+  state.outboundMessages = overrides.outboundMessages ?? [];
   state.metrics = overrides.metrics ?? [];
   state.departments = overrides.departments ?? [];
 }
@@ -58,6 +60,17 @@ function fakePrisma() {
       },
     },
     inboundMessage: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
+        state.inboundMessages.find((item) => {
+          if (item.clientId !== where.clientId) return false;
+          if (where.externalMessageId && item.externalMessageId !== where.externalMessageId) return false;
+          const clauses = Array.isArray(where.OR) ? where.OR as Array<Record<string, unknown>> : [];
+          return clauses.length === 0 || clauses.some((clause) => {
+            if (clause.waId && item.waId === clause.waId) return true;
+            if (clause.waIdCanonical && item.waIdCanonical === clause.waIdCanonical) return true;
+            return false;
+          });
+        }) ?? null,
       findUnique: async ({ where }: { where: { clientId_messageId: { clientId: string; messageId: string } } }) =>
         state.inboundMessages.find(
           (item) =>
@@ -69,6 +82,19 @@ function fakePrisma() {
         state.inboundMessages.push(row);
         return { id: row.id };
       },
+    },
+    outboundMessage: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
+        state.outboundMessages.find((item) => {
+          if (item.clientId !== where.clientId) return false;
+          if (where.externalMessageId && item.externalMessageId !== where.externalMessageId) return false;
+          const clauses = Array.isArray(where.OR) ? where.OR as Array<Record<string, unknown>> : [];
+          return clauses.length === 0 || clauses.some((clause) => {
+            if (clause.waId && item.waId === clause.waId) return true;
+            if (clause.waIdCanonical && item.waIdCanonical === clause.waIdCanonical) return true;
+            return false;
+          });
+        }) ?? null,
     },
     event: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -198,6 +224,50 @@ test("ingestBaileysWebSessionMessage persists tenant-scoped text inbound once", 
   assert.equal(duplicate.action, "duplicate");
   assert.equal(state.inboundMessages.length, 1);
   assert.equal(state.events.some((event) => event.eventName === "whatsapp.web.inbound.duplicate"), true);
+});
+
+test("ingestBaileysWebSessionMessage resolves inbound quoted reference to local outbound", async () => {
+  resetState({
+    outboundMessages: [
+      {
+        id: "outbound_quoted",
+        clientId: "client_1",
+        waId: "5584999997784",
+        waIdCanonical: "55849999997784",
+        externalMessageId: "OUTBOUND_EXT_1",
+        type: MessageType.TEXT,
+      },
+    ],
+  });
+
+  const result = await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    message: {
+      key: { id: "MSG_QUOTED", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      messageTimestamp: 1786464002,
+      message: {
+        extendedTextMessage: {
+          text: "Respondendo a mensagem anterior",
+          contextInfo: { stanzaId: "OUTBOUND_EXT_1" },
+        },
+      },
+    },
+  });
+
+  assert.equal(result.action, "persisted");
+  const rawPayload = state.inboundMessages[0]?.rawPayload as Record<string, unknown>;
+  const contextualReply = rawPayload.contextualReply as Record<string, unknown>;
+  assert.equal(contextualReply.replyToKind, "outbound");
+  assert.equal(contextualReply.replyToInternalMessageId, "outbound_quoted");
+  assert.equal(contextualReply.replyToProvider, "web_session");
+  assert.equal(contextualReply.replyToProviderMessagePresent, true);
+  assert.equal(contextualReply.replyToMetaMessagePresent, false);
+  assert.equal(contextualReply.contextResolved, true);
+  assert.equal(JSON.stringify(contextualReply).includes("OUTBOUND_EXT_1"), false);
+  assert.equal(JSON.stringify(contextualReply).includes("5584999997784"), false);
 });
 
 test("ingestBaileysWebSessionMessage accepts sender resolved from LID mapping", async () => {

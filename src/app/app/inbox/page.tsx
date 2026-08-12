@@ -4806,10 +4806,12 @@ export default function AppInboxPage() {
           session,
           selectedConversationWaId,
           uploadFile,
-          caption?.trim() || undefined
+          caption?.trim() || undefined,
+          replyTarget ? { kind: replyTarget.kind, id: replyTarget.id, mode: replyTarget.mode } : null
         );
         setSelectedMediaFile(null);
         setMessageDraft("");
+        setReplyTarget(null);
         if (mediaInputRef.current) {
           mediaInputRef.current.value = "";
         }
@@ -4833,6 +4835,18 @@ export default function AppInboxPage() {
           messageId: response.message.messageId,
           internalMessageId: response.message.internalMessageId ?? null,
           metaMessageId: response.message.metaMessageId,
+          replyTo: replyTarget
+            ? {
+                kind: replyTarget.kind,
+                id: replyTarget.id,
+                previewType: replyTarget.type,
+                mode: replyTarget.mode,
+                previewBody: replyTarget.preview,
+                previewDirection: replyTarget.direction,
+                previewMedia: replyTarget.media ?? null,
+                previewLocation: replyTarget.location ?? null,
+              }
+            : response.message.replyTo ?? null,
           actor: response.message.actor ?? {
             source: "human_inbox",
             userId: session.user.id,
@@ -4896,6 +4910,7 @@ export default function AppInboxPage() {
       canReply,
       focusComposer,
       handleUnauthorized,
+      replyTarget,
       selectedConversation,
       selectedConversationMediaOutboundDisabledMessage,
       selectedConversationOutboundDisabledMessage,
@@ -4913,13 +4928,6 @@ export default function AppInboxPage() {
 
   const handlePrimarySend = async () => {
     if (selectedMediaFile) {
-      if (replyTarget) {
-        setError(
-          "Mensagem marcada com anexo ainda não está disponível. Remova a marcação ou envie uma mensagem de texto."
-        );
-        setErrorDetails(null);
-        return;
-      }
       await handleSendMedia();
       return;
     }

@@ -237,6 +237,7 @@ export async function sendMediaMessage(params: {
   caption?: string | null;
   fileName?: string | null;
   credentials?: TenantSendCredentials;
+  options?: { replyToMetaMessageId?: string | null; replyToOriginalType?: string | null };
 }): Promise<SendResult> {
   const phoneNumberId = params.credentials?.phoneNumberId?.trim() || env.WHATSAPP_PHONE_NUMBER_ID;
   const accessToken = params.credentials?.accessToken?.trim() || env.WHATSAPP_ACCESS_TOKEN;
@@ -246,6 +247,7 @@ export async function sendMediaMessage(params: {
       ? {
           messaging_product: "whatsapp",
           to: params.to,
+          ...(params.options?.replyToMetaMessageId ? { context: { message_id: params.options.replyToMetaMessageId } } : {}),
           type: "image",
           image: {
             id: params.mediaId,
@@ -256,6 +258,7 @@ export async function sendMediaMessage(params: {
         ? {
             messaging_product: "whatsapp",
             to: params.to,
+            ...(params.options?.replyToMetaMessageId ? { context: { message_id: params.options.replyToMetaMessageId } } : {}),
             type: "document",
             document: {
               id: params.mediaId,
@@ -267,6 +270,7 @@ export async function sendMediaMessage(params: {
           ? {
               messaging_product: "whatsapp",
               to: params.to,
+              ...(params.options?.replyToMetaMessageId ? { context: { message_id: params.options.replyToMetaMessageId } } : {}),
               type: "audio",
               audio: {
                 id: params.mediaId,
@@ -275,6 +279,7 @@ export async function sendMediaMessage(params: {
           : {
               messaging_product: "whatsapp",
               to: params.to,
+              ...(params.options?.replyToMetaMessageId ? { context: { message_id: params.options.replyToMetaMessageId } } : {}),
               type: "video",
               video: {
                 id: params.mediaId,

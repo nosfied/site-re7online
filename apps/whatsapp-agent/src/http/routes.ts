@@ -187,6 +187,7 @@ import {
   createWebSessionTextOutboundMessage,
   createWebSessionMediaOutboundMessage,
   isWebSessionTextOutboundReady,
+  type WebSessionReplyReference,
 } from "../web-session/webSessionOutboundService.js";
 import { resolveWebSessionStoredMedia } from "../media/webSessionMedia.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
@@ -5846,7 +5847,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             replyToKind: resolvedReplyContext.replyToKind,
             replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
             replyToType: resolvedReplyContext.previewType,
-            replyToMetaMessagePresent: true,
+            replyToMetaMessagePresent: resolvedReplyContext.replyToProvider === "meta",
             ...buildContextualReplyDiagnosticPayload(resolvedReplyContext),
             mode: resolvedReplyContext.mode,
           },
@@ -6023,13 +6024,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 409, { error: buildWindowClosedError(currentConversation.window.expiresAt) });
         return;
       }
-      if (parsedReplyTo.replyTo && isWebSessionWhatsApp) {
-        json(res, 409, {
-          error: "reply_context_unsupported_transport",
-          message: "Resposta contextual ainda nao esta disponivel para WhatsApp por sessao.",
-        });
-        return;
-      }
       if (parsedReplyTo.replyTo && resolvedChannel !== "whatsapp") {
         json(res, 409, {
           error: "reply_context_unsupported_channel",
@@ -6060,6 +6054,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ),
             historyVisibleAfter: resolvedConversation.winner?.historyVisibleAfter ?? null,
             replyTo: parsedReplyTo.replyTo,
+            provider: isWebSessionWhatsApp ? "web_session" : "meta",
           })
         : null;
       if (replyContext && !replyContext.ok) {
@@ -6128,6 +6123,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                       actorUserId: clientAuth.userId,
                       source: resolvedConversation.winner ?? undefined,
                       conversation: currentConversation,
+                      reply: asWebSessionContextualReply(resolvedReplyContext),
                     })
               : await adminSendMessage({
                   waId: resolvedConversation.resolvedWaId,
@@ -6165,7 +6161,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             replyToKind: resolvedReplyContext.replyToKind,
             replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
             replyToType: resolvedReplyContext.previewType,
-            replyToMetaMessagePresent: true,
+            replyToMetaMessagePresent: resolvedReplyContext.replyToProvider === "meta",
             ...buildContextualReplyDiagnosticPayload(resolvedReplyContext),
             mode: resolvedReplyContext.mode,
             reason: "message_send_failed",
@@ -6215,7 +6211,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             replyToKind: resolvedReplyContext.replyToKind,
             replyToInternalMessageId: resolvedReplyContext.replyToInternalMessageId,
             replyToType: resolvedReplyContext.previewType,
-            replyToMetaMessagePresent: true,
+            replyToMetaMessagePresent: resolvedReplyContext.replyToProvider === "meta",
             ...buildContextualReplyDiagnosticPayload(resolvedReplyContext),
             mode: resolvedReplyContext.mode,
           },
@@ -6280,6 +6276,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
       const body = await readMultipartBody(req, res);
       if (!body) return;
+      const parsedReplyTo = parseInboxContextualReplyInput(body.replyTo);
+      if (!parsedReplyTo.ok) {
+        json(res, 400, { error: parsedReplyTo.code, message: parsedReplyTo.message });
+        return;
+      }
       if (!body.file || body.file.content.length <= 0) {
         json(res, 400, {
           error: {
@@ -6327,6 +6328,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       const resolvedChannelFields = serializeInboxChannelFields(resolvedConversation.winner ?? undefined);
       const resolvedChannel = resolvedChannelFields.channel;
+      const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && resolvedChannelFields.provider === "web_session";
       if (
         isConversationOutboundBlocked(resolvedConversation.winner) ||
         resolvedChannel === "messenger" ||
@@ -6343,6 +6345,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               : resolvedChannel === "instagram"
               ? INSTAGRAM_OUTBOUND_DISABLED_MESSAGE
               : MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+        });
+        return;
+      }
+      if (parsedReplyTo.replyTo && resolvedChannel !== "whatsapp") {
+        json(res, 409, {
+          error: "reply_context_unsupported_channel",
+          message: "Resposta contextual esta disponivel apenas para WhatsApp nesta etapa.",
+        });
+        return;
+      }
+      if (parsedReplyTo.replyTo && resolvedConversation.winner?.deletedAt) {
+        json(res, 409, {
+          error: "reply_context_unavailable",
+          message: "Mensagem citada indisponivel para esta conversa.",
         });
         return;
       }
@@ -6403,8 +6419,33 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
+      const replyContext = parsedReplyTo.replyTo
+        ? await resolveInboxContextualReply(prisma, {
+            clientId: client.id,
+            detailWaIds: Array.from(
+              new Set(
+                [
+                  ...buildWaIdLookup(waId).variants,
+                  waId,
+                  resolvedConversation.resolvedWaId,
+                  resolvedConversation.resolvedWaIdCanonical,
+                  ...resolvedConversation.matchedWaIds,
+                ].filter(Boolean)
+              )
+            ),
+            historyVisibleAfter: resolvedConversation.winner?.historyVisibleAfter ?? null,
+            replyTo: parsedReplyTo.replyTo,
+            provider: isWebSessionWhatsApp ? "web_session" : "meta",
+          })
+        : null;
+      if (replyContext && !replyContext.ok) {
+        json(res, replyContext.status, { error: replyContext.code, message: replyContext.message });
+        return;
+      }
+      const resolvedReplyContext = replyContext?.ok ? replyContext.reply : null;
+
       const result =
-        resolvedChannel === "whatsapp" && resolvedChannelFields.provider === "web_session"
+        isWebSessionWhatsApp
           ? await createWebSessionMediaOutboundMessage({
               prisma,
               waId: resolvedConversation.resolvedWaId,
@@ -6423,6 +6464,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 channelAccountId: resolvedChannelFields.channelAccountId,
               },
               conversation: currentConversation,
+              reply: asWebSessionContextualReply(resolvedReplyContext),
             })
           : await adminSendMediaMessage({
               waId: resolvedConversation.resolvedWaId,
@@ -6434,6 +6476,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               fileName: body.file.fileName,
               caption: body.caption,
               content: body.file.content,
+              reply: resolvedReplyContext,
             });
       if (!result.ok) {
         if (result.error === "window_closed" && result.errorPayload) {
@@ -6516,6 +6559,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           type: result.mediaType,
           bodyText: result.bodyText,
           media: result.media,
+          replyTo: serializeContextualReplyForClient(resolvedReplyContext),
           actor: {
             source: "human_inbox",
             userId: clientAuth.userId,
@@ -26866,31 +26910,48 @@ async function buildConversationDetailPayload(
   params.latency?.duration("detailOperationalLookups", operationalLookupsStartedAt);
 
   const items = [
-    ...inbound.map((item) => ({
-      internalMessageId: item.id,
-      messageKind: "inbound",
-      direction: "INBOUND",
-      type: item.type,
-      status: "RECEIVED",
-      intent: null,
-      bodyText: item.bodyText ?? null,
-      location: extractMessageLocation(item.rawPayload),
-      media: buildInboxMessageMedia({
+    ...inbound.map((item) => {
+      const contextualReply = extractContextualReplyPayload(item.rawPayload);
+      return {
+        internalMessageId: item.id,
+        messageKind: "inbound",
+        direction: "INBOUND",
         type: item.type,
-        rawPayload: item.rawPayload,
-        downloadUrl: item.messageId
-          ? buildConversationMessageDownloadPath(resolved.resolvedWaId, item.messageId)
-          : undefined,
-      }),
-      templateName: null,
-      templateLang: null,
-      requestId: item.requestId,
-      messageId: item.messageId,
-      metaMessageId: null,
-      errorBody: null,
-      createdAt: item.createdAt,
-      rawPayload: params.includeRaw ? item.rawPayload : undefined,
-    })),
+        status: "RECEIVED",
+        intent: null,
+        bodyText: item.bodyText ?? null,
+        location: extractMessageLocation(item.rawPayload),
+        media: buildInboxMessageMedia({
+          type: item.type,
+          rawPayload: item.rawPayload,
+          downloadUrl: item.messageId
+            ? buildConversationMessageDownloadPath(resolved.resolvedWaId, item.messageId)
+            : undefined,
+        }),
+        templateName: null,
+        templateLang: null,
+        requestId: item.requestId,
+        messageId: item.messageId,
+        metaMessageId: null,
+        errorBody: null,
+        createdAt: item.createdAt,
+        replyTo: contextualReply
+          ? {
+              kind: contextualReply.kind,
+              id: contextualReply.id,
+              previewType: contextualReply.previewType,
+              mode: contextualReply.mode,
+              previewBody: contextualReply.unavailable ? "Mensagem original indisponivel" : null as string | null,
+              previewDirection: null as string | null,
+              previewMedia: null as
+                | (NonNullable<ReturnType<typeof buildInboxMessageMedia>> & { messageId?: string | null })
+                | null,
+              previewLocation: null as ReturnType<typeof extractMessageLocation>,
+            }
+          : null,
+        rawPayload: params.includeRaw ? item.rawPayload : undefined,
+      };
+    }),
     ...outbound.map((item) => {
       const metaStatus = extractMetaStatus(item.rawPayload);
       const contextualReply = extractContextualReplyPayload(item.rawPayload);
@@ -28068,6 +28129,7 @@ async function readJsonBody(req: IncomingMessage, res: ServerResponse) {
 
 type ParsedMultipartBody = {
   caption: string | null;
+  replyTo: unknown;
   file:
     | {
         fileName: string | null;
@@ -28097,6 +28159,7 @@ async function readMultipartBody(req: IncomingMessage, res: ServerResponse) {
     } as RequestInit & { duplex: "half" });
     const formData = await request.formData();
     const captionValue = formData.get("caption");
+    const replyToValue = formData.get("replyTo");
     const fileValue = formData.get("file");
 
     let file: ParsedMultipartBody["file"] = null;
@@ -28110,6 +28173,7 @@ async function readMultipartBody(req: IncomingMessage, res: ServerResponse) {
 
     return {
       caption: typeof captionValue === "string" && captionValue.trim() ? captionValue.trim() : null,
+      replyTo: typeof replyToValue === "string" && replyToValue.trim() ? JSON.parse(replyToValue) : null,
       file,
     };
   } catch {
@@ -28359,10 +28423,26 @@ type InboxContextualReplyInput = {
 type ResolvedInboxContextualReply = {
   replyToKind: "inbound" | "outbound";
   replyToInternalMessageId: string;
-  replyToMetaMessageId: string;
+  replyToMetaMessageId: string | null;
+  replyToExternalMessageId: string | null;
+  replyToProviderMessageId: string;
+  replyToProvider: "meta" | "web_session";
   previewType: MessageType;
   mode: "reply" | "rectify";
+  transportReference?: WebSessionReplyReference;
 };
+
+type ResolvedWebSessionInboxContextualReply = ResolvedInboxContextualReply & {
+  replyToProvider: "web_session";
+  transportReference: WebSessionReplyReference;
+};
+
+function asWebSessionContextualReply(
+  reply: ResolvedInboxContextualReply | null
+): ResolvedWebSessionInboxContextualReply | null {
+  if (reply?.replyToProvider !== "web_session" || !reply.transportReference) return null;
+  return reply as ResolvedWebSessionInboxContextualReply;
+}
 
 function normalizeInboxContextualReplyMode(value: unknown): "reply" | "rectify" | null {
   if (value == null) return "reply";
@@ -28401,7 +28481,9 @@ function serializeContextualReplyPayload(reply: ResolvedInboxContextualReply | n
   return {
     replyToKind: reply.replyToKind,
     replyToInternalMessageId: reply.replyToInternalMessageId,
-    replyToMetaMessagePresent: true,
+    replyToProvider: reply.replyToProvider,
+    replyToProviderMessagePresent: true,
+    replyToMetaMessagePresent: reply.replyToProvider === "meta",
     previewType: reply.previewType,
     replyToType: reply.previewType,
     originalType: reply.previewType,
@@ -28428,6 +28510,8 @@ function buildContextualReplyDiagnosticPayload(reply: ResolvedInboxContextualRep
     contextRequested: true,
     contextResolved: true,
     contextAttached: true,
+    replyToProvider: reply.replyToProvider,
+    replyToProviderMessagePresent: true,
   };
 }
 
@@ -28437,6 +28521,7 @@ function extractContextualReplyPayload(rawPayload: unknown):
       id: string;
       previewType: string | null;
       mode: "reply" | "rectify";
+      unavailable?: boolean;
     }
   | null {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return null;
@@ -28445,12 +28530,34 @@ function extractContextualReplyPayload(rawPayload: unknown):
   const record = contextualReply as Record<string, unknown>;
   const kind = String(record.replyToKind ?? "").trim().toLowerCase();
   const id = String(record.replyToInternalMessageId ?? "").trim();
-  if ((kind !== "inbound" && kind !== "outbound") || !id) return null;
+  const unavailable = record.contextResolved === false || record.referenceUnavailable === true;
+  if ((kind !== "inbound" && kind !== "outbound") || (!id && !unavailable)) return null;
   return {
-    kind,
+    kind: kind === "outbound" ? "outbound" : "inbound",
     id,
     previewType: String(record.previewType ?? "").trim() || null,
     mode: record.mode === "rectify" ? "rectify" : "reply",
+    unavailable,
+  };
+}
+
+function buildWebSessionChatJid(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return /^\d{8,15}$/.test(digits) ? `${digits}@s.whatsapp.net` : null;
+}
+
+function extractMediaMetadataForQuote(rawPayload: unknown) {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return { mimeType: null as string | null, fileName: null as string | null };
+  }
+  const media = (rawPayload as Record<string, unknown>).media;
+  if (!media || typeof media !== "object" || Array.isArray(media)) {
+    return { mimeType: null as string | null, fileName: null as string | null };
+  }
+  const record = media as Record<string, unknown>;
+  return {
+    mimeType: typeof record.mimeType === "string" ? record.mimeType : null,
+    fileName: typeof record.fileName === "string" ? record.fileName : null,
   };
 }
 
@@ -28502,11 +28609,13 @@ async function resolveInboxContextualReply(
     detailWaIds: string[];
     historyVisibleAfter?: Date | null;
     replyTo: InboxContextualReplyInput;
+    provider?: "meta" | "web_session";
   }
 ): Promise<
   | { ok: true; reply: ResolvedInboxContextualReply }
   | { ok: false; status: number; code: string; message: string }
 > {
+  const provider = params.provider ?? "meta";
   const createdAtWhere = params.historyVisibleAfter ? { createdAt: { gt: params.historyVisibleAfter } } : {};
   const sharedWhere = {
     clientId: params.clientId,
@@ -28517,44 +28626,82 @@ async function resolveInboxContextualReply(
   if (params.replyTo.kind === "inbound") {
     const inbound = await prisma.inboundMessage.findFirst({
       where: sharedWhere,
-      select: { id: true, messageId: true, type: true },
+      select: { id: true, messageId: true, externalMessageId: true, type: true, bodyText: true, rawPayload: true },
     });
     if (!inbound) {
       return { ok: false, status: 404, code: "reply_context_not_found", message: "Mensagem citada nao encontrada." };
     }
-    if (!inbound.messageId?.trim()) {
+    const providerMessageId = provider === "web_session" ? inbound.externalMessageId?.trim() : inbound.messageId?.trim();
+    if (!providerMessageId) {
       return { ok: false, status: 409, code: "reply_context_unavailable", message: "Mensagem citada sem referencia valida para resposta." };
     }
+    const quoteMedia = extractMediaMetadataForQuote(inbound.rawPayload);
+    const remoteJid = provider === "web_session" ? buildWebSessionChatJid(params.detailWaIds[0] ?? "") : null;
     return {
       ok: true,
       reply: {
         replyToKind: "inbound",
         replyToInternalMessageId: inbound.id,
-        replyToMetaMessageId: inbound.messageId,
+        replyToMetaMessageId: provider === "meta" ? providerMessageId : null,
+        replyToExternalMessageId: provider === "web_session" ? providerMessageId : inbound.externalMessageId ?? null,
+        replyToProviderMessageId: providerMessageId,
+        replyToProvider: provider,
         previewType: inbound.type,
         mode: params.replyTo.mode,
+        ...(provider === "web_session" && remoteJid
+          ? {
+              transportReference: {
+                externalMessageId: providerMessageId,
+                remoteJid,
+                fromMe: false,
+                messageType: inbound.type as WebSessionReplyReference["messageType"],
+                bodyText: inbound.bodyText ?? null,
+                fileName: quoteMedia.fileName,
+                mimeType: quoteMedia.mimeType,
+              },
+            }
+          : {}),
       },
     };
   }
 
   const outbound = await prisma.outboundMessage.findFirst({
     where: sharedWhere,
-    select: { id: true, metaMessageId: true, type: true },
+    select: { id: true, metaMessageId: true, externalMessageId: true, type: true, bodyText: true, rawPayload: true },
   });
   if (!outbound) {
     return { ok: false, status: 404, code: "reply_context_not_found", message: "Mensagem citada nao encontrada." };
   }
-  if (!outbound.metaMessageId?.trim()) {
+  const providerMessageId = provider === "web_session" ? outbound.externalMessageId?.trim() : outbound.metaMessageId?.trim();
+  if (!providerMessageId) {
     return { ok: false, status: 409, code: "reply_context_unavailable", message: "Mensagem citada sem referencia valida para resposta." };
   }
+  const quoteMedia = extractMediaMetadataForQuote(outbound.rawPayload);
+  const remoteJid = provider === "web_session" ? buildWebSessionChatJid(params.detailWaIds[0] ?? "") : null;
   return {
     ok: true,
     reply: {
       replyToKind: "outbound",
       replyToInternalMessageId: outbound.id,
-      replyToMetaMessageId: outbound.metaMessageId,
+      replyToMetaMessageId: provider === "meta" ? providerMessageId : null,
+      replyToExternalMessageId: provider === "web_session" ? providerMessageId : outbound.externalMessageId ?? null,
+      replyToProviderMessageId: providerMessageId,
+      replyToProvider: provider,
       previewType: outbound.type,
       mode: params.replyTo.mode,
+      ...(provider === "web_session" && remoteJid
+        ? {
+            transportReference: {
+              externalMessageId: providerMessageId,
+              remoteJid,
+              fromMe: true,
+              messageType: outbound.type as WebSessionReplyReference["messageType"],
+              bodyText: outbound.bodyText ?? null,
+              fileName: quoteMedia.fileName,
+              mimeType: quoteMedia.mimeType,
+            },
+          }
+        : {}),
     },
   };
 }
@@ -29296,6 +29443,7 @@ async function adminSendMediaMessage(params: {
   fileName?: string | null;
   caption?: string | null;
   content: Buffer;
+  reply?: ResolvedInboxContextualReply | null;
 }): Promise<
   | {
       ok: true;
@@ -29425,6 +29573,10 @@ async function adminSendMediaMessage(params: {
     caption: params.caption,
     fileName: uploadFileName,
     credentials,
+    options: {
+      replyToMetaMessageId: params.reply?.replyToMetaMessageId ?? null,
+      replyToOriginalType: params.reply?.previewType ?? null,
+    },
   });
   const status = sendResult.ok ? "SENT" : "FAILED";
   const messageId = `admin.send_media.${params.requestId}`;
@@ -29489,6 +29641,7 @@ async function adminSendMediaMessage(params: {
             },
           }
         : {}),
+      ...(params.reply ? { contextualReply: serializeContextualReplyPayload(params.reply) } : {}),
       status: sendResult.status ?? null,
       errorBody: sendResult.errorBody ?? null,
     },
