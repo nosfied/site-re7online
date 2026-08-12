@@ -3187,40 +3187,53 @@ export default function AppInboxPage() {
     }
 
     let matchedConversation = false;
+    let matchedSelectedConversation = false;
+    const matchedConversationKeys = new Set<string>([conversationKey, event.waId, event.waIdCanonical ?? ""]);
     setConversations((prev) => {
       const nextItems = prev.map((item) => {
-          const itemKey = getConversationIdentity(item);
-          if (
-            itemKey !== conversationKey &&
-            item.waId !== event.waId &&
-            item.waIdCanonical !== event.waIdCanonical
-          ) {
-            return item;
-          }
-          matchedConversation = true;
-          const nextAssignedUserId =
-            event.assignedUserId !== undefined ? event.assignedUserId : item.assignedUserId;
-          return {
-            ...item,
-            waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
-            mode: event.mode ?? item.mode,
-            handoffStatus: event.handoffStatus ?? item.handoffStatus,
-            assignedUserId: nextAssignedUserId,
-            departmentId: event.departmentId ?? item.departmentId ?? null,
-            status: nextAssignedUserId ? ("IN_PROGRESS" as const) : item.status,
-            lastMessage: {
-              direction: message.direction,
-              type: message.type,
-              status: message.status,
-              messageId: message.messageId,
-              bodyText: message.bodyText,
-              templateName: message.templateName,
-              createdAt: message.createdAt,
-            },
-            lastInboundAt: message.direction === "INBOUND" ? message.createdAt : item.lastInboundAt,
-            lastOutboundAt: message.direction === "OUTBOUND" ? message.createdAt : item.lastOutboundAt,
-            updatedAt: message.createdAt,
-          };
+        const itemKey = getConversationIdentity(item);
+        if (
+          itemKey !== conversationKey &&
+          item.waId !== event.waId &&
+          item.waIdCanonical !== event.waIdCanonical
+        ) {
+          return item;
+        }
+        matchedConversation = true;
+        matchedConversationKeys.add(itemKey);
+        matchedConversationKeys.add(item.waId);
+        if (item.waIdCanonical) matchedConversationKeys.add(item.waIdCanonical);
+        if (
+          conversationIdentityMatches(getConversationIdentityCandidates(item), [
+            selectedConversationKey,
+            selectedConversationWaId,
+          ])
+        ) {
+          matchedSelectedConversation = true;
+        }
+        const nextAssignedUserId =
+          event.assignedUserId !== undefined ? event.assignedUserId : item.assignedUserId;
+        return {
+          ...item,
+          waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
+          mode: event.mode ?? item.mode,
+          handoffStatus: event.handoffStatus ?? item.handoffStatus,
+          assignedUserId: nextAssignedUserId,
+          departmentId: event.departmentId ?? item.departmentId ?? null,
+          status: nextAssignedUserId ? ("IN_PROGRESS" as const) : item.status,
+          lastMessage: {
+            direction: message.direction,
+            type: message.type,
+            status: message.status,
+            messageId: message.messageId,
+            bodyText: message.bodyText,
+            templateName: message.templateName,
+            createdAt: message.createdAt,
+          },
+          lastInboundAt: message.direction === "INBOUND" ? message.createdAt : item.lastInboundAt,
+          lastOutboundAt: message.direction === "OUTBOUND" ? message.createdAt : item.lastOutboundAt,
+          updatedAt: message.createdAt,
+        };
         });
       if (!matchedConversation) {
         void refreshConversationListRef.current?.(session);
@@ -3228,21 +3241,25 @@ export default function AppInboxPage() {
       return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
     });
 
-    const targetsSelectedConversation = realtimeEventTargetsSelectedConversation({
-      event,
-      selectedConversationKey,
-      selectedConversationWaId,
-      selectedConversationIdentityCandidates: selectedConversationIdentityCandidatesRef.current,
-    });
+    const targetsSelectedConversation =
+      matchedSelectedConversation ||
+      realtimeEventTargetsSelectedConversation({
+        event,
+        selectedConversationKey,
+        selectedConversationWaId,
+        selectedConversationIdentityCandidates: selectedConversationIdentityCandidatesRef.current,
+      });
 
     if (targetsSelectedConversation) {
       const visibleConversationKey =
+        selectedConversationKey ??
         resolveRealtimeTimelineConversationKey({
           event,
           selectedConversationKey,
           selectedConversationWaId,
           selectedConversationIdentityCandidates: selectedConversationIdentityCandidatesRef.current,
-        }) ?? conversationKey;
+        }) ??
+        conversationKey;
       const shouldStickToBottom = isTimelineNearBottom();
       setMessages((prev) => {
         const enrichedMessage = enrichReplyPreviewFromTimeline(message, prev);
@@ -3253,6 +3270,9 @@ export default function AppInboxPage() {
         }
         if (event.waIdCanonical) {
           timelineCacheRef.current.set(event.waIdCanonical, nextMessages);
+        }
+        for (const key of matchedConversationKeys) {
+          if (key) timelineCacheRef.current.set(key, nextMessages);
         }
         return nextMessages;
       });
