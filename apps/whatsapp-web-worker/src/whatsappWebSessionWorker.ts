@@ -328,7 +328,7 @@ export async function sendMediaViaActiveWebSession(params: {
     params.mediaKind === "image"
       ? { image: content, mimetype: params.mimeType, caption: params.caption ?? undefined }
       : params.mediaKind === "audio"
-        ? { audio: content, mimetype: params.mimeType, ptt: false }
+        ? { audio: content, mimetype: "audio/ogg; codecs=opus", ptt: true }
         : params.mediaKind === "video"
           ? { video: content, mimetype: params.mimeType, caption: params.caption ?? undefined }
           : {

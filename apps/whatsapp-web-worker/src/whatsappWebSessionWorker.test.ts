@@ -267,3 +267,63 @@ test("web session worker sends media through an active socket", async (t) => {
   assert.equal(sent[0]?.jid, "5584999997784@s.whatsapp.net");
   assert.deepEqual(Object.keys(sent[0]?.content ?? {}).sort(), ["caption", "document", "fileName", "mimetype"]);
 });
+
+test("web session worker sends audio as WhatsApp voice note compatible opus", async (t) => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "web-session-worker-audio-"));
+  const mediaPath = path.join(tmpDir, "audio.ogg");
+  await fs.writeFile(mediaPath, Buffer.from("ogg opus audio"));
+  t.after(async () => {
+    setActiveWebSessionConnectionForTesting("account-a", null);
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+  const sent: Array<{ jid: string; content: Record<string, unknown> }> = [];
+  setActiveWebSessionConnectionForTesting("account-a", {
+    tenantKey: "tenant-a",
+    channelAccountId: "session-a",
+    startedAtMs: Date.now(),
+    socket: {
+      ev: { on() {} },
+      sendMessage: async (jid, content) => {
+        sent.push({ jid, content });
+        return { key: { id: "baileys-audio-id" } };
+      },
+    },
+    release: async () => {},
+  });
+  const prisma = {
+    channelAccount: {
+      findFirst: async () => account({
+        metadata: {
+          webSession: {
+            desiredState: "CONNECTED",
+            observedState: "CONNECTED",
+          },
+        },
+      }),
+    },
+  };
+
+  const result = await sendMediaViaActiveWebSession({
+    prisma: prisma as never,
+    clientId: "client-a",
+    tenantKey: "tenant-a",
+    accountId: "account-a",
+    channelAccountId: "session-a",
+    recipientWaId: "5584999997784",
+    mediaPath,
+    mediaKind: "audio",
+    mimeType: "audio/ogg",
+    fileName: "audio.ogg",
+    caption: null,
+    requestId: "request-audio-a",
+  });
+
+  assert.deepEqual(result, { ok: true, externalMessageId: "baileys-audio-id" });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]?.jid, "5584999997784@s.whatsapp.net");
+  assert.deepEqual(sent[0]?.content, {
+    audio: Buffer.from("ogg opus audio"),
+    mimetype: "audio/ogg; codecs=opus",
+    ptt: true,
+  });
+});
