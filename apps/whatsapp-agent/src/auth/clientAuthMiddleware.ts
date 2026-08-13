@@ -9,6 +9,15 @@ export type ClientAuthContext = {
   role: NormalizedUserRole;
   email: string;
   sessionId?: string;
+  supportAccess?: {
+    accessType: "platform_support";
+    grantId: string;
+    supportSessionId: string;
+    supportClientId: string;
+    supportUserId: string;
+    sourceAppSessionId?: string | null;
+    expiresAt: string;
+  };
 };
 
 const validatedAuthByRequest = new WeakMap<IncomingMessage, ClientAuthContext>();
@@ -72,6 +81,19 @@ export function resolveClientAuth(req: IncomingMessage): ClientAuthContext | nul
     role: normalizeUserRole(payload.role),
     email: payload.email,
     sessionId: payload.sid,
+    ...(payload.supportAccess?.accessType === "platform_support"
+      ? {
+          supportAccess: {
+            accessType: "platform_support" as const,
+            grantId: payload.supportAccess.grantId,
+            supportSessionId: payload.sid,
+            supportClientId: payload.supportAccess.supportClientId,
+            supportUserId: payload.supportAccess.supportUserId,
+            sourceAppSessionId: payload.supportAccess.sourceAppSessionId ?? null,
+            expiresAt: "",
+          },
+        }
+      : {}),
   };
 }
 

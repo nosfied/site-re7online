@@ -154,6 +154,26 @@ async function request<T = unknown>(
   };
 }
 
+async function requestWithBearer<T = unknown>(
+  method: string,
+  route: string,
+  token: string,
+  body?: unknown
+): Promise<TestResponse<T>> {
+  const response = await fetch(`${baseUrl}${route}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${token}`,
+      ...(body !== undefined ? { "content-type": "application/json" } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  return {
+    status: response.status,
+    body: (await response.json()) as T,
+  };
+}
+
 async function requestText(
   method: string,
   route: string,
@@ -345,6 +365,20 @@ async function cleanup() {
   });
   const clientIds = clients.map((client) => client.id);
   if (clientIds.length === 0) return;
+  await prisma.platformSupportSession.deleteMany({
+    where: {
+      actingClientId: {
+        in: clientIds,
+      },
+    },
+  });
+  await prisma.platformSupportAccessGrant.deleteMany({
+    where: {
+      clientId: {
+        in: clientIds,
+      },
+    },
+  });
   await prisma.inboundMessage.deleteMany({
     where: {
       clientId: {
@@ -1456,6 +1490,253 @@ test("support hub uses configured support tenant and isolates requester conversa
     env.PLATFORM_SUPPORT_TENANT_KEY = originalSupportTenantKey;
     env.SUPPORT_ATTACHMENT_ROOT = originalSupportAttachmentRoot;
   }
+});
+
+test("platform support access is tenant-authorized, temporary, auditable, and not operational", async () => {
+  await prisma.platformSupportSession.deleteMany({ where: { actingClientId: businessClientId } });
+  await prisma.platformSupportAccessGrant.deleteMany({ where: { clientId: businessClientId } });
+
+  const unauth = await requestUnauth<ErrorPayload>("GET", "/app/settings/support-access");
+  assert.equal(unauth.status, 401);
+
+  const agentSettings = await request<ErrorPayload>("GET", "/app/settings/support-access", businessAgent);
+  assert.equal(agentSettings.status, 403);
+  assert.equal(getErrorCode(agentSettings.body), "forbidden");
+
+  const supervisorSettings = await request<{
+    ok: true;
+    grant: null;
+    permissions: { canManage: boolean };
+  }>("GET", "/app/settings/support-access", businessSupervisor);
+  assert.equal(supervisorSettings.status, 200, JSON.stringify(supervisorSettings.body));
+  assert.equal(supervisorSettings.body.grant, null);
+  assert.equal(supervisorSettings.body.permissions.canManage, false);
+
+  const supervisorGrant = await request<ErrorPayload>("POST", "/app/settings/support-access", businessSupervisor, {
+    durationHours: 4,
+    reason: "diagnostico de suporte",
+  });
+  assert.equal(supervisorGrant.status, 403);
+
+  const invalidGrant = await request<ErrorPayload>("POST", "/app/settings/support-access", businessAdmin, {
+    durationHours: 72,
+  });
+  assert.equal(invalidGrant.status, 400);
+  assert.equal(getErrorCode(invalidGrant.body), "invalid_duration");
+
+  const enterWithoutGrant = await request<ErrorPayload>(
+    "POST",
+    `/app/platform-support/tenants/${prefix}-business/enter`,
+    supportAdmin
+  );
+  assert.equal(enterWithoutGrant.status, 403);
+  assert.equal(getErrorCode(enterWithoutGrant.body), "support_access_not_authorized");
+
+  const grant = await request<{
+    ok: true;
+    grant: {
+      id: string;
+      grantedBy: { id: string; name: string } | null;
+      reason: string | null;
+      expiresAt: string;
+      active: boolean;
+    };
+  }>("POST", "/app/settings/support-access", businessAdmin, {
+    durationHours: 4,
+    reason: "analise tecnica temporaria",
+  });
+  assert.equal(grant.status, 200, JSON.stringify(grant.body));
+  assert.equal(grant.body.grant.grantedBy?.id, businessAdmin.id);
+  assert.equal(grant.body.grant.reason, "analise tecnica temporaria");
+  assert.equal(grant.body.grant.active, true);
+  assert.ok(new Date(grant.body.grant.expiresAt).getTime() > Date.now());
+  assert.equal(
+    await prisma.platformSupportAccessGrant.count({
+      where: { id: grant.body.grant.id, clientId: businessClientId },
+    }),
+    1
+  );
+
+  const grantEvent = await prisma.event.findFirst({
+    where: { clientId: businessClientId, eventName: "support.access.granted" },
+    select: { payloadJson: true },
+  });
+  assert.ok(grantEvent);
+  assert.equal(JSON.stringify(grantEvent.payloadJson).includes(businessAdmin.email), false);
+
+  const adminConsoleDetail = await requestSuperadmin<{
+    ok: true;
+    supportAccess: { id: string; active: boolean; reason: string | null } | null;
+  }>("GET", `/admin/tenants/${prefix}-business`);
+  assert.equal(adminConsoleDetail.status, 200, JSON.stringify(adminConsoleDetail.body));
+  assert.equal(adminConsoleDetail.body.supportAccess?.id, grant.body.grant.id);
+  assert.equal(adminConsoleDetail.body.supportAccess?.active, true);
+
+  const tenantUserEnter = await request<ErrorPayload>(
+    "POST",
+    `/app/platform-support/tenants/${prefix}-business/enter`,
+    businessAdmin
+  );
+  assert.equal(tenantUserEnter.status, 403);
+  assert.equal(getErrorCode(tenantUserEnter.body), "support_identity_required");
+
+  const crossTenantEnter = await request<ErrorPayload>(
+    "POST",
+    `/app/platform-support/tenants/${prefix}-government/enter`,
+    supportAdmin
+  );
+  assert.equal(crossTenantEnter.status, 403);
+  assert.equal(getErrorCode(crossTenantEnter.body), "support_access_not_authorized");
+
+  const usersBefore = await prisma.user.count({ where: { clientId: businessClientId } });
+  const appSessionsBefore = await prisma.appAuthSession.count({ where: { clientId: businessClientId } });
+  const outboundBefore = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+
+  const entered = await request<{
+    ok: true;
+    token: string;
+    supportAccess: {
+      accessType: "platform_support";
+      grantId: string;
+      supportClientId: string;
+      supportUserId: string;
+      tenantId: string;
+      tenantName: string;
+      expiresAt: string;
+    };
+  }>("POST", `/app/platform-support/tenants/${prefix}-business/enter`, supportAdmin);
+  assert.equal(entered.status, 200, JSON.stringify(entered.body));
+  assert.equal(entered.body.supportAccess.grantId, grant.body.grant.id);
+  assert.equal(entered.body.supportAccess.supportClientId, supportClientId);
+  assert.equal(entered.body.supportAccess.supportUserId, supportAdmin.id);
+  assert.equal(entered.body.supportAccess.tenantId, `${prefix}-business`);
+
+  assert.equal(await prisma.user.count({ where: { clientId: businessClientId } }), usersBefore);
+  assert.equal(await prisma.appAuthSession.count({ where: { clientId: businessClientId } }), appSessionsBefore);
+
+  const supportTenantView = await requestWithBearer<{
+    ok: true;
+    tenant: { id: string; supportAccess: { accessType: string; grantId: string } | null };
+  }>("GET", "/app/tenant", entered.body.token);
+  assert.equal(supportTenantView.status, 200, JSON.stringify(supportTenantView.body));
+  assert.equal(supportTenantView.body.tenant.id, businessClientId);
+  assert.equal(supportTenantView.body.tenant.supportAccess?.accessType, "platform_support");
+  assert.equal(supportTenantView.body.tenant.supportAccess?.grantId, grant.body.grant.id);
+
+  const supportSettingsView = await requestWithBearer<{
+    ok: true;
+    permissions: { canManage: boolean };
+  }>("GET", "/app/settings/support-access", entered.body.token);
+  assert.equal(supportSettingsView.status, 200, JSON.stringify(supportSettingsView.body));
+  assert.equal(supportSettingsView.body.permissions.canManage, false);
+
+  const supportSelfRevoke = await requestWithBearer<ErrorPayload>(
+    "DELETE",
+    "/app/settings/support-access",
+    entered.body.token
+  );
+  assert.equal(supportSelfRevoke.status, 403);
+  assert.equal(getErrorCode(supportSelfRevoke.body), "support_access_self_management_blocked");
+
+  const supportClaim = await requestWithBearer<ErrorPayload>(
+    "POST",
+    "/app/conversation/5511999990000/claim",
+    entered.body.token
+  );
+  assert.equal(supportClaim.status, 403);
+  assert.equal(getErrorCode(supportClaim.body), "support_operational_action_blocked");
+
+  const supportSend = await requestWithBearer<ErrorPayload>(
+    "POST",
+    "/app/conversation/5511999990000/send",
+    entered.body.token,
+    { text: "nao deve enviar" }
+  );
+  assert.equal(supportSend.status, 403);
+  assert.equal(getErrorCode(supportSend.body), "support_operational_action_blocked");
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId: businessClientId } }), outboundBefore);
+
+  const enteredSession = await prisma.platformSupportSession.findFirst({
+    where: { actingClientId: businessClientId, supportUserId: supportAdmin.id, endedAt: null },
+    select: { id: true },
+  });
+  assert.ok(enteredSession);
+
+  const revoke = await request<{
+    ok: true;
+    grant: { id: string; active: boolean; revokedBy: { id: string; name: string } | null };
+  }>("DELETE", "/app/settings/support-access", businessAdmin);
+  assert.equal(revoke.status, 200, JSON.stringify(revoke.body));
+  assert.equal(revoke.body.grant.id, grant.body.grant.id);
+  assert.equal(revoke.body.grant.active, false);
+  assert.equal(revoke.body.grant.revokedBy?.id, businessAdmin.id);
+
+  const revokedSession = await prisma.platformSupportSession.findUnique({
+    where: { id: enteredSession.id },
+    select: { endedAt: true, endReason: true },
+  });
+  assert.ok(revokedSession?.endedAt);
+  assert.equal(revokedSession.endReason, "grant_revoked");
+
+  const afterRevoke = await requestWithBearer<ErrorPayload>("GET", "/app/tenant", entered.body.token);
+  assert.equal(afterRevoke.status, 401);
+
+  const revokeEvent = await prisma.event.findFirst({
+    where: { clientId: businessClientId, eventName: "support.access.revoked" },
+    select: { payloadJson: true },
+  });
+  assert.ok(revokeEvent);
+
+  const expiredGrant = await prisma.platformSupportAccessGrant.create({
+    data: {
+      clientId: businessClientId,
+      grantedByUserId: businessAdmin.id,
+      reason: "grant expirado de teste",
+      expiresAt: new Date(Date.now() - 60_000),
+    },
+    select: { id: true },
+  });
+  const expiredSession = await prisma.platformSupportSession.create({
+    data: {
+      grantId: expiredGrant.id,
+      actingClientId: businessClientId,
+      supportClientId,
+      supportUserId: supportAdmin.id,
+      sourceAppSessionId: `${supportAdmin.id}-session`,
+      expiresAt: new Date(Date.now() - 30_000),
+    },
+    select: { id: true },
+  });
+  const expiredToken = issueClientAuthToken(
+    {
+      ...supportAdmin,
+      clientId: businessClientId,
+      role: "ADMIN",
+      supportAccess: {
+        accessType: "platform_support",
+        grantId: expiredGrant.id,
+        supportClientId,
+        supportUserId: supportAdmin.id,
+        sourceAppSessionId: `${supportAdmin.id}-session`,
+      },
+    },
+    expiredSession.id,
+    buildAppAuthSessionExpiresAt()
+  );
+  const expiredAccess = await requestWithBearer<ErrorPayload>("GET", "/app/tenant", expiredToken);
+  assert.equal(expiredAccess.status, 401);
+  const expiredStoredSession = await prisma.platformSupportSession.findUnique({
+    where: { id: expiredSession.id },
+    select: { endedAt: true, endReason: true },
+  });
+  assert.ok(expiredStoredSession?.endedAt);
+  assert.equal(expiredStoredSession.endReason, "grant_expired");
+
+  assert.ok(
+    await prisma.event.findFirst({
+      where: { clientId: businessClientId, eventName: "support.access.expired" },
+    })
+  );
 });
 
 test("queue assignment settings are tenant scoped and admin protected", async () => {

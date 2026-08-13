@@ -8,8 +8,11 @@ import ThemeSelector from "@/components/ThemeSelector";
 import {
   AppSession,
   clearAppSession,
+  clearSupportReturnSession,
+  exitPlatformSupportTenant,
   fetchAppTenantSummary,
   getAppSessionRemainingMs,
+  loadSupportReturnSession,
   logoutAppSession,
   renewAppSession,
   saveAppSession,
@@ -329,6 +332,7 @@ export default function AppShell({
   const [remainingMs, setRemainingMs] = useState<number | null>(() => getAppSessionRemainingMs(session));
   const [renewingSession, setRenewingSession] = useState(false);
   const [renewError, setRenewError] = useState<string | null>(null);
+  const [exitingSupportMode, setExitingSupportMode] = useState(false);
   const [directNavLimits, setDirectNavLimits] = useState(() => ({
     operation: DIRECT_OPERATION_NAV_LIMIT,
     administration: DIRECT_ADMINISTRATION_NAV_LIMIT,
@@ -457,6 +461,27 @@ export default function AppShell({
       } finally {
         clearAppSession();
         router.replace("/app/login");
+      }
+    })();
+  };
+
+  const handleExitSupportMode = () => {
+    if (!activeSession.supportAccess || exitingSupportMode) return;
+    setExitingSupportMode(true);
+    void (async () => {
+      try {
+        await exitPlatformSupportTenant(activeSession).catch(() => null);
+        const returnSession = loadSupportReturnSession();
+        clearSupportReturnSession();
+        if (returnSession?.token) {
+          saveAppSession(returnSession);
+          router.replace("/app/inbox");
+          return;
+        }
+        clearAppSession();
+        router.replace("/app/login");
+      } finally {
+        setExitingSupportMode(false);
       }
     })();
   };
@@ -675,6 +700,28 @@ export default function AppShell({
       {helpActions}
     </div>
   );
+  const supportModeBanner = activeSession.supportAccess ? (
+    <div className="rounded-lg border border-amber-300/35 bg-amber-500/12 px-3 py-2 text-sm text-amber-50">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-semibold">Modo de suporte</p>
+          <p className="theme-muted mt-0.5 text-xs">
+            Acesso temporário ao tenant{" "}
+            {activeSession.supportAccess.tenantName || tenantSummary?.name || activeSession.user.clientId}.
+            Expira em {new Date(activeSession.supportAccess.expiresAt).toLocaleString("pt-BR")}.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleExitSupportMode}
+          disabled={exitingSupportMode}
+          className="theme-nav-link shrink-0 rounded-md border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {exitingSupportMode ? "Saindo..." : "Sair do modo de suporte"}
+        </button>
+      </div>
+    </div>
+  ) : null;
   const logoButton = (
     <button
       type="button"
@@ -917,6 +964,7 @@ export default function AppShell({
           }
         />
 
+        {supportModeBanner}
         {children}
       </div>
 

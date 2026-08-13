@@ -92,6 +92,8 @@ model Client {
   slaConfig      SLAConfig?
   retentionConfig RetentionConfig?
   operationalConfig TenantOperationalConfig?
+  supportAccessGrants PlatformSupportAccessGrant[]
+  platformSupportSessions PlatformSupportSession[]
   channelAccounts ChannelAccount[]
   conversationMetrics ConversationMetrics[]
   metaConfig    TenantMetaConfig?
@@ -149,6 +151,9 @@ model User {
   satisfactionQuestionsUpdated SatisfactionQuestion[] @relation("SatisfactionQuestionUpdatedBy")
   satisfactionSurveysAssigned SatisfactionSurvey[] @relation("SatisfactionSurveyAssignedUser")
   departmentMemberships UserDepartmentMembership[]
+  supportAccessGrantsGranted PlatformSupportAccessGrant[] @relation("SupportAccessGrantedBy")
+  supportAccessGrantsRevoked PlatformSupportAccessGrant[] @relation("SupportAccessRevokedBy")
+  platformSupportSessions PlatformSupportSession[] @relation("PlatformSupportSessionUser")
 
   @@unique([clientId, email])
   @@index([clientId, createdAt])
@@ -172,6 +177,51 @@ model AppAuthSession {
 
   @@index([clientId, userId, revokedAt])
   @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+model PlatformSupportAccessGrant {
+  id              String   @id @default(cuid())
+  clientId        String   @db.Uuid
+  grantedByUserId String
+  reason          String?
+  scope           String   @default("ADMIN")
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  revokedByUserId String?
+  revokeReason    String?
+
+  client    Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  grantedBy User   @relation("SupportAccessGrantedBy", fields: [grantedByUserId], references: [id], onDelete: Restrict)
+  revokedBy User?  @relation("SupportAccessRevokedBy", fields: [revokedByUserId], references: [id], onDelete: SetNull)
+  sessions  PlatformSupportSession[]
+
+  @@index([clientId, expiresAt, revokedAt])
+  @@index([clientId, createdAt])
+  @@index([grantedByUserId, createdAt])
+}
+
+model PlatformSupportSession {
+  id                  String   @id @default(cuid())
+  grantId             String
+  actingClientId      String   @db.Uuid
+  supportClientId     String   @db.Uuid
+  supportUserId       String
+  sourceAppSessionId  String?
+  createdAt           DateTime @default(now())
+  expiresAt           DateTime
+  lastSeenAt          DateTime @default(now())
+  endedAt             DateTime?
+  endReason           String?
+
+  grant       PlatformSupportAccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  actingClient Client @relation(fields: [actingClientId], references: [id], onDelete: Cascade)
+  supportUser  User   @relation("PlatformSupportSessionUser", fields: [supportUserId], references: [id], onDelete: Cascade)
+
+  @@index([actingClientId, supportUserId, endedAt])
+  @@index([grantId, endedAt])
+  @@index([supportUserId, createdAt])
   @@index([expiresAt])
 }
 

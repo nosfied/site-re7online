@@ -653,6 +653,19 @@ export type TenantChannelAccount = {
 export type TenantConfigResponse = {
   ok: boolean;
   tenantId: string;
+  supportAccess?: {
+    id: string;
+    clientId: string;
+    grantedByUserId: string;
+    reason: string | null;
+    scope: string;
+    createdAt: string;
+    expiresAt: string;
+    revokedAt: string | null;
+    revokedByUserId: string | null;
+    revokeReason: string | null;
+    active: boolean;
+  } | null;
   client?: {
     id: string;
     clientKey: string;

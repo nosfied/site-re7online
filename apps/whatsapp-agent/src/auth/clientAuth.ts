@@ -16,6 +16,7 @@ type ClientAuthTokenPayload = {
   exp: number;
   typ: "client-auth";
   ver: number;
+  supportAccess?: ClientAuthSupportAccess;
 };
 
 export type ClientAuthUser = {
@@ -24,6 +25,15 @@ export type ClientAuthUser = {
   name: string;
   email: string;
   role: string;
+  supportAccess?: ClientAuthSupportAccess;
+};
+
+export type ClientAuthSupportAccess = {
+  accessType: "platform_support";
+  grantId: string;
+  supportClientId: string;
+  supportUserId: string;
+  sourceAppSessionId?: string | null;
 };
 
 function getClientAuthSecret() {
@@ -86,6 +96,7 @@ export function issueClientAuthToken(user: ClientAuthUser, sessionId: string, ex
     exp: Math.floor(tokenExpiresAt.getTime() / 1000),
     typ: "client-auth",
     ver: TOKEN_VERSION,
+    ...(user.supportAccess ? { supportAccess: user.supportAccess } : {}),
   };
   const header = { alg: "HS256", typ: "JWT" };
   const encodedHeader = toBase64Url(JSON.stringify(header));
@@ -128,7 +139,13 @@ export function verifyClientAuthTokenDetailed(token: string, now = new Date()): 
       !payload.email ||
       !payload.name ||
       !payload.role ||
-      !payload.sid
+      !payload.sid ||
+      (payload.supportAccess !== undefined &&
+        (!payload.supportAccess ||
+          payload.supportAccess.accessType !== "platform_support" ||
+          !payload.supportAccess.grantId ||
+          !payload.supportAccess.supportClientId ||
+          !payload.supportAccess.supportUserId))
     ) {
       return { ok: false, reason: "invalid_payload" };
     }

@@ -11,12 +11,16 @@ import {
   AppMfaRuntimeStatus,
   AppMfaStatus,
   AppSession,
+  AppSupportAccessSettingsResponse,
   clearAppSession,
   fetchAppMfaRecoveryCodeStatus,
   fetchAppMfaRuntimeStatus,
   fetchAppMfaStatus,
+  fetchAppSupportAccessSettings,
+  grantAppSupportAccess,
   generateAppMfaRecoveryCodes,
   loadAppSession,
+  revokeAppSupportAccess,
   saveAppSession,
   startAppMfaEnrollment,
   verifyAppMfaShadow,
@@ -76,10 +80,14 @@ export default function SecuritySettingsPage() {
   const [status, setStatus] = useState<AppMfaStatus | null>(null);
   const [runtimeStatus, setRuntimeStatus] = useState<AppMfaRuntimeStatus | null>(null);
   const [recoveryStatus, setRecoveryStatus] = useState<AppMfaRecoveryCodeStatus | null>(null);
+  const [supportAccess, setSupportAccess] = useState<AppSupportAccessSettingsResponse | null>(null);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [provisioning, setProvisioning] = useState<AppMfaProvisioning | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingSupportAccess, setSavingSupportAccess] = useState(false);
+  const [supportDurationHours, setSupportDurationHours] = useState("4");
+  const [supportReason, setSupportReason] = useState("");
   const [generatingRecovery, setGeneratingRecovery] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [shadowCode, setShadowCode] = useState("");
@@ -101,14 +109,16 @@ export default function SecuritySettingsPage() {
       setLoading(true);
       setError(null);
       try {
-        const [mfaResponse, runtimeResponse, recoveryResponse] = await Promise.all([
+        const [mfaResponse, runtimeResponse, recoveryResponse, supportResponse] = await Promise.all([
           fetchAppMfaStatus(activeSession),
           fetchAppMfaRuntimeStatus(activeSession),
           fetchAppMfaRecoveryCodeStatus(activeSession),
+          fetchAppSupportAccessSettings(activeSession),
         ]);
         setStatus(mfaResponse.status);
         setRuntimeStatus(runtimeResponse.status);
         setRecoveryStatus(recoveryResponse.status);
+        setSupportAccess(supportResponse);
       } catch (err) {
         const typed = err as AppApiError;
         if (typed.status === 401) {
@@ -233,6 +243,60 @@ export default function SecuritySettingsPage() {
     }
   };
 
+  const refreshSupportAccess = async (activeSession: AppSession) => {
+    const response = await fetchAppSupportAccessSettings(activeSession);
+    setSupportAccess(response);
+    return response;
+  };
+
+  const authorizeSupportAccess = async () => {
+    if (!session) return;
+    setSavingSupportAccess(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await grantAppSupportAccess(session, {
+        durationHours: Number(supportDurationHours),
+        reason: supportReason,
+      });
+      setSupportAccess(response);
+      setSuccess("Acesso de suporte autorizado temporariamente.");
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível autorizar o acesso de suporte." }));
+    } finally {
+      setSavingSupportAccess(false);
+    }
+  };
+
+  const revokeSupportAccess = async () => {
+    if (!session) return;
+    setSavingSupportAccess(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await revokeAppSupportAccess(session);
+      setSupportAccess(response);
+      setSuccess("Acesso de suporte revogado.");
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (typed.status === 404) {
+        await refreshSupportAccess(session).catch(() => null);
+      }
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível revogar o acesso de suporte." }));
+    } finally {
+      setSavingSupportAccess(false);
+    }
+  };
+
   const metrics = useMemo(() => {
     return {
       feature: status?.featureEnabled ? "Ativa" : "Inativa",
@@ -252,6 +316,84 @@ export default function SecuritySettingsPage() {
     >
       {error ? <FeedbackToast variant="error" message={error} {...toastHandlers} /> : null}
       {success ? <FeedbackToast variant="success" message={success} {...toastHandlers} /> : null}
+
+      <section className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold">Acesso de suporte da plataforma</h2>
+            <p className="mt-1 max-w-3xl text-sm theme-muted">
+              Permita temporariamente que a equipe técnica da plataforma acesse este ambiente para diagnóstico e suporte.
+              O acesso é registrado, tem prazo definido e pode ser revogado a qualquer momento.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <StatusPill
+                enabled={Boolean(supportAccess?.grant?.active)}
+                label={supportAccess?.grant?.active ? "Autorizado" : "Desativado"}
+              />
+              {supportAccess?.grant ? (
+                <span className="inline-flex rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs font-semibold text-white/70">
+                  Até {formatDateTime(supportAccess.grant.expiresAt)}
+                </span>
+              ) : null}
+            </div>
+            {supportAccess?.grant?.reason ? (
+              <p className="theme-muted mt-3 text-sm">Motivo: {supportAccess.grant.reason}</p>
+            ) : null}
+            {supportAccess?.grant?.grantedBy ? (
+              <p className="theme-muted mt-1 text-xs">
+                Autorizado por {supportAccess.grant.grantedBy.name}
+              </p>
+            ) : null}
+          </div>
+          {supportAccess?.permissions.canManage ? (
+            <div className="grid min-w-[min(100%,22rem)] gap-3 rounded-lg border border-white/10 bg-black/20 p-3">
+              <label className="grid gap-1 text-sm">
+                <span className="theme-muted">Permitir suporte por</span>
+                <select
+                  value={supportDurationHours}
+                  onChange={(event) => setSupportDurationHours(event.target.value)}
+                  disabled={savingSupportAccess}
+                  className="theme-input h-10 rounded-md px-3 text-sm"
+                >
+                  <option value="1">1 hora</option>
+                  <option value="4">4 horas</option>
+                  <option value="8">8 horas</option>
+                  <option value="24">24 horas</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="theme-muted">Motivo/observação</span>
+                <textarea
+                  value={supportReason}
+                  onChange={(event) => setSupportReason(event.target.value)}
+                  disabled={savingSupportAccess}
+                  rows={3}
+                  className="theme-input rounded-md px-3 py-2 text-sm"
+                  placeholder="Ex.: diagnóstico de falha no Inbox"
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={authorizeSupportAccess}
+                  disabled={savingSupportAccess}
+                  className="theme-button-primary h-10 rounded-md px-4 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingSupportAccess ? "Salvando..." : "Autorizar acesso"}
+                </button>
+                <button
+                  type="button"
+                  onClick={revokeSupportAccess}
+                  disabled={savingSupportAccess || !supportAccess?.grant?.active}
+                  className="theme-button-secondary h-10 rounded-md px-4 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Revogar acesso
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </section>
 
       <section className="grid gap-3 md:grid-cols-4">
         <Metric label="Verificação" value={metrics.feature} />

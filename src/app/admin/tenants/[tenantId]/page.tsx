@@ -5,6 +5,13 @@ import { useParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
+  enterPlatformSupportTenant,
+  loadAppSession,
+  saveAppSession,
+  saveSupportReturnSession,
+  type AppSession,
+} from "@/lib/appClientApi";
+import {
   fetchTenantById,
   normalizeWaIdList,
   TenantConfigResponse,
@@ -93,6 +100,9 @@ export default function TenantEditPage() {
   const [saving, setSaving] = useState(false);
   const [clientSnapshot, setClientSnapshot] = useState<TenantConfigResponse["client"] | null>(null);
   const [tenantSnapshot, setTenantSnapshot] = useState<TenantConfigResponse["tenant"] | null>(null);
+  const [supportAccessSnapshot, setSupportAccessSnapshot] = useState<TenantConfigResponse["supportAccess"] | null>(null);
+  const [supportAppSession, setSupportAppSession] = useState<AppSession | null>(null);
+  const [enteringSupport, setEnteringSupport] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<{ fieldsChanged?: string[]; backupPath?: string } | null>(null);
@@ -110,6 +120,10 @@ export default function TenantEditPage() {
     : `/admin/tenants/${encodeURIComponent(tenantId)}/chatbot`;
 
   useEffect(() => {
+    setSupportAppSession(loadAppSession());
+  }, []);
+
+  useEffect(() => {
     if (!tenantId) return;
     if (!connection.baseUrl || !connection.adminToken) return;
 
@@ -123,6 +137,7 @@ export default function TenantEditPage() {
         const tenant = response.tenant;
         setClientSnapshot(response.client ?? null);
         setTenantSnapshot(tenant);
+        setSupportAccessSnapshot(response.supportAccess ?? null);
         setForm({
           profile: response.client?.profile === "government" ? "government" : "business",
           displayPhoneNumber: tenant.displayPhoneNumber ?? "",
@@ -208,6 +223,23 @@ export default function TenantEditPage() {
 
   const updateFormField = (field: keyof TenantFormState, value: string) => {
     setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
+  const handleEnterSupportMode = async () => {
+    if (!supportAppSession || !tenantId) return;
+    setEnteringSupport(true);
+    setError(null);
+    try {
+      saveSupportReturnSession(supportAppSession);
+      const supportSession = await enterPlatformSupportTenant(supportAppSession, tenantId);
+      saveAppSession(supportSession);
+      window.location.href = "/app/inbox";
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      setError(typed.message || "Nao foi possivel acessar o tenant em modo suporte.");
+    } finally {
+      setEnteringSupport(false);
+    }
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -450,6 +482,56 @@ export default function TenantEditPage() {
               >
                 Relatorios do tenant
               </Link>
+              <div className="rounded-lg border border-amber-300/20 bg-amber-950/20 p-3 text-sm">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-amber-100">Acesso de suporte</p>
+                    <p className="mt-1 text-xs text-amber-100/70">
+                      Entrada temporaria auditada. A autorizacao deve ser feita por ADMIN no proprio tenant.
+                    </p>
+                  </div>
+                  <span
+                    className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                      supportAccessSnapshot?.active
+                        ? "bg-emerald-500/15 text-emerald-100"
+                        : "bg-white/10 text-white/70"
+                    }`}
+                  >
+                    {supportAccessSnapshot?.active ? "Autorizado" : "Desativado"}
+                  </span>
+                </div>
+                {supportAccessSnapshot?.active ? (
+                  <dl className="mt-3 grid gap-2 text-xs text-amber-50/80">
+                    <div>
+                      <dt className="uppercase tracking-wide text-amber-100/50">Expira em</dt>
+                      <dd>{new Date(supportAccessSnapshot.expiresAt).toLocaleString("pt-BR")}</dd>
+                    </div>
+                    {supportAccessSnapshot.reason ? (
+                      <div>
+                        <dt className="uppercase tracking-wide text-amber-100/50">Motivo</dt>
+                        <dd>{supportAccessSnapshot.reason}</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                ) : (
+                  <p className="mt-3 text-xs text-white/60">
+                    Sem autorizacao ativa para suporte da plataforma neste momento.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleEnterSupportMode}
+                  disabled={!supportAccessSnapshot?.active || !supportAppSession || enteringSupport}
+                  className="mt-3 w-full rounded-md border border-amber-200/30 bg-amber-400/15 px-3 py-2 text-sm font-semibold text-amber-50 transition hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:opacity-50"
+                  title={
+                    supportAppSession
+                      ? "Acessar tenant em modo suporte"
+                      : "Entre no Converta com sua conta de suporte antes de usar esta acao"
+                  }
+                >
+                  {enteringSupport ? "Entrando..." : "Acessar em modo suporte"}
+                </button>
+              </div>
             </div>
           </div>
         </section>

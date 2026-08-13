@@ -199,6 +199,12 @@ import {
   serializeWebSessionStatus,
 } from "../web-session/webSessionConnectionAdmin.js";
 import {
+  createPlatformSupportSession,
+  getCurrentPlatformSupportGrant,
+  grantPlatformSupportAccess,
+  revokePlatformSupportAccess,
+} from "../support/platformSupportAccess.js";
+import {
   createWebSessionTextOutboundMessage,
   createWebSessionMediaOutboundMessage,
   isWebSessionTextOutboundReady,
@@ -1782,15 +1788,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   if (req.method === "POST" && pathname === "/auth/logout") {
     const validation = await validateAppSessionFromRequest(req);
     if (validation.ok) {
-      await revokeAppSession({
-        clientId: validation.auth.clientId,
-        userId: validation.auth.userId,
-        sessionId: validation.auth.sessionId ?? "",
-        reason: "logout",
-      });
+      if (validation.auth.supportAccess) {
+        await getPrisma().platformSupportSession.updateMany({
+          where: {
+            id: validation.auth.supportAccess.supportSessionId,
+            supportUserId: validation.auth.supportAccess.supportUserId,
+            endedAt: null,
+          },
+          data: { endedAt: new Date(), endReason: "logout" },
+        });
+      } else {
+        await revokeAppSession({
+          clientId: validation.auth.clientId,
+          userId: validation.auth.userId,
+          sessionId: validation.auth.sessionId ?? "",
+          reason: "logout",
+        });
+      }
       const body = await readJsonBody(req, res).catch(() => null);
       const endpoint = body && typeof body.endpoint === "string" ? body.endpoint : null;
-      if (endpoint) {
+      if (endpoint && !validation.auth.supportAccess) {
         await revokePushSubscription({
           clientId: validation.auth.clientId,
           userId: validation.auth.userId,
@@ -2014,6 +2031,197 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
     setValidatedClientAuth(req, validation.auth);
+  }
+
+  if (pathname === "/app/settings/support-access" && ["GET", "POST", "DELETE"].includes(req.method ?? "")) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminOrSupervisorRole(clientAuth.role)) {
+      json(res, 403, httpError("forbidden", "Only supervisor or admin can view support access settings."));
+      return;
+    }
+    if (clientAuth.supportAccess && req.method !== "GET") {
+      json(res, 403, httpError("support_access_self_management_blocked", "Acesso de suporte deve ser autorizado ou revogado por ADMIN do tenant."));
+      return;
+    }
+    if ((req.method === "POST" || req.method === "DELETE") && !isAdminRole(clientAuth.role)) {
+      json(res, 403, httpError("forbidden", "Only admin can manage support access."));
+      return;
+    }
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (req.method === "GET") {
+        json(res, 200, {
+          ok: true,
+          tenantId: client.clientKey,
+          grant: await getCurrentPlatformSupportGrant({ prisma, clientId: client.id }),
+          permissions: { canManage: isAdminRole(clientAuth.role) && !clientAuth.supportAccess },
+        });
+        return;
+      }
+      if (req.method === "POST") {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const result = await grantPlatformSupportAccess({
+          prisma,
+          clientId: client.id,
+          actorUserId: clientAuth.userId,
+          durationHours: body.durationHours,
+          reason: body.reason,
+          requestId,
+        });
+        if (!result.ok) {
+          json(res, result.status, httpError(result.error, "Duracao de acesso invalida."));
+          return;
+        }
+        json(res, 200, {
+          ok: true,
+          tenantId: client.clientKey,
+          grant: result.grant,
+          permissions: { canManage: true },
+        });
+        return;
+      }
+      const result = await revokePlatformSupportAccess({
+        prisma,
+        clientId: client.id,
+        actorUserId: clientAuth.userId,
+        requestId,
+      });
+      if (!result.ok) {
+        json(res, result.status, httpError(result.error, "Acesso de suporte nao esta ativo."));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        grant: result.grant,
+        permissions: { canManage: true },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.support_access.settings.error",
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  const supportEnterMatch = pathname.match(/^\/app\/platform-support\/tenants\/([^/]+)\/enter$/);
+  if (req.method === "POST" && supportEnterMatch) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (clientAuth.supportAccess) {
+      json(res, 409, httpError("already_in_support_mode", "Saia do modo de suporte atual antes de acessar outro tenant."));
+      return;
+    }
+    try {
+      const tenantKey = decodeURIComponent(supportEnterMatch[1] ?? "").trim();
+      if (!tenantKey) {
+        json(res, 400, httpError("bad_request", "Tenant id is required."));
+        return;
+      }
+      const supportUser = await prisma.user.findFirst({
+        where: { id: clientAuth.userId, clientId: clientAuth.clientId, isActive: true },
+        select: {
+          id: true,
+          clientId: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      });
+      if (!supportUser) {
+        json(res, 401, httpError("unauthorized", "Sessao invalida."));
+        return;
+      }
+      const result = await createPlatformSupportSession({
+        prisma,
+        actingClientKey: tenantKey,
+        supportClientId: clientAuth.clientId,
+        supportUserId: clientAuth.userId,
+        supportUserName: supportUser.name,
+        supportUserEmail: supportUser.email,
+        supportUserRole: supportUser.role,
+        sourceAppSessionId: clientAuth.sessionId ?? null,
+        requestId,
+      });
+      if (!result.ok) {
+        json(res, result.status, httpError(result.error, "Acesso de suporte nao autorizado."));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        token: result.token,
+        expiresAt: result.expiresAt,
+        user: {
+          id: supportUser.id,
+          name: supportUser.name,
+          email: supportUser.email,
+          clientId: result.client.id,
+          role: "ADMIN",
+          departmentId: null,
+          departmentName: null,
+        },
+        features: resolveTenantCapabilities(result.client),
+        profile: getClientProfile(result.client),
+        supportAccess: {
+          ...result.supportAccess,
+          tenantId: result.client.clientKey,
+          tenantName: result.client.name,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.platform_support.enter.error",
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/platform-support/exit") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!clientAuth.supportAccess) {
+      json(res, 409, httpError("not_in_support_mode", "Modo de suporte nao esta ativo."));
+      return;
+    }
+    const endedAt = new Date();
+    await prisma.platformSupportSession.updateMany({
+      where: {
+        id: clientAuth.supportAccess.supportSessionId,
+        supportUserId: clientAuth.supportAccess.supportUserId,
+        endedAt: null,
+      },
+      data: { endedAt, endReason: "support_exited" },
+    });
+    await prisma.event.create({
+      data: {
+        clientId: clientAuth.clientId,
+        eventName: "support.access.exited",
+        requestId: `${requestId}:support-access-exited:${clientAuth.supportAccess.supportSessionId}`,
+        payloadJson: {
+          supportUserId: clientAuth.supportAccess.supportUserId,
+          supportClientId: clientAuth.supportAccess.supportClientId,
+          supportSessionId: clientAuth.supportAccess.supportSessionId,
+          grantId: clientAuth.supportAccess.grantId,
+        },
+      },
+    }).catch(() => null);
+    json(res, 200, { ok: true });
+    return;
   }
 
   if (pathname === "/app/training/catalog" && req.method === "GET") {
@@ -2932,7 +3140,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const client = await prisma.client.findFirst({
         where: {
           id: clientAuth.clientId,
-          status: "ACTIVE",
+          ...(clientAuth.supportAccess ? {} : { status: "ACTIVE" }),
         },
         include: {
           metaConfig: true,
@@ -2965,6 +3173,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           phoneDisplay,
           features: getFeatures(client),
           profile: getClientProfile(client),
+          supportAccess: clientAuth.supportAccess
+            ? {
+                accessType: "platform_support",
+                grantId: clientAuth.supportAccess.grantId,
+                supportSessionId: clientAuth.supportAccess.supportSessionId,
+                expiresAt: clientAuth.supportAccess.expiresAt,
+              }
+            : null,
         },
       });
     } catch (error) {
@@ -4619,6 +4835,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
+    if (isPlatformSupportAuth(clientAuth)) {
+      blockPlatformSupportOperationalAction(res, "envio de template");
+      return;
+    }
     try {
       const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
@@ -5564,6 +5784,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
+    if (isPlatformSupportAuth(clientAuth)) {
+      blockPlatformSupportOperationalAction(res, "envio de mensagem pronta");
+      return;
+    }
     try {
       const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
@@ -6023,6 +6247,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
+    if (isPlatformSupportAuth(clientAuth)) {
+      blockPlatformSupportOperationalAction(res, "envio de mensagem");
+      return;
+    }
     try {
       const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
@@ -6382,6 +6610,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
+    if (isPlatformSupportAuth(clientAuth)) {
+      blockPlatformSupportOperationalAction(res, "envio de midia");
+      return;
+    }
     try {
       const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
@@ -10122,6 +10354,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
+    if (isPlatformSupportAuth(clientAuth)) {
+      blockPlatformSupportOperationalAction(res, "assumir conversa");
+      return;
+    }
     try {
       const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
@@ -17386,10 +17622,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         ),
         resolvedAiIntentQualification.settings
       );
+      const supportAccessGrant = client
+        ? await getCurrentPlatformSupportGrant({ prisma, clientId: client.id })
+        : null;
       json(res, 200, {
         ok: true,
         tenantId,
         tenant: tenantWithDisplayPhone,
+        supportAccess: supportAccessGrant,
         configSource: {
           templates: {
             manualHandoff: resolvedManualHandoff.source,
@@ -25319,6 +25559,24 @@ function isAdminRole(role: string | null | undefined) {
 
 function isAdminOrSupervisorRole(role: string | null | undefined) {
   return isAdminRole(role) || isSupervisorRole(role);
+}
+
+function isPlatformSupportAuth(clientAuth: { supportAccess?: unknown } | null | undefined) {
+  return Boolean(clientAuth?.supportAccess);
+}
+
+function blockPlatformSupportOperationalAction(
+  res: ServerResponse,
+  action: string
+) {
+  json(
+    res,
+    403,
+    httpError(
+      "support_operational_action_blocked",
+      `Modo de suporte permite diagnostico administrativo, mas nao permite ${action}.`
+    )
+  );
 }
 
 function normalizeMetaPreviewSource(value: string) {

@@ -32,6 +32,17 @@ export type AppSessionUser = {
   departmentName?: string | null;
 };
 
+export type AppSupportAccessContext = {
+  accessType: "platform_support";
+  grantId: string;
+  supportSessionId: string;
+  supportClientId: string;
+  supportUserId: string;
+  expiresAt: string;
+  tenantId?: string;
+  tenantName?: string;
+};
+
 export type AppSession = {
   baseUrl: string;
   token: string;
@@ -39,6 +50,28 @@ export type AppSession = {
   user: AppSessionUser;
   features: TenantCapabilities;
   profile: AppProfile;
+  supportAccess?: AppSupportAccessContext | null;
+};
+
+export type AppSupportAccessGrant = {
+  id: string;
+  active: boolean;
+  status: "AUTHORIZED" | "REVOKED" | "EXPIRED" | string;
+  scope: string;
+  reason: string | null;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  revokeReason: string | null;
+  grantedBy: { id: string; name: string } | null;
+  revokedBy: { id: string; name: string } | null;
+};
+
+export type AppSupportAccessSettingsResponse = {
+  ok: true;
+  tenantId: string;
+  grant: AppSupportAccessGrant | null;
+  permissions: { canManage: boolean };
 };
 
 export type AppAgentSignatureSettings = {
@@ -1651,6 +1684,10 @@ function parseStoredSession(raw: string | null): AppSession | null {
       user: resolvedUser,
       features: getTenantCapabilities(parsed as Partial<AppSession>),
       profile: getAppProfile(parsed as Partial<AppSession>),
+      supportAccess:
+        parsed.supportAccess?.accessType === "platform_support"
+          ? parsed.supportAccess
+          : null,
     };
   } catch {
     return null;
@@ -1679,6 +1716,23 @@ export function clearAppSession() {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(LOCAL_KEY);
+}
+
+const SUPPORT_RETURN_SESSION_KEY = "wa_app_support_return_session_v1";
+
+export function saveSupportReturnSession(session: AppSession) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(SUPPORT_RETURN_SESSION_KEY, JSON.stringify(session));
+}
+
+export function loadSupportReturnSession(): AppSession | null {
+  if (typeof window === "undefined") return null;
+  return parseStoredSession(sessionStorage.getItem(SUPPORT_RETURN_SESSION_KEY));
+}
+
+export function clearSupportReturnSession() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(SUPPORT_RETURN_SESSION_KEY);
 }
 
 function getCurrentStoredSessionForRequest(session: AppSession) {
@@ -2824,6 +2878,49 @@ export async function updateAppQueueAssignmentSettings(
     method: "PUT",
     body: JSON.stringify(policy),
   });
+}
+
+export async function fetchAppSupportAccessSettings(
+  session: AppSession
+): Promise<AppSupportAccessSettingsResponse> {
+  return requestAppJson(session, "/app/settings/support-access");
+}
+
+export async function grantAppSupportAccess(
+  session: AppSession,
+  payload: { durationHours: number; reason?: string | null }
+): Promise<AppSupportAccessSettingsResponse> {
+  return requestAppJson(session, "/app/settings/support-access", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function revokeAppSupportAccess(
+  session: AppSession
+): Promise<AppSupportAccessSettingsResponse> {
+  return requestAppJson(session, "/app/settings/support-access", {
+    method: "DELETE",
+  });
+}
+
+export async function enterPlatformSupportTenant(
+  session: AppSession,
+  tenantId: string
+): Promise<AppSession & { ok: true }> {
+  const response = await requestAppJson<AppSession & { ok: true; supportAccess: AppSupportAccessContext }>(
+    session,
+    `/app/platform-support/tenants/${encodeURIComponent(tenantId)}/enter`,
+    { method: "POST" }
+  );
+  return {
+    ...response,
+    baseUrl: session.baseUrl,
+  };
+}
+
+export async function exitPlatformSupportTenant(session: AppSession): Promise<{ ok: true }> {
+  return requestAppJson(session, "/app/platform-support/exit", { method: "POST" });
 }
 
 export async function fetchAppWhatsAppWebSessionStatus(

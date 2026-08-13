@@ -254,6 +254,128 @@ export async function validateAppSessionFromRequest(
     };
   }
   const payload = tokenResult.payload;
+  if (payload.supportAccess?.accessType === "platform_support") {
+    const now = new Date();
+    const supportSession = await getPrisma().platformSupportSession.findFirst({
+      where: {
+        id: payload.sid,
+        actingClientId: payload.clientId,
+        supportUserId: payload.sub,
+      },
+      select: {
+        id: true,
+        grantId: true,
+        actingClientId: true,
+        supportClientId: true,
+        supportUserId: true,
+        sourceAppSessionId: true,
+        expiresAt: true,
+        lastSeenAt: true,
+        endedAt: true,
+        endReason: true,
+        grant: {
+          select: {
+            id: true,
+            clientId: true,
+            expiresAt: true,
+            revokedAt: true,
+            scope: true,
+          },
+        },
+        supportUser: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            isActive: true,
+            client: {
+              select: { id: true, status: true },
+            },
+          },
+        },
+        actingClient: {
+          select: { status: true },
+        },
+      },
+    });
+    if (!supportSession) return { ok: false, reason: "session_not_found" };
+    if (
+      payload.supportAccess.grantId !== supportSession.grantId ||
+      payload.supportAccess.supportClientId !== supportSession.supportClientId ||
+      payload.supportAccess.supportUserId !== supportSession.supportUserId
+    ) {
+      return { ok: false, reason: "session_not_found" };
+    }
+    if (supportSession.endedAt) {
+      return {
+        ok: false,
+        reason:
+          supportSession.endReason === "grant_expired"
+            ? "session_expired"
+            : "session_revoked",
+      };
+    }
+    if (
+      supportSession.expiresAt.getTime() <= now.getTime() ||
+      supportSession.grant.expiresAt.getTime() <= now.getTime()
+    ) {
+      await getPrisma().platformSupportSession.update({
+        where: { id: supportSession.id },
+        data: { endedAt: now, endReason: "grant_expired" },
+      });
+      await getPrisma().event.create({
+        data: {
+          clientId: supportSession.actingClientId,
+          eventName: "support.access.expired",
+          requestId: `support.access.expired:${supportSession.id}`,
+          payloadJson: {
+            supportUserId: supportSession.supportUserId,
+            supportClientId: supportSession.supportClientId,
+            supportSessionId: supportSession.id,
+            grantId: supportSession.grantId,
+          },
+        },
+      }).catch(() => null);
+      return { ok: false, reason: "session_expired" };
+    }
+    if (
+      supportSession.grant.revokedAt ||
+      supportSession.grant.clientId !== supportSession.actingClientId ||
+      !supportSession.supportUser.isActive ||
+      supportSession.supportUser.client.status !== "ACTIVE"
+    ) {
+      await getPrisma().platformSupportSession.update({
+        where: { id: supportSession.id },
+        data: { endedAt: now, endReason: supportSession.grant.revokedAt ? "grant_revoked" : "support_identity_revoked" },
+      }).catch(() => null);
+      return { ok: false, reason: "session_revoked" };
+    }
+    if (now.getTime() - supportSession.lastSeenAt.getTime() > 5 * 60 * 1000) {
+      await getPrisma().platformSupportSession.update({
+        where: { id: supportSession.id },
+        data: { lastSeenAt: now },
+      });
+    }
+    return {
+      ok: true,
+      auth: {
+        userId: payload.sub,
+        clientId: payload.clientId,
+        role: "ADMIN",
+        email: payload.email,
+        sessionId: payload.sid,
+        supportAccess: {
+          accessType: "platform_support",
+          grantId: supportSession.grantId,
+          supportSessionId: supportSession.id,
+          supportClientId: supportSession.supportClientId,
+          supportUserId: supportSession.supportUserId,
+          sourceAppSessionId: supportSession.sourceAppSessionId,
+          expiresAt: supportSession.expiresAt.toISOString(),
+        },
+      },
+    };
+  }
   const session = await getPrisma().appAuthSession.findFirst({
     where: {
       id: payload.sid,
