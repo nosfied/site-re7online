@@ -109,15 +109,16 @@ export default function SecuritySettingsPage() {
       setLoading(true);
       setError(null);
       try {
+        const hasMfaCapability = hasCapability(activeSession, "mfa");
         const [mfaResponse, runtimeResponse, recoveryResponse, supportResponse] = await Promise.all([
-          fetchAppMfaStatus(activeSession),
-          fetchAppMfaRuntimeStatus(activeSession),
-          fetchAppMfaRecoveryCodeStatus(activeSession),
+          hasMfaCapability ? fetchAppMfaStatus(activeSession) : Promise.resolve(null),
+          hasMfaCapability ? fetchAppMfaRuntimeStatus(activeSession) : Promise.resolve(null),
+          hasMfaCapability ? fetchAppMfaRecoveryCodeStatus(activeSession) : Promise.resolve(null),
           fetchAppSupportAccessSettings(activeSession),
         ]);
-        setStatus(mfaResponse.status);
-        setRuntimeStatus(runtimeResponse.status);
-        setRecoveryStatus(recoveryResponse.status);
+        setStatus(mfaResponse?.status ?? null);
+        setRuntimeStatus(runtimeResponse?.status ?? null);
+        setRecoveryStatus(recoveryResponse?.status ?? null);
         setSupportAccess(supportResponse);
       } catch (err) {
         const typed = err as AppApiError;
@@ -143,7 +144,7 @@ export default function SecuritySettingsPage() {
       router.replace("/app/login");
       return;
     }
-    if (!canManageSecurity(stored.user.role) || !hasCapability(stored, "mfa")) {
+    if (!canManageSecurity(stored.user.role)) {
       router.replace("/app/inbox");
       return;
     }
@@ -307,12 +308,13 @@ export default function SecuritySettingsPage() {
   }, [recoveryStatus, status]);
 
   if (!session) return null;
+  const mfaCapabilityEnabled = hasCapability(session, "mfa");
 
   return (
     <AppShell
       session={session}
       title="Segurança"
-      subtitle="Base da verificação em duas etapas para usuários internos. O login ainda não exige essa verificação nesta fase."
+      subtitle="Controle de acesso temporário para suporte da plataforma e configurações de segurança disponíveis para este tenant."
     >
       {error ? <FeedbackToast variant="error" message={error} {...toastHandlers} /> : null}
       {success ? <FeedbackToast variant="success" message={success} {...toastHandlers} /> : null}
@@ -395,6 +397,8 @@ export default function SecuritySettingsPage() {
         </div>
       </section>
 
+      {mfaCapabilityEnabled ? (
+        <>
       <section className="grid gap-3 md:grid-cols-4">
         <Metric label="Verificação" value={metrics.feature} />
         <Metric label="Configuração" value={metrics.enrolled} />
@@ -580,6 +584,16 @@ export default function SecuritySettingsPage() {
           </div>
         </div>
       </section>
+        </>
+      ) : (
+        <section className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+          <h2 className="text-base font-semibold">Verificação em duas etapas</h2>
+          <p className="mt-1 text-sm theme-muted">
+            Este tenant ainda não usa a verificação por aplicativo autenticador. O acesso de suporte pode ser autorizado acima
+            sem ativar essa configuração.
+          </p>
+        </section>
+      )}
     </AppShell>
   );
 }
