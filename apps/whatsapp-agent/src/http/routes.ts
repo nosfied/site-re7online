@@ -405,7 +405,12 @@ import {
   normalizeSessionAuditRole,
   normalizeSessionAuditStatus,
 } from "../reports/sessionAuditReport.js";
-import { publishRealtimeEvent } from "../realtime/hub.js";
+import {
+  closeRealtimeConnectionsForClientSupport,
+  closeRealtimeConnectionsForSupportGrant,
+  closeRealtimeConnectionsForSupportSession,
+  publishRealtimeEvent,
+} from "../realtime/hub.js";
 import {
   getPushStatus,
   getWebPushPublicKey,
@@ -1797,6 +1802,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           },
           data: { endedAt: new Date(), endReason: "logout" },
         });
+        closeRealtimeConnectionsForSupportSession(validation.auth.supportAccess.supportSessionId, "support_logout");
       } else {
         await revokeAppSession({
           clientId: validation.auth.clientId,
@@ -2079,6 +2085,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, result.status, httpError(result.error, "Duracao de acesso invalida."));
           return;
         }
+        closeRealtimeConnectionsForClientSupport(client.id, "support_grant_replaced");
         json(res, 200, {
           ok: true,
           tenantId: client.clientKey,
@@ -2096,6 +2103,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (!result.ok) {
         json(res, result.status, httpError(result.error, "Acesso de suporte nao esta ativo."));
         return;
+      }
+      if (result.grant?.id) {
+        closeRealtimeConnectionsForSupportGrant(result.grant.id, "support_grant_revoked");
       }
       json(res, 200, {
         ok: true,
@@ -2207,6 +2217,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       },
       data: { endedAt, endReason: "support_exited" },
     });
+    closeRealtimeConnectionsForSupportSession(clientAuth.supportAccess.supportSessionId, "support_exited");
     await prisma.event.create({
       data: {
         clientId: clientAuth.clientId,

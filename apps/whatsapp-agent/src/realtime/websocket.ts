@@ -43,6 +43,13 @@ export function attachRealtimeWebSocket(server: http.Server) {
               clientId: validation.auth.clientId,
               email: validation.auth.email,
               role: validation.auth.role,
+              supportAccess: validation.auth.supportAccess
+                ? {
+                    grantId: validation.auth.supportAccess.grantId,
+                    supportSessionId: validation.auth.supportAccess.supportSessionId,
+                    expiresAt: validation.auth.supportAccess.expiresAt,
+                  }
+                : null,
             });
           });
         })

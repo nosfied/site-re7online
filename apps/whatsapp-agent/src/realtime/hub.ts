@@ -10,6 +10,11 @@ export type RealtimeConnectionContext = {
   clientId: string;
   role: RealtimeRole;
   email: string;
+  supportAccess?: {
+    grantId: string;
+    supportSessionId: string;
+    expiresAt: string;
+  } | null;
 };
 
 type RealtimeConnection = RealtimeConnectionContext & {
@@ -99,11 +104,51 @@ export function removeConnection(id: string, reason: string) {
   stopHeartbeatIfIdle();
 }
 
+export function closeRealtimeConnectionsForSupportGrant(grantId: string, reason: string) {
+  for (const connection of connections.values()) {
+    if (connection.supportAccess?.grantId !== grantId) continue;
+    connection.socket.close(4001, reason);
+    removeConnection(connection.id, reason);
+  }
+}
+
+export function closeRealtimeConnectionsForSupportSession(supportSessionId: string, reason: string) {
+  for (const connection of connections.values()) {
+    if (connection.supportAccess?.supportSessionId !== supportSessionId) continue;
+    connection.socket.close(4001, reason);
+    removeConnection(connection.id, reason);
+  }
+}
+
+export function closeRealtimeConnectionsForClientSupport(clientId: string, reason: string) {
+  for (const connection of connections.values()) {
+    if (connection.clientId !== clientId || !connection.supportAccess) continue;
+    connection.socket.close(4001, reason);
+    removeConnection(connection.id, reason);
+  }
+}
+
+export function closeRealtimeConnectionsForClient(clientId: string, reason: string) {
+  for (const connection of connections.values()) {
+    if (connection.clientId !== clientId) continue;
+    connection.socket.close(4001, reason);
+    removeConnection(connection.id, reason);
+  }
+}
+
 export function publishRealtimeEvent(event: InboxRealtimeEvent) {
   let delivered = 0;
   for (const connection of connections.values()) {
     if (connection.clientId !== event.clientId) continue;
     if (connection.socket.readyState !== WebSocket.OPEN) continue;
+    if (
+      connection.supportAccess?.expiresAt &&
+      new Date(connection.supportAccess.expiresAt).getTime() <= Date.now()
+    ) {
+      connection.socket.close(4001, "support_access_expired");
+      removeConnection(connection.id, "support_access_expired");
+      continue;
+    }
     connection.socket.send(JSON.stringify(event));
     delivered += 1;
   }

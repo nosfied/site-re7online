@@ -1709,6 +1709,7 @@ export function saveAppSession(session: AppSession) {
     baseUrl: normalizeBaseUrl(session.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl(),
   });
   sessionStorage.setItem(SESSION_KEY, payload);
+  if (session.supportAccess?.accessType === "platform_support") return;
   localStorage.setItem(LOCAL_KEY, payload);
 }
 
