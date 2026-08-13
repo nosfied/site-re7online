@@ -301,7 +301,6 @@ const APP_NAV_ITEMS: NavItem[] = [
     href: "/app/settings/security",
     icon: "🔐",
     group: "administration",
-    feature: "mfa",
     minRole: "SUPERVISOR",
     labels: { business: "Segurança", government: "Segurança" },
   },
