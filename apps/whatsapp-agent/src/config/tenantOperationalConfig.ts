@@ -21,6 +21,7 @@ export type TenantOperationalConfigValue = {
   templates?: {
     manualHandoff?: string;
   };
+  runtimeLimits?: RuntimeLimitsSettings;
   agentSignature?: AgentSignatureSettings;
   followUp?: FollowUpSettings;
   handoffLeadNotification?: HandoffLeadNotificationSettings;
@@ -83,6 +84,15 @@ export type PlanLimitsSettings = {
 
 export type ResolvedPlanLimitsSettings = {
   settings: PlanLimitsSettings;
+  source: TenantOperationalConfigSource;
+};
+
+export type RuntimeLimitsSettings = {
+  maxActiveAppUsers: number | null;
+};
+
+export type ResolvedRuntimeLimitsSettings = {
+  settings: RuntimeLimitsSettings;
   source: TenantOperationalConfigSource;
 };
 
@@ -285,6 +295,23 @@ function normalizePlanLimitsSettings(input: unknown): PlanLimitsSettings {
   };
 }
 
+function normalizeRuntimeLimitsSettings(input: unknown): RuntimeLimitsSettings {
+  const record = isRecord(input) ? input : {};
+  const maxActiveAppUsers =
+    typeof record.maxActiveAppUsers === "number" &&
+    Number.isInteger(record.maxActiveAppUsers) &&
+    record.maxActiveAppUsers >= 0
+      ? record.maxActiveAppUsers
+      : null;
+  return { maxActiveAppUsers };
+}
+
+function normalizeRuntimeLimitsSettingsFromTenant(
+  tenant?: Pick<TenantConfig, "maxActiveAppUsers"> | null
+): RuntimeLimitsSettings {
+  return normalizeRuntimeLimitsSettings({ maxActiveAppUsers: tenant?.maxActiveAppUsers });
+}
+
 function normalizePlanLimitsSettingsFromTenant(
   tenant?: Pick<
     TenantConfig,
@@ -437,6 +464,9 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
       config.templates = { manualHandoff };
     }
   }
+  if (Object.prototype.hasOwnProperty.call(value, "runtimeLimits")) {
+    config.runtimeLimits = normalizeRuntimeLimitsSettings(value.runtimeLimits);
+  }
   if (Object.prototype.hasOwnProperty.call(value, "agentSignature")) {
     config.agentSignature = normalizeAgentSignatureSettings(value.agentSignature);
   }
@@ -462,6 +492,72 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
     config.aiIntentQualification = normalizeAiIntentQualificationSettings(value.aiIntentQualification);
   }
   return config;
+}
+
+export async function resolveRuntimeLimitsSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  tenant?: Pick<TenantConfig, "maxActiveAppUsers"> | null;
+}): Promise<ResolvedRuntimeLimitsSettings> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const dbConfig = parseOperationalConfig(record?.config);
+  if (dbConfig.runtimeLimits?.maxActiveAppUsers !== null && dbConfig.runtimeLimits?.maxActiveAppUsers !== undefined) {
+    return {
+      settings: dbConfig.runtimeLimits,
+      source: "db",
+    };
+  }
+  return {
+    settings: normalizeRuntimeLimitsSettingsFromTenant(params.tenant),
+    source: "json_fallback",
+  };
+}
+
+export async function saveRuntimeLimitsSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  settings: Partial<RuntimeLimitsSettings>;
+  tenant?: Pick<TenantConfig, "maxActiveAppUsers"> | null;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const currentSettings = parseOperationalConfig(existing?.config).runtimeLimits
+    ?? normalizeRuntimeLimitsSettingsFromTenant(params.tenant);
+  const nextSettings = normalizeRuntimeLimitsSettings({
+    ...currentSettings,
+    ...params.settings,
+  });
+  const nextConfig = {
+    ...existingConfig,
+    runtimeLimits: nextSettings,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+    },
+  });
+  return {
+    record: saved,
+    settings: nextSettings,
+  };
 }
 
 export async function resolveCrmBusinessStatuses(params: {

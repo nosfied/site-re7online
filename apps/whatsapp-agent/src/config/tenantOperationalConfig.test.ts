@@ -7,6 +7,7 @@ import {
   resolveAiIntentQualificationSettings,
   resolveAutomationFlagsSettings,
   resolvePlanLimitsSettings,
+  resolveRuntimeLimitsSettings,
 } from "./tenantOperationalConfig.js";
 
 function prismaWithConfig(config: unknown) {
@@ -91,6 +92,40 @@ test("resolvePlanLimitsSettings uses safe defaults when no limit exists", async 
     quotaWarnAtPct: 0.8,
     quotaBlockedReplyText: null,
     quotaExcludeWaIds: [],
+  });
+});
+
+test("resolveRuntimeLimitsSettings prefers DB runtime limits over tenants.json", async () => {
+  const resolved = await resolveRuntimeLimitsSettings({
+    prisma: prismaWithConfig({
+      runtimeLimits: {
+        maxActiveAppUsers: 14,
+      },
+    }),
+    clientId: "client-1",
+    tenant: {
+      maxActiveAppUsers: 5,
+    },
+  });
+
+  assert.equal(resolved.source, "db");
+  assert.deepEqual(resolved.settings, {
+    maxActiveAppUsers: 14,
+  });
+});
+
+test("resolveRuntimeLimitsSettings falls back to tenants.json runtime limits", async () => {
+  const resolved = await resolveRuntimeLimitsSettings({
+    prisma: prismaWithConfig({}),
+    clientId: "client-1",
+    tenant: {
+      maxActiveAppUsers: 7,
+    },
+  });
+
+  assert.equal(resolved.source, "json_fallback");
+  assert.deepEqual(resolved.settings, {
+    maxActiveAppUsers: 7,
   });
 });
 

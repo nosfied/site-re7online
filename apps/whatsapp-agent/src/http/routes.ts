@@ -44,6 +44,7 @@ import {
   resolveManualHandoffTemplate,
   resolveMediaHandoffPolicy,
   resolvePlanLimitsSettings,
+  resolveRuntimeLimitsSettings,
   saveAiAssistantConfigSettings,
   saveAiIntentQualificationSettings,
   saveAgentSignatureSettings,
@@ -53,6 +54,7 @@ import {
   saveHandoffLeadNotificationSettings,
   saveMediaHandoffPolicy,
   savePlanLimitsSettings,
+  saveRuntimeLimitsSettings,
   type AiAssistantConfigSettings,
   type AiIntentQualificationSettings,
   type AgentSignatureSettings,
@@ -16474,10 +16476,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
       const prisma = getPrisma();
       let phoneMappingAction: "created" | "existing" | null = null;
-      let tenantPatch:
-        | { backupPath: string; fieldsChanged: string[]; tenant: Record<string, unknown> }
-        | null = null;
-
       try {
         const result = await prisma.$transaction(async (tx) => {
           const existingClient = await tx.client.findUnique({
@@ -16575,7 +16573,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return { client, clientAction };
         });
 
-        tenantPatch = await saveTenantPatch(
+        const tenantPatch = await saveTenantPatch(
           clientKey,
           buildTenantProvisioningConfigPatch({
             tenantId: clientKey,
@@ -16585,6 +16583,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             body: payload,
           })
         );
+
+        const maxActiveAppUsers = Number(payload.maxActiveAppUsers);
+        if (Number.isInteger(maxActiveAppUsers) && maxActiveAppUsers >= 0) {
+          await saveRuntimeLimitsSettings({
+            prisma,
+            clientId: result.client.id,
+            settings: { maxActiveAppUsers },
+            tenant: tenantPatch.tenant,
+          });
+        }
 
         logger.info({
           event: "admin.tenant.provisioned",
@@ -17164,7 +17172,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 tenantId,
                 backupPath: saved.backupPath,
                 fieldsChanged: saved.fieldsChanged,
-                channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
+                channelAccounts: redactTenantChannelAccounts(getSavedTenantChannelAccounts(saved.tenant)),
               });
             } catch (error) {
               json(res, 400, httpError("invalid_channel_accounts", (error as Error).message));
@@ -17654,9 +17662,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
 
         let phoneMappingAction: "created" | "existing" | null = null;
-        let tenantUpdate:
-          | { backupPath: string; fieldsChanged: string[]; tenant: Record<string, unknown> }
-          | undefined;
+        let tenantUpdate: SavedTenantPatch | undefined;
 
         if (finalPhoneNumberId) {
           const syncResult = await syncTenantPhoneNumberMapping({
@@ -18505,7 +18511,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 applyPlanLimitsToTenantView(
                   {
                     ...saved.tenant,
-                    channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
+                    channelAccounts: redactTenantChannelAccounts(getSavedTenantChannelAccounts(saved.tenant)),
                   },
                   planLimitsSettings ?? {
                     planName: typeof currentTenant.planName === "string" ? currentTenant.planName : null,
@@ -22235,7 +22241,19 @@ function diffTenantFields(
   return fieldsChanged;
 }
 
-async function saveTenantPatch(tenantId: string, body: Record<string, unknown>) {
+type SavedTenantPatch = {
+  backupPath: string | null;
+  fieldsChanged: string[];
+  tenant: Record<string, unknown>;
+};
+
+function getSavedTenantChannelAccounts(tenant: Record<string, unknown>) {
+  return Array.isArray(tenant.channelAccounts)
+    ? (tenant.channelAccounts as TenantChannelAccount[])
+    : undefined;
+}
+
+async function saveTenantPatch(tenantId: string, body: Record<string, unknown>): Promise<SavedTenantPatch> {
   const currentTenants = await getTenants();
   const previousTenant = currentTenants[tenantId];
   const nextTenant = {
@@ -22248,7 +22266,25 @@ async function saveTenantPatch(tenantId: string, body: Record<string, unknown>) 
     [tenantId]: nextTenant,
   };
   const fieldsChanged = diffTenantFields(previousTenant, nextTenant);
-  const saved = await saveTenants(nextTenants);
+  let saved: Awaited<ReturnType<typeof saveTenants>>;
+  try {
+    saved = await saveTenants(nextTenants);
+  } catch (error) {
+    if ((error as Error).message !== "tenants_json_write_disabled") {
+      throw error;
+    }
+    logger.warn({
+      event: "tenants_json.write_skipped",
+      tenantId,
+      reason: "ALLOW_TENANTS_JSON_WRITE=false",
+      fieldsChanged,
+    });
+    return {
+      backupPath: null,
+      fieldsChanged,
+      tenant: nextTenant,
+    };
+  }
   return {
     backupPath: saved.backupPath,
     fieldsChanged,
@@ -24537,8 +24573,25 @@ function satisfactionResponseValue(result: Record<string, unknown>) {
   return result.question ?? result.survey ?? result.response;
 }
 
-function getTenantMaxActiveAppUsers(clientKey: string, tenants: Awaited<ReturnType<typeof getTenants>>) {
-  const configuredLimit = tenants[clientKey]?.maxActiveAppUsers;
+async function resolveTenantMaxActiveAppUsers(params: {
+  prisma: ReturnType<typeof getPrisma>;
+  clientId: string;
+  clientKey: string;
+}) {
+  const tenants = await getTenants();
+  const resolved = await resolveRuntimeLimitsSettings({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    tenant: tenants[params.clientKey],
+  });
+  if (
+    typeof resolved.settings.maxActiveAppUsers === "number" &&
+    Number.isInteger(resolved.settings.maxActiveAppUsers) &&
+    resolved.settings.maxActiveAppUsers >= 0
+  ) {
+    return resolved.settings.maxActiveAppUsers;
+  }
+  const configuredLimit = tenants[params.clientKey]?.maxActiveAppUsers;
   if (
     typeof configuredLimit === "number" &&
     Number.isInteger(configuredLimit) &&
@@ -24560,8 +24613,11 @@ async function assertTenantActiveUserLimitAvailable(
   | { ok: true; maxActiveAppUsers: number; activeUsers: number }
   | { ok: false; maxActiveAppUsers: number; activeUsers: number }
 > {
-  const tenants = await getTenants();
-  const maxActiveAppUsers = getTenantMaxActiveAppUsers(params.clientKey, tenants);
+  const maxActiveAppUsers = await resolveTenantMaxActiveAppUsers({
+    prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+  });
   const activeUsers = await prisma.user.count({
     where: {
       clientId: params.clientId,

@@ -2315,6 +2315,7 @@ test("admin tenant provisioning creates tenant without initial channel and remai
     name: "Tenant Sem Canal",
     profile: "government",
     status: "ONBOARDING",
+    maxActiveAppUsers: 14,
     companyLegalName: "Orgao Publico de Teste",
     companyTaxId: "00.000.000/0001-00",
     contractNotes,
@@ -2361,7 +2362,12 @@ test("admin tenant provisioning creates tenant without initial channel and remai
     phoneNumbers: 0,
   });
   assert.equal(await prisma.tenantMetaConfig.count({ where: { clientId: client.id } }), 0);
-  assert.ok(await prisma.tenantOperationalConfig.findUnique({ where: { clientId: client.id } }));
+  const operationalConfig = await prisma.tenantOperationalConfig.findUnique({ where: { clientId: client.id } });
+  assert.ok(operationalConfig);
+  assert.deepEqual(
+    (operationalConfig.config as { runtimeLimits?: { maxActiveAppUsers?: number } }).runtimeLimits,
+    { maxActiveAppUsers: 14 }
+  );
 
   const detail = await requestSuperadmin<{
     tenant: { id: string; metaPhoneNumberId: string; channelAccounts?: unknown[] };
@@ -2386,6 +2392,7 @@ test("admin tenant provisioning creates tenant without initial channel and remai
       name: "Tenant Sem Canal",
       profile: "government",
       status: "ONBOARDING",
+      maxActiveAppUsers: 14,
       companyLegalName: "Orgao Publico de Teste",
       companyTaxId: "00.000.000/0001-00",
       contractNotes,
@@ -2398,6 +2405,56 @@ test("admin tenant provisioning creates tenant without initial channel and remai
   assert.equal(await prisma.client.count({ where: { clientKey: tenantKey } }), 1);
   assert.equal(await prisma.channelAccount.count({ where: { clientId: client.id } }), 0);
   assert.equal(await prisma.waPhoneNumber.count({ where: { clientId: client.id } }), 0);
+});
+
+test("app user limit can resolve maxActiveAppUsers from tenant operational config", async () => {
+  const tenantKey = `${prefix}-runtime-limit`;
+  const client = await prisma.client.create({
+    data: {
+      clientKey: tenantKey,
+      name: "Runtime Limit Tenant",
+      status: "ACTIVE",
+      profile: "business",
+    },
+    select: { id: true },
+  });
+  await prisma.tenantOperationalConfig.create({
+    data: {
+      clientId: client.id,
+      config: {
+        runtimeLimits: { maxActiveAppUsers: 2 },
+      },
+    },
+  });
+  const department = await prisma.department.create({
+    data: {
+      clientId: client.id,
+      name: "Atendimento",
+      slug: "atendimento",
+    },
+    select: { id: true },
+  });
+  const admin = await createUser({ clientId: client.id, role: "ADMIN", suffix: "runtime-limit-admin" });
+
+  const allowed = await request<{ ok: boolean; user: TestUser }>("POST", "/app/users", admin, {
+    name: "Runtime Limit Agent",
+    email: `${prefix}-runtime-limit-agent@example.test`,
+    role: "AGENT",
+    departmentId: department.id,
+    isActive: true,
+  });
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.body.ok, true);
+
+  const blocked = await request<ErrorPayload>("POST", "/app/users", admin, {
+    name: "Runtime Limit Extra Agent",
+    email: `${prefix}-runtime-limit-extra@example.test`,
+    role: "AGENT",
+    departmentId: department.id,
+    isActive: true,
+  });
+  assert.equal(blocked.status, 409);
+  assert.equal(getErrorCode(blocked.body), "user_limit_exceeded");
 });
 
 test("admin tenant without channel can receive web session channel later", async () => {
