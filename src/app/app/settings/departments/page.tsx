@@ -265,7 +265,8 @@ export default function AppSettingsDepartmentsPage() {
   const sortedDepartments = useMemo(
     () =>
       [...departments].sort((a, b) => {
-        if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+        const createdDiff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        if (createdDiff !== 0) return createdDiff;
         return a.name.localeCompare(b.name, "pt-BR");
       }),
     [departments]

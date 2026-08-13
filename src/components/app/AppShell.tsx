@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import ThemeSelector from "@/components/ThemeSelector";
 import {
   AppSession,
@@ -332,6 +332,8 @@ export default function AppShell({
   const [renewingSession, setRenewingSession] = useState(false);
   const [renewError, setRenewError] = useState<string | null>(null);
   const [exitingSupportMode, setExitingSupportMode] = useState(false);
+  const [supportBannerPosition, setSupportBannerPosition] = useState<{ x: number; y: number } | null>(null);
+  const supportBannerDragOffset = useRef<{ x: number; y: number } | null>(null);
   const [directNavLimits, setDirectNavLimits] = useState(() => ({
     operation: DIRECT_OPERATION_NAV_LIMIT,
     administration: DIRECT_ADMINISTRATION_NAV_LIMIT,
@@ -483,6 +485,36 @@ export default function AppShell({
         setExitingSupportMode(false);
       }
     })();
+  };
+
+  const handleSupportBannerPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    const banner = event.currentTarget.closest("[data-support-banner]");
+    if (!(banner instanceof HTMLElement)) return;
+    const rect = banner.getBoundingClientRect();
+    supportBannerDragOffset.current = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleSupportBannerPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const offset = supportBannerDragOffset.current;
+    if (!offset) return;
+    const maxX = Math.max(8, window.innerWidth - 360);
+    const maxY = Math.max(8, window.innerHeight - 120);
+    setSupportBannerPosition({
+      x: Math.min(Math.max(8, event.clientX - offset.x), maxX),
+      y: Math.min(Math.max(8, event.clientY - offset.y), maxY),
+    });
+  };
+
+  const handleSupportBannerPointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    supportBannerDragOffset.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   };
 
   const handleRenewSession = () => {
@@ -700,9 +732,22 @@ export default function AppShell({
     </div>
   );
   const supportModeBanner = activeSession.supportAccess ? (
-    <div className="rounded-lg border border-amber-300/35 bg-amber-500/12 px-3 py-2 text-sm text-amber-50">
+    <div
+      data-support-banner
+      style={supportBannerPosition ? { left: supportBannerPosition.x, top: supportBannerPosition.y } : undefined}
+      className={`fixed z-[130] w-[min(31rem,calc(100vw-1rem))] rounded-xl border border-amber-300/35 bg-[#251c08]/95 px-3 py-2 text-sm text-amber-50 shadow-[0_18px_60px_rgba(0,0,0,0.32)] backdrop-blur ${
+        supportBannerPosition ? "" : "right-3 top-3"
+      }`}
+    >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
+        <div
+          className="min-w-0 cursor-move touch-none select-none"
+          title="Arraste para mover o aviso"
+          onPointerDown={handleSupportBannerPointerDown}
+          onPointerMove={handleSupportBannerPointerMove}
+          onPointerUp={handleSupportBannerPointerEnd}
+          onPointerCancel={handleSupportBannerPointerEnd}
+        >
           <p className="font-semibold">Modo de suporte</p>
           <p className="theme-muted mt-0.5 text-xs">
             Acesso temporário ao tenant{" "}
@@ -714,7 +759,7 @@ export default function AppShell({
           type="button"
           onClick={handleExitSupportMode}
           disabled={exitingSupportMode}
-          className="theme-nav-link shrink-0 rounded-md border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+          className="shrink-0 rounded-md border border-amber-200/30 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-50 hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {exitingSupportMode ? "Saindo..." : "Sair do modo de suporte"}
         </button>
@@ -904,6 +949,7 @@ export default function AppShell({
 
           <section className="order-1 min-h-0 min-w-0 max-w-full overflow-hidden md:order-none">{children}</section>
         </div>
+        {supportModeBanner}
         {brandModal}
         {sessionRenewalModal}
       </main>
@@ -963,10 +1009,10 @@ export default function AppShell({
           }
         />
 
-        {supportModeBanner}
         {children}
       </div>
 
+      {supportModeBanner}
       {brandModal}
       {sessionRenewalModal}
     </main>
