@@ -1,10 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import AdminConfigPanel from "@/components/admin/AdminConfigPanel";
 import { AdminConsoleProvider, useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import ThemeSelector from "@/components/ThemeSelector";
+import {
+  clearAppSession,
+  clearSupportReturnSession,
+  exitPlatformSupportTenant,
+  loadAppSession,
+  loadSupportReturnSession,
+  saveAppSession,
+  type AppSession,
+} from "@/lib/appClientApi";
 import { AdminConnection } from "@/lib/whatsappAdminApi";
 
 function AdminConsoleGate() {
@@ -108,6 +118,95 @@ function AdminConsoleGate() {
 
 function AdminConsoleShell({ children }: { children: React.ReactNode }) {
   const { connection, isConnected, logout } = useAdminConsole();
+  const router = useRouter();
+  const [supportSession, setSupportSession] = useState<AppSession | null>(null);
+  const [supportChecked, setSupportChecked] = useState(false);
+  const [exitingSupport, setExitingSupport] = useState(false);
+
+  useEffect(() => {
+    const session = loadAppSession();
+    setSupportSession(session?.supportAccess ? session : null);
+    setSupportChecked(true);
+  }, []);
+
+  const handleReturnToSupport = () => {
+    router.replace("/app/inbox");
+  };
+
+  const handleExitSupportMode = async () => {
+    if (!supportSession || exitingSupport) return;
+    setExitingSupport(true);
+    try {
+      await exitPlatformSupportTenant(supportSession).catch(() => null);
+      const returnSession = loadSupportReturnSession();
+      clearSupportReturnSession();
+      if (returnSession?.token) {
+        saveAppSession(returnSession);
+        router.replace("/admin/tenants");
+        return;
+      }
+      clearAppSession();
+      router.replace("/app/login");
+    } finally {
+      setExitingSupport(false);
+    }
+  };
+
+  if (!supportChecked) {
+    return (
+      <main className="theme-bg theme-admin min-h-screen px-4 py-8 md:px-8">
+        <div className="theme-surface mx-auto max-w-xl rounded-2xl border p-6">
+          <p className="theme-muted text-sm">Carregando console interno...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (supportSession?.supportAccess) {
+    return (
+      <main className="theme-bg theme-admin min-h-screen px-4 py-8 md:px-8">
+        <section className="theme-surface mx-auto flex max-w-2xl flex-col gap-5 rounded-2xl border p-6 shadow-2xl">
+          <div className="flex flex-col gap-2">
+            <span className="w-fit rounded-full border border-amber-400/40 bg-amber-900/30 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100">
+              Modo de suporte ativo
+            </span>
+            <h1 className="text-2xl font-bold">Console interno bloqueado nesta aba</h1>
+            <p className="theme-muted text-sm leading-6">
+              Esta aba está usando acesso temporário de suporte ao tenant{" "}
+              <strong className="theme-text">
+                {supportSession.supportAccess.tenantName || supportSession.user.clientId}
+              </strong>
+              . Para evitar mistura entre o Console interno e o atendimento em modo suporte, volte
+              ao app ou encerre o modo suporte antes de abrir páginas administrativas.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-amber-400/30 bg-amber-950/30 p-4 text-sm text-amber-50">
+            O Console interno continua disponível normalmente em uma aba comum da RE7ONLINE. Este
+            bloqueio vale somente para a aba que entrou no modo de suporte.
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={handleReturnToSupport}
+              className="rounded-md border px-4 py-2 text-sm font-semibold hover:bg-white/10"
+            >
+              Voltar ao modo suporte
+            </button>
+            <button
+              type="button"
+              onClick={handleExitSupportMode}
+              disabled={exitingSupport}
+              className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {exitingSupport ? "Saindo..." : "Sair do modo suporte"}
+            </button>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   if (!isConnected) {
     return <AdminConsoleGate />;
