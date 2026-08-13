@@ -5,6 +5,7 @@ export type ChatbotFlowMetadata = {
   tags?: string[];
   departmentId?: string | null;
   queueId?: string | null;
+  closedText?: string | null;
 };
 
 export type ChatbotMenuOption = Record<string, unknown> & ChatbotFlowMetadata & {
@@ -61,14 +62,19 @@ export type ChatbotExecutionResult = {
   handled: boolean;
   state: ConversationState;
   replyText?: string;
-  pendingHandoff?: {
-    feedbackText: string;
-    summary: string;
-    suggestedReply: string;
-    tags: string[];
-    nodeId: string;
-  };
+  pendingHandoff?: ChatbotPendingHandoff;
   events?: ChatbotExecutionEvent[];
+};
+
+export type ChatbotPendingHandoff = {
+  feedbackText: string;
+  summary: string;
+  suggestedReply: string;
+  tags: string[];
+  nodeId: string;
+  departmentId: string | null;
+  queueId: string | null;
+  closedText: string | null;
 };
 
 const CHATBOT_MAX_STEPS_PER_EXECUTION = 12;
@@ -171,11 +177,13 @@ function getNodeMetadata(rawNode: Record<string, unknown>): ChatbotFlowMetadata 
   const tags = normalizeTags(rawNode.tags);
   const departmentId = getNonEmptyString(rawNode.departmentId);
   const queueId = getNonEmptyString(rawNode.queueId);
+  const closedText = getNonEmptyString(rawNode.closedText);
   return {
     ...(context ? { context } : {}),
     ...(tags ? { tags } : {}),
     ...(departmentId ? { departmentId } : {}),
     ...(queueId ? { queueId } : {}),
+    ...(closedText ? { closedText } : {}),
   };
 }
 
@@ -255,7 +263,7 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
         };
       }
       normalizedOptions.push({
-        ...preserveUnknownFields(rawOption, ["label", "next", "context", "tags"]),
+        ...preserveUnknownFields(rawOption, ["label", "next", "context", "tags", "departmentId", "queueId", "closedText"]),
         label,
         next,
         ...getNodeMetadata(rawOption),
@@ -264,7 +272,7 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
     return {
       ok: true,
       node: {
-        ...preserveUnknownFields(rawNode, ["type", "text", "options", "context", "tags"]),
+        ...preserveUnknownFields(rawNode, ["type", "text", "options", "context", "tags", "departmentId", "queueId", "closedText"]),
         type: "menu",
         text,
         options: normalizedOptions,
@@ -286,7 +294,7 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
     return {
       ok: true,
       node: {
-        ...preserveUnknownFields(rawNode, ["type", "text", "next", "context", "tags"]),
+        ...preserveUnknownFields(rawNode, ["type", "text", "next", "context", "tags", "departmentId", "queueId", "closedText"]),
         type: "text",
         text,
         ...(next ? { next } : {}),
@@ -327,6 +335,9 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
           "next",
           "context",
           "tags",
+          "departmentId",
+          "queueId",
+          "closedText",
         ]),
         type: "capture",
         text,
@@ -351,6 +362,9 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
         "text",
         "context",
         "tags",
+        "departmentId",
+        "queueId",
+        "closedText",
         "handoffSummary",
       ]),
       type: "handoff",
@@ -948,6 +962,9 @@ function executeNodeChain(params: {
         suggestedReply,
         tags: currentState.answers?.flowTags ?? [],
         nodeId: currentNodeId,
+        departmentId: currentState.departmentId ?? null,
+        queueId: currentState.queueId ?? null,
+        closedText: node.closedText ?? null,
       },
       events,
     };

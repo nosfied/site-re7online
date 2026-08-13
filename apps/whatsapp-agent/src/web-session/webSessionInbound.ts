@@ -7,6 +7,7 @@ import {
   extractChatbotFlowId,
   validateChatbotFlowDefinition,
 } from "../chatbot/chatbotFlow.js";
+import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
 import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
 import { activateHumanHandoff, updateOutbound } from "../conversation/conversation.service.js";
 import { getPrisma } from "../db.js";
@@ -993,6 +994,21 @@ export async function ingestWebSessionInboundMessage(params: {
             nowIso: params.message.timestamp.toISOString(),
           });
           runtimeConversationState = chatbotResult.state;
+          const handoffDecision = chatbotResult.pendingHandoff
+            ? await resolveDepartmentAwareHandoff(prisma, {
+                clientId: params.message.clientId,
+                pendingHandoff: chatbotResult.pendingHandoff,
+                currentDepartmentId: runtimeConversationState.departmentId ?? null,
+                currentQueueId: runtimeConversationState.queueId ?? null,
+                at: params.message.timestamp,
+              })
+            : null;
+          const replyText =
+            handoffDecision?.kind === "closed"
+              ? handoffDecision.closedText
+              : handoffDecision?.kind === "blocked"
+                ? undefined
+              : chatbotResult.replyText;
           for (const event of chatbotResult.events ?? []) {
             logger.info({
               ...event,
@@ -1000,12 +1016,12 @@ export async function ingestWebSessionInboundMessage(params: {
               provider: "web_session",
             });
           }
-          if (chatbotResult.replyText?.trim()) {
+          if (replyText?.trim()) {
             const outboundResult = await createWebSessionTextOutboundMessage({
               prisma,
               waId: params.message.sender,
               waIdCanonical: params.message.senderCanonical,
-              text: chatbotResult.replyText,
+              text: replyText,
               clientKey: params.message.tenantKey,
               clientId: params.message.clientId,
               requestId: `${requestId}:bot-reply`,
@@ -1053,7 +1069,7 @@ export async function ingestWebSessionInboundMessage(params: {
               });
             }
           }
-          if (chatbotResult.pendingHandoff) {
+          if (chatbotResult.pendingHandoff && handoffDecision?.kind !== "closed" && handoffDecision?.kind !== "blocked") {
             const activated = activateHumanHandoff(
               clearChatbotRuntime(runtimeConversationState),
               params.message.timestamp.toISOString(),
@@ -1067,6 +1083,15 @@ export async function ingestWebSessionInboundMessage(params: {
               assignedAt: null,
               status: "WAITING",
               closedAt: null,
+              departmentId: handoffDecision?.departmentId ?? activated.state.departmentId ?? null,
+              queueId: handoffDecision?.queueId ?? activated.state.queueId ?? null,
+            };
+          } else if (handoffDecision?.kind === "closed" || handoffDecision?.kind === "blocked") {
+            runtimeConversationState = {
+              ...clearChatbotRuntime(runtimeConversationState),
+              mode: runtimeConversationState.mode === "HUMAN" ? "HUMAN" : "BOT",
+              departmentId: handoffDecision.departmentId ?? runtimeConversationState.departmentId ?? null,
+              queueId: handoffDecision.queueId ?? runtimeConversationState.queueId ?? null,
             };
           }
           await persistWebSessionRuntimeState({
@@ -1092,6 +1117,8 @@ export async function ingestWebSessionInboundMessage(params: {
           });
           if (
             postFlowRuntime &&
+            handoffDecision?.kind !== "closed" &&
+            handoffDecision?.kind !== "blocked" &&
             (runtimeConversationState.mode === "HUMAN" || runtimeConversationState.status === "WAITING")
           ) {
             await applyBalancedQueueAssignment({

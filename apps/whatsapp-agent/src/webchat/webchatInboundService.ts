@@ -12,6 +12,7 @@ import {
   extractChatbotFlowId,
   validateChatbotFlowDefinition,
 } from "../chatbot/chatbotFlow.js";
+import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import type { ConversationState, FlowContext } from "../conversation/conversation.types.js";
 import { getFeatures } from "../features/clientFeatures.js";
@@ -658,14 +659,7 @@ export async function runWebchatChatbotFlow(params: {
       })
     : null;
   const pendingProtocolContinuation = protocolLookup?.ok === true;
-  const pendingHandoff = Boolean(result.pendingHandoff) || pendingProtocolContinuation;
-  const handoffStatus = pendingHandoff ? HandoffStatus.PENDING : fromHandoffState(result.state.handoff.status);
-  const handoffRequestedAt = pendingHandoff
-    ? outboundAt
-    : result.state.handoff.requestedAt
-      ? new Date(result.state.handoff.requestedAt)
-      : null;
-  const mode = pendingHandoff ? "HUMAN" : result.state.chatbotActive ? "BOT" : result.state.mode ?? "BOT";
+  let pendingHandoff = Boolean(result.pendingHandoff) || pendingProtocolContinuation;
   const handoffRouting = pendingProtocolContinuation
     ? {
         departmentId: protocolLookup.departmentId ?? result.state.departmentId ?? null,
@@ -687,8 +681,35 @@ export async function runWebchatChatbotFlow(params: {
         departmentName: null,
         queueName: null,
       };
+  const handoffDecision = result.pendingHandoff && !pendingProtocolContinuation
+    ? await resolveDepartmentAwareHandoff(params.prisma, {
+        clientId: params.clientId,
+        pendingHandoff: {
+          ...result.pendingHandoff,
+          departmentId: handoffRouting.departmentId ?? result.pendingHandoff.departmentId,
+          queueId: handoffRouting.queueId ?? result.pendingHandoff.queueId,
+        },
+        currentDepartmentId: handoffRouting.departmentId,
+        currentQueueId: handoffRouting.queueId,
+        at: params.now,
+      })
+    : null;
+  if (handoffDecision?.kind === "closed" || handoffDecision?.kind === "blocked") {
+    pendingHandoff = false;
+  }
+  const handoffStatus = pendingHandoff ? HandoffStatus.PENDING : fromHandoffState(result.state.handoff.status);
+  const handoffRequestedAt = pendingHandoff
+    ? outboundAt
+    : result.state.handoff.requestedAt
+      ? new Date(result.state.handoff.requestedAt)
+      : null;
+  const mode = pendingHandoff ? "HUMAN" : result.state.chatbotActive ? "BOT" : result.state.mode ?? "BOT";
   const outboundBodyText = protocolLookup
     ? protocolLookup.publicText
+    : handoffDecision?.kind === "closed"
+    ? handoffDecision.closedText
+    : handoffDecision?.kind === "blocked"
+    ? undefined
     : pendingHandoff && outboundText
     ? `${outboundText}\n\n${buildWebchatHandoffOperationalNotice({
         protocol,
@@ -731,8 +752,16 @@ export async function runWebchatChatbotFlow(params: {
         handoffStatus,
         handoffRequestedAt,
         status: statusFromChatbotState(result.state, pendingHandoff),
-        ...(handoffRouting.departmentId ? { departmentId: handoffRouting.departmentId } : {}),
-        ...(handoffRouting.queueId ? { queueId: handoffRouting.queueId } : {}),
+        ...(handoffDecision?.kind === "closed" || handoffDecision?.kind === "blocked"
+          ? {}
+          : handoffRouting.departmentId
+            ? { departmentId: handoffRouting.departmentId }
+            : {}),
+        ...(handoffDecision?.kind === "closed" || handoffDecision?.kind === "blocked"
+          ? {}
+          : handoffRouting.queueId
+            ? { queueId: handoffRouting.queueId }
+            : {}),
         ...(outboundMessageId ? { lastOutboundAt: outboundAt, lastOutboundMessageId: outboundMessageId } : {}),
       },
     });

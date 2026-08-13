@@ -117,7 +117,9 @@ import {
   extractChatbotFlowId,
   getInitialChatbotAwaitingNodeId,
   validateChatbotFlowDefinition,
+  type ChatbotPendingHandoff,
 } from "../chatbot/chatbotFlow.js";
+import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
 import {
   applyFlowIntentClassificationToContext,
   classifyFreeTextFlowIntent,
@@ -4766,27 +4768,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       state: ConversationState;
       replyText?: string;
       flowId: string | null;
-      pendingHandoff?: {
-        feedbackText: string;
-        summary: string;
-        suggestedReply: string;
-        tags: string[];
-        nodeId: string;
-      };
+      pendingHandoff?: ChatbotPendingHandoff;
     } = {
       handled: false,
       state: updatedConversation,
       replyText: undefined as string | undefined,
       flowId: null as string | null,
-      pendingHandoff: undefined as
-        | {
-            feedbackText: string;
-            summary: string;
-            suggestedReply: string;
-            tags: string[];
-            nodeId: string;
-          }
-        | undefined,
+      pendingHandoff: undefined as ChatbotPendingHandoff | undefined,
     };
 
     if (!handoffResult.handled) {
@@ -5279,6 +5267,74 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       continue;
     }
 
+    const chatbotHandoffDecision = chatbotFlowResult.pendingHandoff && tenantClientId
+      ? await resolveDepartmentAwareHandoff(getPrisma(), {
+          clientId: tenantClientId,
+          pendingHandoff: chatbotFlowResult.pendingHandoff,
+          currentDepartmentId: chatbotFlowResult.state.departmentId ?? updatedConversation.departmentId ?? null,
+          currentQueueId: chatbotFlowResult.state.queueId ?? updatedConversation.queueId ?? null,
+          at: parseWebhookTimestampToDate(message.timestamp),
+        })
+      : null;
+
+    if (chatbotFlowResult.pendingHandoff && chatbotHandoffDecision?.kind === "closed") {
+      logger.info({
+        event: "flow.handoff.department.closed",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        flowId: chatbotFlowResult.flowId,
+        departmentId: chatbotHandoffDecision.departmentId,
+        queueId: chatbotHandoffDecision.queueId,
+        waId: maskNumber(normalizedFrom),
+        requestId: meta?.requestId,
+      });
+      if (chatbotHandoffDecision.closedText.trim() && env.outboundEnabled) {
+        try {
+          const feedbackResult = await sendOutboundText({
+            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+            waId: normalizedFrom,
+            intent: updatedConversation.intent,
+            messageId: `flow.handoff.closed.${message.messageId}`,
+            replyText: chatbotHandoffDecision.closedText,
+            guard: inboundGuard,
+          });
+          if (feedbackResult.ok) {
+            await storage.updateMessage(message.messageId, {
+              status: "replied",
+              repliedAt: new Date().toISOString(),
+              replyType: "text",
+            });
+          }
+        } catch (error) {
+          logger.error({
+            event: "flow.handoff.department.closed_reply.failed",
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            flowId: chatbotFlowResult.flowId,
+            waId: maskNumber(normalizedFrom),
+            error: (error as Error).message,
+            requestId: meta?.requestId,
+          });
+        }
+      }
+      continue;
+    }
+
+    if (chatbotFlowResult.pendingHandoff && chatbotHandoffDecision?.kind === "blocked") {
+      logger.warn({
+        event: "flow.handoff.routing.blocked",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        flowId: chatbotFlowResult.flowId,
+        reason: chatbotHandoffDecision.reason,
+        departmentId: chatbotHandoffDecision.departmentId,
+        queueId: chatbotHandoffDecision.queueId,
+        waId: maskNumber(normalizedFrom),
+        requestId: meta?.requestId,
+      });
+      continue;
+    }
+
     if (chatbotFlowResult.pendingHandoff) {
       logger.info({
         event: "flow.handoff.triggered",
@@ -5545,6 +5601,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         assignedAt: null,
         status: "WAITING",
         closedAt: null,
+        departmentId: chatbotHandoffDecision?.departmentId ?? activatedHandoff.state.departmentId ?? null,
+        queueId: chatbotHandoffDecision?.queueId ?? activatedHandoff.state.queueId ?? null,
       });
       updatedConversation = await upsertConversationSafe(updatedConversation);
       await persistConversationSafe({

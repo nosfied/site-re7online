@@ -635,6 +635,53 @@ test("executeChatbotFlow applies selected option routing", () => {
   assert.match(result.pendingHandoff?.summary ?? "", /Área: Duvidas Tecnicas/);
 });
 
+test("executeChatbotFlow exposes department handoff closed text", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "menu",
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Escolha",
+        options: [
+          {
+            label: "Tecnico",
+            next: "handoff_tecnico",
+            departmentId: "department_technical",
+            queueId: "queue_technical",
+          },
+        ],
+      },
+      handoff_tecnico: {
+        type: "handoff",
+        text: "Vou encaminhar.",
+        closedText: "O setor tecnico esta fechado agora. Volte no proximo horario de atendimento.",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_option_routing_closed",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_option_routing_closed",
+      chatbotActive: true,
+      chatbotNodeId: "menu",
+    }),
+    inboundText: "1",
+    nowIso: "2026-08-07T12:00:00.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.pendingHandoff?.departmentId, "department_technical");
+  assert.equal(result.pendingHandoff?.queueId, "queue_technical");
+  assert.equal(
+    result.pendingHandoff?.closedText,
+    "O setor tecnico esta fechado agora. Volte no proximo horario de atendimento."
+  );
+});
+
 test("buildHandoffSummary skips sensitive context values", () => {
   const summary = buildHandoffSummary({
     servico: "revisao",

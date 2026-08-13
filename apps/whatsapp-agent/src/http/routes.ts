@@ -4438,6 +4438,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
           userDepartmentId: departmentAccess.departmentId,
+          userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: scopedConversation?.departmentId ?? null,
         })
       ) {
@@ -4549,6 +4550,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
           userDepartmentId: departmentAccess.departmentId,
+          userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: scopedConversation?.departmentId ?? null,
         })
       ) {
@@ -4682,6 +4684,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
           userDepartmentId: departmentAccess.departmentId,
+          userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: currentConversation.departmentId ?? conversationRow.departmentId ?? null,
         })
       ) {
@@ -5188,6 +5191,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
           userDepartmentId: departmentAccess.departmentId,
+          userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: scopedConversation?.departmentId ?? null,
         })
       ) {
@@ -5422,6 +5426,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
           userDepartmentId: departmentAccess.departmentId,
+          userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: conversation.departmentId ?? null,
         })
       ) {
@@ -5637,6 +5642,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
           userDepartmentId: departmentAccess.departmentId,
+          userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: currentConversation.departmentId ?? null,
         })
       ) {
@@ -6087,6 +6093,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
           userDepartmentId: departmentAccess.departmentId,
+          userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: currentConversation.departmentId ?? null,
         })
       ) {
@@ -6485,6 +6492,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
           userDepartmentId: departmentAccess.departmentId,
+          userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: currentConversation.departmentId ?? null,
         })
       ) {
@@ -10156,6 +10164,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
           userDepartmentId: departmentAccess.departmentId,
+          userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: operationalConversation.departmentId ?? null,
         })
       ) {
@@ -10379,6 +10388,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
           userDepartmentId: departmentAccess.departmentId,
+          userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: conversation.departmentId ?? null,
         })
       ) {
@@ -10537,6 +10547,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
           userDepartmentId: departmentAccess.departmentId,
+          userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: conversation.departmentId ?? null,
         })
       ) {
@@ -10797,6 +10808,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const hasDepartmentAccess = hasConversationDepartmentAccess({
         role: clientAuth.role,
         userDepartmentId: departmentAccess.departmentId,
+        userDepartmentIds: departmentAccess.departmentIds,
         conversationDepartmentId: conversation.departmentId ?? null,
       });
       const isCurrentAssignedOwner = conversation.assignedUserId === clientAuth.userId;
@@ -11003,6 +11015,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const hasDepartmentAccess = hasConversationDepartmentAccess({
         role: clientAuth.role,
         userDepartmentId: departmentAccess.departmentId,
+        userDepartmentIds: departmentAccess.departmentIds,
         conversationDepartmentId: conversation.departmentId ?? null,
       });
       const isCurrentAssignedOwner = conversation.assignedUserId === clientAuth.userId;
@@ -11187,6 +11200,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
           userDepartmentId: departmentAccess.departmentId,
+          userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: conversation.departmentId ?? null,
         })
       ) {
@@ -25309,30 +25323,52 @@ async function loadAppDepartmentAccess(
   }
 ) {
   if (isAdminRole(params.role)) {
-    return { requiresDepartmentScope: false, departmentId: null as string | null };
+    return {
+      requiresDepartmentScope: false,
+      departmentId: null as string | null,
+      departmentIds: [] as string[],
+    };
   }
   if (!isAgentRole(params.role) && !isSupervisorRole(params.role)) {
-    return { requiresDepartmentScope: false, departmentId: null as string | null };
+    return {
+      requiresDepartmentScope: false,
+      departmentId: null as string | null,
+      departmentIds: [] as string[],
+    };
   }
-  const user = await prisma.user.findFirst({
-    where: { id: params.userId, clientId: params.clientId },
-    select: { departmentId: true },
+  const memberships = await getUserDepartmentMemberships(prisma, {
+    clientId: params.clientId,
+    userId: params.userId,
   });
+  const activeDepartmentIds = memberships
+    .filter((membership) => membership.isActive && membership.departmentIsActive !== false)
+    .map((membership) => membership.departmentId);
+  const primaryMembership =
+    memberships.find((membership) => membership.isPrimary && activeDepartmentIds.includes(membership.departmentId)) ??
+    memberships.find((membership) => activeDepartmentIds.includes(membership.departmentId));
   return {
     requiresDepartmentScope: true,
-    departmentId: user?.departmentId ?? null,
+    departmentId: primaryMembership?.departmentId ?? null,
+    departmentIds: activeDepartmentIds,
   };
 }
 
 function hasConversationDepartmentAccess(params: {
   role: string;
   userDepartmentId: string | null;
+  userDepartmentIds?: string[];
   conversationDepartmentId: string | null | undefined;
 }) {
   if (isAdminRole(params.role)) return true;
   if (!isAgentRole(params.role) && !isSupervisorRole(params.role)) return true;
-  if (!params.userDepartmentId) return false;
-  return params.userDepartmentId === (params.conversationDepartmentId ?? null);
+  const conversationDepartmentId = params.conversationDepartmentId ?? null;
+  const userDepartmentIds = params.userDepartmentIds?.length
+    ? params.userDepartmentIds
+    : params.userDepartmentId
+      ? [params.userDepartmentId]
+      : [];
+  if (userDepartmentIds.length === 0) return false;
+  return Boolean(conversationDepartmentId && userDepartmentIds.includes(conversationDepartmentId));
 }
 
 function logAppDepartmentDenied(params: {
