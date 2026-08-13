@@ -35,10 +35,19 @@ const WEEKDAYS = [
   { value: 6, label: "Sábado" },
 ];
 
+const WEEKDAY_SHORT_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const DEFAULT_BUSINESS_HOUR_INTERVAL = { startMinute: 8 * 60, endMinute: 17 * 60 };
+
 type BusinessHourDraft = {
   weekday: number;
   startMinute: number;
   endMinute: number;
+};
+
+type HoursEditorDraft = {
+  departmentId: string;
+  weekdays: number[];
+  intervals: Array<{ startMinute: number; endMinute: number }>;
 };
 
 function minutesToTime(value: number) {
@@ -51,6 +60,70 @@ function timeToMinutes(value: string) {
   const [hour, minute] = value.split(":").map((item) => Number(item));
   if (!Number.isInteger(hour) || !Number.isInteger(minute)) return 0;
   return Math.max(0, Math.min(1440, hour * 60 + minute));
+}
+
+function getIntervalsForWeekday(hours: BusinessHourDraft[], weekday: number) {
+  return hours
+    .filter((hour) => hour.weekday === weekday)
+    .sort((a, b) => a.startMinute - b.startMinute || a.endMinute - b.endMinute)
+    .map((hour) => ({ startMinute: hour.startMinute, endMinute: hour.endMinute }));
+}
+
+function getIntervalSignature(intervals: Array<{ startMinute: number; endMinute: number }>) {
+  if (intervals.length === 0) return "closed";
+  return intervals.map((hour) => `${hour.startMinute}-${hour.endMinute}`).join("|");
+}
+
+function formatIntervals(intervals: Array<{ startMinute: number; endMinute: number }>) {
+  if (intervals.length === 0) return "Fechado";
+  return intervals.map((hour) => `${minutesToTime(hour.startMinute)} — ${minutesToTime(hour.endMinute)}`).join(" / ");
+}
+
+function formatWeekdayGroup(days: number[]) {
+  const sorted = [...days].sort((a, b) => a - b);
+  const ranges: string[] = [];
+  let index = 0;
+  while (index < sorted.length) {
+    const start = sorted[index];
+    let end = start;
+    while (index + 1 < sorted.length && sorted[index + 1] === end + 1) {
+      index += 1;
+      end = sorted[index];
+    }
+    ranges.push(start === end ? WEEKDAY_SHORT_LABELS[start] : `${WEEKDAY_SHORT_LABELS[start]}–${WEEKDAY_SHORT_LABELS[end]}`);
+    index += 1;
+  }
+  return ranges.join(", ");
+}
+
+function buildBusinessHourGroups(hours: BusinessHourDraft[]) {
+  const groups = new Map<string, { weekdays: number[]; intervals: Array<{ startMinute: number; endMinute: number }> }>();
+  for (const weekday of WEEKDAYS.map((item) => item.value)) {
+    const intervals = getIntervalsForWeekday(hours, weekday);
+    const signature = getIntervalSignature(intervals);
+    const current = groups.get(signature);
+    if (current) {
+      current.weekdays.push(weekday);
+    } else {
+      groups.set(signature, { weekdays: [weekday], intervals });
+    }
+  }
+  return [...groups.values()].sort((a, b) => a.weekdays[0] - b.weekdays[0]);
+}
+
+function validateEditorIntervals(intervals: Array<{ startMinute: number; endMinute: number }>) {
+  const sorted = [...intervals].sort((a, b) => a.startMinute - b.startMinute || a.endMinute - b.endMinute);
+  for (const interval of sorted) {
+    if (interval.startMinute < 0 || interval.endMinute > 1440 || interval.startMinute >= interval.endMinute) {
+      return "Cada período precisa ter início antes do fim.";
+    }
+  }
+  for (let index = 1; index < sorted.length; index += 1) {
+    if (sorted[index].startMinute < sorted[index - 1].endMinute) {
+      return "Os períodos do mesmo dia não podem se sobrepor.";
+    }
+  }
+  return null;
 }
 
 function DepartmentBadge({
@@ -105,6 +178,7 @@ export default function AppSettingsDepartmentsPage() {
   const [drafts, setDrafts] = useState<
     Record<string, { name: string; isActive: boolean; businessHours: BusinessHourDraft[] }>
   >({});
+  const [hoursEditor, setHoursEditor] = useState<HoursEditorDraft | null>(null);
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -275,6 +349,93 @@ export default function AppSettingsDepartmentsPage() {
     }
   };
 
+  const openHoursEditor = (
+    departmentId: string,
+    options?: { weekdays?: number[]; intervals?: Array<{ startMinute: number; endMinute: number }> }
+  ) => {
+    const draft = drafts[departmentId];
+    if (!draft) return;
+    setHoursEditor({
+      departmentId,
+      weekdays: options?.weekdays?.length ? [...options.weekdays] : [1, 2, 3, 4, 5],
+      intervals: options?.intervals
+        ? options.intervals.map((interval) => ({ ...interval }))
+        : [{ ...DEFAULT_BUSINESS_HOUR_INTERVAL }],
+    });
+  };
+
+  const updateHoursEditorInterval = (
+    index: number,
+    field: "startMinute" | "endMinute",
+    value: number
+  ) => {
+    setHoursEditor((current) => {
+      if (!current) return current;
+      const intervals = [...current.intervals];
+      intervals[index] = { ...intervals[index], [field]: value };
+      return { ...current, intervals };
+    });
+  };
+
+  const applyHoursEditor = () => {
+    if (!hoursEditor) return;
+    if (hoursEditor.weekdays.length === 0) {
+      setError("Selecione pelo menos um dia.");
+      return;
+    }
+    const validationError = validateEditorIntervals(hoursEditor.intervals);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setDrafts((current) => {
+      const draft = current[hoursEditor.departmentId];
+      if (!draft) return current;
+      const selected = new Set(hoursEditor.weekdays);
+      const preserved = draft.businessHours.filter((hour) => !selected.has(hour.weekday));
+      const applied = hoursEditor.weekdays.flatMap((weekday) =>
+        hoursEditor.intervals.map((interval) => ({
+          weekday,
+          startMinute: interval.startMinute,
+          endMinute: interval.endMinute,
+        }))
+      );
+      return {
+        ...current,
+        [hoursEditor.departmentId]: {
+          ...draft,
+          businessHours: [...preserved, ...applied].sort(
+            (a, b) => a.weekday - b.weekday || a.startMinute - b.startMinute || a.endMinute - b.endMinute
+          ),
+        },
+      };
+    });
+    setError(null);
+    setHoursEditor(null);
+  };
+
+  const clearSelectedEditorDays = () => {
+    if (!hoursEditor) return;
+    if (hoursEditor.weekdays.length === 0) {
+      setError("Selecione pelo menos um dia.");
+      return;
+    }
+    setDrafts((current) => {
+      const draft = current[hoursEditor.departmentId];
+      if (!draft) return current;
+      const selected = new Set(hoursEditor.weekdays);
+      return {
+        ...current,
+        [hoursEditor.departmentId]: {
+          ...draft,
+          businessHours: draft.businessHours.filter((hour) => !selected.has(hour.weekday)),
+        },
+      };
+    });
+    setError(null);
+    setHoursEditor(null);
+  };
+
   if (!session) {
     return (
       <main className="min-h-screen bg-re7-navy px-4 py-8 text-white md:px-8">
@@ -438,110 +599,181 @@ export default function AppSettingsDepartmentsPage() {
                       )}
                     </div>
                     <div className="space-y-2">
-                      {WEEKDAYS.map((weekday) => {
-                        const intervals = draft.businessHours
-                          .filter((hour) => hour.weekday === weekday.value)
-                          .sort((a, b) => a.startMinute - b.startMinute);
-                        return (
-                          <div key={weekday.value} className="rounded-md border border-white/10 p-2">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span className="text-xs font-semibold text-white/80">{weekday.label}</span>
+                      {draft.businessHours.length === 0 ? (
+                        <div className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/60">
+                          Sem horário configurado. Quando houver períodos salvos, dias sem período aparecem como fechados.
+                        </div>
+                      ) : (
+                        <div className="overflow-hidden rounded-lg border border-white/10">
+                          {buildBusinessHourGroups(draft.businessHours).map((group) => (
+                            <div
+                              key={`${group.weekdays.join("-")}-${getIntervalSignature(group.intervals)}`}
+                              className="grid grid-cols-1 items-center gap-2 border-b border-white/10 px-3 py-2 last:border-b-0 sm:grid-cols-[110px_minmax(0,1fr)_auto]"
+                            >
+                              <span className="text-xs font-semibold text-white/85">
+                                {formatWeekdayGroup(group.weekdays)}
+                              </span>
+                              <span className={group.intervals.length ? "text-sm text-white" : "text-sm text-white/55"}>
+                                {formatIntervals(group.intervals)}
+                              </span>
                               <button
                                 type="button"
                                 disabled={readOnly}
                                 onClick={() =>
-                                  setDrafts((current) => ({
-                                    ...current,
-                                    [item.id]: {
-                                      ...current[item.id],
-                                      businessHours: [
-                                        ...current[item.id].businessHours,
-                                        { weekday: weekday.value, startMinute: 480, endMinute: 720 },
-                                      ],
-                                    },
-                                  }))
+                                  openHoursEditor(item.id, {
+                                    weekdays: group.weekdays,
+                                    intervals: group.intervals.length
+                                      ? group.intervals
+                                      : [{ ...DEFAULT_BUSINESS_HOUR_INTERVAL }],
+                                  })
                                 }
-                                className="rounded-md border border-white/20 px-2 py-1 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="w-fit rounded-md border border-white/20 px-2 py-1 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                Adicionar período
+                                Editar
                               </button>
                             </div>
-                            {intervals.length === 0 ? (
-                              <p className="mt-2 text-xs text-white/45">Fechado ou sem período definido neste dia.</p>
-                            ) : (
-                              <div className="mt-2 space-y-1.5">
-                                {intervals.map((interval, intervalIndex) => {
-                                  const absoluteIndex = draft.businessHours.findIndex(
-                                    (hour) =>
-                                      hour.weekday === interval.weekday &&
-                                      hour.startMinute === interval.startMinute &&
-                                      hour.endMinute === interval.endMinute
-                                  );
-                                  return (
-                                    <div key={`${weekday.value}-${intervalIndex}`} className="flex flex-wrap items-center gap-2">
-                                      <input
-                                        type="time"
-                                        value={minutesToTime(interval.startMinute)}
-                                        disabled={readOnly}
-                                        onChange={(event) =>
-                                          setDrafts((current) => {
-                                            const nextHours = [...current[item.id].businessHours];
-                                            nextHours[absoluteIndex] = {
-                                              ...nextHours[absoluteIndex],
-                                              startMinute: timeToMinutes(event.target.value),
-                                            };
-                                            return {
-                                              ...current,
-                                              [item.id]: { ...current[item.id], businessHours: nextHours },
-                                            };
-                                          })
-                                        }
-                                        className="rounded-md border border-white/15 bg-re7-navy px-2 py-1 text-xs text-white disabled:opacity-50"
-                                      />
-                                      <span className="text-xs text-white/45">até</span>
-                                      <input
-                                        type="time"
-                                        value={minutesToTime(interval.endMinute)}
-                                        disabled={readOnly}
-                                        onChange={(event) =>
-                                          setDrafts((current) => {
-                                            const nextHours = [...current[item.id].businessHours];
-                                            nextHours[absoluteIndex] = {
-                                              ...nextHours[absoluteIndex],
-                                              endMinute: timeToMinutes(event.target.value),
-                                            };
-                                            return {
-                                              ...current,
-                                              [item.id]: { ...current[item.id], businessHours: nextHours },
-                                            };
-                                          })
-                                        }
-                                        className="rounded-md border border-white/15 bg-re7-navy px-2 py-1 text-xs text-white disabled:opacity-50"
-                                      />
-                                      <button
-                                        type="button"
-                                        disabled={readOnly}
-                                        onClick={() =>
-                                          setDrafts((current) => ({
-                                            ...current,
-                                            [item.id]: {
-                                              ...current[item.id],
-                                              businessHours: current[item.id].businessHours.filter((_, index) => index !== absoluteIndex),
-                                            },
-                                          }))
-                                        }
-                                        className="rounded-md border border-white/20 px-2 py-1 text-xs text-white/75 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        Remover
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
+                          ))}
+                        </div>
+                      )}
+
+                      {!readOnly ? (
+                        <button
+                          type="button"
+                          onClick={() => openHoursEditor(item.id)}
+                          className="rounded-md border border-white/20 px-2.5 py-1.5 text-xs font-semibold text-white/85 hover:bg-white/10"
+                        >
+                          Definir horário para vários dias
+                        </button>
+                      ) : null}
+
+                      {hoursEditor?.departmentId === item.id ? (
+                        <div className="rounded-lg border border-re7-sky/35 bg-re7-sky/10 p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <h5 className="text-sm font-semibold text-white">Editar dias selecionados</h5>
+                              <p className="text-xs text-white/60">
+                                Os períodos abaixo serão aplicados a todos os dias marcados.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setHoursEditor(null)}
+                              className="rounded-md border border-white/20 px-2 py-1 text-xs text-white/75 hover:bg-white/10"
+                            >
+                              Fechar
+                            </button>
                           </div>
-                        );
-                      })}
+
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {WEEKDAYS.map((weekday) => {
+                              const checked = hoursEditor.weekdays.includes(weekday.value);
+                              return (
+                                <label
+                                  key={weekday.value}
+                                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${
+                                    checked
+                                      ? "border-re7-sky/60 bg-re7-sky/20 text-white"
+                                      : "border-white/15 bg-white/5 text-white/70"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(event) =>
+                                      setHoursEditor((current) => {
+                                        if (!current) return current;
+                                        const weekdays = event.target.checked
+                                          ? [...current.weekdays, weekday.value]
+                                          : current.weekdays.filter((value) => value !== weekday.value);
+                                        return { ...current, weekdays: [...new Set(weekdays)].sort((a, b) => a - b) };
+                                      })
+                                    }
+                                    className="h-3.5 w-3.5 accent-re7-sky"
+                                  />
+                                  {WEEKDAY_SHORT_LABELS[weekday.value]}
+                                </label>
+                              );
+                            })}
+                          </div>
+
+                          <div className="mt-3 space-y-2">
+                            {hoursEditor.intervals.map((interval, intervalIndex) => (
+                              <div
+                                key={intervalIndex}
+                                className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2 sm:max-w-md"
+                              >
+                                <input
+                                  type="time"
+                                  value={minutesToTime(interval.startMinute)}
+                                  onChange={(event) =>
+                                    updateHoursEditorInterval(intervalIndex, "startMinute", timeToMinutes(event.target.value))
+                                  }
+                                  className="min-w-0 rounded-md border border-white/15 bg-re7-navy px-2 py-1.5 text-xs text-white"
+                                />
+                                <span className="text-xs text-white/45">até</span>
+                                <input
+                                  type="time"
+                                  value={minutesToTime(interval.endMinute)}
+                                  onChange={(event) =>
+                                    updateHoursEditorInterval(intervalIndex, "endMinute", timeToMinutes(event.target.value))
+                                  }
+                                  className="min-w-0 rounded-md border border-white/15 bg-re7-navy px-2 py-1.5 text-xs text-white"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setHoursEditor((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            intervals: current.intervals.filter((_, index) => index !== intervalIndex),
+                                          }
+                                        : current
+                                    )
+                                  }
+                                  disabled={hoursEditor.intervals.length <= 1}
+                                  className="rounded-md border border-white/20 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+                                >
+                                  Remover
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setHoursEditor((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        intervals: [...current.intervals, { startMinute: 13 * 60, endMinute: 17 * 60 }],
+                                      }
+                                    : current
+                                )
+                              }
+                              className="rounded-md border border-white/20 px-2.5 py-1.5 text-xs text-white/80 hover:bg-white/10"
+                            >
+                              + Adicionar período
+                            </button>
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={applyHoursEditor}
+                              className="rounded-md bg-re7-orange px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110"
+                            >
+                              Aplicar aos dias selecionados
+                            </button>
+                            <button
+                              type="button"
+                              onClick={clearSelectedEditorDays}
+                              className="rounded-md border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:bg-white/10"
+                            >
+                              Marcar selecionados como fechado
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
