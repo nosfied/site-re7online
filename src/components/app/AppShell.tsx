@@ -638,7 +638,10 @@ export default function AppShell({
   const helpMenuActive =
     pathname === "/app/support" || pathname.startsWith("/app/support/") ||
     pathname === "/app/training" || pathname.startsWith("/app/training/");
-  const helpActions = (
+  const canViewTraining = capabilities.training;
+  const canOpenSupport = capabilities.support && canViewAdministration;
+  const hasHelpActions = canViewTraining || canOpenSupport;
+  const helpActions = hasHelpActions ? (
     <div ref={helpMenuRef} className="relative z-[70] flex min-w-0 shrink-0 justify-end">
       <button
         type="button"
@@ -666,23 +669,25 @@ export default function AppShell({
           role="menu"
           className="theme-surface-strong absolute right-0 top-[calc(100%+0.45rem)] z-[90] grid w-[min(22rem,calc(100vw-2rem))] gap-1 rounded-lg border p-1.5 text-left shadow-[0_18px_50px_rgba(0,0,0,0.22)]"
         >
-          <Link
-            href="/app/training"
-            role="menuitem"
-            onClick={() => setShowHelpMenu(false)}
-            className="theme-nav-link flex min-w-0 items-start gap-3 rounded-md border border-transparent px-3 py-3 text-sm transition hover:border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-sky"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-re7-sky/12 text-lg leading-none">
-              🎓
-            </span>
-            <span className="min-w-0">
-              <span className="block font-semibold leading-tight">Treinamentos</span>
-              <span className="theme-muted mt-1 block text-xs leading-snug">
-                Vídeos e materiais para aprender a usar o Converta.
+          {canViewTraining ? (
+            <Link
+              href="/app/training"
+              role="menuitem"
+              onClick={() => setShowHelpMenu(false)}
+              className="theme-nav-link flex min-w-0 items-start gap-3 rounded-md border border-transparent px-3 py-3 text-sm transition hover:border-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-sky"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-re7-sky/12 text-lg leading-none">
+                🎓
               </span>
-            </span>
-          </Link>
-          {canViewAdministration ? (
+              <span className="min-w-0">
+                <span className="block font-semibold leading-tight">Treinamentos</span>
+                <span className="theme-muted mt-1 block text-xs leading-snug">
+                  Vídeos e materiais para aprender a usar o Converta.
+                </span>
+              </span>
+            </Link>
+          ) : null}
+          {canOpenSupport ? (
             <Link
               href="/app/support"
               role="menuitem"
@@ -703,7 +708,7 @@ export default function AppShell({
         </div>
       ) : null}
     </div>
-  );
+  ) : null;
   const userActions = (
     <div className="grid min-w-0 justify-items-end gap-1">
       <div className="flex min-w-0 items-center justify-end gap-2">

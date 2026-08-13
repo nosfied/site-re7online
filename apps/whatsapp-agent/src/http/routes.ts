@@ -265,6 +265,11 @@ import {
   type TenantCapabilityKey,
 } from "../features/clientFeatures.js";
 import {
+  buildTenantFeatureEntitlements,
+  getTenantFeatureRuntimeState,
+  updateTenantFeatureOverrides,
+} from "../features/tenantFeatureEntitlements.js";
+import {
   buildOperationsBoardPayload,
   defaultOperationsBoardPeriod,
   normalizeOperationsBoardLimit,
@@ -2249,6 +2254,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
+      if (!hasFeature(client, "training")) {
+        json(res, 403, httpError("feature_not_enabled", "Training feature not enabled"));
+        return;
+      }
       json(res, 200, await serializeTrainingCatalogFromDb(prisma));
     } catch (error) {
       logger.error({
@@ -2274,6 +2283,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (client.status !== "ACTIVE") {
         json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!hasFeature(client, "training")) {
+        json(res, 403, httpError("feature_not_enabled", "Training feature not enabled"));
         return;
       }
       let contentId = "";
@@ -2363,7 +2376,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const [client, user] = await Promise.all([
         prisma.client.findUnique({
           where: { id: clientAuth.clientId },
-          select: { id: true, clientKey: true, name: true, status: true },
+          select: { id: true, clientKey: true, name: true, status: true, profile: true, features: true },
         }),
         prisma.user.findFirst({
           where: { id: clientAuth.userId, clientId: clientAuth.clientId, isActive: true },
@@ -2376,6 +2389,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (client.status !== "ACTIVE") {
         json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!hasFeature(client, "support")) {
+        json(res, 403, httpError("feature_not_enabled", "Support feature not enabled"));
         return;
       }
       if (!user) {
@@ -17636,6 +17653,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const supportAccessGrant = client
         ? await getCurrentPlatformSupportGrant({ prisma, clientId: client.id })
         : null;
+      const featureRuntime = client
+        ? await getTenantFeatureRuntimeState({ prisma, clientId: client.id })
+        : { metaCloudConfigured: false, whatsappWebSessionChannelPresent: false };
       json(res, 200, {
         ok: true,
         tenantId,
@@ -17656,9 +17676,111 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               clientKey: client.clientKey,
               status: client.status,
               profile: getClientProfile(client),
+              features: client.features,
             }
           : null,
+        featureEntitlements: client
+          ? buildTenantFeatureEntitlements({ client, runtime: featureRuntime })
+          : [],
       });
+      return;
+    }
+
+    if (
+      req.method === "PUT" &&
+      pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/features")
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, httpError("bad_request", "Tenant id is required"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (body === null) return;
+      const updates =
+        body && typeof body === "object" && !Array.isArray(body)
+          ? (body as Record<string, unknown>).features
+          : undefined;
+      const prisma = getPrisma();
+      try {
+        const client = await prisma.client.findUnique({
+          where: { clientKey: tenantId },
+          select: { id: true, clientKey: true, name: true, status: true, profile: true, features: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+          return;
+        }
+        const runtime = await getTenantFeatureRuntimeState({ prisma, clientId: client.id });
+        const normalized = updateTenantFeatureOverrides({
+          currentFeatures: client.features,
+          updates,
+          client,
+          runtime,
+        });
+        if (!normalized.ok) {
+          json(res, normalized.status, {
+            error: {
+              code: normalized.error,
+              message: "Funcionalidade indisponivel ou invalida.",
+            },
+            ...(normalized.error === "feature_dependency_unavailable"
+              ? { feature: normalized.feature }
+              : {}),
+          });
+          return;
+        }
+        const saved =
+          normalized.changed.length > 0
+            ? await prisma.client.update({
+                where: { id: client.id },
+                data: { features: normalized.features },
+                select: { id: true, clientKey: true, name: true, status: true, profile: true, features: true },
+              })
+            : client;
+        if (normalized.changed.length > 0) {
+          await prisma.event.create({
+            data: {
+              clientId: client.id,
+              eventName: "tenant.feature.updated",
+              requestId: `${requestId}:tenant-feature-updated:${client.id}`,
+              payloadJson: {
+                actorSource: authToken.source,
+                tenantId: client.clientKey,
+                changes: normalized.changed,
+              },
+            },
+          });
+        }
+        const nextRuntime = await getTenantFeatureRuntimeState({ prisma, clientId: saved.id });
+        json(res, 200, {
+          ok: true,
+          tenantId,
+          client: {
+            id: saved.id,
+            clientKey: saved.clientKey,
+            status: saved.status,
+            profile: getClientProfile(saved),
+            features: saved.features,
+          },
+          featureEntitlements: buildTenantFeatureEntitlements({
+            client: saved,
+            runtime: nextRuntime,
+          }),
+          fieldsChanged: normalized.changed.map((change) => `features.${change.key}`),
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.tenant.features.update.error",
+          tenantId,
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
       return;
     }
 

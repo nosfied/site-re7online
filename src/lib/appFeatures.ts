@@ -2,6 +2,7 @@ export type AppProfile = "business" | "government";
 
 export type AppFeatureKey =
   | "dashboard"
+  | "inbox"
   | "departments"
   | "users"
   | "templates"
@@ -9,6 +10,8 @@ export type AppFeatureKey =
   | "reports"
   | "campaigns"
   | "chatbot"
+  | "training"
+  | "support"
   | "knowledgeBase"
   | "scheduling"
   | "schedulingReminders"
@@ -48,6 +51,7 @@ export type TenantCapabilities = AppFeatures & Record<"crm" | "protocols" | "cat
 
 export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   dashboard: false,
+  inbox: true,
   departments: true,
   users: true,
   templates: true,
@@ -55,6 +59,8 @@ export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   reports: true,
   campaigns: true,
   chatbot: true,
+  training: true,
+  support: true,
   knowledgeBase: false,
   scheduling: false,
   schedulingReminders: false,
@@ -79,6 +85,7 @@ export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
 
 export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   dashboard: true,
+  inbox: true,
   departments: true,
   users: true,
   templates: false,
@@ -86,6 +93,8 @@ export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   reports: true,
   campaigns: false,
   chatbot: true,
+  training: true,
+  support: true,
   knowledgeBase: false,
   scheduling: false,
   schedulingReminders: false,
@@ -152,6 +161,7 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
   const input = raw as Record<string, unknown>;
   return {
     dashboard: normalizeBoolean(input.dashboard) ?? defaults.dashboard,
+    inbox: normalizeBoolean(input.inbox) ?? defaults.inbox,
     departments: normalizeBoolean(input.departments) ?? defaults.departments,
     users: normalizeBoolean(input.users) ?? defaults.users,
     templates: normalizeBoolean(input.templates) ?? defaults.templates,
@@ -159,6 +169,8 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
     reports: normalizeBoolean(input.reports) ?? defaults.reports,
     campaigns: normalizeBoolean(input.campaigns) ?? defaults.campaigns,
     chatbot: normalizeBoolean(input.chatbot) ?? defaults.chatbot,
+    training: normalizeBoolean(input.training) ?? defaults.training,
+    support: normalizeBoolean(input.support) ?? defaults.support,
     knowledgeBase: normalizeBoolean(input.knowledgeBase) ?? defaults.knowledgeBase,
     scheduling: normalizeBoolean(input.scheduling) ?? defaults.scheduling,
     schedulingReminders: normalizeBoolean(input.schedulingReminders) ?? defaults.schedulingReminders,

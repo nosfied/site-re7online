@@ -1,11 +1,14 @@
 export type ClientFeatureKey =
   | "dashboard"
+  | "inbox"
   | "departments"
   | "users"
   | "templates"
   | "reports"
   | "campaigns"
   | "chatbot"
+  | "training"
+  | "support"
   | "knowledgeBase"
   | "scheduling"
   | "schedulingReminders"
@@ -46,6 +49,7 @@ export type TenantCapabilities = ClientFeatures &
 
 export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   dashboard: false,
+  inbox: true,
   departments: true,
   users: true,
   templates: true,
@@ -53,6 +57,8 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   reports: true,
   campaigns: true,
   chatbot: true,
+  training: true,
+  support: true,
   knowledgeBase: false,
   scheduling: false,
   schedulingReminders: false,
@@ -80,6 +86,7 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
 
 export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   dashboard: true,
+  inbox: true,
   departments: true,
   users: true,
   templates: false,
@@ -87,6 +94,8 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   reports: true,
   campaigns: false,
   chatbot: true,
+  training: true,
+  support: true,
   knowledgeBase: false,
   scheduling: false,
   schedulingReminders: false,
@@ -154,6 +163,7 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
   const input = raw as Record<string, unknown>;
   return {
     dashboard: normalizeFeatureValue(input.dashboard) ?? defaults.dashboard,
+    inbox: normalizeFeatureValue(input.inbox) ?? defaults.inbox,
     departments: normalizeFeatureValue(input.departments) ?? defaults.departments,
     users: normalizeFeatureValue(input.users) ?? defaults.users,
     templates: normalizeFeatureValue(input.templates) ?? defaults.templates,
@@ -161,6 +171,8 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
     reports: normalizeFeatureValue(input.reports) ?? defaults.reports,
     campaigns: normalizeFeatureValue(input.campaigns) ?? defaults.campaigns,
     chatbot: normalizeFeatureValue(input.chatbot) ?? defaults.chatbot,
+    training: normalizeFeatureValue(input.training) ?? defaults.training,
+    support: normalizeFeatureValue(input.support) ?? defaults.support,
     knowledgeBase: normalizeFeatureValue(input.knowledgeBase) ?? defaults.knowledgeBase,
     scheduling: normalizeFeatureValue(input.scheduling) ?? defaults.scheduling,
     schedulingReminders: normalizeFeatureValue(input.schedulingReminders) ?? defaults.schedulingReminders,

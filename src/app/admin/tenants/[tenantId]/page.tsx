@@ -16,6 +16,7 @@ import {
   normalizeWaIdList,
   TenantConfigResponse,
   updateTenantById,
+  updateTenantFeatures,
 } from "@/lib/whatsappAdminApi";
 
 type TenantFormState = {
@@ -101,8 +102,12 @@ export default function TenantEditPage() {
   const [clientSnapshot, setClientSnapshot] = useState<TenantConfigResponse["client"] | null>(null);
   const [tenantSnapshot, setTenantSnapshot] = useState<TenantConfigResponse["tenant"] | null>(null);
   const [supportAccessSnapshot, setSupportAccessSnapshot] = useState<TenantConfigResponse["supportAccess"] | null>(null);
+  const [featureEntitlements, setFeatureEntitlements] = useState<
+    NonNullable<TenantConfigResponse["featureEntitlements"]>
+  >([]);
   const [supportAppSession, setSupportAppSession] = useState<AppSession | null>(null);
   const [enteringSupport, setEnteringSupport] = useState(false);
+  const [savingFeatureKey, setSavingFeatureKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<{ fieldsChanged?: string[]; backupPath?: string } | null>(null);
@@ -138,6 +143,7 @@ export default function TenantEditPage() {
         setClientSnapshot(response.client ?? null);
         setTenantSnapshot(tenant);
         setSupportAccessSnapshot(response.supportAccess ?? null);
+        setFeatureEntitlements(response.featureEntitlements ?? []);
         setForm({
           profile: response.client?.profile === "government" ? "government" : "business",
           displayPhoneNumber: tenant.displayPhoneNumber ?? "",
@@ -239,6 +245,26 @@ export default function TenantEditPage() {
       setError(typed.message || "Nao foi possivel acessar o tenant em modo suporte.");
     } finally {
       setEnteringSupport(false);
+    }
+  };
+
+  const handleToggleFeature = async (key: string, enabled: boolean) => {
+    if (savingFeatureKey) return;
+    setSavingFeatureKey(key);
+    setError(null);
+    setToast(null);
+    try {
+      const result = await updateTenantFeatures(connection, tenantId, { [key]: enabled });
+      setClientSnapshot(result.client);
+      setFeatureEntitlements(result.featureEntitlements);
+      setDebugInfo({ fieldsChanged: result.fieldsChanged });
+      setToast(enabled ? "Funcionalidade ativada." : "Funcionalidade desativada.");
+      window.setTimeout(() => setToast(null), 5000);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      setError(typed.message || "Falha ao atualizar funcionalidade.");
+    } finally {
+      setSavingFeatureKey(null);
     }
   };
 
@@ -364,6 +390,17 @@ export default function TenantEditPage() {
       setSaving(false);
     }
   };
+
+  const featureCategories: Array<{
+    key: NonNullable<TenantConfigResponse["featureEntitlements"]>[number]["category"];
+    label: string;
+  }> = [
+    { key: "attendance", label: "Atendimento" },
+    { key: "communication", label: "Comunicacao" },
+    { key: "automation", label: "Automacao" },
+    { key: "management", label: "Gestao" },
+    { key: "security", label: "Seguranca" },
+  ];
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
@@ -533,6 +570,109 @@ export default function TenantEditPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
+                Funcionalidades
+              </h2>
+              <p className="mt-1 text-sm text-white/65">
+                Controle contratual por tenant. Configuracoes operacionais continuam nas telas
+                proprias.
+              </p>
+            </div>
+            <span className="rounded-full border border-white/10 bg-re7-navy/50 px-3 py-1 text-xs text-white/65">
+              Fonte: Client.features
+            </span>
+          </div>
+
+          <div className="mt-4 grid gap-4">
+            {featureCategories.map((category) => {
+              const items = featureEntitlements.filter((item) => item.category === category.key);
+              if (items.length === 0) return null;
+              return (
+                <div key={category.key} className="rounded-lg border border-white/10 bg-re7-navy/35 p-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-white/50">
+                    {category.label}
+                  </h3>
+                  <div className="mt-3 grid gap-2">
+                    {items.map((item) => {
+                      const unavailable = item.status === "unavailable";
+                      const savingThis = savingFeatureKey === item.key;
+                      return (
+                        <div
+                          key={item.key}
+                          className="grid gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3 lg:grid-cols-[minmax(0,1fr)_auto]"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-semibold text-white">{item.label}</p>
+                              <span
+                                className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                                  unavailable
+                                    ? "bg-amber-500/15 text-amber-100"
+                                    : item.enabled
+                                      ? "bg-emerald-500/15 text-emerald-100"
+                                      : "bg-white/10 text-white/65"
+                                }`}
+                              >
+                                {unavailable ? "Indisponivel" : item.enabled ? "Ativo" : "Desativado"}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-sm text-white/65">{item.description}</p>
+                            <details className="mt-2 text-xs text-white/50">
+                              <summary className="cursor-pointer text-white/60">Detalhes tecnicos</summary>
+                              <dl className="mt-2 grid gap-1">
+                                <div>
+                                  <dt className="font-semibold text-white/55">Chave</dt>
+                                  <dd className="font-mono">{item.key}</dd>
+                                </div>
+                                <div>
+                                  <dt className="font-semibold text-white/55">Capacidade tecnica</dt>
+                                  <dd>{item.technicalCapabilitySource}</dd>
+                                </div>
+                                <div>
+                                  <dt className="font-semibold text-white/55">Dependencia operacional</dt>
+                                  <dd>{item.runtimeDependency}</dd>
+                                </div>
+                                <div>
+                                  <dt className="font-semibold text-white/55">Guards</dt>
+                                  <dd>
+                                    Frontend: {item.frontendVisibilityGuard}. Backend: {item.backendGuard}.
+                                  </dd>
+                                </div>
+                              </dl>
+                            </details>
+                            {item.unavailableReasons.length > 0 ? (
+                              <p className="mt-2 rounded-md border border-amber-400/20 bg-amber-950/30 p-2 text-xs text-amber-100">
+                                {item.unavailableReasons.join("; ")}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="flex items-start justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleFeature(item.key, !item.enabled)}
+                              disabled={savingThis || (unavailable && !item.enabled)}
+                              className={`min-w-28 rounded-md border px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                item.enabled
+                                  ? "border-red-300/30 bg-red-900/20 text-red-100 hover:bg-red-900/30"
+                                  : "border-emerald-300/30 bg-emerald-900/20 text-emerald-100 hover:bg-emerald-900/30"
+                              }`}
+                            >
+                              {savingThis ? "Salvando..." : item.enabled ? "Desativar" : "Ativar"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
 

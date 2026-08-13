@@ -671,7 +671,23 @@ export type TenantConfigResponse = {
     clientKey: string;
     status: string;
     profile?: "business" | "government";
+    features?: Record<string, unknown> | null;
   } | null;
+  featureEntitlements?: Array<{
+    key: string;
+    label: string;
+    description: string;
+    category: "attendance" | "communication" | "management" | "security" | "automation";
+    technicalCapabilitySource: string;
+    entitlementSource: "Client.features";
+    runtimeDependency: string;
+    frontendVisibilityGuard: string;
+    backendGuard: string;
+    defaultByProfile: Record<"business" | "government", boolean>;
+    enabled: boolean;
+    status: "enabled" | "disabled" | "unavailable";
+    unavailableReasons: string[];
+  }>;
   tenant: {
     id: string;
     name: string;
@@ -1332,6 +1348,23 @@ export async function updateTenantById(
   return requestJson(connection, `/admin/tenants/${encodeURIComponent(tenantId)}`, {
     method: "PUT",
     body: JSON.stringify(body),
+  });
+}
+
+export async function updateTenantFeatures(
+  connection: AdminConnection,
+  tenantId: string,
+  features: Record<string, boolean>
+): Promise<{
+  ok: true;
+  tenantId: string;
+  client: NonNullable<TenantConfigResponse["client"]>;
+  featureEntitlements: NonNullable<TenantConfigResponse["featureEntitlements"]>;
+  fieldsChanged: string[];
+}> {
+  return requestJson(connection, `/admin/tenants/${encodeURIComponent(tenantId)}/features`, {
+    method: "PUT",
+    body: JSON.stringify({ features }),
   });
 }
 

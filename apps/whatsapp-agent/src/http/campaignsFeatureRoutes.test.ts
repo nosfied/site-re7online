@@ -9,7 +9,7 @@ import { hashPassword, issueClientAuthToken } from "../auth/clientAuth.js";
 import { buildAppAuthSessionExpiresAt } from "../auth/sessionPolicy.js";
 import { saveWebSessionAuthState } from "../web-session/webSessionAuthStore.js";
 import { getPrisma } from "../db.js";
-import { MessageStatus, MessageType, TrainingContentStatus, TrainingContentType } from "@prisma/client";
+import { MessageStatus, MessageType, Prisma, TrainingContentStatus, TrainingContentType } from "@prisma/client";
 import type { ConversationState } from "../conversation/conversation.types.js";
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "campaigns-feature-route-test-secret";
@@ -1737,6 +1737,112 @@ test("platform support access is tenant-authorized, temporary, auditable, and no
       where: { clientId: businessClientId, eventName: "support.access.expired" },
     })
   );
+});
+
+test("admin tenant feature entitlements are platform-scoped, audited, dependency-aware, and preserved in support mode", async () => {
+  const originalClient = await prisma.client.findUnique({
+    where: { id: businessClientId },
+    select: { features: true },
+  });
+  await prisma.platformSupportSession.deleteMany({ where: { actingClientId: businessClientId } });
+  await prisma.platformSupportAccessGrant.deleteMany({ where: { clientId: businessClientId } });
+  try {
+    await prisma.client.update({
+      where: { id: businessClientId },
+      data: { features: { legacyExperimentalFlag: true, campaigns: false, reports: true, crm: true } },
+    });
+
+    const detail = await requestSuperadmin<{
+      ok: true;
+      client: { features: Record<string, unknown> | null };
+      featureEntitlements: Array<{ key: string; status: string; enabled: boolean; unavailableReasons: string[] }>;
+    }>("GET", `/admin/tenants/${prefix}-business`);
+    assert.equal(detail.status, 200, JSON.stringify(detail.body));
+    assert.equal(detail.body.client.features?.legacyExperimentalFlag, true);
+    assert.ok(detail.body.featureEntitlements.some((item) => item.key === "crm" && item.enabled === true));
+    assert.ok(
+      detail.body.featureEntitlements.some(
+        (item) => item.key === "campaigns" && item.status === "unavailable"
+      )
+    );
+
+    const tenantAdminAttempt = await requestUnauth<ErrorPayload>(
+      "PUT",
+      `/admin/tenants/${prefix}-business/features`,
+      { features: { reports: false } }
+    );
+    assert.equal(tenantAdminAttempt.status, 401);
+
+    const unknown = await requestSuperadmin<ErrorPayload>(
+      "PUT",
+      `/admin/tenants/${prefix}-business/features`,
+      { features: { unknownFeature: true } }
+    );
+    assert.equal(unknown.status, 400);
+    assert.equal(getErrorCode(unknown.body), "unknown_feature");
+
+    const dependencyBlocked = await requestSuperadmin<ErrorPayload>(
+      "PUT",
+      `/admin/tenants/${prefix}-business/features`,
+      { features: { campaigns: true } }
+    );
+    assert.equal(dependencyBlocked.status, 409);
+    assert.equal(getErrorCode(dependencyBlocked.body), "feature_dependency_unavailable");
+    assert.equal(dependencyBlocked.body.feature, "campaigns");
+
+    const updated = await requestSuperadmin<{
+      ok: true;
+      client: { features: Record<string, unknown> | null };
+      featureEntitlements: Array<{ key: string; enabled: boolean }>;
+      fieldsChanged: string[];
+    }>("PUT", `/admin/tenants/${prefix}-business/features`, {
+      features: { reports: false, crm: false },
+    });
+    assert.equal(updated.status, 200, JSON.stringify(updated.body));
+    assert.deepEqual(updated.body.fieldsChanged.sort(), ["features.crm", "features.reports"]);
+    assert.equal(updated.body.client.features?.legacyExperimentalFlag, true);
+    assert.equal(updated.body.client.features?.reports, false);
+    assert.equal(updated.body.client.features?.crm, false);
+
+    const saved = await prisma.client.findUnique({
+      where: { id: businessClientId },
+      select: { features: true },
+    });
+    assert.equal((saved?.features as Record<string, unknown>).legacyExperimentalFlag, true);
+
+    const event = await prisma.event.findFirst({
+      where: { clientId: businessClientId, eventName: "tenant.feature.updated" },
+      orderBy: { createdAt: "desc" },
+      select: { payloadJson: true },
+    });
+    assert.ok(event);
+    assert.equal(JSON.stringify(event.payloadJson).includes(businessAdmin.email), false);
+    assert.equal(JSON.stringify(event.payloadJson).includes(process.env.ADMIN_TOKEN ?? ""), false);
+
+    const grant = await request<{ ok: true; grant: { id: string } }>(
+      "POST",
+      "/app/settings/support-access",
+      businessAdmin,
+      { durationHours: 1, reason: "feature entitlement test" }
+    );
+    assert.equal(grant.status, 200, JSON.stringify(grant.body));
+    const entered = await request<{
+      ok: true;
+      features: { reports: boolean; crm: boolean };
+      supportAccess: { accessType: "platform_support"; grantId: string };
+    }>("POST", `/app/platform-support/tenants/${prefix}-business/enter`, supportAdmin);
+    assert.equal(entered.status, 200, JSON.stringify(entered.body));
+    assert.equal(entered.body.supportAccess.grantId, grant.body.grant.id);
+    assert.equal(entered.body.features.reports, false);
+    assert.equal(entered.body.features.crm, false);
+  } finally {
+    await prisma.platformSupportSession.deleteMany({ where: { actingClientId: businessClientId } });
+    await prisma.platformSupportAccessGrant.deleteMany({ where: { clientId: businessClientId } });
+    await prisma.client.update({
+      where: { id: businessClientId },
+      data: { features: (originalClient?.features ?? {}) as Prisma.JsonObject },
+    });
+  }
 });
 
 test("queue assignment settings are tenant scoped and admin protected", async () => {
