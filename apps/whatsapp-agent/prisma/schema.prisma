@@ -70,6 +70,7 @@ model Client {
 
   phoneNumbers WaPhoneNumber[]
   contacts     Contact[]
+  contactConsents ContactConsent[]
   conversations Conversation[]
   inboundMessages InboundMessage[]
   outboundMessages OutboundMessage[]
@@ -243,6 +244,33 @@ model PasswordResetToken {
   @@index([expiresAt])
 }
 
+model ContactConsent {
+  id                String    @id @default(cuid())
+  clientId          String    @db.Uuid
+  contactId         String?   @db.Uuid
+  leadId            String?
+  purpose           String
+  status            String
+  sourceChannel     String?
+  sourceProvider    String?
+  source            String?
+  textVersion       String?
+  textHash          String?
+  acceptedAt        DateTime?
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  client  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  lead    Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, purpose, status])
+  @@index([clientId, contactId, purpose, status])
+  @@index([clientId, leadId, purpose, status])
+  @@index([clientId, updatedAt])
+}
+
 model PushSubscription {
   id          String   @id @default(cuid())
   clientId    String   @db.Uuid
@@ -345,6 +373,7 @@ model Contact {
 
   client Client @relation(fields: [clientId], references: [id])
   channelIdentities ContactChannelIdentity[]
+  consents ContactConsent[]
   appointments Appointment[]
   satisfactionSurveys SatisfactionSurvey[]
   satisfactionResponses SatisfactionResponse[]
@@ -930,6 +959,7 @@ model Lead {
   updatedAt DateTime @updatedAt
   notes     LeadNote[]
   contactChannelIdentity ContactChannelIdentity? @relation(fields: [contactChannelIdentityId], references: [id], onDelete: SetNull)
+  consents ContactConsent[]
   appointments Appointment[]
   satisfactionSurveys SatisfactionSurvey[]
   satisfactionResponses SatisfactionResponse[]
