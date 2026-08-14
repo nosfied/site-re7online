@@ -9,6 +9,8 @@ import {
   isTransientConnectingState,
   isEligibleWebSessionAccount,
   listEligibleWebSessionAccounts,
+  nextWebSessionReconnectCount,
+  resolveWebSessionDisconnectRuntimeState,
   resolveWebSessionSenderJid,
   sendMediaViaActiveWebSession,
   sendTextViaActiveWebSession,
@@ -140,6 +142,41 @@ test("web session worker keeps connection timeout retryable", () => {
     }) as never),
     true
   );
+});
+
+test("web session worker keeps internal socket close retryable while connect is requested", () => {
+  const runtimeState = resolveWebSessionDisconnectRuntimeState({
+    classification: "terminal_manual",
+    stillRequested: true,
+    reconnectCount: 2,
+  });
+  assert.equal(runtimeState.observedState, "RECONNECTING");
+  assert.equal(runtimeState.status, "pending");
+  assert.equal(runtimeState.errorCode, "terminal_manual");
+  assert.equal(runtimeState.eventName, "whatsapp.web_session.reconnecting");
+  assert.equal(runtimeState.eventReason, "internal_socket_closed");
+  assert.equal(runtimeState.reconnectCount, 3);
+  assert.equal(nextWebSessionReconnectCount(0), 1);
+});
+
+test("web session worker only requires QR for proven auth loss", () => {
+  const loggedOut = resolveWebSessionDisconnectRuntimeState({
+    classification: "qr_required",
+    stillRequested: true,
+    reconnectCount: 4,
+  });
+  assert.equal(loggedOut.observedState, "QR_REQUIRED");
+  assert.equal(loggedOut.status, "disconnected");
+  assert.equal(loggedOut.reconnectCount, 4);
+
+  const adminStopped = resolveWebSessionDisconnectRuntimeState({
+    classification: "terminal_manual",
+    stillRequested: false,
+    reconnectCount: 5,
+  });
+  assert.equal(adminStopped.observedState, "DISCONNECTED");
+  assert.equal(adminStopped.status, "disconnected");
+  assert.equal(adminStopped.reconnectCount, 5);
 });
 
 test("web session worker resolves LID sender through persisted reverse mapping", async () => {

@@ -7,6 +7,7 @@ import {
   readWebSessionLifecycle,
   writeWebSessionLifecycleMetadata,
 } from "./webSessionLifecycle.js";
+import { webSessionMetadataPatch } from "./webSessionConnectionRuntime.js";
 import { createWebSessionQrMemoryStore } from "./qrMemoryStore.js";
 
 test("web session lifecycle reads defaults and explicit desired state", () => {
@@ -53,4 +54,27 @@ test("web session QR memory store expires without persistence", () => {
   now = 1100;
   assert.equal(store.get("account-a"), null);
   assert.equal(store.size(), 0);
+});
+
+test("web session runtime telemetry records terminal and reconnecting disconnect times", () => {
+  const reconnecting = webSessionMetadataPatch(
+    { webSession: { desiredState: "CONNECTED", lastDisconnectedAt: "2026-08-11T00:00:00.000Z" } },
+    { observedState: "RECONNECTING", lastErrorCode: "reconnectable", reconnectCount: 1 }
+  );
+  assert.equal((reconnecting.webSession as Record<string, unknown>).observedState, "RECONNECTING");
+  assert.equal((reconnecting.webSession as Record<string, unknown>).reconnectCount, 1);
+  assert.notEqual(
+    (reconnecting.webSession as Record<string, unknown>).lastDisconnectedAt,
+    "2026-08-11T00:00:00.000Z"
+  );
+
+  const qrRequired = webSessionMetadataPatch(
+    { webSession: { desiredState: "CONNECTED", lastDisconnectedAt: "2026-08-11T00:00:00.000Z" } },
+    { observedState: "QR_REQUIRED", lastErrorCode: "qr_required" }
+  );
+  assert.equal((qrRequired.webSession as Record<string, unknown>).observedState, "QR_REQUIRED");
+  assert.notEqual(
+    (qrRequired.webSession as Record<string, unknown>).lastDisconnectedAt,
+    "2026-08-11T00:00:00.000Z"
+  );
 });

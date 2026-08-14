@@ -31,7 +31,12 @@ export function webSessionMetadataPatch(metadata: unknown, patch: {
     lifecyclePatch.lastErrorCode = null;
     lifecyclePatch.lastErrorAt = null;
   }
-  if (patch.observedState === "DISCONNECTED" || patch.observedState === "ERROR") {
+  if (
+    patch.observedState === "DISCONNECTED" ||
+    patch.observedState === "ERROR" ||
+    patch.observedState === "QR_REQUIRED" ||
+    patch.observedState === "RECONNECTING"
+  ) {
     lifecyclePatch.lastDisconnectedAt = timestamp;
   }
   return writeWebSessionLifecycleMetadata(metadata, lifecyclePatch);
@@ -58,6 +63,7 @@ export async function markWebSessionRuntimeState(params: {
   observedState: WebSessionObservedState;
   status?: string;
   errorCode?: string | null;
+  reconnectCount?: number;
 }) {
   const account = await params.prisma.channelAccount.findUnique({
     where: { id: params.accountId },
@@ -71,6 +77,7 @@ export async function markWebSessionRuntimeState(params: {
       metadata: webSessionMetadataPatch(account.metadata, {
         observedState: params.observedState,
         lastErrorCode: params.errorCode,
+        reconnectCount: params.reconnectCount,
       }) as Prisma.InputJsonObject,
     },
   });

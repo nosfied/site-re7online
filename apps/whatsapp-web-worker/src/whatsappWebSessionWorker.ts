@@ -111,6 +111,45 @@ export function connectionOpenTimeoutRuntimeState() {
   };
 }
 
+export function nextWebSessionReconnectCount(currentCount: unknown) {
+  return Math.max(0, Number.isFinite(Number(currentCount)) ? Math.floor(Number(currentCount)) : 0) + 1;
+}
+
+export function resolveWebSessionDisconnectRuntimeState(params: {
+  classification: ReturnType<typeof classifyWebSessionDisconnect>;
+  stillRequested: boolean;
+  reconnectCount: number;
+}) {
+  if (!params.stillRequested) {
+    return {
+      observedState: "DISCONNECTED" as const,
+      status: "disconnected" as const,
+      errorCode: params.classification,
+      reconnectCount: params.reconnectCount,
+      eventName: "whatsapp.web_session.disconnected" as const,
+      eventReason: params.classification,
+    };
+  }
+  if (params.classification === "qr_required") {
+    return {
+      observedState: "QR_REQUIRED" as const,
+      status: "disconnected" as const,
+      errorCode: params.classification,
+      reconnectCount: params.reconnectCount,
+      eventName: "whatsapp.web_session.disconnected" as const,
+      eventReason: params.classification,
+    };
+  }
+  return {
+    observedState: "RECONNECTING" as const,
+    status: "pending" as const,
+    errorCode: params.classification,
+    reconnectCount: nextWebSessionReconnectCount(params.reconnectCount),
+    eventName: "whatsapp.web_session.reconnecting" as const,
+    eventReason: params.classification === "terminal_manual" ? "internal_socket_closed" : params.classification,
+  };
+}
+
 function eventRequestId(account: EligibleWebSessionAccount, eventName: string) {
   return `web-session-worker:${account.id}:${eventName}:${Date.now()}`;
 }
@@ -981,36 +1020,31 @@ async function connectWebSessionAccount(params: {
       }
       const classification = classifyWebSessionDisconnect(reason);
       clearWebSessionQrForRuntime(params.account.id);
-      if (!await isWebSessionStillRequested({ prisma: params.prisma, accountId: params.account.id })) {
-        await markWebSessionRuntimeState({
-          prisma: params.prisma,
-          accountId: params.account.id,
-          observedState: "DISCONNECTED",
-          status: "disconnected",
-          errorCode: classification,
-        });
-        await finishTerminal();
-        return;
-      }
+      const stillRequested = await isWebSessionStillRequested({ prisma: params.prisma, accountId: params.account.id });
+      const runtimeState = resolveWebSessionDisconnectRuntimeState({
+        classification,
+        stillRequested,
+        reconnectCount: params.account.lifecycle.reconnectCount,
+      });
       await markWebSessionRuntimeState({
         prisma: params.prisma,
         accountId: params.account.id,
-        observedState: classification === "reconnectable" ? "RECONNECTING" : "QR_REQUIRED",
-        status: classification === "reconnectable" ? "pending" : "disconnected",
-        errorCode: classification,
+        observedState: runtimeState.observedState,
+        status: runtimeState.status,
+        errorCode: runtimeState.errorCode,
+        reconnectCount: runtimeState.reconnectCount,
       });
       await recordWebSessionWorkerEvent({
         prisma: params.prisma,
         account: effectiveAccount,
         requestSuffix: "disconnected",
-        eventName: classification === "reconnectable"
-          ? "whatsapp.web_session.reconnecting"
-          : "whatsapp.web_session.disconnected",
+        eventName: runtimeState.eventName,
         payloadJson: {
           channel: "whatsapp",
           provider: "web_session",
           channelAccountId: effectiveAccount.channelAccountId,
-          reason: classification,
+          reason: runtimeState.eventReason,
+          rawClassification: classification,
         },
       });
       await finishTerminal();
