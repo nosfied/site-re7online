@@ -42,9 +42,21 @@ export type ChatbotHandoffNode = Record<string, unknown> & ChatbotFlowMetadata &
 
 export type ChatbotNode = ChatbotMenuNode | ChatbotTextNode | ChatbotCaptureNode | ChatbotHandoffNode;
 
-export type ChatbotFlowDefinition = {
+export type ChatbotGlobalCommand = {
+  command: string;
+  action: "BACK";
+  allowedModes?: Array<"BOT" | "HUMAN">;
+};
+
+export type ChatbotInactivityPolicy = {
+  resetAfterMinutes?: number;
+};
+
+export type ChatbotFlowDefinition = Record<string, unknown> & {
   start: string;
   nodes: Record<string, ChatbotNode>;
+  globalCommands?: ChatbotGlobalCommand[];
+  inactivityPolicy?: ChatbotInactivityPolicy;
 };
 
 export type ChatbotValidationResult =
@@ -101,6 +113,22 @@ export type ChatbotExecutionEvent =
       nodeId: string;
       source: "node" | "option";
       tags: string[];
+    }
+  | {
+      event: "flow.global_command.applied";
+      flowId: string;
+      command: string;
+      action: "BACK";
+      fromNodeId: string;
+      toNodeId: string;
+    }
+  | {
+      event: "flow.inactivity_reset.applied";
+      flowId: string;
+      fromNodeId: string;
+      toNodeId: string;
+      idleMinutes: number;
+      resetAfterMinutes: number;
     };
 
 export function getInitialChatbotAwaitingNodeId(definition: ChatbotFlowDefinition) {
@@ -170,6 +198,49 @@ function normalizeTags(value: unknown): string[] | undefined {
     )
   );
   return tags.length > 0 ? tags : undefined;
+}
+
+function normalizeGlobalCommands(value: unknown): ChatbotGlobalCommand[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const commands: ChatbotGlobalCommand[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    const command = getNonEmptyString(item.command);
+    const action = getNonEmptyString(item.action)?.toUpperCase();
+    if (!command || action !== "BACK") continue;
+    const allowedModes = Array.isArray(item.allowedModes)
+      ? Array.from(
+          new Set(
+            item.allowedModes
+              .map((mode) => (typeof mode === "string" ? mode.trim().toUpperCase() : ""))
+              .filter((mode): mode is "BOT" | "HUMAN" => mode === "BOT" || mode === "HUMAN")
+          )
+        )
+      : undefined;
+    const key = command.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    commands.push({
+      command,
+      action: "BACK",
+      ...(allowedModes && allowedModes.length > 0 ? { allowedModes } : {}),
+    });
+  }
+  return commands.length > 0 ? commands : undefined;
+}
+
+function normalizeInactivityPolicy(value: unknown): ChatbotInactivityPolicy | undefined {
+  if (!isRecord(value)) return undefined;
+  const resetAfterMinutes = value.resetAfterMinutes;
+  if (
+    typeof resetAfterMinutes !== "number" ||
+    !Number.isFinite(resetAfterMinutes) ||
+    resetAfterMinutes <= 0
+  ) {
+    return undefined;
+  }
+  return { resetAfterMinutes: Math.floor(resetAfterMinutes) };
 }
 
 function getNodeMetadata(rawNode: Record<string, unknown>): ChatbotFlowMetadata {
@@ -397,6 +468,8 @@ export function validateChatbotFlowDefinition(definition: unknown): ChatbotValid
 
   const start = getNonEmptyString(definition.start);
   const rawNodes = definition.nodes;
+  const globalCommands = normalizeGlobalCommands(definition.globalCommands);
+  const inactivityPolicy = normalizeInactivityPolicy(definition.inactivityPolicy);
   if (!start) {
     return {
       ok: false,
@@ -458,8 +531,11 @@ export function validateChatbotFlowDefinition(definition: unknown): ChatbotValid
   return {
     ok: true,
     definition: {
+      ...preserveUnknownFields(definition, ["start", "nodes", "globalCommands", "inactivityPolicy"]),
       start,
       nodes,
+      ...(globalCommands ? { globalCommands } : {}),
+      ...(inactivityPolicy ? { inactivityPolicy } : {}),
     },
   };
 }
@@ -481,6 +557,33 @@ function withChatbotRuntime(
     flow: flowId ? (`chatbot:${flowId}` as ConversationState["flow"]) : undefined,
     chatbotNodeId: nodeId ?? undefined,
     chatbotActive: active,
+  };
+}
+
+function withChatbotLastInteractionAt(state: ConversationState, nowIso: string): ConversationState {
+  return {
+    ...state,
+    answers: {
+      ...(state.answers ?? {}),
+      chatbotRuntime: {
+        ...(isRecord(state.answers?.chatbotRuntime) ? state.answers?.chatbotRuntime : {}),
+        lastInteractionAt: nowIso,
+      },
+    },
+  };
+}
+
+function getChatbotLastInteractionAt(state: ConversationState) {
+  const value = isRecord(state.answers?.chatbotRuntime)
+    ? state.answers?.chatbotRuntime.lastInteractionAt
+    : null;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function markChatbotResultInteraction(result: ChatbotExecutionResult, nowIso: string): ChatbotExecutionResult {
+  return {
+    ...result,
+    state: withChatbotLastInteractionAt(result.state, nowIso),
   };
 }
 
@@ -517,6 +620,57 @@ function parseExplicitMenuOptionNumber(label: string) {
   return {
     number,
     displayLine: separator === "-" ? `${number} - ${text}` : `${number}${separator} ${text}`,
+  };
+}
+
+function findParentMenuNodeId(definition: ChatbotFlowDefinition, targetNodeId: string) {
+  for (const [nodeId, node] of Object.entries(definition.nodes)) {
+    if (node.type !== "menu") continue;
+    if (node.options.some((option) => option.next === targetNodeId)) return nodeId;
+  }
+  return null;
+}
+
+function findGlobalBackCommand(
+  definition: ChatbotFlowDefinition,
+  inboundText: string | null | undefined,
+  state: ConversationState
+) {
+  const text = String(inboundText ?? "").trim();
+  if (!text || state.handoff.status !== "none" || state.assignedUserId) return null;
+  const mode = state.mode === "HUMAN" ? "HUMAN" : "BOT";
+  for (const command of definition.globalCommands ?? []) {
+    if (command.action !== "BACK") continue;
+    const allowedModes = command.allowedModes ?? ["BOT"];
+    if (!allowedModes.includes(mode)) continue;
+    if (command.command.trim().toLowerCase() === text.toLowerCase()) return command;
+  }
+  return null;
+}
+
+function shouldResetChatbotByInactivity(params: {
+  definition: ChatbotFlowDefinition;
+  state: ConversationState;
+  nowIso: string;
+}) {
+  if (!params.state.chatbotActive || !params.state.chatbotNodeId) return null;
+  if (params.state.mode === "HUMAN" || params.state.handoff.status !== "none" || params.state.assignedUserId) {
+    return null;
+  }
+  const resetAfterMinutes = params.definition.inactivityPolicy?.resetAfterMinutes;
+  if (!resetAfterMinutes) return null;
+  const lastInteractionAt = getChatbotLastInteractionAt(params.state);
+  if (!lastInteractionAt) return null;
+  const previous = new Date(lastInteractionAt).getTime();
+  const current = new Date(params.nowIso).getTime();
+  if (!Number.isFinite(previous) || !Number.isFinite(current) || current <= previous) return null;
+  const idleMinutes = (current - previous) / 60000;
+  if (idleMinutes < resetAfterMinutes) return null;
+  return {
+    fromNodeId: params.state.chatbotNodeId,
+    toNodeId: params.definition.start,
+    idleMinutes,
+    resetAfterMinutes,
   };
 }
 
@@ -997,31 +1151,87 @@ export function executeChatbotFlow(params: {
   startNodeId?: string;
 }): ChatbotExecutionResult {
   if (params.startNodeId && params.definition.nodes[params.startNodeId]) {
-    return executeNodeChain({
+    return markChatbotResultInteraction(executeNodeChain({
       definition: params.definition,
       state: params.state,
       flowId: params.flowId,
       nodeId: params.startNodeId,
       nowIso: params.nowIso,
-    });
+    }), params.nowIso);
   }
 
   if (!params.state.chatbotActive || !params.state.chatbotNodeId) {
-    return executeNodeChain({
+    return markChatbotResultInteraction(executeNodeChain({
       definition: params.definition,
       state: params.state,
       flowId: params.flowId,
       nodeId: params.definition.start,
       nowIso: params.nowIso,
+    }), params.nowIso);
+  }
+
+  const inactivityReset = shouldResetChatbotByInactivity({
+    definition: params.definition,
+    state: params.state,
+    nowIso: params.nowIso,
+  });
+  if (inactivityReset) {
+    const result = executeNodeChain({
+      definition: params.definition,
+      state: withChatbotRuntime(params.state, params.flowId, null, false),
+      flowId: params.flowId,
+      nodeId: params.definition.start,
+      nowIso: params.nowIso,
     });
+    return markChatbotResultInteraction({
+      ...result,
+      events: [
+        {
+          event: "flow.inactivity_reset.applied",
+          flowId: params.flowId,
+          fromNodeId: inactivityReset.fromNodeId,
+          toNodeId: inactivityReset.toNodeId,
+          idleMinutes: Math.floor(inactivityReset.idleMinutes),
+          resetAfterMinutes: inactivityReset.resetAfterMinutes,
+        },
+        ...(result.events ?? []),
+      ],
+    }, params.nowIso);
   }
 
   const currentNode = params.definition.nodes[params.state.chatbotNodeId];
   if (!currentNode) {
-    return {
+    return markChatbotResultInteraction({
       handled: false,
       state: clearChatbotRuntime(params.state),
-    };
+    }, params.nowIso);
+  }
+
+  const globalBackCommand = findGlobalBackCommand(params.definition, params.inboundText, params.state);
+  if (globalBackCommand) {
+    const parentNodeId = findParentMenuNodeId(params.definition, params.state.chatbotNodeId);
+    const targetNodeId = parentNodeId ?? getInitialChatbotAwaitingNodeId(params.definition);
+    const result = executeNodeChain({
+      definition: params.definition,
+      state: params.state,
+      flowId: params.flowId,
+      nodeId: targetNodeId,
+      nowIso: params.nowIso,
+    });
+    return markChatbotResultInteraction({
+      ...result,
+      events: [
+        {
+          event: "flow.global_command.applied",
+          flowId: params.flowId,
+          command: globalBackCommand.command,
+          action: "BACK",
+          fromNodeId: params.state.chatbotNodeId,
+          toNodeId: targetNodeId,
+        },
+        ...(result.events ?? []),
+      ],
+    }, params.nowIso);
   }
 
   if (currentNode.type !== "menu") {
@@ -1029,9 +1239,11 @@ export function executeChatbotFlow(params: {
       const captured = validateCapturedInput(currentNode, params.inboundText);
       if (!captured.ok) {
         return {
+          ...markChatbotResultInteraction({
           handled: true,
           state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
           replyText: currentNode.errorText ?? currentNode.text,
+          }, params.nowIso),
         };
       }
       const stateWithCapturedValue = mergeFlowMetadata({
@@ -1053,21 +1265,21 @@ export function executeChatbotFlow(params: {
         source: "node",
         events: [],
       });
-      return executeNodeChain({
+      return markChatbotResultInteraction(executeNodeChain({
         definition: params.definition,
         state: stateWithCapturedValue,
         flowId: params.flowId,
         nodeId: currentNode.next,
         nowIso: params.nowIso,
-      });
+      }), params.nowIso);
     }
-    return executeNodeChain({
+    return markChatbotResultInteraction(executeNodeChain({
       definition: params.definition,
       state: params.state,
       flowId: params.flowId,
       nodeId: params.state.chatbotNodeId,
       nowIso: params.nowIso,
-    });
+    }), params.nowIso);
   }
 
   const choice = parseMenuSelection(params.inboundText);
@@ -1079,11 +1291,11 @@ export function executeChatbotFlow(params: {
         );
   const selectedOptionIndex = explicitOptionIndex >= 0 ? explicitOptionIndex : (choice ?? 0) - 1;
   if (choice === null || selectedOptionIndex < 0 || selectedOptionIndex >= currentNode.options.length) {
-    return {
+    return markChatbotResultInteraction({
       handled: true,
       state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
       replyText: renderMenu(currentNode),
-    };
+    }, params.nowIso);
   }
 
   const selectedOption = currentNode.options[selectedOptionIndex]!;
@@ -1103,8 +1315,8 @@ export function executeChatbotFlow(params: {
     nodeId: selectedOption.next,
     nowIso: params.nowIso,
   });
-  return {
+  return markChatbotResultInteraction({
     ...result,
     events: [...events, ...(result.events ?? [])],
-  };
+  }, params.nowIso);
 }

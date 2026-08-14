@@ -146,6 +146,213 @@ test("executeChatbotFlow preserves explicit menu option numbers", () => {
   assert.equal(selected.replyText, "Voltando ao início.");
 });
 
+test("executeChatbotFlow applies configured global back command without hardcoding command text", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "main",
+    globalCommands: [{ command: "#", action: "BACK", allowedModes: ["BOT"] }],
+    nodes: {
+      main: {
+        type: "menu",
+        text: "Menu principal",
+        options: [{ label: "4 - Submenu", next: "submenu" }],
+      },
+      submenu: {
+        type: "menu",
+        text: "Submenu",
+        options: [{ label: "1 - Detalhe", next: "detail" }],
+      },
+      detail: {
+        type: "text",
+        text: "Detalhe",
+        next: "submenu",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_back",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_back",
+      chatbotActive: true,
+      chatbotNodeId: "submenu",
+      answers: {
+        chatbotRuntime: { lastInteractionAt: "2026-08-12T10:00:00.000Z" },
+      },
+    }),
+    inboundText: "#",
+    nowIso: "2026-08-12T10:01:00.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotNodeId, "main");
+  assert.match(result.replyText ?? "", /Menu principal/);
+  assert.equal(result.events?.[0]?.event, "flow.global_command.applied");
+});
+
+test("executeChatbotFlow ignores global back command during human handoff", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "main",
+    globalCommands: [{ command: "#", action: "BACK", allowedModes: ["BOT"] }],
+    nodes: {
+      main: {
+        type: "menu",
+        text: "Menu principal",
+        options: [{ label: "1 - Atendimento", next: "handoff" }],
+      },
+      handoff: { type: "handoff" },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_back_human",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_back_human",
+      chatbotActive: true,
+      chatbotNodeId: "main",
+      mode: "HUMAN",
+      handoff: { status: "active", activatedAt: "2026-08-12T10:00:00.000Z" },
+    }),
+    inboundText: "#",
+    nowIso: "2026-08-12T10:01:00.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotNodeId, "main");
+  assert.match(result.replyText ?? "", /Menu principal/);
+  assert.equal(Boolean(result.events?.some((event) => event.event === "flow.global_command.applied")), false);
+});
+
+test("executeChatbotFlow ignores global back command when conversation is assigned", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "main",
+    globalCommands: [{ command: "#", action: "BACK", allowedModes: ["BOT"] }],
+    nodes: {
+      main: {
+        type: "menu",
+        text: "Menu principal",
+        options: [{ label: "1 - Submenu", next: "submenu" }],
+      },
+      submenu: {
+        type: "menu",
+        text: "Submenu",
+        options: [{ label: "1 - Detalhe", next: "detail" }],
+      },
+      detail: { type: "text", text: "Detalhe" },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_back_assigned",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_back_assigned",
+      chatbotActive: true,
+      chatbotNodeId: "submenu",
+      assignedUserId: "operator-1",
+    }),
+    inboundText: "#",
+    nowIso: "2026-08-12T10:01:00.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotNodeId, "submenu");
+  assert.match(result.replyText ?? "", /Submenu/);
+  assert.equal(Boolean(result.events?.some((event) => event.event === "flow.global_command.applied")), false);
+});
+
+test("executeChatbotFlow resets submenu after configured inactivity while preserving flow context", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "main",
+    inactivityPolicy: { resetAfterMinutes: 30 },
+    nodes: {
+      main: {
+        type: "menu",
+        text: "Menu principal",
+        options: [{ label: "1 - Submenu", next: "submenu" }],
+      },
+      submenu: {
+        type: "menu",
+        text: "Submenu antigo",
+        options: [{ label: "1 - Detalhe", next: "detail" }],
+      },
+      detail: { type: "text", text: "Detalhe" },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_timeout",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_timeout",
+      chatbotActive: true,
+      chatbotNodeId: "submenu",
+      answers: {
+        flowContext: { consent: true },
+        chatbotRuntime: { lastInteractionAt: "2026-08-12T10:00:00.000Z" },
+      },
+    }),
+    inboundText: "1",
+    nowIso: "2026-08-12T10:45:00.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotNodeId, "main");
+  assert.equal(result.state.answers?.flowContext?.consent, true);
+  assert.match(result.replyText ?? "", /Menu principal/);
+  assert.equal(result.events?.[0]?.event, "flow.inactivity_reset.applied");
+});
+
+test("executeChatbotFlow keeps submenu inside inactivity window", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "main",
+    inactivityPolicy: { resetAfterMinutes: 30 },
+    nodes: {
+      main: {
+        type: "menu",
+        text: "Menu principal",
+        options: [{ label: "1 - Submenu", next: "submenu" }],
+      },
+      submenu: {
+        type: "menu",
+        text: "Submenu",
+        options: [{ label: "1 - Detalhe", next: "detail" }],
+      },
+      detail: { type: "text", text: "Detalhe" },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_timeout",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_timeout",
+      chatbotActive: true,
+      chatbotNodeId: "submenu",
+      answers: {
+        chatbotRuntime: { lastInteractionAt: "2026-08-12T10:00:00.000Z" },
+      },
+    }),
+    inboundText: "1",
+    nowIso: "2026-08-12T10:10:00.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.replyText, "Detalhe");
+  assert.equal(Boolean(result.events?.some((event) => event.event === "flow.inactivity_reset.applied")), false);
+});
+
 test("validateChatbotFlowDefinition rejects duplicate explicit menu option numbers", () => {
   const result = validateChatbotFlowDefinition({
     start: "menu",

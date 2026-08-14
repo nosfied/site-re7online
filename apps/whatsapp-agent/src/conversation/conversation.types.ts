@@ -153,6 +153,9 @@ export type QuoteSiteAnswers = {
   aiOrchestrator?: AIOrchestratorState;
   aiMemory?: AIMemoryState;
   aiQualification?: AIQualificationState;
+  chatbotRuntime?: {
+    lastInteractionAt?: string | null;
+  };
   protocolContinuation?: {
     protocol: string;
     originalConversationId: string;

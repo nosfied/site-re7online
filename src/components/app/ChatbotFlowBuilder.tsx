@@ -16,7 +16,7 @@ export type ChatbotFlowBuilderQueue = {
   departmentId: string;
 };
 
-type FlowDefinition = {
+type FlowDefinition = Record<string, unknown> & {
   start: string;
   nodes: Record<string, Record<string, unknown>>;
 };
@@ -54,7 +54,7 @@ function parseDefinition(text: string): ParsedDefinition {
     for (const [nodeId, node] of Object.entries(parsed.nodes)) {
       if (isRecord(node)) nodes[nodeId] = node;
     }
-    return { ok: true, definition: { start: parsed.start, nodes } };
+    return { ok: true, definition: { ...parsed, start: parsed.start, nodes } };
   } catch (error) {
     return { ok: false, message: (error as Error).message || "JSON invalido." };
   }
@@ -168,6 +168,29 @@ function setNodeField(definition: FlowDefinition, nodeId: string, key: string, v
   };
 }
 
+function setDefinitionField(definition: FlowDefinition, key: string, value: unknown) {
+  const next = { ...definition };
+  if (value === "" || value === null || value === undefined) {
+    delete next[key];
+  } else {
+    next[key] = value;
+  }
+  return next;
+}
+
+function getBackCommand(definition: FlowDefinition) {
+  const commands = Array.isArray(definition.globalCommands) ? definition.globalCommands : [];
+  const command = commands.find((item) => isRecord(item) && item.action === "BACK");
+  return isRecord(command) && typeof command.command === "string" ? command.command : "";
+}
+
+function getResetAfterMinutes(definition: FlowDefinition) {
+  const policy = isRecord(definition.inactivityPolicy) ? definition.inactivityPolicy : null;
+  return typeof policy?.resetAfterMinutes === "number" && Number.isFinite(policy.resetAfterMinutes)
+    ? String(policy.resetAfterMinutes)
+    : "";
+}
+
 export function ChatbotFlowBuilder({
   definitionText,
   onDefinitionTextChange,
@@ -254,6 +277,52 @@ export function ChatbotFlowBuilder({
             <p className="text-xs text-white/55 sm:col-span-4">
               Setores usados: {departmentIds.size || "nenhum"}. O transporte usado pelo canal não altera esta configuração.
             </p>
+            <div className="grid gap-2 sm:col-span-2">
+              <label className="grid gap-1 text-sm text-white/70">
+                Comando para voltar
+                <input
+                  value={getBackCommand(definition)}
+                  disabled={disabled}
+                  onChange={(event) => {
+                    const command = event.target.value.trim();
+                    commit(setDefinitionField(
+                      definition,
+                      "globalCommands",
+                      command ? [{ command, action: "BACK", allowedModes: ["BOT"] }] : undefined
+                    ));
+                  }}
+                  className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                  placeholder="Ex.: #, 0 ou voltar"
+                />
+              </label>
+              <span className="text-xs text-white/50">
+                Funciona somente durante a automação. Não retira a conversa de atendimento humano.
+              </span>
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+              <label className="grid gap-1 text-sm text-white/70">
+                Reiniciar automação após inatividade
+                <input
+                  type="number"
+                  min="1"
+                  value={getResetAfterMinutes(definition)}
+                  disabled={disabled}
+                  onChange={(event) => {
+                    const value = Number.parseInt(event.target.value, 10);
+                    commit(setDefinitionField(
+                      definition,
+                      "inactivityPolicy",
+                      Number.isFinite(value) && value > 0 ? { resetAfterMinutes: value } : undefined
+                    ));
+                  }}
+                  className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                  placeholder="Minutos"
+                />
+              </label>
+              <span className="text-xs text-white/50">
+                O reset volta ao menu inicial e preserva dados já salvos da conversa.
+              </span>
+            </div>
           </section>
 
           {issues.length > 0 ? (
