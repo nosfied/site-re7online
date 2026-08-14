@@ -2163,6 +2163,52 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
     1
   );
 
+  await prisma.channelAccount.create({
+    data: {
+      clientId: businessClientId,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId: "web-session-default",
+      displayName: "Placeholder Web Session",
+      enabled: true,
+      runtimeEnabled: true,
+      inboundPersistenceEnabled: false,
+      outboundEnabled: false,
+      automationEnabled: false,
+      aiEnabled: false,
+      handoffEnabled: false,
+      status: "disconnected",
+      tokenStatus: "not_required",
+    },
+  });
+
+  const disconnected = await request<{
+    status: {
+      account: { channelAccountId: string; runtimeEnabled: boolean; status: string };
+      authState: { configured: boolean };
+      lifecycle: { desiredState: string; observedState: string };
+    };
+  }>("POST", "/app/settings/channels/whatsapp/web-session/disconnect", businessAdmin);
+  assert.equal(disconnected.status, 200);
+  assert.equal(disconnected.body.status.account.channelAccountId, "lab-account");
+  assert.equal(disconnected.body.status.account.runtimeEnabled, false);
+  assert.equal(disconnected.body.status.authState.configured, true);
+
+  const reconnected = await request<{
+    status: {
+      account: { channelAccountId: string; runtimeEnabled: boolean; status: string };
+      authState: { configured: boolean };
+      lifecycle: { desiredState: string; observedState: string };
+    };
+  }>("POST", "/app/settings/channels/whatsapp/web-session/connect", businessAdmin);
+  assert.equal(reconnected.status, 200);
+  assert.equal(reconnected.body.status.account.channelAccountId, "lab-account");
+  assert.equal(reconnected.body.status.account.runtimeEnabled, true);
+  assert.equal(reconnected.body.status.account.status, "pending");
+  assert.equal(reconnected.body.status.authState.configured, true);
+  assert.equal(reconnected.body.status.lifecycle.desiredState, "CONNECTED");
+  assert.equal(reconnected.body.status.lifecycle.observedState, "CONNECTING");
+
   const reset = await request<{
     status: {
       authState: { configured: boolean };

@@ -44,7 +44,7 @@ export async function getWebSessionAccount(params: {
   prisma: PrismaClient;
   clientId: string;
 }) {
-  return params.prisma.channelAccount.findFirst({
+  const accounts = await params.prisma.channelAccount.findMany({
     where: {
       clientId: params.clientId,
       channel: WEB_SESSION_CHANNEL,
@@ -59,6 +59,22 @@ export async function getWebSessionAccount(params: {
     },
     orderBy: [{ updatedAt: "desc" }],
   });
+  return accounts.sort((left, right) => {
+    const leftApproved = left.secrets.some(
+      (secret) => secret.secretKind === WEB_SESSION_AUTH_SECRET_KIND && secret.status === "configured" && secret.secretCiphertext
+    );
+    const rightApproved = right.secrets.some(
+      (secret) => secret.secretKind === WEB_SESSION_AUTH_SECRET_KIND && secret.status === "configured" && secret.secretCiphertext
+    );
+    if (leftApproved !== rightApproved) return leftApproved ? -1 : 1;
+    const leftRealIdentity = /^\d{8,}$/.test(left.channelAccountId);
+    const rightRealIdentity = /^\d{8,}$/.test(right.channelAccountId);
+    if (leftRealIdentity !== rightRealIdentity) return leftRealIdentity ? -1 : 1;
+    const leftActive = left.runtimeEnabled || left.status === "connected" || left.status === "pending";
+    const rightActive = right.runtimeEnabled || right.status === "connected" || right.status === "pending";
+    if (leftActive !== rightActive) return leftActive ? -1 : 1;
+    return right.updatedAt.getTime() - left.updatedAt.getTime();
+  })[0] ?? null;
 }
 
 async function readWorkerQr(accountId: string) {
