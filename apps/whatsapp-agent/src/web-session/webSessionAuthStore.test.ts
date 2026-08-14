@@ -406,6 +406,33 @@ test("durable staged web session auth store promotes after account identity reco
   }
 });
 
+test("durable staged web session auth store clears residual staging when approved auth exists", async () => {
+  const previous = process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+  process.env.CHANNEL_ACCOUNT_SECRET_KEY = "unit-test-channel-account-secret-key";
+  try {
+    const prisma = makePrisma();
+    const scope = { tenantKey: "tenant-a", channelAccountId: "session-a" };
+    await saveWebSessionAuthState({ prisma: prisma as never, ...scope, state: { approved: true } });
+    await saveWebSessionAuthState({
+      prisma: prisma as never,
+      ...scope,
+      secretKind: WEB_SESSION_AUTH_STAGING_SECRET_KIND,
+      state: { residual: true },
+    });
+    assert.equal(prisma.state.secrets.length, 2);
+
+    const staged = createDurableStagedWebSessionAuthStore({ prisma: prisma as never });
+    const loaded = await staged.store.load(scope);
+
+    assert.deepEqual(loaded, { approved: true });
+    assert.equal(prisma.state.secrets.length, 1);
+    assert.equal(prisma.state.secrets[0]?.secretKind, WEB_SESSION_AUTH_SECRET_KIND);
+  } finally {
+    if (previous === undefined) delete process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+    else process.env.CHANNEL_ACCOUNT_SECRET_KEY = previous;
+  }
+});
+
 test("durable staged web session auth store discards conflicted staging and preserves approved auth", async () => {
   const previous = process.env.CHANNEL_ACCOUNT_SECRET_KEY;
   process.env.CHANNEL_ACCOUNT_SECRET_KEY = "unit-test-channel-account-secret-key";

@@ -230,6 +230,7 @@ export function createDurableStagedWebSessionAuthStore(params: {
       async load(scope) {
         const approved = await approvedStore.load(scope);
         if (approved) {
+          await stagingStore.clear(scope);
           loadedKind = "approved";
           promoted = true;
           return approved;
