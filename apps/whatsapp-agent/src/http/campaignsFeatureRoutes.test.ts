@@ -2263,7 +2263,10 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
   });
   await new Promise<void>((resolve) => fakeWorker.listen(0, "127.0.0.1", resolve));
   t.after(async () => {
-    await new Promise<void>((resolve, reject) => fakeWorker.close((error) => error ? reject(error) : resolve()));
+    const closePromise = new Promise<void>((resolve, reject) => fakeWorker.close((error) => error ? reject(error) : resolve()));
+    fakeWorker.closeAllConnections();
+    fakeWorker.closeIdleConnections();
+    await closePromise;
     if (previousWorkerUrl === undefined) delete process.env.WHATSAPP_WEB_WORKER_CONTROL_URL;
     else process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = previousWorkerUrl;
     if (previousWorkerToken === undefined) delete process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN;
@@ -2388,7 +2391,7 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
 
   const response = await request<{
     ok: true;
-    message: { status: string; metaMessageId: string | null; bodyText: string | null };
+    message: { messageId: string; status: string; metaMessageId: string | null; bodyText: string | null };
   }>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
     text: "Mensagem controlada web session.",
   });
@@ -2419,6 +2422,23 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
   assert.equal((outbound.rawPayload as Record<string, unknown>).provider, "web_session");
   assert.equal((outbound.rawPayload as Record<string, unknown>).metaUsage, undefined);
   assert.equal(JSON.stringify(outbound.rawPayload).includes(waId), false);
+
+  const outboundConversation = await prisma.conversation.findFirstOrThrow({
+    where: { clientId: businessClientId, waId, provider: "web_session" },
+    select: { lastOutboundAt: true, channelAccountId: true },
+  });
+  assert.equal(outboundConversation.channelAccountId, channelAccountId);
+  assert.ok(outboundConversation.lastOutboundAt);
+  assert.ok(outboundConversation.lastOutboundAt.getTime() >= outbound.createdAt.getTime());
+
+  const outboundRuntime = await prisma.conversationRuntimeState.findFirstOrThrow({
+    where: { clientId: businessClientId, waId, provider: "web_session" },
+    select: { lastOutboundAt: true, lastOutboundMessageId: true, channelAccountId: true },
+  });
+  assert.equal(outboundRuntime.channelAccountId, channelAccountId);
+  assert.equal(outboundRuntime.lastOutboundMessageId, response.body.message.messageId);
+  assert.ok(outboundRuntime.lastOutboundAt);
+  assert.ok(outboundRuntime.lastOutboundAt.getTime() >= outbound.createdAt.getTime());
 
   const event = await prisma.event.findFirstOrThrow({
     where: { clientId: businessClientId, eventName: "inbox.web_session.text.sent" },

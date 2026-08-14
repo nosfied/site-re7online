@@ -80,6 +80,42 @@ function isWebSessionAccountConnected(account: WebSessionChannelAccount) {
   return readWebSessionLifecycle(account.metadata).observedState === "CONNECTED";
 }
 
+async function markWebSessionOutboundActivity(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  waId: string;
+  waIdCanonical?: string | null;
+  channelAccountId: string;
+  sentAt: Date;
+  messageId: string;
+}) {
+  const waIdCanonical = params.waIdCanonical ?? params.waId;
+  const identityWhere = {
+    clientId: params.clientId,
+    channel: "whatsapp",
+    OR: [{ waId: params.waId }, { waIdCanonical }],
+  };
+  await Promise.all([
+    params.prisma.conversation.updateMany({
+      where: identityWhere,
+      data: {
+        provider: "web_session",
+        channelAccountId: params.channelAccountId,
+        lastOutboundAt: params.sentAt,
+      },
+    }),
+    params.prisma.conversationRuntimeState.updateMany({
+      where: identityWhere,
+      data: {
+        provider: "web_session",
+        channelAccountId: params.channelAccountId,
+        lastOutboundAt: params.sentAt,
+        lastOutboundMessageId: params.messageId,
+      },
+    }),
+  ]);
+}
+
 async function findWebSessionAccount(params: {
   prisma: PrismaClient;
   clientId: string;
@@ -442,6 +478,17 @@ export async function createWebSessionTextOutboundMessage(params: {
       requestId: params.requestId,
     });
   }
+  if (sendResult.ok) {
+    await markWebSessionOutboundActivity({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical ?? recipientWaId,
+      channelAccountId: account.channelAccountId,
+      sentAt: createdAt,
+      messageId,
+    });
+  }
   logger.info({
     event: sendResult.ok ? "whatsapp.web_session.outbound.persisted" : "whatsapp.web_session.outbound.failed",
     tenantKey: params.clientKey,
@@ -734,6 +781,15 @@ export async function createWebSessionMediaOutboundMessage(params: {
         : params.conversation?.assignedAt ?? null,
       assignedUserId: params.conversation?.assignedUserId ?? null,
       requestId: params.requestId,
+    });
+    await markWebSessionOutboundActivity({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical ?? recipientWaId,
+      channelAccountId: account.channelAccountId,
+      sentAt: createdAt,
+      messageId,
     });
   }
   logger.info({
