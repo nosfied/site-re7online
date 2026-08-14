@@ -1029,7 +1029,7 @@ async function connectWebSessionAccount(params: {
       }
       const promotion = await authStore.promote({
         tenantKey: params.account.tenantKey,
-        channelAccountId: params.account.channelAccountId,
+        channelAccountId: reconciliation.channelAccountId,
       });
       if (!promotion.ok) {
         await markWebSessionRuntimeState({

@@ -379,6 +379,33 @@ test("durable staged web session auth store promotes staging and removes tempora
   }
 });
 
+test("durable staged web session auth store promotes after account identity reconciliation", async () => {
+  const previous = process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+  process.env.CHANNEL_ACCOUNT_SECRET_KEY = "unit-test-channel-account-secret-key";
+  try {
+    const prisma = makePrisma();
+    const initialScope = { tenantKey: "tenant-a", channelAccountId: "session-a" };
+    const reconciledScope = { tenantKey: "tenant-a", channelAccountId: "5584999992218" };
+    const staged = createDurableStagedWebSessionAuthStore({ prisma: prisma as never });
+    await staged.store.save({ ...initialScope, state: { approvedAfterIdentity: true } });
+
+    const account = prisma.state.accounts.find((item) => item.id === "account-a");
+    assert.ok(account);
+    account.channelAccountId = reconciledScope.channelAccountId;
+
+    assert.deepEqual(await staged.promote(reconciledScope), { ok: true });
+    assert.equal(staged.isPromoted(), true);
+    assert.equal(prisma.state.secrets.length, 1);
+    assert.equal(prisma.state.secrets[0]?.secretKind, WEB_SESSION_AUTH_SECRET_KIND);
+    const loaded = await loadWebSessionAuthState({ prisma: prisma as never, ...reconciledScope });
+    assert.equal(loaded.ok, true);
+    if (loaded.ok) assert.deepEqual(loaded.state, { approvedAfterIdentity: true });
+  } finally {
+    if (previous === undefined) delete process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+    else process.env.CHANNEL_ACCOUNT_SECRET_KEY = previous;
+  }
+});
+
 test("durable staged web session auth store discards conflicted staging and preserves approved auth", async () => {
   const previous = process.env.CHANNEL_ACCOUNT_SECRET_KEY;
   process.env.CHANNEL_ACCOUNT_SECRET_KEY = "unit-test-channel-account-secret-key";
