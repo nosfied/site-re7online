@@ -6,9 +6,10 @@ import {
   readWebSessionLifecycle,
 } from "./webSessionLifecycle.js";
 import {
-  clearWebSessionAuthState,
+  clearAllWebSessionAuthState,
   loadWebSessionAuthState,
   WEB_SESSION_AUTH_SECRET_KIND,
+  WEB_SESSION_AUTH_STAGING_SECRET_KIND,
 } from "./webSessionAuthStore.js";
 import {
   clearWebSessionQrForRuntime,
@@ -51,8 +52,8 @@ export async function getWebSessionAccount(params: {
     },
     include: {
       secrets: {
-        where: { secretKind: WEB_SESSION_AUTH_SECRET_KIND },
-        select: { status: true, secretCiphertext: true, updatedAt: true },
+        where: { secretKind: { in: [WEB_SESSION_AUTH_SECRET_KIND, WEB_SESSION_AUTH_STAGING_SECRET_KIND] } },
+        select: { secretKind: true, status: true, secretCiphertext: true, updatedAt: true },
       },
     },
     orderBy: [{ updatedAt: "desc" }],
@@ -85,7 +86,8 @@ export async function serializeWebSessionStatus(params: {
   client: ScopedClient;
 }) {
   const account = await getWebSessionAccount({ prisma: params.prisma, clientId: params.client.id });
-  const secret = account?.secrets?.[0] ?? null;
+  const approvedSecret = account?.secrets?.find((secret) => secret.secretKind === WEB_SESSION_AUTH_SECRET_KIND) ?? null;
+  const stagingSecret = account?.secrets?.find((secret) => secret.secretKind === WEB_SESSION_AUTH_STAGING_SECRET_KIND) ?? null;
   const lifecycle = account ? readWebSessionLifecycle(account.metadata) : DEFAULT_WEB_SESSION_LIFECYCLE;
   return {
     configured: Boolean(account),
@@ -108,9 +110,13 @@ export async function serializeWebSessionStatus(params: {
       : null,
     lifecycle,
     authState: {
-      configured: Boolean(secret?.status === "configured" && secret.secretCiphertext),
+      configured: Boolean(approvedSecret?.status === "configured" && approvedSecret.secretCiphertext),
+      approvedConfigured: Boolean(approvedSecret?.status === "configured" && approvedSecret.secretCiphertext),
+      stagingConfigured: Boolean(stagingSecret?.status === "configured" && stagingSecret.secretCiphertext),
       secretKind: WEB_SESSION_AUTH_SECRET_KIND,
-      updatedAt: secret?.updatedAt?.toISOString() ?? null,
+      stagingSecretKind: WEB_SESSION_AUTH_STAGING_SECRET_KIND,
+      updatedAt: approvedSecret?.updatedAt?.toISOString() ?? null,
+      stagingUpdatedAt: stagingSecret?.updatedAt?.toISOString() ?? null,
     },
     qr: {
       available: account ? getWebSessionQrFromRuntime(account.id) !== null : false,
@@ -266,7 +272,7 @@ export async function resetWebSession(params: {
   const account = await getWebSessionAccount({ prisma: params.prisma, clientId: params.client.id });
   if (!account) return { ok: false as const, status: 404, code: "web_session_account_not_found" };
   clearWebSessionQrForRuntime(account.id);
-  await clearWebSessionAuthState({
+  await clearAllWebSessionAuthState({
     prisma: params.prisma,
     tenantKey: params.client.clientKey,
     channelAccountId: account.channelAccountId,

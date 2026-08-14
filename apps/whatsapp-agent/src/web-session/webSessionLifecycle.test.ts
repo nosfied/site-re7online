@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   calculateWebSessionReconnectBackoff,
   classifyWebSessionDisconnect,
+  extractWebSessionDisconnectInfo,
   isWebSessionConnectRequested,
   readWebSessionLifecycle,
   writeWebSessionLifecycleMetadata,
@@ -44,6 +45,22 @@ test("web session disconnect classification and backoff are conservative", () =>
   );
   assert.equal(classifyWebSessionDisconnect("network_close"), "reconnectable");
   assert.equal(calculateWebSessionReconnectBackoff({ attempt: 2, random: () => 0.5 }), 4000);
+});
+
+test("web session disconnect classification uses Baileys 7 status codes explicitly", () => {
+  assert.deepEqual(
+    extractWebSessionDisconnectInfo({ lastDisconnect: { error: { output: { statusCode: 428 } } } }),
+    { statusCode: 428, reasonCode: "baileys_428", classification: "reconnectable" }
+  );
+  assert.equal(classifyWebSessionDisconnect({ error: { output: { statusCode: 408 } } }), "reconnectable");
+  assert.equal(classifyWebSessionDisconnect({ output: { statusCode: 503 } }), "reconnectable");
+  assert.equal(classifyWebSessionDisconnect({ statusCode: 515 }), "reconnectable");
+
+  assert.equal(classifyWebSessionDisconnect({ output: { statusCode: 401 } }), "qr_required");
+  assert.equal(classifyWebSessionDisconnect({ output: { statusCode: 403 } }), "qr_required");
+  assert.equal(classifyWebSessionDisconnect({ output: { statusCode: 411 } }), "qr_required");
+  assert.equal(classifyWebSessionDisconnect({ output: { statusCode: 440 } }), "qr_required");
+  assert.equal(classifyWebSessionDisconnect({ output: { statusCode: 500 } }), "qr_required");
 });
 
 test("web session QR memory store expires without persistence", () => {

@@ -1,4 +1,5 @@
 import type { WebSessionAuthStore } from "../../../whatsapp-agent/src/web-session/webSessionAuthStore.js";
+import crypto from "node:crypto";
 
 type BaileysAuthModuleLike = {
   BufferJSON: {
@@ -73,6 +74,20 @@ function createSignalKeyStoreLogger(logger?: AuthStateLogger): AuthStateLogger {
   return wrapped;
 }
 
+function sanitizeScope(scope: BaileysAuthStateScope) {
+  const hash = crypto
+    .createHash("sha256")
+    .update(`${scope.tenantKey}:${scope.channelAccountId}`)
+    .digest("hex")
+    .slice(0, 12);
+  const digits = scope.channelAccountId.replace(/\D/g, "");
+  return {
+    tenantKey: scope.tenantKey,
+    channelAccountRef: hash,
+    channelAccountIdLast4: digits.length >= 4 ? digits.slice(-4) : null,
+  };
+}
+
 export async function createBaileysAuthState(params: {
   module: BaileysAuthModuleLike;
   store: WebSessionAuthStore;
@@ -101,8 +116,7 @@ export async function createBaileysAuthState(params: {
       }
       params.logger?.info?.({
         event: "whatsapp.web.auth.keys_get",
-        tenantKey: params.scope.tenantKey,
-        channelAccountId: params.scope.channelAccountId,
+        ...sanitizeScope(params.scope),
         keyType: type,
         requestedCount: ids.length,
         foundCount: Object.keys(values).length,
@@ -128,8 +142,7 @@ export async function createBaileysAuthState(params: {
       }
       params.logger?.info?.({
         event: "whatsapp.web.auth.keys_set",
-        tenantKey: params.scope.tenantKey,
-        channelAccountId: params.scope.channelAccountId,
+        ...sanitizeScope(params.scope),
         summary,
       });
       await save();
@@ -146,8 +159,7 @@ export async function createBaileysAuthState(params: {
     mergeCredentials(patch: Record<string, unknown>) {
       params.logger?.info?.({
         event: "whatsapp.web.auth.creds_update",
-        tenantKey: params.scope.tenantKey,
-        channelAccountId: params.scope.channelAccountId,
+        ...sanitizeScope(params.scope),
         keys: Object.keys(patch).sort(),
         hasMe: Boolean(patch.me),
         registered: patch.registered === true ? true : patch.registered === false ? false : null,

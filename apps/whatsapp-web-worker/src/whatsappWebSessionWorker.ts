@@ -13,6 +13,7 @@ import {
 import {
   calculateWebSessionReconnectBackoff,
   classifyWebSessionDisconnect,
+  extractWebSessionDisconnectInfo,
   isWebSessionConnectRequested,
   readWebSessionLifecycle,
 } from "../../whatsapp-agent/src/web-session/webSessionLifecycle.js";
@@ -20,10 +21,7 @@ import {
   extractWebSessionObservedIdentity,
   reconcileWebSessionObservedIdentity,
 } from "../../whatsapp-agent/src/web-session/webSessionIdentity.js";
-import {
-  createQueuedWebSessionAuthStore,
-  createStagedWebSessionAuthStore,
-} from "../../whatsapp-agent/src/web-session/webSessionAuthStore.js";
+import { createDurableStagedWebSessionAuthStore } from "../../whatsapp-agent/src/web-session/webSessionAuthStore.js";
 import {
   clearWebSessionQrForRuntime,
   markWebSessionRuntimeState,
@@ -100,6 +98,27 @@ const STALE_ACTIVE_CONNECTING_TIMEOUT_MS = 45_000;
 const DEFAULT_SEND_TEXT_TIMEOUT_MS = 15_000;
 const DEFAULT_SEND_MEDIA_TIMEOUT_MS = 30_000;
 const DEFAULT_AGENT_RECEIPT_REALTIME_TIMEOUT_MS = 2_000;
+
+function sanitizeWebSessionAccountRef(params: {
+  tenantKey: string;
+  channelAccountId: string;
+}) {
+  const hash = crypto
+    .createHash("sha256")
+    .update(`${params.tenantKey}:${params.channelAccountId}`)
+    .digest("hex")
+    .slice(0, 12);
+  const digits = params.channelAccountId.replace(/\D/g, "");
+  return {
+    tenantKey: params.tenantKey,
+    channelAccountRef: hash,
+    channelAccountIdLast4: digits.length >= 4 ? digits.slice(-4) : null,
+  };
+}
+
+function webSessionLogAccount(account: Pick<EligibleWebSessionAccount, "tenantKey" | "channelAccountId">) {
+  return sanitizeWebSessionAccountRef(account);
+}
 
 export function setActiveWebSessionConnectionForTesting(accountId: string, active: ActiveConnection | null) {
   if (!active) {
@@ -216,8 +235,7 @@ async function notifyAgentWebSessionReceiptRealtime(params: {
     if (!response.ok) {
       logger.warn({
         event: "whatsapp.web.receipt.realtime_notify_failed",
-        tenantKey: params.account.tenantKey,
-        channelAccountId: params.account.channelAccountId,
+        ...webSessionLogAccount(params.account),
         status: params.payload.status,
         reason: `http_${response.status}`,
       });
@@ -225,8 +243,7 @@ async function notifyAgentWebSessionReceiptRealtime(params: {
   } catch (error) {
     logger.warn({
       event: "whatsapp.web.receipt.realtime_notify_failed",
-      tenantKey: params.account.tenantKey,
-      channelAccountId: params.account.channelAccountId,
+      ...webSessionLogAccount(params.account),
       status: params.payload.status,
       reason: error instanceof Error ? error.name : "unknown_error",
     });
@@ -396,8 +413,7 @@ export async function sendTextViaActiveWebSession(params: {
     const externalMessageId = extractExternalMessageId(result);
     logger.info({
       event: "whatsapp.web.outbound.sent",
-      tenantKey: params.tenantKey,
-      channelAccountId: params.channelAccountId,
+      ...sanitizeWebSessionAccountRef(params),
       requestId: params.requestId,
       hasExternalMessageId: Boolean(externalMessageId),
       hasReplyReference: Boolean(params.replyTo),
@@ -407,8 +423,7 @@ export async function sendTextViaActiveWebSession(params: {
     const reason = error instanceof Error ? error.message : "unknown_error";
     logger.warn({
       event: "whatsapp.web.outbound.failed",
-      tenantKey: params.tenantKey,
-      channelAccountId: params.channelAccountId,
+      ...sanitizeWebSessionAccountRef(params),
       requestId: params.requestId,
       reason,
     });
@@ -487,8 +502,7 @@ export async function sendMediaViaActiveWebSession(params: {
   } catch (error) {
     logger.warn({
       event: "whatsapp.web.outbound.media.failed",
-      tenantKey: params.tenantKey,
-      channelAccountId: params.channelAccountId,
+      ...sanitizeWebSessionAccountRef(params),
       requestId: params.requestId,
       reason: error instanceof Error ? error.message : "media_read_failed",
     });
@@ -516,8 +530,7 @@ export async function sendMediaViaActiveWebSession(params: {
     const externalMessageId = extractExternalMessageId(result);
     logger.info({
       event: "whatsapp.web.outbound.media.sent",
-      tenantKey: params.tenantKey,
-      channelAccountId: params.channelAccountId,
+      ...sanitizeWebSessionAccountRef(params),
       requestId: params.requestId,
       mediaKind: params.mediaKind,
       hasExternalMessageId: Boolean(externalMessageId),
@@ -528,8 +541,7 @@ export async function sendMediaViaActiveWebSession(params: {
     const reason = error instanceof Error ? error.message : "unknown_error";
     logger.warn({
       event: "whatsapp.web.outbound.media.failed",
-      tenantKey: params.tenantKey,
-      channelAccountId: params.channelAccountId,
+      ...sanitizeWebSessionAccountRef(params),
       requestId: params.requestId,
       mediaKind: params.mediaKind,
       reason,
@@ -566,8 +578,7 @@ async function recordWebSessionWorkerEvent(params: {
   } catch (error) {
     logger.warn({
       event: "whatsapp.web.session.event_write_failed",
-      tenantKey: params.account.tenantKey,
-      channelAccountId: params.account.channelAccountId,
+      ...webSessionLogAccount(params.account),
       eventName: params.eventName,
       message: error instanceof Error ? error.message : "unknown_error",
     });
@@ -663,8 +674,7 @@ async function reconcileActiveWebSessionConnections(prisma: WorkerPrismaClient) 
       });
       logger.warn({
         event: "whatsapp.web.session.active_timeout",
-        tenantKey: active.tenantKey,
-        channelAccountId: active.channelAccountId,
+        ...sanitizeWebSessionAccountRef(active),
       });
     }
     activeConnections.delete(accountId);
@@ -672,8 +682,7 @@ async function reconcileActiveWebSessionConnections(prisma: WorkerPrismaClient) 
     await active.release();
     logger.info({
       event: "whatsapp.web.session.active_stopped",
-      tenantKey: active.tenantKey,
-      channelAccountId: active.channelAccountId,
+      ...sanitizeWebSessionAccountRef(active),
     });
   }
 }
@@ -701,8 +710,7 @@ export async function runWhatsAppWebSessionWorker(params: {
         if (!lock.acquired) {
           logger.info({
             event: "whatsapp.web.session.lock_skipped",
-            tenantKey: account.tenantKey,
-            channelAccountId: account.channelAccountId,
+            ...webSessionLogAccount(account),
             lockHash: lock.lockHash,
           });
           continue;
@@ -711,8 +719,7 @@ export async function runWhatsAppWebSessionWorker(params: {
           if (activeConnections.has(account.id)) continue;
           logger.info({
             event: "whatsapp.web.session.connecting",
-            tenantKey: account.tenantKey,
-            channelAccountId: account.channelAccountId,
+            ...webSessionLogAccount(account),
             observedState: account.lifecycle.observedState,
           });
           activeConnections.set(account.id, {
@@ -744,8 +751,7 @@ export async function runWhatsAppWebSessionWorker(params: {
           });
           logger.error({
             event: "whatsapp.web.session.connect_error",
-            tenantKey: account.tenantKey,
-            channelAccountId: account.channelAccountId,
+            ...webSessionLogAccount(account),
             message: error instanceof Error ? error.message : "unknown_error",
           });
         }
@@ -782,6 +788,13 @@ async function connectWebSessionAccount(params: {
   let closingAfterIdentityConflict = false;
   let inboundCutoverAt: Date | null = null;
   let effectiveAccount = params.account;
+  const accountEventRef = (account: Pick<EligibleWebSessionAccount, "tenantKey" | "channelAccountId">) => {
+    const sanitized = webSessionLogAccount(account);
+    return {
+      channelAccountRef: sanitized.channelAccountRef,
+      channelAccountIdLast4: sanitized.channelAccountIdLast4,
+    };
+  };
   const clearConnectionOpenTimer = () => {
     if (!connectionOpenTimer) return;
     clearTimeout(connectionOpenTimer);
@@ -797,7 +810,7 @@ async function connectWebSessionAccount(params: {
     if (socket) closeBaileysSocket(socket);
   };
   const module = await import("@whiskeysockets/baileys");
-  const authStore = createStagedWebSessionAuthStore(createQueuedWebSessionAuthStore(params.prisma));
+  const authStore = createDurableStagedWebSessionAuthStore({ prisma: params.prisma });
   const auth = await createBaileysAuthState({
     module: module as unknown as Parameters<typeof createBaileysAuthState>[0]["module"],
     store: authStore.store,
@@ -818,11 +831,11 @@ async function connectWebSessionAccount(params: {
     account: params.account,
     requestSuffix: "connecting",
     eventName: "whatsapp.web_session.connecting",
-    payloadJson: {
-      channel: "whatsapp",
-      provider: "web_session",
-      channelAccountId: params.account.channelAccountId,
-    },
+      payloadJson: {
+        channel: "whatsapp",
+        provider: "web_session",
+        ...accountEventRef(params.account),
+      },
   });
   connectionOpenTimer = setTimeout(() => {
     void (async () => {
@@ -839,7 +852,7 @@ async function connectWebSessionAccount(params: {
         payloadJson: {
           channel: "whatsapp",
           provider: "web_session",
-          channelAccountId: params.account.channelAccountId,
+          ...accountEventRef(params.account),
           reason: "connection_open_timeout",
         },
       });
@@ -872,7 +885,7 @@ async function connectWebSessionAccount(params: {
         payloadJson: {
           channel: "whatsapp",
           provider: "web_session",
-          channelAccountId: params.account.channelAccountId,
+          ...accountEventRef(params.account),
           qrStored: false,
         },
       });
@@ -884,8 +897,7 @@ async function connectWebSessionAccount(params: {
     onConnectionUpdate: async (update) => {
       logger.info({
         event: "whatsapp.web.connection.update",
-        tenantKey: effectiveAccount.tenantKey,
-        channelAccountId: effectiveAccount.channelAccountId,
+        ...webSessionLogAccount(effectiveAccount),
         connection: typeof update.connection === "string" ? update.connection : null,
         receivedPendingNotifications: update.receivedPendingNotifications === true,
         isNewLogin: update.isNewLogin === true,
@@ -928,8 +940,7 @@ async function connectWebSessionAccount(params: {
     onSocketNode: async (node) => {
       logger.info({
         event: "whatsapp.web.socket.node",
-        tenantKey: effectiveAccount.tenantKey,
-        channelAccountId: effectiveAccount.channelAccountId,
+        ...webSessionLogAccount(effectiveAccount),
         name: node.name,
         tag: node.tag,
         type: node.type,
@@ -946,8 +957,7 @@ async function connectWebSessionAccount(params: {
       const messagesUpdate = (events as { "messages.update"?: unknown })["messages.update"];
       logger.info({
         event: "whatsapp.web.event_batch",
-        tenantKey: effectiveAccount.tenantKey,
-        channelAccountId: effectiveAccount.channelAccountId,
+        ...webSessionLogAccount(effectiveAccount),
         eventNames,
         messagesUpsertCount: Array.isArray((events as { "messages.upsert"?: { messages?: unknown[] } })["messages.upsert"]?.messages)
           ? (events as { "messages.upsert"?: { messages?: unknown[] } })["messages.upsert"]?.messages?.length
@@ -972,8 +982,7 @@ async function connectWebSessionAccount(params: {
         onBlocked: async (lock) => {
           logger.warn({
             event: "whatsapp.web.identity.lock_skipped",
-            tenantKey: params.account.tenantKey,
-            channelAccountId: params.account.channelAccountId,
+            ...webSessionLogAccount(params.account),
             lockHash: lock.lockHash,
           });
         },
@@ -989,7 +998,10 @@ async function connectWebSessionAccount(params: {
         ? reconciliationAttempt.value
         : { ok: false as const, error: "web_session_identity_lock_unavailable" as const };
       if (!reconciliation.ok) {
-        authStore.discard();
+        await authStore.discardPersisted?.({
+          tenantKey: params.account.tenantKey,
+          channelAccountId: params.account.channelAccountId,
+        });
         await markWebSessionRuntimeState({
           prisma: params.prisma,
           accountId: params.account.id,
@@ -1005,7 +1017,7 @@ async function connectWebSessionAccount(params: {
           payloadJson: {
             channel: "whatsapp",
             provider: "web_session",
-            channelAccountId: params.account.channelAccountId,
+            ...accountEventRef(params.account),
             reason: reconciliation.error,
             conflict: reconciliation.error === "web_session_identity_conflict",
           },
@@ -1020,7 +1032,6 @@ async function connectWebSessionAccount(params: {
         channelAccountId: params.account.channelAccountId,
       });
       if (!promotion.ok) {
-        authStore.discard();
         await markWebSessionRuntimeState({
           prisma: params.prisma,
           accountId: params.account.id,
@@ -1036,7 +1047,7 @@ async function connectWebSessionAccount(params: {
           payloadJson: {
             channel: "whatsapp",
             provider: "web_session",
-            channelAccountId: params.account.channelAccountId,
+            ...accountEventRef(params.account),
             reason: promotion.error,
           },
         });
@@ -1065,7 +1076,7 @@ async function connectWebSessionAccount(params: {
         payloadJson: {
           channel: "whatsapp",
           provider: "web_session",
-          channelAccountId: effectiveAccount.channelAccountId,
+          ...accountEventRef(effectiveAccount),
           identityAction: reconciliation.action,
         },
       });
@@ -1076,8 +1087,15 @@ async function connectWebSessionAccount(params: {
         await finishTerminal();
         return;
       }
-      const classification = classifyWebSessionDisconnect(reason);
+      const disconnectInfo = extractWebSessionDisconnectInfo(reason);
+      const classification = disconnectInfo.classification;
       clearWebSessionQrForRuntime(params.account.id);
+      if (classification === "qr_required") {
+        await authStore.store.clear({
+          tenantKey: params.account.tenantKey,
+          channelAccountId: params.account.channelAccountId,
+        });
+      }
       const stillRequested = await isWebSessionStillRequested({ prisma: params.prisma, accountId: params.account.id });
       const runtimeState = resolveWebSessionDisconnectRuntimeState({
         classification,
@@ -1100,9 +1118,12 @@ async function connectWebSessionAccount(params: {
         payloadJson: {
           channel: "whatsapp",
           provider: "web_session",
-          channelAccountId: effectiveAccount.channelAccountId,
+          channelAccountRef: webSessionLogAccount(effectiveAccount).channelAccountRef,
+          channelAccountIdLast4: webSessionLogAccount(effectiveAccount).channelAccountIdLast4,
           reason: runtimeState.eventReason,
           rawClassification: classification,
+          disconnectReasonCode: disconnectInfo.reasonCode,
+          disconnectStatusCode: disconnectInfo.statusCode,
         },
       });
       await finishTerminal();
@@ -1200,8 +1221,7 @@ async function persistWebSessionReceipt(params: {
   }
   logger.info({
     event: "whatsapp.web.receipt.processed",
-    tenantKey: params.account.tenantKey,
-    channelAccountId: params.account.channelAccountId,
+    ...webSessionLogAccount(params.account),
     source: params.source,
     status: params.status,
     updated: result.updated,
@@ -1317,8 +1337,7 @@ async function attachInboundMedia(params: {
   if (typeof downloadMediaMessage !== "function") {
     logger.warn({
       event: "whatsapp.web.inbound.media.download_failed",
-      tenantKey: params.account.tenantKey,
-      channelAccountId: params.account.channelAccountId,
+      ...webSessionLogAccount(params.account),
       reason: "download_media_unavailable",
       mediaKind: descriptor.kind,
     });
@@ -1354,8 +1373,7 @@ async function attachInboundMedia(params: {
     });
     logger.info({
       event: "whatsapp.web.inbound.media.persisted",
-      tenantKey: params.account.tenantKey,
-      channelAccountId: params.account.channelAccountId,
+      ...webSessionLogAccount(params.account),
       mediaKind: stored.kind,
       mimeType: stored.mimeType,
       sizeBytes: stored.sizeBytes,
@@ -1367,8 +1385,7 @@ async function attachInboundMedia(params: {
   } catch (error) {
     logger.warn({
       event: "whatsapp.web.inbound.media.download_failed",
-      tenantKey: params.account.tenantKey,
-      channelAccountId: params.account.channelAccountId,
+      ...webSessionLogAccount(params.account),
       mediaKind: descriptor.kind,
       reason: error instanceof Error ? error.message : "unknown_error",
     });
@@ -1388,8 +1405,7 @@ async function handleWebSessionMessagesUpdate(params: {
   const updateSummary = summarizeMessageUpdates(params.event);
   logger.info({
     event: "whatsapp.web.inbound.update_received",
-    tenantKey: params.account.tenantKey,
-    channelAccountId: params.account.channelAccountId,
+    ...webSessionLogAccount(params.account),
     count: params.event.length,
     messagePayloadCount: messages.length,
     updateSummary,
@@ -1416,8 +1432,7 @@ async function handleWebSessionMessagesUpsert(params: {
   const messages = Array.isArray(params.event.messages) ? params.event.messages : [];
   logger.info({
     event: "whatsapp.web.inbound.upsert_received",
-    tenantKey: params.account.tenantKey,
-    channelAccountId: params.account.channelAccountId,
+    ...webSessionLogAccount(params.account),
     upsertType: params.event.type ?? null,
     count: messages.length,
   });
@@ -1430,7 +1445,8 @@ async function handleWebSessionMessagesUpsert(params: {
       payloadJson: {
         channel: "whatsapp",
         provider: "web_session",
-        channelAccountId: params.account.channelAccountId,
+        channelAccountRef: webSessionLogAccount(params.account).channelAccountRef,
+        channelAccountIdLast4: webSessionLogAccount(params.account).channelAccountIdLast4,
         reason: "non_notify_upsert",
         upsertType: params.event.type,
         count: messages.length,
@@ -1461,16 +1477,14 @@ async function handleWebSessionMessagesUpsert(params: {
       });
       logger.info({
         event: "whatsapp.web.inbound.processed",
-        tenantKey: params.account.tenantKey,
-        channelAccountId: params.account.channelAccountId,
+        ...webSessionLogAccount(params.account),
         action: result.action,
         reason: "reason" in result ? result.reason : null,
       });
     } catch (error) {
       logger.error({
         event: "whatsapp.web.inbound.process_failed",
-        tenantKey: params.account.tenantKey,
-        channelAccountId: params.account.channelAccountId,
+        ...webSessionLogAccount(params.account),
         errorName: error instanceof Error ? error.name : "unknown_error",
         message: error instanceof Error ? error.message : "unknown_error",
       });

@@ -71,6 +71,18 @@ function webSessionErrorLabel(errorCode: string | null | undefined) {
   }
 }
 
+function authStateLabel(status: AppWhatsAppWebSessionStatus | null) {
+  if (status?.authState.approvedConfigured || status?.authState.configured) return "Sessão aprovada salva";
+  if (status?.authState.stagingConfigured) return "Pareamento em andamento salvo";
+  return "Sem sessão salva";
+}
+
+function authStateTone(status: AppWhatsAppWebSessionStatus | null) {
+  if (status?.authState.approvedConfigured || status?.authState.configured) return "success";
+  if (status?.authState.stagingConfigured) return "warning";
+  return "neutral";
+}
+
 function Pill({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "success" | "warning" | "danger" }) {
   const classes =
     tone === "success"
@@ -373,7 +385,7 @@ export default function AppWhatsAppChannelSettingsPage() {
             <div className="flex flex-wrap gap-2">
               <Pill label={stateLabel(currentState)} tone={stateTone(currentState)} />
               <Pill label={status?.featureEnabled ? "Feature habilitada" : "Feature desligada"} tone={status?.featureEnabled ? "success" : "warning"} />
-              <Pill label={status?.authState.configured ? "Sessão salva" : "Sem sessão salva"} />
+              <Pill label={authStateLabel(status)} tone={authStateTone(status)} />
               {readOnly ? <Pill label="Somente leitura" tone="warning" /> : null}
             </div>
           </div>

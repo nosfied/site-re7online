@@ -110,6 +110,14 @@ export function isWebSessionConnectRequested(metadata: unknown) {
   return readWebSessionLifecycle(metadata).desiredState === "CONNECTED";
 }
 
+export type WebSessionDisconnectClassification = "reconnectable" | "qr_required" | "terminal_manual";
+
+export type WebSessionDisconnectInfo = {
+  statusCode: number | null;
+  reasonCode: string | null;
+  classification: WebSessionDisconnectClassification;
+};
+
 function disconnectReasonText(reason: unknown): string {
   if (typeof reason === "string") return reason;
   if (reason instanceof Error) return reason.message;
@@ -126,24 +134,69 @@ function disconnectReasonText(reason: unknown): string {
   ].filter((value) => value !== undefined && value !== null).join(" ");
 }
 
-export function classifyWebSessionDisconnect(reason: unknown): "reconnectable" | "qr_required" | "terminal_manual" {
+function getNestedRecord(value: unknown, key: string): Record<string, unknown> {
+  const record = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const nested = record[key];
+  return nested && typeof nested === "object" && !Array.isArray(nested)
+    ? nested as Record<string, unknown>
+    : {};
+}
+
+function normalizeStatusCode(value: unknown) {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number.parseInt(value, 10) : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function extractDisconnectStatusCode(reason: unknown): number | null {
+  if (!reason || typeof reason !== "object") return null;
+  const record = reason as Record<string, unknown>;
+  return normalizeStatusCode(record.statusCode) ??
+    normalizeStatusCode(record.status) ??
+    normalizeStatusCode(getNestedRecord(reason, "output").statusCode) ??
+    normalizeStatusCode(getNestedRecord(reason, "output").status) ??
+    normalizeStatusCode(getNestedRecord(record.error, "output").statusCode) ??
+    normalizeStatusCode(getNestedRecord(record.lastDisconnect, "error").statusCode) ??
+    normalizeStatusCode(getNestedRecord(getNestedRecord(record.lastDisconnect, "error"), "output").statusCode);
+}
+
+function classifyByDisconnectStatusCode(statusCode: number): WebSessionDisconnectClassification | null {
+  // @whiskeysockets/baileys@7.0.0-rc13 DisconnectReason:
+  // 408 timedOut/connectionLost, 428 connectionClosed, 503 unavailableService, 515 restartRequired.
+  if (statusCode === 408 || statusCode === 428 || statusCode === 503 || statusCode === 515) return "reconnectable";
+  // 401 loggedOut, 403 forbidden, 411 multideviceMismatch, 440 connectionReplaced, 500 badSession.
+  if (statusCode === 401 || statusCode === 403 || statusCode === 411 || statusCode === 440 || statusCode === 500) return "qr_required";
+  return null;
+}
+
+export function extractWebSessionDisconnectInfo(reason: unknown): WebSessionDisconnectInfo {
   const normalized = disconnectReasonText(reason).toLowerCase();
+  const statusCode = extractDisconnectStatusCode(reason);
   if (
     normalized.includes("logout") ||
     normalized.includes("logged_out") ||
     normalized.includes("invalid") ||
     normalized.includes("401")
   ) {
-    return "qr_required";
+    return { statusCode, reasonCode: statusCode ? `baileys_${statusCode}` : "logged_out", classification: "qr_required" };
   }
   if (
     normalized.includes("manual") ||
     normalized.includes("disabled") ||
     normalized.includes("admin_disconnect")
   ) {
-    return "terminal_manual";
+    return { statusCode, reasonCode: "admin_disconnect", classification: "terminal_manual" };
   }
-  return "reconnectable";
+  if (statusCode !== null) {
+    const classification = classifyByDisconnectStatusCode(statusCode);
+    if (classification) return { statusCode, reasonCode: `baileys_${statusCode}`, classification };
+  }
+  return { statusCode, reasonCode: statusCode ? `baileys_${statusCode}` : "unknown_disconnect", classification: "reconnectable" };
+}
+
+export function classifyWebSessionDisconnect(reason: unknown): WebSessionDisconnectClassification {
+  return extractWebSessionDisconnectInfo(reason).classification;
 }
 
 export function calculateWebSessionReconnectBackoff(input: WebSessionBackoffInput) {

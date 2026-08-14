@@ -1617,8 +1617,12 @@ export type AppWhatsAppWebSessionStatus = {
   lifecycle: AppWhatsAppWebSessionLifecycle;
   authState: {
     configured: boolean;
+    approvedConfigured?: boolean;
+    stagingConfigured?: boolean;
     secretKind: string;
+    stagingSecretKind?: string;
     updatedAt: string | null;
+    stagingUpdatedAt?: string | null;
   };
   qr: {
     available: boolean;

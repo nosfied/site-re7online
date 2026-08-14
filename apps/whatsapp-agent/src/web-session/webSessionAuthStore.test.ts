@@ -1,13 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  clearAllWebSessionAuthState,
   clearWebSessionAuthState,
+  createDurableStagedWebSessionAuthStore,
   createQueuedWebSessionAuthStore,
   createStagedWebSessionAuthStore,
   loadWebSessionAuthState,
   saveWebSessionAuthState,
   type WebSessionAuthStore,
   WEB_SESSION_AUTH_SECRET_KIND,
+  WEB_SESSION_AUTH_STAGING_SECRET_KIND,
 } from "./webSessionAuthStore.js";
 import { decryptChannelAccountSecret } from "../channels/channelAccountSecretCrypto.js";
 
@@ -31,7 +34,7 @@ function makePrisma() {
   };
   type FindFirstResult = Promise<
     | (Account & {
-        secrets?: Array<{ secretKind: string; status: string; secretCiphertext: string | null }>;
+        secrets?: Array<{ secretKind: string; status: string; secretCiphertext: string | null; updatedAt?: Date }>;
       })
     | null
   >;
@@ -69,6 +72,7 @@ function makePrisma() {
       secretCiphertext: string | null;
       encryptionKeyRef: string | null;
       status: string;
+      updatedAt?: Date;
     }>,
   };
   const prisma = {
@@ -86,8 +90,8 @@ function makePrisma() {
         const index = state.secrets.findIndex(
           (item) => item.channelAccountId === key.channelAccountId && item.secretKind === key.secretKind
         );
-        if (index >= 0) state.secrets[index] = { ...state.secrets[index], ...args.update };
-        else state.secrets.push({ ...args.create });
+        if (index >= 0) state.secrets[index] = { ...state.secrets[index], ...args.update, updatedAt: new Date() };
+        else state.secrets.push({ ...args.create, updatedAt: new Date() });
       },
       deleteMany: async (args: { where: { channelAccountId: string; secretKind: string } }) => {
         const before = state.secrets.length;
@@ -123,6 +127,7 @@ function makePrisma() {
           secretKind: secret.secretKind,
           status: secret.status,
           secretCiphertext: secret.secretCiphertext,
+          updatedAt: secret.updatedAt,
         })),
     };
   };
@@ -287,4 +292,135 @@ test("staged web session auth store discards conflict state without touching per
   assert.equal(staged.hasStagedState(), false);
   assert.equal(staged.isPromoted(), false);
   assert.equal(writes.length, 0);
+});
+
+test("durable staged web session auth store persists encrypted staging and reloads before promotion", async () => {
+  const previous = process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+  process.env.CHANNEL_ACCOUNT_SECRET_KEY = "unit-test-channel-account-secret-key";
+  let now = Date.parse("2026-08-14T10:00:00.000Z");
+  try {
+    const prisma = makePrisma();
+    const scope = { tenantKey: "tenant-a", channelAccountId: "session-a" };
+    const staged = createDurableStagedWebSessionAuthStore({
+      prisma: prisma as never,
+      ttlMs: 45 * 60 * 1000,
+      now: () => now,
+    });
+    assert.equal(await staged.store.load(scope), null);
+    assert.deepEqual(await staged.store.save({ ...scope, state: { creds: { registered: true }, keys: { a: "secret-key-material" } } }), { ok: true });
+    assert.equal(prisma.state.secrets.length, 1);
+    assert.equal(prisma.state.secrets[0]?.secretKind, WEB_SESSION_AUTH_STAGING_SECRET_KIND);
+    assert.equal(JSON.stringify(prisma.state.secrets).includes("secret-key-material"), false);
+
+    now += 1000;
+    const reloaded = createDurableStagedWebSessionAuthStore({
+      prisma: prisma as never,
+      ttlMs: 45 * 60 * 1000,
+      now: () => now,
+    });
+    assert.deepEqual(await reloaded.store.load(scope), { creds: { registered: true }, keys: { a: "secret-key-material" } });
+    assert.equal(reloaded.hasStagedState(), true);
+    assert.equal(reloaded.isPromoted(), false);
+  } finally {
+    if (previous === undefined) delete process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+    else process.env.CHANNEL_ACCOUNT_SECRET_KEY = previous;
+  }
+});
+
+test("durable staged web session auth store expires stale staging without clearing approved auth", async () => {
+  const previous = process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+  process.env.CHANNEL_ACCOUNT_SECRET_KEY = "unit-test-channel-account-secret-key";
+  let now = Date.parse("2026-08-14T10:00:00.000Z");
+  try {
+    const prisma = makePrisma();
+    const scope = { tenantKey: "tenant-a", channelAccountId: "session-a" };
+    const staged = createDurableStagedWebSessionAuthStore({ prisma: prisma as never, ttlMs: 1000, now: () => now });
+    await staged.store.save({ ...scope, state: { staging: true } });
+    await saveWebSessionAuthState({ prisma: prisma as never, ...scope, state: { approved: true } });
+    assert.equal(prisma.state.secrets.length, 2);
+
+    await clearWebSessionAuthState({ prisma: prisma as never, ...scope });
+    now += 2000;
+    const expired = createDurableStagedWebSessionAuthStore({ prisma: prisma as never, ttlMs: 1000, now: () => now });
+    assert.equal(await expired.store.load(scope), null);
+    assert.equal(prisma.state.secrets.length, 0);
+  } finally {
+    if (previous === undefined) delete process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+    else process.env.CHANNEL_ACCOUNT_SECRET_KEY = previous;
+  }
+});
+
+test("durable staged web session auth store promotes staging and removes temporary secret", async () => {
+  const previous = process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+  process.env.CHANNEL_ACCOUNT_SECRET_KEY = "unit-test-channel-account-secret-key";
+  try {
+    const prisma = makePrisma();
+    const scope = { tenantKey: "tenant-a", channelAccountId: "session-a" };
+    const staged = createDurableStagedWebSessionAuthStore({ prisma: prisma as never });
+    await staged.store.save({ ...scope, state: { approvedAfterIdentity: true } });
+
+    assert.deepEqual(await staged.promote(scope), { ok: true });
+    assert.equal(staged.isPromoted(), true);
+    assert.equal(prisma.state.secrets.length, 1);
+    assert.equal(prisma.state.secrets[0]?.secretKind, WEB_SESSION_AUTH_SECRET_KIND);
+    const loaded = await loadWebSessionAuthState({ prisma: prisma as never, ...scope });
+    assert.equal(loaded.ok, true);
+    if (loaded.ok) assert.deepEqual(loaded.state, { approvedAfterIdentity: true });
+    const staging = await loadWebSessionAuthState({
+      prisma: prisma as never,
+      ...scope,
+      secretKind: WEB_SESSION_AUTH_STAGING_SECRET_KIND,
+    });
+    assert.equal(staging.ok, true);
+    if (staging.ok) assert.equal(staging.state, null);
+  } finally {
+    if (previous === undefined) delete process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+    else process.env.CHANNEL_ACCOUNT_SECRET_KEY = previous;
+  }
+});
+
+test("durable staged web session auth store discards conflicted staging and preserves approved auth", async () => {
+  const previous = process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+  process.env.CHANNEL_ACCOUNT_SECRET_KEY = "unit-test-channel-account-secret-key";
+  try {
+    const prisma = makePrisma();
+    const scope = { tenantKey: "tenant-a", channelAccountId: "session-a" };
+    await saveWebSessionAuthState({ prisma: prisma as never, ...scope, state: { approved: true } });
+    const staged = createDurableStagedWebSessionAuthStore({ prisma: prisma as never });
+    await staged.store.save({ ...scope, state: { conflict: true } });
+    assert.equal(prisma.state.secrets.length, 2);
+
+    assert.deepEqual(await staged.discardPersisted?.(scope), { ok: true });
+    assert.equal(prisma.state.secrets.length, 1);
+    assert.equal(prisma.state.secrets[0]?.secretKind, WEB_SESSION_AUTH_SECRET_KIND);
+    const approved = await loadWebSessionAuthState({ prisma: prisma as never, ...scope });
+    assert.equal(approved.ok, true);
+    if (approved.ok) assert.deepEqual(approved.state, { approved: true });
+  } finally {
+    if (previous === undefined) delete process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+    else process.env.CHANNEL_ACCOUNT_SECRET_KEY = previous;
+  }
+});
+
+test("clear all web session auth state removes approved and staging secrets", async () => {
+  const previous = process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+  process.env.CHANNEL_ACCOUNT_SECRET_KEY = "unit-test-channel-account-secret-key";
+  try {
+    const prisma = makePrisma();
+    const scope = { tenantKey: "tenant-a", channelAccountId: "session-a" };
+    await saveWebSessionAuthState({ prisma: prisma as never, ...scope, state: { approved: true } });
+    await saveWebSessionAuthState({
+      prisma: prisma as never,
+      ...scope,
+      secretKind: WEB_SESSION_AUTH_STAGING_SECRET_KIND,
+      state: { staging: true },
+    });
+    assert.equal(prisma.state.secrets.length, 2);
+
+    assert.deepEqual(await clearAllWebSessionAuthState({ prisma: prisma as never, ...scope }), { ok: true });
+    assert.equal(prisma.state.secrets.length, 0);
+  } finally {
+    if (previous === undefined) delete process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+    else process.env.CHANNEL_ACCOUNT_SECRET_KEY = previous;
+  }
 });
