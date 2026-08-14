@@ -19,6 +19,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
         handlers.set(eventName, handler as (...args: never[]) => unknown);
       },
     },
+    user: { id: "5584999997784:1@s.whatsapp.net" },
   };
   const module = {
     Browsers: {
@@ -42,6 +43,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   let socketNodeChildAttrsKeys: string[] = [];
   let socketNodeEncTypes: string[] = [];
   let batchKeys: string[] = [];
+  let connectedUserId = "";
 
   const result = await createBaileysSocketFromModule(module, {
     authState: { creds: "redacted" },
@@ -49,6 +51,10 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
     onQr: (qr) => qrValues.push(qr),
     onConnectionUpdate: () => {
       connectionUpdateSeen = true;
+    },
+    onConnected: (connectedSocket) => {
+      const user = connectedSocket.user as { id?: string } | undefined;
+      connectedUserId = user?.id ?? "";
     },
     onCredentialsUpdate: () => {
       credentialsUpdated = true;
@@ -93,6 +99,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
   assert.equal(handlers.has("process"), true);
 
   handlers.get("connection.update")?.({ qr: "qr-payload" } as never);
+  handlers.get("connection.update")?.({ connection: "open" } as never);
   await handlers.get("creds.update")?.();
   await handlers.get("messages.upsert")?.({ type: "notify", messages: [] } as never);
   await handlers.get("messages.update")?.([{ key: {}, update: {} }] as never);
@@ -109,6 +116,7 @@ test("baileys socket factory disables terminal QR and exposes safe event hooks",
 
   assert.deepEqual(qrValues, ["qr-payload"]);
   assert.equal(connectionUpdateSeen, true);
+  assert.equal(connectedUserId, "5584999997784:1@s.whatsapp.net");
   assert.equal(credentialsUpdated, true);
   assert.equal(upsertType, "notify");
   assert.equal(updateCount, 1);

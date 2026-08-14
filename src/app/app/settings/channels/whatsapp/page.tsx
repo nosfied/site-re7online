@@ -378,7 +378,7 @@ export default function AppWhatsAppChannelSettingsPage() {
                     />
                   </label>
                   <Detail label="Tipo de conexão" value="WhatsApp Business" />
-                  <Detail label="Identidade local" value={status?.account?.channelAccountId ?? "Não preparada"} />
+                  <Detail label="Identidade detectada" value={status?.account?.channelAccountId ?? "Não preparada"} />
                   <Detail label="Estado técnico" value={currentState} />
                   <Detail label="Última conexão" value={lifecycle?.lastConnectedAt} />
                   <Detail label="Última desconexão" value={lifecycle?.lastDisconnectedAt} />

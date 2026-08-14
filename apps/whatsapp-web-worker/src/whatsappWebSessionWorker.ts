@@ -16,6 +16,10 @@ import {
   isWebSessionConnectRequested,
   readWebSessionLifecycle,
 } from "../../whatsapp-agent/src/web-session/webSessionLifecycle.js";
+import {
+  extractWebSessionObservedIdentity,
+  reconcileWebSessionObservedIdentity,
+} from "../../whatsapp-agent/src/web-session/webSessionIdentity.js";
 import { acquireWebSessionAdvisoryLock } from "../../whatsapp-agent/src/web-session/webSessionAdvisoryLock.js";
 import { createQueuedWebSessionAuthStore } from "../../whatsapp-agent/src/web-session/webSessionAuthStore.js";
 import {
@@ -730,6 +734,7 @@ async function connectWebSessionAccount(params: {
   let connectionOpenTimer: ReturnType<typeof setTimeout> | null = null;
   let closingAfterConnectionOpenTimeout = false;
   let inboundCutoverAt: Date | null = null;
+  let effectiveAccount = params.account;
   const clearConnectionOpenTimer = () => {
     if (!connectionOpenTimer) return;
     clearTimeout(connectionOpenTimer);
@@ -831,8 +836,8 @@ async function connectWebSessionAccount(params: {
     onConnectionUpdate: async (update) => {
       logger.info({
         event: "whatsapp.web.connection.update",
-        tenantKey: params.account.tenantKey,
-        channelAccountId: params.account.channelAccountId,
+        tenantKey: effectiveAccount.tenantKey,
+        channelAccountId: effectiveAccount.channelAccountId,
         connection: typeof update.connection === "string" ? update.connection : null,
         receivedPendingNotifications: update.receivedPendingNotifications === true,
         isNewLogin: update.isNewLogin === true,
@@ -843,7 +848,7 @@ async function connectWebSessionAccount(params: {
     onMessagesUpsert: async (event) => {
       await handleWebSessionMessagesUpsert({
         prisma: params.prisma,
-        account: params.account,
+        account: effectiveAccount,
         event,
         authKeys: auth.state.keys as BaileysAuthKeysLike,
         cutoverAt: inboundCutoverAt,
@@ -853,12 +858,12 @@ async function connectWebSessionAccount(params: {
     onMessagesUpdate: async (event) => {
       await handleWebSessionOutboundStatusUpdates({
         prisma: params.prisma,
-        account: params.account,
+        account: effectiveAccount,
         event,
       });
       await handleWebSessionMessagesUpdate({
         prisma: params.prisma,
-        account: params.account,
+        account: effectiveAccount,
         event,
         authKeys: auth.state.keys as BaileysAuthKeysLike,
         cutoverAt: inboundCutoverAt,
@@ -868,15 +873,15 @@ async function connectWebSessionAccount(params: {
     onMessageReceiptUpdate: async (event) => {
       await handleWebSessionReceiptUpdates({
         prisma: params.prisma,
-        account: params.account,
+        account: effectiveAccount,
         event,
       });
     },
     onSocketNode: async (node) => {
       logger.info({
         event: "whatsapp.web.socket.node",
-        tenantKey: params.account.tenantKey,
-        channelAccountId: params.account.channelAccountId,
+        tenantKey: effectiveAccount.tenantKey,
+        channelAccountId: effectiveAccount.channelAccountId,
         name: node.name,
         tag: node.tag,
         type: node.type,
@@ -893,8 +898,8 @@ async function connectWebSessionAccount(params: {
       const messagesUpdate = (events as { "messages.update"?: unknown })["messages.update"];
       logger.info({
         event: "whatsapp.web.event_batch",
-        tenantKey: params.account.tenantKey,
-        channelAccountId: params.account.channelAccountId,
+        tenantKey: effectiveAccount.tenantKey,
+        channelAccountId: effectiveAccount.channelAccountId,
         eventNames,
         messagesUpsertCount: Array.isArray((events as { "messages.upsert"?: { messages?: unknown[] } })["messages.upsert"]?.messages)
           ? (events as { "messages.upsert"?: { messages?: unknown[] } })["messages.upsert"]?.messages?.length
@@ -902,11 +907,53 @@ async function connectWebSessionAccount(params: {
         messagesUpdateCount: Array.isArray(messagesUpdate) ? messagesUpdate.length : null,
       });
     },
-    onConnected: async () => {
+    onConnected: async (connectedSocket) => {
       clearConnectionOpenTimer();
       inboundCutoverAt = new Date();
       clearWebSessionQrForRuntime(params.account.id);
       await auth.save();
+      const observedIdentity = extractWebSessionObservedIdentity({
+        user: connectedSocket.user,
+        creds: auth.state.creds,
+      });
+      const reconciliation = await reconcileWebSessionObservedIdentity({
+        prisma: params.prisma,
+        accountId: params.account.id,
+        observedIdentity,
+        requestId: `web-session-identity:${params.account.id}:${Date.now()}`,
+        source: "worker_connected",
+      });
+      if (!reconciliation.ok) {
+        await markWebSessionRuntimeState({
+          prisma: params.prisma,
+          accountId: params.account.id,
+          observedState: "ERROR",
+          status: "error",
+          errorCode: reconciliation.error,
+        });
+        await recordWebSessionWorkerEvent({
+          prisma: params.prisma,
+          account: params.account,
+          requestSuffix: `identity-${reconciliation.error}`,
+          eventName: "whatsapp.web_session.error",
+          payloadJson: {
+            channel: "whatsapp",
+            provider: "web_session",
+            channelAccountId: params.account.channelAccountId,
+            reason: reconciliation.error,
+            conflict: reconciliation.error === "web_session_identity_conflict",
+          },
+        });
+        closeSocket();
+        await finishTerminal();
+        return;
+      }
+      effectiveAccount = {
+        ...effectiveAccount,
+        channelAccountId: reconciliation.channelAccountId,
+      };
+      const active = activeConnections.get(params.account.id);
+      if (active) active.channelAccountId = reconciliation.channelAccountId;
       await markWebSessionRuntimeState({
         prisma: params.prisma,
         accountId: params.account.id,
@@ -915,13 +962,14 @@ async function connectWebSessionAccount(params: {
       });
       await recordWebSessionWorkerEvent({
         prisma: params.prisma,
-        account: params.account,
+        account: effectiveAccount,
         requestSuffix: "connected",
         eventName: "whatsapp.web_session.connected",
         payloadJson: {
           channel: "whatsapp",
           provider: "web_session",
-          channelAccountId: params.account.channelAccountId,
+          channelAccountId: effectiveAccount.channelAccountId,
+          identityAction: reconciliation.action,
         },
       });
     },
@@ -953,7 +1001,7 @@ async function connectWebSessionAccount(params: {
       });
       await recordWebSessionWorkerEvent({
         prisma: params.prisma,
-        account: params.account,
+        account: effectiveAccount,
         requestSuffix: "disconnected",
         eventName: classification === "reconnectable"
           ? "whatsapp.web_session.reconnecting"
@@ -961,7 +1009,7 @@ async function connectWebSessionAccount(params: {
         payloadJson: {
           channel: "whatsapp",
           provider: "web_session",
-          channelAccountId: params.account.channelAccountId,
+          channelAccountId: effectiveAccount.channelAccountId,
           reason: classification,
         },
       });

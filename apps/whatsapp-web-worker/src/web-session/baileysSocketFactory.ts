@@ -5,7 +5,7 @@ type BaileysSocketFactoryParams = {
   browserName?: string;
   logger?: BaileysLoggerLike;
   onQr?: (qr: string) => void;
-  onConnected?: () => void;
+  onConnected?: (socket: BaileysSocketLike) => void;
   onDisconnected?: (reason: unknown) => void;
   onConnectionUpdate?: (update: BaileysConnectionUpdateEvent) => Promise<void> | void;
   onCredentialsUpdate?: (state: SerializedWebSessionAuthState) => Promise<void> | void;
@@ -77,6 +77,7 @@ export type BaileysSocketLike = {
   };
   sendMessage?: (jid: string, content: Record<string, unknown>, options?: Record<string, unknown>) => Promise<unknown>;
   updateMediaMessage?: (message: unknown) => Promise<unknown>;
+  user?: unknown;
   end?: (error?: Error) => void;
   ws?: {
     on?: (eventName: string, handler: (node: unknown) => unknown) => void;
@@ -166,7 +167,7 @@ export async function createBaileysSocketFromModule(
   socket.ev.on("connection.update", async (update: BaileysConnectionUpdateEvent) => {
     await params.onConnectionUpdate?.(update ?? {});
     if (update.qr) params.onQr?.(update.qr);
-    if (update.connection === "open") params.onConnected?.();
+    if (update.connection === "open") params.onConnected?.(socket);
     if (update.connection === "close") params.onDisconnected?.(update.lastDisconnect);
   });
   socket.ev.on("creds.update", async (update: SerializedWebSessionAuthState) => {
