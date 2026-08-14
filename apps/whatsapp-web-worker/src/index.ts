@@ -1,11 +1,14 @@
 import "dotenv/config";
 import { logger } from "../../whatsapp-agent/src/logger/logger.js";
+import { installSensitiveConsoleFilter } from "./web-session/sensitiveConsoleFilter.js";
 import {
   runWhatsAppWebSessionWorker,
   sendMediaViaActiveWebSession,
   sendTextViaActiveWebSession,
 } from "./whatsappWebSessionWorker.js";
 import { startWebSessionControlServer } from "./webSessionControlServer.js";
+
+installSensitiveConsoleFilter();
 
 const abortController = new AbortController();
 const controlPort = Number(process.env.WHATSAPP_WEB_WORKER_CONTROL_PORT ?? "");

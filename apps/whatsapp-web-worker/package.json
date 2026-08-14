@@ -9,7 +9,7 @@
     "start": "node dist/whatsapp-web-worker/src/index.js",
     "worker": "node dist/whatsapp-web-worker/src/index.js",
     "dev": "tsx src/index.ts",
-    "test": "node --import tsx --test src/whatsappWebSessionWorker.test.ts src/web-session/baileysSocketFactory.test.ts src/web-session/dedicatedPgAdvisoryLock.test.ts",
+    "test": "node --import tsx --test src/whatsappWebSessionWorker.test.ts src/web-session/baileysSocketFactory.test.ts src/web-session/dedicatedPgAdvisoryLock.test.ts src/web-session/sensitiveConsoleFilter.test.ts",
     "db:generate": "prisma generate --schema ../whatsapp-agent/prisma/schema.prisma"
   },
   "dependencies": {
