@@ -210,13 +210,15 @@ export default function AppWhatsAppChannelSettingsPage() {
   const isConfigured = Boolean(status?.configured);
   const isConnected = currentState === "CONNECTED";
   const isDisconnected = currentState === "DISCONNECTED";
-  const isConnecting = currentState === "CONNECTING" || currentState === "QR_REQUIRED" || currentState === "RECONNECTING";
+  const isQrRequired = currentState === "QR_REQUIRED";
+  const isConnecting = currentState === "CONNECTING" || currentState === "RECONNECTING";
+  const isPendingConnection = isConnecting || isQrRequired;
   const isBusy = Boolean(working);
-  const canPrepare = !readOnly && !isBusy && !isConnected && !isConnecting;
+  const canPrepare = !readOnly && !isBusy && !isConnected && !isPendingConnection;
   const canConnect = !readOnly && !isBusy && isConfigured && !isConnected && !isConnecting;
   const canDisconnect = !readOnly && !isBusy && isConfigured && !isDisconnected;
   const canReset = !readOnly && !isBusy && isConfigured;
-  const shouldAutoPoll = Boolean(session && isConfigured && (isConnecting || currentState === "CONNECTED" || currentState === "ERROR"));
+  const shouldAutoPoll = Boolean(session && isConfigured && (isPendingConnection || currentState === "CONNECTED" || currentState === "ERROR"));
   const stateChangedAt = useMemo(() => {
     const raw = status?.account?.lastUpdatedAt;
     const parsed = raw ? Date.parse(raw) : NaN;
@@ -225,10 +227,10 @@ export default function AppWhatsAppChannelSettingsPage() {
   const stateElapsedSeconds = Math.max(0, Math.floor((now - stateChangedAt) / 1000));
 
   useEffect(() => {
-    if (!isConnecting) return;
+    if (!isPendingConnection) return;
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
-  }, [isConnecting]);
+  }, [isPendingConnection]);
 
   const statusHint = useMemo(() => {
     if (!status?.configured) return "Prepare o canal para iniciar a conexão.";
