@@ -69,8 +69,14 @@ export function getAppErrorUxMessage(input: {
     case "session_expired":
     case "token_expired":
       return "Sua sessão expirou. Entre novamente.";
+    case "support_access_expired":
+      return "O acesso temporário de suporte expirou.";
+    case "support_access_revoked":
+      return "O acesso temporário de suporte foi encerrado.";
     case "window_closed":
       return "A janela de atendimento está fechada. Use um modelo aprovado para continuar a conversa.";
+    case "user_inactive":
+      return "Esta conta está inativa. Fale com um administrador para recuperar o acesso.";
     case "feature_disabled":
     case "feature_not_enabled":
       return "Este recurso não está disponível para seu perfil.";

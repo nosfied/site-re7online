@@ -24,7 +24,10 @@ export type AppSessionRejectReason =
   | "session_not_found"
   | "session_replaced"
   | "session_revoked"
-  | "session_expired";
+  | "session_expired"
+  | "user_inactive"
+  | "support_access_expired"
+  | "support_access_revoked";
 
 export type AppSessionValidation =
   | { ok: true; auth: ClientAuthContext }
@@ -120,6 +123,15 @@ async function markExpiredAppSession(params: {
 export function buildSessionExpiredMessage(reason: AppSessionRejectReason) {
   if (reason === "session_replaced") {
     return "Sua sessao foi encerrada porque houve um novo login em outro dispositivo.";
+  }
+  if (reason === "support_access_expired") {
+    return "O acesso temporario de suporte expirou.";
+  }
+  if (reason === "support_access_revoked") {
+    return "O acesso temporario de suporte foi encerrado.";
+  }
+  if (reason === "user_inactive") {
+    return "Esta conta esta inativa. Fale com um administrador para recuperar o acesso.";
   }
   if (reason === "session_expired" || reason === "token_expired") {
     return "Sessao expirada. Faca login novamente.";
@@ -311,8 +323,8 @@ export async function validateAppSessionFromRequest(
         ok: false,
         reason:
           supportSession.endReason === "grant_expired"
-            ? "session_expired"
-            : "session_revoked",
+            ? "support_access_expired"
+            : "support_access_revoked",
       };
     }
     if (
@@ -336,7 +348,7 @@ export async function validateAppSessionFromRequest(
           },
         },
       }).catch(() => null);
-      return { ok: false, reason: "session_expired" };
+      return { ok: false, reason: "support_access_expired" };
     }
     if (
       supportSession.grant.revokedAt ||
@@ -348,7 +360,10 @@ export async function validateAppSessionFromRequest(
         where: { id: supportSession.id },
         data: { endedAt: now, endReason: supportSession.grant.revokedAt ? "grant_revoked" : "support_identity_revoked" },
       }).catch(() => null);
-      return { ok: false, reason: "session_revoked" };
+      return {
+        ok: false,
+        reason: supportSession.supportUser.isActive ? "support_access_revoked" : "user_inactive",
+      };
     }
     if (now.getTime() - supportSession.lastSeenAt.getTime() > 5 * 60 * 1000) {
       await getPrisma().platformSupportSession.update({
@@ -431,7 +446,7 @@ export async function validateAppSessionFromRequest(
     return { ok: false, reason: "session_expired" };
   }
   if (!session.user.isActive || session.user.client.status !== "ACTIVE") {
-    return { ok: false, reason: "session_revoked" };
+    return { ok: false, reason: "user_inactive" };
   }
   if (now.getTime() - session.lastSeenAt.getTime() > 5 * 60 * 1000) {
     await getPrisma().appAuthSession.update({
@@ -576,7 +591,7 @@ export async function renewAppSessionFromRequest(
     return { ok: false, reason: "session_expired" };
   }
   if (!currentSession.user.isActive || currentSession.user.client.status !== "ACTIVE") {
-    return { ok: false, reason: "session_revoked" };
+    return { ok: false, reason: "user_inactive" };
   }
 
   return prisma.$transaction(async (tx): Promise<AppSessionRenewal> => {

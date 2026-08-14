@@ -1680,6 +1680,7 @@ test("platform support access is tenant-authorized, temporary, auditable, and no
 
   const afterRevoke = await requestWithBearer<ErrorPayload>("GET", "/app/tenant", entered.body.token);
   assert.equal(afterRevoke.status, 401);
+  assert.equal(getErrorCode(afterRevoke.body), "support_access_revoked");
 
   const revokeEvent = await prisma.event.findFirst({
     where: { clientId: businessClientId, eventName: "support.access.revoked" },
@@ -1725,6 +1726,7 @@ test("platform support access is tenant-authorized, temporary, auditable, and no
   );
   const expiredAccess = await requestWithBearer<ErrorPayload>("GET", "/app/tenant", expiredToken);
   assert.equal(expiredAccess.status, 401);
+  assert.equal(getErrorCode(expiredAccess.body), "support_access_expired");
   const expiredStoredSession = await prisma.platformSupportSession.findUnique({
     where: { id: expiredSession.id },
     select: { endedAt: true, endReason: true },
@@ -4243,6 +4245,14 @@ test("auth sessions expire, do not slide on lastSeen and can be explicitly renew
   assert.ok(expiredSession.revokedAt);
   assert.equal(expiredSession.revokeReason, "session_expired");
   assert.equal(expiredSession.lastSeenAt.toISOString(), expiredCreatedAt.toISOString());
+
+  await prisma.user.update({ where: { id: user.id }, data: { isActive: false } });
+  const inactiveRequest = await fetch(`${baseUrl}/app/campaigns`, {
+    headers: { authorization: `Bearer ${renewBody.token}` },
+  });
+  const inactiveBody = (await inactiveRequest.json()) as ErrorPayload;
+  assert.equal(inactiveRequest.status, 401);
+  assert.equal(getErrorCode(inactiveBody), "user_inactive");
 
   const events = await prisma.event.findMany({
     where: {

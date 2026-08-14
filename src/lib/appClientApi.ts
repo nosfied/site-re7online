@@ -20,7 +20,50 @@ import {
   type AppProfile,
   type TenantCapabilities,
 } from "@/lib/appFeatures";
+import {
+  buildAppLoginPath,
+  normalizeSessionEndReason,
+  sanitizeAppReturnTo,
+  type AppSessionEndReason,
+} from "@/lib/appSessionRedirect";
 import { getAppErrorUxMessage } from "@/lib/appUxLabels";
+
+const SESSION_END_REASON_KEY = "wa_app_session_end_reason_v1";
+export { buildAppLoginPath, normalizeSessionEndReason, sanitizeAppReturnTo, type AppSessionEndReason };
+
+function saveSessionEndReason(reason: AppSessionEndReason | null | undefined) {
+  if (typeof window === "undefined") return;
+  if (!reason) {
+    sessionStorage.removeItem(SESSION_END_REASON_KEY);
+    localStorage.removeItem(SESSION_END_REASON_KEY);
+    return;
+  }
+  const payload = JSON.stringify({ reason, recordedAt: Date.now() });
+  try {
+    sessionStorage.setItem(SESSION_END_REASON_KEY, payload);
+    localStorage.setItem(SESSION_END_REASON_KEY, payload);
+  } catch {
+    // best effort only; losing the explanatory message must not block logout.
+  }
+}
+
+export function consumeAppSessionEndReason(): AppSessionEndReason | null {
+  if (typeof window === "undefined") return null;
+  const raw =
+    sessionStorage.getItem(SESSION_END_REASON_KEY) ||
+    localStorage.getItem(SESSION_END_REASON_KEY);
+  sessionStorage.removeItem(SESSION_END_REASON_KEY);
+  localStorage.removeItem(SESSION_END_REASON_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { reason?: string; recordedAt?: number };
+    const ageMs = Date.now() - Number(parsed.recordedAt ?? 0);
+    if (!Number.isFinite(ageMs) || ageMs > 5 * 60 * 1000) return null;
+    return normalizeSessionEndReason(parsed.reason);
+  } catch {
+    return null;
+  }
+}
 
 export type AppSessionUser = {
   id: string;
@@ -1713,8 +1756,9 @@ export function saveAppSession(session: AppSession) {
   localStorage.setItem(LOCAL_KEY, payload);
 }
 
-export function clearAppSession() {
+export function clearAppSession(reason?: string | null) {
   if (typeof window === "undefined") return;
+  saveSessionEndReason(normalizeSessionEndReason(reason));
   sessionStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(LOCAL_KEY);
 }
@@ -1767,6 +1811,7 @@ async function requestAppJson<T>(
   if (!token) {
     const error = new Error(getAppErrorUxMessage({ status: 401 })) as AppApiError;
     error.status = 401;
+    error.errorCode = "missing_token";
     throw error;
   }
 
@@ -1838,7 +1883,7 @@ async function requestAppJson<T>(
     error.details = details;
     error.payload = payload;
     if (res.status === 401) {
-      clearAppSession();
+      clearAppSession(errorCode);
       error.message = getAppErrorUxMessage({ status: res.status, errorCode });
     }
     if (res.status === 403) error.message = getAppErrorUxMessage({ status: res.status, errorCode });
@@ -1875,6 +1920,7 @@ async function requestAppText(
   if (!token) {
     const error = new Error(getAppErrorUxMessage({ status: 401 })) as AppApiError;
     error.status = 401;
+    error.errorCode = "missing_token";
     throw error;
   }
 
@@ -1946,7 +1992,7 @@ async function requestAppText(
     error.details = details;
     error.payload = payload;
     if (res.status === 401) {
-      clearAppSession();
+      clearAppSession(errorCode);
       error.message = getAppErrorUxMessage({ status: res.status, errorCode });
     }
     if (res.status === 403) error.message = getAppErrorUxMessage({ status: res.status, errorCode });
@@ -1974,6 +2020,7 @@ async function requestAppBlob(
   if (!token) {
     const error = new Error(getAppErrorUxMessage({ status: 401 })) as AppApiError;
     error.status = 401;
+    error.errorCode = "missing_token";
     throw error;
   }
 
@@ -2007,8 +2054,14 @@ async function requestAppBlob(
 
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
+    let errorCode: string | undefined;
     try {
-      const body = (await res.json()) as { error?: string | { message?: string }; message?: string };
+      const body = (await res.json()) as { error?: string | { code?: string; message?: string }; message?: string };
+      if (typeof body.error === "string") {
+        errorCode = body.error;
+      } else if (body.error && typeof body.error === "object") {
+        errorCode = typeof body.error.code === "string" ? body.error.code : undefined;
+      }
       message =
         (typeof body.message === "string" && body.message.trim()) ||
         (body.error && typeof body.error === "object" && typeof body.error.message === "string"
@@ -2024,9 +2077,10 @@ async function requestAppBlob(
     }
     const error = new Error(message) as AppApiError;
     error.status = res.status;
+    error.errorCode = errorCode;
     if (res.status === 401) {
-      clearAppSession();
-      error.message = getAppErrorUxMessage({ status: res.status });
+      clearAppSession(errorCode);
+      error.message = getAppErrorUxMessage({ status: res.status, errorCode });
     }
     if (res.status === 403) error.message = getAppErrorUxMessage({ status: res.status });
     if (res.status >= 500) error.message = getAppErrorUxMessage({ status: res.status });

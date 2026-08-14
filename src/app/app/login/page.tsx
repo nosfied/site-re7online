@@ -2,22 +2,63 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import ThemeSelector from "@/components/ThemeSelector";
 import {
   AppSession,
+  consumeAppSessionEndReason,
   clearAppSession,
   loadAppSession,
   loginAppUser,
+  normalizeSessionEndReason,
+  sanitizeAppReturnTo,
   saveAppSession,
   verifyAppMfaLoginChallenge,
+  type AppSessionEndReason,
 } from "@/lib/appClientApi";
 
 const MOBILE_NOTIFICATION_NOTICE_AFTER_LOGIN_KEY = "converta_mobile_notification_notice_after_login";
 
-export default function AppLoginPage() {
+function getSessionEndNotice(reason: AppSessionEndReason) {
+  switch (reason) {
+    case "session_expired":
+      return {
+        title: "Sua sessão expirou",
+        body: "Por segurança, sua sessão foi encerrada após o período máximo de uso. Entre novamente para continuar.",
+      };
+    case "session_replaced":
+      return {
+        title: "Sua sessão foi encerrada",
+        body: "Houve um novo login com esta conta. Entre novamente para continuar neste dispositivo.",
+      };
+    case "support_access_expired":
+      return {
+        title: "Acesso de suporte expirado",
+        body: "O acesso temporário de suporte expirou. Volte para sua sessão normal ou solicite uma nova autorização.",
+      };
+    case "support_access_revoked":
+      return {
+        title: "Acesso de suporte encerrado",
+        body: "O acesso temporário de suporte foi encerrado. Volte para sua sessão normal ou solicite uma nova autorização.",
+      };
+    case "user_inactive":
+      return {
+        title: "Conta inativa",
+        body: "Esta conta está inativa. Fale com um administrador para recuperar o acesso.",
+      };
+    case "session_revoked":
+    default:
+      return {
+        title: "Sua sessão foi encerrada",
+        body: "Entre novamente para continuar.",
+      };
+  }
+}
+
+function AppLoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,13 +72,21 @@ export default function AppLoginPage() {
     userName: string;
   } | null>(null);
   const [mfaCode, setMfaCode] = useState("");
+  const [storedSessionEndReason, setStoredSessionEndReason] = useState<AppSessionEndReason | null>(null);
+  const urlReason = normalizeSessionEndReason(searchParams.get("reason"));
+  const returnTo = useMemo(() => sanitizeAppReturnTo(searchParams.get("returnTo")), [searchParams]);
+  const sessionEndReason = urlReason || storedSessionEndReason;
+
+  useEffect(() => {
+    setStoredSessionEndReason(consumeAppSessionEndReason());
+  }, []);
 
   useEffect(() => {
     let fallbackTimer: number | null = null;
     try {
       const existing = loadAppSession();
       if (existing?.token) {
-        router.replace("/app/inbox");
+        router.replace(returnTo);
         fallbackTimer = window.setTimeout(() => {
           setCheckingSession(false);
         }, 800);
@@ -49,7 +98,7 @@ export default function AppLoginPage() {
       clearAppSession();
     }
     setCheckingSession(false);
-  }, [router]);
+  }, [returnTo, router]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -86,7 +135,7 @@ export default function AppLoginPage() {
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(MOBILE_NOTIFICATION_NOTICE_AFTER_LOGIN_KEY, "1");
       }
-      router.replace("/app/inbox");
+      router.replace(returnTo);
     } catch (err) {
       const typed = err as { message?: string };
       setError(typed.message || "Não foi possível entrar. Verifique sua conexão e tente novamente.");
@@ -119,7 +168,7 @@ export default function AppLoginPage() {
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(MOBILE_NOTIFICATION_NOTICE_AFTER_LOGIN_KEY, "1");
       }
-      router.replace("/app/inbox");
+      router.replace(returnTo);
     } catch (err) {
       const typed = err as { message?: string };
       setError(typed.message || "Não foi possível validar o código de verificação.");
@@ -160,6 +209,13 @@ export default function AppLoginPage() {
         </div>
 
         {checkingSession ? <p className="theme-muted text-sm">Verificando acesso...</p> : null}
+
+        {!checkingSession && sessionEndReason ? (
+          <div className="mb-3 rounded-lg border border-amber-400/35 bg-amber-900/25 p-3 text-sm text-amber-50">
+            <p className="font-semibold">{getSessionEndNotice(sessionEndReason).title}</p>
+            <p className="mt-1 text-amber-50/85">{getSessionEndNotice(sessionEndReason).body}</p>
+          </div>
+        ) : null}
 
         {!checkingSession && !mfaChallenge ? (
           <form className="grid gap-3 sm:gap-4" onSubmit={handleSubmit}>
@@ -202,7 +258,7 @@ export default function AppLoginPage() {
               disabled={loading}
               className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? "Entrando..." : "Entrar"}
+              {loading ? "Entrando..." : sessionEndReason ? "Entrar novamente" : "Entrar"}
             </button>
           </form>
         ) : null}
@@ -255,5 +311,13 @@ export default function AppLoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function AppLoginPage() {
+  return (
+    <Suspense fallback={<main className="theme-bg min-h-[100dvh]" />}>
+      <AppLoginContent />
+    </Suspense>
   );
 }

@@ -34,6 +34,9 @@ test("session rejection messages distinguish replaced and expired sessions", () 
   assert.match(buildSessionExpiredMessage("session_replaced"), /novo login/i);
   assert.match(buildSessionExpiredMessage("session_expired"), /expirada/i);
   assert.match(buildSessionExpiredMessage("session_revoked"), /encerrada/i);
+  assert.match(buildSessionExpiredMessage("support_access_expired"), /suporte expirou/i);
+  assert.match(buildSessionExpiredMessage("support_access_revoked"), /suporte foi encerrado/i);
+  assert.match(buildSessionExpiredMessage("user_inactive"), /conta esta inativa/i);
 });
 
 test("hashSensitiveValue is deterministic and does not expose the input", () => {

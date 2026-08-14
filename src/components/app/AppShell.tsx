@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, ty
 import ThemeSelector from "@/components/ThemeSelector";
 import {
   AppSession,
+  buildAppLoginPath,
   clearAppSession,
   clearSupportReturnSession,
   exitPlatformSupportTenant,
@@ -416,14 +417,19 @@ export default function AppShell({
       const nextRemaining = getAppSessionRemainingMs(activeSession);
       setRemainingMs(nextRemaining);
       if (nextRemaining !== null && nextRemaining <= 0) {
-        clearAppSession();
-        router.replace("/app/login");
+        clearAppSession(activeSession.supportAccess ? "support_access_expired" : "session_expired");
+        router.replace(
+          buildAppLoginPath({
+            reason: activeSession.supportAccess ? "support_access_expired" : "session_expired",
+            returnTo: pathname,
+          })
+        );
       }
     };
     refreshRemaining();
     const timer = window.setInterval(refreshRemaining, 1000);
     return () => window.clearInterval(timer);
-  }, [activeSession, router]);
+  }, [activeSession, pathname, router]);
 
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
@@ -440,11 +446,11 @@ export default function AppShell({
         setRenewError(null);
         return;
       }
-      router.replace("/app/login");
+      router.replace(buildAppLoginPath({ returnTo: pathname }));
     };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
-  }, [router]);
+  }, [pathname, router]);
 
   const handleLogout = () => {
     void (async () => {
