@@ -152,6 +152,10 @@ export type AdminUserItem = {
   }>;
   isActive?: boolean;
   createdAt: string;
+  firstAccess?: {
+    status: "password_configured" | "token_active" | "token_expired" | "not_ready";
+    tokenExpiresAt: string | null;
+  } | null;
 };
 
 export type AdminDepartmentItem = {
@@ -1749,6 +1753,29 @@ export async function resetUserPassword(
       body: JSON.stringify({ password }),
     }
   );
+}
+
+export async function prepareUserFirstAccess(
+  connection: AdminConnection,
+  clientKey: string,
+  payload: { userIds?: string[]; sendEmail?: boolean } = {}
+): Promise<{
+  ok: true;
+  deliveryMode: "prepare_only" | "email";
+  deliveryConfigured: boolean;
+  requestedCount: number;
+  eligibleCount: number;
+  issuedCount: number;
+  deliveredCount: number;
+  skippedPasswordConfiguredCount: number;
+  expiresAt: string;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(connection, `/admin/users/first-access?${params.toString()}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function updateUser(

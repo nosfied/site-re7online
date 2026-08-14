@@ -228,6 +228,10 @@ import {
   validateAppSessionFromRequest,
 } from "../auth/appSessionService.js";
 import {
+  getFirstAccessUserStatus,
+  prepareFirstAccessForUsers,
+} from "../auth/firstAccessService.js";
+import {
   createMfaLoginChallengeIfRequired,
   evaluateMfaRuntimeShadow,
   generateMfaRecoveryCodes,
@@ -7558,6 +7562,69 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   }
 
   if (
+    req.method === "POST" &&
+    pathname === "/app/users/first-access"
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (!isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can prepare first access."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const record = body as Record<string, unknown>;
+      const rawUserIds = Array.isArray(record.userIds) ? record.userIds : [];
+      const userIds = rawUserIds
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter(Boolean);
+      const result = await prepareFirstAccessForUsers({
+        prisma,
+        clientId: client.id,
+        userIds: userIds.length > 0 ? userIds : undefined,
+        deliveryMode: record.sendEmail === true ? "email" : "prepare_only",
+        actorUserId: clientAuth.userId,
+        requestId,
+        passwordResetBaseUrl: env.PASSWORD_RESET_BASE_URL,
+      });
+      if (!result.ok) {
+        json(res, 404, httpError(result.reason, "One or more users were not found in this tenant."));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        deliveryMode: result.deliveryMode,
+        deliveryConfigured: result.deliveryConfigured,
+        requestedCount: result.requestedCount,
+        eligibleCount: result.eligibleCount,
+        issuedCount: result.issuedCount,
+        deliveredCount: result.deliveredCount,
+        skippedPasswordConfiguredCount: result.skippedPasswordConfiguredCount,
+        expiresAt: result.expiresAt,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.users.first_access.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
     req.method === "PUT" &&
     pathname.startsWith("/app/users/") &&
     pathname.split("/").length === 4
@@ -13493,7 +13560,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             createdAt: true,
           },
         });
-        json(res, 200, { ok: true, count: users.length, items: users });
+        const items = await Promise.all(
+          users.map((user) =>
+            serializeAdminUserForResponse(prisma, {
+              clientId: client.id,
+              user,
+            })
+          )
+        );
+        json(res, 200, { ok: true, count: users.length, items });
       } catch (error) {
         logger.error({
           event: "admin.users.list.error",
@@ -13635,6 +13710,60 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         logger.error({
           event: "admin.users.create.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/admin/users/first-access") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const record = body as Record<string, unknown>;
+        const rawUserIds = Array.isArray(record.userIds) ? record.userIds : [];
+        const userIds = rawUserIds
+          .map((item) => (typeof item === "string" ? item.trim() : ""))
+          .filter(Boolean);
+        const result = await prepareFirstAccessForUsers({
+          prisma,
+          clientId: client.id,
+          userIds: userIds.length > 0 ? userIds : undefined,
+          deliveryMode: record.sendEmail === true ? "email" : "prepare_only",
+          actorUserId: null,
+          requestId,
+          passwordResetBaseUrl: env.PASSWORD_RESET_BASE_URL,
+        });
+        if (!result.ok) {
+          json(res, 404, httpError(result.reason, "One or more users were not found in this tenant."));
+          return;
+        }
+        json(res, 200, {
+          ok: true,
+          deliveryMode: result.deliveryMode,
+          deliveryConfigured: result.deliveryConfigured,
+          requestedCount: result.requestedCount,
+          eligibleCount: result.eligibleCount,
+          issuedCount: result.issuedCount,
+          deliveredCount: result.deliveredCount,
+          skippedPasswordConfiguredCount: result.skippedPasswordConfiguredCount,
+          expiresAt: result.expiresAt,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.users.first_access.error",
           message: (error as Error).message,
           requestId,
         });
@@ -23584,6 +23713,7 @@ async function serializeAdminUserForResponse(
       department?: { name: string } | null;
       isActive?: boolean;
       createdAt: Date;
+      passwordHash?: string | null;
     };
   }
 ) {
@@ -23605,6 +23735,11 @@ async function serializeAdminUserForResponse(
     ...serializedMemberships,
     isActive: params.user.isActive,
     createdAt: params.user.createdAt,
+    firstAccess: await getFirstAccessUserStatus({
+      prisma,
+      clientId: params.clientId,
+      userId: params.user.id,
+    }),
   };
 }
 

@@ -77,7 +77,7 @@ export function hashSensitiveValue(value: string) {
   return crypto.createHash("sha256").update(normalized).digest("hex");
 }
 
-function hashResetToken(token: string) {
+export function hashResetToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
@@ -800,7 +800,7 @@ export async function revokeAllUserSessionsAndPush(params: {
   return result;
 }
 
-function isSmtpConfigured() {
+export function isSmtpConfigured() {
   return Boolean(env.SMTP_HOST.trim() && env.SMTP_FROM.trim());
 }
 
@@ -933,7 +933,7 @@ async function sendPasswordResetViaResendApi(params: {
   }
 }
 
-async function sendPasswordResetEmail(params: {
+export async function sendPasswordResetEmail(params: {
   to: string;
   name: string;
   resetUrl: string;
