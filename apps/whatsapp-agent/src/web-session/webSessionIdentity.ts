@@ -1,14 +1,16 @@
 import crypto from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { readWebSessionLifecycle } from "./webSessionLifecycle.js";
 
 export type WebSessionIdentityReconciliationResult =
   | {
       ok: true;
-      action: "unchanged" | "changed";
+      action: "unchanged" | "changed" | "changed_archived_same_tenant_duplicate";
       accountId: string;
       clientId: string;
       channelAccountId: string;
       previousChannelAccountId: string;
+      archivedConflictAccountId?: string;
     }
   | {
       ok: false;
@@ -82,6 +84,59 @@ function mergeIdentityMetadata(metadata: unknown, params: {
   } satisfies Prisma.InputJsonObject;
 }
 
+function mergeArchivedDuplicateMetadata(metadata: unknown, params: {
+  previousChannelAccountId: string;
+  archivedAt: string;
+  source: string;
+  replacementAccountId: string;
+}) {
+  const base = asRecord(metadata);
+  const webSession = asRecord(base.webSession);
+  return {
+    ...base,
+    webSession: {
+      ...webSession,
+      archivedDuplicate: {
+        source: params.source,
+        archivedAt: params.archivedAt,
+        previousIdentity: maskIdentity(params.previousChannelAccountId),
+        replacementAccountId: params.replacementAccountId,
+      },
+    },
+  } satisfies Prisma.InputJsonObject;
+}
+
+function buildArchivedChannelAccountId(accountId: string, channelAccountId: string) {
+  return `archived:${accountId}:${maskIdentity(channelAccountId).hash}`;
+}
+
+function isInactiveSameTenantDuplicateCandidate(params: {
+  currentClientId: string;
+  conflict: {
+    clientId: string;
+    status: string;
+    runtimeEnabled: boolean;
+    metadata: unknown;
+    secrets: Array<{ id: string; secretKind: string }>;
+  };
+}) {
+  if (params.conflict.clientId !== params.currentClientId) return false;
+  if (params.conflict.runtimeEnabled === true) return false;
+  if (params.conflict.secrets.length > 0) return false;
+  if (params.conflict.status === "connected" || params.conflict.status === "pending") return false;
+  const lifecycle = readWebSessionLifecycle(params.conflict.metadata);
+  if (lifecycle.desiredState === "CONNECTED") return false;
+  if (
+    lifecycle.observedState === "CONNECTED" ||
+    lifecycle.observedState === "CONNECTING" ||
+    lifecycle.observedState === "RECONNECTING" ||
+    lifecycle.observedState === "QR_REQUIRED"
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export async function reconcileWebSessionObservedIdentity(params: {
   prisma: PrismaClient;
   accountId: string;
@@ -129,15 +184,74 @@ export async function reconcileWebSessionObservedIdentity(params: {
         provider: "web_session",
         channelAccountId: nextChannelAccountId,
       },
-      select: { id: true, clientId: true },
+      select: {
+        id: true,
+        clientId: true,
+        channelAccountId: true,
+        status: true,
+        runtimeEnabled: true,
+        metadata: true,
+        secrets: {
+          where: {
+            secretKind: { in: ["baileysAuthState.v1", "baileysAuthState.staging.v1"] },
+            status: "configured",
+            secretCiphertext: { not: null },
+          },
+          select: { id: true, secretKind: true },
+        },
+      },
     });
     if (conflict) {
-      return {
-        ok: false as const,
-        error: "web_session_identity_conflict" as const,
-        conflictAccountId: conflict.id,
-        conflictClientId: conflict.clientId,
-      };
+      const sameTenantInactiveDuplicate = isInactiveSameTenantDuplicateCandidate({
+        currentClientId: account.clientId,
+        conflict,
+      });
+      if (!sameTenantInactiveDuplicate) {
+        return {
+          ok: false as const,
+          error: "web_session_identity_conflict" as const,
+          conflictAccountId: conflict.id,
+          conflictClientId: conflict.clientId,
+        };
+      }
+
+      const archivedChannelAccountId = buildArchivedChannelAccountId(conflict.id, conflict.channelAccountId);
+      await tx.channelAccount.update({
+        where: { id: conflict.id },
+        data: {
+          channelAccountId: archivedChannelAccountId,
+          status: "archived_duplicate",
+          enabled: false,
+          runtimeEnabled: false,
+          inboundPersistenceEnabled: false,
+          outboundEnabled: false,
+          automationEnabled: false,
+          aiEnabled: false,
+          handoffEnabled: false,
+          metadata: mergeArchivedDuplicateMetadata(conflict.metadata, {
+            previousChannelAccountId: conflict.channelAccountId,
+            archivedAt: observedAt,
+            source,
+            replacementAccountId: account.id,
+          }),
+        },
+      });
+      await tx.event.create({
+        data: {
+          clientId: account.clientId,
+          requestId: `${params.requestId}:archive-duplicate:${conflict.id}`,
+          eventName: "whatsapp.web.identity.duplicate_archived",
+          payloadJson: {
+            channel: "whatsapp",
+            provider: "web_session",
+            channelAccountId: conflict.id,
+            replacementChannelAccountId: account.id,
+            archivedIdentity: maskIdentity(conflict.channelAccountId),
+            source,
+            observedAt,
+          },
+        },
+      });
     }
 
     await tx.channelAccount.update({
@@ -171,11 +285,12 @@ export async function reconcileWebSessionObservedIdentity(params: {
 
     return {
       ok: true as const,
-      action: "changed" as const,
+      action: conflict ? "changed_archived_same_tenant_duplicate" as const : "changed" as const,
       accountId: account.id,
       clientId: account.clientId,
       channelAccountId: nextChannelAccountId,
       previousChannelAccountId,
+      ...(conflict ? { archivedConflictAccountId: conflict.id } : {}),
     };
   });
 }

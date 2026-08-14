@@ -15,7 +15,16 @@ function makePrisma() {
         channel: "whatsapp",
         provider: "web_session",
         channelAccountId: "5584999990001",
+        status: "pending",
+        runtimeEnabled: true,
+        enabled: true,
+        inboundPersistenceEnabled: true,
+        outboundEnabled: false,
+        automationEnabled: false,
+        aiEnabled: false,
+        handoffEnabled: false,
         metadata: { webSession: { desiredState: "CONNECTED" } },
+        secrets: [] as Array<{ id: string; secretKind: string }>,
       },
       {
         id: "account-b",
@@ -23,7 +32,84 @@ function makePrisma() {
         channel: "whatsapp",
         provider: "web_session",
         channelAccountId: "5584999990002",
+        status: "connected",
+        runtimeEnabled: true,
+        enabled: true,
+        inboundPersistenceEnabled: true,
+        outboundEnabled: false,
+        automationEnabled: false,
+        aiEnabled: false,
+        handoffEnabled: false,
         metadata: { webSession: { desiredState: "CONNECTED" } },
+        secrets: [{ id: "secret-b", secretKind: "baileysAuthState.v1" }] as Array<{ id: string; secretKind: string }>,
+      },
+      {
+        id: "account-a-old",
+        clientId: "client-a",
+        channel: "whatsapp",
+        provider: "web_session",
+        channelAccountId: "5584999990004",
+        status: "disconnected",
+        runtimeEnabled: false,
+        enabled: true,
+        inboundPersistenceEnabled: true,
+        outboundEnabled: false,
+        automationEnabled: false,
+        aiEnabled: false,
+        handoffEnabled: false,
+        metadata: { webSession: { desiredState: "DISCONNECTED" } },
+        secrets: [] as Array<{ id: string; secretKind: string }>,
+      },
+      {
+        id: "account-a-active",
+        clientId: "client-a",
+        channel: "whatsapp",
+        provider: "web_session",
+        channelAccountId: "5584999990005",
+        status: "pending",
+        runtimeEnabled: true,
+        enabled: true,
+        inboundPersistenceEnabled: true,
+        outboundEnabled: false,
+        automationEnabled: false,
+        aiEnabled: false,
+        handoffEnabled: false,
+        metadata: { webSession: { desiredState: "CONNECTED" } },
+        secrets: [] as Array<{ id: string; secretKind: string }>,
+      },
+      {
+        id: "account-a-staging",
+        clientId: "client-a",
+        channel: "whatsapp",
+        provider: "web_session",
+        channelAccountId: "5584999990006",
+        status: "disconnected",
+        runtimeEnabled: false,
+        enabled: true,
+        inboundPersistenceEnabled: true,
+        outboundEnabled: false,
+        automationEnabled: false,
+        aiEnabled: false,
+        handoffEnabled: false,
+        metadata: { webSession: { desiredState: "DISCONNECTED", observedState: "DISCONNECTED" } },
+        secrets: [{ id: "secret-staging", secretKind: "baileysAuthState.staging.v1" }] as Array<{ id: string; secretKind: string }>,
+      },
+      {
+        id: "account-a-desired",
+        clientId: "client-a",
+        channel: "whatsapp",
+        provider: "web_session",
+        channelAccountId: "5584999990007",
+        status: "disconnected",
+        runtimeEnabled: false,
+        enabled: true,
+        inboundPersistenceEnabled: true,
+        outboundEnabled: false,
+        automationEnabled: false,
+        aiEnabled: false,
+        handoffEnabled: false,
+        metadata: { webSession: { desiredState: "CONNECTED", observedState: "DISCONNECTED" } },
+        secrets: [] as Array<{ id: string; secretKind: string }>,
       },
       {
         id: "account-meta",
@@ -31,7 +117,16 @@ function makePrisma() {
         channel: "whatsapp",
         provider: "meta",
         channelAccountId: "5584999990003",
+        status: "connected",
+        runtimeEnabled: true,
+        enabled: true,
+        inboundPersistenceEnabled: true,
+        outboundEnabled: true,
+        automationEnabled: true,
+        aiEnabled: true,
+        handoffEnabled: true,
         metadata: {},
+        secrets: [] as Array<{ id: string; secretKind: string }>,
       },
     ],
     events: [] as Array<{
@@ -52,17 +147,25 @@ function makePrisma() {
           provider: string;
           channelAccountId: string;
         };
-      }) =>
-        state.accounts.find(
+      }) => {
+        const account = state.accounts.find(
           (item) =>
             item.id !== args.where.id?.not &&
             item.channel === args.where.channel &&
             item.provider === args.where.provider &&
             item.channelAccountId === args.where.channelAccountId
-        ) ?? null,
+        );
+        if (!account) return null;
+        return {
+          ...account,
+          secrets: account.secrets.filter((secret) =>
+            ["baileysAuthState.v1", "baileysAuthState.staging.v1"].includes(secret.secretKind)
+          ),
+        };
+      },
       update: async (args: {
         where: { id: string };
-        data: { channelAccountId?: string; metadata?: unknown };
+        data: Partial<typeof state.accounts[number]>;
       }) => {
         const account = state.accounts.find((item) => item.id === args.where.id);
         if (!account) throw new Error("not_found");
@@ -130,7 +233,7 @@ test("different number auto reconciles the same ChannelAccount with sanitized au
     assert.equal(result.channelAccountId, "5584999997784");
   }
   assert.equal(state.accounts[0]?.channelAccountId, "5584999997784");
-  assert.equal(state.accounts.length, 3);
+  assert.equal(state.accounts.length, 7);
   assert.equal(state.events.length, 1);
   assert.equal(state.events[0]?.eventName, "whatsapp.web.identity.changed");
   const payloadText = JSON.stringify(state.events[0]?.payloadJson);
@@ -155,6 +258,96 @@ test("cross-tenant web session identity conflict blocks reconciliation", async (
     conflictClientId: "client-b",
   });
   assert.equal(state.accounts[0]?.channelAccountId, "5584999990001");
+  assert.equal(state.events.length, 0);
+});
+
+test("inactive same-tenant duplicate is archived before identity reconciliation", async () => {
+  const { prisma, state } = makePrisma();
+  const result = await reconcileWebSessionObservedIdentity({
+    prisma: prisma as never,
+    accountId: "account-a",
+    observedIdentity: "5584999990004@s.whatsapp.net",
+    requestId: "same-tenant-duplicate",
+    source: "unit_test",
+  });
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.action, "changed_archived_same_tenant_duplicate");
+    assert.equal(result.archivedConflictAccountId, "account-a-old");
+    assert.equal(result.channelAccountId, "5584999990004");
+  }
+  const archived = state.accounts.find((item) => item.id === "account-a-old");
+  assert.equal(archived?.status, "archived_duplicate");
+  assert.equal(archived?.enabled, false);
+  assert.equal(archived?.runtimeEnabled, false);
+  assert.match(archived?.channelAccountId ?? "", /^archived:account-a-old:/);
+  assert.equal(state.accounts[0]?.channelAccountId, "5584999990004");
+  assert.equal(state.events.length, 2);
+  assert.equal(state.events[0]?.eventName, "whatsapp.web.identity.duplicate_archived");
+  assert.equal(state.events[1]?.eventName, "whatsapp.web.identity.changed");
+  const payloadText = JSON.stringify(state.events);
+  assert.equal(payloadText.includes("5584999990004"), false);
+  assert.match(payloadText, /"last4":"0004"/);
+});
+
+test("active same-tenant duplicate remains blocked", async () => {
+  const { prisma, state } = makePrisma();
+  const result = await reconcileWebSessionObservedIdentity({
+    prisma: prisma as never,
+    accountId: "account-a",
+    observedIdentity: "5584999990005@s.whatsapp.net",
+    requestId: "same-tenant-active-duplicate",
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "web_session_identity_conflict",
+    conflictAccountId: "account-a-active",
+    conflictClientId: "client-a",
+  });
+  assert.equal(state.accounts[0]?.channelAccountId, "5584999990001");
+  assert.equal(state.accounts.find((item) => item.id === "account-a-active")?.channelAccountId, "5584999990005");
+  assert.equal(state.events.length, 0);
+});
+
+test("same-tenant duplicate with staging auth remains blocked", async () => {
+  const { prisma, state } = makePrisma();
+  const result = await reconcileWebSessionObservedIdentity({
+    prisma: prisma as never,
+    accountId: "account-a",
+    observedIdentity: "5584999990006@s.whatsapp.net",
+    requestId: "same-tenant-staging-duplicate",
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "web_session_identity_conflict",
+    conflictAccountId: "account-a-staging",
+    conflictClientId: "client-a",
+  });
+  assert.equal(state.accounts[0]?.channelAccountId, "5584999990001");
+  assert.equal(state.accounts.find((item) => item.id === "account-a-staging")?.channelAccountId, "5584999990006");
+  assert.equal(state.events.length, 0);
+});
+
+test("same-tenant duplicate with desired connected remains blocked", async () => {
+  const { prisma, state } = makePrisma();
+  const result = await reconcileWebSessionObservedIdentity({
+    prisma: prisma as never,
+    accountId: "account-a",
+    observedIdentity: "5584999990007@s.whatsapp.net",
+    requestId: "same-tenant-desired-duplicate",
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "web_session_identity_conflict",
+    conflictAccountId: "account-a-desired",
+    conflictClientId: "client-a",
+  });
+  assert.equal(state.accounts[0]?.channelAccountId, "5584999990001");
+  assert.equal(state.accounts.find((item) => item.id === "account-a-desired")?.channelAccountId, "5584999990007");
   assert.equal(state.events.length, 0);
 });
 

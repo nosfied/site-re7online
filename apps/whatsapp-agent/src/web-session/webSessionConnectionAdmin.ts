@@ -49,6 +49,7 @@ export async function getWebSessionAccount(params: {
       clientId: params.clientId,
       channel: WEB_SESSION_CHANNEL,
       provider: WEB_SESSION_PROVIDER,
+      status: { not: "archived_duplicate" },
     },
     include: {
       secrets: {
