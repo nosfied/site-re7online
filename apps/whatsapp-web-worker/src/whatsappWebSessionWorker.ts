@@ -20,8 +20,10 @@ import {
   extractWebSessionObservedIdentity,
   reconcileWebSessionObservedIdentity,
 } from "../../whatsapp-agent/src/web-session/webSessionIdentity.js";
-import { acquireWebSessionAdvisoryLock } from "../../whatsapp-agent/src/web-session/webSessionAdvisoryLock.js";
-import { createQueuedWebSessionAuthStore } from "../../whatsapp-agent/src/web-session/webSessionAuthStore.js";
+import {
+  createQueuedWebSessionAuthStore,
+  createStagedWebSessionAuthStore,
+} from "../../whatsapp-agent/src/web-session/webSessionAuthStore.js";
 import {
   clearWebSessionQrForRuntime,
   markWebSessionRuntimeState,
@@ -46,6 +48,10 @@ import {
   type BaileysMessagesUpsertEvent,
 } from "./web-session/baileysSocketFactory.js";
 import type { WebSessionControlReplyReference } from "./webSessionControlServer.js";
+import {
+  acquireDedicatedPgAdvisoryLock,
+  withDedicatedPgAdvisoryLock,
+} from "./web-session/dedicatedPgAdvisoryLock.js";
 
 export type EligibleWebSessionAccount = {
   id: string;
@@ -691,12 +697,13 @@ export async function runWhatsAppWebSessionWorker(params: {
       }
       for (const account of accounts) {
         if (activeConnections.has(account.id)) continue;
-        const lock = await acquireWebSessionAdvisoryLock({ prisma, accountId: account.id });
+        const lock = await acquireDedicatedPgAdvisoryLock({ scope: `web-session-account:${account.id}` });
         if (!lock.acquired) {
           logger.info({
             event: "whatsapp.web.session.lock_skipped",
             tenantKey: account.tenantKey,
             channelAccountId: account.channelAccountId,
+            lockHash: lock.lockHash,
           });
           continue;
         }
@@ -772,6 +779,7 @@ async function connectWebSessionAccount(params: {
   let socket: Awaited<ReturnType<typeof createBaileysSocket>> | null = null;
   let connectionOpenTimer: ReturnType<typeof setTimeout> | null = null;
   let closingAfterConnectionOpenTimeout = false;
+  let closingAfterIdentityConflict = false;
   let inboundCutoverAt: Date | null = null;
   let effectiveAccount = params.account;
   const clearConnectionOpenTimer = () => {
@@ -789,9 +797,10 @@ async function connectWebSessionAccount(params: {
     if (socket) closeBaileysSocket(socket);
   };
   const module = await import("@whiskeysockets/baileys");
+  const authStore = createStagedWebSessionAuthStore(createQueuedWebSessionAuthStore(params.prisma));
   const auth = await createBaileysAuthState({
     module: module as unknown as Parameters<typeof createBaileysAuthState>[0]["module"],
-    store: createQueuedWebSessionAuthStore(params.prisma),
+    store: authStore.store,
     scope: {
       tenantKey: params.account.tenantKey,
       channelAccountId: params.account.channelAccountId,
@@ -955,14 +964,32 @@ async function connectWebSessionAccount(params: {
         user: connectedSocket.user,
         creds: auth.state.creds,
       });
-      const reconciliation = await reconcileWebSessionObservedIdentity({
-        prisma: params.prisma,
-        accountId: params.account.id,
-        observedIdentity,
-        requestId: `web-session-identity:${params.account.id}:${Date.now()}`,
-        source: "worker_connected",
+      const identityLockScope = observedIdentity
+        ? `web-session-identity:${observedIdentity}`
+        : `web-session-identity:missing:${params.account.id}`;
+      const reconciliationAttempt = await withDedicatedPgAdvisoryLock({
+        scope: identityLockScope,
+        onBlocked: async (lock) => {
+          logger.warn({
+            event: "whatsapp.web.identity.lock_skipped",
+            tenantKey: params.account.tenantKey,
+            channelAccountId: params.account.channelAccountId,
+            lockHash: lock.lockHash,
+          });
+        },
+        run: async () => reconcileWebSessionObservedIdentity({
+          prisma: params.prisma,
+          accountId: params.account.id,
+          observedIdentity,
+          requestId: `web-session-identity:${params.account.id}:${Date.now()}`,
+          source: "worker_connected",
+        }),
       });
+      const reconciliation = reconciliationAttempt.ok
+        ? reconciliationAttempt.value
+        : { ok: false as const, error: "web_session_identity_lock_unavailable" as const };
       if (!reconciliation.ok) {
+        authStore.discard();
         await markWebSessionRuntimeState({
           prisma: params.prisma,
           accountId: params.account.id,
@@ -983,6 +1010,37 @@ async function connectWebSessionAccount(params: {
             conflict: reconciliation.error === "web_session_identity_conflict",
           },
         });
+        closingAfterIdentityConflict = true;
+        closeSocket();
+        await finishTerminal();
+        return;
+      }
+      const promotion = await authStore.promote({
+        tenantKey: params.account.tenantKey,
+        channelAccountId: params.account.channelAccountId,
+      });
+      if (!promotion.ok) {
+        authStore.discard();
+        await markWebSessionRuntimeState({
+          prisma: params.prisma,
+          accountId: params.account.id,
+          observedState: "ERROR",
+          status: "error",
+          errorCode: promotion.error,
+        });
+        await recordWebSessionWorkerEvent({
+          prisma: params.prisma,
+          account: params.account,
+          requestSuffix: `identity-promotion-${promotion.error}`,
+          eventName: "whatsapp.web_session.error",
+          payloadJson: {
+            channel: "whatsapp",
+            provider: "web_session",
+            channelAccountId: params.account.channelAccountId,
+            reason: promotion.error,
+          },
+        });
+        closingAfterIdentityConflict = true;
         closeSocket();
         await finishTerminal();
         return;
@@ -1014,7 +1072,7 @@ async function connectWebSessionAccount(params: {
     },
     onDisconnected: async (reason) => {
       clearConnectionOpenTimer();
-      if (closingAfterConnectionOpenTimeout) {
+      if (closingAfterConnectionOpenTimeout || closingAfterIdentityConflict) {
         await finishTerminal();
         return;
       }

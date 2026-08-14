@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import {
   clearWebSessionAuthState,
   createQueuedWebSessionAuthStore,
+  createStagedWebSessionAuthStore,
   loadWebSessionAuthState,
   saveWebSessionAuthState,
+  type WebSessionAuthStore,
   WEB_SESSION_AUTH_SECRET_KIND,
 } from "./webSessionAuthStore.js";
 import { decryptChannelAccountSecret } from "../channels/channelAccountSecretCrypto.js";
@@ -234,4 +236,55 @@ test("queued web session auth store serializes writes for one account", async ()
     if (previous === undefined) delete process.env.CHANNEL_ACCOUNT_SECRET_KEY;
     else process.env.CHANNEL_ACCOUNT_SECRET_KEY = previous;
   }
+});
+
+test("staged web session auth store does not persist before identity promotion", async () => {
+  const writes: Array<Record<string, unknown>> = [];
+  const baseStore: WebSessionAuthStore = {
+    load: async () => ({ persisted: true }),
+    save: async (params) => {
+      writes.push(params.state);
+      return { ok: true };
+    },
+    clear: async () => ({ ok: true }),
+  };
+  const staged = createStagedWebSessionAuthStore(baseStore);
+  const scope = { tenantKey: "tenant-a", channelAccountId: "session-a" };
+
+  assert.deepEqual(await staged.store.load(scope), { persisted: true });
+  assert.deepEqual(await staged.store.save({ ...scope, state: { step: "pre-open" } }), { ok: true });
+  assert.deepEqual(await staged.store.save({ ...scope, state: { step: "open" } }), { ok: true });
+
+  assert.equal(staged.hasStagedState(), true);
+  assert.equal(staged.isPromoted(), false);
+  assert.equal(writes.length, 0);
+
+  assert.deepEqual(await staged.promote(scope), { ok: true });
+  assert.equal(staged.isPromoted(), true);
+  assert.deepEqual(writes, [{ step: "open" }]);
+
+  await staged.store.save({ ...scope, state: { step: "after-promotion" } });
+  assert.deepEqual(writes, [{ step: "open" }, { step: "after-promotion" }]);
+});
+
+test("staged web session auth store discards conflict state without touching persisted owner auth", async () => {
+  const writes: Array<Record<string, unknown>> = [];
+  const baseStore: WebSessionAuthStore = {
+    load: async () => ({ owner: "auth" }),
+    save: async (params) => {
+      writes.push(params.state);
+      return { ok: true };
+    },
+    clear: async () => ({ ok: true }),
+  };
+  const staged = createStagedWebSessionAuthStore(baseStore);
+  const scope = { tenantKey: "tenant-b", channelAccountId: "session-b" };
+
+  assert.deepEqual(await staged.store.load(scope), { owner: "auth" });
+  await staged.store.save({ ...scope, state: { conflicting: "auth" } });
+  staged.discard();
+
+  assert.equal(staged.hasStagedState(), false);
+  assert.equal(staged.isPromoted(), false);
+  assert.equal(writes.length, 0);
 });

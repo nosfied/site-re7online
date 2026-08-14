@@ -19,6 +19,14 @@ export type WebSessionAuthStore = {
   clear(params: WebSessionAuthScope): Promise<WebSessionAuthWriteResult>;
 };
 
+export type StagedWebSessionAuthStore = {
+  store: WebSessionAuthStore;
+  promote(params: WebSessionAuthScope): Promise<WebSessionAuthWriteResult>;
+  discard(): void;
+  hasStagedState(): boolean;
+  isPromoted(): boolean;
+};
+
 export type WebSessionAuthScope = {
   tenantKey: string;
   channelAccountId: string;
@@ -81,6 +89,44 @@ export function createQueuedWebSessionAuthStore(prisma: PrismaClient): WebSessio
     },
     save: (params) => withQueue(params, () => saveWebSessionAuthState({ prisma, ...params })),
     clear: (params) => withQueue(params, () => clearWebSessionAuthState({ prisma, ...params })),
+  };
+}
+
+export function createStagedWebSessionAuthStore(baseStore: WebSessionAuthStore): StagedWebSessionAuthStore {
+  let stagedState: SerializedWebSessionAuthState | null = null;
+  let promoted = false;
+
+  return {
+    store: {
+      load: (params) => baseStore.load(params),
+      save: async (params) => {
+        if (promoted) return baseStore.save(params);
+        stagedState = params.state;
+        return { ok: true };
+      },
+      clear: async (params) => {
+        stagedState = null;
+        promoted = false;
+        return baseStore.clear(params);
+      },
+    },
+    async promote(params) {
+      promoted = true;
+      if (!stagedState) return { ok: true };
+      const result = await baseStore.save({ ...params, state: stagedState });
+      if (!result.ok) promoted = false;
+      return result;
+    },
+    discard() {
+      stagedState = null;
+      promoted = false;
+    },
+    hasStagedState() {
+      return stagedState !== null;
+    },
+    isPromoted() {
+      return promoted;
+    },
   };
 }
 

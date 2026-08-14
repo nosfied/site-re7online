@@ -54,6 +54,23 @@ function stateTone(state: AppWhatsAppWebSessionStatus["lifecycle"]["observedStat
   return "neutral";
 }
 
+function webSessionErrorLabel(errorCode: string | null | undefined) {
+  switch (errorCode) {
+    case "web_session_identity_conflict":
+      return "Este número já está conectado a outra organização. A tentativa foi bloqueada por segurança.";
+    case "web_session_identity_lock_unavailable":
+      return "Já existe uma verificação de identidade em andamento. Aguarde alguns instantes e tente novamente.";
+    case "connection_open_timeout":
+      return "A conexão demorou mais que o esperado. Tente conectar novamente.";
+    case "qr_required":
+      return "Código expirado. Clique em Conectar para gerar um novo código.";
+    case "terminal_manual":
+      return "Conexão encerrada manualmente.";
+    default:
+      return errorCode || null;
+  }
+}
+
 function Pill({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "success" | "warning" | "danger" }) {
   const classes =
     tone === "success"
@@ -384,7 +401,7 @@ export default function AppWhatsAppChannelSettingsPage() {
                   <Detail label="Estado técnico" value={currentState} />
                   <Detail label="Última conexão" value={lifecycle?.lastConnectedAt} />
                   <Detail label="Última desconexão" value={lifecycle?.lastDisconnectedAt} />
-                  <Detail label="Último erro" value={lifecycle?.lastErrorCode} />
+                  <Detail label="Último erro" value={webSessionErrorLabel(lifecycle?.lastErrorCode)} />
                   <Detail label="Reconexões" value={String(lifecycle?.reconnectCount ?? 0)} />
                 </div>
 
