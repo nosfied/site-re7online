@@ -146,6 +146,28 @@ test("executeChatbotFlow preserves explicit menu option numbers", () => {
   assert.equal(selected.replyText, "Voltando ao início.");
 });
 
+test("validateChatbotFlowDefinition rejects duplicate explicit menu option numbers", () => {
+  const result = validateChatbotFlowDefinition({
+    start: "menu",
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Escolha",
+        options: [
+          { label: "2. Atendimento", next: "handoff" },
+          { label: "2 - Outro atendimento", next: "handoff" },
+        ],
+      },
+      handoff: {
+        type: "handoff",
+      },
+    },
+  });
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.match(result.message, /duplicate option/);
+});
+
 test("executeChatbotFlow captures validated contact fields before menu", () => {
   const validated = validateChatbotFlowDefinition({
     start: "capture_email",

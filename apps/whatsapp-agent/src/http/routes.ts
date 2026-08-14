@@ -299,6 +299,7 @@ import {
 } from "../bootstrap/defaultOperationalDepartment.js";
 import { ensureDefaultDepartments } from "../bootstrap/seedDepartments.js";
 import { validateChatbotFlowDefinition } from "../chatbot/chatbotFlow.js";
+import { validateChatbotFlowTenantReferences } from "../chatbot/chatbotFlowTenantValidation.js";
 import {
   createKnowledgeBaseArticle,
   createKnowledgeBaseCollection,
@@ -8172,6 +8173,59 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (req.method === "GET" && pathname === "/app/chatbot/resources") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can view chatbot resources."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "chatbot",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const [departments, queues] = await Promise.all([
+        prisma.department.findMany({
+          where: {
+            clientId: client.id,
+            isActive: true,
+            ...LEGACY_OPERATIONAL_DEPARTMENT_FILTER,
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: { id: true, name: true, slug: true, isActive: true },
+        }),
+        prisma.queue.findMany({
+          where: { clientId: client.id },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: { id: true, name: true, departmentId: true },
+        }),
+      ]);
+      json(res, 200, { ok: true, departments, queues });
+    } catch (error) {
+      logger.error({
+        event: "app.chatbot.resources.get.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
   if (req.method === "GET" && pathname === "/app/chatbot/settings") {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
@@ -9862,20 +9916,101 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   }
 
   if (req.method === "POST" && pathname === "/app/chatbot/flows") {
+    const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
-    logger.warn({
-      event: "app.chatbot.flows.create.denied",
-      requestId,
-      clientId: clientAuth.clientId,
-      userId: clientAuth.userId,
-      reason: "managed_by_internal_admin",
-    });
-    json(
-      res,
-      403,
-      httpError("managed_by_internal_admin", "Flows do chatbot sao gerenciados no console interno.")
-    );
+    try {
+      if (!isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can create chatbot flows."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "chatbot",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const automationFlags = (await resolveAutomationFlagsSettings({
+        prisma,
+        clientId: client.id,
+        tenant,
+      })).settings;
+      if (automationFlags.disableChatbotFlowEditing) {
+        json(res, 403, httpError("chatbot_flow_editing_locked_by_admin", "Chatbot flow editing is locked."));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const parsed = await parseChatbotFlowUpsertPayload(prisma, client.id, body, {
+        requireName: true,
+        requireDefinition: true,
+      });
+      if (!parsed.ok) {
+        json(res, parsed.status, httpError(parsed.code, parsed.message));
+        return;
+      }
+      const flow = await prisma.$transaction(async (tx) => {
+        if (parsed.data.entryPoint === true) {
+          await tx.chatbotFlow.updateMany({
+            where: { clientId: client.id },
+            data: { entryPoint: false },
+          });
+        }
+        return tx.chatbotFlow.create({
+          data: {
+            clientId: client.id,
+            name: parsed.data.name as string,
+            isActive: parsed.data.isActive ?? false,
+            entryPoint: parsed.data.entryPoint ?? false,
+            definition: parsed.data.definition as Prisma.InputJsonValue,
+          },
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            isActive: true,
+            entryPoint: true,
+            definition: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+      });
+      logger.info({
+        event: "app.chatbot.flow.created",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        userId: clientAuth.userId,
+        flowId: flow.id,
+        isActive: flow.isActive,
+        entryPoint: flow.entryPoint,
+      });
+      json(res, 200, { ok: true, flow });
+    } catch (error) {
+      logger.error({
+        event: "app.chatbot.flows.create.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
     return;
   }
 
@@ -9884,20 +10019,116 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     pathname.startsWith("/app/chatbot/flows/") &&
     pathname.split("/").length === 5
   ) {
+    const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
-    logger.warn({
-      event: "app.chatbot.flows.update.denied",
-      requestId,
-      clientId: clientAuth.clientId,
-      userId: clientAuth.userId,
-      reason: "managed_by_internal_admin",
-    });
-    json(
-      res,
-      403,
-      httpError("managed_by_internal_admin", "Flows do chatbot sao gerenciados no console interno.")
-    );
+    try {
+      if (!isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can update chatbot flows."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "chatbot",
+        endpoint: "/app/chatbot/flows/:flowId",
+        requestId,
+      }))) return;
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const automationFlags = (await resolveAutomationFlagsSettings({
+        prisma,
+        clientId: client.id,
+        tenant,
+      })).settings;
+      if (automationFlags.disableChatbotFlowEditing) {
+        json(res, 403, httpError("chatbot_flow_editing_locked_by_admin", "Chatbot flow editing is locked."));
+        return;
+      }
+      const flowId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+      if (!flowId) {
+        json(res, 400, httpError("bad_request", "Flow id is required"));
+        return;
+      }
+      const existing = await prisma.chatbotFlow.findFirst({
+        where: { id: flowId, clientId: client.id },
+        select: { id: true },
+      });
+      if (!existing) {
+        json(res, 404, httpError("chatbot_flow_not_found", "Chatbot flow not found"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const parsed = await parseChatbotFlowUpsertPayload(prisma, client.id, body);
+      if (!parsed.ok) {
+        json(res, parsed.status, httpError(parsed.code, parsed.message));
+        return;
+      }
+      const flow = await prisma.$transaction(async (tx) => {
+        if (parsed.data.entryPoint === true) {
+          await tx.chatbotFlow.updateMany({
+            where: {
+              clientId: client.id,
+              id: { not: flowId },
+            },
+            data: { entryPoint: false },
+          });
+        }
+        return tx.chatbotFlow.update({
+          where: { id: flowId },
+          data: {
+            ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
+            ...(parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : {}),
+            ...(parsed.data.entryPoint !== undefined ? { entryPoint: parsed.data.entryPoint } : {}),
+            ...(parsed.data.definition !== undefined
+              ? { definition: parsed.data.definition as Prisma.InputJsonValue }
+              : {}),
+          },
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            isActive: true,
+            entryPoint: true,
+            definition: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+      });
+      logger.info({
+        event: "app.chatbot.flow.updated",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        userId: clientAuth.userId,
+        flowId: flow.id,
+        isActive: flow.isActive,
+        entryPoint: flow.entryPoint,
+      });
+      json(res, 200, { ok: true, flow });
+    } catch (error) {
+      logger.error({
+        event: "app.chatbot.flows.update.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
     return;
   }
 
@@ -14504,6 +14735,46 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/admin/chatbot/resources") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const [departments, queues] = await Promise.all([
+          prisma.department.findMany({
+            where: {
+              clientId: client.id,
+              isActive: true,
+              ...LEGACY_OPERATIONAL_DEPARTMENT_FILTER,
+            },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            select: { id: true, name: true, slug: true, isActive: true },
+          }),
+          prisma.queue.findMany({
+            where: { clientId: client.id },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            select: { id: true, name: true, departmentId: true },
+          }),
+        ]);
+        json(res, 200, { ok: true, departments, queues });
+      } catch (error) {
+        logger.error({
+          event: "admin.chatbot.resources.get.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
     if (req.method === "GET" && pathname === "/admin/chatbot/settings") {
       try {
         const clientKey = await getScopedClientKey();
@@ -15213,7 +15484,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         const body = await readJsonBody(req, res);
         if (!body) return;
-        const parsed = parseChatbotFlowUpsertPayload(body, {
+        const parsed = await parseChatbotFlowUpsertPayload(prisma, client.id, body, {
           requireName: true,
           requireDefinition: true,
         });
@@ -15297,7 +15568,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         const body = await readJsonBody(req, res);
         if (!body) return;
-        const parsed = parseChatbotFlowUpsertPayload(body);
+        const parsed = await parseChatbotFlowUpsertPayload(prisma, client.id, body);
         if (!parsed.ok) {
           json(res, parsed.status, httpError(parsed.code, parsed.message));
           return;
@@ -23416,13 +23687,15 @@ function parseDepartmentUpsertPayload(
   return { ok: true, data };
 }
 
-function parseChatbotFlowUpsertPayload(
+async function parseChatbotFlowUpsertPayload(
+  prisma: ReturnType<typeof getPrisma>,
+  clientId: string,
   body: unknown,
   options?: {
     requireName?: boolean;
     requireDefinition?: boolean;
   }
-):
+): Promise<
   | {
       ok: true;
       data: {
@@ -23432,7 +23705,8 @@ function parseChatbotFlowUpsertPayload(
         definition?: Prisma.JsonValue;
       };
     }
-  | { ok: false; status: 400; code: string; message: string } {
+  | { ok: false; status: 400; code: string; message: string }
+> {
   const payload =
     body && typeof body === "object" && !Array.isArray(body)
       ? (body as Record<string, unknown>)
@@ -23489,6 +23763,18 @@ function parseChatbotFlowUpsertPayload(
         status: 400,
         code: validated.code,
         message: validated.message,
+      };
+    }
+    const tenantReferences = await validateChatbotFlowTenantReferences(prisma, {
+      clientId,
+      definition: validated.definition,
+    });
+    if (!tenantReferences.ok) {
+      return {
+        ok: false,
+        status: 400,
+        code: tenantReferences.code,
+        message: tenantReferences.message,
       };
     }
     data.definition = validated.definition as Prisma.JsonValue;

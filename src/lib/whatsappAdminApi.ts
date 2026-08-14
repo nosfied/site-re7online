@@ -169,6 +169,12 @@ export type AdminDepartmentItem = {
   businessHoursConfigured?: boolean;
 };
 
+export type AdminQueueItem = {
+  id: string;
+  name: string;
+  departmentId: string;
+};
+
 export type AdminClientItem = {
   id: string;
   name: string;
@@ -1978,6 +1984,18 @@ export async function fetchAdminChatbotFlows(
 }> {
   const params = new URLSearchParams({ clientKey });
   return requestJson(connection, `/admin/chatbot/flows?${params.toString()}`);
+}
+
+export async function fetchAdminChatbotResources(
+  connection: AdminConnection,
+  clientKey: string
+): Promise<{
+  ok: true;
+  departments: AdminDepartmentItem[];
+  queues: AdminQueueItem[];
+}> {
+  const params = new URLSearchParams({ clientKey });
+  return requestJson(connection, `/admin/chatbot/resources?${params.toString()}`);
 }
 
 export async function fetchAdminChatbotSettings(

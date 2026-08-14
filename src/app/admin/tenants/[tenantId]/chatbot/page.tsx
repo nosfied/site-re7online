@@ -5,9 +5,15 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
+  ChatbotFlowBuilder,
+  ChatbotFlowBuilderDepartment,
+  ChatbotFlowBuilderQueue,
+} from "@/components/app/ChatbotFlowBuilder";
+import {
   AdminAutomationSettings,
   AdminChatbotFlowItem,
   createAdminChatbotFlow,
+  fetchAdminChatbotResources,
   fetchAdminChatbotFlows,
   fetchAdminChatbotSettings,
   fetchTenantById,
@@ -370,6 +376,10 @@ export default function AdminTenantChatbotPage() {
   const [tenantName, setTenantName] = useState("");
   const [flows, setFlows] = useState<AdminChatbotFlowItem[]>([]);
   const [settings, setSettings] = useState<AdminAutomationSettings | null>(null);
+  const [builderResources, setBuilderResources] = useState<{
+    departments: ChatbotFlowBuilderDepartment[];
+    queues: ChatbotFlowBuilderQueue[];
+  }>({ departments: [], queues: [] });
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -475,12 +485,17 @@ export default function AdminTenantChatbotPage() {
 
   const loadData = useCallback(
     async (activeClientKey: string) => {
-      const [flowResponse, settingsResponse] = await Promise.all([
+      const [flowResponse, settingsResponse, resourcesResponse] = await Promise.all([
         fetchAdminChatbotFlows(connection, activeClientKey),
         fetchAdminChatbotSettings(connection, activeClientKey),
+        fetchAdminChatbotResources(connection, activeClientKey),
       ]);
       hydrateFlows(flowResponse.items);
       setSettings(settingsResponse.settings);
+      setBuilderResources({
+        departments: resourcesResponse.departments,
+        queues: resourcesResponse.queues,
+      });
       setIntentCatalogText(formatIntentCatalogText(settingsResponse.settings.aiAssistantIntentCatalog));
     },
     [connection, hydrateFlows]
@@ -1639,38 +1654,49 @@ export default function AdminTenantChatbotPage() {
               onChange={(event) => setNewName(event.target.value)}
               placeholder="Fluxo principal"
             />
-            <textarea
-              id="admin-new-flow-definition"
-              className="min-h-[18rem] w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 font-mono text-sm text-white outline-none focus:border-re7-sky"
-              value={newDefinition}
-              onChange={(event) => setNewDefinition(event.target.value)}
-              spellCheck={false}
+            <ChatbotFlowBuilder
+              definitionText={newDefinition}
+              onDefinitionTextChange={setNewDefinition}
+              disabled={creating || !clientKey}
+              departments={builderResources.departments}
+              queues={builderResources.queues}
+              advancedEditor={
+                <>
+                  <textarea
+                    id="admin-new-flow-definition"
+                    className="min-h-[18rem] w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 font-mono text-sm text-white outline-none focus:border-re7-sky"
+                    value={newDefinition}
+                    onChange={(event) => setNewDefinition(event.target.value)}
+                    spellCheck={false}
+                  />
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-white/75">
+                    <input
+                      className="min-w-[220px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                      value={newSearch}
+                      onChange={(event) => setNewSearch(event.target.value)}
+                      placeholder="Localizar no JSON"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => selectJsonOccurrence("admin-new-flow-definition", newDefinition, newSearch, true)}
+                      disabled={!newSearch.trim()}
+                      className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectJsonOccurrence("admin-new-flow-definition", newDefinition, newSearch)}
+                      disabled={!newSearch.trim()}
+                      className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Proximo
+                    </button>
+                    <span className="text-xs text-white/50">{countOccurrences(newDefinition, newSearch)} ocorrencia(s)</span>
+                  </div>
+                </>
+              }
             />
-            <div className="flex flex-wrap items-center gap-2 text-sm text-white/75">
-              <input
-                className="min-w-[220px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-                value={newSearch}
-                onChange={(event) => setNewSearch(event.target.value)}
-                placeholder="Localizar no JSON"
-              />
-              <button
-                type="button"
-                onClick={() => selectJsonOccurrence("admin-new-flow-definition", newDefinition, newSearch, true)}
-                disabled={!newSearch.trim()}
-                className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Anterior
-              </button>
-              <button
-                type="button"
-                onClick={() => selectJsonOccurrence("admin-new-flow-definition", newDefinition, newSearch)}
-                disabled={!newSearch.trim()}
-                className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Proximo
-              </button>
-              <span className="text-xs text-white/50">{countOccurrences(newDefinition, newSearch)} ocorrencia(s)</span>
-            </div>
             {newJsonError ? (
               <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
                 JSON invalido: {newJsonError}
@@ -1763,62 +1789,81 @@ export default function AdminTenantChatbotPage() {
                           }))
                         }
                       />
-                      <textarea
-                        id={`admin-flow-definition-${flow.id}`}
-                        className="min-h-[18rem] w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 font-mono text-sm text-white outline-none focus:border-re7-sky"
-                        value={draft.definitionText}
-                        onChange={(event) =>
+                      <ChatbotFlowBuilder
+                        definitionText={draft.definitionText}
+                        onDefinitionTextChange={(value) =>
                           setDrafts((current) => ({
                             ...current,
                             [flow.id]: {
                               ...draft,
-                              definitionText: event.target.value,
+                              definitionText: value,
                             },
                           }))
                         }
-                        spellCheck={false}
+                        disabled={false}
+                        departments={builderResources.departments}
+                        queues={builderResources.queues}
+                        advancedEditor={
+                          <>
+                            <textarea
+                              id={`admin-flow-definition-${flow.id}`}
+                              className="min-h-[18rem] w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 font-mono text-sm text-white outline-none focus:border-re7-sky"
+                              value={draft.definitionText}
+                              onChange={(event) =>
+                                setDrafts((current) => ({
+                                  ...current,
+                                  [flow.id]: {
+                                    ...draft,
+                                    definitionText: event.target.value,
+                                  },
+                                }))
+                              }
+                              spellCheck={false}
+                            />
+                            <div className="flex flex-wrap items-center gap-2 text-sm text-white/75">
+                              <input
+                                className="min-w-[220px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                                value={search}
+                                onChange={(event) =>
+                                  setDraftSearches((current) => ({
+                                    ...current,
+                                    [flow.id]: event.target.value,
+                                  }))
+                                }
+                                placeholder="Localizar no JSON"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  selectJsonOccurrence(
+                                    `admin-flow-definition-${flow.id}`,
+                                    draft.definitionText,
+                                    search,
+                                    true
+                                  )
+                                }
+                                disabled={!search.trim()}
+                                className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Anterior
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  selectJsonOccurrence(`admin-flow-definition-${flow.id}`, draft.definitionText, search)
+                                }
+                                disabled={!search.trim()}
+                                className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Proximo
+                              </button>
+                              <span className="text-xs text-white/50">
+                                {countOccurrences(draft.definitionText, search)} ocorrencia(s)
+                              </span>
+                            </div>
+                          </>
+                        }
                       />
-                      <div className="flex flex-wrap items-center gap-2 text-sm text-white/75">
-                        <input
-                          className="min-w-[220px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-                          value={search}
-                          onChange={(event) =>
-                            setDraftSearches((current) => ({
-                              ...current,
-                              [flow.id]: event.target.value,
-                            }))
-                          }
-                          placeholder="Localizar no JSON"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            selectJsonOccurrence(
-                              `admin-flow-definition-${flow.id}`,
-                              draft.definitionText,
-                              search,
-                              true
-                            )
-                          }
-                          disabled={!search.trim()}
-                          className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Anterior
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            selectJsonOccurrence(`admin-flow-definition-${flow.id}`, draft.definitionText, search)
-                          }
-                          disabled={!search.trim()}
-                          className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Proximo
-                        </button>
-                        <span className="text-xs text-white/50">
-                          {countOccurrences(draft.definitionText, search)} ocorrencia(s)
-                        </span>
-                      </div>
                       {draftJsonErrors[flow.id] ? (
                         <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
                           JSON invalido: {draftJsonErrors[flow.id]}

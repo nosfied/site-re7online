@@ -887,6 +887,19 @@ export type AppChatbotFlowItem = {
   updatedAt: string;
 };
 
+export type AppChatbotDepartmentItem = {
+  id: string;
+  name: string;
+  slug?: string;
+  isActive: boolean;
+};
+
+export type AppChatbotQueueItem = {
+  id: string;
+  name: string;
+  departmentId: string;
+};
+
 export type AppCannedReplyItem = {
   id: string;
   title: string;
@@ -3054,6 +3067,16 @@ export async function fetchAppChatbotFlows(
   items: AppChatbotFlowItem[];
 }> {
   return requestAppJson(session, "/app/chatbot/flows");
+}
+
+export async function fetchAppChatbotResources(
+  session: AppSession
+): Promise<{
+  ok: true;
+  departments: AppChatbotDepartmentItem[];
+  queues: AppChatbotQueueItem[];
+}> {
+  return requestAppJson(session, "/app/chatbot/resources");
 }
 
 export async function fetchAppChatbotSettings(

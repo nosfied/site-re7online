@@ -244,6 +244,7 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
       };
     }
     const normalizedOptions: ChatbotMenuNode["options"] = [];
+    const optionKeys = new Set<string>();
     for (let index = 0; index < options.length; index += 1) {
       const rawOption = options[index];
       if (!isRecord(rawOption)) {
@@ -262,6 +263,16 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
           message: `Menu node "${nodeId}" option ${index + 1} requires label and next.`,
         };
       }
+      const explicit = parseExplicitMenuOptionNumber(label);
+      const optionKey = explicit ? `number:${explicit.number}` : `label:${label.toLowerCase()}`;
+      if (optionKeys.has(optionKey)) {
+        return {
+          ok: false,
+          code: "invalid_chatbot_definition",
+          message: `Menu node "${nodeId}" has a duplicate option "${label}".`,
+        };
+      }
+      optionKeys.add(optionKey);
       normalizedOptions.push({
         ...preserveUnknownFields(rawOption, ["label", "next", "context", "tags", "departmentId", "queueId", "closedText"]),
         label,

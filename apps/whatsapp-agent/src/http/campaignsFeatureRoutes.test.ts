@@ -625,6 +625,95 @@ test("business profile default can access campaigns route", async () => {
   assert.equal(response.body.count, 0);
 });
 
+test("app chatbot flow builder uses session tenant and rejects cross-tenant routing ids", async () => {
+  const businessDepartment = await prisma.department.create({
+    data: {
+      clientId: businessClientId,
+      name: `${prefix} Builder Business`,
+      slug: `${prefix}-builder-business`,
+    },
+    select: { id: true },
+  });
+  const businessQueue = await prisma.queue.create({
+    data: {
+      clientId: businessClientId,
+      departmentId: businessDepartment.id,
+      name: `${prefix} Builder Business`,
+    },
+    select: { id: true },
+  });
+  const governmentDepartment = await prisma.department.create({
+    data: {
+      clientId: governmentClientId,
+      name: `${prefix} Builder Government`,
+      slug: `${prefix}-builder-government`,
+    },
+    select: { id: true },
+  });
+  const governmentQueue = await prisma.queue.create({
+    data: {
+      clientId: governmentClientId,
+      departmentId: governmentDepartment.id,
+      name: `${prefix} Builder Government`,
+    },
+    select: { id: true },
+  });
+
+  const response = await request<{ ok: true; flow: { id: string; clientId: string; definition: unknown } }>(
+    "POST",
+    "/app/chatbot/flows",
+    businessAdmin,
+    {
+      name: "Builder tenant scoped",
+      isActive: true,
+      entryPoint: true,
+      definition: {
+        start: "menu",
+        nodes: {
+          menu: {
+            type: "menu",
+            text: "Escolha",
+            options: [
+              {
+                label: "Atendimento",
+                next: "handoff",
+                departmentId: businessDepartment.id,
+                queueId: businessQueue.id,
+              },
+            ],
+          },
+          handoff: { type: "handoff", text: "Encaminhando" },
+        },
+      },
+    }
+  );
+
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  assert.equal(response.body.flow.clientId, businessClientId);
+
+  const crossTenant = await request<ErrorPayload>(
+    "POST",
+    "/app/chatbot/flows",
+    businessAdmin,
+    {
+      name: "Builder cross tenant",
+      definition: {
+        start: "handoff",
+        nodes: {
+          handoff: {
+            type: "handoff",
+            departmentId: governmentDepartment.id,
+            queueId: governmentQueue.id,
+          },
+        },
+      },
+    }
+  );
+
+  assert.equal(crossTenant.status, 400, JSON.stringify(crossTenant.body));
+  assert.equal(getErrorCode(crossTenant.body), "invalid_chatbot_reference");
+});
+
 test("government profile default is blocked from campaigns routes", async () => {
   const routes = [
     { method: "GET", route: "/app/campaigns" },

@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
+  ChatbotFlowBuilder,
+  ChatbotFlowBuilderDepartment,
+  ChatbotFlowBuilderQueue,
+} from "@/components/app/ChatbotFlowBuilder";
+import {
   AppApiError,
   AppAutomationSettings,
   AppChatbotFlowItem,
@@ -12,6 +17,7 @@ import {
   clearAppSession,
   createAppChatbotFlow,
   fetchAppChatbotFlows,
+  fetchAppChatbotResources,
   fetchAppChatbotSettings,
   loadAppSession,
   saveAppSession,
@@ -354,6 +360,10 @@ export default function AppChatbotPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppAutomationSettings | null>(null);
+  const [builderResources, setBuilderResources] = useState<{
+    departments: ChatbotFlowBuilderDepartment[];
+    queues: ChatbotFlowBuilderQueue[];
+  }>({ departments: [], queues: [] });
   const [notificationSettingsDirty, setNotificationSettingsDirty] = useState(false);
   const [newName, setNewName] = useState("Fluxo principal");
   const [newDefinition, setNewDefinition] = useState(DEFAULT_DEFINITION_TEXT);
@@ -466,12 +476,17 @@ export default function AppChatbotPage() {
 
   const loadFlows = useCallback(
     async (activeSession: AppSession) => {
-      const [flowResponse, settingsResponse] = await Promise.all([
+      const [flowResponse, settingsResponse, resourcesResponse] = await Promise.all([
         fetchAppChatbotFlows(activeSession),
         fetchAppChatbotSettings(activeSession),
+        fetchAppChatbotResources(activeSession),
       ]);
       hydrateFlows(flowResponse.items);
       setSettings(settingsResponse.settings);
+      setBuilderResources({
+        departments: resourcesResponse.departments,
+        queues: resourcesResponse.queues,
+      });
     },
     [hydrateFlows]
   );
@@ -678,7 +693,7 @@ export default function AppChatbotPage() {
   };
   const flowEditingLocked = Boolean(automationDraft.flowEditingLocked);
   const automationReadOnly = true;
-  const flowReadOnly = true;
+  const flowReadOnly = readOnly || flowEditingLocked;
   const aiConfigStatus = automationDraft.aiAssistantConfigurationStatus ?? {
     ready: Boolean(automationDraft.aiConfigured),
     missing: [],
@@ -923,40 +938,51 @@ export default function AppChatbotPage() {
             placeholder="Fluxo principal"
             disabled={flowReadOnly || creating}
           />
-          <JsonEditorWithSearch
-            id="new-flow-definition"
-            value={newDefinition}
-            onChange={setNewDefinition}
-            search={newSearch}
+          <ChatbotFlowBuilder
+            definitionText={newDefinition}
+            onDefinitionTextChange={setNewDefinition}
             disabled={flowReadOnly || creating}
+            departments={builderResources.departments}
+            queues={builderResources.queues}
+            advancedEditor={
+              <>
+                <JsonEditorWithSearch
+                  id="new-flow-definition"
+                  value={newDefinition}
+                  onChange={setNewDefinition}
+                  search={newSearch}
+                  disabled={flowReadOnly || creating}
+                />
+                <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-white/75">
+                  <input
+                    className="min-w-[220px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
+                    value={newSearch}
+                    onChange={(event) => setNewSearch(event.target.value)}
+                    placeholder="Localizar no JSON"
+                    disabled={readOnly || creating}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => selectJsonOccurrence("new-flow-definition", newDefinition, newSearch, true)}
+                    disabled={!newSearch.trim()}
+                    className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectJsonOccurrence("new-flow-definition", newDefinition, newSearch)}
+                    disabled={!newSearch.trim()}
+                    className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Próximo
+                  </button>
+                  <span className="text-xs text-white/50">{countOccurrences(newDefinition, newSearch)} ocorrência(s)</span>
+                </div>
+                <JsonSearchPreview text={newDefinition} query={newSearch} />
+              </>
+            }
           />
-          <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-white/75">
-            <input
-              className="min-w-[220px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
-              value={newSearch}
-              onChange={(event) => setNewSearch(event.target.value)}
-              placeholder="Localizar no JSON"
-              disabled={readOnly || creating}
-            />
-            <button
-              type="button"
-              onClick={() => selectJsonOccurrence("new-flow-definition", newDefinition, newSearch, true)}
-              disabled={!newSearch.trim()}
-              className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Anterior
-            </button>
-            <button
-              type="button"
-              onClick={() => selectJsonOccurrence("new-flow-definition", newDefinition, newSearch)}
-              disabled={!newSearch.trim()}
-              className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Próximo
-            </button>
-            <span className="text-xs text-white/50">{countOccurrences(newDefinition, newSearch)} ocorrência(s)</span>
-          </div>
-          <JsonSearchPreview text={newDefinition} query={newSearch} />
           {newJsonError ? (
             <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
               JSON inválido: {newJsonError}
@@ -1059,10 +1085,9 @@ export default function AppChatbotPage() {
                       }
                       disabled={flowReadOnly}
                     />
-                    <JsonEditorWithSearch
-                      id={`flow-definition-${flow.id}`}
-                      value={draft.definitionText}
-                      onChange={(value) =>
+                    <ChatbotFlowBuilder
+                      definitionText={draft.definitionText}
+                      onDefinitionTextChange={(value) =>
                         setDrafts((current) => ({
                           ...current,
                           [flow.id]: {
@@ -1071,56 +1096,76 @@ export default function AppChatbotPage() {
                           },
                         }))
                       }
-                      search={draftSearches[flow.id] ?? ""}
                       disabled={flowReadOnly}
+                      departments={builderResources.departments}
+                      queues={builderResources.queues}
+                      advancedEditor={
+                        <>
+                          <JsonEditorWithSearch
+                            id={`flow-definition-${flow.id}`}
+                            value={draft.definitionText}
+                            onChange={(value) =>
+                              setDrafts((current) => ({
+                                ...current,
+                                [flow.id]: {
+                                  ...draft,
+                                  definitionText: value,
+                                },
+                              }))
+                            }
+                            search={draftSearches[flow.id] ?? ""}
+                            disabled={flowReadOnly}
+                          />
+                          <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-white/75">
+                            <input
+                              className="min-w-[220px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
+                              value={draftSearches[flow.id] ?? ""}
+                              onChange={(event) =>
+                                setDraftSearches((current) => ({
+                                  ...current,
+                                  [flow.id]: event.target.value,
+                                }))
+                              }
+                              placeholder="Localizar no JSON"
+                              disabled={readOnly}
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                selectJsonOccurrence(
+                                  `flow-definition-${flow.id}`,
+                                  draft.definitionText,
+                                  draftSearches[flow.id] ?? "",
+                                  true
+                                )
+                              }
+                              disabled={!(draftSearches[flow.id] ?? "").trim()}
+                              className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Anterior
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                selectJsonOccurrence(
+                                  `flow-definition-${flow.id}`,
+                                  draft.definitionText,
+                                  draftSearches[flow.id] ?? ""
+                                )
+                              }
+                              disabled={!(draftSearches[flow.id] ?? "").trim()}
+                              className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Proximo
+                            </button>
+                            <span className="text-xs text-white/50">
+                              {countOccurrences(draft.definitionText, draftSearches[flow.id] ?? "")} ocorrência(s)
+                            </span>
+                          </div>
+                          <JsonSearchPreview text={draft.definitionText} query={draftSearches[flow.id] ?? ""} />
+                        </>
+                      }
                     />
-                    <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-white/75">
-                      <input
-                        className="min-w-[220px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
-                        value={draftSearches[flow.id] ?? ""}
-                        onChange={(event) =>
-                          setDraftSearches((current) => ({
-                            ...current,
-                            [flow.id]: event.target.value,
-                          }))
-                        }
-                        placeholder="Localizar no JSON"
-                        disabled={readOnly}
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          selectJsonOccurrence(
-                            `flow-definition-${flow.id}`,
-                            draft.definitionText,
-                            draftSearches[flow.id] ?? "",
-                            true
-                          )
-                        }
-                        disabled={!(draftSearches[flow.id] ?? "").trim()}
-                        className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Anterior
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          selectJsonOccurrence(
-                            `flow-definition-${flow.id}`,
-                            draft.definitionText,
-                            draftSearches[flow.id] ?? ""
-                          )
-                        }
-                        disabled={!(draftSearches[flow.id] ?? "").trim()}
-                        className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Proximo
-                      </button>
-                      <span className="text-xs text-white/50">
-                        {countOccurrences(draft.definitionText, draftSearches[flow.id] ?? "")} ocorrência(s)
-                      </span>
-                    </div>
-                    <JsonSearchPreview text={draft.definitionText} query={draftSearches[flow.id] ?? ""} />
                     {draftJsonErrors[flow.id] ? (
                       <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
                         JSON inválido: {draftJsonErrors[flow.id]}
