@@ -8,10 +8,10 @@ import {
   type PrismaClient,
 } from "@prisma/client";
 import {
-  executeChatbotFlow,
   extractChatbotFlowId,
   validateChatbotFlowDefinition,
 } from "../chatbot/chatbotFlow.js";
+import { executeChatbotFlowWithConsent } from "../chatbot/chatbotConsentRuntime.js";
 import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import type { ConversationState, FlowContext } from "../conversation/conversation.types.js";
@@ -625,7 +625,14 @@ export async function runWebchatChatbotFlow(params: {
     ...runtimeState,
     clientKey: params.clientKey,
   }, params.now);
-  const result = executeChatbotFlow({
+  const result = await executeChatbotFlowWithConsent({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    waId: params.waId,
+    sourceChannel: channel,
+    sourceProvider: "webchat",
+    source: "chatbot",
+    requestId: params.requestId,
     flowId: flow.id,
     definition: validated.definition,
     state,

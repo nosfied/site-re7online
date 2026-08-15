@@ -3,10 +3,10 @@ import { HandoffStatus, MessageType, Prisma, type PrismaClient } from "@prisma/c
 import { getDefaultOperationalDepartment } from "../bootstrap/defaultOperationalDepartment.js";
 import {
   clearChatbotRuntime,
-  executeChatbotFlow,
   extractChatbotFlowId,
   validateChatbotFlowDefinition,
 } from "../chatbot/chatbotFlow.js";
+import { executeChatbotFlowWithConsent } from "../chatbot/chatbotConsentRuntime.js";
 import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
 import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
 import { activateHumanHandoff, updateOutbound } from "../conversation/conversation.service.js";
@@ -986,7 +986,14 @@ export async function ingestWebSessionInboundMessage(params: {
             reason: validatedDefinition.message,
           });
         } else {
-          const chatbotResult = executeChatbotFlow({
+          const chatbotResult = await executeChatbotFlowWithConsent({
+            prisma,
+            clientId: params.message.clientId,
+            waId: params.message.sender,
+            sourceChannel: "whatsapp",
+            sourceProvider: "web_session",
+            source: "chatbot",
+            requestId,
             flowId: chatbotFlow.id,
             definition: validatedDefinition.definition,
             state: runtimeConversationState,

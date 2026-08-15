@@ -25,8 +25,9 @@ async function resolveConsentSubject(params: {
   clientId: string;
   contactId?: string | null;
   leadId?: string | null;
+  waId?: string | null;
 }) {
-  if (!params.contactId && !params.leadId) {
+  if (!params.contactId && !params.leadId && !params.waId) {
     return { ok: false as const, reason: "subject_required" as const };
   }
   const [contact, lead] = await Promise.all([
@@ -35,12 +36,22 @@ async function resolveConsentSubject(params: {
           where: { id: params.contactId, clientId: params.clientId },
           select: { id: true, waId: true },
         })
+      : params.waId
+        ? params.prisma.contact.findFirst({
+            where: { clientId: params.clientId, waId: params.waId },
+            select: { id: true, waId: true },
+          })
       : Promise.resolve(null),
     params.leadId
       ? params.prisma.lead.findFirst({
           where: { id: params.leadId, tenantId: params.clientId },
           select: { id: true, waId: true },
         })
+      : params.waId
+        ? params.prisma.lead.findFirst({
+            where: { tenantId: params.clientId, waId: params.waId },
+            select: { id: true, waId: true },
+          })
       : Promise.resolve(null),
   ]);
   if (params.contactId && !contact) return { ok: false as const, reason: "contact_not_found" as const };
@@ -75,7 +86,10 @@ export async function getContactConsentState(params: {
   clientId: string;
   contactId?: string | null;
   leadId?: string | null;
+  waId?: string | null;
   purpose: string;
+  textVersion?: string | null;
+  textBody?: string | null;
 }) {
   const purpose = normalizeConsentPurpose(params.purpose);
   if (!purpose) return { ok: false as const, reason: "invalid_purpose" as const };
@@ -107,6 +121,13 @@ export async function getContactConsentState(params: {
   });
   if (!consent) return { ok: true as const, status: "missing" as ContactConsentStatus, consent: null };
   if (consent.status === "accepted" && !consent.revokedAt) {
+    const expectedHash = buildConsentTextHash(params.textBody);
+    if (params.textVersion && consent.textVersion !== params.textVersion) {
+      return { ok: true as const, status: "missing" as ContactConsentStatus, consent };
+    }
+    if (expectedHash && consent.textHash !== expectedHash) {
+      return { ok: true as const, status: "missing" as ContactConsentStatus, consent };
+    }
     return { ok: true as const, status: "accepted" as ContactConsentStatus, consent };
   }
   return { ok: true as const, status: "revoked" as ContactConsentStatus, consent };
@@ -117,6 +138,7 @@ export async function recordContactConsent(params: {
   clientId: string;
   contactId?: string | null;
   leadId?: string | null;
+  waId?: string | null;
   purpose: string;
   sourceChannel?: string | null;
   sourceProvider?: string | null;
@@ -184,6 +206,7 @@ export async function revokeContactConsent(params: {
   clientId: string;
   contactId?: string | null;
   leadId?: string | null;
+  waId?: string | null;
   purpose: string;
   source?: string | null;
   requestId: string;

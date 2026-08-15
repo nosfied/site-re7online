@@ -113,12 +113,12 @@ import { ensureLeadForConversation, upsertLeadFromCapture } from "../crm/lead.se
 import { runWhatsAppDualReadShadow } from "../channels/whatsappDualReadShadow.js";
 import {
   clearChatbotRuntime,
-  executeChatbotFlow,
   extractChatbotFlowId,
   getInitialChatbotAwaitingNodeId,
   validateChatbotFlowDefinition,
   type ChatbotPendingHandoff,
 } from "../chatbot/chatbotFlow.js";
+import { executeChatbotFlowWithConsent } from "../chatbot/chatbotConsentRuntime.js";
 import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
 import {
   applyFlowIntentClassificationToContext,
@@ -5070,7 +5070,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             }
           }
           if (!shouldDeferInitialMenuToAssistant) {
-            const chatbotResult = executeChatbotFlow({
+            const chatbotResult = await executeChatbotFlowWithConsent({
+              prisma,
+              clientId: tenantClientId,
+              waId: normalizedFrom,
+              sourceChannel: "whatsapp",
+              sourceProvider: "meta",
+              source: "chatbot",
+              requestId: meta?.requestId ?? `chatbot:${tenantClientId}:${message.messageId}`,
               flowId: chatbotFlow.id,
               definition: validatedDefinition.definition,
               state: updatedConversation,

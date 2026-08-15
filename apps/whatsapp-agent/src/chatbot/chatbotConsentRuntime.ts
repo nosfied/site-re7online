@@ -1,0 +1,157 @@
+import type { PrismaClient } from "@prisma/client";
+import {
+  ChatbotExecutionResult,
+  ChatbotFlowDefinition,
+  ChatbotConsentNode,
+  clearChatbotRuntime,
+  executeChatbotFlow,
+  getChatbotConsentKey,
+} from "./chatbotFlow.js";
+import type { ConversationState } from "../conversation/conversation.types.js";
+import {
+  getContactConsentState,
+  recordContactConsent,
+} from "../consent/contactConsent.js";
+
+type PrismaForChatbotConsent = Pick<PrismaClient, "contact" | "lead" | "conversation" | "contactConsent" | "event">;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeAnswer(value: string | null | undefined) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function getConsentNodes(definition: ChatbotFlowDefinition) {
+  return Object.values(definition.nodes).filter((node): node is ChatbotConsentNode => node.type === "consent");
+}
+
+function withAcceptedConsent(state: ConversationState, node: ChatbotConsentNode): ConversationState {
+  const runtime = isRecord(state.answers?.chatbotRuntime) ? state.answers?.chatbotRuntime : {};
+  const acceptedConsents = isRecord(runtime.acceptedConsents) ? runtime.acceptedConsents : {};
+  return {
+    ...state,
+    answers: {
+      ...(state.answers ?? {}),
+      chatbotRuntime: {
+        ...runtime,
+        acceptedConsents: {
+          ...acceptedConsents,
+          [getChatbotConsentKey(node)]: true,
+        },
+      },
+    },
+  };
+}
+
+async function hydrateAcceptedConsents(params: {
+  prisma: PrismaForChatbotConsent;
+  clientId: string;
+  waId: string;
+  state: ConversationState;
+  definition: ChatbotFlowDefinition;
+}) {
+  let state = params.state;
+  for (const node of getConsentNodes(params.definition)) {
+    const consent = await getContactConsentState({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      waId: params.waId,
+      purpose: node.purpose,
+      textVersion: node.textVersion,
+      textBody: node.message,
+    });
+    if (consent.ok && consent.status === "accepted") {
+      state = withAcceptedConsent(state, node);
+    }
+  }
+  return state;
+}
+
+function getCurrentConsentNode(params: {
+  definition: ChatbotFlowDefinition;
+  state: ConversationState;
+  startNodeId?: string;
+}) {
+  const nodeId = params.startNodeId ?? params.state.chatbotNodeId ?? null;
+  if (!nodeId) return null;
+  const node = params.definition.nodes[nodeId];
+  return node?.type === "consent" ? { nodeId, node } : null;
+}
+
+export async function executeChatbotFlowWithConsent(params: {
+  prisma: PrismaForChatbotConsent;
+  clientId: string;
+  waId: string;
+  sourceChannel: string;
+  sourceProvider: string;
+  source: string;
+  requestId: string;
+  flowId: string;
+  definition: ChatbotFlowDefinition;
+  state: ConversationState;
+  inboundText: string | null | undefined;
+  nowIso: string;
+  startNodeId?: string;
+}): Promise<ChatbotExecutionResult> {
+  const hydratedState = await hydrateAcceptedConsents({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    waId: params.waId,
+    state: params.state,
+    definition: params.definition,
+  });
+  const currentConsent = getCurrentConsentNode({
+    definition: params.definition,
+    state: hydratedState,
+    startNodeId: params.startNodeId,
+  });
+  if (currentConsent) {
+    const answer = normalizeAnswer(params.inboundText);
+    const accepted = answer === normalizeAnswer(currentConsent.node.acceptOption);
+    if (accepted) {
+      const recorded = await recordContactConsent({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        waId: params.waId,
+        purpose: currentConsent.node.purpose,
+        textVersion: currentConsent.node.textVersion,
+        textBody: currentConsent.node.message,
+        sourceChannel: params.sourceChannel,
+        sourceProvider: params.sourceProvider,
+        source: params.source,
+        requestId: params.requestId,
+      });
+      if (recorded.ok) {
+        return executeChatbotFlow({
+          flowId: params.flowId,
+          definition: params.definition,
+          state: withAcceptedConsent(hydratedState, currentConsent.node),
+          inboundText: params.inboundText,
+          nowIso: params.nowIso,
+          startNodeId: currentConsent.node.onAccepted,
+        });
+      }
+    }
+    if (currentConsent.node.onDeclined && answer && answer !== normalizeAnswer(currentConsent.node.acceptOption)) {
+      return executeChatbotFlow({
+        flowId: params.flowId,
+        definition: params.definition,
+        state: clearChatbotRuntime(hydratedState),
+        inboundText: params.inboundText,
+        nowIso: params.nowIso,
+        startNodeId: currentConsent.node.onDeclined,
+      });
+    }
+  }
+
+  return executeChatbotFlow({
+    flowId: params.flowId,
+    definition: params.definition,
+    state: hydratedState,
+    inboundText: params.inboundText,
+    nowIso: params.nowIso,
+    startNodeId: params.startNodeId,
+  });
+}

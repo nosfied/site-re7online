@@ -53,11 +53,21 @@ function makePrisma() {
   const prisma = {
     contact: {
       findFirst: async ({ where }: any) =>
-        state.contacts.find((item) => item.id === where.id && item.clientId === where.clientId) ?? null,
+        state.contacts.find((item) => {
+          if (item.clientId !== where.clientId) return false;
+          if (where.id) return item.id === where.id;
+          if (where.waId) return item.waId === where.waId;
+          return false;
+        }) ?? null,
     },
     lead: {
       findFirst: async ({ where }: any) =>
-        state.leads.find((item) => item.id === where.id && item.tenantId === where.tenantId) ?? null,
+        state.leads.find((item) => {
+          if (item.tenantId !== where.tenantId) return false;
+          if (where.id) return item.id === where.id;
+          if (where.waId) return item.waId === where.waId;
+          return false;
+        }) ?? null,
     },
     conversation: {
       findFirst: async ({ where }: any) =>
@@ -225,6 +235,66 @@ test("consent supports independent purposes for the same subject", async () => {
     state.consents.find((item) => item.purpose === "marketing_informational")?.status,
     "revoked"
   );
+});
+
+test("consent can resolve subject by waId and requires current text version", async () => {
+  const { prisma, state } = makePrisma();
+  const accepted = await recordContactConsent({
+    prisma,
+    clientId: "11111111-1111-4111-8111-111111111111",
+    waId: "support-user-1",
+    purpose: "attendance",
+    sourceChannel: "whatsapp",
+    sourceProvider: "web_session",
+    source: "chatbot",
+    textVersion: "v1",
+    textBody: "Texto v1",
+    requestId: "consent-waid",
+  });
+  assert.equal(accepted.ok, true);
+  assert.equal(state.consents[0].contactId, "contact-1");
+  assert.equal(state.consents[0].leadId, "lead-1");
+
+  const current = await getContactConsentState({
+    prisma,
+    clientId: "11111111-1111-4111-8111-111111111111",
+    waId: "support-user-1",
+    purpose: "attendance",
+    textVersion: "v1",
+    textBody: "Texto v1",
+  });
+  assert.equal(current.ok, true);
+  assert.equal(current.status, "accepted");
+
+  const outdated = await getContactConsentState({
+    prisma,
+    clientId: "11111111-1111-4111-8111-111111111111",
+    waId: "support-user-1",
+    purpose: "attendance",
+    textVersion: "v2",
+    textBody: "Texto v2",
+  });
+  assert.equal(outdated.ok, true);
+  assert.equal(outdated.status, "missing");
+
+  await revokeContactConsent({
+    prisma,
+    clientId: "11111111-1111-4111-8111-111111111111",
+    waId: "support-user-1",
+    purpose: "attendance",
+    source: "privacy_settings",
+    requestId: "consent-waid-revoke",
+  });
+  const revoked = await getContactConsentState({
+    prisma,
+    clientId: "11111111-1111-4111-8111-111111111111",
+    waId: "support-user-1",
+    purpose: "attendance",
+    textVersion: "v1",
+    textBody: "Texto v1",
+  });
+  assert.equal(revoked.ok, true);
+  assert.equal(revoked.status, "revoked");
 });
 
 test("consent preserves tenant isolation and requires a compatible subject", async () => {

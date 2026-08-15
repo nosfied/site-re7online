@@ -155,6 +155,7 @@ export type QuoteSiteAnswers = {
   aiQualification?: AIQualificationState;
   chatbotRuntime?: {
     lastInteractionAt?: string | null;
+    acceptedConsents?: Record<string, boolean>;
   };
   protocolContinuation?: {
     protocol: string;

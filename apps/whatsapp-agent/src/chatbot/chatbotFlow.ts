@@ -40,7 +40,22 @@ export type ChatbotHandoffNode = Record<string, unknown> & ChatbotFlowMetadata &
   handoffSummary?: string;
 };
 
-export type ChatbotNode = ChatbotMenuNode | ChatbotTextNode | ChatbotCaptureNode | ChatbotHandoffNode;
+export type ChatbotConsentNode = Record<string, unknown> & ChatbotFlowMetadata & {
+  type: "consent";
+  purpose: string;
+  textVersion: string;
+  message: string;
+  acceptOption: string;
+  onAccepted: string;
+  onDeclined?: string;
+};
+
+export type ChatbotNode =
+  | ChatbotMenuNode
+  | ChatbotTextNode
+  | ChatbotCaptureNode
+  | ChatbotHandoffNode
+  | ChatbotConsentNode;
 
 export type ChatbotGlobalCommand = {
   command: string;
@@ -289,7 +304,7 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
   }
 
   const type = getNonEmptyString(rawNode.type);
-  if (!type || !["menu", "text", "capture", "handoff"].includes(type)) {
+  if (!type || !["menu", "text", "capture", "handoff", "consent"].includes(type)) {
     return {
       ok: false,
       code: "invalid_chatbot_definition",
@@ -434,6 +449,49 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
     };
   }
 
+  if (type === "consent") {
+    const purpose = getNonEmptyString(rawNode.purpose);
+    const textVersion = getNonEmptyString(rawNode.textVersion);
+    const message = getNonEmptyString(rawNode.message);
+    const acceptOption = getNonEmptyString(rawNode.acceptOption);
+    const onAccepted = getNonEmptyString(rawNode.onAccepted);
+    const onDeclined = getNonEmptyString(rawNode.onDeclined);
+    if (!purpose || !textVersion || !message || !acceptOption || !onAccepted) {
+      return {
+        ok: false,
+        code: "invalid_chatbot_definition",
+        message: `Consent node "${nodeId}" requires purpose, textVersion, message, acceptOption and onAccepted.`,
+      };
+    }
+    return {
+      ok: true,
+      node: {
+        ...preserveUnknownFields(rawNode, [
+          "type",
+          "purpose",
+          "textVersion",
+          "message",
+          "acceptOption",
+          "onAccepted",
+          "onDeclined",
+          "context",
+          "tags",
+          "departmentId",
+          "queueId",
+          "closedText",
+        ]),
+        type: "consent",
+        purpose,
+        textVersion,
+        message,
+        acceptOption,
+        onAccepted,
+        ...(onDeclined ? { onDeclined } : {}),
+        ...getNodeMetadata(rawNode),
+      },
+    };
+  }
+
   const text = getNonEmptyString(rawNode.text);
   const handoffSummary = getNonEmptyString(rawNode.handoffSummary);
   return {
@@ -526,6 +584,22 @@ export function validateChatbotFlowDefinition(definition: unknown): ChatbotValid
         message: `Capture node "${nodeId}" points to an unknown node "${node.next}".`,
       };
     }
+    if (node.type === "consent") {
+      if (!nodes[node.onAccepted]) {
+        return {
+          ok: false,
+          code: "invalid_chatbot_definition",
+          message: `Consent node "${nodeId}" points to an unknown accepted node "${node.onAccepted}".`,
+        };
+      }
+      if (node.onDeclined && !nodes[node.onDeclined]) {
+        return {
+          ok: false,
+          code: "invalid_chatbot_definition",
+          message: `Consent node "${nodeId}" points to an unknown declined node "${node.onDeclined}".`,
+        };
+      }
+    }
   }
 
   return {
@@ -600,6 +674,20 @@ function renderMenu(node: ChatbotMenuNode) {
     return explicit ? explicit.displayLine : `${index + 1}. ${option.label}`;
   });
   return [node.text, ...lines].join("\n");
+}
+
+export function getChatbotConsentKey(node: Pick<ChatbotConsentNode, "purpose" | "textVersion">) {
+  return `${node.purpose}:${node.textVersion}`;
+}
+
+function getAcceptedConsentKeys(state: ConversationState) {
+  const runtime = isRecord(state.answers?.chatbotRuntime) ? state.answers?.chatbotRuntime : null;
+  const accepted = runtime && isRecord(runtime.acceptedConsents) ? runtime.acceptedConsents : {};
+  return new Set(
+    Object.entries(accepted)
+      .filter(([, value]) => value === true)
+      .map(([key]) => key)
+  );
 }
 
 function parseMenuSelection(text: string | null | undefined) {
@@ -1110,6 +1198,36 @@ function executeNodeChain(params: {
       };
     }
 
+    if (node.type === "consent") {
+      const consentKey = getChatbotConsentKey(node);
+      if (getAcceptedConsentKeys(currentState).has(consentKey)) {
+        autoAdvanceCount += 1;
+        if (autoAdvanceCount > CHATBOT_MAX_AUTO_ADVANCES_PER_EXECUTION) {
+          return {
+            handled: false,
+            state: clearChatbotRuntime(currentState),
+            events,
+          };
+        }
+        events.push({
+          event: "flow.node.auto_advanced",
+          flowId: params.flowId,
+          fromNodeId: currentNodeId,
+          toNodeId: node.onAccepted,
+        });
+        currentNodeId = node.onAccepted;
+        continue;
+      }
+      currentState = withChatbotRuntime(currentState, params.flowId, currentNodeId, true);
+      messages.push(node.message);
+      return {
+        handled: true,
+        state: currentState,
+        replyText: messages.join("\n\n"),
+        events,
+      };
+    }
+
     const feedbackText = node.text ?? DEFAULT_HANDOFF_FEEDBACK_TEXT;
     const summary = buildHandoffSummary(currentState.answers?.flowContext, node);
     const suggestedReply = buildSuggestedReply(
@@ -1270,6 +1388,15 @@ export function executeChatbotFlow(params: {
         state: stateWithCapturedValue,
         flowId: params.flowId,
         nodeId: currentNode.next,
+        nowIso: params.nowIso,
+      }), params.nowIso);
+    }
+    if (currentNode.type === "consent") {
+      return markChatbotResultInteraction(executeNodeChain({
+        definition: params.definition,
+        state: params.state,
+        flowId: params.flowId,
+        nodeId: params.state.chatbotNodeId,
         nowIso: params.nowIso,
       }), params.nowIso);
     }

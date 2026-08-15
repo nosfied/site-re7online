@@ -34,7 +34,7 @@ type Props = {
   advancedEditor: ReactNode;
 };
 
-const NODE_TYPES = ["menu", "text", "capture", "handoff"] as const;
+const NODE_TYPES = ["menu", "text", "capture", "consent", "handoff"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -68,6 +68,7 @@ function nodeTypeLabel(type: string) {
   if (type === "menu") return "Menu";
   if (type === "text") return "Mensagem";
   if (type === "capture") return "Coleta de resposta";
+  if (type === "consent") return "Consentimento";
   if (type === "handoff") return "Atendimento humano";
   return "Tipo desconhecido";
 }
@@ -109,6 +110,21 @@ function buildIssues(definition: FlowDefinition, queues: ChatbotFlowBuilderQueue
     }
     if ((type === "menu" || type === "text" || type === "capture") && !stringValue(node.text).trim()) {
       issues.push(`A etapa "${nodeId}" precisa de mensagem.`);
+    }
+    if (type === "consent") {
+      if (!stringValue(node.purpose).trim()) issues.push(`A etapa "${nodeId}" precisa de finalidade.`);
+      if (!stringValue(node.textVersion).trim()) issues.push(`A etapa "${nodeId}" precisa de versão do texto.`);
+      if (!stringValue(node.message).trim()) issues.push(`A etapa "${nodeId}" precisa da mensagem de consentimento.`);
+      if (!stringValue(node.acceptOption).trim()) issues.push(`A etapa "${nodeId}" precisa da opção de aceite.`);
+      if (!stringValue(node.onAccepted).trim()) issues.push(`A etapa "${nodeId}" precisa do destino ao aceitar.`);
+      if (stringValue(node.onAccepted) && !definition.nodes[stringValue(node.onAccepted)]) {
+        issues.push(`A etapa "${nodeId}" aceita e aponta para etapa inexistente.`);
+      }
+      if (stringValue(node.onDeclined) && !definition.nodes[stringValue(node.onDeclined)]) {
+        issues.push(`A etapa "${nodeId}" recusa e aponta para etapa inexistente.`);
+      }
+      if (stringValue(node.onAccepted)) inbound.add(stringValue(node.onAccepted));
+      if (stringValue(node.onDeclined)) inbound.add(stringValue(node.onDeclined));
     }
     if (type === "menu") {
       const seenKeys = new Set<string>();
@@ -351,6 +367,15 @@ export function ChatbotFlowBuilder({
                       ? { type, text: "Escolha uma opção:", options: [] }
                       : type === "capture"
                         ? { type, text: "Informe sua resposta:", field: "resposta", next: definition.start }
+                        : type === "consent"
+                          ? {
+                              type,
+                              purpose: "atendimento",
+                              textVersion: "draft",
+                              message: "Antes de continuar, confirme que leu e aceita o atendimento por este canal. Responda ACEITO para prosseguir.",
+                              acceptOption: "ACEITO",
+                              onAccepted: definition.start,
+                            }
                         : type === "handoff"
                           ? { type, text: "Vou encaminhar para atendimento humano." }
                           : { type, text: "Mensagem do fluxo." };
@@ -404,7 +429,7 @@ export function ChatbotFlowBuilder({
                       </select>
                     </label>
 
-                    {type !== "handoff" ? (
+                    {type !== "handoff" && type !== "consent" ? (
                       <label className="grid gap-1 text-sm text-white/70">
                         Mensagem
                         <textarea
@@ -418,6 +443,7 @@ export function ChatbotFlowBuilder({
                         </span>
                       </label>
                     ) : (
+                      type === "handoff" ? (
                       <label className="grid gap-1 text-sm text-white/70">
                         Mensagem antes de encaminhar
                         <textarea
@@ -427,6 +453,7 @@ export function ChatbotFlowBuilder({
                           className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
                         />
                       </label>
+                      ) : null
                     )}
 
                     {(type === "text" || type === "capture") ? (
@@ -469,6 +496,86 @@ export function ChatbotFlowBuilder({
                             <option value="phone_br">Telefone brasileiro</option>
                           </select>
                         </label>
+                      </div>
+                    ) : null}
+
+                    {type === "consent" ? (
+                      <div className="grid gap-3 rounded-lg border border-white/10 bg-black/10 p-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">Consentimento guiado</p>
+                          <p className="mt-1 text-xs text-white/55">
+                            O sistema consulta e grava o consentimento no servidor. O editor só define a finalidade, versão e caminhos do fluxo.
+                          </p>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <label className="grid gap-1 text-sm text-white/70">
+                            Finalidade
+                            <input
+                              value={stringValue(node.purpose)}
+                              disabled={disabled}
+                              onChange={(event) => commit(setNodeField(definition, nodeId, "purpose", event.target.value))}
+                              className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                              placeholder="Ex.: atendimento"
+                            />
+                          </label>
+                          <label className="grid gap-1 text-sm text-white/70">
+                            Versão do texto
+                            <input
+                              value={stringValue(node.textVersion)}
+                              disabled={disabled}
+                              onChange={(event) => commit(setNodeField(definition, nodeId, "textVersion", event.target.value))}
+                              className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                              placeholder="Ex.: 2026-08-draft"
+                            />
+                          </label>
+                        </div>
+                        <label className="grid gap-1 text-sm text-white/70">
+                          Mensagem
+                          <textarea
+                            value={stringValue(node.message)}
+                            disabled={disabled}
+                            onChange={(event) => commit(setNodeField(definition, nodeId, "message", event.target.value))}
+                            className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                          />
+                          <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/65 whitespace-pre-wrap">
+                            {stringValue(node.message) || "Prévia da solicitação de consentimento"}
+                          </span>
+                        </label>
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <label className="grid gap-1 text-sm text-white/70">
+                            Opção de aceite
+                            <input
+                              value={stringValue(node.acceptOption)}
+                              disabled={disabled}
+                              onChange={(event) => commit(setNodeField(definition, nodeId, "acceptOption", event.target.value))}
+                              className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                              placeholder="Ex.: ACEITO"
+                            />
+                          </label>
+                          <label className="grid gap-1 text-sm text-white/70">
+                            Ao aceitar
+                            <select
+                              value={stringValue(node.onAccepted)}
+                              disabled={disabled}
+                              onChange={(event) => commit(setNodeField(definition, nodeId, "onAccepted", event.target.value))}
+                              className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                            >
+                              {nodeIds.map((targetId) => <option key={targetId} value={targetId}>{targetId}</option>)}
+                            </select>
+                          </label>
+                          <label className="grid gap-1 text-sm text-white/70">
+                            Ao recusar
+                            <select
+                              value={stringValue(node.onDeclined)}
+                              disabled={disabled}
+                              onChange={(event) => commit(setNodeField(definition, nodeId, "onDeclined", event.target.value))}
+                              className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                            >
+                              <option value="">Repetir solicitação</option>
+                              {nodeIds.map((targetId) => <option key={targetId} value={targetId}>{targetId}</option>)}
+                            </select>
+                          </label>
+                        </div>
                       </div>
                     ) : null}
 

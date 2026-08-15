@@ -95,6 +95,63 @@ test("executeChatbotFlow starts in menu and waits for numeric answer", () => {
   assert.match(result.replyText ?? "", /1\. Atendimento/);
 });
 
+test("executeChatbotFlow prompts for consent and advances after accepted consent marker", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "consent",
+    nodes: {
+      consent: {
+        type: "consent",
+        purpose: "attendance",
+        textVersion: "v1",
+        message: "Responda ACEITO para continuar.",
+        acceptOption: "ACEITO",
+        onAccepted: "menu",
+      },
+      menu: {
+        type: "menu",
+        text: "Escolha",
+        options: [{ label: "Atendimento", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Tudo certo",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const prompt = executeChatbotFlow({
+    flowId: "flow_consent",
+    definition: validated.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-04-17T10:00:01.000Z",
+  });
+  assert.equal(prompt.handled, true);
+  assert.equal(prompt.state.chatbotNodeId, "consent");
+  assert.match(prompt.replyText ?? "", /ACEITO/);
+
+  const accepted = executeChatbotFlow({
+    flowId: "flow_consent",
+    definition: validated.definition,
+    state: makeState({
+      answers: {
+        chatbotRuntime: {
+          acceptedConsents: {
+            "attendance:v1": true,
+          },
+        } as any,
+      },
+    }),
+    inboundText: "oi",
+    nowIso: "2026-04-17T10:00:02.000Z",
+  });
+  assert.equal(accepted.handled, true);
+  assert.equal(accepted.state.chatbotNodeId, "menu");
+  assert.match(accepted.replyText ?? "", /1\. Atendimento/);
+});
+
 test("executeChatbotFlow preserves explicit menu option numbers", () => {
   const validated = validateChatbotFlowDefinition({
     start: "menu",
