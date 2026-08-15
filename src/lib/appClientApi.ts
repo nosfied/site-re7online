@@ -1624,6 +1624,19 @@ export type AppWhatsAppWebSessionStatus = {
     updatedAt: string | null;
     stagingUpdatedAt?: string | null;
   };
+  authorization: {
+    status: "AUTHORIZED" | "OWNED" | "RELEASED";
+    authorizedNumberCanonical: string | null;
+    authorizedNumberMasked: string | null;
+    authorizedAt: string | null;
+    authorizedBy: string | null;
+    releasedAt: string | null;
+    releasedBy: string | null;
+  };
+  detectedNumber: {
+    masked: string | null;
+    matchesAuthorized: boolean;
+  } | null;
   qr: {
     available: boolean;
     ttlMs: number;
@@ -3015,6 +3028,24 @@ export async function connectAppWhatsAppWebSession(
   session: AppSession
 ): Promise<AppWhatsAppWebSessionResponse> {
   return requestAppJson(session, "/app/settings/channels/whatsapp/web-session/connect", {
+    method: "POST",
+  });
+}
+
+export async function authorizeAppWhatsAppWebSessionNumber(
+  session: AppSession,
+  input: { number: string }
+): Promise<AppWhatsAppWebSessionResponse> {
+  return requestAppJson(session, "/app/settings/channels/whatsapp/web-session/authorize-number", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function releaseAppWhatsAppWebSessionNumber(
+  session: AppSession
+): Promise<AppWhatsAppWebSessionResponse> {
+  return requestAppJson(session, "/app/settings/channels/whatsapp/web-session/release-number", {
     method: "POST",
   });
 }

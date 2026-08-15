@@ -660,6 +660,45 @@ export type TenantChannelAccount = {
   updatedAt?: string;
 };
 
+export type TenantWebSessionStatus = {
+  configured: boolean;
+  featureEnabled: boolean;
+  account: {
+    id: string;
+    channelAccountId: string;
+    displayName: string | null;
+    channel: "whatsapp";
+    provider: "web_session";
+    enabled: boolean;
+    runtimeEnabled: boolean;
+    status: string;
+    tokenStatus: string;
+    lastUpdatedAt: string;
+  } | null;
+  lifecycle: {
+    desiredState: "CONNECTED" | "DISCONNECTED";
+    observedState: "DISCONNECTED" | "CONNECTING" | "QR_REQUIRED" | "CONNECTED" | "RECONNECTING" | "ERROR";
+    lastConnectedAt: string | null;
+    lastDisconnectedAt: string | null;
+    lastErrorAt: string | null;
+    lastErrorCode: string | null;
+    reconnectCount: number;
+  };
+  authorization: {
+    status: "AUTHORIZED" | "OWNED" | "RELEASED";
+    authorizedNumberCanonical: string | null;
+    authorizedNumberMasked: string | null;
+    authorizedAt: string | null;
+    authorizedBy: string | null;
+    releasedAt: string | null;
+    releasedBy: string | null;
+  };
+  detectedNumber: {
+    masked: string | null;
+    matchesAuthorized: boolean;
+  } | null;
+};
+
 export type TenantConfigResponse = {
   ok: boolean;
   tenantId: string;
@@ -1385,6 +1424,7 @@ export async function getTenantChannelAccounts(
   ok: true;
   tenantId: string;
   channelAccounts: TenantChannelAccount[];
+  webSessionStatus?: TenantWebSessionStatus;
 }> {
   return requestJson(
     connection,
@@ -1402,6 +1442,7 @@ export async function updateTenantChannelAccounts(
   backupPath: string;
   fieldsChanged: string[];
   channelAccounts: TenantChannelAccount[];
+  webSessionStatus?: TenantWebSessionStatus;
 }> {
   return requestJson(
     connection,
@@ -1409,6 +1450,42 @@ export async function updateTenantChannelAccounts(
     {
       method: "PUT",
       body: JSON.stringify(accounts),
+    }
+  );
+}
+
+export async function authorizeTenantWebSessionNumber(
+  connection: AdminConnection,
+  tenantId: string,
+  number: string
+): Promise<{
+  ok: true;
+  tenantId: string;
+  status: TenantWebSessionStatus;
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/web-session/authorize-number`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ number }),
+    }
+  );
+}
+
+export async function releaseTenantWebSessionNumber(
+  connection: AdminConnection,
+  tenantId: string
+): Promise<{
+  ok: true;
+  tenantId: string;
+  status: TenantWebSessionStatus;
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/web-session/release-number`,
+    {
+      method: "POST",
     }
   );
 }

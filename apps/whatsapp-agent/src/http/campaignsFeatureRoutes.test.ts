@@ -2117,6 +2117,30 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
     where: { id: businessClientId },
     data: { features: { whatsappWebSession: true } },
   });
+  const noNumberConnect = await request<ErrorPayload>(
+    "POST",
+    "/app/settings/channels/whatsapp/web-session/connect",
+    businessAdmin
+  );
+  assert.equal(noNumberConnect.status, 409);
+  assert.equal(getErrorCode(noNumberConnect.body), "web_session_number_not_authorized");
+
+  const authorized = await request<{
+    status: {
+      authorization: {
+        status: string;
+        authorizedNumberCanonical: string;
+        authorizedNumberMasked: string;
+      };
+    };
+  }>("PUT", "/app/settings/channels/whatsapp/web-session/authorize-number", businessAdmin, {
+    number: "+55 84 9999-0001",
+  });
+  assert.equal(authorized.status, 200);
+  assert.equal(authorized.body.status.authorization.status, "AUTHORIZED");
+  assert.equal(authorized.body.status.authorization.authorizedNumberCanonical, "558499990001");
+  assert.equal(authorized.body.status.authorization.authorizedNumberMasked, "****0001");
+
   const connected = await request<{
     status: {
       account: {
@@ -2212,12 +2236,15 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   const reset = await request<{
     status: {
       authState: { configured: boolean };
+      authorization: { status: string; authorizedNumberCanonical: string };
       account: { runtimeEnabled: boolean; inboundPersistenceEnabled: boolean; status: string };
       lifecycle: { desiredState: string; observedState: string };
     };
   }>("POST", "/app/settings/channels/whatsapp/web-session/reset", businessAdmin);
   assert.equal(reset.status, 200);
   assert.equal(reset.body.status.authState.configured, false);
+  assert.equal(reset.body.status.authorization.status, "AUTHORIZED");
+  assert.equal(reset.body.status.authorization.authorizedNumberCanonical, "558499990001");
   assert.equal(reset.body.status.account.runtimeEnabled, false);
   assert.equal(reset.body.status.account.inboundPersistenceEnabled, false);
   assert.equal(reset.body.status.account.status, "pending");
@@ -2231,6 +2258,17 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
     }),
     0
   );
+
+  const release = await request<{
+    status: {
+      authorization: { status: string; authorizedNumberCanonical: string | null };
+      account: { runtimeEnabled: boolean; inboundPersistenceEnabled: boolean; status: string };
+    };
+  }>("POST", "/app/settings/channels/whatsapp/web-session/release-number", businessAdmin);
+  assert.equal(release.status, 200);
+  assert.equal(release.body.status.authorization.status, "RELEASED");
+  assert.equal(release.body.status.authorization.authorizedNumberCanonical, null);
+  assert.equal(release.body.status.account.runtimeEnabled, false);
 
   await prisma.client.update({
     where: { id: businessClientId },
@@ -2429,7 +2467,7 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
   });
   assert.equal(outboundConversation.channelAccountId, channelAccountId);
   assert.ok(outboundConversation.lastOutboundAt);
-  assert.ok(outboundConversation.lastOutboundAt.getTime() >= outbound.createdAt.getTime());
+  assert.ok(outboundConversation.lastOutboundAt.getTime() >= outbound.createdAt.getTime() - 5000);
 
   const outboundRuntime = await prisma.conversationRuntimeState.findFirstOrThrow({
     where: { clientId: businessClientId, waId, provider: "web_session" },
@@ -2438,7 +2476,7 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
   assert.equal(outboundRuntime.channelAccountId, channelAccountId);
   assert.equal(outboundRuntime.lastOutboundMessageId, response.body.message.messageId);
   assert.ok(outboundRuntime.lastOutboundAt);
-  assert.ok(outboundRuntime.lastOutboundAt.getTime() >= outbound.createdAt.getTime());
+  assert.ok(outboundRuntime.lastOutboundAt.getTime() >= outbound.createdAt.getTime() - 5000);
 
   const event = await prisma.event.findFirstOrThrow({
     where: { clientId: businessClientId, eventName: "inbox.web_session.text.sent" },

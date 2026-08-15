@@ -56,6 +56,7 @@ export type EligibleWebSessionAccount = {
   clientId: string;
   tenantKey: string;
   channelAccountId: string;
+  metadata: unknown;
   lifecycle: ReturnType<typeof readWebSessionLifecycle>;
 };
 
@@ -118,6 +119,18 @@ function sanitizeWebSessionAccountRef(params: {
 
 function webSessionLogAccount(account: Pick<EligibleWebSessionAccount, "tenantKey" | "channelAccountId">) {
   return sanitizeWebSessionAccountRef(account);
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function readExpectedWebSessionIdentity(metadata: unknown) {
+  const webSession = asRecord(asRecord(metadata).webSession);
+  const snapshot = asRecord(webSession.authorizationSnapshot);
+  return typeof snapshot.authorizedNumberCanonical === "string"
+    ? snapshot.authorizedNumberCanonical
+    : null;
 }
 
 export function setActiveWebSessionConnectionForTesting(accountId: string, active: ActiveConnection | null) {
@@ -632,6 +645,7 @@ export async function listEligibleWebSessionAccounts(prisma: WorkerPrismaClient)
       clientId: account.clientId,
       tenantKey: account.client.clientKey,
       channelAccountId: account.channelAccountId,
+      metadata: account.metadata,
       lifecycle: readWebSessionLifecycle(account.metadata),
     } satisfies EligibleWebSessionAccount));
 }
@@ -990,6 +1004,7 @@ async function connectWebSessionAccount(params: {
           prisma: params.prisma,
           accountId: params.account.id,
           observedIdentity,
+          expectedIdentity: readExpectedWebSessionIdentity(params.account.metadata),
           requestId: `web-session-identity:${params.account.id}:${Date.now()}`,
           source: "worker_connected",
         }),
@@ -1022,6 +1037,21 @@ async function connectWebSessionAccount(params: {
             conflict: reconciliation.error === "web_session_identity_conflict",
           },
         });
+        if (reconciliation.error === "web_session_identity_mismatch") {
+          await recordWebSessionWorkerEvent({
+            prisma: params.prisma,
+            account: params.account,
+            requestSuffix: "identity-mismatch",
+            eventName: "whatsapp.web.number.mismatch",
+            payloadJson: {
+              channel: "whatsapp",
+              provider: "web_session",
+              ...accountEventRef(params.account),
+              expected: reconciliation.expectedIdentityMasked,
+              observed: reconciliation.observedIdentityMasked,
+            },
+          });
+        }
         closingAfterIdentityConflict = true;
         closeSocket();
         await finishTerminal();

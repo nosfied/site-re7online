@@ -9,6 +9,7 @@ import {
   AppApiError,
   AppSession,
   AppWhatsAppWebSessionStatus,
+  authorizeAppWhatsAppWebSessionNumber,
   clearAppSession,
   connectAppWhatsAppWebSession,
   disconnectAppWhatsAppWebSession,
@@ -16,6 +17,7 @@ import {
   fetchAppWhatsAppWebSessionStatus,
   loadAppSession,
   prepareAppWhatsAppWebSession,
+  releaseAppWhatsAppWebSessionNumber,
   resetAppWhatsAppWebSession,
   saveAppSession,
 } from "@/lib/appClientApi";
@@ -58,6 +60,10 @@ function webSessionErrorLabel(errorCode: string | null | undefined) {
   switch (errorCode) {
     case "web_session_identity_conflict":
       return "Este número já está conectado a outra organização. A tentativa foi bloqueada por segurança.";
+    case "web_session_identity_mismatch":
+      return "O número conectado não corresponde ao número autorizado para esta organização.";
+    case "web_session_number_not_authorized":
+      return "Nenhum número foi autorizado pela plataforma para esta organização.";
     case "web_session_identity_lock_unavailable":
       return "Já existe uma verificação de identidade em andamento. Aguarde alguns instantes e tente novamente.";
     case "connection_open_timeout":
@@ -120,6 +126,7 @@ export default function AppWhatsAppChannelSettingsPage() {
   const [status, setStatus] = useState<AppWhatsAppWebSessionStatus | null>(null);
   const [canUpdate, setCanUpdate] = useState(false);
   const [displayName, setDisplayName] = useState("WhatsApp Business");
+  const [authorizedNumber, setAuthorizedNumber] = useState("");
   const [qr, setQr] = useState<string | null>(null);
   const [qrImage, setQrImage] = useState<string | null>(null);
   const [qrExpired, setQrExpired] = useState(false);
@@ -143,6 +150,7 @@ export default function AppWhatsAppChannelSettingsPage() {
     setStatus(nextStatus);
     setCanUpdate(nextCanUpdate);
     setDisplayName(nextStatus.account?.displayName || "WhatsApp Business");
+    setAuthorizedNumber(nextStatus.authorization.authorizedNumberCanonical || "");
     const observedState = nextStatus.lifecycle.observedState;
     if (observedState === "CONNECTED" || observedState === "DISCONNECTED" || observedState === "ERROR") {
       setQr(null);
@@ -243,10 +251,13 @@ export default function AppWhatsAppChannelSettingsPage() {
   const isConnecting = currentState === "CONNECTING" || currentState === "RECONNECTING";
   const isPendingConnection = isConnecting || isQrRequired;
   const isBusy = Boolean(working);
+  const hasAuthorizedNumber = Boolean(status?.authorization.authorizedNumberCanonical);
   const canPrepare = !readOnly && !isBusy && !isConnected && !isPendingConnection;
-  const canConnect = !readOnly && !isBusy && isConfigured && !isConnected && !isConnecting;
+  const canConnect = !readOnly && !isBusy && isConfigured && hasAuthorizedNumber && !isConnected && !isConnecting;
   const canDisconnect = !readOnly && !isBusy && isConfigured && !isDisconnected;
   const canReset = !readOnly && !isBusy && isConfigured;
+  const canAuthorize = !readOnly && !isBusy && Boolean(authorizedNumber.trim());
+  const canRelease = !readOnly && !isBusy && Boolean(status?.authorization.authorizedNumberCanonical || status?.configured);
   const shouldAutoPoll = Boolean(session && isConfigured && (isPendingConnection || currentState === "CONNECTED" || currentState === "ERROR"));
   const stateChangedAt = useMemo(() => {
     const raw = status?.account?.lastUpdatedAt;
@@ -263,6 +274,7 @@ export default function AppWhatsAppChannelSettingsPage() {
 
   const statusHint = useMemo(() => {
     if (!status?.configured) return "Prepare o canal para iniciar a conexão.";
+    if (!hasAuthorizedNumber) return "Nenhum número foi autorizado pela plataforma para este tenant.";
     if (currentState === "CONNECTED") return "Conexão ativa. O código foi removido e a sessão está salva.";
     if (currentState === "CONNECTING" || currentState === "RECONNECTING") {
       return "Conectando ao WhatsApp Business. Se um código for necessário, ele aparecerá aqui automaticamente.";
@@ -270,7 +282,7 @@ export default function AppWhatsAppChannelSettingsPage() {
     if (currentState === "QR_REQUIRED") return "Leia o código abaixo em Dispositivos conectados no WhatsApp Business.";
     if (currentState === "ERROR") return "Houve erro na conexão. Redefina a sessão ou tente conectar novamente.";
     return "Conexão parada. Clique em Conectar para iniciar.";
-  }, [currentState, status?.configured]);
+  }, [currentState, hasAuthorizedNumber, status?.configured]);
 
   const progressSteps = useMemo(() => {
     const base = [
@@ -338,8 +350,15 @@ export default function AppWhatsAppChannelSettingsPage() {
       const response = await fn(session);
       applyStatus(response.status, true);
       if (action === "prepare") setSuccess("Canal WhatsApp Business preparado.");
+      if (action === "authorize") setSuccess("Número autorizado para pareamento.");
       if (action === "connect") setSuccess("Conexão solicitada. O código aparecerá automaticamente quando estiver disponível.");
       if (action === "disconnect") setSuccess("Conexão interrompida sem apagar a sessão salva.");
+      if (action === "release") {
+        setQr(null);
+        setQrImage(null);
+        setQrExpired(false);
+        setSuccess("Número liberado. A próxima conexão exigirá nova autorização.");
+      }
       if (action === "reset") {
         setQr(null);
         setQrImage(null);
@@ -409,12 +428,35 @@ export default function AppWhatsAppChannelSettingsPage() {
                     />
                   </label>
                   <Detail label="Tipo de conexão" value="WhatsApp Business" />
-                  <Detail label="Identidade detectada" value={status?.account?.channelAccountId ?? "Não preparada"} />
+                  <Detail label="Número autorizado" value={status?.authorization.authorizedNumberMasked ?? "Não autorizado"} />
+                  <Detail label="Status da autorização" value={status?.authorization.status ?? "RELEASED"} />
+                  <Detail label="Número detectado" value={status?.detectedNumber?.masked ?? "Não preparado"} />
                   <Detail label="Estado técnico" value={currentState} />
                   <Detail label="Última conexão" value={lifecycle?.lastConnectedAt} />
                   <Detail label="Última desconexão" value={lifecycle?.lastDisconnectedAt} />
                   <Detail label="Último erro" value={webSessionErrorLabel(lifecycle?.lastErrorCode)} />
                   <Detail label="Reconexões" value={String(lifecycle?.reconnectCount ?? 0)} />
+                </div>
+
+                <div className="flex flex-wrap items-end gap-2 border-t border-white/10 pt-4">
+                  <label className="flex min-w-72 flex-1 flex-col gap-1.5 text-sm text-white/75">
+                    <span>Número autorizado para pareamento</span>
+                    <input
+                      value={authorizedNumber}
+                      onChange={(event) => setAuthorizedNumber(event.target.value)}
+                      disabled={readOnly || Boolean(working)}
+                      className="rounded-md border border-white/15 bg-re7-navy px-2.5 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-60"
+                      placeholder="+55..."
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void runAction("authorize", (activeSession) => authorizeAppWhatsAppWebSessionNumber(activeSession, { number: authorizedNumber }))}
+                    disabled={!canAuthorize}
+                    className="rounded-md border border-sky-300/35 bg-sky-500/15 px-4 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Autorizar número
+                  </button>
                 </div>
 
                 <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
@@ -449,6 +491,18 @@ export default function AppWhatsAppChannelSettingsPage() {
                     className="rounded-md border border-red-300/30 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Redefinir sessão
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm("Liberar este número remove a sessão Web Session deste tenant. Use apenas quando o número será transferido.")) {
+                        void runAction("release", releaseAppWhatsAppWebSessionNumber);
+                      }
+                    }}
+                    disabled={!canRelease}
+                    className="rounded-md border border-amber-300/30 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Liberar número
                   </button>
                   <button
                     type="button"

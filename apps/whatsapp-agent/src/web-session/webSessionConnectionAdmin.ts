@@ -16,6 +16,13 @@ import {
   getWebSessionQrFromRuntime,
   webSessionMetadataPatch,
 } from "./webSessionConnectionRuntime.js";
+import {
+  fingerprintWebSessionNumber,
+  markWebSessionAuthorizationReleased,
+  maskWebSessionNumber,
+  resolveWebSessionAuthorization,
+  saveWebSessionAuthorization,
+} from "./webSessionAuthorization.js";
 
 export const WEB_SESSION_CHANNEL = "whatsapp";
 export const WEB_SESSION_PROVIDER = "web_session";
@@ -103,6 +110,7 @@ export async function serializeWebSessionStatus(params: {
   client: ScopedClient;
 }) {
   const account = await getWebSessionAccount({ prisma: params.prisma, clientId: params.client.id });
+  const authorization = await resolveWebSessionAuthorization({ prisma: params.prisma, clientId: params.client.id });
   const approvedSecret = account?.secrets?.find((secret) => secret.secretKind === WEB_SESSION_AUTH_SECRET_KIND) ?? null;
   const stagingSecret = account?.secrets?.find((secret) => secret.secretKind === WEB_SESSION_AUTH_STAGING_SECRET_KIND) ?? null;
   const lifecycle = account ? readWebSessionLifecycle(account.metadata) : DEFAULT_WEB_SESSION_LIFECYCLE;
@@ -135,6 +143,16 @@ export async function serializeWebSessionStatus(params: {
       updatedAt: approvedSecret?.updatedAt?.toISOString() ?? null,
       stagingUpdatedAt: stagingSecret?.updatedAt?.toISOString() ?? null,
     },
+    authorization,
+    detectedNumber: account
+      ? {
+          masked: maskWebSessionNumber(account.channelAccountId),
+          matchesAuthorized: Boolean(
+            authorization.authorizedNumberCanonical &&
+              authorization.authorizedNumberCanonical === account.channelAccountId
+          ),
+        }
+      : null,
     qr: {
       available: account ? getWebSessionQrFromRuntime(account.id) !== null : false,
       ttlMs: 60_000,
@@ -205,6 +223,37 @@ export async function prepareWebSessionAccount(params: {
   return serializeWebSessionStatus({ prisma: params.prisma, client: params.client });
 }
 
+export async function authorizeWebSessionNumber(params: {
+  prisma: PrismaClient;
+  client: ScopedClient;
+  actorUserId: string;
+  requestId: string;
+  number: string;
+}) {
+  const result = await saveWebSessionAuthorization({
+    prisma: params.prisma,
+    clientId: params.client.id,
+    actorUserId: params.actorUserId,
+    number: params.number,
+  });
+  if (!result.ok) return { ok: false as const, status: 400, code: result.error };
+  await persistEvent({
+    clientId: params.client.id,
+    requestId: `${params.requestId}:web-session-number-authorized`,
+    eventName: "whatsapp.web.number.authorized",
+    payloadJson: {
+      actorUserId: params.actorUserId,
+      channel: WEB_SESSION_CHANNEL,
+      provider: WEB_SESSION_PROVIDER,
+      number: {
+        masked: result.authorization.authorizedNumberMasked,
+        hash: fingerprintWebSessionNumber(result.authorization.authorizedNumberCanonical),
+      },
+    },
+  });
+  return { ok: true as const, status: await serializeWebSessionStatus({ prisma: params.prisma, client: params.client }) };
+}
+
 export async function requestWebSessionConnect(params: {
   prisma: PrismaClient;
   client: ScopedClient;
@@ -216,9 +265,20 @@ export async function requestWebSessionConnect(params: {
   if (getFeatures(params.client).whatsappWebSession !== true) {
     return { ok: false as const, status: 403, code: "web_session_feature_disabled" };
   }
+  const authorization = await resolveWebSessionAuthorization({ prisma: params.prisma, clientId: params.client.id });
+  if (!authorization.authorizedNumberCanonical || authorization.status === "RELEASED") {
+    return { ok: false as const, status: 409, code: "web_session_number_not_authorized" };
+  }
   const metadata = webSessionMetadataPatch(account.metadata, {
     desiredState: "CONNECTED",
     observedState: "CONNECTING",
+    authorizationSnapshot: {
+      authorizedNumberCanonical: authorization.authorizedNumberCanonical,
+      authorizedNumberMasked: authorization.authorizedNumberMasked,
+      authorizedNumberHash: fingerprintWebSessionNumber(authorization.authorizedNumberCanonical),
+      status: authorization.status,
+      capturedAt: new Date().toISOString(),
+    },
   });
   await params.prisma.channelAccount.update({
     where: { id: account.id },
@@ -240,6 +300,68 @@ export async function requestWebSessionConnect(params: {
       channel: WEB_SESSION_CHANNEL,
       provider: WEB_SESSION_PROVIDER,
       channelAccountId: account.channelAccountId,
+    },
+  });
+  return { ok: true as const, status: await serializeWebSessionStatus({ prisma: params.prisma, client: params.client }) };
+}
+
+export async function releaseWebSessionNumber(params: {
+  prisma: PrismaClient;
+  client: ScopedClient;
+  actorUserId: string;
+  requestId: string;
+}) {
+  const currentAuthorization = await resolveWebSessionAuthorization({ prisma: params.prisma, clientId: params.client.id });
+  const accounts = await params.prisma.channelAccount.findMany({
+    where: {
+      clientId: params.client.id,
+      channel: WEB_SESSION_CHANNEL,
+      provider: WEB_SESSION_PROVIDER,
+      status: { not: "archived_duplicate" },
+    },
+    select: { id: true, channelAccountId: true, metadata: true },
+  });
+  for (const item of accounts) {
+    clearWebSessionQrForRuntime(item.id);
+    await clearAllWebSessionAuthState({
+      prisma: params.prisma,
+      tenantKey: params.client.clientKey,
+      channelAccountId: item.channelAccountId,
+    });
+    await params.prisma.channelAccount.update({
+      where: { id: item.id },
+      data: {
+        runtimeEnabled: false,
+        inboundPersistenceEnabled: false,
+        outboundEnabled: false,
+        status: "disabled",
+        metadata: webSessionMetadataPatch(item.metadata, {
+          desiredState: "DISCONNECTED",
+          observedState: "DISCONNECTED",
+          lastErrorCode: null,
+          reconnectCount: 0,
+        }),
+      },
+    });
+  }
+  await markWebSessionAuthorizationReleased({
+    prisma: params.prisma,
+    clientId: params.client.id,
+    actorUserId: params.actorUserId,
+  });
+  await persistEvent({
+    clientId: params.client.id,
+    requestId: `${params.requestId}:web-session-number-released`,
+    eventName: "whatsapp.web.number.released",
+    payloadJson: {
+      actorUserId: params.actorUserId,
+      channel: WEB_SESSION_CHANNEL,
+      provider: WEB_SESSION_PROVIDER,
+      number: {
+        masked: currentAuthorization.authorizedNumberMasked,
+        hash: fingerprintWebSessionNumber(currentAuthorization.authorizedNumberCanonical),
+      },
+      accountReleased: accounts.length > 0,
     },
   });
   return { ok: true as const, status: await serializeWebSessionStatus({ prisma: params.prisma, client: params.client }) };

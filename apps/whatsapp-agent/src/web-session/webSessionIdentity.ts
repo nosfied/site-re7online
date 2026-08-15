@@ -1,6 +1,12 @@
 import crypto from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { readWebSessionLifecycle } from "./webSessionLifecycle.js";
+import {
+  fingerprintWebSessionNumber,
+  markWebSessionAuthorizationOwned,
+  maskWebSessionNumber,
+  normalizeWebSessionAuthorizedNumber,
+} from "./webSessionAuthorization.js";
 
 export type WebSessionIdentityReconciliationResult =
   | {
@@ -14,9 +20,15 @@ export type WebSessionIdentityReconciliationResult =
     }
   | {
       ok: false;
-      error: "invalid_identity" | "web_session_account_not_found" | "web_session_identity_conflict";
+      error:
+        | "invalid_identity"
+        | "web_session_account_not_found"
+        | "web_session_identity_conflict"
+        | "web_session_identity_mismatch";
       conflictAccountId?: string;
       conflictClientId?: string;
+      expectedIdentityMasked?: string | null;
+      observedIdentityMasked?: string | null;
     };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -143,9 +155,19 @@ export async function reconcileWebSessionObservedIdentity(params: {
   observedIdentity: unknown;
   requestId: string;
   source?: string;
+  expectedIdentity?: string | null;
 }): Promise<WebSessionIdentityReconciliationResult> {
   const nextChannelAccountId = normalizeWebSessionObservedIdentity(params.observedIdentity);
   if (!nextChannelAccountId) return { ok: false, error: "invalid_identity" };
+  const expectedIdentity = normalizeWebSessionAuthorizedNumber(params.expectedIdentity ?? "");
+  if (expectedIdentity && expectedIdentity !== nextChannelAccountId) {
+    return {
+      ok: false,
+      error: "web_session_identity_mismatch",
+      expectedIdentityMasked: maskWebSessionNumber(expectedIdentity),
+      observedIdentityMasked: maskWebSessionNumber(nextChannelAccountId),
+    };
+  }
   const observedAt = new Date().toISOString();
   const source = params.source ?? "worker";
 
@@ -166,6 +188,13 @@ export async function reconcileWebSessionObservedIdentity(params: {
     }
 
     if (account.channelAccountId === nextChannelAccountId) {
+      if (expectedIdentity) {
+        await markWebSessionAuthorizationOwned({
+          prisma: tx as unknown as PrismaClient,
+          clientId: account.clientId,
+          observedIdentity: nextChannelAccountId,
+        });
+      }
       return {
         ok: true as const,
         action: "unchanged" as const,
@@ -282,6 +311,31 @@ export async function reconcileWebSessionObservedIdentity(params: {
         },
       },
     });
+    if (expectedIdentity) {
+      await markWebSessionAuthorizationOwned({
+        prisma: tx as unknown as PrismaClient,
+        clientId: account.clientId,
+        observedIdentity: nextChannelAccountId,
+      });
+      await tx.event.create({
+        data: {
+          clientId: account.clientId,
+          requestId: `${params.requestId}:owned`,
+          eventName: "whatsapp.web.number.owned",
+          payloadJson: {
+            channel: "whatsapp",
+            provider: "web_session",
+            channelAccountId: account.id,
+            number: {
+              masked: maskWebSessionNumber(nextChannelAccountId),
+              hash: fingerprintWebSessionNumber(nextChannelAccountId),
+            },
+            source,
+            observedAt,
+          },
+        },
+      });
+    }
 
     return {
       ok: true as const,

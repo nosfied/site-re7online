@@ -191,9 +191,11 @@ import {
   resolveTenantOperationalTimezone,
 } from "../departments/businessHours.js";
 import {
+  authorizeWebSessionNumber,
   disconnectWebSession,
   getWebSessionQr,
   prepareWebSessionAccount,
+  releaseWebSessionNumber,
   requestWebSessionConnect,
   resetWebSession,
   serializeWebSessionStatus,
@@ -7204,6 +7206,96 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.whatsapp_web_session.connect.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    pathname === "/app/settings/channels/whatsapp/web-session/authorize-number" &&
+    req.method === "PUT"
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (!isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can authorize WhatsApp Web Session number."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const number = body && typeof body === "object" && !Array.isArray(body)
+        ? String((body as Record<string, unknown>).number ?? "")
+        : "";
+      const result = await authorizeWebSessionNumber({
+        prisma,
+        client,
+        actorUserId: clientAuth.userId,
+        requestId,
+        number,
+      });
+      if (!result.ok) {
+        json(res, result.status, httpError(result.code, result.code));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        status: result.status,
+        permissions: { canUpdate: true },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.whatsapp_web_session.authorize_number.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    pathname === "/app/settings/channels/whatsapp/web-session/release-number" &&
+    req.method === "POST"
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (!isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can release WhatsApp Web Session number."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      const result = await releaseWebSessionNumber({
+        prisma,
+        client,
+        actorUserId: clientAuth.userId,
+        requestId,
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        status: result.status,
+        permissions: { canUpdate: true },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.whatsapp_web_session.release_number.error",
         message: (error as Error).message,
         requestId,
       });
@@ -17796,7 +17888,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const prisma = getPrisma();
       const client = await prisma.client.findUnique({
         where: { clientKey: tenantId },
-        select: { id: true },
+        select: { id: true, clientKey: true, status: true, features: true, profile: true },
       });
       if (!client) {
         if (env.ENV !== "production") {
@@ -17859,6 +17951,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           tenantId,
           source: "db",
           channelAccounts: redactTenantChannelAccounts(channelAccounts),
+          webSessionStatus: await serializeWebSessionStatus({ prisma, client }),
         });
         return;
       }
@@ -17904,6 +17997,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             source: "db",
             fieldsChanged: ["channelAccounts"],
             channelAccounts: redactTenantChannelAccounts(channelAccounts),
+            webSessionStatus: await serializeWebSessionStatus({ prisma, client }),
           });
         } catch (error) {
           logger.warn({
@@ -17917,6 +18011,76 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         return;
       }
+    }
+
+    const adminWebSessionAuthorizeMatch = pathname.match(
+      /^\/admin\/tenants\/([^/]+)\/web-session\/authorize-number$/
+    );
+    if (req.method === "PUT" && adminWebSessionAuthorizeMatch) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(adminWebSessionAuthorizeMatch[1] ?? "").trim();
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const number = body && typeof body === "object" && !Array.isArray(body)
+        ? String((body as Record<string, unknown>).number ?? "")
+        : "";
+      const prisma = getPrisma();
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true, status: true, features: true, profile: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const result = await authorizeWebSessionNumber({
+        prisma,
+        client,
+        actorUserId: `admin:${authToken.source}`,
+        requestId,
+        number,
+      });
+      if (!result.ok) {
+        json(res, result.status, httpError(result.code, result.code));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        status: result.status,
+        permissions: { canUpdate: true },
+      });
+      return;
+    }
+
+    const adminWebSessionReleaseMatch = pathname.match(
+      /^\/admin\/tenants\/([^/]+)\/web-session\/release-number$/
+    );
+    if (req.method === "POST" && adminWebSessionReleaseMatch) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(adminWebSessionReleaseMatch[1] ?? "").trim();
+      const prisma = getPrisma();
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true, status: true, features: true, profile: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const result = await releaseWebSessionNumber({
+        prisma,
+        client,
+        actorUserId: `admin:${authToken.source}`,
+        requestId,
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        status: result.status,
+        permissions: { canUpdate: true },
+      });
+      return;
     }
 
     if (

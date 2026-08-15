@@ -16,6 +16,13 @@ export function webSessionMetadataPatch(metadata: unknown, patch: {
   observedState?: WebSessionObservedState;
   lastErrorCode?: string | null;
   reconnectCount?: number;
+  authorizationSnapshot?: {
+    authorizedNumberCanonical: string;
+    authorizedNumberMasked: string | null;
+    authorizedNumberHash: string | null;
+    status: string;
+    capturedAt: string;
+  };
 }) {
   const timestamp = nowIso();
   const lifecyclePatch: Parameters<typeof writeWebSessionLifecycleMetadata>[1] = {};
@@ -39,7 +46,21 @@ export function webSessionMetadataPatch(metadata: unknown, patch: {
   ) {
     lifecyclePatch.lastDisconnectedAt = timestamp;
   }
-  return writeWebSessionLifecycleMetadata(metadata, lifecyclePatch);
+  const next = writeWebSessionLifecycleMetadata(metadata, lifecyclePatch);
+  if (patch.authorizationSnapshot) {
+    const currentWebSession =
+      next.webSession && typeof next.webSession === "object" && !Array.isArray(next.webSession)
+        ? next.webSession
+        : {};
+    return {
+      ...next,
+      webSession: {
+        ...currentWebSession,
+        authorizationSnapshot: patch.authorizationSnapshot,
+      },
+    };
+  }
+  return next;
 }
 
 export function setWebSessionQrForRuntime(params: {

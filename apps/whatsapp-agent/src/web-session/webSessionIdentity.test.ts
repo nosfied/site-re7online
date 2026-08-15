@@ -135,8 +135,27 @@ function makePrisma() {
       eventName: string;
       payloadJson: unknown;
     }>,
+    operationalConfigs: [] as Array<{ clientId: string; config: unknown; schemaVersion: number }>,
   };
   const client = {
+    tenantOperationalConfig: {
+      findUnique: async (args: { where: { clientId: string } }) =>
+        state.operationalConfigs.find((item) => item.clientId === args.where.clientId) ?? null,
+      upsert: async (args: {
+        where: { clientId: string };
+        update: { config: unknown; schemaVersion: number };
+        create: { clientId: string; config: unknown; schemaVersion: number };
+      }) => {
+        const existing = state.operationalConfigs.find((item) => item.clientId === args.where.clientId);
+        if (existing) {
+          existing.config = args.update.config;
+          existing.schemaVersion = args.update.schemaVersion;
+          return existing;
+        }
+        state.operationalConfigs.push(args.create);
+        return args.create;
+      },
+    },
     channelAccount: {
       findUnique: async (args: { where: { id: string } }) =>
         state.accounts.find((item) => item.id === args.where.id) ?? null,
@@ -259,6 +278,40 @@ test("cross-tenant web session identity conflict blocks reconciliation", async (
   });
   assert.equal(state.accounts[0]?.channelAccountId, "5584999990001");
   assert.equal(state.events.length, 0);
+});
+
+test("authorized number mismatch blocks reconciliation before account mutation", async () => {
+  const { prisma, state } = makePrisma();
+  const result = await reconcileWebSessionObservedIdentity({
+    prisma: prisma as never,
+    accountId: "account-a",
+    observedIdentity: "5584999997784@s.whatsapp.net",
+    expectedIdentity: "5584999990001",
+    requestId: "mismatch",
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "web_session_identity_mismatch",
+    expectedIdentityMasked: "****0001",
+    observedIdentityMasked: "****7784",
+  });
+  assert.equal(state.accounts[0]?.channelAccountId, "5584999990001");
+  assert.equal(state.events.length, 0);
+});
+
+test("authorized number match allows reconciliation", async () => {
+  const { prisma, state } = makePrisma();
+  const result = await reconcileWebSessionObservedIdentity({
+    prisma: prisma as never,
+    accountId: "account-a",
+    observedIdentity: "5584999990001@s.whatsapp.net",
+    expectedIdentity: "5584999990001",
+    requestId: "match",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.accounts[0]?.channelAccountId, "5584999990001");
 });
 
 test("inactive same-tenant duplicate is archived before identity reconciliation", async () => {

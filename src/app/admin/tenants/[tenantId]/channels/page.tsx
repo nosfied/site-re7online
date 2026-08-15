@@ -6,10 +6,13 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
   Channel,
+  authorizeTenantWebSessionNumber,
   getTenantChannelAccounts,
   Provider,
+  releaseTenantWebSessionNumber,
   startTenantInstagramBusinessConnect,
   TenantChannelAccount,
+  TenantWebSessionStatus,
   updateTenantChannelAccounts,
 } from "@/lib/whatsappAdminApi";
 
@@ -251,6 +254,9 @@ export default function TenantChannelsPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [backupPath, setBackupPath] = useState<string | null>(null);
   const [connectingInstagram, setConnectingInstagram] = useState(false);
+  const [webSessionStatus, setWebSessionStatus] = useState<TenantWebSessionStatus | null>(null);
+  const [authorizedNumber, setAuthorizedNumber] = useState("");
+  const [webSessionWorking, setWebSessionWorking] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tenantId || !connection.baseUrl || !connection.adminToken) return;
@@ -263,6 +269,8 @@ export default function TenantChannelsPage() {
       .then((response) => {
         if (cancelled) return;
         setDrafts(response.channelAccounts.map(toDraft));
+        setWebSessionStatus(response.webSessionStatus ?? null);
+        setAuthorizedNumber(response.webSessionStatus?.authorization.authorizedNumberCanonical ?? "");
       })
       .catch((err: { status?: number; message?: string }) => {
         if (cancelled) return;
@@ -317,6 +325,8 @@ export default function TenantChannelsPage() {
     try {
       const response = await updateTenantChannelAccounts(connection, tenantId, toPayload(drafts, tenantId));
       setDrafts(response.channelAccounts.map(toDraft));
+      setWebSessionStatus(response.webSessionStatus ?? null);
+      setAuthorizedNumber(response.webSessionStatus?.authorization.authorizedNumberCanonical ?? authorizedNumber);
       setBackupPath(response.backupPath ?? null);
       setToast("Canais conectados salvos.");
     } catch (err) {
@@ -336,6 +346,39 @@ export default function TenantChannelsPage() {
     } catch (err) {
       setError((err as Error).message || "Falha ao iniciar Instagram Business Login.");
       setConnectingInstagram(false);
+    }
+  };
+
+  const handleAuthorizeWebSessionNumber = async () => {
+    setWebSessionWorking("authorize");
+    setError(null);
+    setToast(null);
+    try {
+      const response = await authorizeTenantWebSessionNumber(connection, tenantId, authorizedNumber);
+      setWebSessionStatus(response.status);
+      setAuthorizedNumber(response.status.authorization.authorizedNumberCanonical ?? "");
+      setToast("Número Web Session autorizado.");
+    } catch (err) {
+      setError((err as Error).message || "Falha ao autorizar número Web Session.");
+    } finally {
+      setWebSessionWorking(null);
+    }
+  };
+
+  const handleReleaseWebSessionNumber = async () => {
+    if (!window.confirm("Liberar este número remove sessão e ownership Web Session deste tenant. Use apenas para transferência controlada.")) return;
+    setWebSessionWorking("release");
+    setError(null);
+    setToast(null);
+    try {
+      const response = await releaseTenantWebSessionNumber(connection, tenantId);
+      setWebSessionStatus(response.status);
+      setAuthorizedNumber(response.status.authorization.authorizedNumberCanonical ?? "");
+      setToast("Número Web Session liberado.");
+    } catch (err) {
+      setError((err as Error).message || "Falha ao liberar número Web Session.");
+    } finally {
+      setWebSessionWorking(null);
     }
   };
 
@@ -388,6 +431,66 @@ export default function TenantChannelsPage() {
             A tela legacy de review em <code>/app/settings/channels/instagram</code> permanece acessivel
             diretamente apenas como fallback temporario, mas nao aparece mais no menu do app do cliente.
           </p>
+        </section>
+
+        <section className="rounded-xl border border-emerald-400/25 bg-emerald-950/20 p-4 text-sm text-emerald-100">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-emerald-100/80">
+                  Web Session
+                </h2>
+                <p className="mt-1 text-emerald-100/70">
+                  Autorize o número antes de permitir QR. Redefinir sessão não libera ownership; use Liberar número
+                  apenas em transferência controlada.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <StatusBadge
+                  label={webSessionStatus?.authorization.status ?? "RELEASED"}
+                  tone={webSessionStatus?.authorization.status === "OWNED" ? "success" : webSessionStatus?.authorization.status === "AUTHORIZED" ? "warning" : "neutral"}
+                />
+                <StatusBadge
+                  label={webSessionStatus?.lifecycle.observedState ?? "DISCONNECTED"}
+                  tone={webSessionStatus?.lifecycle.observedState === "CONNECTED" ? "success" : webSessionStatus?.lifecycle.observedState === "ERROR" ? "danger" : "warning"}
+                />
+              </div>
+            </div>
+
+            <dl className="grid gap-2 md:grid-cols-3">
+              <TechnicalValue label="Número autorizado" value={webSessionStatus?.authorization.authorizedNumberMasked ?? "Não autorizado"} />
+              <TechnicalValue label="Número detectado" value={webSessionStatus?.detectedNumber?.masked ?? "-"} />
+              <TechnicalValue label="Feature" value={webSessionStatus?.featureEnabled ? "enabled" : "disabled"} />
+            </dl>
+
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="flex min-w-72 flex-1 flex-col gap-1 text-sm">
+                <span className="text-emerald-100/70">Número autorizado para pareamento</span>
+                <input
+                  value={authorizedNumber}
+                  onChange={(event) => setAuthorizedNumber(event.target.value)}
+                  className="rounded-md border border-white/10 bg-re7-navy px-3 py-2 font-mono text-white"
+                  placeholder="+55..."
+                />
+              </label>
+              <button
+                type="button"
+                onClick={handleAuthorizeWebSessionNumber}
+                disabled={Boolean(webSessionWorking) || !authorizedNumber.trim()}
+                className="rounded-md border border-emerald-300/40 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {webSessionWorking === "authorize" ? "Autorizando..." : "Autorizar número"}
+              </button>
+              <button
+                type="button"
+                onClick={handleReleaseWebSessionNumber}
+                disabled={Boolean(webSessionWorking) || !webSessionStatus?.configured}
+                className="rounded-md border border-amber-300/40 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {webSessionWorking === "release" ? "Liberando..." : "Liberar número"}
+              </button>
+            </div>
+          </div>
         </section>
 
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
