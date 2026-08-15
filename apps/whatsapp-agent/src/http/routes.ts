@@ -201,6 +201,13 @@ import {
   serializeWebSessionStatus,
 } from "../web-session/webSessionConnectionAdmin.js";
 import {
+  invalidateWebSessionForMetaIdentityChange,
+  normalizeHybridWhatsappNumber,
+  resolveHybridWhatsappIdentityStatus,
+  resolveWhatsappPrimaryTransport,
+  saveWhatsappPrimaryTransport,
+} from "../web-session/hybridIdentity.js";
+import {
   createPlatformSupportSession,
   getCurrentPlatformSupportGrant,
   grantPlatformSupportAccess,
@@ -6324,7 +6331,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       const resolvedChannelFields = serializeInboxChannelFields(resolvedConversation.winner ?? undefined);
       const resolvedChannel = resolvedChannelFields.channel;
-      const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && resolvedChannelFields.provider === "web_session";
+      const configuredPrimaryTransport =
+        resolvedChannel === "whatsapp"
+          ? await resolveWhatsappPrimaryTransport({ prisma, clientId: client.id })
+          : null;
+      const effectiveWhatsappProvider = configuredPrimaryTransport ?? resolvedChannelFields.provider;
+      const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && effectiveWhatsappProvider === "web_session";
       if (isConversationOutboundBlocked(resolvedConversation.winner)) {
         json(res, 409, {
           error: "channel_outbound_not_enabled",
@@ -6499,7 +6511,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                       clientId: client.id,
                       requestId,
                       actorUserId: clientAuth.userId,
-                      source: resolvedConversation.winner ?? undefined,
+                      source: isWebSessionWhatsApp
+                        ? { channel: "whatsapp", provider: "web_session", channelAccountId: null }
+                        : resolvedConversation.winner ?? undefined,
                       conversation: currentConversation,
                       reply: asWebSessionContextualReply(resolvedReplyContext),
                     })
@@ -7215,6 +7229,89 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   }
 
   if (
+    pathname === "/app/settings/channels/whatsapp/primary-transport" &&
+    req.method === "PUT"
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (!isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can update WhatsApp primary transport."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const provider = body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>).provider
+        : null;
+      if (provider !== "meta" && provider !== "web_session") {
+        json(res, 400, httpError("invalid_primary_transport", "Invalid WhatsApp primary transport."));
+        return;
+      }
+      const hybrid = await resolveHybridWhatsappIdentityStatus({ prisma, clientId: client.id });
+      if (hybrid.conflict) {
+        json(res, 409, httpError("hybrid_identity_conflict", "WhatsApp transport identities do not match."));
+        return;
+      }
+      if (provider === "meta" && !hybrid.meta.canonicalNumber) {
+        json(res, 409, httpError("meta_transport_unavailable", "Meta Cloud number is not operational for this tenant."));
+        return;
+      }
+      if (provider === "web_session") {
+        const ready = await isWebSessionTextOutboundReady({
+          prisma,
+          clientId: client.id,
+          clientKey: client.clientKey,
+        });
+        if (!ready || !hybrid.web.canonicalNumber) {
+          json(res, 409, httpError("web_session_transport_unavailable", "WhatsApp Web Session is not connected for this tenant."));
+          return;
+        }
+      }
+      const savedProvider = await saveWhatsappPrimaryTransport({
+        prisma,
+        clientId: client.id,
+        provider,
+      });
+      await persistEvent({
+        clientId: client.id,
+        requestId: `${requestId}:whatsapp-primary-transport`,
+        eventName: "whatsapp.primary_transport.updated",
+        payloadJson: {
+          actorUserId: clientAuth.userId,
+          provider: savedProvider,
+          identity: hybrid.logicalIdentity
+            ? {
+                provider: hybrid.logicalIdentity.provider,
+                masked: hybrid.logicalIdentity.maskedNumber,
+              }
+            : null,
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        primaryTransport: savedProvider,
+        status: await serializeWebSessionStatus({ prisma, client }),
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.whatsapp_primary_transport.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
     pathname === "/app/settings/channels/whatsapp/web-session/authorize-number" &&
     req.method === "PUT"
   ) {
@@ -7244,7 +7341,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         number,
       });
       if (!result.ok) {
-        json(res, result.status, httpError(result.code, result.code));
+        json(res, result.status, httpError(result.code, result.code, result.details));
         return;
       }
       json(res, 200, {
@@ -18562,6 +18659,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         };
         const displayPhoneNumber =
           embeddedDisplayPhoneNumber ?? extractTenantDisplayPhoneFromRawPayload(rawPayload);
+        const hybridGuard = await enforceMetaIdentityChangeAgainstWebSession({
+          prisma,
+          client,
+          requestId,
+          actorUserId: null,
+          displayPhoneNumber,
+          confirmInvalidateWebSession: body.confirmInvalidateWebSession === true,
+        });
+        if (!hybridGuard.ok) {
+          json(res, hybridGuard.status, hybridGuard.body);
+          return;
+        }
         const phoneNumberChanged =
           Boolean(previousMetaConfig?.phoneNumberId) &&
           Boolean(finalPhoneNumberId) &&
@@ -18942,6 +19051,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         displayPhoneNumber =
           displayPhoneNumber ??
           (enriched ? extractTenantDisplayPhoneFromRawPayload({ enrich: enriched.rawPayload }) : null);
+        const hybridGuard = await enforceMetaIdentityChangeAgainstWebSession({
+          prisma,
+          client,
+          requestId,
+          actorUserId: null,
+          displayPhoneNumber,
+          confirmInvalidateWebSession: body.confirmInvalidateWebSession === true,
+        });
+        if (!hybridGuard.ok) {
+          json(res, hybridGuard.status, hybridGuard.body);
+          return;
+        }
         const phoneNumberChanged =
           Boolean(previousMetaConfig?.phoneNumberId) &&
           previousMetaConfig?.phoneNumberId !== phoneNumberId;
@@ -23472,6 +23593,65 @@ function extractMetaPhoneNumberPayload(rawPayload: unknown): Record<string, unkn
   return phoneNumber && typeof phoneNumber === "object" && !Array.isArray(phoneNumber)
     ? (phoneNumber as Record<string, unknown>)
     : null;
+}
+
+async function enforceMetaIdentityChangeAgainstWebSession(params: {
+  prisma: Prisma.TransactionClient | ReturnType<typeof getPrisma>;
+  client: { id: string; clientKey: string };
+  requestId: string;
+  actorUserId: string | null;
+  displayPhoneNumber: string | null;
+  confirmInvalidateWebSession: boolean;
+}) {
+  const nextMetaNumber = normalizeHybridWhatsappNumber(params.displayPhoneNumber ?? "");
+  if (!nextMetaNumber) return { ok: true as const, invalidated: false };
+  const maskedNextMetaNumber = `****${nextMetaNumber.slice(-4)}`;
+  const hybrid = await resolveHybridWhatsappIdentityStatus({
+    prisma: params.prisma as ReturnType<typeof getPrisma>,
+    clientId: params.client.id,
+  });
+  if (!hybrid.web.canonicalNumber || hybrid.web.canonicalNumber === nextMetaNumber) {
+    return { ok: true as const, invalidated: false };
+  }
+  await persistEvent({
+    clientId: params.client.id,
+    requestId: `${params.requestId}:hybrid-identity-conflict`,
+    eventName: "whatsapp.hybrid.identity.conflict",
+    payloadJson: {
+      channel: "whatsapp",
+      attemptedProvider: "meta",
+      existingWebNumber: {
+        masked: hybrid.web.maskedNumber,
+      },
+      nextMetaNumber: {
+        masked: maskedNextMetaNumber,
+      },
+      requiresConfirmInvalidateWebSession: true,
+    },
+  });
+  if (!params.confirmInvalidateWebSession) {
+    return {
+      ok: false as const,
+      status: 409,
+      body: httpError(
+        "hybrid_identity_conflict",
+        "Meta Cloud number does not match the authorized WhatsApp Web Session number.",
+        {
+          metaNumberMasked: maskedNextMetaNumber,
+          webNumberMasked: hybrid.web.maskedNumber,
+          requiresConfirmInvalidateWebSession: true,
+        }
+      ),
+    };
+  }
+  await invalidateWebSessionForMetaIdentityChange({
+    prisma: params.prisma as ReturnType<typeof getPrisma>,
+    client: params.client,
+    actorUserId: params.actorUserId,
+    requestId: params.requestId,
+    newMetaNumber: nextMetaNumber,
+  });
+  return { ok: true as const, invalidated: true };
 }
 
 function buildOnboardingConnectionWarnings(params: {

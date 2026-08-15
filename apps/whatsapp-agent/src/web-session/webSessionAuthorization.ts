@@ -1,7 +1,11 @@
 import crypto from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 
-export type WebSessionAuthorizationStatus = "AUTHORIZED" | "OWNED" | "RELEASED";
+export type WebSessionAuthorizationStatus =
+  | "AUTHORIZED"
+  | "OWNED"
+  | "RELEASED"
+  | "INVALIDATED_BY_META_IDENTITY_CHANGE";
 
 export type WebSessionAuthorization = {
   status: WebSessionAuthorizationStatus;
@@ -11,6 +15,9 @@ export type WebSessionAuthorization = {
   authorizedBy: string | null;
   releasedAt: string | null;
   releasedBy: string | null;
+  invalidatedAt: string | null;
+  invalidatedBy: string | null;
+  invalidationReason: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -40,7 +47,9 @@ export function readWebSessionAuthorizationFromConfig(config: unknown): WebSessi
   const webSession = isRecord(record.webSessionAuthorization) ? record.webSessionAuthorization : {};
   const canonical = normalizeWebSessionAuthorizedNumber(webSession.authorizedNumberCanonical);
   const status =
-    webSession.status === "OWNED" && canonical
+    webSession.status === "INVALIDATED_BY_META_IDENTITY_CHANGE"
+      ? "INVALIDATED_BY_META_IDENTITY_CHANGE"
+      : webSession.status === "OWNED" && canonical
       ? "OWNED"
       : webSession.status === "AUTHORIZED" && canonical
         ? "AUTHORIZED"
@@ -51,12 +60,20 @@ export function readWebSessionAuthorizationFromConfig(config: unknown): WebSessi
             : "RELEASED";
   return {
     status,
-    authorizedNumberCanonical: status === "RELEASED" ? null : canonical,
-    authorizedNumberMasked: status === "RELEASED" ? null : maskWebSessionNumber(canonical),
+    authorizedNumberCanonical:
+      status === "RELEASED" || status === "INVALIDATED_BY_META_IDENTITY_CHANGE" ? null : canonical,
+    authorizedNumberMasked:
+      status === "RELEASED" || status === "INVALIDATED_BY_META_IDENTITY_CHANGE"
+        ? null
+        : maskWebSessionNumber(canonical),
     authorizedAt: typeof webSession.authorizedAt === "string" ? webSession.authorizedAt : null,
     authorizedBy: typeof webSession.authorizedBy === "string" ? webSession.authorizedBy : null,
     releasedAt: typeof webSession.releasedAt === "string" ? webSession.releasedAt : null,
     releasedBy: typeof webSession.releasedBy === "string" ? webSession.releasedBy : null,
+    invalidatedAt: typeof webSession.invalidatedAt === "string" ? webSession.invalidatedAt : null,
+    invalidatedBy: typeof webSession.invalidatedBy === "string" ? webSession.invalidatedBy : null,
+    invalidationReason:
+      typeof webSession.invalidationReason === "string" ? webSession.invalidationReason : null,
   };
 }
 
@@ -159,6 +176,34 @@ export async function markWebSessionAuthorizationReleased(params: {
     previousNumberHash: fingerprintWebSessionNumber(current.authorizedNumberCanonical),
     releasedAt: new Date().toISOString(),
     releasedBy: params.actorUserId,
+  };
+  await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: { schemaVersion: 1, config: { ...existingConfig, webSessionAuthorization } as Prisma.InputJsonValue },
+    create: { clientId: params.clientId, schemaVersion: 1, config: { ...existingConfig, webSessionAuthorization } as Prisma.InputJsonValue },
+  });
+  return readWebSessionAuthorizationFromConfig({ webSessionAuthorization });
+}
+
+export async function markWebSessionAuthorizationInvalidatedByMetaIdentityChange(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  actorUserId: string | null;
+  reason?: string | null;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const current = readWebSessionAuthorizationFromConfig(existing?.config);
+  const webSessionAuthorization = {
+    status: "INVALIDATED_BY_META_IDENTITY_CHANGE",
+    previousNumberMasked: current.authorizedNumberMasked,
+    previousNumberHash: fingerprintWebSessionNumber(current.authorizedNumberCanonical),
+    invalidatedAt: new Date().toISOString(),
+    invalidatedBy: params.actorUserId,
+    invalidationReason: params.reason ?? "meta_identity_changed",
   };
   await params.prisma.tenantOperationalConfig.upsert({
     where: { clientId: params.clientId },

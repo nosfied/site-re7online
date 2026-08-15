@@ -20,6 +20,7 @@ import {
   releaseAppWhatsAppWebSessionNumber,
   resetAppWhatsAppWebSession,
   saveAppSession,
+  updateAppWhatsAppPrimaryTransport,
 } from "@/lib/appClientApi";
 import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 
@@ -117,6 +118,18 @@ function normalizeError(error: AppApiError, fallback: string) {
   }
   if (error.status === 403) return "Sem permissão para alterar este canal.";
   if (error.status === 404) return "Prepare o canal antes de solicitar conexão.";
+  if (error.errorCode === "web_session_meta_identity_mismatch") {
+    return "O número autorizado para sessão Web não corresponde ao número Meta Cloud deste tenant.";
+  }
+  if (error.errorCode === "hybrid_identity_conflict") {
+    return "Os números configurados para Meta Cloud e sessão Web são diferentes.";
+  }
+  if (error.errorCode === "web_session_transport_unavailable") {
+    return "A sessão Web precisa estar conectada antes de ser definida como transporte principal.";
+  }
+  if (error.errorCode === "meta_transport_unavailable") {
+    return "Configure um número Meta Cloud válido antes de usar Meta como transporte principal.";
+  }
   return getAppErrorUxMessage({ ...error, fallback });
 }
 
@@ -351,6 +364,8 @@ export default function AppWhatsAppChannelSettingsPage() {
       applyStatus(response.status, true);
       if (action === "prepare") setSuccess("Canal WhatsApp Business preparado.");
       if (action === "authorize") setSuccess("Número autorizado para pareamento.");
+      if (action === "primary-meta") setSuccess("Meta Cloud definido como transporte principal.");
+      if (action === "primary-web") setSuccess("WhatsApp Business por sessão definido como transporte principal.");
       if (action === "connect") setSuccess("Conexão solicitada. O código aparecerá automaticamente quando estiver disponível.");
       if (action === "disconnect") setSuccess("Conexão interrompida sem apagar a sessão salva.");
       if (action === "release") {
@@ -430,12 +445,44 @@ export default function AppWhatsAppChannelSettingsPage() {
                   <Detail label="Tipo de conexão" value="WhatsApp Business" />
                   <Detail label="Número autorizado" value={status?.authorization.authorizedNumberMasked ?? "Não autorizado"} />
                   <Detail label="Status da autorização" value={status?.authorization.status ?? "RELEASED"} />
+                  <Detail label="Identidade lógica" value={status?.hybridIdentity?.logicalIdentity?.maskedNumber ?? "Não definida"} />
+                  <Detail label="Transporte principal" value={status?.primaryTransport === "web_session" ? "WhatsApp Business por sessão" : status?.primaryTransport === "meta" ? "Meta Cloud" : "Padrão da conversa"} />
                   <Detail label="Número detectado" value={status?.detectedNumber?.masked ?? "Não preparado"} />
                   <Detail label="Estado técnico" value={currentState} />
                   <Detail label="Última conexão" value={lifecycle?.lastConnectedAt} />
                   <Detail label="Última desconexão" value={lifecycle?.lastDisconnectedAt} />
                   <Detail label="Último erro" value={webSessionErrorLabel(lifecycle?.lastErrorCode)} />
                   <Detail label="Reconexões" value={String(lifecycle?.reconnectCount ?? 0)} />
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-re7-navy/35 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Transporte principal para texto no Inbox</p>
+                      <p className="mt-1 text-xs text-white/60">
+                        A escolha usa somente os canais elegíveis deste tenant. Campanhas e modelos continuam pelo caminho Meta.
+                      </p>
+                    </div>
+                    {status?.hybridIdentity?.conflict ? <Pill label="Identidades divergentes" tone="danger" /> : null}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void runAction("primary-meta", (activeSession) => updateAppWhatsAppPrimaryTransport(activeSession, { provider: "meta" }))}
+                      disabled={readOnly || Boolean(working) || status?.primaryTransport === "meta"}
+                      className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm font-semibold text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Usar Meta Cloud
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void runAction("primary-web", (activeSession) => updateAppWhatsAppPrimaryTransport(activeSession, { provider: "web_session" }))}
+                      disabled={readOnly || Boolean(working) || status?.primaryTransport === "web_session"}
+                      className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm font-semibold text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Usar sessão Web
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-end gap-2 border-t border-white/10 pt-4">

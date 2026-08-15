@@ -685,14 +685,38 @@ export type TenantWebSessionStatus = {
     reconnectCount: number;
   };
   authorization: {
-    status: "AUTHORIZED" | "OWNED" | "RELEASED";
+    status: "AUTHORIZED" | "OWNED" | "RELEASED" | "INVALIDATED_BY_META_IDENTITY_CHANGE";
     authorizedNumberCanonical: string | null;
     authorizedNumberMasked: string | null;
     authorizedAt: string | null;
     authorizedBy: string | null;
     releasedAt: string | null;
     releasedBy: string | null;
+    invalidatedAt?: string | null;
+    invalidatedBy?: string | null;
+    invalidationReason?: string | null;
   };
+  hybridIdentity?: {
+    meta: {
+      configured: boolean;
+      canonicalNumber: string | null;
+      maskedNumber: string | null;
+      phoneNumberIdPresent: boolean;
+      reason: string;
+    };
+    web: {
+      status: string;
+      canonicalNumber: string | null;
+      maskedNumber: string | null;
+    };
+    conflict: boolean;
+    logicalIdentity: {
+      provider: "meta" | "web_session";
+      canonicalNumber: string;
+      maskedNumber: string | null;
+    } | null;
+  };
+  primaryTransport?: "meta" | "web_session" | null;
   detectedNumber: {
     masked: string | null;
     matchesAuthorized: boolean;

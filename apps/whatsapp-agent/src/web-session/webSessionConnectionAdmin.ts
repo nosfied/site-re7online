@@ -23,6 +23,11 @@ import {
   resolveWebSessionAuthorization,
   saveWebSessionAuthorization,
 } from "./webSessionAuthorization.js";
+import {
+  resolveHybridWhatsappIdentityStatus,
+  resolveWhatsappPrimaryTransport,
+  validateWebSessionNumberAgainstMeta,
+} from "./hybridIdentity.js";
 
 export const WEB_SESSION_CHANNEL = "whatsapp";
 export const WEB_SESSION_PROVIDER = "web_session";
@@ -114,6 +119,14 @@ export async function serializeWebSessionStatus(params: {
   const approvedSecret = account?.secrets?.find((secret) => secret.secretKind === WEB_SESSION_AUTH_SECRET_KIND) ?? null;
   const stagingSecret = account?.secrets?.find((secret) => secret.secretKind === WEB_SESSION_AUTH_STAGING_SECRET_KIND) ?? null;
   const lifecycle = account ? readWebSessionLifecycle(account.metadata) : DEFAULT_WEB_SESSION_LIFECYCLE;
+  const hybridIdentity = await resolveHybridWhatsappIdentityStatus({
+    prisma: params.prisma,
+    clientId: params.client.id,
+  });
+  const primaryTransport = await resolveWhatsappPrimaryTransport({
+    prisma: params.prisma,
+    clientId: params.client.id,
+  });
   return {
     configured: Boolean(account),
     featureEnabled: getFeatures(params.client).whatsappWebSession === true,
@@ -144,6 +157,8 @@ export async function serializeWebSessionStatus(params: {
       stagingUpdatedAt: stagingSecret?.updatedAt?.toISOString() ?? null,
     },
     authorization,
+    hybridIdentity,
+    primaryTransport,
     detectedNumber: account
       ? {
           masked: maskWebSessionNumber(account.channelAccountId),
@@ -230,6 +245,24 @@ export async function authorizeWebSessionNumber(params: {
   requestId: string;
   number: string;
 }) {
+  const validation = await validateWebSessionNumberAgainstMeta({
+    prisma: params.prisma,
+    clientId: params.client.id,
+    number: params.number,
+  });
+  if (!validation.ok) {
+    return {
+      ok: false as const,
+      status: validation.status,
+      code: validation.code,
+      details: "metaNumberMasked" in validation
+        ? {
+            metaNumberMasked: validation.metaNumberMasked,
+            webNumberMasked: validation.webNumberMasked,
+          }
+        : undefined,
+    };
+  }
   const result = await saveWebSessionAuthorization({
     prisma: params.prisma,
     clientId: params.client.id,
@@ -266,8 +299,20 @@ export async function requestWebSessionConnect(params: {
     return { ok: false as const, status: 403, code: "web_session_feature_disabled" };
   }
   const authorization = await resolveWebSessionAuthorization({ prisma: params.prisma, clientId: params.client.id });
-  if (!authorization.authorizedNumberCanonical || authorization.status === "RELEASED") {
+  if (
+    !authorization.authorizedNumberCanonical ||
+    authorization.status === "RELEASED" ||
+    authorization.status === "INVALIDATED_BY_META_IDENTITY_CHANGE"
+  ) {
     return { ok: false as const, status: 409, code: "web_session_number_not_authorized" };
+  }
+  const validation = await validateWebSessionNumberAgainstMeta({
+    prisma: params.prisma,
+    clientId: params.client.id,
+    number: authorization.authorizedNumberCanonical,
+  });
+  if (!validation.ok) {
+    return { ok: false as const, status: validation.status, code: validation.code };
   }
   const metadata = webSessionMetadataPatch(account.metadata, {
     desiredState: "CONNECTED",

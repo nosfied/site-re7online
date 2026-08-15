@@ -461,7 +461,24 @@ export default function TenantChannelsPage() {
               <TechnicalValue label="Número autorizado" value={webSessionStatus?.authorization.authorizedNumberMasked ?? "Não autorizado"} />
               <TechnicalValue label="Número detectado" value={webSessionStatus?.detectedNumber?.masked ?? "-"} />
               <TechnicalValue label="Feature" value={webSessionStatus?.featureEnabled ? "enabled" : "disabled"} />
+              <TechnicalValue label="Identidade Meta" value={webSessionStatus?.hybridIdentity?.meta.maskedNumber ?? "Não configurada"} />
+              <TechnicalValue label="Identidade Web" value={webSessionStatus?.hybridIdentity?.web.maskedNumber ?? "Não autorizada"} />
+              <TechnicalValue
+                label="Transporte principal"
+                value={
+                  webSessionStatus?.primaryTransport === "web_session"
+                    ? "WhatsApp Business por sessão"
+                    : webSessionStatus?.primaryTransport === "meta"
+                      ? "Meta Cloud"
+                      : "Padrão da conversa"
+                }
+              />
             </dl>
+            {webSessionStatus?.hybridIdentity?.conflict ? (
+              <div className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-100">
+                Identidade Meta e identidade Web estão divergentes. Corrija antes de permitir uso operacional híbrido.
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap items-end gap-2">
               <label className="flex min-w-72 flex-1 flex-col gap-1 text-sm">

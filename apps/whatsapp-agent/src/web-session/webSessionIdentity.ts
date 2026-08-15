@@ -7,6 +7,7 @@ import {
   maskWebSessionNumber,
   normalizeWebSessionAuthorizedNumber,
 } from "./webSessionAuthorization.js";
+import { validateObservedWebSessionIdentityAgainstMeta } from "./hybridIdentity.js";
 
 export type WebSessionIdentityReconciliationResult =
   | {
@@ -185,6 +186,19 @@ export async function reconcileWebSessionObservedIdentity(params: {
     });
     if (!account || account.channel !== "whatsapp" || account.provider !== "web_session") {
       return { ok: false as const, error: "web_session_account_not_found" as const };
+    }
+    const metaMismatch = await validateObservedWebSessionIdentityAgainstMeta({
+      prisma: tx as unknown as PrismaClient,
+      clientId: account.clientId,
+      observedIdentity: nextChannelAccountId,
+    });
+    if (metaMismatch) {
+      return {
+        ok: false as const,
+        error: "web_session_identity_mismatch" as const,
+        expectedIdentityMasked: metaMismatch.expectedIdentityMasked,
+        observedIdentityMasked: metaMismatch.observedIdentityMasked,
+      };
     }
 
     if (account.channelAccountId === nextChannelAccountId) {

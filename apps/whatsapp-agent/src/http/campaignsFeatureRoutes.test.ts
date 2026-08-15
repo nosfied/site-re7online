@@ -2117,6 +2117,27 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
     where: { id: businessClientId },
     data: { features: { whatsappWebSession: true } },
   });
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      phoneNumberId: "meta-phone-id-business",
+      rawPayload: { phoneNumber: { display_phone_number: "+55 84 9999-0001" } },
+    },
+    create: {
+      clientId: businessClientId,
+      phoneNumberId: "meta-phone-id-business",
+      rawPayload: { phoneNumber: { display_phone_number: "+55 84 9999-0001" } },
+    },
+  });
+  await prisma.waPhoneNumber.upsert({
+    where: { phoneNumberId: "meta-phone-id-business" },
+    update: { clientId: businessClientId, display: "+55 84 9999-0001" },
+    create: {
+      clientId: businessClientId,
+      phoneNumberId: "meta-phone-id-business",
+      display: "+55 84 9999-0001",
+    },
+  });
   const noNumberConnect = await request<ErrorPayload>(
     "POST",
     "/app/settings/channels/whatsapp/web-session/connect",
@@ -2124,6 +2145,15 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   );
   assert.equal(noNumberConnect.status, 409);
   assert.equal(getErrorCode(noNumberConnect.body), "web_session_number_not_authorized");
+
+  const mismatchedAuthorization = await request<ErrorPayload>(
+    "PUT",
+    "/app/settings/channels/whatsapp/web-session/authorize-number",
+    businessAdmin,
+    { number: "+55 84 9999-9999" }
+  );
+  assert.equal(mismatchedAuthorization.status, 409);
+  assert.equal(getErrorCode(mismatchedAuthorization.body), "web_session_meta_identity_mismatch");
 
   const authorized = await request<{
     status: {
@@ -2140,6 +2170,15 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   assert.equal(authorized.body.status.authorization.status, "AUTHORIZED");
   assert.equal(authorized.body.status.authorization.authorizedNumberCanonical, "558499990001");
   assert.equal(authorized.body.status.authorization.authorizedNumberMasked, "****0001");
+
+  const webPrimaryBeforeConnect = await request<ErrorPayload>(
+    "PUT",
+    "/app/settings/channels/whatsapp/primary-transport",
+    businessAdmin,
+    { provider: "web_session" }
+  );
+  assert.equal(webPrimaryBeforeConnect.status, 409);
+  assert.equal(getErrorCode(webPrimaryBeforeConnect.body), "web_session_transport_unavailable");
 
   const connected = await request<{
     status: {
@@ -2233,6 +2272,31 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   assert.equal(reconnected.body.status.lifecycle.desiredState, "CONNECTED");
   assert.equal(reconnected.body.status.lifecycle.observedState, "CONNECTING");
 
+  await prisma.channelAccount.updateMany({
+    where: { clientId: businessClientId, channel: "whatsapp", provider: "web_session", channelAccountId: "lab-account" },
+    data: {
+      status: "connected",
+      outboundEnabled: true,
+      metadata: {
+        webSession: {
+          desiredState: "CONNECTED",
+          observedState: "CONNECTED",
+        },
+      },
+    },
+  });
+  const savedWebPrimary = await request<{
+    ok: true;
+    primaryTransport: "web_session";
+    status: { primaryTransport: "web_session"; hybridIdentity: { conflict: boolean } };
+  }>("PUT", "/app/settings/channels/whatsapp/primary-transport", businessAdmin, {
+    provider: "web_session",
+  });
+  assert.equal(savedWebPrimary.status, 200, JSON.stringify(savedWebPrimary.body));
+  assert.equal(savedWebPrimary.body.primaryTransport, "web_session");
+  assert.equal(savedWebPrimary.body.status.primaryTransport, "web_session");
+  assert.equal(savedWebPrimary.body.status.hybridIdentity.conflict, false);
+
   const reset = await request<{
     status: {
       authState: { configured: boolean };
@@ -2269,6 +2333,49 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   assert.equal(release.body.status.authorization.status, "RELEASED");
   assert.equal(release.body.status.authorization.authorizedNumberCanonical, null);
   assert.equal(release.body.status.account.runtimeEnabled, false);
+
+  const reauthorized = await request("PUT", "/app/settings/channels/whatsapp/web-session/authorize-number", businessAdmin, {
+    number: "+55 84 9999-0001",
+  });
+  assert.equal(reauthorized.status, 200);
+  const metaMismatch = await requestSuperadmin<ErrorPayload>(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/onboarding/manual-bind`,
+    {
+      phoneNumberId: "meta-phone-id-business-2",
+      displayPhoneNumber: "+55 84 9999-0002",
+    }
+  );
+  assert.equal(metaMismatch.status, 409);
+  assert.equal(getErrorCode(metaMismatch.body), "hybrid_identity_conflict");
+
+  const confirmedMetaChange = await requestSuperadmin<{ ok: true; phoneNumberId: string }>(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/onboarding/manual-bind`,
+    {
+      phoneNumberId: "meta-phone-id-business-2",
+      displayPhoneNumber: "+55 84 9999-0002",
+      confirmInvalidateWebSession: true,
+    }
+  );
+  assert.equal(confirmedMetaChange.status, 200, JSON.stringify(confirmedMetaChange.body));
+  assert.equal(confirmedMetaChange.body.phoneNumberId, "meta-phone-id-business-2");
+  const invalidatedConfig = await prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: businessClientId },
+    select: { config: true },
+  });
+  assert.equal(
+    (invalidatedConfig?.config as { webSessionAuthorization?: { status?: string } })?.webSessionAuthorization?.status,
+    "INVALIDATED_BY_META_IDENTITY_CHANGE"
+  );
+  assert.equal(
+    await prisma.channelAccountSecret.count({
+      where: {
+        channelAccount: { clientId: businessClientId, channel: "whatsapp", provider: "web_session" },
+      },
+    }),
+    0
+  );
 
   await prisma.client.update({
     where: { id: businessClientId },

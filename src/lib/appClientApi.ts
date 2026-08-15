@@ -1625,14 +1625,38 @@ export type AppWhatsAppWebSessionStatus = {
     stagingUpdatedAt?: string | null;
   };
   authorization: {
-    status: "AUTHORIZED" | "OWNED" | "RELEASED";
+    status: "AUTHORIZED" | "OWNED" | "RELEASED" | "INVALIDATED_BY_META_IDENTITY_CHANGE";
     authorizedNumberCanonical: string | null;
     authorizedNumberMasked: string | null;
     authorizedAt: string | null;
     authorizedBy: string | null;
     releasedAt: string | null;
     releasedBy: string | null;
+    invalidatedAt?: string | null;
+    invalidatedBy?: string | null;
+    invalidationReason?: string | null;
   };
+  hybridIdentity?: {
+    meta: {
+      configured: boolean;
+      canonicalNumber: string | null;
+      maskedNumber: string | null;
+      phoneNumberIdPresent: boolean;
+      reason: string;
+    };
+    web: {
+      status: string;
+      canonicalNumber: string | null;
+      maskedNumber: string | null;
+    };
+    conflict: boolean;
+    logicalIdentity: {
+      provider: "meta" | "web_session";
+      canonicalNumber: string;
+      maskedNumber: string | null;
+    } | null;
+  };
+  primaryTransport?: "meta" | "web_session" | null;
   detectedNumber: {
     masked: string | null;
     matchesAuthorized: boolean;
@@ -3047,6 +3071,16 @@ export async function releaseAppWhatsAppWebSessionNumber(
 ): Promise<AppWhatsAppWebSessionResponse> {
   return requestAppJson(session, "/app/settings/channels/whatsapp/web-session/release-number", {
     method: "POST",
+  });
+}
+
+export async function updateAppWhatsAppPrimaryTransport(
+  session: AppSession,
+  input: { provider: "meta" | "web_session" }
+): Promise<AppWhatsAppWebSessionResponse> {
+  return requestAppJson(session, "/app/settings/channels/whatsapp/primary-transport", {
+    method: "PUT",
+    body: JSON.stringify(input),
   });
 }
 
