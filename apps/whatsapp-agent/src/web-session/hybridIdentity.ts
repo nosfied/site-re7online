@@ -77,7 +77,13 @@ export async function resolveOperationalMetaWhatsappIdentity(params: {
   const phoneNumberId = typeof metaConfig?.phoneNumberId === "string"
     ? metaConfig.phoneNumberId.trim()
     : "";
-  if (!phoneNumberId || !businessToken || !wabaId || isMetaOperationallyRemoved(metaConfig?.rawPayload)) {
+  if (
+    !phoneNumberId ||
+    !businessToken ||
+    !wabaId ||
+    isMetaOperationallyRemoved(metaConfig?.rawPayload) ||
+    !hasOperationalMetaSource(metaConfig?.rawPayload)
+  ) {
     return {
       configured: false,
       canonicalNumber: null,
@@ -116,6 +122,11 @@ function isMetaOperationallyRemoved(rawPayload: unknown) {
   if (!isRecord(rawPayload)) return false;
   const operationalStatus = rawPayload.operationalStatus;
   return isRecord(operationalStatus) && operationalStatus.state === "removed";
+}
+
+function hasOperationalMetaSource(rawPayload: unknown) {
+  if (!isRecord(rawPayload)) return false;
+  return typeof rawPayload.source === "string" && rawPayload.source.trim().length > 0;
 }
 
 function buildMetaRemovalRawPayload(rawPayload: unknown, actorUserId: string | null, requestId: string) {

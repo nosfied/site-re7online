@@ -80,7 +80,7 @@ function setMeta(prisma: ReturnType<typeof makePrisma>, clientId: string, displa
     phoneNumberId: `phone-${clientId}`,
     wabaId: `waba-${clientId}`,
     businessToken: `token-${clientId}`,
-    rawPayload: { phoneNumber: { display_phone_number: display } },
+    rawPayload: { source: "unit_test", phoneNumber: { display_phone_number: display } },
   });
   if (display) {
     prisma.state.waPhoneNumbers.push({
@@ -256,6 +256,29 @@ test("cleared or partial Meta config is not treated as operational identity", as
   assert.equal(partialMeta.configured, false);
   assert.equal(partialMeta.canonicalNumber, null);
   assert.equal(partialMeta.phoneNumberIdPresent, true);
+
+  prisma.state.metaConfigs.push({
+    clientId: "residual-meta",
+    phoneNumberId: "phone-residual",
+    wabaId: "waba-residual",
+    businessToken: "token-residual",
+    rawPayload: {
+      embeddedSignup: { phoneNumberId: "phone-residual", displayPhoneNumber: "+55 84 9999-0005" },
+      enrich: { phoneNumber: { display_phone_number: "+55 84 9999-0005" } },
+    },
+  });
+  prisma.state.waPhoneNumbers.push({
+    clientId: "residual-meta",
+    phoneNumberId: "phone-residual",
+    display: "+55 84 9999-0005",
+  });
+  const residualMeta = await resolveOperationalMetaWhatsappIdentity({
+    prisma: prisma as never,
+    clientId: "residual-meta",
+  });
+  assert.equal(residualMeta.configured, false);
+  assert.equal(residualMeta.canonicalNumber, null);
+  assert.equal(residualMeta.phoneNumberIdPresent, true);
 });
 
 test("primary transport config accepts only explicit known providers and preserves sibling config", async () => {

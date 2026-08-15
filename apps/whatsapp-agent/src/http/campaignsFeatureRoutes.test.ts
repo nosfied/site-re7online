@@ -2123,14 +2123,14 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
       phoneNumberId: "meta-phone-id-business",
       businessToken: "meta-business-token-business",
       wabaId: "meta-waba-id-business",
-      rawPayload: { phoneNumber: { display_phone_number: "+55 84 9999-0001" } },
+      rawPayload: { source: "unit_test", phoneNumber: { display_phone_number: "+55 84 9999-0001" } },
     },
     create: {
       clientId: businessClientId,
       phoneNumberId: "meta-phone-id-business",
       businessToken: "meta-business-token-business",
       wabaId: "meta-waba-id-business",
-      rawPayload: { phoneNumber: { display_phone_number: "+55 84 9999-0001" } },
+      rawPayload: { source: "unit_test", phoneNumber: { display_phone_number: "+55 84 9999-0001" } },
     },
   });
   await prisma.waPhoneNumber.upsert({
@@ -3253,7 +3253,7 @@ test("admin channel removal clears operational Meta identity but preserves histo
       businessPortfolioId: "meta-portfolio-teardown",
       wabaId: "meta-waba-teardown",
       phoneNumberId: "meta-phone-teardown",
-      rawPayload: { phoneNumber: { display_phone_number: "+55 84 9999-1001" } },
+      rawPayload: { source: "unit_test", phoneNumber: { display_phone_number: "+55 84 9999-1001" } },
     },
   });
   await prisma.waPhoneNumber.create({

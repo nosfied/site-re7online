@@ -341,7 +341,7 @@ test("Meta operational number blocks observed web session mismatch before promot
     phoneNumberId: "meta-phone-client-a",
     wabaId: "meta-waba-client-a",
     businessToken: "meta-token-client-a",
-    rawPayload: { phoneNumber: { display_phone_number: "+55 84 9999-0001" } },
+    rawPayload: { source: "unit_test", phoneNumber: { display_phone_number: "+55 84 9999-0001" } },
   });
   state.waPhoneNumbers.push({
     clientId: "client-a",
