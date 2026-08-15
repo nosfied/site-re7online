@@ -2352,6 +2352,10 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
     }),
     0
   );
+  await prisma.channelAccount.updateMany({
+    where: { clientId: businessClientId, channel: "whatsapp", provider: "web_session", channelAccountId: "lab-account" },
+    data: { channelAccountId: "558499990001" },
+  });
 
   const release = await requestSuperadmin<{
     status: {
@@ -2370,6 +2374,20 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   assert.equal(release.body.status.hybridIdentity.logicalIdentity?.provider, "meta");
   assert.equal(release.body.status.hybridIdentity.logicalIdentity?.maskedNumber, "****0001");
   assert.equal(release.body.status.account.runtimeEnabled, false);
+  const archivedReleasedAccount = await prisma.channelAccount.findFirst({
+    where: { clientId: businessClientId, channel: "whatsapp", provider: "web_session", channelAccountId: { startsWith: "archived:" } },
+    select: { channelAccountId: true },
+  });
+  assert.ok(archivedReleasedAccount);
+  assert.match(archivedReleasedAccount.channelAccountId, /^archived:/);
+  const releaseArchiveEvent = await prisma.event.findFirst({
+    where: { clientId: businessClientId, eventName: "whatsapp.web.identity.released_archived" },
+    select: { payloadJson: true },
+  });
+  assert.ok(releaseArchiveEvent);
+  const releaseArchivePayload = releaseArchiveEvent.payloadJson as { previousNumberMasked?: string; previousNumberHash?: string };
+  assert.equal(releaseArchivePayload.previousNumberMasked, "****0001");
+  assert.ok(releaseArchivePayload.previousNumberHash);
 
   const reauthorized = await requestSuperadmin(
     "PUT",

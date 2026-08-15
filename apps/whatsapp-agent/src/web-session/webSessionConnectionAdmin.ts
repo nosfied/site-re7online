@@ -52,6 +52,14 @@ function sanitizeChannelAccountId(value: unknown) {
   return value.trim().replace(/[^a-zA-Z0-9_.:-]/g, "").slice(0, 120) || DEFAULT_WEB_SESSION_ACCOUNT_ID;
 }
 
+function isObservedWhatsappIdentity(value: string) {
+  return /^\d{8,}$/.test(value);
+}
+
+function buildArchivedChannelAccountId(accountId: string, channelAccountId: string) {
+  return `archived:${accountId}:${fingerprintWebSessionNumber(channelAccountId)}`;
+}
+
 export async function getWebSessionAccount(params: {
   prisma: PrismaClient;
   clientId: string;
@@ -373,9 +381,13 @@ export async function releaseWebSessionNumber(params: {
       tenantKey: params.client.clientKey,
       channelAccountId: item.channelAccountId,
     });
+    const archivedChannelAccountId = isObservedWhatsappIdentity(item.channelAccountId)
+      ? buildArchivedChannelAccountId(item.id, item.channelAccountId)
+      : item.channelAccountId;
     await params.prisma.channelAccount.update({
       where: { id: item.id },
       data: {
+        channelAccountId: archivedChannelAccountId,
         runtimeEnabled: false,
         inboundPersistenceEnabled: false,
         outboundEnabled: false,
@@ -388,6 +400,21 @@ export async function releaseWebSessionNumber(params: {
         }),
       },
     });
+    if (archivedChannelAccountId !== item.channelAccountId) {
+      await persistEvent({
+        clientId: params.client.id,
+        requestId: `${params.requestId}:web-session-identity-archived:${item.id}`,
+        eventName: "whatsapp.web.identity.released_archived",
+        payloadJson: {
+          actorUserId: params.actorUserId,
+          channel: WEB_SESSION_CHANNEL,
+          provider: WEB_SESSION_PROVIDER,
+          channelAccountId: item.id,
+          previousNumberMasked: maskWebSessionNumber(item.channelAccountId),
+          previousNumberHash: fingerprintWebSessionNumber(item.channelAccountId),
+        },
+      });
+    }
   }
   await markWebSessionAuthorizationReleased({
     prisma: params.prisma,
