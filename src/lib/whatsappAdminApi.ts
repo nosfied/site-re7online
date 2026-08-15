@@ -1514,6 +1514,26 @@ export async function releaseTenantWebSessionNumber(
   );
 }
 
+export async function updateTenantWhatsAppPrimaryTransport(
+  connection: AdminConnection,
+  tenantId: string,
+  provider: "meta" | "web_session"
+): Promise<{
+  ok: true;
+  tenantId: string;
+  primaryTransport: "meta" | "web_session";
+  status: TenantWebSessionStatus;
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/whatsapp/primary-transport`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ provider }),
+    }
+  );
+}
+
 export async function startTenantInstagramBusinessConnect(
   connection: AdminConnection,
   tenantId: string

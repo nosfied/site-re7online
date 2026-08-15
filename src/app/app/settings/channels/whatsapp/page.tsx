@@ -9,7 +9,6 @@ import {
   AppApiError,
   AppSession,
   AppWhatsAppWebSessionStatus,
-  authorizeAppWhatsAppWebSessionNumber,
   clearAppSession,
   connectAppWhatsAppWebSession,
   disconnectAppWhatsAppWebSession,
@@ -17,10 +16,8 @@ import {
   fetchAppWhatsAppWebSessionStatus,
   loadAppSession,
   prepareAppWhatsAppWebSession,
-  releaseAppWhatsAppWebSessionNumber,
   resetAppWhatsAppWebSession,
   saveAppSession,
-  updateAppWhatsAppPrimaryTransport,
 } from "@/lib/appClientApi";
 import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 
@@ -139,7 +136,6 @@ export default function AppWhatsAppChannelSettingsPage() {
   const [status, setStatus] = useState<AppWhatsAppWebSessionStatus | null>(null);
   const [canUpdate, setCanUpdate] = useState(false);
   const [displayName, setDisplayName] = useState("WhatsApp Business");
-  const [authorizedNumber, setAuthorizedNumber] = useState("");
   const [qr, setQr] = useState<string | null>(null);
   const [qrImage, setQrImage] = useState<string | null>(null);
   const [qrExpired, setQrExpired] = useState(false);
@@ -163,7 +159,6 @@ export default function AppWhatsAppChannelSettingsPage() {
     setStatus(nextStatus);
     setCanUpdate(nextCanUpdate);
     setDisplayName(nextStatus.account?.displayName || "WhatsApp Business");
-    setAuthorizedNumber(nextStatus.authorization.authorizedNumberCanonical || "");
     const observedState = nextStatus.lifecycle.observedState;
     if (observedState === "CONNECTED" || observedState === "DISCONNECTED" || observedState === "ERROR") {
       setQr(null);
@@ -269,8 +264,6 @@ export default function AppWhatsAppChannelSettingsPage() {
   const canConnect = !readOnly && !isBusy && isConfigured && hasAuthorizedNumber && !isConnected && !isConnecting;
   const canDisconnect = !readOnly && !isBusy && isConfigured && !isDisconnected;
   const canReset = !readOnly && !isBusy && isConfigured;
-  const canAuthorize = !readOnly && !isBusy && Boolean(authorizedNumber.trim());
-  const canRelease = !readOnly && !isBusy && Boolean(status?.authorization.authorizedNumberCanonical || status?.configured);
   const shouldAutoPoll = Boolean(session && isConfigured && (isPendingConnection || currentState === "CONNECTED" || currentState === "ERROR"));
   const stateChangedAt = useMemo(() => {
     const raw = status?.account?.lastUpdatedAt;
@@ -363,17 +356,8 @@ export default function AppWhatsAppChannelSettingsPage() {
       const response = await fn(session);
       applyStatus(response.status, true);
       if (action === "prepare") setSuccess("Canal WhatsApp Business preparado.");
-      if (action === "authorize") setSuccess("Número autorizado para pareamento.");
-      if (action === "primary-meta") setSuccess("Meta Cloud definido como transporte principal.");
-      if (action === "primary-web") setSuccess("WhatsApp Business por sessão definido como transporte principal.");
       if (action === "connect") setSuccess("Conexão solicitada. O código aparecerá automaticamente quando estiver disponível.");
       if (action === "disconnect") setSuccess("Conexão interrompida sem apagar a sessão salva.");
-      if (action === "release") {
-        setQr(null);
-        setQrImage(null);
-        setQrExpired(false);
-        setSuccess("Número liberado. A próxima conexão exigirá nova autorização.");
-      }
       if (action === "reset") {
         setQr(null);
         setQrImage(null);
@@ -460,50 +444,14 @@ export default function AppWhatsAppChannelSettingsPage() {
                     <div>
                       <p className="text-sm font-semibold text-white">Transporte principal para texto no Inbox</p>
                       <p className="mt-1 text-xs text-white/60">
-                        A escolha usa somente os canais elegíveis deste tenant. Campanhas e modelos continuam pelo caminho Meta.
+                        Definido pela administração da plataforma. Campanhas e modelos continuam pelo caminho Meta.
                       </p>
                     </div>
                     {status?.hybridIdentity?.conflict ? <Pill label="Identidades divergentes" tone="danger" /> : null}
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void runAction("primary-meta", (activeSession) => updateAppWhatsAppPrimaryTransport(activeSession, { provider: "meta" }))}
-                      disabled={readOnly || Boolean(working) || status?.primaryTransport === "meta"}
-                      className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm font-semibold text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Usar Meta Cloud
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void runAction("primary-web", (activeSession) => updateAppWhatsAppPrimaryTransport(activeSession, { provider: "web_session" }))}
-                      disabled={readOnly || Boolean(working) || status?.primaryTransport === "web_session"}
-                      className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm font-semibold text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Usar sessão Web
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-end gap-2 border-t border-white/10 pt-4">
-                  <label className="flex min-w-72 flex-1 flex-col gap-1.5 text-sm text-white/75">
-                    <span>Número autorizado para pareamento</span>
-                    <input
-                      value={authorizedNumber}
-                      onChange={(event) => setAuthorizedNumber(event.target.value)}
-                      disabled={readOnly || Boolean(working)}
-                      className="rounded-md border border-white/15 bg-re7-navy px-2.5 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:cursor-not-allowed disabled:opacity-60"
-                      placeholder="+55..."
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => void runAction("authorize", (activeSession) => authorizeAppWhatsAppWebSessionNumber(activeSession, { number: authorizedNumber }))}
-                    disabled={!canAuthorize}
-                    className="rounded-md border border-sky-300/35 bg-sky-500/15 px-4 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/25 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Autorizar número
-                  </button>
+                  <p className="mt-3 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/65">
+                    Número autorizado e transporte de saída são governados no console interno.
+                  </p>
                 </div>
 
                 <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
@@ -538,18 +486,6 @@ export default function AppWhatsAppChannelSettingsPage() {
                     className="rounded-md border border-red-300/30 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Redefinir sessão
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm("Liberar este número remove a sessão Web Session deste tenant. Use apenas quando o número será transferido.")) {
-                        void runAction("release", releaseAppWhatsAppWebSessionNumber);
-                      }
-                    }}
-                    disabled={!canRelease}
-                    className="rounded-md border border-amber-300/30 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Liberar número
                   </button>
                   <button
                     type="button"

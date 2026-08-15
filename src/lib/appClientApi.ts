@@ -3056,34 +3056,6 @@ export async function connectAppWhatsAppWebSession(
   });
 }
 
-export async function authorizeAppWhatsAppWebSessionNumber(
-  session: AppSession,
-  input: { number: string }
-): Promise<AppWhatsAppWebSessionResponse> {
-  return requestAppJson(session, "/app/settings/channels/whatsapp/web-session/authorize-number", {
-    method: "PUT",
-    body: JSON.stringify(input),
-  });
-}
-
-export async function releaseAppWhatsAppWebSessionNumber(
-  session: AppSession
-): Promise<AppWhatsAppWebSessionResponse> {
-  return requestAppJson(session, "/app/settings/channels/whatsapp/web-session/release-number", {
-    method: "POST",
-  });
-}
-
-export async function updateAppWhatsAppPrimaryTransport(
-  session: AppSession,
-  input: { provider: "meta" | "web_session" }
-): Promise<AppWhatsAppWebSessionResponse> {
-  return requestAppJson(session, "/app/settings/channels/whatsapp/primary-transport", {
-    method: "PUT",
-    body: JSON.stringify(input),
-  });
-}
-
 export async function fetchAppWhatsAppWebSessionQr(
   session: AppSession
 ): Promise<AppWhatsAppWebSessionQrResponse> {

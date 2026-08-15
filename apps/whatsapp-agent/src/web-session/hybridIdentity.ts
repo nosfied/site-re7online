@@ -70,15 +70,19 @@ export async function resolveOperationalMetaWhatsappIdentity(params: {
       rawPayload: true,
     },
   });
+  const businessToken = typeof metaConfig?.businessToken === "string"
+    ? metaConfig.businessToken.trim()
+    : "";
+  const wabaId = typeof metaConfig?.wabaId === "string" ? metaConfig.wabaId.trim() : "";
   const phoneNumberId = typeof metaConfig?.phoneNumberId === "string"
     ? metaConfig.phoneNumberId.trim()
     : "";
-  if (!phoneNumberId) {
+  if (!phoneNumberId || !businessToken || !wabaId || isMetaOperationallyRemoved(metaConfig?.rawPayload)) {
     return {
       configured: false,
       canonicalNumber: null,
       maskedNumber: null,
-      phoneNumberIdPresent: false,
+      phoneNumberIdPresent: Boolean(phoneNumberId),
       reason: "meta_not_configured" as const,
     };
   }
@@ -106,6 +110,83 @@ export async function resolveOperationalMetaWhatsappIdentity(params: {
     phoneNumberIdPresent: true,
     reason: "ok" as const,
   };
+}
+
+function isMetaOperationallyRemoved(rawPayload: unknown) {
+  if (!isRecord(rawPayload)) return false;
+  const operationalStatus = rawPayload.operationalStatus;
+  return isRecord(operationalStatus) && operationalStatus.state === "removed";
+}
+
+function buildMetaRemovalRawPayload(rawPayload: unknown, actorUserId: string | null, requestId: string) {
+  const previous = isRecord(rawPayload) ? rawPayload : {};
+  return {
+    ...previous,
+    operationalStatus: {
+      state: "removed",
+      removedAt: new Date().toISOString(),
+      removedBy: actorUserId,
+      requestId,
+    },
+  } as Prisma.InputJsonValue;
+}
+
+export async function clearOperationalMetaWhatsappIdentity(params: {
+  prisma: PrismaClient | Prisma.TransactionClient;
+  clientId: string;
+  actorUserId: string | null;
+  requestId: string;
+  reason: string;
+}) {
+  const tenantMetaConfig = (params.prisma as unknown as {
+    tenantMetaConfig?: PrismaClient["tenantMetaConfig"];
+  }).tenantMetaConfig;
+  if (!tenantMetaConfig) return { cleared: false };
+  const existing = await tenantMetaConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: {
+      id: true,
+      phoneNumberId: true,
+      wabaId: true,
+      businessToken: true,
+      rawPayload: true,
+    },
+  });
+  if (!existing) return { cleared: false };
+  const hadOperationalFields = Boolean(
+    String(existing.phoneNumberId ?? "").trim() ||
+      String(existing.wabaId ?? "").trim() ||
+      String(existing.businessToken ?? "").trim()
+  );
+  await tenantMetaConfig.update({
+    where: { clientId: params.clientId },
+    data: {
+      businessToken: null,
+      businessId: null,
+      businessPortfolioId: null,
+      wabaId: null,
+      phoneNumberId: null,
+      rawPayload: buildMetaRemovalRawPayload(existing.rawPayload, params.actorUserId, params.requestId),
+    },
+  });
+  const event = (params.prisma as unknown as { event?: PrismaClient["event"] }).event;
+  if (event) {
+    await event.create({
+      data: {
+        clientId: params.clientId,
+        requestId: `${params.requestId}:meta-operational-identity-cleared`,
+        eventName: "whatsapp.meta.operational_identity_cleared",
+        payloadJson: {
+          channel: "whatsapp",
+          provider: "meta",
+          reason: params.reason,
+          actorUserId: params.actorUserId,
+          hadOperationalFields,
+        } as Prisma.InputJsonValue,
+      },
+    });
+  }
+  return { cleared: hadOperationalFields };
 }
 
 export async function resolveHybridWhatsappIdentityStatus(params: {
@@ -225,6 +306,29 @@ export async function saveWhatsappPrimaryTransport(params: {
     },
   });
   return params.provider;
+}
+
+export async function clearWhatsappPrimaryTransport(params: {
+  prisma: PrismaClient | Prisma.TransactionClient;
+  clientId: string;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  if (!isRecord(existing?.config) || !("whatsappPrimaryTransport" in existing.config)) {
+    return { cleared: false };
+  }
+  const nextConfig = { ...existing.config };
+  delete nextConfig.whatsappPrimaryTransport;
+  await params.prisma.tenantOperationalConfig.update({
+    where: { clientId: params.clientId },
+    data: {
+      schemaVersion: 1,
+      config: nextConfig as Prisma.InputJsonValue,
+    },
+  });
+  return { cleared: true };
 }
 
 export async function invalidateWebSessionForMetaIdentityChange(params: {

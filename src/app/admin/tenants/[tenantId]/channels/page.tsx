@@ -14,6 +14,7 @@ import {
   TenantChannelAccount,
   TenantWebSessionStatus,
   updateTenantChannelAccounts,
+  updateTenantWhatsAppPrimaryTransport,
 } from "@/lib/whatsappAdminApi";
 
 type ChannelAccountDraft = {
@@ -382,6 +383,25 @@ export default function TenantChannelsPage() {
     }
   };
 
+  const handlePrimaryTransport = async (provider: "meta" | "web_session") => {
+    setWebSessionWorking(`primary-${provider}`);
+    setError(null);
+    setToast(null);
+    try {
+      const response = await updateTenantWhatsAppPrimaryTransport(connection, tenantId, provider);
+      setWebSessionStatus(response.status);
+      setToast(
+        provider === "meta"
+          ? "Meta Cloud definido como transporte principal."
+          : "WhatsApp Business por sessão definido como transporte principal."
+      );
+    } catch (err) {
+      setError((err as Error).message || "Falha ao atualizar transporte principal.");
+    } finally {
+      setWebSessionWorking(null);
+    }
+  };
+
   return (
     <div className="px-4 py-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
@@ -479,6 +499,28 @@ export default function TenantChannelsPage() {
                 Identidade Meta e identidade Web estão divergentes. Corrija antes de permitir uso operacional híbrido.
               </div>
             ) : null}
+
+            <div className="flex flex-wrap items-end gap-2">
+              <button
+                type="button"
+                onClick={() => void handlePrimaryTransport("meta")}
+                disabled={Boolean(webSessionWorking) || webSessionStatus?.primaryTransport === "meta"}
+                className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {webSessionWorking === "primary-meta" ? "Salvando..." : "Usar Meta Cloud"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handlePrimaryTransport("web_session")}
+                disabled={Boolean(webSessionWorking) || webSessionStatus?.primaryTransport === "web_session"}
+                className="rounded-md border border-emerald-300/40 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {webSessionWorking === "primary-web_session" ? "Salvando..." : "Usar sessão Web"}
+              </button>
+              <p className="min-w-64 flex-1 text-xs text-emerald-100/60">
+                Transporte primário é governança interna da plataforma. O app do tenant apenas exibe o valor atual.
+              </p>
+            </div>
 
             <div className="flex flex-wrap items-end gap-2">
               <label className="flex min-w-72 flex-1 flex-col gap-1 text-sm">

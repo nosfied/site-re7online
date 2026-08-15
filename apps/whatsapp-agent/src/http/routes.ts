@@ -201,6 +201,8 @@ import {
   serializeWebSessionStatus,
 } from "../web-session/webSessionConnectionAdmin.js";
 import {
+  clearOperationalMetaWhatsappIdentity,
+  clearWhatsappPrimaryTransport,
   invalidateWebSessionForMetaIdentityChange,
   normalizeHybridWhatsappNumber,
   resolveHybridWhatsappIdentityStatus,
@@ -7232,82 +7234,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     pathname === "/app/settings/channels/whatsapp/primary-transport" &&
     req.method === "PUT"
   ) {
-    const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
-    try {
-      if (!isAdminRole(clientAuth.role)) {
-        json(res, 403, httpError("forbidden", "Only admin can update WhatsApp primary transport."));
-        return;
-      }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      const body = await readJsonBody(req, res);
-      if (!body) return;
-      const provider = body && typeof body === "object" && !Array.isArray(body)
-        ? (body as Record<string, unknown>).provider
-        : null;
-      if (provider !== "meta" && provider !== "web_session") {
-        json(res, 400, httpError("invalid_primary_transport", "Invalid WhatsApp primary transport."));
-        return;
-      }
-      const hybrid = await resolveHybridWhatsappIdentityStatus({ prisma, clientId: client.id });
-      if (hybrid.conflict) {
-        json(res, 409, httpError("hybrid_identity_conflict", "WhatsApp transport identities do not match."));
-        return;
-      }
-      if (provider === "meta" && !hybrid.meta.canonicalNumber) {
-        json(res, 409, httpError("meta_transport_unavailable", "Meta Cloud number is not operational for this tenant."));
-        return;
-      }
-      if (provider === "web_session") {
-        const ready = await isWebSessionTextOutboundReady({
-          prisma,
-          clientId: client.id,
-          clientKey: client.clientKey,
-        });
-        if (!ready || !hybrid.web.canonicalNumber) {
-          json(res, 409, httpError("web_session_transport_unavailable", "WhatsApp Web Session is not connected for this tenant."));
-          return;
-        }
-      }
-      const savedProvider = await saveWhatsappPrimaryTransport({
-        prisma,
-        clientId: client.id,
-        provider,
-      });
-      await persistEvent({
-        clientId: client.id,
-        requestId: `${requestId}:whatsapp-primary-transport`,
-        eventName: "whatsapp.primary_transport.updated",
-        payloadJson: {
-          actorUserId: clientAuth.userId,
-          provider: savedProvider,
-          identity: hybrid.logicalIdentity
-            ? {
-                provider: hybrid.logicalIdentity.provider,
-                masked: hybrid.logicalIdentity.maskedNumber,
-              }
-            : null,
-        },
-      });
-      json(res, 200, {
-        ok: true,
-        tenantId: client.clientKey,
-        primaryTransport: savedProvider,
-        status: await serializeWebSessionStatus({ prisma, client }),
-      });
-    } catch (error) {
-      logger.error({
-        event: "app.whatsapp_primary_transport.error",
-        message: (error as Error).message,
-        requestId,
-      });
-      json(res, 500, httpError("server_error", "Server error"));
-    }
+    json(
+      res,
+      403,
+      httpError(
+        "platform_admin_required",
+        "WhatsApp primary transport is managed by the internal platform console."
+      )
+    );
     return;
   }
 
@@ -7315,49 +7251,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     pathname === "/app/settings/channels/whatsapp/web-session/authorize-number" &&
     req.method === "PUT"
   ) {
-    const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
-    try {
-      if (!isAdminRole(clientAuth.role)) {
-        json(res, 403, httpError("forbidden", "Only admin can authorize WhatsApp Web Session number."));
-        return;
-      }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      const body = await readJsonBody(req, res);
-      if (!body) return;
-      const number = body && typeof body === "object" && !Array.isArray(body)
-        ? String((body as Record<string, unknown>).number ?? "")
-        : "";
-      const result = await authorizeWebSessionNumber({
-        prisma,
-        client,
-        actorUserId: clientAuth.userId,
-        requestId,
-        number,
-      });
-      if (!result.ok) {
-        json(res, result.status, httpError(result.code, result.code, result.details));
-        return;
-      }
-      json(res, 200, {
-        ok: true,
-        tenantId: client.clientKey,
-        status: result.status,
-        permissions: { canUpdate: true },
-      });
-    } catch (error) {
-      logger.error({
-        event: "app.whatsapp_web_session.authorize_number.error",
-        message: (error as Error).message,
-        requestId,
-      });
-      json(res, 500, httpError("server_error", "Server error"));
-    }
+    json(
+      res,
+      403,
+      httpError(
+        "platform_admin_required",
+        "WhatsApp Web Session number authorization is managed by the internal platform console."
+      )
+    );
     return;
   }
 
@@ -7365,39 +7268,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     pathname === "/app/settings/channels/whatsapp/web-session/release-number" &&
     req.method === "POST"
   ) {
-    const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
-    try {
-      if (!isAdminRole(clientAuth.role)) {
-        json(res, 403, httpError("forbidden", "Only admin can release WhatsApp Web Session number."));
-        return;
-      }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      const result = await releaseWebSessionNumber({
-        prisma,
-        client,
-        actorUserId: clientAuth.userId,
-        requestId,
-      });
-      json(res, 200, {
-        ok: true,
-        tenantId: client.clientKey,
-        status: result.status,
-        permissions: { canUpdate: true },
-      });
-    } catch (error) {
-      logger.error({
-        event: "app.whatsapp_web_session.release_number.error",
-        message: (error as Error).message,
-        requestId,
-      });
-      json(res, 500, httpError("server_error", "Server error"));
-    }
+    json(
+      res,
+      403,
+      httpError(
+        "platform_admin_required",
+        "WhatsApp Web Session number release is managed by the internal platform console."
+      )
+    );
     return;
   }
 
@@ -18074,17 +17954,50 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           });
           const channelAccounts =
             normalizeTenantChannelAccountsForTenant(rawAccounts, tenantId, existingAccounts) ?? [];
+          const hadOperationalMetaWhatsapp = existingAccounts.some(
+            (account) =>
+              account.channel === "whatsapp" &&
+              account.provider === "meta" &&
+              account.enabled === true &&
+              account.status !== "disabled"
+          );
+          const hasOperationalMetaWhatsapp = channelAccounts.some(
+            (account) =>
+              account.channel === "whatsapp" &&
+              account.provider === "meta" &&
+              account.enabled === true &&
+              account.status !== "disabled"
+          );
           await replaceTenantChannelAccountsInDb({
             prisma,
             tenantKey: tenantId,
             accounts: channelAccounts,
           });
+          let metaIdentityCleared = false;
+          let primaryTransportCleared = false;
+          if (hadOperationalMetaWhatsapp && !hasOperationalMetaWhatsapp) {
+            const clearedMeta = await clearOperationalMetaWhatsappIdentity({
+              prisma,
+              clientId: client.id,
+              actorUserId: `admin:${authToken.source}`,
+              requestId,
+              reason: "admin_channel_account_removed",
+            });
+            metaIdentityCleared = clearedMeta.cleared;
+            const clearedPrimary = await clearWhatsappPrimaryTransport({
+              prisma,
+              clientId: client.id,
+            });
+            primaryTransportCleared = clearedPrimary.cleared;
+          }
           logger.info({
             event: "admin.tenant.channel_accounts.updated",
             tenantId,
             authSource: authToken.source,
             accountCount: channelAccounts.length,
             fieldsChanged: ["channelAccounts"],
+            metaIdentityCleared,
+            primaryTransportCleared,
             source: "db",
             requestId,
           });
@@ -18176,6 +18089,79 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         tenantId: client.clientKey,
         status: result.status,
         permissions: { canUpdate: true },
+      });
+      return;
+    }
+
+    const adminWhatsappPrimaryTransportMatch = pathname.match(
+      /^\/admin\/tenants\/([^/]+)\/whatsapp\/primary-transport$/
+    );
+    if (req.method === "PUT" && adminWhatsappPrimaryTransportMatch) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(adminWhatsappPrimaryTransportMatch[1] ?? "").trim();
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const provider = body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>).provider
+        : null;
+      if (provider !== "meta" && provider !== "web_session") {
+        json(res, 400, httpError("invalid_primary_transport", "Invalid WhatsApp primary transport."));
+        return;
+      }
+      const prisma = getPrisma();
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true, status: true, features: true, profile: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const hybrid = await resolveHybridWhatsappIdentityStatus({ prisma, clientId: client.id });
+      if (hybrid.conflict) {
+        json(res, 409, httpError("hybrid_identity_conflict", "WhatsApp transport identities do not match."));
+        return;
+      }
+      if (provider === "meta" && !hybrid.meta.canonicalNumber) {
+        json(res, 409, httpError("meta_transport_unavailable", "Meta Cloud number is not operational for this tenant."));
+        return;
+      }
+      if (provider === "web_session") {
+        const ready = await isWebSessionTextOutboundReady({
+          prisma,
+          clientId: client.id,
+          clientKey: client.clientKey,
+        });
+        if (!ready || !hybrid.web.canonicalNumber) {
+          json(res, 409, httpError("web_session_transport_unavailable", "WhatsApp Web Session is not connected for this tenant."));
+          return;
+        }
+      }
+      const savedProvider = await saveWhatsappPrimaryTransport({
+        prisma,
+        clientId: client.id,
+        provider,
+      });
+      await persistEvent({
+        clientId: client.id,
+        requestId: `${requestId}:admin-whatsapp-primary-transport`,
+        eventName: "whatsapp.primary_transport.updated",
+        payloadJson: {
+          actorUserId: `admin:${authToken.source}`,
+          provider: savedProvider,
+          identity: hybrid.logicalIdentity
+            ? {
+                provider: hybrid.logicalIdentity.provider,
+                masked: hybrid.logicalIdentity.maskedNumber,
+              }
+            : null,
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        primaryTransport: savedProvider,
+        status: await serializeWebSessionStatus({ prisma, client }),
       });
       return;
     }

@@ -136,7 +136,13 @@ function makePrisma() {
       payloadJson: unknown;
     }>,
     operationalConfigs: [] as Array<{ clientId: string; config: unknown; schemaVersion: number }>,
-    metaConfigs: [] as Array<{ clientId: string; phoneNumberId: string; rawPayload: unknown }>,
+    metaConfigs: [] as Array<{
+      clientId: string;
+      phoneNumberId: string;
+      wabaId?: string | null;
+      businessToken?: string | null;
+      rawPayload: unknown;
+    }>,
     waPhoneNumbers: [] as Array<{ clientId: string; phoneNumberId: string; display: string | null }>,
   };
   const client = {
@@ -333,6 +339,8 @@ test("Meta operational number blocks observed web session mismatch before promot
   state.metaConfigs.push({
     clientId: "client-a",
     phoneNumberId: "meta-phone-client-a",
+    wabaId: "meta-waba-client-a",
+    businessToken: "meta-token-client-a",
     rawPayload: { phoneNumber: { display_phone_number: "+55 84 9999-0001" } },
   });
   state.waPhoneNumbers.push({
