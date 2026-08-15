@@ -2326,12 +2326,19 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   const release = await request<{
     status: {
       authorization: { status: string; authorizedNumberCanonical: string | null };
+      hybridIdentity: {
+        conflict: boolean;
+        logicalIdentity: { provider: string; maskedNumber: string | null } | null;
+      };
       account: { runtimeEnabled: boolean; inboundPersistenceEnabled: boolean; status: string };
     };
   }>("POST", "/app/settings/channels/whatsapp/web-session/release-number", businessAdmin);
   assert.equal(release.status, 200);
   assert.equal(release.body.status.authorization.status, "RELEASED");
   assert.equal(release.body.status.authorization.authorizedNumberCanonical, null);
+  assert.equal(release.body.status.hybridIdentity.conflict, false);
+  assert.equal(release.body.status.hybridIdentity.logicalIdentity?.provider, "meta");
+  assert.equal(release.body.status.hybridIdentity.logicalIdentity?.maskedNumber, "****0001");
   assert.equal(release.body.status.account.runtimeEnabled, false);
 
   const reauthorized = await request("PUT", "/app/settings/channels/whatsapp/web-session/authorize-number", businessAdmin, {
@@ -2376,6 +2383,13 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
     }),
     0
   );
+  const invalidatedReconnect = await request<ErrorPayload>(
+    "POST",
+    "/app/settings/channels/whatsapp/web-session/connect",
+    businessAdmin
+  );
+  assert.equal(invalidatedReconnect.status, 409);
+  assert.equal(getErrorCode(invalidatedReconnect.body), "web_session_number_not_authorized");
 
   await prisma.client.update({
     where: { id: businessClientId },

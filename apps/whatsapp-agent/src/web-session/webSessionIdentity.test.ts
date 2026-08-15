@@ -136,8 +136,22 @@ function makePrisma() {
       payloadJson: unknown;
     }>,
     operationalConfigs: [] as Array<{ clientId: string; config: unknown; schemaVersion: number }>,
+    metaConfigs: [] as Array<{ clientId: string; phoneNumberId: string; rawPayload: unknown }>,
+    waPhoneNumbers: [] as Array<{ clientId: string; phoneNumberId: string; display: string | null }>,
   };
   const client = {
+    tenantMetaConfig: {
+      findUnique: async (args: { where: { clientId: string } }) =>
+        state.metaConfigs.find((item) => item.clientId === args.where.clientId) ?? null,
+    },
+    waPhoneNumber: {
+      findFirst: async (args: { where: { clientId: string; phoneNumberId: string } }) =>
+        state.waPhoneNumbers.find(
+          (item) =>
+            item.clientId === args.where.clientId &&
+            item.phoneNumberId === args.where.phoneNumberId
+        ) ?? null,
+    },
     tenantOperationalConfig: {
       findUnique: async (args: { where: { clientId: string } }) =>
         state.operationalConfigs.find((item) => item.clientId === args.where.clientId) ?? null,
@@ -312,6 +326,36 @@ test("authorized number match allows reconciliation", async () => {
 
   assert.equal(result.ok, true);
   assert.equal(state.accounts[0]?.channelAccountId, "5584999990001");
+});
+
+test("Meta operational number blocks observed web session mismatch before promotion", async () => {
+  const { prisma, state } = makePrisma();
+  state.metaConfigs.push({
+    clientId: "client-a",
+    phoneNumberId: "meta-phone-client-a",
+    rawPayload: { phoneNumber: { display_phone_number: "+55 84 9999-0001" } },
+  });
+  state.waPhoneNumbers.push({
+    clientId: "client-a",
+    phoneNumberId: "meta-phone-client-a",
+    display: "+55 84 9999-0001",
+  });
+
+  const result = await reconcileWebSessionObservedIdentity({
+    prisma: prisma as never,
+    accountId: "account-a",
+    observedIdentity: "5584999997784@s.whatsapp.net",
+    requestId: "meta-observed-mismatch",
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "web_session_identity_mismatch",
+    expectedIdentityMasked: "****0001",
+    observedIdentityMasked: "****7784",
+  });
+  assert.equal(state.accounts[0]?.channelAccountId, "5584999990001");
+  assert.equal(state.events.length, 0);
 });
 
 test("inactive same-tenant duplicate is archived before identity reconciliation", async () => {
