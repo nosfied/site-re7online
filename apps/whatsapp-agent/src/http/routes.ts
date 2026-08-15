@@ -206,6 +206,7 @@ import {
   invalidateWebSessionForMetaIdentityChange,
   normalizeHybridWhatsappNumber,
   resolveHybridWhatsappIdentityStatus,
+  resolveOperationalWhatsappDisplayIdentity,
   resolveWhatsappPrimaryTransport,
   saveWhatsappPrimaryTransport,
 } from "../web-session/hybridIdentity.js";
@@ -3186,35 +3187,30 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           id: clientAuth.clientId,
           ...(clientAuth.supportAccess ? {} : { status: "ACTIVE" }),
         },
-        include: {
-          metaConfig: true,
-          phoneNumbers: {
-            orderBy: { createdAt: "asc" },
-            take: 1,
-          },
-        },
+        include: { metaConfig: true },
       });
       if (!client) {
         json(res, 404, { error: "client_not_found" });
         return;
       }
-      const phone = client.phoneNumbers[0] ?? null;
       const tenants = await getTenants();
       const tenantConfig = tenants[client.clientKey];
-      const metaDisplayPhone = extractTenantDisplayPhoneFromRawPayload(client.metaConfig?.rawPayload);
-      const phoneDisplay =
-        tenantConfig?.displayPhoneNumber?.trim() ||
-        metaDisplayPhone ||
-        phone?.display ||
-        phone?.phoneNumberId ||
-        null;
+      const whatsappIdentity = await resolveOperationalWhatsappDisplayIdentity({
+        prisma,
+        clientId: client.id,
+      });
+      const phoneDisplay = whatsappIdentity.maskedNumber ?? null;
       json(res, 200, {
         ok: true,
         tenant: {
           id: client.id,
           name: tenantConfig?.name || client.name,
-          phoneNumberId: client.metaConfig?.phoneNumberId ?? phone?.phoneNumberId ?? null,
+          phoneNumberId:
+            whatsappIdentity.provider === "meta" || whatsappIdentity.provider === "hybrid"
+              ? client.metaConfig?.phoneNumberId ?? null
+              : null,
           phoneDisplay,
+          whatsappIdentityProvider: whatsappIdentity.provider,
           features: getFeatures(client),
           profile: getClientProfile(client),
           supportAccess: clientAuth.supportAccess

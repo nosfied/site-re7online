@@ -12,6 +12,7 @@ import {
   clearSupportReturnSession,
   exitPlatformSupportTenant,
   fetchAppTenantSummary,
+  formatAppWhatsappIdentityDisplay,
   getAppSessionRemainingMs,
   loadSupportReturnSession,
   logoutAppSession,
@@ -343,6 +344,7 @@ export default function AppShell({
   const [tenantSummary, setTenantSummary] = useState<{
     name: string;
     phoneDisplay: string | null;
+    whatsappIdentityProvider: "meta" | "web_session" | "hybrid" | "none";
     profile: AppProfile;
   } | null>(null);
   const canViewAdministration = isSupervisorRole(activeSession.user.role) || isAdminRole(activeSession.user.role);
@@ -401,6 +403,7 @@ export default function AppShell({
         setTenantSummary({
           name: response.tenant.name,
           phoneDisplay: response.tenant.phoneDisplay,
+          whatsappIdentityProvider: response.tenant.whatsappIdentityProvider,
           profile: response.tenant.profile,
         });
       })
@@ -722,9 +725,9 @@ export default function AppShell({
           {tenantSummary ? (
             <>
               <p className="theme-muted truncate text-xs leading-tight">{tenantSummary.name}</p>
-              {tenantSummary.phoneDisplay ? (
-                <p className="theme-soft truncate text-xs leading-tight">{tenantSummary.phoneDisplay}</p>
-              ) : null}
+              <p className="theme-soft truncate text-xs leading-tight">
+                {formatAppWhatsappIdentityDisplay(tenantSummary)}
+              </p>
             </>
           ) : null}
           <p className="theme-muted truncate text-xs leading-tight lg:text-sm">

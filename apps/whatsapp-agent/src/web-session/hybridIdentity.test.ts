@@ -5,6 +5,7 @@ import {
   readWhatsappPrimaryTransportFromConfig,
   resolveHybridWhatsappIdentityStatus,
   resolveOperationalMetaWhatsappIdentity,
+  resolveOperationalWhatsappDisplayIdentity,
   saveWhatsappPrimaryTransport,
   validateWebSessionNumberAgainstMeta,
 } from "./hybridIdentity.js";
@@ -20,6 +21,15 @@ function makePrisma() {
       rawPayload: unknown;
     }>,
     waPhoneNumbers: [] as Array<{ clientId: string; phoneNumberId: string; display: string | null }>,
+    channelAccounts: [] as Array<{
+      clientId: string;
+      channel: string;
+      provider: string;
+      channelAccountId: string;
+      status: string;
+      runtimeEnabled: boolean;
+      metadata: unknown;
+    }>,
     events: [] as Array<{ clientId: string; requestId: string; eventName: string; payloadJson: unknown }>,
   };
   const prisma = {
@@ -58,6 +68,25 @@ function makePrisma() {
           (item) =>
             item.clientId === args.where.clientId &&
             item.phoneNumberId === args.where.phoneNumberId
+        ) ?? null,
+    },
+    channelAccount: {
+      findFirst: async (args: {
+        where: {
+          clientId: string;
+          channel: string;
+          provider: string;
+          status?: { not: string };
+          runtimeEnabled?: boolean;
+        };
+      }) =>
+        state.channelAccounts.find(
+          (item) =>
+            item.clientId === args.where.clientId &&
+            item.channel === args.where.channel &&
+            item.provider === args.where.provider &&
+            item.runtimeEnabled === args.where.runtimeEnabled &&
+            (!args.where.status?.not || item.status !== args.where.status.not)
         ) ?? null,
     },
     event: {
@@ -108,6 +137,24 @@ function setWebAuthorization(prisma: ReturnType<typeof makePrisma>, clientId: st
   };
   if (existing) existing.config = config;
   else prisma.state.operationalConfigs.push({ clientId, schemaVersion: 1, config });
+}
+
+function setWebAccount(
+  prisma: ReturnType<typeof makePrisma>,
+  clientId: string,
+  number: string,
+  state: "CONNECTED" | "DISCONNECTED" | "QR_REQUIRED" = "CONNECTED"
+) {
+  prisma.state.channelAccounts = prisma.state.channelAccounts.filter((item) => item.clientId !== clientId);
+  prisma.state.channelAccounts.push({
+    clientId,
+    channel: "whatsapp",
+    provider: "web_session",
+    channelAccountId: number,
+    status: state === "CONNECTED" ? "connected" : "pending",
+    runtimeEnabled: true,
+    metadata: { webSession: { observedState: state } },
+  });
 }
 
 test("operational Meta identity uses display number instead of phoneNumberId", async () => {
@@ -165,6 +212,85 @@ test("hybrid logical identity resolves Meta only, Web only, matching hybrid and 
   assert.equal(mismatch.conflict, true);
   assert.equal(mismatch.meta.canonicalNumber, "558499990004");
   assert.equal(mismatch.web.canonicalNumber, "558499990005");
+});
+
+test("operational display prefers connected Web Session over residual Meta history", async () => {
+  const prisma = makePrisma();
+  prisma.state.metaConfigs.push({
+    clientId: "demo-converta",
+    phoneNumberId: "phone-residual",
+    wabaId: "waba-residual",
+    businessToken: "token-residual",
+    rawPayload: {
+      embeddedSignup: { phoneNumberId: "phone-residual", displayPhoneNumber: "+55 84 9999-5328" },
+      enrich: { phoneNumber: { display_phone_number: "+55 84 9999-5328" } },
+    },
+  });
+  prisma.state.waPhoneNumbers.push({
+    clientId: "demo-converta",
+    phoneNumberId: "phone-residual",
+    display: "+55 84 9999-5328",
+  });
+  setWebAccount(prisma, "demo-converta", "558496712218");
+
+  const identity = await resolveOperationalWhatsappDisplayIdentity({
+    prisma: prisma as never,
+    clientId: "demo-converta",
+  });
+
+  assert.equal(identity.provider, "web_session");
+  assert.equal(identity.canonicalNumber, "558496712218");
+  assert.equal(identity.maskedNumber, "****2218");
+});
+
+test("operational display does not expose authorized-only or historical WhatsApp numbers", async () => {
+  const prisma = makePrisma();
+  setWebAuthorization(prisma, "lab-websession", "558496712218");
+  prisma.state.metaConfigs.push({
+    clientId: "lab-websession",
+    phoneNumberId: "phone-residual",
+    wabaId: "waba-residual",
+    businessToken: "token-residual",
+    rawPayload: {
+      embeddedSignup: { phoneNumberId: "phone-residual", displayPhoneNumber: "+55 84 9999-5328" },
+    },
+  });
+  prisma.state.waPhoneNumbers.push({
+    clientId: "lab-websession",
+    phoneNumberId: "phone-residual",
+    display: "+55 84 9999-5328",
+  });
+
+  const identity = await resolveOperationalWhatsappDisplayIdentity({
+    prisma: prisma as never,
+    clientId: "lab-websession",
+  });
+
+  assert.equal(identity.provider, "none");
+  assert.equal(identity.canonicalNumber, null);
+  assert.equal(identity.maskedNumber, null);
+});
+
+test("operational display reports Meta and matching hybrid identities", async () => {
+  const prisma = makePrisma();
+  setMeta(prisma, "meta-only", "+55 84 9999-0001");
+  const metaOnly = await resolveOperationalWhatsappDisplayIdentity({
+    prisma: prisma as never,
+    clientId: "meta-only",
+  });
+  assert.equal(metaOnly.provider, "meta");
+  assert.equal(metaOnly.canonicalNumber, "558499990001");
+  assert.equal(metaOnly.maskedNumber, "****0001");
+
+  setMeta(prisma, "hybrid", "+55 84 9999-0002");
+  setWebAccount(prisma, "hybrid", "558499990002");
+  const hybrid = await resolveOperationalWhatsappDisplayIdentity({
+    prisma: prisma as never,
+    clientId: "hybrid",
+  });
+  assert.equal(hybrid.provider, "hybrid");
+  assert.equal(hybrid.canonicalNumber, "558499990002");
+  assert.equal(hybrid.maskedNumber, "****0002");
 });
 
 test("web authorization is blocked only when operational Meta has a different logical number", async () => {

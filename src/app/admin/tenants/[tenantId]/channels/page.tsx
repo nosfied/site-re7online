@@ -258,6 +258,10 @@ export default function TenantChannelsPage() {
   const [webSessionStatus, setWebSessionStatus] = useState<TenantWebSessionStatus | null>(null);
   const [authorizedNumber, setAuthorizedNumber] = useState("");
   const [webSessionWorking, setWebSessionWorking] = useState<string | null>(null);
+  const webSessionConnectedNumber =
+    webSessionStatus?.lifecycle.observedState === "CONNECTED" && webSessionStatus.detectedNumber?.masked
+      ? webSessionStatus.detectedNumber.masked
+      : "Nenhum número conectado";
 
   useEffect(() => {
     if (!tenantId || !connection.baseUrl || !connection.adminToken) return;
@@ -479,10 +483,11 @@ export default function TenantChannelsPage() {
 
             <dl className="grid gap-2 md:grid-cols-3">
               <TechnicalValue label="Número autorizado" value={webSessionStatus?.authorization.authorizedNumberMasked ?? "Não autorizado"} />
+              <TechnicalValue label="Número conectado" value={webSessionConnectedNumber} />
               <TechnicalValue label="Número detectado" value={webSessionStatus?.detectedNumber?.masked ?? "-"} />
               <TechnicalValue label="Feature" value={webSessionStatus?.featureEnabled ? "enabled" : "disabled"} />
               <TechnicalValue label="Identidade Meta" value={webSessionStatus?.hybridIdentity?.meta.maskedNumber ?? "Não configurada"} />
-              <TechnicalValue label="Identidade Web" value={webSessionStatus?.hybridIdentity?.web.maskedNumber ?? "Não autorizada"} />
+              <TechnicalValue label="Número autorizado Web" value={webSessionStatus?.hybridIdentity?.web.maskedNumber ?? "Não autorizado"} />
               <TechnicalValue
                 label="Transporte principal"
                 value={

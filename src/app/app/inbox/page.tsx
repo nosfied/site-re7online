@@ -41,6 +41,7 @@ import {
   fetchAppMetaUsagePreview,
   fetchAppLeadNotes,
   fetchAppTenantSummary,
+  formatAppWhatsappIdentityDisplay,
   listAppCannedReplies,
   listAppTemplates,
   sendAppConversationMedia,
@@ -2729,7 +2730,7 @@ export default function AppInboxPage() {
     fetchAppTenantSummary(session)
       .then((response) => {
         if (cancelled) return;
-        const phone = response.tenant.phoneDisplay || response.tenant.phoneNumberId || null;
+        const phone = formatAppWhatsappIdentityDisplay(response.tenant);
         setTenantNameLabel(response.tenant.name || null);
         setTenantPhoneLabel(phone);
       })

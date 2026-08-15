@@ -258,6 +258,10 @@ export default function AppWhatsAppChannelSettingsPage() {
   const isQrRequired = currentState === "QR_REQUIRED";
   const isConnecting = currentState === "CONNECTING" || currentState === "RECONNECTING";
   const isPendingConnection = isConnecting || isQrRequired;
+  const connectedNumberDisplay =
+    currentState === "CONNECTED" && status?.detectedNumber?.masked
+      ? status.detectedNumber.masked
+      : "Nenhum número conectado";
   const isBusy = Boolean(working);
   const hasAuthorizedNumber = Boolean(status?.authorization.authorizedNumberCanonical);
   const canPrepare = !readOnly && !isBusy && !isConnected && !isPendingConnection;
@@ -429,7 +433,7 @@ export default function AppWhatsAppChannelSettingsPage() {
                   <Detail label="Tipo de conexão" value="WhatsApp Business" />
                   <Detail label="Número autorizado" value={status?.authorization.authorizedNumberMasked ?? "Não autorizado"} />
                   <Detail label="Status da autorização" value={status?.authorization.status ?? "RELEASED"} />
-                  <Detail label="Identidade lógica" value={status?.hybridIdentity?.logicalIdentity?.maskedNumber ?? "Não definida"} />
+                  <Detail label="Número conectado" value={connectedNumberDisplay} />
                   <Detail label="Transporte principal" value={status?.primaryTransport === "web_session" ? "WhatsApp Business por sessão" : status?.primaryTransport === "meta" ? "Meta Cloud" : "Padrão da conversa"} />
                   <Detail label="Número detectado" value={status?.detectedNumber?.masked ?? "Não preparado"} />
                   <Detail label="Estado técnico" value={currentState} />

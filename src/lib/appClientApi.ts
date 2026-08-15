@@ -1689,9 +1689,19 @@ export type AppTenantSummary = {
   name: string;
   phoneNumberId: string | null;
   phoneDisplay: string | null;
+  whatsappIdentityProvider: "meta" | "web_session" | "hybrid" | "none";
   features: AppFeatures;
   profile: AppProfile;
 };
+
+export function formatAppWhatsappIdentityDisplay(
+  tenant: Pick<AppTenantSummary, "phoneDisplay" | "whatsappIdentityProvider">
+) {
+  if (!tenant.phoneDisplay || tenant.whatsappIdentityProvider === "none") return "Nenhum número conectado";
+  if (tenant.whatsappIdentityProvider === "web_session") return `${tenant.phoneDisplay} · Web Session`;
+  if (tenant.whatsappIdentityProvider === "hybrid") return `${tenant.phoneDisplay} · Cloud API + Web Session`;
+  return `${tenant.phoneDisplay} · Cloud API`;
+}
 
 const SESSION_KEY = "wa_app_session_session_v1";
 const LOCAL_KEY = "wa_app_session_local_v1";

@@ -234,6 +234,67 @@ export async function resolveHybridWhatsappIdentityStatus(params: {
   };
 }
 
+function readObservedWebSessionState(metadata: unknown) {
+  if (!isRecord(metadata)) return null;
+  const webSession = isRecord(metadata.webSession) ? metadata.webSession : {};
+  return typeof webSession.observedState === "string" ? webSession.observedState : null;
+}
+
+export async function resolveOperationalWhatsappDisplayIdentity(params: {
+  prisma: PrismaClient;
+  clientId: string;
+}) {
+  const meta = await resolveOperationalMetaWhatsappIdentity(params);
+  const channelAccount = (params.prisma as unknown as {
+    channelAccount?: PrismaClient["channelAccount"];
+  }).channelAccount;
+  const webAccount = channelAccount
+    ? await channelAccount.findFirst({
+        where: {
+          clientId: params.clientId,
+          channel: "whatsapp",
+          provider: "web_session",
+          status: { not: "archived_duplicate" },
+          runtimeEnabled: true,
+        },
+        select: { channelAccountId: true, metadata: true, status: true },
+      })
+    : null;
+  const webCanonicalNumber =
+    webAccount &&
+    (webAccount.status === "connected" || readObservedWebSessionState(webAccount.metadata) === "CONNECTED")
+      ? normalizeWebSessionAuthorizedNumber(webAccount.channelAccountId)
+      : null;
+  const webMaskedNumber = maskWebSessionNumber(webCanonicalNumber);
+
+  if (meta.canonicalNumber && webCanonicalNumber && meta.canonicalNumber === webCanonicalNumber) {
+    return {
+      provider: "hybrid" as const,
+      canonicalNumber: meta.canonicalNumber,
+      maskedNumber: meta.maskedNumber,
+    };
+  }
+  if (meta.canonicalNumber) {
+    return {
+      provider: "meta" as const,
+      canonicalNumber: meta.canonicalNumber,
+      maskedNumber: meta.maskedNumber,
+    };
+  }
+  if (webCanonicalNumber) {
+    return {
+      provider: "web_session" as const,
+      canonicalNumber: webCanonicalNumber,
+      maskedNumber: webMaskedNumber,
+    };
+  }
+  return {
+    provider: "none" as const,
+    canonicalNumber: null,
+    maskedNumber: null,
+  };
+}
+
 export async function validateWebSessionNumberAgainstMeta(params: {
   prisma: PrismaClient;
   clientId: string;
