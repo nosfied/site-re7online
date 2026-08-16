@@ -93,7 +93,7 @@ test("executeChatbotFlow starts in menu and waits for numeric answer", () => {
   assert.equal(result.handled, true);
   assert.equal(result.state.chatbotActive, true);
   assert.equal(result.state.chatbotNodeId, "menu");
-  assert.match(result.replyText ?? "", /1\. Atendimento/);
+  assert.match(result.replyText ?? "", /\*1\* - Atendimento/);
 });
 
 test("executeChatbotFlow hides department option when department is closed", () => {
@@ -129,7 +129,7 @@ test("executeChatbotFlow hides department option when department is closed", () 
     options: { departmentAvailabilityById: { department_technical: "CLOSED" } },
   });
 
-  assert.match(menu.replyText ?? "", /1\. Atendimento geral/);
+  assert.match(menu.replyText ?? "", /\*1\* - Atendimento geral/);
   assert.doesNotMatch(menu.replyText ?? "", /Falar com atendente/);
 
   const blocked = executeChatbotFlow({
@@ -147,7 +147,7 @@ test("executeChatbotFlow hides department option when department is closed", () 
   });
 
   assert.equal(blocked.pendingHandoff, undefined);
-  assert.match(blocked.replyText ?? "", /1\. Atendimento geral/);
+  assert.match(blocked.replyText ?? "", /\*1\* - Atendimento geral/);
   assert.doesNotMatch(blocked.replyText ?? "", /Falar com atendente/);
 });
 
@@ -205,7 +205,7 @@ test("executeChatbotFlow prompts for consent and advances after accepted consent
   });
   assert.equal(accepted.handled, true);
   assert.equal(accepted.state.chatbotNodeId, "menu");
-  assert.match(accepted.replyText ?? "", /1\. Atendimento/);
+  assert.match(accepted.replyText ?? "", /\*1\* - Atendimento/);
 });
 
 test("executeChatbotFlowWithConsent repeats consent prompt for invalid answer when decline option is explicit", async () => {
@@ -334,8 +334,8 @@ test("executeChatbotFlow preserves explicit menu option numbers", () => {
     inboundText: "oi",
     nowIso: "2026-08-12T10:00:00.000Z",
   });
-  assert.match(menu.replyText ?? "", /1\. Dúvidas técnicas/);
-  assert.match(menu.replyText ?? "", /0 - Voltar/);
+  assert.match(menu.replyText ?? "", /\*1\* - Dúvidas técnicas/);
+  assert.match(menu.replyText ?? "", /\*0\* - Voltar/);
   assert.doesNotMatch(menu.replyText ?? "", /2\. 0 - Voltar/);
 
   const selected = executeChatbotFlow({
@@ -679,7 +679,7 @@ test("executeChatbotFlow captures validated contact fields before menu", () => {
 
   assert.equal(valid.state.chatbotNodeId, "menu");
   assert.equal(valid.state.answers?.flowContext?.contact_email, "ana@example.com");
-  assert.match(valid.replyText ?? "", /1\. Demonstração/);
+  assert.match(valid.replyText ?? "", /\*1\* - Demonstração/);
 });
 
 test("classifyFreeTextFlowIntent returns no match for greeting", () => {

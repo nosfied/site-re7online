@@ -783,12 +783,27 @@ function getVisibleMenuOptions(
   });
 }
 
-function renderMenu(node: ChatbotMenuNode, state: ConversationState, options?: ChatbotExecutionOptions) {
+function getMenuBackCommand(definition: ChatbotFlowDefinition) {
+  return definition.globalCommands?.find((command) => {
+    if (command.action !== "BACK") return false;
+    const allowedModes = command.allowedModes ?? ["BOT"];
+    return allowedModes.includes("BOT");
+  })?.command.trim();
+}
+
+function renderMenu(
+  definition: ChatbotFlowDefinition,
+  node: ChatbotMenuNode,
+  state: ConversationState,
+  options?: ChatbotExecutionOptions
+) {
   const lines = getVisibleMenuOptions(node, state, options).map((option, index) => {
     const explicit = parseExplicitMenuOptionNumber(option.label);
-    return explicit ? explicit.displayLine : `${index + 1}. ${option.label}`;
+    return explicit ? `*${explicit.number}* - ${explicit.text}` : `*${index + 1}* - ${option.label}`;
   });
-  return [renderChatbotTemplateText(node.text, state), ...lines].join("\n");
+  const backCommand = getMenuBackCommand(definition);
+  const commandLines = backCommand ? [`${backCommand} - Voltar às opções anteriores.`] : [];
+  return [renderChatbotTemplateText(node.text, state), ...lines, ...commandLines].join("\n");
 }
 
 export function getChatbotConsentKey(node: Pick<ChatbotConsentNode, "purpose" | "textVersion">) {
@@ -822,6 +837,7 @@ function parseExplicitMenuOptionNumber(label: string) {
   if (!Number.isFinite(number) || !text) return null;
   return {
     number,
+    text,
     displayLine: separator === "-" ? `${number} - ${text}` : `${number}${separator} ${text}`,
   };
 }
@@ -1282,7 +1298,7 @@ function executeNodeChain(params: {
 
     if (node.type === "menu") {
       currentState = withChatbotRuntime(currentState, params.flowId, currentNodeId, true);
-      messages.push(renderMenu(node, currentState, params.options));
+      messages.push(renderMenu(params.definition, node, currentState, params.options));
       return {
         handled: true,
         state: currentState,
@@ -1471,7 +1487,7 @@ export function executeChatbotFlow(params: {
         return markChatbotResultInteraction({
           handled: true,
           state: withChatbotRuntime(params.state, params.flowId, initialNodeId, true),
-          replyText: `Opção inválida.\n\n${renderMenu(node, params.state, params.options)}`,
+          replyText: `${node.fallbackText ?? "Opção inválida."}\n\n${renderMenu(params.definition, node, params.state, params.options)}`,
           events: [],
         }, params.nowIso);
       }
@@ -1616,10 +1632,15 @@ export function executeChatbotFlow(params: {
         events,
       }, params.nowIso);
     }
+    const fallbackText = currentNode.fallbackText
+      ? renderChatbotTemplateText(String(currentNode.fallbackText), params.state)
+      : null;
     return markChatbotResultInteraction({
       handled: true,
       state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
-      replyText: renderMenu(currentNode, params.state, params.options),
+      replyText: fallbackText
+        ? `${fallbackText}\n\n${renderMenu(params.definition, currentNode, params.state, params.options)}`
+        : renderMenu(params.definition, currentNode, params.state, params.options),
     }, params.nowIso);
   }
 
