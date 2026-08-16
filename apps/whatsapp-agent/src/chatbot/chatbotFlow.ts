@@ -1480,18 +1480,16 @@ export function executeChatbotFlow(params: {
   const globalBackCommand = findGlobalBackCommand(params.definition, params.inboundText, params.state);
   if (globalBackCommand) {
     const parentNodeId = findParentMenuNodeId(params.definition, params.state.chatbotNodeId);
-    const initialNodeId = getInitialChatbotAwaitingNodeId(params.definition);
-    if (!parentNodeId && params.state.chatbotNodeId === initialNodeId) {
-      const node = params.definition.nodes[initialNodeId];
-      if (node?.type === "menu") {
-        return markChatbotResultInteraction({
-          handled: true,
-          state: withChatbotRuntime(params.state, params.flowId, initialNodeId, true),
-          replyText: `${node.fallbackText ?? "Opção inválida."}\n\n${renderMenu(params.definition, node, params.state, params.options)}`,
-          events: [],
-        }, params.nowIso);
-      }
+    const currentMenuNode = params.definition.nodes[params.state.chatbotNodeId];
+    if (!parentNodeId && currentMenuNode?.type === "menu") {
+      return markChatbotResultInteraction({
+        handled: true,
+        state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
+        replyText: `${currentMenuNode.fallbackText ?? "Opção inválida."}\n\n${renderMenu(params.definition, currentMenuNode, params.state, params.options)}`,
+        events: [],
+      }, params.nowIso);
     }
+    const initialNodeId = getInitialChatbotAwaitingNodeId(params.definition);
     const targetNodeId = parentNodeId ?? initialNodeId;
     const result = executeNodeChain({
       definition: params.definition,

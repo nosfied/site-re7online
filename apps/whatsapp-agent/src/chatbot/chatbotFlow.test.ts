@@ -436,6 +436,64 @@ test("executeChatbotFlow treats root back command as invalid option and redispla
   assert.match(result.replyText ?? "", /Menu principal/);
 });
 
+test("executeChatbotFlow treats root menu after consent as invalid option on back command", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "consent",
+    globalCommands: [{ command: "#", action: "BACK", allowedModes: ["BOT"] }],
+    nodes: {
+      consent: {
+        type: "consent",
+        purpose: "service",
+        textVersion: "v1",
+        message: "Autoriza?",
+        acceptOption: "1",
+        declineOption: "2",
+        onAccepted: "welcome",
+        onDeclined: "declined",
+      },
+      welcome: {
+        type: "text",
+        text: "Bem-vindo",
+        next: "main",
+      },
+      main: {
+        type: "menu",
+        text: "Menu principal",
+        fallbackText: "Opção inválida.",
+        options: [{ label: "4 - Atendimento", next: "handoff" }],
+      },
+      handoff: { type: "handoff" },
+      declined: { type: "text", text: "Encerrado" },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_back_root_after_consent",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_back_root_after_consent",
+      chatbotActive: true,
+      chatbotNodeId: "main",
+      answers: {
+        chatbotRuntime: {
+          acceptedConsents: { "service:v1": true },
+          lastInteractionAt: "2026-08-12T10:00:00.000Z",
+        },
+      },
+    }),
+    inboundText: "#",
+    nowIso: "2026-08-12T10:01:00.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotNodeId, "main");
+  assert.match(result.replyText ?? "", /Opção inválida/);
+  assert.match(result.replyText ?? "", /Menu principal/);
+  assert.doesNotMatch(result.replyText ?? "", /Autoriza/);
+});
+
 test("executeChatbotFlow ignores global back command during human handoff", () => {
   const validated = validateChatbotFlowDefinition({
     start: "main",
