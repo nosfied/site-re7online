@@ -1294,36 +1294,38 @@ export async function ingestWebSessionInboundMessage(params: {
       });
       return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
     }
-    const satisfactionResult = await handleWebSessionSatisfactionInbound({
-      prisma,
-      clientId: params.message.clientId,
-      clientKey: params.message.tenantKey,
-      waId: params.message.sender,
-      waIdCanonical: params.message.senderCanonical,
-      channelAccountId: params.message.channelAccountId,
-      conversationId: conversation?.id ?? null,
-      inboundText: params.message.text,
-      requestId,
-      state: runtimeConversationState,
-      now: params.message.timestamp,
-    });
-    runtimeConversationState = satisfactionResult.state;
-    if (satisfactionResult.handled) {
-      await persistWebSessionRuntimeState({
+    if (closePolicy.satisfaction.enabled) {
+      const satisfactionResult = await handleWebSessionSatisfactionInbound({
         prisma,
         clientId: params.message.clientId,
+        clientKey: params.message.tenantKey,
         waId: params.message.sender,
-        state: runtimeConversationState,
-      });
-      await safeRecordInboundEvent({
-        prisma,
-        message: params.message,
-        clientId: params.message.clientId,
-        eventName: "whatsapp.web.satisfaction.handled",
-        requestId: `${requestId}:satisfaction`,
+        waIdCanonical: params.message.senderCanonical,
+        channelAccountId: params.message.channelAccountId,
         conversationId: conversation?.id ?? null,
+        inboundText: params.message.text,
+        requestId,
+        state: runtimeConversationState,
+        now: params.message.timestamp,
       });
-      return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
+      runtimeConversationState = satisfactionResult.state;
+      if (satisfactionResult.handled) {
+        await persistWebSessionRuntimeState({
+          prisma,
+          clientId: params.message.clientId,
+          waId: params.message.sender,
+          state: runtimeConversationState,
+        });
+        await safeRecordInboundEvent({
+          prisma,
+          message: params.message,
+          clientId: params.message.clientId,
+          eventName: "whatsapp.web.satisfaction.handled",
+          requestId: `${requestId}:satisfaction`,
+          conversationId: conversation?.id ?? null,
+        });
+        return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
+      }
     }
     if (
       automationFlags.settings.disableChatbot !== true &&

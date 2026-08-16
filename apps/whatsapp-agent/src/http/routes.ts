@@ -177,6 +177,7 @@ import {
   saveQueueAssignmentPolicy,
   toPublicQueueAssignmentPolicy,
 } from "../queue/assignmentPolicy.js";
+import { compareCanonicalQueueItems } from "../queue/queuePosition.js";
 import {
   DepartmentMembershipValidationError,
   getUserDepartmentMemberships,
@@ -27354,6 +27355,7 @@ async function buildAppDashboardOverview(
       closedAt: true,
       lastInboundAt: true,
       lastOutboundAt: true,
+      createdAt: true,
       updatedAt: true,
     },
   });
@@ -27521,7 +27523,15 @@ async function buildAppDashboardOverview(
   const startOfDay = startOfCurrentDay();
   const queue = operationalItems
     .filter((item) => item.status === ConversationOperationalStatus.WAITING)
-    .sort((left, right) => left.waitingSince.getTime() - right.waitingSince.getTime())
+    .sort((left, right) => compareCanonicalQueueItems({
+      id: left.state?.waId ?? left.conversation.id,
+      handoffActivatedAt: left.state?.handoffActivatedAt ?? null,
+      createdAt: left.state?.createdAt ?? left.conversation.updatedAt,
+    }, {
+      id: right.state?.waId ?? right.conversation.id,
+      handoffActivatedAt: right.state?.handoffActivatedAt ?? null,
+      createdAt: right.state?.createdAt ?? right.conversation.updatedAt,
+    }))
     .slice(0, 50)
     .map((item) => {
       const lead = leadByWaId.get(item.key);

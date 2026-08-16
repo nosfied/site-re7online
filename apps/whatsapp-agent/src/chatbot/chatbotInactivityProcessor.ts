@@ -47,6 +47,42 @@ function getClosedHandoffPolicy(definition: unknown) {
   };
 }
 
+export async function claimChatbotInactivityHandoff(params: {
+  prisma: PrismaClient;
+  runtimeStateId: string;
+  expectedAnswers: unknown;
+  nextAnswers: Prisma.InputJsonValue;
+  now: Date;
+  departmentId: string | null;
+  queueId: string | null;
+}) {
+  return params.prisma.conversationRuntimeState.updateMany({
+    where: {
+      id: params.runtimeStateId,
+      chatbotActive: true,
+      mode: "BOT",
+      handoffStatus: HandoffStatus.NONE,
+      assignedUserId: null,
+      closedAt: null,
+      answers: { equals: params.expectedAnswers as Prisma.InputJsonValue },
+    },
+    data: {
+      mode: "HUMAN",
+      status: "WAITING",
+      chatbotActive: false,
+      chatbotNodeId: null,
+      handoffStatus: HandoffStatus.ACTIVE,
+      handoffActivatedAt: params.now,
+      assignedUserId: null,
+      assignedTo: null,
+      assignedAt: null,
+      departmentId: params.departmentId,
+      queueId: params.queueId,
+      answers: params.nextAnswers,
+    },
+  });
+}
+
 async function sendBotText(params: {
   prisma: PrismaClient;
   clientId: string;
@@ -169,23 +205,16 @@ export async function processChatbotInactivityTimeouts(params: {
         inactivityHandoffTriggeredAt: now.toISOString(),
       },
     };
-    await params.prisma.conversationRuntimeState.update({
-      where: { id: state.id },
-      data: {
-        mode: "HUMAN",
-        status: "WAITING",
-        chatbotActive: false,
-        chatbotNodeId: null,
-        handoffStatus: HandoffStatus.ACTIVE,
-        handoffActivatedAt: now,
-        assignedUserId: null,
-        assignedTo: null,
-        assignedAt: null,
-        departmentId: decision.departmentId ?? state.departmentId,
-        queueId: decision.queueId ?? state.queueId,
-        answers: nextAnswers as Prisma.InputJsonValue,
-      },
+    const claimed = await claimChatbotInactivityHandoff({
+      prisma: params.prisma,
+      runtimeStateId: state.id,
+      expectedAnswers: state.answers,
+      nextAnswers: nextAnswers as Prisma.InputJsonValue,
+      now,
+      departmentId: decision.departmentId ?? state.departmentId,
+      queueId: decision.queueId ?? state.queueId,
     });
+    if (claimed.count !== 1) continue;
     await sendBotText({
       prisma: params.prisma,
       clientId: state.clientId,
