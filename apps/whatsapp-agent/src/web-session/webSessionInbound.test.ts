@@ -19,6 +19,12 @@ const state = {
   outboundMessages: [] as Array<Record<string, unknown>>,
   metrics: [] as Array<Record<string, unknown>>,
   departments: [] as Array<Record<string, unknown>>,
+  config: null as Record<string, unknown> | null,
+  channelAccounts: [] as Array<Record<string, unknown>>,
+  users: [] as Array<Record<string, unknown>>,
+  satisfactionSurveys: [] as Array<Record<string, unknown>>,
+  satisfactionResponses: [] as Array<Record<string, unknown>>,
+  chatbotFlow: null as Record<string, unknown> | null,
 };
 
 function resetState(overrides: Partial<typeof state> = {}) {
@@ -32,6 +38,12 @@ function resetState(overrides: Partial<typeof state> = {}) {
   state.outboundMessages = overrides.outboundMessages ?? [];
   state.metrics = overrides.metrics ?? [];
   state.departments = overrides.departments ?? [];
+  state.config = overrides.config ?? null;
+  state.channelAccounts = overrides.channelAccounts ?? [];
+  state.users = overrides.users ?? [];
+  state.satisfactionSurveys = overrides.satisfactionSurveys ?? [];
+  state.satisfactionResponses = overrides.satisfactionResponses ?? [];
+  state.chatbotFlow = overrides.chatbotFlow ?? null;
 }
 
 function fakePrisma() {
@@ -57,6 +69,10 @@ function fakePrisma() {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         state.conversation = { id: "conversation_1", ...data };
         return state.conversation;
+      },
+      updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+        if (state.conversation) state.conversation = { ...state.conversation, ...data };
+        return { count: state.conversation ? 1 : 0 };
       },
     },
     inboundMessage: {
@@ -95,6 +111,27 @@ function fakePrisma() {
             return false;
           });
         }) ?? null,
+      findUnique: async ({ where }: { where: { clientId_messageId: { clientId: string; messageId: string } } }) =>
+        state.outboundMessages.find(
+          (item) =>
+            item.clientId === where.clientId_messageId.clientId &&
+            item.messageId === where.clientId_messageId.messageId
+        ) ?? null,
+      create: async ({ data, select }: { data: Record<string, unknown>; select?: Record<string, unknown> }) => {
+        const row = { id: `outbound_${state.outboundMessages.length + 1}`, ...data };
+        state.outboundMessages.push(row);
+        return select?.id ? { id: row.id } : row;
+      },
+      update: async ({ where, data, select }: { where: { clientId_messageId: { clientId: string; messageId: string } }; data: Record<string, unknown>; select?: Record<string, unknown> }) => {
+        const index = state.outboundMessages.findIndex(
+          (item) =>
+            item.clientId === where.clientId_messageId.clientId &&
+            item.messageId === where.clientId_messageId.messageId
+        );
+        if (index >= 0) state.outboundMessages[index] = { ...state.outboundMessages[index], ...data };
+        const row = index >= 0 ? state.outboundMessages[index] : null;
+        return select?.id ? { id: row?.id ?? "outbound_0" } : row;
+      },
     },
     event: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -111,10 +148,47 @@ function fakePrisma() {
       },
     },
     tenantOperationalConfig: {
-      findUnique: async () => null,
+      findUnique: async () => state.config ? { config: state.config } : null,
+    },
+    channelAccount: {
+      findFirst: async () => state.channelAccounts[0] ?? null,
+    },
+    user: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
+        state.users.find((user) => user.id === where.id && user.clientId === where.clientId && user.isActive !== false) ?? null,
+    },
+    satisfactionSurvey: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
+        state.satisfactionSurveys.find((survey) => {
+          if (survey.clientId !== where.clientId) return false;
+          if (where.conversationId && survey.conversationId !== where.conversationId) return false;
+          if (where.type && survey.type !== where.type) return false;
+          if (where.source && survey.source !== where.source) return false;
+          const status = where.status as { in?: string[] } | string | undefined;
+          if (typeof status === "string" && survey.status !== status) return false;
+          if (status && typeof status === "object" && Array.isArray(status.in) && !status.in.includes(String(survey.status))) return false;
+          return true;
+        }) ?? null,
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        const row = { id: `survey_${state.satisfactionSurveys.length + 1}`, createdAt: new Date(), updatedAt: new Date(), ...data };
+        state.satisfactionSurveys.push(row);
+        return row;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        const index = state.satisfactionSurveys.findIndex((survey) => survey.id === where.id);
+        if (index >= 0) state.satisfactionSurveys[index] = { ...state.satisfactionSurveys[index], ...data, updatedAt: new Date() };
+        return state.satisfactionSurveys[index] ?? null;
+      },
+    },
+    satisfactionResponse: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        const row = { id: `response_${state.satisfactionResponses.length + 1}`, createdAt: new Date(), updatedAt: new Date(), ...data };
+        state.satisfactionResponses.push(row);
+        return row;
+      },
     },
     chatbotFlow: {
-      findFirst: async () => null,
+      findFirst: async () => state.chatbotFlow,
     },
     contact: {
       findUnique: async () => state.contacts[0] ?? null,
@@ -178,6 +252,14 @@ function fakePrisma() {
           closedAt: row.closedAt instanceof Date ? row.closedAt : null,
         };
       },
+      updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+        if (state.runtimeStates[0]) state.runtimeStates[0] = { ...state.runtimeStates[0], ...data };
+        return { count: state.runtimeStates[0] ? 1 : 0 };
+      },
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        if (state.runtimeStates[0]) state.runtimeStates[0] = { ...state.runtimeStates[0], ...data };
+        return state.runtimeStates[0] ?? null;
+      },
     },
     $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
@@ -196,6 +278,64 @@ function fakePrisma() {
 }
 
 setPrismaForTesting(fakePrisma() as never);
+
+function withConnectedWebSession() {
+  state.channelAccounts = [{
+    id: "account_1",
+    clientId: "client_1",
+    channel: "whatsapp",
+    provider: "web_session",
+    channelAccountId: "web-session-default",
+    enabled: true,
+    runtimeEnabled: true,
+    status: "connected",
+    metadata: {
+      webSession: {
+        desiredState: "CONNECTED",
+        observedState: "CONNECTED",
+      },
+    },
+    client: {
+      id: "client_1",
+      clientKey: "tenant_1",
+      status: "ACTIVE",
+      features: { whatsappWebSession: true },
+    },
+  }];
+}
+
+async function withFakeWorker<T>(callback: () => Promise<T>) {
+  const previousUrl = process.env.WHATSAPP_WEB_WORKER_CONTROL_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = "http://worker.test";
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ ok: true, externalMessageId: `worker_${Date.now()}` }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })) as typeof fetch;
+  try {
+    return await callback();
+  } finally {
+    if (previousUrl === undefined) delete process.env.WHATSAPP_WEB_WORKER_CONTROL_URL;
+    else process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = previousUrl;
+    globalThis.fetch = previousFetch;
+  }
+}
+
+function closeConfig() {
+  return {
+    chatbotCloseCommand: {
+      command: "#ENCERRAR#",
+      closedMessage: "Atendimento encerrado. Obrigado pelo contato.",
+    },
+    satisfactionPolicy: {
+      enabled: true,
+      trigger: "HUMAN_CONVERSATION_CLOSED",
+      expiresAfterMinutes: 15,
+      questionText: "Pesquisa de Satisfação do Protocolo #{protocol}.\n\n5 - ⭐⭐⭐⭐⭐\n4 - ⭐⭐⭐⭐\n3 - ⭐⭐⭐\n2 - ⭐⭐\n1 - ⭐",
+    },
+  };
+}
 
 test("extractPhoneFromBaileysJid normalizes one-to-one WhatsApp JIDs only", () => {
   assert.equal(extractPhoneFromBaileysJid("5584999997784@s.whatsapp.net"), "5584999997784");
@@ -480,4 +620,280 @@ test("ingestBaileysWebSessionMessage does not rehydrate anonymized conversations
   const serialized = JSON.stringify(state.events);
   assert.equal(serialized.includes("5584999997784"), false);
   assert.equal(serialized.includes("nao reidratar"), false);
+});
+
+function conversationFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "conversation_1",
+    clientId: "client_1",
+    waId: "5584999997784",
+    waIdCanonical: "55849999997784",
+    channel: "whatsapp",
+    provider: "web_session",
+    channelAccountId: "web-session-default",
+    departmentId: "department_general",
+    queueId: "queue_general",
+    ...overrides,
+  };
+}
+
+function runtimeFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "runtime_1",
+    clientId: "client_1",
+    waId: "5584999997784",
+    waIdCanonical: "55849999997784",
+    channel: "whatsapp",
+    provider: "web_session",
+    channelAccountId: "web-session-default",
+    firstSeenAt: new Date("2026-08-11T12:00:00.000Z"),
+    windowIsOpen: true,
+    windowExpiresAt: new Date("2026-08-12T12:00:00.000Z"),
+    lastInboundAt: new Date("2026-08-11T12:00:00.000Z"),
+    lastOutboundAt: null,
+    intent: "unknown",
+    handoffStatus: "NONE",
+    handoffRequestedAt: null,
+    handoffActivatedAt: null,
+    handoffReleasedAt: null,
+    flow: null,
+    flowStep: null,
+    chatbotNodeId: null,
+    chatbotActive: false,
+    answers: {},
+    mode: "HUMAN",
+    assignedUserId: null,
+    assignedTo: null,
+    assignedAt: null,
+    departmentId: "department_general",
+    queueId: "queue_general",
+    status: "WAITING",
+    closedAt: null,
+    ...overrides,
+  };
+}
+
+async function ingestText(text: string, messageId: string, timestamp = "2026-08-11T12:00:00.000Z") {
+  return ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    message: {
+      key: { id: messageId, remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      messageTimestamp: Date.parse(timestamp) / 1000,
+      message: { conversation: text },
+    },
+  });
+}
+
+test("close command closes waiting conversation without CSAT when no agent is assigned", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [runtimeFixture({ status: "WAITING", assignedUserId: null })],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    const result = await ingestText("#ENCERRAR#", "MSG_CLOSE_WAITING");
+    assert.equal(result.action, "persisted");
+  });
+
+  assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal(state.runtimeStates[0]?.assignedUserId, null);
+  assert.equal(state.satisfactionSurveys.length, 0);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Atendimento encerrado")), true);
+});
+
+test("close command creates a single attributed CSAT after human service", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        status: "IN_PROGRESS",
+        assignedUserId: "agent_1",
+        assignedTo: "Agente Um",
+        assignedAt: new Date("2026-08-11T11:55:00.000Z"),
+      }),
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("#ENCERRAR#", "MSG_CLOSE_HUMAN");
+    await ingestText("#ENCERRAR#", "MSG_CLOSE_HUMAN_DUP");
+  });
+
+  assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal(state.runtimeStates[0]?.assignedUserId, null);
+  assert.equal(state.satisfactionSurveys.length, 1);
+  assert.equal(state.satisfactionSurveys[0]?.assignedUserId, "agent_1");
+  assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.queueId, "queue_general");
+  assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Pesquisa de Satisfação")).length, 1);
+});
+
+test("close command does not close normal bot conversation", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [runtimeFixture({ mode: "BOT", status: null, assignedUserId: null })],
+    chatbotFlow: {
+      id: "flow_1",
+      definition: {
+        start: "menu",
+        nodes: {
+          menu: {
+            type: "menu",
+            text: "Menu",
+            options: [{ label: "Atendimento", next: "done" }],
+          },
+          done: { type: "text", text: "Tudo certo" },
+        },
+      },
+    },
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    const result = await ingestText("#ENCERRAR#", "MSG_CLOSE_BOT");
+    assert.equal(result.action, "persisted");
+  });
+
+  assert.notEqual(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal(state.satisfactionSurveys.length, 0);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Atendimento encerrado")), false);
+});
+
+test("CSAT accepts only scores 1 to 5 before TTL and records the response", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [runtimeFixture({ status: "CLOSED", closedAt: new Date("2026-08-11T12:00:00.000Z") })],
+    satisfactionSurveys: [
+      {
+        id: "survey_1",
+        clientId: "client_1",
+        conversationId: "conversation_1",
+        type: "csat",
+        source: "human_close",
+        status: "sent",
+        questionText: "Pesquisa",
+        expiresAt: new Date("2026-08-11T12:15:00.000Z"),
+        contactId: null,
+        leadId: null,
+      },
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("9", "MSG_CSAT_INVALID", "2026-08-11T12:05:00.000Z");
+    await ingestText("5", "MSG_CSAT_VALID", "2026-08-11T12:06:00.000Z");
+    await ingestText("4", "MSG_CSAT_DUPLICATE", "2026-08-11T12:07:00.000Z");
+  });
+
+  assert.equal(state.satisfactionResponses.length, 1);
+  assert.equal(state.satisfactionResponses[0]?.score, 5);
+  assert.equal(state.satisfactionSurveys[0]?.status, "responded");
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Responda a pesquisa com uma nota de 1 a 5")), true);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Obrigado pela avaliação")), true);
+});
+
+test("expired CSAT asks for a new-service decision and option 1 returns to bot mode", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        status: "CLOSED",
+        closedAt: new Date("2026-08-11T12:00:00.000Z"),
+      }),
+    ],
+    satisfactionSurveys: [
+      {
+        id: "survey_1",
+        clientId: "client_1",
+        conversationId: "conversation_1",
+        type: "csat",
+        source: "human_close",
+        status: "sent",
+        questionText: "Pesquisa",
+        expiresAt: new Date("2026-08-11T12:15:00.000Z"),
+        contactId: null,
+        leadId: null,
+      },
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("5", "MSG_CSAT_EXPIRED", "2026-08-11T12:16:00.000Z");
+    assert.equal(state.satisfactionSurveys[0]?.status, "expired");
+    assert.equal((state.runtimeStates[0]?.answers as Record<string, unknown> | undefined)?.satisfactionRuntime instanceof Object, true);
+    await ingestText("1", "MSG_CSAT_NEW_SERVICE", "2026-08-11T12:17:00.000Z");
+  });
+
+  assert.equal(state.runtimeStates[0]?.mode, "BOT");
+  assert.equal(state.runtimeStates[0]?.status, null);
+  assert.equal(state.runtimeStates[0]?.closedAt, null);
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("satisfactionRuntime"), false);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
+});
+
+test("expired CSAT option 2 keeps the conversation closed", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        status: "CLOSED",
+        closedAt: new Date("2026-08-11T12:00:00.000Z"),
+        answers: {
+          satisfactionRuntime: {
+            awaitingExpiredSurveyDecision: true,
+            expiredSurveyId: "survey_1",
+          },
+        },
+      }),
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("2", "MSG_CSAT_NO_SERVICE", "2026-08-11T12:17:00.000Z");
+  });
+
+  assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("satisfactionRuntime"), false);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Atendimento encerrado")), true);
+});
+
+test("expired CSAT decision rejects other input without falling through to the chatbot", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        status: "CLOSED",
+        closedAt: new Date("2026-08-11T12:00:00.000Z"),
+        answers: {
+          satisfactionRuntime: {
+            awaitingExpiredSurveyDecision: true,
+            expiredSurveyId: "survey_1",
+          },
+        },
+      }),
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("qualquer coisa", "MSG_CSAT_OTHER", "2026-08-11T12:17:00.000Z");
+  });
+
+  assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal((state.runtimeStates[0]?.answers as Record<string, unknown> | undefined)?.satisfactionRuntime instanceof Object, true);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
 });

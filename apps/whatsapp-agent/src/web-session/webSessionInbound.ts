@@ -23,6 +23,7 @@ import { makeConversationKey } from "../storage/conversationKey.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
 import { persistConversationWindow, persistInboundMessage } from "../db/persist.js";
 import { resolveAutomationFlagsSettings } from "../config/tenantOperationalConfig.js";
+import { getDepartmentAvailability } from "../departments/businessHours.js";
 import { createWebSessionTextOutboundMessage } from "./webSessionOutboundService.js";
 
 export type WebSessionInboundMessageType = "text" | "image" | "audio" | "video" | "document" | "unknown";
@@ -95,6 +96,41 @@ function getClosedHandoffPolicy(definition: ChatbotFlowDefinition) {
   };
 }
 
+async function buildDepartmentAvailabilityById(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  definition: ChatbotFlowDefinition;
+  at: Date;
+}) {
+  const departmentIds = new Set<string>();
+  for (const node of Object.values(params.definition.nodes)) {
+    if (node.departmentId) departmentIds.add(node.departmentId);
+    if (node.type === "menu") {
+      for (const option of node.options) {
+        const condition = isRecord(option.visibilityCondition) ? option.visibilityCondition : null;
+        if (condition?.departmentAvailability && option.departmentId) {
+          departmentIds.add(option.departmentId);
+        }
+      }
+    }
+  }
+  const entries = await Promise.all(
+    Array.from(departmentIds).map(async (departmentId) => {
+      try {
+        const availability = await getDepartmentAvailability(params.prisma, {
+          clientId: params.clientId,
+          departmentId,
+          at: params.at,
+        });
+        return [departmentId, availability.status] as const;
+      } catch {
+        return [departmentId, "NO_SCHEDULE"] as const;
+      }
+    })
+  );
+  return Object.fromEntries(entries);
+}
+
 async function getWebSessionClosePolicy(params: { prisma: PrismaClient; clientId: string }) {
   const config = await params.prisma.tenantOperationalConfig.findUnique({
     where: { clientId: params.clientId },
@@ -104,21 +140,54 @@ async function getWebSessionClosePolicy(params: { prisma: PrismaClient; clientId
   const closeCommand = isRecord(root.chatbotCloseCommand) ? root.chatbotCloseCommand : {};
   const satisfaction = isRecord(root.satisfactionPolicy) ? root.satisfactionPolicy : {};
   return {
-    command: getNonEmptyString(closeCommand.command) ?? "#ENCERRAR#",
+    command: getNonEmptyString(closeCommand.command),
     closedMessage:
       getNonEmptyString(closeCommand.closedMessage) ??
       "Atendimento encerrado. Obrigado pelo contato.",
     satisfaction: {
       enabled: satisfaction.enabled === true,
       ttlMinutes:
-        typeof satisfaction.ttlMinutes === "number" && Number.isFinite(satisfaction.ttlMinutes)
-          ? Math.max(1, Math.floor(satisfaction.ttlMinutes))
+        typeof satisfaction.expiresAfterMinutes === "number" && Number.isFinite(satisfaction.expiresAfterMinutes)
+          ? Math.max(1, Math.floor(satisfaction.expiresAfterMinutes))
+          : typeof satisfaction.ttlMinutes === "number" && Number.isFinite(satisfaction.ttlMinutes)
+            ? Math.max(1, Math.floor(satisfaction.ttlMinutes))
           : 15,
       questionText:
         getNonEmptyString(satisfaction.questionText) ??
         "Pesquisa de Satisfação do Protocolo #{protocol}.\n\nComo você avalia este atendimento?\n5 - ⭐⭐⭐⭐⭐\n4 - ⭐⭐⭐⭐\n3 - ⭐⭐⭐\n2 - ⭐⭐\n1 - ⭐\n\nObs.: Você tem 15 minutos para responder à pesquisa.",
     },
   };
+}
+
+function getSatisfactionRuntime(state: ConversationState) {
+  const answers = isRecord(state.answers) ? state.answers as Record<string, unknown> : {};
+  return isRecord(answers.satisfactionRuntime) ? answers.satisfactionRuntime : {};
+}
+
+function withSatisfactionRuntime(state: ConversationState, runtime: Record<string, unknown> | null): ConversationState {
+  const answers = isRecord(state.answers) ? state.answers as Record<string, unknown> : {};
+  const nextAnswers = { ...answers };
+  if (runtime && Object.keys(runtime).length > 0) {
+    nextAnswers.satisfactionRuntime = runtime;
+  } else {
+    delete nextAnswers.satisfactionRuntime;
+  }
+  return { ...state, answers: nextAnswers as ConversationState["answers"] };
+}
+
+function markExpiredSurveyDecision(state: ConversationState, surveyId: string) {
+  return withSatisfactionRuntime(state, {
+    ...getSatisfactionRuntime(state),
+    awaitingExpiredSurveyDecision: true,
+    expiredSurveyId: surveyId,
+  });
+}
+
+function clearExpiredSurveyDecision(state: ConversationState) {
+  const runtime = { ...getSatisfactionRuntime(state) };
+  delete runtime.awaitingExpiredSurveyDecision;
+  delete runtime.expiredSurveyId;
+  return withSatisfactionRuntime(state, runtime);
 }
 
 function maskIdentifier(value: string) {
@@ -774,17 +843,33 @@ async function sendWebSessionSatisfactionSurvey(params: {
   conversationId: string | null;
   protocol: string;
   state: ConversationState;
+  now?: Date;
+  assignedUserId?: string | null;
 }) {
   const policy = await getWebSessionClosePolicy({ prisma: params.prisma, clientId: params.clientId });
   if (!policy.satisfaction.enabled || !params.conversationId) return params.state;
-  const now = new Date();
+  const assignedUserId = params.assignedUserId ?? params.state.assignedUserId ?? null;
+  if (!assignedUserId) return params.state;
+  const now = params.now ?? new Date();
   const expiresAt = new Date(now.getTime() + policy.satisfaction.ttlMinutes * 60_000);
+  const existing = await params.prisma.satisfactionSurvey.findFirst({
+    where: {
+      clientId: params.clientId,
+      conversationId: params.conversationId,
+      type: "csat",
+      source: "human_close",
+      status: { in: ["sent", "pending", "responded"] },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  if (existing) return params.state;
   const survey = await params.prisma.satisfactionSurvey.create({
     data: {
       clientId: params.clientId,
       conversationId: params.conversationId,
       departmentId: params.state.departmentId ?? null,
-      assignedUserId: params.state.assignedUserId ?? null,
+      assignedUserId,
       channel: "whatsapp",
       type: "csat",
       status: "sent",
@@ -798,6 +883,8 @@ async function sendWebSessionSatisfactionSurvey(params: {
         trigger: "HUMAN_CONVERSATION_CLOSED",
         ttlMinutes: policy.satisfaction.ttlMinutes,
         provider: "web_session",
+        attribution: "last_assigned_agent",
+        queueId: params.state.queueId ?? null,
       },
     },
   });
@@ -834,36 +921,26 @@ async function handleWebSessionSatisfactionInbound(params: {
   now: Date;
 }) {
   if (!params.conversationId) return { handled: false as const, state: params.state };
-  const survey = await params.prisma.satisfactionSurvey.findFirst({
-    where: {
-      clientId: params.clientId,
-      conversationId: params.conversationId,
-      type: "csat",
-      status: { in: ["sent", "pending"] },
-    },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      questionText: true,
-      expiresAt: true,
-      contactId: true,
-      leadId: true,
-    },
-  });
-  if (!survey) return { handled: false as const, state: params.state };
   const text = String(params.inboundText ?? "").trim();
-  const score = /^\d+$/.test(text) ? Number(text) : NaN;
-  const expired = survey.expiresAt ? survey.expiresAt.getTime() <= params.now.getTime() : false;
-  if (expired) {
-    await params.prisma.satisfactionSurvey.update({
-      where: { id: survey.id },
-      data: { status: "expired" },
-    });
+  const satisfactionRuntime = getSatisfactionRuntime(params.state);
+  if (satisfactionRuntime.awaitingExpiredSurveyDecision === true) {
     if (text === "1") {
-      return { handled: false as const, state: { ...params.state, mode: "BOT" as const, status: null, closedAt: null } };
+      return {
+        handled: true as const,
+        state: {
+          ...clearExpiredSurveyDecision(params.state),
+          mode: "BOT" as const,
+          status: null,
+          closedAt: null,
+        },
+      };
     }
     if (text === "2") {
-      const nextState = { ...params.state, status: "CLOSED" as const, closedAt: params.now.toISOString() };
+      const nextState = {
+        ...clearExpiredSurveyDecision(params.state),
+        status: "CLOSED" as const,
+        closedAt: params.now.toISOString(),
+      };
       await sendWebSessionBotText({
         prisma: params.prisma,
         clientId: params.clientId,
@@ -884,9 +961,46 @@ async function handleWebSessionSatisfactionInbound(params: {
       waId: params.waId,
       waIdCanonical: params.waIdCanonical,
       channelAccountId: params.channelAccountId,
-      requestId: `${params.requestId}:survey-expired`,
-      text: "Tempo de resposta da pesquisa esgotado. Deseja iniciar um novo atendimento? 😃\n1 - Sim. 😁\n2 - Não. 😉",
+      requestId: `${params.requestId}:survey-expired-choice`,
+      text: "Tempo de resposta da pesquisa esgotado.\n\nDeseja iniciar um novo atendimento? 😃\n\n1 - Sim. 😁\n2 - Não. 😉",
       state: params.state,
+    });
+    return { handled: true as const, state };
+  }
+  const survey = await params.prisma.satisfactionSurvey.findFirst({
+    where: {
+      clientId: params.clientId,
+      conversationId: params.conversationId,
+      type: "csat",
+      status: { in: ["sent", "pending"] },
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      questionText: true,
+      expiresAt: true,
+      contactId: true,
+      leadId: true,
+    },
+  });
+  if (!survey) return { handled: false as const, state: params.state };
+  const score = /^\d+$/.test(text) ? Number(text) : NaN;
+  const expired = survey.expiresAt ? survey.expiresAt.getTime() <= params.now.getTime() : false;
+  if (expired) {
+    await params.prisma.satisfactionSurvey.update({
+      where: { id: survey.id },
+      data: { status: "expired" },
+    });
+    const state = await sendWebSessionBotText({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical,
+      channelAccountId: params.channelAccountId,
+      requestId: `${params.requestId}:survey-expired`,
+      text: "Tempo de resposta da pesquisa esgotado.\n\nDeseja iniciar um novo atendimento? 😃\n\n1 - Sim. 😁\n2 - Não. 😉",
+      state: markExpiredSurveyDecision(params.state, survey.id),
     });
     return { handled: true as const, state };
   }
@@ -1242,15 +1356,21 @@ export async function ingestWebSessionInboundMessage(params: {
     });
     const closePolicy = await getWebSessionClosePolicy({ prisma, clientId: params.message.clientId });
     if (
+      closePolicy.command &&
       String(params.message.text ?? "").trim().toLowerCase() === closePolicy.command.toLowerCase() &&
       (runtimeConversationState.mode === "HUMAN" ||
         runtimeConversationState.status === "WAITING" ||
         runtimeConversationState.status === "IN_PROGRESS")
     ) {
       const closedAt = params.message.timestamp.toISOString();
+      const closingAssignedUserId = runtimeConversationState.assignedUserId ?? null;
       runtimeConversationState = {
         ...clearChatbotRuntime(runtimeConversationState),
         mode: "HUMAN",
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        handoff: { ...runtimeConversationState.handoff, status: "none" },
         status: "CLOSED",
         closedAt,
       };
@@ -1277,6 +1397,8 @@ export async function ingestWebSessionInboundMessage(params: {
         conversationId: conversation?.id ?? null,
         protocol,
         state: runtimeConversationState,
+        now: params.message.timestamp,
+        assignedUserId: closingAssignedUserId,
       });
       await persistWebSessionRuntimeState({
         prisma,
@@ -1355,7 +1477,13 @@ export async function ingestWebSessionInboundMessage(params: {
             flowId: chatbotFlow.id,
             reason: validatedDefinition.message,
           });
-        } else {
+          } else {
+          const departmentAvailabilityById = await buildDepartmentAvailabilityById({
+            prisma,
+            clientId: params.message.clientId,
+            definition: validatedDefinition.definition,
+            at: params.message.timestamp,
+          });
           const chatbotResult = await executeChatbotFlowWithConsent({
             prisma,
             clientId: params.message.clientId,
@@ -1369,6 +1497,7 @@ export async function ingestWebSessionInboundMessage(params: {
             state: runtimeConversationState,
             inboundText: params.message.text,
             nowIso: params.message.timestamp.toISOString(),
+            options: { departmentAvailabilityById },
           });
           runtimeConversationState = chatbotResult.state;
           const closedHandoffPolicy = getClosedHandoffPolicy(validatedDefinition.definition);

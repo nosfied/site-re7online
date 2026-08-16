@@ -3,6 +3,7 @@ import {
   ChatbotExecutionResult,
   ChatbotFlowDefinition,
   ChatbotConsentNode,
+  type ChatbotExecutionOptions,
   clearChatbotRuntime,
   executeChatbotFlow,
   getChatbotConsentKey,
@@ -94,6 +95,7 @@ export async function executeChatbotFlowWithConsent(params: {
   inboundText: string | null | undefined;
   nowIso: string;
   startNodeId?: string;
+  options?: ChatbotExecutionOptions;
 }): Promise<ChatbotExecutionResult> {
   const hydratedState = await hydrateAcceptedConsents({
     prisma: params.prisma,
@@ -131,6 +133,7 @@ export async function executeChatbotFlowWithConsent(params: {
           inboundText: params.inboundText,
           nowIso: params.nowIso,
           startNodeId: currentConsent.node.onAccepted,
+          options: params.options,
         });
       }
     }
@@ -142,6 +145,7 @@ export async function executeChatbotFlowWithConsent(params: {
         inboundText: params.inboundText,
         nowIso: params.nowIso,
         startNodeId: currentConsent.node.onDeclined,
+        options: params.options,
       });
     }
   }
@@ -153,5 +157,6 @@ export async function executeChatbotFlowWithConsent(params: {
     inboundText: params.inboundText,
     nowIso: params.nowIso,
     startNodeId: params.startNodeId,
+    options: params.options,
   });
 }

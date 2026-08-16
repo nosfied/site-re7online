@@ -11,6 +11,9 @@ export type ChatbotFlowMetadata = {
 export type ChatbotMenuOption = Record<string, unknown> & ChatbotFlowMetadata & {
   label: string;
   next: string;
+  visibilityCondition?: {
+    departmentAvailability?: "OPEN" | "CLOSED";
+  };
 };
 
 export type ChatbotMenuNode = Record<string, unknown> & ChatbotFlowMetadata & {
@@ -95,6 +98,10 @@ export type ChatbotExecutionResult = {
   events?: ChatbotExecutionEvent[];
 };
 
+export type ChatbotExecutionOptions = {
+  departmentAvailabilityById?: Record<string, "OPEN" | "CLOSED" | "NO_SCHEDULE">;
+};
+
 export type ChatbotPendingHandoff = {
   feedbackText: string;
   summary: string;
@@ -168,6 +175,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function getNonEmptyString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function normalizeVisibilityCondition(value: unknown): ChatbotMenuOption["visibilityCondition"] | undefined {
+  if (!isRecord(value)) return undefined;
+  const departmentAvailability = getNonEmptyString(value.departmentAvailability)?.toUpperCase();
+  if (departmentAvailability !== "OPEN" && departmentAvailability !== "CLOSED") return undefined;
+  return { departmentAvailability };
 }
 
 function normalizeJsonValue(value: unknown): FlowContext[string] | undefined {
@@ -377,10 +391,21 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
         };
       }
       optionKeys.add(optionKey);
+      const visibilityCondition = normalizeVisibilityCondition(rawOption.visibilityCondition);
       normalizedOptions.push({
-        ...preserveUnknownFields(rawOption, ["label", "next", "context", "tags", "departmentId", "queueId", "closedText"]),
+        ...preserveUnknownFields(rawOption, [
+          "label",
+          "next",
+          "context",
+          "tags",
+          "departmentId",
+          "queueId",
+          "closedText",
+          "visibilityCondition",
+        ]),
         label,
         next,
+        ...(visibilityCondition ? { visibilityCondition } : {}),
         ...getNodeMetadata(rawOption),
       });
     }
@@ -686,8 +711,24 @@ export function clearChatbotRuntime(state: ConversationState): ConversationState
   return withChatbotRuntime(state, null, null, false);
 }
 
-function renderMenu(node: ChatbotMenuNode) {
-  const lines = node.options.map((option, index) => {
+function getVisibleMenuOptions(
+  node: ChatbotMenuNode,
+  state: ConversationState,
+  options?: ChatbotExecutionOptions
+) {
+  return node.options.filter((option) => {
+    const condition = option.visibilityCondition;
+    if (!condition?.departmentAvailability) return true;
+    const departmentId = option.departmentId ?? node.departmentId ?? state.departmentId ?? null;
+    if (!departmentId) return false;
+    const availability = options?.departmentAvailabilityById?.[departmentId] ?? null;
+    if (!availability) return false;
+    return availability === condition.departmentAvailability;
+  });
+}
+
+function renderMenu(node: ChatbotMenuNode, state: ConversationState, options?: ChatbotExecutionOptions) {
+  const lines = getVisibleMenuOptions(node, state, options).map((option, index) => {
     const explicit = parseExplicitMenuOptionNumber(option.label);
     return explicit ? explicit.displayLine : `${index + 1}. ${option.label}`;
   });
@@ -1125,6 +1166,7 @@ function executeNodeChain(params: {
   flowId: string;
   nodeId: string;
   nowIso: string;
+  options?: ChatbotExecutionOptions;
 }): ChatbotExecutionResult {
   const messages: string[] = [];
   const events: ChatbotExecutionEvent[] = [];
@@ -1168,7 +1210,7 @@ function executeNodeChain(params: {
 
     if (node.type === "menu") {
       currentState = withChatbotRuntime(currentState, params.flowId, currentNodeId, true);
-      messages.push(renderMenu(node));
+      messages.push(renderMenu(node, currentState, params.options));
       return {
         handled: true,
         state: currentState,
@@ -1285,6 +1327,7 @@ export function executeChatbotFlow(params: {
   inboundText: string | null | undefined;
   nowIso: string;
   startNodeId?: string;
+  options?: ChatbotExecutionOptions;
 }): ChatbotExecutionResult {
   if (params.startNodeId && params.definition.nodes[params.startNodeId]) {
     return markChatbotResultInteraction(executeNodeChain({
@@ -1293,6 +1336,7 @@ export function executeChatbotFlow(params: {
       flowId: params.flowId,
       nodeId: params.startNodeId,
       nowIso: params.nowIso,
+      options: params.options,
     }), params.nowIso);
   }
 
@@ -1303,6 +1347,7 @@ export function executeChatbotFlow(params: {
       flowId: params.flowId,
       nodeId: params.definition.start,
       nowIso: params.nowIso,
+      options: params.options,
     }), params.nowIso);
   }
 
@@ -1318,6 +1363,7 @@ export function executeChatbotFlow(params: {
       flowId: params.flowId,
       nodeId: params.definition.start,
       nowIso: params.nowIso,
+      options: params.options,
     });
     return markChatbotResultInteraction({
       ...result,
@@ -1353,7 +1399,7 @@ export function executeChatbotFlow(params: {
         return markChatbotResultInteraction({
           handled: true,
           state: withChatbotRuntime(params.state, params.flowId, initialNodeId, true),
-          replyText: `Opção inválida.\n\n${renderMenu(node)}`,
+          replyText: `Opção inválida.\n\n${renderMenu(node, params.state, params.options)}`,
           events: [],
         }, params.nowIso);
       }
@@ -1365,6 +1411,7 @@ export function executeChatbotFlow(params: {
       flowId: params.flowId,
       nodeId: targetNodeId,
       nowIso: params.nowIso,
+      options: params.options,
     });
     return markChatbotResultInteraction({
       ...result,
@@ -1419,6 +1466,7 @@ export function executeChatbotFlow(params: {
         flowId: params.flowId,
         nodeId: currentNode.next,
         nowIso: params.nowIso,
+        options: params.options,
       }), params.nowIso);
     }
     if (currentNode.type === "consent") {
@@ -1428,6 +1476,7 @@ export function executeChatbotFlow(params: {
         flowId: params.flowId,
         nodeId: params.state.chatbotNodeId,
         nowIso: params.nowIso,
+        options: params.options,
       }), params.nowIso);
     }
     return markChatbotResultInteraction(executeNodeChain({
@@ -1436,26 +1485,28 @@ export function executeChatbotFlow(params: {
       flowId: params.flowId,
       nodeId: params.state.chatbotNodeId,
       nowIso: params.nowIso,
+      options: params.options,
     }), params.nowIso);
   }
 
+  const visibleOptions = getVisibleMenuOptions(currentNode, params.state, params.options);
   const choice = parseMenuSelection(params.inboundText);
   const explicitOptionIndex =
     choice === null
       ? -1
-      : currentNode.options.findIndex(
+      : visibleOptions.findIndex(
           (option) => parseExplicitMenuOptionNumber(option.label)?.number === choice
         );
   const selectedOptionIndex = explicitOptionIndex >= 0 ? explicitOptionIndex : (choice ?? 0) - 1;
-  if (choice === null || selectedOptionIndex < 0 || selectedOptionIndex >= currentNode.options.length) {
+  if (choice === null || selectedOptionIndex < 0 || selectedOptionIndex >= visibleOptions.length) {
     return markChatbotResultInteraction({
       handled: true,
       state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
-      replyText: renderMenu(currentNode),
+      replyText: renderMenu(currentNode, params.state, params.options),
     }, params.nowIso);
   }
 
-  const selectedOption = currentNode.options[selectedOptionIndex]!;
+  const selectedOption = visibleOptions[selectedOptionIndex]!;
   const events: ChatbotExecutionEvent[] = [];
   const stateWithOptionContext = mergeFlowMetadata({
     state: params.state,
@@ -1471,6 +1522,7 @@ export function executeChatbotFlow(params: {
     flowId: params.flowId,
     nodeId: selectedOption.next,
     nowIso: params.nowIso,
+    options: params.options,
   });
   return markChatbotResultInteraction({
     ...result,

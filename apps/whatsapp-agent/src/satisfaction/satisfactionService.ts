@@ -195,6 +195,107 @@ function serializeResponse(item: {
   };
 }
 
+function emptyScoreDistribution() {
+  return { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 } as Record<string, number>;
+}
+
+function buildSatisfactionSummary(params: {
+  surveys: Array<{
+    id: string;
+    status: string;
+    assignedUserId: string | null;
+    departmentId: string | null;
+    metadata?: unknown;
+  }>;
+  responses: Array<{
+    surveyId: string;
+    score: number;
+  }>;
+}) {
+  const surveyById = new Map(params.surveys.map((survey) => [survey.id, survey]));
+  const distribution = emptyScoreDistribution();
+  const byAgent = new Map<string, { sent: number; responded: number; scoreTotal: number; distribution: Record<string, number> }>();
+  const byDepartment = new Map<string, { sent: number; responded: number; scoreTotal: number; distribution: Record<string, number> }>();
+  const byQueue = new Map<string, { sent: number; responded: number; scoreTotal: number; distribution: Record<string, number> }>();
+  const ensureBucket = (
+    map: Map<string, { sent: number; responded: number; scoreTotal: number; distribution: Record<string, number> }>,
+    key: string
+  ) => {
+    const existing = map.get(key);
+    if (existing) return existing;
+    const bucket = { sent: 0, responded: 0, scoreTotal: 0, distribution: emptyScoreDistribution() };
+    map.set(key, bucket);
+    return bucket;
+  };
+  const getQueueId = (metadata: unknown) => {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+    const value = (metadata as Record<string, unknown>).queueId;
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  };
+
+  for (const survey of params.surveys) {
+    if (survey.assignedUserId) ensureBucket(byAgent, survey.assignedUserId).sent += 1;
+    if (survey.departmentId) ensureBucket(byDepartment, survey.departmentId).sent += 1;
+    const queueId = getQueueId(survey.metadata);
+    if (queueId) ensureBucket(byQueue, queueId).sent += 1;
+  }
+
+  let scoreTotal = 0;
+  for (const response of params.responses) {
+    const survey = surveyById.get(response.surveyId);
+    if (!survey) continue;
+    const scoreKey = String(response.score);
+    if (scoreKey in distribution) distribution[scoreKey] += 1;
+    scoreTotal += response.score;
+    if (survey.assignedUserId) {
+      const bucket = ensureBucket(byAgent, survey.assignedUserId);
+      bucket.responded += 1;
+      bucket.scoreTotal += response.score;
+      if (scoreKey in bucket.distribution) bucket.distribution[scoreKey] += 1;
+    }
+    if (survey.departmentId) {
+      const bucket = ensureBucket(byDepartment, survey.departmentId);
+      bucket.responded += 1;
+      bucket.scoreTotal += response.score;
+      if (scoreKey in bucket.distribution) bucket.distribution[scoreKey] += 1;
+    }
+    const queueId = getQueueId(survey.metadata);
+    if (queueId) {
+      const bucket = ensureBucket(byQueue, queueId);
+      bucket.responded += 1;
+      bucket.scoreTotal += response.score;
+      if (scoreKey in bucket.distribution) bucket.distribution[scoreKey] += 1;
+    }
+  }
+
+  const serializeBuckets = (
+    map: Map<string, { sent: number; responded: number; scoreTotal: number; distribution: Record<string, number> }>
+  ) =>
+    Array.from(map.entries()).map(([id, bucket]) => ({
+      id,
+      sent: bucket.sent,
+      responded: bucket.responded,
+      responseRate: bucket.sent > 0 ? bucket.responded / bucket.sent : 0,
+      averageScore: bucket.responded > 0 ? bucket.scoreTotal / bucket.responded : null,
+      distribution: bucket.distribution,
+    }));
+
+  const sent = params.surveys.filter((survey) => survey.status !== "draft" && survey.status !== "cancelled").length;
+  const responded = params.responses.length;
+  const expired = params.surveys.filter((survey) => survey.status === "expired").length;
+  return {
+    sent,
+    responded,
+    expired,
+    responseRate: sent > 0 ? responded / sent : 0,
+    averageScore: responded > 0 ? scoreTotal / responded : null,
+    distribution,
+    byAgent: serializeBuckets(byAgent),
+    byDepartment: serializeBuckets(byDepartment),
+    byQueue: serializeBuckets(byQueue),
+  };
+}
+
 async function validateOptionalQuestion(prisma: PrismaClient, clientId: string, questionId: string | null) {
   if (!questionId) return true;
   const question = await prisma.satisfactionQuestion.findFirst({
@@ -271,6 +372,7 @@ export async function listSatisfaction(params: { prisma: PrismaClient; clientId:
     questions: questions.map(serializeQuestion),
     surveys: surveys.map(serializeSurvey),
     responses: responses.map(serializeResponse),
+    summary: buildSatisfactionSummary({ surveys, responses }),
   };
 }
 

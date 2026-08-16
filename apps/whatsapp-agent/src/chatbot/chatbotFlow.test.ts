@@ -95,6 +95,61 @@ test("executeChatbotFlow starts in menu and waits for numeric answer", () => {
   assert.match(result.replyText ?? "", /1\. Atendimento/);
 });
 
+test("executeChatbotFlow hides department option when department is closed", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "menu",
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Escolha uma opção",
+        options: [
+          { label: "Atendimento geral", next: "general" },
+          {
+            label: "Falar com atendente",
+            next: "human",
+            departmentId: "department_technical",
+            visibilityCondition: { departmentAvailability: "OPEN" },
+          },
+        ],
+      },
+      general: { type: "text", text: "Geral" },
+      human: { type: "handoff", text: "Encaminhando", departmentId: "department_technical" },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const menu = executeChatbotFlow({
+    flowId: "flow_visibility",
+    definition: validated.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-04-17T10:00:01.000Z",
+    options: { departmentAvailabilityById: { department_technical: "CLOSED" } },
+  });
+
+  assert.match(menu.replyText ?? "", /1\. Atendimento geral/);
+  assert.doesNotMatch(menu.replyText ?? "", /Falar com atendente/);
+
+  const blocked = executeChatbotFlow({
+    flowId: "flow_visibility",
+    definition: validated.definition,
+    state: {
+      ...menu.state,
+      flow: "chatbot:flow_visibility",
+      chatbotActive: true,
+      chatbotNodeId: "menu",
+    },
+    inboundText: "2",
+    nowIso: "2026-04-17T10:00:02.000Z",
+    options: { departmentAvailabilityById: { department_technical: "CLOSED" } },
+  });
+
+  assert.equal(blocked.pendingHandoff, undefined);
+  assert.match(blocked.replyText ?? "", /1\. Atendimento geral/);
+  assert.doesNotMatch(blocked.replyText ?? "", /Falar com atendente/);
+});
+
 test("executeChatbotFlow prompts for consent and advances after accepted consent marker", () => {
   const validated = validateChatbotFlowDefinition({
     start: "consent",
