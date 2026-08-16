@@ -112,6 +112,9 @@ export async function executeChatbotFlowWithConsent(params: {
   if (currentConsent) {
     const answer = normalizeAnswer(params.inboundText);
     const accepted = answer === normalizeAnswer(currentConsent.node.acceptOption);
+    const declineOption = currentConsent.node.declineOption
+      ? normalizeAnswer(currentConsent.node.declineOption)
+      : null;
     if (accepted) {
       const recorded = await recordContactConsent({
         prisma: params.prisma,
@@ -137,7 +140,12 @@ export async function executeChatbotFlowWithConsent(params: {
         });
       }
     }
-    if (currentConsent.node.onDeclined && answer && answer !== normalizeAnswer(currentConsent.node.acceptOption)) {
+    if (
+      currentConsent.node.onDeclined &&
+      answer &&
+      answer !== normalizeAnswer(currentConsent.node.acceptOption) &&
+      (!declineOption || answer === declineOption)
+    ) {
       return executeChatbotFlow({
         flowId: params.flowId,
         definition: params.definition,
@@ -147,6 +155,16 @@ export async function executeChatbotFlowWithConsent(params: {
         startNodeId: currentConsent.node.onDeclined,
         options: params.options,
       });
+    }
+    if (answer && declineOption && answer !== declineOption) {
+      const replyText = currentConsent.node.invalidText
+        ? `${currentConsent.node.invalidText}\n\n${currentConsent.node.message}`
+        : currentConsent.node.message;
+      return {
+        handled: true,
+        state: hydratedState,
+        replyText,
+      };
     }
   }
 

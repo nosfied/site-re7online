@@ -56,6 +56,8 @@ export type ChatbotConsentNode = Record<string, unknown> & ChatbotFlowMetadata &
   textVersion: string;
   message: string;
   acceptOption: string;
+  declineOption?: string;
+  invalidText?: string;
   onAccepted: string;
   onDeclined?: string;
 };
@@ -545,6 +547,8 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
     const textVersion = getNonEmptyString(rawNode.textVersion);
     const message = getNonEmptyString(rawNode.message);
     const acceptOption = getNonEmptyString(rawNode.acceptOption);
+    const declineOption = getNonEmptyString(rawNode.declineOption);
+    const invalidText = getNonEmptyString(rawNode.invalidText);
     const onAccepted = getNonEmptyString(rawNode.onAccepted);
     const onDeclined = getNonEmptyString(rawNode.onDeclined);
     if (!purpose || !textVersion || !message || !acceptOption || !onAccepted) {
@@ -563,6 +567,8 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
           "textVersion",
           "message",
           "acceptOption",
+          "declineOption",
+          "invalidText",
           "onAccepted",
           "onDeclined",
           "context",
@@ -576,6 +582,8 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
         textVersion,
         message,
         acceptOption,
+        ...(declineOption ? { declineOption } : {}),
+        ...(invalidText ? { invalidText } : {}),
         onAccepted,
         ...(onDeclined ? { onDeclined } : {}),
         ...getNodeMetadata(rawNode),

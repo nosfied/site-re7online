@@ -8,6 +8,7 @@ import {
   getInitialChatbotAwaitingNodeId,
   validateChatbotFlowDefinition,
 } from "./chatbotFlow.js";
+import { executeChatbotFlowWithConsent } from "./chatbotConsentRuntime.js";
 import {
   applyFlowIntentClassificationToContext,
   classifyFreeTextFlowIntent,
@@ -205,6 +206,98 @@ test("executeChatbotFlow prompts for consent and advances after accepted consent
   assert.equal(accepted.handled, true);
   assert.equal(accepted.state.chatbotNodeId, "menu");
   assert.match(accepted.replyText ?? "", /1\. Atendimento/);
+});
+
+test("executeChatbotFlowWithConsent repeats consent prompt for invalid answer when decline option is explicit", async () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "consent",
+    nodes: {
+      consent: {
+        type: "consent",
+        purpose: "attendance",
+        textVersion: "v1",
+        message: "Digite 1 para aceitar ou 2 para encerrar.",
+        acceptOption: "1",
+        declineOption: "2",
+        invalidText: "⚠️ Desculpe, essa opção é inválida.",
+        onAccepted: "menu",
+        onDeclined: "declined",
+      },
+      menu: {
+        type: "menu",
+        text: "Escolha",
+        options: [{ label: "Atendimento", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Tudo certo",
+      },
+      declined: {
+        type: "text",
+        text: "Atendimento encerrado.",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const prisma = {
+    contact: { findFirst: async () => null },
+    lead: { findFirst: async () => null },
+    conversation: { findFirst: async () => null },
+    contactConsent: {
+      findFirst: async () => null,
+      updateMany: async () => ({ count: 0 }),
+      create: async () => ({ id: "consent_1", textHash: "hash" }),
+    },
+    event: { create: async () => ({ id: "event_1" }) },
+  } as any;
+
+  const result = await executeChatbotFlowWithConsent({
+    prisma,
+    clientId: "client_1",
+    waId: "5511999999999",
+    sourceChannel: "whatsapp",
+    sourceProvider: "web_session",
+    source: "test",
+    requestId: "request_1",
+    flowId: "flow_consent",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_consent",
+      chatbotActive: true,
+      chatbotNodeId: "consent",
+    }),
+    inboundText: "olá",
+    nowIso: "2026-04-17T10:00:02.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotNodeId, "consent");
+  assert.match(result.replyText ?? "", /opção é inválida/);
+  assert.match(result.replyText ?? "", /Digite 1 para aceitar/);
+
+  const declined = await executeChatbotFlowWithConsent({
+    prisma,
+    clientId: "client_1",
+    waId: "5511999999999",
+    sourceChannel: "whatsapp",
+    sourceProvider: "web_session",
+    source: "test",
+    requestId: "request_2",
+    flowId: "flow_consent",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_consent",
+      chatbotActive: true,
+      chatbotNodeId: "consent",
+    }),
+    inboundText: "2",
+    nowIso: "2026-04-17T10:00:03.000Z",
+  });
+
+  assert.equal(declined.handled, true);
+  assert.match(declined.replyText ?? "", /Atendimento encerrado/);
 });
 
 test("executeChatbotFlow preserves explicit menu option numbers", () => {
