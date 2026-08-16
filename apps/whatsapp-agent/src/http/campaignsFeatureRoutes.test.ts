@@ -11,6 +11,7 @@ import { saveWebSessionAuthState } from "../web-session/webSessionAuthStore.js";
 import { getPrisma } from "../db.js";
 import { MessageStatus, MessageType, Prisma, TrainingContentStatus, TrainingContentType } from "@prisma/client";
 import type { ConversationState } from "../conversation/conversation.types.js";
+import { getDepartmentAvailability, getNextDepartmentOpenAt } from "../departments/businessHours.js";
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "campaigns-feature-route-test-secret";
 process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || "campaigns-feature-route-test-admin-token";
@@ -8927,4 +8928,188 @@ test("campaign export remains capability protected", async () => {
   assert.equal(response.status, 403);
   assert.equal(getErrorCode(response.body), "feature_not_enabled");
   assert.equal(response.body.feature, "campaigns");
+});
+
+test("tenant admins manage department schedule exceptions with RBAC and tenant isolation", async () => {
+  const departmentA = await prisma.department.create({
+    data: {
+      clientId: businessClientId,
+      name: `${prefix} Agenda A`,
+      slug: `${prefix}-agenda-a`,
+    },
+    select: { id: true },
+  });
+  const departmentB = await prisma.department.create({
+    data: {
+      clientId: businessClientId,
+      name: `${prefix} Agenda B`,
+      slug: `${prefix}-agenda-b`,
+    },
+    select: { id: true },
+  });
+  const otherDepartment = await prisma.department.create({
+    data: {
+      clientId: governmentClientId,
+      name: `${prefix} Agenda Gov`,
+      slug: `${prefix}-agenda-gov`,
+    },
+    select: { id: true },
+  });
+  const regularHours = [
+    { weekday: 1, startMinute: 8 * 60, endMinute: 12 * 60 },
+    { weekday: 1, startMinute: 13 * 60, endMinute: 17 * 60 },
+    { weekday: 2, startMinute: 8 * 60, endMinute: 12 * 60 },
+    { weekday: 2, startMinute: 13 * 60, endMinute: 17 * 60 },
+  ];
+
+  for (const department of [departmentA, departmentB]) {
+    const saved = await request<{ ok: true; department: { businessHours: unknown[] } }>(
+      "PUT",
+      `/app/departments/${department.id}`,
+      businessAdmin,
+      { businessHours: regularHours }
+    );
+    assert.equal(saved.status, 200);
+    assert.equal(saved.body.department.businessHours.length, regularHours.length);
+  }
+
+  const supervisorList = await request<{ ok: true; items: Array<{ id: string; businessHourExceptions?: unknown[] }> }>(
+    "GET",
+    "/app/departments",
+    businessSupervisor
+  );
+  assert.equal(supervisorList.status, 200);
+  assert.ok(supervisorList.body.items.some((item) => item.id === departmentA.id));
+
+  const supervisorMutation = await request<ErrorPayload>(
+    "PUT",
+    `/app/departments/${departmentA.id}`,
+    businessSupervisor,
+    {
+      businessHourExceptions: [{ date: "2026-09-07", type: "CLOSED", reason: "Teste supervisor" }],
+    }
+  );
+  assert.equal(supervisorMutation.status, 403);
+
+  const agentMutation = await request<ErrorPayload>(
+    "PUT",
+    `/app/departments/${departmentA.id}`,
+    businessAgent,
+    {
+      businessHourExceptions: [{ date: "2026-09-07", type: "CLOSED", reason: "Teste agente" }],
+    }
+  );
+  assert.equal(agentMutation.status, 403);
+
+  const crossTenantMutation = await request<ErrorPayload>(
+    "PUT",
+    `/app/departments/${otherDepartment.id}`,
+    businessAdmin,
+    {
+      businessHourExceptions: [{ date: "2026-09-07", type: "CLOSED", reason: "Outro tenant" }],
+    }
+  );
+  assert.equal(crossTenantMutation.status, 404);
+  assert.equal(getErrorCode(crossTenantMutation.body), "department_not_found");
+
+  const closedPayload = {
+    businessHourExceptions: [{ date: "2026-09-07", type: "CLOSED", reason: "Independencia do Brasil" }],
+  };
+  const closedA = await request<{ ok: true; department: { businessHourExceptions: Array<{ date: string; type: string }> } }>(
+    "PUT",
+    `/app/departments/${departmentA.id}`,
+    businessAdmin,
+    closedPayload
+  );
+  const closedB = await request<{ ok: true; department: { businessHourExceptions: Array<{ date: string; type: string }> } }>(
+    "PUT",
+    `/app/departments/${departmentB.id}`,
+    businessAdmin,
+    closedPayload
+  );
+  assert.equal(closedA.status, 200);
+  assert.equal(closedB.status, 200);
+  assert.equal(closedA.body.department.businessHourExceptions[0].type, "CLOSED");
+  assert.equal(closedB.body.department.businessHourExceptions[0].date, "2026-09-07");
+
+  const closedAvailability = await getDepartmentAvailability(prisma, {
+    clientId: businessClientId,
+    departmentId: departmentA.id,
+    at: new Date("2026-09-07T13:00:00.000Z"),
+  });
+  assert.equal(closedAvailability.status, "CLOSED");
+  assert.equal(closedAvailability.reason, "EXCEPTION");
+
+  const nextOpen = await getNextDepartmentOpenAt(prisma, {
+    clientId: businessClientId,
+    departmentId: departmentA.id,
+    after: new Date("2026-09-04T20:30:00.000Z"),
+  });
+  assert.equal(nextOpen?.date, "2026-09-08");
+
+  const custom = await request<{ ok: true; department: { businessHourExceptions: Array<{ date: string; type: string; intervals: unknown[] }> } }>(
+    "PUT",
+    `/app/departments/${departmentA.id}`,
+    businessAdmin,
+    {
+      businessHourExceptions: [
+        {
+          date: "2026-09-07",
+          type: "CUSTOM_HOURS",
+          reason: "Expediente especial",
+          intervals: [{ startMinute: 10 * 60, endMinute: 11 * 60 }],
+        },
+      ],
+    }
+  );
+  assert.equal(custom.status, 200);
+  assert.equal(custom.body.department.businessHourExceptions[0].type, "CUSTOM_HOURS");
+  assert.equal(custom.body.department.businessHourExceptions[0].intervals.length, 1);
+
+  const customOpen = await getDepartmentAvailability(prisma, {
+    clientId: businessClientId,
+    departmentId: departmentA.id,
+    at: new Date("2026-09-07T13:30:00.000Z"),
+  });
+  const customClosed = await getDepartmentAvailability(prisma, {
+    clientId: businessClientId,
+    departmentId: departmentA.id,
+    at: new Date("2026-09-07T15:30:00.000Z"),
+  });
+  assert.equal(customOpen.status, "OPEN");
+  assert.equal(customClosed.status, "CLOSED");
+
+  const removed = await request<{ ok: true; department: { businessHourExceptions: unknown[] } }>(
+    "PUT",
+    `/app/departments/${departmentA.id}`,
+    businessAdmin,
+    { businessHourExceptions: [] }
+  );
+  assert.equal(removed.status, 200);
+  assert.equal(removed.body.department.businessHourExceptions.length, 0);
+
+  const isolatedRead = await request<{ ok: true; items: Array<{ id: string }> }>(
+    "GET",
+    `/app/departments?clientId=${encodeURIComponent(governmentClientId)}`,
+    businessAdmin
+  );
+  assert.equal(isolatedRead.status, 200);
+  assert.ok(isolatedRead.body.items.some((item) => item.id === departmentA.id));
+  assert.equal(isolatedRead.body.items.some((item) => item.id === otherDepartment.id), false);
+
+  const platformList = await requestAdmin<{ ok: true; items: Array<{ id: string; businessHourExceptions?: unknown[] }> }>(
+    "GET",
+    `/admin/departments?clientKey=${prefix}-business&includeInactive=true`
+  );
+  assert.equal(platformList.status, 200);
+  assert.ok(platformList.body.items.some((item) => item.id === departmentB.id));
+
+  const auditEvents = await prisma.event.findMany({
+    where: {
+      clientId: businessClientId,
+      eventName: { in: ["department.business_hour_exceptions.updated", "department.business_hour_exceptions.deleted"] },
+    },
+    select: { payloadJson: true },
+  });
+  assert.ok(auditEvents.some((event) => JSON.stringify(event.payloadJson).includes(businessAdmin.id)));
 });

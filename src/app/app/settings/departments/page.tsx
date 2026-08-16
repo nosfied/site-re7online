@@ -44,6 +44,15 @@ type BusinessHourDraft = {
   endMinute: number;
 };
 
+type BusinessHourExceptionDraft = {
+  date: string;
+  type: "CLOSED" | "CUSTOM_HOURS";
+  reason: string;
+  intervals: Array<{ startMinute: number; endMinute: number }>;
+  departmentIds: string[];
+  originalDate?: string;
+};
+
 type HoursEditorDraft = {
   departmentId: string;
   weekdays: number[];
@@ -77,6 +86,38 @@ function getIntervalSignature(intervals: Array<{ startMinute: number; endMinute:
 function formatIntervals(intervals: Array<{ startMinute: number; endMinute: number }>) {
   if (intervals.length === 0) return "Fechado";
   return intervals.map((hour) => `${minutesToTime(hour.startMinute)} — ${minutesToTime(hour.endMinute)}`).join(" / ");
+}
+
+function formatExceptionType(type: string) {
+  return type === "CUSTOM_HOURS" ? "Horário especial" : "Fechado o dia inteiro";
+}
+
+function normalizeExceptionIntervals(
+  intervals: Array<{ startMinute: number; endMinute: number }> | null | undefined
+) {
+  return Array.isArray(intervals)
+    ? intervals.map((interval) => ({
+        startMinute: Number(interval.startMinute),
+        endMinute: Number(interval.endMinute),
+      }))
+    : [];
+}
+
+function normalizeExceptionPayload(
+  item: NonNullable<AdminDepartmentItem["businessHourExceptions"]>[number]
+): {
+  date: string;
+  type: "CLOSED" | "CUSTOM_HOURS";
+  reason?: string | null;
+  intervals?: Array<{ startMinute: number; endMinute: number }> | null;
+} {
+  const type = item.type === "CUSTOM_HOURS" ? "CUSTOM_HOURS" : "CLOSED";
+  return {
+    date: item.date,
+    type,
+    reason: item.reason ?? null,
+    intervals: type === "CUSTOM_HOURS" ? normalizeExceptionIntervals(item.intervals) : [],
+  };
 }
 
 function formatWeekdayGroup(days: number[]) {
@@ -126,6 +167,24 @@ function validateEditorIntervals(intervals: Array<{ startMinute: number; endMinu
   return null;
 }
 
+function validateExceptionDraft(draft: BusinessHourExceptionDraft) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.date)) {
+    return "Informe a data da exceção.";
+  }
+  const uniqueDepartments = new Set(draft.departmentIds);
+  if (uniqueDepartments.size === 0) {
+    return "Selecione pelo menos um setor.";
+  }
+  if (uniqueDepartments.size !== draft.departmentIds.length) {
+    return "Remova setores repetidos antes de salvar.";
+  }
+  if (draft.type === "CUSTOM_HOURS") {
+    if (draft.intervals.length === 0) return "Adicione pelo menos um intervalo para horário especial.";
+    return validateEditorIntervals(draft.intervals);
+  }
+  return null;
+}
+
 function DepartmentBadge({
   label,
   tone = "default",
@@ -157,6 +216,29 @@ function normalizeDepartmentError(error: AppApiError, fallback: string) {
   if (error.errorCode === "bad_request") {
     return error.message || fallback;
   }
+  if (
+    error.errorCode === "invalid_business_hour_exceptions" ||
+    error.errorCode === "invalid_business_hour_exception" ||
+    error.errorCode === "invalid_exception_date"
+  ) {
+    return "Confira a data e os dados da exceção de horário.";
+  }
+  if (error.errorCode === "duplicate_exception_date") {
+    return "Já existe uma exceção para esta data neste setor.";
+  }
+  if (
+    error.errorCode === "invalid_exception_type" ||
+    error.errorCode === "closed_exception_with_hours" ||
+    error.errorCode === "custom_hours_without_intervals"
+  ) {
+    return "Escolha se o dia ficará fechado ou se terá horário especial.";
+  }
+  if (
+    error.errorCode === "invalid_business_hour_interval" ||
+    error.errorCode === "overlapping_business_hours"
+  ) {
+    return "Confira os intervalos: o início precisa ser antes do fim e os horários não podem se sobrepor.";
+  }
   if (error.status === 403) {
     return "Sem permissão para gerenciar setores.";
   }
@@ -179,6 +261,8 @@ export default function AppSettingsDepartmentsPage() {
     Record<string, { name: string; isActive: boolean; businessHours: BusinessHourDraft[] }>
   >({});
   const [hoursEditor, setHoursEditor] = useState<HoursEditorDraft | null>(null);
+  const [exceptionEditor, setExceptionEditor] = useState<BusinessHourExceptionDraft | null>(null);
+  const [savingExceptions, setSavingExceptions] = useState(false);
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -415,6 +499,127 @@ export default function AppSettingsDepartmentsPage() {
     setHoursEditor(null);
   };
 
+  const openExceptionEditor = (
+    departmentId: string,
+    exception?: NonNullable<AdminDepartmentItem["businessHourExceptions"]>[number]
+  ) => {
+    const type = exception?.type === "CUSTOM_HOURS" ? "CUSTOM_HOURS" : "CLOSED";
+    setExceptionEditor({
+      date: exception?.date ?? "",
+      originalDate: exception?.date,
+      type,
+      reason: exception?.reason ?? "",
+      intervals:
+        type === "CUSTOM_HOURS"
+          ? normalizeExceptionIntervals(exception?.intervals)
+          : [{ startMinute: 8 * 60, endMinute: 17 * 60 }],
+      departmentIds: [departmentId],
+    });
+  };
+
+  const updateExceptionInterval = (
+    index: number,
+    field: "startMinute" | "endMinute",
+    value: number
+  ) => {
+    setExceptionEditor((current) => {
+      if (!current) return current;
+      const intervals = [...current.intervals];
+      intervals[index] = { ...intervals[index], [field]: value };
+      return { ...current, intervals };
+    });
+  };
+
+  const buildNextExceptions = (
+    item: AdminDepartmentItem,
+    draft: BusinessHourExceptionDraft
+  ): Array<{
+    date: string;
+    type: "CLOSED" | "CUSTOM_HOURS";
+    reason?: string | null;
+    intervals?: Array<{ startMinute: number; endMinute: number }> | null;
+  }> => {
+    const replacement = {
+      date: draft.date,
+      type: draft.type,
+      reason: draft.reason.trim() || null,
+      intervals: draft.type === "CUSTOM_HOURS" ? draft.intervals : [],
+    };
+    return [
+      ...(item.businessHourExceptions ?? [])
+        .filter((exception) => exception.date !== (draft.originalDate ?? draft.date))
+        .map(normalizeExceptionPayload),
+      replacement,
+    ].sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  const saveExceptionEditor = async () => {
+    if (!session || !exceptionEditor) return;
+    const validationError = validateExceptionDraft(exceptionEditor);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    const uniqueDepartmentIds = [...new Set(exceptionEditor.departmentIds)];
+    const selectedDepartments = uniqueDepartmentIds
+      .map((departmentId) => departments.find((item) => item.id === departmentId))
+      .filter(Boolean) as AdminDepartmentItem[];
+    if (selectedDepartments.length !== uniqueDepartmentIds.length) {
+      setError("Selecione apenas setores desta organização.");
+      return;
+    }
+    setSavingExceptions(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      for (const department of selectedDepartments) {
+        await updateAppDepartment(session, department.id, {
+          businessHourExceptions: buildNextExceptions(department, exceptionEditor),
+        });
+      }
+      setExceptionEditor(null);
+      await loadDepartments(session);
+      setSuccess("Exceção de horário salva.");
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(normalizeDepartmentError(typed, "Não foi possível salvar a exceção de horário."));
+    } finally {
+      setSavingExceptions(false);
+    }
+  };
+
+  const deleteException = async (
+    item: AdminDepartmentItem,
+    exception: NonNullable<AdminDepartmentItem["businessHourExceptions"]>[number]
+  ) => {
+    if (!session) return;
+    setSavingExceptions(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await updateAppDepartment(session, item.id, {
+        businessHourExceptions: (item.businessHourExceptions ?? [])
+          .filter((candidate) => candidate.date !== exception.date)
+          .map(normalizeExceptionPayload),
+      });
+      await loadDepartments(session);
+      setSuccess("Exceção removida.");
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(normalizeDepartmentError(typed, "Não foi possível remover a exceção."));
+    } finally {
+      setSavingExceptions(false);
+    }
+  };
+
   const clearSelectedEditorDays = () => {
     if (!hoursEditor) return;
     if (hoursEditor.weekdays.length === 0) {
@@ -503,6 +708,198 @@ export default function AppSettingsDepartmentsPage() {
             <DepartmentBadge label={`${departments.length} setores`} />
           </div>
         </div>
+
+        {exceptionEditor ? (
+          <div className="mb-3 rounded-xl border border-re7-sky/35 bg-re7-sky/10 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-white">
+                  {exceptionEditor.originalDate ? "Editar exceção de horário" : "Adicionar exceção de horário"}
+                </h3>
+                <p className="text-xs text-white/60">
+                  A exceção será aplicada aos setores selecionados e passa a valer imediatamente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExceptionEditor(null)}
+                disabled={savingExceptions}
+                className="rounded-md border border-white/20 px-2 py-1 text-xs text-white/75 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[180px_220px_minmax(0,1fr)]">
+              <label className="flex flex-col gap-1.5 text-xs text-white/75">
+                <span>Data</span>
+                <input
+                  type="date"
+                  value={exceptionEditor.date}
+                  onChange={(event) =>
+                    setExceptionEditor((current) => current ? { ...current, date: event.target.value } : current)
+                  }
+                  className="min-w-0 rounded-md border border-white/15 bg-re7-navy px-2 py-1.5 text-xs text-white outline-none focus:border-re7-sky"
+                />
+              </label>
+
+              <div className="flex flex-col gap-1.5 text-xs text-white/75">
+                <span>Funcionamento</span>
+                <label className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 py-1.5">
+                  <input
+                    type="radio"
+                    checked={exceptionEditor.type === "CLOSED"}
+                    onChange={() =>
+                      setExceptionEditor((current) => current ? { ...current, type: "CLOSED" } : current)
+                    }
+                    className="accent-re7-orange"
+                  />
+                  Fechado o dia inteiro
+                </label>
+                <label className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 py-1.5">
+                  <input
+                    type="radio"
+                    checked={exceptionEditor.type === "CUSTOM_HOURS"}
+                    onChange={() =>
+                      setExceptionEditor((current) => current ? { ...current, type: "CUSTOM_HOURS" } : current)
+                    }
+                    className="accent-re7-orange"
+                  />
+                  Horário especial
+                </label>
+              </div>
+
+              <label className="flex flex-col gap-1.5 text-xs text-white/75">
+                <span>Motivo opcional</span>
+                <input
+                  value={exceptionEditor.reason}
+                  onChange={(event) =>
+                    setExceptionEditor((current) => current ? { ...current, reason: event.target.value } : current)
+                  }
+                  placeholder="Ex.: Feriado municipal"
+                  className="min-w-0 rounded-md border border-white/15 bg-re7-navy px-2 py-1.5 text-xs text-white outline-none focus:border-re7-sky"
+                />
+              </label>
+            </div>
+
+            {exceptionEditor.type === "CUSTOM_HOURS" ? (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs font-semibold text-white/80">Intervalos do horário especial</p>
+                {exceptionEditor.intervals.map((interval, intervalIndex) => (
+                  <div
+                    key={intervalIndex}
+                    className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2 sm:max-w-md"
+                  >
+                    <input
+                      type="time"
+                      value={minutesToTime(interval.startMinute)}
+                      onChange={(event) =>
+                        updateExceptionInterval(intervalIndex, "startMinute", timeToMinutes(event.target.value))
+                      }
+                      className="min-w-0 rounded-md border border-white/15 bg-re7-navy px-2 py-1.5 text-xs text-white"
+                    />
+                    <span className="text-xs text-white/45">até</span>
+                    <input
+                      type="time"
+                      value={minutesToTime(interval.endMinute)}
+                      onChange={(event) =>
+                        updateExceptionInterval(intervalIndex, "endMinute", timeToMinutes(event.target.value))
+                      }
+                      className="min-w-0 rounded-md border border-white/15 bg-re7-navy px-2 py-1.5 text-xs text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExceptionEditor((current) =>
+                          current
+                            ? {
+                                ...current,
+                                intervals: current.intervals.filter((_, index) => index !== intervalIndex),
+                              }
+                            : current
+                        )
+                      }
+                      disabled={exceptionEditor.intervals.length <= 1}
+                      className="rounded-md border border-white/20 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExceptionEditor((current) =>
+                      current
+                        ? {
+                            ...current,
+                            intervals: [...current.intervals, { startMinute: 13 * 60, endMinute: 17 * 60 }],
+                          }
+                        : current
+                    )
+                  }
+                  className="rounded-md border border-white/20 px-2.5 py-1.5 text-xs text-white/80 hover:bg-white/10"
+                >
+                  + Adicionar intervalo
+                </button>
+              </div>
+            ) : null}
+
+            <div className="mt-3">
+              <p className="mb-2 text-xs font-semibold text-white/80">Aplicar aos setores</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {sortedDepartments.map((department) => {
+                  const checked = exceptionEditor.departmentIds.includes(department.id);
+                  return (
+                    <label
+                      key={department.id}
+                      className={`flex min-w-0 items-center gap-2 rounded-md border px-2 py-1.5 text-xs ${
+                        checked
+                          ? "border-re7-sky/55 bg-re7-sky/20 text-white"
+                          : "border-white/15 bg-white/5 text-white/70"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) =>
+                          setExceptionEditor((current) => {
+                            if (!current) return current;
+                            const departmentIds = event.target.checked
+                              ? [...current.departmentIds, department.id]
+                              : current.departmentIds.filter((value) => value !== department.id);
+                            return { ...current, departmentIds: [...new Set(departmentIds)] };
+                          })
+                        }
+                        className="h-3.5 w-3.5 accent-re7-sky"
+                      />
+                      <span className="min-w-0 truncate">{department.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={saveExceptionEditor}
+                disabled={savingExceptions}
+                className="rounded-md bg-re7-orange px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingExceptions ? "Salvando..." : "Salvar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setExceptionEditor(null)}
+                disabled={savingExceptions}
+                className="rounded-md border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {loading ? (
           <p className="text-sm text-white/70">Carregando setores...</p>
@@ -776,6 +1173,77 @@ export default function AppSettingsDepartmentsPage() {
                         </div>
                       ) : null}
                     </div>
+                  </div>
+
+                  <div className="mt-3 rounded-lg border border-white/10 bg-re7-navy/35 p-2.5">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-semibold text-white">Exceções, feriados e expedientes especiais</h4>
+                        <p className="text-xs text-white/55">Essas datas substituem o horário regular deste setor.</p>
+                      </div>
+                      {!readOnly ? (
+                        <button
+                          type="button"
+                          onClick={() => openExceptionEditor(item.id)}
+                          disabled={savingExceptions}
+                          className="rounded-md border border-white/20 px-2.5 py-1.5 text-xs font-semibold text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          + Adicionar exceção
+                        </button>
+                      ) : null}
+                    </div>
+                    {(item.businessHourExceptions ?? []).length === 0 ? (
+                      <div className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/60">
+                        Nenhuma exceção cadastrada.
+                      </div>
+                    ) : (
+                      <div className="overflow-hidden rounded-lg border border-white/10">
+                        <div className="hidden grid-cols-[120px_160px_minmax(0,1fr)_auto] gap-2 border-b border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] font-semibold uppercase text-white/55 sm:grid">
+                          <span>Data</span>
+                          <span>Funcionamento</span>
+                          <span>Motivo</span>
+                          <span>Ações</span>
+                        </div>
+                        {(item.businessHourExceptions ?? []).map((exception) => {
+                          const intervals = normalizeExceptionIntervals(exception.intervals);
+                          return (
+                            <div
+                              key={`${item.id}-${exception.date}`}
+                              className="grid grid-cols-1 gap-2 border-b border-white/10 px-3 py-2 last:border-b-0 sm:grid-cols-[120px_160px_minmax(0,1fr)_auto]"
+                            >
+                              <span className="text-xs font-semibold text-white/85">{exception.date}</span>
+                              <span className="text-xs text-white/75">
+                                {formatExceptionType(exception.type)}
+                                {exception.type === "CUSTOM_HOURS" ? `: ${formatIntervals(intervals)}` : ""}
+                              </span>
+                              <span className="min-w-0 text-xs text-white/65">{exception.reason || "-"}</span>
+                              {readOnly ? (
+                                <span className="text-xs text-white/45">Somente leitura</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => openExceptionEditor(item.id, exception)}
+                                    disabled={savingExceptions}
+                                    className="rounded-md border border-white/20 px-2 py-1 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void deleteException(item, exception)}
+                                    disabled={savingExceptions}
+                                    className="rounded-md border border-red-300/30 px-2 py-1 text-xs text-red-100 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Excluir
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">

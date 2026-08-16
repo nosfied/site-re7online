@@ -7950,6 +7950,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             orderBy: [{ weekday: "asc" }, { startMinute: "asc" }],
             select: { id: true, weekday: true, startMinute: true, endMinute: true },
           },
+          businessHourExceptions: {
+            orderBy: [{ date: "asc" }],
+            select: { id: true, date: true, type: true, reason: true, intervals: true },
+          },
         },
       });
       json(res, 200, {
@@ -8008,6 +8012,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const businessHours = "businessHours" in bodyRecord
         ? parseDepartmentBusinessHoursInput(bodyRecord.businessHours)
         : undefined;
+      const businessHourExceptions = "businessHourExceptions" in bodyRecord
+        ? parseDepartmentBusinessHourExceptionsInput(bodyRecord.businessHourExceptions)
+        : undefined;
       const existingBySlug = await prisma.department.findFirst({
         where: {
           clientId: client.id,
@@ -8047,6 +8054,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           intervals: businessHours,
         });
       }
+      if (businessHourExceptions) {
+        await replaceDepartmentBusinessHourExceptions(prisma, {
+          clientId: client.id,
+          departmentId: department.id,
+          exceptions: businessHourExceptions,
+        });
+        await persistEvent({
+          clientId: client.id,
+          requestId: `${requestId}:department-business-hour-exceptions-created`,
+          eventName: "department.business_hour_exceptions.created",
+          payloadJson: {
+            actorUserId: clientAuth.userId,
+            departmentId: department.id,
+            exceptionCount: businessHourExceptions.length,
+            dates: businessHourExceptions.map((exception) => exception.date),
+            types: businessHourExceptions.map((exception) => exception.type),
+            source: "tenant_app",
+          },
+        });
+      }
       logger.info({
         event: "department.created",
         requestId,
@@ -8067,6 +8094,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             orderBy: [{ weekday: "asc" }, { startMinute: "asc" }],
             select: { id: true, weekday: true, startMinute: true, endMinute: true },
           },
+          businessHourExceptions: {
+            orderBy: [{ date: "asc" }],
+            select: { id: true, date: true, type: true, reason: true, intervals: true },
+          },
         },
       });
       json(res, 200, {
@@ -8076,6 +8107,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           : department,
       });
     } catch (error) {
+      if (error instanceof DepartmentBusinessHoursValidationError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
@@ -8156,8 +8191,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const businessHours = "businessHours" in bodyRecord
         ? parseDepartmentBusinessHoursInput(bodyRecord.businessHours)
         : undefined;
-      if (Object.keys(parsed.data).length === 0 && businessHours === undefined) {
-        json(res, 400, httpError("bad_request", "Provide name, isActive and/or businessHours"));
+      const businessHourExceptions = "businessHourExceptions" in bodyRecord
+        ? parseDepartmentBusinessHourExceptionsInput(bodyRecord.businessHourExceptions)
+        : undefined;
+      if (Object.keys(parsed.data).length === 0 && businessHours === undefined && businessHourExceptions === undefined) {
+        json(res, 400, httpError("bad_request", "Provide name, isActive, businessHours and/or businessHourExceptions"));
         return;
       }
       if (parsed.data.slug && parsed.data.slug !== existing.slug) {
@@ -8202,6 +8240,28 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           intervals: businessHours,
         });
       }
+      if (businessHourExceptions !== undefined) {
+        await replaceDepartmentBusinessHourExceptions(prisma, {
+          clientId: client.id,
+          departmentId: department.id,
+          exceptions: businessHourExceptions,
+        });
+        await persistEvent({
+          clientId: client.id,
+          requestId: `${requestId}:department-business-hour-exceptions-updated`,
+          eventName: businessHourExceptions.length > 0
+            ? "department.business_hour_exceptions.updated"
+            : "department.business_hour_exceptions.deleted",
+          payloadJson: {
+            actorUserId: clientAuth.userId,
+            departmentId: department.id,
+            exceptionCount: businessHourExceptions.length,
+            dates: businessHourExceptions.map((exception) => exception.date),
+            types: businessHourExceptions.map((exception) => exception.type),
+            source: "tenant_app",
+          },
+        });
+      }
       logger.info({
         event: "department.updated",
         requestId,
@@ -8234,6 +8294,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           businessHours: {
             orderBy: [{ weekday: "asc" }, { startMinute: "asc" }],
             select: { id: true, weekday: true, startMinute: true, endMinute: true },
+          },
+          businessHourExceptions: {
+            orderBy: [{ date: "asc" }],
+            select: { id: true, date: true, type: true, reason: true, intervals: true },
           },
         },
       });

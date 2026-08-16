@@ -3769,6 +3769,12 @@ export async function createAppDepartment(
     name: string;
     isActive?: boolean;
     businessHours?: Array<{ weekday: number; startMinute: number; endMinute: number }>;
+    businessHourExceptions?: Array<{
+      date: string;
+      type: "CLOSED" | "CUSTOM_HOURS";
+      reason?: string | null;
+      intervals?: Array<{ startMinute: number; endMinute: number }> | null;
+    }>;
   }
 ): Promise<{
   ok: true;
@@ -3787,6 +3793,12 @@ export async function updateAppDepartment(
     name?: string;
     isActive?: boolean;
     businessHours?: Array<{ weekday: number; startMinute: number; endMinute: number }>;
+    businessHourExceptions?: Array<{
+      date: string;
+      type: "CLOSED" | "CUSTOM_HOURS";
+      reason?: string | null;
+      intervals?: Array<{ startMinute: number; endMinute: number }> | null;
+    }>;
   }
 ): Promise<{
   ok: true;
