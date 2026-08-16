@@ -216,7 +216,7 @@ test("executeChatbotFlowWithConsent repeats consent prompt for invalid answer wh
         type: "consent",
         purpose: "attendance",
         textVersion: "v1",
-        message: "Digite 1 para aceitar ou 2 para encerrar.",
+        message: "Você autoriza o contato pelo número {{contactPhone}}?\nDigite 1 para aceitar ou 2 para encerrar.",
         acceptOption: "1",
         declineOption: "2",
         invalidText: "⚠️ Desculpe, essa opção é inválida.",
@@ -264,6 +264,7 @@ test("executeChatbotFlowWithConsent repeats consent prompt for invalid answer wh
     flowId: "flow_consent",
     definition: validated.definition,
     state: makeState({
+      waId: "558499049614",
       flow: "chatbot:flow_consent",
       chatbotActive: true,
       chatbotNodeId: "consent",
@@ -276,6 +277,7 @@ test("executeChatbotFlowWithConsent repeats consent prompt for invalid answer wh
   assert.equal(result.state.chatbotNodeId, "consent");
   assert.match(result.replyText ?? "", /opção é inválida/);
   assert.match(result.replyText ?? "", /Digite 1 para aceitar/);
+  assert.match(result.replyText ?? "", /55 \(84\) 9904-9614/);
 
   const declined = await executeChatbotFlowWithConsent({
     prisma,
@@ -892,7 +894,11 @@ test("executeChatbotFlow can hand off on invalid menu answer when configured", (
       menu: {
         type: "menu",
         text: "Escolha",
-        options: [{ label: "4 - Atendimento", next: "text_1" }],
+        options: [
+          { label: "4 - Atendimento", next: "text_1" },
+          { label: "5 - Fundarpe", next: "text_2" },
+          { label: "7 - Cultura Viva", next: "text_3" },
+        ],
         invalidSelectionAction: {
           action: "HANDOFF",
           text: "Aguarde só mais um pouco, estou te direcionando para um/uma atendente.",
@@ -905,6 +911,14 @@ test("executeChatbotFlow can hand off on invalid menu answer when configured", (
       text_1: {
         type: "text",
         text: "Tudo certo",
+      },
+      text_2: {
+        type: "text",
+        text: "Fundarpe",
+      },
+      text_3: {
+        type: "text",
+        text: "Cultura Viva",
       },
     },
   });
@@ -919,7 +933,7 @@ test("executeChatbotFlow can hand off on invalid menu answer when configured", (
       chatbotActive: true,
       chatbotNodeId: "menu",
     }),
-    inboundText: "8",
+    inboundText: "3",
     nowIso: "2026-04-17T10:00:02.000Z",
   });
 
@@ -933,6 +947,7 @@ test("executeChatbotFlow can hand off on invalid menu answer when configured", (
   assert.equal(result.pendingHandoff?.queueId, "queue_general");
   assert.equal(result.pendingHandoff?.tags.includes("invalid_selection"), true);
   assert.equal(result.events?.some((event) => event.event === "flow.invalid_selection.handoff_applied"), true);
+  assert.doesNotMatch(result.replyText ?? "", /Cultura Viva/);
 });
 
 test("executeChatbotFlow follows text next and reaches handoff", () => {

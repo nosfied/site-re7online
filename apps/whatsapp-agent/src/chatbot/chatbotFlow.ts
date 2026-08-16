@@ -788,7 +788,7 @@ function renderMenu(node: ChatbotMenuNode, state: ConversationState, options?: C
     const explicit = parseExplicitMenuOptionNumber(option.label);
     return explicit ? explicit.displayLine : `${index + 1}. ${option.label}`;
   });
-  return [node.text, ...lines].join("\n");
+  return [renderChatbotTemplateText(node.text, state), ...lines].join("\n");
 }
 
 export function getChatbotConsentKey(node: Pick<ChatbotConsentNode, "purpose" | "textVersion">) {
@@ -824,6 +824,22 @@ function parseExplicitMenuOptionNumber(label: string) {
     number,
     displayLine: separator === "-" ? `${number} - ${text}` : `${number}${separator} ${text}`,
   };
+}
+
+function formatChatbotContactPhone(waId: string | null | undefined) {
+  const digits = String(waId ?? "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("55") && digits.length >= 12) {
+    const area = digits.slice(2, 4);
+    const local = digits.slice(4);
+    if (local.length === 8) return `55 (${area}) ${local.slice(0, 4)}-${local.slice(4)}`;
+    if (local.length === 9) return `55 (${area}) ${local.slice(0, 5)}-${local.slice(5)}`;
+  }
+  return digits;
+}
+
+export function renderChatbotTemplateText(text: string, state: Pick<ConversationState, "waId">) {
+  return text.replace(/\{\{\s*contactPhone\s*\}\}/gi, formatChatbotContactPhone(state.waId));
 }
 
 function findParentMenuNodeId(definition: ChatbotFlowDefinition, targetNodeId: string) {
@@ -1276,7 +1292,7 @@ function executeNodeChain(params: {
     }
 
     if (node.type === "text") {
-      messages.push(node.text);
+      messages.push(renderChatbotTemplateText(node.text, currentState));
       if (node.next) {
         autoAdvanceCount += 1;
         if (autoAdvanceCount > CHATBOT_MAX_AUTO_ADVANCES_PER_EXECUTION) {
@@ -1305,7 +1321,7 @@ function executeNodeChain(params: {
 
     if (node.type === "capture") {
       currentState = withChatbotRuntime(currentState, params.flowId, currentNodeId, true);
-      messages.push(node.text);
+      messages.push(renderChatbotTemplateText(node.text, currentState));
       return {
         handled: true,
         state: currentState,
@@ -1335,7 +1351,7 @@ function executeNodeChain(params: {
         continue;
       }
       currentState = withChatbotRuntime(currentState, params.flowId, currentNodeId, true);
-      messages.push(node.message);
+      messages.push(renderChatbotTemplateText(node.message, currentState));
       return {
         handled: true,
         state: currentState,
@@ -1344,7 +1360,7 @@ function executeNodeChain(params: {
       };
     }
 
-    const feedbackText = node.text ?? DEFAULT_HANDOFF_FEEDBACK_TEXT;
+    const feedbackText = node.text ? renderChatbotTemplateText(node.text, currentState) : DEFAULT_HANDOFF_FEEDBACK_TEXT;
     const summary = buildHandoffSummary(currentState.answers?.flowContext, node);
     const suggestedReply = buildSuggestedReply(
       currentState.answers?.flowContext,
@@ -1493,7 +1509,7 @@ export function executeChatbotFlow(params: {
           ...markChatbotResultInteraction({
           handled: true,
           state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
-          replyText: currentNode.errorText ?? currentNode.text,
+          replyText: renderChatbotTemplateText(currentNode.errorText ?? currentNode.text, params.state),
           }, params.nowIso),
         };
       }
@@ -1547,13 +1563,18 @@ export function executeChatbotFlow(params: {
 
   const visibleOptions = getVisibleMenuOptions(currentNode, params.state, params.options);
   const choice = parseMenuSelection(params.inboundText);
+  const menuUsesExplicitNumbers = visibleOptions.some((option) => parseExplicitMenuOptionNumber(option.label));
   const explicitOptionIndex =
     choice === null
       ? -1
       : visibleOptions.findIndex(
           (option) => parseExplicitMenuOptionNumber(option.label)?.number === choice
         );
-  const selectedOptionIndex = explicitOptionIndex >= 0 ? explicitOptionIndex : (choice ?? 0) - 1;
+  const selectedOptionIndex = explicitOptionIndex >= 0
+    ? explicitOptionIndex
+    : menuUsesExplicitNumbers
+      ? -1
+      : (choice ?? 0) - 1;
   if (choice === null || selectedOptionIndex < 0 || selectedOptionIndex >= visibleOptions.length) {
     const invalidSelectionAction = currentNode.invalidSelectionAction;
     if (invalidSelectionAction?.action === "HANDOFF") {
@@ -1572,7 +1593,9 @@ export function executeChatbotFlow(params: {
         source: "node",
         events,
       });
-      const feedbackText = invalidSelectionAction.text ?? DEFAULT_HANDOFF_FEEDBACK_TEXT;
+      const feedbackText = invalidSelectionAction.text
+        ? renderChatbotTemplateText(invalidSelectionAction.text, stateWithInvalidContext)
+        : DEFAULT_HANDOFF_FEEDBACK_TEXT;
       return markChatbotResultInteraction({
         handled: true,
         state: clearChatbotRuntime(stateWithInvalidContext),

@@ -7,6 +7,7 @@ import {
   clearChatbotRuntime,
   executeChatbotFlow,
   getChatbotConsentKey,
+  renderChatbotTemplateText,
 } from "./chatbotFlow.js";
 import type { ConversationState } from "../conversation/conversation.types.js";
 import {
@@ -61,7 +62,7 @@ async function hydrateAcceptedConsents(params: {
       waId: params.waId,
       purpose: node.purpose,
       textVersion: node.textVersion,
-      textBody: node.message,
+      textBody: renderChatbotTemplateText(node.message, state),
     });
     if (consent.ok && consent.status === "accepted") {
       state = withAcceptedConsent(state, node);
@@ -122,7 +123,7 @@ export async function executeChatbotFlowWithConsent(params: {
         waId: params.waId,
         purpose: currentConsent.node.purpose,
         textVersion: currentConsent.node.textVersion,
-        textBody: currentConsent.node.message,
+        textBody: renderChatbotTemplateText(currentConsent.node.message, hydratedState),
         sourceChannel: params.sourceChannel,
         sourceProvider: params.sourceProvider,
         source: params.source,
@@ -158,8 +159,8 @@ export async function executeChatbotFlowWithConsent(params: {
     }
     if (answer && declineOption && answer !== declineOption) {
       const replyText = currentConsent.node.invalidText
-        ? `${currentConsent.node.invalidText}\n\n${currentConsent.node.message}`
-        : currentConsent.node.message;
+        ? `${renderChatbotTemplateText(currentConsent.node.invalidText, hydratedState)}\n\n${renderChatbotTemplateText(currentConsent.node.message, hydratedState)}`
+        : renderChatbotTemplateText(currentConsent.node.message, hydratedState);
       return {
         handled: true,
         state: hydratedState,
