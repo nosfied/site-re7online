@@ -26,6 +26,7 @@ export type TenantOperationalConfigValue = {
   followUp?: FollowUpSettings;
   handoffLeadNotification?: HandoffLeadNotificationSettings;
   mediaHandoffPolicy?: TenantMediaHandoffPolicy;
+  whatsappMediaPolicy?: WhatsappMediaPolicy;
   planLimits?: PlanLimitsSettings;
   automationFlags?: AutomationFlagsSettings;
   aiAssistantConfig?: AiAssistantConfigSettings;
@@ -70,6 +71,21 @@ export type ResolvedHandoffLeadNotificationSettings = {
 
 export type ResolvedMediaHandoffPolicy = {
   policy: TenantMediaHandoffPolicy;
+  source: TenantOperationalConfigSource;
+};
+
+export type WhatsappMediaKind = "image" | "audio" | "video" | "document";
+export type WhatsappMediaDirection = "inbound" | "outbound";
+
+export type WhatsappMediaPolicyDirection = Record<WhatsappMediaKind, boolean>;
+
+export type WhatsappMediaPolicy = {
+  inbound: WhatsappMediaPolicyDirection;
+  outbound: WhatsappMediaPolicyDirection;
+};
+
+export type ResolvedWhatsappMediaPolicy = {
+  policy: WhatsappMediaPolicy;
   source: TenantOperationalConfigSource;
 };
 
@@ -200,6 +216,56 @@ export function normalizeAgentSignatureSettings(input: unknown): AgentSignatureS
     mode: "user_name",
     format: "bold_line",
   };
+}
+
+export const WHATSAPP_MEDIA_KINDS: WhatsappMediaKind[] = ["image", "audio", "video", "document"];
+
+export function getDefaultWhatsappMediaPolicy(): WhatsappMediaPolicy {
+  return {
+    inbound: {
+      image: true,
+      audio: true,
+      video: true,
+      document: true,
+    },
+    outbound: {
+      image: true,
+      audio: true,
+      video: true,
+      document: true,
+    },
+  };
+}
+
+export function isWhatsappMediaKind(value: unknown): value is WhatsappMediaKind {
+  return typeof value === "string" && WHATSAPP_MEDIA_KINDS.includes(value.trim().toLowerCase() as WhatsappMediaKind);
+}
+
+function normalizeWhatsappMediaPolicyDirection(input: unknown): WhatsappMediaPolicyDirection {
+  const defaults = getDefaultWhatsappMediaPolicy().inbound;
+  const record = isRecord(input) ? input : {};
+  return {
+    image: typeof record.image === "boolean" ? record.image : defaults.image,
+    audio: typeof record.audio === "boolean" ? record.audio : defaults.audio,
+    video: typeof record.video === "boolean" ? record.video : defaults.video,
+    document: typeof record.document === "boolean" ? record.document : defaults.document,
+  };
+}
+
+export function normalizeWhatsappMediaPolicy(input: unknown): WhatsappMediaPolicy {
+  const record = isRecord(input) ? input : {};
+  return {
+    inbound: normalizeWhatsappMediaPolicyDirection(record.inbound),
+    outbound: normalizeWhatsappMediaPolicyDirection(record.outbound),
+  };
+}
+
+export function isWhatsappMediaAllowed(
+  policy: WhatsappMediaPolicy,
+  direction: WhatsappMediaDirection,
+  kind: WhatsappMediaKind
+) {
+  return policy[direction][kind] === true;
 }
 
 function normalizeFollowUpSettings(input: unknown, fallbackTenant?: Pick<TenantConfig, "defaultLanguage"> | null): FollowUpSettings {
@@ -478,6 +544,9 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   }
   if (Object.prototype.hasOwnProperty.call(value, "mediaHandoffPolicy")) {
     config.mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(value.mediaHandoffPolicy);
+  }
+  if (Object.prototype.hasOwnProperty.call(value, "whatsappMediaPolicy")) {
+    config.whatsappMediaPolicy = normalizeWhatsappMediaPolicy(value.whatsappMediaPolicy);
   }
   if (Object.prototype.hasOwnProperty.call(value, "planLimits")) {
     config.planLimits = normalizePlanLimitsSettings(value.planLimits);
@@ -855,6 +924,65 @@ export async function saveMediaHandoffPolicy(params: {
   const nextConfig = {
     ...existingConfig,
     mediaHandoffPolicy: nextPolicy,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+    },
+  });
+  return {
+    record: saved,
+    policy: nextPolicy,
+  };
+}
+
+export async function resolveWhatsappMediaPolicy(params: {
+  prisma: PrismaClient;
+  clientId: string;
+}): Promise<ResolvedWhatsappMediaPolicy> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const dbConfig = parseOperationalConfig(record?.config);
+  if (dbConfig.whatsappMediaPolicy) {
+    return {
+      policy: dbConfig.whatsappMediaPolicy,
+      source: "db",
+    };
+  }
+  return {
+    policy: getDefaultWhatsappMediaPolicy(),
+    source: "json_fallback",
+  };
+}
+
+export async function saveWhatsappMediaPolicy(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  policy: unknown;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const nextPolicy = normalizeWhatsappMediaPolicy(params.policy);
+  const nextConfig = {
+    ...existingConfig,
+    whatsappMediaPolicy: nextPolicy,
   };
   const saved = await params.prisma.tenantOperationalConfig.upsert({
     where: { clientId: params.clientId },

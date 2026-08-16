@@ -545,6 +545,39 @@ test("ingestBaileysWebSessionMessage persists web session media references witho
   assert.equal(state.events.some((event) => event.eventName === "whatsapp.web.inbound.media.persisted"), true);
 });
 
+test("ingestBaileysWebSessionMessage blocks inbound media disabled by tenant policy", async () => {
+  resetState({
+    config: {
+      whatsappMediaPolicy: {
+        inbound: { image: false, audio: true, video: true, document: true },
+        outbound: { image: true, audio: true, video: true, document: true },
+      },
+    },
+  });
+
+  const result = await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    message: {
+      key: { id: "MSG_IMAGE_BLOCKED", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      messageTimestamp: 1786464000,
+      message: {
+        imageMessage: {
+          mimetype: "image/png",
+          caption: "print da tela",
+        },
+      },
+    },
+  });
+
+  assert.equal(result.action, "ignored");
+  assert.equal(result.reason, "media_type_not_allowed");
+  assert.equal(state.inboundMessages.length, 0);
+  assert.equal(state.events.some((event) => event.eventName === "whatsapp.media_policy.blocked"), true);
+});
+
 test("ingestBaileysWebSessionMessage ignores messages older than the connection cutover", async () => {
   resetState();
 

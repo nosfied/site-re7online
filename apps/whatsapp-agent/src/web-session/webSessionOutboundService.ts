@@ -11,7 +11,11 @@ import {
   type WebSessionMediaKind,
 } from "../media/webSessionMedia.js";
 import { recordConversationAgentOutboundMetrics } from "../metrics/conversationMetrics.js";
-import { resolveAgentSignatureSettings } from "../config/tenantOperationalConfig.js";
+import {
+  isWhatsappMediaAllowed,
+  resolveAgentSignatureSettings,
+  resolveWhatsappMediaPolicy,
+} from "../config/tenantOperationalConfig.js";
 import { readWebSessionLifecycle } from "./webSessionLifecycle.js";
 
 type WebSessionOutboundConversationState = {
@@ -592,6 +596,32 @@ export async function createWebSessionMediaOutboundMessage(params: {
   if (!recipientWaId) return { ok: false, statusCode: 400, error: "bad_request" };
   const mediaKind = detectWebSessionMediaKind(params.mimeType, params.fileName);
   if (!mediaKind) return { ok: false, statusCode: 400, error: "unsupported_media_type" };
+  const mediaPolicy = await resolveWhatsappMediaPolicy({
+    prisma: params.prisma,
+    clientId: params.clientId,
+  });
+  if (!isWhatsappMediaAllowed(mediaPolicy.policy, "outbound", mediaKind)) {
+    await persistEvent({
+      clientId: params.clientId,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical ?? recipientWaId,
+      requestId: `web-session-outbound-media-policy:${params.requestId}`,
+      eventName: "whatsapp.media_policy.blocked",
+      payloadJson: {
+        direction: "outbound",
+        provider: "web_session",
+        channel: "whatsapp",
+        mediaKind,
+        source: "inbox_media",
+      },
+    });
+    return {
+      ok: false,
+      statusCode: 403,
+      error: "media_type_not_allowed",
+      message: "Este tipo de midia nao esta habilitado para este atendimento.",
+    };
+  }
   try {
     validateWebSessionMedia({
       content: params.content,

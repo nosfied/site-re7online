@@ -45,6 +45,7 @@ import {
   resolveMediaHandoffPolicy,
   resolvePlanLimitsSettings,
   resolveRuntimeLimitsSettings,
+  resolveWhatsappMediaPolicy,
   saveAiAssistantConfigSettings,
   saveAiIntentQualificationSettings,
   saveAgentSignatureSettings,
@@ -55,6 +56,8 @@ import {
   saveMediaHandoffPolicy,
   savePlanLimitsSettings,
   saveRuntimeLimitsSettings,
+  saveWhatsappMediaPolicy,
+  isWhatsappMediaAllowed,
   type AiAssistantConfigSettings,
   type AiIntentQualificationSettings,
   type AgentSignatureSettings,
@@ -6884,6 +6887,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             error: {
               code: "unsupported_media_type",
               message: "Tipo de arquivo ainda nao suportado no inbox.",
+            },
+          });
+          return;
+        }
+        if (result.error === "media_type_not_allowed") {
+          json(res, result.statusCode, {
+            error: {
+              code: "media_type_not_allowed",
+              message: "Este tipo de midia nao esta habilitado para este atendimento.",
             },
           });
           return;
@@ -18093,6 +18105,67 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const adminWhatsappPrimaryTransportMatch = pathname.match(
       /^\/admin\/tenants\/([^/]+)\/whatsapp\/primary-transport$/
     );
+    const adminWhatsappMediaPolicyMatch = pathname.match(
+      /^\/admin\/tenants\/([^/]+)\/whatsapp\/media-policy$/
+    );
+    if ((req.method === "GET" || req.method === "PUT") && adminWhatsappMediaPolicyMatch) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(adminWhatsappMediaPolicyMatch[1] ?? "").trim();
+      const prisma = getPrisma();
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true, status: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      if (req.method === "GET") {
+        const resolved = await resolveWhatsappMediaPolicy({ prisma, clientId: client.id });
+        json(res, 200, {
+          ok: true,
+          tenantId: client.clientKey,
+          source: resolved.source,
+          whatsappMediaPolicy: resolved.policy,
+          permissions: { canUpdate: true },
+        });
+        return;
+      }
+
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const rawPolicy = body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>).whatsappMediaPolicy ?? body
+        : body;
+      const before = await resolveWhatsappMediaPolicy({ prisma, clientId: client.id });
+      const saved = await saveWhatsappMediaPolicy({
+        prisma,
+        clientId: client.id,
+        policy: rawPolicy,
+      });
+      await persistEvent({
+        clientId: client.id,
+        requestId: `${requestId}:admin-whatsapp-media-policy`,
+        eventName: "whatsapp.media_policy.updated",
+        payloadJson: {
+          actorUserId: `admin:${authToken.source}`,
+          before: before.policy,
+          after: saved.policy,
+          source: before.source,
+          tenantKey: client.clientKey,
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        source: "db",
+        fieldsChanged: ["whatsappMediaPolicy"],
+        whatsappMediaPolicy: saved.policy,
+        permissions: { canUpdate: true },
+      });
+      return;
+    }
+
     if (req.method === "PUT" && adminWhatsappPrimaryTransportMatch) {
       if (requireSuperadmin()) return;
       const tenantId = decodeURIComponent(adminWhatsappPrimaryTransportMatch[1] ?? "").trim();
@@ -31663,6 +31736,31 @@ async function adminSendMediaMessage(params: {
   const mediaKind = detectOutboundMediaKind(params.mimeType, params.fileName);
   if (!mediaKind) {
     return { ok: false, statusCode: 400, error: "unsupported_media_type" };
+  }
+  const mediaPolicy = await resolveWhatsappMediaPolicy({
+    prisma: getPrisma(),
+    clientId: params.clientId,
+  });
+  if (!isWhatsappMediaAllowed(mediaPolicy.policy, "outbound", mediaKind)) {
+    await persistEvent({
+      clientId: params.clientId,
+      waId: params.waId,
+      requestId: `meta-outbound-media-policy:${params.requestId}`,
+      eventName: "whatsapp.media_policy.blocked",
+      payloadJson: {
+        direction: "outbound",
+        provider: "meta",
+        channel: "whatsapp",
+        mediaKind,
+        source: "admin_inbox_media",
+      },
+    });
+    return {
+      ok: false,
+      statusCode: 403,
+      error: "media_type_not_allowed",
+      errorDetails: null,
+    };
   }
 
   let uploadContent = params.content;

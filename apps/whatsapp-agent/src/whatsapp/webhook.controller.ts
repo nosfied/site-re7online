@@ -90,6 +90,9 @@ import {
   resolveHandoffLeadNotificationSettings,
   resolveMediaHandoffPolicy,
   resolvePlanLimitsSettings,
+  resolveWhatsappMediaPolicy,
+  isWhatsappMediaAllowed,
+  isWhatsappMediaKind,
   type AutomationFlagsSettings,
   type PlanLimitsSettings,
 } from "../config/tenantOperationalConfig.js";
@@ -3018,6 +3021,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       ? tenantAllowlist.includes(normalizedFrom)
       : true;
     const status = allowlistHit ? "received" : "ignored";
+    if (tenantClientId && await isInboundMediaBlockedByPolicy({
+      clientId: tenantClientId,
+      waId: message.from,
+      messageId: message.messageId,
+      type: message.type,
+      requestId: meta?.requestId,
+    })) {
+      continue;
+    }
     const quotaExcludeWaIds = new Set(
       planLimitsSettings.quotaExcludeWaIds
         .map((waId) => waId.replace(/\D/g, ""))
@@ -7963,6 +7975,45 @@ function mapMessageType(type: string): MessageType {
 function isWhatsAppInboundMediaMessage(type?: string | null): boolean {
   const normalized = (type ?? "").trim().toLowerCase();
   return ["image", "audio", "video", "document", "sticker"].includes(normalized);
+}
+
+async function isInboundMediaBlockedByPolicy(params: {
+  clientId: string;
+  waId: string;
+  messageId: string;
+  type: string | null | undefined;
+  requestId?: string | null;
+}) {
+  const kind = (params.type ?? "").trim().toLowerCase();
+  if (!isWhatsappMediaKind(kind)) return false;
+  const policy = await resolveWhatsappMediaPolicy({
+    prisma: getPrisma(),
+    clientId: params.clientId,
+  });
+  if (isWhatsappMediaAllowed(policy.policy, "inbound", kind)) return false;
+  await persistEvent({
+    clientId: params.clientId,
+    waId: params.waId,
+    messageId: params.messageId,
+    requestId: `${params.requestId ?? "webhook"}:${params.messageId}:media-policy`,
+    eventName: "whatsapp.media_policy.blocked",
+    payloadJson: {
+      direction: "inbound",
+      provider: "meta",
+      channel: "whatsapp",
+      mediaKind: kind,
+      source: "webhook",
+    },
+  });
+  logger.info({
+    event: "whatsapp.media_policy.blocked",
+    direction: "inbound",
+    provider: "meta",
+    waId: maskNumber(params.waId),
+    mediaKind: kind,
+    requestId: params.requestId,
+  });
+  return true;
 }
 
 function buildRealtimeMessageDownloadPath(waId: string, messageId: string) {

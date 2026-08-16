@@ -8,13 +8,17 @@ import {
   Channel,
   authorizeTenantWebSessionNumber,
   getTenantChannelAccounts,
+  getTenantWhatsAppMediaPolicy,
   Provider,
   releaseTenantWebSessionNumber,
   startTenantInstagramBusinessConnect,
   TenantChannelAccount,
   TenantWebSessionStatus,
   updateTenantChannelAccounts,
+  updateTenantWhatsAppMediaPolicy,
   updateTenantWhatsAppPrimaryTransport,
+  WhatsappMediaKind,
+  WhatsappMediaPolicy,
 } from "@/lib/whatsappAdminApi";
 
 type ChannelAccountDraft = {
@@ -63,6 +67,17 @@ const NEW_TENANT_CHECKLIST = [
   "Manter IA, automacao e handoff desligados por padrao em Messenger/Instagram.",
   "Registrar a validacao segura sem expor tokens.",
 ];
+const WHATSAPP_MEDIA_KINDS: Array<{ kind: WhatsappMediaKind; label: string }> = [
+  { kind: "image", label: "Imagens" },
+  { kind: "audio", label: "Audios" },
+  { kind: "video", label: "Videos" },
+  { kind: "document", label: "Documentos" },
+];
+
+const DEFAULT_WHATSAPP_MEDIA_POLICY: WhatsappMediaPolicy = {
+  inbound: { image: true, audio: true, video: true, document: true },
+  outbound: { image: true, audio: true, video: true, document: true },
+};
 
 function createDraft(): ChannelAccountDraft {
   return {
@@ -258,6 +273,9 @@ export default function TenantChannelsPage() {
   const [webSessionStatus, setWebSessionStatus] = useState<TenantWebSessionStatus | null>(null);
   const [authorizedNumber, setAuthorizedNumber] = useState("");
   const [webSessionWorking, setWebSessionWorking] = useState<string | null>(null);
+  const [mediaPolicy, setMediaPolicy] = useState<WhatsappMediaPolicy>(DEFAULT_WHATSAPP_MEDIA_POLICY);
+  const [mediaPolicySource, setMediaPolicySource] = useState<"db" | "json_fallback">("json_fallback");
+  const [savingMediaPolicy, setSavingMediaPolicy] = useState(false);
   const webSessionConnectedNumber =
     webSessionStatus?.lifecycle.observedState === "CONNECTED" && webSessionStatus.detectedNumber?.masked
       ? webSessionStatus.detectedNumber.masked
@@ -270,12 +288,17 @@ export default function TenantChannelsPage() {
     setError(null);
     setToast(null);
 
-    getTenantChannelAccounts(connection, tenantId)
-      .then((response) => {
+    Promise.all([
+      getTenantChannelAccounts(connection, tenantId),
+      getTenantWhatsAppMediaPolicy(connection, tenantId),
+    ])
+      .then(([response, policyResponse]) => {
         if (cancelled) return;
         setDrafts(response.channelAccounts.map(toDraft));
         setWebSessionStatus(response.webSessionStatus ?? null);
         setAuthorizedNumber(response.webSessionStatus?.authorization.authorizedNumberCanonical ?? "");
+        setMediaPolicy(policyResponse.whatsappMediaPolicy);
+        setMediaPolicySource(policyResponse.source);
       })
       .catch((err: { status?: number; message?: string }) => {
         if (cancelled) return;
@@ -403,6 +426,36 @@ export default function TenantChannelsPage() {
       setError((err as Error).message || "Falha ao atualizar transporte principal.");
     } finally {
       setWebSessionWorking(null);
+    }
+  };
+
+  const updateMediaPolicyDraft = (
+    direction: keyof WhatsappMediaPolicy,
+    kind: WhatsappMediaKind,
+    enabled: boolean
+  ) => {
+    setMediaPolicy((current) => ({
+      ...current,
+      [direction]: {
+        ...current[direction],
+        [kind]: enabled,
+      },
+    }));
+  };
+
+  const handleSaveMediaPolicy = async () => {
+    setSavingMediaPolicy(true);
+    setError(null);
+    setToast(null);
+    try {
+      const response = await updateTenantWhatsAppMediaPolicy(connection, tenantId, mediaPolicy);
+      setMediaPolicy(response.whatsappMediaPolicy);
+      setMediaPolicySource(response.source);
+      setToast("Politica de midias do WhatsApp salva.");
+    } catch (err) {
+      setError((err as Error).message || "Falha ao salvar politica de midias.");
+    } finally {
+      setSavingMediaPolicy(false);
     }
   };
 
@@ -554,6 +607,55 @@ export default function TenantChannelsPage() {
                 {webSessionWorking === "release" ? "Liberando..." : "Liberar número"}
               </button>
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
+                Midias permitidas no WhatsApp
+              </h2>
+              <p className="mt-1 text-white/60">
+                Governanca interna por tenant para Meta Cloud e WhatsApp Business por sessao.
+              </p>
+            </div>
+            <StatusBadge label={mediaPolicySource === "db" ? "configurado" : "padrao compativel"} tone="neutral" />
+          </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {(["inbound", "outbound"] as const).map((direction) => (
+              <div key={direction} className="rounded-lg border border-white/10 bg-re7-navy/35 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/50">
+                  {direction === "inbound" ? "Recebimento" : "Envio"}
+                </p>
+                <div className="mt-3 grid gap-2">
+                  {WHATSAPP_MEDIA_KINDS.map(({ kind, label }) => (
+                    <label key={`${direction}-${kind}`} className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/5 px-3 py-2">
+                      <span>{label}</span>
+                      <input
+                        type="checkbox"
+                        checked={mediaPolicy[direction][kind]}
+                        onChange={(event) => updateMediaPolicyDraft(direction, kind, event.target.checked)}
+                        className="h-4 w-4 accent-re7-orange"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-white/50">
+              Tenants sem configuracao explicita mantem compatibilidade com as midias ja suportadas.
+            </p>
+            <button
+              type="button"
+              onClick={handleSaveMediaPolicy}
+              disabled={savingMediaPolicy || loading}
+              className="rounded-md border border-re7-orange/40 bg-re7-orange/20 px-3 py-2 text-sm font-semibold text-orange-100 hover:bg-re7-orange/30 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {savingMediaPolicy ? "Salvando..." : "Salvar politica de midias"}
+            </button>
           </div>
         </section>
 

@@ -8,6 +8,9 @@ import {
   resolveAutomationFlagsSettings,
   resolvePlanLimitsSettings,
   resolveRuntimeLimitsSettings,
+  resolveWhatsappMediaPolicy,
+  normalizeWhatsappMediaPolicy,
+  isWhatsappMediaAllowed,
 } from "./tenantOperationalConfig.js";
 
 function prismaWithConfig(config: unknown) {
@@ -127,6 +130,33 @@ test("resolveRuntimeLimitsSettings falls back to tenants.json runtime limits", a
   assert.deepEqual(resolved.settings, {
     maxActiveAppUsers: 7,
   });
+});
+
+test("resolveWhatsappMediaPolicy defaults all supported media to allowed", async () => {
+  const resolved = await resolveWhatsappMediaPolicy({
+    prisma: prismaWithConfig(null),
+    clientId: "client-1",
+  });
+
+  assert.equal(resolved.source, "json_fallback");
+  assert.deepEqual(resolved.policy, {
+    inbound: { image: true, audio: true, video: true, document: true },
+    outbound: { image: true, audio: true, video: true, document: true },
+  });
+});
+
+test("normalizeWhatsappMediaPolicy preserves booleans and falls back per field", () => {
+  const policy = normalizeWhatsappMediaPolicy({
+    inbound: { image: true, audio: false },
+    outbound: { video: false, document: true },
+  });
+
+  assert.equal(policy.inbound.image, true);
+  assert.equal(policy.inbound.audio, false);
+  assert.equal(policy.inbound.video, true);
+  assert.equal(policy.outbound.video, false);
+  assert.equal(policy.outbound.image, true);
+  assert.equal(isWhatsappMediaAllowed(policy, "outbound", "video"), false);
 });
 
 test("resolveAutomationFlagsSettings prefers DB automation flags over tenants.json", async () => {

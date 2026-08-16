@@ -2166,6 +2166,18 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   );
   assert.equal(tenantPrimaryBlocked.status, 403);
   assert.equal(getErrorCode(tenantPrimaryBlocked.body), "platform_admin_required");
+  const tenantMediaPolicyBlocked = await request<ErrorPayload>(
+    "PUT",
+    "/app/settings/channels/whatsapp/media-policy",
+    businessAdmin,
+    {
+      whatsappMediaPolicy: {
+        inbound: { image: true, audio: false, video: false, document: true },
+        outbound: { image: true, audio: false, video: false, document: true },
+      },
+    }
+  );
+  assert.equal(tenantMediaPolicyBlocked.status, 404);
   const tenantReleaseBlocked = await request<ErrorPayload>(
     "POST",
     "/app/settings/channels/whatsapp/web-session/release-number",
@@ -2173,6 +2185,65 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   );
   assert.equal(tenantReleaseBlocked.status, 403);
   assert.equal(getErrorCode(tenantReleaseBlocked.body), "platform_admin_required");
+
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      config: {
+        supportChannel: { chatbotFlowId: "flow-preserved" },
+      },
+    },
+    create: {
+      clientId: businessClientId,
+      config: {
+        supportChannel: { chatbotFlowId: "flow-preserved" },
+      },
+    },
+  });
+  const mediaPolicyDefault = await requestSuperadmin<{
+    ok: true;
+    source: string;
+    whatsappMediaPolicy: {
+      inbound: { image: boolean; audio: boolean; video: boolean; document: boolean };
+      outbound: { image: boolean; audio: boolean; video: boolean; document: boolean };
+    };
+  }>("GET", `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/whatsapp/media-policy`);
+  assert.equal(mediaPolicyDefault.status, 200);
+  assert.equal(mediaPolicyDefault.body.source, "json_fallback");
+  assert.equal(mediaPolicyDefault.body.whatsappMediaPolicy.inbound.audio, true);
+
+  const mediaPolicyUpdated = await requestSuperadmin<{
+    ok: true;
+    fieldsChanged: string[];
+    whatsappMediaPolicy: {
+      inbound: { image: boolean; audio: boolean; video: boolean; document: boolean };
+      outbound: { image: boolean; audio: boolean; video: boolean; document: boolean };
+    };
+  }>("PUT", `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/whatsapp/media-policy`, {
+    whatsappMediaPolicy: {
+      inbound: { image: true, audio: false, video: false, document: true },
+      outbound: { image: true, audio: true, video: false, document: true },
+    },
+  });
+  assert.equal(mediaPolicyUpdated.status, 200, JSON.stringify(mediaPolicyUpdated.body));
+  assert.deepEqual(mediaPolicyUpdated.body.fieldsChanged, ["whatsappMediaPolicy"]);
+  assert.equal(mediaPolicyUpdated.body.whatsappMediaPolicy.inbound.audio, false);
+  assert.equal(mediaPolicyUpdated.body.whatsappMediaPolicy.outbound.audio, true);
+  const configAfterMediaPolicy = await prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: businessClientId },
+    select: { config: true },
+  });
+  const configObject = configAfterMediaPolicy?.config as Record<string, unknown> | null;
+  assert.deepEqual(configObject?.supportChannel, { chatbotFlowId: "flow-preserved" });
+  assert.equal(Boolean(configObject?.whatsappMediaPolicy), true);
+  const mediaPolicyAudit = await prisma.event.findFirst({
+    where: {
+      clientId: businessClientId,
+      eventName: "whatsapp.media_policy.updated",
+    },
+  });
+  assert.ok(mediaPolicyAudit);
+  assert.equal(JSON.stringify(mediaPolicyAudit.payloadJson).includes(process.env.ADMIN_TOKEN ?? ""), false);
 
   const mismatchedAuthorization = await requestSuperadmin<ErrorPayload>(
     "PUT",

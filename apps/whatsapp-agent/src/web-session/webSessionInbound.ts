@@ -22,7 +22,12 @@ import { publishRealtimeEvent } from "../realtime/hub.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
 import { persistConversationWindow, persistInboundMessage } from "../db/persist.js";
-import { resolveAutomationFlagsSettings } from "../config/tenantOperationalConfig.js";
+import {
+  isWhatsappMediaAllowed,
+  isWhatsappMediaKind,
+  resolveAutomationFlagsSettings,
+  resolveWhatsappMediaPolicy,
+} from "../config/tenantOperationalConfig.js";
 import { getDepartmentAvailability } from "../departments/businessHours.js";
 import { createWebSessionTextOutboundMessage } from "./webSessionOutboundService.js";
 
@@ -1796,6 +1801,35 @@ export async function ingestBaileysWebSessionMessage(params: {
       reason: "before_cutover",
     });
     return { ok: true as const, action: "ignored" as const, reason: "before_cutover" };
+  }
+  const normalizedKind = normalized.message.type.toLowerCase();
+  if (isWhatsappMediaKind(normalizedKind)) {
+    const mediaPolicy = await resolveWhatsappMediaPolicy({
+      prisma,
+      clientId: params.clientId,
+    });
+    if (!isWhatsappMediaAllowed(mediaPolicy.policy, "inbound", normalizedKind)) {
+      if (normalized.message.media) {
+        await deleteWebSessionStoredMedia(normalized.message.media).catch((error) => {
+          logger.warn({
+            event: "whatsapp.web.inbound.media_policy.cleanup_failed",
+            clientId: params.clientId,
+            requestId: `web-session-inbound:${params.channelAccountDbId}:${normalized.message.externalMessageId}:media-policy`,
+            mediaKind: normalizedKind,
+            message: (error as Error).message,
+          });
+        });
+      }
+      await safeRecordInboundEvent({
+        prisma,
+        message: normalized.message,
+        clientId: params.clientId,
+        eventName: "whatsapp.media_policy.blocked",
+        requestId: `web-session-inbound:${params.channelAccountDbId}:${normalized.message.externalMessageId}:media-policy`,
+        reason: "media_type_not_allowed",
+      });
+      return { ok: true as const, action: "ignored" as const, reason: "media_type_not_allowed" };
+    }
   }
   return ingestWebSessionInboundMessage({ prisma, message: normalized.message });
 }

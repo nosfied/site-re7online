@@ -71,6 +71,13 @@ export type InboxMessageItem = {
 
 export type InboxChannel = "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "support";
 
+export type WhatsappMediaKind = "image" | "audio" | "video" | "document";
+
+export type WhatsappMediaPolicy = {
+  inbound: Record<WhatsappMediaKind, boolean>;
+  outbound: Record<WhatsappMediaKind, boolean>;
+};
+
 export type InboxConversationContinuation = {
   protocol: string;
   originalConversationId: string;
@@ -1474,6 +1481,44 @@ export async function updateTenantChannelAccounts(
     {
       method: "PUT",
       body: JSON.stringify(accounts),
+    }
+  );
+}
+
+export async function getTenantWhatsAppMediaPolicy(
+  connection: AdminConnection,
+  tenantId: string
+): Promise<{
+  ok: true;
+  tenantId: string;
+  source: "db" | "json_fallback";
+  whatsappMediaPolicy: WhatsappMediaPolicy;
+  permissions: { canUpdate: boolean };
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/whatsapp/media-policy`
+  );
+}
+
+export async function updateTenantWhatsAppMediaPolicy(
+  connection: AdminConnection,
+  tenantId: string,
+  whatsappMediaPolicy: WhatsappMediaPolicy
+): Promise<{
+  ok: true;
+  tenantId: string;
+  source: "db";
+  fieldsChanged: string[];
+  whatsappMediaPolicy: WhatsappMediaPolicy;
+  permissions: { canUpdate: boolean };
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/whatsapp/media-policy`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ whatsappMediaPolicy }),
     }
   );
 }
