@@ -792,6 +792,56 @@ test("executeChatbotFlow repeats menu on invalid answer", () => {
   assert.match(result.replyText ?? "", /Escolha/);
 });
 
+test("executeChatbotFlow can hand off on invalid menu answer when configured", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "menu",
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Escolha",
+        options: [{ label: "4 - Atendimento", next: "text_1" }],
+        invalidSelectionAction: {
+          action: "HANDOFF",
+          text: "Aguarde só mais um pouco, estou te direcionando para um/uma atendente.",
+          departmentId: "department_general",
+          queueId: "queue_general",
+          context: { motivo: "opcao_invalida" },
+          tags: ["invalid_selection"],
+        },
+      },
+      text_1: {
+        type: "text",
+        text: "Tudo certo",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_1",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_1",
+      chatbotActive: true,
+      chatbotNodeId: "menu",
+    }),
+    inboundText: "8",
+    nowIso: "2026-04-17T10:00:02.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotActive, false);
+  assert.equal(result.state.chatbotNodeId, undefined);
+  assert.equal(result.state.departmentId, "department_general");
+  assert.equal(result.state.queueId, "queue_general");
+  assert.equal(result.pendingHandoff?.feedbackText, "Aguarde só mais um pouco, estou te direcionando para um/uma atendente.");
+  assert.equal(result.pendingHandoff?.departmentId, "department_general");
+  assert.equal(result.pendingHandoff?.queueId, "queue_general");
+  assert.equal(result.pendingHandoff?.tags.includes("invalid_selection"), true);
+  assert.equal(result.events?.some((event) => event.event === "flow.invalid_selection.handoff_applied"), true);
+});
+
 test("executeChatbotFlow follows text next and reaches handoff", () => {
   const validated = validateChatbotFlowDefinition({
     start: "menu",

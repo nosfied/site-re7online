@@ -16,10 +16,17 @@ export type ChatbotMenuOption = Record<string, unknown> & ChatbotFlowMetadata & 
   };
 };
 
+export type ChatbotInvalidSelectionAction = Record<string, unknown> & ChatbotFlowMetadata & {
+  action: "HANDOFF";
+  text?: string;
+  handoffSummary?: string;
+};
+
 export type ChatbotMenuNode = Record<string, unknown> & ChatbotFlowMetadata & {
   type: "menu";
   text: string;
   options: ChatbotMenuOption[];
+  invalidSelectionAction?: ChatbotInvalidSelectionAction;
 };
 
 export type ChatbotTextNode = Record<string, unknown> & ChatbotFlowMetadata & {
@@ -153,6 +160,11 @@ export type ChatbotExecutionEvent =
       toNodeId: string;
       idleMinutes: number;
       resetAfterMinutes: number;
+    }
+  | {
+      event: "flow.invalid_selection.handoff_applied";
+      flowId: string;
+      nodeId: string;
     };
 
 export function getInitialChatbotAwaitingNodeId(definition: ChatbotFlowDefinition) {
@@ -182,6 +194,30 @@ function normalizeVisibilityCondition(value: unknown): ChatbotMenuOption["visibi
   const departmentAvailability = getNonEmptyString(value.departmentAvailability)?.toUpperCase();
   if (departmentAvailability !== "OPEN" && departmentAvailability !== "CLOSED") return undefined;
   return { departmentAvailability };
+}
+
+function normalizeInvalidSelectionAction(value: unknown): ChatbotInvalidSelectionAction | undefined {
+  if (!isRecord(value)) return undefined;
+  const action = getNonEmptyString(value.action)?.toUpperCase();
+  if (action !== "HANDOFF") return undefined;
+  const text = getNonEmptyString(value.text) ?? undefined;
+  const handoffSummary = getNonEmptyString(value.handoffSummary) ?? undefined;
+  return {
+    ...preserveUnknownFields(value, [
+      "action",
+      "text",
+      "handoffSummary",
+      "context",
+      "tags",
+      "departmentId",
+      "queueId",
+      "closedText",
+    ]),
+    action,
+    ...(text ? { text } : {}),
+    ...(handoffSummary ? { handoffSummary } : {}),
+    ...getNodeMetadata(value),
+  };
 }
 
 function normalizeJsonValue(value: unknown): FlowContext[string] | undefined {
@@ -409,13 +445,25 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
         ...getNodeMetadata(rawOption),
       });
     }
+    const invalidSelectionAction = normalizeInvalidSelectionAction(rawNode.invalidSelectionAction);
     return {
       ok: true,
       node: {
-        ...preserveUnknownFields(rawNode, ["type", "text", "options", "context", "tags", "departmentId", "queueId", "closedText"]),
+        ...preserveUnknownFields(rawNode, [
+          "type",
+          "text",
+          "options",
+          "context",
+          "tags",
+          "departmentId",
+          "queueId",
+          "closedText",
+          "invalidSelectionAction",
+        ]),
         type: "menu",
         text,
         options: normalizedOptions,
+        ...(invalidSelectionAction ? { invalidSelectionAction } : {}),
         ...getNodeMetadata(rawNode),
       },
     };
@@ -1499,6 +1547,44 @@ export function executeChatbotFlow(params: {
         );
   const selectedOptionIndex = explicitOptionIndex >= 0 ? explicitOptionIndex : (choice ?? 0) - 1;
   if (choice === null || selectedOptionIndex < 0 || selectedOptionIndex >= visibleOptions.length) {
+    const invalidSelectionAction = currentNode.invalidSelectionAction;
+    if (invalidSelectionAction?.action === "HANDOFF") {
+      const events: ChatbotExecutionEvent[] = [
+        {
+          event: "flow.invalid_selection.handoff_applied",
+          flowId: params.flowId,
+          nodeId: params.state.chatbotNodeId,
+        },
+      ];
+      const stateWithInvalidContext = mergeFlowMetadata({
+        state: params.state,
+        metadata: invalidSelectionAction,
+        flowId: params.flowId,
+        nodeId: params.state.chatbotNodeId,
+        source: "node",
+        events,
+      });
+      const feedbackText = invalidSelectionAction.text ?? DEFAULT_HANDOFF_FEEDBACK_TEXT;
+      return markChatbotResultInteraction({
+        handled: true,
+        state: clearChatbotRuntime(stateWithInvalidContext),
+        replyText: feedbackText,
+        pendingHandoff: {
+          feedbackText,
+          summary: buildHandoffSummary(stateWithInvalidContext.answers?.flowContext, invalidSelectionAction),
+          suggestedReply: buildSuggestedReply(
+            stateWithInvalidContext.answers?.flowContext,
+            stateWithInvalidContext.answers?.flowTags
+          ),
+          tags: stateWithInvalidContext.answers?.flowTags ?? [],
+          nodeId: params.state.chatbotNodeId,
+          departmentId: stateWithInvalidContext.departmentId ?? null,
+          queueId: stateWithInvalidContext.queueId ?? null,
+          closedText: invalidSelectionAction.closedText ?? null,
+        },
+        events,
+      }, params.nowIso);
+    }
     return markChatbotResultInteraction({
       handled: true,
       state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
