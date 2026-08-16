@@ -45,6 +45,78 @@ function ActionIcon({ children }: { children: ReactNode }) {
   return <span className="inline-flex h-4 w-4 items-center justify-center text-sm">{children}</span>;
 }
 
+const WEEKDAY_SHORT_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+type BusinessHourExceptionDraft = {
+  date: string;
+  type: "CLOSED" | "CUSTOM_HOURS";
+  reason: string;
+  intervals: Array<{ startMinute: number; endMinute: number }>;
+};
+
+function minutesToTime(value: number) {
+  const hour = Math.floor(value / 60);
+  const minute = value % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function timeToMinutes(value: string) {
+  const [hour, minute] = value.split(":").map((item) => Number(item));
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return 0;
+  return Math.max(0, Math.min(1440, hour * 60 + minute));
+}
+
+function getIntervalsForWeekday(
+  hours: NonNullable<AdminDepartmentItem["businessHours"]>,
+  weekday: number
+) {
+  return hours
+    .filter((hour) => hour.weekday === weekday)
+    .sort((a, b) => a.startMinute - b.startMinute || a.endMinute - b.endMinute)
+    .map((hour) => ({ startMinute: hour.startMinute, endMinute: hour.endMinute }));
+}
+
+function getIntervalSignature(intervals: Array<{ startMinute: number; endMinute: number }>) {
+  if (intervals.length === 0) return "closed";
+  return intervals.map((hour) => `${hour.startMinute}-${hour.endMinute}`).join("|");
+}
+
+function formatIntervals(intervals: Array<{ startMinute: number; endMinute: number }>) {
+  if (intervals.length === 0) return "Fechado";
+  return intervals.map((hour) => `${minutesToTime(hour.startMinute)}-${minutesToTime(hour.endMinute)}`).join(" / ");
+}
+
+function formatWeekdayGroup(days: number[]) {
+  const sorted = [...days].sort((a, b) => a - b);
+  return sorted.map((day) => WEEKDAY_SHORT_LABELS[day] ?? String(day)).join(", ");
+}
+
+function buildBusinessHourGroups(hours: AdminDepartmentItem["businessHours"] = []) {
+  const groups = new Map<string, { weekdays: number[]; intervals: Array<{ startMinute: number; endMinute: number }> }>();
+  for (const weekday of [0, 1, 2, 3, 4, 5, 6]) {
+    const intervals = getIntervalsForWeekday(hours, weekday);
+    const signature = getIntervalSignature(intervals);
+    const current = groups.get(signature);
+    if (current) current.weekdays.push(weekday);
+    else groups.set(signature, { weekdays: [weekday], intervals });
+  }
+  return [...groups.values()].sort((a, b) => a.weekdays[0] - b.weekdays[0]);
+}
+
+function buildExceptionDrafts(items: AdminDepartmentItem[]) {
+  return Object.fromEntries(
+    items.map((item) => [
+      item.id,
+      (item.businessHourExceptions ?? []).map((exception) => ({
+        date: exception.date,
+        type: exception.type === "CUSTOM_HOURS" ? "CUSTOM_HOURS" : "CLOSED",
+        reason: exception.reason ?? "",
+        intervals: exception.type === "CUSTOM_HOURS" ? exception.intervals ?? [] : [],
+      })),
+    ])
+  ) as Record<string, BusinessHourExceptionDraft[]>;
+}
+
 export default function AdminDepartmentsPage() {
   const { connection } = useAdminConsole();
   const searchParams = useSearchParams();
@@ -59,6 +131,9 @@ export default function AdminDepartmentsPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [consolidatingId, setConsolidatingId] = useState<string | null>(null);
   const [consolidationTargets, setConsolidationTargets] = useState<Record<string, string>>({});
+  const [timezone, setTimezone] = useState("America/Fortaleza");
+  const [exceptionDrafts, setExceptionDrafts] = useState<Record<string, BusinessHourExceptionDraft[]>>({});
+  const [savingExceptionsId, setSavingExceptionsId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -90,6 +165,8 @@ export default function AdminDepartmentsPage() {
       includeInactive: true,
     });
     setDepartments(response.items);
+    if (response.timezone) setTimezone(response.timezone);
+    setExceptionDrafts(buildExceptionDrafts(response.items));
   };
 
   useEffect(() => {
@@ -103,11 +180,14 @@ export default function AdminDepartmentsPage() {
       .then((response) => {
         if (cancelled) return;
         setDepartments(response.items);
+        if (response.timezone) setTimezone(response.timezone);
+        setExceptionDrafts(buildExceptionDrafts(response.items));
       })
       .catch((err: { message?: string }) => {
         if (cancelled) return;
         setError(err.message || "Falha ao carregar setores.");
         setDepartments([]);
+        setExceptionDrafts({});
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -217,6 +297,62 @@ export default function AdminDepartmentsPage() {
       setError(typed.message || "Falha ao consolidar setor.");
     } finally {
       setConsolidatingId(null);
+    }
+  };
+
+  const updateExceptionDraft = (
+    departmentId: string,
+    index: number,
+    patch: Partial<BusinessHourExceptionDraft>
+  ) => {
+    setExceptionDrafts((current) => {
+      const items = current[departmentId] ?? [];
+      return {
+        ...current,
+        [departmentId]: items.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item),
+      };
+    });
+  };
+
+  const addExceptionDraft = (departmentId: string) => {
+    const today = new Date().toISOString().slice(0, 10);
+    setExceptionDrafts((current) => ({
+      ...current,
+      [departmentId]: [
+        ...(current[departmentId] ?? []),
+        { date: today, type: "CLOSED", reason: "", intervals: [] },
+      ],
+    }));
+  };
+
+  const removeExceptionDraft = (departmentId: string, index: number) => {
+    setExceptionDrafts((current) => ({
+      ...current,
+      [departmentId]: (current[departmentId] ?? []).filter((_, itemIndex) => itemIndex !== index),
+    }));
+  };
+
+  const saveExceptions = async (item: AdminDepartmentItem) => {
+    if (!clientKey) return;
+    const exceptions = exceptionDrafts[item.id] ?? [];
+    setSavingExceptionsId(item.id);
+    setError(null);
+    try {
+      await updateDepartment(connection, clientKey, item.id, {
+        businessHourExceptions: exceptions.map((exception) => ({
+          date: exception.date,
+          type: exception.type,
+          reason: exception.reason.trim() || null,
+          intervals: exception.type === "CUSTOM_HOURS" ? exception.intervals : [],
+        })),
+      });
+      await loadItems(clientKey);
+      setSuccess(`Exceções de horário de "${item.name}" salvas.`);
+    } catch (err) {
+      const typed = err as { message?: string };
+      setError(typed.message || "Falha ao salvar exceções de horário.");
+    } finally {
+      setSavingExceptionsId(null);
     }
   };
 
@@ -370,12 +506,15 @@ export default function AdminDepartmentsPage() {
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Setores do tenant</h2>
             <p className="mt-1 text-sm text-white/65">
-              Visual mais simples: nome grande, status claro e acao direta.
+              Visual mais simples: nome grande, status claro, horário regular e exceções por data.
             </p>
+            <p className="mt-1 text-xs text-white/45">Fuso aplicado: {timezone}</p>
           </div>
           {sortedDepartments.length ? (
             <div className="grid gap-3 p-4">
-              {sortedDepartments.map((item) => (
+              {sortedDepartments.map((item) => {
+                const exceptions = exceptionDrafts[item.id] ?? [];
+                return (
                 <article key={item.id} className="rounded-xl border border-white/10 bg-re7-navy/30 p-4">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="space-y-3">
@@ -430,8 +569,158 @@ export default function AdminDepartmentsPage() {
                       </span>
                     </div>
                   </div>
+                  <div className="mt-5 grid gap-4 border-t border-white/10 pt-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+                    <div>
+                      <h4 className="text-sm font-semibold text-white">Horário regular</h4>
+                      <div className="mt-2 grid gap-2 text-sm text-white/70">
+                        {item.businessHours?.length ? (
+                          buildBusinessHourGroups(item.businessHours).map((group) => (
+                            <div key={`${group.weekdays.join("-")}-${formatIntervals(group.intervals)}`} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                              <span className="font-medium text-white/85">{formatWeekdayGroup(group.weekdays)}</span>
+                              <span className="ml-2">{formatIntervals(group.intervals)}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="rounded-lg border border-amber-300/20 bg-amber-500/10 px-3 py-2 text-amber-100">
+                            Sem horário regular configurado.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <h4 className="text-sm font-semibold text-white">Exceções e feriados</h4>
+                          <p className="mt-1 text-xs text-white/50">
+                            A exceção da data prevalece sobre o horário regular. Não há feriados automáticos.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => addExceptionDraft(item.id)}
+                          className="rounded-md border border-white/20 px-3 py-2 text-xs font-semibold text-white hover:bg-white/10"
+                        >
+                          Adicionar exceção
+                        </button>
+                      </div>
+                      <div className="mt-3 grid gap-3">
+                        {exceptions.length ? exceptions.map((exception, index) => (
+                          <div key={`${item.id}-${index}`} className="grid gap-3 rounded-lg border border-white/10 bg-black/20 p-3">
+                            <div className="grid gap-3 md:grid-cols-[140px_180px_minmax(0,1fr)_auto]">
+                              <label className="grid gap-1 text-xs text-white/65">
+                                Data
+                                <input
+                                  type="date"
+                                  value={exception.date}
+                                  onChange={(event) => updateExceptionDraft(item.id, index, { date: event.target.value })}
+                                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                                />
+                              </label>
+                              <label className="grid gap-1 text-xs text-white/65">
+                                Situação
+                                <select
+                                  value={exception.type}
+                                  onChange={(event) => updateExceptionDraft(item.id, index, {
+                                    type: event.target.value === "CUSTOM_HOURS" ? "CUSTOM_HOURS" : "CLOSED",
+                                    intervals: event.target.value === "CUSTOM_HOURS" && exception.intervals.length === 0
+                                      ? [{ startMinute: 8 * 60, endMinute: 12 * 60 }]
+                                      : exception.intervals,
+                                  })}
+                                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                                >
+                                  <option value="CLOSED">Fechado o dia inteiro</option>
+                                  <option value="CUSTOM_HOURS">Horário especial</option>
+                                </select>
+                              </label>
+                              <label className="grid gap-1 text-xs text-white/65">
+                                Motivo
+                                <input
+                                  value={exception.reason}
+                                  onChange={(event) => updateExceptionDraft(item.id, index, { reason: event.target.value })}
+                                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                                  placeholder="Opcional"
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => removeExceptionDraft(item.id, index)}
+                                className="self-end rounded-md border border-red-300/30 px-3 py-2 text-xs font-semibold text-red-100 hover:bg-red-500/10"
+                              >
+                                Excluir
+                              </button>
+                            </div>
+                            {exception.type === "CUSTOM_HOURS" ? (
+                              <div className="grid gap-2">
+                                {exception.intervals.map((interval, intervalIndex) => (
+                                  <div key={intervalIndex} className="grid gap-2 sm:grid-cols-[140px_140px_auto]">
+                                    <input
+                                      type="time"
+                                      value={minutesToTime(interval.startMinute)}
+                                      onChange={(event) => updateExceptionDraft(item.id, index, {
+                                        intervals: exception.intervals.map((candidate, candidateIndex) =>
+                                          candidateIndex === intervalIndex
+                                            ? { ...candidate, startMinute: timeToMinutes(event.target.value) }
+                                            : candidate
+                                        ),
+                                      })}
+                                      className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                                    />
+                                    <input
+                                      type="time"
+                                      value={minutesToTime(interval.endMinute)}
+                                      onChange={(event) => updateExceptionDraft(item.id, index, {
+                                        intervals: exception.intervals.map((candidate, candidateIndex) =>
+                                          candidateIndex === intervalIndex
+                                            ? { ...candidate, endMinute: timeToMinutes(event.target.value) }
+                                            : candidate
+                                        ),
+                                      })}
+                                      className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => updateExceptionDraft(item.id, index, {
+                                        intervals: exception.intervals.filter((_, candidateIndex) => candidateIndex !== intervalIndex),
+                                      })}
+                                      className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10"
+                                    >
+                                      Remover período
+                                    </button>
+                                  </div>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => updateExceptionDraft(item.id, index, {
+                                    intervals: [...exception.intervals, { startMinute: 13 * 60, endMinute: 17 * 60 }],
+                                  })}
+                                  className="w-fit rounded-md border border-white/20 px-3 py-2 text-xs font-semibold text-white hover:bg-white/10"
+                                >
+                                  Adicionar período
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        )) : (
+                          <p className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/60">
+                            Nenhuma exceção cadastrada.
+                          </p>
+                        )}
+                      </div>
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => saveExceptions(item)}
+                          disabled={savingExceptionsId === item.id}
+                          className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {savingExceptionsId === item.id ? "Salvando..." : "Salvar exceções"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </article>
-              ))}
+              );})}
             </div>
           ) : (
             <p className="p-4 text-sm text-white/70">Nenhum setor cadastrado para este tenant.</p>

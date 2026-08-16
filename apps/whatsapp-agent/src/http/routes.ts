@@ -190,7 +190,9 @@ import {
 } from "../users/departmentMemberships.js";
 import {
   DepartmentBusinessHoursValidationError,
+  parseDepartmentBusinessHourExceptionsInput,
   parseDepartmentBusinessHoursInput,
+  replaceDepartmentBusinessHourExceptions,
   replaceDepartmentBusinessHours,
   resolveTenantOperationalTimezone,
 } from "../departments/businessHours.js";
@@ -14454,6 +14456,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, httpError("client_not_found", "Client not found"));
           return;
         }
+        const timezone = await resolveTenantOperationalTimezone(prisma, client.id);
         const departments = await prisma.department.findMany({
           where: {
             clientId: client.id,
@@ -14467,11 +14470,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             slug: true,
             isActive: true,
             createdAt: true,
+            businessHours: {
+              orderBy: [{ weekday: "asc" }, { startMinute: "asc" }],
+              select: { id: true, weekday: true, startMinute: true, endMinute: true },
+            },
+            businessHourExceptions: {
+              orderBy: [{ date: "asc" }],
+              select: { id: true, date: true, type: true, reason: true, intervals: true },
+            },
           },
         });
         json(res, 200, {
           ok: true,
           count: departments.length,
+          timezone,
           items: departments,
         });
       } catch (error) {
@@ -14499,11 +14511,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         const body = await readJsonBody(req, res);
         if (!body) return;
+        const bodyRecord = body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
         const name = typeof body.name === "string" ? body.name.trim() : "";
         if (!name) {
           json(res, 400, httpError("bad_request", "Department name is required"));
           return;
         }
+        const businessHours = "businessHours" in bodyRecord
+          ? parseDepartmentBusinessHoursInput(bodyRecord.businessHours)
+          : undefined;
+        const businessHourExceptions = "businessHourExceptions" in bodyRecord
+          ? parseDepartmentBusinessHourExceptionsInput(bodyRecord.businessHourExceptions)
+          : undefined;
         const slug = normalizeDepartmentSlug(name);
         const existingBySlug = await prisma.department.findFirst({
           where: {
@@ -14534,6 +14553,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             createdAt: true,
           },
         });
+        if (businessHours) {
+          await replaceDepartmentBusinessHours(prisma, {
+            clientId: client.id,
+            departmentId: department.id,
+            intervals: businessHours,
+          });
+        }
+        if (businessHourExceptions) {
+          await replaceDepartmentBusinessHourExceptions(prisma, {
+            clientId: client.id,
+            departmentId: department.id,
+            exceptions: businessHourExceptions,
+          });
+        }
         logger.info({
           event: "department.created",
           requestId,
@@ -14541,8 +14574,30 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           departmentId: department.id,
           isActive: department.isActive,
         });
-        json(res, 200, { ok: true, department });
+        const fullDepartment = await prisma.department.findUnique({
+          where: { id: department.id },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            isActive: true,
+            createdAt: true,
+            businessHours: {
+              orderBy: [{ weekday: "asc" }, { startMinute: "asc" }],
+              select: { id: true, weekday: true, startMinute: true, endMinute: true },
+            },
+            businessHourExceptions: {
+              orderBy: [{ date: "asc" }],
+              select: { id: true, date: true, type: true, reason: true, intervals: true },
+            },
+          },
+        });
+        json(res, 200, { ok: true, department: fullDepartment ?? department });
       } catch (error) {
+        if (error instanceof DepartmentBusinessHoursValidationError) {
+          json(res, error.status, httpError(error.code, error.message));
+          return;
+        }
         if (
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === "P2002"
@@ -14587,10 +14642,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         const body = await readJsonBody(req, res);
         if (!body) return;
+        const bodyRecord = body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
         const hasName = typeof body.name === "string";
         const hasActive = typeof body.isActive === "boolean";
-        if (!hasName && !hasActive) {
-          json(res, 400, httpError("bad_request", "Provide name and/or isActive"));
+        const businessHours = "businessHours" in bodyRecord
+          ? parseDepartmentBusinessHoursInput(bodyRecord.businessHours)
+          : undefined;
+        const businessHourExceptions = "businessHourExceptions" in bodyRecord
+          ? parseDepartmentBusinessHourExceptionsInput(bodyRecord.businessHourExceptions)
+          : undefined;
+        if (!hasName && !hasActive && businessHours === undefined && businessHourExceptions === undefined) {
+          json(res, 400, httpError("bad_request", "Provide name, isActive, businessHours and/or businessHourExceptions"));
           return;
         }
         const name = hasName ? String(body.name ?? "").trim() : undefined;
@@ -14652,8 +14714,51 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             isActive: department.isActive,
           });
         }
-        json(res, 200, { ok: true, department });
+        if (businessHours !== undefined) {
+          await replaceDepartmentBusinessHours(prisma, {
+            clientId: client.id,
+            departmentId: department.id,
+            intervals: businessHours,
+          });
+        }
+        if (businessHourExceptions !== undefined) {
+          await replaceDepartmentBusinessHourExceptions(prisma, {
+            clientId: client.id,
+            departmentId: department.id,
+            exceptions: businessHourExceptions,
+          });
+          logger.info({
+            event: "department.business_hour_exceptions.updated",
+            requestId,
+            clientId: client.id,
+            departmentId: department.id,
+            count: businessHourExceptions.length,
+          });
+        }
+        const fullDepartment = await prisma.department.findUnique({
+          where: { id: department.id },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            isActive: true,
+            createdAt: true,
+            businessHours: {
+              orderBy: [{ weekday: "asc" }, { startMinute: "asc" }],
+              select: { id: true, weekday: true, startMinute: true, endMinute: true },
+            },
+            businessHourExceptions: {
+              orderBy: [{ date: "asc" }],
+              select: { id: true, date: true, type: true, reason: true, intervals: true },
+            },
+          },
+        });
+        json(res, 200, { ok: true, department: fullDepartment ?? department });
       } catch (error) {
+        if (error instanceof DepartmentBusinessHoursValidationError) {
+          json(res, error.status, httpError(error.code, error.message));
+          return;
+        }
         if (
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === "P2002"

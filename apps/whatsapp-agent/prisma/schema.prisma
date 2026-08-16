@@ -124,6 +124,7 @@ model Client {
   searchIndexes SearchIndex[]
   userDepartmentMemberships UserDepartmentMembership[]
   departmentBusinessHours DepartmentBusinessHour[]
+  departmentBusinessHourExceptions DepartmentBusinessHourException[]
 }
 
 model User {
@@ -764,6 +765,7 @@ model Department {
   satisfactionSurveys SatisfactionSurvey[]
   userMemberships UserDepartmentMembership[]
   businessHours DepartmentBusinessHour[]
+  businessHourExceptions DepartmentBusinessHourException[]
 
   @@unique([clientId, name])
   @@unique([clientId, slug])
@@ -805,6 +807,25 @@ model DepartmentBusinessHour {
 
   @@index([clientId, departmentId, weekday])
   @@index([departmentId, weekday])
+}
+
+model DepartmentBusinessHourException {
+  id           String   @id @default(cuid())
+  clientId     String   @db.Uuid
+  departmentId String
+  date         String
+  type         String
+  reason       String?
+  intervals    Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  client     Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, departmentId, date])
+  @@index([clientId, departmentId, date])
+  @@index([departmentId, date])
 }
 
 model Queue {

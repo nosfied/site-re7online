@@ -177,6 +177,13 @@ export type AdminDepartmentItem = {
     startMinute: number;
     endMinute: number;
   }>;
+  businessHourExceptions?: Array<{
+    id?: string;
+    date: string;
+    type: "CLOSED" | "CUSTOM_HOURS" | string;
+    reason?: string | null;
+    intervals?: Array<{ startMinute: number; endMinute: number }> | null;
+  }>;
   businessHoursConfigured?: boolean;
 };
 
@@ -1796,6 +1803,7 @@ export async function fetchDepartments(
 ): Promise<{
   ok: true;
   count: number;
+  timezone?: string;
   items: AdminDepartmentItem[];
 }> {
   const params = new URLSearchParams();
@@ -1809,7 +1817,16 @@ export async function fetchDepartments(
 export async function createDepartment(
   connection: AdminConnection,
   clientKey: string,
-  payload: { name: string }
+  payload: {
+    name: string;
+    businessHours?: Array<{ weekday: number; startMinute: number; endMinute: number }>;
+    businessHourExceptions?: Array<{
+      date: string;
+      type: "CLOSED" | "CUSTOM_HOURS";
+      reason?: string | null;
+      intervals?: Array<{ startMinute: number; endMinute: number }> | null;
+    }>;
+  }
 ): Promise<{
   ok: true;
   department: AdminDepartmentItem;
@@ -1826,7 +1843,17 @@ export async function updateDepartment(
   connection: AdminConnection,
   clientKey: string,
   departmentId: string,
-  payload: { name?: string; isActive?: boolean }
+  payload: {
+    name?: string;
+    isActive?: boolean;
+    businessHours?: Array<{ weekday: number; startMinute: number; endMinute: number }>;
+    businessHourExceptions?: Array<{
+      date: string;
+      type: "CLOSED" | "CUSTOM_HOURS";
+      reason?: string | null;
+      intervals?: Array<{ startMinute: number; endMinute: number }> | null;
+    }>;
+  }
 ): Promise<{
   ok: true;
   department: AdminDepartmentItem;
