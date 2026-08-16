@@ -5,6 +5,7 @@ import { attachRealtimeWebSocket } from "./realtime/websocket.js";
 import { logger } from "./logger/logger.js";
 import { getPrisma } from "./db.js";
 import { loadTenantsJsonFallback } from "./config/tenantJsonFallback.js";
+import { startChatbotInactivityProcessor } from "./chatbot/chatbotInactivityProcessor.js";
 
 async function bootstrap() {
   const { env } = await import("./config/env.js");
@@ -171,6 +172,13 @@ async function bootstrap() {
 
   const server = createServer();
   attachRealtimeWebSocket(server);
+  if (String(process.env.CHATBOT_INACTIVITY_PROCESSOR_DISABLED ?? "").toLowerCase() !== "true") {
+    startChatbotInactivityProcessor({
+      prisma: getPrisma(),
+      intervalMs: Number(process.env.CHATBOT_INACTIVITY_PROCESSOR_INTERVAL_MS) || undefined,
+    });
+    logger.info({ event: "chatbot.inactivity.processor.started" });
+  }
   server.listen(env.PORT, () => {
     logger.info({ event: "server.started", port: env.PORT });
   });

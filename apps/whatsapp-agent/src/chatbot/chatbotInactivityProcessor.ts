@@ -1,0 +1,260 @@
+import { HandoffStatus, Prisma, type PrismaClient } from "@prisma/client";
+import { validateChatbotFlowDefinition } from "./chatbotFlow.js";
+import { resolveDepartmentAwareHandoff } from "./departmentAwareHandoff.js";
+import { buildConversationProtocol, buildConversationProtocolNotice } from "../inbox/conversationProtocol.js";
+import { logger } from "../logger/logger.js";
+import { getQueuePosition } from "../queue/queuePosition.js";
+import { createWebSessionTextOutboundMessage } from "../web-session/webSessionOutboundService.js";
+
+const DEFAULT_QUEUE_POSITION_TEXT = "Você é o nº {position} da fila de atendimento.";
+const DEFAULT_OFF_HOURS_TEXT =
+  "No momento não temos nenhum atendente disponível. Você será atendido no primeiro horário do próximo expediente.";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getNonEmptyString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getRuntimeLastInteractionAt(answers: unknown) {
+  const runtime = isRecord(answers) && isRecord(answers.chatbotRuntime) ? answers.chatbotRuntime : null;
+  const value = runtime ? runtime.lastInteractionAt : null;
+  return typeof value === "string" && value.trim() ? new Date(value) : null;
+}
+
+function getInactivityPolicy(definition: unknown) {
+  if (!isRecord(definition) || !isRecord(definition.inactivityPolicy)) return null;
+  const raw = definition.inactivityPolicy;
+  const timeoutMinutes = typeof raw.timeoutMinutes === "number" && Number.isFinite(raw.timeoutMinutes)
+    ? Math.floor(raw.timeoutMinutes)
+    : null;
+  const action = getNonEmptyString(raw.action)?.toUpperCase();
+  if (!timeoutMinutes || timeoutMinutes <= 0 || action !== "HANDOFF") return null;
+  return { timeoutMinutes };
+}
+
+function getClosedHandoffPolicy(definition: unknown) {
+  const raw = isRecord(definition) && isRecord(definition.closedHandoffPolicy)
+    ? definition.closedHandoffPolicy
+    : {};
+  const action = getNonEmptyString(raw.action)?.toUpperCase();
+  return {
+    queueClosed: action === "QUEUE_FOR_NEXT_OPEN",
+    queuePositionText: getNonEmptyString(raw.queuePositionText) ?? DEFAULT_QUEUE_POSITION_TEXT,
+    offHoursMessage: getNonEmptyString(raw.offHoursMessage) ?? DEFAULT_OFF_HOURS_TEXT,
+  };
+}
+
+async function sendBotText(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientKey: string;
+  waId: string;
+  waIdCanonical: string | null;
+  channelAccountId: string | null;
+  requestId: string;
+  text: string;
+}) {
+  if (!params.text.trim()) return;
+  await createWebSessionTextOutboundMessage({
+    prisma: params.prisma,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical ?? params.waId,
+    text: params.text,
+    clientKey: params.clientKey,
+    clientId: params.clientId,
+    requestId: params.requestId,
+    actorUserId: null,
+    outboundSource: "bot",
+    skipAgentSignature: true,
+    source: {
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId: params.channelAccountId,
+    },
+  });
+}
+
+export async function processChatbotInactivityTimeouts(params: {
+  prisma: PrismaClient;
+  now?: Date;
+  limit?: number;
+}) {
+  const now = params.now ?? new Date();
+  const candidates = await params.prisma.conversationRuntimeState.findMany({
+    where: {
+      chatbotActive: true,
+      mode: "BOT",
+      flow: { startsWith: "chatbot:" },
+      handoffStatus: HandoffStatus.NONE,
+      assignedUserId: null,
+      closedAt: null,
+    },
+    orderBy: { updatedAt: "asc" },
+    take: params.limit ?? 100,
+    select: {
+      id: true,
+      clientId: true,
+      waId: true,
+      waIdCanonical: true,
+      channelAccountId: true,
+      flow: true,
+      answers: true,
+      departmentId: true,
+      queueId: true,
+    },
+  });
+  let processed = 0;
+  for (const state of candidates) {
+    const flowId = state.flow?.startsWith("chatbot:") ? state.flow.slice("chatbot:".length) : null;
+    if (!flowId) continue;
+    const flow = await params.prisma.chatbotFlow.findFirst({
+      where: { id: flowId, clientId: state.clientId, isActive: true },
+      select: { id: true, definition: true },
+    });
+    const validated = validateChatbotFlowDefinition(flow?.definition);
+    if (!validated.ok) continue;
+    const policy = getInactivityPolicy(validated.definition);
+    if (!policy) continue;
+    const lastInteractionAt = getRuntimeLastInteractionAt(state.answers);
+    if (!lastInteractionAt || !Number.isFinite(lastInteractionAt.getTime())) continue;
+    const idleMinutes = (now.getTime() - lastInteractionAt.getTime()) / 60000;
+    if (idleMinutes < policy.timeoutMinutes) continue;
+    const alreadyTriggered = isRecord(state.answers) &&
+      isRecord(state.answers.chatbotRuntime) &&
+      state.answers.chatbotRuntime.inactivityHandoffTriggeredAt;
+    if (alreadyTriggered) continue;
+
+    const fallbackHandoff = {
+      feedbackText: getNonEmptyString(validated.definition.handoffTransitionMessage) ??
+        "Vou te encaminhar para atendimento humano.",
+      summary: "Atendimento encaminhado automaticamente por inatividade na automação.",
+      suggestedReply: "Olá, tudo bem? Vou continuar seu atendimento.",
+      tags: ["inactivity_timeout"],
+      nodeId: "inactivity_timeout",
+      departmentId: state.departmentId,
+      queueId: state.queueId,
+      closedText: null,
+    };
+    const decision = await resolveDepartmentAwareHandoff(params.prisma, {
+      clientId: state.clientId,
+      pendingHandoff: fallbackHandoff,
+      currentDepartmentId: state.departmentId,
+      currentQueueId: state.queueId,
+      at: now,
+    });
+    if (decision.kind === "blocked") continue;
+    const closedPolicy = getClosedHandoffPolicy(validated.definition);
+    if (decision.kind === "closed" && !closedPolicy.queueClosed) continue;
+    const [client, conversation] = await Promise.all([
+      params.prisma.client.findUnique({
+        where: { id: state.clientId },
+        select: { clientKey: true },
+      }),
+      params.prisma.conversation.findUnique({
+        where: { clientId_waId: { clientId: state.clientId, waId: state.waId } },
+        select: { id: true },
+      }),
+    ]);
+    if (!client) continue;
+    const runtime = isRecord(state.answers) && isRecord(state.answers.chatbotRuntime)
+      ? state.answers.chatbotRuntime
+      : {};
+    const nextAnswers = {
+      ...(isRecord(state.answers) ? state.answers : {}),
+      chatbotRuntime: {
+        ...runtime,
+        inactivityHandoffTriggeredAt: now.toISOString(),
+      },
+    };
+    await params.prisma.conversationRuntimeState.update({
+      where: { id: state.id },
+      data: {
+        mode: "HUMAN",
+        status: "WAITING",
+        chatbotActive: false,
+        chatbotNodeId: null,
+        handoffStatus: HandoffStatus.ACTIVE,
+        handoffActivatedAt: now,
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        departmentId: decision.departmentId ?? state.departmentId,
+        queueId: decision.queueId ?? state.queueId,
+        answers: nextAnswers as Prisma.InputJsonValue,
+      },
+    });
+    await sendBotText({
+      prisma: params.prisma,
+      clientId: state.clientId,
+      clientKey: client.clientKey,
+      waId: state.waId,
+      waIdCanonical: state.waIdCanonical,
+      channelAccountId: state.channelAccountId,
+      requestId: `chatbot-inactivity:${state.id}:handoff`,
+      text: fallbackHandoff.feedbackText,
+    });
+    const protocol = buildConversationProtocol({ id: conversation?.id ?? null, createdAt: now });
+    await sendBotText({
+      prisma: params.prisma,
+      clientId: state.clientId,
+      clientKey: client.clientKey,
+      waId: state.waId,
+      waIdCanonical: state.waIdCanonical,
+      channelAccountId: state.channelAccountId,
+      requestId: `chatbot-inactivity:${state.id}:protocol`,
+      text: buildConversationProtocolNotice(protocol),
+    });
+    const position = await getQueuePosition({
+      prisma: params.prisma,
+      clientId: state.clientId,
+      runtimeStateId: state.id,
+      queueId: decision.queueId ?? state.queueId,
+    });
+    if (position) {
+      await sendBotText({
+        prisma: params.prisma,
+        clientId: state.clientId,
+        clientKey: client.clientKey,
+        waId: state.waId,
+        waIdCanonical: state.waIdCanonical,
+        channelAccountId: state.channelAccountId,
+        requestId: `chatbot-inactivity:${state.id}:position`,
+        text: closedPolicy.queuePositionText.replace("{position}", String(position)),
+      });
+    }
+    if (decision.kind === "closed") {
+      await sendBotText({
+        prisma: params.prisma,
+        clientId: state.clientId,
+        clientKey: client.clientKey,
+        waId: state.waId,
+        waIdCanonical: state.waIdCanonical,
+        channelAccountId: state.channelAccountId,
+        requestId: `chatbot-inactivity:${state.id}:off-hours`,
+        text: closedPolicy.offHoursMessage,
+      });
+    }
+    processed += 1;
+  }
+  return { processed };
+}
+
+export function startChatbotInactivityProcessor(params: {
+  prisma: PrismaClient;
+  intervalMs?: number;
+}) {
+  const intervalMs = params.intervalMs ?? 60_000;
+  const timer = setInterval(() => {
+    processChatbotInactivityTimeouts({ prisma: params.prisma }).catch((error) => {
+      logger.error({
+        event: "chatbot.inactivity.processor.error",
+        message: error instanceof Error ? error.message : "unknown_error",
+      });
+    });
+  }, intervalMs);
+  timer.unref?.();
+  return () => clearInterval(timer);
+}

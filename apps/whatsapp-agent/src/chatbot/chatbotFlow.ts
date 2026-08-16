@@ -59,11 +59,13 @@ export type ChatbotNode =
 
 export type ChatbotGlobalCommand = {
   command: string;
-  action: "BACK";
+  action: "BACK" | "CLOSE_CONVERSATION";
   allowedModes?: Array<"BOT" | "HUMAN">;
 };
 
 export type ChatbotInactivityPolicy = {
+  timeoutMinutes?: number;
+  action?: "RESET_TO_ROOT" | "HANDOFF" | "CLOSE";
   resetAfterMinutes?: number;
 };
 
@@ -223,7 +225,7 @@ function normalizeGlobalCommands(value: unknown): ChatbotGlobalCommand[] | undef
     if (!isRecord(item)) continue;
     const command = getNonEmptyString(item.command);
     const action = getNonEmptyString(item.action)?.toUpperCase();
-    if (!command || action !== "BACK") continue;
+    if (!command || (action !== "BACK" && action !== "CLOSE_CONVERSATION")) continue;
     const allowedModes = Array.isArray(item.allowedModes)
       ? Array.from(
           new Set(
@@ -238,7 +240,7 @@ function normalizeGlobalCommands(value: unknown): ChatbotGlobalCommand[] | undef
     seen.add(key);
     commands.push({
       command,
-      action: "BACK",
+      action,
       ...(allowedModes && allowedModes.length > 0 ? { allowedModes } : {}),
     });
   }
@@ -248,14 +250,30 @@ function normalizeGlobalCommands(value: unknown): ChatbotGlobalCommand[] | undef
 function normalizeInactivityPolicy(value: unknown): ChatbotInactivityPolicy | undefined {
   if (!isRecord(value)) return undefined;
   const resetAfterMinutes = value.resetAfterMinutes;
-  if (
-    typeof resetAfterMinutes !== "number" ||
-    !Number.isFinite(resetAfterMinutes) ||
-    resetAfterMinutes <= 0
-  ) {
+  const timeoutMinutes = value.timeoutMinutes;
+  const action = typeof value.action === "string" ? value.action.trim().toUpperCase() : "";
+  const normalizedReset =
+    typeof resetAfterMinutes === "number" && Number.isFinite(resetAfterMinutes) && resetAfterMinutes > 0
+      ? Math.floor(resetAfterMinutes)
+      : null;
+  const normalizedTimeout =
+    typeof timeoutMinutes === "number" && Number.isFinite(timeoutMinutes) && timeoutMinutes > 0
+      ? Math.floor(timeoutMinutes)
+      : null;
+  const normalizedAction =
+    action === "HANDOFF" || action === "CLOSE" || action === "RESET_TO_ROOT"
+      ? action
+      : normalizedReset
+        ? "RESET_TO_ROOT"
+        : null;
+  if (!normalizedReset && !normalizedTimeout) {
     return undefined;
   }
-  return { resetAfterMinutes: Math.floor(resetAfterMinutes) };
+  return {
+    ...(normalizedTimeout ? { timeoutMinutes: normalizedTimeout } : {}),
+    ...(normalizedAction ? { action: normalizedAction } : {}),
+    ...(normalizedReset ? { resetAfterMinutes: normalizedReset } : {}),
+  };
 }
 
 function getNodeMetadata(rawNode: Record<string, unknown>): ChatbotFlowMetadata {
@@ -1328,7 +1346,19 @@ export function executeChatbotFlow(params: {
   const globalBackCommand = findGlobalBackCommand(params.definition, params.inboundText, params.state);
   if (globalBackCommand) {
     const parentNodeId = findParentMenuNodeId(params.definition, params.state.chatbotNodeId);
-    const targetNodeId = parentNodeId ?? getInitialChatbotAwaitingNodeId(params.definition);
+    const initialNodeId = getInitialChatbotAwaitingNodeId(params.definition);
+    if (!parentNodeId && params.state.chatbotNodeId === initialNodeId) {
+      const node = params.definition.nodes[initialNodeId];
+      if (node?.type === "menu") {
+        return markChatbotResultInteraction({
+          handled: true,
+          state: withChatbotRuntime(params.state, params.flowId, initialNodeId, true),
+          replyText: `Opção inválida.\n\n${renderMenu(node)}`,
+          events: [],
+        }, params.nowIso);
+      }
+    }
+    const targetNodeId = parentNodeId ?? initialNodeId;
     const result = executeNodeChain({
       definition: params.definition,
       state: params.state,

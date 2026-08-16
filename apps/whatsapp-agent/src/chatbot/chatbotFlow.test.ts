@@ -249,6 +249,43 @@ test("executeChatbotFlow applies configured global back command without hardcodi
   assert.equal(result.events?.[0]?.event, "flow.global_command.applied");
 });
 
+test("executeChatbotFlow treats root back command as invalid option and redisplays root menu", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "main",
+    globalCommands: [{ command: "#", action: "BACK", allowedModes: ["BOT"] }],
+    nodes: {
+      main: {
+        type: "menu",
+        text: "Menu principal",
+        options: [{ label: "1 - Atendimento", next: "handoff" }],
+      },
+      handoff: { type: "handoff" },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_back_root",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_back_root",
+      chatbotActive: true,
+      chatbotNodeId: "main",
+      answers: {
+        chatbotRuntime: { lastInteractionAt: "2026-08-12T10:00:00.000Z" },
+      },
+    }),
+    inboundText: "#",
+    nowIso: "2026-08-12T10:01:00.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotNodeId, "main");
+  assert.match(result.replyText ?? "", /Opção inválida/);
+  assert.match(result.replyText ?? "", /Menu principal/);
+});
+
 test("executeChatbotFlow ignores global back command during human handoff", () => {
   const validated = validateChatbotFlowDefinition({
     start: "main",

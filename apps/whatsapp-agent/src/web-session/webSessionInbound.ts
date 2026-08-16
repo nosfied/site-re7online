@@ -4,6 +4,7 @@ import { getDefaultOperationalDepartment } from "../bootstrap/defaultOperational
 import {
   clearChatbotRuntime,
   extractChatbotFlowId,
+  type ChatbotFlowDefinition,
   validateChatbotFlowDefinition,
 } from "../chatbot/chatbotFlow.js";
 import { executeChatbotFlowWithConsent } from "../chatbot/chatbotConsentRuntime.js";
@@ -11,10 +12,12 @@ import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff
 import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
 import { activateHumanHandoff, updateOutbound } from "../conversation/conversation.service.js";
 import { getPrisma } from "../db.js";
+import { buildConversationProtocol, buildConversationProtocolNotice } from "../inbox/conversationProtocol.js";
 import { logger } from "../logger/logger.js";
 import { deleteWebSessionStoredMedia, type WebSessionStoredMedia } from "../media/webSessionMedia.js";
 import { recordConversationInboundMetrics } from "../metrics/conversationMetrics.js";
 import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
+import { getQueuePosition } from "../queue/queuePosition.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
@@ -72,6 +75,50 @@ export type WebSessionInboundResult =
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getNonEmptyString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getClosedHandoffPolicy(definition: ChatbotFlowDefinition) {
+  const raw = isRecord(definition.closedHandoffPolicy) ? definition.closedHandoffPolicy : {};
+  const action = getNonEmptyString(raw.action)?.toUpperCase();
+  return {
+    action: action === "QUEUE_FOR_NEXT_OPEN" ? "QUEUE_FOR_NEXT_OPEN" : "REJECT",
+    queuePositionText:
+      getNonEmptyString(raw.queuePositionText) ??
+      "Você é o nº {position} da fila de atendimento.",
+    offHoursMessage:
+      getNonEmptyString(raw.offHoursMessage) ??
+      "No momento não temos nenhum atendente disponível. Você será atendido no primeiro horário do próximo expediente.",
+  };
+}
+
+async function getWebSessionClosePolicy(params: { prisma: PrismaClient; clientId: string }) {
+  const config = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const root = isRecord(config?.config) ? config.config : {};
+  const closeCommand = isRecord(root.chatbotCloseCommand) ? root.chatbotCloseCommand : {};
+  const satisfaction = isRecord(root.satisfactionPolicy) ? root.satisfactionPolicy : {};
+  return {
+    command: getNonEmptyString(closeCommand.command) ?? "#ENCERRAR#",
+    closedMessage:
+      getNonEmptyString(closeCommand.closedMessage) ??
+      "Atendimento encerrado. Obrigado pelo contato.",
+    satisfaction: {
+      enabled: satisfaction.enabled === true,
+      ttlMinutes:
+        typeof satisfaction.ttlMinutes === "number" && Number.isFinite(satisfaction.ttlMinutes)
+          ? Math.max(1, Math.floor(satisfaction.ttlMinutes))
+          : 15,
+      questionText:
+        getNonEmptyString(satisfaction.questionText) ??
+        "Pesquisa de Satisfação do Protocolo #{protocol}.\n\nComo você avalia este atendimento?\n5 - ⭐⭐⭐⭐⭐\n4 - ⭐⭐⭐⭐\n3 - ⭐⭐⭐\n2 - ⭐⭐\n1 - ⭐\n\nObs.: Você tem 15 minutos para responder à pesquisa.",
+    },
+  };
 }
 
 function maskIdentifier(value: string) {
@@ -653,6 +700,242 @@ async function persistWebSessionRuntimeState(params: {
   });
 }
 
+async function sendWebSessionBotText(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientKey: string;
+  waId: string;
+  waIdCanonical: string;
+  channelAccountId: string | null;
+  requestId: string;
+  text: string;
+  state: ConversationState;
+}) {
+  if (!params.text.trim()) return params.state;
+  const outboundResult = await createWebSessionTextOutboundMessage({
+    prisma: params.prisma,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical,
+    text: params.text,
+    clientKey: params.clientKey,
+    clientId: params.clientId,
+    requestId: params.requestId,
+    actorUserId: null,
+    outboundSource: "bot",
+    skipAgentSignature: true,
+    source: {
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId: params.channelAccountId,
+    },
+  });
+  if (outboundResult.ok && outboundResult.status === "SENT") {
+    const nextState = updateOutbound(params.state, outboundResult.messageId, outboundResult.createdAt);
+    publishRealtimeEvent({
+      type: "message.created",
+      clientId: params.clientId,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical,
+      mode: nextState.mode === "HUMAN" ? "HUMAN" : "BOT",
+      handoffStatus: nextState.handoff.status,
+      assignedUserId: nextState.assignedUserId ?? null,
+      departmentId: nextState.departmentId ?? null,
+      message: {
+        internalMessageId: outboundResult.internalMessageId,
+        messageKind: "outbound",
+        direction: "OUTBOUND",
+        type: "TEXT",
+        status: "SENT",
+        intent: nextState.intent ?? null,
+        bodyText: outboundResult.bodyText,
+        media: null,
+        templateName: null,
+        templateLang: null,
+        requestId: params.requestId,
+        messageId: outboundResult.messageId,
+        metaMessageId: null,
+        errorBody: null,
+        createdAt: outboundResult.createdAt,
+      },
+    });
+    return nextState;
+  }
+  return params.state;
+}
+
+async function sendWebSessionSatisfactionSurvey(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientKey: string;
+  waId: string;
+  waIdCanonical: string;
+  channelAccountId: string | null;
+  requestId: string;
+  conversationId: string | null;
+  protocol: string;
+  state: ConversationState;
+}) {
+  const policy = await getWebSessionClosePolicy({ prisma: params.prisma, clientId: params.clientId });
+  if (!policy.satisfaction.enabled || !params.conversationId) return params.state;
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + policy.satisfaction.ttlMinutes * 60_000);
+  const survey = await params.prisma.satisfactionSurvey.create({
+    data: {
+      clientId: params.clientId,
+      conversationId: params.conversationId,
+      departmentId: params.state.departmentId ?? null,
+      assignedUserId: params.state.assignedUserId ?? null,
+      channel: "whatsapp",
+      type: "csat",
+      status: "sent",
+      questionText: policy.satisfaction.questionText.replace("{protocol}", params.protocol),
+      commentEnabled: false,
+      source: "human_close",
+      sentAt: now,
+      expiresAt,
+      metadata: {
+        protocol: params.protocol,
+        trigger: "HUMAN_CONVERSATION_CLOSED",
+        ttlMinutes: policy.satisfaction.ttlMinutes,
+        provider: "web_session",
+      },
+    },
+  });
+  return sendWebSessionBotText({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical,
+    channelAccountId: params.channelAccountId,
+    requestId: `${params.requestId}:survey:${survey.id}`,
+    text: survey.questionText,
+    state: params.state,
+  });
+}
+
+function satisfactionCategory(score: number) {
+  if (score <= 2) return "negative";
+  if (score === 3) return "neutral";
+  return "positive";
+}
+
+async function handleWebSessionSatisfactionInbound(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientKey: string;
+  waId: string;
+  waIdCanonical: string;
+  channelAccountId: string | null;
+  conversationId: string | null;
+  inboundText: string | null | undefined;
+  requestId: string;
+  state: ConversationState;
+  now: Date;
+}) {
+  if (!params.conversationId) return { handled: false as const, state: params.state };
+  const survey = await params.prisma.satisfactionSurvey.findFirst({
+    where: {
+      clientId: params.clientId,
+      conversationId: params.conversationId,
+      type: "csat",
+      status: { in: ["sent", "pending"] },
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      questionText: true,
+      expiresAt: true,
+      contactId: true,
+      leadId: true,
+    },
+  });
+  if (!survey) return { handled: false as const, state: params.state };
+  const text = String(params.inboundText ?? "").trim();
+  const score = /^\d+$/.test(text) ? Number(text) : NaN;
+  const expired = survey.expiresAt ? survey.expiresAt.getTime() <= params.now.getTime() : false;
+  if (expired) {
+    await params.prisma.satisfactionSurvey.update({
+      where: { id: survey.id },
+      data: { status: "expired" },
+    });
+    if (text === "1") {
+      return { handled: false as const, state: { ...params.state, mode: "BOT" as const, status: null, closedAt: null } };
+    }
+    if (text === "2") {
+      const nextState = { ...params.state, status: "CLOSED" as const, closedAt: params.now.toISOString() };
+      await sendWebSessionBotText({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        waId: params.waId,
+        waIdCanonical: params.waIdCanonical,
+        channelAccountId: params.channelAccountId,
+        requestId: `${params.requestId}:survey-expired-close`,
+        text: "Atendimento encerrado. Obrigado pelo contato.",
+        state: nextState,
+      });
+      return { handled: true as const, state: nextState };
+    }
+    const state = await sendWebSessionBotText({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical,
+      channelAccountId: params.channelAccountId,
+      requestId: `${params.requestId}:survey-expired`,
+      text: "Tempo de resposta da pesquisa esgotado. Deseja iniciar um novo atendimento? 😃\n1 - Sim. 😁\n2 - Não. 😉",
+      state: params.state,
+    });
+    return { handled: true as const, state };
+  }
+  if (!Number.isInteger(score) || score < 1 || score > 5) {
+    const state = await sendWebSessionBotText({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical,
+      channelAccountId: params.channelAccountId,
+      requestId: `${params.requestId}:survey-invalid`,
+      text: "Responda a pesquisa com uma nota de 1 a 5.",
+      state: params.state,
+    });
+    return { handled: true as const, state };
+  }
+  const respondedAt = params.now;
+  await params.prisma.satisfactionResponse.create({
+    data: {
+      clientId: params.clientId,
+      surveyId: survey.id,
+      conversationId: params.conversationId,
+      contactId: survey.contactId,
+      leadId: survey.leadId,
+      score,
+      category: satisfactionCategory(score),
+      source: "whatsapp_web_session",
+      respondedAt,
+    },
+  });
+  await params.prisma.satisfactionSurvey.update({
+    where: { id: survey.id },
+    data: { status: "responded", answeredAt: respondedAt },
+  });
+  const state = await sendWebSessionBotText({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical,
+    channelAccountId: params.channelAccountId,
+    requestId: `${params.requestId}:survey-thanks`,
+    text: "Obrigado pela avaliação.",
+    state: params.state,
+  });
+  return { handled: true as const, state };
+}
+
 async function ensureWebSessionContactIdentity(params: {
   prisma: PrismaClient;
   message: NormalizedWebSessionInboundMessage;
@@ -957,6 +1240,91 @@ export async function ingestWebSessionInboundMessage(params: {
             : null,
       },
     });
+    const closePolicy = await getWebSessionClosePolicy({ prisma, clientId: params.message.clientId });
+    if (
+      String(params.message.text ?? "").trim().toLowerCase() === closePolicy.command.toLowerCase() &&
+      (runtimeConversationState.mode === "HUMAN" ||
+        runtimeConversationState.status === "WAITING" ||
+        runtimeConversationState.status === "IN_PROGRESS")
+    ) {
+      const closedAt = params.message.timestamp.toISOString();
+      runtimeConversationState = {
+        ...clearChatbotRuntime(runtimeConversationState),
+        mode: "HUMAN",
+        status: "CLOSED",
+        closedAt,
+      };
+      runtimeConversationState = await sendWebSessionBotText({
+        prisma,
+        clientId: params.message.clientId,
+        clientKey: params.message.tenantKey,
+        waId: params.message.sender,
+        waIdCanonical: params.message.senderCanonical,
+        channelAccountId: params.message.channelAccountId,
+        requestId: `${requestId}:close-command`,
+        text: closePolicy.closedMessage,
+        state: runtimeConversationState,
+      });
+      const protocol = buildConversationProtocol({ id: conversation?.id ?? null, createdAt: params.message.timestamp });
+      runtimeConversationState = await sendWebSessionSatisfactionSurvey({
+        prisma,
+        clientId: params.message.clientId,
+        clientKey: params.message.tenantKey,
+        waId: params.message.sender,
+        waIdCanonical: params.message.senderCanonical,
+        channelAccountId: params.message.channelAccountId,
+        requestId,
+        conversationId: conversation?.id ?? null,
+        protocol,
+        state: runtimeConversationState,
+      });
+      await persistWebSessionRuntimeState({
+        prisma,
+        clientId: params.message.clientId,
+        waId: params.message.sender,
+        state: runtimeConversationState,
+      });
+      await safeRecordInboundEvent({
+        prisma,
+        message: params.message,
+        clientId: params.message.clientId,
+        eventName: "whatsapp.web.close_command.handled",
+        requestId: `${requestId}:close-command`,
+        conversationId: conversation?.id ?? null,
+      });
+      return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
+    }
+    const satisfactionResult = await handleWebSessionSatisfactionInbound({
+      prisma,
+      clientId: params.message.clientId,
+      clientKey: params.message.tenantKey,
+      waId: params.message.sender,
+      waIdCanonical: params.message.senderCanonical,
+      channelAccountId: params.message.channelAccountId,
+      conversationId: conversation?.id ?? null,
+      inboundText: params.message.text,
+      requestId,
+      state: runtimeConversationState,
+      now: params.message.timestamp,
+    });
+    runtimeConversationState = satisfactionResult.state;
+    if (satisfactionResult.handled) {
+      await persistWebSessionRuntimeState({
+        prisma,
+        clientId: params.message.clientId,
+        waId: params.message.sender,
+        state: runtimeConversationState,
+      });
+      await safeRecordInboundEvent({
+        prisma,
+        message: params.message,
+        clientId: params.message.clientId,
+        eventName: "whatsapp.web.satisfaction.handled",
+        requestId: `${requestId}:satisfaction`,
+        conversationId: conversation?.id ?? null,
+      });
+      return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
+    }
     if (
       automationFlags.settings.disableChatbot !== true &&
       runtimeConversationState.mode !== "HUMAN" &&
@@ -1001,6 +1369,7 @@ export async function ingestWebSessionInboundMessage(params: {
             nowIso: params.message.timestamp.toISOString(),
           });
           runtimeConversationState = chatbotResult.state;
+          const closedHandoffPolicy = getClosedHandoffPolicy(validatedDefinition.definition);
           const handoffDecision = chatbotResult.pendingHandoff
             ? await resolveDepartmentAwareHandoff(prisma, {
                 clientId: params.message.clientId,
@@ -1010,12 +1379,17 @@ export async function ingestWebSessionInboundMessage(params: {
                 at: params.message.timestamp,
               })
             : null;
+          const queueClosedHandoff = Boolean(
+            chatbotResult.pendingHandoff &&
+            handoffDecision?.kind === "closed" &&
+            closedHandoffPolicy.action === "QUEUE_FOR_NEXT_OPEN"
+          );
           const replyText =
-            handoffDecision?.kind === "closed"
+            handoffDecision?.kind === "closed" && !queueClosedHandoff
               ? handoffDecision.closedText
               : handoffDecision?.kind === "blocked"
                 ? undefined
-              : chatbotResult.replyText;
+                : chatbotResult.replyText;
           for (const event of chatbotResult.events ?? []) {
             logger.info({
               ...event,
@@ -1076,7 +1450,10 @@ export async function ingestWebSessionInboundMessage(params: {
               });
             }
           }
-          if (chatbotResult.pendingHandoff && handoffDecision?.kind !== "closed" && handoffDecision?.kind !== "blocked") {
+          if (
+            chatbotResult.pendingHandoff &&
+            (queueClosedHandoff || (handoffDecision?.kind !== "closed" && handoffDecision?.kind !== "blocked"))
+          ) {
             const activated = activateHumanHandoff(
               clearChatbotRuntime(runtimeConversationState),
               params.message.timestamp.toISOString(),
@@ -1124,24 +1501,79 @@ export async function ingestWebSessionInboundMessage(params: {
           });
           if (
             postFlowRuntime &&
-            handoffDecision?.kind !== "closed" &&
+            (queueClosedHandoff || handoffDecision?.kind !== "closed") &&
             handoffDecision?.kind !== "blocked" &&
             (runtimeConversationState.mode === "HUMAN" || runtimeConversationState.status === "WAITING")
           ) {
-            await applyBalancedQueueAssignment({
-              prisma,
-              clientId: params.message.clientId,
-              conversationId: conversation?.id ?? null,
-              runtimeStateId: postFlowRuntime.id,
-              waId: params.message.sender,
-              waIdCanonical: params.message.senderCanonical,
-              departmentId: postFlowRuntime.departmentId,
-              queueId: postFlowRuntime.queueId,
-              status: postFlowRuntime.status,
-              assignedUserId: postFlowRuntime.assignedUserId,
-              requestId,
-              source: "whatsapp.web.chatbot.handoff",
-            });
+            if (!queueClosedHandoff) {
+              await applyBalancedQueueAssignment({
+                prisma,
+                clientId: params.message.clientId,
+                conversationId: conversation?.id ?? null,
+                runtimeStateId: postFlowRuntime.id,
+                waId: params.message.sender,
+                waIdCanonical: params.message.senderCanonical,
+                departmentId: postFlowRuntime.departmentId,
+                queueId: postFlowRuntime.queueId,
+                status: postFlowRuntime.status,
+                assignedUserId: postFlowRuntime.assignedUserId,
+                requestId,
+                source: "whatsapp.web.chatbot.handoff",
+              });
+            }
+            if (queueClosedHandoff) {
+              const protocol = buildConversationProtocol({
+                id: conversation?.id ?? null,
+                createdAt: params.message.timestamp,
+              });
+              runtimeConversationState = await sendWebSessionBotText({
+                prisma,
+                clientId: params.message.clientId,
+                clientKey: params.message.tenantKey,
+                waId: params.message.sender,
+                waIdCanonical: params.message.senderCanonical,
+                channelAccountId: params.message.channelAccountId,
+                requestId: `${requestId}:protocol`,
+                text: buildConversationProtocolNotice(protocol),
+                state: runtimeConversationState,
+              });
+              const position = await getQueuePosition({
+                prisma,
+                clientId: params.message.clientId,
+                runtimeStateId: postFlowRuntime.id,
+                queueId: postFlowRuntime.queueId,
+              });
+              if (position) {
+                runtimeConversationState = await sendWebSessionBotText({
+                  prisma,
+                  clientId: params.message.clientId,
+                  clientKey: params.message.tenantKey,
+                  waId: params.message.sender,
+                  waIdCanonical: params.message.senderCanonical,
+                  channelAccountId: params.message.channelAccountId,
+                  requestId: `${requestId}:queue-position`,
+                  text: closedHandoffPolicy.queuePositionText.replace("{position}", String(position)),
+                  state: runtimeConversationState,
+                });
+              }
+              runtimeConversationState = await sendWebSessionBotText({
+                prisma,
+                clientId: params.message.clientId,
+                clientKey: params.message.tenantKey,
+                waId: params.message.sender,
+                waIdCanonical: params.message.senderCanonical,
+                channelAccountId: params.message.channelAccountId,
+                requestId: `${requestId}:off-hours`,
+                text: closedHandoffPolicy.offHoursMessage,
+                state: runtimeConversationState,
+              });
+              await persistWebSessionRuntimeState({
+                prisma,
+                clientId: params.message.clientId,
+                waId: params.message.sender,
+                state: runtimeConversationState,
+              });
+            }
             publishRealtimeEvent({
               type: "conversation.handoff.updated",
               clientId: params.message.clientId,
