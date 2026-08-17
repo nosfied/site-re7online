@@ -552,7 +552,14 @@ export default function TenantChannelsPage() {
               <TechnicalValue label="Número detectado" value={webSessionStatus?.account?.channelAccountId ? formatBrazilPhone(webSessionStatus.account.channelAccountId) : "-"} />
               <TechnicalValue label="Feature" value={webSessionStatus?.featureEnabled ? "enabled" : "disabled"} />
               <TechnicalValue label="Identidade Meta" value={webSessionStatus?.hybridIdentity?.meta.maskedNumber ?? "Não configurada"} />
-              <TechnicalValue label="Número autorizado Web" value={webSessionStatus?.hybridIdentity?.web.maskedNumber ?? "Não autorizado"} />
+              <TechnicalValue
+                label="Número autorizado Web"
+                value={
+                  webSessionStatus?.hybridIdentity?.web.canonicalNumber
+                    ? formatBrazilPhone(webSessionStatus.hybridIdentity.web.canonicalNumber)
+                    : "Não autorizado"
+                }
+              />
               <TechnicalValue
                 label="Transporte principal"
                 value={
