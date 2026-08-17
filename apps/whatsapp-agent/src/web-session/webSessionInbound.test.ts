@@ -1030,6 +1030,66 @@ test("close command does not close normal bot conversation", async () => {
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Atendimento encerrado")), false);
 });
 
+test("chatbot handoff opens a new human service cycle with persisted operational protocol", async () => {
+  resetState({
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        mode: "BOT",
+        status: null,
+        handoffStatus: "NONE",
+        handoffRequestedAt: null,
+        handoffActivatedAt: null,
+        chatbotActive: true,
+        chatbotNodeId: "menu",
+        answers: {},
+        assignedUserId: null,
+      }),
+    ],
+    chatbotFlow: {
+      id: "flow_1",
+      definition: {
+        start: "menu",
+        nodes: {
+          menu: {
+            type: "menu",
+            text: "Menu inicial",
+            options: [
+              {
+                label: "Outros",
+                next: "handoff_1",
+                departmentId: "department_general",
+                queueId: "queue_general",
+              },
+            ],
+          },
+          handoff_1: {
+            type: "handoff",
+            text: "Aguarde só mais um pouco, estou te direcionando para um/uma atendente.",
+          },
+        },
+      },
+    },
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    const result = await ingestText("1", "MSG_HANDOFF_CYCLE", "2026-08-11T12:00:00.000Z");
+    assert.equal(result.action, "persisted");
+  });
+
+  const runtime = state.runtimeStates[0];
+  assert.equal(runtime?.mode, "HUMAN");
+  assert.equal(runtime?.status, "WAITING");
+  assert.equal(runtime?.handoffStatus, "ACTIVE");
+  assert.equal(runtime?.chatbotActive, false);
+  assert.equal(runtime?.chatbotNodeId, null);
+  const answers = runtime?.answers as Record<string, unknown> | undefined;
+  const operationalProtocol = answers?.operationalProtocol as Record<string, unknown> | undefined;
+  assert.match(String(operationalProtocol?.protocol ?? ""), /^CVT-[A-Z0-9]{12}$/);
+  assert.equal(operationalProtocol?.source, "service_cycle");
+});
+
 test("CSAT accepts only scores 1 to 5 before TTL and records the response", async () => {
   resetState({
     config: closeConfig(),

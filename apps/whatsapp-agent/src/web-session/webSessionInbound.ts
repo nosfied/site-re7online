@@ -363,6 +363,27 @@ function ensureOperationalProtocol(state: ConversationState, issuedAt: Date) {
   };
 }
 
+function buildInboundNotificationMessage(params: {
+  internalMessageId: string | null;
+  message: NormalizedWebSessionInboundMessage;
+  messageId: string;
+  requestId: string;
+}) {
+  return {
+    internalMessageId: params.internalMessageId,
+    messageKind: "inbound" as const,
+    direction: "INBOUND" as const,
+    type: params.message.type,
+    status: "RECEIVED" as const,
+    intent: null,
+    bodyText: params.message.text ?? null,
+    requestId: params.requestId,
+    messageId: params.messageId,
+    metaMessageId: null,
+    createdAt: params.message.timestamp.toISOString(),
+  };
+}
+
 function clearWebSessionServiceCycleState(state: ConversationState): ConversationState {
   const answers = isRecord(state.answers) ? state.answers as Record<string, unknown> : {};
   const nextAnswers = { ...answers };
@@ -1783,6 +1804,12 @@ export async function ingestWebSessionInboundMessage(params: {
       where: { clientId_messageId: { clientId: params.message.clientId, messageId } },
       select: { id: true },
     });
+    const inboundNotificationMessage = buildInboundNotificationMessage({
+      internalMessageId: insertedMessage?.id ?? null,
+      message: params.message,
+      messageId,
+      requestId,
+    });
     publishRealtimeEvent({
       type: "message.created",
       clientId: params.message.clientId,
@@ -1793,7 +1820,7 @@ export async function ingestWebSessionInboundMessage(params: {
       assignedUserId: runtime.assignedUserId ?? null,
       departmentId: runtime.departmentId ?? null,
       message: {
-        internalMessageId: insertedMessage?.id ?? null,
+        internalMessageId: inboundNotificationMessage.internalMessageId,
         messageKind: "inbound",
         direction: "INBOUND",
         type: params.message.type,
@@ -2281,10 +2308,16 @@ export async function ingestWebSessionInboundMessage(params: {
                 runtimeConversationState.handoff.status === "none"
                   ? "active"
                   : runtimeConversationState.handoff.status,
-              assignedUserId: postFlowRuntime.assignedUserId ?? null,
-              departmentId: postFlowRuntime.departmentId ?? null,
-              updatedAt: new Date().toISOString(),
-            });
+                assignedUserId: postFlowRuntime.assignedUserId ?? null,
+                departmentId: postFlowRuntime.departmentId ?? null,
+                updatedAt: new Date().toISOString(),
+                notificationMessage: {
+                  messageId: inboundNotificationMessage.messageId,
+                  type: inboundNotificationMessage.type,
+                  bodyText: inboundNotificationMessage.bodyText,
+                  createdAt: inboundNotificationMessage.createdAt,
+                },
+              });
           }
           await safeRecordInboundEvent({
             prisma,
