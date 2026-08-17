@@ -5973,7 +5973,7 @@ export default function AppInboxPage() {
               <div className="min-w-0">
                 <h2 className="text-base font-semibold">Mensagens prontas</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Textos prontos da sua organização para agilizar respostas dentro da janela de atendimento.
+                  Textos prontos da sua organização para agilizar respostas no canal configurado.
                 </p>
               </div>
               <button
@@ -6062,7 +6062,7 @@ export default function AppInboxPage() {
                       <div>
                         <h3 className="text-sm font-semibold text-slate-950">{selectedCannedReply.title}</h3>
                         <p className="mt-1 text-xs text-slate-500">
-                          Mensagem interna. Não substitui modelo aprovado quando a janela estiver fechada.
+                          Mensagem interna. Em Meta Cloud, texto livre segue a janela de atendimento; em Web Session, segue o canal conectado.
                         </p>
                       </div>
                       <div>

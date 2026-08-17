@@ -768,7 +768,16 @@ export async function createWebSessionMediaOutboundMessage(params: {
     status: sendResult.ok ? "sent" : "failed",
     error: sendResult.ok ? null : sendResult.error,
   };
-  const outboundInserted = await persistOutboundMessage({
+  const existingOutbound = await params.prisma.outboundMessage.findUnique({
+    where: {
+      clientId_messageId: {
+        clientId: params.clientId,
+        messageId,
+      },
+    },
+    select: { id: true },
+  });
+  const outboundData = {
     clientId: params.clientId,
     channel: "whatsapp",
     provider: "web_session",
@@ -784,7 +793,23 @@ export async function createWebSessionMediaOutboundMessage(params: {
     metaMessageId: null,
     errorBody: sendResult.ok ? null : sendResult.error,
     rawPayload,
-  });
+  };
+  const persistedOutbound = existingOutbound
+    ? await params.prisma.outboundMessage.update({
+        where: {
+          clientId_messageId: {
+            clientId: params.clientId,
+            messageId,
+          },
+        },
+        data: outboundData,
+        select: { id: true },
+      })
+    : await params.prisma.outboundMessage.create({
+        data: outboundData,
+        select: { id: true },
+      });
+  const outboundInserted = !existingOutbound;
   await persistEvent({
     clientId: params.clientId,
     waId: params.waId,
@@ -848,15 +873,6 @@ export async function createWebSessionMediaOutboundMessage(params: {
     mediaKind: stored.kind,
     hasExternalMessageId: sendResult.ok ? Boolean(sendResult.externalMessageId) : false,
     error: sendResult.ok ? null : sendResult.error,
-  });
-  const persistedOutbound = await params.prisma.outboundMessage.findUnique({
-    where: {
-      clientId_messageId: {
-        clientId: params.clientId,
-        messageId,
-      },
-    },
-    select: { id: true },
   });
   return {
     ok: true,

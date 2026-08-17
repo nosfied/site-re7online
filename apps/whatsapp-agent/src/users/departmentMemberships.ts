@@ -113,7 +113,9 @@ export async function syncUserDepartmentMemberships(
   }
 ) {
   const departmentIds = uniqueStrings(params.departmentIds);
-  const primaryDepartmentId = params.primaryDepartmentId?.trim() || null;
+  const requestedPrimaryDepartmentId = params.primaryDepartmentId?.trim() || null;
+  const primaryDepartmentId =
+    requestedPrimaryDepartmentId ?? (departmentIds.length === 1 ? departmentIds[0] : null);
   if (departmentIds.length > 0 && !primaryDepartmentId) {
     throw new DepartmentMembershipValidationError(
       "primary_department_required",

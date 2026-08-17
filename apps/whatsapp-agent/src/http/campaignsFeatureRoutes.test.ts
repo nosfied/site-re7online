@@ -2519,16 +2519,18 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   });
 });
 
-test("inbox sends WhatsApp web session text through worker without Meta fallback", async (t) => {
+test("inbox routes WhatsApp web session outbound through worker without Meta fallback", async (t) => {
   const previousWorkerUrl = process.env.WHATSAPP_WEB_WORKER_CONTROL_URL;
   const previousWorkerToken = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN;
   const previousFetch = globalThis.fetch;
   const waId = "5511940008842";
   const legacyCanonicalWaId = "55119940008842";
   const channelAccountId = "lab-outbound-account";
-  const workerRequests: Array<Record<string, unknown>> = [];
+  const workerTextRequests: Array<Record<string, unknown>> = [];
+  const workerMediaRequests: Array<Record<string, unknown>> = [];
+  let workerMessageSequence = 0;
   const fakeWorker = createServer((req, res) => {
-    if (req.method !== "POST" || req.url !== "/web-session/send-text") {
+    if (req.method !== "POST" || (req.url !== "/web-session/send-text" && req.url !== "/web-session/send-media")) {
       res.writeHead(404, { "content-type": "application/json" });
       res.end(JSON.stringify({ ok: false, error: "not_found" }));
       return;
@@ -2537,9 +2539,12 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
     const chunks: Buffer[] = [];
     req.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
     req.on("end", () => {
-      workerRequests.push(JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>);
+      const requestPayload = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
+      const requests = req.url === "/web-session/send-media" ? workerMediaRequests : workerTextRequests;
+      requests.push(requestPayload);
+      workerMessageSequence += 1;
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true, externalMessageId: `baileys-test-message-id-${workerRequests.length}` }));
+      res.end(JSON.stringify({ ok: true, externalMessageId: `baileys-test-message-id-${workerMessageSequence}` }));
     });
   });
   await new Promise<void>((resolve) => fakeWorker.listen(0, "127.0.0.1", resolve));
@@ -2679,11 +2684,11 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
   assert.equal(response.status, 200, JSON.stringify(response.body));
   assert.equal(response.body.message.status, "SENT");
   assert.equal(response.body.message.metaMessageId, null);
-  assert.equal(workerRequests.length, 1);
-  assert.equal(workerRequests[0]?.tenantKey, `${prefix}-business`);
-  assert.equal(workerRequests[0]?.channelAccountId, channelAccountId);
-  assert.equal(workerRequests[0]?.recipientWaId, waId);
-  assert.notEqual(workerRequests[0]?.recipientWaId, legacyCanonicalWaId);
+  assert.equal(workerTextRequests.length, 1);
+  assert.equal(workerTextRequests[0]?.tenantKey, `${prefix}-business`);
+  assert.equal(workerTextRequests[0]?.channelAccountId, channelAccountId);
+  assert.equal(workerTextRequests[0]?.recipientWaId, waId);
+  assert.notEqual(workerTextRequests[0]?.recipientWaId, legacyCanonicalWaId);
 
   const outbound = await prisma.outboundMessage.findFirstOrThrow({
     where: {
@@ -2751,8 +2756,8 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
     previewType: "IMAGE",
     mode: "reply",
   });
-  assert.equal(workerRequests.length, 2);
-  assert.deepEqual(workerRequests[1]?.replyTo, {
+  assert.equal(workerTextRequests.length, 2);
+  assert.deepEqual(workerTextRequests[1]?.replyTo, {
     externalMessageId: "quoted-inbound-1",
     remoteJid: `${waId}@s.whatsapp.net`,
     fromMe: false,
@@ -2840,10 +2845,10 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
   assert.equal(claimResponse.status, 200, JSON.stringify(claimResponse.body));
   assert.match(claimResponse.body.protocol ?? "", /^CVT-/);
   assert.equal(claimResponse.body.assignedUserId, businessAdmin.id);
-  assert.equal(workerRequests.length, 3);
-  assert.equal(workerRequests[2]?.recipientWaId, protocolWaId);
+  assert.equal(workerTextRequests.length, 3);
+  assert.equal(workerTextRequests[2]?.recipientWaId, protocolWaId);
   assert.equal(
-    typeof workerRequests[2]?.text === "string" && workerRequests[2].text.includes(claimResponse.body.protocol ?? ""),
+    typeof workerTextRequests[2]?.text === "string" && workerTextRequests[2].text.includes(claimResponse.body.protocol ?? ""),
     true
   );
   const protocolOutbound = await prisma.outboundMessage.findFirstOrThrow({
@@ -2855,6 +2860,121 @@ test("inbox sends WhatsApp web session text through worker without Meta fallback
     },
   });
   assert.equal((protocolOutbound.rawPayload as Record<string, unknown>).source, "protocol_notice");
+
+  const legacyMetaWaId = "5511940008844";
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      config: { whatsappPrimaryTransport: "web_session" },
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: businessClientId,
+      config: { whatsappPrimaryTransport: "web_session" },
+      schemaVersion: 1,
+    },
+  });
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId: legacyMetaWaId,
+      waIdCanonical: legacyMetaWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: false,
+      windowExpiresAt: new Date("2026-01-01T10:00:00.000Z"),
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId: legacyMetaWaId,
+      waIdCanonical: legacyMetaWaId,
+      conversationKey: `${prefix}-business:${legacyMetaWaId}`,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: false,
+      mode: "HUMAN",
+      status: "IN_PROGRESS",
+      assignedUserId: businessAdmin.id,
+      assignedTo: businessAdmin.name,
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+  await seedHybridRuntimeState({
+    waId: legacyMetaWaId,
+    waIdCanonical: legacyMetaWaId,
+    firstSeenAt: "2026-01-01T08:00:00.000Z",
+    lastInboundAt: "2026-01-01T08:00:00.000Z",
+    window: { isOpen: false, expiresAt: "2026-01-01T10:00:00.000Z" },
+    mode: "HUMAN",
+    status: "IN_PROGRESS",
+    assignedUserId: businessAdmin.id,
+    assignedTo: businessAdmin.name,
+  });
+  const primaryTransportResponse = await request<{
+    ok: true;
+    message: { status: string; metaMessageId: string | null };
+  }>("POST", `/app/conversation/${legacyMetaWaId}/send`, businessAdmin, {
+    text: "Mensagem web session em conversa Meta fechada.",
+  });
+  assert.equal(primaryTransportResponse.status, 200, JSON.stringify(primaryTransportResponse.body));
+  assert.equal(primaryTransportResponse.body.message.status, "SENT");
+  assert.equal(primaryTransportResponse.body.message.metaMessageId, null);
+  assert.equal(workerTextRequests.length, 4);
+  assert.equal(workerTextRequests[3]?.recipientWaId, legacyMetaWaId);
+
+  const webSessionCanned = await request<{ ok: true; item: { id: string } }>(
+    "POST",
+    "/app/canned-replies",
+    businessAdmin,
+    {
+      title: "Resposta Web Session",
+      body: "Mensagem pronta por Web Session em conversa Meta fechada.",
+    }
+  );
+  assert.equal(webSessionCanned.status, 201, JSON.stringify(webSessionCanned.body));
+  const cannedPrimaryTransportResponse = await request<{
+    ok: true;
+    message: { status: string; metaMessageId: string | null };
+  }>("POST", `/app/conversation/${legacyMetaWaId}/send-canned-reply`, businessAdmin, {
+    cannedReplyId: webSessionCanned.body.item.id,
+  });
+  assert.equal(cannedPrimaryTransportResponse.status, 200, JSON.stringify(cannedPrimaryTransportResponse.body));
+  assert.equal(cannedPrimaryTransportResponse.body.message.status, "SENT");
+  assert.equal(cannedPrimaryTransportResponse.body.message.metaMessageId, null);
+  assert.equal(workerTextRequests.length, 5);
+  assert.equal(workerTextRequests[4]?.recipientWaId, legacyMetaWaId);
+
+  const imagePng = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l2t0XQAAAABJRU5ErkJggg==",
+    "base64"
+  );
+  const mediaForm = new FormData();
+  mediaForm.set("caption", "Imagem via Web Session em conversa Meta fechada.");
+  mediaForm.set("file", new Blob([imagePng], { type: "image/png" }), "web-session-hybrid.png");
+  const mediaPrimaryTransportResponse = await requestMultipart<{
+    ok: true;
+    message: { status: string; metaMessageId: string | null; media: { kind: string; mimeType: string; fileName: string } };
+  }>(`/app/conversation/${legacyMetaWaId}/send-media`, businessAdmin, mediaForm);
+  assert.equal(mediaPrimaryTransportResponse.status, 200, JSON.stringify(mediaPrimaryTransportResponse.body));
+  assert.equal(mediaPrimaryTransportResponse.body.message.status, "SENT");
+  assert.equal(mediaPrimaryTransportResponse.body.message.metaMessageId, null);
+  assert.equal(mediaPrimaryTransportResponse.body.message.media.kind, "image");
+  assert.equal(workerMediaRequests.length, 1);
+  assert.equal(workerMediaRequests[0]?.recipientWaId, legacyMetaWaId);
+  assert.equal(workerMediaRequests[0]?.mediaKind, "image");
+  const mediaOutbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, provider: "web_session", type: "IMAGE" },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.equal(mediaOutbound.waIdCanonical, legacyMetaWaId);
+  assert.equal(mediaOutbound.provider, "web_session");
+  assert.equal(mediaOutbound.type, "IMAGE");
+  assert.equal(mediaOutbound.externalMessageId, "baileys-test-message-id-6");
+  assert.equal(mediaOutbound.metaMessageId, null);
+  assert.equal((mediaOutbound.rawPayload as Record<string, unknown>).provider, "web_session");
   assert.equal((protocolOutbound.rawPayload as Record<string, unknown>).agentSignatureApplied, false);
   const protocolEvent = await prisma.event.findFirstOrThrow({
     where: { clientId: businessClientId, eventName: "conversation.protocol.notice.sent" },
@@ -8928,6 +9048,241 @@ test("campaign export remains capability protected", async () => {
   assert.equal(response.status, 403);
   assert.equal(getErrorCode(response.body), "feature_not_enabled");
   assert.equal(response.body.feature, "campaigns");
+});
+
+test("inbox operations stay functional when tenant has no active general department", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const waId = "5584993310101";
+  const departments: Array<{ id: string; queueId: string }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.optional-general.${safeTemplatePrefix}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return previousFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = previousFetch;
+  });
+
+  await prisma.department.updateMany({
+    where: {
+      clientId: businessClientId,
+      OR: [
+        { name: { equals: "Atendimento Geral", mode: "insensitive" } },
+        { slug: { equals: "atendimento-geral", mode: "insensitive" } },
+        { name: { equals: "Geral", mode: "insensitive" } },
+        { slug: { equals: "geral", mode: "insensitive" } },
+      ],
+    },
+    data: { isActive: false },
+  });
+
+  for (const [index, name] of ["Setor Alfa", "Setor Beta", "Setor Gama"].entries()) {
+    const department = await prisma.department.create({
+      data: {
+        clientId: businessClientId,
+        name: `${prefix} ${name}`,
+        slug: `${prefix}-optional-general-${index}`,
+      },
+      select: { id: true },
+    });
+    const queue = await prisma.queue.create({
+      data: {
+        clientId: businessClientId,
+        departmentId: department.id,
+        name: `${prefix} Fila ${index + 1}`,
+      },
+      select: { id: true },
+    });
+    departments.push({ id: department.id, queueId: queue.id });
+  }
+
+  await prisma.user.updateMany({
+    where: { id: { in: [businessAdmin.id, businessSupervisor.id] }, clientId: businessClientId },
+    data: { departmentId: departments[0].id },
+  });
+  await prisma.userDepartmentMembership.updateMany({
+    where: { userId: { in: [businessAdmin.id, businessSupervisor.id] }, clientId: businessClientId },
+    data: { isPrimary: false, isActive: false },
+  });
+  for (const user of [businessAdmin, businessSupervisor]) {
+    for (const [index, department] of departments.entries()) {
+      await prisma.userDepartmentMembership.upsert({
+        where: { userId_departmentId: { userId: user.id, departmentId: department.id } },
+        create: {
+          clientId: businessClientId,
+          userId: user.id,
+          departmentId: department.id,
+          isPrimary: index === 0,
+          isActive: true,
+        },
+        update: { isPrimary: index === 0, isActive: true },
+      });
+    }
+  }
+
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    create: {
+      clientId: businessClientId,
+      businessToken: "optional-general-token",
+      phoneNumberId: `optional-general-phone-${safeTemplatePrefix}`,
+      rawPayload: {},
+    },
+    update: {
+      businessToken: "optional-general-token",
+      phoneNumberId: `optional-general-phone-${safeTemplatePrefix}`,
+      rawPayload: {},
+    },
+  });
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      departmentId: departments[0].id,
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      lastInboundAt: new Date(),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      conversationKey: `${prefix}-business:${waId}`,
+      channel: "whatsapp",
+      provider: "meta",
+      departmentId: departments[0].id,
+      queueId: departments[0].queueId,
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      mode: "HUMAN",
+      status: "WAITING",
+      lastInboundAt: new Date(),
+    },
+  });
+  await runtimeStorage.upsertConversation({
+    clientKey: `${prefix}-business`,
+    conversationKey: `${prefix}-business:${waId}`,
+    waId,
+    waIdCanonical: waId,
+    firstSeenAt: new Date().toISOString(),
+    lastInboundAt: new Date().toISOString(),
+    window: { isOpen: true, expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() },
+    handoff: { status: "active" },
+    mode: "HUMAN",
+    status: "WAITING",
+    assignedUserId: null,
+    assignedTo: null,
+    answers: {},
+    chatbotActive: false,
+    departmentId: departments[0].id,
+    queueId: departments[0].queueId,
+  } as ConversationState);
+  await prisma.inboundMessage.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      messageId: `wamid.optional-general.inbound.${safeTemplatePrefix}`,
+      type: "TEXT",
+      bodyText: "Mensagem inicial",
+      allowlistHit: true,
+      rawPayload: { provider: "meta" },
+    },
+  });
+
+  const inbox = await request<{ ok: true }>("GET", "/app/conversations", businessAdmin);
+  assert.equal(inbox.status, 200, JSON.stringify(inbox.body));
+  const detail = await request<{ ok: true }>("GET", `/app/conversation/${waId}`, businessAdmin);
+  assert.equal(detail.status, 200, JSON.stringify(detail.body));
+  const timeline = await request<{ ok: true }>("GET", `/app/conversation/${waId}/timeline`, businessAdmin);
+  assert.equal(timeline.status, 200, JSON.stringify(timeline.body));
+
+  const claim = await request<{ ok: true; assignedUserId: string | null; departmentId: string | null }>(
+    "POST",
+    `/app/conversation/${waId}/claim`,
+    businessAdmin,
+    {}
+  );
+  assert.equal(claim.status, 200, JSON.stringify(claim.body));
+  assert.equal(claim.body.assignedUserId, businessAdmin.id);
+  assert.equal(claim.body.departmentId, departments[0].id);
+
+  const textSend = await request<{ ok: true; message: { status: string; metaMessageId: string | null } }>(
+    "POST",
+    `/app/conversation/${waId}/send`,
+    businessAdmin,
+    { text: "Resposta sem setor geral." }
+  );
+  assert.equal(textSend.status, 200, JSON.stringify(textSend.body));
+  assert.equal(textSend.body.message.status, "SENT");
+  assert.ok(textSend.body.message.metaMessageId);
+
+  const canned = await request<{ ok: true; item: { id: string } }>("POST", "/app/canned-replies", businessAdmin, {
+    title: "Sem setor geral",
+    body: "Mensagem pronta sem setor geral.",
+  });
+  assert.equal(canned.status, 201, JSON.stringify(canned.body));
+  const cannedSend = await request<{ ok: true; message: { status: string; metaMessageId: string | null } }>(
+    "POST",
+    `/app/conversation/${waId}/send-canned-reply`,
+    businessAdmin,
+    { cannedReplyId: canned.body.item.id }
+  );
+  assert.equal(cannedSend.status, 200, JSON.stringify(cannedSend.body));
+  assert.equal(cannedSend.body.message.status, "SENT");
+  assert.ok(cannedSend.body.message.metaMessageId);
+
+  const transfer = await request<{ ok: true; assignedUserId: string | null; departmentId: string | null }>(
+    "POST",
+    `/app/conversation/${waId}/transfer`,
+    businessAdmin,
+    { userId: businessSupervisor.id }
+  );
+  assert.equal(transfer.status, 200, JSON.stringify(transfer.body));
+  assert.equal(transfer.body.assignedUserId, businessSupervisor.id);
+  assert.equal(transfer.body.departmentId, departments[0].id);
+
+  const releaseToGeneral = await request<ErrorPayload>(
+    "POST",
+    `/app/conversation/${waId}/release-to-general`,
+    businessSupervisor
+  );
+  assert.equal(releaseToGeneral.status, 409, JSON.stringify(releaseToGeneral.body));
+  assert.equal(getErrorCode(releaseToGeneral.body), "general_queue_unavailable");
+
+  const closeToGeneral = await request<ErrorPayload>(
+    "POST",
+    `/app/conversation/${waId}/close-to-general`,
+    businessSupervisor
+  );
+  assert.equal(closeToGeneral.status, 409, JSON.stringify(closeToGeneral.body));
+  assert.equal(getErrorCode(closeToGeneral.body), "general_queue_unavailable");
+
+  const activeGeneralDepartments = await prisma.department.count({
+    where: {
+      clientId: businessClientId,
+      isActive: true,
+      OR: [
+        { name: { equals: "Atendimento Geral", mode: "insensitive" } },
+        { slug: { equals: "atendimento-geral", mode: "insensitive" } },
+        { name: { equals: "Geral", mode: "insensitive" } },
+        { slug: { equals: "geral", mode: "insensitive" } },
+      ],
+    },
+  });
+  assert.equal(activeGeneralDepartments, 0);
 });
 
 test("tenant admins manage department schedule exceptions with RBAC and tenant isolation", async () => {

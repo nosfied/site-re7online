@@ -95,6 +95,9 @@ function normalizeAppErrorMessage(error: AppApiError, fallback: string) {
   if (error.errorCode === "department_required") {
     return "Selecione um setor para AGENT ou SUPERVISOR.";
   }
+  if (error.errorCode === "primary_department_required") {
+    return "Selecione o setor principal.";
+  }
   if (error.errorCode === "department_not_found") {
     return "Setor inválido para esta organização.";
   }
@@ -561,6 +564,9 @@ export default function AppSettingsUsersPage() {
                       .map((departmentId) => departmentNameById[departmentId] || departmentId)
                       .join(", ")
                   : "-";
+              const primaryDepartmentLabel = draft.primaryDepartmentId
+                ? departmentNameById[draft.primaryDepartmentId] || draft.primaryDepartmentId
+                : "-";
               return (
                 <article
                   key={item.id}
@@ -576,6 +582,10 @@ export default function AppSettingsUsersPage() {
                     <div className="flex flex-wrap items-center gap-1.5">
                       <InfoBadge label={`Perfil: ${draft.role}`} />
                       <InfoBadge label={`Setor: ${departmentLabel}`} />
+                      <InfoBadge
+                        label={`Principal: ${primaryDepartmentLabel}`}
+                        tone={draft.primaryDepartmentId ? "success" : "warning"}
+                      />
                       <InfoBadge
                         label={draft.isActive ? "Ativo" : "Inativo"}
                         tone={draft.isActive ? "success" : "warning"}

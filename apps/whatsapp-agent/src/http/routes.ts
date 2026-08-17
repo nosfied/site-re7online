@@ -318,7 +318,7 @@ import {
   DEFAULT_OPERATIONAL_DEPARTMENT_NAME,
   DEFAULT_OPERATIONAL_QUEUE_NAME,
   ensureDefaultOperationalDepartmentAndQueue,
-  resolveOperationalDepartmentId,
+  isLegacyOperationalDepartment,
 } from "../bootstrap/defaultOperationalDepartment.js";
 import { ensureDefaultDepartments } from "../bootstrap/seedDepartments.js";
 import { validateChatbotFlowDefinition } from "../chatbot/chatbotFlow.js";
@@ -4697,7 +4697,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           waId: resolvedConversation.resolvedWaId,
           channel: serializeInboxChannelFields(resolvedConversation.winner ?? undefined).channel,
         }),
-        await ensureDefaultDepartmentAndQueue(prisma, client.id)
+        await loadOptionalDefaultDepartmentAndQueue(prisma, client.id)
       );
       if (
         !hasConversationDepartmentAccess({
@@ -4808,7 +4808,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           waId: resolvedConversation.resolvedWaId,
           channel: serializeInboxChannelFields(resolvedConversation.winner ?? undefined).channel,
         }),
-        await ensureDefaultDepartmentAndQueue(prisma, client.id)
+        await loadOptionalDefaultDepartmentAndQueue(prisma, client.id)
       );
       latency.duration("routeOperationalState", routeOperationalStateStartedAt);
       if (
@@ -5735,7 +5735,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
-      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
+      if (!defaults.department || !defaults.queue) {
+        json(res, 409, {
+          error: "general_queue_unavailable",
+          message: "Este tenant nao possui Atendimento Geral ativo para devolver a conversa.",
+        });
+        return;
+      }
       const closedAt = new Date().toISOString();
       const closingAssignedUserId = conversation.assignedUserId ?? clientAuth.userId;
       const nextState = {
@@ -5878,7 +5885,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const resolvedChannelFields = serializeInboxChannelFields(conversationRow);
       const resolvedChannel = resolvedChannelFields.channel;
-      const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && resolvedChannelFields.provider === "web_session";
+      const configuredPrimaryTransport =
+        resolvedChannel === "whatsapp"
+          ? await resolveWhatsappPrimaryTransport({ prisma, clientId: client.id })
+          : null;
+      const effectiveWhatsappProvider = configuredPrimaryTransport ?? resolvedChannelFields.provider;
+      const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && effectiveWhatsappProvider === "web_session";
       const currentConversation = await loadInboxConversationState(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
@@ -6121,7 +6133,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             actorUserId: clientAuth.userId,
             outboundSource: "canned_reply",
             cannedReplyId: cannedReply.id,
-            source: conversationRow,
+            source:
+              effectiveWhatsappProvider === "web_session"
+                ? { channel: "whatsapp", provider: "web_session", channelAccountId: null }
+                : conversationRow,
             conversation: currentConversation,
             reply: asWebSessionContextualReply(resolvedReplyContext),
           })
@@ -6170,7 +6185,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, result.ok ? 502 : result.statusCode, httpError(result.ok ? "message_send_failed" : result.error, "Falha ao enviar mensagem pronta."));
         return;
       }
-      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
       const conversation = await ensureConversationOperationalState(prisma, {
         clientId: client.id,
         defaults,
@@ -6570,7 +6585,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         return;
       }
-      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
       const conversation = await ensureConversationOperationalState(prisma, {
         clientId: client.id,
         defaults,
@@ -6729,7 +6744,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       const resolvedChannelFields = serializeInboxChannelFields(resolvedConversation.winner ?? undefined);
       const resolvedChannel = resolvedChannelFields.channel;
-      const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && resolvedChannelFields.provider === "web_session";
+      const configuredPrimaryTransport =
+        resolvedChannel === "whatsapp"
+          ? await resolveWhatsappPrimaryTransport({ prisma, clientId: client.id })
+          : null;
+      const effectiveWhatsappProvider = configuredPrimaryTransport ?? resolvedChannelFields.provider;
+      const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && effectiveWhatsappProvider === "web_session";
       if (
         isConversationOutboundBlocked(resolvedConversation.winner) ||
         resolvedChannel === "messenger" ||
@@ -6861,9 +6881,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               caption: body.caption,
               content: body.file.content,
               source: {
-                channel: resolvedChannelFields.channel,
-                provider: resolvedChannelFields.provider,
-                channelAccountId: resolvedChannelFields.channelAccountId,
+                channel: "whatsapp",
+                provider: "web_session",
+                channelAccountId:
+                  effectiveWhatsappProvider === resolvedChannelFields.provider
+                    ? resolvedChannelFields.channelAccountId
+                    : null,
               },
               conversation: currentConversation,
               reply: asWebSessionContextualReply(resolvedReplyContext),
@@ -6937,7 +6960,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
-      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
       const conversation = await ensureConversationOperationalState(prisma, {
         clientId: client.id,
         defaults,
@@ -10862,7 +10885,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
-      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
       const operationalConversation = materializeConversationOperationalState(conversation, defaults) ?? conversation;
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
         clientId: client.id,
@@ -10943,9 +10966,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "user_not_found" });
         return;
       }
+      const targetDepartmentIds = assignedUser
+        ? await loadActiveUserDepartmentIds(prisma, {
+            clientId: client.id,
+            userId: assignedUser.id,
+          })
+        : departmentAccess.departmentIds;
       const routing = await resolveAssignmentRouting(prisma, {
         clientId: client.id,
-        assignedUserDepartmentId: assignedUser?.departmentId ?? departmentAccess.departmentId,
+        assignedUserDepartmentId: chooseAssignmentDepartmentCandidate({
+          conversationDepartmentId: operationalConversation.departmentId ?? null,
+          userPrimaryDepartmentId: assignedUser?.departmentId ?? departmentAccess.departmentId,
+          userDepartmentIds: targetDepartmentIds,
+        }),
         fallbackDepartmentId: operationalConversation.departmentId ?? null,
         fallbackQueueId: operationalConversation.queueId ?? null,
       });
@@ -11296,7 +11329,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
-      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
+      if (!defaults.department || !defaults.queue) {
+        json(res, 409, {
+          error: "general_queue_unavailable",
+          message: "Este tenant nao possui Atendimento Geral ativo para devolver a conversa.",
+        });
+        return;
+      }
       const releasedAt = new Date().toISOString();
       const nextState = {
         ...conversation,
@@ -11558,9 +11598,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         return;
       }
+      const targetDepartmentIds = await loadActiveUserDepartmentIds(prisma, {
+        clientId: client.id,
+        userId: assignedUser.id,
+      });
       const routing = await resolveAssignmentRouting(prisma, {
         clientId: client.id,
-        assignedUserDepartmentId: assignedUser.departmentId,
+        assignedUserDepartmentId: chooseAssignmentDepartmentCandidate({
+          conversationDepartmentId: conversation.departmentId ?? null,
+          userPrimaryDepartmentId: assignedUser.departmentId,
+          userDepartmentIds: targetDepartmentIds,
+        }),
         fallbackDepartmentId: conversation.departmentId ?? null,
         fallbackQueueId: conversation.queueId ?? null,
       });
@@ -11948,15 +11996,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         return;
       }
-      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
       const nextState = {
         ...conversation,
         mode:
           nextStatus === ConversationOperationalStatus.CLOSED
             ? (conversation.mode ?? "HUMAN")
             : "HUMAN" as const,
-        departmentId: conversation.departmentId ?? defaults.department.id,
-        queueId: conversation.queueId ?? defaults.queue.id,
+        departmentId: conversation.departmentId ?? defaults.department?.id ?? null,
+        queueId: conversation.queueId ?? defaults.queue?.id ?? null,
         status: nextStatus,
         closedAt:
           nextStatus === ConversationOperationalStatus.CLOSED
@@ -16256,9 +16304,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, { error: "conversation_not_found" });
           return;
         }
+        const targetDepartmentIds = await loadActiveUserDepartmentIds(prisma, {
+          clientId: client.id,
+          userId: assignedUser.id,
+        });
         const routing = await resolveAssignmentRouting(prisma, {
           clientId: client.id,
-          assignedUserDepartmentId: assignedUser.departmentId,
+          assignedUserDepartmentId: chooseAssignmentDepartmentCandidate({
+            conversationDepartmentId: conversation.departmentId ?? null,
+            userPrimaryDepartmentId: assignedUser.departmentId,
+            userDepartmentIds: targetDepartmentIds,
+          }),
           fallbackDepartmentId: conversation.departmentId ?? null,
           fallbackQueueId: conversation.queueId ?? null,
         });
@@ -16374,9 +16430,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, { error: "conversation_not_found" });
           return;
         }
+        const targetDepartmentIds = await loadActiveUserDepartmentIds(prisma, {
+          clientId: client.id,
+          userId: assignedUser.id,
+        });
         const routing = await resolveAssignmentRouting(prisma, {
           clientId: client.id,
-          assignedUserDepartmentId: assignedUser.departmentId,
+          assignedUserDepartmentId: chooseAssignmentDepartmentCandidate({
+            conversationDepartmentId: conversation.departmentId ?? null,
+            userPrimaryDepartmentId: assignedUser.departmentId,
+            userDepartmentIds: targetDepartmentIds,
+          }),
           fallbackDepartmentId: conversation.departmentId ?? null,
           fallbackQueueId: conversation.queueId ?? null,
         });
@@ -16657,15 +16721,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, { error: "conversation_not_found" });
           return;
         }
-        const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+        const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
         const nextState = {
           ...conversation,
           mode:
             nextStatus === ConversationOperationalStatus.CLOSED
               ? (conversation.mode ?? "HUMAN")
               : "HUMAN" as const,
-          departmentId: conversation.departmentId ?? defaults.department.id,
-          queueId: conversation.queueId ?? defaults.queue.id,
+          departmentId: conversation.departmentId ?? defaults.department?.id ?? null,
+          queueId: conversation.queueId ?? defaults.queue?.id ?? null,
           status: nextStatus,
           closedAt:
             nextStatus === ConversationOperationalStatus.CLOSED
@@ -16783,9 +16847,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, { error: "user_not_found" });
           return;
         }
+        const targetDepartmentIds = assignedUser
+          ? await loadActiveUserDepartmentIds(prisma, {
+              clientId: client.id,
+              userId: assignedUser.id,
+            })
+          : [];
         const routing = await resolveAssignmentRouting(prisma, {
           clientId: client.id,
-          assignedUserDepartmentId: assignedUser?.departmentId ?? null,
+          assignedUserDepartmentId: chooseAssignmentDepartmentCandidate({
+            conversationDepartmentId: conversation.departmentId ?? null,
+            userPrimaryDepartmentId: assignedUser?.departmentId ?? null,
+            userDepartmentIds: targetDepartmentIds,
+            preserveConversationWithoutUserScope: !assignedUser,
+          }),
           fallbackDepartmentId: conversation.departmentId ?? null,
           fallbackQueueId: conversation.queueId ?? null,
         });
@@ -24193,6 +24268,14 @@ async function parseAdminUserUpsertPayload(
       primaryDepartmentId: body.primaryDepartmentId,
       legacyDepartmentId: hasDepartment ? data.departmentId ?? null : undefined,
     });
+    if (membershipInput.departmentIds.length > 0 && !membershipInput.primaryDepartmentId) {
+      return {
+        ok: false,
+        status: 400,
+        code: "primary_department_required",
+        message: "Primary department is required when departments are selected",
+      };
+    }
     if (membershipInput.primaryDepartmentId && !membershipInput.departmentIds.includes(membershipInput.primaryDepartmentId)) {
       return {
         ok: false,
@@ -26110,13 +26193,20 @@ async function resolveAssignmentRouting(
     fallbackQueueId?: string | null;
   }
 ) {
-  const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
-  const departmentId =
-    (await resolveOperationalDepartmentId(
-      prisma,
-      params.clientId,
-      params.assignedUserDepartmentId ?? params.fallbackDepartmentId ?? defaults.department.id
-    )) ?? defaults.department.id;
+  const optionalDefaults = await loadOptionalDefaultDepartmentAndQueue(prisma, params.clientId);
+  const departmentCandidate = params.assignedUserDepartmentId ?? params.fallbackDepartmentId ?? optionalDefaults.department?.id ?? null;
+  let departmentId =
+    (await resolveActiveOperationalDepartmentId(prisma, {
+      clientId: params.clientId,
+      departmentId: departmentCandidate,
+    })) ?? optionalDefaults.department?.id ?? null;
+  const defaults = departmentId
+    ? optionalDefaults
+    : await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
+  departmentId = departmentId ?? defaults.department?.id ?? null;
+  if (!departmentId) {
+    throw new Error("assignment_department_missing");
+  }
   const fallbackQueue = params.fallbackQueueId
     ? await prisma.queue.findFirst({
         where: {
@@ -26129,13 +26219,61 @@ async function resolveAssignmentRouting(
     : null;
   const queue =
     fallbackQueue ??
-    (departmentId === defaults.department.id
+    (departmentId === defaults.department?.id && defaults.queue
       ? defaults.queue
       : await ensureQueueForDepartment(prisma, {
           clientId: params.clientId,
           departmentId,
         }));
   return { departmentId, queueId: queue.id };
+}
+
+async function resolveActiveOperationalDepartmentId(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    departmentId?: string | null;
+  }
+) {
+  if (!params.departmentId) return null;
+  const department = await prisma.department.findFirst({
+    where: { clientId: params.clientId, id: params.departmentId },
+    select: { id: true, name: true, slug: true, isActive: true },
+  });
+  if (!department || !department.isActive || isLegacyOperationalDepartment(department)) {
+    return null;
+  }
+  return department.id;
+}
+
+async function loadActiveUserDepartmentIds(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    userId: string;
+  }
+) {
+  const memberships = await getUserDepartmentMemberships(prisma, params);
+  return memberships
+    .filter((membership) => membership.isActive && membership.departmentIsActive !== false)
+    .map((membership) => membership.departmentId);
+}
+
+function chooseAssignmentDepartmentCandidate(params: {
+  conversationDepartmentId?: string | null;
+  userPrimaryDepartmentId?: string | null;
+  userDepartmentIds?: string[];
+  preserveConversationWithoutUserScope?: boolean;
+}) {
+  const conversationDepartmentId = params.conversationDepartmentId ?? null;
+  const userDepartmentIds = params.userDepartmentIds ?? [];
+  if (
+    conversationDepartmentId &&
+    (params.preserveConversationWithoutUserScope || userDepartmentIds.includes(conversationDepartmentId))
+  ) {
+    return conversationDepartmentId;
+  }
+  return params.userPrimaryDepartmentId ?? conversationDepartmentId;
 }
 
 const CONVERSATION_OPERATIONAL_STATUS_VALUES = [
@@ -26462,11 +26600,10 @@ async function ensureConversationOperationalState(
   }
 ) {
   const normalizedDepartmentId = params.conversation
-    ? await resolveOperationalDepartmentId(
-        prisma,
-        params.clientId,
-        params.conversation.departmentId ?? null
-      )
+    ? (await resolveActiveOperationalDepartmentId(prisma, {
+        clientId: params.clientId,
+        departmentId: params.conversation.departmentId ?? null,
+      })) ?? params.defaults.department?.id ?? null
     : null;
   const normalizedConversation =
     params.conversation && normalizedDepartmentId !== (params.conversation.departmentId ?? null)
@@ -27074,31 +27211,33 @@ async function buildConversationActionPayload(
     assignedUserName?: string | null;
   }
 ) {
-  const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
+  const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, params.clientId);
   const conversation = materializeConversationOperationalState(params.conversation, defaults);
   const assignedUserName =
     params.assignedUserName ??
     (conversation?.assignedUserId
       ? await findAssignedUserName(prisma, params.clientId, conversation.assignedUserId)
       : null);
-  const departmentName =
-    conversation?.departmentId === defaults.department.id || !conversation?.departmentId
+  const departmentName = conversation?.departmentId
+    ? defaults.department && conversation.departmentId === defaults.department.id
       ? defaults.department.name
       : (
           await prisma.department.findFirst({
             where: { clientId: params.clientId, id: conversation.departmentId },
             select: { name: true },
           })
-        )?.name ?? null;
-  const queueName =
-    conversation?.queueId === defaults.queue.id || !conversation?.queueId
+        )?.name ?? null
+    : defaults.department?.name ?? null;
+  const queueName = conversation?.queueId
+    ? defaults.queue && conversation.queueId === defaults.queue.id
       ? defaults.queue.name
       : (
           await prisma.queue.findFirst({
             where: { clientId: params.clientId, id: conversation.queueId },
             select: { name: true },
           })
-        )?.name ?? null;
+        )?.name ?? null
+    : defaults.queue?.name ?? null;
   const tenants = await getTenants();
   const tenant = tenants[params.clientKey];
   const client = await prisma.client.findUnique({

@@ -105,6 +105,42 @@ test("supports zero, one and multiple active memberships with a primary departme
   assert.equal(user?.departmentId, fixture.departments[1].id);
 });
 
+test("auto-selects primary for a single department and rejects multiple departments without primary", async () => {
+  const fixture = await createFixture("primary-required");
+  await syncUserDepartmentMemberships(prisma, {
+    clientId: fixture.client.id,
+    userId: fixture.user.id,
+    departmentIds: [fixture.departments[0].id],
+    primaryDepartmentId: null,
+  });
+  let memberships = await getUserDepartmentMemberships(prisma, {
+    clientId: fixture.client.id,
+    userId: fixture.user.id,
+    fallbackToLegacy: false,
+  });
+  assert.equal(memberships.length, 1);
+  assert.equal(memberships[0].isPrimary, true);
+
+  await assert.rejects(
+    syncUserDepartmentMemberships(prisma, {
+      clientId: fixture.client.id,
+      userId: fixture.user.id,
+      departmentIds: fixture.departments.map((department) => department.id),
+      primaryDepartmentId: null,
+    }),
+    (error) =>
+      error instanceof DepartmentMembershipValidationError &&
+      error.code === "primary_department_required"
+  );
+  memberships = await getUserDepartmentMemberships(prisma, {
+    clientId: fixture.client.id,
+    userId: fixture.user.id,
+    fallbackToLegacy: false,
+  });
+  assert.equal(memberships.length, 1);
+  assert.equal(memberships[0].departmentId, fixture.departments[0].id);
+});
+
 test("legacy departmentId is used only when no memberships exist", async () => {
   const fixture = await createFixture("legacy");
   const memberships = await getUserDepartmentMemberships(prisma, {
