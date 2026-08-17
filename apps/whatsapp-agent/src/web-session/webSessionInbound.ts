@@ -1003,7 +1003,7 @@ async function sendWebSessionSatisfactionSurvey(params: {
       conversationId: params.conversationId,
       type: "csat",
       source: "human_close",
-      status: { in: ["sent", "pending", "responded"] },
+      status: { in: ["sent", "pending"] },
     },
     orderBy: { createdAt: "desc" },
     select: { id: true },

@@ -908,6 +908,47 @@ test("close command creates a single attributed CSAT after human service", async
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Atendimento encerrado")).length, 1);
 });
 
+test("close command creates a new CSAT after a previous survey was already answered", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        status: "IN_PROGRESS",
+        assignedUserId: "agent_1",
+        assignedTo: "Agente Um",
+        assignedAt: new Date("2026-08-11T12:20:00.000Z"),
+      }),
+    ],
+    satisfactionSurveys: [
+      {
+        id: "survey_old",
+        clientId: "client_1",
+        conversationId: "conversation_1",
+        type: "csat",
+        source: "human_close",
+        status: "responded",
+        questionText: "Pesquisa anterior",
+        expiresAt: new Date("2026-08-11T12:15:00.000Z"),
+        contactId: null,
+        leadId: null,
+      },
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("#ENCERRAR#", "MSG_CLOSE_REOPENED_REQUEST", "2026-08-11T12:30:00.000Z");
+    await ingestText("1", "MSG_CLOSE_REOPENED_CONFIRM", "2026-08-11T12:31:00.000Z");
+  });
+
+  assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal(state.satisfactionSurveys.length, 2);
+  assert.equal(state.satisfactionSurveys[1]?.assignedUserId, "agent_1");
+  assert.equal(state.satisfactionSurveys[1]?.status, "sent");
+  assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Pesquisa de Satisfação")).length, 1);
+});
+
 test("close command does not close normal bot conversation", async () => {
   resetState({
     config: closeConfig(),
