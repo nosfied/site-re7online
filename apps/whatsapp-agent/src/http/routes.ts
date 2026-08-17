@@ -315,6 +315,7 @@ import {
 } from "../utils/waid.js";
 import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
 import {
+  DEFAULT_OPERATIONAL_DEPARTMENT_NAME,
   DEFAULT_OPERATIONAL_QUEUE_NAME,
   ensureDefaultOperationalDepartmentAndQueue,
   resolveOperationalDepartmentId,
@@ -26420,12 +26421,44 @@ async function ensureDefaultDepartmentAndQueue(
   return ensureDefaultOperationalDepartmentAndQueue(prisma, clientId);
 }
 
+type ConversationOperationalDefaults = {
+  department: { id: string; name: string } | null;
+  queue: { id: string; name: string; departmentId: string } | null;
+};
+
+async function loadOptionalDefaultDepartmentAndQueue(
+  prisma: ReturnType<typeof getPrisma>,
+  clientId: string
+): Promise<ConversationOperationalDefaults> {
+  const slug = normalizeDepartmentSlug(DEFAULT_OPERATIONAL_DEPARTMENT_NAME);
+  const department = await prisma.department.findFirst({
+    where: {
+      clientId,
+      isActive: true,
+      OR: [{ slug }, { name: DEFAULT_OPERATIONAL_DEPARTMENT_NAME }],
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true, name: true },
+  });
+  if (!department) return { department: null, queue: null };
+  const queue = await prisma.queue.findFirst({
+    where: {
+      clientId,
+      departmentId: department.id,
+      name: DEFAULT_OPERATIONAL_QUEUE_NAME,
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true, name: true, departmentId: true },
+  });
+  return { department, queue };
+}
+
 async function ensureConversationOperationalState(
   prisma: ReturnType<typeof getPrisma>,
   params: {
     clientId: string;
     conversation: Awaited<ReturnType<typeof runtimeStorage.getConversation>>;
-    defaults: Awaited<ReturnType<typeof ensureDefaultDepartmentAndQueue>>;
+    defaults: ConversationOperationalDefaults;
   }
 ) {
   const normalizedDepartmentId = params.conversation
@@ -26458,7 +26491,7 @@ async function ensureConversationOperationalState(
 
 function materializeConversationOperationalState(
   conversation: Awaited<ReturnType<typeof runtimeStorage.getConversation>>,
-  defaults: Awaited<ReturnType<typeof ensureDefaultDepartmentAndQueue>>
+  defaults: ConversationOperationalDefaults
 ) {
   if (!conversation) return null;
   if (!isConversationInHumanFlow(conversation)) {
@@ -26475,8 +26508,8 @@ function materializeConversationOperationalState(
       : resolvedStatus;
   return {
     ...conversation,
-    departmentId: conversation.departmentId ?? defaults.department.id,
-    queueId: conversation.queueId ?? defaults.queue.id,
+    departmentId: conversation.departmentId ?? defaults.department?.id ?? null,
+    queueId: conversation.queueId ?? defaults.queue?.id ?? null,
     status: normalizedStatus,
     closedAt:
       normalizedStatus === ConversationOperationalStatus.CLOSED
@@ -26628,7 +26661,7 @@ async function loadConversationOperationalLookups(
       | null
       | undefined
     >;
-    defaults: Awaited<ReturnType<typeof ensureDefaultDepartmentAndQueue>>;
+    defaults: ConversationOperationalDefaults;
   }
 ) {
   const departmentIds = Array.from(
@@ -26663,8 +26696,12 @@ async function loadConversationOperationalLookups(
 
   const departmentById = new Map(departments.map((item) => [item.id, item.name]));
   const queueById = new Map(queues.map((item) => [item.id, item.name]));
-  departmentById.set(params.defaults.department.id, params.defaults.department.name);
-  queueById.set(params.defaults.queue.id, params.defaults.queue.name);
+  if (params.defaults.department) {
+    departmentById.set(params.defaults.department.id, params.defaults.department.name);
+  }
+  if (params.defaults.queue) {
+    queueById.set(params.defaults.queue.id, params.defaults.queue.name);
+  }
   return { departmentById, queueById };
 }
 
@@ -28522,7 +28559,7 @@ async function buildConversationListPayload(
   }
 ) {
   const defaultsStartedAt = channelLatencyNow();
-  const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
+  const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, params.clientId);
   recordInboxListTiming(params.clientId, "defaults", defaultsStartedAt);
   const conversationFetchLimit = Math.min(params.limit * 10 + 1, 1000);
   const messageFetchLimit = Math.min(conversationFetchLimit * 2, 2000);
@@ -29103,7 +29140,7 @@ async function buildConversationDetailPayload(
   }
 ) {
   const defaultsStartedAt = channelLatencyNow();
-  const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
+  const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, params.clientId);
   params.latency?.duration("detailDefaults", defaultsStartedAt);
   const detailResolveStartedAt = channelLatencyNow();
   const resolved = await resolveConversationTarget(prisma, {
