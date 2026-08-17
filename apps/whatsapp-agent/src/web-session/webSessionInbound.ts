@@ -1177,7 +1177,7 @@ async function restartWebSessionBotConversation(params: {
     flowId: chatbotFlow.id,
     definition: validatedDefinition.definition,
     state: nextState,
-    inboundText: acceptedRestartNode ? null : params.inboundText ?? null,
+    inboundText: null,
     nowIso: params.now.toISOString(),
     startNodeId: acceptedRestartNode ?? undefined,
     options: { departmentAvailabilityById },

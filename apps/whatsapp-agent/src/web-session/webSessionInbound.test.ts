@@ -1275,6 +1275,7 @@ test("completed CSAT asks for a new-service decision before returning to chatbot
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("OLDPROTO123"), false);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), true);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Tudo certo")), false);
 });
 
 test("completed CSAT decision repeats options for invalid input after prompt", async () => {
@@ -1361,6 +1362,7 @@ test("expired CSAT asks for a new-service decision and option 1 returns to bot m
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("satisfactionRuntime"), false);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), true);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Tudo certo")), false);
 });
 
 test("expired CSAT option 2 keeps the conversation closed", async () => {
