@@ -30,7 +30,7 @@ import {
   AppContactTimelineItem,
   AppSession,
   claimAppConversation,
-  closeAppConversationToGeneral,
+  closeAppConversation,
   clearAppSession,
   createAppLeadNote,
   fetchAppConversation,
@@ -5555,14 +5555,14 @@ export default function AppInboxPage() {
   const handleCloseConversationToGeneral = async () => {
     if (!session || !selectedConversationWaId) return;
     const confirmed = window.confirm(
-      "Finalizar este atendimento e devolver a conversa para a fila como Finalizada?"
+      "Encerrar este atendimento?\n\nAo confirmar, o protocolo será encerrado e a pesquisa de satisfação será enviada ao cliente."
     );
     if (!confirmed) return;
     setConversationAction("close-general");
     setError(null);
     setSuccess(null);
     try {
-      const response = await closeAppConversationToGeneral(session, selectedConversationWaId);
+      const response = await closeAppConversation(session, selectedConversationWaId);
       const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
       const stillInUserScope = canSessionAccessConversationDepartment(session, response.departmentId);
 
@@ -5604,14 +5604,14 @@ export default function AppInboxPage() {
       if (!stillInUserScope) {
         detailRequestSeqRef.current += 1;
         clearSelectedConversation();
-        setSuccess("Atendimento finalizado, devolvido para a fila e reativado para automação.");
+        setSuccess("Atendimento encerrado.");
         void refreshConversationList(session).catch((err) => {
           if ((err as { status?: number }).status === 401) handleUnauthorized();
         });
         return;
       }
 
-      setSuccess("Atendimento finalizado, devolvido para a fila e reativado para automação.");
+      setSuccess("Atendimento encerrado.");
       await refreshConversationList(session);
       await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
     } catch (err) {
@@ -6710,7 +6710,7 @@ export default function AppInboxPage() {
                       >
                         {conversationAction === "close-general"
                           ? "Finalizando..."
-                          : "Finalizar atendimento"}
+                          : "Encerrar atendimento"}
                       </button>
                     </>
                   ) : (
@@ -6794,8 +6794,8 @@ export default function AppInboxPage() {
                   </button>
                   <button
                     type="button"
-                    title="Finalizar atendimento"
-                    aria-label="Finalizar atendimento e devolver para a fila"
+                    title="Encerrar atendimento"
+                    aria-label="Encerrar atendimento"
                     disabled={!selectedConversationWaId || Boolean(conversationAction)}
                     onClick={handleCloseConversationToGeneral}
                     className="flex h-9 w-9 items-center justify-center rounded-xl border border-amber-500/25 bg-amber-50 text-base text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8 max-md:h-10 max-md:w-10"

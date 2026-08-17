@@ -87,6 +87,10 @@ function getNonEmptyString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function getBoolean(value: unknown, fallback = false) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function getClosedHandoffPolicy(definition: ChatbotFlowDefinition) {
   const raw = isRecord(definition.closedHandoffPolicy) ? definition.closedHandoffPolicy : {};
   const action = getNonEmptyString(raw.action)?.toUpperCase();
@@ -144,11 +148,22 @@ async function getWebSessionClosePolicy(params: { prisma: PrismaClient; clientId
   const root = isRecord(config?.config) ? config.config : {};
   const closeCommand = isRecord(root.chatbotCloseCommand) ? root.chatbotCloseCommand : {};
   const satisfaction = isRecord(root.satisfactionPolicy) ? root.satisfactionPolicy : {};
+  const closeConfirmation = isRecord(closeCommand.confirmation) ? closeCommand.confirmation : {};
+  const comment = isRecord(satisfaction.comment) ? satisfaction.comment : {};
   return {
     command: getNonEmptyString(closeCommand.command),
     closedMessage:
       getNonEmptyString(closeCommand.closedMessage) ??
       "Atendimento encerrado. Obrigado pelo contato.",
+    confirmation: {
+      enabled: getBoolean(closeConfirmation.enabled, false),
+      questionText:
+        getNonEmptyString(closeConfirmation.questionText) ??
+        "Encerrar o protocolo atual?\n\n1 - Sim\n2 - Não",
+      cancelledText:
+        getNonEmptyString(closeConfirmation.cancelledText) ??
+        "Encerramento cancelado. Seguimos com o atendimento.",
+    },
     satisfaction: {
       enabled: satisfaction.enabled === true,
       ttlMinutes:
@@ -160,8 +175,36 @@ async function getWebSessionClosePolicy(params: { prisma: PrismaClient; clientId
       questionText:
         getNonEmptyString(satisfaction.questionText) ??
         "Pesquisa de Satisfação do Protocolo #{protocol}.\n\nComo você avalia este atendimento?\n5 - ⭐⭐⭐⭐⭐\n4 - ⭐⭐⭐⭐\n3 - ⭐⭐⭐\n2 - ⭐⭐\n1 - ⭐\n\nObs.: Você tem 15 minutos para responder à pesquisa.",
+      commentEnabled: getBoolean(satisfaction.commentEnabled, getBoolean(comment.enabled, false)),
+      commentOfferText:
+        getNonEmptyString(satisfaction.commentOfferText) ??
+        getNonEmptyString(comment.offerText) ??
+        "Poderia compartilhar conosco o que motivou essa avaliação?\n\n1 - Sim\n2 - Não",
+      commentPromptText:
+        getNonEmptyString(satisfaction.commentPromptText) ??
+        getNonEmptyString(comment.promptText) ??
+        "Digite o texto:",
+      thankYouText:
+        getNonEmptyString(satisfaction.thankYouText) ??
+        getNonEmptyString(comment.thankYouText) ??
+        "Obrigad@ por participar da nossa pesquisa! 😊",
     },
   };
+}
+
+function renderWebSessionCloseTemplate(input: string, params: { protocol: string; contactName?: string | null; at: Date }) {
+  const dateTime = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Fortaleza",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(params.at);
+  return input
+    .replace(/\{protocol\}/g, params.protocol)
+    .replace(/\{dataHora\}/g, dateTime)
+    .replace(/\{contactName\}/g, params.contactName?.trim() || "contato");
 }
 
 function getSatisfactionRuntime(state: ConversationState) {
@@ -186,6 +229,59 @@ function markExpiredSurveyDecision(state: ConversationState, surveyId: string) {
     awaitingExpiredSurveyDecision: true,
     expiredSurveyId: surveyId,
   });
+}
+
+function markCloseConfirmation(state: ConversationState, requestedAt: Date) {
+  return withSatisfactionRuntime(state, {
+    ...getSatisfactionRuntime(state),
+    closeConfirmation: {
+      awaiting: true,
+      requestedAt: requestedAt.toISOString(),
+      previousMode: state.mode ?? null,
+      previousStatus: state.status ?? null,
+      previousHandoffStatus: state.handoff?.status ?? null,
+    },
+  });
+}
+
+function clearCloseConfirmation(state: ConversationState) {
+  const runtime = { ...getSatisfactionRuntime(state) };
+  delete runtime.closeConfirmation;
+  return withSatisfactionRuntime(state, runtime);
+}
+
+function getCloseConfirmationRuntime(state: ConversationState) {
+  const runtime = getSatisfactionRuntime(state);
+  return isRecord(runtime.closeConfirmation) ? runtime.closeConfirmation : null;
+}
+
+function markSatisfactionCommentOffer(state: ConversationState, surveyId: string, responseId: string) {
+  return withSatisfactionRuntime(state, {
+    ...getSatisfactionRuntime(state),
+    commentOffer: {
+      awaiting: true,
+      surveyId,
+      responseId,
+    },
+  });
+}
+
+function markSatisfactionCommentInput(state: ConversationState, surveyId: string, responseId: string) {
+  const runtime = { ...getSatisfactionRuntime(state) };
+  delete runtime.commentOffer;
+  runtime.commentInput = {
+    awaiting: true,
+    surveyId,
+    responseId,
+  };
+  return withSatisfactionRuntime(state, runtime);
+}
+
+function clearSatisfactionCommentRuntime(state: ConversationState) {
+  const runtime = { ...getSatisfactionRuntime(state) };
+  delete runtime.commentOffer;
+  delete runtime.commentInput;
+  return withSatisfactionRuntime(state, runtime);
 }
 
 function clearExpiredSurveyDecision(state: ConversationState) {
@@ -879,7 +975,7 @@ async function sendWebSessionSatisfactionSurvey(params: {
       type: "csat",
       status: "sent",
       questionText: policy.satisfaction.questionText.replace("{protocol}", params.protocol),
-      commentEnabled: false,
+      commentEnabled: policy.satisfaction.commentEnabled,
       source: "human_close",
       sentAt: now,
       expiresAt,
@@ -906,6 +1002,67 @@ async function sendWebSessionSatisfactionSurvey(params: {
   });
 }
 
+export async function closeWebSessionHumanService(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientKey: string;
+  waId: string;
+  waIdCanonical: string;
+  channelAccountId: string | null;
+  requestId: string;
+  conversationId: string | null;
+  protocol: string;
+  state: ConversationState;
+  now: Date;
+  assignedUserId?: string | null;
+  contactName?: string | null;
+}) {
+  if (params.state.status === "CLOSED" && params.state.closedAt) {
+    return params.state;
+  }
+  const closePolicy = await getWebSessionClosePolicy({ prisma: params.prisma, clientId: params.clientId });
+  const closingAssignedUserId = params.assignedUserId ?? params.state.assignedUserId ?? null;
+  let nextState: ConversationState = {
+    ...clearCloseConfirmation(clearChatbotRuntime(params.state)),
+    mode: "HUMAN" as const,
+    assignedUserId: null,
+    assignedTo: null,
+    assignedAt: null,
+    handoff: { ...params.state.handoff, status: "none" as const },
+    status: "CLOSED" as const,
+    closedAt: params.now.toISOString(),
+  };
+  nextState = await sendWebSessionBotText({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical,
+    channelAccountId: params.channelAccountId,
+    requestId: `${params.requestId}:close-message`,
+    text: renderWebSessionCloseTemplate(closePolicy.closedMessage, {
+      protocol: params.protocol,
+      contactName: params.contactName,
+      at: params.now,
+    }),
+    state: nextState,
+  });
+  return sendWebSessionSatisfactionSurvey({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical,
+    channelAccountId: params.channelAccountId,
+    requestId: params.requestId,
+    conversationId: params.conversationId,
+    protocol: params.protocol,
+    state: nextState,
+    now: params.now,
+    assignedUserId: closingAssignedUserId,
+  });
+}
+
 function satisfactionCategory(score: number) {
   if (score <= 2) return "negative";
   if (score === 3) return "neutral";
@@ -928,6 +1085,7 @@ async function handleWebSessionSatisfactionInbound(params: {
   if (!params.conversationId) return { handled: false as const, state: params.state };
   const text = String(params.inboundText ?? "").trim();
   const satisfactionRuntime = getSatisfactionRuntime(params.state);
+  const closePolicy = await getWebSessionClosePolicy({ prisma: params.prisma, clientId: params.clientId });
   if (satisfactionRuntime.awaitingExpiredSurveyDecision === true) {
     if (text === "1") {
       return {
@@ -972,6 +1130,87 @@ async function handleWebSessionSatisfactionInbound(params: {
     });
     return { handled: true as const, state };
   }
+  const commentOffer = isRecord(satisfactionRuntime.commentOffer) ? satisfactionRuntime.commentOffer : null;
+  if (commentOffer?.awaiting === true) {
+    const surveyId = getNonEmptyString(commentOffer.surveyId);
+    const responseId = getNonEmptyString(commentOffer.responseId);
+    if (!surveyId || !responseId) {
+      return { handled: true as const, state: clearSatisfactionCommentRuntime(params.state) };
+    }
+    if (text === "1") {
+      const state = await sendWebSessionBotText({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        waId: params.waId,
+        waIdCanonical: params.waIdCanonical,
+        channelAccountId: params.channelAccountId,
+        requestId: `${params.requestId}:survey-comment-prompt`,
+        text: closePolicy.satisfaction.commentPromptText,
+        state: markSatisfactionCommentInput(params.state, surveyId, responseId),
+      });
+      return { handled: true as const, state };
+    }
+    if (text === "2") {
+      await params.prisma.satisfactionSurvey.update({
+        where: { id: surveyId },
+        data: { status: "responded" },
+      });
+      const state = await sendWebSessionBotText({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        waId: params.waId,
+        waIdCanonical: params.waIdCanonical,
+        channelAccountId: params.channelAccountId,
+        requestId: `${params.requestId}:survey-thanks`,
+        text: closePolicy.satisfaction.thankYouText,
+        state: clearSatisfactionCommentRuntime(params.state),
+      });
+      return { handled: true as const, state };
+    }
+    const state = await sendWebSessionBotText({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical,
+      channelAccountId: params.channelAccountId,
+      requestId: `${params.requestId}:survey-comment-offer-repeat`,
+      text: closePolicy.satisfaction.commentOfferText,
+      state: params.state,
+    });
+    return { handled: true as const, state };
+  }
+  const commentInput = isRecord(satisfactionRuntime.commentInput) ? satisfactionRuntime.commentInput : null;
+  if (commentInput?.awaiting === true) {
+    const surveyId = getNonEmptyString(commentInput.surveyId);
+    const responseId = getNonEmptyString(commentInput.responseId);
+    if (!surveyId || !responseId) {
+      return { handled: true as const, state: clearSatisfactionCommentRuntime(params.state) };
+    }
+    const comment = text.slice(0, 2000);
+    await params.prisma.satisfactionResponse.update({
+      where: { id: responseId },
+      data: { comment: comment || null },
+    });
+    await params.prisma.satisfactionSurvey.update({
+      where: { id: surveyId },
+      data: { status: "responded" },
+    });
+    const state = await sendWebSessionBotText({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical,
+      channelAccountId: params.channelAccountId,
+      requestId: `${params.requestId}:survey-thanks`,
+      text: closePolicy.satisfaction.thankYouText,
+      state: clearSatisfactionCommentRuntime(params.state),
+    });
+    return { handled: true as const, state };
+  }
   const survey = await params.prisma.satisfactionSurvey.findFirst({
     where: {
       clientId: params.clientId,
@@ -986,6 +1225,7 @@ async function handleWebSessionSatisfactionInbound(params: {
       expiresAt: true,
       contactId: true,
       leadId: true,
+      commentEnabled: true,
     },
   });
   if (!survey) return { handled: false as const, state: params.state };
@@ -1024,7 +1264,7 @@ async function handleWebSessionSatisfactionInbound(params: {
     return { handled: true as const, state };
   }
   const respondedAt = params.now;
-  await params.prisma.satisfactionResponse.create({
+  const response = await params.prisma.satisfactionResponse.create({
     data: {
       clientId: params.clientId,
       surveyId: survey.id,
@@ -1037,9 +1277,10 @@ async function handleWebSessionSatisfactionInbound(params: {
       respondedAt,
     },
   });
+  const shouldAskComment = survey.commentEnabled === true && closePolicy.satisfaction.commentEnabled;
   await params.prisma.satisfactionSurvey.update({
     where: { id: survey.id },
-    data: { status: "responded", answeredAt: respondedAt },
+    data: { status: shouldAskComment ? "pending" : "responded", answeredAt: respondedAt },
   });
   const state = await sendWebSessionBotText({
     prisma: params.prisma,
@@ -1048,9 +1289,11 @@ async function handleWebSessionSatisfactionInbound(params: {
     waId: params.waId,
     waIdCanonical: params.waIdCanonical,
     channelAccountId: params.channelAccountId,
-    requestId: `${params.requestId}:survey-thanks`,
-    text: "Obrigado pela avaliação.",
-    state: params.state,
+    requestId: shouldAskComment ? `${params.requestId}:survey-comment-offer` : `${params.requestId}:survey-thanks`,
+    text: shouldAskComment ? closePolicy.satisfaction.commentOfferText : closePolicy.satisfaction.thankYouText,
+    state: shouldAskComment
+      ? markSatisfactionCommentOffer(params.state, survey.id, response.id)
+      : clearSatisfactionCommentRuntime(params.state),
   });
   return { handled: true as const, state };
 }
@@ -1360,25 +1603,68 @@ export async function ingestWebSessionInboundMessage(params: {
       },
     });
     const closePolicy = await getWebSessionClosePolicy({ prisma, clientId: params.message.clientId });
-    if (
-      closePolicy.command &&
-      String(params.message.text ?? "").trim().toLowerCase() === closePolicy.command.toLowerCase() &&
-      (runtimeConversationState.mode === "HUMAN" ||
-        runtimeConversationState.status === "WAITING" ||
-        runtimeConversationState.status === "IN_PROGRESS")
-    ) {
-      const closedAt = params.message.timestamp.toISOString();
-      const closingAssignedUserId = runtimeConversationState.assignedUserId ?? null;
-      runtimeConversationState = {
-        ...clearChatbotRuntime(runtimeConversationState),
-        mode: "HUMAN",
-        assignedUserId: null,
-        assignedTo: null,
-        assignedAt: null,
-        handoff: { ...runtimeConversationState.handoff, status: "none" },
-        status: "CLOSED",
-        closedAt,
-      };
+    const closeConfirmation = getCloseConfirmationRuntime(runtimeConversationState);
+    if (closeConfirmation?.awaiting === true) {
+      const inboundChoice = String(params.message.text ?? "").trim();
+      const protocol = buildConversationProtocol({ id: conversation?.id ?? null, createdAt: params.message.timestamp });
+      if (inboundChoice === "1") {
+        runtimeConversationState = await closeWebSessionHumanService({
+          prisma,
+          clientId: params.message.clientId,
+          clientKey: params.message.tenantKey,
+          waId: params.message.sender,
+          waIdCanonical: params.message.senderCanonical,
+          channelAccountId: params.message.channelAccountId,
+          requestId,
+          conversationId: conversation?.id ?? null,
+          protocol,
+          state: runtimeConversationState,
+          now: params.message.timestamp,
+        });
+        await persistWebSessionRuntimeState({
+          prisma,
+          clientId: params.message.clientId,
+          waId: params.message.sender,
+          state: runtimeConversationState,
+        });
+        await safeRecordInboundEvent({
+          prisma,
+          message: params.message,
+          clientId: params.message.clientId,
+          eventName: "whatsapp.web.close_command.confirmed",
+          requestId: `${requestId}:close-command-confirmed`,
+          conversationId: conversation?.id ?? null,
+        });
+        return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
+      }
+      if (inboundChoice === "2") {
+        runtimeConversationState = await sendWebSessionBotText({
+          prisma,
+          clientId: params.message.clientId,
+          clientKey: params.message.tenantKey,
+          waId: params.message.sender,
+          waIdCanonical: params.message.senderCanonical,
+          channelAccountId: params.message.channelAccountId,
+          requestId: `${requestId}:close-command-cancelled`,
+          text: closePolicy.confirmation.cancelledText,
+          state: clearCloseConfirmation(runtimeConversationState),
+        });
+        await persistWebSessionRuntimeState({
+          prisma,
+          clientId: params.message.clientId,
+          waId: params.message.sender,
+          state: runtimeConversationState,
+        });
+        await safeRecordInboundEvent({
+          prisma,
+          message: params.message,
+          clientId: params.message.clientId,
+          eventName: "whatsapp.web.close_command.cancelled",
+          requestId: `${requestId}:close-command-cancelled`,
+          conversationId: conversation?.id ?? null,
+        });
+        return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
+      }
       runtimeConversationState = await sendWebSessionBotText({
         prisma,
         clientId: params.message.clientId,
@@ -1386,25 +1672,55 @@ export async function ingestWebSessionInboundMessage(params: {
         waId: params.message.sender,
         waIdCanonical: params.message.senderCanonical,
         channelAccountId: params.message.channelAccountId,
-        requestId: `${requestId}:close-command`,
-        text: closePolicy.closedMessage,
+        requestId: `${requestId}:close-command-repeat`,
+        text: closePolicy.confirmation.questionText,
         state: runtimeConversationState,
       });
-      const protocol = buildConversationProtocol({ id: conversation?.id ?? null, createdAt: params.message.timestamp });
-      runtimeConversationState = await sendWebSessionSatisfactionSurvey({
+      await persistWebSessionRuntimeState({
         prisma,
         clientId: params.message.clientId,
-        clientKey: params.message.tenantKey,
         waId: params.message.sender,
-        waIdCanonical: params.message.senderCanonical,
-        channelAccountId: params.message.channelAccountId,
-        requestId,
-        conversationId: conversation?.id ?? null,
-        protocol,
         state: runtimeConversationState,
-        now: params.message.timestamp,
-        assignedUserId: closingAssignedUserId,
       });
+      return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
+    }
+    if (
+      closePolicy.command &&
+      String(params.message.text ?? "").trim().toLowerCase() === closePolicy.command.toLowerCase() &&
+      runtimeConversationState.status !== "CLOSED" &&
+      !runtimeConversationState.closedAt &&
+      (runtimeConversationState.mode === "HUMAN" ||
+        runtimeConversationState.status === "WAITING" ||
+        runtimeConversationState.status === "IN_PROGRESS")
+    ) {
+      const protocol = buildConversationProtocol({ id: conversation?.id ?? null, createdAt: params.message.timestamp });
+      if (closePolicy.confirmation.enabled) {
+        runtimeConversationState = await sendWebSessionBotText({
+          prisma,
+          clientId: params.message.clientId,
+          clientKey: params.message.tenantKey,
+          waId: params.message.sender,
+          waIdCanonical: params.message.senderCanonical,
+          channelAccountId: params.message.channelAccountId,
+          requestId: `${requestId}:close-command-confirmation`,
+          text: closePolicy.confirmation.questionText,
+          state: markCloseConfirmation(runtimeConversationState, params.message.timestamp),
+        });
+      } else {
+        runtimeConversationState = await closeWebSessionHumanService({
+          prisma,
+          clientId: params.message.clientId,
+          clientKey: params.message.tenantKey,
+          waId: params.message.sender,
+          waIdCanonical: params.message.senderCanonical,
+          channelAccountId: params.message.channelAccountId,
+          requestId,
+          conversationId: conversation?.id ?? null,
+          protocol,
+          state: runtimeConversationState,
+          now: params.message.timestamp,
+        });
+      }
       await persistWebSessionRuntimeState({
         prisma,
         clientId: params.message.clientId,
@@ -1415,7 +1731,9 @@ export async function ingestWebSessionInboundMessage(params: {
         prisma,
         message: params.message,
         clientId: params.message.clientId,
-        eventName: "whatsapp.web.close_command.handled",
+        eventName: closePolicy.confirmation.enabled
+          ? "whatsapp.web.close_command.confirmation_requested"
+          : "whatsapp.web.close_command.handled",
         requestId: `${requestId}:close-command`,
         conversationId: conversation?.id ?? null,
       });

@@ -228,6 +228,7 @@ import {
   isWebSessionTextOutboundReady,
   type WebSessionReplyReference,
 } from "../web-session/webSessionOutboundService.js";
+import { closeWebSessionHumanService } from "../web-session/webSessionInbound.js";
 import { resolveWebSessionStoredMedia } from "../media/webSessionMedia.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
 import {
@@ -11997,7 +11998,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
-      const nextState = {
+      const closingAssignedUserId = conversation.assignedUserId ?? null;
+      let nextState: ConversationState = {
         ...conversation,
         mode:
           nextStatus === ConversationOperationalStatus.CLOSED
@@ -12011,6 +12013,31 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ? new Date().toISOString()
             : null,
       };
+      const isWebSessionConversation =
+        conversation.provider === "web_session" || resolvedConversation.winner?.provider === "web_session";
+      if (
+        nextStatus === ConversationOperationalStatus.CLOSED &&
+        isWebSessionConversation &&
+        conversation.mode === "HUMAN"
+      ) {
+        const protocol = resolvedConversation.winner
+          ? buildConversationProtocol(resolvedConversation.winner)
+          : buildConversationProtocol({ id: conversation.conversationKey ?? conversation.waId, createdAt: nextState.closedAt });
+        nextState = await closeWebSessionHumanService({
+          prisma,
+          clientId: client.id,
+          clientKey: client.clientKey,
+          waId: conversation.waId,
+          waIdCanonical: conversation.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          channelAccountId: conversation.channelAccountId ?? null,
+          requestId,
+          conversationId: resolvedConversation.winner?.id ?? null,
+          protocol,
+          state: conversation,
+          now: nextState.closedAt ? new Date(nextState.closedAt) : new Date(),
+          assignedUserId: closingAssignedUserId,
+        });
+      }
       await runtimeStorage.upsertConversation(nextState);
       if (nextStatus === ConversationOperationalStatus.CLOSED && nextState.closedAt) {
         await recordConversationClosedMetrics({
@@ -12018,7 +12045,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientId: client.id,
           waId: nextState.waId,
           closedAt: new Date(nextState.closedAt),
-          assignedUserId: nextState.assignedUserId ?? null,
+          assignedUserId:
+            nextStatus === ConversationOperationalStatus.CLOSED
+              ? closingAssignedUserId
+              : nextState.assignedUserId ?? null,
           requestId,
         });
       }

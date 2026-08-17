@@ -170,6 +170,9 @@ export type ConversationState = {
   conversationKey?: string;
   waId: string;
   waIdCanonical?: string;
+  channel?: string | null;
+  provider?: string | null;
+  channelAccountId?: string | null;
   firstSeenAt: string;
   lastInboundAt: string;
   lastOutboundAt?: string;

@@ -181,10 +181,26 @@ function fakePrisma() {
       },
     },
     satisfactionResponse: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
+        state.satisfactionResponses.find((response) => {
+          if (response.clientId !== where.clientId) return false;
+          if (where.surveyId && response.surveyId !== where.surveyId) return false;
+          if (where.id && response.id !== where.id) return false;
+          return true;
+        }) ?? null,
       create: async ({ data }: { data: Record<string, unknown> }) => {
         const row = { id: `response_${state.satisfactionResponses.length + 1}`, createdAt: new Date(), updatedAt: new Date(), ...data };
         state.satisfactionResponses.push(row);
         return row;
+      },
+      update: async ({ where, data }: { where: { id?: string; surveyId?: string }; data: Record<string, unknown> }) => {
+        const index = state.satisfactionResponses.findIndex((response) => {
+          if (where.id) return response.id === where.id;
+          if (where.surveyId) return response.surveyId === where.surveyId;
+          return false;
+        });
+        if (index >= 0) state.satisfactionResponses[index] = { ...state.satisfactionResponses[index], ...data, updatedAt: new Date() };
+        return state.satisfactionResponses[index] ?? null;
       },
     },
     chatbotFlow: {
@@ -250,6 +266,9 @@ function fakePrisma() {
           queueId: typeof row.queueId === "string" ? row.queueId : null,
           status: typeof row.status === "string" ? row.status : null,
           closedAt: row.closedAt instanceof Date ? row.closedAt : null,
+          channel: typeof row.channel === "string" ? row.channel : null,
+          provider: typeof row.provider === "string" ? row.provider : null,
+          channelAccountId: typeof row.channelAccountId === "string" ? row.channelAccountId : null,
         };
       },
       updateMany: async ({ data }: { data: Record<string, unknown> }) => {
@@ -326,13 +345,22 @@ function closeConfig() {
   return {
     chatbotCloseCommand: {
       command: "#ENCERRAR#",
-      closedMessage: "Atendimento encerrado. Obrigado pelo contato.",
+      closedMessage: "Atendimento encerrado - {dataHora} - {protocol}\n\nObrigado pelo seu contato, {contactName}! 👋\nChame sempre que precisar. 😁",
+      confirmation: {
+        enabled: true,
+        questionText: "Encerrar o protocolo atual?\n\n1 - Sim\n2 - Não",
+        cancelledText: "Encerramento cancelado. Seguimos com o atendimento.",
+      },
     },
     satisfactionPolicy: {
       enabled: true,
       trigger: "HUMAN_CONVERSATION_CLOSED",
       expiresAfterMinutes: 15,
       questionText: "Pesquisa de Satisfação do Protocolo #{protocol}.\n\n5 - ⭐⭐⭐⭐⭐\n4 - ⭐⭐⭐⭐\n3 - ⭐⭐⭐\n2 - ⭐⭐\n1 - ⭐",
+      commentEnabled: true,
+      commentOfferText: "Poderia compartilhar conosco o que motivou essa avaliação?\n\n1 - Sim\n2 - Não",
+      commentPromptText: "Digite o texto:",
+      thankYouText: "Obrigad@ por participar da nossa pesquisa! 😊",
     },
   };
 }
@@ -729,14 +757,48 @@ test("close command closes waiting conversation without CSAT when no agent is as
   withConnectedWebSession();
 
   await withFakeWorker(async () => {
-    const result = await ingestText("#ENCERRAR#", "MSG_CLOSE_WAITING");
+    const requested = await ingestText("#ENCERRAR#", "MSG_CLOSE_WAITING_REQUEST");
+    assert.equal(requested.action, "persisted");
+    assert.equal(state.runtimeStates[0]?.status, "WAITING");
+    assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("closeConfirmation"), true);
+
+    const result = await ingestText("1", "MSG_CLOSE_WAITING_CONFIRM");
     assert.equal(result.action, "persisted");
   });
 
   assert.equal(state.runtimeStates[0]?.status, "CLOSED");
   assert.equal(state.runtimeStates[0]?.assignedUserId, null);
   assert.equal(state.satisfactionSurveys.length, 0);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Encerrar o protocolo atual?")), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Atendimento encerrado")), true);
+});
+
+test("close command cancellation keeps the previous human queue state", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        mode: "HUMAN",
+        status: "IN_PROGRESS",
+        assignedUserId: "agent_1",
+        assignedTo: "Agente Um",
+      }),
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("#ENCERRAR#", "MSG_CLOSE_CANCEL_REQUEST");
+    await ingestText("2", "MSG_CLOSE_CANCEL_NO");
+  });
+
+  assert.equal(state.runtimeStates[0]?.mode, "HUMAN");
+  assert.equal(state.runtimeStates[0]?.status, "IN_PROGRESS");
+  assert.equal(state.runtimeStates[0]?.assignedUserId, "agent_1");
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("closeConfirmation"), false);
+  assert.equal(state.satisfactionSurveys.length, 0);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Encerramento cancelado")), true);
 });
 
 test("close command creates a single attributed CSAT after human service", async () => {
@@ -755,7 +817,8 @@ test("close command creates a single attributed CSAT after human service", async
   withConnectedWebSession();
 
   await withFakeWorker(async () => {
-    await ingestText("#ENCERRAR#", "MSG_CLOSE_HUMAN");
+    await ingestText("#ENCERRAR#", "MSG_CLOSE_HUMAN_REQUEST");
+    await ingestText("1", "MSG_CLOSE_HUMAN_CONFIRM");
     await ingestText("#ENCERRAR#", "MSG_CLOSE_HUMAN_DUP");
   });
 
@@ -763,8 +826,10 @@ test("close command creates a single attributed CSAT after human service", async
   assert.equal(state.runtimeStates[0]?.assignedUserId, null);
   assert.equal(state.satisfactionSurveys.length, 1);
   assert.equal(state.satisfactionSurveys[0]?.assignedUserId, "agent_1");
+  assert.equal(state.satisfactionSurveys[0]?.commentEnabled, true);
   assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.queueId, "queue_general");
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Pesquisa de Satisfação")).length, 1);
+  assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Atendimento encerrado")).length, 1);
 });
 
 test("close command does not close normal bot conversation", async () => {
@@ -814,6 +879,7 @@ test("CSAT accepts only scores 1 to 5 before TTL and records the response", asyn
         status: "sent",
         questionText: "Pesquisa",
         expiresAt: new Date("2026-08-11T12:15:00.000Z"),
+        commentEnabled: true,
         contactId: null,
         leadId: null,
       },
@@ -829,9 +895,83 @@ test("CSAT accepts only scores 1 to 5 before TTL and records the response", asyn
 
   assert.equal(state.satisfactionResponses.length, 1);
   assert.equal(state.satisfactionResponses[0]?.score, 5);
-  assert.equal(state.satisfactionSurveys[0]?.status, "responded");
+  assert.equal(state.satisfactionSurveys[0]?.status, "pending");
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentOffer"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Responda a pesquisa com uma nota de 1 a 5")), true);
-  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Obrigado pela avaliação")), true);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Poderia compartilhar conosco")), true);
+});
+
+test("CSAT comment offer can be skipped after a valid score", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [runtimeFixture({ status: "CLOSED", closedAt: new Date("2026-08-11T12:00:00.000Z") })],
+    satisfactionSurveys: [
+      {
+        id: "survey_1",
+        clientId: "client_1",
+        conversationId: "conversation_1",
+        type: "csat",
+        source: "human_close",
+        status: "sent",
+        questionText: "Pesquisa",
+        expiresAt: new Date("2026-08-11T12:15:00.000Z"),
+        commentEnabled: true,
+        contactId: null,
+        leadId: null,
+      },
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("4", "MSG_CSAT_SCORE_SKIP", "2026-08-11T12:05:00.000Z");
+    await ingestText("2", "MSG_CSAT_COMMENT_SKIP", "2026-08-11T12:06:00.000Z");
+  });
+
+  assert.equal(state.satisfactionResponses.length, 1);
+  assert.equal(state.satisfactionResponses[0]?.score, 4);
+  assert.equal(state.satisfactionResponses[0]?.comment ?? null, null);
+  assert.equal(state.satisfactionSurveys[0]?.status, "responded");
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentOffer"), false);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Obrigad@ por participar")), true);
+});
+
+test("CSAT comment text is saved after the customer opts in", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [runtimeFixture({ status: "CLOSED", closedAt: new Date("2026-08-11T12:00:00.000Z") })],
+    satisfactionSurveys: [
+      {
+        id: "survey_1",
+        clientId: "client_1",
+        conversationId: "conversation_1",
+        type: "csat",
+        source: "human_close",
+        status: "sent",
+        questionText: "Pesquisa",
+        expiresAt: new Date("2026-08-11T12:15:00.000Z"),
+        commentEnabled: true,
+        contactId: null,
+        leadId: null,
+      },
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("5", "MSG_CSAT_SCORE_COMMENT", "2026-08-11T12:05:00.000Z");
+    await ingestText("1", "MSG_CSAT_COMMENT_YES", "2026-08-11T12:06:00.000Z");
+    await ingestText("Atendimento muito bom", "MSG_CSAT_COMMENT_TEXT", "2026-08-11T12:07:00.000Z");
+  });
+
+  assert.equal(state.satisfactionResponses.length, 1);
+  assert.equal(state.satisfactionResponses[0]?.score, 5);
+  assert.equal(state.satisfactionResponses[0]?.comment, "Atendimento muito bom");
+  assert.equal(state.satisfactionSurveys[0]?.status, "responded");
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentInput"), false);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Digite o texto:")), true);
 });
 
 test("expired CSAT asks for a new-service decision and option 1 returns to bot mode", async () => {

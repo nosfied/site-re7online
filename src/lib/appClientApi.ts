@@ -2785,6 +2785,13 @@ export async function closeAppConversationToGeneral(
   });
 }
 
+export async function closeAppConversation(
+  session: AppSession,
+  waId: string
+): Promise<AppConversationOperationalPayload> {
+  return updateAppConversationStatus(session, waId, "CLOSED");
+}
+
 export async function transferAppConversation(
   session: AppSession,
   waId: string,
