@@ -1698,9 +1698,21 @@ export function formatAppWhatsappIdentityDisplay(
   tenant: Pick<AppTenantSummary, "phoneDisplay" | "whatsappIdentityProvider">
 ) {
   if (!tenant.phoneDisplay || tenant.whatsappIdentityProvider === "none") return "Nenhum número conectado";
-  if (tenant.whatsappIdentityProvider === "web_session") return `${tenant.phoneDisplay} · Web Session`;
-  if (tenant.whatsappIdentityProvider === "hybrid") return `${tenant.phoneDisplay} · Cloud API + Web Session`;
-  return `${tenant.phoneDisplay} · Cloud API`;
+  const phoneDisplay = formatAppBrazilPhone(tenant.phoneDisplay);
+  if (tenant.whatsappIdentityProvider === "web_session") return `${phoneDisplay} · Web Session`;
+  if (tenant.whatsappIdentityProvider === "hybrid") return `${phoneDisplay} · Cloud API + Web Session`;
+  return `${phoneDisplay} · Cloud API`;
+}
+
+function formatAppBrazilPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (digits.startsWith("55") && digits.length === 13) {
+    return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+  }
+  if (digits.startsWith("55") && digits.length === 12) {
+    return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`;
+  }
+  return digits.startsWith("55") ? `+${digits}` : value;
 }
 
 const SESSION_KEY = "wa_app_session_session_v1";
