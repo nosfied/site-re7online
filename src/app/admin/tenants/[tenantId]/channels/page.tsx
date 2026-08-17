@@ -56,6 +56,18 @@ const TOKEN_STATUS_OPTIONS: Array<NonNullable<TenantChannelAccount["tokenStatus"
   "expired",
   "missing",
 ];
+function formatBrazilPhone(value: string | null | undefined) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (!digits) return value ?? "-";
+  if (digits.startsWith("55") && digits.length === 13) {
+    return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+  }
+  if (digits.startsWith("55") && digits.length === 12) {
+    return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`;
+  }
+  return digits.startsWith("55") ? `+${digits}` : digits;
+}
+
 const NEW_TENANT_CHECKLIST = [
   "Cadastrar channelAccount e aliases tecnicos.",
   "Conectar/autenticar a conta do canal.",
@@ -278,7 +290,7 @@ export default function TenantChannelsPage() {
   const [savingMediaPolicy, setSavingMediaPolicy] = useState(false);
   const webSessionConnectedNumber =
     webSessionStatus?.lifecycle.observedState === "CONNECTED" && webSessionStatus.account?.channelAccountId
-      ? webSessionStatus.account.channelAccountId
+      ? formatBrazilPhone(webSessionStatus.account.channelAccountId)
       : "Nenhum número conectado";
 
   useEffect(() => {
@@ -535,9 +547,9 @@ export default function TenantChannelsPage() {
             </div>
 
             <dl className="grid gap-2 md:grid-cols-3">
-              <TechnicalValue label="Número autorizado" value={webSessionStatus?.authorization.authorizedNumberCanonical ?? "Não autorizado"} />
+              <TechnicalValue label="Número autorizado" value={webSessionStatus?.authorization.authorizedNumberCanonical ? formatBrazilPhone(webSessionStatus.authorization.authorizedNumberCanonical) : "Não autorizado"} />
               <TechnicalValue label="Número conectado" value={webSessionConnectedNumber} />
-              <TechnicalValue label="Número detectado" value={webSessionStatus?.account?.channelAccountId ?? "-"} />
+              <TechnicalValue label="Número detectado" value={webSessionStatus?.account?.channelAccountId ? formatBrazilPhone(webSessionStatus.account.channelAccountId) : "-"} />
               <TechnicalValue label="Feature" value={webSessionStatus?.featureEnabled ? "enabled" : "disabled"} />
               <TechnicalValue label="Identidade Meta" value={webSessionStatus?.hybridIdentity?.meta.maskedNumber ?? "Não configurada"} />
               <TechnicalValue label="Número autorizado Web" value={webSessionStatus?.hybridIdentity?.web.maskedNumber ?? "Não autorizado"} />

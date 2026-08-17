@@ -30,6 +30,18 @@ function canUpdateChannels(role: string) {
   return role.trim().toUpperCase() === "ADMIN";
 }
 
+function formatBrazilPhone(value: string | null | undefined) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (!digits) return value ?? "-";
+  if (digits.startsWith("55") && digits.length === 13) {
+    return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+  }
+  if (digits.startsWith("55") && digits.length === 12) {
+    return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`;
+  }
+  return digits.startsWith("55") ? `+${digits}` : digits;
+}
+
 function stateLabel(state: AppWhatsAppWebSessionStatus["lifecycle"]["observedState"]) {
   switch (state) {
     case "CONNECTED":
@@ -260,7 +272,7 @@ export default function AppWhatsAppChannelSettingsPage() {
   const isPendingConnection = isConnecting || isQrRequired;
   const connectedNumberDisplay =
     currentState === "CONNECTED" && status?.account?.channelAccountId
-      ? status.account.channelAccountId
+      ? formatBrazilPhone(status.account.channelAccountId)
       : "Nenhum número conectado";
   const isBusy = Boolean(working);
   const hasAuthorizedNumber = Boolean(status?.authorization.authorizedNumberCanonical);
@@ -431,11 +443,11 @@ export default function AppWhatsAppChannelSettingsPage() {
                     />
                   </label>
                   <Detail label="Tipo de conexão" value="WhatsApp Business" />
-                  <Detail label="Número autorizado" value={status?.authorization.authorizedNumberCanonical ?? "Não autorizado"} />
+                  <Detail label="Número autorizado" value={status?.authorization.authorizedNumberCanonical ? formatBrazilPhone(status.authorization.authorizedNumberCanonical) : "Não autorizado"} />
                   <Detail label="Status da autorização" value={status?.authorization.status ?? "RELEASED"} />
                   <Detail label="Número conectado" value={connectedNumberDisplay} />
                   <Detail label="Transporte principal" value={status?.primaryTransport === "web_session" ? "WhatsApp Business por sessão" : status?.primaryTransport === "meta" ? "Meta Cloud" : "Padrão da conversa"} />
-                  <Detail label="Número detectado" value={status?.account?.channelAccountId ?? "Não preparado"} />
+                  <Detail label="Número detectado" value={status?.account?.channelAccountId ? formatBrazilPhone(status.account.channelAccountId) : "Não preparado"} />
                   <Detail label="Estado técnico" value={currentState} />
                   <Detail label="Última conexão" value={lifecycle?.lastConnectedAt} />
                   <Detail label="Última desconexão" value={lifecycle?.lastDisconnectedAt} />

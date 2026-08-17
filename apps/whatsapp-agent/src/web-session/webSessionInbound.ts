@@ -29,7 +29,7 @@ import {
   resolveWhatsappMediaPolicy,
 } from "../config/tenantOperationalConfig.js";
 import { getDepartmentAvailability } from "../departments/businessHours.js";
-import { createWebSessionTextOutboundMessage } from "./webSessionOutboundService.js";
+import { createWebSessionTextOutboundMessage, normalizeBotMenuOptionMarkdown } from "./webSessionOutboundService.js";
 
 export type WebSessionInboundMessageType = "text" | "image" | "audio" | "video" | "document" | "unknown";
 
@@ -790,7 +790,7 @@ async function sendWebSessionBotText(params: {
     prisma: params.prisma,
     waId: params.waId,
     waIdCanonical: params.waIdCanonical,
-    text: params.text,
+    text: normalizeBotMenuOptionMarkdown(params.text),
     clientKey: params.clientKey,
     clientId: params.clientId,
     requestId: params.requestId,
@@ -1534,11 +1534,12 @@ export async function ingestWebSessionInboundMessage(params: {
             });
           }
           if (replyText?.trim()) {
+            const normalizedReplyText = normalizeBotMenuOptionMarkdown(replyText);
             const outboundResult = await createWebSessionTextOutboundMessage({
               prisma,
               waId: params.message.sender,
               waIdCanonical: params.message.senderCanonical,
-              text: replyText,
+              text: normalizedReplyText,
               clientKey: params.message.tenantKey,
               clientId: params.message.clientId,
               requestId: `${requestId}:bot-reply`,
