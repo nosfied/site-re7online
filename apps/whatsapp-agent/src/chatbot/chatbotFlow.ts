@@ -33,6 +33,7 @@ export type ChatbotTextNode = Record<string, unknown> & ChatbotFlowMetadata & {
   type: "text";
   text: string;
   next?: string;
+  returnTo?: string;
 };
 
 export type ChatbotCaptureNode = Record<string, unknown> & ChatbotFlowMetadata & {
@@ -481,13 +482,22 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
       };
     }
     const next = getNonEmptyString(rawNode.next);
+    const returnTo = getNonEmptyString(rawNode.returnTo);
+    if (next && returnTo) {
+      return {
+        ok: false,
+        code: "invalid_chatbot_definition",
+        message: `Text node "${nodeId}" cannot define both next and returnTo.`,
+      };
+    }
     return {
       ok: true,
       node: {
-        ...preserveUnknownFields(rawNode, ["type", "text", "next", "context", "tags", "departmentId", "queueId", "closedText"]),
+        ...preserveUnknownFields(rawNode, ["type", "text", "next", "returnTo", "context", "tags", "departmentId", "queueId", "closedText"]),
         type: "text",
         text,
         ...(next ? { next } : {}),
+        ...(returnTo ? { returnTo } : {}),
         ...getNodeMetadata(rawNode),
       },
     };
@@ -667,6 +677,16 @@ export function validateChatbotFlowDefinition(definition: unknown): ChatbotValid
             message: `Menu node "${nodeId}" points to an unknown node "${option.next}".`,
           };
         }
+      }
+    }
+    if (node.type === "text" && node.returnTo) {
+      const target = nodes[node.returnTo];
+      if (!target || target.type !== "menu") {
+        return {
+          ok: false,
+          code: "invalid_chatbot_definition",
+          message: `Text node "${nodeId}" has an invalid returnTo menu.`,
+        };
       }
     }
     if (node.type === "text" && node.next && !nodes[node.next]) {
@@ -1309,6 +1329,14 @@ function executeNodeChain(params: {
 
     if (node.type === "text") {
       messages.push(renderChatbotTemplateText(node.text, currentState));
+      if (node.returnTo && params.definition.nodes[node.returnTo]?.type === "menu") {
+        return {
+          handled: true,
+          state: withChatbotRuntime(currentState, params.flowId, node.returnTo, true),
+          replyText: messages.join("\n\n"),
+          events,
+        };
+      }
       if (node.next) {
         autoAdvanceCount += 1;
         if (autoAdvanceCount > CHATBOT_MAX_AUTO_ADVANCES_PER_EXECUTION) {

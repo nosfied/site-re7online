@@ -945,6 +945,43 @@ test("executeChatbotFlow repeats menu on invalid answer", () => {
   assert.match(result.replyText ?? "", /Escolha/);
 });
 
+test("executeChatbotFlow can answer text and remain on a menu without redisplay", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "menu",
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Escolha",
+        options: [{ label: "1. Link", next: "link" }],
+      },
+      link: {
+        type: "text",
+        text: "Clique Aqui: https://example.test",
+        returnTo: "menu",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_1",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_1",
+      chatbotActive: true,
+      chatbotNodeId: "menu",
+    }),
+    inboundText: "1",
+    nowIso: "2026-04-17T10:00:02.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotActive, true);
+  assert.equal(result.state.chatbotNodeId, "menu");
+  assert.equal(result.replyText, "Clique Aqui: https://example.test");
+});
+
 test("executeChatbotFlow can hand off on invalid menu answer when configured", () => {
   const validated = validateChatbotFlowDefinition({
     start: "menu",
