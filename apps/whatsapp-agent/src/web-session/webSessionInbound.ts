@@ -4,6 +4,7 @@ import { findDefaultOperationalDepartment } from "../bootstrap/defaultOperationa
 import {
   clearChatbotRuntime,
   extractChatbotFlowId,
+  getChatbotConsentKey,
   type ChatbotFlowDefinition,
   validateChatbotFlowDefinition,
 } from "../chatbot/chatbotFlow.js";
@@ -375,6 +376,15 @@ function clearWebSessionServiceCycleState(state: ConversationState): Conversatio
     departmentId: null,
     queueId: null,
   };
+}
+
+function getAcceptedConsentRestartNode(definition: ChatbotFlowDefinition, state: ConversationState) {
+  const startNode = definition.nodes[definition.start];
+  if (startNode?.type !== "consent") return null;
+  const answers = isRecord(state.answers) ? state.answers as Record<string, unknown> : {};
+  const runtime = isRecord(answers.chatbotRuntime) ? answers.chatbotRuntime : {};
+  const acceptedConsents = isRecord(runtime.acceptedConsents) ? runtime.acceptedConsents : {};
+  return acceptedConsents[getChatbotConsentKey(startNode)] === true ? startNode.onAccepted : null;
 }
 
 function maskIdentifier(value: string) {
@@ -1112,6 +1122,7 @@ async function restartWebSessionBotConversation(params: {
   requestId: string;
   state: ConversationState;
   now: Date;
+  inboundText?: string | null;
 }) {
   const nextState: ConversationState = {
     ...clearWebSessionServiceCycleState(clearChatbotRuntime(params.state)),
@@ -1133,6 +1144,7 @@ async function restartWebSessionBotConversation(params: {
     definition: validatedDefinition.definition,
     at: params.now,
   });
+  const acceptedRestartNode = getAcceptedConsentRestartNode(validatedDefinition.definition, nextState);
   const chatbotResult = await executeChatbotFlowWithConsent({
     prisma: params.prisma,
     clientId: params.clientId,
@@ -1144,8 +1156,9 @@ async function restartWebSessionBotConversation(params: {
     flowId: chatbotFlow.id,
     definition: validatedDefinition.definition,
     state: nextState,
-    inboundText: null,
+    inboundText: acceptedRestartNode ? null : params.inboundText ?? null,
     nowIso: params.now.toISOString(),
+    startNodeId: acceptedRestartNode ?? undefined,
     options: { departmentAvailabilityById },
   });
   const state = chatbotResult.state;
@@ -1263,6 +1276,7 @@ async function handleWebSessionSatisfactionInbound(params: {
         requestId: params.requestId,
         state: nextState,
         now: params.now,
+        inboundText: text,
       });
       return {
         handled: true as const,
@@ -1314,6 +1328,7 @@ async function handleWebSessionSatisfactionInbound(params: {
         requestId: params.requestId,
         state: nextState,
         now: params.now,
+        inboundText: text,
       });
       return {
         handled: true as const,

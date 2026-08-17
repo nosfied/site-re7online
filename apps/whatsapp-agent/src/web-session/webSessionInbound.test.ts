@@ -25,6 +25,7 @@ const state = {
   satisfactionSurveys: [] as Array<Record<string, unknown>>,
   satisfactionResponses: [] as Array<Record<string, unknown>>,
   chatbotFlow: null as Record<string, unknown> | null,
+  contactConsents: [] as Array<Record<string, unknown>>,
 };
 
 function resetState(overrides: Partial<typeof state> = {}) {
@@ -44,11 +45,19 @@ function resetState(overrides: Partial<typeof state> = {}) {
   state.satisfactionSurveys = overrides.satisfactionSurveys ?? [];
   state.satisfactionResponses = overrides.satisfactionResponses ?? [];
   state.chatbotFlow = overrides.chatbotFlow ?? null;
+  state.contactConsents = overrides.contactConsents ?? [];
 }
 
 function fakePrisma() {
   const prisma = {
     conversation: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        if (!state.conversation) return null;
+        if (where.clientId && state.conversation.clientId !== where.clientId) return null;
+        if (where.waId && state.conversation.waId !== where.waId) return null;
+        if (where.id && state.conversation.id !== where.id) return null;
+        return state.conversation;
+      },
       findUnique: async ({ where }: { where: { clientId_waId: { clientId: string; waId: string } } }) => {
         if (
           state.conversation?.clientId === where.clientId_waId.clientId &&
@@ -218,6 +227,13 @@ function fakePrisma() {
       findFirst: async () => state.chatbotFlow,
     },
     contact: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
+        state.contacts.find((contact) => {
+          if (where.clientId && contact.clientId !== where.clientId) return false;
+          if (where.waId && contact.waId !== where.waId) return false;
+          if (where.id && contact.id !== where.id) return false;
+          return true;
+        }) ?? null,
       findUnique: async () => state.contacts[0] ?? null,
       upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
         const existing = state.contacts[0];
@@ -235,12 +251,35 @@ function fakePrisma() {
       },
     },
     lead: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
+        state.leads.find((lead) => {
+          if (where.tenantId && lead.tenantId !== where.tenantId) return false;
+          if (where.waId && lead.waId !== where.waId) return false;
+          if (where.id && lead.id !== where.id) return false;
+          return true;
+        }) ?? null,
       findUnique: async () => state.leads[0] ?? null,
       upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
         const existing = state.leads[0];
         const row = existing ? { ...existing, ...update } : { id: "lead_1", ...create };
         state.leads[0] = row;
         return { id: row.id };
+      },
+    },
+    contactConsent: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
+        state.contactConsents.find((consent) => {
+          if (where.clientId && consent.clientId !== where.clientId) return false;
+          if (where.purpose && consent.purpose !== where.purpose) return false;
+          if (where.contactId && consent.contactId !== where.contactId) return false;
+          if (where.leadId && consent.leadId !== where.leadId) return false;
+          return true;
+        }) ?? null,
+      updateMany: async () => ({ count: 0 }),
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        const row = { id: `consent_${state.contactConsents.length + 1}`, createdAt: new Date(), updatedAt: new Date(), ...data };
+        state.contactConsents.push(row);
+        return row;
       },
     },
     conversationRuntimeState: {
@@ -1120,6 +1159,11 @@ test("completed CSAT asks for a new-service decision before returning to chatbot
             cycleId: "cycle_old",
             source: "service_cycle",
           },
+          chatbotRuntime: {
+            acceptedConsents: {
+              "service_communications:v-test": true,
+            },
+          },
           satisfactionRuntime: {
             completedSurveyDecision: {
               awaiting: true,
@@ -1132,8 +1176,17 @@ test("completed CSAT asks for a new-service decision before returning to chatbot
     chatbotFlow: {
       id: "flow_1",
       definition: {
-        start: "menu",
+        start: "consent",
         nodes: {
+          consent: {
+            type: "consent",
+            purpose: "service_communications",
+            textVersion: "v-test",
+            message: "Consentimento",
+            acceptOption: "1",
+            declineOption: "2",
+            onAccepted: "menu",
+          },
           menu: {
             type: "menu",
             text: "Menu inicial",
