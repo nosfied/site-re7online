@@ -292,6 +292,7 @@ export default function TenantChannelsPage() {
     webSessionStatus?.lifecycle.observedState === "CONNECTED" && webSessionStatus.account?.channelAccountId
       ? formatBrazilPhone(webSessionStatus.account.channelAccountId)
       : "Nenhum número conectado";
+  const authorizedNumberDisplay = authorizedNumber.trim() ? formatBrazilPhone(authorizedNumber) : null;
 
   useEffect(() => {
     if (!tenantId || !connection.baseUrl || !connection.adminToken) return;
@@ -608,6 +609,11 @@ export default function TenantChannelsPage() {
                   className="rounded-md border border-white/10 bg-re7-navy px-3 py-2 font-mono text-white"
                   placeholder="+55..."
                 />
+                {authorizedNumberDisplay ? (
+                  <span className="text-xs font-semibold text-emerald-100">
+                    Contato: {authorizedNumberDisplay}
+                  </span>
+                ) : null}
               </label>
               <button
                 type="button"
