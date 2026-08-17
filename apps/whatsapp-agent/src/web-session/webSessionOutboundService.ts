@@ -377,10 +377,7 @@ export async function createWebSessionTextOutboundMessage(params: {
       clientId: params.clientId,
     }),
   ]);
-  const outboundText =
-    (params.outboundSource ?? "inbox_text") === "bot"
-      ? normalizeBotMenuOptionMarkdown(params.text)
-      : params.text;
+  const outboundText = normalizeBotMenuOptionMarkdown(params.text);
   const signedBody = params.skipAgentSignature
     ? {
         ok: true as const,

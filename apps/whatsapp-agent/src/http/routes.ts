@@ -3205,7 +3205,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         prisma,
         clientId: client.id,
       });
-      const phoneDisplay = whatsappIdentity.maskedNumber ?? null;
+      const phoneDisplay = whatsappIdentity.canonicalNumber ?? whatsappIdentity.maskedNumber ?? null;
       json(res, 200, {
         ok: true,
         tenant: {
