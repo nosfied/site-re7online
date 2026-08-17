@@ -436,6 +436,53 @@ test("executeChatbotFlow treats root back command as invalid option and redispla
   assert.match(result.replyText ?? "", /Menu principal/);
 });
 
+test("executeChatbotFlow can hide the rendered back command on selected menus", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "main",
+    globalCommands: [{ command: "#", action: "BACK", allowedModes: ["BOT"] }],
+    nodes: {
+      main: {
+        type: "menu",
+        text: "Menu principal",
+        showBackCommand: false,
+        options: [{ label: "4 - Submenu", next: "submenu" }],
+      },
+      submenu: {
+        type: "menu",
+        text: "Submenu",
+        options: [{ label: "1 - Detalhe", next: "detail" }],
+      },
+      detail: { type: "text", text: "Detalhe" },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const root = executeChatbotFlow({
+    flowId: "flow_hidden_back",
+    definition: validated.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-08-12T10:00:00.000Z",
+  });
+  assert.match(root.replyText ?? "", /Menu principal/);
+  assert.doesNotMatch(root.replyText ?? "", /# - Voltar/);
+
+  const submenu = executeChatbotFlow({
+    flowId: "flow_hidden_back",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_hidden_back",
+      chatbotActive: true,
+      chatbotNodeId: "main",
+    }),
+    inboundText: "4",
+    nowIso: "2026-08-12T10:01:00.000Z",
+  });
+  assert.match(submenu.replyText ?? "", /Submenu/);
+  assert.match(submenu.replyText ?? "", /# - Voltar às opções anteriores\./);
+});
+
 test("executeChatbotFlow treats root menu after consent as invalid option on back command", () => {
   const validated = validateChatbotFlowDefinition({
     start: "consent",

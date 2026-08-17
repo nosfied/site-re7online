@@ -26,6 +26,7 @@ export type ChatbotMenuNode = Record<string, unknown> & ChatbotFlowMetadata & {
   type: "menu";
   text: string;
   options: ChatbotMenuOption[];
+  showBackCommand?: boolean;
   invalidSelectionAction?: ChatbotInvalidSelectionAction;
 };
 
@@ -822,7 +823,9 @@ function renderMenu(
     return explicit ? `*${explicit.number}* - ${explicit.text}` : `*${index + 1}* - ${option.label}`;
   });
   const backCommand = getMenuBackCommand(definition);
-  const commandLines = backCommand ? [`${backCommand} - Voltar às opções anteriores.`] : [];
+  const commandLines = backCommand && node.showBackCommand !== false
+    ? [`${backCommand} - Voltar às opções anteriores.`]
+    : [];
   return [renderChatbotTemplateText(node.text, state), ...lines, ...commandLines].join("\n");
 }
 
