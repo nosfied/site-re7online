@@ -75,6 +75,22 @@ function resolveWebSessionTransportRecipientWaId(params: { waId: string; waIdCan
   return normalizeRecipientWaId(params.waId) ?? normalizeRecipientWaId(params.waIdCanonical ?? "");
 }
 
+export function normalizeBotMenuOptionMarkdown(text: string) {
+  if (!/(Digite o n[uú]mero|Digite, atentamente, apenas a numera[cç][aã]o)/i.test(text)) return text;
+  return text
+    .split("\n")
+    .map((line) => {
+      if (/^\*\d+\*\s+-\s+/.test(line)) return line;
+      const match = line.match(/^(\d+)\s*[.)-]\s+(.+)$/);
+      if (!match) return line;
+      const number = Number.parseInt(match[1] ?? "", 10);
+      const label = (match[2] ?? "").trim();
+      if (!Number.isFinite(number) || !label) return line;
+      return `*${number}* - ${label}`;
+    })
+    .join("\n");
+}
+
 function isWebSessionAccountConnected(account: WebSessionChannelAccount) {
   if (account.client.status !== "ACTIVE") return false;
   if (getFeatures(account.client).whatsappWebSession !== true) return false;
@@ -361,15 +377,19 @@ export async function createWebSessionTextOutboundMessage(params: {
       clientId: params.clientId,
     }),
   ]);
+  const outboundText =
+    (params.outboundSource ?? "inbox_text") === "bot"
+      ? normalizeBotMenuOptionMarkdown(params.text)
+      : params.text;
   const signedBody = params.skipAgentSignature
     ? {
         ok: true as const,
-        bodyText: params.text,
+        bodyText: outboundText,
         signatureApplied: false,
         signatureFormat: null,
       }
     : applyAgentSignature({
-        bodyText: params.text,
+        bodyText: outboundText,
         actorDisplayName: actorUser?.name ?? null,
         settings: agentSignatureSettings?.settings ?? null,
       });
