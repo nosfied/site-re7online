@@ -12,7 +12,11 @@ import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff
 import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
 import { activateHumanHandoff, updateOutbound } from "../conversation/conversation.service.js";
 import { getPrisma } from "../db.js";
-import { buildConversationProtocol, buildConversationProtocolNotice } from "../inbox/conversationProtocol.js";
+import {
+  buildConversationProtocol,
+  buildConversationProtocolNotice,
+  normalizeConversationProtocol,
+} from "../inbox/conversationProtocol.js";
 import { logger } from "../logger/logger.js";
 import { deleteWebSessionStoredMedia, type WebSessionStoredMedia } from "../media/webSessionMedia.js";
 import { recordConversationInboundMetrics } from "../metrics/conversationMetrics.js";
@@ -320,6 +324,57 @@ function clearExpiredSurveyDecision(state: ConversationState) {
   delete runtime.awaitingExpiredSurveyDecision;
   delete runtime.expiredSurveyId;
   return withSatisfactionRuntime(state, runtime);
+}
+
+function buildServiceCycleProtocol() {
+  return `CVT-${crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
+}
+
+function getOperationalProtocol(state: ConversationState) {
+  const answers = isRecord(state.answers) ? state.answers as Record<string, unknown> : {};
+  const raw = isRecord(answers.operationalProtocol) ? answers.operationalProtocol.protocol : null;
+  return normalizeConversationProtocol(typeof raw === "string" ? raw : null);
+}
+
+function withOperationalProtocol(state: ConversationState, protocol: string, issuedAt: Date): ConversationState {
+  const answers = isRecord(state.answers) ? state.answers as Record<string, unknown> : {};
+  return {
+    ...state,
+    answers: {
+      ...answers,
+      operationalProtocol: {
+        protocol,
+        issuedAt: issuedAt.toISOString(),
+        cycleId: crypto.randomUUID(),
+        source: "service_cycle",
+      },
+    } as ConversationState["answers"],
+  };
+}
+
+function ensureOperationalProtocol(state: ConversationState, issuedAt: Date) {
+  const existing = getOperationalProtocol(state);
+  if (existing) return { state, protocol: existing };
+  const protocol = buildServiceCycleProtocol();
+  return {
+    state: withOperationalProtocol(state, protocol, issuedAt),
+    protocol,
+  };
+}
+
+function clearWebSessionServiceCycleState(state: ConversationState): ConversationState {
+  const answers = isRecord(state.answers) ? state.answers as Record<string, unknown> : {};
+  const nextAnswers = { ...answers };
+  delete nextAnswers.flowContext;
+  delete nextAnswers.flowTags;
+  delete nextAnswers.operationalProtocol;
+  delete nextAnswers.protocolContinuation;
+  return {
+    ...state,
+    answers: nextAnswers as ConversationState["answers"],
+    departmentId: null,
+    queueId: null,
+  };
 }
 
 function maskIdentifier(value: string) {
@@ -1059,7 +1114,7 @@ async function restartWebSessionBotConversation(params: {
   now: Date;
 }) {
   const nextState: ConversationState = {
-    ...clearChatbotRuntime(params.state),
+    ...clearWebSessionServiceCycleState(clearChatbotRuntime(params.state)),
     mode: "BOT" as const,
     status: null,
     closedAt: null,
@@ -1773,7 +1828,9 @@ export async function ingestWebSessionInboundMessage(params: {
     const closeConfirmation = getCloseConfirmationRuntime(runtimeConversationState);
     if (closeConfirmation?.awaiting === true) {
       const inboundChoice = String(params.message.text ?? "").trim();
-      const protocol = buildConversationProtocol({ id: conversation?.id ?? null, createdAt: params.message.timestamp });
+      const protocol =
+        getOperationalProtocol(runtimeConversationState) ??
+        buildConversationProtocol({ id: conversation?.id ?? null, createdAt: params.message.timestamp });
       if (inboundChoice === "1") {
         runtimeConversationState = await closeWebSessionHumanService({
           prisma,
@@ -1860,7 +1917,9 @@ export async function ingestWebSessionInboundMessage(params: {
         runtimeConversationState.status === "WAITING" ||
         runtimeConversationState.status === "IN_PROGRESS")
     ) {
-      const protocol = buildConversationProtocol({ id: conversation?.id ?? null, createdAt: params.message.timestamp });
+      const protocol =
+        getOperationalProtocol(runtimeConversationState) ??
+        buildConversationProtocol({ id: conversation?.id ?? null, createdAt: params.message.timestamp });
       if (closePolicy.confirmation.enabled) {
         runtimeConversationState = await sendWebSessionBotText({
           prisma,
@@ -2092,6 +2151,8 @@ export async function ingestWebSessionInboundMessage(params: {
               departmentId: handoffDecision?.departmentId ?? activated.state.departmentId ?? null,
               queueId: handoffDecision?.queueId ?? activated.state.queueId ?? null,
             };
+            const protocolResult = ensureOperationalProtocol(runtimeConversationState, params.message.timestamp);
+            runtimeConversationState = protocolResult.state;
           } else if (handoffDecision?.kind === "closed" || handoffDecision?.kind === "blocked") {
             runtimeConversationState = {
               ...clearChatbotRuntime(runtimeConversationState),
@@ -2144,10 +2205,9 @@ export async function ingestWebSessionInboundMessage(params: {
               });
             }
             if (queueClosedHandoff) {
-              const protocol = buildConversationProtocol({
-                id: conversation?.id ?? null,
-                createdAt: params.message.timestamp,
-              });
+              const protocol =
+                getOperationalProtocol(runtimeConversationState) ??
+                buildConversationProtocol({ id: conversation?.id ?? null, createdAt: params.message.timestamp });
               runtimeConversationState = await sendWebSessionBotText({
                 prisma,
                 clientId: params.message.clientId,

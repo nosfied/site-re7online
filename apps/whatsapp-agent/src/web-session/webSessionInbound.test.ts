@@ -887,6 +887,14 @@ test("close command creates a single attributed CSAT after human service", async
         assignedUserId: "agent_1",
         assignedTo: "Agente Um",
         assignedAt: new Date("2026-08-11T11:55:00.000Z"),
+        answers: {
+          operationalProtocol: {
+            protocol: "CVT-ABCDEF123456",
+            issuedAt: "2026-08-11T11:50:00.000Z",
+            cycleId: "cycle_1",
+            source: "service_cycle",
+          },
+        },
       }),
     ],
   });
@@ -903,6 +911,8 @@ test("close command creates a single attributed CSAT after human service", async
   assert.equal(state.satisfactionSurveys.length, 1);
   assert.equal(state.satisfactionSurveys[0]?.assignedUserId, "agent_1");
   assert.equal(state.satisfactionSurveys[0]?.commentEnabled, true);
+  assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.protocol, "CVT-ABCDEF123456");
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("CVT-ABCDEF123456")), true);
   assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.queueId, "queue_general");
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Pesquisa de Satisfação")).length, 1);
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Atendimento encerrado")).length, 1);
@@ -1102,6 +1112,14 @@ test("completed CSAT asks for a new-service decision before returning to chatbot
         status: "CLOSED",
         closedAt: new Date("2026-08-11T12:00:00.000Z"),
         answers: {
+          flowContext: { currentMenu: "old_menu" },
+          flowTags: ["old_tag"],
+          operationalProtocol: {
+            protocol: "CVT-OLDPROTO123",
+            issuedAt: "2026-08-11T11:50:00.000Z",
+            cycleId: "cycle_old",
+            source: "service_cycle",
+          },
           satisfactionRuntime: {
             completedSurveyDecision: {
               awaiting: true,
@@ -1139,6 +1157,9 @@ test("completed CSAT asks for a new-service decision before returning to chatbot
   assert.equal(state.runtimeStates[0]?.status, null);
   assert.equal(state.runtimeStates[0]?.closedAt, null);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("satisfactionRuntime"), false);
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("flowContext"), false);
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("flowTags"), false);
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("OLDPROTO123"), false);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), true);
 });

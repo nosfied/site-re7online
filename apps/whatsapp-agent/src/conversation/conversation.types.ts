@@ -163,6 +163,12 @@ export type QuoteSiteAnswers = {
     linkedAt: string;
     reason: "protocol_lookup";
   };
+  operationalProtocol?: {
+    protocol: string;
+    issuedAt: string;
+    cycleId: string;
+    source: "conversation" | "service_cycle";
+  };
 };
 
 export type ConversationState = {
