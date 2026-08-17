@@ -16,6 +16,13 @@ export type SatisfactionSurveyStatus = (typeof SATISFACTION_SURVEY_STATUSES)[num
 export type SatisfactionType = (typeof SATISFACTION_TYPES)[number];
 
 type JsonInput = Record<string, unknown>;
+type SatisfactionReportFilters = {
+  from?: Date | null;
+  to?: Date | null;
+  departmentId?: string | null;
+  assignedUserId?: string | null;
+  channel?: string | null;
+};
 
 const MAX_KEY_LENGTH = 80;
 const MAX_TITLE_LENGTH = 160;
@@ -199,6 +206,28 @@ function emptyScoreDistribution() {
   return { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 } as Record<string, number>;
 }
 
+export function satisfactionScoreLabel(score: number) {
+  if (score === 5) return "Muito Satisfeito";
+  if (score === 4) return "Satisfeito";
+  if (score === 3) return "Neutro";
+  if (score === 2) return "Insatisfeito";
+  if (score === 1) return "Muito Insatisfeito";
+  return "Sem resposta";
+}
+
+function csvCell(value: string | number | null | undefined) {
+  if (value === null || value === undefined) return "";
+  const text = String(value);
+  if (!/[",\n]/.test(text)) return text;
+  return `"${text.replace(/"/g, "\"\"")}"`;
+}
+
+function metadataString(metadata: unknown, key: string) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const value = (metadata as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 function buildSatisfactionSummary(params: {
   surveys: Array<{
     id: string;
@@ -283,9 +312,11 @@ function buildSatisfactionSummary(params: {
   const sent = params.surveys.filter((survey) => survey.status !== "draft" && survey.status !== "cancelled").length;
   const responded = params.responses.length;
   const expired = params.surveys.filter((survey) => survey.status === "expired").length;
+  const pending = params.surveys.filter((survey) => survey.status === "sent" || survey.status === "pending").length;
   return {
     sent,
     responded,
+    pending,
     expired,
     responseRate: sent > 0 ? responded / sent : 0,
     averageScore: responded > 0 ? scoreTotal / responded : null,
@@ -294,6 +325,136 @@ function buildSatisfactionSummary(params: {
     byDepartment: serializeBuckets(byDepartment),
     byQueue: serializeBuckets(byQueue),
   };
+}
+
+function buildSurveyWhere(clientId: string, filters: SatisfactionReportFilters = {}) {
+  const where: Record<string, unknown> = {
+    clientId,
+    type: "csat",
+  };
+  if (filters.from || filters.to) {
+    where.createdAt = {
+      ...(filters.from ? { gte: filters.from } : {}),
+      ...(filters.to ? { lte: filters.to } : {}),
+    };
+  }
+  if (filters.departmentId) where.departmentId = filters.departmentId;
+  if (filters.assignedUserId) where.assignedUserId = filters.assignedUserId;
+  if (filters.channel) where.channel = filters.channel;
+  return where;
+}
+
+export async function buildSatisfactionReport(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  filters?: SatisfactionReportFilters;
+}) {
+  const filters = params.filters ?? {};
+  const [surveys, responses] = await Promise.all([
+    params.prisma.satisfactionSurvey.findMany({
+      where: buildSurveyWhere(params.clientId, filters),
+      orderBy: [{ createdAt: "desc" }],
+      take: 1000,
+      include: {
+        response: true,
+        department: { select: { id: true, name: true } },
+        assignedUser: { select: { id: true, name: true } },
+      },
+    }),
+    params.prisma.satisfactionResponse.findMany({
+      where: {
+        clientId: params.clientId,
+        survey: buildSurveyWhere(params.clientId, filters),
+      },
+      orderBy: [{ respondedAt: "desc" }],
+      take: 1000,
+    }),
+  ]);
+
+  const summary = buildSatisfactionSummary({ surveys, responses });
+  const rows = surveys.map((survey) => {
+    const response = survey.response ?? null;
+    const score = typeof response?.score === "number" ? response.score : null;
+    return {
+      surveyId: survey.id,
+      conversationId: survey.conversationId,
+      protocol: metadataString(survey.metadata, "protocol"),
+      channel: survey.channel,
+      departmentId: survey.departmentId,
+      departmentName: survey.department?.name ?? null,
+      assignedUserId: survey.assignedUserId,
+      assignedUserName: survey.assignedUser?.name ?? null,
+      attribution: survey.assignedUserId ? "agent" : "unattributed_directed_service",
+      status: normalizeSurveyStatus(survey.status),
+      sentAt: serializeDate(survey.sentAt),
+      answeredAt: serializeDate(survey.answeredAt),
+      expiresAt: serializeDate(survey.expiresAt),
+      score,
+      scoreLabel: score === null ? null : satisfactionScoreLabel(score),
+      comment: response?.comment ?? null,
+    };
+  });
+
+  return {
+    ok: true as const,
+    filters: {
+      from: serializeDate(filters.from ?? null),
+      to: serializeDate(filters.to ?? null),
+      departmentId: filters.departmentId ?? null,
+      assignedUserId: filters.assignedUserId ?? null,
+      channel: filters.channel ?? null,
+    },
+    summary,
+    rows,
+    notes: [
+      "Pesquisas de atendimento direcionado sem atendente atribuido nao sao contabilizadas como desempenho individual.",
+      "Comentarios sao feedback operacional; nao incluem telefone, token, waId ou payload bruto.",
+    ],
+  };
+}
+
+export function buildSatisfactionReportCsv(report: Awaited<ReturnType<typeof buildSatisfactionReport>>) {
+  const headers = [
+    "surveyId",
+    "protocol",
+    "channel",
+    "departmentId",
+    "departmentName",
+    "assignedUserId",
+    "assignedUserName",
+    "attribution",
+    "status",
+    "sentAt",
+    "answeredAt",
+    "expiresAt",
+    "score",
+    "scoreLabel",
+    "comment",
+  ];
+  return [
+    headers.join(","),
+    ...report.rows.map((row) =>
+      [
+        row.surveyId,
+        row.protocol,
+        row.channel,
+        row.departmentId,
+        row.departmentName,
+        row.assignedUserId,
+        row.assignedUserName,
+        row.attribution,
+        row.status,
+        row.sentAt,
+        row.answeredAt,
+        row.expiresAt,
+        row.score,
+        row.scoreLabel,
+        row.comment,
+      ]
+        .map(csvCell)
+        .join(",")
+    ),
+  ].join("\n");
 }
 
 async function validateOptionalQuestion(prisma: PrismaClient, clientId: string, questionId: string | null) {

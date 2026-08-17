@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildSatisfactionReport,
+  buildSatisfactionReportCsv,
   createSatisfactionQuestion,
   createSatisfactionResponse,
   createSatisfactionSurvey,
@@ -46,8 +48,12 @@ function makeSurvey(overrides: Record<string, unknown> = {}) {
     sentAt: null,
     answeredAt: null,
     expiresAt: null,
+    metadata: {},
     createdAt: now,
     updatedAt: now,
+    response: null,
+    department: null,
+    assignedUser: null,
     ...overrides,
   };
 }
@@ -210,4 +216,103 @@ test("createSatisfactionResponse validates score range and updates survey only o
   });
   assert.equal(valid.ok, true);
   assert.equal(updated, true);
+});
+
+test("buildSatisfactionReport keeps directed service CSAT unattributed to agents", async () => {
+  const calls: Array<{ where: Record<string, unknown> }> = [];
+  const surveys = [
+    makeSurvey({
+      id: "survey-agent",
+      status: "responded",
+      assignedUserId: "user-1",
+      departmentId: "department-1",
+      metadata: { protocol: "CVT-1" },
+      sentAt: now,
+      answeredAt: now,
+      department: { id: "department-1", name: "Geral" },
+      assignedUser: { id: "user-1", name: "Atendente 1" },
+      response: makeResponse({ surveyId: "survey-agent", score: 5, comment: "Otimo" }),
+    }),
+    makeSurvey({
+      id: "survey-directed",
+      status: "responded",
+      assignedUserId: null,
+      departmentId: "department-1",
+      metadata: { protocol: "CVT-2" },
+      sentAt: now,
+      answeredAt: now,
+      department: { id: "department-1", name: "Geral" },
+      response: makeResponse({ surveyId: "survey-directed", score: 3, comment: "Aguardando" }),
+    }),
+  ];
+  const responses = [
+    makeResponse({ surveyId: "survey-agent", score: 5, comment: "Otimo" }),
+    makeResponse({ surveyId: "survey-directed", score: 3, comment: "Aguardando" }),
+  ];
+  const prisma = {
+    satisfactionSurvey: {
+      findMany: async (args: { where: Record<string, unknown> }) => {
+        calls.push(args);
+        return surveys;
+      },
+    },
+    satisfactionResponse: {
+      findMany: async (args: { where: Record<string, unknown> }) => {
+        calls.push(args);
+        return responses;
+      },
+    },
+  };
+
+  const report = await buildSatisfactionReport({
+    prisma: prisma as never,
+    clientId: "tenant-1",
+    filters: {
+      departmentId: "department-1",
+      channel: "whatsapp",
+      from: now,
+      to: now,
+    },
+  });
+
+  assert.equal(report.summary.sent, 2);
+  assert.equal(report.summary.responded, 2);
+  assert.equal(report.summary.averageScore, 4);
+  assert.equal(report.summary.byAgent.length, 1);
+  assert.equal(report.summary.byAgent[0]?.id, "user-1");
+  assert.equal(report.rows.find((row) => row.surveyId === "survey-directed")?.attribution, "unattributed_directed_service");
+  assert.equal(report.rows.find((row) => row.surveyId === "survey-directed")?.assignedUserName, null);
+  assert.equal(report.rows.find((row) => row.surveyId === "survey-directed")?.scoreLabel, "Neutro");
+  assert.equal((calls[0]?.where as { clientId?: string }).clientId, "tenant-1");
+  assert.deepEqual(calls[0]?.where.departmentId, "department-1");
+  assert.deepEqual(calls[0]?.where.channel, "whatsapp");
+});
+
+test("buildSatisfactionReportCsv exports comments without PII-only technical fields", async () => {
+  const report = await buildSatisfactionReport({
+    prisma: {
+      satisfactionSurvey: {
+        findMany: async () => [
+          makeSurvey({
+            id: "survey-1",
+            status: "responded",
+            assignedUserId: null,
+            departmentId: "department-1",
+            metadata: { protocol: "CVT-1" },
+            response: makeResponse({ surveyId: "survey-1", score: 1, comment: "Precisa melhorar, por favor" }),
+          }),
+        ],
+      },
+      satisfactionResponse: {
+        findMany: async () => [makeResponse({ surveyId: "survey-1", score: 1, comment: "Precisa melhorar, por favor" })],
+      },
+    } as never,
+    clientId: "tenant-1",
+  });
+
+  const csv = buildSatisfactionReportCsv(report);
+  assert.match(csv, /surveyId,protocol,channel,departmentId/);
+  assert.match(csv, /Muito Insatisfeito/);
+  assert.match(csv, /Precisa melhorar/);
+  assert.doesNotMatch(csv, /waId|token|rawPayload|phone/i);
 });

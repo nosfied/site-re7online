@@ -346,6 +346,8 @@ import {
   updateSchedulingService,
 } from "../scheduling/schedulingService.js";
 import {
+  buildSatisfactionReport,
+  buildSatisfactionReportCsv,
   createSatisfactionQuestion,
   createSatisfactionResponse,
   createSatisfactionSurvey,
@@ -10360,6 +10362,148 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.chatbot.flows.update.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && (pathname === "/app/reports/satisfaction" || pathname === "/app/reports/satisfaction/export")) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can view reports."));
+        return;
+      }
+      const period = parseSessionAuditPeriod(query);
+      if (!period) {
+        json(res, 400, httpError("invalid_period", "Invalid period"));
+        return;
+      }
+      const channel = normalizeReportChannelFilter(query.channel);
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "reports",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const requestedDepartmentId =
+        clientAuth.role === "SUPERVISOR"
+          ? departmentAccess.departmentId ?? ""
+          : typeof query.departmentId === "string"
+            ? query.departmentId.trim()
+            : "";
+      if (clientAuth.role === "SUPERVISOR" && !requestedDepartmentId) {
+        const emptyReport = await buildSatisfactionReport({
+          prisma,
+          clientId: client.id,
+          filters: {
+            from: period.from,
+            to: period.to,
+            departmentId: "__no_supervisor_department__",
+            channel,
+          },
+        });
+        if (pathname.endsWith("/export")) {
+          res.writeHead(200, {
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": "attachment; filename=\"satisfaction-report-empty.csv\"",
+          });
+          res.end(buildSatisfactionReportCsv(emptyReport));
+          return;
+        }
+        json(res, 200, emptyReport);
+        return;
+      }
+      if (requestedDepartmentId) {
+        const department = await prisma.department.findFirst({
+          where: { id: requestedDepartmentId, clientId: client.id },
+          select: { id: true },
+        });
+        if (!department) {
+          json(res, 400, httpError("department_not_found", "Department not found"));
+          return;
+        }
+      }
+      const requestedUserId =
+        typeof query.assignedUserId === "string"
+          ? query.assignedUserId.trim()
+          : typeof query.userId === "string"
+            ? query.userId.trim()
+            : "";
+      if (requestedUserId) {
+        const user = await prisma.user.findFirst({
+          where: { id: requestedUserId, clientId: client.id },
+          select: { id: true },
+        });
+        if (!user) {
+          json(res, 400, httpError("user_not_found", "User not found"));
+          return;
+        }
+      }
+      const report = await buildSatisfactionReport({
+        prisma,
+        clientId: client.id,
+        filters: {
+          from: period.from,
+          to: period.to,
+          departmentId: requestedDepartmentId || null,
+          assignedUserId: requestedUserId || null,
+          channel,
+        },
+      });
+      if (pathname.endsWith("/export")) {
+        const safeClientKey = client.clientKey.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
+        res.writeHead(200, {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename=\"satisfaction-report-${safeClientKey}.csv\"`,
+        });
+        res.end(buildSatisfactionReportCsv(report));
+        logger.info({
+          event: "app.reports.satisfaction.exported",
+          requestId,
+          clientId: client.id,
+          userId: clientAuth.userId,
+          role: clientAuth.role,
+          departmentId: requestedDepartmentId || null,
+          assignedUserId: requestedUserId || null,
+          channel,
+        });
+        return;
+      }
+      json(res, 200, report);
+      logger.info({
+        event: "app.reports.satisfaction.viewed",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+        departmentId: requestedDepartmentId || null,
+        assignedUserId: requestedUserId || null,
+        channel,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.reports.satisfaction.error",
         message: (error as Error).message,
         requestId,
       });

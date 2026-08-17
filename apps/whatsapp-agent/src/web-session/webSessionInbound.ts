@@ -150,6 +150,7 @@ async function getWebSessionClosePolicy(params: { prisma: PrismaClient; clientId
   const satisfaction = isRecord(root.satisfactionPolicy) ? root.satisfactionPolicy : {};
   const closeConfirmation = isRecord(closeCommand.confirmation) ? closeCommand.confirmation : {};
   const comment = isRecord(satisfaction.comment) ? satisfaction.comment : {};
+  const eligibility = getNonEmptyString(satisfaction.eligibility)?.toUpperCase();
   return {
     command: getNonEmptyString(closeCommand.command),
     closedMessage:
@@ -166,6 +167,7 @@ async function getWebSessionClosePolicy(params: { prisma: PrismaClient; clientId
     },
     satisfaction: {
       enabled: satisfaction.enabled === true,
+      eligibility: eligibility === "DIRECTED_SERVICE" ? "DIRECTED_SERVICE" : "HUMAN_ONLY",
       ttlMinutes:
         typeof satisfaction.expiresAfterMinutes === "number" && Number.isFinite(satisfaction.expiresAfterMinutes)
           ? Math.max(1, Math.floor(satisfaction.expiresAfterMinutes))
@@ -188,6 +190,9 @@ async function getWebSessionClosePolicy(params: { prisma: PrismaClient; clientId
         getNonEmptyString(satisfaction.thankYouText) ??
         getNonEmptyString(comment.thankYouText) ??
         "Obrigad@ por participar da nossa pesquisa! 😊",
+      newServiceGateText:
+        getNonEmptyString(satisfaction.newServiceGateText) ??
+        "Deseja iniciar um novo atendimento? 😀\n\n1 - Sim. 😁\n2 - Não. 😉",
     },
   };
 }
@@ -229,6 +234,32 @@ function markExpiredSurveyDecision(state: ConversationState, surveyId: string) {
     awaitingExpiredSurveyDecision: true,
     expiredSurveyId: surveyId,
   });
+}
+
+function markCompletedSurveyDecision(state: ConversationState) {
+  return withSatisfactionRuntime(state, {
+    ...getSatisfactionRuntime(state),
+    completedSurveyDecision: {
+      awaiting: true,
+      prompted: false,
+    },
+  });
+}
+
+function markCompletedSurveyDecisionPrompted(state: ConversationState) {
+  return withSatisfactionRuntime(state, {
+    ...getSatisfactionRuntime(state),
+    completedSurveyDecision: {
+      awaiting: true,
+      prompted: true,
+    },
+  });
+}
+
+function clearCompletedSurveyDecision(state: ConversationState) {
+  const runtime = { ...getSatisfactionRuntime(state) };
+  delete runtime.completedSurveyDecision;
+  return withSatisfactionRuntime(state, runtime);
 }
 
 function markCloseConfirmation(state: ConversationState, requestedAt: Date) {
@@ -636,14 +667,26 @@ async function ensureWebSessionRuntimeState(params: {
       chatbotNodeId: true,
       flow: true,
       status: true,
+      closedAt: true,
       assignedUserId: true,
+      answers: true,
     },
   });
+  const existingAnswers = isRecord(existing?.answers) ? existing.answers as Record<string, unknown> : {};
+  const existingSatisfactionRuntime = isRecord(existingAnswers.satisfactionRuntime)
+    ? existingAnswers.satisfactionRuntime
+    : {};
+  const existingCompletedSurveyDecision = isRecord(existingSatisfactionRuntime.completedSurveyDecision)
+    ? existingSatisfactionRuntime.completedSurveyDecision
+    : null;
+  const shouldPreserveClosedSurveyDecision =
+    existing?.status === "CLOSED" && existingCompletedSurveyDecision?.awaiting === true;
   const existingHumanTakeover =
     existing?.handoffStatus === "ACTIVE" ||
     existing?.handoffStatus === "PENDING" ||
     Boolean(existing?.assignedUserId) ||
-    existing?.status === "IN_PROGRESS";
+    existing?.status === "IN_PROGRESS" ||
+    shouldPreserveClosedSurveyDecision;
   const shouldStartBot = params.chatbotEntryPointAvailable && !existingHumanTakeover;
   const runtime = await params.prisma.conversationRuntimeState.upsert({
     where: {
@@ -673,11 +716,12 @@ async function ensureWebSessionRuntimeState(params: {
             assignedUserId: null,
             assignedTo: null,
             assignedAt: null,
+            closedAt: null,
           }
         : {
             status: existing?.status ?? "WAITING",
+            ...(shouldPreserveClosedSurveyDecision ? {} : { closedAt: null }),
           }),
-      closedAt: null,
     },
     create: {
       clientId: params.message.clientId,
@@ -950,7 +994,7 @@ async function sendWebSessionSatisfactionSurvey(params: {
   const policy = await getWebSessionClosePolicy({ prisma: params.prisma, clientId: params.clientId });
   if (!policy.satisfaction.enabled || !params.conversationId) return params.state;
   const assignedUserId = params.assignedUserId ?? params.state.assignedUserId ?? null;
-  if (!assignedUserId) return params.state;
+  if (!assignedUserId && policy.satisfaction.eligibility !== "DIRECTED_SERVICE") return params.state;
   const now = params.now ?? new Date();
   const expiresAt = new Date(now.getTime() + policy.satisfaction.ttlMinutes * 60_000);
   const existing = await params.prisma.satisfactionSurvey.findFirst({
@@ -984,7 +1028,8 @@ async function sendWebSessionSatisfactionSurvey(params: {
         trigger: "HUMAN_CONVERSATION_CLOSED",
         ttlMinutes: policy.satisfaction.ttlMinutes,
         provider: "web_session",
-        attribution: "last_assigned_agent",
+        attribution: assignedUserId ? "last_assigned_agent" : "no_assigned_agent",
+        eligibility: policy.satisfaction.eligibility,
         queueId: params.state.queueId ?? null,
       },
     },
@@ -1086,6 +1131,53 @@ async function handleWebSessionSatisfactionInbound(params: {
   const text = String(params.inboundText ?? "").trim();
   const satisfactionRuntime = getSatisfactionRuntime(params.state);
   const closePolicy = await getWebSessionClosePolicy({ prisma: params.prisma, clientId: params.clientId });
+  const completedSurveyDecision = isRecord(satisfactionRuntime.completedSurveyDecision)
+    ? satisfactionRuntime.completedSurveyDecision
+    : null;
+  if (completedSurveyDecision?.awaiting === true) {
+    if (completedSurveyDecision.prompted === true && text === "1") {
+      return {
+        handled: true as const,
+        state: {
+          ...clearCompletedSurveyDecision(params.state),
+          mode: "BOT" as const,
+          status: null,
+          closedAt: null,
+        },
+      };
+    }
+    if (completedSurveyDecision.prompted === true && text === "2") {
+      const nextState = {
+        ...clearCompletedSurveyDecision(params.state),
+        status: "CLOSED" as const,
+        closedAt: params.state.closedAt ?? params.now.toISOString(),
+      };
+      await sendWebSessionBotText({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        waId: params.waId,
+        waIdCanonical: params.waIdCanonical,
+        channelAccountId: params.channelAccountId,
+        requestId: `${params.requestId}:survey-completed-close`,
+        text: "Atendimento encerrado. Obrigado pelo contato.",
+        state: nextState,
+      });
+      return { handled: true as const, state: nextState };
+    }
+    const state = await sendWebSessionBotText({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical,
+      channelAccountId: params.channelAccountId,
+      requestId: `${params.requestId}:survey-completed-choice`,
+      text: closePolicy.satisfaction.newServiceGateText,
+      state: markCompletedSurveyDecisionPrompted(params.state),
+    });
+    return { handled: true as const, state };
+  }
   if (satisfactionRuntime.awaitingExpiredSurveyDecision === true) {
     if (text === "1") {
       return {
@@ -1165,7 +1257,7 @@ async function handleWebSessionSatisfactionInbound(params: {
         channelAccountId: params.channelAccountId,
         requestId: `${params.requestId}:survey-thanks`,
         text: closePolicy.satisfaction.thankYouText,
-        state: clearSatisfactionCommentRuntime(params.state),
+        state: markCompletedSurveyDecision(clearSatisfactionCommentRuntime(params.state)),
       });
       return { handled: true as const, state };
     }
@@ -1207,7 +1299,7 @@ async function handleWebSessionSatisfactionInbound(params: {
       channelAccountId: params.channelAccountId,
       requestId: `${params.requestId}:survey-thanks`,
       text: closePolicy.satisfaction.thankYouText,
-      state: clearSatisfactionCommentRuntime(params.state),
+      state: markCompletedSurveyDecision(clearSatisfactionCommentRuntime(params.state)),
     });
     return { handled: true as const, state };
   }
@@ -1293,7 +1385,7 @@ async function handleWebSessionSatisfactionInbound(params: {
     text: shouldAskComment ? closePolicy.satisfaction.commentOfferText : closePolicy.satisfaction.thankYouText,
     state: shouldAskComment
       ? markSatisfactionCommentOffer(params.state, survey.id, response.id)
-      : clearSatisfactionCommentRuntime(params.state),
+      : markCompletedSurveyDecision(clearSatisfactionCommentRuntime(params.state)),
   });
   return { handled: true as const, state };
 }

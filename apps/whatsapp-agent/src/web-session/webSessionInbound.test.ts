@@ -365,6 +365,17 @@ function closeConfig() {
   };
 }
 
+function directedServiceCloseConfig() {
+  const config = closeConfig();
+  return {
+    ...config,
+    satisfactionPolicy: {
+      ...config.satisfactionPolicy,
+      eligibility: "DIRECTED_SERVICE",
+    },
+  };
+}
+
 test("extractPhoneFromBaileysJid normalizes one-to-one WhatsApp JIDs only", () => {
   assert.equal(extractPhoneFromBaileysJid("5584999997784@s.whatsapp.net"), "5584999997784");
   assert.equal(extractPhoneFromBaileysJid("5584999997784:12@s.whatsapp.net"), "5584999997784");
@@ -748,7 +759,7 @@ async function ingestText(text: string, messageId: string, timestamp = "2026-08-
   });
 }
 
-test("close command closes waiting conversation without CSAT when no agent is assigned", async () => {
+test("close command keeps legacy HUMAN_ONLY CSAT from waiting conversations without an agent", async () => {
   resetState({
     config: closeConfig(),
     conversation: conversationFixture(),
@@ -771,6 +782,29 @@ test("close command closes waiting conversation without CSAT when no agent is as
   assert.equal(state.satisfactionSurveys.length, 0);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Encerrar o protocolo atual?")), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Atendimento encerrado")), true);
+});
+
+test("close command creates unattributed CSAT for directed waiting service when policy allows it", async () => {
+  resetState({
+    config: directedServiceCloseConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [runtimeFixture({ status: "WAITING", assignedUserId: null })],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("#ENCERRAR#", "MSG_CLOSE_WAITING_DIRECTED_REQUEST");
+    await ingestText("1", "MSG_CLOSE_WAITING_DIRECTED_CONFIRM");
+  });
+
+  assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal(state.runtimeStates[0]?.assignedUserId, null);
+  assert.equal(state.satisfactionSurveys.length, 1);
+  assert.equal(state.satisfactionSurveys[0]?.assignedUserId, null);
+  assert.equal(Boolean(state.satisfactionSurveys[0]?.departmentId), true);
+  assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.attribution, "no_assigned_agent");
+  assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.eligibility, "DIRECTED_SERVICE");
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Pesquisa de Satisfação")), true);
 });
 
 test("close command cancellation keeps the previous human queue state", async () => {
@@ -934,6 +968,7 @@ test("CSAT comment offer can be skipped after a valid score", async () => {
   assert.equal(state.satisfactionResponses[0]?.comment ?? null, null);
   assert.equal(state.satisfactionSurveys[0]?.status, "responded");
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentOffer"), false);
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("completedSurveyDecision"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Obrigad@ por participar")), true);
 });
 
@@ -971,7 +1006,88 @@ test("CSAT comment text is saved after the customer opts in", async () => {
   assert.equal(state.satisfactionResponses[0]?.comment, "Atendimento muito bom");
   assert.equal(state.satisfactionSurveys[0]?.status, "responded");
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentInput"), false);
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("completedSurveyDecision"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Digite o texto:")), true);
+});
+
+test("completed CSAT asks for a new-service decision before returning to chatbot", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        status: "CLOSED",
+        closedAt: new Date("2026-08-11T12:00:00.000Z"),
+        answers: {
+          satisfactionRuntime: {
+            completedSurveyDecision: {
+              awaiting: true,
+              prompted: false,
+            },
+          },
+        },
+      }),
+    ],
+    chatbotFlow: {
+      id: "flow_1",
+      definition: {
+        start: "menu",
+        nodes: {
+          menu: {
+            type: "menu",
+            text: "Menu inicial",
+            options: [{ label: "Atendimento", next: "done" }],
+          },
+          done: { type: "text", text: "Tudo certo" },
+        },
+      },
+    },
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("Oi", "MSG_COMPLETED_GATE_PROMPT", "2026-08-11T12:08:00.000Z");
+    assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+    assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("\"prompted\":true"), true);
+    await ingestText("1", "MSG_COMPLETED_GATE_START", "2026-08-11T12:09:00.000Z");
+  });
+
+  assert.equal(state.runtimeStates[0]?.mode, "BOT");
+  assert.equal(state.runtimeStates[0]?.status, null);
+  assert.equal(state.runtimeStates[0]?.closedAt, null);
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("satisfactionRuntime"), false);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), false);
+});
+
+test("completed CSAT decision repeats options for invalid input after prompt", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        status: "CLOSED",
+        closedAt: new Date("2026-08-11T12:00:00.000Z"),
+        answers: {
+          satisfactionRuntime: {
+            completedSurveyDecision: {
+              awaiting: true,
+              prompted: true,
+            },
+          },
+        },
+      }),
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("qualquer coisa", "MSG_COMPLETED_GATE_INVALID", "2026-08-11T12:09:00.000Z");
+  });
+
+  assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("completedSurveyDecision"), true);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
 });
 
 test("expired CSAT asks for a new-service decision and option 1 returns to bot mode", async () => {
