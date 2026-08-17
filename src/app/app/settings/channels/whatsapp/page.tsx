@@ -259,8 +259,8 @@ export default function AppWhatsAppChannelSettingsPage() {
   const isConnecting = currentState === "CONNECTING" || currentState === "RECONNECTING";
   const isPendingConnection = isConnecting || isQrRequired;
   const connectedNumberDisplay =
-    currentState === "CONNECTED" && status?.detectedNumber?.masked
-      ? status.detectedNumber.masked
+    currentState === "CONNECTED" && status?.account?.channelAccountId
+      ? status.account.channelAccountId
       : "Nenhum número conectado";
   const isBusy = Boolean(working);
   const hasAuthorizedNumber = Boolean(status?.authorization.authorizedNumberCanonical);
@@ -431,11 +431,11 @@ export default function AppWhatsAppChannelSettingsPage() {
                     />
                   </label>
                   <Detail label="Tipo de conexão" value="WhatsApp Business" />
-                  <Detail label="Número autorizado" value={status?.authorization.authorizedNumberMasked ?? "Não autorizado"} />
+                  <Detail label="Número autorizado" value={status?.authorization.authorizedNumberCanonical ?? "Não autorizado"} />
                   <Detail label="Status da autorização" value={status?.authorization.status ?? "RELEASED"} />
                   <Detail label="Número conectado" value={connectedNumberDisplay} />
                   <Detail label="Transporte principal" value={status?.primaryTransport === "web_session" ? "WhatsApp Business por sessão" : status?.primaryTransport === "meta" ? "Meta Cloud" : "Padrão da conversa"} />
-                  <Detail label="Número detectado" value={status?.detectedNumber?.masked ?? "Não preparado"} />
+                  <Detail label="Número detectado" value={status?.account?.channelAccountId ?? "Não preparado"} />
                   <Detail label="Estado técnico" value={currentState} />
                   <Detail label="Última conexão" value={lifecycle?.lastConnectedAt} />
                   <Detail label="Última desconexão" value={lifecycle?.lastDisconnectedAt} />

@@ -277,8 +277,8 @@ export default function TenantChannelsPage() {
   const [mediaPolicySource, setMediaPolicySource] = useState<"db" | "json_fallback">("json_fallback");
   const [savingMediaPolicy, setSavingMediaPolicy] = useState(false);
   const webSessionConnectedNumber =
-    webSessionStatus?.lifecycle.observedState === "CONNECTED" && webSessionStatus.detectedNumber?.masked
-      ? webSessionStatus.detectedNumber.masked
+    webSessionStatus?.lifecycle.observedState === "CONNECTED" && webSessionStatus.account?.channelAccountId
+      ? webSessionStatus.account.channelAccountId
       : "Nenhum número conectado";
 
   useEffect(() => {
@@ -535,9 +535,9 @@ export default function TenantChannelsPage() {
             </div>
 
             <dl className="grid gap-2 md:grid-cols-3">
-              <TechnicalValue label="Número autorizado" value={webSessionStatus?.authorization.authorizedNumberMasked ?? "Não autorizado"} />
+              <TechnicalValue label="Número autorizado" value={webSessionStatus?.authorization.authorizedNumberCanonical ?? "Não autorizado"} />
               <TechnicalValue label="Número conectado" value={webSessionConnectedNumber} />
-              <TechnicalValue label="Número detectado" value={webSessionStatus?.detectedNumber?.masked ?? "-"} />
+              <TechnicalValue label="Número detectado" value={webSessionStatus?.account?.channelAccountId ?? "-"} />
               <TechnicalValue label="Feature" value={webSessionStatus?.featureEnabled ? "enabled" : "disabled"} />
               <TechnicalValue label="Identidade Meta" value={webSessionStatus?.hybridIdentity?.meta.maskedNumber ?? "Não configurada"} />
               <TechnicalValue label="Número autorizado Web" value={webSessionStatus?.hybridIdentity?.web.maskedNumber ?? "Não autorizado"} />
