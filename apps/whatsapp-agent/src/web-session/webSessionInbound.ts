@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { HandoffStatus, MessageType, Prisma, type PrismaClient } from "@prisma/client";
-import { getDefaultOperationalDepartment } from "../bootstrap/defaultOperationalDepartment.js";
+import { findDefaultOperationalDepartment } from "../bootstrap/defaultOperationalDepartment.js";
 import {
   clearChatbotRuntime,
   extractChatbotFlowId,
@@ -651,7 +651,7 @@ async function ensureWebSessionRuntimeState(params: {
   requestId: string;
   chatbotEntryPointAvailable: boolean;
 }) {
-  const department = await getDefaultOperationalDepartment(params.prisma, params.message.clientId);
+  const department = await findDefaultOperationalDepartment(params.prisma, params.message.clientId);
   const conversationKey = makeConversationKey(params.message.tenantKey, params.message.sender);
   const existing = await params.prisma.conversationRuntimeState.findUnique({
     where: {
@@ -2175,6 +2175,7 @@ export async function ingestWebSessionInboundMessage(params: {
       channelAccountId: params.message.channelAccountId,
       waIdSuffix: maskIdentifier(params.message.sender).suffix,
       errorName: error instanceof Error ? error.name : "unknown_error",
+      errorCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
     });
     return { ok: false, action: "failed", reason: "persist_error" };
   }

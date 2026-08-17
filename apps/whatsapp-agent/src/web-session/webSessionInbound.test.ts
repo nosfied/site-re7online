@@ -140,7 +140,18 @@ function fakePrisma() {
       },
     },
     department: {
-      findFirst: async () => state.departments[0] ?? null,
+      findFirst: async ({ where }: { where?: Record<string, unknown> } = {}) =>
+        state.departments.find((department) => {
+          if (where?.clientId && department.clientId !== where.clientId) return false;
+          if (where?.isActive !== undefined && department.isActive !== where.isActive) return false;
+          const clauses = Array.isArray(where?.OR) ? where.OR as Array<Record<string, unknown>> : [];
+          if (clauses.length === 0) return true;
+          return clauses.some((clause) => {
+            if (clause.slug && department.slug === clause.slug) return true;
+            if (clause.name && department.name === clause.name) return true;
+            return false;
+          });
+        }) ?? null,
       create: async ({ data }: { data: Record<string, unknown> }) => {
         const row: Record<string, unknown> = { id: "department_1", ...data };
         state.departments.push(row);
@@ -433,6 +444,37 @@ test("ingestBaileysWebSessionMessage persists tenant-scoped text inbound once", 
   assert.equal(duplicate.action, "duplicate");
   assert.equal(state.inboundMessages.length, 1);
   assert.equal(state.events.some((event) => event.eventName === "whatsapp.web.inbound.duplicate"), true);
+});
+
+test("ingestBaileysWebSessionMessage does not recreate inactive default department", async () => {
+  resetState({
+    departments: [
+      {
+        id: "department_inactive",
+        clientId: "client_1",
+        name: "Atendimento Geral",
+        slug: "atendimento-geral",
+        isActive: false,
+      },
+    ],
+  });
+
+  const result = await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    message: {
+      key: { id: "MSG_NO_DEFAULT_DEPARTMENT", remoteJid: "5584999999614@s.whatsapp.net", fromMe: false },
+      messageTimestamp: 1786464000,
+      message: { conversation: "inicio" },
+    },
+  });
+
+  assert.equal(result.action, "persisted");
+  assert.equal(state.departments.length, 1);
+  assert.equal(state.runtimeStates[0]?.departmentId, undefined);
+  assert.equal(state.conversation?.departmentId, undefined);
 });
 
 test("ingestBaileysWebSessionMessage stores provider observed name only when local names are empty", async () => {
@@ -801,7 +843,7 @@ test("close command creates unattributed CSAT for directed waiting service when 
   assert.equal(state.runtimeStates[0]?.assignedUserId, null);
   assert.equal(state.satisfactionSurveys.length, 1);
   assert.equal(state.satisfactionSurveys[0]?.assignedUserId, null);
-  assert.equal(Boolean(state.satisfactionSurveys[0]?.departmentId), true);
+  assert.equal(state.satisfactionSurveys[0]?.departmentId ?? null, null);
   assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.attribution, "no_assigned_agent");
   assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.eligibility, "DIRECTED_SERVICE");
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Pesquisa de Satisfação")), true);

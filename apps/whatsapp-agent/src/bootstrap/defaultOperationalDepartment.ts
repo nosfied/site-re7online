@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
 
 export const DEFAULT_OPERATIONAL_DEPARTMENT_NAME = "Atendimento Geral";
@@ -22,13 +22,13 @@ export function isLegacyOperationalDepartment(department: {
   );
 }
 
-export async function getDefaultOperationalDepartment(
+export async function findDefaultOperationalDepartment(
   prisma: PrismaClient,
   clientId: string
 ) {
   if (!clientId) return null;
   const slug = normalizeDepartmentSlug(DEFAULT_OPERATIONAL_DEPARTMENT_NAME);
-  const existing = await prisma.department.findFirst({
+  return prisma.department.findFirst({
     where: {
       clientId,
       isActive: true,
@@ -37,16 +37,35 @@ export async function getDefaultOperationalDepartment(
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: { id: true, name: true },
   });
+}
+
+export async function getDefaultOperationalDepartment(
+  prisma: PrismaClient,
+  clientId: string,
+  options: { createIfMissing?: boolean } = {}
+) {
+  if (!clientId) return null;
+  const createIfMissing = options.createIfMissing ?? true;
+  const slug = normalizeDepartmentSlug(DEFAULT_OPERATIONAL_DEPARTMENT_NAME);
+  const existing = await findDefaultOperationalDepartment(prisma, clientId);
   if (existing) return existing;
-  return prisma.department.create({
-    data: {
-      clientId,
-      name: DEFAULT_OPERATIONAL_DEPARTMENT_NAME,
-      slug,
-      isActive: true,
-    },
-    select: { id: true, name: true },
-  });
+  if (!createIfMissing) return null;
+  try {
+    return await prisma.department.create({
+      data: {
+        clientId,
+        name: DEFAULT_OPERATIONAL_DEPARTMENT_NAME,
+        slug,
+        isActive: true,
+      },
+      select: { id: true, name: true },
+    });
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) {
+      throw error;
+    }
+    return findDefaultOperationalDepartment(prisma, clientId);
+  }
 }
 
 export async function ensureDefaultOperationalDepartmentAndQueue(
@@ -81,7 +100,7 @@ export async function resolveOperationalDepartmentId(
   clientId: string,
   departmentId?: string | null
 ) {
-  const fallback = await getDefaultOperationalDepartment(prisma, clientId);
+  const fallback = await getDefaultOperationalDepartment(prisma, clientId, { createIfMissing: false });
   if (!departmentId) return fallback?.id ?? null;
   const department = await prisma.department.findFirst({
     where: { clientId, id: departmentId },
