@@ -1140,7 +1140,7 @@ test("completed CSAT asks for a new-service decision before returning to chatbot
   assert.equal(state.runtimeStates[0]?.closedAt, null);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("satisfactionRuntime"), false);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
-  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), false);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), true);
 });
 
 test("completed CSAT decision repeats options for invalid input after prompt", async () => {
@@ -1197,6 +1197,20 @@ test("expired CSAT asks for a new-service decision and option 1 returns to bot m
         leadId: null,
       },
     ],
+    chatbotFlow: {
+      id: "flow_1",
+      definition: {
+        start: "menu",
+        nodes: {
+          menu: {
+            type: "menu",
+            text: "Menu inicial",
+            options: [{ label: "Atendimento", next: "done" }],
+          },
+          done: { type: "text", text: "Tudo certo" },
+        },
+      },
+    },
   });
   withConnectedWebSession();
 
@@ -1212,6 +1226,7 @@ test("expired CSAT asks for a new-service decision and option 1 returns to bot m
   assert.equal(state.runtimeStates[0]?.closedAt, null);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("satisfactionRuntime"), false);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), true);
 });
 
 test("expired CSAT option 2 keeps the conversation closed", async () => {

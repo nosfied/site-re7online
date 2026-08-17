@@ -1047,6 +1047,67 @@ async function sendWebSessionSatisfactionSurvey(params: {
   });
 }
 
+async function restartWebSessionBotConversation(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientKey: string;
+  waId: string;
+  waIdCanonical: string;
+  channelAccountId: string | null;
+  requestId: string;
+  state: ConversationState;
+  now: Date;
+}) {
+  const nextState: ConversationState = {
+    ...clearChatbotRuntime(params.state),
+    mode: "BOT" as const,
+    status: null,
+    closedAt: null,
+  };
+  const chatbotFlow = await loadWebSessionChatbotFlow({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    state: nextState,
+  });
+  if (!chatbotFlow) return nextState;
+  const validatedDefinition = validateChatbotFlowDefinition(chatbotFlow.definition);
+  if (!validatedDefinition.ok) return nextState;
+  const departmentAvailabilityById = await buildDepartmentAvailabilityById({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    definition: validatedDefinition.definition,
+    at: params.now,
+  });
+  const chatbotResult = await executeChatbotFlowWithConsent({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    waId: params.waId,
+    sourceChannel: "whatsapp",
+    sourceProvider: "web_session",
+    source: "chatbot",
+    requestId: params.requestId,
+    flowId: chatbotFlow.id,
+    definition: validatedDefinition.definition,
+    state: nextState,
+    inboundText: null,
+    nowIso: params.now.toISOString(),
+    options: { departmentAvailabilityById },
+  });
+  const state = chatbotResult.state;
+  if (!chatbotResult.replyText?.trim()) return state;
+  return sendWebSessionBotText({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical,
+    channelAccountId: params.channelAccountId,
+    requestId: `${params.requestId}:new-service-start`,
+    text: chatbotResult.replyText,
+    state,
+  });
+}
+
 export async function closeWebSessionHumanService(params: {
   prisma: PrismaClient;
   clientId: string;
@@ -1136,14 +1197,21 @@ async function handleWebSessionSatisfactionInbound(params: {
     : null;
   if (completedSurveyDecision?.awaiting === true) {
     if (completedSurveyDecision.prompted === true && text === "1") {
+      const nextState = clearCompletedSurveyDecision(params.state);
+      const state = await restartWebSessionBotConversation({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        waId: params.waId,
+        waIdCanonical: params.waIdCanonical,
+        channelAccountId: params.channelAccountId,
+        requestId: params.requestId,
+        state: nextState,
+        now: params.now,
+      });
       return {
         handled: true as const,
-        state: {
-          ...clearCompletedSurveyDecision(params.state),
-          mode: "BOT" as const,
-          status: null,
-          closedAt: null,
-        },
+        state,
       };
     }
     if (completedSurveyDecision.prompted === true && text === "2") {
@@ -1180,14 +1248,21 @@ async function handleWebSessionSatisfactionInbound(params: {
   }
   if (satisfactionRuntime.awaitingExpiredSurveyDecision === true) {
     if (text === "1") {
+      const nextState = clearExpiredSurveyDecision(params.state);
+      const state = await restartWebSessionBotConversation({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        waId: params.waId,
+        waIdCanonical: params.waIdCanonical,
+        channelAccountId: params.channelAccountId,
+        requestId: params.requestId,
+        state: nextState,
+        now: params.now,
+      });
       return {
         handled: true as const,
-        state: {
-          ...clearExpiredSurveyDecision(params.state),
-          mode: "BOT" as const,
-          status: null,
-          closedAt: null,
-        },
+        state,
       };
     }
     if (text === "2") {
