@@ -1036,7 +1036,7 @@ function mergeReadStatePreservingLocal(current: InboxReadState, incoming: InboxR
 const QUICK_EMOJIS = ["😀", "😂", "😍", "❤️", "🙏", "👍", "👋", "👏", "🔥", "✅"];
 const CONVERSATION_FILTERS = [
   { value: "ALL", label: "Todas" },
-  { value: "WAITING", label: "Aguardando" },
+  { value: "WAITING", label: "Aguardando atendimento" },
   { value: "AUTOMATION", label: "Automação" },
   { value: "IN_PROGRESS", label: "Em atendimento" },
   { value: "WAITING_USER", label: "Aguardando cliente" },
@@ -4506,7 +4506,7 @@ export default function AppInboxPage() {
     }
     const currentStatus = getConversationOperationalStatus(selectedConversation);
     setStatusActionDraft(
-      currentStatus && ["IN_PROGRESS", "WAITING_USER", "CLOSED"].includes(currentStatus)
+      currentStatus && ["WAITING", "IN_PROGRESS", "WAITING_USER", "CLOSED"].includes(currentStatus)
         ? currentStatus
         : ""
     );
@@ -6898,7 +6898,7 @@ export default function AppInboxPage() {
                     Situação
                   </option>
                   {CONVERSATION_FILTERS.filter((item) =>
-                    ["IN_PROGRESS", "WAITING_USER", "CLOSED"].includes(item.value)
+                    ["WAITING", "IN_PROGRESS", "WAITING_USER", "CLOSED"].includes(item.value)
                   ).map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}

@@ -8077,14 +8077,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      if (isAgentRole(clientAuth.role)) {
-        json(
-          res,
-          403,
-          httpError("forbidden", "Only supervisor or admin can manage departments.")
-        );
-        return;
-      }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
         json(res, 404, httpError("client_not_found", "Client not found"));
@@ -8104,10 +8096,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const includeInactive =
         clientAuth.role === "ADMIN" && parsedUrl.searchParams.get("includeInactive") === "true";
       const timezone = await resolveTenantOperationalTimezone(prisma, client.id);
+      const scopedDepartmentIds = isAgentRole(clientAuth.role)
+        ? (
+            await getUserDepartmentMemberships(prisma, {
+              clientId: client.id,
+              userId: clientAuth.userId,
+              fallbackToLegacy: true,
+            })
+          )
+            .filter(
+              (membership) =>
+                membership.isActive &&
+                membership.departmentIsActive !== false
+            )
+            .map((membership) => membership.departmentId)
+        : null;
       const departments = await prisma.department.findMany({
         where: {
           clientId: client.id,
           ...(includeInactive ? {} : { isActive: true }),
+          ...(scopedDepartmentIds ? { id: { in: scopedDepartmentIds } } : {}),
           ...LEGACY_OPERATIONAL_DEPARTMENT_FILTER,
         },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],

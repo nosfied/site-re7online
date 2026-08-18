@@ -9174,6 +9174,37 @@ test("inbox operations stay functional when tenant has no active general departm
       });
     }
   }
+  const multiDepartmentAgent = await createUser({
+    clientId: businessClientId,
+    role: "AGENT",
+    suffix: "multi-department-agent",
+  });
+  await prisma.user.update({
+    where: { id: multiDepartmentAgent.id },
+    data: { departmentId: departments[0].id },
+  });
+  for (const [index, department] of departments.entries()) {
+    await prisma.userDepartmentMembership.upsert({
+      where: { userId_departmentId: { userId: multiDepartmentAgent.id, departmentId: department.id } },
+      create: {
+        clientId: businessClientId,
+        userId: multiDepartmentAgent.id,
+        departmentId: department.id,
+        isPrimary: index === 0,
+        isActive: true,
+      },
+      update: { isPrimary: index === 0, isActive: true },
+    });
+  }
+  const agentDepartments = await request<{
+    ok: true;
+    items: Array<{ id: string; isActive: boolean }>;
+  }>("GET", "/app/departments", multiDepartmentAgent);
+  assert.equal(agentDepartments.status, 200, JSON.stringify(agentDepartments.body));
+  assert.deepEqual(
+    agentDepartments.body.items.map((item) => item.id).sort(),
+    departments.map((department) => department.id).sort()
+  );
 
   await prisma.tenantMetaConfig.upsert({
     where: { clientId: businessClientId },
