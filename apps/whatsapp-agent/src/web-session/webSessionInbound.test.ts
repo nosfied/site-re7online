@@ -49,6 +49,8 @@ function resetState(overrides: Partial<typeof state> = {}) {
 }
 
 function fakePrisma() {
+  const withoutUndefined = (value: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
   const prisma = {
     conversation: {
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
@@ -285,9 +287,20 @@ function fakePrisma() {
     conversationRuntimeState: {
       findFirst: async () => state.runtimeStates[0] ?? null,
       findUnique: async () => state.runtimeStates[0] ?? null,
+      findMany: async ({ where }: { where?: Record<string, unknown> } = {}) =>
+        state.runtimeStates.filter((runtimeState) => {
+          if (where?.clientId && runtimeState.clientId !== where.clientId) return false;
+          if (where?.queueId && runtimeState.queueId !== where.queueId) return false;
+          if (where?.status && runtimeState.status !== where.status) return false;
+          if (where?.assignedUserId === null && runtimeState.assignedUserId != null) return false;
+          if (where?.closedAt === null && runtimeState.closedAt != null) return false;
+          return true;
+        }),
       upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
         const existing = state.runtimeStates[0];
-        const row: Record<string, unknown> = existing ? { ...existing, ...update } : { id: "runtime_1", ...create };
+        const row: Record<string, unknown> = existing
+          ? { ...existing, ...withoutUndefined(update) }
+          : { id: "runtime_1", ...withoutUndefined(create) };
         state.runtimeStates[0] = row;
         return {
           id: String(row.id),
@@ -882,7 +895,8 @@ test("close command creates unattributed CSAT for directed waiting service when 
   assert.equal(state.runtimeStates[0]?.assignedUserId, null);
   assert.equal(state.satisfactionSurveys.length, 1);
   assert.equal(state.satisfactionSurveys[0]?.assignedUserId, null);
-  assert.equal(state.satisfactionSurveys[0]?.departmentId ?? null, null);
+  assert.equal(state.satisfactionSurveys[0]?.departmentId, "department_general");
+  assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.queueId, "queue_general");
   assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.attribution, "no_assigned_agent");
   assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.eligibility, "DIRECTED_SERVICE");
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Pesquisa de Satisfação")), true);
@@ -914,6 +928,42 @@ test("close command cancellation keeps the previous human queue state", async ()
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("closeConfirmation"), false);
   assert.equal(state.satisfactionSurveys.length, 0);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Encerramento cancelado")), true);
+});
+
+test("close command cancellation preserves waiting queue without CSAT", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        mode: "HUMAN",
+        status: "WAITING",
+        handoffStatus: "ACTIVE",
+        handoffActivatedAt: new Date("2026-08-11T11:59:00.000Z"),
+        departmentId: "department_general",
+        queueId: "queue_general",
+        assignedUserId: null,
+        assignedTo: null,
+      }),
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("#ENCERRAR#", "MSG_WAITING_CLOSE_CANCEL_REQUEST");
+    await ingestText("2", "MSG_WAITING_CLOSE_CANCEL_NO");
+  });
+
+  assert.equal(state.runtimeStates[0]?.mode, "HUMAN");
+  assert.equal(state.runtimeStates[0]?.status, "WAITING");
+  assert.equal(state.runtimeStates[0]?.handoffStatus, "ACTIVE");
+  assert.equal(state.runtimeStates[0]?.departmentId, "department_general");
+  assert.equal(state.runtimeStates[0]?.queueId, "queue_general");
+  assert.equal(state.runtimeStates[0]?.closedAt, null);
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("closeConfirmation"), false);
+  assert.equal(state.satisfactionSurveys.length, 0);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Encerramento cancelado")), true);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Pesquisa de Satisfação")), false);
 });
 
 test("close command creates a single attributed CSAT after human service", async () => {
@@ -1088,6 +1138,9 @@ test("chatbot handoff opens a new human service cycle with persisted operational
   const operationalProtocol = answers?.operationalProtocol as Record<string, unknown> | undefined;
   assert.match(String(operationalProtocol?.protocol ?? ""), /^CVT-[A-Z0-9]{12}$/);
   assert.equal(operationalProtocol?.source, "service_cycle");
+  assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("CVT-")).length, 1);
+  assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("fila de atendimento")).length, 1);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("próximo horário")), false);
 });
 
 test("CSAT accepts only scores 1 to 5 before TTL and records the response", async () => {

@@ -47,6 +47,88 @@ test("validateChatbotFlowDefinition accepts valid flow", () => {
   assert.equal(result.ok, true);
 });
 
+test("executeChatbotFlow auto-selects a single visible availability route", () => {
+  const definition = validateChatbotFlowDefinition({
+    start: "availability_router",
+    nodes: {
+      availability_router: {
+        type: "menu",
+        text: "Roteando atendimento.",
+        autoSelectSingleVisibleOption: true,
+        options: [
+          {
+            label: "1 - Aberto",
+            next: "open_menu",
+            departmentId: "department_general",
+            visibilityCondition: { departmentAvailability: "OPEN" },
+          },
+          {
+            label: "2 - Fechado",
+            next: "closed_menu",
+            departmentId: "department_general",
+            visibilityCondition: { departmentAvailability: "CLOSED" },
+          },
+          {
+            label: "3 - Sem escala",
+            next: "closed_menu",
+            departmentId: "department_general",
+            visibilityCondition: { departmentAvailability: "NO_SCHEDULE" },
+          },
+        ],
+      },
+      open_menu: {
+        type: "menu",
+        text: "Menu em expediente",
+        options: [{ label: "8 - Outros", next: "handoff" }],
+      },
+      closed_menu: {
+        type: "menu",
+        text: "Menu fora de expediente",
+        options: [{ label: "4 - Dúvidas técnicas", next: "handoff" }],
+      },
+      handoff: { type: "handoff", text: "Vou encaminhar." },
+    },
+  });
+
+  assert.equal(definition.ok, true);
+  if (!definition.ok) return;
+
+  const open = executeChatbotFlow({
+    flowId: "flow_availability",
+    definition: definition.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-08-17T13:00:00.000Z",
+    options: { departmentAvailabilityById: { department_general: "OPEN" } },
+  });
+  assert.equal(open.replyText?.includes("Menu em expediente"), true);
+  assert.equal(open.replyText?.includes("Menu fora de expediente"), false);
+  assert.equal(open.state.chatbotNodeId, "open_menu");
+
+  const closed = executeChatbotFlow({
+    flowId: "flow_availability",
+    definition: definition.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-08-17T20:03:00.000Z",
+    options: { departmentAvailabilityById: { department_general: "CLOSED" } },
+  });
+  assert.equal(closed.replyText?.includes("Menu fora de expediente"), true);
+  assert.equal(closed.replyText?.includes("Menu em expediente"), false);
+  assert.equal(closed.state.chatbotNodeId, "closed_menu");
+
+  const noSchedule = executeChatbotFlow({
+    flowId: "flow_availability",
+    definition: definition.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-08-17T13:00:00.000Z",
+    options: { departmentAvailabilityById: { department_general: "NO_SCHEDULE" } },
+  });
+  assert.equal(noSchedule.replyText?.includes("Menu fora de expediente"), true);
+  assert.equal(noSchedule.state.chatbotNodeId, "closed_menu");
+});
+
 test("validateChatbotFlowDefinition rejects invalid next", () => {
   const result = validateChatbotFlowDefinition({
     start: "menu",

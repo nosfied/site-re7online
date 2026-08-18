@@ -3177,8 +3177,9 @@ test("web session inbound uses shared chatbot flow and queue handoff", async (t)
       rawPayload: { provider: "web_session", type: "text" },
     },
   });
-  assert.equal(workerRequests.length, 3);
+  assert.equal(workerRequests.length, 4);
   assert.match(String(workerRequests[2]?.text ?? ""), /atendimento humano/);
+  assert.match(String(workerRequests[3]?.text ?? ""), /protocolo de atendimento/);
   const handoffRuntime = await prisma.conversationRuntimeState.findUniqueOrThrow({
     where: { clientId_waId: { clientId: businessClientId, waId } },
   });

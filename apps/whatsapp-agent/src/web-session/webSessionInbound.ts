@@ -276,6 +276,14 @@ function markCloseConfirmation(state: ConversationState, requestedAt: Date) {
       previousMode: state.mode ?? null,
       previousStatus: state.status ?? null,
       previousHandoffStatus: state.handoff?.status ?? null,
+      previousDepartmentId: state.departmentId ?? null,
+      previousQueueId: state.queueId ?? null,
+      previousAssignedUserId: state.assignedUserId ?? null,
+      previousAssignedTo: state.assignedTo ?? null,
+      previousAssignedAt: state.assignedAt ?? null,
+      previousHandoffRequestedAt: state.handoff?.requestedAt ?? null,
+      previousHandoffActivatedAt: state.handoff?.activatedAt ?? null,
+      previousHandoffReleasedAt: state.handoff?.releasedAt ?? null,
     },
   });
 }
@@ -289,6 +297,48 @@ function clearCloseConfirmation(state: ConversationState) {
 function getCloseConfirmationRuntime(state: ConversationState) {
   const runtime = getSatisfactionRuntime(state);
   return isRecord(runtime.closeConfirmation) ? runtime.closeConfirmation : null;
+}
+
+function getStoredString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function restoreCloseConfirmationState(state: ConversationState): ConversationState {
+  const closeConfirmation = getCloseConfirmationRuntime(state);
+  const cleared = clearCloseConfirmation(state);
+  if (!closeConfirmation) return cleared;
+  const previousMode = getStoredString(closeConfirmation.previousMode);
+  const previousStatus = getStoredString(closeConfirmation.previousStatus);
+  const previousHandoffStatus = getStoredString(closeConfirmation.previousHandoffStatus);
+  const previousAssignedAt = getStoredString(closeConfirmation.previousAssignedAt);
+  const previousHandoffRequestedAt = getStoredString(closeConfirmation.previousHandoffRequestedAt);
+  const previousHandoffActivatedAt = getStoredString(closeConfirmation.previousHandoffActivatedAt);
+  const previousHandoffReleasedAt = getStoredString(closeConfirmation.previousHandoffReleasedAt);
+  return {
+    ...cleared,
+    mode: previousMode === "BOT" ? "BOT" : "HUMAN",
+    status: previousStatus === "WAITING" || previousStatus === "IN_PROGRESS" || previousStatus === "CLOSED"
+      ? previousStatus
+      : cleared.status,
+    closedAt: previousStatus === "CLOSED" ? cleared.closedAt : null,
+    departmentId: getStoredString(closeConfirmation.previousDepartmentId) ?? cleared.departmentId ?? null,
+    queueId: getStoredString(closeConfirmation.previousQueueId) ?? cleared.queueId ?? null,
+    assignedUserId: getStoredString(closeConfirmation.previousAssignedUserId) ?? cleared.assignedUserId ?? null,
+    assignedTo: getStoredString(closeConfirmation.previousAssignedTo) ?? cleared.assignedTo ?? null,
+    assignedAt: previousAssignedAt ?? cleared.assignedAt ?? null,
+    handoff: {
+      ...cleared.handoff,
+      status:
+        previousHandoffStatus === "active" ||
+        previousHandoffStatus === "pending" ||
+        previousHandoffStatus === "none"
+          ? previousHandoffStatus
+          : cleared.handoff.status,
+      requestedAt: previousHandoffRequestedAt ?? cleared.handoff.requestedAt,
+      activatedAt: previousHandoffActivatedAt ?? cleared.handoff.activatedAt,
+      releasedAt: previousHandoffReleasedAt ?? cleared.handoff.releasedAt,
+    },
+  };
 }
 
 function markSatisfactionCommentOffer(state: ConversationState, surveyId: string, responseId: string) {
@@ -1061,6 +1111,71 @@ async function sendWebSessionBotText(params: {
     return nextState;
   }
   return params.state;
+}
+
+async function sendWebSessionHandoffNotifications(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientKey: string;
+  waId: string;
+  waIdCanonical: string;
+  channelAccountId: string | null;
+  requestId: string;
+  conversationId: string | null;
+  runtimeStateId: string;
+  queueId: string | null;
+  state: ConversationState;
+  now: Date;
+  closedHandoffPolicy: ReturnType<typeof getClosedHandoffPolicy>;
+  includeOffHoursMessage: boolean;
+}) {
+  const protocol =
+    getOperationalProtocol(params.state) ??
+    buildConversationProtocol({ id: params.conversationId, createdAt: params.now });
+  let nextState = await sendWebSessionBotText({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical,
+    channelAccountId: params.channelAccountId,
+    requestId: `${params.requestId}:protocol`,
+    text: buildConversationProtocolNotice(protocol),
+    state: params.state,
+  });
+  const position = await getQueuePosition({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    runtimeStateId: params.runtimeStateId,
+    queueId: params.queueId,
+  });
+  if (position) {
+    nextState = await sendWebSessionBotText({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical,
+      channelAccountId: params.channelAccountId,
+      requestId: `${params.requestId}:queue-position`,
+      text: params.closedHandoffPolicy.queuePositionText.replace("{position}", String(position)),
+      state: nextState,
+    });
+  }
+  if (params.includeOffHoursMessage) {
+    nextState = await sendWebSessionBotText({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical,
+      channelAccountId: params.channelAccountId,
+      requestId: `${params.requestId}:off-hours`,
+      text: params.closedHandoffPolicy.offHoursMessage,
+      state: nextState,
+    });
+  }
+  return nextState;
 }
 
 async function sendWebSessionSatisfactionSurvey(params: {
@@ -1913,7 +2028,7 @@ export async function ingestWebSessionInboundMessage(params: {
           channelAccountId: params.message.channelAccountId,
           requestId: `${requestId}:close-command-cancelled`,
           text: closePolicy.confirmation.cancelledText,
-          state: clearCloseConfirmation(runtimeConversationState),
+          state: restoreCloseConfirmationState(runtimeConversationState),
         });
         await persistWebSessionRuntimeState({
           prisma,
@@ -2230,6 +2345,7 @@ export async function ingestWebSessionInboundMessage(params: {
             handoffDecision?.kind !== "blocked" &&
             (runtimeConversationState.mode === "HUMAN" || runtimeConversationState.status === "WAITING")
           ) {
+            let effectiveRuntime = postFlowRuntime;
             if (!queueClosedHandoff) {
               await applyBalancedQueueAssignment({
                 prisma,
@@ -2245,59 +2361,45 @@ export async function ingestWebSessionInboundMessage(params: {
                 requestId,
                 source: "whatsapp.web.chatbot.handoff",
               });
+              const refreshedRuntime = await prisma.conversationRuntimeState.findUnique({
+                where: {
+                  clientId_waId: {
+                    clientId: params.message.clientId,
+                    waId: params.message.sender,
+                  },
+                },
+                select: {
+                  id: true,
+                  assignedUserId: true,
+                  departmentId: true,
+                  queueId: true,
+                  status: true,
+                },
+              });
+              if (refreshedRuntime) effectiveRuntime = refreshedRuntime;
             }
-            if (queueClosedHandoff) {
-              const protocol =
-                getOperationalProtocol(runtimeConversationState) ??
-                buildConversationProtocol({ id: conversation?.id ?? null, createdAt: params.message.timestamp });
-              runtimeConversationState = await sendWebSessionBotText({
-                prisma,
-                clientId: params.message.clientId,
-                clientKey: params.message.tenantKey,
-                waId: params.message.sender,
-                waIdCanonical: params.message.senderCanonical,
-                channelAccountId: params.message.channelAccountId,
-                requestId: `${requestId}:protocol`,
-                text: buildConversationProtocolNotice(protocol),
-                state: runtimeConversationState,
-              });
-              const position = await getQueuePosition({
-                prisma,
-                clientId: params.message.clientId,
-                runtimeStateId: postFlowRuntime.id,
-                queueId: postFlowRuntime.queueId,
-              });
-              if (position) {
-                runtimeConversationState = await sendWebSessionBotText({
-                  prisma,
-                  clientId: params.message.clientId,
-                  clientKey: params.message.tenantKey,
-                  waId: params.message.sender,
-                  waIdCanonical: params.message.senderCanonical,
-                  channelAccountId: params.message.channelAccountId,
-                  requestId: `${requestId}:queue-position`,
-                  text: closedHandoffPolicy.queuePositionText.replace("{position}", String(position)),
-                  state: runtimeConversationState,
-                });
-              }
-              runtimeConversationState = await sendWebSessionBotText({
-                prisma,
-                clientId: params.message.clientId,
-                clientKey: params.message.tenantKey,
-                waId: params.message.sender,
-                waIdCanonical: params.message.senderCanonical,
-                channelAccountId: params.message.channelAccountId,
-                requestId: `${requestId}:off-hours`,
-                text: closedHandoffPolicy.offHoursMessage,
-                state: runtimeConversationState,
-              });
-              await persistWebSessionRuntimeState({
-                prisma,
-                clientId: params.message.clientId,
-                waId: params.message.sender,
-                state: runtimeConversationState,
-              });
-            }
+            runtimeConversationState = await sendWebSessionHandoffNotifications({
+              prisma,
+              clientId: params.message.clientId,
+              clientKey: params.message.tenantKey,
+              waId: params.message.sender,
+              waIdCanonical: params.message.senderCanonical,
+              channelAccountId: params.message.channelAccountId,
+              requestId,
+              conversationId: conversation?.id ?? null,
+              runtimeStateId: effectiveRuntime.id,
+              queueId: effectiveRuntime.queueId,
+              state: runtimeConversationState,
+              now: params.message.timestamp,
+              closedHandoffPolicy,
+              includeOffHoursMessage: queueClosedHandoff,
+            });
+            await persistWebSessionRuntimeState({
+              prisma,
+              clientId: params.message.clientId,
+              waId: params.message.sender,
+              state: runtimeConversationState,
+            });
             publishRealtimeEvent({
               type: "conversation.handoff.updated",
               clientId: params.message.clientId,
@@ -2308,8 +2410,8 @@ export async function ingestWebSessionInboundMessage(params: {
                 runtimeConversationState.handoff.status === "none"
                   ? "active"
                   : runtimeConversationState.handoff.status,
-                assignedUserId: postFlowRuntime.assignedUserId ?? null,
-                departmentId: postFlowRuntime.departmentId ?? null,
+                assignedUserId: effectiveRuntime.assignedUserId ?? null,
+                departmentId: effectiveRuntime.departmentId ?? null,
                 updatedAt: new Date().toISOString(),
                 notificationMessage: {
                   messageId: inboundNotificationMessage.messageId,

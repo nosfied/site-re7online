@@ -74,6 +74,10 @@ function buildSecultDemoConsolidatedDefinition(targets: ResolvedRoutingTarget[] 
   const technicalTarget = secultDemoRoutingTargets.find((item) => item.key === "technical")!;
   const invalidText =
     "⚠️ Desculpe, essa opção é inválida. Tente novamente digitando apenas o número correspondente ao seu interesse, tá?";
+  const handoffText =
+    "Aguarde só mais um pouco, estou te direcionando para um/uma atendente. 😉\n\nPara encerrar o atendimento a qualquer momento, digite: #ENCERRAR#";
+  const operatingHoursText =
+    "🚨 *Nosso horário de atendimento direcionado é de segunda a sexta, das 8h às 12h e 13h às 17h, de segunda a sexta.*\n\n🚨 *Não operamos através de áudio, vídeo ou ligações*\n\n😁 Digite o número de acordo com o assunto desejado:";
 
   return {
     metadata: {
@@ -102,17 +106,63 @@ function buildSecultDemoConsolidatedDefinition(targets: ResolvedRoutingTarget[] 
         acceptOption: "1",
         declineOption: "2",
         invalidText,
-        onAccepted: "main_menu",
+        onAccepted: "availability_router",
         onDeclined: "declined",
       },
       declined: {
         type: "text",
         text: "Atendimento encerrado. Caso precise, envie uma nova mensagem e autorize o atendimento.",
       },
+      availability_router: {
+        type: "menu",
+        text: "Direcionando atendimento.",
+        showBackCommand: false,
+        autoSelectSingleVisibleOption: true,
+        fallbackText: invalidText,
+        departmentId: general.departmentId,
+        options: [
+          {
+            label: "1 - Atendimento em expediente",
+            next: "main_menu",
+            ...general,
+            visibilityCondition: { departmentAvailability: "OPEN" },
+          },
+          {
+            label: "2 - Atendimento fora de expediente",
+            next: "closed_menu",
+            ...general,
+            visibilityCondition: { departmentAvailability: "CLOSED" },
+          },
+          {
+            label: "3 - Atendimento sem escala disponível",
+            next: "closed_menu",
+            ...general,
+            visibilityCondition: { departmentAvailability: "NO_SCHEDULE" },
+          },
+        ],
+      },
+      closed_menu: {
+        type: "menu",
+        text: operatingHoursText,
+        fallbackText: invalidText,
+        showBackCommand: false,
+        invalidSelectionAction: {
+          action: "HANDOFF",
+          text: handoffText,
+          ...general,
+          context: secultHandoffContext("fora_expediente", generalTarget.department, generalTarget.queue),
+          handoffSummary: "Atendimento fora de expediente",
+        },
+        options: [
+          { label: "4 - Dúvidas Técnicas - Plataforma Mapa Cultural", next: "mapa_menu" },
+          { label: "5 - Fundarpe", next: "fundarpe_menu" },
+          { label: "7 - Cultura Viva", next: "cultura_viva_menu" },
+        ],
+      },
       main_menu: {
         type: "menu",
         text:
-          "Seja bem-vindo (a) ao Canal de Atendimento da Secretaria de Cultura de Pernambuco.\nSalve meu contato, beleza? 😁\nAntes de solicitar falar com um/uma atendente, verifique sempre se nas numerações das opções se já encontra a solução para sua questão. Após entrar na fila de atendimento você não poderá retornar para as opções iniciais.\n\nAO DIGITAR # VOCÊ SERÁ ENCAMINHADO PARA O MENU INICIAL OU ANTERIOR.\n\n🚨 *Nosso horário de atendimento direcionado é de segunda a sexta, das 8h às 12h e 13h às 17h, de segunda a sexta.*\n\n🚨 *Não operamos através de áudio, vídeo ou ligações*\n\n😁 Digite o número de acordo com o assunto desejado:",
+          `Seja bem-vindo (a) ao Canal de Atendimento da Secretaria de Cultura de Pernambuco.\nSalve meu contato, beleza? 😁\nAntes de solicitar falar com um/uma atendente, verifique sempre se nas numerações das opções se já encontra a solução para sua questão. Após entrar na fila de atendimento você não poderá retornar para as opções iniciais.\n\nAO DIGITAR # VOCÊ SERÁ ENCAMINHADO PARA O MENU INICIAL OU ANTERIOR.\n\n${operatingHoursText}`,
         fallbackText: invalidText,
         showBackCommand: false,
         options: [
@@ -211,13 +261,13 @@ function buildSecultDemoConsolidatedDefinition(targets: ResolvedRoutingTarget[] 
           "*E-mail:* culturaviva@secult.pe.gov.br e *WhatsApp:* 98494-0511\n(Horário de 08h às 17h, de segunda a sexta-feira)",
         next: "cultura_viva_menu",
       },
-      handoff_pnab: { type: "handoff", text: "Vou encaminhar seu atendimento para a equipe responsável.", ...general },
-      handoff_lpg: { type: "handoff", text: "Vou encaminhar seu atendimento para a equipe responsável.", ...general },
-      handoff_outros_editais: { type: "handoff", text: "Vou encaminhar seu atendimento para a equipe responsável.", ...general },
-      handoff_busca_ativa: { type: "handoff", text: "Vou encaminhar seu atendimento para a equipe responsável.", ...general },
-      handoff_outros: { type: "handoff", text: "Vou encaminhar seu atendimento para a equipe responsável.", ...general },
-      fundarpe_handoff: { type: "handoff", text: "Vou encaminhar seu atendimento para a equipe da Fundarpe.", ...fundarpe },
-      mapa_handoff: { type: "handoff", text: "Vou encaminhar seu atendimento para a equipe de dúvidas técnicas.", ...technical },
+      handoff_pnab: { type: "handoff", text: handoffText, ...general },
+      handoff_lpg: { type: "handoff", text: handoffText, ...general },
+      handoff_outros_editais: { type: "handoff", text: handoffText, ...general },
+      handoff_busca_ativa: { type: "handoff", text: handoffText, ...general },
+      handoff_outros: { type: "handoff", text: handoffText, ...general },
+      fundarpe_handoff: { type: "handoff", text: handoffText, ...fundarpe },
+      mapa_handoff: { type: "handoff", text: handoffText, ...technical },
     },
   } satisfies Prisma.InputJsonObject;
 }
