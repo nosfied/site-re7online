@@ -8,7 +8,7 @@ dotenv.config({ path: ".env" });
 
 type Options = {
   tenant: string;
-  preset: "re7online-private-intake";
+  preset: "re7online-private-intake" | "secult-pe-demo-consolidated";
   execute: boolean;
   json: boolean;
 };
@@ -19,12 +19,208 @@ type Action = {
   detail: Record<string, unknown>;
 };
 
-const routingTargets = [
+type RoutingTarget = {
+  key?: string;
+  department: string;
+  queue: string;
+};
+
+type ResolvedRoutingTarget = RoutingTarget & {
+  departmentId: string | null;
+  departmentActive: boolean;
+  queueId: string | null;
+};
+
+const re7onlineRoutingTargets = [
   { department: "Atendimento Geral", queue: "Fila Geral" },
   { department: "Comercial", queue: "Fila Comercial" },
   { department: "Suporte", queue: "Fila Suporte" },
   { department: "Governo e Licitações", queue: "Fila Governo" },
 ] as const;
+
+const secultDemoRoutingTargets = [
+  { key: "general", department: "Dúvidas Gerais - SECULT / PE", queue: "Dúvidas Gerais - SECULT / PE" },
+  { key: "fundarpe", department: "Dúvidas Gerais - FUNDARPE", queue: "Dúvidas Gerais - FUNDARPE" },
+  {
+    key: "technical",
+    department: "Dúvidas Técnicas - Plataforma Mapa Cultural",
+    queue: "Dúvidas Técnicas - Plataforma Mapa Cultural",
+  },
+] as const;
+
+function routeByKey(targets: ResolvedRoutingTarget[], key: "general" | "fundarpe" | "technical") {
+  const target = targets.find((item) => item.key === key);
+  return {
+    departmentId: target?.departmentId ?? undefined,
+    queueId: target?.queueId ?? undefined,
+  };
+}
+
+function secultHandoffContext(service: string, department: string, queue: string) {
+  return {
+    intent: "directed_service",
+    servico: service,
+    targetDepartment: department,
+    targetQueue: queue,
+  };
+}
+
+function buildSecultDemoConsolidatedDefinition(targets: ResolvedRoutingTarget[] = []) {
+  const general = routeByKey(targets, "general");
+  const fundarpe = routeByKey(targets, "fundarpe");
+  const technical = routeByKey(targets, "technical");
+  const generalTarget = secultDemoRoutingTargets.find((item) => item.key === "general")!;
+  const fundarpeTarget = secultDemoRoutingTargets.find((item) => item.key === "fundarpe")!;
+  const technicalTarget = secultDemoRoutingTargets.find((item) => item.key === "technical")!;
+  const invalidText =
+    "⚠️ Desculpe, essa opção é inválida. Tente novamente digitando apenas o número correspondente ao seu interesse, tá?";
+
+  return {
+    metadata: {
+      preset: "secult-pe-demo-consolidated",
+      sourceOfTruth: "ChatbotFlow",
+      closeCommandSource: "TenantOperationalConfig.config.chatbotCloseCommand",
+      availabilitySource: "DepartmentBusinessHour",
+      protocolSource: "TenantOperationalConfig.config.protocolNotification",
+      satisfactionSource: "TenantOperationalConfig.config.satisfactionPolicy",
+    },
+    start: "consent",
+    globalCommands: [{ command: "#", action: "BACK", allowedModes: ["BOT"] }],
+    inactivityPolicy: { action: "HANDOFF", timeoutMinutes: 60, resetAfterMinutes: 1440 },
+    closedHandoffPolicy: {
+      action: "QUEUE_FOR_NEXT_OPEN",
+      queuePositionText: "Você é o nº {position} da fila de atendimento.",
+      offHoursMessage: "No momento não temos nenhum atendente disponível. Você será atendido no primeiro horário do próximo expediente.",
+    },
+    nodes: {
+      consent: {
+        type: "consent",
+        purpose: "attendance",
+        textVersion: "secult-pe-v1",
+        message:
+          "Atenção: precisamos de sua autorização para iniciar o atendimento.\nNo Brasil, a LGPD (Lei Geral de Proteção de Dados) exige que se dê autorização para que se possa receber e enviar mensagens por aplicativos de comunicação como o WhatsApp.\n\nVocê autoriza a Secretaria de Cultura de Pernambuco a enviar mensagens, por esse canal para o número de WhatsApp {{contactPhone}}, referentes ao nosso atendimento, comunicados, avisos, informativos, eventos específicos, entre outras oportunidades relacionadas às nossas ações, editais e ao Mapa Cultural de Pernambuco?\n\nDigite, atentamente, apenas a numeração conforme abaixo:\n\n*1* - Sim. Continuar com o atendimento.\nVocê pode revogar essa autorização a qualquer momento. Enviando e-mail para revogar.atendimento@secult.pe.gov.br ele é exclusivo para retirar você da lista de recebimento de mensagens do nosso whatsapp\n*2* - Não. Encerrar o atendimento.\nAo encerrar o atendimento pelo WhatsApp, você pode buscar outros canais para contato, disponíveis no portal www.cultura.pe.com.br\n\nCaso queira autorizar o contato por aqui, fale conosco e responda o questionário novamente",
+        acceptOption: "1",
+        declineOption: "2",
+        invalidText,
+        onAccepted: "main_menu",
+        onDeclined: "declined",
+      },
+      declined: {
+        type: "text",
+        text: "Atendimento encerrado. Caso precise, envie uma nova mensagem e autorize o atendimento.",
+      },
+      main_menu: {
+        type: "menu",
+        text:
+          "Seja bem-vindo (a) ao Canal de Atendimento da Secretaria de Cultura de Pernambuco.\nSalve meu contato, beleza? 😁\nAntes de solicitar falar com um/uma atendente, verifique sempre se nas numerações das opções se já encontra a solução para sua questão. Após entrar na fila de atendimento você não poderá retornar para as opções iniciais.\n\nAO DIGITAR # VOCÊ SERÁ ENCAMINHADO PARA O MENU INICIAL OU ANTERIOR.\n\n🚨 *Nosso horário de atendimento direcionado é de segunda a sexta, das 8h às 12h e 13h às 17h, de segunda a sexta.*\n\n🚨 *Não operamos através de áudio, vídeo ou ligações*\n\n😁 Digite o número de acordo com o assunto desejado:",
+        fallbackText: invalidText,
+        showBackCommand: false,
+        options: [
+          {
+            label: "1 - Dúvidas gerais - PNAB",
+            next: "handoff_pnab",
+            ...general,
+            context: secultHandoffContext("pnab", generalTarget.department, generalTarget.queue),
+          },
+          {
+            label: "2 - Dúvidas Lei Paulo Gustavo - Prestação de Contas",
+            next: "handoff_lpg",
+            ...general,
+            context: secultHandoffContext("lei_paulo_gustavo", generalTarget.department, generalTarget.queue),
+          },
+          {
+            label: "3 - Dúvidas gerais - Outros Editais",
+            next: "handoff_outros_editais",
+            ...general,
+            context: secultHandoffContext("outros_editais", generalTarget.department, generalTarget.queue),
+          },
+          { label: "4 - Dúvidas Técnicas - Plataforma Mapa Cultural", next: "mapa_menu" },
+          { label: "5 - Fundarpe", next: "fundarpe_menu" },
+          {
+            label: "6 - Agente de Suporte para Busca Ativa",
+            next: "handoff_busca_ativa",
+            ...general,
+            context: secultHandoffContext("busca_ativa", generalTarget.department, generalTarget.queue),
+          },
+          { label: "7 - Cultura Viva", next: "cultura_viva_menu" },
+          {
+            label: "8 - Outros",
+            next: "handoff_outros",
+            ...general,
+            context: secultHandoffContext("outros", generalTarget.department, generalTarget.queue),
+          },
+        ],
+      },
+      mapa_menu: {
+        type: "menu",
+        text: "😁 Digite o número de acordo com o assunto desejado:\n\n👉 *4 - Dúvidas Técnicas - Plataforma Mapa Cultural:*",
+        fallbackText: invalidText,
+        options: [
+          { label: "1 - Acesse o Mapa Cultural de Pernambuco", next: "mapa_link" },
+          { label: "2 - Tutorial: Cadastro de Agente Cultural", next: "mapa_tutorial" },
+          {
+            label: "3 - Falar com atendimento técnico",
+            next: "mapa_handoff",
+            ...technical,
+            visibilityCondition: { departmentAvailability: "OPEN" },
+            context: secultHandoffContext("mapa_cultural_atendimento", technicalTarget.department, technicalTarget.queue),
+          },
+        ],
+      },
+      mapa_link: {
+        type: "text",
+        text:
+          "Mapa Cultural de Pernambuco\nO Mapa Cultural de Pernambuco é uma plataforma livre, gratuita e colaborativa de mapeamento da Secretaria da Cultura do Estado de Pernambuco e da Fundação do Patrimônio Histórico e Artístico de Pernambuco.\n\nClicando no link abaixo você terá acesso à Plataforma do Mapa Cultural de Pernambuco.\n\nClique Aqui 👉 https://www.mapacultural.pe.gov.br/\n\nDigite # e você retornará para as opções anteriores.\nCaso você ainda tenha interesse em outras informações sobre a Plataforma do Mapa Cultural de Pernambuco, digite as numerações que eu te disse anteriormente. Ok? ☺️",
+        next: "mapa_menu",
+      },
+      mapa_tutorial: {
+        type: "text",
+        text:
+          "Clicando no link abaixo você terá acesso ao vídeo tutorial ensinando o passo a passo de como realizar o cadastro de Agente Individual no Mapa Cultural.\n\nClique Aqui 👉 https://www.youtube.com/watch?v=X7cdEEfE5hM\n\nDigite # e você retornará para as opções anteriores.\nCaso você ainda tenha interesse em outras informações sobre o Mapa Cultural de Pernambuco, digite as numerações que eu te disse anteriormente. Ok? ☺️",
+        next: "mapa_menu",
+      },
+      fundarpe_menu: {
+        type: "menu",
+        text: "😁 Digite o número de acordo com o assunto desejado:\n\n👉 *5 - Fundarpe:*",
+        fallbackText: invalidText,
+        options: [
+          { label: "1 - Contato Fundarpe", next: "fundarpe_contact" },
+          {
+            label: "2 - Falar com atendimento Fundarpe",
+            next: "fundarpe_handoff",
+            ...fundarpe,
+            context: secultHandoffContext("fundarpe_atendimento", fundarpeTarget.department, fundarpeTarget.queue),
+          },
+        ],
+      },
+      fundarpe_contact: {
+        type: "text",
+        text:
+          "*Telefone* (81) 3184-3026 (horário de 9h às 17h, de segunda a sexta-feira)\n*E-mail:* atendimentosic@fundarpe.pe.gov.br",
+        next: "fundarpe_menu",
+      },
+      cultura_viva_menu: {
+        type: "menu",
+        text: "😁 Digite o número de acordo com o assunto desejado:\n\n👉 *7 - Cultura Viva:*",
+        fallbackText: invalidText,
+        options: [{ label: "1 - Contatos Cultura Viva", next: "cultura_viva_contact" }],
+      },
+      cultura_viva_contact: {
+        type: "text",
+        text:
+          "*E-mail:* culturaviva@secult.pe.gov.br e *WhatsApp:* 98494-0511\n(Horário de 08h às 17h, de segunda a sexta-feira)",
+        next: "cultura_viva_menu",
+      },
+      handoff_pnab: { type: "handoff", text: "Vou encaminhar seu atendimento para a equipe responsável.", ...general },
+      handoff_lpg: { type: "handoff", text: "Vou encaminhar seu atendimento para a equipe responsável.", ...general },
+      handoff_outros_editais: { type: "handoff", text: "Vou encaminhar seu atendimento para a equipe responsável.", ...general },
+      handoff_busca_ativa: { type: "handoff", text: "Vou encaminhar seu atendimento para a equipe responsável.", ...general },
+      handoff_outros: { type: "handoff", text: "Vou encaminhar seu atendimento para a equipe responsável.", ...general },
+      fundarpe_handoff: { type: "handoff", text: "Vou encaminhar seu atendimento para a equipe da Fundarpe.", ...fundarpe },
+      mapa_handoff: { type: "handoff", text: "Vou encaminhar seu atendimento para a equipe de dúvidas técnicas.", ...technical },
+    },
+  } satisfies Prisma.InputJsonObject;
+}
 
 function fail(message: string): never {
   console.error(`[tenant-intake-flow] FAIL: ${message}`);
@@ -56,7 +252,7 @@ function parseArgs(argv: string[]): Options {
         break;
       case "--preset": {
         const preset = requireValue(current);
-        if (preset !== "re7online-private-intake") {
+        if (preset !== "re7online-private-intake" && preset !== "secult-pe-demo-consolidated") {
           fail(`preset desconhecido: ${preset}`);
         }
         options.preset = preset;
@@ -919,6 +1115,16 @@ function getPresetDefinition(options: Options) {
     return {
       name: "Re7online Automated Intake",
       definition: re7onlineSlaIntakeDefinition,
+      routingTargets: re7onlineRoutingTargets as readonly RoutingTarget[],
+      legacyFlowNames: [] as readonly string[],
+    };
+  }
+  if (options.preset === "secult-pe-demo-consolidated") {
+    return {
+      name: "SECULT-PE - Boas-vindas e triagem",
+      definition: buildSecultDemoConsolidatedDefinition(),
+      routingTargets: secultDemoRoutingTargets as readonly RoutingTarget[],
+      legacyFlowNames: ["Atendimento SECULT/PE - Espelho operacional"] as readonly string[],
     };
   }
   fail(`preset desconhecido: ${options.preset}`);
@@ -953,10 +1159,6 @@ function output(data: unknown, json: boolean) {
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const preset = getPresetDefinition(options);
-  const validation = validateChatbotFlowDefinition(preset.definition);
-  if (!validation.ok) {
-    fail(`preset inválido: ${validation.message}`);
-  }
 
   const prisma = new PrismaClient();
   try {
@@ -990,7 +1192,7 @@ async function main() {
     const nextFeatures = { ...currentFeatures, chatbot: true };
     const activeEntryPointsToDisable = client.chatbotFlows.filter((flow) => flow.id !== existingFlow?.id);
     const existingRouting = await Promise.all(
-      routingTargets.map(async (target) => {
+      preset.routingTargets.map(async (target) => {
         const department = await prisma.department.findFirst({
           where: { clientId: client.id, name: target.department },
           select: {
@@ -1012,6 +1214,13 @@ async function main() {
         };
       })
     );
+    const flowDefinition = options.preset === "secult-pe-demo-consolidated"
+      ? buildSecultDemoConsolidatedDefinition(existingRouting)
+      : preset.definition;
+    const validation = validateChatbotFlowDefinition(flowDefinition);
+    if (!validation.ok) {
+      fail(`preset inválido: ${validation.message}`);
+    }
     const actions: Action[] = [];
 
     if (currentFeatures.chatbot !== true) {
@@ -1078,6 +1287,26 @@ async function main() {
       }
     }
 
+    if (preset.legacyFlowNames.length > 0) {
+      for (const name of preset.legacyFlowNames) {
+        const legacyFlow = await prisma.chatbotFlow.findFirst({
+          where: { clientId: client.id, name },
+          select: { id: true, name: true, isActive: true, entryPoint: true, definition: true },
+        });
+        if (legacyFlow) {
+          actions.push({
+            action: "deprecate",
+            target: "ChatbotFlow",
+            detail: {
+              id: legacyFlow.id,
+              name: legacyFlow.name,
+              set: { isActive: false, entryPoint: false, metadata: "legacy_deprecated" },
+            },
+          });
+        }
+      }
+    }
+
     const report = {
       ok: true,
       mode: options.execute ? "execute" : "dry-run",
@@ -1116,7 +1345,7 @@ async function main() {
         const updated = await tx.chatbotFlow.update({
           where: { id: existingFlow.id },
           data: {
-            definition: preset.definition,
+            definition: flowDefinition,
             isActive: true,
             entryPoint: true,
           },
@@ -1128,7 +1357,7 @@ async function main() {
           data: {
             clientId: client.id,
             name: preset.name,
-            definition: preset.definition,
+            definition: flowDefinition,
             isActive: true,
             entryPoint: true,
           },
@@ -1148,7 +1377,7 @@ async function main() {
         });
       }
 
-      for (const target of routingTargets) {
+      for (const target of preset.routingTargets) {
         let department = await tx.department.findFirst({
           where: { clientId: client.id, name: target.department },
           select: { id: true, isActive: true },
@@ -1183,6 +1412,32 @@ async function main() {
           });
         }
       }
+
+        for (const name of preset.legacyFlowNames) {
+          const legacyFlow = await tx.chatbotFlow.findFirst({
+            where: { clientId: client.id, name },
+            select: { id: true, definition: true },
+          });
+          if (!legacyFlow) continue;
+          const definition = asRecord(legacyFlow.definition);
+          const metadata = asRecord(definition.metadata);
+          await tx.chatbotFlow.update({
+            where: { id: legacyFlow.id },
+            data: {
+              isActive: false,
+              entryPoint: false,
+              definition: {
+                ...definition,
+                metadata: {
+                  ...metadata,
+                  legacy: true,
+                  deprecated: true,
+                  supersededBy: preset.name,
+                },
+              } as Prisma.InputJsonValue,
+            },
+          });
+        }
 
       return { flowId };
     });

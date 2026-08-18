@@ -353,6 +353,142 @@ test("executeChatbotFlow preserves explicit menu option numbers", () => {
   assert.equal(selected.replyText, "Voltando ao início.");
 });
 
+function makeConsolidatedMenuFixture() {
+  return validateChatbotFlowDefinition({
+    metadata: {
+      preset: "tenant-demo-consolidated",
+      closeCommandSource: "TenantOperationalConfig.config.chatbotCloseCommand",
+    },
+    start: "main_menu",
+    globalCommands: [{ command: "#", action: "BACK", allowedModes: ["BOT"] }],
+    nodes: {
+      main_menu: {
+        type: "menu",
+        text:
+          "Seja bem-vindo (a).\n\n🚨 *Nosso horário de atendimento direcionado é de segunda a sexta.*\n\n😁 Digite o número de acordo com o assunto desejado:",
+        fallbackText:
+          "⚠️ Desculpe, essa opção é inválida. Tente novamente digitando apenas o número correspondente ao seu interesse, tá?",
+        showBackCommand: false,
+        options: [
+          { label: "1 - PNAB", next: "handoff_general", departmentId: "department_general", queueId: "queue_general" },
+          { label: "2 - Lei Paulo Gustavo", next: "handoff_general", departmentId: "department_general", queueId: "queue_general" },
+          { label: "3 - Outros Editais", next: "handoff_general", departmentId: "department_general", queueId: "queue_general" },
+          { label: "4 - Mapa Cultural", next: "mapa_menu" },
+          { label: "5 - Fundarpe", next: "fundarpe_menu" },
+          { label: "6 - Busca Ativa", next: "handoff_general", departmentId: "department_general", queueId: "queue_general" },
+          { label: "7 - Cultura Viva", next: "cultura_viva_menu" },
+          { label: "8 - Outros", next: "handoff_general", departmentId: "department_general", queueId: "queue_general" },
+        ],
+      },
+      mapa_menu: {
+        type: "menu",
+        text: "😁 Digite o número de acordo com o assunto desejado:\n\n👉 *4 - Mapa Cultural:*",
+        fallbackText: "⚠️ Desculpe, essa opção é inválida.",
+        options: [
+          { label: "1 - Acesse o Mapa Cultural", next: "mapa_link" },
+          { label: "2 - Tutorial", next: "mapa_tutorial" },
+          {
+            label: "3 - Falar com atendimento técnico",
+            next: "handoff_technical",
+            departmentId: "department_technical",
+            queueId: "queue_technical",
+            visibilityCondition: { departmentAvailability: "OPEN" },
+          },
+        ],
+      },
+      fundarpe_menu: {
+        type: "menu",
+        text: "😁 Digite o número de acordo com o assunto desejado:\n\n👉 *5 - Fundarpe:*",
+        options: [
+          { label: "1 - Contato Fundarpe", next: "fundarpe_contact" },
+          { label: "2 - Falar com atendimento Fundarpe", next: "handoff_fundarpe", departmentId: "department_fundarpe", queueId: "queue_fundarpe" },
+        ],
+      },
+      cultura_viva_menu: {
+        type: "menu",
+        text: "😁 Digite o número de acordo com o assunto desejado:\n\n👉 *7 - Cultura Viva:*",
+        options: [{ label: "1 - Contatos Cultura Viva", next: "cultura_viva_contact" }],
+      },
+      mapa_link: { type: "text", text: "Link do Mapa.", next: "mapa_menu" },
+      mapa_tutorial: { type: "text", text: "Tutorial do Mapa.", next: "mapa_menu" },
+      fundarpe_contact: { type: "text", text: "Contato Fundarpe.", next: "fundarpe_menu" },
+      cultura_viva_contact: { type: "text", text: "Contato Cultura Viva.", next: "cultura_viva_menu" },
+      handoff_general: { type: "handoff", text: "Encaminhando.", departmentId: "department_general", queueId: "queue_general" },
+      handoff_fundarpe: { type: "handoff", text: "Encaminhando Fundarpe.", departmentId: "department_fundarpe", queueId: "queue_fundarpe" },
+      handoff_technical: { type: "handoff", text: "Encaminhando técnico.", departmentId: "department_technical", queueId: "queue_technical" },
+    },
+  });
+}
+
+test("executeChatbotFlow keeps consolidated menu explicit numbers bold without duplicating labels", () => {
+  const validated = makeConsolidatedMenuFixture();
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_consolidated",
+    definition: validated.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-08-17T13:00:00.000Z",
+  });
+
+  assert.match(result.replyText ?? "", /\*1\* - PNAB/);
+  assert.match(result.replyText ?? "", /\*8\* - Outros/);
+  assert.doesNotMatch(result.replyText ?? "", /\*1\* - 1 - PNAB/);
+  assert.doesNotMatch(result.replyText ?? "", /#ENCERRAR#/);
+});
+
+test("executeChatbotFlow does not map hidden explicit options by visible array index", () => {
+  const validated = makeConsolidatedMenuFixture();
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_consolidated",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_consolidated",
+      chatbotActive: true,
+      chatbotNodeId: "mapa_menu",
+    }),
+    inboundText: "3",
+    nowIso: "2026-08-17T15:30:00.000Z",
+    options: { departmentAvailabilityById: { department_technical: "CLOSED" } },
+  });
+
+  assert.equal(result.pendingHandoff, undefined);
+  assert.match(result.replyText ?? "", /opção é inválida/i);
+  assert.match(result.replyText ?? "", /\*1\* - Acesse o Mapa Cultural/);
+  assert.match(result.replyText ?? "", /\*2\* - Tutorial/);
+  assert.doesNotMatch(result.replyText ?? "", /Falar com atendimento técnico/);
+});
+
+test("executeChatbotFlow keeps global close command outside consolidated flow commands", () => {
+  const validated = makeConsolidatedMenuFixture();
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  assert.deepEqual(validated.definition.globalCommands, [
+    { command: "#", action: "BACK", allowedModes: ["BOT"] },
+  ]);
+
+  const result = executeChatbotFlow({
+    flowId: "flow_consolidated",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_consolidated",
+      chatbotActive: true,
+      chatbotNodeId: "fundarpe_menu",
+    }),
+    inboundText: "#",
+    nowIso: "2026-08-17T14:00:00.000Z",
+  });
+
+  assert.equal(result.state.chatbotNodeId, "main_menu");
+  assert.match(result.replyText ?? "", /\*5\* - Fundarpe/);
+});
+
 test("executeChatbotFlow applies configured global back command without hardcoding command text", () => {
   const validated = validateChatbotFlowDefinition({
     start: "main",
