@@ -31,6 +31,7 @@ import {
   ingestBaileysWebSessionMessage,
   type BaileysInboundMessageLike,
 } from "../../whatsapp-agent/src/web-session/webSessionInbound.js";
+import type { InboxRealtimeEvent } from "../../whatsapp-agent/src/realtime/events.js";
 import {
   normalizeBaileysReceiptStatus,
   recordWebSessionOutboundReceipt,
@@ -98,7 +99,7 @@ const DEFAULT_CONNECTION_OPEN_TIMEOUT_MS = 30_000;
 const STALE_ACTIVE_CONNECTING_TIMEOUT_MS = 45_000;
 const DEFAULT_SEND_TEXT_TIMEOUT_MS = 15_000;
 const DEFAULT_SEND_MEDIA_TIMEOUT_MS = 30_000;
-const DEFAULT_AGENT_RECEIPT_REALTIME_TIMEOUT_MS = 2_000;
+const DEFAULT_AGENT_REALTIME_TIMEOUT_MS = 2_000;
 
 function sanitizeWebSessionAccountRef(params: {
   tenantKey: string;
@@ -234,7 +235,7 @@ async function notifyAgentWebSessionReceiptRealtime(params: {
   if (!token || !params.payload.messageId) return;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), DEFAULT_AGENT_RECEIPT_REALTIME_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), DEFAULT_AGENT_REALTIME_TIMEOUT_MS);
   try {
     const response = await fetch(`${getAgentInternalBaseUrl()}/internal/web-session/receipt-realtime`, {
       method: "POST",
@@ -258,6 +259,68 @@ async function notifyAgentWebSessionReceiptRealtime(params: {
       event: "whatsapp.web.receipt.realtime_notify_failed",
       ...webSessionLogAccount(params.account),
       status: params.payload.status,
+      reason: error instanceof Error ? error.name : "unknown_error",
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export function buildWebSessionHandoffRealtimePayload(
+  event: Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>
+) {
+  return {
+    clientId: event.clientId,
+    waId: event.waId,
+    waIdCanonical: event.waIdCanonical ?? null,
+    mode: "HUMAN" as const,
+    handoffStatus: event.handoffStatus,
+    assignedUserId: event.assignedUserId ?? null,
+    departmentId: event.departmentId ?? null,
+    updatedAt: event.updatedAt,
+    notificationMessage: event.notificationMessage
+      ? {
+          messageId: event.notificationMessage.messageId,
+          type: event.notificationMessage.type,
+          bodyText: event.notificationMessage.bodyText,
+          createdAt: event.notificationMessage.createdAt,
+        }
+      : null,
+  };
+}
+
+async function notifyAgentWebSessionHandoffRealtime(params: {
+  account: EligibleWebSessionAccount;
+  event: Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>;
+}) {
+  const token = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN?.trim();
+  if (!token) return;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DEFAULT_AGENT_REALTIME_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${getAgentInternalBaseUrl()}/internal/web-session/handoff-realtime`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(buildWebSessionHandoffRealtimePayload(params.event)),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      logger.warn({
+        event: "whatsapp.web.handoff.realtime_notify_failed",
+        ...webSessionLogAccount(params.account),
+        handoffStatus: params.event.handoffStatus,
+        reason: `http_${response.status}`,
+      });
+    }
+  } catch (error) {
+    logger.warn({
+      event: "whatsapp.web.handoff.realtime_notify_failed",
+      ...webSessionLogAccount(params.account),
+      handoffStatus: params.event.handoffStatus,
       reason: error instanceof Error ? error.name : "unknown_error",
     });
   } finally {
@@ -1504,6 +1567,10 @@ async function handleWebSessionMessagesUpsert(params: {
         message: preparedMessage,
         resolvedSenderJid,
         cutoverAt: params.cutoverAt ?? null,
+        publishHandoffRealtime: (event) => notifyAgentWebSessionHandoffRealtime({
+          account: params.account,
+          event,
+        }),
       });
       logger.info({
         event: "whatsapp.web.inbound.processed",

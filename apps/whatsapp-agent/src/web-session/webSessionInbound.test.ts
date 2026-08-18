@@ -2,11 +2,46 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { MessageType } from "@prisma/client";
 import { setPrismaForTesting } from "../db.js";
+import type { InboxRealtimeEvent } from "../realtime/events.js";
 import {
+  buildWebSessionHandoffNotificationPlan,
   extractPhoneFromBaileysJid,
   ingestBaileysWebSessionMessage,
   shouldIgnoreBaileysInboundMessage,
 } from "./webSessionInbound.js";
+
+test("handoff notification plan keeps OPEN base notifications ordered and unique", () => {
+  const plan = buildWebSessionHandoffNotificationPlan({
+    protocolText: "Protocolo CVT-TESTE",
+    closeCommandGuidance: "Para encerrar, digite !SAIR!",
+    queuePositionText: "Você é o nº 1 da fila.",
+    offHoursMessage: null,
+  });
+
+  assert.deepEqual(plan.map((item) => item.requestSuffix), [
+    "protocol",
+    "close-command-guidance",
+    "queue-position",
+  ]);
+  assert.equal(plan.filter((item) => item.text.includes("!SAIR!")).length, 1);
+});
+
+test("handoff notification plan adds only next-expedient message for CLOSED", () => {
+  const plan = buildWebSessionHandoffNotificationPlan({
+    protocolText: "Protocolo CVT-TESTE",
+    closeCommandGuidance: "Para encerrar, digite !SAIR!",
+    queuePositionText: "Você é o nº 1 da fila.",
+    offHoursMessage: "Atendimento no próximo expediente.",
+  });
+
+  assert.deepEqual(plan.map((item) => item.requestSuffix), [
+    "protocol",
+    "close-command-guidance",
+    "queue-position",
+    "off-hours",
+  ]);
+  assert.equal(new Set(plan.map((item) => item.requestSuffix)).size, 4);
+});
 
 const state = {
   conversation: null as Record<string, unknown> | null,
@@ -839,7 +874,14 @@ function runtimeFixture(overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function ingestText(text: string, messageId: string, timestamp = "2026-08-11T12:00:00.000Z") {
+async function ingestText(
+  text: string,
+  messageId: string,
+  timestamp = "2026-08-11T12:00:00.000Z",
+  publishHandoffRealtime?: (
+    event: Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>
+  ) => Promise<void>
+) {
   return ingestBaileysWebSessionMessage({
     clientId: "client_1",
     tenantKey: "tenant_1",
@@ -850,6 +892,7 @@ async function ingestText(text: string, messageId: string, timestamp = "2026-08-
       messageTimestamp: Date.parse(timestamp) / 1000,
       message: { conversation: text },
     },
+    publishHandoffRealtime,
   });
 }
 
@@ -1081,7 +1124,11 @@ test("close command does not close normal bot conversation", async () => {
 });
 
 test("chatbot handoff opens a new human service cycle with persisted operational protocol", async () => {
+  const closePolicy = closeConfig();
+  closePolicy.chatbotCloseCommand.command = "!SAIR!";
+  const handoffEvents: Array<Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>> = [];
   resetState({
+    config: closePolicy,
     conversation: conversationFixture(),
     runtimeStates: [
       runtimeFixture({
@@ -1124,8 +1171,25 @@ test("chatbot handoff opens a new human service cycle with persisted operational
   withConnectedWebSession();
 
   await withFakeWorker(async () => {
-    const result = await ingestText("1", "MSG_HANDOFF_CYCLE", "2026-08-11T12:00:00.000Z");
+    const publishHandoffRealtime = async (
+      event: Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>
+    ) => {
+      handoffEvents.push(event);
+    };
+    const result = await ingestText(
+      "1",
+      "MSG_HANDOFF_CYCLE",
+      "2026-08-11T12:00:00.000Z",
+      publishHandoffRealtime
+    );
     assert.equal(result.action, "persisted");
+    const replay = await ingestText(
+      "1",
+      "MSG_HANDOFF_CYCLE",
+      "2026-08-11T12:00:00.000Z",
+      publishHandoffRealtime
+    );
+    assert.equal(replay.action, "duplicate");
   });
 
   const runtime = state.runtimeStates[0];
@@ -1139,8 +1203,13 @@ test("chatbot handoff opens a new human service cycle with persisted operational
   assert.match(String(operationalProtocol?.protocol ?? ""), /^CVT-[A-Z0-9]{12}$/);
   assert.equal(operationalProtocol?.source, "service_cycle");
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("CVT-")).length, 1);
+  assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("!SAIR!")).length, 1);
+  assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("#ENCERRAR#")).length, 0);
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("fila de atendimento")).length, 1);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("próximo horário")), false);
+  assert.equal(handoffEvents.length, 1);
+  assert.equal(handoffEvents[0]?.handoffStatus, "active");
+  assert.equal(handoffEvents[0]?.departmentId, "department_general");
 });
 
 test("CSAT accepts only scores 1 to 5 before TTL and records the response", async () => {

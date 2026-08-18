@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
+  buildWebSessionHandoffRealtimePayload,
   buildWebSessionReceiptRealtimePayload,
   connectionOpenTimeoutRuntimeState,
   isTransientConnectingState,
@@ -122,6 +123,33 @@ test("web session worker builds receipt realtime payload without message content
   assert.equal("bodyText" in payload, false);
   assert.equal("rawPayload" in payload, false);
   assert.equal("token" in payload, false);
+});
+
+test("web session worker builds sanitized handoff realtime payload", () => {
+  const payload = buildWebSessionHandoffRealtimePayload({
+    type: "conversation.handoff.updated",
+    clientId: "client-a",
+    waId: "5584999997784",
+    waIdCanonical: "55849999997784",
+    mode: "HUMAN",
+    handoffStatus: "active",
+    assignedUserId: null,
+    departmentId: "department-a",
+    updatedAt: "2026-08-18T12:00:00.000Z",
+    notificationMessage: {
+      messageId: "web.session.inbound.1",
+      type: "TEXT",
+      bodyText: "Quero atendimento",
+      createdAt: "2026-08-18T12:00:00.000Z",
+    },
+  });
+
+  assert.equal(payload.handoffStatus, "active");
+  assert.equal(payload.departmentId, "department-a");
+  assert.equal(payload.notificationMessage?.messageId, "web.session.inbound.1");
+  assert.equal("rawPayload" in payload, false);
+  assert.equal("token" in payload, false);
+  assert.equal("senderJid" in payload, false);
 });
 
 test("web session worker keeps connection timeout retryable", () => {

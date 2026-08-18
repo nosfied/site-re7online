@@ -841,6 +841,79 @@ async function handleInternalWebSessionReceiptRealtime(
   json(res, 200, { ok: true, requestId });
 }
 
+async function handleInternalWebSessionHandoffRealtime(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestId: string
+) {
+  const expectedToken = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN?.trim();
+  if (!expectedToken || getBearerToken(req) !== expectedToken) {
+    json(res, 401, { ok: false, error: "unauthorized", requestId });
+    return;
+  }
+
+  const body = await readJsonBody(req, res);
+  if (!body) return;
+
+  const clientId = typeof body.clientId === "string" ? body.clientId.trim() : "";
+  const waId = typeof body.waId === "string" ? body.waId.trim() : "";
+  const waIdCanonical = typeof body.waIdCanonical === "string" ? body.waIdCanonical.trim() : null;
+  const mode = body.mode === "HUMAN" ? "HUMAN" : null;
+  const handoffStatus = body.handoffStatus === "pending" || body.handoffStatus === "active"
+    ? body.handoffStatus
+    : null;
+  const assignedUserId = typeof body.assignedUserId === "string" ? body.assignedUserId.trim() || null : null;
+  const departmentId = typeof body.departmentId === "string" ? body.departmentId.trim() || null : null;
+  const updatedAt =
+    typeof body.updatedAt === "string" && !Number.isNaN(Date.parse(body.updatedAt))
+      ? body.updatedAt
+      : new Date().toISOString();
+  const rawNotification =
+    body.notificationMessage && typeof body.notificationMessage === "object" && !Array.isArray(body.notificationMessage)
+      ? body.notificationMessage as Record<string, unknown>
+      : null;
+  const notificationMessage = rawNotification
+    ? {
+        messageId: typeof rawNotification.messageId === "string" ? rawNotification.messageId.trim() || null : null,
+        type: typeof rawNotification.type === "string" ? rawNotification.type.trim() : "TEXT",
+        bodyText: typeof rawNotification.bodyText === "string" ? rawNotification.bodyText : null,
+        createdAt:
+          typeof rawNotification.createdAt === "string" && !Number.isNaN(Date.parse(rawNotification.createdAt))
+            ? rawNotification.createdAt
+            : updatedAt,
+      }
+    : null;
+
+  if (!clientId || !waId || !mode || !handoffStatus) {
+    json(res, 400, { ok: false, error: "invalid_handoff_realtime_payload", requestId });
+    return;
+  }
+
+  publishRealtimeEvent({
+    type: "conversation.handoff.updated",
+    clientId,
+    waId,
+    waIdCanonical: waIdCanonical ?? canonicalizeBrazilWaId(waId),
+    mode: "HUMAN",
+    handoffStatus,
+    assignedUserId,
+    departmentId,
+    updatedAt,
+    notificationMessage,
+  });
+
+  logger.info({
+    event: "whatsapp.web_session.handoff.realtime_published",
+    requestId,
+    clientId,
+    handoffStatus,
+    assigned: Boolean(assignedUserId),
+    departmentId,
+    waIdLast4: (waIdCanonical ?? canonicalizeBrazilWaId(waId)).slice(-4),
+  });
+  json(res, 200, { ok: true, requestId });
+}
+
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
   const requestId = crypto.randomUUID();
@@ -860,6 +933,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
   if (req.method === "POST" && pathname === "/internal/web-session/receipt-realtime") {
     return handleInternalWebSessionReceiptRealtime(req, res, requestId);
+  }
+
+  if (req.method === "POST" && pathname === "/internal/web-session/handoff-realtime") {
+    return handleInternalWebSessionHandoffRealtime(req, res, requestId);
   }
 
   if (pathname.startsWith("/webchat/v1/")) {

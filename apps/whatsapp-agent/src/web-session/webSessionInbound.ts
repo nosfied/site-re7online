@@ -24,6 +24,7 @@ import { recordConversationInboundMetrics } from "../metrics/conversationMetrics
 import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
 import { getQueuePosition } from "../queue/queuePosition.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
+import type { InboxRealtimeEvent } from "../realtime/events.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
 import { persistConversationWindow, persistInboundMessage } from "../db/persist.js";
@@ -156,8 +157,14 @@ async function getWebSessionClosePolicy(params: { prisma: PrismaClient; clientId
   const closeConfirmation = isRecord(closeCommand.confirmation) ? closeCommand.confirmation : {};
   const comment = isRecord(satisfaction.comment) ? satisfaction.comment : {};
   const eligibility = getNonEmptyString(satisfaction.eligibility)?.toUpperCase();
+  const command = getNonEmptyString(closeCommand.command);
+  const guidanceTemplate = getNonEmptyString(closeCommand.guidanceText);
   return {
-    command: getNonEmptyString(closeCommand.command),
+    command,
+    guidanceText: command
+      ? (guidanceTemplate ?? "Para encerrar o atendimento a qualquer momento, digite: {command}")
+          .split("{command}").join(command)
+      : null,
     closedMessage:
       getNonEmptyString(closeCommand.closedMessage) ??
       "Atendimento encerrado. Obrigado pelo contato.",
@@ -1127,29 +1134,33 @@ async function sendWebSessionHandoffNotifications(params: {
   state: ConversationState;
   now: Date;
   closedHandoffPolicy: ReturnType<typeof getClosedHandoffPolicy>;
+  closePolicy: Awaited<ReturnType<typeof getWebSessionClosePolicy>>;
+  transitionText: string | null;
   includeOffHoursMessage: boolean;
 }) {
   const protocol =
     getOperationalProtocol(params.state) ??
     buildConversationProtocol({ id: params.conversationId, createdAt: params.now });
-  let nextState = await sendWebSessionBotText({
-    prisma: params.prisma,
-    clientId: params.clientId,
-    clientKey: params.clientKey,
-    waId: params.waId,
-    waIdCanonical: params.waIdCanonical,
-    channelAccountId: params.channelAccountId,
-    requestId: `${params.requestId}:protocol`,
-    text: buildConversationProtocolNotice(protocol),
-    state: params.state,
-  });
+  const closeCommandGuidance =
+    params.closePolicy.command && params.transitionText?.includes(params.closePolicy.command)
+      ? null
+      : params.closePolicy.guidanceText;
   const position = await getQueuePosition({
     prisma: params.prisma,
     clientId: params.clientId,
     runtimeStateId: params.runtimeStateId,
     queueId: params.queueId,
   });
-  if (position) {
+  const notifications = buildWebSessionHandoffNotificationPlan({
+    protocolText: buildConversationProtocolNotice(protocol),
+    closeCommandGuidance,
+    queuePositionText: position
+      ? params.closedHandoffPolicy.queuePositionText.replace("{position}", String(position))
+      : null,
+    offHoursMessage: params.includeOffHoursMessage ? params.closedHandoffPolicy.offHoursMessage : null,
+  });
+  let nextState = params.state;
+  for (const notification of notifications) {
     nextState = await sendWebSessionBotText({
       prisma: params.prisma,
       clientId: params.clientId,
@@ -1157,25 +1168,32 @@ async function sendWebSessionHandoffNotifications(params: {
       waId: params.waId,
       waIdCanonical: params.waIdCanonical,
       channelAccountId: params.channelAccountId,
-      requestId: `${params.requestId}:queue-position`,
-      text: params.closedHandoffPolicy.queuePositionText.replace("{position}", String(position)),
-      state: nextState,
-    });
-  }
-  if (params.includeOffHoursMessage) {
-    nextState = await sendWebSessionBotText({
-      prisma: params.prisma,
-      clientId: params.clientId,
-      clientKey: params.clientKey,
-      waId: params.waId,
-      waIdCanonical: params.waIdCanonical,
-      channelAccountId: params.channelAccountId,
-      requestId: `${params.requestId}:off-hours`,
-      text: params.closedHandoffPolicy.offHoursMessage,
+      requestId: `${params.requestId}:${notification.requestSuffix}`,
+      text: notification.text,
       state: nextState,
     });
   }
   return nextState;
+}
+
+export function buildWebSessionHandoffNotificationPlan(params: {
+  protocolText: string;
+  closeCommandGuidance: string | null;
+  queuePositionText: string | null;
+  offHoursMessage: string | null;
+}) {
+  return [
+    { requestSuffix: "protocol", text: params.protocolText },
+    ...(params.closeCommandGuidance
+      ? [{ requestSuffix: "close-command-guidance", text: params.closeCommandGuidance }]
+      : []),
+    ...(params.queuePositionText
+      ? [{ requestSuffix: "queue-position", text: params.queuePositionText }]
+      : []),
+    ...(params.offHoursMessage
+      ? [{ requestSuffix: "off-hours", text: params.offHoursMessage }]
+      : []),
+  ];
 }
 
 async function sendWebSessionSatisfactionSurvey(params: {
@@ -1803,6 +1821,9 @@ async function ensureWebSessionContactIdentity(params: {
 export async function ingestWebSessionInboundMessage(params: {
   prisma?: PrismaClient;
   message: NormalizedWebSessionInboundMessage;
+  publishHandoffRealtime?: (
+    event: Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>
+  ) => Promise<void>;
 }): Promise<WebSessionInboundResult> {
   const prisma = params.prisma ?? getPrisma();
   const messageId = buildLocalMessageId(params.message);
@@ -2392,6 +2413,8 @@ export async function ingestWebSessionInboundMessage(params: {
               state: runtimeConversationState,
               now: params.message.timestamp,
               closedHandoffPolicy,
+              closePolicy,
+              transitionText: chatbotResult.replyText ?? null,
               includeOffHoursMessage: queueClosedHandoff,
             });
             await persistWebSessionRuntimeState({
@@ -2400,7 +2423,7 @@ export async function ingestWebSessionInboundMessage(params: {
               waId: params.message.sender,
               state: runtimeConversationState,
             });
-            publishRealtimeEvent({
+            const handoffRealtimeEvent = {
               type: "conversation.handoff.updated",
               clientId: params.message.clientId,
               waId: params.message.sender,
@@ -2419,7 +2442,12 @@ export async function ingestWebSessionInboundMessage(params: {
                   bodyText: inboundNotificationMessage.bodyText,
                   createdAt: inboundNotificationMessage.createdAt,
                 },
-              });
+              } satisfies Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>;
+            if (params.publishHandoffRealtime) {
+              await params.publishHandoffRealtime(handoffRealtimeEvent);
+            } else {
+              publishRealtimeEvent(handoffRealtimeEvent);
+            }
           }
           await safeRecordInboundEvent({
             prisma,
@@ -2475,6 +2503,9 @@ export async function ingestBaileysWebSessionMessage(params: {
   message: BaileysInboundMessageLike;
   resolvedSenderJid?: string | null;
   cutoverAt?: Date | null;
+  publishHandoffRealtime?: (
+    event: Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>
+  ) => Promise<void>;
 }) {
   const prisma = params.prisma ?? getPrisma();
   const normalized = normalizeBaileysInboundMessage(params);
@@ -2528,5 +2559,9 @@ export async function ingestBaileysWebSessionMessage(params: {
       return { ok: true as const, action: "ignored" as const, reason: "media_type_not_allowed" };
     }
   }
-  return ingestWebSessionInboundMessage({ prisma, message: normalized.message });
+  return ingestWebSessionInboundMessage({
+    prisma,
+    message: normalized.message,
+    publishHandoffRealtime: params.publishHandoffRealtime,
+  });
 }
