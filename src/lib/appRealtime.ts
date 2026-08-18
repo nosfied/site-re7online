@@ -289,18 +289,11 @@ export function canUserReceiveTargetedNotification(
   }
   const departmentId = String(target.departmentId ?? "").trim();
   if (departmentId) {
-    if (isAdminWithoutDepartment(user)) return true;
+    if (!isDepartmentScopedRole(user.role)) return true;
     return String(user.departmentId ?? "").trim() === departmentId;
   }
-  if (isAdminWithoutDepartment(user)) return true;
+  if (!isDepartmentScopedRole(user.role)) return true;
   return normalizeDepartmentName(user.departmentName) === "atendimento geral";
-}
-
-function isAdminWithoutDepartment(user: { role?: string | null; departmentId?: string | null }) {
-  return (
-    String(user.role ?? "").trim().toUpperCase() === "ADMIN" &&
-    !String(user.departmentId ?? "").trim()
-  );
 }
 
 function normalizeDepartmentName(value?: string | null) {
