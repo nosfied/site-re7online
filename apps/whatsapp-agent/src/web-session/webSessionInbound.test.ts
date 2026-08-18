@@ -13,6 +13,7 @@ import {
 
 test("handoff notification plan keeps OPEN base notifications ordered and unique", () => {
   const plan = buildWebSessionHandoffNotificationPlan({
+    handoffText: "Vou encaminhar seu atendimento para a equipe responsável.",
     protocolText: "Protocolo CVT-TESTE",
     closeCommandGuidance: "Para encerrar, digite !SAIR!",
     queuePositionText: "Você é o nº 1 da fila.",
@@ -20,6 +21,7 @@ test("handoff notification plan keeps OPEN base notifications ordered and unique
   });
 
   assert.deepEqual(plan.map((item) => item.requestSuffix), [
+    "handoff",
     "protocol",
     "close-command-guidance",
     "queue-position",
@@ -29,6 +31,7 @@ test("handoff notification plan keeps OPEN base notifications ordered and unique
 
 test("handoff notification plan adds only next-expedient message for CLOSED", () => {
   const plan = buildWebSessionHandoffNotificationPlan({
+    handoffText: "Vou encaminhar seu atendimento para a equipe responsável.",
     protocolText: "Protocolo CVT-TESTE",
     closeCommandGuidance: "Para encerrar, digite !SAIR!",
     queuePositionText: "Você é o nº 1 da fila.",
@@ -36,12 +39,13 @@ test("handoff notification plan adds only next-expedient message for CLOSED", ()
   });
 
   assert.deepEqual(plan.map((item) => item.requestSuffix), [
+    "handoff",
     "protocol",
     "close-command-guidance",
     "queue-position",
     "off-hours",
   ]);
-  assert.equal(new Set(plan.map((item) => item.requestSuffix)).size, 4);
+  assert.equal(new Set(plan.map((item) => item.requestSuffix)).size, 5);
 });
 
 const state = {
@@ -1230,11 +1234,12 @@ test("chatbot handoff opens a new human service cycle with persisted operational
   assert.equal(operationalProtocol?.source, "web_session");
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("CVT-")).length, 1);
   const handoffOutbounds = state.outboundMessages.filter((message) =>
+    String(message.bodyText).includes("direcionando") ||
     String(message.bodyText).includes("CVT-") ||
     String(message.bodyText).includes("!SAIR!") ||
     String(message.bodyText).includes("fila de atendimento")
   );
-  assert.equal(handoffOutbounds.length, 3);
+  assert.equal(handoffOutbounds.length, 4);
   for (const message of handoffOutbounds) {
     const serviceCycle = (message.rawPayload as Record<string, unknown> | undefined)?.serviceCycle as
       | Record<string, unknown>

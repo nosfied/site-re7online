@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MessageType } from "@prisma/client";
+import { MessageStatus, MessageType } from "@prisma/client";
 import { setPrismaForTesting } from "../db.js";
-import { persistConversationWindow, persistInboundMessage } from "./persist.js";
+import { persistConversationWindow, persistInboundMessage, persistOutboundMessage } from "./persist.js";
 
 type ConversationRecord = {
   id: string;
@@ -18,6 +18,7 @@ const state = {
   conversation: null as ConversationRecord | null,
   events: [] as Array<Record<string, unknown>>,
   inboundMessages: [] as Array<Record<string, unknown>>,
+  outboundMessages: [] as Array<Record<string, unknown>>,
   conversationUpserts: [] as Array<Record<string, unknown>>,
 };
 
@@ -25,6 +26,7 @@ function resetState(conversation: ConversationRecord | null) {
   state.conversation = conversation;
   state.events = [];
   state.inboundMessages = [];
+  state.outboundMessages = [];
   state.conversationUpserts = [];
 }
 
@@ -49,6 +51,33 @@ const fakePrisma = {
     create: async ({ data }: { data: Record<string, unknown> }) => {
       state.inboundMessages.push(data);
       return { id: "inbound_1" };
+    },
+  },
+  outboundMessage: {
+    findUnique: async ({ where }: { where: { clientId_messageId: { clientId: string; messageId: string } } }) =>
+      state.outboundMessages.find(
+        (item) =>
+          item.clientId === where.clientId_messageId.clientId &&
+          item.messageId === where.clientId_messageId.messageId
+      ) ?? null,
+    create: async ({ data, select }: { data: Record<string, unknown>; select?: Record<string, unknown> }) => {
+      const row = { id: `outbound_${state.outboundMessages.length + 1}`, ...data };
+      state.outboundMessages.push(row);
+      return select?.id ? { id: row.id } : row;
+    },
+    update: async ({ where, data, select }: {
+      where: { clientId_messageId: { clientId: string; messageId: string } };
+      data: Record<string, unknown>;
+      select?: Record<string, unknown>;
+    }) => {
+      const index = state.outboundMessages.findIndex(
+        (item) =>
+          item.clientId === where.clientId_messageId.clientId &&
+          item.messageId === where.clientId_messageId.messageId
+      );
+      if (index >= 0) state.outboundMessages[index] = { ...state.outboundMessages[index], ...data };
+      const row = index >= 0 ? state.outboundMessages[index] : null;
+      return select?.id ? { id: row?.id ?? "outbound_0" } : row;
     },
   },
   event: {
@@ -91,6 +120,55 @@ test("persistInboundMessage blocks WhatsApp anonymized identity rehydration", as
   assert.equal(serializedEvent.includes("5584999997784"), false);
   assert.equal(serializedEvent.includes("Meu nome e Ana"), false);
   assert.equal(serializedEvent.includes("secret"), false);
+});
+
+test("persistOutboundMessage preserves service cycle snapshot when updating existing payload", async () => {
+  resetState(null);
+  state.outboundMessages.push({
+    id: "outbound_existing",
+    clientId: "client_1",
+    messageId: "web.session.send.req_1",
+    rawPayload: {
+      source: "bot",
+      provider: "web_session",
+      serviceCycle: {
+        protocol: "CVT-AAA",
+        cycleId: "cycle_a",
+        issuedAt: "2026-08-18T12:00:00.000Z",
+      },
+    },
+  });
+
+  const inserted = await persistOutboundMessage({
+    clientId: "client_1",
+    channel: "whatsapp",
+    provider: "web_session",
+    channelAccountId: "web-session-default",
+    externalMessageId: "worker_2",
+    waId: "5584999997784",
+    waIdCanonical: "5584999997784",
+    messageId: "web.session.send.req_1",
+    type: MessageType.TEXT,
+    status: MessageStatus.SENT,
+    bodyText: "Atualizado",
+    requestId: "req_1",
+    metaMessageId: null,
+    rawPayload: {
+      source: "bot",
+      provider: "web_session",
+      externalMessageId: "worker_2",
+      webSessionStatus: {
+        lastStatus: "sent",
+      },
+    },
+  });
+
+  assert.equal(inserted, false);
+  const rawPayload = state.outboundMessages[0]?.rawPayload as Record<string, unknown>;
+  const serviceCycle = rawPayload.serviceCycle as Record<string, unknown>;
+  assert.equal(serviceCycle.protocol, "CVT-AAA");
+  assert.equal(serviceCycle.cycleId, "cycle_a");
+  assert.deepEqual(rawPayload.webSessionStatus, { lastStatus: "sent" });
 });
 
 test("persistConversationWindow does not reactivate anonymized WhatsApp conversation", async () => {

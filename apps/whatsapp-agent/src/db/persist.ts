@@ -428,6 +428,25 @@ export async function persistOutboundMessage(params: {
   if (!params.clientId) return false;
   try {
     const prisma = getPrisma();
+    const mergeRawPayload = (existingRawPayload: Prisma.JsonValue | null | undefined) => {
+      if (
+        !existingRawPayload ||
+        typeof existingRawPayload !== "object" ||
+        Array.isArray(existingRawPayload) ||
+        !params.rawPayload ||
+        typeof params.rawPayload !== "object" ||
+        Array.isArray(params.rawPayload)
+      ) {
+        return params.rawPayload;
+      }
+      const existing = existingRawPayload as Record<string, unknown>;
+      const incoming = params.rawPayload as Record<string, unknown>;
+      return {
+        ...existing,
+        ...incoming,
+        serviceCycle: incoming.serviceCycle ?? existing.serviceCycle,
+      } as Prisma.InputJsonValue;
+    };
     const data = {
       clientId: params.clientId,
       phoneNumberId: params.phoneNumberId,
@@ -456,7 +475,7 @@ export async function persistOutboundMessage(params: {
             messageId: params.messageId,
           },
         },
-        select: { id: true },
+        select: { id: true, rawPayload: true },
       });
       if (existing) {
         const updated = await prisma.outboundMessage.update({
@@ -466,7 +485,10 @@ export async function persistOutboundMessage(params: {
               messageId: params.messageId,
             },
           },
-          data,
+          data: {
+            ...data,
+            rawPayload: mergeRawPayload(existing.rawPayload),
+          },
           select: { id: true },
         });
         if (isWhatsAppMultichannelShadowWriteEnabled()) {

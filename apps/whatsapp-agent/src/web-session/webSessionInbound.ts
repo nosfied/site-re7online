@@ -20,6 +20,7 @@ import {
   getServiceCycleForDisplay,
   recordServiceCycleEvent,
   startNewServiceCycle,
+  type ServiceCycleSnapshot,
   withServiceCycleSnapshot,
 } from "../conversation/serviceCycle.js";
 import { getPrisma } from "../db.js";
@@ -1077,9 +1078,10 @@ async function sendWebSessionBotText(params: {
   requestId: string;
   text: string;
   state: ConversationState;
+  serviceCycle?: ServiceCycleSnapshot | null;
 }) {
   if (!params.text.trim()) return params.state;
-  const serviceCycle = getServiceCycleForDisplay(params.state);
+  const serviceCycle = params.serviceCycle ?? getServiceCycleForDisplay(params.state);
   const outboundResult = await createWebSessionTextOutboundMessage({
     prisma: params.prisma,
     waId: params.waId,
@@ -1153,8 +1155,11 @@ async function sendWebSessionHandoffNotifications(params: {
   closePolicy: Awaited<ReturnType<typeof getWebSessionClosePolicy>>;
   transitionText: string | null;
   includeOffHoursMessage: boolean;
+  serviceCycle?: ServiceCycleSnapshot | null;
 }) {
+  const serviceCycle = params.serviceCycle ?? getServiceCycleForDisplay(params.state);
   const protocol =
+    serviceCycle?.protocol ??
     getOperationalProtocol(params.state) ??
     buildConversationProtocol({ id: params.conversationId, createdAt: params.now });
   const closeCommandGuidance =
@@ -1168,6 +1173,7 @@ async function sendWebSessionHandoffNotifications(params: {
     queueId: params.queueId,
   });
   const notifications = buildWebSessionHandoffNotificationPlan({
+    handoffText: params.transitionText,
     protocolText: buildConversationProtocolNotice(protocol),
     closeCommandGuidance,
     queuePositionText: position
@@ -1187,18 +1193,23 @@ async function sendWebSessionHandoffNotifications(params: {
       requestId: `${params.requestId}:${notification.requestSuffix}`,
       text: notification.text,
       state: nextState,
+      serviceCycle,
     });
   }
   return nextState;
 }
 
 export function buildWebSessionHandoffNotificationPlan(params: {
+  handoffText?: string | null;
   protocolText: string;
   closeCommandGuidance: string | null;
   queuePositionText: string | null;
   offHoursMessage: string | null;
 }) {
   return [
+    ...(params.handoffText?.trim()
+      ? [{ requestSuffix: "handoff", text: params.handoffText }]
+      : []),
     { requestSuffix: "protocol", text: params.protocolText },
     ...(params.closeCommandGuidance
       ? [{ requestSuffix: "close-command-guidance", text: params.closeCommandGuidance }]
@@ -2338,8 +2349,13 @@ export async function ingestWebSessionInboundMessage(params: {
             handoffDecision?.kind === "closed" &&
             closedHandoffPolicy.action === "QUEUE_FOR_NEXT_OPEN"
           );
-          const replyText =
-            handoffDecision?.kind === "closed" && !queueClosedHandoff
+          const shouldSendHandoffNotifications = Boolean(
+            chatbotResult.pendingHandoff &&
+            (queueClosedHandoff || (handoffDecision?.kind !== "closed" && handoffDecision?.kind !== "blocked"))
+          );
+          const replyText = shouldSendHandoffNotifications
+            ? undefined
+            : handoffDecision?.kind === "closed" && !queueClosedHandoff
               ? handoffDecision.closedText
               : handoffDecision?.kind === "blocked"
                 ? undefined
@@ -2411,9 +2427,10 @@ export async function ingestWebSessionInboundMessage(params: {
               });
             }
           }
+          let handoffServiceCycle: ServiceCycleSnapshot | null = null;
           if (
-            chatbotResult.pendingHandoff &&
-            (queueClosedHandoff || (handoffDecision?.kind !== "closed" && handoffDecision?.kind !== "blocked"))
+            shouldSendHandoffNotifications &&
+            chatbotResult.pendingHandoff
           ) {
             const activated = activateHumanHandoff(
               clearChatbotRuntime(runtimeConversationState),
@@ -2433,6 +2450,7 @@ export async function ingestWebSessionInboundMessage(params: {
             };
             const protocolResult = ensureOperationalProtocol(runtimeConversationState, params.message.timestamp);
             runtimeConversationState = protocolResult.state;
+            handoffServiceCycle = protocolResult.cycle;
             if (protocolResult.created) {
               await safeRecordServiceCycleEvent({
                 prisma,
@@ -2530,6 +2548,7 @@ export async function ingestWebSessionInboundMessage(params: {
               closePolicy,
               transitionText: chatbotResult.replyText ?? null,
               includeOffHoursMessage: queueClosedHandoff,
+              serviceCycle: handoffServiceCycle ?? getServiceCycleForDisplay(runtimeConversationState),
             });
             await persistWebSessionRuntimeState({
               prisma,
