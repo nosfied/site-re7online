@@ -1995,7 +1995,26 @@ export async function ingestWebSessionInboundMessage(params: {
       chatbotEntryPointAvailable: Boolean(entryPointFlow),
     });
     let runtimeConversationState = runtimeToConversationState({ runtime, message: params.message });
+    const closePolicy = await getWebSessionClosePolicy({ prisma, clientId: params.message.clientId });
+    let satisfactionResult: Awaited<ReturnType<typeof handleWebSessionSatisfactionInbound>> | null = null;
+    if (closePolicy.satisfaction.enabled) {
+      satisfactionResult = await handleWebSessionSatisfactionInbound({
+        prisma,
+        clientId: params.message.clientId,
+        clientKey: params.message.tenantKey,
+        waId: params.message.sender,
+        waIdCanonical: params.message.senderCanonical,
+        channelAccountId: params.message.channelAccountId,
+        conversationId: conversation?.id ?? null,
+        inboundText: params.message.text,
+        requestId,
+        state: runtimeConversationState,
+        now: params.message.timestamp,
+      });
+      runtimeConversationState = satisfactionResult.state;
+    }
     const shouldHaveActiveServiceCycle =
+      satisfactionResult?.handled !== true &&
       runtimeConversationState.status !== "CLOSED" &&
       !runtimeConversationState.closedAt &&
       (runtimeConversationState.mode === "BOT" ||
@@ -2109,7 +2128,23 @@ export async function ingestWebSessionInboundMessage(params: {
             : null,
       },
     });
-    const closePolicy = await getWebSessionClosePolicy({ prisma, clientId: params.message.clientId });
+    if (satisfactionResult?.handled === true) {
+      await persistWebSessionRuntimeState({
+        prisma,
+        clientId: params.message.clientId,
+        waId: params.message.sender,
+        state: runtimeConversationState,
+      });
+      await safeRecordInboundEvent({
+        prisma,
+        message: params.message,
+        clientId: params.message.clientId,
+        eventName: "whatsapp.web.satisfaction.handled",
+        requestId: `${requestId}:satisfaction`,
+        conversationId: conversation?.id ?? null,
+      });
+      return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
+    }
     const closeConfirmation = getCloseConfirmationRuntime(runtimeConversationState);
     if (closeConfirmation?.awaiting === true) {
       const inboundChoice = String(params.message.text ?? "").trim();
@@ -2249,39 +2284,6 @@ export async function ingestWebSessionInboundMessage(params: {
         conversationId: conversation?.id ?? null,
       });
       return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
-    }
-    if (closePolicy.satisfaction.enabled) {
-      const satisfactionResult = await handleWebSessionSatisfactionInbound({
-        prisma,
-        clientId: params.message.clientId,
-        clientKey: params.message.tenantKey,
-        waId: params.message.sender,
-        waIdCanonical: params.message.senderCanonical,
-        channelAccountId: params.message.channelAccountId,
-        conversationId: conversation?.id ?? null,
-        inboundText: params.message.text,
-        requestId,
-        state: runtimeConversationState,
-        now: params.message.timestamp,
-      });
-      runtimeConversationState = satisfactionResult.state;
-      if (satisfactionResult.handled) {
-        await persistWebSessionRuntimeState({
-          prisma,
-          clientId: params.message.clientId,
-          waId: params.message.sender,
-          state: runtimeConversationState,
-        });
-        await safeRecordInboundEvent({
-          prisma,
-          message: params.message,
-          clientId: params.message.clientId,
-          eventName: "whatsapp.web.satisfaction.handled",
-          requestId: `${requestId}:satisfaction`,
-          conversationId: conversation?.id ?? null,
-        });
-        return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
-      }
     }
     if (
       automationFlags.settings.disableChatbot !== true &&

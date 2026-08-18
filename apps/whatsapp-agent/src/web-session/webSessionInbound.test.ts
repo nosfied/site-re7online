@@ -88,6 +88,10 @@ function resetState(overrides: Partial<typeof state> = {}) {
   state.contactConsents = overrides.contactConsents ?? [];
 }
 
+function protocolStartedEvents() {
+  return state.events.filter((event) => event.eventName === "conversation.protocol.started");
+}
+
 function fakePrisma() {
   const withoutUndefined = (value: Record<string, unknown>) =>
     Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
@@ -1260,7 +1264,7 @@ test("CSAT accepts only scores 1 to 5 before TTL and records the response", asyn
   resetState({
     config: closeConfig(),
     conversation: conversationFixture(),
-    runtimeStates: [runtimeFixture({ status: "CLOSED", closedAt: new Date("2026-08-11T12:00:00.000Z") })],
+    runtimeStates: [runtimeFixture({ mode: "BOT", status: null, closedAt: null })],
     satisfactionSurveys: [
       {
         id: "survey_1",
@@ -1288,6 +1292,8 @@ test("CSAT accepts only scores 1 to 5 before TTL and records the response", asyn
   assert.equal(state.satisfactionResponses.length, 1);
   assert.equal(state.satisfactionResponses[0]?.score, 5);
   assert.equal(state.satisfactionSurveys[0]?.status, "pending");
+  assert.equal(protocolStartedEvents().length, 0);
+  assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentOffer"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Responda a pesquisa com uma nota de 1 a 5")), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Poderia compartilhar conosco")), true);
@@ -1297,7 +1303,7 @@ test("CSAT comment offer can be skipped after a valid score", async () => {
   resetState({
     config: closeConfig(),
     conversation: conversationFixture(),
-    runtimeStates: [runtimeFixture({ status: "CLOSED", closedAt: new Date("2026-08-11T12:00:00.000Z") })],
+    runtimeStates: [runtimeFixture({ mode: "BOT", status: null, closedAt: null })],
     satisfactionSurveys: [
       {
         id: "survey_1",
@@ -1325,6 +1331,8 @@ test("CSAT comment offer can be skipped after a valid score", async () => {
   assert.equal(state.satisfactionResponses[0]?.score, 4);
   assert.equal(state.satisfactionResponses[0]?.comment ?? null, null);
   assert.equal(state.satisfactionSurveys[0]?.status, "responded");
+  assert.equal(protocolStartedEvents().length, 0);
+  assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentOffer"), false);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("completedSurveyDecision"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Obrigad@ por participar")), true);
@@ -1334,7 +1342,7 @@ test("CSAT comment text is saved after the customer opts in", async () => {
   resetState({
     config: closeConfig(),
     conversation: conversationFixture(),
-    runtimeStates: [runtimeFixture({ status: "CLOSED", closedAt: new Date("2026-08-11T12:00:00.000Z") })],
+    runtimeStates: [runtimeFixture({ mode: "BOT", status: null, closedAt: null })],
     satisfactionSurveys: [
       {
         id: "survey_1",
@@ -1363,6 +1371,8 @@ test("CSAT comment text is saved after the customer opts in", async () => {
   assert.equal(state.satisfactionResponses[0]?.score, 5);
   assert.equal(state.satisfactionResponses[0]?.comment, "Atendimento muito bom");
   assert.equal(state.satisfactionSurveys[0]?.status, "responded");
+  assert.equal(protocolStartedEvents().length, 0);
+  assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentInput"), false);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("completedSurveyDecision"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Digite o texto:")), true);
@@ -1429,9 +1439,11 @@ test("completed CSAT asks for a new-service decision before returning to chatbot
     await ingestText("Oi", "MSG_COMPLETED_GATE_PROMPT", "2026-08-11T12:08:00.000Z");
     assert.equal(state.runtimeStates[0]?.status, "CLOSED");
     assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("\"prompted\":true"), true);
+    assert.equal(protocolStartedEvents().length, 0);
     await ingestText("1", "MSG_COMPLETED_GATE_START", "2026-08-11T12:09:00.000Z");
   });
 
+  assert.equal(protocolStartedEvents().length, 1);
   assert.equal(state.runtimeStates[0]?.mode, "BOT");
   assert.equal(state.runtimeStates[0]?.status, null);
   assert.equal(state.runtimeStates[0]?.closedAt, null);
@@ -1471,9 +1483,74 @@ test("completed CSAT decision repeats options for invalid input after prompt", a
     await ingestText("qualquer coisa", "MSG_COMPLETED_GATE_INVALID", "2026-08-11T12:09:00.000Z");
   });
 
+  assert.equal(protocolStartedEvents().length, 0);
   assert.equal(state.runtimeStates[0]?.status, "CLOSED");
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("completedSurveyDecision"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
+});
+
+test("post-service decision prompt does not create a service cycle before explicit decision", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        mode: "BOT",
+        status: null,
+        closedAt: null,
+        answers: {
+          satisfactionRuntime: {
+            completedSurveyDecision: {
+              awaiting: true,
+              prompted: false,
+            },
+          },
+        },
+      }),
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("Oi", "MSG_POST_SERVICE_PROMPT", "2026-08-11T12:08:00.000Z");
+  });
+
+  assert.equal(protocolStartedEvents().length, 0);
+  assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("\"prompted\":true"), true);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
+});
+
+test("post-service decision option 2 keeps conversation closed without service cycle", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        mode: "BOT",
+        status: null,
+        closedAt: null,
+        answers: {
+          satisfactionRuntime: {
+            completedSurveyDecision: {
+              awaiting: true,
+              prompted: true,
+            },
+          },
+        },
+      }),
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("2", "MSG_POST_SERVICE_NO", "2026-08-11T12:09:00.000Z");
+  });
+
+  assert.equal(protocolStartedEvents().length, 0);
+  assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
+  assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Atendimento encerrado")), true);
 });
 
 test("generic inbound after CLOSED starts a new service cycle", async () => {
@@ -1518,6 +1595,7 @@ test("generic inbound after CLOSED starts a new service cycle", async () => {
   });
 
   const active = getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers });
+  assert.equal(protocolStartedEvents().length, 1);
   assert.equal(Boolean(active), true);
   assert.notEqual(active?.protocol, "CVT-PREVIOUS1234");
   assert.equal(state.runtimeStates[0]?.status, null);
@@ -1568,9 +1646,11 @@ test("expired CSAT asks for a new-service decision and option 1 returns to bot m
     await ingestText("5", "MSG_CSAT_EXPIRED", "2026-08-11T12:16:00.000Z");
     assert.equal(state.satisfactionSurveys[0]?.status, "expired");
     assert.equal((state.runtimeStates[0]?.answers as Record<string, unknown> | undefined)?.satisfactionRuntime instanceof Object, true);
+    assert.equal(protocolStartedEvents().length, 0);
     await ingestText("1", "MSG_CSAT_NEW_SERVICE", "2026-08-11T12:17:00.000Z");
   });
 
+  assert.equal(protocolStartedEvents().length, 1);
   assert.equal(state.runtimeStates[0]?.mode, "BOT");
   assert.equal(state.runtimeStates[0]?.status, null);
   assert.equal(state.runtimeStates[0]?.closedAt, null);
@@ -1612,6 +1692,7 @@ test("expired CSAT option 2 keeps the conversation closed", async () => {
     await ingestText("2", "MSG_CSAT_NO_SERVICE", "2026-08-11T12:17:00.000Z");
   });
 
+  assert.equal(protocolStartedEvents().length, 0);
   assert.equal(state.runtimeStates[0]?.status, "CLOSED");
   assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
   assert.equal(getLastClosedServiceCycle({ answers: state.runtimeStates[0]?.answers })?.protocol, "CVT-CLOSED123456");
@@ -1642,6 +1723,7 @@ test("expired CSAT decision rejects other input without falling through to the c
     await ingestText("qualquer coisa", "MSG_CSAT_OTHER", "2026-08-11T12:17:00.000Z");
   });
 
+  assert.equal(protocolStartedEvents().length, 0);
   assert.equal(state.runtimeStates[0]?.status, "CLOSED");
   assert.equal((state.runtimeStates[0]?.answers as Record<string, unknown> | undefined)?.satisfactionRuntime instanceof Object, true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
