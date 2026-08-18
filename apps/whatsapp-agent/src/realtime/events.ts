@@ -1,4 +1,6 @@
 export type InboxRealtimeMessage = {
+  protocol?: string | null;
+  cycleId?: string | null;
   internalMessageId?: string | null;
   messageKind?: "inbound" | "outbound" | string | null;
   direction: "INBOUND" | "OUTBOUND";
@@ -34,6 +36,8 @@ export type InboxRealtimeEvent =
       handoffStatus?: "none" | "pending" | "active" | null;
       assignedUserId?: string | null;
       departmentId?: string | null;
+      protocol?: string | null;
+      cycleId?: string | null;
       message: InboxRealtimeMessage;
     }
   | {
@@ -56,6 +60,8 @@ export type InboxRealtimeEvent =
       handoffStatus: "pending" | "active";
       assignedUserId?: string | null;
       departmentId?: string | null;
+      protocol?: string | null;
+      cycleId?: string | null;
       updatedAt: string;
       reason?: "released_to_general" | null;
       notificationMessage?: {

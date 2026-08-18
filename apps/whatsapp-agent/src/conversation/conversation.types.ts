@@ -167,7 +167,16 @@ export type QuoteSiteAnswers = {
     protocol: string;
     issuedAt: string;
     cycleId: string;
-    source: "conversation" | "service_cycle";
+    source: string;
+  };
+  lastClosedServiceCycle?: {
+    protocol: string;
+    issuedAt: string;
+    cycleId: string;
+    source: string;
+    closedAt: string;
+    closeReason: string;
+    closeSource: string;
   };
 };
 

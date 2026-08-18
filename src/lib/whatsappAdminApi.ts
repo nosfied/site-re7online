@@ -20,6 +20,8 @@ export type TenantSummaryItem = {
 };
 
 export type InboxMessageItem = {
+  protocol?: string | null;
+  cycleId?: string | null;
   internalMessageId?: string | null;
   messageKind?: "inbound" | "outbound" | string | null;
   direction: "INBOUND" | "OUTBOUND";
@@ -89,11 +91,14 @@ export type InboxConversationItem = {
   waId: string;
   waIdCanonical?: string | null;
   protocol?: string | null;
+  cycleId?: string | null;
   channel?: InboxChannel | string | null;
   provider?: string | null;
   channelAccountId?: string | null;
   channelOutboundEnabled?: boolean;
   lastMessage: {
+    protocol?: string | null;
+    cycleId?: string | null;
     direction: "INBOUND" | "OUTBOUND";
     type: string;
     status: string;
@@ -376,6 +381,7 @@ export type ConversationReportByChannelItem = {
 
 export type ConversationReportConversationItem = {
   conversationId: string;
+  cycleId: string | null;
   protocol: string;
   waId: string;
   channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "support" | "unknown";

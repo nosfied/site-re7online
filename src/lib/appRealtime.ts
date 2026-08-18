@@ -15,6 +15,8 @@ export type AppRealtimeEvent =
       handoffStatus?: AppHandoffStatus | null;
       assignedUserId?: string | null;
       departmentId?: string | null;
+      protocol?: string | null;
+      cycleId?: string | null;
     }
   | {
       type: "message.status.updated";
@@ -36,6 +38,8 @@ export type AppRealtimeEvent =
       handoffStatus: "pending" | "active";
       assignedUserId?: string | null;
       departmentId?: string | null;
+      protocol?: string | null;
+      cycleId?: string | null;
       updatedAt: string;
       reason?: "released_to_general" | null;
       notificationMessage?: {

@@ -1,4 +1,5 @@
 import { MessageStatus, MessageType, type PrismaClient } from "@prisma/client";
+import type { ServiceCycleSnapshot } from "../conversation/serviceCycle.js";
 import { applyAgentSignature } from "../inbox/agentSignature.js";
 import { persistEvent, persistOutboundMessage } from "../db/persist.js";
 import { getFeatures } from "../features/clientFeatures.js";
@@ -311,6 +312,7 @@ export async function createWebSessionTextOutboundMessage(params: {
   outboundSource?: "inbox_text" | "canned_reply" | "protocol_notice" | "bot";
   cannedReplyId?: string | null;
   skipAgentSignature?: boolean;
+  serviceCycle?: ServiceCycleSnapshot | null;
   source?: {
     channel?: string | null;
     provider?: string | null;
@@ -418,6 +420,15 @@ export async function createWebSessionTextOutboundMessage(params: {
     },
     agentSignatureApplied: signedBody.signatureApplied,
     agentSignatureFormat: signedBody.signatureFormat,
+    ...(params.serviceCycle
+      ? {
+          serviceCycle: {
+            protocol: params.serviceCycle.protocol,
+            cycleId: params.serviceCycle.cycleId,
+            issuedAt: params.serviceCycle.issuedAt,
+          },
+        }
+      : {}),
     ...(params.reply
       ? {
           contextualReply: {
@@ -483,6 +494,13 @@ export async function createWebSessionTextOutboundMessage(params: {
       waIdLast4: recipientWaId.slice(-4),
       waIdLength: recipientWaId.length,
       error: sendResult.ok ? null : sendResult.error,
+      serviceCycle: params.serviceCycle
+        ? {
+            protocol: params.serviceCycle.protocol,
+            cycleId: params.serviceCycle.cycleId,
+            issuedAt: params.serviceCycle.issuedAt,
+          }
+        : null,
     },
   });
   if (sendResult.ok && outboundSource !== "bot" && params.actorUserId) {
@@ -566,6 +584,7 @@ export async function createWebSessionMediaOutboundMessage(params: {
   fileName?: string | null;
   caption?: string | null;
   content: Buffer;
+  serviceCycle?: ServiceCycleSnapshot | null;
   source?: {
     channel?: string | null;
     provider?: string | null;
@@ -747,6 +766,15 @@ export async function createWebSessionMediaOutboundMessage(params: {
       source: "human_inbox",
       userId: params.actorUserId,
     },
+    ...(params.serviceCycle
+      ? {
+          serviceCycle: {
+            protocol: params.serviceCycle.protocol,
+            cycleId: params.serviceCycle.cycleId,
+            issuedAt: params.serviceCycle.issuedAt,
+          },
+        }
+      : {}),
     ...(params.reply
       ? {
           contextualReply: {
@@ -839,6 +867,13 @@ export async function createWebSessionMediaOutboundMessage(params: {
       waIdLast4: recipientWaId.slice(-4),
       waIdLength: recipientWaId.length,
       error: sendResult.ok ? null : sendResult.error,
+      serviceCycle: params.serviceCycle
+        ? {
+            protocol: params.serviceCycle.protocol,
+            cycleId: params.serviceCycle.cycleId,
+            issuedAt: params.serviceCycle.issuedAt,
+          }
+        : null,
     },
   });
   if (sendResult.ok) {

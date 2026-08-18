@@ -5,6 +5,7 @@ import {
   normalizeOptOutWaId,
 } from "../campaigns/optOutRegistry.js";
 import { buildConversationProtocol } from "../inbox/conversationProtocol.js";
+import { getServiceCycleForDisplay } from "../conversation/serviceCycle.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
 
 const DEFAULT_LIMIT = 50;
@@ -548,6 +549,7 @@ export async function buildCrmContactsPayload(
           waIdCanonical: true,
           channel: true,
           status: true,
+          answers: true,
           updatedAt: true,
         },
       }),
@@ -669,7 +671,9 @@ export async function buildCrmContactsPayload(
         leadStatus: lead.status,
         lastConversationId: lastConversation?.id ?? null,
         lastConversationIdentity: lastConversation ? getIdentityKey(lastConversation) : null,
-        lastProtocol: lastConversation ? buildConversationProtocol(lastConversation) : null,
+        lastProtocol: lastConversation
+          ? getServiceCycleForDisplay(runtime)?.protocol ?? buildConversationProtocol(lastConversation)
+          : null,
         lastConversationStatus: runtime?.status ?? null,
         lastConversationUpdatedAt: lastConversation?.updatedAt.toISOString() ?? null,
         conversationsCount: conversationSummary.count,
@@ -822,6 +826,7 @@ export async function buildCrmContactDetailPayload(
           assignedTo: true,
           departmentId: true,
           queueId: true,
+          answers: true,
           updatedAt: true,
         },
       }),
@@ -933,7 +938,9 @@ export async function buildCrmContactDetailPayload(
       leadStatus: lead.status,
       lastConversationId: latestConversation?.id ?? null,
       lastConversationIdentity: latestConversation ? getIdentityKey(latestConversation) : null,
-      lastProtocol: latestConversation ? buildConversationProtocol(latestConversation) : null,
+      lastProtocol: latestConversation
+        ? getServiceCycleForDisplay(latestRuntime)?.protocol ?? buildConversationProtocol(latestConversation)
+        : null,
       lastConversationStatus: latestRuntime?.status ?? null,
       lastConversationUpdatedAt: latestConversation?.updatedAt.toISOString() ?? null,
       conversationsCount: conversations.length,
@@ -963,7 +970,7 @@ export async function buildCrmContactDetailPayload(
       return {
         conversationId: conversation.id,
         conversationIdentity: getIdentityKey(conversation),
-        protocol: buildConversationProtocol(conversation),
+        protocol: getServiceCycleForDisplay(runtime)?.protocol ?? buildConversationProtocol(conversation),
         channel: runtime?.channel ?? conversation.channel,
         provider: conversation.provider,
         status: runtime?.status ?? null,

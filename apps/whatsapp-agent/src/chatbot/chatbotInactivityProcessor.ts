@@ -1,7 +1,13 @@
 import { HandoffStatus, Prisma, type PrismaClient } from "@prisma/client";
 import { validateChatbotFlowDefinition } from "./chatbotFlow.js";
 import { resolveDepartmentAwareHandoff } from "./departmentAwareHandoff.js";
-import { buildConversationProtocol, buildConversationProtocolNotice } from "../inbox/conversationProtocol.js";
+import type { ConversationState } from "../conversation/conversation.types.js";
+import {
+  ensureActiveServiceCycle,
+  recordServiceCycleEvent,
+  type ServiceCycleSnapshot,
+} from "../conversation/serviceCycle.js";
+import { buildConversationProtocolNotice } from "../inbox/conversationProtocol.js";
 import { logger } from "../logger/logger.js";
 import { getQueuePosition } from "../queue/queuePosition.js";
 import { createWebSessionTextOutboundMessage } from "../web-session/webSessionOutboundService.js";
@@ -92,6 +98,7 @@ async function sendBotText(params: {
   channelAccountId: string | null;
   requestId: string;
   text: string;
+  serviceCycle: ServiceCycleSnapshot;
 }) {
   if (!params.text.trim()) return;
   await createWebSessionTextOutboundMessage({
@@ -105,6 +112,7 @@ async function sendBotText(params: {
     actorUserId: null,
     outboundSource: "bot",
     skipAgentSignature: true,
+    serviceCycle: params.serviceCycle,
     source: {
       channel: "whatsapp",
       provider: "web_session",
@@ -198,8 +206,13 @@ export async function processChatbotInactivityTimeouts(params: {
     const runtime = isRecord(state.answers) && isRecord(state.answers.chatbotRuntime)
       ? state.answers.chatbotRuntime
       : {};
+    const cycleResult = ensureActiveServiceCycle(
+      { answers: state.answers } as ConversationState,
+      now,
+      "web_session"
+    );
     const nextAnswers = {
-      ...(isRecord(state.answers) ? state.answers : {}),
+      ...(isRecord(cycleResult.state.answers) ? cycleResult.state.answers : {}),
       chatbotRuntime: {
         ...runtime,
         inactivityHandoffTriggeredAt: now.toISOString(),
@@ -215,6 +228,18 @@ export async function processChatbotInactivityTimeouts(params: {
       queueId: decision.queueId ?? state.queueId,
     });
     if (claimed.count !== 1) continue;
+    if (cycleResult.created) {
+      await recordServiceCycleEvent({
+        prisma: params.prisma,
+        clientId: state.clientId,
+        conversationId: conversation?.id ?? null,
+        waId: state.waId,
+        waIdCanonical: state.waIdCanonical,
+        requestId: `chatbot-inactivity:${state.id}`,
+        action: "started",
+        cycle: cycleResult.cycle,
+      });
+    }
     await sendBotText({
       prisma: params.prisma,
       clientId: state.clientId,
@@ -224,8 +249,9 @@ export async function processChatbotInactivityTimeouts(params: {
       channelAccountId: state.channelAccountId,
       requestId: `chatbot-inactivity:${state.id}:handoff`,
       text: fallbackHandoff.feedbackText,
+      serviceCycle: cycleResult.cycle,
     });
-    const protocol = buildConversationProtocol({ id: conversation?.id ?? null, createdAt: now });
+    const protocol = cycleResult.cycle.protocol;
     await sendBotText({
       prisma: params.prisma,
       clientId: state.clientId,
@@ -235,6 +261,7 @@ export async function processChatbotInactivityTimeouts(params: {
       channelAccountId: state.channelAccountId,
       requestId: `chatbot-inactivity:${state.id}:protocol`,
       text: buildConversationProtocolNotice(protocol),
+      serviceCycle: cycleResult.cycle,
     });
     const position = await getQueuePosition({
       prisma: params.prisma,
@@ -252,6 +279,7 @@ export async function processChatbotInactivityTimeouts(params: {
         channelAccountId: state.channelAccountId,
         requestId: `chatbot-inactivity:${state.id}:position`,
         text: closedPolicy.queuePositionText.replace("{position}", String(position)),
+        serviceCycle: cycleResult.cycle,
       });
     }
     if (decision.kind === "closed") {
@@ -264,6 +292,7 @@ export async function processChatbotInactivityTimeouts(params: {
         channelAccountId: state.channelAccountId,
         requestId: `chatbot-inactivity:${state.id}:off-hours`,
         text: closedPolicy.offHoursMessage,
+        serviceCycle: cycleResult.cycle,
       });
     }
     processed += 1;

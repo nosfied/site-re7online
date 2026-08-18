@@ -674,6 +674,7 @@ type AppConversationOperationalPayload = {
   waId: string;
   waIdCanonical?: string | null;
   protocol?: string | null;
+  cycleId?: string | null;
   channel?: string | null;
   provider?: string | null;
   channelAccountId?: string | null;

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { MessageType } from "@prisma/client";
 import { setPrismaForTesting } from "../db.js";
+import { getActiveServiceCycle, getLastClosedServiceCycle } from "../conversation/serviceCycle.js";
 import type { InboxRealtimeEvent } from "../realtime/events.js";
 import {
   buildWebSessionHandoffNotificationPlan,
@@ -143,6 +144,18 @@ function fakePrisma() {
         const row = { id: `inbound_${state.inboundMessages.length + 1}`, ...data };
         state.inboundMessages.push(row);
         return { id: row.id };
+      },
+      update: async ({ where, data }: {
+        where: { clientId_messageId: { clientId: string; messageId: string } };
+        data: Record<string, unknown>;
+      }) => {
+        const index = state.inboundMessages.findIndex(
+          (item) =>
+            item.clientId === where.clientId_messageId.clientId &&
+            item.messageId === where.clientId_messageId.messageId
+        );
+        if (index >= 0) state.inboundMessages[index] = { ...state.inboundMessages[index], ...data };
+        return index >= 0 ? state.inboundMessages[index] : null;
       },
     },
     outboundMessage: {
@@ -560,7 +573,7 @@ test("ingestBaileysWebSessionMessage does not recreate inactive default departme
 
   assert.equal(result.action, "persisted");
   assert.equal(state.departments.length, 1);
-  assert.equal(state.runtimeStates[0]?.departmentId, undefined);
+  assert.equal(state.runtimeStates[0]?.departmentId, null);
   assert.equal(state.conversation?.departmentId, undefined);
 });
 
@@ -1044,6 +1057,9 @@ test("close command creates a single attributed CSAT after human service", async
   assert.equal(state.satisfactionSurveys[0]?.assignedUserId, "agent_1");
   assert.equal(state.satisfactionSurveys[0]?.commentEnabled, true);
   assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.protocol, "CVT-ABCDEF123456");
+  assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.cycleId, "cycle_1");
+  assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
+  assert.equal(getLastClosedServiceCycle({ answers: state.runtimeStates[0]?.answers })?.protocol, "CVT-ABCDEF123456");
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("CVT-ABCDEF123456")), true);
   assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.queueId, "queue_general");
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Pesquisa de Satisfação")).length, 1);
@@ -1201,7 +1217,7 @@ test("chatbot handoff opens a new human service cycle with persisted operational
   const answers = runtime?.answers as Record<string, unknown> | undefined;
   const operationalProtocol = answers?.operationalProtocol as Record<string, unknown> | undefined;
   assert.match(String(operationalProtocol?.protocol ?? ""), /^CVT-[A-Z0-9]{12}$/);
-  assert.equal(operationalProtocol?.source, "service_cycle");
+  assert.equal(operationalProtocol?.source, "web_session");
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("CVT-")).length, 1);
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("!SAIR!")).length, 1);
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("#ENCERRAR#")).length, 0);
@@ -1395,6 +1411,8 @@ test("completed CSAT asks for a new-service decision before returning to chatbot
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("flowContext"), false);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("flowTags"), false);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("OLDPROTO123"), false);
+  assert.notEqual(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers })?.protocol, "CVT-OLDPROTO123");
+  assert.equal(Boolean(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers })), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Tudo certo")), false);
@@ -1428,6 +1446,53 @@ test("completed CSAT decision repeats options for invalid input after prompt", a
   assert.equal(state.runtimeStates[0]?.status, "CLOSED");
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("completedSurveyDecision"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
+});
+
+test("generic inbound after CLOSED starts a new service cycle", async () => {
+  resetState({
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        status: "CLOSED",
+        closedAt: new Date("2026-08-11T12:00:00.000Z"),
+        answers: {
+          lastClosedServiceCycle: {
+            protocol: "CVT-PREVIOUS1234",
+            issuedAt: "2026-08-11T11:50:00.000Z",
+            cycleId: "cycle_previous",
+            source: "service_cycle",
+            closedAt: "2026-08-11T12:00:00.000Z",
+            closeReason: "human_close",
+            closeSource: "inbox",
+          },
+        },
+      }),
+    ],
+    chatbotFlow: {
+      id: "flow_1",
+      definition: {
+        start: "menu",
+        nodes: {
+          menu: {
+            type: "menu",
+            text: "Menu inicial",
+            options: [{ label: "Atendimento", next: "done" }],
+          },
+          done: { type: "text", text: "Tudo certo" },
+        },
+      },
+    },
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("Oi", "MSG_CLOSED_REENTRY", "2026-08-11T12:10:00.000Z");
+  });
+
+  const active = getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers });
+  assert.equal(Boolean(active), true);
+  assert.notEqual(active?.protocol, "CVT-PREVIOUS1234");
+  assert.equal(state.runtimeStates[0]?.status, null);
 });
 
 test("expired CSAT asks for a new-service decision and option 1 returns to bot mode", async () => {
@@ -1496,6 +1561,15 @@ test("expired CSAT option 2 keeps the conversation closed", async () => {
         status: "CLOSED",
         closedAt: new Date("2026-08-11T12:00:00.000Z"),
         answers: {
+          lastClosedServiceCycle: {
+            protocol: "CVT-CLOSED123456",
+            issuedAt: "2026-08-11T11:50:00.000Z",
+            cycleId: "cycle_closed",
+            source: "service_cycle",
+            closedAt: "2026-08-11T12:00:00.000Z",
+            closeReason: "human_close",
+            closeSource: "inbox",
+          },
           satisfactionRuntime: {
             awaitingExpiredSurveyDecision: true,
             expiredSurveyId: "survey_1",
@@ -1511,6 +1585,8 @@ test("expired CSAT option 2 keeps the conversation closed", async () => {
   });
 
   assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
+  assert.equal(getLastClosedServiceCycle({ answers: state.runtimeStates[0]?.answers })?.protocol, "CVT-CLOSED123456");
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("satisfactionRuntime"), false);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Atendimento encerrado")), true);
 });

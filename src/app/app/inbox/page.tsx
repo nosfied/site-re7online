@@ -1716,6 +1716,7 @@ function applyConversationOperationalPayload(
 	    waId?: string | null;
 	    waIdCanonical?: string | null;
 	    protocol?: string | null;
+	    cycleId?: string | null;
 	    channel?: string | null;
     provider?: string | null;
     channelAccountId?: string | null;
@@ -1750,6 +1751,7 @@ function applyConversationOperationalPayload(
 	    waId: payload.waId ?? item.waId,
 	    waIdCanonical: payload.waIdCanonical ?? item.waIdCanonical,
 	    protocol: payload.protocol ?? item.protocol ?? null,
+	    cycleId: payload.cycleId ?? item.cycleId ?? null,
 	    channel: payload.channel ?? item.channel,
     provider: payload.provider ?? item.provider,
     channelAccountId: payload.channelAccountId ?? item.channelAccountId,
@@ -3155,6 +3157,8 @@ export default function AppInboxPage() {
           return {
             ...item,
             waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
+            protocol: event.protocol ?? item.protocol ?? null,
+            cycleId: event.cycleId ?? item.cycleId ?? null,
             mode: event.mode,
             handoffStatus: event.handoffStatus,
             assignedUserId: nextAssignedUserId ?? null,
@@ -3240,12 +3244,16 @@ export default function AppInboxPage() {
         return {
           ...item,
           waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
+          protocol: event.protocol ?? message.protocol ?? item.protocol ?? null,
+          cycleId: event.cycleId ?? message.cycleId ?? item.cycleId ?? null,
           mode: event.mode ?? item.mode,
           handoffStatus: event.handoffStatus ?? item.handoffStatus,
           assignedUserId: nextAssignedUserId,
           departmentId: event.departmentId ?? item.departmentId ?? null,
           status: nextAssignedUserId ? ("IN_PROGRESS" as const) : item.status,
           lastMessage: {
+            protocol: message.protocol ?? null,
+            cycleId: message.cycleId ?? null,
             direction: message.direction,
             type: message.type,
             status: message.status,

@@ -418,9 +418,18 @@ import {
 import {
   buildConversationProtocol,
   buildConversationProtocolNotice,
-  getConversationIdPrefixFromProtocol,
   normalizeConversationProtocol,
 } from "../inbox/conversationProtocol.js";
+import {
+  buildServiceCycleHistoryMap,
+  closeCurrentServiceCycle,
+  ensureActiveServiceCycle,
+  getActiveServiceCycle,
+  getServiceCycleForDisplay,
+  getServiceCycleSnapshot,
+  recordServiceCycleEvent,
+  type ServiceCycleHistory,
+} from "../conversation/serviceCycle.js";
 import { buildConversationOperationalTimingFields } from "../inbox/conversationOperationalTiming.js";
 import {
   getHumanTransferReportCount,
@@ -5825,8 +5834,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const closedAt = new Date().toISOString();
       const closingAssignedUserId = conversation.assignedUserId ?? clientAuth.userId;
-      const nextState = {
-        ...conversation,
+      const closedCycle = closeCurrentServiceCycle({
+        state: conversation,
+        at: new Date(closedAt),
+        reason: "close_to_general",
+        source: "app_inbox",
+      });
+      let nextState = {
+        ...closedCycle.state,
         mode: "BOT" as const,
         handoff: {
           ...conversation.handoff,
@@ -5836,12 +5851,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         assignedUserId: null,
         assignedTo: null,
         assignedAt: null,
-        answers: clearAutomationRuntimeAnswers(conversation.answers ?? {}),
+        answers: clearAutomationRuntimeAnswers(closedCycle.state.answers ?? {}),
         departmentId: defaults.department.id,
         queueId: defaults.queue.id,
         status: ConversationOperationalStatus.CLOSED,
         closedAt,
       };
+      if (closedCycle.cycle) {
+        await recordServiceCycleEvent({
+          prisma,
+          clientId: client.id,
+          conversationId: resolvedConversation.winner?.id ?? null,
+          waId: conversation.waId,
+          waIdCanonical: conversation.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          requestId,
+          action: "closed",
+          cycle: closedCycle.cycle,
+        });
+      }
       await runtimeStorage.upsertConversation(nextState);
       await persistConversationDepartment(prisma, {
         clientId: client.id,
@@ -6218,6 +6245,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 ? { channel: "whatsapp", provider: "web_session", channelAccountId: null }
                 : conversationRow,
             conversation: currentConversation,
+            serviceCycle: getActiveServiceCycle(currentConversation),
             reply: asWebSessionContextualReply(resolvedReplyContext),
           })
         : await adminSendMessage({
@@ -6348,6 +6376,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         ...serializeInboxChannelFields(resolvedConversation.winner ?? undefined),
         message: {
+          protocol: payload.protocol ?? null,
+          cycleId: payload.cycleId ?? null,
           messageId: result.messageId,
           internalMessageId:
             resolvedChannel === "whatsapp" && "internalMessageId" in result ? result.internalMessageId : null,
@@ -6615,6 +6645,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                         ? { channel: "whatsapp", provider: "web_session", channelAccountId: null }
                         : resolvedConversation.winner ?? undefined,
                       conversation: currentConversation,
+                      serviceCycle: getActiveServiceCycle(currentConversation),
                       reply: asWebSessionContextualReply(resolvedReplyContext),
                     })
               : await adminSendMessage({
@@ -6723,6 +6754,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           features: getFeatures(client),
         }),
         message: {
+          protocol: payload.protocol ?? null,
+          cycleId: payload.cycleId ?? null,
           messageId: result.messageId,
           internalMessageId: "internalMessageId" in result ? result.internalMessageId : null,
           status: result.status,
@@ -6969,6 +7002,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                     : null,
               },
               conversation: currentConversation,
+              serviceCycle: getActiveServiceCycle(currentConversation),
               reply: asWebSessionContextualReply(resolvedReplyContext),
             })
           : await adminSendMediaMessage({
@@ -7065,6 +7099,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waId: payload.waId ?? resolvedConversation.resolvedWaId,
         waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         message: {
+          protocol: payload.protocol ?? null,
+          cycleId: payload.cycleId ?? null,
           messageId: result.messageId,
           internalMessageId: result.internalMessageId,
           status: result.status,
@@ -10899,6 +10935,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           requestedQueueId: requestedQueueId || null,
           filteredMetrics,
           stateByWaId: reportData.stateByWaId,
+          serviceCyclesByConversationId: reportData.serviceCyclesByConversationId,
           slaConfig: reportData.slaConfig,
           departmentNameById: reportData.departmentNameById,
           agentMessageActivity,
@@ -10982,6 +11019,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           [
             [
               "conversationId",
+              "cycleId",
               "protocol",
               "waId",
               "channel",
@@ -11037,6 +11075,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         buildConversationReportCsv({
           metrics: filteredMetrics,
           stateByWaId: reportData.stateByWaId,
+          serviceCyclesByConversationId: reportData.serviceCyclesByConversationId,
           departmentNameById: reportData.departmentNameById,
         })
       );
@@ -11205,7 +11244,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         fallbackQueueId: operationalConversation.queueId ?? null,
       });
       const assignedAt = new Date().toISOString();
-      const nextState = {
+      let nextState: ConversationState = {
         ...operationalConversation,
         mode: "HUMAN" as const,
         handoff: {
@@ -11221,6 +11260,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         status: ConversationOperationalStatus.IN_PROGRESS,
         closedAt: null,
       };
+      const claimedCycle = ensureActiveServiceCycle(nextState, new Date(assignedAt), "inbox_claim");
+      nextState = claimedCycle.state;
+      if (claimedCycle.created) {
+        await recordServiceCycleEvent({
+          prisma,
+          clientId: client.id,
+          conversationId: resolvedConversation.winner?.id ?? null,
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          requestId,
+          action: "started",
+          cycle: claimedCycle.cycle,
+        });
+      }
       await runtimeStorage.upsertConversation(nextState);
       await persistConversationDepartment(prisma, {
         clientId: client.id,
@@ -11262,9 +11315,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         assignedUserId: nextState.assignedUserId,
         fromUserId: conversation.assignedUserId ?? null,
       });
-      const protocol = resolvedConversation.winner
-        ? buildConversationProtocol(resolvedConversation.winner)
-        : null;
+      const protocol = claimedCycle.cycle.protocol;
       await sendConversationProtocolNoticeIfNeeded(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
@@ -12241,9 +12292,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         isWebSessionConversation &&
         conversation.mode === "HUMAN"
       ) {
-        const protocol = resolvedConversation.winner
-          ? buildConversationProtocol(resolvedConversation.winner)
-          : buildConversationProtocol({ id: conversation.conversationKey ?? conversation.waId, createdAt: nextState.closedAt });
+        const protocol =
+          getActiveServiceCycle(conversation)?.protocol ??
+          (resolvedConversation.winner
+            ? buildConversationProtocol(resolvedConversation.winner)
+            : buildConversationProtocol({ id: conversation.conversationKey ?? conversation.waId, createdAt: nextState.closedAt }));
         nextState = await closeWebSessionHumanService({
           prisma,
           clientId: client.id,
@@ -12257,7 +12310,29 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           state: conversation,
           now: nextState.closedAt ? new Date(nextState.closedAt) : new Date(),
           assignedUserId: closingAssignedUserId,
+          closeReason: "operator_close",
+          closeSource: "app_inbox",
         });
+      } else if (nextStatus === ConversationOperationalStatus.CLOSED) {
+        const closedCycle = closeCurrentServiceCycle({
+          state: conversation,
+          at: nextState.closedAt ? new Date(nextState.closedAt) : new Date(),
+          reason: "operator_close",
+          source: "app_inbox",
+        });
+        nextState = { ...nextState, answers: closedCycle.state.answers };
+        if (closedCycle.cycle) {
+          await recordServiceCycleEvent({
+            prisma,
+            clientId: client.id,
+            conversationId: resolvedConversation.winner?.id ?? null,
+            waId: conversation.waId,
+            waIdCanonical: conversation.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+            requestId,
+            action: "closed",
+            cycle: closedCycle.cycle,
+          });
+        }
       }
       await runtimeStorage.upsertConversation(nextState);
       if (nextStatus === ConversationOperationalStatus.CLOSED && nextState.closedAt) {
@@ -16973,7 +17048,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
         const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
-        const nextState = {
+        let nextState = {
           ...conversation,
           mode:
             nextStatus === ConversationOperationalStatus.CLOSED
@@ -16987,6 +17062,27 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               ? new Date().toISOString()
               : null,
         };
+        if (nextStatus === ConversationOperationalStatus.CLOSED) {
+          const closedCycle = closeCurrentServiceCycle({
+            state: conversation,
+            at: nextState.closedAt ? new Date(nextState.closedAt) : new Date(),
+            reason: "admin_close",
+            source: "platform_admin",
+          });
+          nextState = { ...nextState, answers: closedCycle.state.answers };
+          if (closedCycle.cycle) {
+            await recordServiceCycleEvent({
+              prisma,
+              clientId: client.id,
+              conversationId: resolvedConversation.winner?.id ?? null,
+              waId: conversation.waId,
+              waIdCanonical: conversation.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+              requestId,
+              action: "closed",
+              cycle: closedCycle.cycle,
+            });
+          }
+        }
         await runtimeStorage.upsertConversation(nextState);
         if (nextStatus === ConversationOperationalStatus.CLOSED && nextState.closedAt) {
           await recordConversationClosedMetrics({
@@ -23075,6 +23171,7 @@ function buildReportRuntimeStateMap(
     queueId?: string | null;
     status?: string | null;
     mode?: string | null;
+    answers?: unknown;
     assignments?: Array<{ toUserId: string | null }>;
   }>
 ) {
@@ -23099,6 +23196,7 @@ function buildReportRuntimeStateMap(
           queueId: item.queueId ?? null,
           status: item.status ?? null,
           mode: item.mode ?? null,
+          answers: item.answers ?? null,
           assignmentCount,
         },
       ] as const;
@@ -23213,11 +23311,33 @@ async function loadConversationReportData(
           queueId: true,
           status: true,
           mode: true,
+          answers: true,
           assignments: {
             select: {
               toUserId: true,
             },
           },
+        },
+      })
+    : [];
+  const conversationIds = Array.from(new Set(metrics.map((item) => item.conversationId)));
+  const serviceCycleEvents = conversationIds.length
+    ? await prisma.event.findMany({
+        where: {
+          clientId: options.clientId,
+          conversationId: { in: conversationIds },
+          eventName: { in: ["conversation.protocol.started", "conversation.protocol.closed"] },
+          createdAt: {
+            gte: options.since,
+            ...(options.until ? { lte: options.until } : {}),
+          },
+        },
+        orderBy: { createdAt: "asc" },
+        select: {
+          conversationId: true,
+          eventName: true,
+          payloadJson: true,
+          createdAt: true,
         },
       })
     : [];
@@ -23273,6 +23393,7 @@ async function loadConversationReportData(
     ok: true as const,
     metrics,
     stateByWaId: buildReportRuntimeStateMap(runtimeStates),
+    serviceCyclesByConversationId: buildServiceCycleHistoryMap(serviceCycleEvents),
     leadIdentityByWaId,
     slaConfig,
     departmentNameById: new Map(departments.map((item) => [item.id, item.name])),
@@ -23364,6 +23485,7 @@ function buildConversationReportSummary(options: {
     };
   }>;
   stateByWaId: ReturnType<typeof buildReportRuntimeStateMap>;
+  serviceCyclesByConversationId: Map<string, ServiceCycleHistory[]>;
   slaConfig: { firstResponseLimitSec: number; resolutionTimeLimitSec: number } | null;
   departmentNameById: Map<string, string>;
   agentMessageActivity: Array<{ userId: string; userName: string | null; outboundMessages: number }>;
@@ -23461,12 +23583,17 @@ function buildConversationReportSummary(options: {
     const state = options.stateByWaId.get(item.conversation.waId);
     return count + getHumanTransferReportCount(state);
   }, 0);
-  const conversations = options.filteredMetrics.map((item) => {
+  const conversations = options.filteredMetrics.flatMap((item) => {
     const runtimeState = options.stateByWaId.get(item.conversation.waId);
     const departmentBucket = getReportDepartmentBucket(item, options.stateByWaId, options.departmentNameById);
-    return {
+    const cycles = options.serviceCyclesByConversationId.get(item.conversationId) ?? [];
+    const rows = cycles.length > 0 ? cycles : [null];
+    return rows.map((cycle) => ({
       conversationId: item.conversationId,
-      protocol: buildConversationProtocol({ id: item.conversationId, createdAt: item.startedAt }),
+      cycleId: cycle?.cycleId ?? getServiceCycleForDisplay(runtimeState)?.cycleId ?? null,
+      protocol:
+        cycle?.protocol ?? getServiceCycleForDisplay(runtimeState)?.protocol ??
+        buildConversationProtocol({ id: item.conversationId, createdAt: item.startedAt }),
       waId: item.conversation.waId,
       channel: normalizeReportChannelLabel(item.conversation.channel).channel,
       channelName: normalizeReportChannelLabel(item.conversation.channel).channelName,
@@ -23474,9 +23601,10 @@ function buildConversationReportSummary(options: {
       departmentName: departmentBucket.departmentName,
       assignedUserIds: runtimeState?.assignedUserIds ?? [],
       status: runtimeState?.status ?? null,
-      startedAt: item.startedAt.toISOString(),
-      closedAt: "closedAt" in item && item.closedAt instanceof Date ? item.closedAt.toISOString() : null,
-    };
+      startedAt: (cycle?.startedAt ?? item.startedAt).toISOString(),
+      closedAt: cycle?.closedAt?.toISOString() ??
+        ("closedAt" in item && item.closedAt instanceof Date ? item.closedAt.toISOString() : null),
+    }));
   });
   const assignedConversationsByAgent = Array.from(assignedConversationsByAgentMap.values()).map((item) => ({
     userId: item.userId,
@@ -23604,11 +23732,13 @@ function buildConversationReportCsv(options: {
     };
   }>;
   stateByWaId: ReturnType<typeof buildReportRuntimeStateMap>;
+  serviceCyclesByConversationId: Map<string, ServiceCycleHistory[]>;
   departmentNameById: Map<string, string>;
 }) {
   return [
     [
       "conversationId",
+      "cycleId",
       "protocol",
       "waId",
       "channel",
@@ -23624,26 +23754,33 @@ function buildConversationReportCsv(options: {
       "createdAt",
       "closedAt",
     ].join(","),
-    ...options.metrics.map((item) => {
+    ...options.metrics.flatMap((item) => {
       const runtimeState = options.stateByWaId.get(item.conversation.waId);
       const departmentId = item.conversation.departmentId ?? null;
-      return [
-        csvCell(item.conversationId),
-        csvCell(buildConversationProtocol({ id: item.conversationId, createdAt: item.startedAt })),
-        csvCell(item.conversation.waId),
-        csvCell(normalizeReportChannelLabel(item.conversation.channel).channelName),
-        csvCell(departmentId),
-        csvCell(departmentId ? options.departmentNameById.get(departmentId) ?? null : null),
-        csvCell(runtimeState?.queueId ?? null),
-        csvCell(runtimeState?.assignedUserIds.length ? runtimeState.assignedUserIds.join("|") : null),
-        csvCell(runtimeState?.status ?? (item.closedAt ? "CLOSED" : null)),
-        csvCell(isAutomatedConversationReportState(runtimeState) ? "true" : "false"),
-        csvCell(getHumanTransferReportCount(runtimeState)),
-        csvCell(item.firstResponseTimeSec),
-        csvCell(item.resolutionTimeSec),
-        csvCell(item.startedAt.toISOString()),
-        csvCell(item.closedAt ? item.closedAt.toISOString() : null),
-      ].join(",");
+      const cycles = options.serviceCyclesByConversationId.get(item.conversationId) ?? [];
+      return (cycles.length > 0 ? cycles : [null]).map((cycle) =>
+        [
+          csvCell(item.conversationId),
+          csvCell(cycle?.cycleId ?? getServiceCycleForDisplay(runtimeState)?.cycleId ?? null),
+          csvCell(
+            cycle?.protocol ?? getServiceCycleForDisplay(runtimeState)?.protocol ??
+              buildConversationProtocol({ id: item.conversationId, createdAt: item.startedAt })
+          ),
+          csvCell(item.conversation.waId),
+          csvCell(normalizeReportChannelLabel(item.conversation.channel).channelName),
+          csvCell(departmentId),
+          csvCell(departmentId ? options.departmentNameById.get(departmentId) ?? null : null),
+          csvCell(runtimeState?.queueId ?? null),
+          csvCell(runtimeState?.assignedUserIds.length ? runtimeState.assignedUserIds.join("|") : null),
+          csvCell(runtimeState?.status ?? (cycle?.closedAt || item.closedAt ? "CLOSED" : null)),
+          csvCell(isAutomatedConversationReportState(runtimeState) ? "true" : "false"),
+          csvCell(getHumanTransferReportCount(runtimeState)),
+          csvCell(item.firstResponseTimeSec),
+          csvCell(item.resolutionTimeSec),
+          csvCell((cycle?.startedAt ?? item.startedAt).toISOString()),
+          csvCell(cycle?.closedAt?.toISOString() ?? (item.closedAt ? item.closedAt.toISOString() : null)),
+        ].join(",")
+      );
     }),
   ].join("\n");
 }
@@ -27530,7 +27667,10 @@ async function buildConversationActionPayload(
     ok: true,
     waId: conversation?.waId ?? null,
     waIdCanonical: conversation?.waIdCanonical ?? null,
-    protocol: channelSource ? buildConversationProtocol(channelSource) : null,
+    protocol:
+      getServiceCycleForDisplay(conversation)?.protocol ??
+      (channelSource ? buildConversationProtocol(channelSource) : null),
+    cycleId: getServiceCycleForDisplay(conversation)?.cycleId ?? null,
     ...serializeInboxChannelFields(channelSource ?? undefined),
     channelOutboundEnabled,
     ...buildConversationOperationalTimingFields({
@@ -27606,6 +27746,7 @@ async function sendConversationProtocolNoticeIfNeeded(
               channelAccountId: params.channelAccountId ?? null,
             },
             conversation: params.conversation ?? null,
+            serviceCycle: getActiveServiceCycle(params.conversation ?? null),
             skipAgentSignature: true,
           })
         : await adminSendMessage({
@@ -27628,6 +27769,7 @@ async function sendConversationProtocolNoticeIfNeeded(
         source: "protocol_notice",
         provider,
         protocol: params.protocol,
+        cycleId: getActiveServiceCycle(params.conversation ?? null)?.cycleId ?? null,
         status: result.ok ? result.status : null,
         reason: result.ok ? null : result.error,
       },
@@ -28953,7 +29095,6 @@ async function buildConversationListPayload(
   recordInboxListTiming(params.clientId, "defaults", defaultsStartedAt);
   const conversationFetchLimit = Math.min(params.limit * 10 + 1, 1000);
   const messageFetchLimit = Math.min(conversationFetchLimit * 2, 2000);
-  const protocolIdPrefix = getConversationIdPrefixFromProtocol(params.filters.search);
   const searchIdentity = params.filters.search.trim();
   const searchIdentityVariants = searchIdentity
     ? Array.from(new Set([searchIdentity, ...buildWaIdLookup(searchIdentity).variants].filter(Boolean)))
@@ -28983,7 +29124,6 @@ async function buildConversationListPayload(
             ]
           : []),
       ],
-    ...(protocolIdPrefix ? { id: { startsWith: protocolIdPrefix } } : {}),
   };
   const baseQueryStartedAt = channelLatencyNow();
   const conversations = await prisma.conversation.findMany({
@@ -29389,6 +29529,7 @@ async function buildConversationListPayload(
     const latestInbound = latestInboundByWaId.get(key);
     const latestOutbound = latestOutboundByWaId.get(key);
     const runtimeState = runtimeByWaId.get(key);
+    const displayServiceCycle = getServiceCycleForDisplay(runtimeState ?? null);
     const operationalFields = serializeConversationOperationalFields({
       conversation: runtimeState ?? null,
       assignedUserName:
@@ -29416,6 +29557,8 @@ async function buildConversationListPayload(
               location: extractMessageLocation(latestInbound.rawPayload),
               templateName: null,
               createdAt: latestInbound.createdAt,
+              protocol: getServiceCycleSnapshot(latestInbound.rawPayload)?.protocol ?? null,
+              cycleId: getServiceCycleSnapshot(latestInbound.rawPayload)?.cycleId ?? null,
             }
           : null
         : latestOutbound
@@ -29431,6 +29574,8 @@ async function buildConversationListPayload(
               location: extractMessageLocation(latestOutbound.rawPayload),
               templateName: latestOutbound.templateName ?? null,
               createdAt: latestOutbound.createdAt,
+              protocol: getServiceCycleSnapshot(latestOutbound.rawPayload)?.protocol ?? null,
+              cycleId: getServiceCycleSnapshot(latestOutbound.rawPayload)?.cycleId ?? null,
             }
           : null;
 
@@ -29446,7 +29591,8 @@ async function buildConversationListPayload(
     return {
       waId: conversation.waId,
       waIdCanonical: conversation.waIdCanonical,
-      protocol: buildConversationProtocol(conversation),
+      protocol: displayServiceCycle?.protocol ?? buildConversationProtocol(conversation),
+      cycleId: displayServiceCycle?.cycleId ?? null,
       ...serializeInboxChannelFields(conversation),
       channelOutboundEnabled,
       lastMessage,
@@ -29652,7 +29798,10 @@ async function buildConversationDetailPayload(
   const items = [
     ...inbound.map((item) => {
       const contextualReply = extractContextualReplyPayload(item.rawPayload);
+      const serviceCycle = getServiceCycleSnapshot(item.rawPayload);
       return {
+        protocol: serviceCycle?.protocol ?? null,
+        cycleId: serviceCycle?.cycleId ?? null,
         internalMessageId: item.id,
         messageKind: "inbound",
         direction: "INBOUND",
@@ -29696,7 +29845,10 @@ async function buildConversationDetailPayload(
       const metaStatus = extractMetaStatus(item.rawPayload);
       const contextualReply = extractContextualReplyPayload(item.rawPayload);
       const actor = extractOutboundActorPayload(item.rawPayload);
+      const serviceCycle = getServiceCycleSnapshot(item.rawPayload);
       return {
+        protocol: serviceCycle?.protocol ?? null,
+        cycleId: serviceCycle?.cycleId ?? null,
         internalMessageId: item.id,
         messageKind: "outbound",
         direction: "OUTBOUND",
@@ -29884,7 +30036,10 @@ async function buildConversationDetailPayload(
     ok: true,
     waId: conversation?.waId ?? resolved.resolvedWaId,
     waIdCanonical: resolved.resolvedWaIdCanonical,
-    protocol: resolved.winner ? buildConversationProtocol(resolved.winner) : null,
+    protocol:
+      getServiceCycleForDisplay(conversation)?.protocol ??
+      (resolved.winner ? buildConversationProtocol(resolved.winner) : null),
+    cycleId: getServiceCycleForDisplay(conversation)?.cycleId ?? null,
     ...serializeInboxChannelFields(resolved.winner ?? undefined),
     channelOutboundEnabled,
     ...serializeConversationOperationalFields({
@@ -31529,6 +31684,7 @@ async function adminSendMessage(params: {
   source?: "admin_inbox" | "canned_reply" | "protocol_notice";
   cannedReplyId?: string | null;
   reply?: ResolvedInboxContextualReply | null;
+  serviceCycle?: ReturnType<typeof getActiveServiceCycle>;
 }): Promise<
   | {
       ok: true;
@@ -31545,6 +31701,7 @@ async function adminSendMessage(params: {
 > {
   const nowMs = Date.now();
   const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
+  const serviceCycle = params.serviceCycle ?? getActiveServiceCycle(conversation);
   if (conversation && !isWindowOpen(conversation, nowMs)) {
     return {
       ok: false,
@@ -31667,6 +31824,15 @@ async function adminSendMessage(params: {
       metaUsage: usagePayload,
       status: sendResult.status ?? null,
       errorBody: sendResult.errorBody ?? null,
+      ...(serviceCycle
+        ? {
+            serviceCycle: {
+              protocol: serviceCycle.protocol,
+              cycleId: serviceCycle.cycleId,
+              issuedAt: serviceCycle.issuedAt,
+            },
+          }
+        : {}),
     },
   });
   await recordMetaUsageLedgerEvent({
@@ -32296,6 +32462,7 @@ async function adminSendMediaMessage(params: {
   }
   const nowMs = Date.now();
   const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
+  const serviceCycle = getActiveServiceCycle(conversation);
   if (conversation && !isWindowOpen(conversation, nowMs)) {
     return {
       ok: false,
@@ -32489,6 +32656,15 @@ async function adminSendMediaMessage(params: {
       ...(params.reply ? { contextualReply: serializeContextualReplyPayload(params.reply) } : {}),
       status: sendResult.status ?? null,
       errorBody: sendResult.errorBody ?? null,
+      ...(serviceCycle
+        ? {
+            serviceCycle: {
+              protocol: serviceCycle.protocol,
+              cycleId: serviceCycle.cycleId,
+              issuedAt: serviceCycle.issuedAt,
+            },
+          }
+        : {}),
     },
   });
 

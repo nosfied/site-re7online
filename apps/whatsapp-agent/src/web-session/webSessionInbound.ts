@@ -12,6 +12,16 @@ import { executeChatbotFlowWithConsent } from "../chatbot/chatbotConsentRuntime.
 import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
 import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
 import { activateHumanHandoff, updateOutbound } from "../conversation/conversation.service.js";
+import {
+  clearActiveServiceCycle,
+  closeCurrentServiceCycle,
+  ensureActiveServiceCycle,
+  getActiveServiceCycle,
+  getServiceCycleForDisplay,
+  recordServiceCycleEvent,
+  startNewServiceCycle,
+  withServiceCycleSnapshot,
+} from "../conversation/serviceCycle.js";
 import { getPrisma } from "../db.js";
 import {
   buildConversationProtocol,
@@ -384,39 +394,17 @@ function clearExpiredSurveyDecision(state: ConversationState) {
   return withSatisfactionRuntime(state, runtime);
 }
 
-function buildServiceCycleProtocol() {
-  return `CVT-${crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
-}
-
 function getOperationalProtocol(state: ConversationState) {
-  const answers = isRecord(state.answers) ? state.answers as Record<string, unknown> : {};
-  const raw = isRecord(answers.operationalProtocol) ? answers.operationalProtocol.protocol : null;
-  return normalizeConversationProtocol(typeof raw === "string" ? raw : null);
-}
-
-function withOperationalProtocol(state: ConversationState, protocol: string, issuedAt: Date): ConversationState {
-  const answers = isRecord(state.answers) ? state.answers as Record<string, unknown> : {};
-  return {
-    ...state,
-    answers: {
-      ...answers,
-      operationalProtocol: {
-        protocol,
-        issuedAt: issuedAt.toISOString(),
-        cycleId: crypto.randomUUID(),
-        source: "service_cycle",
-      },
-    } as ConversationState["answers"],
-  };
+  return getActiveServiceCycle(state)?.protocol ?? null;
 }
 
 function ensureOperationalProtocol(state: ConversationState, issuedAt: Date) {
-  const existing = getOperationalProtocol(state);
-  if (existing) return { state, protocol: existing };
-  const protocol = buildServiceCycleProtocol();
+  const result = ensureActiveServiceCycle(state, issuedAt, "web_session");
   return {
-    state: withOperationalProtocol(state, protocol, issuedAt),
-    protocol,
+    state: result.state,
+    protocol: result.cycle.protocol,
+    cycle: result.cycle,
+    created: result.created,
   };
 }
 
@@ -442,14 +430,14 @@ function buildInboundNotificationMessage(params: {
 }
 
 function clearWebSessionServiceCycleState(state: ConversationState): ConversationState {
-  const answers = isRecord(state.answers) ? state.answers as Record<string, unknown> : {};
+  const cleared = clearActiveServiceCycle(state);
+  const answers = isRecord(cleared.answers) ? cleared.answers as Record<string, unknown> : {};
   const nextAnswers = { ...answers };
   delete nextAnswers.flowContext;
   delete nextAnswers.flowTags;
-  delete nextAnswers.operationalProtocol;
   delete nextAnswers.protocolContinuation;
   return {
-    ...state,
+    ...cleared,
     answers: nextAnswers as ConversationState["answers"],
     departmentId: null,
     queueId: null,
@@ -747,6 +735,7 @@ async function recordInboundEvent(params: {
   requestId: string;
   reason?: string | null;
   conversationId?: string | null;
+  serviceCycle?: ReturnType<typeof getServiceCycleForDisplay>;
 }) {
   const identifier = params.message ? maskIdentifier(params.message.sender) : null;
   await params.prisma.event.create({
@@ -768,6 +757,13 @@ async function recordInboundEvent(params: {
         waIdSuffix: identifier?.suffix ?? null,
         waIdLength: identifier?.length ?? null,
         reason: params.reason ?? null,
+        serviceCycle: params.serviceCycle
+          ? {
+              protocol: params.serviceCycle.protocol,
+              cycleId: params.serviceCycle.cycleId,
+              issuedAt: params.serviceCycle.issuedAt,
+            }
+          : null,
       } satisfies Prisma.InputJsonObject,
     },
   });
@@ -782,6 +778,20 @@ async function safeRecordInboundEvent(params: Parameters<typeof recordInboundEve
       event: "whatsapp.web.inbound.event_write_failed",
       eventName: params.eventName,
       reason: params.reason ?? null,
+      errorName: error instanceof Error ? error.name : "unknown_error",
+    });
+  }
+}
+
+async function safeRecordServiceCycleEvent(params: Parameters<typeof recordServiceCycleEvent>[0]) {
+  try {
+    await recordServiceCycleEvent(params);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return;
+    logger.warn({
+      event: "conversation.protocol.event_write_failed",
+      action: params.action,
+      clientId: params.clientId,
       errorName: error instanceof Error ? error.name : "unknown_error",
     });
   }
@@ -1069,6 +1079,7 @@ async function sendWebSessionBotText(params: {
   state: ConversationState;
 }) {
   if (!params.text.trim()) return params.state;
+  const serviceCycle = getServiceCycleForDisplay(params.state);
   const outboundResult = await createWebSessionTextOutboundMessage({
     prisma: params.prisma,
     waId: params.waId,
@@ -1080,6 +1091,7 @@ async function sendWebSessionBotText(params: {
     actorUserId: null,
     outboundSource: "bot",
     skipAgentSignature: true,
+    serviceCycle,
     source: {
       channel: "whatsapp",
       provider: "web_session",
@@ -1097,7 +1109,11 @@ async function sendWebSessionBotText(params: {
       handoffStatus: nextState.handoff.status,
       assignedUserId: nextState.assignedUserId ?? null,
       departmentId: nextState.departmentId ?? null,
+      protocol: serviceCycle?.protocol ?? null,
+      cycleId: serviceCycle?.cycleId ?? null,
       message: {
+        protocol: serviceCycle?.protocol ?? null,
+        cycleId: serviceCycle?.cycleId ?? null,
         internalMessageId: outboundResult.internalMessageId,
         messageKind: "outbound",
         direction: "OUTBOUND",
@@ -1215,6 +1231,7 @@ async function sendWebSessionSatisfactionSurvey(params: {
   const assignedUserId = params.assignedUserId ?? params.state.assignedUserId ?? null;
   if (!assignedUserId && policy.satisfaction.eligibility !== "DIRECTED_SERVICE") return params.state;
   const now = params.now ?? new Date();
+  const surveyCycle = getServiceCycleForDisplay(params.state);
   const expiresAt = new Date(now.getTime() + policy.satisfaction.ttlMinutes * 60_000);
   const existing = await params.prisma.satisfactionSurvey.findFirst({
     where: {
@@ -1244,6 +1261,8 @@ async function sendWebSessionSatisfactionSurvey(params: {
       expiresAt,
       metadata: {
         protocol: params.protocol,
+        cycleId: surveyCycle?.cycleId ?? null,
+        issuedAt: surveyCycle?.issuedAt ?? null,
         trigger: "HUMAN_CONVERSATION_CLOSED",
         ttlMinutes: policy.satisfaction.ttlMinutes,
         provider: "web_session",
@@ -1273,17 +1292,30 @@ async function restartWebSessionBotConversation(params: {
   waId: string;
   waIdCanonical: string;
   channelAccountId: string | null;
+  conversationId: string | null;
   requestId: string;
   state: ConversationState;
   now: Date;
   inboundText?: string | null;
 }) {
-  const nextState: ConversationState = {
+  const baseState: ConversationState = {
     ...clearWebSessionServiceCycleState(clearChatbotRuntime(params.state)),
     mode: "BOT" as const,
     status: null,
     closedAt: null,
   };
+  const started = startNewServiceCycle(baseState, params.now, "web_session");
+  const nextState = started.state;
+  await safeRecordServiceCycleEvent({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    conversationId: params.conversationId,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical,
+    requestId: params.requestId,
+    action: "started",
+    cycle: started.cycle,
+  });
   const chatbotFlow = await loadWebSessionChatbotFlow({
     prisma: params.prisma,
     clientId: params.clientId,
@@ -1344,14 +1376,35 @@ export async function closeWebSessionHumanService(params: {
   now: Date;
   assignedUserId?: string | null;
   contactName?: string | null;
+  closeReason?: string;
+  closeSource?: string;
 }) {
   if (params.state.status === "CLOSED" && params.state.closedAt) {
     return params.state;
   }
   const closePolicy = await getWebSessionClosePolicy({ prisma: params.prisma, clientId: params.clientId });
   const closingAssignedUserId = params.assignedUserId ?? params.state.assignedUserId ?? null;
+  const closedCycleResult = closeCurrentServiceCycle({
+    state: params.state,
+    at: params.now,
+    reason: params.closeReason ?? "service_closed",
+    source: params.closeSource ?? "web_session",
+  });
+  if (closedCycleResult.cycle) {
+    await safeRecordServiceCycleEvent({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      conversationId: params.conversationId,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical,
+      requestId: params.requestId,
+      action: "closed",
+      cycle: closedCycleResult.cycle,
+    });
+  }
+  const closedProtocol = closedCycleResult.cycle?.protocol ?? params.protocol;
   let nextState: ConversationState = {
-    ...clearCloseConfirmation(clearChatbotRuntime(params.state)),
+    ...clearCloseConfirmation(clearChatbotRuntime(closedCycleResult.state)),
     mode: "HUMAN" as const,
     assignedUserId: null,
     assignedTo: null,
@@ -1369,7 +1422,7 @@ export async function closeWebSessionHumanService(params: {
     channelAccountId: params.channelAccountId,
     requestId: `${params.requestId}:close-message`,
     text: renderWebSessionCloseTemplate(closePolicy.closedMessage, {
-      protocol: params.protocol,
+      protocol: closedProtocol,
       contactName: params.contactName,
       at: params.now,
     }),
@@ -1384,7 +1437,7 @@ export async function closeWebSessionHumanService(params: {
     channelAccountId: params.channelAccountId,
     requestId: params.requestId,
     conversationId: params.conversationId,
-    protocol: params.protocol,
+    protocol: closedProtocol,
     state: nextState,
     now: params.now,
     assignedUserId: closingAssignedUserId,
@@ -1427,6 +1480,7 @@ async function handleWebSessionSatisfactionInbound(params: {
         waId: params.waId,
         waIdCanonical: params.waIdCanonical,
         channelAccountId: params.channelAccountId,
+        conversationId: params.conversationId,
         requestId: params.requestId,
         state: nextState,
         now: params.now,
@@ -1479,6 +1533,7 @@ async function handleWebSessionSatisfactionInbound(params: {
         waId: params.waId,
         waIdCanonical: params.waIdCanonical,
         channelAccountId: params.channelAccountId,
+        conversationId: params.conversationId,
         requestId: params.requestId,
         state: nextState,
         now: params.now,
@@ -1929,6 +1984,42 @@ export async function ingestWebSessionInboundMessage(params: {
       chatbotEntryPointAvailable: Boolean(entryPointFlow),
     });
     let runtimeConversationState = runtimeToConversationState({ runtime, message: params.message });
+    const shouldHaveActiveServiceCycle =
+      runtimeConversationState.status !== "CLOSED" &&
+      !runtimeConversationState.closedAt &&
+      (runtimeConversationState.mode === "BOT" ||
+        runtimeConversationState.status === "WAITING" ||
+        runtimeConversationState.status === "IN_PROGRESS");
+    if (shouldHaveActiveServiceCycle) {
+      const cycleResult = ensureActiveServiceCycle(
+        runtimeConversationState,
+        params.message.timestamp,
+        "web_session"
+      );
+      runtimeConversationState = cycleResult.state;
+      if (cycleResult.created) {
+        await persistWebSessionRuntimeState({
+          prisma,
+          clientId: params.message.clientId,
+          waId: params.message.sender,
+          state: runtimeConversationState,
+        });
+        await safeRecordServiceCycleEvent({
+          prisma,
+          clientId: params.message.clientId,
+          conversationId: conversation?.id ?? null,
+          waId: params.message.sender,
+          waIdCanonical: params.message.senderCanonical,
+          requestId,
+          action: "started",
+          cycle: cycleResult.cycle,
+        });
+      }
+      await prisma.inboundMessage.update({
+        where: { clientId_messageId: { clientId: params.message.clientId, messageId } },
+        data: { rawPayload: withServiceCycleSnapshot(rawPayload, cycleResult.cycle) },
+      });
+    }
     await recordConversationInboundMetrics({
       prisma,
       clientId: params.message.clientId,
@@ -1946,6 +2037,7 @@ export async function ingestWebSessionInboundMessage(params: {
       messageId,
       requestId,
     });
+    const inboundServiceCycle = getActiveServiceCycle(runtimeConversationState);
     publishRealtimeEvent({
       type: "message.created",
       clientId: params.message.clientId,
@@ -1955,7 +2047,11 @@ export async function ingestWebSessionInboundMessage(params: {
       handoffStatus: runtimeConversationState.handoff.status,
       assignedUserId: runtime.assignedUserId ?? null,
       departmentId: runtime.departmentId ?? null,
+      protocol: inboundServiceCycle?.protocol ?? null,
+      cycleId: inboundServiceCycle?.cycleId ?? null,
       message: {
+        protocol: inboundServiceCycle?.protocol ?? null,
+        cycleId: inboundServiceCycle?.cycleId ?? null,
         internalMessageId: inboundNotificationMessage.internalMessageId,
         messageKind: "inbound",
         direction: "INBOUND",
@@ -2257,6 +2353,7 @@ export async function ingestWebSessionInboundMessage(params: {
           }
           if (replyText?.trim()) {
             const normalizedReplyText = normalizeBotMenuOptionMarkdown(replyText);
+            const replyServiceCycle = getActiveServiceCycle(runtimeConversationState);
             const outboundResult = await createWebSessionTextOutboundMessage({
               prisma,
               waId: params.message.sender,
@@ -2268,6 +2365,7 @@ export async function ingestWebSessionInboundMessage(params: {
               actorUserId: null,
               outboundSource: "bot",
               skipAgentSignature: true,
+              serviceCycle: replyServiceCycle,
               source: {
                 channel: "whatsapp",
                 provider: "web_session",
@@ -2289,7 +2387,11 @@ export async function ingestWebSessionInboundMessage(params: {
                 handoffStatus: runtimeConversationState.handoff.status,
                 assignedUserId: runtimeConversationState.assignedUserId ?? null,
                 departmentId: runtimeConversationState.departmentId ?? null,
+                protocol: replyServiceCycle?.protocol ?? null,
+                cycleId: replyServiceCycle?.cycleId ?? null,
                 message: {
+                  protocol: replyServiceCycle?.protocol ?? null,
+                  cycleId: replyServiceCycle?.cycleId ?? null,
                   internalMessageId: outboundResult.internalMessageId,
                   messageKind: "outbound",
                   direction: "OUTBOUND",
@@ -2331,6 +2433,18 @@ export async function ingestWebSessionInboundMessage(params: {
             };
             const protocolResult = ensureOperationalProtocol(runtimeConversationState, params.message.timestamp);
             runtimeConversationState = protocolResult.state;
+            if (protocolResult.created) {
+              await safeRecordServiceCycleEvent({
+                prisma,
+                clientId: params.message.clientId,
+                conversationId: conversation?.id ?? null,
+                waId: params.message.sender,
+                waIdCanonical: params.message.senderCanonical,
+                requestId,
+                action: "started",
+                cycle: protocolResult.cycle,
+              });
+            }
           } else if (handoffDecision?.kind === "closed" || handoffDecision?.kind === "blocked") {
             runtimeConversationState = {
               ...clearChatbotRuntime(runtimeConversationState),
@@ -2435,6 +2549,8 @@ export async function ingestWebSessionInboundMessage(params: {
                   : runtimeConversationState.handoff.status,
                 assignedUserId: effectiveRuntime.assignedUserId ?? null,
                 departmentId: effectiveRuntime.departmentId ?? null,
+                protocol: getActiveServiceCycle(runtimeConversationState)?.protocol ?? null,
+                cycleId: getActiveServiceCycle(runtimeConversationState)?.cycleId ?? null,
                 updatedAt: new Date().toISOString(),
                 notificationMessage: {
                   messageId: inboundNotificationMessage.messageId,

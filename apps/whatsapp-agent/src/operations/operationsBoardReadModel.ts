@@ -1,6 +1,7 @@
 import { ConversationOperationalStatus, type Prisma, type PrismaClient } from "@prisma/client";
 import { buildConversationOperationalTimingFields } from "../inbox/conversationOperationalTiming.js";
 import { buildConversationProtocol, normalizeConversationProtocol } from "../inbox/conversationProtocol.js";
+import { getServiceCycleForDisplay } from "../conversation/serviceCycle.js";
 
 export const OPERATIONS_BOARD_STATUSES = [
   ConversationOperationalStatus.WAITING,
@@ -484,7 +485,7 @@ export async function buildOperationsBoardPayload(
           return {
             conversationId: conversation.id,
             conversationIdentity: key,
-            protocol: buildConversationProtocol(conversation),
+            protocol: getServiceCycleForDisplay(state)?.protocol ?? buildConversationProtocol(conversation),
             status,
             contactName: lead?.name ?? lead?.phone ?? null,
             company: lead?.company ?? null,

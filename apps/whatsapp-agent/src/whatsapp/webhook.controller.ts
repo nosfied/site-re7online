@@ -33,6 +33,12 @@ import {
   isWindowOpen,
 } from "../conversation/conversation.service.js";
 import { shouldResetClosedConversationForBotReentry } from "../conversation/automationRuntime.js";
+import {
+  ensureActiveServiceCycle,
+  getActiveServiceCycle,
+  recordServiceCycleEvent,
+  withServiceCycleSnapshot,
+} from "../conversation/serviceCycle.js";
 import { createAgentBrain } from "../agent/agent.factory.js";
 import {
   buildHandoffConfirmationPrompt,
@@ -1577,6 +1583,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           realtimeConversation?.handoff?.status === "active"
             ? realtimeConversation.handoff.status
             : "none";
+        const realtimeServiceCycle = getActiveServiceCycle(realtimeConversation);
         publishRealtimeEvent({
           type: "message.created",
           clientId: tenantClientId,
@@ -1586,7 +1593,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           handoffStatus: realtimeHandoffStatus,
           assignedUserId: realtimeConversation?.assignedUserId ?? null,
           departmentId: realtimeConversation?.departmentId ?? null,
+          protocol: realtimeServiceCycle?.protocol ?? null,
+          cycleId: realtimeServiceCycle?.cycleId ?? null,
           message: {
+            protocol: realtimeServiceCycle?.protocol ?? null,
+            cycleId: realtimeServiceCycle?.cycleId ?? null,
             internalMessageId: insertedMessage?.id ?? null,
             messageKind: "inbound",
             direction: "INBOUND",
@@ -3243,6 +3254,43 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         waId: maskNumber(normalizedFrom),
         reason: resetReason,
         requestId: meta?.requestId,
+      });
+    }
+    const activeCycleResult = ensureActiveServiceCycle(currentConversation, inboundDate, "meta_cloud");
+    currentConversation = activeCycleResult.state;
+    if (activeCycleResult.created) {
+      await storage.upsertConversation(currentConversation);
+      await recordServiceCycleEvent({
+        prisma,
+        clientId: tenantClientId,
+        conversationId: directConversationForInbound?.id ?? null,
+        waId: normalizedFrom,
+        waIdCanonical: canonicalizeBrazilWaId(normalizedFrom),
+        requestId: meta?.requestId ?? `meta-inbound:${message.messageId}`,
+        action: "started",
+        cycle: activeCycleResult.cycle,
+      });
+    }
+    const persistedInbound = await prisma.inboundMessage.findUnique({
+      where: {
+        clientId_messageId: {
+          clientId: tenantClientId,
+          messageId: message.messageId,
+        },
+      },
+      select: { rawPayload: true },
+    });
+    if (persistedInbound) {
+      await prisma.inboundMessage.update({
+        where: {
+          clientId_messageId: {
+            clientId: tenantClientId,
+            messageId: message.messageId,
+          },
+        },
+        data: {
+          rawPayload: withServiceCycleSnapshot(persistedInbound.rawPayload, activeCycleResult.cycle),
+        },
       });
     }
     const isAdmin =
