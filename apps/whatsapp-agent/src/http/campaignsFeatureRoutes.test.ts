@@ -9282,6 +9282,116 @@ test("inbox operations stay functional when tenant has no active general departm
       rawPayload: { provider: "meta" },
     },
   });
+  const unscopedDepartment = await prisma.department.create({
+    data: {
+      clientId: businessClientId,
+      name: `${prefix} Setor Delta`,
+      slug: `${prefix}-optional-general-unscoped`,
+    },
+    select: { id: true },
+  });
+  const unscopedQueue = await prisma.queue.create({
+    data: {
+      clientId: businessClientId,
+      departmentId: unscopedDepartment.id,
+      name: `${prefix} Fila sem membership`,
+    },
+    select: { id: true },
+  });
+  const createVisibleConversation = async (
+    suffix: string,
+    department: { id: string; queueId: string }
+  ) => {
+    const scopedWaId = `55849933102${suffix}`;
+    await prisma.conversation.create({
+      data: {
+        clientId: businessClientId,
+        waId: scopedWaId,
+        waIdCanonical: scopedWaId,
+        channel: "whatsapp",
+        provider: "meta",
+        departmentId: department.id,
+        windowIsOpen: true,
+        windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        lastInboundAt: new Date(),
+      },
+    });
+    await prisma.conversationRuntimeState.create({
+      data: {
+        clientId: businessClientId,
+        waId: scopedWaId,
+        waIdCanonical: scopedWaId,
+        conversationKey: `${prefix}-business:${scopedWaId}`,
+        channel: "whatsapp",
+        provider: "meta",
+        departmentId: department.id,
+        queueId: department.queueId,
+        windowIsOpen: true,
+        windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        mode: "HUMAN",
+        status: "WAITING",
+        handoffStatus: "ACTIVE",
+        lastInboundAt: new Date(),
+      },
+    });
+    await prisma.inboundMessage.create({
+      data: {
+        clientId: businessClientId,
+        waId: scopedWaId,
+        waIdCanonical: scopedWaId,
+        channel: "whatsapp",
+        provider: "meta",
+        messageId: `wamid.optional-general.${suffix}.${safeTemplatePrefix}`,
+        type: "TEXT",
+        bodyText: `Mensagem ${suffix}`,
+        allowlistHit: true,
+        rawPayload: { provider: "meta" },
+      },
+    });
+    return scopedWaId;
+  };
+  const waIdDepartmentB = await createVisibleConversation("02", departments[1]);
+  const waIdDepartmentC = await createVisibleConversation("03", departments[2]);
+  const waIdDepartmentD = await createVisibleConversation("04", {
+    id: unscopedDepartment.id,
+    queueId: unscopedQueue.id,
+  });
+
+  const agentDepartmentsAfterUnscoped = await request<{
+    ok: true;
+    items: Array<{ id: string; isActive: boolean }>;
+  }>("GET", "/app/departments", multiDepartmentAgent);
+  assert.equal(agentDepartmentsAfterUnscoped.status, 200, JSON.stringify(agentDepartmentsAfterUnscoped.body));
+  assert.deepEqual(
+    agentDepartmentsAfterUnscoped.body.items.map((item) => item.id).sort(),
+    departments.map((department) => department.id).sort()
+  );
+
+  const agentInbox = await request<{
+    ok: true;
+    items: Array<{ waId: string; departmentId: string | null }>;
+  }>("GET", "/app/conversations", multiDepartmentAgent);
+  assert.equal(agentInbox.status, 200, JSON.stringify(agentInbox.body));
+  const agentInboxByWaId = new Map(agentInbox.body.items.map((item) => [item.waId, item]));
+  assert.equal(agentInboxByWaId.get(waId)?.departmentId, departments[0].id);
+  assert.equal(agentInboxByWaId.get(waIdDepartmentB)?.departmentId, departments[1].id);
+  assert.equal(agentInboxByWaId.get(waIdDepartmentC)?.departmentId, departments[2].id);
+  assert.equal(agentInboxByWaId.has(waIdDepartmentD), false);
+
+  const agentInboxDepartmentC = await request<{
+    ok: true;
+    items: Array<{ waId: string; departmentId: string | null }>;
+  }>("GET", `/app/conversations?departmentId=${departments[2].id}`, multiDepartmentAgent);
+  assert.equal(agentInboxDepartmentC.status, 200, JSON.stringify(agentInboxDepartmentC.body));
+  assert.ok(agentInboxDepartmentC.body.items.every((item) => item.departmentId === departments[2].id));
+  assert.ok(agentInboxDepartmentC.body.items.some((item) => item.waId === waIdDepartmentC));
+
+  const agentInboxDepartmentD = await request<{
+    ok: true;
+    items: Array<{ waId: string; departmentId: string | null }>;
+  }>("GET", `/app/conversations?departmentId=${unscopedDepartment.id}`, multiDepartmentAgent);
+  assert.equal(agentInboxDepartmentD.status, 200, JSON.stringify(agentInboxDepartmentD.body));
+  assert.equal(agentInboxDepartmentD.body.items.length, 0);
 
   const inbox = await request<{ ok: true }>("GET", "/app/conversations", businessAdmin);
   assert.equal(inbox.status, 200, JSON.stringify(inbox.body));

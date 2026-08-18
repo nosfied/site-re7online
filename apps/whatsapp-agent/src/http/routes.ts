@@ -3824,7 +3824,30 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         role: clientAuth.role,
       });
       recordInboxListTiming(client.id, "auth_rbac", authRbacStartedAt);
-      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
+      if (departmentAccess.requiresDepartmentScope && departmentAccess.departmentIds.length === 0) {
+        const serializationStartedAt = channelLatencyNow();
+        jsonWithInboxReadMetrics(res, 200, {
+          ok: true,
+          count: 0,
+          items: [],
+          conversations: [],
+          filterCounts: buildEmptyConversationFilterCounts(),
+          nextCursor: null,
+          readState: {
+            lastReadAtByConversationKey: {},
+            manuallyUnreadByConversationKey: {},
+          },
+        }, {
+          clientId: client.id,
+          serializationStartedAt,
+        });
+        return;
+      }
+      if (
+        departmentAccess.requiresDepartmentScope &&
+        departmentIdFilter &&
+        !departmentAccess.departmentIds.includes(departmentIdFilter)
+      ) {
         const serializationStartedAt = channelLatencyNow();
         jsonWithInboxReadMetrics(res, 200, {
           ok: true,
@@ -3854,8 +3877,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           status: statusFilter,
           channel: normalizeConversationChannelFilter(query.channel),
           departmentId: departmentAccess.requiresDepartmentScope
-            ? departmentAccess.departmentId
+            ? departmentIdFilter
             : departmentIdFilter,
+          departmentIds: departmentAccess.requiresDepartmentScope
+            ? departmentAccess.departmentIds
+            : null,
           assignedUserId: assignedUserIdFilter,
           unassigned: unassignedFilter,
           automation: automationFilter,
@@ -28536,6 +28562,7 @@ type ConversationListFilters = {
   status: ConversationOperationalStatus | null;
   channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "support" | null;
   departmentId: string | null;
+  departmentIds?: string[] | null;
   assignedUserId: string | null;
   unassigned: boolean;
   automation: boolean;
@@ -29022,6 +29049,9 @@ function conversationMatchesListFilters(item: {
     return false;
   }
   if (filters.channel && serializeInboxChannelFields(item).channel !== filters.channel) return false;
+  if (filters.departmentIds?.length && (!item.departmentId || !filters.departmentIds.includes(item.departmentId))) {
+    return false;
+  }
   if (filters.departmentId && item.departmentId !== filters.departmentId) return false;
   if (filters.assignedUserId && item.assignedUserId !== filters.assignedUserId) return false;
   if (filters.unassigned && item.assignedUserId) return false;

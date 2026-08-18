@@ -2801,7 +2801,7 @@ export default function AppInboxPage() {
   }, [adminConnection, session]);
 
   useEffect(() => {
-    if (!session || session.user.role === "AGENT") {
+    if (!session) {
       setDepartments([]);
       return;
     }
@@ -6301,7 +6301,7 @@ export default function AppInboxPage() {
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-re7-sky/40 max-[1440px]:rounded-lg max-[1440px]:px-2.5 max-[1440px]:py-1.5 max-[1440px]:text-xs"
               />
               <div className="relative space-y-1.5">
-                <div className="flex max-w-full flex-nowrap items-center gap-1.5 overflow-hidden pb-0.5 max-[1440px]:gap-1">
+                <div className="flex max-w-full flex-wrap items-center gap-1.5 pb-0.5 max-[1440px]:gap-1">
                   {PRIMARY_CONVERSATION_FILTERS.map((filterValue) => {
                     const filter = CONVERSATION_FILTER_BY_VALUE.get(filterValue);
                     if (!filter) return null;
