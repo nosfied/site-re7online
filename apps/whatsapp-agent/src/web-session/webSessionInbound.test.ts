@@ -1064,6 +1064,16 @@ test("close command creates a single attributed CSAT after human service", async
   assert.equal((state.satisfactionSurveys[0]?.metadata as Record<string, unknown> | undefined)?.queueId, "queue_general");
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Pesquisa de Satisfação")).length, 1);
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Atendimento encerrado")).length, 1);
+  for (const message of state.outboundMessages.filter((item) =>
+    String(item.bodyText).includes("Atendimento encerrado") ||
+    String(item.bodyText).includes("Pesquisa de Satisfação")
+  )) {
+    const serviceCycle = (message.rawPayload as Record<string, unknown> | undefined)?.serviceCycle as
+      | Record<string, unknown>
+      | undefined;
+    assert.equal(serviceCycle?.protocol, "CVT-ABCDEF123456");
+    assert.equal(serviceCycle?.cycleId, "cycle_1");
+  }
 });
 
 test("close command creates a new CSAT after a previous survey was already answered", async () => {
@@ -1219,6 +1229,19 @@ test("chatbot handoff opens a new human service cycle with persisted operational
   assert.match(String(operationalProtocol?.protocol ?? ""), /^CVT-[A-Z0-9]{12}$/);
   assert.equal(operationalProtocol?.source, "web_session");
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("CVT-")).length, 1);
+  const handoffOutbounds = state.outboundMessages.filter((message) =>
+    String(message.bodyText).includes("CVT-") ||
+    String(message.bodyText).includes("!SAIR!") ||
+    String(message.bodyText).includes("fila de atendimento")
+  );
+  assert.equal(handoffOutbounds.length, 3);
+  for (const message of handoffOutbounds) {
+    const serviceCycle = (message.rawPayload as Record<string, unknown> | undefined)?.serviceCycle as
+      | Record<string, unknown>
+      | undefined;
+    assert.equal(serviceCycle?.protocol, operationalProtocol?.protocol);
+    assert.equal(serviceCycle?.cycleId, operationalProtocol?.cycleId);
+  }
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("!SAIR!")).length, 1);
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("#ENCERRAR#")).length, 0);
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("fila de atendimento")).length, 1);

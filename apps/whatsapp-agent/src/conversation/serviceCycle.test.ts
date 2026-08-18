@@ -12,6 +12,7 @@ import {
   startNewServiceCycle,
   withServiceCycleSnapshot,
 } from "./serviceCycle.js";
+import { buildConversationProtocol } from "../inbox/conversationProtocol.js";
 
 function state(): ConversationState {
   return {
@@ -67,6 +68,51 @@ test("message snapshots preserve the cycle after a later cycle starts", () => {
 
   assert.equal(getServiceCycleSnapshot(rawA)?.protocol, cycleA.cycle.protocol);
   assert.notEqual(getServiceCycleSnapshot(rawA)?.protocol, cycleB.cycle.protocol);
+});
+
+test("message snapshots never fall back to the permanent conversation protocol when cycles exist", () => {
+  const legacyConversation = {
+    id: "be35eda4-62be-4d8a-9f22-000000000000",
+    createdAt: "2026-08-18T12:50:14.274Z",
+  };
+  const legacyFallback = buildConversationProtocol(legacyConversation);
+  assert.equal(legacyFallback, "CVT-BE35EDA462BE");
+
+  const messageA = withServiceCycleSnapshot(
+    { provider: "web_session" },
+    {
+      protocol: "CVT-AAAAAAAAAAAA",
+      cycleId: "cycle_a",
+      issuedAt: "2026-08-18T12:54:56.000Z",
+      source: "web_session",
+    }
+  );
+  const messageB = withServiceCycleSnapshot(
+    { provider: "web_session" },
+    {
+      protocol: "CVT-BBBBBBBBBBBB",
+      cycleId: "cycle_b",
+      issuedAt: "2026-08-18T13:01:09.000Z",
+      source: "web_session",
+    }
+  );
+  const activeB = {
+    ...state(),
+    answers: {
+      operationalProtocol: {
+        protocol: "CVT-BBBBBBBBBBBB",
+        cycleId: "cycle_b",
+        issuedAt: "2026-08-18T13:01:09.000Z",
+        source: "web_session",
+      },
+    },
+  };
+
+  assert.equal(getServiceCycleSnapshot(messageA)?.protocol, "CVT-AAAAAAAAAAAA");
+  assert.equal(getServiceCycleSnapshot(messageB)?.protocol, "CVT-BBBBBBBBBBBB");
+  assert.notEqual(getServiceCycleSnapshot(messageA)?.protocol, legacyFallback);
+  assert.notEqual(getServiceCycleSnapshot(messageB)?.protocol, legacyFallback);
+  assert.equal(getActiveServiceCycle(activeB)?.protocol, "CVT-BBBBBBBBBBBB");
 });
 
 test("a cancelled close does not mutate the active cycle", () => {

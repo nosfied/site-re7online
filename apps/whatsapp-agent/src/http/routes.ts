@@ -27669,7 +27669,7 @@ async function buildConversationActionPayload(
     waIdCanonical: conversation?.waIdCanonical ?? null,
     protocol:
       getServiceCycleForDisplay(conversation)?.protocol ??
-      (channelSource ? buildConversationProtocol(channelSource) : null),
+      (conversation ? null : channelSource ? buildConversationProtocol(channelSource) : null),
     cycleId: getServiceCycleForDisplay(conversation)?.cycleId ?? null,
     ...serializeInboxChannelFields(channelSource ?? undefined),
     channelOutboundEnabled,
@@ -29591,7 +29591,7 @@ async function buildConversationListPayload(
     return {
       waId: conversation.waId,
       waIdCanonical: conversation.waIdCanonical,
-      protocol: displayServiceCycle?.protocol ?? buildConversationProtocol(conversation),
+      protocol: displayServiceCycle?.protocol ?? (runtimeState ? null : buildConversationProtocol(conversation)),
       cycleId: displayServiceCycle?.cycleId ?? null,
       ...serializeInboxChannelFields(conversation),
       channelOutboundEnabled,
