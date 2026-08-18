@@ -1,5 +1,8 @@
 import { ConversationOperationalStatus, Prisma, type PrismaClient } from "@prisma/client";
-import { getEligibleUsersForDepartmentAssignment } from "../users/departmentMemberships.js";
+import {
+  getEligibleUsersForDepartmentAssignment,
+  getUserDepartmentMemberships,
+} from "../users/departmentMemberships.js";
 
 export type QueueAssignmentMode = "manual" | "round_robin" | "least_active";
 export type QueueAssignmentScope = "tenant" | "department";
@@ -29,6 +32,33 @@ export type BalancedQueueAssignmentResult =
       selectedUserId: string;
       eligibleCount: number;
       activeCount: number;
+    };
+
+export type QueueAssignmentEligibilityResult =
+  | {
+      ok: true;
+      user: {
+        id: string;
+        name: string | null;
+        role: string;
+      };
+      policy: QueueAssignmentPolicy;
+      activeCount: number;
+      capacityLimit: number | null;
+    }
+  | {
+      ok: false;
+      status: 409 | 404;
+      code:
+        | "user_not_found"
+        | "conversation_department_required"
+        | "department_membership_required"
+        | "online_presence_unavailable"
+        | "max_active_reached";
+      message: string;
+      policy: QueueAssignmentPolicy;
+      activeCount?: number;
+      capacityLimit?: number | null;
     };
 
 const DEFAULT_QUEUE_ASSIGNMENT_POLICY: QueueAssignmentPolicy = {
@@ -182,6 +212,38 @@ function sanitizeDepartmentId(value?: string | null) {
   return value ?? null;
 }
 
+function shouldApplyAssignmentCapacity(
+  config: Record<string, unknown> | null,
+  policy: QueueAssignmentPolicy
+) {
+  return Boolean(config && policy.maxActivePerAgent !== null);
+}
+
+async function countActiveAssignmentsForUsers(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  userIds: string[];
+  departmentId?: string | null;
+  scope: QueueAssignmentScope;
+}) {
+  if (params.userIds.length === 0) return new Map<string, number>();
+  const activeRows = await params.prisma.conversationRuntimeState.findMany({
+    where: {
+      clientId: params.clientId,
+      assignedUserId: { in: params.userIds },
+      status: { in: [ConversationOperationalStatus.IN_PROGRESS, ConversationOperationalStatus.WAITING] },
+      ...(params.scope === "department" && params.departmentId ? { departmentId: params.departmentId } : {}),
+    },
+    select: { assignedUserId: true },
+  });
+  const activeByUser = new Map<string, number>();
+  for (const row of activeRows) {
+    if (!row.assignedUserId) continue;
+    activeByUser.set(row.assignedUserId, (activeByUser.get(row.assignedUserId) ?? 0) + 1);
+  }
+  return activeByUser;
+}
+
 async function recordQueueAssignmentEvent(params: {
   prisma: PrismaClient;
   clientId: string;
@@ -232,6 +294,118 @@ export async function resolveQueueAssignmentPolicy(params: {
   return {
     policy: normalizePolicy(config?.queueAssignmentPolicy),
     config,
+  };
+}
+
+export async function assertQueueAssignmentUserEligible(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  userId: string;
+  departmentId?: string | null;
+  requireDepartment?: boolean;
+  allowedRoles?: Array<"ADMIN" | "SUPERVISOR" | "AGENT">;
+}): Promise<QueueAssignmentEligibilityResult> {
+  const { policy, config } = await resolveQueueAssignmentPolicy({
+    prisma: params.prisma,
+    clientId: params.clientId,
+  });
+  if (!params.departmentId && params.requireDepartment !== false) {
+    return {
+      ok: false,
+      status: 409,
+      code: "conversation_department_required",
+      message: "A conversa precisa estar vinculada a um setor para esta acao.",
+      policy,
+      capacityLimit: policy.maxActivePerAgent,
+    };
+  }
+
+  const allowedRoles = params.allowedRoles ?? ["ADMIN", "SUPERVISOR", "AGENT"];
+  const user = await params.prisma.user.findFirst({
+    where: {
+      id: params.userId,
+      clientId: params.clientId,
+      isActive: true,
+      role: { in: allowedRoles },
+    },
+    select: { id: true, name: true, role: true },
+  });
+  if (!user) {
+    return {
+      ok: false,
+      status: 404,
+      code: "user_not_found",
+      message: "Usuario de destino nao encontrado ou inativo.",
+      policy,
+      capacityLimit: policy.maxActivePerAgent,
+    };
+  }
+
+  if (params.departmentId) {
+    const memberships = await getUserDepartmentMemberships(params.prisma, {
+      clientId: params.clientId,
+      userId: user.id,
+      fallbackToLegacy: true,
+    });
+    const hasDepartmentMembership = memberships.some(
+      (membership) =>
+        membership.isActive &&
+        membership.departmentIsActive !== false &&
+        membership.departmentId === params.departmentId
+    );
+    if (!hasDepartmentMembership) {
+      return {
+        ok: false,
+        status: 409,
+        code: "department_membership_required",
+        message: "O usuario de destino nao pertence ao setor atual da conversa.",
+        policy,
+        capacityLimit: policy.maxActivePerAgent,
+      };
+    }
+  }
+
+  if (policy.requireOnline) {
+    return {
+      ok: false,
+      status: 409,
+      code: "online_presence_unavailable",
+      message: "A politica exige presenca online, mas esse controle ainda nao esta disponivel.",
+      policy,
+      capacityLimit: policy.maxActivePerAgent,
+    };
+  }
+
+  const activeByUser = await countActiveAssignmentsForUsers({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    userIds: [user.id],
+    departmentId: params.departmentId,
+    scope: policy.scope,
+  });
+  const activeCount = activeByUser.get(user.id) ?? 0;
+  if (
+    shouldApplyAssignmentCapacity(config, policy) &&
+    policy.maxActivePerAgent !== null &&
+    activeCount >= policy.maxActivePerAgent
+  ) {
+    return {
+      ok: false,
+      status: 409,
+      code: "max_active_reached",
+      message: "O usuario de destino atingiu o limite de atendimentos ativos.",
+      policy,
+      activeCount,
+      capacityLimit: policy.maxActivePerAgent,
+    };
+  }
+
+  return {
+    ok: true,
+    user,
+    policy,
+    activeCount,
+    capacityLimit: policy.maxActivePerAgent,
   };
 }
 
@@ -362,22 +536,13 @@ export async function applyBalancedQueueAssignment(params: {
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         });
 
-  const activeRows = users.length
-    ? await params.prisma.conversationRuntimeState.findMany({
-        where: {
-          clientId: params.clientId,
-          assignedUserId: { in: users.map((user) => user.id) },
-          status: { in: [ConversationOperationalStatus.IN_PROGRESS, ConversationOperationalStatus.WAITING] },
-          ...(policy.scope === "department" && params.departmentId ? { departmentId: params.departmentId } : {}),
-        },
-        select: { assignedUserId: true },
-      })
-    : [];
-  const activeByUser = new Map<string, number>();
-  for (const row of activeRows) {
-    if (!row.assignedUserId) continue;
-    activeByUser.set(row.assignedUserId, (activeByUser.get(row.assignedUserId) ?? 0) + 1);
-  }
+  const activeByUser = await countActiveAssignmentsForUsers({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    userIds: users.map((user) => user.id),
+    departmentId: params.departmentId,
+    scope: policy.scope,
+  });
 
   const eligible = users.filter((user) => {
     const activeCount = activeByUser.get(user.id) ?? 0;

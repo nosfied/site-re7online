@@ -9304,13 +9304,201 @@ test("inbox operations stay functional when tenant has no active general departm
   assert.equal(transfer.body.assignedUserId, businessSupervisor.id);
   assert.equal(transfer.body.departmentId, departments[0].id);
 
-  const releaseToGeneral = await request<ErrorPayload>(
+  const releaseToCurrentQueue = await request<{
+    ok: true;
+    assignedUserId: string | null;
+    departmentId: string | null;
+    queueId: string | null;
+    status: string | null;
+  }>(
     "POST",
     `/app/conversation/${waId}/release-to-general`,
     businessSupervisor
   );
-  assert.equal(releaseToGeneral.status, 409, JSON.stringify(releaseToGeneral.body));
-  assert.equal(getErrorCode(releaseToGeneral.body), "general_queue_unavailable");
+  assert.equal(releaseToCurrentQueue.status, 200, JSON.stringify(releaseToCurrentQueue.body));
+  assert.equal(releaseToCurrentQueue.body.assignedUserId, null);
+  assert.equal(releaseToCurrentQueue.body.departmentId, departments[0].id);
+  assert.equal(releaseToCurrentQueue.body.queueId, departments[0].queueId);
+  assert.equal(releaseToCurrentQueue.body.status, "WAITING");
+
+  const releasedDetail = await request<{
+    ok: true;
+    assignedUserId: string | null;
+    departmentId: string | null;
+    queueId: string | null;
+    status: string | null;
+    mode: string | null;
+    handoffStatus: string | null;
+  }>("GET", `/app/conversation/${waId}`, businessAdmin);
+  assert.equal(releasedDetail.status, 200, JSON.stringify(releasedDetail.body));
+  assert.equal(releasedDetail.body.assignedUserId, null);
+  assert.equal(releasedDetail.body.departmentId, departments[0].id);
+  assert.equal(releasedDetail.body.queueId, departments[0].queueId);
+  assert.equal(releasedDetail.body.status, "WAITING");
+  assert.equal(releasedDetail.body.mode, "HUMAN");
+  assert.equal(releasedDetail.body.handoffStatus, "active");
+
+  const transferDepartment = await request<{
+    ok: true;
+    assignedUserId: string | null;
+    departmentId: string | null;
+    queueId: string | null;
+    status: string | null;
+  }>("POST", `/app/conversation/${waId}/transfer-department`, businessSupervisor, {
+    departmentId: departments[1].id,
+  });
+  assert.equal(transferDepartment.status, 200, JSON.stringify(transferDepartment.body));
+  assert.equal(transferDepartment.body.assignedUserId, null);
+  assert.equal(transferDepartment.body.departmentId, departments[1].id);
+  assert.ok(transferDepartment.body.queueId);
+  assert.equal(transferDepartment.body.status, "WAITING");
+  const transferredDepartmentQueueId = transferDepartment.body.queueId;
+
+  const transferToMember = await request<{ ok: true; assignedUserId: string | null; departmentId: string | null; queueId: string | null }>(
+    "POST",
+    `/app/conversation/${waId}/transfer`,
+    businessSupervisor,
+    { userId: businessAdmin.id }
+  );
+  assert.equal(transferToMember.status, 200, JSON.stringify(transferToMember.body));
+  assert.equal(transferToMember.body.assignedUserId, businessAdmin.id);
+  assert.equal(transferToMember.body.departmentId, departments[1].id);
+  assert.equal(transferToMember.body.queueId, transferredDepartmentQueueId);
+
+  const nonMember = await createUser({
+    clientId: businessClientId,
+    role: "AGENT",
+    suffix: "non-member-current-queue",
+  });
+  await prisma.userDepartmentMembership.create({
+    data: {
+      clientId: businessClientId,
+      userId: nonMember.id,
+      departmentId: departments[2].id,
+      isPrimary: true,
+      isActive: true,
+    },
+  });
+  const transferToNonMember = await request<ErrorPayload>(
+    "POST",
+    `/app/conversation/${waId}/transfer`,
+    businessAdmin,
+    { userId: nonMember.id }
+  );
+  assert.equal(transferToNonMember.status, 409, JSON.stringify(transferToNonMember.body));
+  assert.equal(getErrorCode(transferToNonMember.body), "department_membership_required");
+  const afterRejectedTransfer = await request<{
+    ok: true;
+    assignedUserId: string | null;
+    departmentId: string | null;
+    queueId: string | null;
+  }>("GET", `/app/conversation/${waId}`, businessAdmin);
+  assert.equal(afterRejectedTransfer.status, 200, JSON.stringify(afterRejectedTransfer.body));
+  assert.equal(afterRejectedTransfer.body.assignedUserId, businessAdmin.id);
+  assert.equal(afterRejectedTransfer.body.departmentId, departments[1].id);
+  assert.equal(afterRejectedTransfer.body.queueId, transferredDepartmentQueueId);
+
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    create: {
+      clientId: businessClientId,
+      config: {
+        queueAssignmentPolicy: {
+          enabled: false,
+          mode: "manual",
+          scope: "department",
+          maxActivePerAgent: 1,
+          includeSupervisors: true,
+          requireOnline: false,
+          notifyAssignedOnly: false,
+          lastAssignedUserIdByScope: {},
+        },
+      },
+    },
+    update: {
+      config: {
+        queueAssignmentPolicy: {
+          enabled: false,
+          mode: "manual",
+          scope: "department",
+          maxActivePerAgent: 1,
+          includeSupervisors: true,
+          requireOnline: false,
+          notifyAssignedOnly: false,
+          lastAssignedUserIdByScope: {},
+        },
+      },
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId: "5584993310199",
+      waIdCanonical: "5584993310199",
+      conversationKey: `${prefix}-business:5584993310199`,
+      channel: "whatsapp",
+      provider: "meta",
+      departmentId: departments[1].id,
+      queueId: transferredDepartmentQueueId,
+      assignedUserId: businessAdmin.id,
+      assignedTo: `user:${businessAdmin.id}`,
+      assignedAt: new Date(),
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      mode: "HUMAN",
+      status: "IN_PROGRESS",
+      handoffStatus: "ACTIVE",
+      lastInboundAt: new Date(),
+    },
+  });
+  const waIdCapacity = "5584993310102";
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId: waIdCapacity,
+      waIdCanonical: waIdCapacity,
+      channel: "whatsapp",
+      provider: "meta",
+      departmentId: departments[1].id,
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      lastInboundAt: new Date(),
+    },
+  });
+  await runtimeStorage.upsertConversation({
+    clientKey: `${prefix}-business`,
+    conversationKey: `${prefix}-business:${waIdCapacity}`,
+    waId: waIdCapacity,
+    waIdCanonical: waIdCapacity,
+    firstSeenAt: new Date().toISOString(),
+    lastInboundAt: new Date().toISOString(),
+    window: { isOpen: true, expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() },
+    handoff: { status: "active" },
+    mode: "HUMAN",
+    status: "WAITING",
+    assignedUserId: null,
+    assignedTo: null,
+    answers: {},
+    chatbotActive: false,
+    departmentId: departments[1].id,
+    queueId: transferredDepartmentQueueId,
+  } as ConversationState);
+  const capacityClaim = await request<ErrorPayload>(
+    "POST",
+    `/app/conversation/${waIdCapacity}/claim`,
+    businessAdmin,
+    {}
+  );
+  assert.equal(capacityClaim.status, 409, JSON.stringify(capacityClaim.body));
+  assert.equal(getErrorCode(capacityClaim.body), "max_active_reached");
+  const capacityTransfer = await request<ErrorPayload>(
+    "POST",
+    `/app/conversation/${waIdCapacity}/transfer`,
+    businessSupervisor,
+    { userId: businessAdmin.id }
+  );
+  assert.equal(capacityTransfer.status, 409, JSON.stringify(capacityTransfer.body));
+  assert.equal(getErrorCode(capacityTransfer.body), "max_active_reached");
 
   const closeToGeneral = await request<ErrorPayload>(
     "POST",

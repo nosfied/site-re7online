@@ -2126,8 +2126,13 @@ function canSessionAccessConversationDepartment(
   if (isAppAdmin(session)) return true;
   const role = String(session.user.role || "").trim().toUpperCase();
   if (role !== "AGENT" && role !== "SUPERVISOR") return true;
+  const targetDepartmentId = departmentId ?? null;
+  const userDepartmentIds = Array.isArray(session.user.departmentIds)
+    ? session.user.departmentIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+    : [];
+  if (userDepartmentIds.length > 0) return Boolean(targetDepartmentId && userDepartmentIds.includes(targetDepartmentId));
   if (!session.user.departmentId) return false;
-  return session.user.departmentId === (departmentId ?? null);
+  return session.user.departmentId === targetDepartmentId;
 }
 
 function getTemplateBodyPreview(content: string | null | undefined) {
@@ -3159,12 +3164,19 @@ export default function AppInboxPage() {
             waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
             protocol: event.protocol ?? item.protocol ?? null,
             cycleId: event.cycleId ?? item.cycleId ?? null,
-            mode: event.mode,
-            handoffStatus: event.handoffStatus,
+            mode: event.mode ?? item.mode,
+            handoffStatus: event.handoffStatus ?? item.handoffStatus,
             assignedUserId: nextAssignedUserId ?? null,
-            departmentId: event.departmentId ?? item.departmentId ?? null,
-            status: nextAssignedUserId ? ("IN_PROGRESS" as const) : ("WAITING" as const),
-            closedAt: null,
+            assignedUserName:
+              event.assignedUserName !== undefined ? event.assignedUserName : item.assignedUserName,
+            assignedAt: event.assignedAt !== undefined ? event.assignedAt : item.assignedAt,
+            departmentId: event.departmentId !== undefined ? event.departmentId : item.departmentId ?? null,
+            departmentName:
+              event.departmentName !== undefined ? event.departmentName : item.departmentName,
+            queueId: event.queueId !== undefined ? event.queueId : item.queueId ?? null,
+            queueName: event.queueName !== undefined ? event.queueName : item.queueName,
+            status: event.status ?? item.status,
+            closedAt: event.closedAt !== undefined ? event.closedAt : item.closedAt,
             lastMessage: event.notificationMessage
               ? {
                   direction: "INBOUND" as const,
@@ -3354,11 +3366,12 @@ export default function AppInboxPage() {
       departmentId: item.departmentId ?? null,
       userId: session?.user.id ?? null,
       userDepartmentId: session?.user.departmentId ?? null,
+      userDepartmentIds: session?.user.departmentIds ?? [],
       userDepartmentName: session?.user.departmentName ?? null,
       userRole: session?.user.role ?? null,
     });
     return wasAccepted;
-  }, [session?.user.departmentId, session?.user.role]);
+  }, [session?.user.departmentId, session?.user.departmentIds, session?.user.role]);
 
   const isAdminUser = useMemo(() => isAppAdmin(session), [session]);
 
@@ -4499,7 +4512,15 @@ export default function AppInboxPage() {
     );
     setTransferUserId(selectedConversation.assignedUserId ?? "");
     setTransferDepartmentId(selectedConversation.departmentId ?? "");
-  }, [selectedConversationKey]);
+  }, [
+    selectedConversation?.assignedUserId,
+    selectedConversation?.departmentId,
+    selectedConversation?.handoffStatus,
+    selectedConversation?.mode,
+    selectedConversation?.queueId,
+    selectedConversation?.status,
+    selectedConversationKey,
+  ]);
 
   useEffect(() => {
     if (!selectedConversationWaId || !composerEnabled || sendingMessage || conversationAction) {
@@ -5538,14 +5559,14 @@ export default function AppInboxPage() {
           prev.filter((item) => getConversationIdentity(item) !== responseIdentity)
         );
         clearSelectedConversation();
-        setSuccess("Conversa liberada para Atendimento Geral.");
+        setSuccess("Conversa devolvida para a fila atual.");
         void refreshConversationList(session).catch((err) => {
           if ((err as { status?: number }).status === 401) handleUnauthorized();
         });
         return;
       }
 
-      setSuccess("Conversa liberada para Atendimento Geral.");
+      setSuccess("Conversa devolvida para a fila atual.");
       await refreshConversationList(session);
       await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
     } catch (err) {
@@ -5554,7 +5575,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível liberar a conversa para Atendimento Geral." }));
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível devolver a conversa para a fila atual." }));
     } finally {
       setConversationAction(null);
     }
@@ -6705,7 +6726,7 @@ export default function AppInboxPage() {
                       >
                         {conversationAction === "release-general"
                           ? "Liberando..."
-                          : "Liberar para atendimento geral"}
+                          : "Devolver para fila atual"}
                       </button>
                       <button
                         type="button"
@@ -6792,8 +6813,8 @@ export default function AppInboxPage() {
                   </button>
                   <button
                     type="button"
-                    title="Liberar para Atendimento Geral"
-                    aria-label="Liberar conversa para Atendimento Geral"
+                    title="Devolver para fila atual"
+                    aria-label="Devolver conversa para fila atual"
                     disabled={!selectedConversationWaId || Boolean(conversationAction)}
                     onClick={handleReleaseConversationToGeneral}
                     className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/25 bg-emerald-50 text-base text-emerald-900 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8 max-md:h-10 max-md:w-10"

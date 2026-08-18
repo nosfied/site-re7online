@@ -1,4 +1,4 @@
-import type { InboxMessageItem } from "@/lib/whatsappAdminApi";
+import type { ConversationOperationalStatus, InboxMessageItem } from "@/lib/whatsappAdminApi";
 
 export type AppRealtimeStatus = "connected" | "reconnecting" | "offline";
 export type AppConversationMode = "BOT" | "HUMAN";
@@ -34,14 +34,21 @@ export type AppRealtimeEvent =
       clientId: string;
       waId: string;
       waIdCanonical?: string | null;
-      mode: "HUMAN";
-      handoffStatus: "pending" | "active";
+      mode?: AppConversationMode | null;
+      handoffStatus?: AppHandoffStatus | null;
+      status?: ConversationOperationalStatus | null;
       assignedUserId?: string | null;
+      assignedUserName?: string | null;
+      assignedAt?: string | null;
       departmentId?: string | null;
+      departmentName?: string | null;
+      queueId?: string | null;
+      queueName?: string | null;
       protocol?: string | null;
       cycleId?: string | null;
+      closedAt?: string | null;
       updatedAt: string;
-      reason?: "released_to_general" | null;
+      reason?: string | null;
       notificationMessage?: {
         messageId: string | null;
         type: string;
@@ -108,6 +115,7 @@ export type AppNotificationCandidate = {
   departmentId?: string | null;
   userId?: string | null;
   userDepartmentId?: string | null;
+  userDepartmentIds?: string[];
   userDepartmentName?: string | null;
   userRole?: string | null;
   title?: string;
@@ -124,6 +132,7 @@ type InboundOrHandoffNotificationInput = {
   departmentId?: string | null;
   userId?: string | null;
   userDepartmentId?: string | null;
+  userDepartmentIds?: string[];
   userDepartmentName?: string | null;
   userRole?: string | null;
   isHandoffTransition?: boolean;
@@ -136,7 +145,7 @@ function resolveNotificationSound(input: InboundOrHandoffNotificationInput) {
     id: input.userId,
     role: input.userRole,
     departmentId: input.userDepartmentId,
-    departmentName: input.userDepartmentName,
+    departmentIds: input.userDepartmentIds,
   })) {
     return null;
   }
@@ -285,7 +294,12 @@ export function canUserReceiveDepartmentNotification(
 
 export function canUserReceiveTargetedNotification(
   target: { assignedUserId?: string | null; departmentId?: string | null },
-  user: { id?: string | null; role?: string | null; departmentId?: string | null; departmentName?: string | null }
+  user: {
+    id?: string | null;
+    role?: string | null;
+    departmentId?: string | null;
+    departmentIds?: string[];
+  }
 ) {
   const assignedUserId = String(target.assignedUserId ?? "").trim();
   if (assignedUserId) {
@@ -294,18 +308,14 @@ export function canUserReceiveTargetedNotification(
   const departmentId = String(target.departmentId ?? "").trim();
   if (departmentId) {
     if (!isDepartmentScopedRole(user.role)) return true;
+    const userDepartmentIds = Array.isArray(user.departmentIds)
+      ? user.departmentIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+      : [];
+    if (userDepartmentIds.length > 0) return userDepartmentIds.includes(departmentId);
     return String(user.departmentId ?? "").trim() === departmentId;
   }
   if (!isDepartmentScopedRole(user.role)) return true;
-  return normalizeDepartmentName(user.departmentName) === "atendimento geral";
-}
-
-function normalizeDepartmentName(value?: string | null) {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
+  return false;
 }
 
 export function canUserReceiveRealtimeEvent(
@@ -353,6 +363,7 @@ export function handleRealtimeNotificationCandidate(candidate: AppNotificationCa
     departmentId: candidate.departmentId,
     userId: candidate.userId,
     userDepartmentId: candidate.userDepartmentId,
+    userDepartmentIds: candidate.userDepartmentIds,
     userDepartmentName: candidate.userDepartmentName,
     userRole: candidate.userRole,
     isHandoffTransition: candidate.kind === "handoff",

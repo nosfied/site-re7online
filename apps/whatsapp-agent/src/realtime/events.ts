@@ -56,14 +56,21 @@ export type InboxRealtimeEvent =
       clientId: string;
       waId: string;
       waIdCanonical?: string | null;
-      mode: "HUMAN";
-      handoffStatus: "pending" | "active";
+      mode?: "BOT" | "HUMAN" | null;
+      handoffStatus?: "none" | "pending" | "active" | null;
+      status?: string | null;
       assignedUserId?: string | null;
+      assignedUserName?: string | null;
+      assignedAt?: string | null;
       departmentId?: string | null;
+      departmentName?: string | null;
+      queueId?: string | null;
+      queueName?: string | null;
       protocol?: string | null;
       cycleId?: string | null;
+      closedAt?: string | null;
       updatedAt: string;
-      reason?: "released_to_general" | null;
+      reason?: string | null;
       notificationMessage?: {
         messageId: string | null;
         type: string;

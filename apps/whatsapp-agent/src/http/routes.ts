@@ -174,6 +174,7 @@ import {
   resolveTenantMetaUsagePolicy,
 } from "../billing/metaUsageSummary.js";
 import {
+  assertQueueAssignmentUserEligible,
   getQueueAssignmentPolicyWarnings,
   parseQueueAssignmentPolicyInput,
   resolveQueueAssignmentPolicy,
@@ -1673,6 +1674,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 401, { error: "invalid_credentials" });
         return;
       }
+      const userMemberships = serializeUserMemberships(
+        await getUserDepartmentMemberships(prisma, {
+          clientId: user.clientId,
+          userId: user.id,
+        })
+      );
 
       await evaluateMfaRuntimeShadow({
         prisma,
@@ -1707,8 +1714,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             email: user.email,
             clientId: user.clientId,
             role: user.role,
-            departmentId: user.departmentId,
-            departmentName: user.department?.name ?? null,
+            departmentId: userMemberships.primaryDepartmentId ?? user.departmentId,
+            departmentName:
+              userMemberships.memberships.find((item) => item.departmentId === userMemberships.primaryDepartmentId)
+                ?.departmentName ??
+              user.department?.name ??
+              null,
+            departmentIds: userMemberships.departmentIds,
+            primaryDepartmentId: userMemberships.primaryDepartmentId,
           },
           features: resolveTenantCapabilities(user.client),
           profile: getClientProfile(user.client),
@@ -1750,8 +1763,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           name: user.name,
           email: user.email,
           clientId: user.clientId,
-          departmentId: user.departmentId,
-          departmentName: user.department?.name ?? null,
+          role: user.role,
+          departmentId: userMemberships.primaryDepartmentId ?? user.departmentId,
+          departmentName:
+            userMemberships.memberships.find((item) => item.departmentId === userMemberships.primaryDepartmentId)
+              ?.departmentName ??
+            user.department?.name ??
+            null,
+          departmentIds: userMemberships.departmentIds,
+          primaryDepartmentId: userMemberships.primaryDepartmentId,
         },
         features: resolveTenantCapabilities(user.client),
         profile: getClientProfile(user.client),
@@ -1963,6 +1983,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       renewal.session.id,
       renewal.session.expiresAt
     );
+    const renewalMemberships = serializeUserMemberships(
+      await getUserDepartmentMemberships(getPrisma(), {
+        clientId: renewal.user.clientId,
+        userId: renewal.user.id,
+      })
+    );
     json(res, 200, {
       ok: true,
       token,
@@ -1973,8 +1999,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         email: renewal.user.email,
         clientId: renewal.user.clientId,
         role: renewal.user.role,
-        departmentId: renewal.user.departmentId,
-        departmentName: renewal.user.departmentName,
+        departmentId: renewalMemberships.primaryDepartmentId ?? renewal.user.departmentId,
+        departmentName:
+          renewalMemberships.memberships.find((item) => item.departmentId === renewalMemberships.primaryDepartmentId)
+            ?.departmentName ??
+          renewal.user.departmentName,
+        departmentIds: renewalMemberships.departmentIds,
+        primaryDepartmentId: renewalMemberships.primaryDepartmentId,
       },
       features: resolveTenantCapabilities(renewal.user.client),
       profile: getClientProfile(renewal.user.client),
@@ -11217,32 +11248,43 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         return;
       }
-      const assignedUser = requestedUserId
-        ? await prisma.user.findFirst({
-            where: { id: requestedUserId, clientId: client.id, isActive: true },
-            select: { id: true, name: true, departmentId: true },
-          })
-        : null;
-      if (requestedUserId && !assignedUser) {
-        json(res, 404, { error: "user_not_found" });
+      const targetUserId = requestedUserId || clientAuth.userId;
+      const currentDepartmentId = operationalConversation.departmentId ?? null;
+      const eligibility = await assertQueueAssignmentUserEligible({
+        prisma,
+        clientId: client.id,
+        userId: targetUserId,
+        departmentId: currentDepartmentId,
+        requireDepartment: false,
+      });
+      if (!eligibility.ok) {
+        json(res, eligibility.status, {
+          error: eligibility.code,
+          message: eligibility.message,
+        });
         return;
       }
-      const targetDepartmentIds = assignedUser
-        ? await loadActiveUserDepartmentIds(prisma, {
-            clientId: client.id,
-            userId: assignedUser.id,
-          })
-        : departmentAccess.departmentIds;
-      const routing = await resolveAssignmentRouting(prisma, {
-        clientId: client.id,
-        assignedUserDepartmentId: chooseAssignmentDepartmentCandidate({
-          conversationDepartmentId: operationalConversation.departmentId ?? null,
-          userPrimaryDepartmentId: assignedUser?.departmentId ?? departmentAccess.departmentId,
-          userDepartmentIds: targetDepartmentIds,
-        }),
-        fallbackDepartmentId: operationalConversation.departmentId ?? null,
-        fallbackQueueId: operationalConversation.queueId ?? null,
-      });
+      const currentQueue = currentDepartmentId
+        ? operationalConversation.queueId
+          ? await prisma.queue.findFirst({
+              where: {
+                id: operationalConversation.queueId,
+                clientId: client.id,
+                departmentId: currentDepartmentId,
+              },
+              select: { id: true },
+            })
+          : null
+        : null;
+      const queueId = currentDepartmentId
+        ? currentQueue?.id ??
+          (
+            await ensureQueueForDepartment(prisma, {
+              clientId: client.id,
+              departmentId: currentDepartmentId,
+            })
+          ).id
+        : null;
       const assignedAt = new Date().toISOString();
       let nextState: ConversationState = {
         ...operationalConversation,
@@ -11252,11 +11294,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           status: "active" as const,
           activatedAt: assignedAt,
         },
-        assignedUserId: assignedUser?.id ?? clientAuth.userId,
-        assignedTo: assignedUser ? `user:${assignedUser.id}` : `user:${clientAuth.userId}`,
+        assignedUserId: eligibility.user.id,
+        assignedTo: `user:${eligibility.user.id}`,
         assignedAt,
-        departmentId: routing.departmentId,
-        queueId: routing.queueId,
+        departmentId: currentDepartmentId,
+        queueId,
         status: ConversationOperationalStatus.IN_PROGRESS,
         closedAt: null,
       };
@@ -11279,7 +11321,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         waId: nextState.waId,
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        departmentId: routing.departmentId,
+        departmentId: currentDepartmentId,
       });
       await recordConversationAssignment(prisma, {
         clientId: client.id,
@@ -11301,8 +11343,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           fromUserId: conversation.assignedUserId ?? null,
           toUserId: nextState.assignedUserId ?? null,
           assignedAt,
-          departmentId: routing.departmentId,
-          queueId: routing.queueId,
+          departmentId: currentDepartmentId,
+          queueId,
           status: nextState.status,
         },
       });
@@ -11329,12 +11371,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         conversation: nextState,
         protocol,
       });
-      const payload = await buildConversationActionPayload(prisma, {
+      const payload = await publishConversationOperationalUpdate(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
         conversation: nextState,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        updatedAt: assignedAt,
+        reason: "claimed",
         assignedUserName:
-          assignedUser?.name ??
+          eligibility.user.name ??
           (nextState.assignedUserId
             ? await findAssignedUserName(prisma, client.id, nextState.assignedUserId)
             : null),
@@ -11602,14 +11647,46 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
-      const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
-      if (!defaults.department || !defaults.queue) {
+      const currentDepartmentId = conversation.departmentId ?? null;
+      if (!currentDepartmentId) {
         json(res, 409, {
-          error: "general_queue_unavailable",
-          message: "Este tenant nao possui Atendimento Geral ativo para devolver a conversa.",
+          error: "current_queue_unavailable",
+          message: "A conversa precisa estar vinculada a um setor para voltar para a fila.",
         });
         return;
       }
+      const department = await prisma.department.findFirst({
+        where: {
+          id: currentDepartmentId,
+          clientId: client.id,
+          isActive: true,
+          ...LEGACY_OPERATIONAL_DEPARTMENT_FILTER,
+        },
+        select: { id: true, name: true },
+      });
+      if (!department) {
+        json(res, 409, {
+          error: "current_department_unavailable",
+          message: "O setor atual da conversa nao esta disponivel para fila.",
+        });
+        return;
+      }
+      const currentQueue = conversation.queueId
+        ? await prisma.queue.findFirst({
+            where: {
+              id: conversation.queueId,
+              clientId: client.id,
+              departmentId: department.id,
+            },
+            select: { id: true, name: true },
+          })
+        : null;
+      const queue =
+        currentQueue ??
+        (await ensureQueueForDepartment(prisma, {
+          clientId: client.id,
+          departmentId: department.id,
+        }));
       const releasedAt = new Date().toISOString();
       const nextState = {
         ...conversation,
@@ -11622,8 +11699,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         assignedUserId: null,
         assignedTo: null,
         assignedAt: null,
-        departmentId: defaults.department.id,
-        queueId: defaults.queue.id,
+        departmentId: department.id,
+        queueId: queue.id,
         status: ConversationOperationalStatus.WAITING,
         closedAt: null,
       };
@@ -11632,7 +11709,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         waId: nextState.waId,
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        departmentId: defaults.department.id,
+        departmentId: department.id,
       });
       const releaseConversationKeys = Array.from(
         new Set(
@@ -11674,7 +11751,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           id: { not: clientAuth.userId },
           OR: [
             { role: "ADMIN" },
-            { departmentId: defaults.department.id },
+            { departmentId: department.id },
+            {
+              departmentMemberships: {
+                some: {
+                  clientId: client.id,
+                  departmentId: department.id,
+                  isActive: true,
+                },
+              },
+            },
           ],
         },
         select: { id: true },
@@ -11713,7 +11799,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           fromStatus: conversation.status ?? null,
           toStatus: nextState.status ?? null,
           fromDepartmentId: conversation.departmentId ?? null,
-          toDepartmentId: defaults.department.id,
+          toDepartmentId: department.id,
           fromAssignedUserId: conversation.assignedUserId ?? null,
           toAssignedUserId: nextState.assignedUserId ?? null,
         },
@@ -11724,19 +11810,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         clientKey: client.clientKey,
         waId: nextState.waIdCanonical ?? nextState.waId,
-        departmentId: defaults.department.id,
+        departmentId: department.id,
       });
-      publishRealtimeEvent({
-        type: "conversation.handoff.updated",
+      const payload = await publishConversationOperationalUpdate(prisma, {
         clientId: client.id,
-        waId: nextState.waId,
-        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        mode: "HUMAN",
-        handoffStatus: "active",
-        assignedUserId: nextState.assignedUserId ?? null,
-        departmentId: defaults.department.id,
+        clientKey: client.clientKey,
+        conversation: nextState,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
         updatedAt: releasedAt,
-        reason: "released_to_general",
+        reason: "released_to_current_queue",
         notificationMessage: latestInboundForRelease
           ? {
               messageId: latestInboundForRelease.messageId ?? null,
@@ -11745,11 +11827,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               createdAt: latestInboundForRelease.createdAt.toISOString(),
             }
           : null,
-      });
-      const payload = await buildConversationActionPayload(prisma, {
-        clientId: client.id,
-        clientKey: client.clientKey,
-        conversation: nextState,
         assignedUserName: null,
       });
       json(res, 200, {
@@ -11797,14 +11874,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (client.status !== "ACTIVE") {
         json(res, 403, { error: "client_inactive" });
-        return;
-      }
-      const assignedUser = await prisma.user.findFirst({
-        where: { id: toUserId, clientId: client.id, isActive: true },
-        select: { id: true, name: true, departmentId: true },
-      });
-      if (!assignedUser) {
-        json(res, 404, { error: "user_not_found" });
         return;
       }
       const resolvedConversation = await resolveConversationTarget(prisma, {
@@ -11871,29 +11940,53 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         return;
       }
-      const targetDepartmentIds = await loadActiveUserDepartmentIds(prisma, {
+      const currentDepartmentId = conversation.departmentId ?? null;
+      const eligibility = await assertQueueAssignmentUserEligible({
+        prisma,
         clientId: client.id,
-        userId: assignedUser.id,
+        userId: toUserId,
+        departmentId: currentDepartmentId,
       });
-      const routing = await resolveAssignmentRouting(prisma, {
-        clientId: client.id,
-        assignedUserDepartmentId: chooseAssignmentDepartmentCandidate({
-          conversationDepartmentId: conversation.departmentId ?? null,
-          userPrimaryDepartmentId: assignedUser.departmentId,
-          userDepartmentIds: targetDepartmentIds,
-        }),
-        fallbackDepartmentId: conversation.departmentId ?? null,
-        fallbackQueueId: conversation.queueId ?? null,
-      });
+      if (!eligibility.ok) {
+        json(res, eligibility.status, {
+          error: eligibility.code,
+          message: eligibility.message,
+        });
+        return;
+      }
+      const currentQueue = currentDepartmentId && conversation.queueId
+        ? await prisma.queue.findFirst({
+            where: {
+              id: conversation.queueId,
+              clientId: client.id,
+              departmentId: currentDepartmentId,
+            },
+            select: { id: true },
+          })
+        : null;
+      const queueId = currentDepartmentId
+        ? currentQueue?.id ??
+          (
+            await ensureQueueForDepartment(prisma, {
+              clientId: client.id,
+              departmentId: currentDepartmentId,
+            })
+          ).id
+        : null;
       const assignedAt = new Date().toISOString();
       const nextState = {
         ...conversation,
         mode: "HUMAN" as const,
-        assignedUserId: assignedUser.id,
-        assignedTo: `user:${assignedUser.id}`,
+        handoff: {
+          ...conversation.handoff,
+          status: "active" as const,
+          activatedAt: conversation.handoff?.activatedAt ?? assignedAt,
+        },
+        assignedUserId: eligibility.user.id,
+        assignedTo: `user:${eligibility.user.id}`,
         assignedAt,
-        departmentId: routing.departmentId,
-        queueId: routing.queueId,
+        departmentId: currentDepartmentId,
+        queueId,
         status: ConversationOperationalStatus.IN_PROGRESS,
         closedAt: null,
       };
@@ -11902,13 +11995,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         waId: nextState.waId,
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        departmentId: routing.departmentId,
+        departmentId: currentDepartmentId,
       });
       await recordConversationAssignment(prisma, {
         clientId: client.id,
         waId: nextState.waId,
         fromUserId: conversation.assignedUserId ?? null,
-        toUserId: assignedUser.id,
+        toUserId: eligibility.user.id,
         assignedAt,
       });
       await recordConversationAuditEvent(prisma, {
@@ -11922,10 +12015,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         conversationId: nextState.conversationKey ?? nextState.waId,
         payload: {
           fromUserId: conversation.assignedUserId ?? null,
-          toUserId: assignedUser.id,
+          toUserId: eligibility.user.id,
           assignedAt,
-          departmentId: routing.departmentId,
-          queueId: routing.queueId,
+          departmentId: currentDepartmentId,
+          queueId,
           status: nextState.status,
         },
       });
@@ -11936,27 +12029,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientKey: client.clientKey,
         waId: nextState.waIdCanonical ?? nextState.waId,
         fromUserId: conversation.assignedUserId ?? null,
-        toUserId: assignedUser.id,
+        toUserId: eligibility.user.id,
       });
-      publishRealtimeEvent({
-        type: "conversation.handoff.updated",
-        clientId: client.id,
-        waId: nextState.waId,
-        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        mode: "HUMAN",
-        handoffStatus:
-          nextState.handoff.status === "pending" || nextState.handoff.status === "active"
-            ? nextState.handoff.status
-            : "active",
-        assignedUserId: nextState.assignedUserId ?? null,
-        departmentId: routing.departmentId,
-        updatedAt: assignedAt,
-      });
-      const payload = await buildConversationActionPayload(prisma, {
+      const payload = await publishConversationOperationalUpdate(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
         conversation: nextState,
-        assignedUserName: assignedUser.name,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        updatedAt: assignedAt,
+        reason: "transferred",
+        assignedUserName: eligibility.user.name,
       });
       json(res, 200, {
         ...payload,
@@ -12094,6 +12176,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const nextState = {
         ...conversation,
         mode: "HUMAN" as const,
+        handoff: {
+          ...conversation.handoff,
+          status: "active" as const,
+          activatedAt: conversation.handoff?.activatedAt ?? new Date().toISOString(),
+        },
         departmentId: department.id,
         queueId: queue.id,
         assignedUserId: null,
@@ -12137,24 +12224,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         toDepartmentId: department.id,
         userId: clientAuth.userId,
       });
-      publishRealtimeEvent({
-        type: "conversation.handoff.updated",
-        clientId: client.id,
-        waId: nextState.waId,
-        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        mode: "HUMAN",
-        handoffStatus:
-          nextState.handoff.status === "pending" || nextState.handoff.status === "active"
-            ? nextState.handoff.status
-            : "active",
-        assignedUserId: null,
-        departmentId: department.id,
-        updatedAt: new Date().toISOString(),
-      });
-      const payload = await buildConversationActionPayload(prisma, {
+      const payload = await publishConversationOperationalUpdate(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
         conversation: nextState,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        reason: "department_transferred",
         assignedUserName: null,
       });
       json(res, 200, {
@@ -12376,10 +12451,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waId: nextState.waIdCanonical ?? nextState.waId,
         status: nextStatus,
       });
-      const payload = await buildConversationActionPayload(prisma, {
+      const payload = await publishConversationOperationalUpdate(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
         conversation: nextState,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        reason: "status_changed",
       });
       json(res, 200, {
         ...payload,
@@ -27684,6 +27761,65 @@ async function buildConversationActionPayload(
       queueName,
     }),
   };
+}
+
+async function publishConversationOperationalUpdate(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    conversation: NonNullable<Awaited<ReturnType<typeof runtimeStorage.getConversation>>>;
+    waIdCanonical?: string | null;
+    assignedUserName?: string | null;
+    updatedAt?: string | null;
+    reason?: "released_to_current_queue" | "released_to_general" | "claimed" | "transferred" | "department_transferred" | "status_changed" | null;
+    notificationMessage?: {
+      messageId: string | null;
+      type: string;
+      bodyText: string | null;
+      createdAt: string;
+    } | null;
+  }
+) {
+  const payload = await buildConversationActionPayload(prisma, {
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    conversation: params.conversation,
+    assignedUserName: params.assignedUserName,
+  });
+  const eventMode = payload.mode === "BOT" || payload.mode === "HUMAN"
+    ? payload.mode
+    : params.conversation.mode === "BOT" || params.conversation.mode === "HUMAN"
+      ? params.conversation.mode
+      : null;
+  const rawHandoffStatus = payload.handoffStatus ?? params.conversation.handoff?.status ?? null;
+  const eventHandoffStatus =
+    rawHandoffStatus === "none" || rawHandoffStatus === "pending" || rawHandoffStatus === "active"
+      ? rawHandoffStatus
+      : null;
+  publishRealtimeEvent({
+    type: "conversation.handoff.updated",
+    clientId: params.clientId,
+    waId: payload.waId ?? params.conversation.waId,
+    waIdCanonical: payload.waIdCanonical ?? params.waIdCanonical ?? params.conversation.waIdCanonical ?? null,
+    mode: eventMode,
+    handoffStatus: eventHandoffStatus,
+    status: payload.status ?? null,
+    assignedUserId: payload.assignedUserId ?? null,
+    assignedUserName: payload.assignedUserName ?? null,
+    assignedAt: payload.assignedAt ?? null,
+    departmentId: payload.departmentId ?? null,
+    departmentName: payload.departmentName ?? null,
+    queueId: payload.queueId ?? null,
+    queueName: payload.queueName ?? null,
+    protocol: payload.protocol ?? null,
+    cycleId: payload.cycleId ?? null,
+    closedAt: payload.closedAt ?? null,
+    updatedAt: params.updatedAt ?? new Date().toISOString(),
+    reason: params.reason ?? null,
+    notificationMessage: params.notificationMessage ?? null,
+  });
+  return payload;
 }
 
 async function sendConversationProtocolNoticeIfNeeded(

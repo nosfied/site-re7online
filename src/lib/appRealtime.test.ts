@@ -29,6 +29,23 @@ test("department-scoped roles remain restricted to their primary department", ()
   );
 });
 
+test("department-scoped roles receive notifications for active memberships", () => {
+  assert.equal(
+    canUserReceiveTargetedNotification(
+      { departmentId: "department-c" },
+      { id: "agent-a", role: "AGENT", departmentId: "department-a", departmentIds: ["department-a", "department-b", "department-c"] }
+    ),
+    true
+  );
+  assert.equal(
+    canUserReceiveTargetedNotification(
+      { departmentId: "department-d" },
+      { id: "supervisor-a", role: "SUPERVISOR", departmentId: "department-a", departmentIds: ["department-a", "department-b"] }
+    ),
+    false
+  );
+});
+
 test("an explicit assignment remains visible only to the assigned user", () => {
   assert.equal(
     canUserReceiveTargetedNotification(

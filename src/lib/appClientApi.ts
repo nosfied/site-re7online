@@ -73,6 +73,8 @@ export type AppSessionUser = {
   role: string;
   departmentId?: string | null;
   departmentName?: string | null;
+  departmentIds?: string[];
+  primaryDepartmentId?: string | null;
 };
 
 export type AppSupportAccessContext = {
