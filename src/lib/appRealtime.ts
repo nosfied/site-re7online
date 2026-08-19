@@ -56,6 +56,19 @@ export type AppRealtimeEvent =
         bodyText: string | null;
         createdAt: string;
       } | null;
+    }
+  | {
+      type: "conversation.read_state.updated";
+      clientId: string;
+      waId: string;
+      waIdCanonical?: string | null;
+      readState: {
+        lastReadAtByConversationKey: Record<string, string>;
+        manuallyUnreadByConversationKey: Record<string, boolean>;
+      };
+      unread: boolean;
+      activityAt?: string | null;
+      updatedAt: string;
     };
 
 type AppRealtimeClientOptions = {
@@ -121,6 +134,7 @@ export type AppNotificationCandidate = {
   userRole?: string | null;
   title?: string;
   body?: string;
+  backendEligible?: boolean;
 };
 
 type InboundOrHandoffNotificationInput = {
@@ -137,12 +151,13 @@ type InboundOrHandoffNotificationInput = {
   userDepartmentName?: string | null;
   userRole?: string | null;
   isHandoffTransition?: boolean;
+  backendEligible?: boolean;
 };
 
 function resolveNotificationSound(input: InboundOrHandoffNotificationInput) {
   if (input.direction && input.direction.toUpperCase() !== "INBOUND") return null;
   if (!input.conversationIdentity) return null;
-  if (!canUserReceiveTargetedNotification(input, {
+  if (!input.backendEligible && !canUserReceiveTargetedNotification(input, {
     id: input.userId,
     role: input.userRole,
     departmentId: input.userDepartmentId,
@@ -368,6 +383,7 @@ export function handleRealtimeNotificationCandidate(candidate: AppNotificationCa
     userDepartmentName: candidate.userDepartmentName,
     userRole: candidate.userRole,
     isHandoffTransition: candidate.kind === "handoff",
+    backendEligible: candidate.backendEligible,
   };
   const sound = resolveNotificationSound(notificationInput);
   if (!sound) return false;
@@ -461,7 +477,8 @@ export function createAppRealtimeClient(options: AppRealtimeClientOptions): AppR
         if (
           event?.type === "message.created" ||
           event?.type === "message.status.updated" ||
-          event?.type === "conversation.handoff.updated"
+          event?.type === "conversation.handoff.updated" ||
+          event?.type === "conversation.read_state.updated"
         ) {
           options.onMessage(event);
         }

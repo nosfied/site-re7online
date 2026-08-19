@@ -18,8 +18,8 @@ function sanitizePathPart(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
-function getReadStateFile(clientId: string, userId: string) {
-  return path.join(dataDir, sanitizePathPart(clientId), `${sanitizePathPart(userId)}.json`);
+function getReadStateFile(clientId: string) {
+  return path.join(dataDir, sanitizePathPart(clientId), "shared.json");
 }
 
 async function ensureDir(dir: string) {
@@ -70,8 +70,8 @@ function normalizeReadState(input: unknown): InboxReadState {
   };
 }
 
-export async function getInboxReadState(clientId: string, userId: string): Promise<InboxReadState> {
-  const targetFile = getReadStateFile(clientId, userId);
+export async function getInboxReadState(clientId: string, _userId: string): Promise<InboxReadState> {
+  const targetFile = getReadStateFile(clientId);
   try {
     const raw = await fs.readFile(targetFile, "utf-8");
     return normalizeReadState(JSON.parse(raw));
@@ -80,8 +80,8 @@ export async function getInboxReadState(clientId: string, userId: string): Promi
   }
 }
 
-async function writeInboxReadState(clientId: string, userId: string, state: InboxReadState) {
-  const targetFile = getReadStateFile(clientId, userId);
+async function writeInboxReadState(clientId: string, _userId: string, state: InboxReadState) {
+  const targetFile = getReadStateFile(clientId);
   return enqueueWrite(targetFile, () => writeAtomic(targetFile, JSON.stringify(state, null, 2)));
 }
 

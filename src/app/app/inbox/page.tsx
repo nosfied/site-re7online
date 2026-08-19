@@ -996,41 +996,10 @@ function getLatestReadAt(current?: string | null, incoming?: string | null) {
   return incomingTimestamp > currentTimestamp ? incoming : current;
 }
 
-function mergeReadStatePreservingLocal(current: InboxReadState, incoming: InboxReadState): InboxReadState {
-  const lastReadAtByConversationKey = { ...incoming.lastReadAtByConversationKey };
-  for (const [conversationKey, currentReadAt] of Object.entries(current.lastReadAtByConversationKey)) {
-    const latestReadAt = getLatestReadAt(
-      currentReadAt,
-      incoming.lastReadAtByConversationKey[conversationKey]
-    );
-    if (latestReadAt) {
-      lastReadAtByConversationKey[conversationKey] = latestReadAt;
-    }
-  }
-
-  const manuallyUnreadByConversationKey = { ...incoming.manuallyUnreadByConversationKey };
-  for (const [conversationKey, isUnread] of Object.entries(current.manuallyUnreadByConversationKey)) {
-    if (isUnread) {
-      manuallyUnreadByConversationKey[conversationKey] = true;
-    }
-  }
-
-  for (const conversationKey of Object.keys(manuallyUnreadByConversationKey)) {
-    const currentReadAt = current.lastReadAtByConversationKey[conversationKey];
-    const latestReadAt = lastReadAtByConversationKey[conversationKey];
-    if (
-      !current.manuallyUnreadByConversationKey[conversationKey] &&
-      currentReadAt &&
-      latestReadAt &&
-      latestReadAt === currentReadAt
-    ) {
-      delete manuallyUnreadByConversationKey[conversationKey];
-    }
-  }
-
+function mergeReadStatePreservingLocal(_current: InboxReadState, incoming: InboxReadState): InboxReadState {
   return {
-    lastReadAtByConversationKey,
-    manuallyUnreadByConversationKey,
+    lastReadAtByConversationKey: { ...incoming.lastReadAtByConversationKey },
+    manuallyUnreadByConversationKey: { ...incoming.manuallyUnreadByConversationKey },
   };
 }
 
@@ -3152,6 +3121,10 @@ export default function AppInboxPage() {
       return;
     }
     if (!session || event.clientId !== session.user.clientId) return;
+    if (event.type === "conversation.read_state.updated") {
+      setReadState((current) => mergeReadStatePreservingLocal(current, event.readState));
+      return;
+    }
     const eventTargetsCurrentUser =
       event.type === "message.created" || event.type === "conversation.handoff.updated"
         ? canUserReceiveTargetedNotification(event, session.user)
@@ -3160,7 +3133,13 @@ export default function AppInboxPage() {
       const conversationKey = event.waIdCanonical ?? event.waId;
       let matchedConversation = false;
       const matchedConversationKeys = new Set<string>([conversationKey, event.waId, event.waIdCanonical ?? ""]);
+      const currentMatchedConversation = conversations.find((item) => {
+        const itemKey = getConversationIdentity(item);
+        return itemKey === conversationKey || item.waId === event.waId || item.waIdCanonical === event.waIdCanonical;
+      });
       const eventRepresentsClosed = event.status === "CLOSED";
+      const eventTargetsKnownEligibleConversation =
+        eventTargetsCurrentUser || (!eventRepresentsClosed && Boolean(currentMatchedConversation));
       const shouldRemoveFromHumanInbox =
         event.reason === "released" ||
         event.reason === "conversation.deleted" ||
@@ -3218,11 +3197,14 @@ export default function AppInboxPage() {
             updatedAt: event.updatedAt,
           }];
         });
-        if (!matchedConversation && eventTargetsCurrentUser && !shouldRemoveFromHumanInbox) {
+        if (!matchedConversation && !shouldRemoveFromHumanInbox) {
           void refreshConversationListRef.current?.(session);
         }
         return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
       });
+      if (!eventTargetsCurrentUser && !eventRepresentsClosed) {
+        void refreshConversationListRef.current?.(session);
+      }
       if (
         shouldRemoveFromHumanInbox &&
         realtimeEventTargetsSelectedConversation({
@@ -3235,12 +3217,29 @@ export default function AppInboxPage() {
         clearSelectedConversation();
       }
       if (
-        eventTargetsCurrentUser &&
+        eventTargetsKnownEligibleConversation &&
         !shouldRemoveFromHumanInbox &&
         selectedConversationKey !== conversationKey &&
         selectedConversationWaId !== event.waId
       ) {
         markConversationIdentitiesAsUnread(Array.from(matchedConversationKeys), event.waId);
+        handleRealtimeNotificationCandidate({
+          source: "websocket",
+          kind: "handoff",
+          conversationIdentity: conversationKey,
+          createdAt: event.updatedAt,
+          direction: "INBOUND",
+          mode: event.mode ?? null,
+          handoffStatus: event.handoffStatus ?? "none",
+          assignedUserId: event.assignedUserId ?? null,
+          departmentId: event.departmentId ?? null,
+          userId: session.user.id,
+          userDepartmentId: session.user.departmentId ?? null,
+          userDepartmentIds: session.user.departmentIds ?? [],
+          userDepartmentName: session.user.departmentName ?? null,
+          userRole: session.user.role,
+          backendEligible: eventTargetsKnownEligibleConversation,
+        });
       }
       return;
     }
@@ -3262,6 +3261,7 @@ export default function AppInboxPage() {
       const itemKey = getConversationIdentity(item);
       return itemKey === conversationKey || item.waId === event.waId || item.waIdCanonical === event.waIdCanonical;
     });
+    const eventTargetsKnownEligibleConversation = eventTargetsCurrentUser || Boolean(currentMatchedConversation);
     if (currentMatchedConversation) {
       const itemKey = getConversationIdentity(currentMatchedConversation);
       matchedConversationKeys.add(itemKey);
@@ -3367,8 +3367,29 @@ export default function AppInboxPage() {
       return;
     }
 
-    if (eventTargetsCurrentUser) {
+    if (eventTargetsKnownEligibleConversation) {
       markConversationAsUnread(conversationKey, event.waId);
+      if (message.direction === "INBOUND") {
+        handleRealtimeNotificationCandidate({
+          source: "websocket",
+          kind: "message",
+          conversationIdentity: conversationKey,
+          messageId: message.messageId ?? null,
+          createdAt: message.createdAt,
+          bodyText: message.bodyText ?? null,
+          direction: message.direction,
+          mode: event.mode ?? null,
+          handoffStatus: event.handoffStatus ?? "none",
+          assignedUserId: event.assignedUserId ?? null,
+          departmentId: event.departmentId ?? null,
+          userId: session.user.id,
+          userDepartmentId: session.user.departmentId ?? null,
+          userDepartmentIds: session.user.departmentIds ?? [],
+          userDepartmentName: session.user.departmentName ?? null,
+          userRole: session.user.role,
+          backendEligible: eventTargetsKnownEligibleConversation,
+        });
+      }
     }
   }, [
     applyRealtimeStatusUpdated,
@@ -3409,6 +3430,7 @@ export default function AppInboxPage() {
       userDepartmentIds: session?.user.departmentIds ?? [],
       userDepartmentName: session?.user.departmentName ?? null,
       userRole: session?.user.role ?? null,
+      backendEligible: true,
     });
     return wasAccepted;
   }, [session?.user.departmentId, session?.user.departmentIds, session?.user.role]);
@@ -3505,7 +3527,6 @@ export default function AppInboxPage() {
           !humanFlowConversationKeysRef.current.has(conversationKey)
         ) {
           if (
-            canUserReceiveTargetedNotification(item, activeSession.user) &&
             conversationKey !== selectedConversationKey
           ) {
             markConversationIdentitiesAsUnread(getConversationIdentityCandidates(item), item.waId);
@@ -3535,7 +3556,6 @@ export default function AppInboxPage() {
           : null;
         if (latestInboundItem && latestInboundConversationKey) {
           if (
-            canUserReceiveTargetedNotification(latestInboundItem, activeSession.user) &&
             (latestInboundConversationKey !== selectedConversationKey || !isAppForegroundFocused())
           ) {
             markConversationIdentitiesAsUnread(

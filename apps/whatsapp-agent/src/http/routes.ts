@@ -5547,6 +5547,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         source: "app_conversation_read_state",
       });
       const conversationKey = resolvedConversation.resolvedWaIdCanonical;
+      const updatedAt = new Date().toISOString();
+      const nextActivityAt = activityAt || updatedAt;
       const nextState = unread
         ? await markInboxConversationUnread({
             clientId: client.id,
@@ -5557,8 +5559,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             clientId: client.id,
             userId: clientAuth.userId,
             conversationKey,
-            activityAt: activityAt || new Date().toISOString(),
+            activityAt: nextActivityAt,
           });
+      publishRealtimeEvent({
+        type: "conversation.read_state.updated",
+        clientId: client.id,
+        waId: resolvedConversation.resolvedWaId,
+        waIdCanonical: conversationKey,
+        readState: nextState,
+        unread,
+        activityAt: unread ? null : nextActivityAt,
+        updatedAt,
+      });
       json(res, 200, { ok: true, readState: nextState });
     } catch (error) {
       logger.error({

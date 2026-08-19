@@ -78,4 +78,17 @@ export type InboxRealtimeEvent =
         bodyText: string | null;
         createdAt: string;
       } | null;
+    }
+  | {
+      type: "conversation.read_state.updated";
+      clientId: string;
+      waId: string;
+      waIdCanonical?: string | null;
+      readState: {
+        lastReadAtByConversationKey: Record<string, string>;
+        manuallyUnreadByConversationKey: Record<string, boolean>;
+      };
+      unread: boolean;
+      activityAt?: string | null;
+      updatedAt: string;
     };
