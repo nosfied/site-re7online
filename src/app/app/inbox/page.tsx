@@ -1820,6 +1820,7 @@ function getConversationStatusLabel(status: ConversationOperationalStatus | null
 function getConversationStatusLabelForItem(
   item: Pick<InboxConversationItem, "status" | "mode" | "handoffStatus" | "assignedUserId" | "assignedAt">
 ) {
+  if (item.status === "CLOSED") return getConversationStatusUxLabel("CLOSED");
   if (isAutomationQueueConversation(item)) return "Automação";
   return getConversationStatusLabel(getConversationOperationalStatus(item));
 }
@@ -3154,23 +3155,29 @@ export default function AppInboxPage() {
       const conversationKey = event.waIdCanonical ?? event.waId;
       let matchedConversation = false;
       const matchedConversationKeys = new Set<string>([conversationKey, event.waId, event.waIdCanonical ?? ""]);
+      const shouldRemoveFromHumanInbox =
+        event.reason === "released" ||
+        event.reason === "conversation.deleted" ||
+        event.reason === "conversation.anonymized" ||
+        !eventTargetsCurrentUser;
       setConversations((prev) => {
-        const nextItems = prev.map((item) => {
+        const nextItems = prev.flatMap((item) => {
           const itemKey = getConversationIdentity(item);
           if (
             itemKey !== conversationKey &&
             item.waId !== event.waId &&
             item.waIdCanonical !== event.waIdCanonical
           ) {
-            return item;
+            return [item];
           }
           matchedConversation = true;
           matchedConversationKeys.add(itemKey);
           matchedConversationKeys.add(item.waId);
           if (item.waIdCanonical) matchedConversationKeys.add(item.waIdCanonical);
+          if (shouldRemoveFromHumanInbox) return [];
           const nextAssignedUserId =
             event.assignedUserId !== undefined ? event.assignedUserId : item.assignedUserId;
-          return {
+          return [{
             ...item,
             waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
             protocol: event.protocol ?? item.protocol ?? null,
@@ -3200,15 +3207,27 @@ export default function AppInboxPage() {
                 }
               : item.lastMessage,
             updatedAt: event.updatedAt,
-          };
+          }];
         });
-        if (!matchedConversation) {
+        if (!matchedConversation && eventTargetsCurrentUser && !shouldRemoveFromHumanInbox) {
           void refreshConversationListRef.current?.(session);
         }
         return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
       });
       if (
+        shouldRemoveFromHumanInbox &&
+        realtimeEventTargetsSelectedConversation({
+          event,
+          selectedConversationKey,
+          selectedConversationWaId,
+          selectedConversationIdentityCandidates: selectedConversationIdentityCandidatesRef.current,
+        })
+      ) {
+        clearSelectedConversation();
+      }
+      if (
         eventTargetsCurrentUser &&
+        !shouldRemoveFromHumanInbox &&
         selectedConversationKey !== conversationKey &&
         selectedConversationWaId !== event.waId
       ) {
@@ -3344,6 +3363,7 @@ export default function AppInboxPage() {
     }
   }, [
     applyRealtimeStatusUpdated,
+    clearSelectedConversation,
     markConversationIdentitiesAsUnread,
     markConversationAsUnread,
     isTimelineNearBottom,

@@ -3655,6 +3655,28 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           rawConversationId,
           reason: "manual_delete",
         });
+        publishRealtimeEvent({
+          type: "conversation.handoff.updated",
+          clientId: client.id,
+          waId: target.waId,
+          waIdCanonical: target.waIdCanonical ?? null,
+          mode: "BOT",
+          handoffStatus: "none",
+          status: null,
+          assignedUserId: null,
+          assignedUserName: null,
+          assignedAt: null,
+          departmentId: null,
+          departmentName: null,
+          queueId: null,
+          queueName: null,
+          protocol: null,
+          cycleId: null,
+          closedAt: null,
+          updatedAt: new Date().toISOString(),
+          reason: "conversation.deleted",
+          notificationMessage: null,
+        });
         json(res, 200, { ok: true, ...result });
         return;
       }
@@ -3667,6 +3689,28 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         action: "conversation_anonymize",
         rawConversationId,
         reason: "manual_anonymize",
+      });
+      publishRealtimeEvent({
+        type: "conversation.handoff.updated",
+        clientId: client.id,
+        waId: target.waId,
+        waIdCanonical: target.waIdCanonical ?? null,
+        mode: "BOT",
+        handoffStatus: "none",
+        status: null,
+        assignedUserId: null,
+        assignedUserName: null,
+        assignedAt: null,
+        departmentId: null,
+        departmentName: null,
+        queueId: null,
+        queueName: null,
+        protocol: null,
+        cycleId: null,
+        closedAt: null,
+        updatedAt: new Date().toISOString(),
+        reason: "conversation.anonymized",
+        notificationMessage: null,
       });
       json(res, 200, { ok: true, ...result });
     } catch (error) {
@@ -5942,10 +5986,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         departmentId: defaults.department.id,
         status: nextState.status,
       });
-      const payload = await buildConversationActionPayload(prisma, {
+      const payload = await publishConversationOperationalUpdate(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
         conversation: nextState,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        updatedAt: nextState.handoff.releasedAt,
+        reason: "released",
         assignedUserName: null,
       });
       json(res, 200, {
@@ -27807,7 +27854,7 @@ async function publishConversationOperationalUpdate(
     waIdCanonical?: string | null;
     assignedUserName?: string | null;
     updatedAt?: string | null;
-    reason?: "released_to_current_queue" | "released_to_general" | "claimed" | "transferred" | "department_transferred" | "status_changed" | null;
+    reason?: "released" | "released_to_current_queue" | "released_to_general" | "claimed" | "transferred" | "department_transferred" | "status_changed" | null;
     notificationMessage?: {
       messageId: string | null;
       type: string;
