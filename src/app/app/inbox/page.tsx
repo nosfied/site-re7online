@@ -25,6 +25,7 @@ import {
   realtimeEventTargetsSelectedConversation,
   resolveRealtimeTimelineConversationKey,
 } from "@/lib/inboxRealtimeTimeline";
+import { QUICK_EMOJIS } from "@/lib/quickEmojis";
 import {
   AppInboxReadState,
   AppContactTimelineItem,
@@ -1033,7 +1034,6 @@ function mergeReadStatePreservingLocal(current: InboxReadState, incoming: InboxR
   };
 }
 
-const QUICK_EMOJIS = ["😀", "😂", "😍", "❤️", "🙏", "👍", "👋", "👏", "🔥", "✅"];
 const CONVERSATION_FILTERS = [
   { value: "ALL", label: "Todas" },
   { value: "WAITING", label: "Aguardando atendimento" },
@@ -4444,6 +4444,7 @@ export default function AppInboxPage() {
   const templateComposerEnabled = canReply && selectedConversationSupportsTemplateOutbound;
   const cannedComposerEnabled =
     canReply && selectedConversationChannel === "whatsapp" && selectedConversationSupportsOutbound;
+  const canUseInboxTemplates = session ? session.user.role !== "AGENT" : false;
   const usableInboxTemplates = useMemo(
     () =>
       templateItems.filter(
@@ -5336,7 +5337,7 @@ export default function AppInboxPage() {
 
   const handleSendCannedReply = async () => {
     if (!session || !selectedConversationWaId || !selectedConversation || !selectedCannedReply) return;
-    if (!templateComposerEnabled) {
+    if (!cannedComposerEnabled) {
       setCannedReplyError("Assuma uma conversa WhatsApp para enviar mensagem pronta.");
       return;
     }
@@ -7387,21 +7388,23 @@ export default function AppInboxPage() {
               >
                 😊
               </button>
-              <button
-                type="button"
-                disabled={
-                  !selectedConversationWaId ||
-                  !templateComposerEnabled ||
-                  isHydratingSelectedTimeline ||
-                  sendingTemplate
-                }
-                onClick={handleOpenTemplateModal}
-                title="Enviar modelo aprovado"
-                aria-label="Enviar modelo aprovado"
-                className="flex h-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:rounded-xl max-[1366px]:px-2.5 max-[1366px]:text-xs max-md:h-11"
-              >
-                Modelo
-              </button>
+              {canUseInboxTemplates ? (
+                <button
+                  type="button"
+                  disabled={
+                    !selectedConversationWaId ||
+                    !templateComposerEnabled ||
+                    isHydratingSelectedTimeline ||
+                    sendingTemplate
+                  }
+                  onClick={handleOpenTemplateModal}
+                  title="Enviar modelo aprovado"
+                  aria-label="Enviar modelo aprovado"
+                  className="flex h-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:rounded-xl max-[1366px]:px-2.5 max-[1366px]:text-xs max-md:h-11"
+                >
+                  Modelo
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={
