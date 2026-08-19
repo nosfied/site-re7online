@@ -2115,6 +2115,11 @@ function isAppAdmin(session: AppSession | null) {
   return session?.user.role === "ADMIN";
 }
 
+function canUseInboxTemplatesForRole(role: string | null | undefined) {
+  const normalized = String(role ?? "").trim().toUpperCase();
+  return normalized === "ADMIN" || normalized === "SUPERVISOR";
+}
+
 function isBusinessSession(session: AppSession | null) {
   return session?.profile !== "government";
 }
@@ -4444,7 +4449,7 @@ export default function AppInboxPage() {
   const templateComposerEnabled = canReply && selectedConversationSupportsTemplateOutbound;
   const cannedComposerEnabled =
     canReply && selectedConversationChannel === "whatsapp" && selectedConversationSupportsOutbound;
-  const canUseInboxTemplates = session ? session.user.role !== "AGENT" : false;
+  const canUseInboxTemplates = canUseInboxTemplatesForRole(session?.user.role);
   const usableInboxTemplates = useMemo(
     () =>
       templateItems.filter(
