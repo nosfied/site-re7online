@@ -5333,7 +5333,6 @@ export default function AppInboxPage() {
   const handleInsertCannedReply = useCallback(
     (reply: AppCannedReplyItem) => {
       setMessageDraft(reply.body);
-      setSuccess("Mensagem pronta inserida. Revise antes de enviar.");
       handleCloseCannedModal();
       focusComposer();
     },
@@ -5431,7 +5430,6 @@ export default function AppInboxPage() {
         response.message.createdAt,
         selectedConversation.waId
       );
-      setSuccess("Mensagem pronta enviada.");
       setReplyTarget(null);
       handleCloseCannedModal();
     } catch (err) {
