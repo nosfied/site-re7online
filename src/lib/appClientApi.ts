@@ -693,6 +693,7 @@ type AppConversationOperationalPayload = {
   queueName: string | null;
   status: ConversationOperationalStatus | null;
   closedAt: string | null;
+  awaitingConsent?: boolean;
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
   waitingFirstResponseSec?: number | null;

@@ -9378,6 +9378,79 @@ test("inbox operations stay functional when tenant has no active general departm
     assert.equal(agentTransferDepartmentIds.has(department.id), true);
   }
   assert.equal(agentTransferDepartmentIds.has(unscopedDepartment.id), true);
+  const preConsentWaId = `55849933${String(process.pid).slice(-3)}${String(Date.now()).slice(-6)}`;
+  await prisma.chatbotFlow.create({
+    data: {
+      clientId: businessClientId,
+      name: `${prefix} Consent flow`,
+      isActive: true,
+      entryPoint: true,
+      definition: {
+        start: "consent",
+        nodes: {
+          consent: {
+            type: "consent",
+            purpose: "lgpd",
+            textVersion: "test",
+            message: "Consentimento",
+            acceptOption: "1",
+            onAccepted: "menu",
+          },
+          menu: {
+            type: "menu",
+            text: "Menu",
+            options: [{ label: "Atendimento", next: "handoff" }],
+          },
+          handoff: { type: "handoff", text: "Direcionando atendimento." },
+        },
+      },
+    },
+  });
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId: preConsentWaId,
+      waIdCanonical: preConsentWaId,
+      channel: "whatsapp",
+      provider: "web_session",
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      lastInboundAt: new Date(),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId: preConsentWaId,
+      waIdCanonical: preConsentWaId,
+      conversationKey: `${prefix}-business:${preConsentWaId}`,
+      channel: "whatsapp",
+      provider: "web_session",
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      mode: "BOT",
+      status: null,
+      handoffStatus: "NONE",
+      chatbotActive: true,
+      chatbotNodeId: "consent",
+      flow: "chatbot:test-consent-flow",
+      lastInboundAt: new Date(),
+    },
+  });
+  await prisma.inboundMessage.create({
+    data: {
+      clientId: businessClientId,
+      waId: preConsentWaId,
+      waIdCanonical: preConsentWaId,
+      channel: "whatsapp",
+      provider: "web_session",
+      messageId: `web.preconsent.${safeTemplatePrefix}`,
+      type: "TEXT",
+      bodyText: "Oi",
+      allowlistHit: true,
+      rawPayload: { provider: "web_session" },
+    },
+  });
 
   const agentInbox = await request<{
     ok: true;
@@ -9389,6 +9462,7 @@ test("inbox operations stay functional when tenant has no active general departm
   assert.equal(agentInboxByWaId.get(waIdDepartmentB)?.departmentId, departments[1].id);
   assert.equal(agentInboxByWaId.get(waIdDepartmentC)?.departmentId, departments[2].id);
   assert.equal(agentInboxByWaId.has(waIdDepartmentD), false);
+  assert.equal(agentInboxByWaId.has(preConsentWaId), false);
 
   const agentInboxDepartmentC = await request<{
     ok: true;
@@ -9453,6 +9527,10 @@ test("inbox operations stay functional when tenant has no active general departm
 
   const inbox = await request<{ ok: true }>("GET", "/app/conversations", businessAdmin);
   assert.equal(inbox.status, 200, JSON.stringify(inbox.body));
+  assert.equal(
+    (inbox.body as { items?: Array<{ waId: string }> }).items?.some((item) => item.waId === preConsentWaId),
+    false
+  );
   const detail = await request<{ ok: true }>("GET", `/app/conversation/${waId}`, businessAdmin);
   assert.equal(detail.status, 200, JSON.stringify(detail.body));
   const timeline = await request<{ ok: true }>("GET", `/app/conversation/${waId}/timeline`, businessAdmin);

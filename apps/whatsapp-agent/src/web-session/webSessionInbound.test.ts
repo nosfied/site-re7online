@@ -211,6 +211,7 @@ function fakePrisma() {
     department: {
       findFirst: async ({ where }: { where?: Record<string, unknown> } = {}) =>
         state.departments.find((department) => {
+          if (where?.id && department.id !== where.id) return false;
           if (where?.clientId && department.clientId !== where.clientId) return false;
           if (where?.isActive !== undefined && department.isActive !== where.isActive) return false;
           const clauses = Array.isArray(where?.OR) ? where.OR as Array<Record<string, unknown>> : [];
@@ -1291,6 +1292,104 @@ test("chatbot handoff opens a new human service cycle with persisted operational
   assert.equal(handoffEvents[0]?.queueName, "Fila Geral");
   assert.equal(handoffEvents[0]?.lastInboundAt, "2026-08-11T12:00:00.000Z");
   assert.equal(handoffEvents[0]?.notificationMessage?.createdAt, "2026-08-11T12:00:00.000Z");
+});
+
+test("chatbot handoff keeps queue and department coherent when a prior default department exists", async () => {
+  const handoffEvents: Array<Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>> = [];
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture({
+      departmentId: "department_secult",
+      queueId: "queue_secult",
+    }),
+    runtimeStates: [
+      runtimeFixture({
+        mode: "BOT",
+        status: null,
+        handoffStatus: "NONE",
+        handoffRequestedAt: null,
+        handoffActivatedAt: null,
+        chatbotActive: true,
+        chatbotNodeId: "menu",
+        answers: {},
+        assignedUserId: null,
+        departmentId: "department_general",
+        queueId: null,
+      }),
+    ],
+    departments: [
+      {
+        id: "department_general",
+        clientId: "client_1",
+        name: "Atendimento Geral",
+        slug: "atendimento-geral",
+        isActive: true,
+      },
+      {
+        id: "department_secult",
+        clientId: "client_1",
+        name: "Dúvidas Gerais - SECULT / PE",
+        slug: "duvidas-gerais-secult-pe",
+        isActive: true,
+      },
+    ],
+    queues: [
+      {
+        id: "queue_secult",
+        clientId: "client_1",
+        departmentId: "department_secult",
+        name: "Dúvidas Gerais - SECULT / PE",
+      },
+    ],
+    chatbotFlow: {
+      id: "flow_1",
+      definition: {
+        start: "menu",
+        nodes: {
+          menu: {
+            type: "menu",
+            text: "Menu inicial",
+            options: [
+              {
+                label: "Dúvidas gerais",
+                next: "handoff_1",
+                queueId: "queue_secult",
+              },
+            ],
+          },
+          handoff_1: {
+            type: "handoff",
+            text: "Vou encaminhar seu atendimento para a equipe responsável.",
+          },
+        },
+      },
+    },
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    const result = await ingestText(
+      "1",
+      "MSG_HANDOFF_QUEUE_DEPARTMENT",
+      "2026-08-11T12:00:00.000Z",
+      async (event) => {
+        handoffEvents.push(event);
+      }
+    );
+    assert.equal(result.action, "persisted");
+  });
+
+  const runtime = state.runtimeStates[0];
+  assert.equal(runtime?.status, "WAITING");
+  assert.equal(runtime?.mode, "HUMAN");
+  assert.equal(runtime?.handoffStatus, "ACTIVE");
+  assert.equal(runtime?.departmentId, "department_secult");
+  assert.equal(runtime?.queueId, "queue_secult");
+  assert.equal(handoffEvents.length, 1);
+  assert.equal(handoffEvents[0]?.departmentId, "department_secult");
+  assert.equal(handoffEvents[0]?.departmentName, "Dúvidas Gerais - SECULT / PE");
+  assert.equal(handoffEvents[0]?.queueId, "queue_secult");
+  assert.equal(handoffEvents[0]?.queueName, "Dúvidas Gerais - SECULT / PE");
 });
 
 test("CSAT accepts only scores 1 to 5 before TTL and records the response", async () => {

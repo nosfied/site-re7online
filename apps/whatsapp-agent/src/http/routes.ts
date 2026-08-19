@@ -634,6 +634,8 @@ const inboxRuntimeStateSelect = {
   lastOutboundMessageId: true,
   handoffStatus: true,
   mode: true,
+  flow: true,
+  chatbotNodeId: true,
   chatbotActive: true,
   assignedUserId: true,
   assignedTo: true,
@@ -673,7 +675,9 @@ function runtimeStateRowToConversationState(
     },
     templateNeeded: false,
     demoStatus: "none",
-    chatbotActive: false,
+    flow: state.flow ? state.flow as ConversationState["flow"] : undefined,
+    chatbotNodeId: state.chatbotNodeId ?? undefined,
+    chatbotActive: state.chatbotActive,
     answers:
       state.answers && typeof state.answers === "object" && !Array.isArray(state.answers)
         ? (state.answers as ConversationState["answers"])
@@ -27605,6 +27609,8 @@ function serializeConversationOperationalFields(params: {
   conversation: {
     mode?: string | null;
     handoff?: { status?: string | null } | null;
+    chatbotActive?: boolean | null;
+    chatbotNodeId?: string | null;
     assignedUserId?: string | null;
     assignedTo?: string | null;
     assignedAt?: string | null;
@@ -27623,6 +27629,7 @@ function serializeConversationOperationalFields(params: {
   assignedUserName: string | null;
   departmentName: string | null;
   queueName: string | null;
+  awaitingConsent?: boolean;
 }) {
   const conversation = params.conversation;
   const flowContext = sanitizeInboxFlowContext(conversation?.answers?.flowContext ?? null);
@@ -27645,6 +27652,7 @@ function serializeConversationOperationalFields(params: {
     queueName: params.queueName,
     status,
     closedAt: conversation?.closedAt ?? null,
+    awaitingConsent: Boolean(params.awaitingConsent),
     lastInboundAt: conversation?.lastInboundAt ?? null,
     lastOutboundAt: conversation?.lastOutboundAt ?? null,
     isUnassigned: !conversation?.assignedUserId,
@@ -29164,12 +29172,33 @@ function conversationListItemIsVisibleInInbox(item: {
   status: ConversationOperationalStatus | null;
   mode?: string | null;
   handoffStatus?: string | null;
+  awaitingConsent?: boolean | null;
   assignedUserId: string | null;
   assignedAt: string | null;
   lastMessage?: unknown;
 }) {
   if (conversationListItemIsInHumanFlow(item)) return true;
+  if (item.awaitingConsent) return false;
   return conversationListItemIsAutomation(item) && Boolean(item.lastMessage);
+}
+
+async function loadActiveChatbotConsentNodeIds(
+  prisma: ReturnType<typeof getPrisma>,
+  clientId: string
+) {
+  const flows = await prisma.chatbotFlow.findMany({
+    where: { clientId, isActive: true },
+    select: { definition: true },
+  });
+  const consentNodeIds = new Set<string>();
+  for (const flow of flows) {
+    const validated = validateChatbotFlowDefinition(flow.definition);
+    if (!validated.ok) continue;
+    for (const [nodeId, node] of Object.entries(validated.definition.nodes)) {
+      if (node.type === "consent") consentNodeIds.add(nodeId);
+    }
+  }
+  return consentNodeIds;
 }
 
 function conversationListItemShouldCountUnread(item: {
@@ -29635,6 +29664,19 @@ async function buildConversationListPayload(
   const runtimeByWaId = new Map(
     runtimeConversations.map((item) => [item.waIdCanonical, item.conversation])
   );
+  const activeChatbotNodeIds = new Set(
+    runtimeConversations
+      .map((item) =>
+        item.conversation?.chatbotActive && item.conversation.chatbotNodeId
+          ? item.conversation.chatbotNodeId
+          : null
+      )
+      .filter((value): value is string => Boolean(value))
+  );
+  const consentNodeIds =
+    activeChatbotNodeIds.size > 0
+      ? await loadActiveChatbotConsentNodeIds(prisma, params.clientId)
+      : new Set<string>();
   const assignedUserIds = params.includeAssignedUserName
     ? Array.from(
         new Set(
@@ -29770,6 +29812,11 @@ async function buildConversationListPayload(
       queueName: runtimeState?.queueId
         ? operationalLookups.queueById.get(runtimeState.queueId) ?? null
         : null,
+      awaitingConsent: Boolean(
+        runtimeState?.chatbotActive &&
+        runtimeState.chatbotNodeId &&
+        consentNodeIds.has(runtimeState.chatbotNodeId)
+      ),
     });
     const inboundAt = latestInbound?.createdAt?.getTime() ?? -1;
     const outboundAt = latestOutbound?.createdAt?.getTime() ?? -1;

@@ -823,6 +823,8 @@ async function ensureWebSessionRuntimeState(params: {
       status: true,
       closedAt: true,
       assignedUserId: true,
+      departmentId: true,
+      queueId: true,
       answers: true,
     },
   });
@@ -862,7 +864,7 @@ async function ensureWebSessionRuntimeState(params: {
       windowExpiresAt: new Date(params.message.timestamp.getTime() + 24 * 60 * 60 * 1000),
       lastInboundAt: params.message.timestamp,
       lastInboundMessageId: buildLocalMessageId(params.message),
-      departmentId: department?.id ?? undefined,
+      ...(!shouldStartBot && !existing?.departmentId ? { departmentId: department?.id ?? undefined } : {}),
       ...(shouldStartBot
         ? {
             mode: "BOT",
@@ -896,7 +898,7 @@ async function ensureWebSessionRuntimeState(params: {
       intent: "unknown",
       handoffStatus: "NONE",
       mode: shouldStartBot ? "BOT" : "HUMAN",
-      departmentId: department?.id ?? undefined,
+      departmentId: shouldStartBot ? undefined : department?.id ?? undefined,
       status: shouldStartBot ? undefined : "WAITING",
       chatbotActive: false,
       answers: {},
@@ -2533,6 +2535,30 @@ export async function ingestWebSessionInboundMessage(params: {
               });
               if (refreshedRuntime) effectiveRuntime = refreshedRuntime;
             }
+            const effectiveQueue = effectiveRuntime.queueId
+              ? await prisma.queue.findFirst({
+                  where: { id: effectiveRuntime.queueId, clientId: params.message.clientId },
+                  select: { id: true, name: true, departmentId: true },
+                })
+              : null;
+            const effectiveDepartmentId =
+              effectiveQueue?.departmentId ?? effectiveRuntime.departmentId ?? null;
+            const stateForHandoffNotifications: ConversationState = {
+              ...runtimeConversationState,
+              mode: "HUMAN",
+              handoff: {
+                ...runtimeConversationState.handoff,
+                status:
+                  runtimeConversationState.handoff.status === "none"
+                    ? "active"
+                    : runtimeConversationState.handoff.status,
+              },
+              assignedUserId: effectiveRuntime.assignedUserId ?? null,
+              departmentId: effectiveDepartmentId,
+              queueId: effectiveQueue?.id ?? effectiveRuntime.queueId ?? null,
+              status: effectiveRuntime.status ?? runtimeConversationState.status ?? "WAITING",
+              closedAt: null,
+            };
             runtimeConversationState = await sendWebSessionHandoffNotifications({
               prisma,
               clientId: params.message.clientId,
@@ -2543,14 +2569,14 @@ export async function ingestWebSessionInboundMessage(params: {
               requestId,
               conversationId: conversation?.id ?? null,
               runtimeStateId: effectiveRuntime.id,
-              queueId: effectiveRuntime.queueId,
-              state: runtimeConversationState,
+              queueId: stateForHandoffNotifications.queueId ?? null,
+              state: stateForHandoffNotifications,
               now: params.message.timestamp,
               closedHandoffPolicy,
               closePolicy,
               transitionText: chatbotResult.replyText ?? null,
               includeOffHoursMessage: queueClosedHandoff,
-              serviceCycle: handoffServiceCycle ?? getServiceCycleForDisplay(runtimeConversationState),
+              serviceCycle: handoffServiceCycle ?? getServiceCycleForDisplay(stateForHandoffNotifications),
             });
             await persistWebSessionRuntimeState({
               prisma,
@@ -2558,16 +2584,10 @@ export async function ingestWebSessionInboundMessage(params: {
               waId: params.message.sender,
               state: runtimeConversationState,
             });
-            const [handoffDepartment, handoffQueue, handoffAssignedUser] = await Promise.all([
-              effectiveRuntime.departmentId
+            const [handoffDepartment, handoffAssignedUser] = await Promise.all([
+              effectiveDepartmentId
                 ? prisma.department.findFirst({
-                    where: { id: effectiveRuntime.departmentId, clientId: params.message.clientId },
-                    select: { name: true },
-                  })
-                : null,
-              effectiveRuntime.queueId
-                ? prisma.queue.findFirst({
-                    where: { id: effectiveRuntime.queueId, clientId: params.message.clientId },
+                    where: { id: effectiveDepartmentId, clientId: params.message.clientId },
                     select: { name: true },
                   })
                 : null,
@@ -2591,10 +2611,10 @@ export async function ingestWebSessionInboundMessage(params: {
               status: effectiveRuntime.status ?? runtimeConversationState.status ?? "WAITING",
               assignedUserId: effectiveRuntime.assignedUserId ?? null,
               assignedUserName: handoffAssignedUser?.name ?? null,
-              departmentId: effectiveRuntime.departmentId ?? null,
+              departmentId: effectiveDepartmentId,
               departmentName: handoffDepartment?.name ?? null,
-              queueId: effectiveRuntime.queueId ?? null,
-              queueName: handoffQueue?.name ?? null,
+              queueId: effectiveQueue?.id ?? effectiveRuntime.queueId ?? null,
+              queueName: effectiveQueue?.name ?? null,
               protocol: getActiveServiceCycle(runtimeConversationState)?.protocol ?? null,
               cycleId: getActiveServiceCycle(runtimeConversationState)?.cycleId ?? null,
               lastInboundAt: inboundNotificationMessage.createdAt,

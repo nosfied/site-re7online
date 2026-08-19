@@ -3155,11 +3155,12 @@ export default function AppInboxPage() {
       const conversationKey = event.waIdCanonical ?? event.waId;
       let matchedConversation = false;
       const matchedConversationKeys = new Set<string>([conversationKey, event.waId, event.waIdCanonical ?? ""]);
+      const eventRepresentsClosed = event.status === "CLOSED";
       const shouldRemoveFromHumanInbox =
         event.reason === "released" ||
         event.reason === "conversation.deleted" ||
         event.reason === "conversation.anonymized" ||
-        !eventTargetsCurrentUser;
+        (!eventTargetsCurrentUser && !eventRepresentsClosed);
       setConversations((prev) => {
         const nextItems = prev.flatMap((item) => {
           const itemKey = getConversationIdentity(item);
@@ -4441,6 +4442,8 @@ export default function AppInboxPage() {
     getInboxMediaOutboundDisabledMessage(selectedConversationChannel, selectedConversation);
   const composerEnabled = canReply && selectedConversationSupportsOutbound;
   const templateComposerEnabled = canReply && selectedConversationSupportsTemplateOutbound;
+  const cannedComposerEnabled =
+    canReply && selectedConversationChannel === "whatsapp" && selectedConversationSupportsOutbound;
   const usableInboxTemplates = useMemo(
     () =>
       templateItems.filter(
@@ -5296,8 +5299,8 @@ export default function AppInboxPage() {
 
   const handleOpenCannedModal = useCallback(() => {
     if (!selectedConversationWaId || !selectedConversation) return;
-    if (!selectedConversationSupportsTemplateOutbound) {
-      setError("Mensagens prontas estão disponíveis apenas para conversas WhatsApp nesta etapa.");
+    if (selectedConversationChannel !== "whatsapp" || !selectedConversationSupportsOutbound) {
+      setError("Mensagens prontas estão disponíveis apenas para conversas WhatsApp com envio habilitado.");
       setErrorDetails(null);
       return;
     }
@@ -5316,7 +5319,8 @@ export default function AppInboxPage() {
     cannedReplies.length,
     loadCannedReplies,
     selectedConversation,
-    selectedConversationSupportsTemplateOutbound,
+    selectedConversationChannel,
+    selectedConversationSupportsOutbound,
     selectedConversationWaId,
   ]);
 
@@ -7402,7 +7406,7 @@ export default function AppInboxPage() {
                 type="button"
                 disabled={
                   !selectedConversationWaId ||
-                  !templateComposerEnabled ||
+                  !cannedComposerEnabled ||
                   isHydratingSelectedTimeline ||
                   sendingCannedReply
                 }
