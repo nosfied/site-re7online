@@ -2558,6 +2558,26 @@ export async function ingestWebSessionInboundMessage(params: {
               waId: params.message.sender,
               state: runtimeConversationState,
             });
+            const [handoffDepartment, handoffQueue, handoffAssignedUser] = await Promise.all([
+              effectiveRuntime.departmentId
+                ? prisma.department.findFirst({
+                    where: { id: effectiveRuntime.departmentId, clientId: params.message.clientId },
+                    select: { name: true },
+                  })
+                : null,
+              effectiveRuntime.queueId
+                ? prisma.queue.findFirst({
+                    where: { id: effectiveRuntime.queueId, clientId: params.message.clientId },
+                    select: { name: true },
+                  })
+                : null,
+              effectiveRuntime.assignedUserId
+                ? prisma.user.findFirst({
+                    where: { id: effectiveRuntime.assignedUserId, clientId: params.message.clientId },
+                    select: { name: true },
+                  })
+                : null,
+            ]);
             const handoffRealtimeEvent = {
               type: "conversation.handoff.updated",
               clientId: params.message.clientId,
@@ -2568,18 +2588,24 @@ export async function ingestWebSessionInboundMessage(params: {
                 runtimeConversationState.handoff.status === "none"
                   ? "active"
                   : runtimeConversationState.handoff.status,
-                assignedUserId: effectiveRuntime.assignedUserId ?? null,
-                departmentId: effectiveRuntime.departmentId ?? null,
-                protocol: getActiveServiceCycle(runtimeConversationState)?.protocol ?? null,
-                cycleId: getActiveServiceCycle(runtimeConversationState)?.cycleId ?? null,
-                updatedAt: new Date().toISOString(),
-                notificationMessage: {
-                  messageId: inboundNotificationMessage.messageId,
-                  type: inboundNotificationMessage.type,
-                  bodyText: inboundNotificationMessage.bodyText,
-                  createdAt: inboundNotificationMessage.createdAt,
-                },
-              } satisfies Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>;
+              status: effectiveRuntime.status ?? runtimeConversationState.status ?? "WAITING",
+              assignedUserId: effectiveRuntime.assignedUserId ?? null,
+              assignedUserName: handoffAssignedUser?.name ?? null,
+              departmentId: effectiveRuntime.departmentId ?? null,
+              departmentName: handoffDepartment?.name ?? null,
+              queueId: effectiveRuntime.queueId ?? null,
+              queueName: handoffQueue?.name ?? null,
+              protocol: getActiveServiceCycle(runtimeConversationState)?.protocol ?? null,
+              cycleId: getActiveServiceCycle(runtimeConversationState)?.cycleId ?? null,
+              lastInboundAt: inboundNotificationMessage.createdAt,
+              updatedAt: new Date().toISOString(),
+              notificationMessage: {
+                messageId: inboundNotificationMessage.messageId,
+                type: inboundNotificationMessage.type,
+                bodyText: inboundNotificationMessage.bodyText,
+                createdAt: inboundNotificationMessage.createdAt,
+              },
+            } satisfies Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>;
             if (params.publishHandoffRealtime) {
               await params.publishHandoffRealtime(handoffRealtimeEvent);
             } else {

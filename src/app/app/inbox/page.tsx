@@ -3206,6 +3206,9 @@ export default function AppInboxPage() {
                   createdAt: event.notificationMessage.createdAt,
                 }
               : item.lastMessage,
+            lastInboundAt:
+              event.lastInboundAt ??
+              (event.notificationMessage ? event.notificationMessage.createdAt : item.lastInboundAt),
             updatedAt: event.updatedAt,
           }];
         });

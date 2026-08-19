@@ -59,6 +59,7 @@ const state = {
   outboundMessages: [] as Array<Record<string, unknown>>,
   metrics: [] as Array<Record<string, unknown>>,
   departments: [] as Array<Record<string, unknown>>,
+  queues: [] as Array<Record<string, unknown>>,
   config: null as Record<string, unknown> | null,
   channelAccounts: [] as Array<Record<string, unknown>>,
   users: [] as Array<Record<string, unknown>>,
@@ -79,6 +80,7 @@ function resetState(overrides: Partial<typeof state> = {}) {
   state.outboundMessages = overrides.outboundMessages ?? [];
   state.metrics = overrides.metrics ?? [];
   state.departments = overrides.departments ?? [];
+  state.queues = overrides.queues ?? [];
   state.config = overrides.config ?? null;
   state.channelAccounts = overrides.channelAccounts ?? [];
   state.users = overrides.users ?? [];
@@ -224,6 +226,14 @@ function fakePrisma() {
         state.departments.push(row);
         return { id: String(row.id), name: String(row.name) };
       },
+    },
+    queue: {
+      findFirst: async ({ where }: { where?: Record<string, unknown> } = {}) =>
+        state.queues.find((queue) => {
+          if (where?.id && queue.id !== where.id) return false;
+          if (where?.clientId && queue.clientId !== where.clientId) return false;
+          return true;
+        }) ?? null,
     },
     tenantOperationalConfig: {
       findUnique: async () => state.config ? { config: state.config } : null,
@@ -1177,6 +1187,23 @@ test("chatbot handoff opens a new human service cycle with persisted operational
         assignedUserId: null,
       }),
     ],
+    departments: [
+      {
+        id: "department_general",
+        clientId: "client_1",
+        name: "Atendimento Geral",
+        slug: "atendimento-geral",
+        isActive: true,
+      },
+    ],
+    queues: [
+      {
+        id: "queue_general",
+        clientId: "client_1",
+        departmentId: "department_general",
+        name: "Fila Geral",
+      },
+    ],
     chatbotFlow: {
       id: "flow_1",
       definition: {
@@ -1256,8 +1283,14 @@ test("chatbot handoff opens a new human service cycle with persisted operational
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("fila de atendimento")).length, 1);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("próximo horário")), false);
   assert.equal(handoffEvents.length, 1);
+  assert.equal(handoffEvents[0]?.status, "WAITING");
   assert.equal(handoffEvents[0]?.handoffStatus, "active");
   assert.equal(handoffEvents[0]?.departmentId, "department_general");
+  assert.equal(handoffEvents[0]?.departmentName, "Atendimento Geral");
+  assert.equal(handoffEvents[0]?.queueId, "queue_general");
+  assert.equal(handoffEvents[0]?.queueName, "Fila Geral");
+  assert.equal(handoffEvents[0]?.lastInboundAt, "2026-08-11T12:00:00.000Z");
+  assert.equal(handoffEvents[0]?.notificationMessage?.createdAt, "2026-08-11T12:00:00.000Z");
 });
 
 test("CSAT accepts only scores 1 to 5 before TTL and records the response", async () => {

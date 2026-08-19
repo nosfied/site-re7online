@@ -47,6 +47,7 @@ export type AppRealtimeEvent =
       protocol?: string | null;
       cycleId?: string | null;
       closedAt?: string | null;
+      lastInboundAt?: string | null;
       updatedAt: string;
       reason?: string | null;
       notificationMessage?: {
