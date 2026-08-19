@@ -2990,7 +2990,7 @@ export function verifyAppMfaShadow(session: AppSession, code: string): Promise<A
 
 export async function fetchAppDepartments(
   session: AppSession,
-  options?: { includeInactive?: boolean }
+  options?: { includeInactive?: boolean; purpose?: "transfer" }
 ): Promise<{
   ok: true;
   count: number;
@@ -3000,6 +3000,9 @@ export async function fetchAppDepartments(
   const params = new URLSearchParams();
   if (options?.includeInactive) {
     params.set("includeInactive", "true");
+  }
+  if (options?.purpose) {
+    params.set("purpose", options.purpose);
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return requestAppJson(session, `/app/departments${suffix}`);

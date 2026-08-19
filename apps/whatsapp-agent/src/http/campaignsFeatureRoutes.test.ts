@@ -9366,6 +9366,18 @@ test("inbox operations stay functional when tenant has no active general departm
     agentDepartmentsAfterUnscoped.body.items.map((item) => item.id).sort(),
     departments.map((department) => department.id).sort()
   );
+  const agentTransferDepartments = await request<{
+    ok: true;
+    items: Array<{ id: string; isActive: boolean }>;
+  }>("GET", "/app/departments?purpose=transfer", multiDepartmentAgent);
+  assert.equal(agentTransferDepartments.status, 200, JSON.stringify(agentTransferDepartments.body));
+  const agentTransferDepartmentIds = new Set(
+    agentTransferDepartments.body.items.map((item) => item.id)
+  );
+  for (const department of departments) {
+    assert.equal(agentTransferDepartmentIds.has(department.id), true);
+  }
+  assert.equal(agentTransferDepartmentIds.has(unscopedDepartment.id), true);
 
   const agentInbox = await request<{
     ok: true;
@@ -9392,6 +9404,52 @@ test("inbox operations stay functional when tenant has no active general departm
   }>("GET", `/app/conversations?departmentId=${unscopedDepartment.id}`, multiDepartmentAgent);
   assert.equal(agentInboxDepartmentD.status, 200, JSON.stringify(agentInboxDepartmentD.body));
   assert.equal(agentInboxDepartmentD.body.items.length, 0);
+
+  await prisma.conversationRuntimeState.updateMany({
+    where: { clientId: businessClientId, waId: waIdDepartmentD },
+    data: {
+      assignedUserId: multiDepartmentAgent.id,
+      assignedTo: `user:${multiDepartmentAgent.id}`,
+      assignedAt: new Date(),
+      status: "IN_PROGRESS",
+    },
+  });
+  const assignedOutsideMembershipInbox = await request<{
+    ok: true;
+    items: Array<{ waId: string; departmentId: string | null; assignedUserId: string | null }>;
+  }>("GET", "/app/conversations", multiDepartmentAgent);
+  assert.equal(
+    assignedOutsideMembershipInbox.status,
+    200,
+    JSON.stringify(assignedOutsideMembershipInbox.body)
+  );
+  const assignedOutsideMembershipItem = assignedOutsideMembershipInbox.body.items.find(
+    (item) => item.waId === waIdDepartmentD
+  );
+  assert.equal(assignedOutsideMembershipItem?.departmentId, unscopedDepartment.id);
+  assert.equal(assignedOutsideMembershipItem?.assignedUserId, multiDepartmentAgent.id);
+  const assignedOutsideMembershipDetail = await request<{ ok: true; departmentId: string | null; assignedUserId: string | null }>(
+    "GET",
+    `/app/conversation/${waIdDepartmentD}`,
+    multiDepartmentAgent
+  );
+  assert.equal(
+    assignedOutsideMembershipDetail.status,
+    200,
+    JSON.stringify(assignedOutsideMembershipDetail.body)
+  );
+  assert.equal(assignedOutsideMembershipDetail.body.departmentId, unscopedDepartment.id);
+  assert.equal(assignedOutsideMembershipDetail.body.assignedUserId, multiDepartmentAgent.id);
+  const assignedOutsideMembershipTimeline = await request<{ ok: true }>(
+    "GET",
+    `/app/conversation/${waIdDepartmentD}/timeline`,
+    multiDepartmentAgent
+  );
+  assert.equal(
+    assignedOutsideMembershipTimeline.status,
+    200,
+    JSON.stringify(assignedOutsideMembershipTimeline.body)
+  );
 
   const inbox = await request<{ ok: true }>("GET", "/app/conversations", businessAdmin);
   assert.equal(inbox.status, 200, JSON.stringify(inbox.body));
@@ -9520,24 +9578,31 @@ test("inbox operations stay functional when tenant has no active general departm
       isActive: true,
     },
   });
-  const transferToNonMember = await request<ErrorPayload>(
+  const transferToNonMember = await request<{
+    ok: true;
+    assignedUserId: string | null;
+    departmentId: string | null;
+    queueId: string | null;
+  }>(
     "POST",
     `/app/conversation/${waId}/transfer`,
     businessAdmin,
     { userId: nonMember.id }
   );
-  assert.equal(transferToNonMember.status, 409, JSON.stringify(transferToNonMember.body));
-  assert.equal(getErrorCode(transferToNonMember.body), "department_membership_required");
-  const afterRejectedTransfer = await request<{
+  assert.equal(transferToNonMember.status, 200, JSON.stringify(transferToNonMember.body));
+  assert.equal(transferToNonMember.body.assignedUserId, nonMember.id);
+  assert.equal(transferToNonMember.body.departmentId, departments[1].id);
+  assert.equal(transferToNonMember.body.queueId, transferredDepartmentQueueId);
+  const afterNonMemberTransfer = await request<{
     ok: true;
     assignedUserId: string | null;
     departmentId: string | null;
     queueId: string | null;
   }>("GET", `/app/conversation/${waId}`, businessAdmin);
-  assert.equal(afterRejectedTransfer.status, 200, JSON.stringify(afterRejectedTransfer.body));
-  assert.equal(afterRejectedTransfer.body.assignedUserId, businessAdmin.id);
-  assert.equal(afterRejectedTransfer.body.departmentId, departments[1].id);
-  assert.equal(afterRejectedTransfer.body.queueId, transferredDepartmentQueueId);
+  assert.equal(afterNonMemberTransfer.status, 200, JSON.stringify(afterNonMemberTransfer.body));
+  assert.equal(afterNonMemberTransfer.body.assignedUserId, nonMember.id);
+  assert.equal(afterNonMemberTransfer.body.departmentId, departments[1].id);
+  assert.equal(afterNonMemberTransfer.body.queueId, transferredDepartmentQueueId);
 
   await prisma.tenantOperationalConfig.upsert({
     where: { clientId: businessClientId },

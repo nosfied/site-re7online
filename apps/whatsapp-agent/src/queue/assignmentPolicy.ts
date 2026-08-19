@@ -303,6 +303,7 @@ export async function assertQueueAssignmentUserEligible(params: {
   userId: string;
   departmentId?: string | null;
   requireDepartment?: boolean;
+  requireDepartmentMembership?: boolean;
   allowedRoles?: Array<"ADMIN" | "SUPERVISOR" | "AGENT">;
 }): Promise<QueueAssignmentEligibilityResult> {
   const { policy, config } = await resolveQueueAssignmentPolicy({
@@ -341,7 +342,7 @@ export async function assertQueueAssignmentUserEligible(params: {
     };
   }
 
-  if (params.departmentId) {
+  if (params.departmentId && params.requireDepartmentMembership !== false) {
     const memberships = await getUserDepartmentMemberships(params.prisma, {
       clientId: params.clientId,
       userId: user.id,

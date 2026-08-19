@@ -3824,48 +3824,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         role: clientAuth.role,
       });
       recordInboxListTiming(client.id, "auth_rbac", authRbacStartedAt);
-      if (departmentAccess.requiresDepartmentScope && departmentAccess.departmentIds.length === 0) {
-        const serializationStartedAt = channelLatencyNow();
-        jsonWithInboxReadMetrics(res, 200, {
-          ok: true,
-          count: 0,
-          items: [],
-          conversations: [],
-          filterCounts: buildEmptyConversationFilterCounts(),
-          nextCursor: null,
-          readState: {
-            lastReadAtByConversationKey: {},
-            manuallyUnreadByConversationKey: {},
-          },
-        }, {
-          clientId: client.id,
-          serializationStartedAt,
-        });
-        return;
-      }
-      if (
-        departmentAccess.requiresDepartmentScope &&
-        departmentIdFilter &&
-        !departmentAccess.departmentIds.includes(departmentIdFilter)
-      ) {
-        const serializationStartedAt = channelLatencyNow();
-        jsonWithInboxReadMetrics(res, 200, {
-          ok: true,
-          count: 0,
-          items: [],
-          conversations: [],
-          filterCounts: buildEmptyConversationFilterCounts(),
-          nextCursor: null,
-          readState: {
-            lastReadAtByConversationKey: {},
-            manuallyUnreadByConversationKey: {},
-          },
-        }, {
-          clientId: client.id,
-          serializationStartedAt,
-        });
-        return;
-      }
       const buildPayloadStartedAt = channelLatencyNow();
       const result = await buildConversationListPayload(prisma, {
         clientId: client.id,
@@ -3881,6 +3839,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             : departmentIdFilter,
           departmentIds: departmentAccess.requiresDepartmentScope
             ? departmentAccess.departmentIds
+            : null,
+          departmentScopeUserId: departmentAccess.requiresDepartmentScope
+            ? clientAuth.userId
             : null,
           assignedUserId: assignedUserIdFilter,
           unassigned: unassignedFilter,
@@ -4848,9 +4809,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
+          currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
           userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: scopedConversation?.departmentId ?? null,
+          conversationAssignedUserId: scopedConversation?.assignedUserId ?? null,
         })
       ) {
         logAppDepartmentDenied({
@@ -4960,9 +4923,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
+          currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
           userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: scopedConversation?.departmentId ?? null,
+          conversationAssignedUserId: scopedConversation?.assignedUserId ?? null,
         })
       ) {
         logAppDepartmentDenied({
@@ -5098,9 +5063,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
+          currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
           userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: currentConversation.departmentId ?? conversationRow.departmentId ?? null,
+          conversationAssignedUserId: currentConversation.assignedUserId ?? null,
         })
       ) {
         logAppDepartmentDenied({
@@ -5605,9 +5572,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
+          currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
           userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: scopedConversation?.departmentId ?? null,
+          conversationAssignedUserId: scopedConversation?.assignedUserId ?? null,
         })
       ) {
         logAppDepartmentDenied({
@@ -5840,9 +5809,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
+          currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
           userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: conversation.departmentId ?? null,
+          conversationAssignedUserId: conversation.assignedUserId ?? null,
         })
       ) {
         logAppDepartmentDenied({
@@ -6090,9 +6061,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
+          currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
           userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: currentConversation.departmentId ?? null,
+          conversationAssignedUserId: currentConversation.assignedUserId ?? null,
         })
       ) {
         logAppDepartmentDenied({
@@ -6556,9 +6529,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
+          currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
           userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: currentConversation.departmentId ?? null,
+          conversationAssignedUserId: currentConversation.assignedUserId ?? null,
         })
       ) {
         logAppDepartmentDenied({
@@ -6969,9 +6944,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
+          currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
           userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: currentConversation.departmentId ?? null,
+          conversationAssignedUserId: currentConversation.assignedUserId ?? null,
         })
       ) {
         logAppDepartmentDenied({
@@ -8122,7 +8099,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const includeInactive =
         clientAuth.role === "ADMIN" && parsedUrl.searchParams.get("includeInactive") === "true";
       const timezone = await resolveTenantOperationalTimezone(prisma, client.id);
-      const scopedDepartmentIds = isAgentRole(clientAuth.role)
+      const purpose = parsedUrl.searchParams.get("purpose");
+      const isTransferPurpose = purpose === "transfer";
+      const scopedDepartmentIds = isAgentRole(clientAuth.role) && !isTransferPurpose
         ? (
             await getUserDepartmentMemberships(prisma, {
               clientId: client.id,
@@ -11221,9 +11200,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
+          currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
           userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: operationalConversation.departmentId ?? null,
+          conversationAssignedUserId: operationalConversation.assignedUserId ?? null,
         })
       ) {
         logAppDepartmentDenied({
@@ -11481,9 +11462,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
+          currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
           userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: conversation.departmentId ?? null,
+          conversationAssignedUserId: conversation.assignedUserId ?? null,
         })
       ) {
         logAppDepartmentDenied({
@@ -11640,9 +11623,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
+          currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
           userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: conversation.departmentId ?? null,
+          conversationAssignedUserId: conversation.assignedUserId ?? null,
         })
       ) {
         logAppDepartmentDenied({
@@ -11932,9 +11917,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       const hasDepartmentAccess = hasConversationDepartmentAccess({
         role: clientAuth.role,
+        currentUserId: clientAuth.userId,
         userDepartmentId: departmentAccess.departmentId,
         userDepartmentIds: departmentAccess.departmentIds,
         conversationDepartmentId: conversation.departmentId ?? null,
+        conversationAssignedUserId: conversation.assignedUserId ?? null,
       });
       const isCurrentAssignedOwner = conversation.assignedUserId === clientAuth.userId;
       if (!hasDepartmentAccess && !isCurrentAssignedOwner) {
@@ -11980,6 +11967,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         userId: toUserId,
         departmentId: currentDepartmentId,
+        requireDepartmentMembership: false,
       });
       if (!eligibility.ok) {
         json(res, eligibility.status, {
@@ -12160,9 +12148,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       const hasDepartmentAccess = hasConversationDepartmentAccess({
         role: clientAuth.role,
+        currentUserId: clientAuth.userId,
         userDepartmentId: departmentAccess.departmentId,
         userDepartmentIds: departmentAccess.departmentIds,
         conversationDepartmentId: conversation.departmentId ?? null,
+        conversationAssignedUserId: conversation.assignedUserId ?? null,
       });
       const isCurrentAssignedOwner = conversation.assignedUserId === clientAuth.userId;
       if (!hasDepartmentAccess && !isCurrentAssignedOwner) {
@@ -12338,9 +12328,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
+          currentUserId: clientAuth.userId,
           userDepartmentId: departmentAccess.departmentId,
           userDepartmentIds: departmentAccess.departmentIds,
           conversationDepartmentId: conversation.departmentId ?? null,
+          conversationAssignedUserId: conversation.assignedUserId ?? null,
         })
       ) {
         logAppDepartmentDenied({
@@ -27465,12 +27457,21 @@ async function loadAppDepartmentAccess(
 
 function hasConversationDepartmentAccess(params: {
   role: string;
+  currentUserId?: string | null;
   userDepartmentId: string | null;
   userDepartmentIds?: string[];
   conversationDepartmentId: string | null | undefined;
+  conversationAssignedUserId?: string | null | undefined;
 }) {
   if (isAdminRole(params.role)) return true;
   if (!isAgentRole(params.role) && !isSupervisorRole(params.role)) return true;
+  if (
+    params.currentUserId &&
+    params.conversationAssignedUserId &&
+    params.currentUserId === params.conversationAssignedUserId
+  ) {
+    return true;
+  }
   const conversationDepartmentId = params.conversationDepartmentId ?? null;
   const userDepartmentIds = params.userDepartmentIds?.length
     ? params.userDepartmentIds
@@ -28563,6 +28564,7 @@ type ConversationListFilters = {
   channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "support" | null;
   departmentId: string | null;
   departmentIds?: string[] | null;
+  departmentScopeUserId?: string | null;
   assignedUserId: string | null;
   unassigned: boolean;
   automation: boolean;
@@ -29049,8 +29051,13 @@ function conversationMatchesListFilters(item: {
     return false;
   }
   if (filters.channel && serializeInboxChannelFields(item).channel !== filters.channel) return false;
-  if (filters.departmentIds?.length && (!item.departmentId || !filters.departmentIds.includes(item.departmentId))) {
-    return false;
+  if (filters.departmentIds) {
+    const inDepartmentScope =
+      filters.departmentIds.length > 0 &&
+      Boolean(item.departmentId && filters.departmentIds.includes(item.departmentId));
+    const directlyAssigned =
+      Boolean(filters.departmentScopeUserId) && item.assignedUserId === filters.departmentScopeUserId;
+    if (!inDepartmentScope && !directlyAssigned) return false;
   }
   if (filters.departmentId && item.departmentId !== filters.departmentId) return false;
   if (filters.assignedUserId && item.assignedUserId !== filters.assignedUserId) return false;

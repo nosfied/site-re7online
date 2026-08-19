@@ -2223,6 +2223,7 @@ export default function AppInboxPage() {
   const [tenantNameLabel, setTenantNameLabel] = useState<string | null>(null);
   const [tenantPhoneLabel, setTenantPhoneLabel] = useState<string | null>(null);
   const [departments, setDepartments] = useState<AdminDepartmentItem[]>([]);
+  const [transferDepartments, setTransferDepartments] = useState<AdminDepartmentItem[]>([]);
   const [selectedConversationKey, setSelectedConversationKey] = useState<string | null>(null);
   const [selectedConversationWaId, setSelectedConversationWaId] = useState<string | null>(null);
   const [messages, setMessages] = useState<InboxMessageItem[]>([]);
@@ -2803,29 +2804,39 @@ export default function AppInboxPage() {
   useEffect(() => {
     if (!session) {
       setDepartments([]);
+      setTransferDepartments([]);
       return;
     }
     let cancelled = false;
-    fetchAppDepartments(session)
+    Promise.all([
+      fetchAppDepartments(session),
+      fetchAppDepartments(session, { purpose: "transfer" }),
+    ])
       .then((response) => {
         if (cancelled) return;
-        setDepartments(response.items);
+        const [naturalDepartments, transferDepartmentResponse] = response;
+        setDepartments(naturalDepartments.items);
+        setTransferDepartments(transferDepartmentResponse.items);
       })
       .catch(() => {
         if (cancelled) return;
+        setTransferDepartments([]);
         if (adminConnection && adminClientKey && session.user.role === "ADMIN") {
           fetchDepartments(adminConnection, adminClientKey)
             .then((response) => {
               if (cancelled) return;
               setDepartments(response.items);
+              setTransferDepartments(response.items);
             })
             .catch(() => {
               if (cancelled) return;
               setDepartments([]);
+              setTransferDepartments([]);
             });
           return;
         }
         setDepartments([]);
+        setTransferDepartments([]);
       });
     return () => {
       cancelled = true;
@@ -4232,6 +4243,19 @@ export default function AppInboxPage() {
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }, [conversations, departments]);
+
+  const transferDepartmentOptions = useMemo<DepartmentOption[]>(() => {
+    const source = transferDepartments.length > 0 ? transferDepartments : departments;
+    if (source.length > 0) {
+      return source
+        .filter(isSelectableDepartment)
+        .map((department) => ({
+          id: department.id,
+          name: department.name,
+        }));
+    }
+    return departmentOptions;
+  }, [departmentOptions, departments, transferDepartments]);
 
   const loggedUserDepartmentName = useMemo(() => {
     const sessionDepartmentName = session?.user.departmentName?.trim();
@@ -5745,6 +5769,7 @@ export default function AppInboxPage() {
       await refreshConversationList(session);
       await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
       const targetDepartmentName =
+        transferDepartmentOptions.find((item) => item.id === transferDepartmentId)?.name ??
         departmentOptions.find((item) => item.id === transferDepartmentId)?.name ??
         response.departmentName ??
         "setor selecionado";
@@ -6938,7 +6963,7 @@ export default function AppInboxPage() {
                     onChange={(event) => setTransferDepartmentId(event.target.value)}
                     disabled={
                       !canTransferDepartment ||
-                      departmentOptions.length === 0 ||
+                      transferDepartmentOptions.length === 0 ||
                       Boolean(conversationAction)
                     }
                     className="min-w-0 flex-1 rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs [@media(max-height:760px)]:py-0.5 [&>option]:bg-white [&>option]:text-slate-900"
@@ -6946,7 +6971,7 @@ export default function AppInboxPage() {
                     <option value="">
                       {selectedConversation?.departmentName || "Setor"}
                     </option>
-                    {departmentOptions.map((department) => (
+                    {transferDepartmentOptions.map((department) => (
                       <option key={department.id} value={department.id}>
                         {department.name}
                       </option>
