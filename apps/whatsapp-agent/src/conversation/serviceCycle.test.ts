@@ -3,6 +3,7 @@ import test from "node:test";
 import { ConversationState } from "./conversation.types.js";
 import {
   buildServiceCycleHistoryMap,
+  clearSatisfactionRuntimeForNewServiceCycle,
   closeCurrentServiceCycle,
   ensureActiveServiceCycle,
   getActiveServiceCycle,
@@ -121,6 +122,45 @@ test("a cancelled close does not mutate the active cycle", () => {
   const waitingState: ConversationState = { ...active.state, status: "WAITING" };
   const after = getActiveServiceCycle(waitingState);
   assert.deepEqual(after, before);
+});
+
+test("new service cycles clear transient satisfaction runtime only", () => {
+  const current = {
+    ...state(),
+    answers: {
+      operationalProtocol: {
+        protocol: "CVT-ACTIVE12345",
+        issuedAt: "2026-08-18T12:00:00.000Z",
+        cycleId: "cycle_active",
+        source: "web_session",
+      },
+      lastClosedServiceCycle: {
+        protocol: "CVT-CLOSED12345",
+        issuedAt: "2026-08-18T11:00:00.000Z",
+        cycleId: "cycle_closed",
+        source: "web_session",
+        closedAt: "2026-08-18T11:30:00.000Z",
+        closeReason: "human_close",
+        closeSource: "inbox",
+      },
+      satisfactionRuntime: {
+        commentOffer: { awaiting: true, surveyId: "survey_old", responseId: "response_old" },
+        commentInput: { awaiting: true, surveyId: "survey_old", responseId: "response_old" },
+        completedSurveyDecision: { awaiting: true, prompted: true },
+        awaitingExpiredSurveyDecision: true,
+        expiredSurveyId: "survey_expired",
+      },
+      retainedAnswer: "keep",
+    },
+  };
+
+  const cleared = clearSatisfactionRuntimeForNewServiceCycle(current);
+  const answers = cleared.answers as Record<string, unknown>;
+
+  assert.equal(answers.retainedAnswer, "keep");
+  assert.equal(Boolean(answers.operationalProtocol), true);
+  assert.equal(Boolean(answers.lastClosedServiceCycle), true);
+  assert.equal("satisfactionRuntime" in answers, false);
 });
 
 test("protocol lifecycle events keep the acting tenant and cycle snapshot", async () => {

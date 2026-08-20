@@ -121,6 +121,23 @@ export function clearActiveServiceCycle(state: ConversationState) {
   return { ...state, answers: answers as ConversationState["answers"] };
 }
 
+export function clearSatisfactionRuntimeForNewServiceCycle(state: ConversationState) {
+  const answers: Record<string, unknown> = isRecord(state.answers) ? { ...state.answers } : {};
+  const runtime = isRecord(answers.satisfactionRuntime) ? { ...answers.satisfactionRuntime } : null;
+  if (!runtime) return state;
+  delete runtime.commentOffer;
+  delete runtime.commentInput;
+  delete runtime.completedSurveyDecision;
+  delete runtime.awaitingExpiredSurveyDecision;
+  delete runtime.expiredSurveyId;
+  if (Object.keys(runtime).length === 0) {
+    delete answers.satisfactionRuntime;
+  } else {
+    answers.satisfactionRuntime = runtime;
+  }
+  return { ...state, answers: answers as ConversationState["answers"] };
+}
+
 export function getServiceCycleForDisplay(state?: { answers?: unknown } | null) {
   return getActiveServiceCycle(state) ?? getLastClosedServiceCycle(state);
 }

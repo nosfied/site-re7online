@@ -1133,6 +1133,7 @@ test("close command creates a new CSAT after a previous survey was already answe
   assert.equal(state.satisfactionSurveys.length, 2);
   assert.equal(state.satisfactionSurveys[1]?.assignedUserId, "agent_1");
   assert.equal(state.satisfactionSurveys[1]?.status, "sent");
+  assert.equal(state.satisfactionSurveys[0]?.status, "responded");
   assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Pesquisa de Satisfação")).length, 1);
 });
 
@@ -1468,6 +1469,65 @@ test("CSAT comment offer can be skipped after a valid score", async () => {
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentOffer"), false);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("completedSurveyDecision"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Obrigad@ por participar")), true);
+});
+
+test("new CSAT score is not routed through stale completed survey decision", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        status: "CLOSED",
+        closedAt: new Date("2026-08-11T12:00:00.000Z"),
+        answers: {
+          lastClosedServiceCycle: {
+            protocol: "CVT-CLOSED123456",
+            issuedAt: "2026-08-11T11:50:00.000Z",
+            cycleId: "cycle_closed",
+            source: "service_cycle",
+            closedAt: "2026-08-11T12:00:00.000Z",
+            closeReason: "human_close",
+            closeSource: "inbox",
+          },
+          satisfactionRuntime: {
+            completedSurveyDecision: {
+              awaiting: true,
+              prompted: false,
+            },
+          },
+        },
+      }),
+    ],
+    satisfactionSurveys: [
+      {
+        id: "survey_new",
+        clientId: "client_1",
+        conversationId: "conversation_1",
+        type: "csat",
+        source: "human_close",
+        status: "sent",
+        questionText: "Pesquisa nova",
+        expiresAt: new Date("2026-08-11T12:15:00.000Z"),
+        commentEnabled: true,
+        contactId: null,
+        leadId: null,
+      },
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("5", "MSG_NEW_CSAT_WITH_STALE_GATE", "2026-08-11T12:05:00.000Z");
+  });
+
+  assert.equal(state.satisfactionResponses.length, 1);
+  assert.equal(state.satisfactionResponses[0]?.score, 5);
+  assert.equal(state.satisfactionSurveys[0]?.status, "pending");
+  assert.equal(protocolStartedEvents().length, 0);
+  assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentOffer"), true);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), false);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Poderia compartilhar conosco")), true);
 });
 
 test("CSAT comment text is saved after the customer opts in", async () => {

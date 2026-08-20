@@ -14,6 +14,7 @@ import type { ConversationState, QuoteSiteAnswers } from "../conversation/conver
 import { activateHumanHandoff, updateOutbound } from "../conversation/conversation.service.js";
 import {
   clearActiveServiceCycle,
+  clearSatisfactionRuntimeForNewServiceCycle,
   closeCurrentServiceCycle,
   ensureActiveServiceCycle,
   getActiveServiceCycle,
@@ -431,7 +432,7 @@ function buildInboundNotificationMessage(params: {
 }
 
 function clearWebSessionServiceCycleState(state: ConversationState): ConversationState {
-  const cleared = clearActiveServiceCycle(state);
+  const cleared = clearSatisfactionRuntimeForNewServiceCycle(clearActiveServiceCycle(state));
   const answers = isRecord(cleared.answers) ? cleared.answers as Record<string, unknown> : {};
   const nextAnswers = { ...answers };
   delete nextAnswers.flowContext;
@@ -1244,7 +1245,6 @@ async function sendWebSessionSatisfactionSurvey(params: {
   const assignedUserId = params.assignedUserId ?? params.state.assignedUserId ?? null;
   if (!assignedUserId && policy.satisfaction.eligibility !== "DIRECTED_SERVICE") return params.state;
   const now = params.now ?? new Date();
-  const surveyCycle = getServiceCycleForDisplay(params.state);
   const expiresAt = new Date(now.getTime() + policy.satisfaction.ttlMinutes * 60_000);
   const existing = await params.prisma.satisfactionSurvey.findFirst({
     where: {
@@ -1258,11 +1258,13 @@ async function sendWebSessionSatisfactionSurvey(params: {
     select: { id: true },
   });
   if (existing) return params.state;
+  const initializedState = clearSatisfactionRuntimeForNewServiceCycle(params.state);
+  const surveyCycle = getServiceCycleForDisplay(initializedState);
   const survey = await params.prisma.satisfactionSurvey.create({
     data: {
       clientId: params.clientId,
       conversationId: params.conversationId,
-      departmentId: params.state.departmentId ?? null,
+      departmentId: initializedState.departmentId ?? null,
       assignedUserId,
       channel: "whatsapp",
       type: "csat",
@@ -1281,7 +1283,7 @@ async function sendWebSessionSatisfactionSurvey(params: {
         provider: "web_session",
         attribution: assignedUserId ? "last_assigned_agent" : "no_assigned_agent",
         eligibility: policy.satisfaction.eligibility,
-        queueId: params.state.queueId ?? null,
+        queueId: initializedState.queueId ?? null,
       },
     },
   });
@@ -1294,7 +1296,7 @@ async function sendWebSessionSatisfactionSurvey(params: {
     channelAccountId: params.channelAccountId,
     requestId: `${params.requestId}:survey:${survey.id}`,
     text: survey.questionText,
-    state: params.state,
+    state: initializedState,
   });
 }
 
@@ -1480,115 +1482,6 @@ async function handleWebSessionSatisfactionInbound(params: {
   const text = String(params.inboundText ?? "").trim();
   const satisfactionRuntime = getSatisfactionRuntime(params.state);
   const closePolicy = await getWebSessionClosePolicy({ prisma: params.prisma, clientId: params.clientId });
-  const completedSurveyDecision = isRecord(satisfactionRuntime.completedSurveyDecision)
-    ? satisfactionRuntime.completedSurveyDecision
-    : null;
-  if (completedSurveyDecision?.awaiting === true) {
-    if (completedSurveyDecision.prompted === true && text === "1") {
-      const nextState = clearCompletedSurveyDecision(params.state);
-      const state = await restartWebSessionBotConversation({
-        prisma: params.prisma,
-        clientId: params.clientId,
-        clientKey: params.clientKey,
-        waId: params.waId,
-        waIdCanonical: params.waIdCanonical,
-        channelAccountId: params.channelAccountId,
-        conversationId: params.conversationId,
-        requestId: params.requestId,
-        state: nextState,
-        now: params.now,
-        inboundText: text,
-      });
-      return {
-        handled: true as const,
-        state,
-      };
-    }
-    if (completedSurveyDecision.prompted === true && text === "2") {
-      const nextState = {
-        ...clearCompletedSurveyDecision(params.state),
-        status: "CLOSED" as const,
-        closedAt: params.state.closedAt ?? params.now.toISOString(),
-      };
-      await sendWebSessionBotText({
-        prisma: params.prisma,
-        clientId: params.clientId,
-        clientKey: params.clientKey,
-        waId: params.waId,
-        waIdCanonical: params.waIdCanonical,
-        channelAccountId: params.channelAccountId,
-        requestId: `${params.requestId}:survey-completed-close`,
-        text: "Atendimento encerrado. Obrigado pelo contato.",
-        state: nextState,
-      });
-      return { handled: true as const, state: nextState };
-    }
-    const state = await sendWebSessionBotText({
-      prisma: params.prisma,
-      clientId: params.clientId,
-      clientKey: params.clientKey,
-      waId: params.waId,
-      waIdCanonical: params.waIdCanonical,
-      channelAccountId: params.channelAccountId,
-      requestId: `${params.requestId}:survey-completed-choice`,
-      text: closePolicy.satisfaction.newServiceGateText,
-      state: markCompletedSurveyDecisionPrompted(params.state),
-    });
-    return { handled: true as const, state };
-  }
-  if (satisfactionRuntime.awaitingExpiredSurveyDecision === true) {
-    if (text === "1") {
-      const nextState = clearExpiredSurveyDecision(params.state);
-      const state = await restartWebSessionBotConversation({
-        prisma: params.prisma,
-        clientId: params.clientId,
-        clientKey: params.clientKey,
-        waId: params.waId,
-        waIdCanonical: params.waIdCanonical,
-        channelAccountId: params.channelAccountId,
-        conversationId: params.conversationId,
-        requestId: params.requestId,
-        state: nextState,
-        now: params.now,
-        inboundText: text,
-      });
-      return {
-        handled: true as const,
-        state,
-      };
-    }
-    if (text === "2") {
-      const nextState = {
-        ...clearExpiredSurveyDecision(params.state),
-        status: "CLOSED" as const,
-        closedAt: params.now.toISOString(),
-      };
-      await sendWebSessionBotText({
-        prisma: params.prisma,
-        clientId: params.clientId,
-        clientKey: params.clientKey,
-        waId: params.waId,
-        waIdCanonical: params.waIdCanonical,
-        channelAccountId: params.channelAccountId,
-        requestId: `${params.requestId}:survey-expired-close`,
-        text: "Atendimento encerrado. Obrigado pelo contato.",
-        state: nextState,
-      });
-      return { handled: true as const, state: nextState };
-    }
-    const state = await sendWebSessionBotText({
-      prisma: params.prisma,
-      clientId: params.clientId,
-      clientKey: params.clientKey,
-      waId: params.waId,
-      waIdCanonical: params.waIdCanonical,
-      channelAccountId: params.channelAccountId,
-      requestId: `${params.requestId}:survey-expired-choice`,
-      text: "Tempo de resposta da pesquisa esgotado.\n\nDeseja iniciar um novo atendimento? 😃\n\n1 - Sim. 😁\n2 - Não. 😉",
-      state: params.state,
-    });
-    return { handled: true as const, state };
-  }
   const commentOffer = isRecord(satisfactionRuntime.commentOffer) ? satisfactionRuntime.commentOffer : null;
   if (commentOffer?.awaiting === true) {
     const surveyId = getNonEmptyString(commentOffer.surveyId);
@@ -1687,7 +1580,118 @@ async function handleWebSessionSatisfactionInbound(params: {
       commentEnabled: true,
     },
   });
-  if (!survey) return { handled: false as const, state: params.state };
+  if (!survey) {
+    const completedSurveyDecision = isRecord(satisfactionRuntime.completedSurveyDecision)
+      ? satisfactionRuntime.completedSurveyDecision
+      : null;
+    if (completedSurveyDecision?.awaiting === true) {
+      if (completedSurveyDecision.prompted === true && text === "1") {
+        const nextState = clearCompletedSurveyDecision(params.state);
+        const state = await restartWebSessionBotConversation({
+          prisma: params.prisma,
+          clientId: params.clientId,
+          clientKey: params.clientKey,
+          waId: params.waId,
+          waIdCanonical: params.waIdCanonical,
+          channelAccountId: params.channelAccountId,
+          conversationId: params.conversationId,
+          requestId: params.requestId,
+          state: nextState,
+          now: params.now,
+          inboundText: text,
+        });
+        return {
+          handled: true as const,
+          state,
+        };
+      }
+      if (completedSurveyDecision.prompted === true && text === "2") {
+        const nextState = {
+          ...clearCompletedSurveyDecision(params.state),
+          status: "CLOSED" as const,
+          closedAt: params.state.closedAt ?? params.now.toISOString(),
+        };
+        await sendWebSessionBotText({
+          prisma: params.prisma,
+          clientId: params.clientId,
+          clientKey: params.clientKey,
+          waId: params.waId,
+          waIdCanonical: params.waIdCanonical,
+          channelAccountId: params.channelAccountId,
+          requestId: `${params.requestId}:survey-completed-close`,
+          text: "Atendimento encerrado. Obrigado pelo contato.",
+          state: nextState,
+        });
+        return { handled: true as const, state: nextState };
+      }
+      const state = await sendWebSessionBotText({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        waId: params.waId,
+        waIdCanonical: params.waIdCanonical,
+        channelAccountId: params.channelAccountId,
+        requestId: `${params.requestId}:survey-completed-choice`,
+        text: closePolicy.satisfaction.newServiceGateText,
+        state: markCompletedSurveyDecisionPrompted(params.state),
+      });
+      return { handled: true as const, state };
+    }
+    if (satisfactionRuntime.awaitingExpiredSurveyDecision === true) {
+      if (text === "1") {
+        const nextState = clearExpiredSurveyDecision(params.state);
+        const state = await restartWebSessionBotConversation({
+          prisma: params.prisma,
+          clientId: params.clientId,
+          clientKey: params.clientKey,
+          waId: params.waId,
+          waIdCanonical: params.waIdCanonical,
+          channelAccountId: params.channelAccountId,
+          conversationId: params.conversationId,
+          requestId: params.requestId,
+          state: nextState,
+          now: params.now,
+          inboundText: text,
+        });
+        return {
+          handled: true as const,
+          state,
+        };
+      }
+      if (text === "2") {
+        const nextState = {
+          ...clearExpiredSurveyDecision(params.state),
+          status: "CLOSED" as const,
+          closedAt: params.now.toISOString(),
+        };
+        await sendWebSessionBotText({
+          prisma: params.prisma,
+          clientId: params.clientId,
+          clientKey: params.clientKey,
+          waId: params.waId,
+          waIdCanonical: params.waIdCanonical,
+          channelAccountId: params.channelAccountId,
+          requestId: `${params.requestId}:survey-expired-close`,
+          text: "Atendimento encerrado. Obrigado pelo contato.",
+          state: nextState,
+        });
+        return { handled: true as const, state: nextState };
+      }
+      const state = await sendWebSessionBotText({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        waId: params.waId,
+        waIdCanonical: params.waIdCanonical,
+        channelAccountId: params.channelAccountId,
+        requestId: `${params.requestId}:survey-expired-choice`,
+        text: "Tempo de resposta da pesquisa esgotado.\n\nDeseja iniciar um novo atendimento? 😃\n\n1 - Sim. 😁\n2 - Não. 😉",
+        state: params.state,
+      });
+      return { handled: true as const, state };
+    }
+    return { handled: false as const, state: params.state };
+  }
   const score = /^\d+$/.test(text) ? Number(text) : NaN;
   const expired = survey.expiresAt ? survey.expiresAt.getTime() <= params.now.getTime() : false;
   if (expired) {

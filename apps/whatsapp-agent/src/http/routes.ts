@@ -423,6 +423,7 @@ import {
 } from "../inbox/conversationProtocol.js";
 import {
   buildServiceCycleHistoryMap,
+  clearSatisfactionRuntimeForNewServiceCycle,
   closeCurrentServiceCycle,
   ensureActiveServiceCycle,
   getActiveServiceCycle,
@@ -11308,7 +11309,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         closedAt: null,
       };
       const claimedCycle = ensureActiveServiceCycle(nextState, new Date(assignedAt), "inbox_claim");
-      nextState = claimedCycle.state;
+      nextState = claimedCycle.created
+        ? clearSatisfactionRuntimeForNewServiceCycle(claimedCycle.state)
+        : claimedCycle.state;
       if (claimedCycle.created) {
         await recordServiceCycleEvent({
           prisma,
