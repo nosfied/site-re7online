@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   realtimeEventTargetsSelectedConversation,
+  resolveRealtimeConversationOperationalProjection,
   resolveRealtimeTimelineConversationKey,
 } from "./inboxRealtimeTimeline";
 
@@ -63,4 +64,36 @@ test("realtime timeline rejects unrelated selected conversation", () => {
     }),
     false
   );
+});
+
+test("realtime partial event does not reopen a known closed conversation visually", () => {
+  const projection = resolveRealtimeConversationOperationalProjection(
+    { status: "CLOSED", mode: "HUMAN" },
+    { mode: "BOT" }
+  );
+
+  assert.deepEqual(projection, {
+    status: "CLOSED",
+    mode: "HUMAN",
+  });
+});
+
+test("realtime explicit new cycle status replaces a known closed conversation", () => {
+  const waitingProjection = resolveRealtimeConversationOperationalProjection(
+    { status: "CLOSED", mode: "HUMAN" },
+    { status: "WAITING", mode: "BOT" }
+  );
+  const inProgressProjection = resolveRealtimeConversationOperationalProjection(
+    { status: "CLOSED", mode: "HUMAN" },
+    { status: "IN_PROGRESS", mode: "HUMAN" }
+  );
+
+  assert.deepEqual(waitingProjection, {
+    status: "WAITING",
+    mode: "BOT",
+  });
+  assert.deepEqual(inProgressProjection, {
+    status: "IN_PROGRESS",
+    mode: "HUMAN",
+  });
 });

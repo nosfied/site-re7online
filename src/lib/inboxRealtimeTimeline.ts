@@ -1,4 +1,5 @@
 import type { AppRealtimeEvent } from "@/lib/appRealtime";
+import type { ConversationOperationalStatus, InboxConversationItem } from "@/lib/whatsappAdminApi";
 
 export function normalizeConversationIdentity(value: string | null | undefined) {
   return String(value ?? "").trim();
@@ -48,4 +49,32 @@ export function resolveRealtimeTimelineConversationKey(input: {
     return input.selectedConversationKey ?? realtimeConversationCandidates(input.event)[0] ?? null;
   }
   return realtimeConversationCandidates(input.event)[0] ?? null;
+}
+
+export function resolveRealtimeConversationOperationalProjection(
+  current: Pick<InboxConversationItem, "mode" | "status">,
+  event: {
+    mode?: InboxConversationItem["mode"] | null;
+    status?: ConversationOperationalStatus | null;
+  }
+) {
+  const hasExplicitStatus = Object.prototype.hasOwnProperty.call(event, "status");
+  if (hasExplicitStatus) {
+    return {
+      mode: event.mode ?? current.mode,
+      status: event.status ?? null,
+    };
+  }
+
+  if (current.status === "CLOSED") {
+    return {
+      mode: current.mode,
+      status: current.status,
+    };
+  }
+
+  return {
+    mode: event.mode ?? current.mode,
+    status: current.status,
+  };
 }

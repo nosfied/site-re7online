@@ -23,6 +23,7 @@ import {
 } from "@/lib/appRealtime";
 import {
   realtimeEventTargetsSelectedConversation,
+  resolveRealtimeConversationOperationalProjection,
   resolveRealtimeTimelineConversationKey,
 } from "@/lib/inboxRealtimeTimeline";
 import { QUICK_EMOJIS } from "@/lib/quickEmojis";
@@ -3162,12 +3163,13 @@ export default function AppInboxPage() {
           if (shouldRemoveFromHumanInbox) return [];
           const nextAssignedUserId =
             event.assignedUserId !== undefined ? event.assignedUserId : item.assignedUserId;
+          const operationalProjection = resolveRealtimeConversationOperationalProjection(item, event);
           return [{
             ...item,
             waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
             protocol: event.protocol ?? item.protocol ?? null,
             cycleId: event.cycleId ?? item.cycleId ?? null,
-            mode: event.mode ?? item.mode,
+            mode: operationalProjection.mode,
             handoffStatus: event.handoffStatus ?? item.handoffStatus,
             assignedUserId: nextAssignedUserId ?? null,
             assignedUserName:
@@ -3178,7 +3180,7 @@ export default function AppInboxPage() {
               event.departmentName !== undefined ? event.departmentName : item.departmentName,
             queueId: event.queueId !== undefined ? event.queueId : item.queueId ?? null,
             queueName: event.queueName !== undefined ? event.queueName : item.queueName,
-            status: event.status ?? item.status,
+            status: operationalProjection.status,
             closedAt: event.closedAt !== undefined ? event.closedAt : item.closedAt,
             lastMessage: event.notificationMessage
               ? {
@@ -3292,16 +3294,20 @@ export default function AppInboxPage() {
         if (item.waIdCanonical) matchedConversationKeys.add(item.waIdCanonical);
         const nextAssignedUserId =
           event.assignedUserId !== undefined ? event.assignedUserId : item.assignedUserId;
+        const operationalProjection = resolveRealtimeConversationOperationalProjection(item, {
+          mode: event.mode,
+          ...(nextAssignedUserId ? { status: "IN_PROGRESS" as const } : {}),
+        });
         return {
           ...item,
           waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
           protocol: event.protocol ?? message.protocol ?? item.protocol ?? null,
           cycleId: event.cycleId ?? message.cycleId ?? item.cycleId ?? null,
-          mode: event.mode ?? item.mode,
+          mode: operationalProjection.mode,
           handoffStatus: event.handoffStatus ?? item.handoffStatus,
           assignedUserId: nextAssignedUserId,
           departmentId: event.departmentId ?? item.departmentId ?? null,
-          status: nextAssignedUserId ? ("IN_PROGRESS" as const) : item.status,
+          status: operationalProjection.status,
           lastMessage: {
             protocol: message.protocol ?? null,
             cycleId: message.cycleId ?? null,
