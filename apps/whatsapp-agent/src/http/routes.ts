@@ -421,7 +421,10 @@ import {
   buildConversationProtocolNotice,
   normalizeConversationProtocol,
 } from "../inbox/conversationProtocol.js";
-import { isManagementOnlyInboxMessage } from "../inbox/messageVisibility.js";
+import {
+  isManagementOnlyInboxMessage,
+  shouldProjectConversationToHumanInbox,
+} from "../inbox/messageVisibility.js";
 import {
   buildServiceCycleHistoryMap,
   clearSatisfactionRuntimeForNewServiceCycle,
@@ -635,6 +638,7 @@ const inboxRuntimeStateSelect = {
   lastInboundMessageId: true,
   lastOutboundMessageId: true,
   handoffStatus: true,
+  handoffActivatedAt: true,
   mode: true,
   flow: true,
   chatbotNodeId: true,
@@ -674,6 +678,7 @@ function runtimeStateRowToConversationState(
     },
     handoff: {
       status: handoffStatus === "PENDING" ? "pending" : handoffStatus === "ACTIVE" ? "active" : "none",
+      activatedAt: state.handoffActivatedAt?.toISOString() ?? undefined,
     },
     templateNeeded: false,
     demoStatus: "none",
@@ -912,6 +917,7 @@ async function handleInternalWebSessionHandoffRealtime(
     waIdCanonical: waIdCanonical ?? canonicalizeBrazilWaId(waId),
     mode: "HUMAN",
     handoffStatus,
+    humanInboxVisible: true,
     assignedUserId,
     departmentId,
     updatedAt,
@@ -3669,6 +3675,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           mode: "BOT",
           handoffStatus: "none",
           status: null,
+          humanInboxVisible: false,
           assignedUserId: null,
           assignedUserName: null,
           assignedAt: null,
@@ -3704,6 +3711,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         mode: "BOT",
         handoffStatus: "none",
         status: null,
+        humanInboxVisible: false,
         assignedUserId: null,
         assignedUserName: null,
         assignedAt: null,
@@ -17073,6 +17081,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             nextState.handoff.status === "pending" || nextState.handoff.status === "active"
               ? nextState.handoff.status
               : "active",
+          humanInboxVisible: true,
           assignedUserId: nextState.assignedUserId ?? null,
           departmentId: department.id,
           updatedAt: new Date().toISOString(),
@@ -27662,7 +27671,7 @@ function logAppRbacDenied(params: {
 function serializeConversationOperationalFields(params: {
   conversation: {
     mode?: string | null;
-    handoff?: { status?: string | null } | null;
+    handoff?: { status?: string | null; activatedAt?: string | null } | null;
     chatbotActive?: boolean | null;
     chatbotNodeId?: string | null;
     assignedUserId?: string | null;
@@ -27704,6 +27713,7 @@ function serializeConversationOperationalFields(params: {
     departmentName: params.departmentName,
     queueId: conversation?.queueId ?? null,
     queueName: params.queueName,
+    handoffActivatedAt: conversation?.handoff?.activatedAt ?? null,
     status,
     closedAt: conversation?.closedAt ?? null,
     awaitingConsent: Boolean(params.awaitingConsent),
@@ -27883,6 +27893,13 @@ async function buildConversationActionPayload(
     source: channelSource,
     features: clientFeatures,
   });
+  const operationalFields = serializeConversationOperationalFields({
+    conversation,
+    assignedUserName,
+    departmentName,
+    queueName,
+  });
+  const humanInboxVisible = shouldProjectConversationToHumanInbox(operationalFields);
 
   return {
     ok: true,
@@ -27898,12 +27915,8 @@ async function buildConversationActionPayload(
       source: channelSource,
       operational: conversation,
     }),
-    ...serializeConversationOperationalFields({
-      conversation,
-      assignedUserName,
-      departmentName,
-      queueName,
-    }),
+    ...operationalFields,
+    humanInboxVisible,
   };
 }
 
@@ -27949,6 +27962,7 @@ async function publishConversationOperationalUpdate(
     mode: eventMode,
     handoffStatus: eventHandoffStatus,
     status: payload.status ?? null,
+    humanInboxVisible: payload.humanInboxVisible === true,
     assignedUserId: payload.assignedUserId ?? null,
     assignedUserName: payload.assignedUserName ?? null,
     assignedAt: payload.assignedAt ?? null,
@@ -29210,16 +29224,11 @@ function conversationListItemIsInHumanFlow(item: {
   handoffStatus?: string | null;
   assignedUserId: string | null;
   assignedAt: string | null;
+  departmentId?: string | null;
+  queueId?: string | null;
+  handoffActivatedAt?: string | Date | null;
 }) {
-  return (
-    item.status === ConversationOperationalStatus.CLOSED ||
-    item.status === ConversationOperationalStatus.WAITING ||
-    item.mode === "HUMAN" ||
-    item.handoffStatus === "active" ||
-    item.handoffStatus === "pending" ||
-    Boolean(item.assignedUserId) ||
-    Boolean(item.assignedAt)
-  );
+  return shouldProjectConversationToHumanInbox(item);
 }
 
 function conversationListItemIsVisibleInInbox(item: {
@@ -29229,11 +29238,14 @@ function conversationListItemIsVisibleInInbox(item: {
   awaitingConsent?: boolean | null;
   assignedUserId: string | null;
   assignedAt: string | null;
+  departmentId?: string | null;
+  queueId?: string | null;
+  handoffActivatedAt?: string | Date | null;
   lastMessage?: unknown;
 }) {
   if (conversationListItemIsInHumanFlow(item)) return true;
   if (item.awaitingConsent) return false;
-  return conversationListItemIsAutomation(item) && Boolean(item.lastMessage);
+  return false;
 }
 
 async function loadActiveChatbotConsentNodeIds(
@@ -29261,6 +29273,9 @@ function conversationListItemShouldCountUnread(item: {
   handoffStatus?: string | null;
   assignedUserId: string | null;
   assignedAt: string | null;
+  departmentId?: string | null;
+  queueId?: string | null;
+  handoffActivatedAt?: string | Date | null;
 }) {
   if (item.status === ConversationOperationalStatus.CLOSED) return false;
   return conversationListItemIsInHumanFlow(item);
@@ -29881,6 +29896,7 @@ async function buildConversationListPayload(
       lastInboundAt: latestInbound?.createdAt?.toISOString() ?? null,
       lastOutboundAt: latestOutbound?.createdAt?.toISOString() ?? null,
     };
+    const humanInboxVisible = shouldProjectConversationToHumanInbox(displayOperationalFields);
     const lastMessage =
       inboundAt >= outboundAt
         ? latestInbound
@@ -29941,6 +29957,7 @@ async function buildConversationListPayload(
       leadEmail: lead?.email ?? null,
       leadCompany: lead?.company ?? null,
       ...displayOperationalFields,
+      humanInboxVisible,
       ...buildConversationOperationalTimingFields({
         source: { ...conversation, lastInboundAt: displayOperationalFields.lastInboundAt },
         operational: displayOperationalFields,

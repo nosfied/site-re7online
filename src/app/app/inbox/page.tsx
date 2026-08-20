@@ -22,6 +22,7 @@ import {
   type AppRealtimeEvent,
 } from "@/lib/appRealtime";
 import {
+  getRealtimeHumanInboxVisibility,
   isManagementOnlyRealtimeMessage,
   realtimeEventTargetsSelectedConversation,
   resolveRealtimeConversationOperationalProjection,
@@ -3132,6 +3133,7 @@ export default function AppInboxPage() {
         ? canUserReceiveTargetedNotification(event, session.user)
         : false;
     if (event.type === "conversation.handoff.updated") {
+      const humanInboxVisibility = getRealtimeHumanInboxVisibility(event);
       const conversationKey = event.waIdCanonical ?? event.waId;
       let matchedConversation = false;
       const matchedConversationKeys = new Set<string>([conversationKey, event.waId, event.waIdCanonical ?? ""]);
@@ -3141,8 +3143,11 @@ export default function AppInboxPage() {
       });
       const eventRepresentsClosed = event.status === "CLOSED";
       const eventTargetsKnownEligibleConversation =
-        eventTargetsCurrentUser || (!eventRepresentsClosed && Boolean(currentMatchedConversation));
+        humanInboxVisibility === false
+          ? false
+          : eventTargetsCurrentUser || (!eventRepresentsClosed && Boolean(currentMatchedConversation));
       const shouldRemoveFromHumanInbox =
+        humanInboxVisibility === false ||
         event.reason === "released" ||
         event.reason === "conversation.deleted" ||
         event.reason === "conversation.anonymized" ||
@@ -3250,6 +3255,7 @@ export default function AppInboxPage() {
     if (isManagementOnlyRealtimeMessage(event)) {
       return;
     }
+    const humanInboxVisibility = getRealtimeHumanInboxVisibility(event);
 
     if (message.direction === "INBOUND") {
       countUnseenInboundMessages(
@@ -3280,6 +3286,25 @@ export default function AppInboxPage() {
         selectedConversationKey,
         selectedConversationWaId,
       ]);
+    if (humanInboxVisibility === false) {
+      setConversations((prev) =>
+        prev.filter((item) => {
+          const itemKey = getConversationIdentity(item);
+          return itemKey !== conversationKey && item.waId !== event.waId && item.waIdCanonical !== event.waIdCanonical;
+        })
+      );
+      if (
+        realtimeEventTargetsSelectedConversation({
+          event,
+          selectedConversationKey,
+          selectedConversationWaId,
+          selectedConversationIdentityCandidates: selectedConversationIdentityCandidatesRef.current,
+        })
+      ) {
+        clearSelectedConversation();
+      }
+      return;
+    }
     setConversations((prev) => {
       const nextItems = prev.map((item) => {
         const itemKey = getConversationIdentity(item);
@@ -3321,7 +3346,7 @@ export default function AppInboxPage() {
           updatedAt: message.createdAt,
         };
         });
-      if (!matchedConversation) {
+      if (!matchedConversation && humanInboxVisibility === true) {
         void refreshConversationListRef.current?.(session);
       }
       return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
@@ -3370,7 +3395,7 @@ export default function AppInboxPage() {
       return;
     }
 
-    if (eventTargetsKnownEligibleConversation) {
+    if (humanInboxVisibility === true && eventTargetsKnownEligibleConversation) {
       markConversationAsUnread(conversationKey, event.waId);
       if (message.direction === "INBOUND") {
         handleRealtimeNotificationCandidate({

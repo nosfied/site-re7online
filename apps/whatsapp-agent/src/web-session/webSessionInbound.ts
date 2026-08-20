@@ -30,7 +30,11 @@ import {
   buildConversationProtocolNotice,
   normalizeConversationProtocol,
 } from "../inbox/conversationProtocol.js";
-import { withInboxMessageVisibility, type InboxMessageVisibility } from "../inbox/messageVisibility.js";
+import {
+  shouldProjectConversationToHumanInbox,
+  withInboxMessageVisibility,
+  type InboxMessageVisibility,
+} from "../inbox/messageVisibility.js";
 import { logger } from "../logger/logger.js";
 import { deleteWebSessionStoredMedia, type WebSessionStoredMedia } from "../media/webSessionMedia.js";
 import { recordConversationInboundMetrics } from "../metrics/conversationMetrics.js";
@@ -989,6 +993,19 @@ function normalizeHandoffStatus(status?: HandoffStatus | string | null) {
   return "none";
 }
 
+function shouldProjectStateToHumanInbox(state: ConversationState) {
+  return shouldProjectConversationToHumanInbox({
+    status: state.status,
+    mode: state.mode,
+    handoffStatus: state.handoff.status,
+    assignedUserId: state.assignedUserId ?? null,
+    assignedAt: state.assignedAt ?? null,
+    departmentId: state.departmentId ?? null,
+    queueId: state.queueId ?? null,
+    handoffActivatedAt: state.handoff.activatedAt ?? null,
+  });
+}
+
 function runtimeToConversationState(params: {
   runtime: WebSessionRuntimeState;
   message: NormalizedWebSessionInboundMessage;
@@ -1184,6 +1201,7 @@ async function sendWebSessionBotText(params: {
       waIdCanonical: params.waIdCanonical,
       mode: nextState.mode === "HUMAN" ? "HUMAN" : "BOT",
       handoffStatus: nextState.handoff.status,
+      humanInboxVisible: inboxVisibility === "management_only" ? false : shouldProjectStateToHumanInbox(nextState),
       assignedUserId: nextState.assignedUserId ?? null,
       departmentId: nextState.departmentId ?? null,
       protocol: serviceCycle?.protocol ?? null,
@@ -2200,6 +2218,8 @@ export async function ingestWebSessionInboundMessage(params: {
       waIdCanonical: params.message.senderCanonical,
       mode: runtimeConversationState.mode === "HUMAN" ? "HUMAN" : "BOT",
       handoffStatus: runtimeConversationState.handoff.status,
+      humanInboxVisible:
+        inboundInboxVisibility === "management_only" ? false : shouldProjectStateToHumanInbox(runtimeConversationState),
       assignedUserId: runtime.assignedUserId ?? null,
       departmentId: runtime.departmentId ?? null,
       protocol: inboundServiceCycle?.protocol ?? null,
@@ -2546,6 +2566,9 @@ export async function ingestWebSessionInboundMessage(params: {
                 waIdCanonical: params.message.senderCanonical,
                 mode: runtimeConversationState.mode === "HUMAN" ? "HUMAN" : "BOT",
                 handoffStatus: runtimeConversationState.handoff.status,
+                humanInboxVisible: chatbotResult.managementInteraction?.outboundKind
+                  ? false
+                  : shouldProjectStateToHumanInbox(runtimeConversationState),
                 assignedUserId: runtimeConversationState.assignedUserId ?? null,
                 departmentId: runtimeConversationState.departmentId ?? null,
                 protocol: replyServiceCycle?.protocol ?? null,
@@ -2753,6 +2776,7 @@ export async function ingestWebSessionInboundMessage(params: {
                   ? "active"
                   : runtimeConversationState.handoff.status,
               status: effectiveRuntime.status ?? runtimeConversationState.status ?? "WAITING",
+              humanInboxVisible: true,
               assignedUserId: effectiveRuntime.assignedUserId ?? null,
               assignedUserName: handoffAssignedUser?.name ?? null,
               departmentId: effectiveDepartmentId,

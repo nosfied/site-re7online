@@ -188,6 +188,36 @@ test("operational message push skips management-only messages", () => {
   );
 });
 
+test("operational message push respects canonical human inbox projection", () => {
+  assert.equal(
+    isOperationalMessagePushCandidate({
+      type: "message.created",
+      clientId: "client-1",
+      waId: "masked",
+      mode: "HUMAN",
+      handoffStatus: "active",
+      humanInboxVisible: false,
+      assignedUserId: null,
+      departmentId: "department-1",
+      message: {
+        direction: "INBOUND",
+        type: "TEXT",
+        status: "RECEIVED",
+        intent: null,
+        bodyText: "ola",
+        templateName: null,
+        templateLang: null,
+        requestId: null,
+        messageId: "message-pre-human",
+        metaMessageId: null,
+        errorBody: null,
+        createdAt: new Date().toISOString(),
+      },
+    }),
+    false
+  );
+});
+
 test("operational message push allows assigned and human conversations", () => {
   const base = {
     type: "message.created" as const,

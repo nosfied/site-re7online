@@ -128,6 +128,7 @@ export type InboxConversationItem = {
   queueId: string | null;
   queueName: string | null;
   status: ConversationOperationalStatus | null;
+  humanInboxVisible?: boolean;
   closedAt: string | null;
   lastInboundAt: string | null;
   lastOutboundAt: string | null;

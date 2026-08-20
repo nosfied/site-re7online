@@ -13,6 +13,7 @@ export type AppRealtimeEvent =
       message: InboxMessageItem;
       mode?: AppConversationMode | null;
       handoffStatus?: AppHandoffStatus | null;
+      humanInboxVisible?: boolean;
       assignedUserId?: string | null;
       departmentId?: string | null;
       protocol?: string | null;
@@ -37,6 +38,7 @@ export type AppRealtimeEvent =
       mode?: AppConversationMode | null;
       handoffStatus?: AppHandoffStatus | null;
       status?: ConversationOperationalStatus | null;
+      humanInboxVisible?: boolean;
       assignedUserId?: string | null;
       assignedUserName?: string | null;
       assignedAt?: string | null;

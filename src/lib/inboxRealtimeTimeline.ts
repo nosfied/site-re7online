@@ -7,6 +7,12 @@ export function isManagementOnlyRealtimeMessage(
   return event.message.inboxVisibility === "management_only";
 }
 
+export function getRealtimeHumanInboxVisibility(
+  event: Pick<Extract<AppRealtimeEvent, { type: "message.created" | "conversation.handoff.updated" }>, "humanInboxVisible">
+) {
+  return typeof event.humanInboxVisible === "boolean" ? event.humanInboxVisible : null;
+}
+
 export function normalizeConversationIdentity(value: string | null | undefined) {
   return String(value ?? "").trim();
 }

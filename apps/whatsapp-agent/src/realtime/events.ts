@@ -35,6 +35,7 @@ export type InboxRealtimeEvent =
       waIdCanonical?: string | null;
       mode?: "BOT" | "HUMAN" | null;
       handoffStatus?: "none" | "pending" | "active" | null;
+      humanInboxVisible?: boolean;
       assignedUserId?: string | null;
       departmentId?: string | null;
       protocol?: string | null;
@@ -60,6 +61,7 @@ export type InboxRealtimeEvent =
       mode?: "BOT" | "HUMAN" | null;
       handoffStatus?: "none" | "pending" | "active" | null;
       status?: string | null;
+      humanInboxVisible?: boolean;
       assignedUserId?: string | null;
       assignedUserName?: string | null;
       assignedAt?: string | null;

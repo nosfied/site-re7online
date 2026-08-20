@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  getRealtimeHumanInboxVisibility,
   isManagementOnlyRealtimeMessage,
   realtimeEventTargetsSelectedConversation,
   resolveRealtimeConversationOperationalProjection,
@@ -52,6 +53,12 @@ test("management-only realtime messages are identifiable without body text match
     }),
     false
   );
+});
+
+test("realtime human inbox visibility comes from structured backend projection", () => {
+  assert.equal(getRealtimeHumanInboxVisibility({ humanInboxVisible: true }), true);
+  assert.equal(getRealtimeHumanInboxVisibility({ humanInboxVisible: false }), false);
+  assert.equal(getRealtimeHumanInboxVisibility({}), null);
 });
 
 test("realtime timeline keeps support/internal channel identity provider-neutral", () => {
