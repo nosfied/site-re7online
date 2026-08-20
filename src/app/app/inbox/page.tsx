@@ -23,6 +23,7 @@ import {
 } from "@/lib/appRealtime";
 import {
   getRealtimeHumanInboxVisibility,
+  isHumanTimelineMessageItem,
   isManagementOnlyRealtimeMessage,
   realtimeEventTargetsSelectedConversation,
   resolveRealtimeConversationOperationalProjection,
@@ -1612,10 +1613,12 @@ function rememberInboundMessages(
 }
 
 function mergeMessagesByIdentity(current: InboxMessageItem[], incoming: InboxMessageItem[]) {
-  if (incoming.length === 0) return current;
-  const next = [...current];
-  const seen = new Set(current.map(getMessageIdentity));
-  for (const item of incoming) {
+  const visibleIncoming = incoming.filter(isHumanTimelineMessageItem);
+  const visibleCurrent = current.filter(isHumanTimelineMessageItem);
+  if (visibleIncoming.length === 0) return visibleCurrent;
+  const next = [...visibleCurrent];
+  const seen = new Set(visibleCurrent.map(getMessageIdentity));
+  for (const item of visibleIncoming) {
     const identity = getMessageIdentity(item);
     if (seen.has(identity)) continue;
     seen.add(identity);
@@ -3253,6 +3256,13 @@ export default function AppInboxPage() {
     const conversationKey = event.waIdCanonical ?? event.waId;
     const message = event.message;
     if (isManagementOnlyRealtimeMessage(event)) {
+      const messageIdentity = getMessageIdentity(message);
+      setMessages((prev) => prev.filter((item) => getMessageIdentity(item) !== messageIdentity));
+      for (const [cacheKey, cacheMessages] of timelineCacheRef.current.entries()) {
+        const nextMessages = cacheMessages.filter((item) => getMessageIdentity(item) !== messageIdentity);
+        timelineCacheRef.current.set(cacheKey, nextMessages);
+      }
+      void refreshConversationListRef.current?.(session);
       return;
     }
     const humanInboxVisibility = getRealtimeHumanInboxVisibility(event);
@@ -3762,6 +3772,8 @@ export default function AppInboxPage() {
     ) {
       return;
     }
+    const visibleResponseItems =
+      response.items.filter(isHumanTimelineMessageItem);
     if (mode === "append") {
       if (
         latestKnownAt &&
@@ -3769,13 +3781,13 @@ export default function AppInboxPage() {
       ) {
         countUnseenInboundMessages(
           responseConversationKey,
-          response.items,
+          visibleResponseItems,
           notifiedInboundMessageKeysRef.current
         );
       } else {
         rememberInboundMessages(
           responseConversationKey,
-          response.items,
+          visibleResponseItems,
           notifiedInboundMessageKeysRef.current
         );
       }
@@ -3783,12 +3795,12 @@ export default function AppInboxPage() {
     } else {
       rememberInboundMessages(
         responseConversationKey,
-        response.items,
+        visibleResponseItems,
         notifiedInboundMessageKeysRef.current
       );
       primedTimelineNotificationKeysRef.current.add(responseConversationKey);
     }
-    const responseItems = mode === "append" ? response.items : sortMessagesAscending(response.items);
+    const responseItems = mode === "append" ? visibleResponseItems : sortMessagesAscending(visibleResponseItems);
     setMessages((prev) => {
       const nextMessages =
         mode === "append"
@@ -3942,13 +3954,14 @@ export default function AppInboxPage() {
           usedCachedTimeline: Boolean(cachedMessages?.length),
           shouldRefreshUnreadWindow,
         });
+        const visibleResponseItems = response.items.filter(isHumanTimelineMessageItem);
         rememberInboundMessages(
           responseConversationKey,
-          response.items,
+          visibleResponseItems,
           notifiedInboundMessageKeysRef.current
         );
         primedTimelineNotificationKeysRef.current.add(responseConversationKey);
-        const responseItems = sortMessagesAscending(response.items);
+        const responseItems = sortMessagesAscending(visibleResponseItems);
         conversationDetailLoadedAtRef.current = {
           key: visibleConversationKey,
           loadedAt: performance.now(),

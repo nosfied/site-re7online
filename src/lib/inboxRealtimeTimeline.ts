@@ -1,10 +1,14 @@
 import type { AppRealtimeEvent } from "@/lib/appRealtime";
-import type { ConversationOperationalStatus, InboxConversationItem } from "@/lib/whatsappAdminApi";
+import type { ConversationOperationalStatus, InboxConversationItem, InboxMessageItem } from "@/lib/whatsappAdminApi";
 
 export function isManagementOnlyRealtimeMessage(
   event: Pick<Extract<AppRealtimeEvent, { type: "message.created" }>, "message">
 ) {
   return event.message.inboxVisibility === "management_only";
+}
+
+export function isHumanTimelineMessageItem(item: { inboxVisibility?: InboxMessageItem["inboxVisibility"] }) {
+  return item.inboxVisibility !== "management_only";
 }
 
 export function getRealtimeHumanInboxVisibility(

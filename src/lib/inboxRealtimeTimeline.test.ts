@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   getRealtimeHumanInboxVisibility,
+  isHumanTimelineMessageItem,
   isManagementOnlyRealtimeMessage,
   realtimeEventTargetsSelectedConversation,
   resolveRealtimeConversationOperationalProjection,
@@ -53,6 +54,12 @@ test("management-only realtime messages are identifiable without body text match
     }),
     false
   );
+});
+
+test("timeline item visibility uses structured inbox visibility", () => {
+  assert.equal(isHumanTimelineMessageItem({ inboxVisibility: "management_only" }), false);
+  assert.equal(isHumanTimelineMessageItem({ inboxVisibility: "human_timeline" }), true);
+  assert.equal(isHumanTimelineMessageItem({}), true);
 });
 
 test("realtime human inbox visibility comes from structured backend projection", () => {
