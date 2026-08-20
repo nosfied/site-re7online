@@ -4571,10 +4571,14 @@ export default function AppInboxPage() {
     Boolean(selectedConversationWaId) &&
     loadingMessages &&
     messagesConversationKey !== selectedConversationKey;
+  const visibleMessages = useMemo(
+    () => messages.filter(isHumanTimelineMessageItem),
+    [messages]
+  );
   const isRefreshingSelectedTimeline =
     Boolean(selectedConversationWaId) &&
     loadingMessages &&
-    messages.length > 0 &&
+    visibleMessages.length > 0 &&
     messagesConversationKey === selectedConversationKey;
   const isTimelineOutOfSync =
     Boolean(selectedConversationWaId) &&
@@ -7127,15 +7131,15 @@ export default function AppInboxPage() {
             ) : null}
             {selectedConversationWaId &&
             !loadingMessages &&
-            messages.length === 0 &&
+            visibleMessages.length === 0 &&
             messagesConversationKey === selectedConversationKey ? (
               <p className="text-sm text-slate-700/80">Sem mensagens para esta conversa.</p>
             ) : null}
             <div className="space-y-3">
-              {messages.map((item, index) => {
+              {visibleMessages.map((item, index) => {
                 const messageIdentity = getMessageIdentity(item);
                 const statusTicks = renderMessageStatusTicks(item);
-                const shouldAutoLoadMedia = index >= Math.max(messages.length - 8, 0);
+                const shouldAutoLoadMedia = index >= Math.max(visibleMessages.length - 8, 0);
                 const replyOption = buildReplyTarget(item);
                 const internalMessageId = getMessageReplyId(item);
                 const isHighlightedReference =
