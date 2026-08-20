@@ -241,6 +241,16 @@ function getSatisfactionRuntime(state: ConversationState) {
   return isRecord(answers.satisfactionRuntime) ? answers.satisfactionRuntime : {};
 }
 
+function hasSatisfactionLifecycleRuntime(state: Pick<ConversationState, "answers">) {
+  const runtime = getSatisfactionRuntime(state as ConversationState);
+  return Boolean(
+    isRecord(runtime.commentOffer) ||
+      isRecord(runtime.commentInput) ||
+      isRecord(runtime.completedSurveyDecision) ||
+      runtime.awaitingExpiredSurveyDecision === true
+  );
+}
+
 function withSatisfactionRuntime(state: ConversationState, runtime: Record<string, unknown> | null): ConversationState {
   const answers = isRecord(state.answers) ? state.answers as Record<string, unknown> : {};
   const nextAnswers = { ...answers };
@@ -836,14 +846,28 @@ async function ensureWebSessionRuntimeState(params: {
   const existingCompletedSurveyDecision = isRecord(existingSatisfactionRuntime.completedSurveyDecision)
     ? existingSatisfactionRuntime.completedSurveyDecision
     : null;
-  const shouldPreserveClosedSurveyDecision =
-    existing?.status === "CLOSED" && existingCompletedSurveyDecision?.awaiting === true;
+  const existingPendingSurvey = existing?.status === "CLOSED" && params.conversationId
+    ? await params.prisma.satisfactionSurvey.findFirst({
+        where: {
+          clientId: params.message.clientId,
+          conversationId: params.conversationId,
+          type: "csat",
+          status: { in: ["sent", "pending"] },
+        },
+        select: { id: true },
+      })
+    : null;
+  const shouldPreserveClosedSatisfactionLifecycle =
+    existing?.status === "CLOSED" &&
+    (Boolean(existingPendingSurvey) ||
+      hasSatisfactionLifecycleRuntime({ answers: existingAnswers }) ||
+      existingCompletedSurveyDecision?.awaiting === true);
   const existingHumanTakeover =
     existing?.handoffStatus === "ACTIVE" ||
     existing?.handoffStatus === "PENDING" ||
     Boolean(existing?.assignedUserId) ||
     existing?.status === "IN_PROGRESS" ||
-    shouldPreserveClosedSurveyDecision;
+    shouldPreserveClosedSatisfactionLifecycle;
   const shouldStartBot = params.chatbotEntryPointAvailable && !existingHumanTakeover;
   const runtime = await params.prisma.conversationRuntimeState.upsert({
     where: {
@@ -877,7 +901,7 @@ async function ensureWebSessionRuntimeState(params: {
           }
         : {
             status: existing?.status ?? "WAITING",
-            ...(shouldPreserveClosedSurveyDecision ? {} : { closedAt: null }),
+            ...(shouldPreserveClosedSatisfactionLifecycle ? {} : { closedAt: null }),
           }),
     },
     create: {
@@ -1069,6 +1093,46 @@ async function persistWebSessionRuntimeState(params: {
       closedAt: params.state.closedAt ? new Date(params.state.closedAt) : null,
     },
   });
+}
+
+async function shouldReopenClosedConversationWindow(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  waId: string;
+}) {
+  const [conversation, runtime] = await Promise.all([
+    params.prisma.conversation.findUnique({
+      where: { clientId_waId: { clientId: params.clientId, waId: params.waId } },
+      select: { id: true, closedAt: true },
+    }),
+    params.prisma.conversationRuntimeState.findUnique({
+      where: { clientId_waId: { clientId: params.clientId, waId: params.waId } },
+      select: { status: true, closedAt: true, answers: true },
+    }),
+  ]);
+  const runtimeState = {
+    answers:
+      runtime?.answers && typeof runtime.answers === "object" && !Array.isArray(runtime.answers)
+        ? runtime.answers as ConversationState["answers"]
+        : {},
+  };
+  const isClosed =
+    Boolean(conversation?.closedAt) ||
+    runtime?.status === "CLOSED" ||
+    Boolean(runtime?.closedAt);
+  if (!isClosed) return true;
+  if (hasSatisfactionLifecycleRuntime(runtimeState)) return false;
+  if (!conversation?.id) return true;
+  const pendingSurvey = await params.prisma.satisfactionSurvey.findFirst({
+    where: {
+      clientId: params.clientId,
+      conversationId: conversation.id,
+      type: "csat",
+      status: { in: ["sent", "pending"] },
+    },
+    select: { id: true },
+  });
+  return !pendingSurvey;
 }
 
 async function sendWebSessionBotText(params: {
@@ -1959,6 +2023,11 @@ export async function ingestWebSessionInboundMessage(params: {
       return { ok: true, action: "ignored", reason: "blocked_by_guard" };
     }
 
+    const reopenClosedWindow = await shouldReopenClosedConversationWindow({
+      prisma,
+      clientId: params.message.clientId,
+      waId: params.message.sender,
+    });
     await persistConversationWindow({
       clientId: params.message.clientId,
       waId: params.message.sender,
@@ -1972,7 +2041,7 @@ export async function ingestWebSessionInboundMessage(params: {
       windowIsOpen: true,
       windowExpiresAt: new Date(params.message.timestamp.getTime() + 24 * 60 * 60 * 1000),
       lastInboundAt: params.message.timestamp,
-      reopenClosed: true,
+      reopenClosed: reopenClosedWindow,
       requestId,
     });
     const conversation = await prisma.conversation.findUnique({

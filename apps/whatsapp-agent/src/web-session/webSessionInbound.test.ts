@@ -1394,10 +1394,11 @@ test("chatbot handoff keeps queue and department coherent when a prior default d
 });
 
 test("CSAT accepts only scores 1 to 5 before TTL and records the response", async () => {
+  const closedAt = new Date("2026-08-11T12:00:00.000Z");
   resetState({
     config: closeConfig(),
-    conversation: conversationFixture(),
-    runtimeStates: [runtimeFixture({ mode: "BOT", status: null, closedAt: null })],
+    conversation: conversationFixture({ closedAt }),
+    runtimeStates: [runtimeFixture({ mode: "HUMAN", status: "CLOSED", closedAt })],
     satisfactionSurveys: [
       {
         id: "survey_1",
@@ -1427,16 +1428,21 @@ test("CSAT accepts only scores 1 to 5 before TTL and records the response", asyn
   assert.equal(state.satisfactionSurveys[0]?.status, "pending");
   assert.equal(protocolStartedEvents().length, 0);
   assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
+  assert.equal(state.runtimeStates[0]?.mode, "HUMAN");
+  assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal((state.runtimeStates[0]?.closedAt as Date | null)?.getTime(), closedAt.getTime());
+  assert.equal((state.conversation?.closedAt as Date | null)?.getTime(), closedAt.getTime());
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentOffer"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Responda a pesquisa com uma nota de 1 a 5")), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Poderia compartilhar conosco")), true);
 });
 
 test("CSAT comment offer can be skipped after a valid score", async () => {
+  const closedAt = new Date("2026-08-11T12:00:00.000Z");
   resetState({
     config: closeConfig(),
-    conversation: conversationFixture(),
-    runtimeStates: [runtimeFixture({ mode: "BOT", status: null, closedAt: null })],
+    conversation: conversationFixture({ closedAt }),
+    runtimeStates: [runtimeFixture({ mode: "HUMAN", status: "CLOSED", closedAt })],
     satisfactionSurveys: [
       {
         id: "survey_1",
@@ -1466,6 +1472,10 @@ test("CSAT comment offer can be skipped after a valid score", async () => {
   assert.equal(state.satisfactionSurveys[0]?.status, "responded");
   assert.equal(protocolStartedEvents().length, 0);
   assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
+  assert.equal(state.runtimeStates[0]?.mode, "HUMAN");
+  assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal((state.runtimeStates[0]?.closedAt as Date | null)?.getTime(), closedAt.getTime());
+  assert.equal((state.conversation?.closedAt as Date | null)?.getTime(), closedAt.getTime());
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentOffer"), false);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("completedSurveyDecision"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Obrigad@ por participar")), true);
@@ -1531,10 +1541,11 @@ test("new CSAT score is not routed through stale completed survey decision", asy
 });
 
 test("CSAT comment text is saved after the customer opts in", async () => {
+  const closedAt = new Date("2026-08-11T12:00:00.000Z");
   resetState({
     config: closeConfig(),
-    conversation: conversationFixture(),
-    runtimeStates: [runtimeFixture({ mode: "BOT", status: null, closedAt: null })],
+    conversation: conversationFixture({ closedAt }),
+    runtimeStates: [runtimeFixture({ mode: "HUMAN", status: "CLOSED", closedAt })],
     satisfactionSurveys: [
       {
         id: "survey_1",
@@ -1565,6 +1576,10 @@ test("CSAT comment text is saved after the customer opts in", async () => {
   assert.equal(state.satisfactionSurveys[0]?.status, "responded");
   assert.equal(protocolStartedEvents().length, 0);
   assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
+  assert.equal(state.runtimeStates[0]?.mode, "HUMAN");
+  assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal((state.runtimeStates[0]?.closedAt as Date | null)?.getTime(), closedAt.getTime());
+  assert.equal((state.conversation?.closedAt as Date | null)?.getTime(), closedAt.getTime());
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentInput"), false);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("completedSurveyDecision"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Digite o texto:")), true);

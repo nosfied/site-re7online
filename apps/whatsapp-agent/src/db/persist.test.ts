@@ -86,6 +86,17 @@ const fakePrisma = {
       return { id: "event_1" };
     },
   },
+  conversationRuntimeState: {
+    findFirst: async () => null,
+  },
+  department: {
+    findFirst: async ({ where }: { where: { id?: string; clientId?: string } }) => {
+      if (where.id === "department_1" && where.clientId === "client_1") {
+        return { id: "department_1", name: "Atendimento", slug: "atendimento-operacional", isActive: true };
+      }
+      return null;
+    },
+  },
 };
 
 setPrismaForTesting(fakePrisma as never);
@@ -197,4 +208,86 @@ test("persistConversationWindow does not reactivate anonymized WhatsApp conversa
   assert.equal(state.conversation?.deletedAt, deletedAt);
   assert.equal(state.conversation?.anonymizedAt, anonymizedAt);
   assert.equal(state.events[0]?.eventName, "inbound.anonymized_identity_seen");
+});
+
+test("persistConversationWindow preserves closedAt when reopenClosed is false", async () => {
+  const closedAt = new Date("2026-08-20T12:00:00.000Z");
+  const lastInboundAt = new Date("2026-08-20T12:05:00.000Z");
+  resetState({
+    id: "conversation_closed",
+    clientId: "client_1",
+    waId: "5584999999614",
+    deletedAt: null,
+    anonymizedAt: null,
+    closedAt,
+    departmentId: "department_1",
+  });
+
+  await persistConversationWindow({
+    clientId: "client_1",
+    phoneNumberId: "phone_number_1",
+    waId: "5584999999614",
+    windowIsOpen: true,
+    lastInboundAt,
+    reopenClosed: false,
+    requestId: "req_whatsapp_window_satisfaction",
+  });
+
+  assert.equal(state.conversationUpserts.length, 1);
+  const upsert = state.conversationUpserts[0] as { update: Record<string, unknown> };
+  assert.equal(Object.prototype.hasOwnProperty.call(upsert.update, "closedAt"), false);
+  assert.equal((upsert.update.lastInboundAt as Date).getTime(), lastInboundAt.getTime());
+});
+
+test("persistConversationWindow reopens closed conversation by default on later inbound", async () => {
+  const closedAt = new Date("2026-08-20T12:00:00.000Z");
+  resetState({
+    id: "conversation_closed",
+    clientId: "client_1",
+    waId: "5584999999614",
+    deletedAt: null,
+    anonymizedAt: null,
+    closedAt,
+    departmentId: "department_1",
+  });
+
+  await persistConversationWindow({
+    clientId: "client_1",
+    phoneNumberId: "phone_number_1",
+    waId: "5584999999614",
+    windowIsOpen: true,
+    lastInboundAt: new Date("2026-08-20T12:05:00.000Z"),
+    requestId: "req_whatsapp_window_default_reopen",
+  });
+
+  assert.equal(state.conversationUpserts.length, 1);
+  const upsert = state.conversationUpserts[0] as { update: Record<string, unknown> };
+  assert.equal(upsert.update.closedAt, null);
+});
+
+test("persistConversationWindow reopens closed conversation when reopenClosed is true", async () => {
+  const closedAt = new Date("2026-08-20T12:00:00.000Z");
+  resetState({
+    id: "conversation_closed",
+    clientId: "client_1",
+    waId: "5584999999614",
+    deletedAt: null,
+    anonymizedAt: null,
+    closedAt,
+    departmentId: "department_1",
+  });
+
+  await persistConversationWindow({
+    clientId: "client_1",
+    phoneNumberId: "phone_number_1",
+    waId: "5584999999614",
+    windowIsOpen: true,
+    lastInboundAt: new Date("2026-08-20T12:05:00.000Z"),
+    reopenClosed: true,
+    requestId: "req_whatsapp_window_explicit_reopen",
+  });
+
+  assert.equal(state.conversationUpserts.length, 1);
+  const upsert = state.conversationUpserts[0] as { update: Record<string, unknown> };
+  assert.equal(upsert.update.closedAt, null);
 });

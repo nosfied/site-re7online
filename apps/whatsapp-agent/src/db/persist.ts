@@ -174,6 +174,9 @@ export async function persistConversationWindow(params: {
       params.lastInboundAt &&
       params.lastInboundAt.getTime() > existing.closedAt.getTime()
   );
+  const shouldReopenClosed =
+    params.reopenClosed === true ||
+    (params.reopenClosed !== false && isInboundAfterClosed);
   const existingDepartmentId = existing?.deletedAt ? null : existing?.departmentId ?? null;
   const requestedDepartmentId = existing?.deletedAt
     ? params.departmentId ?? null
@@ -214,7 +217,7 @@ export async function persistConversationWindow(params: {
             historyVisibleAfter: null,
           }
         : {}),
-      ...(params.reopenClosed || isInboundAfterClosed ? { closedAt: null } : {}),
+      ...(shouldReopenClosed ? { closedAt: null } : {}),
       departmentId: isInboundAfterSoftDelete
         ? null
         : shouldRewriteDepartment
