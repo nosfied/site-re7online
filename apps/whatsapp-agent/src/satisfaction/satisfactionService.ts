@@ -20,6 +20,7 @@ type SatisfactionReportFilters = {
   from?: Date | null;
   to?: Date | null;
   departmentId?: string | null;
+  departmentIds?: string[] | null;
   assignedUserId?: string | null;
   channel?: string | null;
 };
@@ -339,6 +340,7 @@ function buildSurveyWhere(clientId: string, filters: SatisfactionReportFilters =
     };
   }
   if (filters.departmentId) where.departmentId = filters.departmentId;
+  else if (filters.departmentIds) where.departmentId = { in: filters.departmentIds };
   if (filters.assignedUserId) where.assignedUserId = filters.assignedUserId;
   if (filters.channel) where.channel = filters.channel;
   return where;

@@ -288,6 +288,38 @@ test("buildSatisfactionReport keeps directed service CSAT unattributed to agents
   assert.deepEqual(calls[0]?.where.channel, "whatsapp");
 });
 
+test("buildSatisfactionReport accepts multi-department report scope", async () => {
+  const calls: Array<{ where: Record<string, unknown> }> = [];
+  const prisma = {
+    satisfactionSurvey: {
+      findMany: async (args: { where: Record<string, unknown> }) => {
+        calls.push(args);
+        return [];
+      },
+    },
+    satisfactionResponse: {
+      findMany: async (args: { where: Record<string, unknown> }) => {
+        calls.push(args);
+        return [];
+      },
+    },
+  };
+
+  await buildSatisfactionReport({
+    prisma: prisma as never,
+    clientId: "tenant-1",
+    filters: {
+      departmentIds: ["department-a", "department-b"],
+      channel: "whatsapp",
+    },
+  });
+
+  assert.deepEqual(calls[0]?.where.departmentId, { in: ["department-a", "department-b"] });
+  assert.deepEqual((calls[1]?.where.survey as { departmentId?: unknown }).departmentId, {
+    in: ["department-a", "department-b"],
+  });
+});
+
 test("buildSatisfactionReportCsv exports comments without PII-only technical fields", async () => {
   const report = await buildSatisfactionReport({
     prisma: {

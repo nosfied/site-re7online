@@ -8,6 +8,7 @@ export type SessionAuditFilters = {
   from: Date;
   to: Date;
   userId?: string | null;
+  allowedUserIds?: string[] | null;
   role?: string | null;
   status?: SessionAuditStatus | null;
   page?: number | null;
@@ -104,6 +105,7 @@ function buildWhere(params: SessionAuditFilters, now = new Date()): Prisma.AppAu
       },
     },
   ];
+  if (params.allowedUserIds) and.push({ userId: { in: params.allowedUserIds } });
   if (params.userId) and.push({ userId: params.userId });
   if (params.role) and.push({ user: { role: params.role } });
   if (params.status === "OPEN") {

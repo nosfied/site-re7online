@@ -2991,7 +2991,7 @@ export function verifyAppMfaShadow(session: AppSession, code: string): Promise<A
 
 export async function fetchAppDepartments(
   session: AppSession,
-  options?: { includeInactive?: boolean; purpose?: "transfer" }
+  options?: { includeInactive?: boolean; purpose?: "transfer" | "reports" }
 ): Promise<{
   ok: true;
   count: number;
@@ -3641,6 +3641,7 @@ export async function fetchAppSessionAuditReport(
     from?: string | null;
     to?: string | null;
     userId?: string | null;
+    departmentId?: string | null;
     role?: string | null;
     status?: AppSessionAuditStatus | null;
     page?: number | null;
@@ -3651,6 +3652,7 @@ export async function fetchAppSessionAuditReport(
   if (params.from) query.set("from", params.from);
   if (params.to) query.set("to", params.to);
   if (params.userId) query.set("userId", params.userId);
+  if (params.departmentId) query.set("departmentId", params.departmentId);
   if (params.role) query.set("role", params.role);
   if (params.status) query.set("status", params.status);
   if (params.page) query.set("page", String(params.page));
@@ -3741,6 +3743,7 @@ export async function exportAppSessionAuditReportCsv(
     from?: string | null;
     to?: string | null;
     userId?: string | null;
+    departmentId?: string | null;
     role?: string | null;
     status?: AppSessionAuditStatus | null;
   }
@@ -3749,6 +3752,7 @@ export async function exportAppSessionAuditReportCsv(
   if (params.from) query.set("from", params.from);
   if (params.to) query.set("to", params.to);
   if (params.userId) query.set("userId", params.userId);
+  if (params.departmentId) query.set("departmentId", params.departmentId);
   if (params.role) query.set("role", params.role);
   if (params.status) query.set("status", params.status);
   const suffix = query.toString() ? `?${query.toString()}` : "";

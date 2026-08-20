@@ -8177,7 +8177,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const timezone = await resolveTenantOperationalTimezone(prisma, client.id);
       const purpose = parsedUrl.searchParams.get("purpose");
       const isTransferPurpose = purpose === "transfer";
-      const scopedDepartmentIds = isAgentRole(clientAuth.role) && !isTransferPurpose
+      const isReportsPurpose = purpose === "reports";
+      const shouldScopeDepartments =
+        (isAgentRole(clientAuth.role) && !isTransferPurpose) ||
+        (isSupervisorRole(clientAuth.role) && isReportsPurpose);
+      const scopedDepartmentIds = shouldScopeDepartments
         ? (
             await getUserDepartmentMemberships(prisma, {
               clientId: client.id,
@@ -10634,64 +10638,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         endpoint: pathname,
         requestId,
       }))) return;
-      const departmentAccess = await loadAppDepartmentAccess(prisma, {
-        clientId: client.id,
-        userId: clientAuth.userId,
-        role: clientAuth.role,
-      });
       const requestedDepartmentId =
-        clientAuth.role === "SUPERVISOR"
-          ? departmentAccess.departmentId ?? ""
-          : typeof query.departmentId === "string"
-            ? query.departmentId.trim()
-            : "";
-      if (clientAuth.role === "SUPERVISOR" && !requestedDepartmentId) {
-        const emptyReport = await buildSatisfactionReport({
-          prisma,
-          clientId: client.id,
-          filters: {
-            from: period.from,
-            to: period.to,
-            departmentId: "__no_supervisor_department__",
-            channel,
-          },
-        });
-        if (pathname.endsWith("/export")) {
-          res.writeHead(200, {
-            "Content-Type": "text/csv; charset=utf-8",
-            "Content-Disposition": "attachment; filename=\"satisfaction-report-empty.csv\"",
-          });
-          res.end(buildSatisfactionReportCsv(emptyReport));
-          return;
-        }
-        json(res, 200, emptyReport);
-        return;
-      }
-      if (requestedDepartmentId) {
-        const department = await prisma.department.findFirst({
-          where: { id: requestedDepartmentId, clientId: client.id },
-          select: { id: true },
-        });
-        if (!department) {
-          json(res, 400, httpError("department_not_found", "Department not found"));
-          return;
-        }
-      }
+        typeof query.departmentId === "string" ? query.departmentId.trim() : "";
       const requestedUserId =
         typeof query.assignedUserId === "string"
           ? query.assignedUserId.trim()
           : typeof query.userId === "string"
             ? query.userId.trim()
             : "";
-      if (requestedUserId) {
-        const user = await prisma.user.findFirst({
-          where: { id: requestedUserId, clientId: client.id },
-          select: { id: true },
-        });
-        if (!user) {
-          json(res, 400, httpError("user_not_found", "User not found"));
-          return;
-        }
+      const reportScope = await loadAppReportAccessScope(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+        requestedDepartmentId,
+        requestedUserId,
+      });
+      if (!reportScope.ok) {
+        json(res, reportScope.status, httpError(reportScope.code, "Report filter not allowed"));
+        return;
       }
       const report = await buildSatisfactionReport({
         prisma,
@@ -10699,8 +10663,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         filters: {
           from: period.from,
           to: period.to,
-          departmentId: requestedDepartmentId || null,
-          assignedUserId: requestedUserId || null,
+          departmentId: reportScope.requestedDepartmentId,
+          departmentIds: reportScope.requestedDepartmentId ? null : reportScope.effectiveDepartmentIds,
+          assignedUserId: reportScope.requestedUserId,
           channel,
         },
       });
@@ -10717,8 +10682,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientId: client.id,
           userId: clientAuth.userId,
           role: clientAuth.role,
-          departmentId: requestedDepartmentId || null,
-          assignedUserId: requestedUserId || null,
+          departmentId: reportScope.requestedDepartmentId,
+          assignedUserId: reportScope.requestedUserId,
           channel,
         });
         return;
@@ -10730,8 +10695,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         userId: clientAuth.userId,
         role: clientAuth.role,
-        departmentId: requestedDepartmentId || null,
-        assignedUserId: requestedUserId || null,
+        departmentId: reportScope.requestedDepartmentId,
+        assignedUserId: reportScope.requestedUserId,
         channel,
       });
     } catch (error) {
@@ -10788,21 +10753,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
       }))) return;
       const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
-      if (requestedUserId) {
-        const user = await prisma.user.findFirst({
-          where: { id: requestedUserId, clientId: client.id },
-          select: { id: true },
-        });
-        if (!user) {
-          json(res, 400, httpError("user_not_found", "User not found"));
-          return;
-        }
+      const requestedDepartmentId = typeof query.departmentId === "string" ? query.departmentId.trim() : "";
+      const reportScope = await loadAppReportAccessScope(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+        requestedDepartmentId,
+        requestedUserId,
+      });
+      if (!reportScope.ok) {
+        json(res, reportScope.status, httpError(reportScope.code, "Report filter not allowed"));
+        return;
       }
       const report = await buildSessionAuditReport(prisma, {
         clientId: client.id,
         from: period.from,
         to: period.to,
-        userId: requestedUserId || null,
+        userId: reportScope.requestedUserId,
+        allowedUserIds: reportScope.allowedUserIds,
         role,
         status,
         page: parsePositiveInteger(query.page),
@@ -10815,7 +10783,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         userId: clientAuth.userId,
         role: clientAuth.role,
-        filterUserId: requestedUserId || null,
+        filterUserId: reportScope.requestedUserId,
         filterRole: role,
         filterStatus: status,
       });
@@ -10873,21 +10841,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
       }))) return;
       const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
-      if (requestedUserId) {
-        const user = await prisma.user.findFirst({
-          where: { id: requestedUserId, clientId: client.id },
-          select: { id: true },
-        });
-        if (!user) {
-          json(res, 400, httpError("user_not_found", "User not found"));
-          return;
-        }
+      const requestedDepartmentId = typeof query.departmentId === "string" ? query.departmentId.trim() : "";
+      const reportScope = await loadAppReportAccessScope(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+        requestedDepartmentId,
+        requestedUserId,
+      });
+      if (!reportScope.ok) {
+        json(res, reportScope.status, httpError(reportScope.code, "Report filter not allowed"));
+        return;
       }
       const report = await buildSessionAuditReport(prisma, {
         clientId: client.id,
         from: period.from,
         to: period.to,
-        userId: requestedUserId || null,
+        userId: reportScope.requestedUserId,
+        allowedUserIds: reportScope.allowedUserIds,
         role,
         status,
         page: 1,
@@ -10905,7 +10876,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         userId: clientAuth.userId,
         role: clientAuth.role,
-        filterUserId: requestedUserId || null,
+        filterUserId: reportScope.requestedUserId,
         filterRole: role,
         filterStatus: status,
       });
@@ -10956,50 +10927,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         endpoint: pathname,
         requestId,
       }))) return;
-      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+      const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
+      const requestedDepartmentId = typeof query.departmentId === "string" ? query.departmentId.trim() : "";
+      const reportScope = await loadAppReportAccessScope(prisma, {
         clientId: client.id,
         userId: clientAuth.userId,
         role: clientAuth.role,
+        requestedDepartmentId,
+        requestedUserId,
       });
-      const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
-      const requestedDepartmentId =
-        clientAuth.role === "SUPERVISOR"
-          ? departmentAccess.departmentId ?? ""
-          : typeof query.departmentId === "string"
-            ? query.departmentId.trim()
-            : "";
-      if (clientAuth.role === "SUPERVISOR" && !requestedDepartmentId) {
-        json(res, 200, {
-          ok: true,
-          range: range.key,
-          periodFrom: range.since.toISOString(),
-          periodTo: range.until ? range.until.toISOString() : null,
-          dedupe,
-          channel: channelFilter,
-          userId: requestedUserId || null,
-          departmentId: null,
-          totalConversations: 0,
-          automatedConversations: 0,
-          humanTransferCount: 0,
-          avgFirstResponseTimeSec: null,
-          avgResolutionTimeSec: null,
-          slaOperational: {
-            waitingFirstResponse: 0,
-            inProgress: 0,
-            waitingUser: 0,
-            closed: 0,
-            avgFirstResponseTimeSec: null,
-            avgResolutionTimeSec: null,
-          },
-          slaBreaches: 0,
-          agentMessageActivity: [],
-          assignedConversationsByAgent: [],
-          byAgent: [],
-          byDepartment: [],
-          notes: [
-            "Mensagens por atendente utiliza autoria persistida no momento do envio; mensagens historicas anteriores a captura de autoria podem nao ser atribuiveis.",
-          ],
-        });
+      if (!reportScope.ok) {
+        json(res, reportScope.status, httpError(reportScope.code, "Report filter not allowed"));
         return;
       }
       const requestedQueueId = typeof query.queueId === "string" ? query.queueId.trim() : "";
@@ -11007,7 +10945,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         since: range.since,
         until: range.until,
-        requestedDepartmentId: requestedDepartmentId || null,
+        requestedDepartmentId: reportScope.requestedDepartmentId,
+        requestedDepartmentIds: reportScope.requestedDepartmentId ? null : reportScope.effectiveDepartmentIds,
         requestedQueueId: requestedQueueId || null,
         channel: channelFilter,
       });
@@ -11035,9 +10974,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         since: range.since,
         until: range.until,
-        requestedUserId: requestedUserId || null,
+        requestedUserId: reportScope.requestedUserId,
         allowedWaIds:
-          requestedDepartmentId || requestedQueueId || channelFilter
+          reportScope.effectiveDepartmentIds || reportScope.requestedDepartmentId || requestedQueueId || channelFilter
             ? Array.from(new Set(queueFilteredMetrics.map((item) => item.conversation.waId)))
             : null,
       });
@@ -11050,8 +10989,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           periodTo: range.until,
           dedupe,
           channel: channelFilter,
-          requestedUserId: requestedUserId || null,
-          requestedDepartmentId: requestedDepartmentId || null,
+          requestedUserId: reportScope.requestedUserId,
+          requestedDepartmentId: reportScope.requestedDepartmentId,
           requestedQueueId: requestedQueueId || null,
           filteredMetrics,
           stateByWaId: reportData.stateByWaId,
@@ -11067,7 +11006,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         userId: clientAuth.userId,
         role: clientAuth.role,
-        departmentId: requestedDepartmentId || null,
+        departmentId: reportScope.requestedDepartmentId,
         dedupe,
         channel: channelFilter,
       });
@@ -11118,43 +11057,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         endpoint: pathname,
         requestId,
       }))) return;
-      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+      const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
+      const requestedDepartmentId = typeof query.departmentId === "string" ? query.departmentId.trim() : "";
+      const reportScope = await loadAppReportAccessScope(prisma, {
         clientId: client.id,
         userId: clientAuth.userId,
         role: clientAuth.role,
+        requestedDepartmentId,
+        requestedUserId,
       });
-      const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
-      const requestedDepartmentId =
-        clientAuth.role === "SUPERVISOR"
-          ? departmentAccess.departmentId ?? ""
-          : typeof query.departmentId === "string"
-            ? query.departmentId.trim()
-            : "";
-      if (clientAuth.role === "SUPERVISOR" && !requestedDepartmentId) {
-        res.writeHead(200, {
-          "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename=\"conversation-report-app-${range.key}.csv\"`,
-        });
-        res.end(
-          [
-            [
-              "conversationId",
-              "cycleId",
-              "protocol",
-              "waId",
-              "channel",
-              "departmentId",
-              "departmentName",
-              "queueId",
-              "assignedUserId",
-              "status",
-              "firstResponseTimeSec",
-              "resolutionTimeSec",
-              "createdAt",
-              "closedAt",
-            ].join(","),
-          ].join("\n")
-        );
+      if (!reportScope.ok) {
+        json(res, reportScope.status, httpError(reportScope.code, "Report filter not allowed"));
         return;
       }
       const requestedQueueId = typeof query.queueId === "string" ? query.queueId.trim() : "";
@@ -11162,7 +11075,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         since: range.since,
         until: range.until,
-        requestedDepartmentId: requestedDepartmentId || null,
+        requestedDepartmentId: reportScope.requestedDepartmentId,
+        requestedDepartmentIds: reportScope.requestedDepartmentId ? null : reportScope.effectiveDepartmentIds,
         requestedQueueId: requestedQueueId || null,
         channel: channelFilter,
         includeClosedAt: true,
@@ -11205,7 +11119,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         userId: clientAuth.userId,
         role: clientAuth.role,
-        departmentId: requestedDepartmentId || null,
+        departmentId: reportScope.requestedDepartmentId,
         dedupe,
         channel: channelFilter,
       });
@@ -23397,6 +23311,7 @@ async function loadConversationReportData(
     since: Date;
     until?: Date | null;
     requestedDepartmentId: string | null;
+    requestedDepartmentIds?: string[] | null;
     requestedQueueId?: string | null;
     channel?: ReportChannelFilter;
     includeClosedAt?: boolean;
@@ -23419,7 +23334,11 @@ async function loadConversationReportData(
       where: {
         id: options.requestedQueueId,
         clientId: options.clientId,
-        ...(options.requestedDepartmentId ? { departmentId: options.requestedDepartmentId } : {}),
+        ...(options.requestedDepartmentId
+          ? { departmentId: options.requestedDepartmentId }
+          : options.requestedDepartmentIds
+            ? { departmentId: { in: options.requestedDepartmentIds } }
+            : {}),
       },
       select: { id: true },
     });
@@ -23427,6 +23346,14 @@ async function loadConversationReportData(
       return { ok: false as const, status: 404 as const, code: "queue_not_found" as const };
     }
   }
+  const conversationWhere = {
+    ...(options.requestedDepartmentId
+      ? { departmentId: options.requestedDepartmentId }
+      : options.requestedDepartmentIds
+        ? { departmentId: { in: options.requestedDepartmentIds } }
+        : {}),
+    ...(options.channel ? { channel: options.channel } : {}),
+  };
   const metrics = await prisma.conversationMetrics.findMany({
     where: {
       clientId: options.clientId,
@@ -23434,21 +23361,7 @@ async function loadConversationReportData(
         gte: options.since,
         ...(options.until ? { lte: options.until } : {}),
       },
-      ...(options.requestedDepartmentId
-        ? {
-            conversation: {
-              departmentId: options.requestedDepartmentId,
-            },
-          }
-        : {}),
-      ...(options.channel
-        ? {
-            conversation: {
-              ...(options.requestedDepartmentId ? { departmentId: options.requestedDepartmentId } : {}),
-              channel: options.channel,
-            },
-          }
-        : {}),
+      ...(Object.keys(conversationWhere).length ? { conversation: conversationWhere } : {}),
     },
     ...(options.includeClosedAt ? { orderBy: { startedAt: "desc" as const } } : {}),
     select: {
@@ -27490,6 +27403,78 @@ function canManageOwnedConversation(
   if (canManageAnyConversation(role)) return true;
   if (!assignedUserId) return false;
   return assignedUserId === currentUserId;
+}
+
+async function loadAppReportAccessScope(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    userId: string;
+    role: string;
+    requestedDepartmentId?: string | null;
+    requestedUserId?: string | null;
+  }
+) {
+  const departmentAccess = await loadAppDepartmentAccess(prisma, {
+    clientId: params.clientId,
+    userId: params.userId,
+    role: params.role,
+  });
+  const isScoped = isSupervisorRole(params.role);
+  const allowedDepartmentIds = isScoped ? departmentAccess.departmentIds : null;
+  const requestedDepartmentId = params.requestedDepartmentId?.trim() || null;
+  const requestedUserId = params.requestedUserId?.trim() || null;
+  if (requestedDepartmentId) {
+    const department = await prisma.department.findFirst({
+      where: { id: requestedDepartmentId, clientId: params.clientId },
+      select: { id: true },
+    });
+    if (!department) return { ok: false as const, status: 400 as const, code: "department_not_found" as const };
+    if (allowedDepartmentIds && !allowedDepartmentIds.includes(requestedDepartmentId)) {
+      return { ok: false as const, status: 403 as const, code: "department_forbidden" as const };
+    }
+  }
+  const scopedDepartmentIds = allowedDepartmentIds
+    ? requestedDepartmentId
+      ? [requestedDepartmentId]
+      : allowedDepartmentIds
+    : null;
+  const allowedUserIds = scopedDepartmentIds
+    ? Array.from(
+        new Set(
+          (
+            await prisma.userDepartmentMembership.findMany({
+              where: {
+                clientId: params.clientId,
+                isActive: true,
+                departmentId: { in: scopedDepartmentIds },
+                department: { isActive: true },
+                user: { isActive: true },
+              },
+              select: { userId: true },
+            })
+          ).map((membership) => membership.userId)
+        )
+      )
+    : null;
+  if (requestedUserId) {
+    const user = await prisma.user.findFirst({
+      where: { id: requestedUserId, clientId: params.clientId },
+      select: { id: true },
+    });
+    if (!user) return { ok: false as const, status: 400 as const, code: "user_not_found" as const };
+    if (allowedUserIds && !allowedUserIds.includes(requestedUserId)) {
+      return { ok: false as const, status: 403 as const, code: "user_forbidden" as const };
+    }
+  }
+  return {
+    ok: true as const,
+    requestedDepartmentId,
+    requestedUserId,
+    allowedDepartmentIds,
+    effectiveDepartmentIds: scopedDepartmentIds,
+    allowedUserIds,
+  };
 }
 
 async function loadAppDepartmentAccess(

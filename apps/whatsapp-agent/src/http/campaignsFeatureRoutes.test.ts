@@ -4806,6 +4806,29 @@ test("meta usage monthly report exposes sanitized JSON and CSV", async () => {
 test("session audit report is tenant scoped, role protected and sanitized", async () => {
   const from = new Date("2030-01-10T00:00:00.000Z");
   const to = new Date("2030-01-11T00:00:00.000Z");
+  const reportsDepartment = await prisma.department.create({
+    data: {
+      clientId: businessClientId,
+      name: `${prefix} Session Reports Department`,
+      slug: `${prefix}-session-reports-department`,
+    },
+    select: { id: true },
+  });
+  await assignUserDepartments({
+    clientId: businessClientId,
+    userId: businessAdmin.id,
+    departmentIds: [reportsDepartment.id],
+  });
+  await assignUserDepartments({
+    clientId: businessClientId,
+    userId: businessSupervisor.id,
+    departmentIds: [reportsDepartment.id],
+  });
+  await assignUserDepartments({
+    clientId: businessClientId,
+    userId: businessAgent.id,
+    departmentIds: [reportsDepartment.id],
+  });
   const openSessionId = `${businessAdmin.id}-session-audit-open`;
   const logoutSessionId = `${businessSupervisor.id}-session-audit-logout`;
   const replacedSessionId = `${businessAgent.id}-session-audit-replaced`;
@@ -5226,6 +5249,238 @@ test("conversation reports separate human message activity from assignment metri
     response.body.notes.some((note) => note.includes("mensagens historicas anteriores")),
     true
   );
+});
+
+test("app reports scope supervisors to all active department memberships", async () => {
+  const periodFrom = new Date("2031-03-01T00:00:00.000Z");
+  const periodTo = new Date("2031-03-02T00:00:00.000Z");
+  const departments = await Promise.all(
+    ["A", "B", "C", "D"].map((label) =>
+      prisma.department.create({
+        data: {
+          clientId: businessClientId,
+          name: `${prefix} Reports Department ${label}`,
+          slug: `${prefix}-reports-department-${label.toLowerCase()}`,
+        },
+        select: { id: true, name: true },
+      })
+    )
+  );
+  const supervisor = await createUser({
+    clientId: businessClientId,
+    role: "SUPERVISOR",
+    suffix: "reports-multi-department-supervisor",
+  });
+  const agentA = await createUser({ clientId: businessClientId, role: "AGENT", suffix: "reports-agent-a" });
+  const agentB = await createUser({ clientId: businessClientId, role: "AGENT", suffix: "reports-agent-b" });
+  const agentC = await createUser({ clientId: businessClientId, role: "AGENT", suffix: "reports-agent-c" });
+  const agentD = await createUser({ clientId: businessClientId, role: "AGENT", suffix: "reports-agent-d" });
+  await assignUserDepartments({
+    clientId: businessClientId,
+    userId: supervisor.id,
+    departmentIds: [departments[0].id, departments[1].id, departments[2].id],
+    primaryDepartmentId: departments[0].id,
+  });
+  await assignUserDepartments({ clientId: businessClientId, userId: agentA.id, departmentIds: [departments[0].id] });
+  await assignUserDepartments({ clientId: businessClientId, userId: agentB.id, departmentIds: [departments[1].id] });
+  await assignUserDepartments({ clientId: businessClientId, userId: agentC.id, departmentIds: [departments[2].id] });
+  await assignUserDepartments({ clientId: businessClientId, userId: agentD.id, departmentIds: [departments[3].id] });
+
+  const agents = [agentA, agentB, agentC, agentD];
+  for (const [index, department] of departments.entries()) {
+    const conversation = await prisma.conversation.create({
+      data: {
+        clientId: businessClientId,
+        waId: `${prefix}-report-scope-wa-${index}`,
+        waIdCanonical: `${prefix}-report-scope-wa-${index}`,
+        channel: index === 2 ? "webchat" : "whatsapp",
+        provider: index === 2 ? "webchat" : "meta",
+        departmentId: department.id,
+        createdAt: new Date(periodFrom.getTime() + index * 60_000),
+      },
+      select: { id: true, waId: true },
+    });
+    await prisma.conversationMetrics.create({
+      data: {
+        conversationId: conversation.id,
+        clientId: businessClientId,
+        startedAt: new Date(periodFrom.getTime() + index * 60_000),
+        firstResponseTimeSec: 10 + index,
+        totalResponseTimeSec: 20 + index,
+        responseCount: 1,
+        resolutionTimeSec: 100 + index,
+      },
+    });
+    await prisma.conversationRuntimeState.create({
+      data: {
+        clientId: businessClientId,
+        waId: conversation.waId,
+        waIdCanonical: conversation.waId,
+        channel: index === 2 ? "webchat" : "whatsapp",
+        provider: index === 2 ? "webchat" : "meta",
+        mode: "HUMAN",
+        status: "IN_PROGRESS",
+        departmentId: department.id,
+        assignedUserId: agents[index].id,
+        assignedTo: agents[index].name,
+        assignments: {
+          create: {
+            toUserId: agents[index].id,
+            assignedAt: new Date(periodFrom.getTime() + index * 60_000),
+          },
+        },
+      },
+    });
+    await prisma.outboundMessage.create({
+      data: {
+        clientId: businessClientId,
+        waId: conversation.waId,
+        waIdCanonical: conversation.waId,
+        messageId: `${prefix}-report-scope-message-${index}`,
+        type: MessageType.TEXT,
+        status: MessageStatus.SENT,
+        bodyText: `message ${index}`,
+        rawPayload: { actor: { source: "human_inbox", userId: agents[index].id } },
+        createdAt: new Date(periodFrom.getTime() + index * 60_000 + 30_000),
+      },
+    });
+  }
+
+  await prisma.appAuthSession.createMany({
+    data: agents.map((agent, index) => ({
+      id: `${prefix}-report-scope-session-${index}`,
+      clientId: businessClientId,
+      userId: agent.id,
+      createdAt: new Date(periodFrom.getTime() + index * 60_000),
+      lastSeenAt: new Date(periodFrom.getTime() + index * 60_000 + 30_000),
+      expiresAt: buildAppAuthSessionExpiresAt(new Date(periodFrom.getTime() + index * 60_000)),
+      userAgent: "Sensitive browser details",
+      ipHash: "sensitive-ip-hash",
+    })),
+  });
+
+  const reportDepartments = await request<{ ok: true; items: Array<{ id: string }> }>(
+    "GET",
+    "/app/departments?purpose=reports",
+    supervisor
+  );
+  assert.equal(reportDepartments.status, 200, JSON.stringify(reportDepartments.body));
+  assert.deepEqual(
+    reportDepartments.body.items.map((item) => item.id).sort(),
+    [departments[0].id, departments[1].id, departments[2].id].sort()
+  );
+
+  const supervisorReport = await request<{
+    ok: true;
+    totalConversations: number;
+    byDepartment: Array<{ departmentId: string | null; conversations: number }>;
+  }>(
+    "GET",
+    `/app/reports/conversations?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}`,
+    supervisor
+  );
+  assert.equal(supervisorReport.status, 200, JSON.stringify(supervisorReport.body));
+  assert.equal(supervisorReport.body.totalConversations, 3);
+  assert.deepEqual(
+    supervisorReport.body.byDepartment.map((item) => item.departmentId).sort(),
+    [departments[0].id, departments[1].id, departments[2].id].sort()
+  );
+
+  const departmentBReport = await request<{ ok: true; totalConversations: number; byDepartment: Array<{ departmentId: string | null }> }>(
+    "GET",
+    `/app/reports/conversations?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&departmentId=${departments[1].id}`,
+    supervisor
+  );
+  assert.equal(departmentBReport.status, 200, JSON.stringify(departmentBReport.body));
+  assert.equal(departmentBReport.body.totalConversations, 1);
+  assert.equal(departmentBReport.body.byDepartment[0]?.departmentId, departments[1].id);
+
+  const forbiddenDepartment = await request<ErrorPayload>(
+    "GET",
+    `/app/reports/conversations?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&departmentId=${departments[3].id}`,
+    supervisor
+  );
+  assert.equal(forbiddenDepartment.status, 403);
+  assert.equal(getErrorCode(forbiddenDepartment.body), "department_forbidden");
+
+  const agentAReport = await request<{ ok: true; totalConversations: number }>(
+    "GET",
+    `/app/reports/conversations?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&userId=${agentA.id}`,
+    supervisor
+  );
+  assert.equal(agentAReport.status, 200, JSON.stringify(agentAReport.body));
+  assert.equal(agentAReport.body.totalConversations, 1);
+
+  const forbiddenAgent = await request<ErrorPayload>(
+    "GET",
+    `/app/reports/conversations?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&userId=${agentD.id}`,
+    supervisor
+  );
+  assert.equal(forbiddenAgent.status, 403);
+  assert.equal(getErrorCode(forbiddenAgent.body), "user_forbidden");
+
+  const channelFiltered = await request<{ ok: true; totalConversations: number }>(
+    "GET",
+    `/app/reports/conversations?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&channel=webchat`,
+    supervisor
+  );
+  assert.equal(channelFiltered.status, 200, JSON.stringify(channelFiltered.body));
+  assert.equal(channelFiltered.body.totalConversations, 1);
+
+  const combinedDepartmentChannel = await request<{ ok: true; totalConversations: number }>(
+    "GET",
+    `/app/reports/conversations?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&departmentId=${departments[2].id}&channel=webchat`,
+    supervisor
+  );
+  assert.equal(combinedDepartmentChannel.status, 200, JSON.stringify(combinedDepartmentChannel.body));
+  assert.equal(combinedDepartmentChannel.body.totalConversations, 1);
+
+  const adminReport = await request<{ ok: true; totalConversations: number }>(
+    "GET",
+    `/app/reports/conversations?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}`,
+    businessAdmin
+  );
+  assert.equal(adminReport.status, 200, JSON.stringify(adminReport.body));
+  assert.ok(adminReport.body.totalConversations >= 4);
+
+  const csv = await requestText(
+    "GET",
+    `/app/reports/conversations/export?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}`,
+    supervisor
+  );
+  assert.equal(csv.status, 200, csv.text);
+  assert.match(csv.text, new RegExp(`${prefix}-report-scope-wa-0`));
+  assert.match(csv.text, new RegExp(`${prefix}-report-scope-wa-1`));
+  assert.match(csv.text, new RegExp(`${prefix}-report-scope-wa-2`));
+  assert.doesNotMatch(csv.text, new RegExp(`${prefix}-report-scope-wa-3`));
+
+  const sessionReport = await request<{ ok: true; total: number; items: Array<{ userId: string }> }>(
+    "GET",
+    `/app/reports/sessions?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}`,
+    supervisor
+  );
+  assert.equal(sessionReport.status, 200, JSON.stringify(sessionReport.body));
+  assert.equal(sessionReport.body.total, 3);
+  assert.equal(sessionReport.body.items.some((item) => item.userId === agentD.id), false);
+
+  const forbiddenSessionUser = await request<ErrorPayload>(
+    "GET",
+    `/app/reports/sessions?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&userId=${agentD.id}`,
+    supervisor
+  );
+  assert.equal(forbiddenSessionUser.status, 403);
+  assert.equal(getErrorCode(forbiddenSessionUser.body), "user_forbidden");
+
+  const sessionCsv = await requestText(
+    "GET",
+    `/app/reports/sessions/export?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}`,
+    supervisor
+  );
+  assert.equal(sessionCsv.status, 200, sessionCsv.text);
+  assert.match(sessionCsv.text, new RegExp(agentA.name));
+  assert.match(sessionCsv.text, new RegExp(agentB.name));
+  assert.match(sessionCsv.text, new RegExp(agentC.name));
+  assert.doesNotMatch(sessionCsv.text, new RegExp(agentD.name));
 });
 
 test("auth session events are persisted with sanitized payloads", async () => {

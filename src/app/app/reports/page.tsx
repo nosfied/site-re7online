@@ -76,6 +76,10 @@ function isAdminRole(role: string) {
   return role.trim().toUpperCase() === "ADMIN";
 }
 
+function isSupervisorRole(role: string) {
+  return role.trim().toUpperCase() === "SUPERVISOR";
+}
+
 function formatSeconds(value: number | null) {
   if (value === null || value === undefined) return "-";
   if (value < 60) return `${value}s`;
@@ -347,7 +351,7 @@ export default function AppReportsPage() {
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
-    Promise.all([fetchAppUsers(session), fetchAppDepartments(session), fetchAppTenantSummary(session)])
+    Promise.all([fetchAppUsers(session), fetchAppDepartments(session, { purpose: "reports" }), fetchAppTenantSummary(session)])
       .then(([usersResponse, departmentsResponse, tenantResponse]) => {
         if (cancelled) return;
         setUsers(usersResponse.items);
@@ -403,12 +407,12 @@ export default function AppReportsPage() {
       dedupe,
       channel: channel || null,
       userId: userId || null,
-      departmentId: isAdminRole(session.user.role) ? departmentId || null : null,
+      departmentId: isAdminRole(session.user.role) || isSupervisorRole(session.user.role) ? departmentId || null : null,
     })
       .then((response) => {
         if (cancelled) return;
         setReport(response);
-        if (!isAdminRole(session.user.role)) {
+        if (!isAdminRole(session.user.role) && !isSupervisorRole(session.user.role)) {
           setDepartmentId(response.departmentId || "");
         }
       })
@@ -451,6 +455,7 @@ export default function AppReportsPage() {
       userId: sessionUserId || null,
       role: sessionRole || null,
       status: sessionStatus || null,
+      departmentId: isAdminRole(session.user.role) || isSupervisorRole(session.user.role) ? departmentId || null : null,
       page: sessionPage,
       limit: 25,
     })
@@ -477,7 +482,7 @@ export default function AppReportsPage() {
     return () => {
       cancelled = true;
     };
-  }, [handleUnauthorized, router, session, sessionFrom, sessionPage, sessionRole, sessionStatus, sessionTo, sessionUserId]);
+  }, [departmentId, handleUnauthorized, router, session, sessionFrom, sessionPage, sessionRole, sessionStatus, sessionTo, sessionUserId]);
 
   useEffect(() => {
     setSessionPage(1);
@@ -487,6 +492,21 @@ export default function AppReportsPage() {
     () => new Map(users.map((item) => [item.id, item.name])),
     [users]
   );
+  const visibleReportUsers = useMemo(() => {
+    if (!session || isAdminRole(session.user.role)) return users;
+    if (!isSupervisorRole(session.user.role)) return users;
+    const allowedDepartmentIds = new Set((departmentId ? [departmentId] : departments.map((item) => item.id)).filter(Boolean));
+    return users.filter((item) =>
+      (item.departmentIds ?? []).some((currentDepartmentId) => allowedDepartmentIds.has(currentDepartmentId))
+    );
+  }, [departmentId, departments, session, users]);
+
+  useEffect(() => {
+    if (!session || isAdminRole(session.user.role)) return;
+    const visibleUserIds = new Set(visibleReportUsers.map((item) => item.id));
+    if (userId && !visibleUserIds.has(userId)) setUserId("");
+    if (sessionUserId && !visibleUserIds.has(sessionUserId)) setSessionUserId("");
+  }, [session, sessionUserId, userId, visibleReportUsers]);
 
   const handleExport = async () => {
     if (!session) return;
@@ -503,7 +523,7 @@ export default function AppReportsPage() {
         dedupe,
         channel: channel || null,
         userId: userId || null,
-        departmentId: isAdminRole(session.user.role) ? departmentId || null : null,
+        departmentId: isAdminRole(session.user.role) || isSupervisorRole(session.user.role) ? departmentId || null : null,
       });
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -545,6 +565,7 @@ export default function AppReportsPage() {
         userId: sessionUserId || null,
         role: sessionRole || null,
         status: sessionStatus || null,
+        departmentId: isAdminRole(session.user.role) || isSupervisorRole(session.user.role) ? departmentId || null : null,
       });
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -884,7 +905,7 @@ export default function AppReportsPage() {
     );
   }
 
-  const canFilterDepartment = isAdminRole(session.user.role);
+  const canFilterDepartment = isAdminRole(session.user.role) || isSupervisorRole(session.user.role);
   const slaOperational = getSlaOperational(report);
   const periodLabel =
     periodMode === "custom"
@@ -1013,7 +1034,7 @@ export default function AppReportsPage() {
               onChange={(event) => setUserId(event.target.value)}
             >
               <option value="">Todos</option>
-              {users.map((item) => (
+              {visibleReportUsers.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name} ({getUserRoleUxLabel(item.role)})
                 </option>
@@ -1332,7 +1353,7 @@ export default function AppReportsPage() {
                   onChange={(event) => setSessionUserId(event.target.value)}
                 >
                   <option value="">Todos</option>
-                  {users.map((item) => (
+                  {visibleReportUsers.map((item) => (
                     <option key={item.id} value={item.id}>
                   {item.name} ({getUserRoleUxLabel(item.role)})
                     </option>
