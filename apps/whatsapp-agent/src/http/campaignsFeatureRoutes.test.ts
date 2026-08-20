@@ -10155,10 +10155,76 @@ test("inbox operations stay functional when tenant has no active general departm
       rawPayload: { provider: "web_session" },
     },
   });
+  const managementOnlyWaId = `558499${String(Date.now()).slice(-7)}`;
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId: managementOnlyWaId,
+      waIdCanonical: managementOnlyWaId,
+      channel: "whatsapp",
+      provider: "web_session",
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      createdAt: new Date("2026-08-20T11:59:00.000Z"),
+      lastInboundAt: new Date("2026-08-20T12:05:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId: managementOnlyWaId,
+      waIdCanonical: managementOnlyWaId,
+      conversationKey: `${prefix}-business:${managementOnlyWaId}`,
+      channel: "whatsapp",
+      provider: "web_session",
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      mode: "HUMAN",
+      status: "WAITING",
+      handoffStatus: "ACTIVE",
+      departmentId: departments[0].id,
+      queueId: departments[0].queueId,
+      lastInboundAt: new Date("2026-08-20T12:05:00.000Z"),
+    },
+  });
+  await prisma.inboundMessage.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        waId: managementOnlyWaId,
+        waIdCanonical: managementOnlyWaId,
+        channel: "whatsapp",
+        provider: "web_session",
+        messageId: `web.operational.${safeTemplatePrefix}`,
+        type: "TEXT",
+        bodyText: "Mensagem operacional",
+        allowlistHit: true,
+        createdAt: new Date("2026-08-20T12:00:00.000Z"),
+        rawPayload: { provider: "web_session" },
+      },
+      {
+        clientId: businessClientId,
+        waId: managementOnlyWaId,
+        waIdCanonical: managementOnlyWaId,
+        channel: "whatsapp",
+        provider: "web_session",
+        messageId: `web.management.${safeTemplatePrefix}`,
+        type: "TEXT",
+        bodyText: "Pesquisa interna",
+        allowlistHit: true,
+        createdAt: new Date("2026-08-20T12:05:00.000Z"),
+        rawPayload: {
+          provider: "web_session",
+          inboxVisibility: "management_only",
+          inboxInteractionKind: "satisfaction",
+        },
+      },
+    ],
+  });
 
   const agentInbox = await request<{
     ok: true;
-    items: Array<{ waId: string; departmentId: string | null }>;
+    items: Array<{ waId: string; departmentId: string | null; lastMessage?: { bodyText: string | null } | null; unreadCount?: number }>;
   }>("GET", "/app/conversations", multiDepartmentAgent);
   assert.equal(agentInbox.status, 200, JSON.stringify(agentInbox.body));
   const agentInboxByWaId = new Map(agentInbox.body.items.map((item) => [item.waId, item]));
@@ -10167,6 +10233,8 @@ test("inbox operations stay functional when tenant has no active general departm
   assert.equal(agentInboxByWaId.get(waIdDepartmentC)?.departmentId, departments[2].id);
   assert.equal(agentInboxByWaId.has(waIdDepartmentD), false);
   assert.equal(agentInboxByWaId.has(preConsentWaId), false);
+  assert.equal(agentInboxByWaId.get(managementOnlyWaId)?.lastMessage?.bodyText, "Mensagem operacional");
+  assert.equal(agentInboxByWaId.get(managementOnlyWaId)?.unreadCount, 1);
 
   const agentInboxDepartmentC = await request<{
     ok: true;
@@ -10239,6 +10307,14 @@ test("inbox operations stay functional when tenant has no active general departm
   assert.equal(detail.status, 200, JSON.stringify(detail.body));
   const timeline = await request<{ ok: true }>("GET", `/app/conversation/${waId}/timeline`, businessAdmin);
   assert.equal(timeline.status, 200, JSON.stringify(timeline.body));
+  const managementTimeline = await request<{ ok: true; items: Array<{ body: string | null }> }>(
+    "GET",
+    `/app/conversation/${managementOnlyWaId}/timeline`,
+    multiDepartmentAgent
+  );
+  assert.equal(managementTimeline.status, 200, JSON.stringify(managementTimeline.body));
+  assert.equal(managementTimeline.body.items.some((item) => item.body === "Pesquisa interna"), false);
+  assert.equal(managementTimeline.body.items.some((item) => item.body === "Mensagem operacional"), true);
 
   const claim = await request<{ ok: true; assignedUserId: string | null; departmentId: string | null }>(
     "POST",

@@ -1,4 +1,5 @@
 export type InboxRealtimeMessage = {
+  inboxVisibility?: "human_timeline" | "management_only";
   protocol?: string | null;
   cycleId?: string | null;
   internalMessageId?: string | null;

@@ -269,6 +269,7 @@ test("executeChatbotFlow prompts for consent and advances after accepted consent
   assert.equal(prompt.handled, true);
   assert.equal(prompt.state.chatbotNodeId, "consent");
   assert.match(prompt.replyText ?? "", /ACEITO/);
+  assert.equal(prompt.managementInteraction?.outboundKind, "consent_prompt");
 
   const accepted = executeChatbotFlow({
     flowId: "flow_consent",
@@ -360,6 +361,8 @@ test("executeChatbotFlowWithConsent repeats consent prompt for invalid answer wh
   assert.match(result.replyText ?? "", /opção é inválida/);
   assert.match(result.replyText ?? "", /Digite 1 para aceitar/);
   assert.match(result.replyText ?? "", /55 \(84\) 9904-9614/);
+  assert.equal(result.managementInteraction?.inboundKind, "consent_invalid");
+  assert.equal(result.managementInteraction?.outboundKind, "consent_prompt");
 
   const declined = await executeChatbotFlowWithConsent({
     prisma,
@@ -382,6 +385,29 @@ test("executeChatbotFlowWithConsent repeats consent prompt for invalid answer wh
 
   assert.equal(declined.handled, true);
   assert.match(declined.replyText ?? "", /Atendimento encerrado/);
+  assert.equal(declined.managementInteraction?.inboundKind, "consent_negative");
+
+  const accepted = await executeChatbotFlowWithConsent({
+    prisma,
+    clientId: "client_1",
+    waId: "5511999999999",
+    sourceChannel: "whatsapp",
+    sourceProvider: "web_session",
+    source: "test",
+    requestId: "request_3",
+    flowId: "flow_consent",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_consent",
+      chatbotActive: true,
+      chatbotNodeId: "consent",
+    }),
+    inboundText: "1",
+    nowIso: "2026-04-17T10:00:04.000Z",
+  });
+
+  assert.equal(accepted.handled, true);
+  assert.equal(accepted.managementInteraction?.inboundKind, "consent_positive");
 });
 
 test("executeChatbotFlow preserves explicit menu option numbers", () => {

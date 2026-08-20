@@ -421,6 +421,7 @@ import {
   buildConversationProtocolNotice,
   normalizeConversationProtocol,
 } from "../inbox/conversationProtocol.js";
+import { isManagementOnlyInboxMessage } from "../inbox/messageVisibility.js";
 import {
   buildServiceCycleHistoryMap,
   clearSatisfactionRuntimeForNewServiceCycle,
@@ -29635,6 +29636,8 @@ async function buildConversationListPayload(
   ]);
   recordInboxListTiming(params.clientId, "last_message_lookup", lastMessageLookupStartedAt);
   recordInboxListCount(params.clientId, "last_message_lookup", 3);
+  const humanTimelineInbound = inbound.filter((item) => !isManagementOnlyInboxMessage(item.rawPayload));
+  const humanTimelineOutbound = outbound.filter((item) => !isManagementOnlyInboxMessage(item.rawPayload));
   const runtimeStateLookupStartedAt = channelLatencyNow();
   const runtimeStateCandidates = winners.map((item) => {
     const channel = serializeInboxChannelFields(item).channel;
@@ -29794,7 +29797,7 @@ async function buildConversationListPayload(
       );
     const manualUnread = identityKeys.some((identity) => readState.manuallyUnreadByConversationKey[identity]);
     let unreadCount = 0;
-    for (const message of inbound) {
+    for (const message of humanTimelineInbound) {
       if (getWaIdGroupKey(message.waId, message.waIdCanonical) !== key) continue;
       if (!isVisibleInCurrentOperation(key, message.createdAt)) continue;
       const createdAt = message.createdAt.getTime();
@@ -29830,7 +29833,7 @@ async function buildConversationListPayload(
     }
   }
   const latestInboundByWaId = new Map<string, (typeof inbound)[number]>();
-  for (const item of inbound) {
+  for (const item of humanTimelineInbound) {
     const key = getWaIdGroupKey(item.waId, item.waIdCanonical);
     if (!isVisibleInCurrentOperation(key, item.createdAt)) continue;
     if (!latestInboundByWaId.has(key)) {
@@ -29838,7 +29841,7 @@ async function buildConversationListPayload(
     }
   }
   const latestOutboundByWaId = new Map<string, (typeof outbound)[number]>();
-  for (const item of outbound) {
+  for (const item of humanTimelineOutbound) {
     const key = getWaIdGroupKey(item.waId, item.waIdCanonical);
     if (!isVisibleInCurrentOperation(key, item.createdAt)) continue;
     if (!latestOutboundByWaId.has(key)) {
@@ -29873,6 +29876,11 @@ async function buildConversationListPayload(
     });
     const inboundAt = latestInbound?.createdAt?.getTime() ?? -1;
     const outboundAt = latestOutbound?.createdAt?.getTime() ?? -1;
+    const displayOperationalFields = {
+      ...operationalFields,
+      lastInboundAt: latestInbound?.createdAt?.toISOString() ?? null,
+      lastOutboundAt: latestOutbound?.createdAt?.toISOString() ?? null,
+    };
     const lastMessage =
       inboundAt >= outboundAt
         ? latestInbound
@@ -29932,13 +29940,13 @@ async function buildConversationListPayload(
       leadService: lead?.service ?? null,
       leadEmail: lead?.email ?? null,
       leadCompany: lead?.company ?? null,
-      ...operationalFields,
+      ...displayOperationalFields,
       ...buildConversationOperationalTimingFields({
-        source: conversation,
-        operational: operationalFields,
+        source: { ...conversation, lastInboundAt: displayOperationalFields.lastInboundAt },
+        operational: displayOperationalFields,
       }),
-      departmentId: operationalFields.departmentId ?? conversation.departmentId ?? null,
-      unreadCount: conversationListItemShouldCountUnread(operationalFields)
+      departmentId: displayOperationalFields.departmentId ?? conversation.departmentId ?? null,
+      unreadCount: conversationListItemShouldCountUnread(displayOperationalFields)
         ? unreadInboundCountByWaId.get(key) ?? 0
         : 0,
       updatedAt: conversation.updatedAt,
@@ -30101,9 +30109,11 @@ async function buildConversationDetailPayload(
     }),
   ]);
   params.latency?.duration("detailMessageQuery", messageQueryStartedAt);
+  const humanTimelineInbound = inbound.filter((item) => !isManagementOnlyInboxMessage(item.rawPayload));
+  const humanTimelineOutbound = outbound.filter((item) => !isManagementOnlyInboxMessage(item.rawPayload));
   const actorUserIds = Array.from(
     new Set(
-      outbound
+      humanTimelineOutbound
         .map((item) => extractOutboundActorPayload(item.rawPayload)?.userId ?? null)
         .filter((value): value is string => Boolean(value))
     )
@@ -30124,10 +30134,11 @@ async function buildConversationDetailPayload(
   params.latency?.duration("detailOperationalLookups", operationalLookupsStartedAt);
 
   const items = [
-    ...inbound.map((item) => {
+    ...humanTimelineInbound.map((item) => {
       const contextualReply = extractContextualReplyPayload(item.rawPayload);
       const serviceCycle = getServiceCycleSnapshot(item.rawPayload);
       return {
+        inboxVisibility: "human_timeline" as const,
         protocol: serviceCycle?.protocol ?? null,
         cycleId: serviceCycle?.cycleId ?? null,
         internalMessageId: item.id,
@@ -30169,12 +30180,13 @@ async function buildConversationDetailPayload(
         rawPayload: params.includeRaw ? item.rawPayload : undefined,
       };
     }),
-    ...outbound.map((item) => {
+    ...humanTimelineOutbound.map((item) => {
       const metaStatus = extractMetaStatus(item.rawPayload);
       const contextualReply = extractContextualReplyPayload(item.rawPayload);
       const actor = extractOutboundActorPayload(item.rawPayload);
       const serviceCycle = getServiceCycleSnapshot(item.rawPayload);
       return {
+        inboxVisibility: "human_timeline" as const,
         protocol: serviceCycle?.protocol ?? null,
         cycleId: serviceCycle?.cycleId ?? null,
         internalMessageId: item.id,
@@ -30551,7 +30563,7 @@ async function buildContactTimelinePayload(
   ]);
 
   const items = [
-    ...inbound.map((item) => ({
+    ...inbound.filter((item) => !isManagementOnlyInboxMessage(item.rawPayload)).map((item) => ({
       id: `inbound:${item.id}`,
       kind: "message",
       direction: "INBOUND",
@@ -30564,7 +30576,7 @@ async function buildContactTimelinePayload(
         location: extractMessageLocation(item.rawPayload),
       },
     })),
-    ...outbound.map((item) => ({
+    ...outbound.filter((item) => !isManagementOnlyInboxMessage(item.rawPayload)).map((item) => ({
       id: `outbound:${item.id}`,
       kind: "message",
       direction: "OUTBOUND",

@@ -130,7 +130,7 @@ export async function executeChatbotFlowWithConsent(params: {
         requestId: params.requestId,
       });
       if (recorded.ok) {
-        return executeChatbotFlow({
+        const result = executeChatbotFlow({
           flowId: params.flowId,
           definition: params.definition,
           state: withAcceptedConsent(hydratedState, currentConsent.node),
@@ -139,6 +139,13 @@ export async function executeChatbotFlowWithConsent(params: {
           startNodeId: currentConsent.node.onAccepted,
           options: params.options,
         });
+        return {
+          ...result,
+          managementInteraction: {
+            ...(result.managementInteraction ?? {}),
+            inboundKind: "consent_positive",
+          },
+        };
       }
     }
     if (
@@ -147,7 +154,7 @@ export async function executeChatbotFlowWithConsent(params: {
       answer !== normalizeAnswer(currentConsent.node.acceptOption) &&
       (!declineOption || answer === declineOption)
     ) {
-      return executeChatbotFlow({
+      const result = executeChatbotFlow({
         flowId: params.flowId,
         definition: params.definition,
         state: clearChatbotRuntime(hydratedState),
@@ -156,6 +163,13 @@ export async function executeChatbotFlowWithConsent(params: {
         startNodeId: currentConsent.node.onDeclined,
         options: params.options,
       });
+      return {
+        ...result,
+        managementInteraction: {
+          ...(result.managementInteraction ?? {}),
+          inboundKind: "consent_negative",
+        },
+      };
     }
     if (answer && declineOption && answer !== declineOption) {
       const replyText = currentConsent.node.invalidText
@@ -165,6 +179,10 @@ export async function executeChatbotFlowWithConsent(params: {
         handled: true,
         state: hydratedState,
         replyText,
+        managementInteraction: {
+          inboundKind: "consent_invalid",
+          outboundKind: "consent_prompt",
+        },
       };
     }
   }

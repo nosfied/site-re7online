@@ -158,6 +158,36 @@ test("operational message push skips automated bot-only conversations", () => {
   );
 });
 
+test("operational message push skips management-only messages", () => {
+  assert.equal(
+    isOperationalMessagePushCandidate({
+      type: "message.created",
+      clientId: "client-1",
+      waId: "masked",
+      mode: "HUMAN",
+      handoffStatus: "active",
+      assignedUserId: null,
+      departmentId: "department-1",
+      message: {
+        inboxVisibility: "management_only",
+        direction: "INBOUND",
+        type: "TEXT",
+        status: "RECEIVED",
+        intent: null,
+        bodyText: "5",
+        templateName: null,
+        templateLang: null,
+        requestId: null,
+        messageId: "message-management",
+        metaMessageId: null,
+        errorBody: null,
+        createdAt: new Date().toISOString(),
+      },
+    }),
+    false
+  );
+});
+
 test("operational message push allows assigned and human conversations", () => {
   const base = {
     type: "message.created" as const,

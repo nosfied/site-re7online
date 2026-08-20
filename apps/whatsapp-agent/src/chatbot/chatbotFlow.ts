@@ -108,6 +108,10 @@ export type ChatbotExecutionResult = {
   replyText?: string;
   pendingHandoff?: ChatbotPendingHandoff;
   events?: ChatbotExecutionEvent[];
+  managementInteraction?: {
+    inboundKind?: "consent_positive" | "consent_negative" | "consent_invalid";
+    outboundKind?: "consent_prompt";
+  };
 };
 
 export type ChatbotExecutionOptions = {
@@ -1444,6 +1448,7 @@ function executeNodeChain(params: {
         state: currentState,
         replyText: messages.join("\n\n"),
         events,
+        managementInteraction: { outboundKind: "consent_prompt" },
       };
     }
 

@@ -1,6 +1,7 @@
 import { MessageStatus, MessageType, type PrismaClient } from "@prisma/client";
 import type { ServiceCycleSnapshot } from "../conversation/serviceCycle.js";
 import { applyAgentSignature } from "../inbox/agentSignature.js";
+import type { InboxMessageVisibility } from "../inbox/messageVisibility.js";
 import { persistEvent, persistOutboundMessage } from "../db/persist.js";
 import { getFeatures } from "../features/clientFeatures.js";
 import { logger } from "../logger/logger.js";
@@ -313,6 +314,8 @@ export async function createWebSessionTextOutboundMessage(params: {
   cannedReplyId?: string | null;
   skipAgentSignature?: boolean;
   serviceCycle?: ServiceCycleSnapshot | null;
+  inboxVisibility?: InboxMessageVisibility;
+  inboxInteractionKind?: string | null;
   source?: {
     channel?: string | null;
     provider?: string | null;
@@ -410,6 +413,12 @@ export async function createWebSessionTextOutboundMessage(params: {
   const outboundSource = params.outboundSource ?? "inbox_text";
   const rawPayload = {
     source: outboundSource,
+    ...(params.inboxVisibility
+      ? {
+          inboxVisibility: params.inboxVisibility,
+          inboxInteractionKind: params.inboxInteractionKind ?? outboundSource,
+        }
+      : {}),
     cannedReplyId: params.cannedReplyId ?? null,
     provider: "web_session",
     channelAccountId: account.channelAccountId,

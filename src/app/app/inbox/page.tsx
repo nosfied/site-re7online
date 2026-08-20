@@ -22,6 +22,7 @@ import {
   type AppRealtimeEvent,
 } from "@/lib/appRealtime";
 import {
+  isManagementOnlyRealtimeMessage,
   realtimeEventTargetsSelectedConversation,
   resolveRealtimeConversationOperationalProjection,
   resolveRealtimeTimelineConversationKey,
@@ -3246,6 +3247,9 @@ export default function AppInboxPage() {
     if (event.type !== "message.created") return;
     const conversationKey = event.waIdCanonical ?? event.waId;
     const message = event.message;
+    if (isManagementOnlyRealtimeMessage(event)) {
+      return;
+    }
 
     if (message.direction === "INBOUND") {
       countUnseenInboundMessages(

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  isManagementOnlyRealtimeMessage,
   realtimeEventTargetsSelectedConversation,
   resolveRealtimeConversationOperationalProjection,
   resolveRealtimeTimelineConversationKey,
@@ -31,6 +32,25 @@ test("realtime timeline matches selected conversation across canonical identity 
       selectedConversationIdentityCandidates: ["558499996787", "5584999996787"],
     }),
     "558499996787"
+  );
+});
+
+test("management-only realtime messages are identifiable without body text matching", () => {
+  assert.equal(
+    isManagementOnlyRealtimeMessage({
+      message: {
+        inboxVisibility: "management_only",
+      } as never,
+    }),
+    true
+  );
+  assert.equal(
+    isManagementOnlyRealtimeMessage({
+      message: {
+        bodyText: "Obrigado(a) por participar da nossa pesquisa!",
+      } as never,
+    }),
+    false
   );
 });
 

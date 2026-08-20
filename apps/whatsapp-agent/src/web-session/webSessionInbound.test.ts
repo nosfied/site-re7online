@@ -94,6 +94,10 @@ function protocolStartedEvents() {
   return state.events.filter((event) => event.eventName === "conversation.protocol.started");
 }
 
+function rawPayloadOf(row: Record<string, unknown> | undefined) {
+  return row?.rawPayload as Record<string, unknown> | undefined;
+}
+
 function fakePrisma() {
   const withoutUndefined = (value: Record<string, unknown>) =>
     Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
@@ -1435,6 +1439,9 @@ test("CSAT accepts only scores 1 to 5 before TTL and records the response", asyn
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentOffer"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Responda a pesquisa com uma nota de 1 a 5")), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Poderia compartilhar conosco")), true);
+  assert.equal(rawPayloadOf(state.inboundMessages.find((message) => message.externalMessageId === "MSG_CSAT_INVALID"))?.inboxVisibility, "management_only");
+  assert.equal(rawPayloadOf(state.inboundMessages.find((message) => message.externalMessageId === "MSG_CSAT_VALID"))?.inboxVisibility, "management_only");
+  assert.equal(state.outboundMessages.every((message) => rawPayloadOf(message)?.inboxVisibility === "management_only"), true);
 });
 
 test("CSAT comment offer can be skipped after a valid score", async () => {
@@ -1479,6 +1486,9 @@ test("CSAT comment offer can be skipped after a valid score", async () => {
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentOffer"), false);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("completedSurveyDecision"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Obrigad@ por participar")), true);
+  assert.equal(rawPayloadOf(state.inboundMessages.find((message) => message.externalMessageId === "MSG_CSAT_SCORE_SKIP"))?.inboxVisibility, "management_only");
+  assert.equal(rawPayloadOf(state.inboundMessages.find((message) => message.externalMessageId === "MSG_CSAT_COMMENT_SKIP"))?.inboxVisibility, "management_only");
+  assert.equal(state.outboundMessages.every((message) => rawPayloadOf(message)?.inboxVisibility === "management_only"), true);
 });
 
 test("new CSAT score is not routed through stale completed survey decision", async () => {
@@ -1583,6 +1593,10 @@ test("CSAT comment text is saved after the customer opts in", async () => {
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentInput"), false);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("completedSurveyDecision"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Digite o texto:")), true);
+  assert.equal(rawPayloadOf(state.inboundMessages.find((message) => message.externalMessageId === "MSG_CSAT_SCORE_COMMENT"))?.inboxVisibility, "management_only");
+  assert.equal(rawPayloadOf(state.inboundMessages.find((message) => message.externalMessageId === "MSG_CSAT_COMMENT_YES"))?.inboxVisibility, "management_only");
+  assert.equal(rawPayloadOf(state.inboundMessages.find((message) => message.externalMessageId === "MSG_CSAT_COMMENT_TEXT"))?.inboxVisibility, "management_only");
+  assert.equal(state.outboundMessages.every((message) => rawPayloadOf(message)?.inboxVisibility === "management_only"), true);
 });
 
 test("completed CSAT asks for a new-service decision before returning to chatbot", async () => {
@@ -1663,6 +1677,8 @@ test("completed CSAT asks for a new-service decision before returning to chatbot
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Tudo certo")), false);
+  assert.equal(rawPayloadOf(state.inboundMessages.find((message) => message.externalMessageId === "MSG_COMPLETED_GATE_PROMPT"))?.inboxVisibility, "management_only");
+  assert.equal(rawPayloadOf(state.inboundMessages.find((message) => message.externalMessageId === "MSG_COMPLETED_GATE_START"))?.inboxVisibility, "management_only");
 });
 
 test("completed CSAT decision repeats options for invalid input after prompt", async () => {
@@ -1726,6 +1742,8 @@ test("post-service decision prompt does not create a service cycle before explic
   assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("\"prompted\":true"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Deseja iniciar um novo atendimento")), true);
+  assert.equal(rawPayloadOf(state.inboundMessages.find((message) => message.externalMessageId === "MSG_POST_SERVICE_PROMPT"))?.inboxVisibility, "management_only");
+  assert.equal(state.outboundMessages.every((message) => rawPayloadOf(message)?.inboxVisibility === "management_only"), true);
 });
 
 test("post-service decision option 2 keeps conversation closed without service cycle", async () => {
@@ -1758,6 +1776,8 @@ test("post-service decision option 2 keeps conversation closed without service c
   assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
   assert.equal(state.runtimeStates[0]?.status, "CLOSED");
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Atendimento encerrado")), true);
+  assert.equal(rawPayloadOf(state.inboundMessages.find((message) => message.externalMessageId === "MSG_POST_SERVICE_NO"))?.inboxVisibility, "management_only");
+  assert.equal(state.outboundMessages.every((message) => rawPayloadOf(message)?.inboxVisibility === "management_only"), true);
 });
 
 test("generic inbound after CLOSED starts a new service cycle", async () => {

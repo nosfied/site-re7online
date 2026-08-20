@@ -1,6 +1,12 @@
 import type { AppRealtimeEvent } from "@/lib/appRealtime";
 import type { ConversationOperationalStatus, InboxConversationItem } from "@/lib/whatsappAdminApi";
 
+export function isManagementOnlyRealtimeMessage(
+  event: Pick<Extract<AppRealtimeEvent, { type: "message.created" }>, "message">
+) {
+  return event.message.inboxVisibility === "management_only";
+}
+
 export function normalizeConversationIdentity(value: string | null | undefined) {
   return String(value ?? "").trim();
 }

@@ -30,6 +30,7 @@ import {
   buildConversationProtocolNotice,
   normalizeConversationProtocol,
 } from "../inbox/conversationProtocol.js";
+import { withInboxMessageVisibility, type InboxMessageVisibility } from "../inbox/messageVisibility.js";
 import { logger } from "../logger/logger.js";
 import { deleteWebSessionStoredMedia, type WebSessionStoredMedia } from "../media/webSessionMedia.js";
 import { recordConversationInboundMetrics } from "../metrics/conversationMetrics.js";
@@ -1146,9 +1147,14 @@ async function sendWebSessionBotText(params: {
   text: string;
   state: ConversationState;
   serviceCycle?: ServiceCycleSnapshot | null;
+  inboxVisibility?: InboxMessageVisibility;
+  inboxInteractionKind?: string | null;
 }) {
   if (!params.text.trim()) return params.state;
   const serviceCycle = params.serviceCycle ?? getServiceCycleForDisplay(params.state);
+  const inferredManagementKind = params.requestId.includes(":survey") ? "satisfaction" : null;
+  const inboxInteractionKind = params.inboxInteractionKind ?? inferredManagementKind;
+  const inboxVisibility = params.inboxVisibility ?? (inboxInteractionKind ? "management_only" : undefined);
   const outboundResult = await createWebSessionTextOutboundMessage({
     prisma: params.prisma,
     waId: params.waId,
@@ -1161,6 +1167,8 @@ async function sendWebSessionBotText(params: {
     outboundSource: "bot",
     skipAgentSignature: true,
     serviceCycle,
+    inboxVisibility,
+    inboxInteractionKind,
     source: {
       channel: "whatsapp",
       provider: "web_session",
@@ -1181,6 +1189,7 @@ async function sendWebSessionBotText(params: {
       protocol: serviceCycle?.protocol ?? null,
       cycleId: serviceCycle?.cycleId ?? null,
       message: {
+        inboxVisibility,
         protocol: serviceCycle?.protocol ?? null,
         cycleId: serviceCycle?.cycleId ?? null,
         internalMessageId: outboundResult.internalMessageId,
@@ -1361,6 +1370,8 @@ async function sendWebSessionSatisfactionSurvey(params: {
     requestId: `${params.requestId}:survey:${survey.id}`,
     text: survey.questionText,
     state: initializedState,
+    inboxVisibility: "management_only",
+    inboxInteractionKind: "satisfaction_csat_prompt",
   });
 }
 
@@ -1976,10 +1987,10 @@ export async function ingestWebSessionInboundMessage(params: {
 
   try {
     const quotedReference = await resolveInboundQuotedReference({ prisma, message: params.message });
-    const rawPayload = {
+    let rawPayload: Prisma.InputJsonObject = {
       ...(params.message.rawPayload as Record<string, unknown>),
       ...(quotedReference ? { contextualReply: serializeQuotedReferenceForRawPayload(quotedReference) } : {}),
-    } satisfies Prisma.InputJsonObject;
+    };
     const inserted = await persistInboundMessage({
       clientId: params.message.clientId,
       phoneNumberId: undefined,
@@ -2070,8 +2081,10 @@ export async function ingestWebSessionInboundMessage(params: {
       chatbotEntryPointAvailable: Boolean(entryPointFlow),
     });
     let runtimeConversationState = runtimeToConversationState({ runtime, message: params.message });
+    let currentChatbotFlow: Awaited<ReturnType<typeof loadWebSessionChatbotFlow>> | null | undefined;
     const closePolicy = await getWebSessionClosePolicy({ prisma, clientId: params.message.clientId });
     let satisfactionResult: Awaited<ReturnType<typeof handleWebSessionSatisfactionInbound>> | null = null;
+    let inboundInboxVisibility: InboxMessageVisibility | undefined;
     if (closePolicy.satisfaction.enabled) {
       satisfactionResult = await handleWebSessionSatisfactionInbound({
         prisma,
@@ -2087,6 +2100,42 @@ export async function ingestWebSessionInboundMessage(params: {
         now: params.message.timestamp,
       });
       runtimeConversationState = satisfactionResult.state;
+      if (satisfactionResult.handled === true) {
+        inboundInboxVisibility = "management_only";
+        rawPayload = withInboxMessageVisibility(rawPayload, "management_only", "satisfaction");
+        await prisma.inboundMessage.update({
+          where: { clientId_messageId: { clientId: params.message.clientId, messageId } },
+          data: { rawPayload },
+        });
+      }
+    }
+    if (
+      !inboundInboxVisibility &&
+      automationFlags.settings.disableChatbot !== true &&
+      runtimeConversationState.mode !== "HUMAN" &&
+      runtimeConversationState.handoff.status === "none" &&
+      runtimeConversationState.chatbotActive &&
+      runtimeConversationState.chatbotNodeId
+    ) {
+      currentChatbotFlow = await loadWebSessionChatbotFlow({
+        prisma,
+        clientId: params.message.clientId,
+        state: runtimeConversationState,
+      });
+      const validatedCurrentFlow = currentChatbotFlow
+        ? validateChatbotFlowDefinition(currentChatbotFlow.definition)
+        : null;
+      const currentNode = validatedCurrentFlow?.ok
+        ? validatedCurrentFlow.definition.nodes[runtimeConversationState.chatbotNodeId]
+        : null;
+      if (currentNode?.type === "consent") {
+        inboundInboxVisibility = "management_only";
+        rawPayload = withInboxMessageVisibility(rawPayload, "management_only", "consent");
+        await prisma.inboundMessage.update({
+          where: { clientId_messageId: { clientId: params.message.clientId, messageId } },
+          data: { rawPayload },
+        });
+      }
     }
     const shouldHaveActiveServiceCycle =
       satisfactionResult?.handled !== true &&
@@ -2120,11 +2169,12 @@ export async function ingestWebSessionInboundMessage(params: {
           cycle: cycleResult.cycle,
         });
       }
-      await prisma.inboundMessage.update({
-        where: { clientId_messageId: { clientId: params.message.clientId, messageId } },
-        data: { rawPayload: withServiceCycleSnapshot(rawPayload, cycleResult.cycle) },
-      });
-    }
+        await prisma.inboundMessage.update({
+          where: { clientId_messageId: { clientId: params.message.clientId, messageId } },
+          data: { rawPayload: withServiceCycleSnapshot(rawPayload, cycleResult.cycle) },
+        });
+        rawPayload = withServiceCycleSnapshot(rawPayload, cycleResult.cycle);
+      }
     await recordConversationInboundMetrics({
       prisma,
       clientId: params.message.clientId,
@@ -2155,6 +2205,7 @@ export async function ingestWebSessionInboundMessage(params: {
       protocol: inboundServiceCycle?.protocol ?? null,
       cycleId: inboundServiceCycle?.cycleId ?? null,
       message: {
+        inboxVisibility: inboundInboxVisibility,
         protocol: inboundServiceCycle?.protocol ?? null,
         cycleId: inboundServiceCycle?.cycleId ?? null,
         internalMessageId: inboundNotificationMessage.internalMessageId,
@@ -2366,11 +2417,12 @@ export async function ingestWebSessionInboundMessage(params: {
       runtimeConversationState.handoff.status === "none"
     ) {
       const chatbotFlow = runtimeConversationState.chatbotActive
-        ? await loadWebSessionChatbotFlow({
-            prisma,
-            clientId: params.message.clientId,
-            state: runtimeConversationState,
-          })
+        ? (currentChatbotFlow ??
+            await loadWebSessionChatbotFlow({
+              prisma,
+              clientId: params.message.clientId,
+              state: runtimeConversationState,
+            }))
         : entryPointFlow;
       if (chatbotFlow) {
         const validatedDefinition = validateChatbotFlowDefinition(chatbotFlow.definition);
@@ -2411,6 +2463,18 @@ export async function ingestWebSessionInboundMessage(params: {
             options: { departmentAvailabilityById },
           });
           runtimeConversationState = chatbotResult.state;
+          if (chatbotResult.managementInteraction?.inboundKind) {
+            inboundInboxVisibility = "management_only";
+            rawPayload = withInboxMessageVisibility(
+              rawPayload,
+              "management_only",
+              chatbotResult.managementInteraction.inboundKind
+            );
+            await prisma.inboundMessage.update({
+              where: { clientId_messageId: { clientId: params.message.clientId, messageId } },
+              data: { rawPayload },
+            });
+          }
           const closedHandoffPolicy = getClosedHandoffPolicy(validatedDefinition.definition);
           const handoffDecision = chatbotResult.pendingHandoff
             ? await resolveDepartmentAwareHandoff(prisma, {
@@ -2459,6 +2523,10 @@ export async function ingestWebSessionInboundMessage(params: {
               outboundSource: "bot",
               skipAgentSignature: true,
               serviceCycle: replyServiceCycle,
+              inboxVisibility: chatbotResult.managementInteraction?.outboundKind
+                ? "management_only"
+                : undefined,
+              inboxInteractionKind: chatbotResult.managementInteraction?.outboundKind ?? null,
               source: {
                 channel: "whatsapp",
                 provider: "web_session",
@@ -2483,6 +2551,9 @@ export async function ingestWebSessionInboundMessage(params: {
                 protocol: replyServiceCycle?.protocol ?? null,
                 cycleId: replyServiceCycle?.cycleId ?? null,
                 message: {
+                  inboxVisibility: chatbotResult.managementInteraction?.outboundKind
+                    ? "management_only"
+                    : undefined,
                   protocol: replyServiceCycle?.protocol ?? null,
                   cycleId: replyServiceCycle?.cycleId ?? null,
                   internalMessageId: outboundResult.internalMessageId,

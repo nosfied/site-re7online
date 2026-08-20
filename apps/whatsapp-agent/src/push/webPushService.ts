@@ -313,6 +313,7 @@ function buildMessagePreview(value?: string | null) {
 export function isOperationalMessagePushCandidate(
   event: Extract<InboxRealtimeEvent, { type: "message.created" }>
 ) {
+  if (event.message.inboxVisibility === "management_only") return false;
   const handoffStatus = event.handoffStatus ?? "none";
   if (event.assignedUserId) return true;
   if (event.mode === "HUMAN") return true;
