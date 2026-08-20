@@ -24,7 +24,7 @@ import {
 import {
   getRealtimeHumanInboxVisibility,
   isHumanTimelineMessageItem,
-  isManagementOnlyRealtimeMessage,
+  isNonHumanTimelineRealtimeMessage,
   realtimeEventTargetsSelectedConversation,
   resolveRealtimeConversationOperationalProjection,
   resolveRealtimeTimelineConversationKey,
@@ -1380,7 +1380,14 @@ function getLatestMessageSignature(items: InboxMessageItem[]) {
   return `${latest.createdAt}:${latest.messageId ?? latest.metaMessageId ?? latest.requestId ?? latest.direction}`;
 }
 
-function getMessageIdentity(item: InboxMessageItem) {
+function getMessageIdentity(item: {
+  direction: InboxMessageItem["direction"];
+  messageId?: string | null;
+  metaMessageId?: string | null;
+  requestId?: string | null;
+  createdAt: string;
+  type: string;
+}) {
   return `${item.direction}:${item.messageId ?? item.metaMessageId ?? item.requestId ?? item.createdAt}:${item.type}`;
 }
 
@@ -3255,13 +3262,32 @@ export default function AppInboxPage() {
     if (event.type !== "message.created") return;
     const conversationKey = event.waIdCanonical ?? event.waId;
     const message = event.message;
-    if (isManagementOnlyRealtimeMessage(event)) {
+    if (isNonHumanTimelineRealtimeMessage(event)) {
       const messageIdentity = getMessageIdentity(message);
       setMessages((prev) => prev.filter((item) => getMessageIdentity(item) !== messageIdentity));
       for (const [cacheKey, cacheMessages] of timelineCacheRef.current.entries()) {
         const nextMessages = cacheMessages.filter((item) => getMessageIdentity(item) !== messageIdentity);
         timelineCacheRef.current.set(cacheKey, nextMessages);
       }
+      setConversations((prev) =>
+        prev.map((item) => {
+          const itemKey = getConversationIdentity(item);
+          if (
+            itemKey !== conversationKey &&
+            item.waId !== event.waId &&
+            item.waIdCanonical !== event.waIdCanonical
+          ) {
+            return item;
+          }
+          if (!item.lastMessage || getMessageIdentity(item.lastMessage) !== messageIdentity) {
+            return item;
+          }
+          return {
+            ...item,
+            lastMessage: null,
+          };
+        })
+      );
       void refreshConversationListRef.current?.(session);
       return;
     }

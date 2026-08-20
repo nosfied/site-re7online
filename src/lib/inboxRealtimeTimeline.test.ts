@@ -5,6 +5,7 @@ import {
   getRealtimeHumanInboxVisibility,
   isHumanTimelineMessageItem,
   isManagementOnlyRealtimeMessage,
+  isNonHumanTimelineRealtimeMessage,
   realtimeEventTargetsSelectedConversation,
   resolveRealtimeConversationOperationalProjection,
   resolveRealtimeTimelineConversationKey,
@@ -50,6 +51,28 @@ test("management-only realtime messages are identifiable without body text match
     isManagementOnlyRealtimeMessage({
       message: {
         bodyText: "Obrigado(a) por participar da nossa pesquisa!",
+      } as never,
+    }),
+    false
+  );
+});
+
+test("non-human realtime messages are identified by structured visibility projection", () => {
+  assert.equal(
+    isNonHumanTimelineRealtimeMessage({
+      humanInboxVisible: false,
+      message: {
+        bodyText: "5",
+      } as never,
+    }),
+    true
+  );
+  assert.equal(
+    isNonHumanTimelineRealtimeMessage({
+      humanInboxVisible: true,
+      message: {
+        inboxVisibility: "human_timeline",
+        bodyText: "mensagem humana",
       } as never,
     }),
     false
