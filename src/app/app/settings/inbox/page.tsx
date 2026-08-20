@@ -22,7 +22,8 @@ function canAccessInboxSettings(role: string) {
 }
 
 function canManageInboxSettings(role: string) {
-  return role.trim().toUpperCase() === "ADMIN";
+  const normalized = role.trim().toUpperCase();
+  return normalized === "SUPERVISOR" || normalized === "ADMIN";
 }
 
 function getDefaultSettings(): AppAgentSignatureSettings {
@@ -244,7 +245,7 @@ export default function AppSettingsInboxPage() {
                   Atualizar
                 </button>
                 {readOnly ? (
-                  <p className="text-xs text-white/55">Somente administradores podem salvar alterações.</p>
+                  <p className="text-xs text-white/55">Somente supervisores e administradores podem salvar alterações.</p>
                 ) : (
                   <button
                     type="button"

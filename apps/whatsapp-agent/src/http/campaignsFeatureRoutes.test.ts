@@ -2010,7 +2010,7 @@ test("admin tenant feature entitlements are platform-scoped, audited, dependency
   }
 });
 
-test("queue assignment settings are tenant scoped and admin protected", async () => {
+test("queue assignment settings are tenant scoped and managed by admin or supervisor", async () => {
   const unauth = await requestUnauth<ErrorPayload>("GET", "/app/settings/queue-assignment");
   assert.equal(unauth.status, 401);
 
@@ -2026,14 +2026,39 @@ test("queue assignment settings are tenant scoped and admin protected", async ()
   assert.equal(supervisor.body.ok, true);
   assert.equal(supervisor.body.policy.enabled, false);
   assert.equal(supervisor.body.policy.mode, "manual");
-  assert.equal(supervisor.body.permissions.canUpdate, false);
+  assert.equal(supervisor.body.permissions.canUpdate, true);
 
-  const supervisorUpdate = await request<ErrorPayload>("PUT", "/app/settings/queue-assignment", businessSupervisor, {
+  const supervisorUpdate = await request<{
+    ok: boolean;
+    policy: { enabled: boolean; mode: string; scope: string };
+    permissions: { canUpdate: boolean };
+  }>("PUT", "/app/settings/queue-assignment", businessSupervisor, {
     enabled: true,
     mode: "round_robin",
     scope: "department",
   });
-  assert.equal(supervisorUpdate.status, 403);
+  assert.equal(supervisorUpdate.status, 200);
+  assert.equal(supervisorUpdate.body.policy.enabled, true);
+  assert.equal(supervisorUpdate.body.policy.mode, "round_robin");
+  assert.equal(supervisorUpdate.body.permissions.canUpdate, true);
+
+  const supervisorLeastActive = await request<{
+    ok: boolean;
+    policy: { enabled: boolean; mode: string; scope: string };
+  }>("PUT", "/app/settings/queue-assignment", businessSupervisor, {
+    enabled: true,
+    mode: "least_active",
+    scope: "department",
+  });
+  assert.equal(supervisorLeastActive.status, 200);
+  assert.equal(supervisorLeastActive.body.policy.mode, "least_active");
+
+  const agentUpdate = await request<ErrorPayload>("PUT", "/app/settings/queue-assignment", businessAgent, {
+    enabled: true,
+    mode: "round_robin",
+    scope: "department",
+  });
+  assert.equal(agentUpdate.status, 403);
 
   const invalid = await request<ErrorPayload>("PUT", "/app/settings/queue-assignment", businessAdmin, {
     enabled: true,
@@ -6832,7 +6857,7 @@ test("agent signature is tenant-scoped and applies only to human text and canned
   }>("GET", "/app/settings/agent-signature", businessSupervisor);
   assert.equal(defaultSettings.status, 200);
   assert.equal(defaultSettings.body.settings.enabled, false);
-  assert.equal(defaultSettings.body.permissions.canUpdate, false);
+  assert.equal(defaultSettings.body.permissions.canUpdate, true);
 
   const agentSettings = await request<ErrorPayload>("GET", "/app/settings/agent-signature", businessAgent);
   assert.equal(agentSettings.status, 403);
@@ -6840,7 +6865,7 @@ test("agent signature is tenant-scoped and applies only to human text and canned
   const updatedSettings = await request<{
     ok: true;
     settings: { enabled: boolean; mode: string; format: string };
-  }>("PUT", "/app/settings/agent-signature?clientId=malicious", businessAdmin, {
+  }>("PUT", "/app/settings/agent-signature?clientId=malicious", businessSupervisor, {
     enabled: true,
     mode: "ignored",
     format: "ignored",
@@ -10282,7 +10307,20 @@ test("tenant admins manage department schedule exceptions with RBAC and tenant i
   assert.equal(supervisorList.status, 200);
   assert.ok(supervisorList.body.items.some((item) => item.id === departmentA.id));
 
-  const supervisorMutation = await request<ErrorPayload>(
+  const supervisorCreated = await request<{ ok: true; department: { id: string; name: string; isActive: boolean } }>(
+    "POST",
+    "/app/departments",
+    businessSupervisor,
+    {
+      name: `${prefix} Supervisor Created Department`,
+      isActive: true,
+      businessHours: regularHours,
+    }
+  );
+  assert.equal(supervisorCreated.status, 200, JSON.stringify(supervisorCreated.body));
+  assert.equal(supervisorCreated.body.department.isActive, true);
+
+  const supervisorMutation = await request<{ ok: true; department: { businessHourExceptions: Array<{ date: string; type: string }> } }>(
     "PUT",
     `/app/departments/${departmentA.id}`,
     businessSupervisor,
@@ -10290,7 +10328,17 @@ test("tenant admins manage department schedule exceptions with RBAC and tenant i
       businessHourExceptions: [{ date: "2026-09-07", type: "CLOSED", reason: "Teste supervisor" }],
     }
   );
-  assert.equal(supervisorMutation.status, 403);
+  assert.equal(supervisorMutation.status, 200);
+  assert.equal(supervisorMutation.body.department.businessHourExceptions[0].type, "CLOSED");
+
+  const supervisorToggle = await request<{ ok: true; department: { isActive: boolean } }>(
+    "PUT",
+    `/app/departments/${supervisorCreated.body.department.id}`,
+    businessSupervisor,
+    { isActive: false }
+  );
+  assert.equal(supervisorToggle.status, 200);
+  assert.equal(supervisorToggle.body.department.isActive, false);
 
   const agentMutation = await request<ErrorPayload>(
     "PUT",

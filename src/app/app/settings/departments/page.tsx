@@ -22,7 +22,8 @@ function canAccessDepartments(role: string) {
 }
 
 function canManageDepartments(role: string) {
-  return role.trim().toUpperCase() === "ADMIN";
+  const normalized = role.trim().toUpperCase();
+  return normalized === "SUPERVISOR" || normalized === "ADMIN";
 }
 
 const WEEKDAYS = [
@@ -669,7 +670,7 @@ export default function AppSettingsDepartmentsPage() {
             Novo setor
           </span>
           <p className="text-xs text-white/65 sm:text-sm">
-            O nome informado gera o slug automaticamente. Supervisores acessam esta tela apenas em leitura.
+            O nome informado gera o slug automaticamente. Supervisores e administradores podem ajustar a operação.
           </p>
         </div>
         <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
@@ -696,7 +697,7 @@ export default function AppSettingsDepartmentsPage() {
             <h2 className="text-base font-semibold">Setores da organização</h2>
             <p className="mt-0.5 text-xs text-white/65 sm:text-sm">
               {readOnly
-                ? "Visualizacao em leitura para supervisores."
+                ? "Visualização em leitura."
                 : "Edite o nome, ative ou desative setores conforme a operação."}
             </p>
           </div>

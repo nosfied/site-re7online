@@ -7298,8 +7298,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("forbidden", "Only supervisor or admin can view queue assignment settings."));
         return;
       }
-      if (req.method === "PUT" && !isAdminRole(clientAuth.role)) {
-        json(res, 403, httpError("forbidden", "Only admin can update queue assignment settings."));
+      if (req.method === "PUT" && !isAdminOrSupervisorRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can update queue assignment settings."));
         return;
       }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
@@ -7325,7 +7325,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           effectiveMode: publicPolicy.enabled ? publicPolicy.mode : "manual",
           warnings: getQueueAssignmentPolicyWarnings(publicPolicy),
           permissions: {
-            canUpdate: isAdminRole(clientAuth.role),
+            canUpdate: isAdminOrSupervisorRole(clientAuth.role),
           },
         });
         return;
@@ -7623,8 +7623,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("forbidden", "Only supervisor or admin can view agent signature settings."));
         return;
       }
-      if (req.method === "PUT" && !isAdminRole(clientAuth.role)) {
-        json(res, 403, httpError("forbidden", "Only admin can update agent signature settings."));
+      if (req.method === "PUT" && !isAdminOrSupervisorRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can update agent signature settings."));
         return;
       }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
@@ -7651,7 +7651,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             bodyText: "*Maria*\nOla, como posso ajudar?",
           },
           permissions: {
-            canUpdate: isAdminRole(clientAuth.role),
+            canUpdate: isAdminOrSupervisorRole(clientAuth.role),
           },
         });
         return;
@@ -8173,7 +8173,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
       }))) return;
       const includeInactive =
-        clientAuth.role === "ADMIN" && parsedUrl.searchParams.get("includeInactive") === "true";
+        isAdminOrSupervisorRole(clientAuth.role) && parsedUrl.searchParams.get("includeInactive") === "true";
       const timezone = await resolveTenantOperationalTimezone(prisma, client.id);
       const purpose = parsedUrl.searchParams.get("purpose");
       const isTransferPurpose = purpose === "transfer";
@@ -8241,8 +8241,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      if (isAgentRole(clientAuth.role) || clientAuth.role === "SUPERVISOR") {
-        json(res, 403, httpError("forbidden", "Only admin can manage departments."));
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can manage departments."));
         return;
       }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
@@ -8401,8 +8401,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      if (isAgentRole(clientAuth.role) || clientAuth.role === "SUPERVISOR") {
-        json(res, 403, httpError("forbidden", "Only admin can manage departments."));
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can manage departments."));
         return;
       }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
