@@ -3161,8 +3161,6 @@ export default function AppInboxPage() {
           matchedConversationKeys.add(item.waId);
           if (item.waIdCanonical) matchedConversationKeys.add(item.waIdCanonical);
           if (shouldRemoveFromHumanInbox) return [];
-          const nextAssignedUserId =
-            event.assignedUserId !== undefined ? event.assignedUserId : item.assignedUserId;
           const operationalProjection = resolveRealtimeConversationOperationalProjection(item, event);
           return [{
             ...item,
@@ -3170,15 +3168,15 @@ export default function AppInboxPage() {
             protocol: event.protocol ?? item.protocol ?? null,
             cycleId: event.cycleId ?? item.cycleId ?? null,
             mode: operationalProjection.mode,
-            handoffStatus: event.handoffStatus ?? item.handoffStatus,
-            assignedUserId: nextAssignedUserId ?? null,
+            handoffStatus: operationalProjection.handoffStatus,
+            assignedUserId: operationalProjection.assignedUserId ?? null,
             assignedUserName:
               event.assignedUserName !== undefined ? event.assignedUserName : item.assignedUserName,
             assignedAt: event.assignedAt !== undefined ? event.assignedAt : item.assignedAt,
-            departmentId: event.departmentId !== undefined ? event.departmentId : item.departmentId ?? null,
+            departmentId: operationalProjection.departmentId ?? null,
             departmentName:
               event.departmentName !== undefined ? event.departmentName : item.departmentName,
-            queueId: event.queueId !== undefined ? event.queueId : item.queueId ?? null,
+            queueId: operationalProjection.queueId ?? null,
             queueName: event.queueName !== undefined ? event.queueName : item.queueName,
             status: operationalProjection.status,
             closedAt: event.closedAt !== undefined ? event.closedAt : item.closedAt,
@@ -3292,21 +3290,16 @@ export default function AppInboxPage() {
         matchedConversationKeys.add(itemKey);
         matchedConversationKeys.add(item.waId);
         if (item.waIdCanonical) matchedConversationKeys.add(item.waIdCanonical);
-        const nextAssignedUserId =
-          event.assignedUserId !== undefined ? event.assignedUserId : item.assignedUserId;
-        const operationalProjection = resolveRealtimeConversationOperationalProjection(item, {
-          mode: event.mode,
-          ...(nextAssignedUserId ? { status: "IN_PROGRESS" as const } : {}),
-        });
+        const operationalProjection = resolveRealtimeConversationOperationalProjection(item, event);
         return {
           ...item,
           waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
           protocol: event.protocol ?? message.protocol ?? item.protocol ?? null,
           cycleId: event.cycleId ?? message.cycleId ?? item.cycleId ?? null,
           mode: operationalProjection.mode,
-          handoffStatus: event.handoffStatus ?? item.handoffStatus,
-          assignedUserId: nextAssignedUserId,
-          departmentId: event.departmentId ?? item.departmentId ?? null,
+          handoffStatus: operationalProjection.handoffStatus,
+          assignedUserId: operationalProjection.assignedUserId,
+          departmentId: operationalProjection.departmentId ?? null,
           status: operationalProjection.status,
           lastMessage: {
             protocol: message.protocol ?? null,

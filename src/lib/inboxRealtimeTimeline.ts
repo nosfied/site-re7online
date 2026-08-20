@@ -52,10 +52,17 @@ export function resolveRealtimeTimelineConversationKey(input: {
 }
 
 export function resolveRealtimeConversationOperationalProjection(
-  current: Pick<InboxConversationItem, "mode" | "status">,
+  current: Pick<
+    InboxConversationItem,
+    "mode" | "status" | "handoffStatus" | "assignedUserId" | "departmentId" | "queueId"
+  >,
   event: {
     mode?: InboxConversationItem["mode"] | null;
     status?: ConversationOperationalStatus | null;
+    handoffStatus?: InboxConversationItem["handoffStatus"];
+    assignedUserId?: string | null;
+    departmentId?: string | null;
+    queueId?: string | null;
   }
 ) {
   const hasExplicitStatus = Object.prototype.hasOwnProperty.call(event, "status");
@@ -63,6 +70,10 @@ export function resolveRealtimeConversationOperationalProjection(
     return {
       mode: event.mode ?? current.mode,
       status: event.status ?? null,
+      handoffStatus: event.handoffStatus ?? current.handoffStatus,
+      assignedUserId: event.assignedUserId !== undefined ? event.assignedUserId : current.assignedUserId,
+      departmentId: event.departmentId !== undefined ? event.departmentId : current.departmentId,
+      queueId: event.queueId !== undefined ? event.queueId : current.queueId,
     };
   }
 
@@ -70,11 +81,19 @@ export function resolveRealtimeConversationOperationalProjection(
     return {
       mode: current.mode,
       status: current.status,
+      handoffStatus: current.handoffStatus,
+      assignedUserId: current.assignedUserId,
+      departmentId: current.departmentId,
+      queueId: current.queueId,
     };
   }
 
   return {
     mode: event.mode ?? current.mode,
     status: current.status,
+    handoffStatus: event.handoffStatus ?? current.handoffStatus,
+    assignedUserId: event.assignedUserId !== undefined ? event.assignedUserId : current.assignedUserId,
+    departmentId: event.departmentId !== undefined ? event.departmentId : current.departmentId,
+    queueId: event.queueId !== undefined ? event.queueId : current.queueId,
   };
 }
