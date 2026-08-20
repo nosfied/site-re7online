@@ -643,6 +643,193 @@ export default function AppSettingsDepartmentsPage() {
     }
   };
 
+  const renderExceptionEditor = (hostDepartmentId: string) => {
+    if (!exceptionEditor || exceptionEditor.departmentIds[0] !== hostDepartmentId) return null;
+    return (
+      <div className="department-inline-editor mt-3 rounded-lg border border-re7-sky/35 bg-re7-sky/10 p-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h5 className="text-sm font-semibold text-white">
+              {exceptionEditor.originalDate ? "Editar exceção de horário" : "Adicionar exceção de horário"}
+            </h5>
+            <p className="text-xs text-white/60">
+              A exceção será aplicada aos setores selecionados e passa a valer imediatamente.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[180px_220px_minmax(0,1fr)]">
+          <label className="flex flex-col gap-1.5 text-xs text-white/75">
+            <span>Data</span>
+            <input
+              type="date"
+              value={exceptionEditor.date}
+              onChange={(event) =>
+                setExceptionEditor((current) => current ? { ...current, date: event.target.value } : current)
+              }
+              className="min-w-0 rounded-md border border-white/15 bg-re7-navy px-2 py-1.5 text-xs text-white outline-none focus:border-re7-sky"
+            />
+          </label>
+
+          <div className="flex flex-col gap-1.5 text-xs text-white/75">
+            <span>Funcionamento</span>
+            <label className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 py-1.5">
+              <input
+                type="radio"
+                checked={exceptionEditor.type === "CLOSED"}
+                onChange={() =>
+                  setExceptionEditor((current) => current ? { ...current, type: "CLOSED" } : current)
+                }
+                className="accent-re7-orange"
+              />
+              Fechado o dia inteiro
+            </label>
+            <label className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 py-1.5">
+              <input
+                type="radio"
+                checked={exceptionEditor.type === "CUSTOM_HOURS"}
+                onChange={() =>
+                  setExceptionEditor((current) => current ? { ...current, type: "CUSTOM_HOURS" } : current)
+                }
+                className="accent-re7-orange"
+              />
+              Horário especial
+            </label>
+          </div>
+
+          <label className="flex flex-col gap-1.5 text-xs text-white/75">
+            <span>Motivo opcional</span>
+            <input
+              value={exceptionEditor.reason}
+              onChange={(event) =>
+                setExceptionEditor((current) => current ? { ...current, reason: event.target.value } : current)
+              }
+              placeholder="Ex.: Feriado municipal"
+              className="min-w-0 rounded-md border border-white/15 bg-re7-navy px-2 py-1.5 text-xs text-white outline-none focus:border-re7-sky"
+            />
+          </label>
+        </div>
+
+        {exceptionEditor.type === "CUSTOM_HOURS" ? (
+          <div className="mt-3 space-y-2">
+            <p className="text-xs font-semibold text-white/80">Intervalos do horário especial</p>
+            {exceptionEditor.intervals.map((interval, intervalIndex) => (
+              <div
+                key={intervalIndex}
+                className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2 sm:max-w-md"
+              >
+                <input
+                  type="time"
+                  value={minutesToTime(interval.startMinute)}
+                  onChange={(event) =>
+                    updateExceptionInterval(intervalIndex, "startMinute", timeToMinutes(event.target.value))
+                  }
+                  className="min-w-0 rounded-md border border-white/15 bg-re7-navy px-2 py-1.5 text-xs text-white"
+                />
+                <span className="text-xs text-white/45">até</span>
+                <input
+                  type="time"
+                  value={minutesToTime(interval.endMinute)}
+                  onChange={(event) =>
+                    updateExceptionInterval(intervalIndex, "endMinute", timeToMinutes(event.target.value))
+                  }
+                  className="min-w-0 rounded-md border border-white/15 bg-re7-navy px-2 py-1.5 text-xs text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExceptionEditor((current) =>
+                      current
+                        ? {
+                            ...current,
+                            intervals: current.intervals.filter((_, index) => index !== intervalIndex),
+                          }
+                        : current
+                    )
+                  }
+                  disabled={exceptionEditor.intervals.length <= 1}
+                  className="rounded-md border border-white/20 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Remover
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                setExceptionEditor((current) =>
+                  current
+                    ? {
+                        ...current,
+                        intervals: [...current.intervals, { startMinute: 13 * 60, endMinute: 17 * 60 }],
+                      }
+                    : current
+                )
+              }
+              className="rounded-md border border-white/20 px-2.5 py-1.5 text-xs text-white/80 hover:bg-white/10"
+            >
+              + Adicionar intervalo
+            </button>
+          </div>
+        ) : null}
+
+        <div className="mt-3">
+          <p className="mb-2 text-xs font-semibold text-white/80">Aplicar aos setores</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {sortedDepartments.map((department) => {
+              const checked = exceptionEditor.departmentIds.includes(department.id);
+              return (
+                <label
+                  key={department.id}
+                  className={`flex min-w-0 items-center gap-2 rounded-md border px-2 py-1.5 text-xs ${
+                    checked
+                      ? "border-re7-sky/55 bg-re7-sky/20 text-white"
+                      : "border-white/15 bg-white/5 text-white/70"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) =>
+                      setExceptionEditor((current) => {
+                        if (!current) return current;
+                        const departmentIds = event.target.checked
+                          ? [...current.departmentIds, department.id]
+                          : current.departmentIds.filter((value) => value !== department.id);
+                        return { ...current, departmentIds: [...new Set(departmentIds)] };
+                      })
+                    }
+                    className="h-3.5 w-3.5 accent-re7-sky"
+                  />
+                  <span className="min-w-0 truncate">{department.name}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={saveExceptionEditor}
+            disabled={savingExceptions}
+            className="rounded-md bg-re7-orange px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-re7-orange/20 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-orange disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {savingExceptions ? "Salvando..." : "Salvar"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setExceptionEditor(null)}
+            disabled={savingExceptions}
+            className="rounded-md border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const clearSelectedEditorDays = () => {
     if (!hoursEditor) return;
     if (hoursEditor.weekdays.length === 0) {
@@ -732,198 +919,6 @@ export default function AppSettingsDepartmentsPage() {
           </div>
         </div>
 
-        {exceptionEditor ? (
-          <div className="mb-3 rounded-xl border border-re7-sky/35 bg-re7-sky/10 p-3">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-semibold text-white">
-                  {exceptionEditor.originalDate ? "Editar exceção de horário" : "Adicionar exceção de horário"}
-                </h3>
-                <p className="text-xs text-white/60">
-                  A exceção será aplicada aos setores selecionados e passa a valer imediatamente.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setExceptionEditor(null)}
-                disabled={savingExceptions}
-                className="rounded-md border border-white/20 px-2 py-1 text-xs text-white/75 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-            </div>
-
-            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[180px_220px_minmax(0,1fr)]">
-              <label className="flex flex-col gap-1.5 text-xs text-white/75">
-                <span>Data</span>
-                <input
-                  type="date"
-                  value={exceptionEditor.date}
-                  onChange={(event) =>
-                    setExceptionEditor((current) => current ? { ...current, date: event.target.value } : current)
-                  }
-                  className="min-w-0 rounded-md border border-white/15 bg-re7-navy px-2 py-1.5 text-xs text-white outline-none focus:border-re7-sky"
-                />
-              </label>
-
-              <div className="flex flex-col gap-1.5 text-xs text-white/75">
-                <span>Funcionamento</span>
-                <label className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 py-1.5">
-                  <input
-                    type="radio"
-                    checked={exceptionEditor.type === "CLOSED"}
-                    onChange={() =>
-                      setExceptionEditor((current) => current ? { ...current, type: "CLOSED" } : current)
-                    }
-                    className="accent-re7-orange"
-                  />
-                  Fechado o dia inteiro
-                </label>
-                <label className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 py-1.5">
-                  <input
-                    type="radio"
-                    checked={exceptionEditor.type === "CUSTOM_HOURS"}
-                    onChange={() =>
-                      setExceptionEditor((current) => current ? { ...current, type: "CUSTOM_HOURS" } : current)
-                    }
-                    className="accent-re7-orange"
-                  />
-                  Horário especial
-                </label>
-              </div>
-
-              <label className="flex flex-col gap-1.5 text-xs text-white/75">
-                <span>Motivo opcional</span>
-                <input
-                  value={exceptionEditor.reason}
-                  onChange={(event) =>
-                    setExceptionEditor((current) => current ? { ...current, reason: event.target.value } : current)
-                  }
-                  placeholder="Ex.: Feriado municipal"
-                  className="min-w-0 rounded-md border border-white/15 bg-re7-navy px-2 py-1.5 text-xs text-white outline-none focus:border-re7-sky"
-                />
-              </label>
-            </div>
-
-            {exceptionEditor.type === "CUSTOM_HOURS" ? (
-              <div className="mt-3 space-y-2">
-                <p className="text-xs font-semibold text-white/80">Intervalos do horário especial</p>
-                {exceptionEditor.intervals.map((interval, intervalIndex) => (
-                  <div
-                    key={intervalIndex}
-                    className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2 sm:max-w-md"
-                  >
-                    <input
-                      type="time"
-                      value={minutesToTime(interval.startMinute)}
-                      onChange={(event) =>
-                        updateExceptionInterval(intervalIndex, "startMinute", timeToMinutes(event.target.value))
-                      }
-                      className="min-w-0 rounded-md border border-white/15 bg-re7-navy px-2 py-1.5 text-xs text-white"
-                    />
-                    <span className="text-xs text-white/45">até</span>
-                    <input
-                      type="time"
-                      value={minutesToTime(interval.endMinute)}
-                      onChange={(event) =>
-                        updateExceptionInterval(intervalIndex, "endMinute", timeToMinutes(event.target.value))
-                      }
-                      className="min-w-0 rounded-md border border-white/15 bg-re7-navy px-2 py-1.5 text-xs text-white"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExceptionEditor((current) =>
-                          current
-                            ? {
-                                ...current,
-                                intervals: current.intervals.filter((_, index) => index !== intervalIndex),
-                              }
-                            : current
-                        )
-                      }
-                      disabled={exceptionEditor.intervals.length <= 1}
-                      className="rounded-md border border-white/20 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
-                    >
-                      Remover
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setExceptionEditor((current) =>
-                      current
-                        ? {
-                            ...current,
-                            intervals: [...current.intervals, { startMinute: 13 * 60, endMinute: 17 * 60 }],
-                          }
-                        : current
-                    )
-                  }
-                  className="rounded-md border border-white/20 px-2.5 py-1.5 text-xs text-white/80 hover:bg-white/10"
-                >
-                  + Adicionar intervalo
-                </button>
-              </div>
-            ) : null}
-
-            <div className="mt-3">
-              <p className="mb-2 text-xs font-semibold text-white/80">Aplicar aos setores</p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {sortedDepartments.map((department) => {
-                  const checked = exceptionEditor.departmentIds.includes(department.id);
-                  return (
-                    <label
-                      key={department.id}
-                      className={`flex min-w-0 items-center gap-2 rounded-md border px-2 py-1.5 text-xs ${
-                        checked
-                          ? "border-re7-sky/55 bg-re7-sky/20 text-white"
-                          : "border-white/15 bg-white/5 text-white/70"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) =>
-                          setExceptionEditor((current) => {
-                            if (!current) return current;
-                            const departmentIds = event.target.checked
-                              ? [...current.departmentIds, department.id]
-                              : current.departmentIds.filter((value) => value !== department.id);
-                            return { ...current, departmentIds: [...new Set(departmentIds)] };
-                          })
-                        }
-                        className="h-3.5 w-3.5 accent-re7-sky"
-                      />
-                      <span className="min-w-0 truncate">{department.name}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={saveExceptionEditor}
-                disabled={savingExceptions}
-                className="rounded-md bg-re7-orange px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-re7-orange/20 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-orange disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {savingExceptions ? "Salvando..." : "Salvar"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setExceptionEditor(null)}
-                disabled={savingExceptions}
-                className="rounded-md border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        ) : null}
-
         {loading ? (
           <p className="text-sm text-white/70">Carregando setores...</p>
         ) : sortedDepartments.length === 0 ? (
@@ -933,31 +928,55 @@ export default function AppSettingsDepartmentsPage() {
             {sortedDepartments.map((item, index) => {
               const draft = drafts[item.id];
               if (!draft) return null;
+              const isDraftActive = draft.isActive;
+              const cardToneClass = isDraftActive
+                ? index % 2 === 0
+                  ? "department-card-active-a border-re7-sky/45 bg-re7-sky/[0.13] shadow-re7-sky/10"
+                  : "department-card-active-b border-re7-sky/35 bg-re7-sky/[0.09] shadow-re7-sky/10"
+                : "department-card-inactive border-white/15 bg-white/[0.035] shadow-black/10 opacity-85";
+              const cardHeaderToneClass = isDraftActive
+                ? "department-card-header-active border-re7-sky/25 bg-re7-sky/[0.16]"
+                : "department-card-header-inactive border-white/10 bg-white/[0.035]";
+              const sectionToneClass = isDraftActive
+                ? "department-card-section-active border-re7-sky/20 bg-re7-navy/55"
+                : "department-card-section-inactive border-white/10 bg-re7-navy/35";
+              const footerToneClass = isDraftActive
+                ? "department-card-footer-active border-re7-sky/20 bg-re7-navy/60"
+                : "department-card-footer-inactive border-white/10 bg-re7-navy/40";
               return (
                 <article
                   id={`department-card-${item.id}`}
                   key={item.id}
                   className={`theme-list-row ${
                     index % 2 === 0 ? "theme-list-row-even" : "theme-list-row-odd"
-                  } scroll-mt-24 overflow-hidden rounded-xl border shadow-lg shadow-black/10 ${
-                    index % 2 === 0
-                      ? "border-white/20 bg-re7-navy/55"
-                      : "border-white/25 bg-white/[0.09]"
-                  }`}
+                  } scroll-mt-24 overflow-hidden rounded-xl border shadow-lg transition-colors ${cardToneClass}`}
                 >
-                  <div className="border-b border-white/15 bg-white/[0.055] px-3 py-3 md:px-4">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="min-w-0 space-y-1.5">
-                      <h3 className="text-base font-semibold text-white">{item.name}</h3>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <DepartmentBadge label={item.slug || "-"} />
-                        <DepartmentBadge
-                          label={item.isActive ? "Ativo" : "Inativo"}
-                          tone={item.isActive ? "success" : "warning"}
-                        />
+                  <div className={`border-b px-3 py-3 md:px-4 ${cardHeaderToneClass}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 space-y-1.5">
+                        <h3 className="text-base font-semibold text-white">{item.name}</h3>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <DepartmentBadge label={item.slug || "-"} />
+                          <DepartmentBadge
+                            label={isDraftActive ? "Ativo" : "Inativo"}
+                            tone={isDraftActive ? "success" : "warning"}
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-xs text-white/55">Criado em {formatDateTime(item.createdAt)}</div>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <span className="text-xs text-white/55">Criado em {formatDateTime(item.createdAt)}</span>
+                        {!readOnly ? (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdate(item)}
+                            disabled={savingId === item.id || togglingId === item.id}
+                            className="inline-flex items-center gap-1.5 rounded-md bg-re7-orange px-4 py-2 text-xs font-semibold text-white shadow-md shadow-re7-orange/25 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-orange disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+                          >
+                            <ActionIcon>✓</ActionIcon>
+                            {savingId === item.id ? "Salvando..." : "Salvar"}
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
 
@@ -983,34 +1002,34 @@ export default function AppSettingsDepartmentsPage() {
                     <label className="flex flex-col gap-1.5 text-xs text-white/75">
                       <span>Status</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-white/65">{draft.isActive ? "Ativo" : "Inativo"}</span>
+                        <span className="text-xs text-white/65">{isDraftActive ? "Ativo" : "Inativo"}</span>
                         <button
                           type="button"
                           onClick={() => {
                             if (readOnly || togglingId === item.id || savingId === item.id) return;
-                            void handleUpdate(item, !draft.isActive);
+                            void handleUpdate(item, !isDraftActive);
                           }}
                           disabled={readOnly || togglingId === item.id || savingId === item.id}
-                          aria-label={draft.isActive ? "Desativar setor" : "Ativar setor"}
+                          aria-label={isDraftActive ? "Desativar setor" : "Ativar setor"}
                           className={`relative inline-flex h-6 w-12 items-center rounded-full border transition ${
-                            draft.isActive
+                            isDraftActive
                               ? "border-emerald-400/40 bg-emerald-500/20"
                               : "border-white/20 bg-white/10"
                           } ${readOnly || togglingId === item.id || savingId === item.id ? "cursor-not-allowed opacity-50" : ""}`}
                         >
                           <span
                             className={`inline-flex h-4 w-4 transform items-center justify-center rounded-full bg-white text-[8px] font-bold text-re7-navy transition ${
-                              draft.isActive ? "translate-x-7" : "translate-x-1"
+                              isDraftActive ? "translate-x-7" : "translate-x-1"
                             }`}
                           >
-                            {draft.isActive ? "ON" : "OFF"}
+                            {isDraftActive ? "ON" : "OFF"}
                           </span>
                         </button>
                       </div>
                     </label>
                   </div>
 
-                  <div className="mx-3 mt-3 rounded-lg border border-white/15 bg-re7-navy/40 p-3 md:mx-4">
+                  <div className={`mx-3 mt-3 rounded-lg border p-3 md:mx-4 ${sectionToneClass}`}>
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h4 className="text-sm font-semibold text-white">Horário de funcionamento</h4>
@@ -1201,21 +1220,21 @@ export default function AppSettingsDepartmentsPage() {
                     </div>
                   </div>
 
-                  <div className="mx-3 mt-3 rounded-lg border border-white/15 bg-re7-navy/40 p-3 md:mx-4">
+                  <div className={`mx-3 mt-3 rounded-lg border p-3 md:mx-4 ${sectionToneClass}`}>
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h4 className="text-sm font-semibold text-white">Exceções, feriados e expedientes especiais</h4>
                         <p className="text-xs text-white/55">Essas datas substituem o horário regular deste setor.</p>
                       </div>
                       {!readOnly ? (
-                        <button
-                          type="button"
-                          onClick={() => openExceptionEditor(item.id)}
-                          disabled={savingExceptions}
-                          className="rounded-md border border-white/25 bg-white/[0.04] px-2.5 py-1.5 text-xs font-semibold text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          + Adicionar exceção
-                        </button>
+	                        <button
+	                          type="button"
+	                          onClick={() => openExceptionEditor(item.id)}
+	                          disabled={savingExceptions}
+	                          className="department-secondary-action rounded-md border border-white/25 bg-white/[0.04] px-2.5 py-1.5 text-xs font-semibold text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+	                        >
+	                          + Adicionar exceção
+	                        </button>
                       ) : null}
                     </div>
                     {(item.businessHourExceptions ?? []).length === 0 ? (
@@ -1268,27 +1287,16 @@ export default function AppSettingsDepartmentsPage() {
                             </div>
                           );
                         })}
-                      </div>
-                    )}
-                  </div>
+	                      </div>
+	                    )}
+	                    {renderExceptionEditor(item.id)}
+	                  </div>
 
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 bg-white/[0.035] px-3 py-3 md:px-4">
+	                  <div className={`mt-3 flex flex-wrap items-center justify-between gap-2 border-t px-3 py-3 md:px-4 ${footerToneClass}`}>
                     <p className="text-xs text-white/55">Slug atual: {item.slug || "-"}</p>
                     {readOnly ? (
                       <p className="text-xs text-white/55">Somente leitura.</p>
-                    ) : (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleUpdate(item)}
-                          disabled={savingId === item.id || togglingId === item.id}
-                          className="inline-flex items-center gap-1.5 rounded-md bg-re7-orange px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-re7-orange/20 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-orange disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
-                        >
-                          <ActionIcon>✓</ActionIcon>
-                          {savingId === item.id ? "Salvando..." : "Salvar"}
-                        </button>
-                      </div>
-                    )}
+                    ) : null}
                   </div>
                 </article>
               );
