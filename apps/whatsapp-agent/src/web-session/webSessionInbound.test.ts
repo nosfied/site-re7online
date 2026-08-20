@@ -51,6 +51,7 @@ test("handoff notification plan adds only next-expedient message for CLOSED", ()
 const state = {
   conversation: null as Record<string, unknown> | null,
   inboundMessages: [] as Array<Record<string, unknown>>,
+  inboundMessageCreatePayloads: [] as Array<Record<string, unknown>>,
   events: [] as Array<Record<string, unknown>>,
   runtimeStates: [] as Array<Record<string, unknown>>,
   contacts: [] as Array<Record<string, unknown>>,
@@ -72,6 +73,7 @@ const state = {
 function resetState(overrides: Partial<typeof state> = {}) {
   state.conversation = overrides.conversation ?? null;
   state.inboundMessages = overrides.inboundMessages ?? [];
+  state.inboundMessageCreatePayloads = overrides.inboundMessageCreatePayloads ?? [];
   state.events = overrides.events ?? [];
   state.runtimeStates = overrides.runtimeStates ?? [];
   state.contacts = overrides.contacts ?? [];
@@ -156,6 +158,7 @@ function fakePrisma() {
         ) ?? null,
       create: async ({ data }: { data: Record<string, unknown> }) => {
         const row = { id: `inbound_${state.inboundMessages.length + 1}`, ...data };
+        state.inboundMessageCreatePayloads.push(data);
         state.inboundMessages.push(row);
         return { id: row.id };
       },
@@ -1486,6 +1489,8 @@ test("CSAT comment offer can be skipped after a valid score", async () => {
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentOffer"), false);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("completedSurveyDecision"), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Obrigad@ por participar")), true);
+  assert.equal(rawPayloadOf(state.inboundMessageCreatePayloads[0])?.inboxVisibility, "management_only");
+  assert.equal(rawPayloadOf(state.inboundMessageCreatePayloads[1])?.inboxVisibility, "management_only");
   assert.equal(rawPayloadOf(state.inboundMessages.find((message) => message.externalMessageId === "MSG_CSAT_SCORE_SKIP"))?.inboxVisibility, "management_only");
   assert.equal(rawPayloadOf(state.inboundMessages.find((message) => message.externalMessageId === "MSG_CSAT_COMMENT_SKIP"))?.inboxVisibility, "management_only");
   assert.equal(state.outboundMessages.every((message) => rawPayloadOf(message)?.inboxVisibility === "management_only"), true);

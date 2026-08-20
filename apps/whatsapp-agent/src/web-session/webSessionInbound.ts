@@ -1153,6 +1153,46 @@ async function shouldReopenClosedConversationWindow(params: {
   return !pendingSurvey;
 }
 
+async function shouldPreclassifyInboundAsSatisfactionManagement(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  waId: string;
+}) {
+  const [conversation, runtime] = await Promise.all([
+    params.prisma.conversation.findUnique({
+      where: { clientId_waId: { clientId: params.clientId, waId: params.waId } },
+      select: { id: true, closedAt: true },
+    }),
+    params.prisma.conversationRuntimeState.findUnique({
+      where: { clientId_waId: { clientId: params.clientId, waId: params.waId } },
+      select: { status: true, closedAt: true, answers: true },
+    }),
+  ]);
+  const runtimeState = {
+    answers:
+      runtime?.answers && typeof runtime.answers === "object" && !Array.isArray(runtime.answers)
+        ? runtime.answers as ConversationState["answers"]
+        : {},
+  };
+  const isClosed =
+    Boolean(conversation?.closedAt) ||
+    runtime?.status === "CLOSED" ||
+    Boolean(runtime?.closedAt);
+  if (!isClosed) return false;
+  if (hasSatisfactionLifecycleRuntime(runtimeState)) return true;
+  if (!conversation?.id) return false;
+  const pendingSurvey = await params.prisma.satisfactionSurvey.findFirst({
+    where: {
+      clientId: params.clientId,
+      conversationId: conversation.id,
+      type: "csat",
+      status: { in: ["sent", "pending"] },
+    },
+    select: { id: true },
+  });
+  return Boolean(pendingSurvey);
+}
+
 async function sendWebSessionBotText(params: {
   prisma: PrismaClient;
   clientId: string;
@@ -2009,6 +2049,15 @@ export async function ingestWebSessionInboundMessage(params: {
       ...(params.message.rawPayload as Record<string, unknown>),
       ...(quotedReference ? { contextualReply: serializeQuotedReferenceForRawPayload(quotedReference) } : {}),
     };
+    if (
+      await shouldPreclassifyInboundAsSatisfactionManagement({
+        prisma,
+        clientId: params.message.clientId,
+        waId: params.message.sender,
+      })
+    ) {
+      rawPayload = withInboxMessageVisibility(rawPayload, "management_only", "satisfaction");
+    }
     const inserted = await persistInboundMessage({
       clientId: params.message.clientId,
       phoneNumberId: undefined,
