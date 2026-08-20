@@ -301,6 +301,28 @@ export default function AppSettingsDepartmentsPage() {
     [hydrateDepartments]
   );
 
+  const loadDepartmentsPreservingContext = useCallback(
+    async (activeSession: AppSession, departmentId?: string | null) => {
+      const anchorId = departmentId ? `department-card-${departmentId}` : "";
+      const anchorBefore = anchorId ? document.getElementById(anchorId) : null;
+      const topBefore = anchorBefore?.getBoundingClientRect().top ?? null;
+      const scrollBefore = window.scrollY;
+      await loadDepartments(activeSession);
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          const anchorAfter = anchorId ? document.getElementById(anchorId) : null;
+          if (anchorAfter && topBefore !== null) {
+            const topAfter = anchorAfter.getBoundingClientRect().top;
+            window.scrollTo({ top: window.scrollY + topAfter - topBefore });
+            return;
+          }
+          window.scrollTo({ top: scrollBefore });
+        });
+      });
+    },
+    [loadDepartments]
+  );
+
   useEffect(() => {
     const stored = loadAppSession();
     if (!stored?.token) {
@@ -375,7 +397,7 @@ export default function AppSettingsDepartmentsPage() {
     try {
       await createAppDepartment(session, { name: trimmedName, isActive: true });
       setName("");
-      await loadDepartments(session);
+      await loadDepartmentsPreservingContext(session);
       setSuccess(`Setor "${trimmedName}" criado com sucesso.`);
     } catch (err) {
       const typed = err as AppApiError;
@@ -411,7 +433,7 @@ export default function AppSettingsDepartmentsPage() {
         isActive: typeof nextIsActive === "boolean" ? nextIsActive : draft.isActive,
         businessHours: draft.businessHours,
       });
-      await loadDepartments(session);
+      await loadDepartmentsPreservingContext(session, item.id);
       if (typeof nextIsActive === "boolean") {
         setSuccess(`Setor ${nextIsActive ? "ativado" : "desativado"} com sucesso.`);
       } else {
@@ -579,7 +601,7 @@ export default function AppSettingsDepartmentsPage() {
         });
       }
       setExceptionEditor(null);
-      await loadDepartments(session);
+      await loadDepartmentsPreservingContext(session, uniqueDepartmentIds[0]);
       setSuccess("Exceção de horário salva.");
     } catch (err) {
       const typed = err as AppApiError;
@@ -607,7 +629,7 @@ export default function AppSettingsDepartmentsPage() {
           .filter((candidate) => candidate.date !== exception.date)
           .map(normalizeExceptionPayload),
       });
-      await loadDepartments(session);
+      await loadDepartmentsPreservingContext(session, item.id);
       setSuccess("Exceção removida.");
     } catch (err) {
       const typed = err as AppApiError;
@@ -684,7 +706,7 @@ export default function AppSettingsDepartmentsPage() {
             type="button"
             onClick={handleCreate}
             disabled={readOnly || creating}
-            className="rounded-md bg-re7-orange px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+            className="rounded-md bg-re7-orange px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-re7-orange/20 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-orange disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
           >
             {creating ? "Criando..." : "Criar setor"}
           </button>
@@ -886,7 +908,7 @@ export default function AppSettingsDepartmentsPage() {
                 type="button"
                 onClick={saveExceptionEditor}
                 disabled={savingExceptions}
-                className="rounded-md bg-re7-orange px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-md bg-re7-orange px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-re7-orange/20 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-orange disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {savingExceptions ? "Salvando..." : "Salvar"}
               </button>
@@ -907,23 +929,25 @@ export default function AppSettingsDepartmentsPage() {
         ) : sortedDepartments.length === 0 ? (
           <p className="text-sm text-white/70">Nenhum setor encontrado.</p>
         ) : (
-          <div className="space-y-2.5">
+          <div className="space-y-5">
             {sortedDepartments.map((item, index) => {
               const draft = drafts[item.id];
               if (!draft) return null;
               return (
                 <article
+                  id={`department-card-${item.id}`}
                   key={item.id}
                   className={`theme-list-row ${
                     index % 2 === 0 ? "theme-list-row-even" : "theme-list-row-odd"
-                  } rounded-xl border p-2.5 md:p-3 ${
+                  } scroll-mt-24 overflow-hidden rounded-xl border shadow-lg shadow-black/10 ${
                     index % 2 === 0
-                      ? "border-white/10 bg-re7-navy/40"
-                      : "border-white/15 bg-white/[0.075]"
+                      ? "border-white/20 bg-re7-navy/55"
+                      : "border-white/25 bg-white/[0.09]"
                   }`}
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="space-y-1.5">
+                  <div className="border-b border-white/15 bg-white/[0.055] px-3 py-3 md:px-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 space-y-1.5">
                       <h3 className="text-base font-semibold text-white">{item.name}</h3>
                       <div className="flex flex-wrap items-center gap-1.5">
                         <DepartmentBadge label={item.slug || "-"} />
@@ -934,9 +958,10 @@ export default function AppSettingsDepartmentsPage() {
                       </div>
                     </div>
                     <div className="text-xs text-white/55">Criado em {formatDateTime(item.createdAt)}</div>
+                    </div>
                   </div>
 
-                  <div className="mt-2.5 grid min-w-0 grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,170px)]">
+                  <div className="grid min-w-0 grid-cols-1 gap-2 border-b border-white/10 px-3 py-3 md:grid-cols-[minmax(0,1fr)_minmax(0,170px)] md:px-4">
                     <label className="flex flex-col gap-1.5 text-xs text-white/75">
                       <span>Nome</span>
                       <input
@@ -985,7 +1010,7 @@ export default function AppSettingsDepartmentsPage() {
                     </label>
                   </div>
 
-                  <div className="mt-3 rounded-lg border border-white/10 bg-re7-navy/35 p-2.5">
+                  <div className="mx-3 mt-3 rounded-lg border border-white/15 bg-re7-navy/40 p-3 md:mx-4">
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h4 className="text-sm font-semibold text-white">Horário de funcionamento</h4>
@@ -1039,7 +1064,7 @@ export default function AppSettingsDepartmentsPage() {
                         <button
                           type="button"
                           onClick={() => openHoursEditor(item.id)}
-                          className="rounded-md border border-white/20 px-2.5 py-1.5 text-xs font-semibold text-white/85 hover:bg-white/10"
+                          className="rounded-md border border-white/25 bg-white/[0.04] px-2.5 py-1.5 text-xs font-semibold text-white/85 hover:bg-white/10"
                         >
                           Definir horário para vários dias
                         </button>
@@ -1159,7 +1184,7 @@ export default function AppSettingsDepartmentsPage() {
                             <button
                               type="button"
                               onClick={applyHoursEditor}
-                              className="rounded-md bg-re7-orange px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110"
+                              className="rounded-md bg-re7-orange px-3 py-2 text-xs font-semibold text-white shadow-sm shadow-re7-orange/20 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-orange"
                             >
                               Aplicar aos dias selecionados
                             </button>
@@ -1176,7 +1201,7 @@ export default function AppSettingsDepartmentsPage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 rounded-lg border border-white/10 bg-re7-navy/35 p-2.5">
+                  <div className="mx-3 mt-3 rounded-lg border border-white/15 bg-re7-navy/40 p-3 md:mx-4">
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h4 className="text-sm font-semibold text-white">Exceções, feriados e expedientes especiais</h4>
@@ -1187,7 +1212,7 @@ export default function AppSettingsDepartmentsPage() {
                           type="button"
                           onClick={() => openExceptionEditor(item.id)}
                           disabled={savingExceptions}
-                          className="rounded-md border border-white/20 px-2.5 py-1.5 text-xs font-semibold text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-md border border-white/25 bg-white/[0.04] px-2.5 py-1.5 text-xs font-semibold text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           + Adicionar exceção
                         </button>
@@ -1247,7 +1272,7 @@ export default function AppSettingsDepartmentsPage() {
                     )}
                   </div>
 
-                  <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 bg-white/[0.035] px-3 py-3 md:px-4">
                     <p className="text-xs text-white/55">Slug atual: {item.slug || "-"}</p>
                     {readOnly ? (
                       <p className="text-xs text-white/55">Somente leitura.</p>
@@ -1257,7 +1282,7 @@ export default function AppSettingsDepartmentsPage() {
                           type="button"
                           onClick={() => handleUpdate(item)}
                           disabled={savingId === item.id || togglingId === item.id}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-white/20 px-2.5 py-1.5 text-xs text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+                          className="inline-flex items-center gap-1.5 rounded-md bg-re7-orange px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-re7-orange/20 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-orange disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
                         >
                           <ActionIcon>✓</ActionIcon>
                           {savingId === item.id ? "Salvando..." : "Salvar"}
