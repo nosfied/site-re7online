@@ -266,7 +266,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     href: "/app/settings/channels/whatsapp",
     icon: "☏",
     group: "administration",
-    minRole: "SUPERVISOR",
+    minRole: "ADMIN",
     labels: { business: "Canais", government: "Canais" },
   },
   {
@@ -288,7 +288,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     href: "/app/api-keys",
     icon: "🔑",
     group: "administration",
-    minRole: "SUPERVISOR",
+    minRole: "ADMIN",
     labels: { business: "API", government: "API" },
   },
   {
@@ -296,7 +296,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     icon: "🪝",
     group: "administration",
     feature: "webhooks",
-    minRole: "SUPERVISOR",
+    minRole: "ADMIN",
     labels: { business: "Webhooks", government: "Webhooks" },
   },
   {

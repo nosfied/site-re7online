@@ -23,7 +23,7 @@ const DEFAULT_SCOPES: AppPublicApiScope[] = ["read", "contacts", "conversations"
 
 function canManageApiKeys(role: string) {
   const normalized = role.trim().toUpperCase();
-  return normalized === "SUPERVISOR" || normalized === "ADMIN";
+  return normalized === "ADMIN";
 }
 
 function StatusPill({ status }: { status: string }) {

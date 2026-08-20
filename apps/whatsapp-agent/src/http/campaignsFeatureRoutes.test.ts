@@ -19,6 +19,8 @@ process.env.WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || "campai
 process.env.WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "campaigns-feature-route-test-phone";
 process.env.META_APP_SECRET = process.env.META_APP_SECRET || "campaigns-feature-route-test-meta-secret";
 process.env.CHANNEL_ACCOUNT_SECRET_KEY = process.env.CHANNEL_ACCOUNT_SECRET_KEY || "campaigns-feature-route-test-channel-secret";
+process.env.WEBHOOK_SECRET_ENCRYPTION_KEY =
+  process.env.WEBHOOK_SECRET_ENCRYPTION_KEY || "campaigns-feature-route-test-webhook-secret-key";
 
 type TestResponse<T = unknown> = {
   status: number;
@@ -129,6 +131,28 @@ async function createUser(params: {
     },
   });
   return user;
+}
+
+async function assignUserDepartments(params: {
+  clientId: string;
+  userId: string;
+  departmentIds: string[];
+  primaryDepartmentId?: string | null;
+}) {
+  await prisma.user.update({
+    where: { id: params.userId },
+    data: { departmentId: params.primaryDepartmentId ?? params.departmentIds[0] ?? null },
+  });
+  await prisma.userDepartmentMembership.createMany({
+    data: params.departmentIds.map((departmentId) => ({
+      clientId: params.clientId,
+      userId: params.userId,
+      departmentId,
+      isActive: true,
+      isPrimary: departmentId === (params.primaryDepartmentId ?? params.departmentIds[0]),
+    })),
+    skipDuplicates: true,
+  });
 }
 
 function authToken(user: TestUser) {
@@ -2096,16 +2120,8 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   const agent = await request<ErrorPayload>("GET", "/app/settings/channels/whatsapp/web-session", businessAgent);
   assert.equal(agent.status, 403);
 
-  const supervisor = await request<{
-    ok: boolean;
-    status: { configured: boolean; featureEnabled: boolean };
-    permissions: { canUpdate: boolean };
-  }>("GET", "/app/settings/channels/whatsapp/web-session", businessSupervisor);
-  assert.equal(supervisor.status, 200);
-  assert.equal(supervisor.body.ok, true);
-  assert.equal(supervisor.body.status.configured, false);
-  assert.equal(supervisor.body.status.featureEnabled, false);
-  assert.equal(supervisor.body.permissions.canUpdate, false);
+  const supervisor = await request<ErrorPayload>("GET", "/app/settings/channels/whatsapp/web-session", businessSupervisor);
+  assert.equal(supervisor.status, 403);
 
   const supervisorPrepare = await request<ErrorPayload>(
     "POST",
@@ -2148,6 +2164,13 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   assert.equal(prepared.body.status.account.status, "pending");
   assert.equal(prepared.body.status.lifecycle.desiredState, "DISCONNECTED");
   assert.equal(prepared.body.status.lifecycle.observedState, "DISCONNECTED");
+
+  const supervisorQr = await request<ErrorPayload>(
+    "GET",
+    "/app/settings/channels/whatsapp/web-session/qr",
+    businessSupervisor
+  );
+  assert.equal(supervisorQr.status, 403);
 
   const overrideStatus = await request<{
     status: { configured: boolean };
@@ -3450,6 +3473,407 @@ test("app user limit can resolve maxActiveAppUsers from tenant operational confi
   });
   assert.equal(blocked.status, 409);
   assert.equal(getErrorCode(blocked.body), "user_limit_exceeded");
+});
+
+test("app user management enforces target role RBAC and audits role/status changes", async () => {
+  const tenantKey = `${prefix}-users-rbac`;
+  const client = await prisma.client.create({
+    data: {
+      clientKey: tenantKey,
+      name: "Users RBAC Tenant",
+      status: "ACTIVE",
+      profile: "business",
+    },
+    select: { id: true },
+  });
+  await prisma.tenantOperationalConfig.create({
+    data: {
+      clientId: client.id,
+      config: {
+        runtimeLimits: { maxActiveAppUsers: 50 },
+      },
+    },
+  });
+  const departmentA = await prisma.department.create({
+    data: { clientId: client.id, name: "Setor A", slug: "setor-a" },
+    select: { id: true },
+  });
+  const departmentB = await prisma.department.create({
+    data: { clientId: client.id, name: "Setor B", slug: "setor-b" },
+    select: { id: true },
+  });
+  const departmentC = await prisma.department.create({
+    data: { clientId: client.id, name: "Setor C", slug: "setor-c" },
+    select: { id: true },
+  });
+
+  const admin = await createUser({ clientId: client.id, role: "ADMIN", suffix: "users-rbac-admin" });
+  const secondAdmin = await createUser({ clientId: client.id, role: "ADMIN", suffix: "users-rbac-admin-2" });
+  const supervisor = await createUser({ clientId: client.id, role: "SUPERVISOR", suffix: "users-rbac-supervisor" });
+  const editableAgent = await createUser({ clientId: client.id, role: "AGENT", suffix: "users-rbac-agent-edit" });
+  const promotableAgent = await createUser({ clientId: client.id, role: "AGENT", suffix: "users-rbac-agent-promote" });
+  const inactiveAgent = await createUser({ clientId: client.id, role: "AGENT", suffix: "users-rbac-agent-inactive" });
+  const targetSupervisor = await createUser({ clientId: client.id, role: "SUPERVISOR", suffix: "users-rbac-supervisor-target" });
+
+  await assignUserDepartments({ clientId: client.id, userId: supervisor.id, departmentIds: [departmentA.id], primaryDepartmentId: departmentA.id });
+  await assignUserDepartments({ clientId: client.id, userId: targetSupervisor.id, departmentIds: [departmentC.id], primaryDepartmentId: departmentC.id });
+  await assignUserDepartments({ clientId: client.id, userId: editableAgent.id, departmentIds: [departmentA.id], primaryDepartmentId: departmentB.id });
+  await assignUserDepartments({ clientId: client.id, userId: promotableAgent.id, departmentIds: [departmentB.id], primaryDepartmentId: departmentB.id });
+  await assignUserDepartments({ clientId: client.id, userId: inactiveAgent.id, departmentIds: [departmentA.id], primaryDepartmentId: departmentA.id });
+  await assignUserDepartments({ clientId: client.id, userId: secondAdmin.id, departmentIds: [departmentA.id], primaryDepartmentId: departmentA.id });
+
+  const supervisorList = await request<{ items: Array<{ id: string; role: string }> }>("GET", "/app/users", supervisor);
+  assert.equal(supervisorList.status, 200);
+  assert.ok(supervisorList.body.items.some((item) => item.id === editableAgent.id));
+  assert.ok(supervisorList.body.items.some((item) => item.id === promotableAgent.id));
+  assert.ok(supervisorList.body.items.some((item) => item.id === targetSupervisor.id));
+  assert.ok(!supervisorList.body.items.some((item) => item.role === "ADMIN"));
+
+  const editAgent = await request<{ user: { id: string; name: string } }>("PUT", `/app/users/${editableAgent.id}`, supervisor, {
+    name: "Editable Agent Updated",
+    email: editableAgent.email,
+    role: "AGENT",
+    departmentIds: [departmentA.id],
+    primaryDepartmentId: departmentA.id,
+    isActive: true,
+  });
+  assert.equal(editAgent.status, 200);
+  assert.equal(editAgent.body.user.name, "Editable Agent Updated");
+
+  const promoteAgent = await request<{ user: { id: string; role: string } }>("PUT", `/app/users/${promotableAgent.id}`, supervisor, {
+    name: promotableAgent.name,
+    email: promotableAgent.email,
+    role: "SUPERVISOR",
+    departmentIds: [departmentB.id],
+    primaryDepartmentId: departmentB.id,
+    isActive: true,
+  });
+  assert.equal(promoteAgent.status, 200);
+  assert.equal(promoteAgent.body.user.role, "SUPERVISOR");
+
+  const roleEvent = await prisma.event.findFirst({
+    where: { clientId: client.id, eventName: "user.role.changed" },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.ok(roleEvent);
+  assert.equal((roleEvent.payloadJson as Record<string, unknown>).newRole, "SUPERVISOR");
+
+  const editPromotedSupervisor = await request<ErrorPayload>("PUT", `/app/users/${promotableAgent.id}`, supervisor, {
+    name: promotableAgent.name,
+    email: promotableAgent.email,
+    role: "SUPERVISOR",
+    departmentIds: [departmentB.id],
+    primaryDepartmentId: departmentB.id,
+    isActive: true,
+  });
+  assert.equal(editPromotedSupervisor.status, 403);
+
+  const promoteAdmin = await request<ErrorPayload>("PUT", `/app/users/${editableAgent.id}`, supervisor, {
+    name: "Editable Agent Updated",
+    email: editableAgent.email,
+    role: "ADMIN",
+    departmentIds: [departmentA.id],
+    primaryDepartmentId: departmentA.id,
+    isActive: true,
+  });
+  assert.equal(promoteAdmin.status, 403);
+
+  const deactivateAgent = await request<{ user: { isActive: boolean } }>("PUT", `/app/users/${inactiveAgent.id}`, supervisor, {
+    name: inactiveAgent.name,
+    email: inactiveAgent.email,
+    role: "AGENT",
+    departmentIds: [departmentA.id],
+    primaryDepartmentId: departmentA.id,
+    isActive: false,
+  });
+  assert.equal(deactivateAgent.status, 200);
+  assert.equal(deactivateAgent.body.user.isActive, false);
+
+  const statusEvent = await prisma.event.findFirst({
+    where: { clientId: client.id, eventName: "user.status.changed" },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.ok(statusEvent);
+  assert.equal((statusEvent.payloadJson as Record<string, unknown>).newStatus, "INACTIVE");
+
+  const editSupervisor = await request<ErrorPayload>("PUT", `/app/users/${targetSupervisor.id}`, supervisor, {
+    name: targetSupervisor.name,
+    email: targetSupervisor.email,
+    role: "SUPERVISOR",
+    departmentIds: [departmentA.id],
+    primaryDepartmentId: departmentA.id,
+    isActive: true,
+  });
+  assert.equal(editSupervisor.status, 403);
+
+  const demoteSupervisor = await request<ErrorPayload>("PUT", `/app/users/${targetSupervisor.id}`, supervisor, {
+    name: targetSupervisor.name,
+    email: targetSupervisor.email,
+    role: "AGENT",
+    departmentIds: [departmentA.id],
+    primaryDepartmentId: departmentA.id,
+    isActive: true,
+  });
+  assert.equal(demoteSupervisor.status, 403);
+
+  const editAdmin = await request<ErrorPayload>("PUT", `/app/users/${secondAdmin.id}`, supervisor, {
+    name: secondAdmin.name,
+    email: secondAdmin.email,
+    role: "ADMIN",
+    isActive: true,
+  });
+  assert.equal(editAdmin.status, 403);
+
+  const changeOwnRole = await request<ErrorPayload>("PUT", `/app/users/${supervisor.id}`, supervisor, {
+    name: supervisor.name,
+    email: supervisor.email,
+    role: "AGENT",
+    departmentIds: [departmentA.id],
+    primaryDepartmentId: departmentA.id,
+    isActive: true,
+  });
+  assert.equal(changeOwnRole.status, 403);
+
+  const supervisorCreateAgent = await request<{ user: { role: string } }>("POST", "/app/users", supervisor, {
+    name: "Supervisor Created Agent",
+    email: `${prefix}-supervisor-created-agent@example.test`,
+    password: "secret123",
+    role: "AGENT",
+    departmentIds: [departmentA.id],
+    primaryDepartmentId: departmentA.id,
+    isActive: true,
+  });
+  assert.equal(supervisorCreateAgent.status, 200);
+  assert.equal(supervisorCreateAgent.body.user.role, "AGENT");
+
+  const supervisorCreateSupervisor = await request<ErrorPayload>("POST", "/app/users", supervisor, {
+    name: "Supervisor Created Supervisor",
+    email: `${prefix}-supervisor-created-supervisor@example.test`,
+    password: "secret123",
+    role: "SUPERVISOR",
+    departmentIds: [departmentA.id],
+    primaryDepartmentId: departmentA.id,
+    isActive: true,
+  });
+  assert.equal(supervisorCreateSupervisor.status, 403);
+
+  const adminPromote = await request<{ user: { role: string } }>("PUT", `/app/users/${editableAgent.id}`, admin, {
+    name: "Editable Agent Admin Promoted",
+    email: editableAgent.email,
+    role: "SUPERVISOR",
+    departmentIds: [departmentA.id],
+    primaryDepartmentId: departmentA.id,
+    isActive: true,
+  });
+  assert.equal(adminPromote.status, 200);
+  assert.equal(adminPromote.body.user.role, "SUPERVISOR");
+
+  const adminDemote = await request<{ user: { role: string } }>("PUT", `/app/users/${editableAgent.id}`, admin, {
+    name: "Editable Agent Admin Demoted",
+    email: editableAgent.email,
+    role: "AGENT",
+    departmentIds: [departmentA.id],
+    primaryDepartmentId: departmentA.id,
+    isActive: true,
+  });
+  assert.equal(adminDemote.status, 200);
+  assert.equal(adminDemote.body.user.role, "AGENT");
+
+  const adminEditAdmin = await request<{ user: { id: string; name: string } }>("PUT", `/app/users/${secondAdmin.id}`, admin, {
+    name: "Second Admin Updated",
+    email: secondAdmin.email,
+    role: "ADMIN",
+    isActive: true,
+  });
+  assert.equal(adminEditAdmin.status, 200);
+  assert.equal(adminEditAdmin.body.user.name, "Second Admin Updated");
+
+  const adminDowngradeSecondAdmin = await request<{ user: { id: string; role: string } }>("PUT", `/app/users/${secondAdmin.id}`, admin, {
+    name: "Second Admin Updated",
+    email: secondAdmin.email,
+    role: "SUPERVISOR",
+    departmentIds: [departmentA.id],
+    primaryDepartmentId: departmentA.id,
+    isActive: true,
+  });
+  assert.equal(adminDowngradeSecondAdmin.status, 200);
+  assert.equal(adminDowngradeSecondAdmin.body.user.role, "SUPERVISOR");
+
+  const singleAdminClient = await prisma.client.create({
+    data: {
+      clientKey: `${prefix}-single-admin`,
+      name: "Single Admin Tenant",
+      status: "ACTIVE",
+      profile: "business",
+    },
+    select: { id: true },
+  });
+  const singleAdminDepartment = await prisma.department.create({
+    data: { clientId: singleAdminClient.id, name: "Setor unico", slug: "setor-unico" },
+    select: { id: true },
+  });
+  const singleAdmin = await createUser({ clientId: singleAdminClient.id, role: "ADMIN", suffix: "single-admin" });
+  const lastAdminDemotion = await request<ErrorPayload>("PUT", `/app/users/${singleAdmin.id}`, singleAdmin, {
+    name: singleAdmin.name,
+    email: singleAdmin.email,
+    role: "SUPERVISOR",
+    departmentIds: [singleAdminDepartment.id],
+    primaryDepartmentId: singleAdminDepartment.id,
+    isActive: true,
+  });
+  assert.equal(lastAdminDemotion.status, 409);
+  assert.equal(getErrorCode(lastAdminDemotion.body), "last_admin_required");
+
+  const lastAdminDeactivation = await request<ErrorPayload>("PUT", `/app/users/${singleAdmin.id}`, singleAdmin, {
+    name: singleAdmin.name,
+    email: singleAdmin.email,
+    role: "ADMIN",
+    isActive: false,
+  });
+  assert.equal(lastAdminDeactivation.status, 409);
+  assert.equal(getErrorCode(lastAdminDeactivation.body), "last_admin_required");
+});
+
+test("app API keys and webhooks are admin only", async () => {
+  const client = await prisma.client.create({
+    data: {
+      clientKey: `${prefix}-admin-only-integrations`,
+      name: "Admin Only Integrations",
+      status: "ACTIVE",
+      profile: "business",
+      features: { webhooks: true },
+    },
+    select: { id: true },
+  });
+  const admin = await createUser({ clientId: client.id, role: "ADMIN", suffix: "admin-only-integrations-admin" });
+  const supervisor = await createUser({ clientId: client.id, role: "SUPERVISOR", suffix: "admin-only-integrations-supervisor" });
+  const agent = await createUser({ clientId: client.id, role: "AGENT", suffix: "admin-only-integrations-agent" });
+
+  const apiKeysAdmin = await request<{ ok: boolean }>("GET", "/app/api-keys", admin);
+  assert.equal(apiKeysAdmin.status, 200);
+  assert.equal(apiKeysAdmin.body.ok, true);
+  assert.equal((await request<ErrorPayload>("GET", "/app/api-keys", supervisor)).status, 403);
+  assert.equal((await request<ErrorPayload>("GET", "/app/api-keys", agent)).status, 403);
+
+  const createdKey = await request<{ ok: boolean; key: { id: string } }>("POST", "/app/api-keys", admin, {
+    name: "Admin key",
+    scopes: ["read"],
+  });
+  assert.equal(createdKey.status, 201);
+  assert.equal(createdKey.body.ok, true);
+  assert.equal((await request<ErrorPayload>("POST", "/app/api-keys", supervisor, { name: "Blocked", scopes: ["read"] })).status, 403);
+  assert.equal((await request<ErrorPayload>("POST", "/app/api-keys", agent, { name: "Blocked", scopes: ["read"] })).status, 403);
+  assert.equal((await request<{ ok: boolean }>("POST", `/app/api-keys/${createdKey.body.key.id}/revoke`, admin)).status, 200);
+  assert.equal((await request<ErrorPayload>("POST", `/app/api-keys/${createdKey.body.key.id}/revoke`, supervisor)).status, 403);
+
+  const webhooksAdmin = await request<{ ok: boolean }>("GET", "/app/webhooks", admin);
+  assert.equal(webhooksAdmin.status, 200);
+  assert.equal(webhooksAdmin.body.ok, true);
+  assert.equal((await request<ErrorPayload>("GET", "/app/webhooks", supervisor)).status, 403);
+  assert.equal((await request<ErrorPayload>("GET", "/app/webhooks", agent)).status, 403);
+
+  const createdWebhook = await request<{ ok: boolean }>("POST", "/app/webhooks", admin, {
+    name: "Admin webhook",
+    url: "https://example.com/webhook",
+  });
+  assert.equal(createdWebhook.status, 201);
+  assert.equal(createdWebhook.body.ok, true);
+  assert.equal((await request<ErrorPayload>("POST", "/app/webhooks", supervisor, { name: "Blocked", url: "https://example.com/blocked" })).status, 403);
+  assert.equal((await request<ErrorPayload>("POST", "/app/webhooks", agent, { name: "Blocked", url: "https://example.com/blocked" })).status, 403);
+});
+
+test("CRM contact history is hidden from AGENT but available to supervisor and admin", async () => {
+  const client = await prisma.client.create({
+    data: {
+      clientKey: `${prefix}-crm-history-rbac`,
+      name: "CRM History RBAC",
+      status: "ACTIVE",
+      profile: "business",
+      features: { crm: true },
+    },
+    select: { id: true },
+  });
+  const admin = await createUser({ clientId: client.id, role: "ADMIN", suffix: "crm-history-admin" });
+  const supervisor = await createUser({ clientId: client.id, role: "SUPERVISOR", suffix: "crm-history-supervisor" });
+  const agent = await createUser({ clientId: client.id, role: "AGENT", suffix: "crm-history-agent" });
+  const waId = `${prefix}-crm-history-waid`;
+  const lead = await prisma.lead.create({
+    data: {
+      tenantId: client.id,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "web_session",
+      name: "CRM History Contact",
+      phone: "5581999990000",
+    },
+    select: { id: true },
+  });
+  const conversation = await prisma.conversation.create({
+    data: {
+      clientId: client.id,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "web_session",
+    },
+    select: { id: true },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: client.id,
+      waId,
+      waIdCanonical: waId,
+      status: "WAITING",
+      mode: "HUMAN",
+      handoffStatus: "ACTIVE",
+      answers: {},
+    },
+  });
+
+  const agentList = await request<{ items: Array<{ leadId: string; conversationsCount: number; lastConversationId: string | null; hasConversation: boolean }> }>(
+    "GET",
+    "/app/crm/contacts?hasConversation=true",
+    agent
+  );
+  assert.equal(agentList.status, 200);
+  const agentItem = agentList.body.items.find((item) => item.leadId === lead.id);
+  assert.ok(agentItem);
+  assert.equal(agentItem.conversationsCount, 0);
+  assert.equal(agentItem.lastConversationId, null);
+  assert.equal(agentItem.hasConversation, false);
+
+  const supervisorList = await request<{ items: Array<{ leadId: string; conversationsCount: number; lastConversationId: string | null; hasConversation: boolean }> }>(
+    "GET",
+    "/app/crm/contacts?hasConversation=true",
+    supervisor
+  );
+  assert.equal(supervisorList.status, 200);
+  const supervisorItem = supervisorList.body.items.find((item) => item.leadId === lead.id);
+  assert.ok(supervisorItem);
+  assert.equal(supervisorItem.conversationsCount, 1);
+  assert.equal(supervisorItem.lastConversationId, conversation.id);
+  assert.equal(supervisorItem.hasConversation, true);
+
+  const agentDetail = await request<{ item: { conversationsCount: number; lastConversationId: string | null }; conversations: unknown[] }>(
+    "GET",
+    `/app/crm/contacts/${lead.id}`,
+    agent
+  );
+  assert.equal(agentDetail.status, 200);
+  assert.equal(agentDetail.body.item.conversationsCount, 0);
+  assert.equal(agentDetail.body.item.lastConversationId, null);
+  assert.deepEqual(agentDetail.body.conversations, []);
+
+  const adminDetail = await request<{ item: { conversationsCount: number; lastConversationId: string | null }; conversations: unknown[] }>(
+    "GET",
+    `/app/crm/contacts/${lead.id}`,
+    admin
+  );
+  assert.equal(adminDetail.status, 200);
+  assert.equal(adminDetail.body.item.conversationsCount, 1);
+  assert.equal(adminDetail.body.item.lastConversationId, conversation.id);
+  assert.equal(adminDetail.body.conversations.length, 1);
 });
 
 test("admin tenant without channel can receive web session channel later", async () => {

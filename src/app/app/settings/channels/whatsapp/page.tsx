@@ -23,7 +23,7 @@ import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 
 function canViewChannels(role: string) {
   const normalized = role.trim().toUpperCase();
-  return normalized === "ADMIN" || normalized === "SUPERVISOR";
+  return normalized === "ADMIN";
 }
 
 function canUpdateChannels(role: string) {

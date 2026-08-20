@@ -141,17 +141,19 @@ function CrmContactsSkeleton() {
 
 function CrmContactRow({
   item,
+  canViewHistory,
   onOpenDetail,
   onOpenConversation,
   onCopyIdentifier,
 }: {
   item: AppCrmContactItem;
+  canViewHistory: boolean;
   onOpenDetail: (item: AppCrmContactItem) => void;
   onOpenConversation: (item: AppCrmContactItem) => void;
   onCopyIdentifier: (item: AppCrmContactItem) => void;
 }) {
   const identifier = item.phoneDisplay || item.identifierDisplay;
-  const canOpenConversation = Boolean(item.lastConversationIdentity || item.lastConversationId);
+  const canOpenConversation = canViewHistory && Boolean(item.lastConversationIdentity || item.lastConversationId);
   return (
     <tr className="border-b border-white/10 align-top transition hover:bg-white/[0.04]">
       <td className="px-4 py-3">
@@ -179,25 +181,27 @@ function CrmContactRow({
       <td className="px-4 py-3">
         <div className="text-sm font-semibold text-white">{item.crmStatusLabel}</div>
       </td>
-      <td className="px-4 py-3">
-        {canOpenConversation ? (
-          <button
-            type="button"
-            onClick={() => onOpenConversation(item)}
-            className="text-left text-sm font-semibold text-re7-sky transition hover:brightness-125"
-          >
-            {item.lastProtocol || "Abrir conversa"}
-          </button>
-        ) : (
-          <span className="text-sm theme-muted">Sem conversa</span>
-        )}
-        <div className="mt-1 text-xs theme-muted">
-          {getConversationStatusLabel(item.lastConversationStatus)}
-        </div>
-        <div className="mt-1 text-xs theme-muted">
-          {item.conversationsCount ? `${item.conversationsCount} conversa(s)` : "Nenhum histórico"}
-        </div>
-      </td>
+      {canViewHistory ? (
+        <td className="px-4 py-3">
+          {canOpenConversation ? (
+            <button
+              type="button"
+              onClick={() => onOpenConversation(item)}
+              className="text-left text-sm font-semibold text-re7-sky transition hover:brightness-125"
+            >
+              {item.lastProtocol || "Abrir conversa"}
+            </button>
+          ) : (
+            <span className="text-sm theme-muted">Sem conversa</span>
+          )}
+          <div className="mt-1 text-xs theme-muted">
+            {getConversationStatusLabel(item.lastConversationStatus)}
+          </div>
+          <div className="mt-1 text-xs theme-muted">
+            {item.conversationsCount ? `${item.conversationsCount} conversa(s)` : "Nenhum histórico"}
+          </div>
+        </td>
+      ) : null}
       <td className="px-4 py-3">
         <div className="text-sm text-white">{formatDateTime(item.updatedAt)}</div>
         {item.importedSource ? (
@@ -261,6 +265,7 @@ function CrmContactDetailDrawer({
   detail,
   loading,
   error,
+  canViewHistory,
   statuses,
   onClose,
   onRefresh,
@@ -274,6 +279,7 @@ function CrmContactDetailDrawer({
   detail: AppCrmContactDetailResponse | null;
   loading: boolean;
   error: string | null;
+  canViewHistory: boolean;
   statuses: Array<{ id: string; label: string; isActive?: boolean }>;
   onClose: () => void;
   onRefresh: () => void;
@@ -580,51 +586,53 @@ function CrmContactDetailDrawer({
                 </div>
               </DetailSection>
 
-              <DetailSection title="Conversas relacionadas">
-                <p className="mt-1 text-sm theme-muted">
-                  Abertura usa a identidade operacional esperada pela caixa de entrada, sempre na organização da sessão.
-                </p>
-                <div className="mt-4 grid gap-2">
-                  {conversations.length === 0 ? (
-                    <div className="rounded-lg border border-white/10 p-4 text-sm theme-muted">
-                      Nenhuma conversa relacionada encontrada.
-                    </div>
-                  ) : (
-                    conversations.map((conversation) => (
-                      <div
-                        key={conversation.conversationId}
-                        className="grid gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3 md:grid-cols-[1fr_auto] md:items-center"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-semibold text-white">{conversation.protocol}</span>
-                            <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs theme-muted">
-                              {getChannelLabel(conversation.channel)}
-                            </span>
-                            <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs theme-muted">
-                              {getConversationStatusLabel(conversation.status)}
-                            </span>
-                          </div>
-                          <div className="mt-2 text-xs theme-muted">
-                            {conversation.departmentName || "Sem setor"}
-                            {conversation.queueName ? ` / ${conversation.queueName}` : ""}
-                            {conversation.assignedUserName ? ` • ${conversation.assignedUserName}` : ""}
-                          </div>
-                          <div className="mt-1 text-xs theme-muted">
-                            Atualizada em {formatDateTime(conversation.updatedAt)}
-                          </div>
-                        </div>
-                        <ActionIconButton
-                          label="Abrir conversa na caixa de entrada"
-                          icon=">"
-                          onClick={() => onOpenInbox(conversation.conversationIdentity)}
-                          variant="primary"
-                        />
+              {canViewHistory ? (
+                <DetailSection title="Conversas relacionadas">
+                  <p className="mt-1 text-sm theme-muted">
+                    Abertura usa a identidade operacional esperada pela caixa de entrada, sempre na organização da sessão.
+                  </p>
+                  <div className="mt-4 grid gap-2">
+                    {conversations.length === 0 ? (
+                      <div className="rounded-lg border border-white/10 p-4 text-sm theme-muted">
+                        Nenhuma conversa relacionada encontrada.
                       </div>
-                    ))
-                  )}
-                </div>
-              </DetailSection>
+                    ) : (
+                      conversations.map((conversation) => (
+                        <div
+                          key={conversation.conversationId}
+                          className="grid gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3 md:grid-cols-[1fr_auto] md:items-center"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold text-white">{conversation.protocol}</span>
+                              <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs theme-muted">
+                                {getChannelLabel(conversation.channel)}
+                              </span>
+                              <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs theme-muted">
+                                {getConversationStatusLabel(conversation.status)}
+                              </span>
+                            </div>
+                            <div className="mt-2 text-xs theme-muted">
+                              {conversation.departmentName || "Sem setor"}
+                              {conversation.queueName ? ` / ${conversation.queueName}` : ""}
+                              {conversation.assignedUserName ? ` • ${conversation.assignedUserName}` : ""}
+                            </div>
+                            <div className="mt-1 text-xs theme-muted">
+                              Atualizada em {formatDateTime(conversation.updatedAt)}
+                            </div>
+                          </div>
+                          <ActionIconButton
+                            label="Abrir conversa na caixa de entrada"
+                            icon=">"
+                            onClick={() => onOpenInbox(conversation.conversationIdentity)}
+                            variant="primary"
+                          />
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </DetailSection>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -655,6 +663,7 @@ export default function AppCrmContactsPage() {
     setError(null);
     setNotice(null);
   });
+  const canViewCrmHistory = String(session?.user.role ?? "").trim().toUpperCase() !== "AGENT";
 
   useEffect(() => {
     if (!selectedLeadId) return;
@@ -681,12 +690,12 @@ export default function AppCrmContactsPage() {
       q: q || null,
       status: status || null,
       channel: channel || null,
-      hasConversation: hasConversation === "" ? null : hasConversation === "true",
+      hasConversation: canViewCrmHistory && hasConversation !== "" ? hasConversation === "true" : null,
       optOut: optOut === "" ? null : optOut === "true",
       page: targetPage,
       limit: PAGE_LIMIT,
     }),
-    [channel, hasConversation, optOut, page, q, status]
+    [canViewCrmHistory, channel, hasConversation, optOut, page, q, status]
   );
 
   const loadContacts = useCallback(
@@ -956,8 +965,8 @@ export default function AppCrmContactsPage() {
   }, []);
 
   const emptyWithFilters = useMemo(
-    () => Boolean(q || status || channel || hasConversation || optOut),
-    [channel, hasConversation, optOut, q, status]
+    () => Boolean(q || status || channel || (canViewCrmHistory && hasConversation) || optOut),
+    [canViewCrmHistory, channel, hasConversation, optOut, q, status]
   );
 
   if (!session) {
@@ -978,7 +987,13 @@ export default function AppCrmContactsPage() {
       <section className="grid min-h-0 gap-4">
         <div className="sticky top-[242px] z-30 grid gap-2 sm:top-[256px] lg:fixed lg:left-5 lg:right-5 lg:top-[156px] lg:mx-auto lg:w-[calc(100%-2.5rem)] lg:max-w-[1400px] min-[1441px]:top-[210px]">
           <div className="theme-surface-strong theme-shadow rounded-xl border p-4 backdrop-blur">
-            <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_auto_auto] lg:items-end">
+            <div
+              className={`grid gap-3 ${
+                canViewCrmHistory
+                  ? "lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_auto_auto]"
+                  : "lg:grid-cols-[1.4fr_1fr_1fr_1fr_auto_auto]"
+              } lg:items-end`}
+            >
               <label className="grid gap-1.5 text-sm">
                 <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Busca</span>
                 <input
@@ -1020,18 +1035,20 @@ export default function AppCrmContactsPage() {
                   ))}
                 </select>
               </label>
-              <label className="grid gap-1.5 text-sm">
-                <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Historico</span>
-                <select
-                  value={hasConversation}
-                  onChange={(event) => setHasConversation(event.target.value)}
-                  className="theme-input h-10 rounded-md border px-3 text-sm"
-                >
-                  <option value="">Todos</option>
-                  <option value="true">Com conversa</option>
-                  <option value="false">Sem conversa</option>
-                </select>
-              </label>
+              {canViewCrmHistory ? (
+                <label className="grid gap-1.5 text-sm">
+                  <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Historico</span>
+                  <select
+                    value={hasConversation}
+                    onChange={(event) => setHasConversation(event.target.value)}
+                    className="theme-input h-10 rounded-md border px-3 text-sm"
+                  >
+                    <option value="">Todos</option>
+                    <option value="true">Com conversa</option>
+                    <option value="false">Sem conversa</option>
+                  </select>
+                </label>
+              ) : null}
               <label className="grid gap-1.5 text-sm">
                 <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Bloqueio envio</span>
                 <select
@@ -1156,14 +1173,14 @@ export default function AppCrmContactsPage() {
         ) : contacts ? (
           <div className="theme-surface overflow-hidden rounded-xl border shadow-sm">
             <div className="overflow-x-auto">
-              <table className="min-w-[1120px] w-full text-left text-sm">
+              <table className={`${canViewCrmHistory ? "min-w-[1120px]" : "min-w-[960px]"} w-full text-left text-sm`}>
                 <thead className="border-b border-white/10 bg-white/[0.04] text-xs uppercase tracking-[0.12em] theme-soft">
                   <tr>
                     <th className="px-4 py-3 font-semibold">Contato</th>
                     <th className="px-4 py-3 font-semibold">Empresa</th>
                     <th className="px-4 py-3 font-semibold">Canal</th>
                     <th className="px-4 py-3 font-semibold">Situação</th>
-                    <th className="px-4 py-3 font-semibold">Última conversa</th>
+                    {canViewCrmHistory ? <th className="px-4 py-3 font-semibold">Última conversa</th> : null}
                     <th className="px-4 py-3 font-semibold">Atualização</th>
                     <th className="px-4 py-3 text-right font-semibold">Ações</th>
                   </tr>
@@ -1173,6 +1190,7 @@ export default function AppCrmContactsPage() {
                     <CrmContactRow
                       key={item.leadId}
                       item={item}
+                      canViewHistory={canViewCrmHistory}
                       onOpenDetail={openContactDetail}
                       onOpenConversation={openConversation}
                       onCopyIdentifier={copyIdentifier}
@@ -1193,6 +1211,7 @@ export default function AppCrmContactsPage() {
           detail={contactDetail}
           loading={loadingDetail}
           error={detailError}
+          canViewHistory={canViewCrmHistory}
           onClose={() => {
             setSelectedLeadId(null);
             setContactDetail(null);

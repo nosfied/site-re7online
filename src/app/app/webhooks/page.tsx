@@ -24,7 +24,7 @@ import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 function canManageWebhooks(role: string) {
   const normalized = role.trim().toUpperCase();
-  return normalized === "SUPERVISOR" || normalized === "ADMIN";
+  return normalized === "ADMIN";
 }
 
 function EndpointStatusPill({ active }: { active: boolean }) {

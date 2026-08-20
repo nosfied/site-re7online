@@ -2691,8 +2691,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
-    if (!isAdminOrSupervisorRole(clientAuth.role)) {
-      json(res, 403, httpError("forbidden", "Only supervisor or admin can manage API keys."));
+    if (!isAdminRole(clientAuth.role)) {
+      json(res, 403, httpError("forbidden", "Only admin can manage API keys."));
       return;
     }
     try {
@@ -2729,8 +2729,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
-    if (!isAdminOrSupervisorRole(clientAuth.role)) {
-      json(res, 403, httpError("forbidden", "Only supervisor or admin can manage API keys."));
+    if (!isAdminRole(clientAuth.role)) {
+      json(res, 403, httpError("forbidden", "Only admin can manage API keys."));
       return;
     }
     try {
@@ -2790,8 +2790,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
-    if (!isAdminOrSupervisorRole(clientAuth.role)) {
-      json(res, 403, httpError("forbidden", "Only supervisor or admin can manage API keys."));
+    if (!isAdminRole(clientAuth.role)) {
+      json(res, 403, httpError("forbidden", "Only admin can manage API keys."));
       return;
     }
     try {
@@ -7239,19 +7239,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
-      const departmentAccess = await loadAppDepartmentAccess(prisma, {
-        clientId: client.id,
-        userId: clientAuth.userId,
-        role: clientAuth.role,
-      });
-      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
-        json(res, 200, { ok: true, count: 0, items: [] });
-        return;
-      }
       const users = await prisma.user.findMany({
         where: {
           clientId: client.id,
           isActive: true,
+          ...(clientAuth.role === "SUPERVISOR"
+            ? {
+                role: { in: ["AGENT", "SUPERVISOR"] },
+              }
+            : {}),
         },
         orderBy: [{ createdAt: "desc" }],
         select: {
@@ -7379,8 +7375,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      if (isAgentRole(clientAuth.role)) {
-        json(res, 403, httpError("forbidden", "Only supervisor or admin can view WhatsApp Web Session settings."));
+      if (!isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can view WhatsApp Web Session settings."));
         return;
       }
       if (req.method === "POST" && !isAdminRole(clientAuth.role)) {
@@ -7534,8 +7530,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      if (isAgentRole(clientAuth.role)) {
-        json(res, 403, httpError("forbidden", "Only supervisor or admin can view WhatsApp Web Session QR status."));
+      if (!isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can view WhatsApp Web Session QR status."));
         return;
       }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
@@ -7726,15 +7722,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
-      const departmentAccess = await loadAppDepartmentAccess(prisma, {
-        clientId: client.id,
-        userId: clientAuth.userId,
-        role: clientAuth.role,
-      });
-      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
-        json(res, 403, httpError("forbidden", "Supervisor requires a department."));
-        return;
-      }
       const body = await readJsonBody(req, res);
       if (!body) return;
       const parsed = await parseAdminUserUpsertPayload(prisma, {
@@ -7748,22 +7735,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, parsed.status, httpError(parsed.code, parsed.message));
         return;
       }
+      if (clientAuth.role === "SUPERVISOR" && (parsed.data.role ?? "AGENT") !== "AGENT") {
+        json(res, 403, httpError("forbidden", "Supervisor can only create AGENT users."));
+        return;
+      }
       const emailAvailability = await assertGlobalUserEmailAvailable(prisma, {
         email: parsed.data.email,
       });
       if (!emailAvailability.ok) {
         json(res, emailAvailability.status, httpError(emailAvailability.code, emailAvailability.message));
-        return;
-      }
-      if (
-        departmentAccess.requiresDepartmentScope &&
-        (parsed.data.departmentId ?? null) !== departmentAccess.departmentId
-      ) {
-        json(
-          res,
-          403,
-          httpError("forbidden", "Supervisor can only manage users from the same department.")
-        );
         return;
       }
       const password = typeof body.password === "string" ? body.password : "";
@@ -7963,15 +7943,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
-      const departmentAccess = await loadAppDepartmentAccess(prisma, {
-        clientId: client.id,
-        userId: clientAuth.userId,
-        role: clientAuth.role,
-      });
-      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
-        json(res, 403, httpError("forbidden", "Supervisor requires a department."));
-        return;
-      }
       const userId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
       if (!userId) {
         json(res, 400, httpError("bad_request", "User id is required"));
@@ -7981,9 +7952,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         where: {
           id: userId,
           clientId: client.id,
-          ...(departmentAccess.requiresDepartmentScope
-            ? { departmentId: departmentAccess.departmentId }
-            : {}),
         },
         select: { id: true, departmentId: true, role: true, isActive: true },
       });
@@ -8006,6 +7974,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, parsed.status, httpError(parsed.code, parsed.message));
         return;
       }
+      if (clientAuth.role === "SUPERVISOR") {
+        if (existingUser.id === clientAuth.userId && parsed.data.role && parsed.data.role !== existingUser.role) {
+          json(res, 403, httpError("forbidden", "Supervisor cannot change their own role."));
+          return;
+        }
+        if (existingUser.role !== "AGENT") {
+          json(res, 403, httpError("forbidden", "Supervisor can only manage AGENT users."));
+          return;
+        }
+        if (parsed.data.role === "ADMIN") {
+          json(res, 403, httpError("forbidden", "Supervisor cannot create or promote ADMIN users."));
+          return;
+        }
+      }
       const emailAvailability = await assertGlobalUserEmailAvailable(prisma, {
         email: parsed.data.email,
         exceptUserId: existingUser.id,
@@ -8025,21 +8007,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         );
         return;
       }
-      const nextDepartmentId =
-        Object.prototype.hasOwnProperty.call(parsed.data, "departmentId")
-          ? (parsed.data.departmentId ?? null)
-          : existingUser.departmentId ?? null;
-      if (
-        departmentAccess.requiresDepartmentScope &&
-        nextDepartmentId !== departmentAccess.departmentId
-      ) {
-        json(
-          res,
-          403,
-          httpError("forbidden", "Supervisor can only manage users from the same department.")
-        );
-        return;
-      }
       if (parsed.data.isActive === true && existingUser.isActive === false) {
         const activeLimit = await assertTenantActiveUserLimitAvailable(prisma, {
           clientId: client.id,
@@ -8055,6 +8022,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               `Limite de usuarios ativos atingido (${activeLimit.maxActiveAppUsers}).`
             )
           );
+          return;
+        }
+      }
+      const requestedRole = parsed.data.role ?? existingUser.role;
+      const requestedIsActive =
+        typeof parsed.data.isActive === "boolean" ? parsed.data.isActive : existingUser.isActive;
+      if (
+        isAdminRole(existingUser.role) &&
+        existingUser.isActive &&
+        (!isAdminRole(requestedRole) || requestedIsActive === false)
+      ) {
+        const activeAdminCount = await prisma.user.count({
+          where: {
+            clientId: client.id,
+            role: "ADMIN",
+            isActive: true,
+          },
+        });
+        if (activeAdminCount <= 1) {
+          json(res, 409, httpError("last_admin_required", "Tenant must keep at least one active admin."));
           return;
         }
       }
@@ -8099,6 +8086,32 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         departmentId: user.departmentId,
         isActive: user.isActive,
       });
+      if (existingUser.role !== user.role) {
+        await persistEvent({
+          clientId: client.id,
+          requestId: `${requestId}:user-role-changed`,
+          eventName: "user.role.changed",
+          payloadJson: {
+            actorUserId: clientAuth.userId,
+            targetUserId: user.id,
+            oldRole: existingUser.role,
+            newRole: user.role,
+          },
+        });
+      }
+      if (existingUser.isActive !== user.isActive) {
+        await persistEvent({
+          clientId: client.id,
+          requestId: `${requestId}:user-status-changed`,
+          eventName: "user.status.changed",
+          payloadJson: {
+            actorUserId: clientAuth.userId,
+            targetUserId: user.id,
+            oldStatus: existingUser.isActive ? "ACTIVE" : "INACTIVE",
+            newStatus: user.isActive ? "ACTIVE" : "INACTIVE",
+          },
+        });
+      }
       if (existingUser.departmentId !== user.departmentId && user.departmentId) {
         logger.info({
           event: "user.department.assigned",
@@ -9974,10 +9987,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       const payload = await buildCrmContactsPayload(prisma, {
         clientId: client.id,
-        query,
+        query: isAgentRole(clientAuth.role) ? { ...query, hasConversation: null } : query,
         statuses: resolvedStatuses.statuses,
       });
-      json(res, 200, payload);
+      json(res, 200, isAgentRole(clientAuth.role) ? stripCrmHistoryFromContactsPayload(payload) : payload);
     } catch (error) {
       logger.error({
         event: "app.crm.contacts.error",
@@ -10039,7 +10052,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, httpError("contact_not_found", "Contact not found"));
         return;
       }
-      json(res, 200, payload);
+      json(res, 200, isAgentRole(clientAuth.role) ? stripCrmHistoryFromContactDetailPayload(payload) : payload);
     } catch (error) {
       logger.error({
         event: "app.crm.contact_detail.error",
@@ -26380,8 +26393,8 @@ async function requireWebhooksAppAccess(
   const prisma = getPrisma();
   const clientAuth = requireClientAuth(req, res);
   if (!clientAuth) return null;
-  if (isAgentRole(clientAuth.role)) {
-    json(res, 403, httpError("forbidden", "Only supervisor or admin can manage webhooks."));
+  if (!isAdminRole(clientAuth.role)) {
+    json(res, 403, httpError("forbidden", "Only admin can manage webhooks."));
     return null;
   }
   const client = await getScopedClientById(prisma, clientAuth.clientId);
@@ -27516,6 +27529,46 @@ async function loadAppDepartmentAccess(
     departmentId: primaryMembership?.departmentId ?? null,
     departmentIds: activeDepartmentIds,
   };
+}
+
+function stripCrmHistoryFromContactsPayload<T extends {
+  filters?: { hasConversation?: boolean | null };
+  items?: Array<Record<string, unknown>>;
+}>(payload: T): T {
+  return {
+    ...payload,
+    filters: payload.filters ? { ...payload.filters, hasConversation: null } : payload.filters,
+    items: (payload.items ?? []).map((item) => ({
+      ...item,
+      lastConversationId: null,
+      lastConversationIdentity: null,
+      lastProtocol: null,
+      lastConversationStatus: null,
+      lastConversationUpdatedAt: null,
+      conversationsCount: 0,
+      hasConversation: false,
+    })),
+  } as T;
+}
+
+function stripCrmHistoryFromContactDetailPayload<T extends {
+  item: Record<string, unknown>;
+  conversations?: unknown[];
+}>(payload: T): T {
+  return {
+    ...payload,
+    item: {
+      ...payload.item,
+      lastConversationId: null,
+      lastConversationIdentity: null,
+      lastProtocol: null,
+      lastConversationStatus: null,
+      lastConversationUpdatedAt: null,
+      conversationsCount: 0,
+      hasConversation: false,
+    },
+    conversations: [],
+  } as T;
 }
 
 function hasConversationDepartmentAccess(params: {

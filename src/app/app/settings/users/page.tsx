@@ -38,6 +38,28 @@ function canManageUsers(role: string) {
   return normalized === "SUPERVISOR" || normalized === "ADMIN";
 }
 
+function isAdminRole(role: string | null | undefined) {
+  return String(role ?? "").trim().toUpperCase() === "ADMIN";
+}
+
+function isSupervisorRole(role: string | null | undefined) {
+  return String(role ?? "").trim().toUpperCase() === "SUPERVISOR";
+}
+
+function getCreateRoleOptions(actorRole: string) {
+  return isSupervisorRole(actorRole) ? ["AGENT"] : USER_ROLE_OPTIONS;
+}
+
+function canEditUserForActor(actorRole: string, targetRole: string) {
+  if (isAdminRole(actorRole)) return true;
+  if (isSupervisorRole(actorRole)) return targetRole.trim().toUpperCase() === "AGENT";
+  return false;
+}
+
+function getUpdateRoleOptions(actorRole: string) {
+  return isSupervisorRole(actorRole) ? ["AGENT", "SUPERVISOR"] : USER_ROLE_OPTIONS;
+}
+
 function isDepartmentRequired(role: string) {
   return role === "AGENT" || role === "SUPERVISOR";
 }
@@ -233,9 +255,21 @@ export default function AppSettingsUsersPage() {
     () => Object.fromEntries(departments.map((item) => [item.id, item.name])),
     [departments]
   );
+  const createRoleOptions = useMemo(
+    () => (session ? getCreateRoleOptions(session.user.role) : USER_ROLE_OPTIONS),
+    [session]
+  );
+  const updateRoleOptions = useMemo(
+    () => (session ? getUpdateRoleOptions(session.user.role) : USER_ROLE_OPTIONS),
+    [session]
+  );
 
   const handleCreateUser = async () => {
     if (!session) return;
+    if (isSupervisorRole(session.user.role) && userForm.role !== "AGENT") {
+      setUserError("Supervisor pode criar apenas usuários AGENT.");
+      return;
+    }
     if (!userForm.name.trim() || !userForm.email.trim() || !userForm.password.trim()) {
       setUserError("Preencha nome, email e senha.");
       return;
@@ -287,6 +321,10 @@ export default function AppSettingsUsersPage() {
 
   const handleUpdateUser = async (item: AdminUserItem) => {
     if (!session) return;
+    if (!canEditUserForActor(session.user.role, item.role)) {
+      setActionError("Sem permissão para alterar este usuário.");
+      return;
+    }
     const draft = userDrafts[item.id];
     if (!draft) return;
     const nextRole = String(draft.role ?? item.role).trim().toUpperCase();
@@ -428,7 +466,7 @@ export default function AppSettingsUsersPage() {
                   }
                   className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
                 >
-                  {USER_ROLE_OPTIONS.map((role) => (
+                  {createRoleOptions.map((role) => (
                     <option key={role} value={role}>
                       {role}
                     </option>
@@ -558,6 +596,7 @@ export default function AppSettingsUsersPage() {
             {users.map((item, index) => {
               const draft = userDrafts[item.id];
               if (!draft) return null;
+              const canEditThisUser = canEditUserForActor(session.user.role, item.role);
               const departmentLabel =
                 draft.departmentIds.length > 0
                   ? draft.departmentIds
@@ -600,6 +639,7 @@ export default function AppSettingsUsersPage() {
                         <input
                           aria-label="Nome"
                           value={draft.name}
+                          disabled={!canEditThisUser}
                           onChange={(event) =>
                             setUserDrafts((current) => ({
                               ...current,
@@ -609,13 +649,14 @@ export default function AppSettingsUsersPage() {
                               },
                             }))
                           }
-                          className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                          className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0 disabled:cursor-not-allowed disabled:opacity-60"
                         />
                       </label>
                       <label className="flex min-w-0 flex-col text-sm text-white/75">
                         <input
                           aria-label="Email"
                           value={draft.email}
+                          disabled={!canEditThisUser}
                           onChange={(event) =>
                             setUserDrafts((current) => ({
                               ...current,
@@ -625,7 +666,7 @@ export default function AppSettingsUsersPage() {
                               },
                             }))
                           }
-                          className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                          className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0 disabled:cursor-not-allowed disabled:opacity-60"
                         />
                       </label>
                     </div>
@@ -635,6 +676,7 @@ export default function AppSettingsUsersPage() {
                         <span>Perfil</span>
                         <select
                           value={draft.role}
+                          disabled={!canEditThisUser}
                           onChange={(event) =>
                             setUserDrafts((current) => ({
                               ...current,
@@ -650,9 +692,9 @@ export default function AppSettingsUsersPage() {
                               },
                             }))
                           }
-                          className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                          className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {USER_ROLE_OPTIONS.map((role) => (
+                          {updateRoleOptions.map((role) => (
                             <option key={role} value={role}>
                               {role}
                             </option>
@@ -670,6 +712,7 @@ export default function AppSettingsUsersPage() {
                                   <input
                                     type="checkbox"
                                     checked={checked}
+                                    disabled={!canEditThisUser}
                                     onChange={() =>
                                       setUserDrafts((current) => {
                                         const currentDraft = current[item.id];
@@ -701,7 +744,7 @@ export default function AppSettingsUsersPage() {
                                     type="radio"
                                     name={`primary-department-${item.id}`}
                                     checked={checked && draft.primaryDepartmentId === department.id}
-                                    disabled={!checked}
+                                    disabled={!checked || !canEditThisUser}
                                     onChange={() =>
                                       setUserDrafts((current) => ({
                                         ...current,
@@ -723,6 +766,7 @@ export default function AppSettingsUsersPage() {
                         <span>Status</span>
                         <select
                           value={draft.isActive ? "active" : "inactive"}
+                          disabled={!canEditThisUser}
                           onChange={(event) =>
                             setUserDrafts((current) => ({
                               ...current,
@@ -732,7 +776,7 @@ export default function AppSettingsUsersPage() {
                               },
                             }))
                           }
-                          className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                          className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <option value="active">Ativo</option>
                           <option value="inactive">Inativo</option>
@@ -748,7 +792,7 @@ export default function AppSettingsUsersPage() {
                     <button
                       type="button"
                       onClick={() => handleUpdateUser(item)}
-                      disabled={savingUserId === item.id}
+                      disabled={savingUserId === item.id || !canEditThisUser}
                       className="inline-flex items-center gap-1.5 rounded-md border border-white/20 px-2.5 py-1.5 text-xs text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
                     >
                       <ActionIcon>✓</ActionIcon>
