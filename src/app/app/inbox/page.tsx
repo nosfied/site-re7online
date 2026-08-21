@@ -29,6 +29,10 @@ import {
   resolveRealtimeTimelineConversationKey,
   shouldApplyRealtimeMessageToHumanTimeline,
 } from "@/lib/inboxRealtimeTimeline";
+import {
+  shouldMarkReadAfterTimelineRefresh,
+  type TimelineRefreshReadIntent,
+} from "@/lib/inboxTimelineRefresh";
 import { QUICK_EMOJIS } from "@/lib/quickEmojis";
 import { formatUserDisplayName } from "@/lib/userDisplayName";
 import {
@@ -2384,7 +2388,12 @@ export default function AppInboxPage() {
   const selectedConversationIdentityCandidatesRef = useRef<string[]>([]);
   const refreshConversationListRef = useRef<((activeSession: AppSession) => Promise<void>) | null>(null);
   const refreshSelectedTimelineRef = useRef<
-    ((activeSession: AppSession, waId: string, mode?: "replace" | "append") => Promise<void>) | null
+    ((
+      activeSession: AppSession,
+      waId: string,
+      mode?: "replace" | "append",
+      readIntent?: TimelineRefreshReadIntent
+    ) => Promise<void>) | null
   >(null);
   const timelineCacheRef = useRef(new Map<string, InboxMessageItem[]>());
   const highlightedReferenceTimeoutRef = useRef<number | null>(null);
@@ -3826,7 +3835,8 @@ export default function AppInboxPage() {
   const refreshSelectedTimeline = useCallback(async (
     activeSession: AppSession,
     waId: string,
-    mode: "replace" | "append" = "replace"
+    mode: "replace" | "append" = "replace",
+    readIntent?: TimelineRefreshReadIntent
   ) => {
     const requestSeq = ++detailRequestSeqRef.current;
     const latestKnownAt =
@@ -3908,10 +3918,11 @@ export default function AppInboxPage() {
       (responseItems.length > 0
         ? responseItems[responseItems.length - 1]?.createdAt
         : latestKnownAt) ?? null;
-    if (
-      isAppForegroundFocused() &&
-      canCurrentUserMutateConversationReadState(response, activeSession.user.id)
-    ) {
+    if (shouldMarkReadAfterTimelineRefresh({
+      canMutateReadState: canCurrentUserMutateConversationReadState(response, activeSession.user.id),
+      isForegroundFocused: isAppForegroundFocused(),
+      intent: readIntent,
+    })) {
       markConversationIdentitiesAsRead(
         [responseConversationKey, response.waId, response.waIdCanonical, waId],
         latestActivityAt,
@@ -5788,7 +5799,9 @@ export default function AppInboxPage() {
 
       setSuccess("Conversa devolvida para a fila atual.");
       await refreshConversationList(session);
-      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId, "replace", {
+        skipMarkRead: true,
+      });
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
@@ -5964,7 +5977,9 @@ export default function AppInboxPage() {
       );
       await refreshConversationList(session);
       try {
-        await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+        await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId, "replace", {
+          skipMarkRead: true,
+        });
       } catch (refreshError) {
         const typedRefreshError = refreshError as { status?: number };
         if (typedRefreshError.status === 401) {
