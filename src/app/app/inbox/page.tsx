@@ -30,6 +30,11 @@ import {
   shouldApplyRealtimeMessageToHumanTimeline,
 } from "@/lib/inboxRealtimeTimeline";
 import {
+  addAutoReadSuppressionKeys,
+  clearAutoReadSuppressionKeys,
+  hasAutoReadSuppressionKey,
+  retainAutoReadSuppressionKeys,
+  removeAutoReadSuppressionKeys,
   shouldMarkReadAfterTimelineRefresh,
   type TimelineRefreshReadIntent,
 } from "@/lib/inboxTimelineRefresh";
@@ -2387,6 +2392,8 @@ export default function AppInboxPage() {
   const selectedTimelineRequestedActivityAtRef = useRef<number | null>(null);
   const selectedConversationIdentityCandidatesRef = useRef<string[]>([]);
   const skipNextSelectedConversationListMarkReadRef = useRef(false);
+  const queueMutationAutoReadSuppressedKeysRef = useRef(new Set<string>());
+  const autoReadSuppressionSessionKeyRef = useRef<string | null>(null);
   const refreshConversationListRef = useRef<((activeSession: AppSession) => Promise<void>) | null>(null);
   const refreshSelectedTimelineRef = useRef<
     ((
@@ -2402,6 +2409,7 @@ export default function AppInboxPage() {
   const sortedLogSignatureRef = useRef<string | null>(null);
 
   const handleUnauthorized = useCallback(() => {
+    clearAutoReadSuppressionKeys(queueMutationAutoReadSuppressedKeysRef.current);
     clearAppSession();
     router.replace("/app/login");
   }, [router]);
@@ -2421,6 +2429,7 @@ export default function AppInboxPage() {
       } catch {
         // Logout must remain available even if service worker access fails.
       } finally {
+        clearAutoReadSuppressionKeys(queueMutationAutoReadSuppressedKeysRef.current);
         clearAppSession();
         router.replace("/app/login");
       }
@@ -2769,6 +2778,20 @@ export default function AppInboxPage() {
     setSession(stored);
     saveAppSession(stored);
   }, [router]);
+
+  useEffect(() => {
+    const sessionKey = session ? `${session.user.clientId}:${session.user.id}:${session.token}` : null;
+    if (autoReadSuppressionSessionKeyRef.current !== sessionKey) {
+      clearAutoReadSuppressionKeys(queueMutationAutoReadSuppressedKeysRef.current);
+      skipNextSelectedConversationListMarkReadRef.current = false;
+      autoReadSuppressionSessionKeyRef.current = sessionKey;
+    }
+  }, [session]);
+
+  useEffect(() => () => {
+    clearAutoReadSuppressionKeys(queueMutationAutoReadSuppressedKeysRef.current);
+    skipNextSelectedConversationListMarkReadRef.current = false;
+  }, []);
 
   useEffect(() => {
     if (!session) return;
@@ -3124,6 +3147,19 @@ export default function AppInboxPage() {
       }).catch(() => undefined);
     }
   }, [session]);
+
+  const suppressAutoReadForQueueMutation = useCallback((conversationKeys: Array<string | null | undefined>) => {
+    addAutoReadSuppressionKeys(queueMutationAutoReadSuppressedKeysRef.current, conversationKeys);
+    skipNextSelectedConversationListMarkReadRef.current = true;
+  }, []);
+
+  const clearAutoReadSuppressionForConversation = useCallback((conversationKeys: Array<string | null | undefined>) => {
+    removeAutoReadSuppressionKeys(queueMutationAutoReadSuppressedKeysRef.current, conversationKeys);
+  }, []);
+
+  const isAutoReadSuppressedForConversation = useCallback((conversationKeys: Array<string | null | undefined>) => (
+    hasAutoReadSuppressionKey(queueMutationAutoReadSuppressedKeysRef.current, conversationKeys)
+  ), []);
 
   const applyRealtimeStatusUpdated = useCallback((
     event: Extract<AppRealtimeEvent, { type: "message.status.updated" }>
@@ -3640,6 +3676,10 @@ export default function AppInboxPage() {
     }
     const prioritizeLeads = isBusinessSession(activeSession);
     const sortedItems = dedupeConversationsByIdentity(pageItems, prioritizeLeads);
+    retainAutoReadSuppressionKeys(
+      queueMutationAutoReadSuppressedKeysRef.current,
+      sortedItems.flatMap((item) => getConversationIdentityCandidates(item))
+    );
     const latestInboundSignature = getLatestInboundConversationSignature(sortedItems);
     const latestInboundTimestamp = getLatestInboundConversationTimestamp(sortedItems);
     const humanFlowConversationKeys = getHumanFlowConversationKeys(sortedItems);
@@ -3761,6 +3801,7 @@ export default function AppInboxPage() {
 	      !loadingMessages &&
 	      !waitingForUnreadAnchor &&
         !skipSelectedConversationMarkRead &&
+        !isAutoReadSuppressedForConversation(getConversationIdentityCandidates(activeConversation)) &&
 	      canCurrentUserMutateConversationReadState(activeConversation, activeSession.user.id)
 	    ) {
 	      markConversationIdentitiesAsRead(
@@ -3925,7 +3966,9 @@ export default function AppInboxPage() {
     if (shouldMarkReadAfterTimelineRefresh({
       canMutateReadState: canCurrentUserMutateConversationReadState(response, activeSession.user.id),
       isForegroundFocused: isAppForegroundFocused(),
-      intent: readIntent,
+      intent: isAutoReadSuppressedForConversation([responseConversationKey, response.waId, response.waIdCanonical, waId])
+        ? { ...readIntent, skipMarkRead: true }
+        : readIntent,
     })) {
       markConversationIdentitiesAsRead(
         [responseConversationKey, response.waId, response.waIdCanonical, waId],
@@ -4331,6 +4374,7 @@ export default function AppInboxPage() {
   const openConversationItem = useCallback((item: InboxConversationItem, options?: { fromPush?: boolean }) => {
     const conversationIdentity = getConversationIdentity(item);
     const conversationIdentityCandidates = getConversationIdentityCandidates(item);
+    clearAutoReadSuppressionForConversation(conversationIdentityCandidates);
     const unreadCount = getConversationUnreadBadgeCount(item, readState, session?.user);
     const shouldOpenAtUnread = unreadCount > 0;
     const activityAt = getConversationActivityAt(item);
@@ -5802,7 +5846,13 @@ export default function AppInboxPage() {
       }
 
       setSuccess("Conversa devolvida para a fila atual.");
-      skipNextSelectedConversationListMarkReadRef.current = true;
+      suppressAutoReadForQueueMutation([
+        responseIdentity,
+        response.waId,
+        response.waIdCanonical,
+        selectedConversationWaId,
+        selectedConversationKey,
+      ]);
       try {
         await refreshConversationList(session);
       } finally {
@@ -5984,7 +6034,14 @@ export default function AppInboxPage() {
         selectedConversationWaId,
         transferDepartmentId
       );
-      skipNextSelectedConversationListMarkReadRef.current = true;
+      const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
+      suppressAutoReadForQueueMutation([
+        responseIdentity,
+        response.waId,
+        response.waIdCanonical,
+        selectedConversationWaId,
+        selectedConversationKey,
+      ]);
       try {
         await refreshConversationList(session);
       } finally {
