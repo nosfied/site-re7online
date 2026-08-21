@@ -54,7 +54,9 @@ function eventFor(clientId: string) {
     type: "message.created" as const,
     clientId,
     waId: "support:test",
+    humanInboxVisible: true,
     message: {
+      inboxVisibility: "human_timeline" as const,
       direction: "INBOUND" as const,
       type: "TEXT",
       status: "RECEIVED" as const,

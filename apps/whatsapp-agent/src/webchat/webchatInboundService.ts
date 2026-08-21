@@ -1224,9 +1224,11 @@ export async function createWebchatInboundMessage(params: {
         : runtimeState.handoffStatus === HandoffStatus.ACTIVE
           ? "active"
           : "none",
+    humanInboxVisible: true,
     assignedUserId,
     departmentId: runtimeState.departmentId ?? defaults.department.id,
     message: {
+      inboxVisibility: "human_timeline",
       direction: "INBOUND",
       type: MessageType.TEXT,
       status: "RECEIVED",

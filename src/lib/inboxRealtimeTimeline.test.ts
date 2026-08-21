@@ -9,6 +9,7 @@ import {
   realtimeEventTargetsSelectedConversation,
   resolveRealtimeConversationOperationalProjection,
   resolveRealtimeTimelineConversationKey,
+  shouldApplyRealtimeMessageToHumanTimeline,
 } from "./inboxRealtimeTimeline";
 
 test("realtime timeline matches selected conversation across canonical identity variants", () => {
@@ -73,6 +74,55 @@ test("non-human realtime messages are identified by structured visibility projec
       message: {
         inboxVisibility: "human_timeline",
         bodyText: "mensagem humana",
+      } as never,
+    }),
+    false
+  );
+});
+
+test("realtime messages only update human timeline when explicitly classified as human", () => {
+  assert.equal(
+    shouldApplyRealtimeMessageToHumanTimeline({
+      humanInboxVisible: true,
+      message: {
+        bodyText: "mensagem humana",
+      } as never,
+    }),
+    true
+  );
+  assert.equal(
+    shouldApplyRealtimeMessageToHumanTimeline({
+      message: {
+        inboxVisibility: "human_timeline",
+        bodyText: "mensagem humana",
+      } as never,
+    }),
+    true
+  );
+  assert.equal(
+    shouldApplyRealtimeMessageToHumanTimeline({
+      message: {
+        bodyText: "5",
+      } as never,
+    }),
+    false
+  );
+  assert.equal(
+    shouldApplyRealtimeMessageToHumanTimeline({
+      humanInboxVisible: false,
+      message: {
+        inboxVisibility: "human_timeline",
+        bodyText: "5",
+      } as never,
+    }),
+    false
+  );
+  assert.equal(
+    shouldApplyRealtimeMessageToHumanTimeline({
+      humanInboxVisible: true,
+      message: {
+        inboxVisibility: "management_only",
+        bodyText: "5",
       } as never,
     }),
     false

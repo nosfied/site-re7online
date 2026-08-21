@@ -420,9 +420,11 @@ async function persistSupportInboundMessage(
     waIdCanonical: params.conversation.waId,
     mode: params.mode ?? "HUMAN",
     handoffStatus: "none",
+    humanInboxVisible: true,
     assignedUserId: null,
     departmentId: null,
     message: {
+      inboxVisibility: "human_timeline",
       direction: "INBOUND",
       type: MessageType.TEXT,
       status: "RECEIVED",
@@ -556,9 +558,11 @@ async function persistSupportInboundAttachmentMessage(
     waIdCanonical: params.conversation.waId,
     mode: params.mode ?? "HUMAN",
     handoffStatus: "none",
+    humanInboxVisible: true,
     assignedUserId: null,
     departmentId: null,
     message: {
+      inboxVisibility: "human_timeline",
       direction: "INBOUND",
       type: MessageType.IMAGE,
       status: "RECEIVED",

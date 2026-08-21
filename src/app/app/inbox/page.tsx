@@ -24,10 +24,10 @@ import {
 import {
   getRealtimeHumanInboxVisibility,
   isHumanTimelineMessageItem,
-  isNonHumanTimelineRealtimeMessage,
   realtimeEventTargetsSelectedConversation,
   resolveRealtimeConversationOperationalProjection,
   resolveRealtimeTimelineConversationKey,
+  shouldApplyRealtimeMessageToHumanTimeline,
 } from "@/lib/inboxRealtimeTimeline";
 import { QUICK_EMOJIS } from "@/lib/quickEmojis";
 import {
@@ -3262,7 +3262,7 @@ export default function AppInboxPage() {
     if (event.type !== "message.created") return;
     const conversationKey = event.waIdCanonical ?? event.waId;
     const message = event.message;
-    if (isNonHumanTimelineRealtimeMessage(event)) {
+    if (!shouldApplyRealtimeMessageToHumanTimeline(event)) {
       const messageIdentity = getMessageIdentity(message);
       setMessages((prev) => prev.filter((item) => getMessageIdentity(item) !== messageIdentity));
       for (const [cacheKey, cacheMessages] of timelineCacheRef.current.entries()) {

@@ -137,9 +137,11 @@ test("operational message push skips automated bot-only conversations", () => {
       waId: "masked",
       mode: "BOT",
       handoffStatus: "none",
+      humanInboxVisible: false,
       assignedUserId: null,
       departmentId: null,
       message: {
+        inboxVisibility: "management_only",
         direction: "INBOUND",
         type: "TEXT",
         status: "RECEIVED",
@@ -166,6 +168,7 @@ test("operational message push skips management-only messages", () => {
       waId: "masked",
       mode: "HUMAN",
       handoffStatus: "active",
+      humanInboxVisible: false,
       assignedUserId: null,
       departmentId: "department-1",
       message: {
@@ -200,6 +203,7 @@ test("operational message push respects canonical human inbox projection", () =>
       assignedUserId: null,
       departmentId: "department-1",
       message: {
+        inboxVisibility: "human_timeline",
         direction: "INBOUND",
         type: "TEXT",
         status: "RECEIVED",
@@ -224,6 +228,7 @@ test("operational message push allows assigned and human conversations", () => {
     clientId: "client-1",
     waId: "masked",
     message: {
+      inboxVisibility: "human_timeline" as const,
       direction: "INBOUND" as const,
       type: "TEXT",
       status: "RECEIVED" as const,
@@ -244,6 +249,7 @@ test("operational message push allows assigned and human conversations", () => {
       ...base,
       mode: "BOT",
       handoffStatus: "none",
+      humanInboxVisible: true,
       assignedUserId: "user-1",
       departmentId: null,
     }),
@@ -254,6 +260,7 @@ test("operational message push allows assigned and human conversations", () => {
       ...base,
       mode: "HUMAN",
       handoffStatus: "active",
+      humanInboxVisible: true,
       assignedUserId: null,
       departmentId: "department-1",
     }),

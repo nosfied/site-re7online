@@ -1,5 +1,5 @@
 export type InboxRealtimeMessage = {
-  inboxVisibility?: "human_timeline" | "management_only";
+  inboxVisibility: "human_timeline" | "management_only";
   protocol?: string | null;
   cycleId?: string | null;
   internalMessageId?: string | null;
@@ -35,7 +35,7 @@ export type InboxRealtimeEvent =
       waIdCanonical?: string | null;
       mode?: "BOT" | "HUMAN" | null;
       handoffStatus?: "none" | "pending" | "active" | null;
-      humanInboxVisible?: boolean;
+      humanInboxVisible: boolean;
       assignedUserId?: string | null;
       departmentId?: string | null;
       protocol?: string | null;

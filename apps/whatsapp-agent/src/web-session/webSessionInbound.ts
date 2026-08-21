@@ -1234,6 +1234,9 @@ async function sendWebSessionBotText(params: {
   });
   if (outboundResult.ok && outboundResult.status === "SENT") {
     const nextState = updateOutbound(params.state, outboundResult.messageId, outboundResult.createdAt);
+    const humanInboxVisible =
+      inboxVisibility === "management_only" ? false : shouldProjectStateToHumanInbox(nextState);
+    const eventInboxVisibility: InboxMessageVisibility = humanInboxVisible ? "human_timeline" : "management_only";
     publishRealtimeEvent({
       type: "message.created",
       clientId: params.clientId,
@@ -1241,13 +1244,13 @@ async function sendWebSessionBotText(params: {
       waIdCanonical: params.waIdCanonical,
       mode: nextState.mode === "HUMAN" ? "HUMAN" : "BOT",
       handoffStatus: nextState.handoff.status,
-      humanInboxVisible: inboxVisibility === "management_only" ? false : shouldProjectStateToHumanInbox(nextState),
+      humanInboxVisible,
       assignedUserId: nextState.assignedUserId ?? null,
       departmentId: nextState.departmentId ?? null,
       protocol: serviceCycle?.protocol ?? null,
       cycleId: serviceCycle?.cycleId ?? null,
       message: {
-        inboxVisibility,
+        inboxVisibility: eventInboxVisibility,
         protocol: serviceCycle?.protocol ?? null,
         cycleId: serviceCycle?.cycleId ?? null,
         internalMessageId: outboundResult.internalMessageId,
@@ -2260,6 +2263,9 @@ export async function ingestWebSessionInboundMessage(params: {
       requestId,
     });
     const inboundServiceCycle = getActiveServiceCycle(runtimeConversationState);
+    const humanInboxVisible =
+      inboundInboxVisibility === "management_only" ? false : shouldProjectStateToHumanInbox(runtimeConversationState);
+    const eventInboxVisibility: InboxMessageVisibility = humanInboxVisible ? "human_timeline" : "management_only";
     publishRealtimeEvent({
       type: "message.created",
       clientId: params.message.clientId,
@@ -2267,14 +2273,13 @@ export async function ingestWebSessionInboundMessage(params: {
       waIdCanonical: params.message.senderCanonical,
       mode: runtimeConversationState.mode === "HUMAN" ? "HUMAN" : "BOT",
       handoffStatus: runtimeConversationState.handoff.status,
-      humanInboxVisible:
-        inboundInboxVisibility === "management_only" ? false : shouldProjectStateToHumanInbox(runtimeConversationState),
+      humanInboxVisible,
       assignedUserId: runtime.assignedUserId ?? null,
       departmentId: runtime.departmentId ?? null,
       protocol: inboundServiceCycle?.protocol ?? null,
       cycleId: inboundServiceCycle?.cycleId ?? null,
       message: {
-        inboxVisibility: inboundInboxVisibility,
+        inboxVisibility: eventInboxVisibility,
         protocol: inboundServiceCycle?.protocol ?? null,
         cycleId: inboundServiceCycle?.cycleId ?? null,
         internalMessageId: inboundNotificationMessage.internalMessageId,
@@ -2608,6 +2613,12 @@ export async function ingestWebSessionInboundMessage(params: {
                 outboundResult.messageId,
                 outboundResult.createdAt
               );
+              const humanInboxVisible = chatbotResult.managementInteraction?.outboundKind
+                ? false
+                : shouldProjectStateToHumanInbox(runtimeConversationState);
+              const eventInboxVisibility: InboxMessageVisibility = humanInboxVisible
+                ? "human_timeline"
+                : "management_only";
               publishRealtimeEvent({
                 type: "message.created",
                 clientId: params.message.clientId,
@@ -2615,17 +2626,13 @@ export async function ingestWebSessionInboundMessage(params: {
                 waIdCanonical: params.message.senderCanonical,
                 mode: runtimeConversationState.mode === "HUMAN" ? "HUMAN" : "BOT",
                 handoffStatus: runtimeConversationState.handoff.status,
-                humanInboxVisible: chatbotResult.managementInteraction?.outboundKind
-                  ? false
-                  : shouldProjectStateToHumanInbox(runtimeConversationState),
+                humanInboxVisible,
                 assignedUserId: runtimeConversationState.assignedUserId ?? null,
                 departmentId: runtimeConversationState.departmentId ?? null,
                 protocol: replyServiceCycle?.protocol ?? null,
                 cycleId: replyServiceCycle?.cycleId ?? null,
                 message: {
-                  inboxVisibility: chatbotResult.managementInteraction?.outboundKind
-                    ? "management_only"
-                    : undefined,
+                  inboxVisibility: eventInboxVisibility,
                   protocol: replyServiceCycle?.protocol ?? null,
                   cycleId: replyServiceCycle?.cycleId ?? null,
                   internalMessageId: outboundResult.internalMessageId,

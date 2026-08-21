@@ -1591,11 +1591,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           waIdCanonical: canonicalizeBrazilWaId(params.waId),
           mode: realtimeConversation?.mode === "HUMAN" ? "HUMAN" : "BOT",
           handoffStatus: realtimeHandoffStatus,
+          humanInboxVisible: true,
           assignedUserId: realtimeConversation?.assignedUserId ?? null,
           departmentId: realtimeConversation?.departmentId ?? null,
           protocol: realtimeServiceCycle?.protocol ?? null,
           cycleId: realtimeServiceCycle?.cycleId ?? null,
           message: {
+            inboxVisibility: "human_timeline",
             protocol: realtimeServiceCycle?.protocol ?? null,
             cycleId: realtimeServiceCycle?.cycleId ?? null,
             internalMessageId: insertedMessage?.id ?? null,

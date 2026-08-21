@@ -13,6 +13,13 @@ export function isNonHumanTimelineRealtimeMessage(
   return isManagementOnlyRealtimeMessage(event) || event.humanInboxVisible === false;
 }
 
+export function shouldApplyRealtimeMessageToHumanTimeline(
+  event: Pick<Extract<AppRealtimeEvent, { type: "message.created" }>, "humanInboxVisible" | "message">
+) {
+  if (isNonHumanTimelineRealtimeMessage(event)) return false;
+  return event.humanInboxVisible === true || event.message.inboxVisibility === "human_timeline";
+}
+
 export function isHumanTimelineMessageItem(item: { inboxVisibility?: InboxMessageItem["inboxVisibility"] }) {
   return item.inboxVisibility !== "management_only";
 }

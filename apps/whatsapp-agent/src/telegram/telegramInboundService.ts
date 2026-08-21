@@ -443,9 +443,11 @@ export async function persistTelegramInboundMessage(params: {
     waIdCanonical: syntheticWaId,
     mode: "HUMAN",
     handoffStatus: "none",
+    humanInboxVisible: true,
     assignedUserId,
     departmentId: defaults.department.id,
     message: {
+      inboxVisibility: "human_timeline",
       direction: "INBOUND",
       type: MessageType.TEXT,
       status: "RECEIVED",

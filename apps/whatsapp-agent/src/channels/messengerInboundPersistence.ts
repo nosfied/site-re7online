@@ -470,9 +470,11 @@ export async function persistMessengerInboundEvent(params: {
     waIdCanonical: syntheticWaId,
     mode: "HUMAN",
     handoffStatus: "none",
+    humanInboxVisible: true,
     assignedUserId,
     departmentId: operationalRoute.departmentId,
     message: {
+      inboxVisibility: "human_timeline",
       direction: "INBOUND",
       type: event.text ? MessageType.TEXT : MessageType.UNKNOWN,
       status: "RECEIVED",
