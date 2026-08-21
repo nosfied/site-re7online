@@ -91,6 +91,7 @@ export type InboxRealtimeEvent =
         lastReadAtByConversationKey: Record<string, string>;
         manuallyUnreadByConversationKey: Record<string, boolean>;
       };
+      readScope?: { type: "shared" } | { type: "assigned"; assignedUserId: string };
       unread: boolean;
       activityAt?: string | null;
       updatedAt: string;

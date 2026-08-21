@@ -6,6 +6,8 @@ import {
   getInboxReadState,
   markInboxConversationRead,
   markInboxConversationUnread,
+  markInboxConversationUnreadFromActivity,
+  resolveConversationReadScope,
 } from "./readStateStore.js";
 
 const testClientId = "read-state-shared-test-client";
@@ -49,4 +51,58 @@ test("shared read state remains tenant isolated", async () => {
 
   const otherTenantState = await getInboxReadState(otherTestClientId, "user-a");
   assert.deepEqual(otherTenantState.manuallyUnreadByConversationKey, {});
+});
+
+test("assigned read state is visible only to the assigned user", async () => {
+  const scope = { type: "assigned" as const, assignedUserId: "joao" };
+
+  await markInboxConversationUnreadFromActivity({
+    clientId: testClientId,
+    userId: "joao",
+    conversationKeys: ["conversation-assigned"],
+    activityAt: "2026-08-21T10:00:00.000Z",
+    scope,
+  });
+
+  const joaoState = await getInboxReadState(testClientId, "joao");
+  assert.equal(joaoState.manuallyUnreadByConversationKey["conversation-assigned"], true);
+  assert.equal(joaoState.lastReadAtByConversationKey["conversation-assigned"], "2026-08-21T10:00:00.000Z");
+
+  const mariaState = await getInboxReadState(testClientId, "maria");
+  assert.equal(mariaState.manuallyUnreadByConversationKey["conversation-assigned"], undefined);
+  assert.equal(mariaState.lastReadAtByConversationKey["conversation-assigned"], undefined);
+});
+
+test("shared read updates do not clear assigned unread state", async () => {
+  await markInboxConversationUnreadFromActivity({
+    clientId: testClientId,
+    userId: "joao",
+    conversationKeys: ["conversation-assigned"],
+    activityAt: "2026-08-21T10:00:00.000Z",
+    scope: { type: "assigned", assignedUserId: "joao" },
+  });
+
+  await markInboxConversationRead({
+    clientId: testClientId,
+    userId: "maria",
+    conversationKey: "conversation-assigned",
+    activityAt: "2026-08-21T10:05:00.000Z",
+    scope: { type: "shared" },
+  });
+
+  const joaoState = await getInboxReadState(testClientId, "joao");
+  assert.equal(joaoState.manuallyUnreadByConversationKey["conversation-assigned"], true);
+  assert.equal(joaoState.lastReadAtByConversationKey["conversation-assigned"], "2026-08-21T10:00:00.000Z");
+
+  const mariaState = await getInboxReadState(testClientId, "maria");
+  assert.equal(mariaState.manuallyUnreadByConversationKey["conversation-assigned"], undefined);
+  assert.equal(mariaState.lastReadAtByConversationKey["conversation-assigned"], "2026-08-21T10:05:00.000Z");
+});
+
+test("conversation read scope uses assignment when present", () => {
+  assert.deepEqual(resolveConversationReadScope({ assignedUserId: " joao " }), {
+    type: "assigned",
+    assignedUserId: "joao",
+  });
+  assert.deepEqual(resolveConversationReadScope({ assignedUserId: null }), { type: "shared" });
 });

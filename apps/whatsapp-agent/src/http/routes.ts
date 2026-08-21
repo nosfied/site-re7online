@@ -415,6 +415,7 @@ import {
   markInboxConversationRead,
   markInboxConversationUnread,
   markInboxConversationUnreadFromActivity,
+  resolveConversationReadScope,
 } from "../inbox/readStateStore.js";
 import {
   buildConversationProtocol,
@@ -5557,45 +5558,58 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         source: "app_conversation_read_state",
       });
       const conversationKey = resolvedConversation.resolvedWaIdCanonical;
-      if (unread) {
-        const scopedConversation = await runtimeStorage.getConversation(
-          resolvedConversation.resolvedWaId,
-          client.clientKey
-        );
-        const assignedUserId = String(scopedConversation?.assignedUserId ?? "").trim();
-        if (assignedUserId && assignedUserId !== clientAuth.userId) {
-          json(res, 403, {
-            error: "conversation_assigned_to_another_user",
-            message: "Apenas o atendente responsável pode marcar esta conversa como não lida.",
-          });
-          return;
-        }
+      const scopedConversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
+      const readScope = resolveConversationReadScope(scopedConversation);
+      if (
+        readScope.type === "assigned" &&
+        readScope.assignedUserId !== clientAuth.userId
+      ) {
+        json(res, 403, {
+          error: "conversation_assigned_to_another_user",
+          message: unread
+            ? "Apenas o atendente responsável pode marcar esta conversa como não lida."
+            : "Apenas o atendente responsável pode marcar esta conversa como lida.",
+        });
+        return;
       }
       const updatedAt = new Date().toISOString();
       const nextActivityAt = activityAt || updatedAt;
-      const nextState = unread
-        ? await markInboxConversationUnread({
-            clientId: client.id,
-            userId: clientAuth.userId,
-            conversationKey,
-          })
-        : await markInboxConversationRead({
-            clientId: client.id,
-            userId: clientAuth.userId,
-            conversationKey,
-            activityAt: nextActivityAt,
-          });
+      let scopeState;
+      if (unread) {
+        scopeState = await markInboxConversationUnread({
+          clientId: client.id,
+          userId: clientAuth.userId,
+          conversationKey,
+          scope: readScope,
+        });
+      } else {
+        scopeState = await markInboxConversationRead({
+          clientId: client.id,
+          userId: clientAuth.userId,
+          conversationKey,
+          activityAt: nextActivityAt,
+          scope: readScope,
+        });
+      }
+      const scopedState = await getInboxReadState(client.id, clientAuth.userId);
       publishRealtimeEvent({
         type: "conversation.read_state.updated",
         clientId: client.id,
         waId: resolvedConversation.resolvedWaId,
         waIdCanonical: conversationKey,
-        readState: nextState,
+        readState: readScope.type === "shared" ? scopeState : scopedState,
+        readScope:
+          readScope.type === "assigned"
+            ? { type: "assigned", assignedUserId: readScope.assignedUserId }
+            : { type: "shared" },
         unread,
         activityAt: unread ? null : nextActivityAt,
         updatedAt,
       });
-      json(res, 200, { ok: true, readState: nextState });
+      json(res, 200, { ok: true, readState: scopedState });
     } catch (error) {
       logger.error({
         event: "app.conversation.read_state.error",
@@ -11388,6 +11402,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         assignedUserId: nextState.assignedUserId,
         fromUserId: conversation.assignedUserId ?? null,
       });
+      await markAssignedConversationUnreadForDirectedAssignment(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        conversation: nextState,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        assignedUserId: nextState.assignedUserId,
+        actorUserId: clientAuth.userId,
+        updatedAt: assignedAt,
+      });
       const protocol = claimedCycle.cycle.protocol;
       await sendConversationProtocolNoticeIfNeeded(prisma, {
         clientId: client.id,
@@ -12068,6 +12092,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waId: nextState.waIdCanonical ?? nextState.waId,
         fromUserId: conversation.assignedUserId ?? null,
         toUserId: eligibility.user.id,
+      });
+      await markAssignedConversationUnreadForDirectedAssignment(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        conversation: nextState,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        assignedUserId: eligibility.user.id,
+        actorUserId: clientAuth.userId,
+        updatedAt: assignedAt,
       });
       const payload = await publishConversationOperationalUpdate(prisma, {
         clientId: client.id,
@@ -16947,6 +16981,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           fromUserId: conversation.assignedUserId ?? null,
           toUserId: assignedUser.id,
         });
+        await markAssignedConversationUnreadForDirectedAssignment(prisma, {
+          clientId: client.id,
+          clientKey,
+          requestId,
+          conversation: nextState,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          assignedUserId: assignedUser.id,
+          actorUserId: resolveAssignedTo(adminAuth),
+          updatedAt: assignedAt,
+        });
         const payload = await buildConversationActionPayload(prisma, {
           clientId: client.id,
           clientKey,
@@ -17388,6 +17432,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           waId: nextState.waIdCanonical ?? nextState.waId,
           assignedUserId: nextState.assignedUserId,
           fromUserId: previousAssignedUserId,
+        });
+        await markAssignedConversationUnreadForDirectedAssignment(prisma, {
+          clientId: client.id,
+          clientKey,
+          requestId,
+          conversation: nextState,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          assignedUserId: nextState.assignedUserId,
+          actorUserId: resolveAssignedTo(adminAuth),
+          updatedAt: assignedAt,
         });
         const payload = await buildConversationActionPayload(prisma, {
           clientId: client.id,
@@ -27992,6 +28046,78 @@ async function publishConversationOperationalUpdate(
     notificationMessage: params.notificationMessage ?? null,
   });
   return payload;
+}
+
+async function markAssignedConversationUnreadForDirectedAssignment(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    requestId: string;
+    conversation: ConversationState;
+    waIdCanonical?: string | null;
+    assignedUserId?: string | null;
+    actorUserId?: string | null;
+    updatedAt: string;
+  }
+) {
+  const assignedUserId = String(params.assignedUserId ?? "").trim();
+  if (!assignedUserId || assignedUserId === String(params.actorUserId ?? "").trim()) return;
+  const conversationKeys = Array.from(
+    new Set(
+      [
+        params.conversation.waId,
+        params.conversation.waIdCanonical,
+        params.conversation.conversationKey,
+        params.waIdCanonical,
+      ]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+  if (conversationKeys.length === 0) return;
+  try {
+    const latestInbound = await prisma.inboundMessage.findFirst({
+      where: {
+        clientId: params.clientId,
+        OR: [
+          { waId: { in: conversationKeys } },
+          { waIdCanonical: { in: conversationKeys } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    });
+    const activityAt = latestInbound?.createdAt.toISOString() ?? params.updatedAt;
+    await markInboxConversationUnreadFromActivity({
+      clientId: params.clientId,
+      userId: assignedUserId,
+      conversationKeys,
+      activityAt,
+      scope: { type: "assigned", assignedUserId },
+    });
+    const readState = await getInboxReadState(params.clientId, assignedUserId);
+    publishRealtimeEvent({
+      type: "conversation.read_state.updated",
+      clientId: params.clientId,
+      waId: params.conversation.waId,
+      waIdCanonical: params.waIdCanonical ?? params.conversation.waIdCanonical ?? null,
+      readState,
+      readScope: { type: "assigned", assignedUserId },
+      unread: true,
+      activityAt: null,
+      updatedAt: params.updatedAt,
+    });
+  } catch (error) {
+    logger.warn({
+      event: "conversation.assigned.read_state_failed",
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      assignedUserId,
+      requestId: params.requestId,
+      message: (error as Error).message,
+    });
+  }
 }
 
 async function sendConversationProtocolNoticeIfNeeded(

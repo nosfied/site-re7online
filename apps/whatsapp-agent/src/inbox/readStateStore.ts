@@ -6,6 +6,10 @@ export type InboxReadState = {
   manuallyUnreadByConversationKey: Record<string, boolean>;
 };
 
+export type ConversationReadScope =
+  | { type: "shared" }
+  | { type: "assigned"; assignedUserId: string };
+
 const EMPTY_READ_STATE: InboxReadState = {
   lastReadAtByConversationKey: {},
   manuallyUnreadByConversationKey: {},
@@ -20,6 +24,23 @@ function sanitizePathPart(value: string) {
 
 function getReadStateFile(clientId: string) {
   return path.join(dataDir, sanitizePathPart(clientId), "shared.json");
+}
+
+function getAssignedReadStateFile(clientId: string, assignedUserId: string) {
+  return path.join(dataDir, sanitizePathPart(clientId), "assigned", `${sanitizePathPart(assignedUserId)}.json`);
+}
+
+export function resolveConversationReadScope(conversation: {
+  assignedUserId?: string | null;
+} | null | undefined): ConversationReadScope {
+  const assignedUserId = String(conversation?.assignedUserId ?? "").trim();
+  return assignedUserId ? { type: "assigned", assignedUserId } : { type: "shared" };
+}
+
+function getReadStateFileForScope(clientId: string, scope: ConversationReadScope = { type: "shared" }) {
+  return scope.type === "assigned"
+    ? getAssignedReadStateFile(clientId, scope.assignedUserId)
+    : getReadStateFile(clientId);
 }
 
 async function ensureDir(dir: string) {
@@ -71,7 +92,15 @@ function normalizeReadState(input: unknown): InboxReadState {
 }
 
 export async function getInboxReadState(clientId: string, _userId: string): Promise<InboxReadState> {
-  const targetFile = getReadStateFile(clientId);
+  const shared = await readInboxReadStateScope(clientId, { type: "shared" });
+  const userId = String(_userId ?? "").trim();
+  if (!userId) return shared;
+  const assigned = await readInboxReadStateScope(clientId, { type: "assigned", assignedUserId: userId });
+  return mergeReadStates(shared, assigned);
+}
+
+async function readInboxReadStateScope(clientId: string, scope: ConversationReadScope) {
+  const targetFile = getReadStateFileForScope(clientId, scope);
   try {
     const raw = await fs.readFile(targetFile, "utf-8");
     return normalizeReadState(JSON.parse(raw));
@@ -80,8 +109,21 @@ export async function getInboxReadState(clientId: string, _userId: string): Prom
   }
 }
 
-async function writeInboxReadState(clientId: string, _userId: string, state: InboxReadState) {
-  const targetFile = getReadStateFile(clientId);
+function mergeReadStates(shared: InboxReadState, assigned: InboxReadState): InboxReadState {
+  return {
+    lastReadAtByConversationKey: {
+      ...shared.lastReadAtByConversationKey,
+      ...assigned.lastReadAtByConversationKey,
+    },
+    manuallyUnreadByConversationKey: {
+      ...shared.manuallyUnreadByConversationKey,
+      ...assigned.manuallyUnreadByConversationKey,
+    },
+  };
+}
+
+async function writeInboxReadState(clientId: string, _userId: string, state: InboxReadState, scope: ConversationReadScope) {
+  const targetFile = getReadStateFileForScope(clientId, scope);
   return enqueueWrite(targetFile, () => writeAtomic(targetFile, JSON.stringify(state, null, 2)));
 }
 
@@ -90,8 +132,10 @@ export async function markInboxConversationRead(params: {
   userId: string;
   conversationKey: string;
   activityAt: string;
+  scope?: ConversationReadScope;
 }) {
-  const current = await getInboxReadState(params.clientId, params.userId);
+  const scope = params.scope ?? { type: "shared" };
+  const current = await readInboxReadStateScope(params.clientId, scope);
   const nextUnread = { ...current.manuallyUnreadByConversationKey };
   delete nextUnread[params.conversationKey];
   const nextState: InboxReadState = {
@@ -101,7 +145,7 @@ export async function markInboxConversationRead(params: {
     },
     manuallyUnreadByConversationKey: nextUnread,
   };
-  await writeInboxReadState(params.clientId, params.userId, nextState);
+  await writeInboxReadState(params.clientId, params.userId, nextState, scope);
   return nextState;
 }
 
@@ -109,8 +153,10 @@ export async function markInboxConversationUnread(params: {
   clientId: string;
   userId: string;
   conversationKey: string;
+  scope?: ConversationReadScope;
 }) {
-  const current = await getInboxReadState(params.clientId, params.userId);
+  const scope = params.scope ?? { type: "shared" };
+  const current = await readInboxReadStateScope(params.clientId, scope);
   const nextState: InboxReadState = {
     lastReadAtByConversationKey: current.lastReadAtByConversationKey,
     manuallyUnreadByConversationKey: {
@@ -118,7 +164,7 @@ export async function markInboxConversationUnread(params: {
       [params.conversationKey]: true,
     },
   };
-  await writeInboxReadState(params.clientId, params.userId, nextState);
+  await writeInboxReadState(params.clientId, params.userId, nextState, scope);
   return nextState;
 }
 
@@ -127,11 +173,13 @@ export async function markInboxConversationUnreadFromActivity(params: {
   userId: string;
   conversationKeys: string[];
   activityAt: string;
+  scope?: ConversationReadScope;
 }) {
   const conversationKeys = Array.from(
     new Set(params.conversationKeys.map((key) => key.trim()).filter(Boolean))
   );
-  const current = await getInboxReadState(params.clientId, params.userId);
+  const scope = params.scope ?? { type: "shared" };
+  const current = await readInboxReadStateScope(params.clientId, scope);
   const nextState: InboxReadState = {
     lastReadAtByConversationKey: {
       ...current.lastReadAtByConversationKey,
@@ -142,6 +190,6 @@ export async function markInboxConversationUnreadFromActivity(params: {
       ...Object.fromEntries(conversationKeys.map((key) => [key, true])),
     },
   };
-  await writeInboxReadState(params.clientId, params.userId, nextState);
+  await writeInboxReadState(params.clientId, params.userId, nextState, scope);
   return nextState;
 }

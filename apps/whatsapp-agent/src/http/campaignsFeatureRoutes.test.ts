@@ -7261,6 +7261,13 @@ test("conversation unread state cannot be marked by a non-assigned user", async 
   assert.equal(blocked.status, 403, JSON.stringify(blocked.body));
   assert.equal(getErrorCode(blocked.body), "conversation_assigned_to_another_user");
 
+  const readBlocked = await request<ErrorPayload>("POST", `/app/conversation/${waId}/read-state`, businessAgent, {
+    unread: false,
+    activityAt: "2026-01-01T08:01:00.000Z",
+  });
+  assert.equal(readBlocked.status, 403, JSON.stringify(readBlocked.body));
+  assert.equal(getErrorCode(readBlocked.body), "conversation_assigned_to_another_user");
+
   const assigned = await request<{ ok: true }>("POST", `/app/conversation/${waId}/read-state`, businessAdmin, {
     unread: true,
   });

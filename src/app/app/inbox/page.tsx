@@ -1007,6 +1007,34 @@ function mergeReadStatePreservingLocal(_current: InboxReadState, incoming: Inbox
   };
 }
 
+function mergeSharedReadStatePreservingAssigned(
+  current: InboxReadState,
+  incomingShared: InboxReadState,
+  conversations: InboxConversationItem[],
+  userId?: string | null
+): InboxReadState {
+  const normalizedUserId = String(userId ?? "").trim();
+  if (!normalizedUserId) return mergeReadStatePreservingLocal(current, incomingShared);
+  const assignedConversationKeys = new Set<string>();
+  for (const item of conversations) {
+    if (String(item.assignedUserId ?? "").trim() !== normalizedUserId) continue;
+    for (const key of getConversationIdentityCandidates(item)) {
+      assignedConversationKeys.add(key);
+    }
+  }
+  if (assignedConversationKeys.size === 0) return mergeReadStatePreservingLocal(current, incomingShared);
+  const nextState = mergeReadStatePreservingLocal(current, incomingShared);
+  for (const key of assignedConversationKeys) {
+    if (current.lastReadAtByConversationKey[key] && !incomingShared.lastReadAtByConversationKey[key]) {
+      nextState.lastReadAtByConversationKey[key] = current.lastReadAtByConversationKey[key];
+    }
+    if (current.manuallyUnreadByConversationKey[key] && !incomingShared.manuallyUnreadByConversationKey[key]) {
+      nextState.manuallyUnreadByConversationKey[key] = current.manuallyUnreadByConversationKey[key];
+    }
+  }
+  return nextState;
+}
+
 const CONVERSATION_FILTERS = [
   { value: "ALL", label: "Todas" },
   { value: "WAITING", label: "Aguardando atendimento" },
@@ -1082,6 +1110,7 @@ type PendingReadAfterHydration = {
   conversationKeys: string[];
   activityAt: string | null;
   waId: string | null;
+  canMutateReadState: boolean;
 };
 
 type AudioRecordingState = "idle" | "recording" | "stopping";
@@ -1289,6 +1318,15 @@ function getConversationUnreadBadgeCount(
   if (!isConversationUnreadForUser(item, state, user)) return 0;
   const count = Number(item.unreadCount ?? 0);
   return Number.isFinite(count) && count > 0 ? count : 1;
+}
+
+function canCurrentUserMutateConversationReadState(
+  item: Pick<InboxConversationItem, "assignedUserId"> | null | undefined,
+  userId?: string | null
+) {
+  const assignedUserId = String(item?.assignedUserId ?? "").trim();
+  if (!assignedUserId) return true;
+  return assignedUserId === String(userId ?? "").trim();
 }
 
 function getLatestReadAtForConversation(
@@ -3034,6 +3072,7 @@ export default function AppInboxPage() {
     pendingUnreadAnchorConversationIdentityRef.current = null;
     pendingUnreadLastReadAtRef.current = null;
     pendingUnreadAnchorMessageIdRef.current = null;
+    if (!pendingRead.canMutateReadState) return;
     markConversationIdentitiesAsRead(pendingRead.conversationKeys, pendingRead.activityAt, pendingRead.waId);
   }, [markConversationIdentitiesAsRead]);
 
@@ -3136,7 +3175,17 @@ export default function AppInboxPage() {
     }
     if (!session || event.clientId !== session.user.clientId) return;
     if (event.type === "conversation.read_state.updated") {
-      setReadState((current) => mergeReadStatePreservingLocal(current, event.readState));
+      if (
+        event.readScope?.type === "assigned" &&
+        event.readScope.assignedUserId !== session.user.id
+      ) {
+        return;
+      }
+      setReadState((current) =>
+        event.readScope?.type === "shared"
+          ? mergeSharedReadStatePreservingAssigned(current, event.readState, conversations, session.user.id)
+          : mergeReadStatePreservingLocal(current, event.readState)
+      );
       return;
     }
     const eventTargetsCurrentUser =
@@ -3694,7 +3743,12 @@ export default function AppInboxPage() {
 	        }
 	      );
 	    }
-	    if (activeConversation && !loadingMessages && !waitingForUnreadAnchor) {
+	    if (
+	      activeConversation &&
+	      !loadingMessages &&
+	      !waitingForUnreadAnchor &&
+	      canCurrentUserMutateConversationReadState(activeConversation, activeSession.user.id)
+	    ) {
 	      markConversationIdentitiesAsRead(
 	        getConversationIdentityCandidates(activeConversation),
 	        getConversationActivityAt(activeConversation),
@@ -3853,23 +3907,32 @@ export default function AppInboxPage() {
       (responseItems.length > 0
         ? responseItems[responseItems.length - 1]?.createdAt
         : latestKnownAt) ?? null;
-    if (isAppForegroundFocused()) {
+    if (
+      isAppForegroundFocused() &&
+      canCurrentUserMutateConversationReadState(response, activeSession.user.id)
+    ) {
       markConversationIdentitiesAsRead(
         [responseConversationKey, response.waId, response.waIdCanonical, waId],
         latestActivityAt,
         response.waId ?? waId
       );
     }
-	  }, [isTimelineNearBottom, markConversationIdentitiesAsRead, messages, selectedConversationKey, selectedConversationWaId]);
+  }, [
+    isTimelineNearBottom,
+    markConversationIdentitiesAsRead,
+    messages,
+    selectedConversationKey,
+    selectedConversationWaId,
+  ]);
 
-	  useEffect(() => {
-	    refreshSelectedTimelineRef.current = refreshSelectedTimeline;
-	    return () => {
-	      if (refreshSelectedTimelineRef.current === refreshSelectedTimeline) {
-	        refreshSelectedTimelineRef.current = null;
-	      }
-	    };
-	  }, [refreshSelectedTimeline]);
+  useEffect(() => {
+    refreshSelectedTimelineRef.current = refreshSelectedTimeline;
+    return () => {
+      if (refreshSelectedTimelineRef.current === refreshSelectedTimeline) {
+        refreshSelectedTimelineRef.current = null;
+      }
+    };
+  }, [refreshSelectedTimeline]);
 
 	  useEffect(() => {
 	    if (!session) return;
@@ -4275,6 +4338,7 @@ export default function AppInboxPage() {
       conversationKeys: conversationIdentityCandidates,
       activityAt,
       waId: item.waId,
+      canMutateReadState: canCurrentUserMutateConversationReadState(item, session?.user.id),
     };
     conversationOpenStartedAtRef.current = {
       key: conversationIdentity,
@@ -4697,6 +4761,7 @@ export default function AppInboxPage() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!isAppForegroundFocused() || !selectedConversation) return;
+      if (!canCurrentUserMutateConversationReadState(selectedConversation, session?.user.id)) return;
       markConversationIdentitiesAsRead(
         getConversationIdentityCandidates(selectedConversation),
         getConversationActivityAt(selectedConversation),
@@ -4705,7 +4770,7 @@ export default function AppInboxPage() {
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [markConversationIdentitiesAsRead, selectedConversation]);
+  }, [markConversationIdentitiesAsRead, selectedConversation, session?.user.id]);
 
   const selectedLead = useMemo(() => {
     if (!selectedConversation?.leadId) return null;
