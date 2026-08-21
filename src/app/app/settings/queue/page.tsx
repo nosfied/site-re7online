@@ -27,7 +27,7 @@ function canAccessQueueSettings(role: string) {
 
 function canManageQueueSettings(role: string) {
   const normalized = role.trim().toUpperCase();
-  return normalized === "SUPERVISOR" || normalized === "ADMIN";
+  return normalized === "ADMIN";
 }
 
 function getDefaultPolicy(): AppQueueAssignmentPolicy {
@@ -370,7 +370,7 @@ export default function AppSettingsQueuePage() {
                   Atualizar
                 </button>
                 {readOnly ? (
-                  <p className="text-xs text-white/55">Somente supervisores e administradores podem salvar alterações.</p>
+                  <p className="text-xs text-white/55">Somente administradores podem alterar a configuração das filas.</p>
                 ) : (
                   <button
                     type="button"

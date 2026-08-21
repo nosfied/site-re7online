@@ -2011,7 +2011,7 @@ test("admin tenant feature entitlements are platform-scoped, audited, dependency
   }
 });
 
-test("queue assignment settings are tenant scoped and managed by admin or supervisor", async () => {
+test("queue assignment settings are tenant scoped and admin managed with supervisor read only", async () => {
   const unauth = await requestUnauth<ErrorPayload>("GET", "/app/settings/queue-assignment");
   assert.equal(unauth.status, 401);
 
@@ -2027,32 +2027,21 @@ test("queue assignment settings are tenant scoped and managed by admin or superv
   assert.equal(supervisor.body.ok, true);
   assert.equal(supervisor.body.policy.enabled, false);
   assert.equal(supervisor.body.policy.mode, "manual");
-  assert.equal(supervisor.body.permissions.canUpdate, true);
+  assert.equal(supervisor.body.permissions.canUpdate, false);
 
-  const supervisorUpdate = await request<{
-    ok: boolean;
-    policy: { enabled: boolean; mode: string; scope: string };
-    permissions: { canUpdate: boolean };
-  }>("PUT", "/app/settings/queue-assignment", businessSupervisor, {
+  const supervisorUpdate = await request<ErrorPayload>("PUT", "/app/settings/queue-assignment", businessSupervisor, {
     enabled: true,
     mode: "round_robin",
     scope: "department",
   });
-  assert.equal(supervisorUpdate.status, 200);
-  assert.equal(supervisorUpdate.body.policy.enabled, true);
-  assert.equal(supervisorUpdate.body.policy.mode, "round_robin");
-  assert.equal(supervisorUpdate.body.permissions.canUpdate, true);
+  assert.equal(supervisorUpdate.status, 403);
 
-  const supervisorLeastActive = await request<{
-    ok: boolean;
-    policy: { enabled: boolean; mode: string; scope: string };
-  }>("PUT", "/app/settings/queue-assignment", businessSupervisor, {
+  const supervisorLeastActive = await request<ErrorPayload>("PUT", "/app/settings/queue-assignment", businessSupervisor, {
     enabled: true,
     mode: "least_active",
     scope: "department",
   });
-  assert.equal(supervisorLeastActive.status, 200);
-  assert.equal(supervisorLeastActive.body.policy.mode, "least_active");
+  assert.equal(supervisorLeastActive.status, 403);
 
   const agentUpdate = await request<ErrorPayload>("PUT", "/app/settings/queue-assignment", businessAgent, {
     enabled: true,
