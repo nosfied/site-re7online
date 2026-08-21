@@ -139,6 +139,22 @@ export type AppNotificationCandidate = {
   backendEligible?: boolean;
 };
 
+export function buildRealtimeNotificationUserContext(user: {
+  id?: string | null;
+  role?: string | null;
+  departmentId?: string | null;
+  departmentIds?: string[] | null;
+  departmentName?: string | null;
+}) {
+  return {
+    userId: user.id ?? null,
+    userDepartmentId: user.departmentId ?? null,
+    userDepartmentIds: Array.isArray(user.departmentIds) ? user.departmentIds : [],
+    userDepartmentName: user.departmentName ?? null,
+    userRole: user.role ?? null,
+  };
+}
+
 type InboundOrHandoffNotificationInput = {
   conversationIdentity: string | null;
   notificationKey: string;

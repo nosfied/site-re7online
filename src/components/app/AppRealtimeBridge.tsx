@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addAppNotificationListener,
   APP_AUDIO_UNLOCK_EVENT_NAME,
+  buildRealtimeNotificationUserContext,
   createAppRealtimeClient,
   dispatchAppAudioState,
   dispatchAppRealtimeEvent,
@@ -323,10 +324,7 @@ export default function AppRealtimeBridge() {
       handoffStatus: event.handoffStatus,
       assignedUserId: event.assignedUserId ?? null,
       departmentId: event.departmentId ?? null,
-      userId: session.user.id,
-      userDepartmentId: session.user.departmentId ?? null,
-      userDepartmentName: session.user.departmentName ?? null,
-      userRole: session.user.role,
+      ...buildRealtimeNotificationUserContext(session.user),
     });
   }, []);
 
@@ -347,10 +345,7 @@ export default function AppRealtimeBridge() {
       handoffStatus: event.handoffStatus,
       assignedUserId: event.assignedUserId ?? null,
       departmentId: event.departmentId ?? null,
-      userId: session.user.id,
-      userDepartmentId: session.user.departmentId ?? null,
-      userDepartmentName: session.user.departmentName ?? null,
-      userRole: session.user.role,
+      ...buildRealtimeNotificationUserContext(session.user),
       title: isReleasedToGeneral ? "Conversa voltou para Atendimento Geral" : undefined,
       body: event.notificationMessage?.bodyText
         ? event.notificationMessage.bodyText

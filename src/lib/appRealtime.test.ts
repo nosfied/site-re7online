@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildRealtimeNotificationUserContext,
   canUserReceiveTargetedNotification,
   handleRealtimeNotificationCandidate,
 } from "./appRealtime";
@@ -46,6 +47,79 @@ test("department-scoped roles receive notifications for active memberships", () 
       { id: "supervisor-a", role: "SUPERVISOR", departmentId: "department-a", departmentIds: ["department-a", "department-b"] }
     ),
     false
+  );
+});
+
+test("global realtime notification context carries membership department ids", () => {
+  assert.deepEqual(
+    buildRealtimeNotificationUserContext({
+      id: "agent-a",
+      role: "AGENT",
+      departmentId: "department-primary",
+      departmentIds: ["department-secult", "department-fundarpe", "department-mapa"],
+      departmentName: "Mapa",
+    }),
+    {
+      userId: "agent-a",
+      userRole: "AGENT",
+      userDepartmentId: "department-primary",
+      userDepartmentIds: ["department-secult", "department-fundarpe", "department-mapa"],
+      userDepartmentName: "Mapa",
+    }
+  );
+});
+
+test("non-primary memberships are eligible for realtime notification candidates", () => {
+  const userContext = buildRealtimeNotificationUserContext({
+    id: "agent-maria",
+    role: "AGENT",
+    departmentId: "department-mapa",
+    departmentIds: ["department-secult", "department-fundarpe", "department-mapa"],
+    departmentName: "Mapa",
+  });
+
+  assert.equal(
+    canUserReceiveTargetedNotification(
+      { departmentId: "department-secult" },
+      {
+        id: "agent-maria",
+        role: "AGENT",
+        departmentId: "department-mapa",
+        departmentIds: ["department-secult", "department-fundarpe", "department-mapa"],
+      }
+    ),
+    true
+  );
+
+  assert.equal(
+    handleRealtimeNotificationCandidate({
+      source: "websocket",
+      kind: "message",
+      conversationIdentity: "conversation-secult-message",
+      messageId: "message-secult",
+      createdAt: "2026-08-21T10:01:00.000Z",
+      direction: "INBOUND",
+      mode: "HUMAN",
+      handoffStatus: "active",
+      departmentId: "department-secult",
+      ...userContext,
+    }),
+    true
+  );
+
+  assert.equal(
+    handleRealtimeNotificationCandidate({
+      source: "websocket",
+      kind: "handoff",
+      conversationIdentity: "conversation-secult-handoff",
+      createdAt: "2026-08-21T10:02:00.000Z",
+      direction: "INBOUND",
+      mode: "HUMAN",
+      handoffStatus: "active",
+      departmentId: "department-secult",
+      ...userContext,
+    }),
+    true
   );
 });
 
