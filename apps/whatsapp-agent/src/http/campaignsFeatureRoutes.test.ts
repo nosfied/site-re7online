@@ -8,6 +8,7 @@ import path from "node:path";
 import { hashPassword, issueClientAuthToken } from "../auth/clientAuth.js";
 import { buildAppAuthSessionExpiresAt } from "../auth/sessionPolicy.js";
 import { saveWebSessionAuthState } from "../web-session/webSessionAuthStore.js";
+import { readWebSessionPrePairingOutboundState } from "../web-session/webSessionLifecycle.js";
 import { getPrisma } from "../db.js";
 import { MessageStatus, MessageType, Prisma, TrainingContentStatus, TrainingContentType } from "@prisma/client";
 import type { ConversationState } from "../conversation/conversation.types.js";
@@ -2395,6 +2396,13 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   assert.equal(connected.body.status.account.status, "pending");
   assert.equal(connected.body.status.lifecycle.desiredState, "CONNECTED");
   assert.equal(connected.body.status.lifecycle.observedState, "CONNECTING");
+  const accountAfterConnect = await prisma.channelAccount.findFirstOrThrow({
+    where: { clientId: businessClientId, channel: "whatsapp", provider: "web_session", channelAccountId: "lab-account" },
+    select: { metadata: true },
+  });
+  const prePairingOutbound = readWebSessionPrePairingOutboundState(accountAfterConnect.metadata);
+  assert.equal(prePairingOutbound?.enabled, false);
+  assert.equal(typeof prePairingOutbound?.capturedAt, "string");
 
   const qr = await request<{
     ok: boolean;

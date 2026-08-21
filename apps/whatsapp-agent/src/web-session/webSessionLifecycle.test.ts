@@ -5,10 +5,12 @@ import {
   classifyWebSessionDisconnect,
   extractWebSessionDisconnectInfo,
   isWebSessionConnectRequested,
+  readWebSessionPrePairingOutboundState,
   readWebSessionLifecycle,
+  writeWebSessionPrePairingOutboundMetadata,
   writeWebSessionLifecycleMetadata,
 } from "./webSessionLifecycle.js";
-import { webSessionMetadataPatch } from "./webSessionConnectionRuntime.js";
+import { markWebSessionRuntimeState, webSessionMetadataPatch } from "./webSessionConnectionRuntime.js";
 import { createWebSessionQrMemoryStore } from "./qrMemoryStore.js";
 
 test("web session lifecycle reads defaults and explicit desired state", () => {
@@ -33,6 +35,22 @@ test("web session lifecycle writes durable state without QR", () => {
   assert.equal((metadata.webSession as Record<string, unknown>).desiredState, "CONNECTED");
   assert.equal((metadata.webSession as Record<string, unknown>).observedState, "QR_REQUIRED");
   assert.equal(JSON.stringify(metadata).includes("forbidden"), false);
+});
+
+test("web session lifecycle stores and clears pre-pairing outbound snapshot", () => {
+  const metadata = writeWebSessionPrePairingOutboundMetadata(
+    { preserved: "yes", webSession: { desiredState: "CONNECTED", qr: "forbidden" } },
+    { enabled: true, capturedAt: "2026-08-21T13:09:30.000Z" }
+  );
+  assert.deepEqual(readWebSessionPrePairingOutboundState(metadata), {
+    enabled: true,
+    capturedAt: "2026-08-21T13:09:30.000Z",
+  });
+  assert.equal(JSON.stringify(metadata).includes("forbidden"), false);
+
+  const cleared = writeWebSessionPrePairingOutboundMetadata(metadata, null);
+  assert.equal(readWebSessionPrePairingOutboundState(cleared), null);
+  assert.equal((cleared.webSession as Record<string, unknown>).desiredState, "CONNECTED");
 });
 
 test("web session disconnect classification and backoff are conservative", () => {
@@ -94,4 +112,99 @@ test("web session runtime telemetry records terminal and reconnecting disconnect
     (qrRequired.webSession as Record<string, unknown>).lastDisconnectedAt,
     "2026-08-11T00:00:00.000Z"
   );
+});
+
+async function markRuntimeForTest(params: {
+  metadata: unknown;
+  outboundEnabled: boolean;
+  observedState: "DISCONNECTED" | "QR_REQUIRED" | "CONNECTING" | "CONNECTED" | "RECONNECTING" | "ERROR";
+}) {
+  let updateData: Record<string, unknown> | null = null;
+  const prisma = {
+    channelAccount: {
+      findUnique: async () => ({
+        id: "account-a",
+        metadata: params.metadata,
+        outboundEnabled: params.outboundEnabled,
+      }),
+      update: async (input: { data: Record<string, unknown> }) => {
+        updateData = input.data;
+        return { id: "account-a" };
+      },
+    },
+  };
+  await markWebSessionRuntimeState({
+    prisma: prisma as never,
+    accountId: "account-a",
+    observedState: params.observedState,
+    status: params.observedState === "CONNECTED" ? "connected" : "pending",
+  });
+  assert.notEqual(updateData, null);
+  return updateData as unknown as Record<string, unknown>;
+}
+
+test("web session CONNECTED restores previous true outbound and consumes snapshot", async () => {
+  const metadata = writeWebSessionPrePairingOutboundMetadata(
+    { webSession: { desiredState: "CONNECTED", observedState: "CONNECTING" } },
+    { enabled: true, capturedAt: "2026-08-21T13:09:30.000Z" }
+  );
+  const update = await markRuntimeForTest({
+    metadata,
+    outboundEnabled: false,
+    observedState: "CONNECTED",
+  });
+  assert.equal(update.outboundEnabled, true);
+  assert.equal(readWebSessionLifecycle(update.metadata).observedState, "CONNECTED");
+  assert.equal(readWebSessionPrePairingOutboundState(update.metadata), null);
+});
+
+test("web session CONNECTED preserves previous false outbound and consumes snapshot", async () => {
+  const metadata = writeWebSessionPrePairingOutboundMetadata(
+    { webSession: { desiredState: "CONNECTED", observedState: "CONNECTING" } },
+    { enabled: false, capturedAt: "2026-08-21T13:09:30.000Z" }
+  );
+  const update = await markRuntimeForTest({
+    metadata,
+    outboundEnabled: false,
+    observedState: "CONNECTED",
+  });
+  assert.equal(update.outboundEnabled, false);
+  assert.equal(readWebSessionPrePairingOutboundState(update.metadata), null);
+});
+
+test("web session QR_REQUIRED does not restore pre-pairing outbound", async () => {
+  const metadata = writeWebSessionPrePairingOutboundMetadata(
+    { webSession: { desiredState: "CONNECTED", observedState: "CONNECTING" } },
+    { enabled: true, capturedAt: "2026-08-21T13:09:30.000Z" }
+  );
+  const update = await markRuntimeForTest({
+    metadata,
+    outboundEnabled: false,
+    observedState: "QR_REQUIRED",
+  });
+  assert.equal("outboundEnabled" in update, false);
+  assert.deepEqual(readWebSessionPrePairingOutboundState(update.metadata), {
+    enabled: true,
+    capturedAt: "2026-08-21T13:09:30.000Z",
+  });
+});
+
+test("web session CONNECTED without snapshot does not change outbound", async () => {
+  const update = await markRuntimeForTest({
+    metadata: { webSession: { desiredState: "CONNECTED", observedState: "CONNECTING" } },
+    outboundEnabled: false,
+    observedState: "CONNECTED",
+  });
+  assert.equal("outboundEnabled" in update, false);
+  assert.equal(readWebSessionPrePairingOutboundState(update.metadata), null);
+});
+
+test("web session CONNECTED preserves admin override when pairing snapshot is absent", async () => {
+  const update = await markRuntimeForTest({
+    metadata: { webSession: { desiredState: "CONNECTED", observedState: "CONNECTING" } },
+    outboundEnabled: false,
+    observedState: "CONNECTED",
+  });
+  assert.equal("outboundEnabled" in update, false);
+  assert.equal(readWebSessionPrePairingOutboundState(update.metadata), null);
 });

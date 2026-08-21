@@ -1,7 +1,9 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { createWebSessionQrMemoryStore } from "./qrMemoryStore.js";
 import {
+  readWebSessionPrePairingOutboundState,
   writeWebSessionLifecycleMetadata,
+  writeWebSessionPrePairingOutboundMetadata,
   type WebSessionObservedState,
 } from "./webSessionLifecycle.js";
 
@@ -88,18 +90,28 @@ export async function markWebSessionRuntimeState(params: {
 }) {
   const account = await params.prisma.channelAccount.findUnique({
     where: { id: params.accountId },
-    select: { id: true, metadata: true },
+    select: { id: true, metadata: true, outboundEnabled: true },
   });
   if (!account) return;
+  const patchedMetadata = webSessionMetadataPatch(account.metadata, {
+    observedState: params.observedState,
+    lastErrorCode: params.errorCode,
+    reconnectCount: params.reconnectCount,
+  });
+  const prePairingOutbound = params.observedState === "CONNECTED"
+    ? readWebSessionPrePairingOutboundState(account.metadata)
+    : null;
+  const metadata = prePairingOutbound
+    ? writeWebSessionPrePairingOutboundMetadata(patchedMetadata, null)
+    : patchedMetadata;
   await params.prisma.channelAccount.update({
     where: { id: account.id },
     data: {
       ...(params.status ? { status: params.status } : {}),
-      metadata: webSessionMetadataPatch(account.metadata, {
-        observedState: params.observedState,
-        lastErrorCode: params.errorCode,
-        reconnectCount: params.reconnectCount,
-      }) as Prisma.InputJsonObject,
+      ...(prePairingOutbound && account.outboundEnabled === false
+        ? { outboundEnabled: prePairingOutbound.enabled }
+        : {}),
+      metadata: metadata as Prisma.InputJsonObject,
     },
   });
 }

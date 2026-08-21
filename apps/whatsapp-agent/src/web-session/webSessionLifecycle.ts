@@ -19,6 +19,11 @@ export type WebSessionLifecycleState = {
   reconnectCount: number;
 };
 
+export type WebSessionPrePairingOutboundState = {
+  enabled: boolean;
+  capturedAt: string;
+};
+
 export type WebSessionBackoffInput = {
   attempt: number;
   baseMs?: number;
@@ -73,6 +78,14 @@ function normalizeReconnectCount(value: unknown) {
     : 0;
 }
 
+function normalizePrePairingOutboundState(value: unknown): WebSessionPrePairingOutboundState | null {
+  const record = asRecord(value);
+  if (typeof record.enabled !== "boolean") return null;
+  const capturedAt = normalizeIso(record.capturedAt);
+  if (!capturedAt) return null;
+  return { enabled: record.enabled, capturedAt };
+}
+
 export function readWebSessionLifecycle(metadata: unknown): WebSessionLifecycleState {
   const webSession = asRecord(asRecord(metadata).webSession);
   return {
@@ -84,6 +97,11 @@ export function readWebSessionLifecycle(metadata: unknown): WebSessionLifecycleS
     lastErrorAt: normalizeIso(webSession.lastErrorAt),
     reconnectCount: normalizeReconnectCount(webSession.reconnectCount),
   };
+}
+
+export function readWebSessionPrePairingOutboundState(metadata: unknown): WebSessionPrePairingOutboundState | null {
+  const webSession = asRecord(asRecord(metadata).webSession);
+  return normalizePrePairingOutboundState(webSession.prePairingOutboundEnabled);
 }
 
 export function writeWebSessionLifecycleMetadata(
@@ -103,6 +121,27 @@ export function writeWebSessionLifecycleMetadata(
       ...existingWebSession,
       ...next,
     },
+  };
+}
+
+export function writeWebSessionPrePairingOutboundMetadata(
+  metadata: unknown,
+  snapshot: WebSessionPrePairingOutboundState | null
+): Prisma.InputJsonObject {
+  const base = asRecord(metadata);
+  const { qr: _qr, pairingCode: _pairingCode, ...existingWebSession } = asRecord(base.webSession);
+  const nextWebSession = { ...existingWebSession };
+  if (snapshot) {
+    nextWebSession.prePairingOutboundEnabled = {
+      enabled: snapshot.enabled,
+      capturedAt: snapshot.capturedAt,
+    };
+  } else {
+    delete nextWebSession.prePairingOutboundEnabled;
+  }
+  return {
+    ...base,
+    webSession: nextWebSession as Prisma.InputJsonObject,
   };
 }
 

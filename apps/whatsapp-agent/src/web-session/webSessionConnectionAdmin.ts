@@ -3,7 +3,9 @@ import { getFeatures } from "../features/clientFeatures.js";
 import { persistEvent } from "../db/persist.js";
 import {
   DEFAULT_WEB_SESSION_LIFECYCLE,
+  readWebSessionPrePairingOutboundState,
   readWebSessionLifecycle,
+  writeWebSessionPrePairingOutboundMetadata,
 } from "./webSessionLifecycle.js";
 import {
   clearAllWebSessionAuthState,
@@ -333,6 +335,13 @@ export async function requestWebSessionConnect(params: {
       capturedAt: new Date().toISOString(),
     },
   });
+  const prePairingOutbound = readWebSessionPrePairingOutboundState(account.metadata);
+  const metadataWithOutboundSnapshot = prePairingOutbound
+    ? metadata
+    : writeWebSessionPrePairingOutboundMetadata(metadata, {
+      enabled: account.outboundEnabled,
+      capturedAt: new Date().toISOString(),
+    });
   await params.prisma.channelAccount.update({
     where: { id: account.id },
     data: {
@@ -341,7 +350,7 @@ export async function requestWebSessionConnect(params: {
       inboundPersistenceEnabled: true,
       outboundEnabled: false,
       status: "pending",
-      metadata,
+      metadata: metadataWithOutboundSnapshot,
     },
   });
   await persistEvent({
