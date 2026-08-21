@@ -3,7 +3,15 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import ThemeSelector from "@/components/ThemeSelector";
 import {
   AppSession,
@@ -51,6 +59,56 @@ type NavItem = {
   profiles?: AppProfile[];
   minRole?: "SUPERVISOR" | "ADMIN";
 };
+
+type AppAvailabilityContextValue = {
+  canUseAvailability: boolean;
+  availability: AppAgentAvailability | null;
+  loading: boolean;
+  updating: boolean;
+  error: string | null;
+  toggle: () => void;
+};
+
+const AppAvailabilityContext = createContext<AppAvailabilityContextValue | null>(null);
+
+export function useAppAvailability() {
+  return useContext(AppAvailabilityContext);
+}
+
+export function AgentAvailabilityIcon({
+  state,
+  className = "h-5 w-5",
+}: {
+  state: "available" | "stale" | "unavailable" | "loading";
+  className?: string;
+}) {
+  if (state === "loading") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className={`${className} animate-spin`}>
+        <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+        <path d="M20 12a8 8 0 0 0-8-8" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+      </svg>
+    );
+  }
+
+  const badge =
+    state === "available" ? (
+      <path d="m14.8 17.2 1.6 1.6 3.1-3.4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+    ) : state === "stale" ? (
+      <path d="M16 15.8v3.6M19 15.8v3.6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+    ) : (
+      <path d="m15.5 15.8 3.4 3.4M18.9 15.8l-3.4 3.4" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+    );
+
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
+      <path d="M5 13v-1a7 7 0 0 1 14 0v1" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+      <path d="M5 13.5c0-1 .8-1.8 1.8-1.8H8v5H6.8A1.8 1.8 0 0 1 5 14.9v-1.4ZM19 13.5c0-1-.8-1.8-1.8-1.8H16v5h1.2a1.8 1.8 0 0 0 1.8-1.8v-1.4Z" fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="2" />
+      <path d="M8 17c.7 1.4 2 2.2 4 2.2h1.2" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+      {badge}
+    </svg>
+  );
+}
 
 const DIRECT_OPERATION_NAV_LIMIT = 4;
 const DIRECT_ADMINISTRATION_NAV_LIMIT = 3;
@@ -807,6 +865,19 @@ export default function AppShell({
     </div>
   ) : null;
   const activeUserDisplayName = formatUserDisplayName(activeSession.user.name, activeSession.user.email);
+  const availabilityTitle = agentAvailability?.available
+    ? agentAvailability.effectiveAvailable
+      ? "Disponível para receber novos atendimentos"
+      : "Disponível, aguardando presença recente"
+    : "Indisponível para novos atendimentos automáticos";
+  const availabilityIconState =
+    availabilityUpdating || availabilityLoading
+      ? "loading"
+      : agentAvailability?.available && agentAvailability.effectiveAvailable
+        ? "available"
+        : agentAvailability?.available
+          ? "stale"
+          : "unavailable";
   const availabilityControl = canUseAvailability ? (
     <div className="grid justify-items-end gap-1">
       <button
@@ -814,46 +885,35 @@ export default function AppShell({
         onClick={handleAvailabilityToggle}
         disabled={availabilityLoading || availabilityUpdating}
         aria-pressed={agentAvailability?.available === true}
-        title={
+        aria-label={availabilityTitle}
+        title={availabilityTitle}
+        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-base font-semibold leading-none shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-sky disabled:cursor-not-allowed disabled:opacity-60 min-[1441px]:h-9 min-[1441px]:w-9 ${
           agentAvailability?.available
             ? agentAvailability.effectiveAvailable
-              ? "Disponível para receber novos atendimentos"
-              : "Disponível, aguardando presença recente"
-            : "Indisponível para novos atendimentos automáticos"
-        }
-        className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-md border px-2.5 text-xs font-semibold leading-none shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-sky disabled:cursor-not-allowed disabled:opacity-60 min-[1441px]:h-9 ${
-          agentAvailability?.available
-            ? "border-emerald-500/45 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-100"
-            : "theme-nav-link"
+              ? "border-emerald-500/45 bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-100"
+              : "border-amber-400/40 bg-amber-500/15 text-amber-600 hover:bg-amber-500/20 dark:text-amber-100"
+            : "border-red-400/40 bg-red-500/12 text-red-600 hover:bg-red-500/20 dark:text-red-100"
         }`}
       >
-        <span
-          aria-hidden="true"
-          className={`h-2.5 w-2.5 rounded-full ${
-            agentAvailability?.available && agentAvailability.effectiveAvailable
-              ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]"
-              : agentAvailability?.available
-                ? "bg-amber-300"
-                : "bg-slate-400"
-          }`}
-        />
-        <span className="hidden sm:inline">
-          {availabilityUpdating
-            ? "Salvando..."
-            : agentAvailability?.available
-              ? "Disponível"
-              : "Indisponível"}
-        </span>
+        <AgentAvailabilityIcon state={availabilityIconState} />
+        <span className="sr-only">{availabilityTitle}</span>
       </button>
       {availabilityError ? (
         <p className="max-w-44 text-right text-[11px] leading-tight text-red-300">{availabilityError}</p>
       ) : null}
     </div>
   ) : null;
+  const availabilityContextValue: AppAvailabilityContextValue = {
+    canUseAvailability,
+    availability: agentAvailability,
+    loading: availabilityLoading,
+    updating: availabilityUpdating,
+    error: availabilityError,
+    toggle: handleAvailabilityToggle,
+  };
   const userActions = (
     <div className="grid min-w-0 justify-items-end gap-1">
       <div className="flex min-w-0 items-center justify-end gap-2">
-        {availabilityControl}
         <div className="min-w-0 text-right">
           {tenantSummary ? (
             <>
@@ -867,6 +927,7 @@ export default function AppShell({
             {activeUserDisplayName}
           </p>
         </div>
+        {availabilityControl}
         <button
           type="button"
           onClick={handleLogout}
@@ -1083,7 +1144,6 @@ export default function AppShell({
                 );
               })}
             </nav>
-            {availabilityControl ? <div className="hidden md:flex md:justify-center">{availabilityControl}</div> : null}
             <ThemeSelector className="hidden md:mt-2 md:flex md:flex-col md:gap-1 md:[&_select]:h-8 md:[&_select]:w-14 md:[&_select]:px-1 md:[&_select]:text-[10px]" />
             <button
               type="button"
@@ -1095,7 +1155,11 @@ export default function AppShell({
             </button>
           </aside>
 
-          <section className="order-1 min-h-0 min-w-0 max-w-full overflow-hidden md:order-none">{children}</section>
+          <section className="order-1 min-h-0 min-w-0 max-w-full overflow-hidden md:order-none">
+            <AppAvailabilityContext.Provider value={availabilityContextValue}>
+              {children}
+            </AppAvailabilityContext.Provider>
+          </section>
         </div>
         {supportModeBanner}
         {brandModal}
@@ -1157,7 +1221,9 @@ export default function AppShell({
           }
         />
 
-        {children}
+        <AppAvailabilityContext.Provider value={availabilityContextValue}>
+          {children}
+        </AppAvailabilityContext.Provider>
       </div>
 
       {supportModeBanner}

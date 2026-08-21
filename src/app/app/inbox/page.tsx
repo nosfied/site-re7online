@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type TouchEvent } from "react";
-import AppShell from "@/components/app/AppShell";
+import AppShell, { AgentAvailabilityIcon, useAppAvailability } from "@/components/app/AppShell";
 import ThemeSelector from "@/components/ThemeSelector";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import { isSelectableDepartment } from "@/lib/departments";
@@ -1043,6 +1043,49 @@ function mergeSharedReadStatePreservingAssigned(
     }
   }
   return nextState;
+}
+
+function InboxAvailabilityButton() {
+  const availability = useAppAvailability();
+  if (!availability?.canUseAvailability) return null;
+
+  const available = availability.availability?.available === true;
+  const effectiveAvailable = availability.availability?.effectiveAvailable === true;
+  const title = availability.error
+    ? availability.error
+    : available
+      ? effectiveAvailable
+        ? "Disponível para receber novos atendimentos"
+        : "Disponível, aguardando presença recente"
+      : "Indisponível para novos atendimentos automáticos";
+  const iconState =
+    availability.loading || availability.updating
+      ? "loading"
+      : available && effectiveAvailable
+        ? "available"
+        : available
+          ? "stale"
+          : "unavailable";
+
+  return (
+    <button
+      type="button"
+      onClick={availability.toggle}
+      disabled={availability.loading || availability.updating}
+      aria-pressed={available}
+      aria-label={title}
+      title={title}
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-base font-semibold leading-none transition disabled:cursor-not-allowed disabled:opacity-60 ${
+        available
+          ? effectiveAvailable
+            ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/20"
+            : "border-amber-300/30 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20"
+          : "border-red-400/35 bg-red-500/12 text-red-100 hover:bg-red-500/20"
+      }`}
+    >
+      <AgentAvailabilityIcon state={iconState} />
+    </button>
+  );
 }
 
 const CONVERSATION_FILTERS = [
@@ -6573,6 +6616,7 @@ export default function AppInboxPage() {
                 ) : null}
               </div>
               <div className="flex items-start gap-2">
+                <InboxAvailabilityButton />
                 <button
                   type="button"
                   onClick={handleNotificationToggle}
