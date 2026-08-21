@@ -3,6 +3,7 @@ import test from "node:test";
 import { ConversationOperationalStatus, Prisma } from "@prisma/client";
 import { getPrisma } from "../db.js";
 import { syncUserDepartmentMemberships } from "../users/departmentMemberships.js";
+import { AGENT_ONLINE_TTL_MS } from "./agentAvailability.js";
 import { applyBalancedQueueAssignment } from "./assignmentPolicy.js";
 
 const prisma = getPrisma();
@@ -31,6 +32,7 @@ async function cleanup() {
   });
   await prisma.conversationRuntimeState.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.event.deleteMany({ where: { clientId: { in: clientIds } } });
+  await prisma.agentAvailability.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.tenantOperationalConfig.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.userDepartmentMembership.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.user.deleteMany({ where: { clientId: { in: clientIds } } });
@@ -150,6 +152,27 @@ async function setPolicy(clientId: string, policy: Record<string, unknown>) {
     where: { clientId },
     create: { clientId, config },
     update: { config },
+  });
+}
+
+async function setAvailability(params: {
+  clientId: string;
+  userId: string;
+  available: boolean;
+  lastHeartbeatAt?: Date | null;
+}) {
+  return prisma.agentAvailability.upsert({
+    where: { clientId_userId: { clientId: params.clientId, userId: params.userId } },
+    create: {
+      clientId: params.clientId,
+      userId: params.userId,
+      available: params.available,
+      lastHeartbeatAt: params.lastHeartbeatAt ?? null,
+    },
+    update: {
+      available: params.available,
+      lastHeartbeatAt: params.lastHeartbeatAt ?? null,
+    },
   });
 }
 
@@ -480,6 +503,295 @@ test("department scoped round robin uses active memberships and never falls back
     orderBy: { createdAt: "desc" },
   });
   assert.equal((event?.payloadJson as Record<string, unknown> | undefined)?.reason, "department_required");
+});
+
+test("requireOnline false preserves legacy assignment without availability rows", async () => {
+  const client = await createClient("online-disabled");
+  const first = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "online-disabled-a" });
+  const second = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "online-disabled-b" });
+  await setAvailability({
+    clientId: client.id,
+    userId: first.id,
+    available: false,
+    lastHeartbeatAt: null,
+  });
+  await setPolicy(client.id, {
+    enabled: true,
+    mode: "round_robin",
+    scope: "department",
+    includeSupervisors: false,
+    requireOnline: false,
+    lastAssignedUserIdByScope: { [`department:${client.departmentId}`]: first.id },
+  });
+  const { conversation, runtime } = await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "online-disabled-target",
+  });
+
+  const result = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: conversation.id,
+    runtimeStateId: runtime.id,
+    waId: runtime.waId,
+    waIdCanonical: runtime.waIdCanonical,
+    departmentId: runtime.departmentId,
+    queueId: runtime.queueId,
+    status: runtime.status,
+    assignedUserId: null,
+    requestId: "online-disabled",
+    source: "test",
+  });
+
+  assert.equal(result.applied, true);
+  assert.equal(result.selectedUserId, second.id);
+});
+
+test("requireOnline true filters round robin to available users with recent heartbeat", async () => {
+  const client = await createClient("online-rr");
+  const now = new Date();
+  const first = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "online-rr-a" });
+  const second = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "online-rr-b" });
+  const third = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "online-rr-c" });
+  await setAvailability({ clientId: client.id, userId: first.id, available: true, lastHeartbeatAt: now });
+  await setAvailability({ clientId: client.id, userId: second.id, available: false, lastHeartbeatAt: now });
+  await setAvailability({ clientId: client.id, userId: third.id, available: true, lastHeartbeatAt: now });
+  await setPolicy(client.id, {
+    enabled: true,
+    mode: "round_robin",
+    scope: "department",
+    includeSupervisors: false,
+    requireOnline: true,
+    lastAssignedUserIdByScope: { [`department:${client.departmentId}`]: first.id },
+  });
+  const firstTarget = await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "online-rr-target-1",
+  });
+  const firstResult = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: firstTarget.conversation.id,
+    runtimeStateId: firstTarget.runtime.id,
+    waId: firstTarget.runtime.waId,
+    waIdCanonical: firstTarget.runtime.waIdCanonical,
+    departmentId: firstTarget.runtime.departmentId,
+    queueId: firstTarget.runtime.queueId,
+    status: firstTarget.runtime.status,
+    assignedUserId: null,
+    requestId: "online-rr-1",
+    source: "test",
+  });
+  assert.equal(firstResult.applied, true);
+  assert.equal(firstResult.selectedUserId, third.id);
+  assert.equal(firstResult.eligibleCount, 2);
+
+  const secondTarget = await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "online-rr-target-2",
+  });
+  const secondResult = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: secondTarget.conversation.id,
+    runtimeStateId: secondTarget.runtime.id,
+    waId: secondTarget.runtime.waId,
+    waIdCanonical: secondTarget.runtime.waIdCanonical,
+    departmentId: secondTarget.runtime.departmentId,
+    queueId: secondTarget.runtime.queueId,
+    status: secondTarget.runtime.status,
+    assignedUserId: null,
+    requestId: "online-rr-2",
+    source: "test",
+  });
+  assert.equal(secondResult.applied, true);
+  assert.equal(secondResult.selectedUserId, first.id);
+
+  await setAvailability({ clientId: client.id, userId: second.id, available: true, lastHeartbeatAt: now });
+  const thirdTarget = await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "online-rr-target-3",
+  });
+  const thirdResult = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: thirdTarget.conversation.id,
+    runtimeStateId: thirdTarget.runtime.id,
+    waId: thirdTarget.runtime.waId,
+    waIdCanonical: thirdTarget.runtime.waIdCanonical,
+    departmentId: thirdTarget.runtime.departmentId,
+    queueId: thirdTarget.runtime.queueId,
+    status: thirdTarget.runtime.status,
+    assignedUserId: null,
+    requestId: "online-rr-3",
+    source: "test",
+  });
+  assert.equal(thirdResult.applied, true);
+  assert.equal(thirdResult.selectedUserId, second.id);
+});
+
+test("requireOnline true excludes stale heartbeat from least active and leaves shared waiting when none online", async () => {
+  const client = await createClient("online-least");
+  const now = new Date();
+  const stale = new Date(now.getTime() - AGENT_ONLINE_TTL_MS - 15_000);
+  const highLoad = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "online-least-a" });
+  const staleLowLoad = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "online-least-b" });
+  const lowLoad = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "online-least-c" });
+  await setAvailability({ clientId: client.id, userId: highLoad.id, available: true, lastHeartbeatAt: now });
+  await setAvailability({ clientId: client.id, userId: staleLowLoad.id, available: true, lastHeartbeatAt: stale });
+  await setAvailability({ clientId: client.id, userId: lowLoad.id, available: true, lastHeartbeatAt: now });
+  await Promise.all(
+    [1, 2, 3].map((index) =>
+      createRuntime({
+        clientId: client.id,
+        departmentId: client.departmentId,
+        queueId: client.queueId,
+        suffix: `online-least-load-a-${index}`,
+        assignedUserId: highLoad.id,
+        status: ConversationOperationalStatus.IN_PROGRESS,
+      })
+    )
+  );
+  await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "online-least-load-c",
+    assignedUserId: lowLoad.id,
+    status: ConversationOperationalStatus.IN_PROGRESS,
+  });
+  await setPolicy(client.id, {
+    enabled: true,
+    mode: "least_active",
+    scope: "department",
+    includeSupervisors: false,
+    requireOnline: true,
+  });
+  const target = await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "online-least-target",
+  });
+  const result = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: target.conversation.id,
+    runtimeStateId: target.runtime.id,
+    waId: target.runtime.waId,
+    waIdCanonical: target.runtime.waIdCanonical,
+    departmentId: target.runtime.departmentId,
+    queueId: target.runtime.queueId,
+    status: target.runtime.status,
+    assignedUserId: null,
+    requestId: "online-least",
+    source: "test",
+  });
+  assert.equal(result.applied, true);
+  assert.equal(result.selectedUserId, lowLoad.id);
+
+  await Promise.all(
+    [highLoad.id, staleLowLoad.id, lowLoad.id].map((userId) =>
+      setAvailability({ clientId: client.id, userId, available: false, lastHeartbeatAt: now })
+    )
+  );
+  const waitingTarget = await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "online-least-waiting",
+  });
+  const missing = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: waitingTarget.conversation.id,
+    runtimeStateId: waitingTarget.runtime.id,
+    waId: waitingTarget.runtime.waId,
+    waIdCanonical: waitingTarget.runtime.waIdCanonical,
+    departmentId: waitingTarget.runtime.departmentId,
+    queueId: waitingTarget.runtime.queueId,
+    status: waitingTarget.runtime.status,
+    assignedUserId: null,
+    requestId: "online-least-missing",
+    source: "test",
+  });
+  assert.equal(missing.applied, false);
+  assert.equal(missing.reason, "no_eligible_agent");
+  const reloaded = await prisma.conversationRuntimeState.findUnique({ where: { id: waitingTarget.runtime.id } });
+  assert.equal(reloaded?.assignedUserId, null);
+  assert.equal(reloaded?.status, ConversationOperationalStatus.WAITING);
+  const event = await prisma.event.findFirst({
+    where: { clientId: client.id, eventName: "queue.assignment.no_eligible_agent" },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.equal((event?.payloadJson as Record<string, unknown> | undefined)?.reason, "online_presence_unavailable");
+});
+
+test("tenant scoped policy still respects department membership eligibility", async () => {
+  const client = await createClient("tenant-scope-membership");
+  const secondDepartment = await prisma.department.create({
+    data: {
+      clientId: client.id,
+      name: "Tenant scope second",
+      slug: "tenant-scope-second",
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  const first = await createUser({ clientId: client.id, departmentId: null, suffix: "tenant-scope-a" });
+  const otherDepartmentOnly = await createUser({ clientId: client.id, departmentId: null, suffix: "tenant-scope-b" });
+  await syncUserDepartmentMemberships(prisma, {
+    clientId: client.id,
+    userId: first.id,
+    departmentIds: [client.departmentId],
+    primaryDepartmentId: client.departmentId,
+  });
+  await syncUserDepartmentMemberships(prisma, {
+    clientId: client.id,
+    userId: otherDepartmentOnly.id,
+    departmentIds: [secondDepartment.id],
+    primaryDepartmentId: secondDepartment.id,
+  });
+  await setPolicy(client.id, {
+    enabled: true,
+    mode: "round_robin",
+    scope: "tenant",
+    includeSupervisors: false,
+    requireOnline: false,
+  });
+  const target = await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "tenant-scope-target",
+  });
+
+  const result = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: target.conversation.id,
+    runtimeStateId: target.runtime.id,
+    waId: target.runtime.waId,
+    waIdCanonical: target.runtime.waIdCanonical,
+    departmentId: target.runtime.departmentId,
+    queueId: target.runtime.queueId,
+    status: target.runtime.status,
+    assignedUserId: null,
+    requestId: "tenant-scope-membership",
+    source: "test",
+  });
+
+  assert.equal(result.applied, true);
+  assert.equal(result.selectedUserId, first.id);
+  assert.equal(result.eligibleCount, 1);
 });
 
 test("concurrent round robin assignments are serialized per department scope", async () => {

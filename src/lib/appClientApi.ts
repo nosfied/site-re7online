@@ -152,6 +152,20 @@ export type AppPushStatus = {
   subscriptions: number;
 };
 
+export type AppAgentAvailability = {
+  available: boolean;
+  effectiveAvailable: boolean;
+  lastHeartbeatAt: string | null;
+  availabilityChangedAt: string | null;
+};
+
+export type AppAgentAvailabilityResponse = {
+  ok: true;
+  availability: AppAgentAvailability;
+  heartbeatIntervalMs: number;
+  onlineTtlMs: number;
+};
+
 export type AppSupportConversation = {
   supportRef: string;
   protocol: string;
@@ -2413,6 +2427,32 @@ export function logoutAppSession(
     method: "POST",
     body: JSON.stringify({ endpoint: endpoint ?? null }),
     timeoutMs: 3000,
+  });
+}
+
+export async function fetchAppAgentAvailability(session: AppSession): Promise<AppAgentAvailabilityResponse> {
+  return requestAppJson(session, "/app/agent-availability", {
+    method: "GET",
+    timeoutMs: 5000,
+  });
+}
+
+export async function updateAppAgentAvailability(
+  session: AppSession,
+  available: boolean
+): Promise<AppAgentAvailabilityResponse> {
+  return requestAppJson(session, "/app/agent-availability", {
+    method: "PATCH",
+    body: JSON.stringify({ available }),
+    timeoutMs: 5000,
+  });
+}
+
+export async function heartbeatAppAgentAvailability(session: AppSession): Promise<AppAgentAvailabilityResponse> {
+  return requestAppJson(session, "/app/agent-availability/heartbeat", {
+    method: "POST",
+    body: JSON.stringify({}),
+    timeoutMs: 5000,
   });
 }
 

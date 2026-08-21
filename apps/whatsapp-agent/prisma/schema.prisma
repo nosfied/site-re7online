@@ -123,6 +123,7 @@ model Client {
   audioTranscriptionJobs AudioTranscriptionJob[]
   searchIndexes SearchIndex[]
   userDepartmentMemberships UserDepartmentMembership[]
+  agentAvailabilities AgentAvailability[]
   departmentBusinessHours DepartmentBusinessHour[]
   departmentBusinessHourExceptions DepartmentBusinessHourException[]
 }
@@ -153,6 +154,7 @@ model User {
   satisfactionQuestionsUpdated SatisfactionQuestion[] @relation("SatisfactionQuestionUpdatedBy")
   satisfactionSurveysAssigned SatisfactionSurvey[] @relation("SatisfactionSurveyAssignedUser")
   departmentMemberships UserDepartmentMembership[]
+  agentAvailabilities AgentAvailability[]
   supportAccessGrantsGranted PlatformSupportAccessGrant[] @relation("SupportAccessGrantedBy")
   supportAccessGrantsRevoked PlatformSupportAccessGrant[] @relation("SupportAccessRevokedBy")
   platformSupportSessions PlatformSupportSession[] @relation("PlatformSupportSessionUser")
@@ -160,6 +162,24 @@ model User {
   @@unique([clientId, email])
   @@index([clientId, createdAt])
   @@index([clientId, departmentId])
+}
+
+model AgentAvailability {
+  id                    String   @id @default(cuid())
+  clientId              String   @db.Uuid
+  userId                String
+  available             Boolean  @default(false)
+  lastHeartbeatAt       DateTime?
+  availabilityChangedAt DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, userId])
+  @@index([clientId, available, lastHeartbeatAt])
+  @@index([userId])
 }
 
 model AppAuthSession {

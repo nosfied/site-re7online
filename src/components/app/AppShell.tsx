@@ -11,14 +11,18 @@ import {
   clearAppSession,
   clearSupportReturnSession,
   exitPlatformSupportTenant,
+  fetchAppAgentAvailability,
   fetchAppTenantSummary,
   formatAppWhatsappIdentityDisplay,
   getAppSessionRemainingMs,
+  heartbeatAppAgentAvailability,
   loadSupportReturnSession,
   logoutAppSession,
   renewAppSession,
   saveAppSession,
   unsubscribeAppPush,
+  updateAppAgentAvailability,
+  type AppAgentAvailability,
 } from "@/lib/appClientApi";
 import {
   getAppProfile,
@@ -56,6 +60,7 @@ const NARROW_OPERATION_NAV_LIMIT = 1;
 const NARROW_ADMINISTRATION_NAV_LIMIT = 1;
 const SESSION_WARNING_THRESHOLD_MS = 60 * 1000;
 const APP_SESSION_STORAGE_KEYS = new Set(["wa_app_session_session_v1", "wa_app_session_local_v1"]);
+const DEFAULT_AGENT_HEARTBEAT_INTERVAL_MS = 10_000;
 
 function getDirectNavLimits(width: number) {
   if (width < 1024) {
@@ -116,6 +121,11 @@ function isSupervisorRole(role: string) {
 
 function isAdminRole(role: string) {
   return role.trim().toUpperCase() === "ADMIN";
+}
+
+function canUseOperationalAvailability(role: string) {
+  const normalized = role.trim().toUpperCase();
+  return normalized === "AGENT" || normalized === "SUPERVISOR";
 }
 
 function formatCountdown(ms: number | null) {
@@ -348,7 +358,12 @@ export default function AppShell({
     whatsappIdentityProvider: "meta" | "web_session" | "hybrid" | "none";
     profile: AppProfile;
   } | null>(null);
+  const [agentAvailability, setAgentAvailability] = useState<AppAgentAvailability | null>(null);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityUpdating, setAvailabilityUpdating] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const canViewAdministration = isSupervisorRole(activeSession.user.role) || isAdminRole(activeSession.user.role);
+  const canUseAvailability = canUseOperationalAvailability(activeSession.user.role);
   const capabilities = getTenantCapabilities(activeSession);
   const profile = tenantSummary?.profile ?? getAppProfile(activeSession);
 
@@ -361,6 +376,58 @@ export default function AppShell({
     setShowHelpMenu(false);
     setShowMainMenuSubmenu(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!canUseAvailability) {
+      setAgentAvailability(null);
+      setAvailabilityLoading(false);
+      setAvailabilityUpdating(false);
+      setAvailabilityError(null);
+      return;
+    }
+
+    let cancelled = false;
+    let intervalMs = DEFAULT_AGENT_HEARTBEAT_INTERVAL_MS;
+    setAvailabilityLoading(true);
+    setAvailabilityError(null);
+
+    const applyResponse = (response: {
+      availability: AppAgentAvailability;
+      heartbeatIntervalMs?: number | null;
+    }) => {
+      if (cancelled) return;
+      setAgentAvailability(response.availability);
+      if (typeof response.heartbeatIntervalMs === "number" && response.heartbeatIntervalMs >= 1000) {
+        intervalMs = response.heartbeatIntervalMs;
+      }
+    };
+
+    const heartbeat = () => {
+      void heartbeatAppAgentAvailability(activeSession)
+        .then(applyResponse)
+        .catch(() => {
+          if (!cancelled) setAvailabilityError("Não foi possível atualizar sua presença.");
+        });
+    };
+
+    fetchAppAgentAvailability(activeSession)
+      .then((response) => {
+        applyResponse(response);
+        heartbeat();
+      })
+      .catch(() => {
+        if (!cancelled) setAvailabilityError("Não foi possível carregar sua disponibilidade.");
+      })
+      .finally(() => {
+        if (!cancelled) setAvailabilityLoading(false);
+      });
+
+    const timer = window.setInterval(heartbeat, intervalMs);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeSession, canUseAvailability]);
 
   useEffect(() => {
     let frame = 0;
@@ -551,6 +618,26 @@ export default function AppShell({
       .finally(() => setRenewingSession(false));
   };
 
+  const handleAvailabilityToggle = () => {
+    if (!canUseAvailability || availabilityUpdating) return;
+    const nextAvailable = !(agentAvailability?.available ?? false);
+    setAvailabilityUpdating(true);
+    setAvailabilityError(null);
+    void updateAppAgentAvailability(activeSession, nextAvailable)
+      .then((response) => {
+        setAgentAvailability(response.availability);
+        if (!nextAvailable) return response;
+        return heartbeatAppAgentAvailability(activeSession).then((heartbeatResponse) => {
+          setAgentAvailability(heartbeatResponse.availability);
+          return heartbeatResponse;
+        });
+      })
+      .catch(() => {
+        setAvailabilityError("Não foi possível alterar sua disponibilidade.");
+      })
+      .finally(() => setAvailabilityUpdating(false));
+  };
+
   const visibleNavItems = APP_NAV_ITEMS.filter((item) => {
     if (item.profiles && !item.profiles.includes(profile)) return false;
     if (item.feature && !capabilities[item.feature]) return false;
@@ -720,9 +807,53 @@ export default function AppShell({
     </div>
   ) : null;
   const activeUserDisplayName = formatUserDisplayName(activeSession.user.name, activeSession.user.email);
+  const availabilityControl = canUseAvailability ? (
+    <div className="grid justify-items-end gap-1">
+      <button
+        type="button"
+        onClick={handleAvailabilityToggle}
+        disabled={availabilityLoading || availabilityUpdating}
+        aria-pressed={agentAvailability?.available === true}
+        title={
+          agentAvailability?.available
+            ? agentAvailability.effectiveAvailable
+              ? "Disponível para receber novos atendimentos"
+              : "Disponível, aguardando presença recente"
+            : "Indisponível para novos atendimentos automáticos"
+        }
+        className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-md border px-2.5 text-xs font-semibold leading-none shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-sky disabled:cursor-not-allowed disabled:opacity-60 min-[1441px]:h-9 ${
+          agentAvailability?.available
+            ? "border-emerald-500/45 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-100"
+            : "theme-nav-link"
+        }`}
+      >
+        <span
+          aria-hidden="true"
+          className={`h-2.5 w-2.5 rounded-full ${
+            agentAvailability?.available && agentAvailability.effectiveAvailable
+              ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]"
+              : agentAvailability?.available
+                ? "bg-amber-300"
+                : "bg-slate-400"
+          }`}
+        />
+        <span className="hidden sm:inline">
+          {availabilityUpdating
+            ? "Salvando..."
+            : agentAvailability?.available
+              ? "Disponível"
+              : "Indisponível"}
+        </span>
+      </button>
+      {availabilityError ? (
+        <p className="max-w-44 text-right text-[11px] leading-tight text-red-300">{availabilityError}</p>
+      ) : null}
+    </div>
+  ) : null;
   const userActions = (
     <div className="grid min-w-0 justify-items-end gap-1">
       <div className="flex min-w-0 items-center justify-end gap-2">
+        {availabilityControl}
         <div className="min-w-0 text-right">
           {tenantSummary ? (
             <>
@@ -952,6 +1083,7 @@ export default function AppShell({
                 );
               })}
             </nav>
+            {availabilityControl ? <div className="hidden md:flex md:justify-center">{availabilityControl}</div> : null}
             <ThemeSelector className="hidden md:mt-2 md:flex md:flex-col md:gap-1 md:[&_select]:h-8 md:[&_select]:w-14 md:[&_select]:px-1 md:[&_select]:text-[10px]" />
             <button
               type="button"

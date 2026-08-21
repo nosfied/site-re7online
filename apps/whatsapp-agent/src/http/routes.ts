@@ -183,6 +183,13 @@ import {
   toPublicQueueAssignmentPolicy,
   type BalancedQueueAssignmentResult,
 } from "../queue/assignmentPolicy.js";
+import {
+  AGENT_HEARTBEAT_INTERVAL_MS,
+  AGENT_ONLINE_TTL_MS,
+  getAgentAvailability,
+  recordAgentHeartbeat,
+  setAgentAvailability,
+} from "../queue/agentAvailability.js";
 import { compareCanonicalQueueItems } from "../queue/queuePosition.js";
 import {
   DepartmentMembershipValidationError,
@@ -1958,6 +1965,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         closeRealtimeConnectionsForSupportSession(validation.auth.supportAccess.supportSessionId, "support_logout");
       } else {
+        if (["AGENT", "SUPERVISOR"].includes(normalizeUserRole(validation.auth.role))) {
+          await setAgentAvailability({
+            prisma: getPrisma(),
+            clientId: validation.auth.clientId,
+            userId: validation.auth.userId,
+            available: false,
+          }).catch(() => null);
+        }
         await revokeAppSession({
           clientId: validation.auth.clientId,
           userId: validation.auth.userId,
@@ -2202,6 +2217,116 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
     setValidatedClientAuth(req, validation.auth);
+  }
+
+  if (pathname === "/app/agent-availability" && ["GET", "PATCH"].includes(req.method ?? "")) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!["AGENT", "SUPERVISOR"].includes(normalizeUserRole(clientAuth.role))) {
+      json(res, 403, httpError("forbidden", "Disponibilidade operacional e restrita a atendentes e supervisores."));
+      return;
+    }
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (req.method === "GET") {
+        const availability = await getAgentAvailability({
+          prisma,
+          clientId: client.id,
+          userId: clientAuth.userId,
+        });
+        json(res, 200, {
+          ok: true,
+          availability: {
+            available: availability.available,
+            effectiveAvailable: availability.effectiveAvailable,
+            lastHeartbeatAt: availability.lastHeartbeatAt?.toISOString() ?? null,
+            availabilityChangedAt: availability.availabilityChangedAt?.toISOString() ?? null,
+          },
+          heartbeatIntervalMs: AGENT_HEARTBEAT_INTERVAL_MS,
+          onlineTtlMs: AGENT_ONLINE_TTL_MS,
+        });
+        return;
+      }
+
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      if (typeof body.available !== "boolean") {
+        json(res, 400, httpError("bad_request", "Campo available deve ser booleano."));
+        return;
+      }
+      const availability = await setAgentAvailability({
+        prisma,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        available: body.available,
+      });
+      json(res, 200, {
+        ok: true,
+        availability: {
+          available: availability.available,
+          effectiveAvailable: availability.effectiveAvailable,
+          lastHeartbeatAt: availability.lastHeartbeatAt?.toISOString() ?? null,
+          availabilityChangedAt: availability.availabilityChangedAt?.toISOString() ?? null,
+        },
+        heartbeatIntervalMs: AGENT_HEARTBEAT_INTERVAL_MS,
+        onlineTtlMs: AGENT_ONLINE_TTL_MS,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.agent_availability.error",
+        requestId,
+        method: req.method,
+        message: (error as Error).message,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/agent-availability/heartbeat") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!["AGENT", "SUPERVISOR"].includes(normalizeUserRole(clientAuth.role))) {
+      json(res, 403, httpError("forbidden", "Disponibilidade operacional e restrita a atendentes e supervisores."));
+      return;
+    }
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      const availability = await recordAgentHeartbeat({
+        prisma,
+        clientId: client.id,
+        userId: clientAuth.userId,
+      });
+      json(res, 200, {
+        ok: true,
+        availability: {
+          available: availability.available,
+          effectiveAvailable: availability.effectiveAvailable,
+          lastHeartbeatAt: availability.lastHeartbeatAt?.toISOString() ?? null,
+          availabilityChangedAt: availability.availabilityChangedAt?.toISOString() ?? null,
+        },
+        heartbeatIntervalMs: AGENT_HEARTBEAT_INTERVAL_MS,
+        onlineTtlMs: AGENT_ONLINE_TTL_MS,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.agent_availability.heartbeat.error",
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
   }
 
   if (pathname === "/app/settings/support-access" && ["GET", "POST", "DELETE"].includes(req.method ?? "")) {

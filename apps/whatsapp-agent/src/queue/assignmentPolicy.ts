@@ -4,6 +4,7 @@ import {
   getEligibleUsersForDepartmentAssignment,
   getUserDepartmentMemberships,
 } from "../users/departmentMemberships.js";
+import { getEffectivelyAvailableUserIds } from "./agentAvailability.js";
 
 export type QueueAssignmentMode = "manual" | "round_robin" | "least_active";
 export type QueueAssignmentScope = "tenant" | "department";
@@ -195,9 +196,6 @@ export function parseQueueAssignmentPolicyInput(input: unknown): QueueAssignment
 
 export function getQueueAssignmentPolicyWarnings(policy: PublicQueueAssignmentPolicy): string[] {
   const warnings: string[] = [];
-  if (policy.enabled && policy.requireOnline) {
-    warnings.push("Presenca online ainda nao e medida automaticamente. Com essa opcao ativa, a atribuicao automatica nao seleciona atendentes.");
-  }
   return warnings;
 }
 
@@ -368,17 +366,6 @@ export async function assertQueueAssignmentUserEligible(params: {
         capacityLimit: policy.maxActivePerAgent,
       };
     }
-  }
-
-  if (policy.requireOnline) {
-    return {
-      ok: false,
-      status: 409,
-      code: "online_presence_unavailable",
-      message: "A politica exige presenca online, mas esse controle ainda nao esta disponivel.",
-      policy,
-      capacityLimit: policy.maxActivePerAgent,
-    };
   }
 
   const activeByUser = await countActiveAssignmentsForUsers({
@@ -590,27 +577,8 @@ async function applyBalancedQueueAssignmentLocked(params: {
     });
     return { applied: false, reason: "no_eligible_agent" };
   }
-  if (policy.requireOnline) {
-    await recordQueueAssignmentEvent({
-      prisma: params.prisma,
-      clientId: params.clientId,
-      conversationId: params.conversationId,
-      requestId: `${params.requestId ?? "queue-assignment"}:no-eligible:${params.runtimeStateId}`,
-      eventName: "queue.assignment.no_eligible_agent",
-      payload: {
-        mode: assignmentMode,
-        scope: policy.scope,
-        departmentId: sanitizeDepartmentId(departmentId),
-        eligibleCount: 0,
-        reason: "online_presence_unavailable",
-        source: params.source,
-      },
-    });
-    return { applied: false, reason: "no_eligible_agent" };
-  }
-
   const users =
-    policy.scope === "department"
+    departmentId
       ? await getEligibleUsersForDepartmentAssignment(params.prisma, {
           clientId: params.clientId,
           departmentId: departmentId as string,
@@ -635,7 +603,16 @@ async function applyBalancedQueueAssignmentLocked(params: {
     scope: policy.scope,
   });
 
+  const effectivelyAvailableUserIds = policy.requireOnline
+    ? await getEffectivelyAvailableUserIds({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        userIds: users.map((user) => user.id),
+      })
+    : null;
+
   const eligible = users.filter((user) => {
+    if (effectivelyAvailableUserIds && !effectivelyAvailableUserIds.has(user.id)) return false;
     const activeCount = activeByUser.get(user.id) ?? 0;
     return policy.maxActivePerAgent === null || activeCount < policy.maxActivePerAgent;
   });
@@ -651,7 +628,12 @@ async function applyBalancedQueueAssignmentLocked(params: {
         scope: policy.scope,
         departmentId: sanitizeDepartmentId(departmentId),
         eligibleCount: 0,
-        reason: users.length === 0 ? "no_active_agents" : "max_active_reached",
+        reason:
+          users.length === 0
+            ? "no_active_agents"
+            : policy.requireOnline && effectivelyAvailableUserIds?.size === 0
+              ? "online_presence_unavailable"
+              : "max_active_reached",
         source: params.source,
       },
     });

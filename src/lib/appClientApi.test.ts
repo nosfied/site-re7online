@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { loadAppSession } from "./appClientApi";
+import {
+  fetchAppAgentAvailability,
+  heartbeatAppAgentAvailability,
+  loadAppSession,
+  updateAppAgentAvailability,
+  type AppSession,
+} from "./appClientApi";
 
 function createMemoryStorage() {
   const items = new Map<string, string>();
@@ -69,4 +75,62 @@ test("loadAppSession preserves membership department ids from storage", () => {
     "department-mapa",
   ]);
   assert.equal(session?.user.primaryDepartmentId, "department-mapa");
+});
+
+test("agent availability client calls session-scoped endpoints", async () => {
+  const calls: Array<{ url: string; method: string; body: string | null }> = [];
+  const originalFetch = globalThis.fetch;
+  Object.assign(globalThis, {
+    fetch: async (url: string | URL, init?: RequestInit) => {
+      calls.push({
+        url: String(url),
+        method: init?.method ?? "GET",
+        body: typeof init?.body === "string" ? init.body : null,
+      });
+      return {
+        ok: true,
+        json: async () => ({
+          ok: true,
+          availability: {
+            available: true,
+            effectiveAvailable: true,
+            lastHeartbeatAt: "2026-08-21T12:00:00.000Z",
+            availabilityChangedAt: "2026-08-21T11:59:00.000Z",
+          },
+          heartbeatIntervalMs: 10000,
+          onlineTtlMs: 30000,
+        }),
+      };
+    },
+  });
+
+  const session: AppSession = {
+    baseUrl: "https://app.example.test",
+    token: "token",
+    user: {
+      id: "agent-a",
+      name: "Agent A",
+      email: "agent@example.test",
+      clientId: "tenant-a",
+      role: "AGENT",
+    },
+    features: {},
+    profile: "business",
+  };
+
+  try {
+    await fetchAppAgentAvailability(session);
+    await updateAppAgentAvailability(session, true);
+    await heartbeatAppAgentAvailability(session);
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
+
+  assert.deepEqual(calls.map((call) => [call.method, new URL(call.url).pathname]), [
+    ["GET", "/app/agent-availability"],
+    ["PATCH", "/app/agent-availability"],
+    ["POST", "/app/agent-availability/heartbeat"],
+  ]);
+  assert.equal(calls[1].body, JSON.stringify({ available: true }));
+  assert.equal(calls[2].body, JSON.stringify({}));
 });
