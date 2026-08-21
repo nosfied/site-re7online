@@ -19,6 +19,7 @@ import {
 } from "@/lib/appClientApi";
 import { hasCapability } from "@/lib/appFeatures";
 import { getAppErrorUxMessage } from "@/lib/appUxLabels";
+import { formatUserDisplayName } from "@/lib/userDisplayName";
 import type {
   AdminDepartmentItem,
   AdminUserItem,
@@ -275,7 +276,7 @@ function OperationsCard({
           <span className="text-white/38">Fila</span> · {card.queueName || "-"}
         </p>
         <p className="truncate">
-          <span className="text-white/38">Resp.</span> · {card.assignedUserName || "Sem responsavel"}
+          <span className="text-white/38">Resp.</span> · {formatUserDisplayName(card.assignedUserName, "Sem responsavel")}
         </p>
       </div>
 

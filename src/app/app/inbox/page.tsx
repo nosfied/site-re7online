@@ -30,6 +30,7 @@ import {
   shouldApplyRealtimeMessageToHumanTimeline,
 } from "@/lib/inboxRealtimeTimeline";
 import { QUICK_EMOJIS } from "@/lib/quickEmojis";
+import { formatUserDisplayName } from "@/lib/userDisplayName";
 import {
   AppInboxReadState,
   AppContactTimelineItem,
@@ -2116,7 +2117,7 @@ function getConversationAssignmentLabel(
 ) {
   if (!item?.assignedUserId) return null;
   if (currentUserId && item.assignedUserId === currentUserId) return "Atribuída a você";
-  if (item.assignedUserName) return `Atribuída a ${item.assignedUserName}`;
+  if (item.assignedUserName) return `Atribuída a ${formatUserDisplayName(item.assignedUserName, item.assignedUserName)}`;
   return "Atribuída";
 }
 
@@ -5962,7 +5963,20 @@ export default function AppInboxPage() {
         transferDepartmentId
       );
       await refreshConversationList(session);
-      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+      try {
+        await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+      } catch (refreshError) {
+        const typedRefreshError = refreshError as { status?: number };
+        if (typedRefreshError.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        if (typedRefreshError.status === 403 || typedRefreshError.status === 404) {
+          clearSelectedConversation();
+        } else {
+          throw refreshError;
+        }
+      }
       const targetDepartmentName =
         transferDepartmentOptions.find((item) => item.id === transferDepartmentId)?.name ??
         departmentOptions.find((item) => item.id === transferDepartmentId)?.name ??
@@ -6457,9 +6471,9 @@ export default function AppInboxPage() {
               <div className="min-w-0">
                 <p
                   className="truncate text-[11px] text-white/55"
-                  title={`${session.user.name || session.user.email} - ${loggedUserDepartmentLabel}`}
+                  title={`${formatUserDisplayName(session.user.name, session.user.email)} - ${loggedUserDepartmentLabel}`}
                 >
-                  <span>{session.user.name || session.user.email}</span>
+                  <span>{formatUserDisplayName(session.user.name, session.user.email)}</span>
                   <span className="text-white/35"> • </span>
                   <span className="font-medium text-white/70">{loggedUserDepartmentLabel}</span>
                 </p>
@@ -7138,7 +7152,7 @@ export default function AppInboxPage() {
                     <option value="">Atendente</option>
                     {users.map((user) => (
                       <option key={user.id} value={user.id}>
-                        {user.name}
+                        {formatUserDisplayName(user.name, user.email)}
                       </option>
                     ))}
                   </select>
@@ -7253,7 +7267,7 @@ export default function AppInboxPage() {
                       ? getConversationLabel(selectedConversation)
                       : null
                     : item.actor?.source === "human_inbox"
-                      ? item.actor.displayName
+                      ? formatUserDisplayName(item.actor.displayName, item.actor.displayName)
                       : null;
                 const messageActions =
                   replyOption && composerEnabled

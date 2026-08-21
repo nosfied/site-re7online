@@ -20,6 +20,7 @@ import {
 import { addAppRealtimeListener } from "@/lib/appRealtime";
 import { getAppProfile, type AppProfile } from "@/lib/appFeatures";
 import { getAppErrorUxMessage, getConversationStatusUxLabel } from "@/lib/appUxLabels";
+import { formatUserDisplayName } from "@/lib/userDisplayName";
 import type {
   AdminDepartmentItem,
   AdminUserItem,
@@ -533,7 +534,7 @@ export default function AppDashboardPage() {
                   </td>
                   <td className="px-3 py-2"><StatusBadge status={item.status} /></td>
                   <td className="px-3 py-2">{item.departmentName ?? "-"}</td>
-                  <td className="px-3 py-2">{item.assignedUserName ?? "-"}</td>
+                  <td className="px-3 py-2">{formatUserDisplayName(item.assignedUserName, "-")}</td>
                   <td className="px-3 py-2">{formatDateTime(item.lastInteractionAt)}</td>
                   <td className="px-3 py-2"><QueueAgeBadge waitingSince={item.waitingSince} now={now} /></td>
                   <td className="px-3 py-2">

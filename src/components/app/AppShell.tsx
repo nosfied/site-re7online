@@ -26,6 +26,7 @@ import {
   type AppProfile,
   type TenantCapabilityKey,
 } from "@/lib/appFeatures";
+import { formatUserDisplayName } from "@/lib/userDisplayName";
 
 type AppShellProps = {
   session: AppSession;
@@ -718,6 +719,7 @@ export default function AppShell({
       ) : null}
     </div>
   ) : null;
+  const activeUserDisplayName = formatUserDisplayName(activeSession.user.name, activeSession.user.email);
   const userActions = (
     <div className="grid min-w-0 justify-items-end gap-1">
       <div className="flex min-w-0 items-center justify-end gap-2">
@@ -731,7 +733,7 @@ export default function AppShell({
             </>
           ) : null}
           <p className="theme-muted truncate text-xs leading-tight lg:text-sm">
-            {activeSession.user.name || activeSession.user.email}
+            {activeUserDisplayName}
           </p>
         </div>
         <button
@@ -853,7 +855,7 @@ export default function AppShell({
             </p>
             <h2 className="mt-1 text-lg font-bold">Menu principal</h2>
             <p className="theme-muted mt-1 text-sm">
-              Opções disponíveis para {activeSession.user.name || activeSession.user.email}.
+              Opções disponíveis para {activeUserDisplayName}.
             </p>
           </div>
           <button

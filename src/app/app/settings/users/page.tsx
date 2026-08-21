@@ -20,6 +20,7 @@ import {
   AdminUserItem,
   formatDateTime,
 } from "@/lib/whatsappAdminApi";
+import { formatUserDisplayName } from "@/lib/userDisplayName";
 
 const USER_ROLE_OPTIONS = ["AGENT", "SUPERVISOR", "ADMIN"] as const;
 
@@ -630,7 +631,10 @@ export default function AppSettingsUsersPage() {
                         tone={draft.isActive ? "success" : "warning"}
                       />
                     </div>
-                    <div className="text-xs text-white/55">Criado em {formatDateTime(item.createdAt)}</div>
+                    <div className="text-right text-xs text-white/55">
+                      <div className="font-semibold text-white/80">{formatUserDisplayName(draft.name, draft.email)}</div>
+                      <div>Criado em {formatDateTime(item.createdAt)}</div>
+                    </div>
                   </div>
 
                   <div className="mt-3 space-y-3 border-t border-white/10 pt-3">

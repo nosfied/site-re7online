@@ -24,6 +24,7 @@ import {
 } from "@/lib/appClientApi";
 import { hasCapability } from "@/lib/appFeatures";
 import { getAppErrorUxMessage, getChannelUxLabel, getConversationStatusUxLabel } from "@/lib/appUxLabels";
+import { formatUserDisplayName } from "@/lib/userDisplayName";
 
 const PAGE_LIMIT = 50;
 
@@ -615,7 +616,9 @@ function CrmContactDetailDrawer({
                             <div className="mt-2 text-xs theme-muted">
                               {conversation.departmentName || "Sem setor"}
                               {conversation.queueName ? ` / ${conversation.queueName}` : ""}
-                              {conversation.assignedUserName ? ` • ${conversation.assignedUserName}` : ""}
+                              {conversation.assignedUserName
+                                ? ` • ${formatUserDisplayName(conversation.assignedUserName, conversation.assignedUserName)}`
+                                : ""}
                             </div>
                             <div className="mt-1 text-xs theme-muted">
                               Atualizada em {formatDateTime(conversation.updatedAt)}

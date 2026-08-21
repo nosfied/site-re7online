@@ -10465,6 +10465,14 @@ test("inbox operations stay functional when tenant has no active general departm
   assert.ok(transferDepartment.body.queueId);
   assert.equal(transferDepartment.body.status, "WAITING");
   const transferredDepartmentQueueId = transferDepartment.body.queueId;
+  const destinationMemberInbox = await request<{
+    ok: true;
+    readState?: {
+      manuallyUnreadByConversationKey: Record<string, boolean>;
+    };
+  }>("GET", `/app/conversations?departmentId=${departments[1].id}`, multiDepartmentAgent);
+  assert.equal(destinationMemberInbox.status, 200, JSON.stringify(destinationMemberInbox.body));
+  assert.equal(destinationMemberInbox.body.readState?.manuallyUnreadByConversationKey[waId], true);
 
   const transferToMember = await request<{ ok: true; assignedUserId: string | null; departmentId: string | null; queueId: string | null }>(
     "POST",

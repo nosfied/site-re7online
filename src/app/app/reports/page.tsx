@@ -35,6 +35,7 @@ import type {
   ConversationReportRange,
   ConversationReportResponse,
 } from "@/lib/whatsappAdminApi";
+import { formatUserDisplayName } from "@/lib/userDisplayName";
 
 const REPORT_RANGES: ConversationReportRange[] = ["1d", "7d", "30d", "month"];
 
@@ -489,7 +490,7 @@ export default function AppReportsPage() {
   }, [sessionFrom, sessionRole, sessionStatus, sessionTo, sessionUserId]);
 
   const userNameById = useMemo(
-    () => new Map(users.map((item) => [item.id, item.name])),
+    () => new Map(users.map((item) => [item.id, formatUserDisplayName(item.name, item.email)])),
     [users]
   );
   const visibleReportUsers = useMemo(() => {
@@ -659,7 +660,7 @@ export default function AppReportsPage() {
     );
     const agentActivityRows = printTableRows(
       (report.agentMessageActivity ?? []).map((item) => [
-        item.userName ?? userNameById.get(item.userId) ?? "Atendente sem nome",
+        formatUserDisplayName(item.userName, userNameById.get(item.userId) ?? "Atendente sem nome"),
         item.outboundMessages,
       ]),
       2,
@@ -687,7 +688,7 @@ export default function AppReportsPage() {
     );
     const sessionDetailRows = printTableRows(
       sessionItems.map((item) => [
-        item.userName,
+        formatUserDisplayName(item.userName, item.userName),
         getUserRoleUxLabel(item.role),
         formatDateTime(item.loginAt),
         item.endedAt ? formatDateTime(item.endedAt) : "-",
@@ -1272,7 +1273,7 @@ export default function AppReportsPage() {
                     <tbody>
                       {report.agentMessageActivity.map((item) => (
                         <tr key={item.userId} className="border-t border-white/10">
-                          <td className="px-3 py-2">{item.userName ?? userNameById.get(item.userId) ?? "-"}</td>
+                          <td className="px-3 py-2">{formatUserDisplayName(item.userName, userNameById.get(item.userId) ?? "-")}</td>
                           <td className="px-3 py-2 font-mono text-xs">{item.userId}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{item.outboundMessages}</td>
                         </tr>
@@ -1411,7 +1412,7 @@ export default function AppReportsPage() {
                   <tbody>
                     {sessionReport.items.map((item) => (
                       <tr key={item.id} className="border-t border-white/10">
-                        <td className="px-3 py-2">{item.userName}</td>
+                        <td className="px-3 py-2">{formatUserDisplayName(item.userName, item.userName)}</td>
                         <td className="px-3 py-2 text-white/70">{getUserRoleUxLabel(item.role)}</td>
                         <td className="px-3 py-2">{formatDateTime(item.loginAt)}</td>
                         <td className="px-3 py-2">{item.endedAt ? formatDateTime(item.endedAt) : "-"}</td>

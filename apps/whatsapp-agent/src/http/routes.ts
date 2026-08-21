@@ -12298,6 +12298,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         toDepartmentId: department.id,
         userId: clientAuth.userId,
       });
+      await markQueueConversationUnreadForSharedActivity(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        conversation: nextState,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        updatedAt: new Date().toISOString(),
+      });
       const payload = await publishConversationOperationalUpdate(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
@@ -17128,6 +17136,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           toDepartmentId: department.id,
           userId: resolveAssignedTo(adminAuth),
           requestId,
+        });
+        await markQueueConversationUnreadForSharedActivity(prisma, {
+          clientId: client.id,
+          clientKey,
+          requestId,
+          conversation: nextState,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          updatedAt: new Date().toISOString(),
         });
         publishRealtimeEvent({
           type: "conversation.handoff.updated",
@@ -28114,6 +28130,73 @@ async function markAssignedConversationUnreadForDirectedAssignment(
       clientId: params.clientId,
       clientKey: params.clientKey,
       assignedUserId,
+      requestId: params.requestId,
+      message: (error as Error).message,
+    });
+  }
+}
+
+async function markQueueConversationUnreadForSharedActivity(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    requestId: string;
+    conversation: ConversationState;
+    waIdCanonical?: string | null;
+    updatedAt: string;
+  }
+) {
+  if (params.conversation.assignedUserId) return;
+  const conversationKeys = Array.from(
+    new Set(
+      [
+        params.conversation.waId,
+        params.conversation.waIdCanonical,
+        params.conversation.conversationKey,
+        params.waIdCanonical,
+      ]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+  if (conversationKeys.length === 0) return;
+  try {
+    const latestInbound = await prisma.inboundMessage.findFirst({
+      where: {
+        clientId: params.clientId,
+        OR: [
+          { waId: { in: conversationKeys } },
+          { waIdCanonical: { in: conversationKeys } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    });
+    const activityAt = latestInbound?.createdAt.toISOString() ?? params.updatedAt;
+    const readState = await markInboxConversationUnreadFromActivity({
+      clientId: params.clientId,
+      userId: "shared",
+      conversationKeys,
+      activityAt,
+      scope: { type: "shared" },
+    });
+    publishRealtimeEvent({
+      type: "conversation.read_state.updated",
+      clientId: params.clientId,
+      waId: params.conversation.waId,
+      waIdCanonical: params.waIdCanonical ?? params.conversation.waIdCanonical ?? null,
+      readState,
+      readScope: { type: "shared" },
+      unread: true,
+      activityAt: null,
+      updatedAt: params.updatedAt,
+    });
+  } catch (error) {
+    logger.warn({
+      event: "conversation.queue.read_state_failed",
+      clientId: params.clientId,
+      clientKey: params.clientKey,
       requestId: params.requestId,
       message: (error as Error).message,
     });
