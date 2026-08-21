@@ -23,7 +23,9 @@ export function sanitizeAgentSignatureName(value: unknown) {
   if (!collapsed) return null;
   const sanitized = collapsed.replace(/[*_~`]+/g, "").trim();
   if (!sanitized) return null;
-  return sanitized.slice(0, MAX_AGENT_SIGNATURE_NAME_LENGTH).trim() || null;
+  const firstName = sanitized.split(/\s+/).find((token) => token.trim());
+  if (!firstName) return null;
+  return firstName.slice(0, MAX_AGENT_SIGNATURE_NAME_LENGTH).trim() || null;
 }
 
 export function buildAgentSignaturePrefix(displayName: string) {

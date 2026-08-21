@@ -32,9 +32,16 @@ test("agent signature is off by default and applies bold_line when enabled", () 
   });
 });
 
-test("agent signature sanitizes names and does not fallback without actor name", () => {
-  assert.equal(sanitizeAgentSignatureName("  Ma*ria\n_Suporte_  "), "Maria Suporte");
+test("agent signature uses the first non-empty token from the registered name", () => {
+  assert.equal(sanitizeAgentSignatureName("Leandro José Dias da Silva"), "Leandro");
+  assert.equal(sanitizeAgentSignatureName("Maria Júlia Duarte Costa de Farias"), "Maria");
+  assert.equal(sanitizeAgentSignatureName("João Antônio Wanderley de Araujo"), "João");
+  assert.equal(sanitizeAgentSignatureName("  Maria Júlia  "), "Maria");
+  assert.equal(sanitizeAgentSignatureName("João"), "João");
+  assert.equal(sanitizeAgentSignatureName("  Ma*ria\n_Suporte_  "), "Maria");
+});
 
+test("agent signature does not fallback without actor name", () => {
   const missing = applyAgentSignature({
     bodyText: "Ola",
     actorDisplayName: "",

@@ -7163,8 +7163,9 @@ test("agent signature is tenant-scoped and applies only to human text and canned
   }>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
     text: "Ola, vou verificar.",
   });
+  const expectedSignatureName = businessAdmin.name.trim().split(/\s+/)[0];
   assert.equal(freeText.status, 200, JSON.stringify(freeText.body));
-  assert.equal(freeText.body.message.bodyText, `*${businessAdmin.name}*\nOla, vou verificar.`);
+  assert.equal(freeText.body.message.bodyText, `*${expectedSignatureName}*\nOla, vou verificar.`);
   assert.equal(freeText.body.message.agentSignatureApplied, true);
   assert.equal(freeText.body.message.agentSignatureFormat, "bold_line");
   assert.equal((metaPayloads[0] as { text?: { body?: string } }).text?.body, freeText.body.message.bodyText);
@@ -7180,7 +7181,7 @@ test("agent signature is tenant-scoped and applies only to human text and canned
     cannedReplyId: canned.body.item.id,
   });
   assert.equal(cannedResponse.status, 200, JSON.stringify(cannedResponse.body));
-  assert.equal(cannedResponse.body.message.bodyText, `*${businessAdmin.name}*\n${canned.body.item.body}`);
+  assert.equal(cannedResponse.body.message.bodyText, `*${expectedSignatureName}*\n${canned.body.item.body}`);
   assert.equal(cannedResponse.body.message.agentSignatureApplied, true);
   assert.equal((metaPayloads[1] as { text?: { body?: string } }).text?.body, cannedResponse.body.message.bodyText);
 
