@@ -10,6 +10,11 @@ export type ConversationReadScope =
   | { type: "shared" }
   | { type: "assigned"; assignedUserId: string };
 
+export type ConversationReadStateProjection = {
+  conversationKeys: Array<string | null | undefined>;
+  assignedUserId?: string | null;
+};
+
 const EMPTY_READ_STATE: InboxReadState = {
   lastReadAtByConversationKey: {},
   manuallyUnreadByConversationKey: {},
@@ -99,6 +104,18 @@ export async function getInboxReadState(clientId: string, _userId: string): Prom
   return mergeReadStates(shared, assigned);
 }
 
+export async function getInboxReadStateForConversations(params: {
+  clientId: string;
+  userId: string;
+  conversations: ConversationReadStateProjection[];
+}): Promise<InboxReadState> {
+  const userId = String(params.userId ?? "").trim();
+  const shared = await readInboxReadStateScope(params.clientId, { type: "shared" });
+  if (!userId) return projectReadStateForConversations(shared, EMPTY_READ_STATE, "", params.conversations);
+  const assigned = await readInboxReadStateScope(params.clientId, { type: "assigned", assignedUserId: userId });
+  return projectReadStateForConversations(shared, assigned, userId, params.conversations);
+}
+
 async function readInboxReadStateScope(clientId: string, scope: ConversationReadScope) {
   const targetFile = getReadStateFileForScope(clientId, scope);
   try {
@@ -122,6 +139,76 @@ function mergeReadStates(shared: InboxReadState, assigned: InboxReadState): Inbo
   };
 }
 
+function normalizeConversationKeys(conversationKeys: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(
+      conversationKeys
+        .map((key) => String(key ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function getLatestReadAtForKeys(state: InboxReadState, conversationKeys: string[]) {
+  let latestReadAt: string | null = null;
+  let latestTimestamp = Number.NEGATIVE_INFINITY;
+  for (const key of conversationKeys) {
+    const readAt = state.lastReadAtByConversationKey[key];
+    const timestamp = Date.parse(readAt ?? "");
+    if (!Number.isFinite(timestamp) || timestamp < latestTimestamp) continue;
+    latestReadAt = readAt;
+    latestTimestamp = timestamp;
+  }
+  return latestReadAt;
+}
+
+function projectConversationReadState(
+  target: InboxReadState,
+  source: InboxReadState,
+  conversationKeys: string[]
+) {
+  if (conversationKeys.length === 0) return;
+  const latestReadAt = getLatestReadAtForKeys(source, conversationKeys);
+  if (latestReadAt) {
+    for (const key of conversationKeys) {
+      target.lastReadAtByConversationKey[key] = latestReadAt;
+    }
+  }
+
+  const latestReadTimestamp = Date.parse(latestReadAt ?? "");
+  const hasLatestReadTimestamp = Number.isFinite(latestReadTimestamp);
+  const hasEffectiveManualUnread = conversationKeys.some((key) => {
+    if (!source.manuallyUnreadByConversationKey[key]) return false;
+    const keyReadTimestamp = Date.parse(source.lastReadAtByConversationKey[key] ?? "");
+    if (!hasLatestReadTimestamp) return true;
+    if (!Number.isFinite(keyReadTimestamp)) return false;
+    return keyReadTimestamp >= latestReadTimestamp;
+  });
+  if (!hasEffectiveManualUnread) return;
+  for (const key of conversationKeys) {
+    target.manuallyUnreadByConversationKey[key] = true;
+  }
+}
+
+function projectReadStateForConversations(
+  shared: InboxReadState,
+  assigned: InboxReadState,
+  userId: string,
+  conversations: ConversationReadStateProjection[]
+): InboxReadState {
+  const next: InboxReadState = {
+    lastReadAtByConversationKey: {},
+    manuallyUnreadByConversationKey: {},
+  };
+  for (const conversation of conversations) {
+    const conversationKeys = normalizeConversationKeys(conversation.conversationKeys);
+    const scope = resolveConversationReadScope(conversation);
+    const source = scope.type === "assigned" && scope.assignedUserId === userId ? assigned : shared;
+    projectConversationReadState(next, source, conversationKeys);
+  }
+  return next;
+}
+
 async function writeInboxReadState(clientId: string, _userId: string, state: InboxReadState, scope: ConversationReadScope) {
   const targetFile = getReadStateFileForScope(clientId, scope);
   return enqueueWrite(targetFile, () => writeAtomic(targetFile, JSON.stringify(state, null, 2)));
@@ -131,17 +218,21 @@ export async function markInboxConversationRead(params: {
   clientId: string;
   userId: string;
   conversationKey: string;
+  conversationKeys?: string[];
   activityAt: string;
   scope?: ConversationReadScope;
 }) {
   const scope = params.scope ?? { type: "shared" };
   const current = await readInboxReadStateScope(params.clientId, scope);
+  const conversationKeys = normalizeConversationKeys([params.conversationKey, ...(params.conversationKeys ?? [])]);
   const nextUnread = { ...current.manuallyUnreadByConversationKey };
-  delete nextUnread[params.conversationKey];
+  for (const key of conversationKeys) {
+    delete nextUnread[key];
+  }
   const nextState: InboxReadState = {
     lastReadAtByConversationKey: {
       ...current.lastReadAtByConversationKey,
-      [params.conversationKey]: params.activityAt,
+      ...Object.fromEntries(conversationKeys.map((key) => [key, params.activityAt])),
     },
     manuallyUnreadByConversationKey: nextUnread,
   };
@@ -153,15 +244,17 @@ export async function markInboxConversationUnread(params: {
   clientId: string;
   userId: string;
   conversationKey: string;
+  conversationKeys?: string[];
   scope?: ConversationReadScope;
 }) {
   const scope = params.scope ?? { type: "shared" };
   const current = await readInboxReadStateScope(params.clientId, scope);
+  const conversationKeys = normalizeConversationKeys([params.conversationKey, ...(params.conversationKeys ?? [])]);
   const nextState: InboxReadState = {
     lastReadAtByConversationKey: current.lastReadAtByConversationKey,
     manuallyUnreadByConversationKey: {
       ...current.manuallyUnreadByConversationKey,
-      [params.conversationKey]: true,
+      ...Object.fromEntries(conversationKeys.map((key) => [key, true])),
     },
   };
   await writeInboxReadState(params.clientId, params.userId, nextState, scope);

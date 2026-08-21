@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   getInboxReadState,
+  getInboxReadStateForConversations,
   markInboxConversationRead,
   markInboxConversationUnread,
   markInboxConversationUnreadFromActivity,
@@ -105,4 +106,119 @@ test("conversation read scope uses assignment when present", () => {
     assignedUserId: "joao",
   });
   assert.deepEqual(resolveConversationReadScope({ assignedUserId: null }), { type: "shared" });
+});
+
+test("scope-aware read state ignores stale assigned state after closed unassigned transition", async () => {
+  await fs.mkdir(testStateDir, { recursive: true });
+  await fs.writeFile(
+    path.join(testStateDir, "shared.json"),
+    JSON.stringify({
+      lastReadAtByConversationKey: {
+        "558499049614": "2026-08-21T12:04:39.256Z",
+        "demo-converta:558499049614": "2026-08-21T05:05:50.218Z",
+      },
+      manuallyUnreadByConversationKey: {
+        "demo-converta:558499049614": true,
+      },
+    }),
+    "utf-8"
+  );
+  await markInboxConversationUnreadFromActivity({
+    clientId: testClientId,
+    userId: "ana",
+    conversationKeys: ["558499049614", "demo-converta:558499049614"],
+    activityAt: "2026-08-21T10:24:28.263Z",
+    scope: { type: "assigned", assignedUserId: "ana" },
+  });
+
+  const scopedState = await getInboxReadStateForConversations({
+    clientId: testClientId,
+    userId: "ana",
+    conversations: [
+      {
+        assignedUserId: null,
+        conversationKeys: ["558499049614", "demo-converta:558499049614"],
+      },
+    ],
+  });
+
+  assert.equal(scopedState.lastReadAtByConversationKey["558499049614"], "2026-08-21T12:04:39.256Z");
+  assert.equal(scopedState.lastReadAtByConversationKey["demo-converta:558499049614"], "2026-08-21T12:04:39.256Z");
+  assert.equal(scopedState.manuallyUnreadByConversationKey["558499049614"], undefined);
+  assert.equal(scopedState.manuallyUnreadByConversationKey["demo-converta:558499049614"], undefined);
+});
+
+test("scope-aware read state switches authority between shared and assigned scopes", async () => {
+  await markInboxConversationRead({
+    clientId: testClientId,
+    userId: "shared",
+    conversationKey: "conversation-a",
+    activityAt: "2026-08-21T10:00:00.000Z",
+    scope: { type: "shared" },
+  });
+  await markInboxConversationUnreadFromActivity({
+    clientId: testClientId,
+    userId: "ana",
+    conversationKeys: ["conversation-a"],
+    activityAt: "2026-08-21T10:05:00.000Z",
+    scope: { type: "assigned", assignedUserId: "ana" },
+  });
+
+  const sharedScope = await getInboxReadStateForConversations({
+    clientId: testClientId,
+    userId: "ana",
+    conversations: [{ assignedUserId: null, conversationKeys: ["conversation-a"] }],
+  });
+  assert.equal(sharedScope.manuallyUnreadByConversationKey["conversation-a"], undefined);
+  assert.equal(sharedScope.lastReadAtByConversationKey["conversation-a"], "2026-08-21T10:00:00.000Z");
+
+  const assignedToAna = await getInboxReadStateForConversations({
+    clientId: testClientId,
+    userId: "ana",
+    conversations: [{ assignedUserId: "ana", conversationKeys: ["conversation-a"] }],
+  });
+  assert.equal(assignedToAna.manuallyUnreadByConversationKey["conversation-a"], true);
+  assert.equal(assignedToAna.lastReadAtByConversationKey["conversation-a"], "2026-08-21T10:05:00.000Z");
+
+  const assignedToJoaoForAna = await getInboxReadStateForConversations({
+    clientId: testClientId,
+    userId: "ana",
+    conversations: [{ assignedUserId: "joao", conversationKeys: ["conversation-a"] }],
+  });
+  assert.equal(assignedToJoaoForAna.manuallyUnreadByConversationKey["conversation-a"], undefined);
+  assert.equal(assignedToJoaoForAna.lastReadAtByConversationKey["conversation-a"], "2026-08-21T10:00:00.000Z");
+});
+
+test("mark read clears all known aliases in the active read scope", async () => {
+  await markInboxConversationUnreadFromActivity({
+    clientId: testClientId,
+    userId: "shared",
+    conversationKeys: ["558499049614", "demo-converta:558499049614"],
+    activityAt: "2026-08-21T11:29:04.718Z",
+    scope: { type: "shared" },
+  });
+
+  await markInboxConversationRead({
+    clientId: testClientId,
+    userId: "ana",
+    conversationKey: "558499049614",
+    conversationKeys: ["demo-converta:558499049614"],
+    activityAt: "2026-08-21T12:04:39.256Z",
+    scope: { type: "shared" },
+  });
+
+  const scopedState = await getInboxReadStateForConversations({
+    clientId: testClientId,
+    userId: "ana",
+    conversations: [
+      {
+        assignedUserId: null,
+        conversationKeys: ["558499049614", "demo-converta:558499049614"],
+      },
+    ],
+  });
+  assert.equal(scopedState.manuallyUnreadByConversationKey["558499049614"], undefined);
+  assert.equal(scopedState.manuallyUnreadByConversationKey["demo-converta:558499049614"], undefined);
+  assert.equal(scopedState.lastReadAtByConversationKey["558499049614"], "2026-08-21T12:04:39.256Z");
+  assert.equal(scopedState.lastReadAtByConversationKey["demo-converta:558499049614"], "2026-08-21T12:04:39.256Z");
 });

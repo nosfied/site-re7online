@@ -414,6 +414,7 @@ import { buildInboxMessageMedia, extractRawMediaId } from "./inboxMedia.js";
 import { extractMessageLocation, formatMessageLocationText } from "../inbox/messageLocation.js";
 import {
   getInboxReadState,
+  getInboxReadStateForConversations,
   markInboxConversationRead,
   markInboxConversationUnread,
   markInboxConversationUnreadFromActivity,
@@ -5565,6 +5566,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         client.clientKey
       );
       const readScope = resolveConversationReadScope(scopedConversation);
+      const conversationKeys = Array.from(
+        new Set(
+          [
+            resolvedConversation.resolvedWaId,
+            resolvedConversation.resolvedWaIdCanonical,
+            scopedConversation?.waId,
+            scopedConversation?.waIdCanonical,
+            scopedConversation?.conversationKey,
+          ]
+            .map((value) => String(value ?? "").trim())
+            .filter(Boolean)
+        )
+      );
       if (
         readScope.type === "assigned" &&
         readScope.assignedUserId !== clientAuth.userId
@@ -5585,6 +5599,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientId: client.id,
           userId: clientAuth.userId,
           conversationKey,
+          conversationKeys,
           scope: readScope,
         });
       } else {
@@ -5592,11 +5607,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientId: client.id,
           userId: clientAuth.userId,
           conversationKey,
+          conversationKeys,
           activityAt: nextActivityAt,
           scope: readScope,
         });
       }
-      const scopedState = await getInboxReadState(client.id, clientAuth.userId);
+      const scopedState = await getInboxReadStateForConversations({
+        clientId: client.id,
+        userId: clientAuth.userId,
+        conversations: [
+          {
+            conversationKeys,
+            assignedUserId: scopedConversation?.assignedUserId ?? null,
+          },
+        ],
+      });
       publishRealtimeEvent({
         type: "conversation.read_state.updated",
         clientId: client.id,
@@ -30121,7 +30146,23 @@ async function buildConversationListPayload(
   recordInboxListCount(params.clientId, "operational_lookups", 2);
   const readStateStartedAt = channelLatencyNow();
   const readState = params.userId
-    ? await getInboxReadState(params.clientId, params.userId)
+    ? await getInboxReadStateForConversations({
+        clientId: params.clientId,
+        userId: params.userId,
+        conversations: winners.map((conversation) => {
+          const runtimeState = runtimeByWaId.get(conversation.waIdCanonical);
+          return {
+            conversationKeys: [
+              conversation.waId,
+              conversation.waIdCanonical,
+              runtimeState?.waId,
+              runtimeState?.waIdCanonical,
+              runtimeState?.conversationKey,
+            ],
+            assignedUserId: runtimeState?.assignedUserId ?? null,
+          };
+        }),
+      })
     : {
         lastReadAtByConversationKey: {},
         manuallyUnreadByConversationKey: {},
