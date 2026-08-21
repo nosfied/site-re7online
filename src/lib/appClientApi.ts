@@ -1753,8 +1753,13 @@ function decodeClientAuthToken(token: string): Partial<AppSessionUser> & { sid?:
       sid: string;
       departmentId?: string | null;
       departmentName?: string | null;
+      departmentIds?: unknown;
+      primaryDepartmentId?: string | null;
       exp?: number;
     }>;
+    const departmentIds = Array.isArray(parsed.departmentIds)
+      ? parsed.departmentIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+      : [];
     return {
       id: typeof parsed.sub === "string" ? parsed.sub : undefined,
       name: typeof parsed.name === "string" ? parsed.name : undefined,
@@ -1765,6 +1770,8 @@ function decodeClientAuthToken(token: string): Partial<AppSessionUser> & { sid?:
       exp: typeof parsed.exp === "number" ? parsed.exp : undefined,
       departmentId: typeof parsed.departmentId === "string" ? parsed.departmentId : undefined,
       departmentName: typeof parsed.departmentName === "string" ? parsed.departmentName : undefined,
+      departmentIds,
+      primaryDepartmentId: typeof parsed.primaryDepartmentId === "string" ? parsed.primaryDepartmentId : undefined,
     };
   } catch {
     return {};
@@ -1777,6 +1784,12 @@ function parseStoredSession(raw: string | null): AppSession | null {
     const parsed = JSON.parse(raw) as Partial<AppSession>;
     const token = String(parsed?.token || "");
     const tokenUser = decodeClientAuthToken(token);
+    const parsedDepartmentIds = Array.isArray(parsed?.user?.departmentIds)
+      ? parsed.user.departmentIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+      : [];
+    const tokenDepartmentIds = Array.isArray(tokenUser.departmentIds)
+      ? tokenUser.departmentIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+      : [];
     const resolvedUser = {
       id: String(parsed?.user?.id || tokenUser.id || ""),
       name: String(parsed?.user?.name || tokenUser.name || ""),
@@ -1791,6 +1804,11 @@ function parseStoredSession(raw: string | null): AppSession | null {
         typeof parsed?.user?.departmentName === "string"
           ? parsed.user.departmentName
           : tokenUser.departmentName ?? null,
+      departmentIds: parsedDepartmentIds.length > 0 ? parsedDepartmentIds : tokenDepartmentIds,
+      primaryDepartmentId:
+        typeof parsed?.user?.primaryDepartmentId === "string"
+          ? parsed.user.primaryDepartmentId
+          : tokenUser.primaryDepartmentId ?? null,
     };
     if (!token || !tokenUser.sid || !resolvedUser.id || !resolvedUser.clientId || !resolvedUser.email) {
       return null;
