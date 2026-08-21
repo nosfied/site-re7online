@@ -250,6 +250,7 @@ test("round robin assigns next active agent inside department and tenant", async
   assert.equal(result.eligibleCount, 2);
   const reloaded = await prisma.conversationRuntimeState.findUnique({ where: { id: runtime.id } });
   assert.equal(reloaded?.assignedUserId, second.id);
+  assert.equal(reloaded?.status, ConversationOperationalStatus.IN_PROGRESS);
   const event = await prisma.event.findFirst({
     where: { clientId: client.id, eventName: "queue.assignment.round_robin_applied" },
   });
@@ -307,6 +308,8 @@ test("least active respects maxActivePerAgent and chooses smaller active load", 
   });
   assert.equal(result.applied, true);
   assert.equal(result.selectedUserId, available.id);
+  const reloaded = await prisma.conversationRuntimeState.findUnique({ where: { id: runtime.id } });
+  assert.equal(reloaded?.status, ConversationOperationalStatus.IN_PROGRESS);
 });
 
 test("no eligible agent leaves conversation unassigned and records sanitized event", async () => {
@@ -452,6 +455,10 @@ test("department scoped round robin uses active memberships and never falls back
     queueId: client.queueId,
     suffix: "member-missing-department",
   });
+  await prisma.conversationRuntimeState.update({
+    where: { id: missingDepartmentRuntime.runtime.id },
+    data: { departmentId: null, queueId: null },
+  });
   const missing = await applyBalancedQueueAssignment({
     prisma,
     clientId: client.id,
@@ -473,4 +480,120 @@ test("department scoped round robin uses active memberships and never falls back
     orderBy: { createdAt: "desc" },
   });
   assert.equal((event?.payloadJson as Record<string, unknown> | undefined)?.reason, "department_required");
+});
+
+test("concurrent round robin assignments are serialized per department scope", async () => {
+  const client = await createClient("rr-concurrent");
+  const first = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "rr-concurrent-a" });
+  const second = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "rr-concurrent-b" });
+  await setPolicy(client.id, {
+    enabled: true,
+    mode: "round_robin",
+    scope: "department",
+    includeSupervisors: false,
+  });
+  const targets = await Promise.all(
+    [1, 2, 3, 4].map((index) =>
+      createRuntime({
+        clientId: client.id,
+        departmentId: client.departmentId,
+        queueId: client.queueId,
+        suffix: `rr-concurrent-${index}`,
+      })
+    )
+  );
+
+  const results = await Promise.all(
+    targets.map(({ conversation, runtime }, index) =>
+      applyBalancedQueueAssignment({
+        prisma,
+        clientId: client.id,
+        conversationId: conversation.id,
+        runtimeStateId: runtime.id,
+        waId: runtime.waId,
+        waIdCanonical: runtime.waIdCanonical,
+        departmentId: runtime.departmentId,
+        queueId: runtime.queueId,
+        status: runtime.status,
+        assignedUserId: null,
+        requestId: `rr-concurrent-${index}`,
+        source: "test",
+      })
+    )
+  );
+
+  assert.equal(results.every((result) => result.applied), true);
+  const assignedCounts = await prisma.conversationRuntimeState.groupBy({
+    by: ["assignedUserId"],
+    where: { id: { in: targets.map((target) => target.runtime.id) } },
+    _count: { _all: true },
+  });
+  const countByUser = new Map(assignedCounts.map((row) => [row.assignedUserId, row._count._all]));
+  assert.equal(countByUser.get(first.id), 2);
+  assert.equal(countByUser.get(second.id), 2);
+  const updatedPolicy = await prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: client.id },
+    select: { config: true },
+  });
+  const lastAssigned = (updatedPolicy?.config as Record<string, unknown> | null)?.queueAssignmentPolicy as
+    | Record<string, unknown>
+    | undefined;
+  assert.ok(lastAssigned);
+  assert.equal(
+    ((lastAssigned.lastAssignedUserIdByScope as Record<string, string> | undefined) ?? {})[
+      `department:${client.departmentId}`
+    ],
+    second.id
+  );
+});
+
+test("concurrent least-active assignments observe committed load", async () => {
+  const client = await createClient("least-concurrent");
+  const first = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "least-concurrent-a" });
+  const second = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "least-concurrent-b" });
+  await setPolicy(client.id, {
+    enabled: true,
+    mode: "least_active",
+    scope: "department",
+    includeSupervisors: false,
+  });
+  const targets = await Promise.all(
+    [1, 2, 3, 4].map((index) =>
+      createRuntime({
+        clientId: client.id,
+        departmentId: client.departmentId,
+        queueId: client.queueId,
+        suffix: `least-concurrent-${index}`,
+      })
+    )
+  );
+
+  const results = await Promise.all(
+    targets.map(({ conversation, runtime }, index) =>
+      applyBalancedQueueAssignment({
+        prisma,
+        clientId: client.id,
+        conversationId: conversation.id,
+        runtimeStateId: runtime.id,
+        waId: runtime.waId,
+        waIdCanonical: runtime.waIdCanonical,
+        departmentId: runtime.departmentId,
+        queueId: runtime.queueId,
+        status: runtime.status,
+        assignedUserId: null,
+        requestId: `least-concurrent-${index}`,
+        source: "test",
+      })
+    )
+  );
+
+  assert.equal(results.every((result) => result.applied), true);
+  const assignedCounts = await prisma.conversationRuntimeState.groupBy({
+    by: ["assignedUserId"],
+    where: { id: { in: targets.map((target) => target.runtime.id) } },
+    _count: { _all: true },
+  });
+  const countByUser = new Map(assignedCounts.map((row) => [row.assignedUserId, row._count._all]));
+  assert.equal(countByUser.get(first.id), 2);
+  assert.equal(countByUser.get(second.id), 2);
 });

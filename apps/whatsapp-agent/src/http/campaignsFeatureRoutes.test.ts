@@ -10531,6 +10531,68 @@ test("inbox operations stay functional when tenant has no active general departm
       clientId: businessClientId,
       config: {
         queueAssignmentPolicy: {
+          enabled: true,
+          mode: "round_robin",
+          scope: "department",
+          maxActivePerAgent: null,
+          includeSupervisors: false,
+          requireOnline: false,
+          notifyAssignedOnly: false,
+          lastAssignedUserIdByScope: {},
+        },
+      },
+    },
+    update: {
+      config: {
+        queueAssignmentPolicy: {
+          enabled: true,
+          mode: "round_robin",
+          scope: "department",
+          maxActivePerAgent: null,
+          includeSupervisors: false,
+          requireOnline: false,
+          notifyAssignedOnly: false,
+          lastAssignedUserIdByScope: {},
+        },
+      },
+    },
+  });
+  const autoTransferDepartment = await request<{
+    ok: true;
+    assignedUserId: string | null;
+    departmentId: string | null;
+    queueId: string | null;
+    status: string | null;
+  }>("POST", `/app/conversation/${waId}/transfer-department`, businessAdmin, {
+    departmentId: departments[2].id,
+  });
+  assert.equal(autoTransferDepartment.status, 200, JSON.stringify(autoTransferDepartment.body));
+  assert.ok(autoTransferDepartment.body.assignedUserId);
+  assert.equal(autoTransferDepartment.body.departmentId, departments[2].id);
+  assert.equal(autoTransferDepartment.body.status, "IN_PROGRESS");
+
+  const autoReleaseToCurrentQueue = await request<{
+    ok: true;
+    assignedUserId: string | null;
+    departmentId: string | null;
+    queueId: string | null;
+    status: string | null;
+  }>(
+    "POST",
+    `/app/conversation/${waId}/release-to-general`,
+    businessAdmin
+  );
+  assert.equal(autoReleaseToCurrentQueue.status, 200, JSON.stringify(autoReleaseToCurrentQueue.body));
+  assert.ok(autoReleaseToCurrentQueue.body.assignedUserId);
+  assert.equal(autoReleaseToCurrentQueue.body.departmentId, departments[2].id);
+  assert.equal(autoReleaseToCurrentQueue.body.status, "IN_PROGRESS");
+
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    create: {
+      clientId: businessClientId,
+      config: {
+        queueAssignmentPolicy: {
           enabled: false,
           mode: "manual",
           scope: "department",

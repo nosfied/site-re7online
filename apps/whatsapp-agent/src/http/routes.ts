@@ -174,12 +174,14 @@ import {
   resolveTenantMetaUsagePolicy,
 } from "../billing/metaUsageSummary.js";
 import {
+  applyBalancedQueueAssignment,
   assertQueueAssignmentUserEligible,
   getQueueAssignmentPolicyWarnings,
   parseQueueAssignmentPolicyInput,
   resolveQueueAssignmentPolicy,
   saveQueueAssignmentPolicy,
   toPublicQueueAssignmentPolicy,
+  type BalancedQueueAssignmentResult,
 } from "../queue/assignmentPolicy.js";
 import { compareCanonicalQueueItems } from "../queue/queuePosition.js";
 import {
@@ -11770,11 +11772,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         departmentId: department.id,
       });
+      const queueEntry = await applyCanonicalQueueEntryAutoAssignment(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        conversationId: nextState.conversationKey ?? nextState.waId,
+        conversation: nextState,
+        source: "app.conversation.release_to_current_queue",
+      });
+      const effectiveState = queueEntry.conversation;
       const releaseConversationKeys = Array.from(
         new Set(
           [
-            nextState.waId,
-            nextState.waIdCanonical,
+            effectiveState.waId,
+            effectiveState.waIdCanonical,
             resolvedConversation.resolvedWaId,
             resolvedConversation.resolvedWaIdCanonical,
             ...resolvedConversation.matchedWaIds,
@@ -11803,64 +11814,33 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const releaseNotificationBody =
         latestInboundForRelease?.bodyText?.trim() ||
         (latestInboundForRelease ? getTimelineMessageBody(latestInboundForRelease.type, null, null) : null);
-      const queueUsers = await prisma.user.findMany({
-        where: {
-          clientId: client.id,
-          isActive: true,
-          id: { not: clientAuth.userId },
-          OR: [
-            { role: "ADMIN" },
-            { departmentId: department.id },
-            {
-              departmentMemberships: {
-                some: {
-                  clientId: client.id,
-                  departmentId: department.id,
-                  isActive: true,
-                },
-              },
-            },
-          ],
-        },
-        select: { id: true },
+      await markConversationUnreadAfterQueueEntry(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        conversation: effectiveState,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        actorUserId: clientAuth.userId,
+        updatedAt: releaseNotificationActivityAt,
       });
-      await Promise.all(
-        queueUsers.map((user) =>
-          markInboxConversationUnreadFromActivity({
-            clientId: client.id,
-            userId: user.id,
-            conversationKeys: releaseConversationKeys,
-            activityAt: releaseNotificationActivityAt,
-          }).catch((error) => {
-            logger.warn({
-              event: "conversation.release_to_general.read_state_failed",
-              clientId: client.id,
-              clientKey: client.clientKey,
-              userId: user.id,
-              requestId,
-              message: (error as Error).message,
-            });
-          })
-        )
-      );
       await recordConversationAuditEvent(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
         requestId,
         eventName: "conversation.released_to_general",
         actorUserId: clientAuth.userId,
-        waId: nextState.waId,
-        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        conversationId: nextState.conversationKey ?? nextState.waId,
+        waId: effectiveState.waId,
+        waIdCanonical: effectiveState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: effectiveState.conversationKey ?? effectiveState.waId,
         payload: {
           fromMode: conversation.mode ?? null,
-          toMode: nextState.mode,
+          toMode: effectiveState.mode,
           fromStatus: conversation.status ?? null,
-          toStatus: nextState.status ?? null,
+          toStatus: effectiveState.status ?? null,
           fromDepartmentId: conversation.departmentId ?? null,
           toDepartmentId: department.id,
           fromAssignedUserId: conversation.assignedUserId ?? null,
-          toAssignedUserId: nextState.assignedUserId ?? null,
+          toAssignedUserId: effectiveState.assignedUserId ?? null,
         },
       });
       logger.info({
@@ -11868,13 +11848,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         clientId: client.id,
         clientKey: client.clientKey,
-        waId: nextState.waIdCanonical ?? nextState.waId,
+        waId: effectiveState.waIdCanonical ?? effectiveState.waId,
         departmentId: department.id,
+        assignedUserId: effectiveState.assignedUserId ?? null,
       });
       const payload = await publishConversationOperationalUpdate(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
-        conversation: nextState,
+        conversation: effectiveState,
         waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
         updatedAt: releasedAt,
         reason: "released_to_current_queue",
@@ -11886,11 +11867,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               createdAt: latestInboundForRelease.createdAt.toISOString(),
             }
           : null,
-        assignedUserName: null,
+        assignedUserName: queueEntry.assignedUserName,
       });
       json(res, 200, {
         ...payload,
-        waId: payload.waId ?? nextState.waId,
+        waId: payload.waId ?? effectiveState.waId,
         waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
       });
     } catch (error) {
@@ -12270,21 +12251,31 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         departmentId: department.id,
       });
+      const transferUpdatedAt = new Date().toISOString();
+      const queueEntry = await applyCanonicalQueueEntryAutoAssignment(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        conversationId: nextState.conversationKey ?? nextState.waId,
+        conversation: nextState,
+        source: "app.conversation.transfer_department",
+      });
+      const effectiveState = queueEntry.conversation;
       await recordConversationAuditEvent(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
         requestId,
         eventName: "conversation.department.transferred",
         actorUserId: clientAuth.userId,
-        waId: nextState.waId,
-        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        conversationId: nextState.conversationKey ?? nextState.waId,
+        waId: effectiveState.waId,
+        waIdCanonical: effectiveState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: effectiveState.conversationKey ?? effectiveState.waId,
         payload: {
           fromDepartmentId: previousDepartmentId,
           toDepartmentId: department.id,
           fromAssignedUserId: conversation.assignedUserId ?? null,
-          toAssignedUserId: nextState.assignedUserId ?? null,
-          status: nextState.status,
+          toAssignedUserId: effectiveState.assignedUserId ?? null,
+          status: effectiveState.status,
           queueId: queue.id,
         },
       });
@@ -12292,31 +12283,34 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         event: "conversation.department.transferred",
         requestId,
         clientId: client.id,
-        conversationId: nextState.waId,
-        waId: nextState.waIdCanonical ?? nextState.waId,
+        conversationId: effectiveState.waId,
+        waId: effectiveState.waIdCanonical ?? effectiveState.waId,
         fromDepartmentId: previousDepartmentId,
         toDepartmentId: department.id,
         userId: clientAuth.userId,
+        assignedUserId: effectiveState.assignedUserId ?? null,
       });
-      await markQueueConversationUnreadForSharedActivity(prisma, {
+      await markConversationUnreadAfterQueueEntry(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
         requestId,
-        conversation: nextState,
+        conversation: effectiveState,
         waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
-        updatedAt: new Date().toISOString(),
+        actorUserId: clientAuth.userId,
+        updatedAt: transferUpdatedAt,
       });
       const payload = await publishConversationOperationalUpdate(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
-        conversation: nextState,
+        conversation: effectiveState,
         waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        updatedAt: transferUpdatedAt,
         reason: "department_transferred",
-        assignedUserName: null,
+        assignedUserName: queueEntry.assignedUserName,
       });
       json(res, 200, {
         ...payload,
-        waId: payload.waId ?? nextState.waId,
+        waId: payload.waId ?? effectiveState.waId,
         waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
       });
     } catch (error) {
@@ -28134,6 +28128,129 @@ async function markAssignedConversationUnreadForDirectedAssignment(
       message: (error as Error).message,
     });
   }
+}
+
+async function applyCanonicalQueueEntryAutoAssignment(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    requestId: string;
+    conversationId?: string | null;
+    conversation: ConversationState;
+    source: string;
+  }
+): Promise<{
+  conversation: ConversationState;
+  result: BalancedQueueAssignmentResult | null;
+  assignedUserName: string | null;
+}> {
+  if (params.conversation.assignedUserId) {
+    return { conversation: params.conversation, result: null, assignedUserName: null };
+  }
+  if (params.conversation.status !== ConversationOperationalStatus.WAITING) {
+    return { conversation: params.conversation, result: null, assignedUserName: null };
+  }
+  const runtimeState = await prisma.conversationRuntimeState.findUnique({
+    where: {
+      clientId_waId: {
+        clientId: params.clientId,
+        waId: params.conversation.waId,
+      },
+    },
+    select: { id: true },
+  });
+  if (!runtimeState) {
+    return { conversation: params.conversation, result: null, assignedUserName: null };
+  }
+  await prisma.conversationRuntimeState.update({
+    where: { id: runtimeState.id },
+    data: {
+      mode: "HUMAN",
+      handoffStatus: "ACTIVE",
+      handoffActivatedAt: params.conversation.handoff?.activatedAt
+        ? new Date(params.conversation.handoff.activatedAt)
+        : new Date(),
+      departmentId: params.conversation.departmentId ?? null,
+      queueId: params.conversation.queueId ?? null,
+      assignedUserId: null,
+      assignedTo: null,
+      assignedAt: null,
+      status: ConversationOperationalStatus.WAITING,
+      closedAt: null,
+    },
+  });
+  const result = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: params.clientId,
+    conversationId: params.conversationId ?? null,
+    runtimeStateId: runtimeState.id,
+    waId: params.conversation.waId,
+    waIdCanonical: params.conversation.waIdCanonical ?? null,
+    departmentId: params.conversation.departmentId ?? null,
+    queueId: params.conversation.queueId ?? null,
+    status: params.conversation.status,
+    assignedUserId: params.conversation.assignedUserId ?? null,
+    requestId: params.requestId,
+    source: params.source,
+  });
+  if (!result.applied) {
+    return { conversation: params.conversation, result, assignedUserName: null };
+  }
+
+  const assignedUser = await prisma.user.findFirst({
+    where: { id: result.selectedUserId, clientId: params.clientId },
+    select: { name: true },
+  });
+  const nextConversation: ConversationState = {
+    ...params.conversation,
+    assignedUserId: result.selectedUserId,
+    assignedTo: `user:${result.selectedUserId}`,
+    assignedAt: result.assignedAt.toISOString(),
+    status: ConversationOperationalStatus.IN_PROGRESS,
+    closedAt: null,
+  };
+  await runtimeStorage.upsertConversation(nextConversation);
+  return {
+    conversation: nextConversation,
+    result,
+    assignedUserName: assignedUser?.name ?? null,
+  };
+}
+
+async function markConversationUnreadAfterQueueEntry(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    requestId: string;
+    conversation: ConversationState;
+    waIdCanonical?: string | null;
+    actorUserId?: string | null;
+    updatedAt: string;
+  }
+) {
+  if (params.conversation.assignedUserId) {
+    await markAssignedConversationUnreadForDirectedAssignment(prisma, {
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      requestId: params.requestId,
+      conversation: params.conversation,
+      waIdCanonical: params.waIdCanonical,
+      assignedUserId: params.conversation.assignedUserId,
+      actorUserId: params.actorUserId ?? null,
+      updatedAt: params.updatedAt,
+    });
+    return;
+  }
+  await markQueueConversationUnreadForSharedActivity(prisma, {
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    requestId: params.requestId,
+    conversation: params.conversation,
+    waIdCanonical: params.waIdCanonical,
+    updatedAt: params.updatedAt,
+  });
 }
 
 async function markQueueConversationUnreadForSharedActivity(
