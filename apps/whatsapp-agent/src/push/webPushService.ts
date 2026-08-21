@@ -323,6 +323,28 @@ export function isOperationalMessagePushCandidate(
   return false;
 }
 
+export function buildOperationalPushUserWhere(event: Pick<InboxRealtimeEvent, "clientId"> & {
+  assignedUserId?: string | null;
+  departmentId?: string | null;
+}) {
+  if (event.assignedUserId) return { id: event.assignedUserId };
+  if (!event.departmentId) return {};
+  return {
+    OR: [
+      { role: "ADMIN" },
+      {
+        departmentMemberships: {
+          some: {
+            clientId: event.clientId,
+            departmentId: event.departmentId,
+            isActive: true,
+          },
+        },
+      },
+    ],
+  };
+}
+
 function getLatestActiveSessionCreatedAt(subscription: {
   user?: {
     authSessions?: Array<{ createdAt: Date }>;
@@ -382,11 +404,7 @@ export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent)
   }
 
   const prisma = getPrisma();
-  const userWhere = event.assignedUserId
-    ? { id: event.assignedUserId }
-    : event.departmentId
-      ? { OR: [{ role: "ADMIN" }, { departmentId: event.departmentId }] }
-      : {};
+  const userWhere = buildOperationalPushUserWhere(event);
 
   const subscriptions = await prisma.pushSubscription.findMany({
     where: {

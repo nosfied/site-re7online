@@ -1274,10 +1274,10 @@ function isConversationUnreadForUser(
   state: InboxReadState,
   user: AppSession["user"] | null | undefined
 ) {
-  const identityCandidates = getConversationIdentityCandidates(item);
-  if (identityCandidates.some((key) => state.manuallyUnreadByConversationKey[key])) return true;
   if (!user) return false;
   if (!canUserReceiveTargetedNotification(item, user)) return false;
+  const identityCandidates = getConversationIdentityCandidates(item);
+  if (identityCandidates.some((key) => state.manuallyUnreadByConversationKey[key])) return true;
   return isConversationUnread(item, state);
 }
 
@@ -2441,13 +2441,14 @@ export default function AppInboxPage() {
   );
 
   const handleOpenContactTimeline = useCallback(() => {
+    if (String(session?.user.role ?? "").trim().toUpperCase() === "AGENT") return;
     if (!selectedConversationWaId) return;
     setShowContactTimeline(true);
     setContactTimelineItems([]);
     setContactTimelineCursor(null);
     setContactTimelineError(null);
     void loadContactTimeline("reset");
-  }, [loadContactTimeline, selectedConversationWaId]);
+  }, [loadContactTimeline, selectedConversationWaId, session?.user.role]);
 
   const handleCloseContactTimeline = useCallback(() => {
     setShowContactTimeline(false);
@@ -3152,10 +3153,6 @@ export default function AppInboxPage() {
         return itemKey === conversationKey || item.waId === event.waId || item.waIdCanonical === event.waIdCanonical;
       });
       const eventRepresentsClosed = event.status === "CLOSED";
-      const eventTargetsKnownEligibleConversation =
-        humanInboxVisibility === false
-          ? false
-          : eventTargetsCurrentUser || (!eventRepresentsClosed && Boolean(currentMatchedConversation));
       const shouldRemoveFromHumanInbox =
         humanInboxVisibility === false ||
         event.reason === "released" ||
@@ -3233,7 +3230,7 @@ export default function AppInboxPage() {
         clearSelectedConversation();
       }
       if (
-        eventTargetsKnownEligibleConversation &&
+        eventTargetsCurrentUser &&
         !shouldRemoveFromHumanInbox &&
         selectedConversationKey !== conversationKey &&
         selectedConversationWaId !== event.waId
@@ -3254,7 +3251,7 @@ export default function AppInboxPage() {
           userDepartmentIds: session.user.departmentIds ?? [],
           userDepartmentName: session.user.departmentName ?? null,
           userRole: session.user.role,
-          backendEligible: eventTargetsKnownEligibleConversation,
+          backendEligible: eventTargetsCurrentUser,
         });
       }
       return;
@@ -3307,7 +3304,6 @@ export default function AppInboxPage() {
       const itemKey = getConversationIdentity(item);
       return itemKey === conversationKey || item.waId === event.waId || item.waIdCanonical === event.waIdCanonical;
     });
-    const eventTargetsKnownEligibleConversation = eventTargetsCurrentUser || Boolean(currentMatchedConversation);
     if (currentMatchedConversation) {
       const itemKey = getConversationIdentity(currentMatchedConversation);
       matchedConversationKeys.add(itemKey);
@@ -3425,13 +3421,13 @@ export default function AppInboxPage() {
       });
       setMessagesConversationKey(visibleConversationKey);
       shouldScrollToBottomRef.current = shouldStickToBottom;
-      if (message.direction === "INBOUND" && !isAppForegroundFocused()) {
+      if (message.direction === "INBOUND" && eventTargetsCurrentUser && !isAppForegroundFocused()) {
         markConversationIdentitiesAsUnread([conversationKey, event.waId, event.waIdCanonical], event.waId);
       }
       return;
     }
 
-    if (humanInboxVisibility === true && eventTargetsKnownEligibleConversation) {
+    if (humanInboxVisibility === true && eventTargetsCurrentUser) {
       markConversationAsUnread(conversationKey, event.waId);
       if (message.direction === "INBOUND") {
         handleRealtimeNotificationCandidate({
@@ -3451,7 +3447,7 @@ export default function AppInboxPage() {
           userDepartmentIds: session.user.departmentIds ?? [],
           userDepartmentName: session.user.departmentName ?? null,
           userRole: session.user.role,
-          backendEligible: eventTargetsKnownEligibleConversation,
+          backendEligible: eventTargetsCurrentUser,
         });
       }
     }
@@ -3477,6 +3473,8 @@ export default function AppInboxPage() {
     isHandoffTransition = false
   ) => {
     if (!shouldPlayInboundNotificationForConversation(item)) return null;
+    const targetsCurrentUser = canUserReceiveTargetedNotification(item, session?.user ?? {});
+    if (!targetsCurrentUser) return null;
     const wasAccepted = handleRealtimeNotificationCandidate({
       source: "polling",
       kind: isHandoffTransition ? "handoff" : "message",
@@ -3494,12 +3492,16 @@ export default function AppInboxPage() {
       userDepartmentIds: session?.user.departmentIds ?? [],
       userDepartmentName: session?.user.departmentName ?? null,
       userRole: session?.user.role ?? null,
-      backendEligible: true,
+      backendEligible: targetsCurrentUser,
     });
     return wasAccepted;
-  }, [session?.user.departmentId, session?.user.departmentIds, session?.user.role]);
+  }, [session?.user]);
 
   const isAdminUser = useMemo(() => isAppAdmin(session), [session]);
+  const canAccessCrmHistory = useMemo(
+    () => String(session?.user.role ?? "").trim().toUpperCase() !== "AGENT",
+    [session?.user.role]
+  );
 
   const buildConversationFetchOptions = useCallback((cursor?: string | null) => {
     const search = conversationSearch.trim();
@@ -3591,7 +3593,8 @@ export default function AppInboxPage() {
           !humanFlowConversationKeysRef.current.has(conversationKey)
         ) {
           if (
-            conversationKey !== selectedConversationKey
+            conversationKey !== selectedConversationKey &&
+            canUserReceiveTargetedNotification(item, activeSession.user)
           ) {
             markConversationIdentitiesAsUnread(getConversationIdentityCandidates(item), item.waId);
           }
@@ -3620,7 +3623,8 @@ export default function AppInboxPage() {
           : null;
         if (latestInboundItem && latestInboundConversationKey) {
           if (
-            (latestInboundConversationKey !== selectedConversationKey || !isAppForegroundFocused())
+            (latestInboundConversationKey !== selectedConversationKey || !isAppForegroundFocused()) &&
+            canUserReceiveTargetedNotification(latestInboundItem, activeSession.user)
           ) {
             markConversationIdentitiesAsUnread(
               getConversationIdentityCandidates(latestInboundItem),
@@ -4239,6 +4243,10 @@ export default function AppInboxPage() {
     () =>
       conversations.find((item) => getConversationIdentity(item) === selectedConversationKey) ?? null,
     [conversations, selectedConversationKey]
+  );
+  const canMarkSelectedConversationUnread = useMemo(
+    () => Boolean(selectedConversation && !isConversationAssignedToAnotherUser(selectedConversation, session?.user.id ?? "")),
+    [selectedConversation, session?.user.id]
   );
 
   const openConversationItem = useCallback((item: InboxConversationItem, options?: { fromPush?: boolean }) => {
@@ -6909,8 +6917,9 @@ export default function AppInboxPage() {
                   <button
                     type="button"
                     className="block w-full px-4 py-3 text-left font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={!selectedConversation}
+                    disabled={!selectedConversation || !canMarkSelectedConversationUnread}
                     onClick={() => {
+                      if (!selectedConversation || !canMarkSelectedConversationUnread) return;
                       markConversationIdentitiesAsUnread(
                         getConversationIdentityCandidates(selectedConversation),
                         selectedConversation.waId
@@ -6999,9 +7008,9 @@ export default function AppInboxPage() {
                 type="button"
                 title="Marcar como não lida"
                 aria-label="Marcar conversa como não lida"
-                disabled={!selectedConversation}
+                disabled={!selectedConversation || !canMarkSelectedConversationUnread}
                 onClick={() => {
-                  if (!selectedConversation) return;
+                  if (!selectedConversation || !canMarkSelectedConversationUnread) return;
                   markConversationIdentitiesAsUnread(
                     getConversationIdentityCandidates(selectedConversation),
                     selectedConversation.waId
@@ -7586,17 +7595,19 @@ export default function AppInboxPage() {
           <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2 max-[1440px]:gap-2 max-[1440px]:px-2.5 max-[1440px]:py-1.5">
             <h2 className="text-sm font-semibold text-white">CRM</h2>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                title="Ver histórico"
-                aria-label="Ver histórico do contato"
-                disabled={!selectedConversation}
-                onClick={handleOpenContactTimeline}
-                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/15 bg-white/8 px-2.5 py-1.5 text-xs font-medium text-white/85 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50 max-[1440px]:px-2 max-[1440px]:text-[11px]"
-              >
-                <span aria-hidden="true">◷</span>
-                Histórico
-              </button>
+              {canAccessCrmHistory ? (
+                <button
+                  type="button"
+                  title="Ver histórico"
+                  aria-label="Ver histórico do contato"
+                  disabled={!selectedConversation}
+                  onClick={handleOpenContactTimeline}
+                  className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/15 bg-white/8 px-2.5 py-1.5 text-xs font-medium text-white/85 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50 max-[1440px]:px-2 max-[1440px]:text-[11px]"
+                >
+                  <span aria-hidden="true">◷</span>
+                  Histórico
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="hidden rounded-xl border border-white/15 bg-white/8 px-2.5 py-1.5 text-xs font-semibold text-white/85 hover:bg-white/12 max-md:inline-flex"

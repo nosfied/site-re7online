@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  buildOperationalPushUserWhere,
   hashEndpoint,
   isOperationalMessagePushCandidate,
   isPushSubscriptionCurrentForActiveSession,
@@ -265,6 +266,39 @@ test("operational message push allows assigned and human conversations", () => {
       departmentId: "department-1",
     }),
     true
+  );
+});
+
+test("operational push audience targets assignee or active department memberships", () => {
+  assert.deepEqual(
+    buildOperationalPushUserWhere({
+      clientId: "client-1",
+      assignedUserId: "user-assigned",
+      departmentId: "department-1",
+    }),
+    { id: "user-assigned" }
+  );
+
+  assert.deepEqual(
+    buildOperationalPushUserWhere({
+      clientId: "client-1",
+      assignedUserId: null,
+      departmentId: "department-1",
+    }),
+    {
+      OR: [
+        { role: "ADMIN" },
+        {
+          departmentMemberships: {
+            some: {
+              clientId: "client-1",
+              departmentId: "department-1",
+              isActive: true,
+            },
+          },
+        },
+      ],
+    }
   );
 });
 

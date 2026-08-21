@@ -470,7 +470,7 @@ export async function createWebSessionTextOutboundMessage(params: {
     messageId,
     type: MessageType.TEXT,
     status,
-    bodyText: signedBody.bodyText,
+    bodyText: outboundText,
     requestId: params.requestId,
     metaMessageId: null,
     errorBody: sendResult.ok ? null : sendResult.error,
@@ -554,7 +554,7 @@ export async function createWebSessionTextOutboundMessage(params: {
       internalMessageId: null,
       metaMessageId: null,
       createdAt: createdAt.toISOString(),
-      bodyText: signedBody.bodyText,
+      bodyText: outboundText,
       agentSignatureApplied: signedBody.signatureApplied,
       agentSignatureFormat: signedBody.signatureFormat,
     };
@@ -575,7 +575,7 @@ export async function createWebSessionTextOutboundMessage(params: {
     internalMessageId: persistedOutbound?.id ?? null,
     metaMessageId: null,
     createdAt: createdAt.toISOString(),
-    bodyText: signedBody.bodyText,
+    bodyText: outboundText,
     agentSignatureApplied: signedBody.signatureApplied,
     agentSignatureFormat: signedBody.signatureFormat,
   };

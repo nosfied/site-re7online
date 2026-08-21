@@ -5557,6 +5557,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         source: "app_conversation_read_state",
       });
       const conversationKey = resolvedConversation.resolvedWaIdCanonical;
+      if (unread) {
+        const scopedConversation = await runtimeStorage.getConversation(
+          resolvedConversation.resolvedWaId,
+          client.clientKey
+        );
+        const assignedUserId = String(scopedConversation?.assignedUserId ?? "").trim();
+        if (assignedUserId && assignedUserId !== clientAuth.userId) {
+          json(res, 403, {
+            error: "conversation_assigned_to_another_user",
+            message: "Apenas o atendente responsável pode marcar esta conversa como não lida.",
+          });
+          return;
+        }
+      }
       const updatedAt = new Date().toISOString();
       const nextActivityAt = activityAt || updatedAt;
       const nextState = unread
@@ -32157,7 +32171,7 @@ async function adminSendMessage(params: {
     messageId,
     type: "TEXT",
     status,
-    bodyText: signedBody.bodyText,
+    bodyText: outboundText,
     requestId: params.requestId,
     metaMessageId: sendResult.messageId ?? null,
     errorBody: sendResult.errorBody ?? null,
@@ -32258,7 +32272,7 @@ async function adminSendMessage(params: {
     internalMessageId: persistedOutbound?.id ?? null,
     metaMessageId: sendResult.messageId ?? null,
     createdAt,
-    bodyText: signedBody.bodyText,
+    bodyText: outboundText,
     agentSignatureApplied: signedBody.signatureApplied,
     agentSignatureFormat: signedBody.signatureFormat,
   };

@@ -336,6 +336,15 @@ export function canUserReceiveTargetedNotification(
   return false;
 }
 
+export function isConversationAssignedToAnotherUser(
+  target: { assignedUserId?: string | null },
+  user: { id?: string | null } | null | undefined
+) {
+  const assignedUserId = String(target.assignedUserId ?? "").trim();
+  if (!assignedUserId) return false;
+  return String(user?.id ?? "").trim() !== assignedUserId;
+}
+
 export function canUserReceiveRealtimeEvent(
   event: AppRealtimeEvent,
   user: { role?: string | null; departmentId?: string | null }

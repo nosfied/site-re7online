@@ -77,4 +77,18 @@ test("an explicit assignment remains visible only to the assigned user", () => {
     ),
     false
   );
+  assert.equal(
+    canUserReceiveTargetedNotification(
+      { assignedUserId: "agent-b", departmentId: "department-b" },
+      { id: "agent-a", role: "AGENT", departmentId: "department-a", departmentIds: ["department-b"] }
+    ),
+    false
+  );
+  assert.equal(
+    canUserReceiveTargetedNotification(
+      { assignedUserId: "agent-b", departmentId: "department-c" },
+      { id: "agent-b", role: "AGENT", departmentId: "department-a", departmentIds: [] }
+    ),
+    true
+  );
 });

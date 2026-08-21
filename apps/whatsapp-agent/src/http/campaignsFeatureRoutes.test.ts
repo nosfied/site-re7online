@@ -7165,10 +7165,10 @@ test("agent signature is tenant-scoped and applies only to human text and canned
   });
   const expectedSignatureName = businessAdmin.name.trim().split(/\s+/)[0];
   assert.equal(freeText.status, 200, JSON.stringify(freeText.body));
-  assert.equal(freeText.body.message.bodyText, `*${expectedSignatureName}*\nOla, vou verificar.`);
+  assert.equal(freeText.body.message.bodyText, "Ola, vou verificar.");
   assert.equal(freeText.body.message.agentSignatureApplied, true);
   assert.equal(freeText.body.message.agentSignatureFormat, "bold_line");
-  assert.equal((metaPayloads[0] as { text?: { body?: string } }).text?.body, freeText.body.message.bodyText);
+  assert.equal((metaPayloads[0] as { text?: { body?: string } }).text?.body, `*${expectedSignatureName}*\nOla, vou verificar.`);
 
   const cannedResponse = await request<{
     ok: true;
@@ -7181,9 +7181,9 @@ test("agent signature is tenant-scoped and applies only to human text and canned
     cannedReplyId: canned.body.item.id,
   });
   assert.equal(cannedResponse.status, 200, JSON.stringify(cannedResponse.body));
-  assert.equal(cannedResponse.body.message.bodyText, `*${expectedSignatureName}*\n${canned.body.item.body}`);
+  assert.equal(cannedResponse.body.message.bodyText, canned.body.item.body);
   assert.equal(cannedResponse.body.message.agentSignatureApplied, true);
-  assert.equal((metaPayloads[1] as { text?: { body?: string } }).text?.body, cannedResponse.body.message.bodyText);
+  assert.equal((metaPayloads[1] as { text?: { body?: string } }).text?.body, `*${expectedSignatureName}*\n${canned.body.item.body}`);
 
   const storedCanned = await request<{ ok: true; items: Array<{ id: string; body: string }> }>(
     "GET",
@@ -7218,6 +7218,53 @@ test("agent signature is tenant-scoped and applies only to human text and canned
     assert.equal(rawPayload.agentSignatureFormat, "bold_line");
     assert.equal(JSON.stringify(rawPayload).includes(businessAdmin.email), false);
   }
+  assert.deepEqual(signedOutbounds.map((item) => item.bodyText), [
+    "Ola, vou verificar.",
+    canned.body.item.body,
+  ]);
+});
+
+test("conversation unread state cannot be marked by a non-assigned user", async () => {
+  const waId = "5541991177884";
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+  await runtimeStorage.upsertConversation({
+    clientKey: `${prefix}-business`,
+    conversationKey: `${prefix}-business:${waId}`,
+    waId,
+    waIdCanonical: waId,
+    firstSeenAt: "2026-01-01T08:00:00.000Z",
+    lastInboundAt: "2026-01-01T08:00:00.000Z",
+    window: { isOpen: true, expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() },
+    handoff: { status: "active" },
+    mode: "HUMAN",
+    status: "IN_PROGRESS",
+    assignedUserId: businessAdmin.id,
+    assignedTo: businessAdmin.name,
+    answers: {},
+    chatbotActive: false,
+  });
+
+  const blocked = await request<ErrorPayload>("POST", `/app/conversation/${waId}/read-state`, businessAgent, {
+    unread: true,
+  });
+  assert.equal(blocked.status, 403, JSON.stringify(blocked.body));
+  assert.equal(getErrorCode(blocked.body), "conversation_assigned_to_another_user");
+
+  const assigned = await request<{ ok: true }>("POST", `/app/conversation/${waId}/read-state`, businessAdmin, {
+    unread: true,
+  });
+  assert.equal(assigned.status, 200, JSON.stringify(assigned.body));
 });
 
 test("inbox canned reply blocks closed, inactive, opt-out and anonymized conversations", async () => {
