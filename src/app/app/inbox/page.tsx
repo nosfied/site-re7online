@@ -2386,6 +2386,7 @@ export default function AppInboxPage() {
   const selectedTimelineLastRefreshAtRef = useRef(0);
   const selectedTimelineRequestedActivityAtRef = useRef<number | null>(null);
   const selectedConversationIdentityCandidatesRef = useRef<string[]>([]);
+  const skipNextSelectedConversationListMarkReadRef = useRef(false);
   const refreshConversationListRef = useRef<((activeSession: AppSession) => Promise<void>) | null>(null);
   const refreshSelectedTimelineRef = useRef<
     ((
@@ -3599,6 +3600,8 @@ export default function AppInboxPage() {
 
   const refreshConversationList = useCallback(async (activeSession: AppSession) => {
     const requestQueryKey = conversationQueryKey;
+    const skipSelectedConversationMarkRead = skipNextSelectedConversationListMarkReadRef.current;
+    skipNextSelectedConversationListMarkReadRef.current = false;
     const response = await fetchAppConversations(activeSession, buildConversationFetchOptions(null));
     if (requestQueryKey !== conversationQueryKeyRef.current) {
       return;
@@ -3757,6 +3760,7 @@ export default function AppInboxPage() {
 	      activeConversation &&
 	      !loadingMessages &&
 	      !waitingForUnreadAnchor &&
+        !skipSelectedConversationMarkRead &&
 	      canCurrentUserMutateConversationReadState(activeConversation, activeSession.user.id)
 	    ) {
 	      markConversationIdentitiesAsRead(
@@ -5798,7 +5802,12 @@ export default function AppInboxPage() {
       }
 
       setSuccess("Conversa devolvida para a fila atual.");
-      await refreshConversationList(session);
+      skipNextSelectedConversationListMarkReadRef.current = true;
+      try {
+        await refreshConversationList(session);
+      } finally {
+        skipNextSelectedConversationListMarkReadRef.current = false;
+      }
       await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId, "replace", {
         skipMarkRead: true,
       });
@@ -5975,7 +5984,12 @@ export default function AppInboxPage() {
         selectedConversationWaId,
         transferDepartmentId
       );
-      await refreshConversationList(session);
+      skipNextSelectedConversationListMarkReadRef.current = true;
+      try {
+        await refreshConversationList(session);
+      } finally {
+        skipNextSelectedConversationListMarkReadRef.current = false;
+      }
       try {
         await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId, "replace", {
           skipMarkRead: true,
