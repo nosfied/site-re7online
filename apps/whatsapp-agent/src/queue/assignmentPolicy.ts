@@ -499,6 +499,7 @@ export async function applyBalancedQueueAssignment(params: {
     applyBalancedQueueAssignmentLocked({
       ...params,
       prisma: tx,
+      availabilityPrisma: params.prisma,
       policy,
       config,
     })
@@ -507,6 +508,7 @@ export async function applyBalancedQueueAssignment(params: {
 
 async function applyBalancedQueueAssignmentLocked(params: {
   prisma: Prisma.TransactionClient;
+  availabilityPrisma: PrismaClient;
   clientId: string;
   conversationId?: string | null;
   runtimeStateId: string;
@@ -605,7 +607,7 @@ async function applyBalancedQueueAssignmentLocked(params: {
 
   const effectivelyAvailableUserIds = policy.requireOnline
     ? await getEffectivelyAvailableUserIds({
-        prisma: params.prisma,
+        prisma: params.availabilityPrisma,
         clientId: params.clientId,
         userIds: users.map((user) => user.id),
       })

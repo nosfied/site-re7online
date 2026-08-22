@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import test from "node:test";
 import { ConversationOperationalStatus, Prisma } from "@prisma/client";
 import { getPrisma } from "../db.js";
@@ -174,6 +175,27 @@ async function setAvailability(params: {
       lastHeartbeatAt: params.lastHeartbeatAt ?? null,
     },
   });
+}
+
+function queueAssignmentLockKeyForTest(params: {
+  clientId: string;
+  scope: "tenant" | "department";
+  departmentId?: string | null;
+}) {
+  const scopeId = params.scope === "department" ? params.departmentId ?? "missing" : "tenant";
+  const hash = crypto
+    .createHash("sha256")
+    .update(`queue-assignment:${params.clientId}:${params.scope}:${scopeId}`, "utf8")
+    .digest();
+  return hash.readBigInt64BE(0);
+}
+
+function defer() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
 }
 
 test.before(async () => {
@@ -636,6 +658,74 @@ test("requireOnline true filters round robin to available users with recent hear
   });
   assert.equal(thirdResult.applied, true);
   assert.equal(thirdResult.selectedUserId, second.id);
+});
+
+test("requireOnline assignment sees heartbeat committed while assignment waits for lock", async () => {
+  const client = await createClient("online-committed-heartbeat");
+  const now = new Date();
+  const stale = new Date(now.getTime() - AGENT_ONLINE_TTL_MS - 15_000);
+  const joao = await createUser({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    suffix: "online-committed-joao",
+  });
+  await setAvailability({ clientId: client.id, userId: joao.id, available: true, lastHeartbeatAt: stale });
+  await setPolicy(client.id, {
+    enabled: true,
+    mode: "round_robin",
+    scope: "department",
+    includeSupervisors: false,
+    requireOnline: true,
+  });
+  const target = await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "online-committed-target",
+  });
+
+  const lockKey = queueAssignmentLockKeyForTest({
+    clientId: client.id,
+    scope: "department",
+    departmentId: client.departmentId,
+  });
+  const lockAcquired = defer();
+  const releaseLock = defer();
+  const lockHolder = prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(${lockKey})`);
+    lockAcquired.resolve();
+    await releaseLock.promise;
+  });
+  await lockAcquired.promise;
+
+  const assignment = applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: target.conversation.id,
+    runtimeStateId: target.runtime.id,
+    waId: target.runtime.waId,
+    waIdCanonical: target.runtime.waIdCanonical,
+    departmentId: target.runtime.departmentId,
+    queueId: target.runtime.queueId,
+    status: target.runtime.status,
+    assignedUserId: null,
+    requestId: "online-committed-heartbeat",
+    source: "test",
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const heartbeatAt = new Date();
+  await setAvailability({ clientId: client.id, userId: joao.id, available: true, lastHeartbeatAt: heartbeatAt });
+  releaseLock.resolve();
+  await lockHolder;
+
+  const result = await assignment;
+  assert.equal(result.applied, true);
+  assert.equal(result.selectedUserId, joao.id);
+  assert.equal(result.eligibleCount, 1);
+  const reloaded = await prisma.conversationRuntimeState.findUnique({ where: { id: target.runtime.id } });
+  assert.equal(reloaded?.assignedUserId, joao.id);
+  assert.equal(reloaded?.status, ConversationOperationalStatus.IN_PROGRESS);
 });
 
 test("requireOnline true excludes stale heartbeat from least active and leaves shared waiting when none online", async () => {
