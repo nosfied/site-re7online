@@ -1400,6 +1400,81 @@ test("chatbot handoff keeps queue and department coherent when a prior default d
   assert.equal(handoffEvents[0]?.queueName, "Dúvidas Gerais - SECULT / PE");
 });
 
+test("legacy invalid human handoff without destination returns to bot flow on next inbound", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture({
+      departmentId: null,
+      queueId: null,
+    }),
+    runtimeStates: [
+      runtimeFixture({
+        mode: "HUMAN",
+        status: "WAITING",
+        handoffStatus: "ACTIVE",
+        handoffRequestedAt: null,
+        handoffActivatedAt: new Date("2026-08-11T11:50:00.000Z"),
+        chatbotActive: false,
+        chatbotNodeId: null,
+        flow: null,
+        answers: {},
+        assignedUserId: null,
+        departmentId: null,
+        queueId: null,
+      }),
+    ],
+    chatbotFlow: {
+      id: "flow_1",
+      definition: {
+        start: "menu",
+        nodes: {
+          menu: {
+            type: "menu",
+            text: "Menu inicial\n\n1 - Dúvidas gerais",
+            options: [
+              {
+                label: "Dúvidas gerais",
+                next: "handoff_1",
+                departmentId: "department_secult",
+                queueId: "queue_secult",
+              },
+            ],
+          },
+          handoff_1: {
+            type: "handoff",
+            text: "Vou encaminhar seu atendimento para a equipe responsável.",
+          },
+        },
+      },
+    },
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    const result = await ingestText("Oi", "MSG_INVALID_HUMAN_RECOVERY", "2026-08-11T12:00:00.000Z");
+    assert.equal(result.action, "persisted");
+  });
+
+  const runtime = state.runtimeStates[0];
+  assert.equal(runtime?.mode, "BOT");
+  assert.equal(runtime?.status, null);
+  assert.equal(runtime?.handoffStatus, "NONE");
+  assert.equal(runtime?.assignedUserId, null);
+  assert.equal(runtime?.departmentId, null);
+  assert.equal(runtime?.queueId, null);
+  assert.equal(
+    state.events.some((event) => event.eventName === "queue.assignment.no_eligible_agent"),
+    false
+  );
+  assert.equal(
+    state.events.some((event) => {
+      const payload = event.payloadJson as Record<string, unknown> | undefined;
+      return payload?.reason === "department_required";
+    }),
+    false
+  );
+});
+
 test("CSAT accepts only scores 1 to 5 before TTL and records the response", async () => {
   const closedAt = new Date("2026-08-11T12:00:00.000Z");
   resetState({

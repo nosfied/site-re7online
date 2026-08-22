@@ -867,11 +867,22 @@ async function ensureWebSessionRuntimeState(params: {
     (Boolean(existingPendingSurvey) ||
       hasSatisfactionLifecycleRuntime({ answers: existingAnswers }) ||
       existingCompletedSurveyDecision?.awaiting === true);
+  const existingOperationalHumanDestination = Boolean(existing?.departmentId && existing?.queueId);
+  const existingInvalidHumanHandoff =
+    (existing?.handoffStatus === "ACTIVE" ||
+      existing?.handoffStatus === "PENDING" ||
+      existing?.status === "WAITING" ||
+      existing?.status === "IN_PROGRESS" ||
+      existing?.mode === "HUMAN") &&
+    !existingOperationalHumanDestination &&
+    !existing?.assignedUserId &&
+    !shouldPreserveClosedSatisfactionLifecycle;
   const existingHumanTakeover =
-    existing?.handoffStatus === "ACTIVE" ||
-    existing?.handoffStatus === "PENDING" ||
+    ((existing?.handoffStatus === "ACTIVE" || existing?.handoffStatus === "PENDING") &&
+      existingOperationalHumanDestination) ||
     Boolean(existing?.assignedUserId) ||
-    existing?.status === "IN_PROGRESS" ||
+    (existing?.status === "WAITING" && existingOperationalHumanDestination) ||
+    (existing?.status === "IN_PROGRESS" && existingOperationalHumanDestination) ||
     shouldPreserveClosedSatisfactionLifecycle;
   const shouldStartBot = params.chatbotEntryPointAvailable && !existingHumanTakeover;
   const runtime = await params.prisma.conversationRuntimeState.upsert({
@@ -899,10 +910,20 @@ async function ensureWebSessionRuntimeState(params: {
         ? {
             mode: "BOT",
             status: null,
+            handoffStatus: "NONE",
+            handoffRequestedAt: null,
+            handoffActivatedAt: null,
+            handoffReleasedAt: null,
             assignedUserId: null,
             assignedTo: null,
             assignedAt: null,
             closedAt: null,
+            ...(existingInvalidHumanHandoff
+              ? {
+                  departmentId: null,
+                  queueId: null,
+                }
+              : {}),
           }
         : {
             status: existing?.status ?? "WAITING",

@@ -9,6 +9,7 @@ import {
 } from "../conversation/serviceCycle.js";
 import { buildConversationProtocolNotice } from "../inbox/conversationProtocol.js";
 import { logger } from "../logger/logger.js";
+import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
 import { getQueuePosition } from "../queue/queuePosition.js";
 import { createWebSessionTextOutboundMessage } from "../web-session/webSessionOutboundService.js";
 
@@ -28,6 +29,15 @@ function getRuntimeLastInteractionAt(answers: unknown) {
   const runtime = isRecord(answers) && isRecord(answers.chatbotRuntime) ? answers.chatbotRuntime : null;
   const value = runtime ? runtime.lastInteractionAt : null;
   return typeof value === "string" && value.trim() ? new Date(value) : null;
+}
+
+export function resolveInactivityHandoffDestination(params: {
+  departmentId?: string | null;
+  queueId?: string | null;
+}) {
+  const departmentId = getNonEmptyString(params.departmentId);
+  const queueId = getNonEmptyString(params.queueId);
+  return departmentId && queueId ? { departmentId, queueId } : null;
 }
 
 function getInactivityPolicy(definition: unknown) {
@@ -62,6 +72,8 @@ export async function claimChatbotInactivityHandoff(params: {
   departmentId: string | null;
   queueId: string | null;
 }) {
+  const destination = resolveInactivityHandoffDestination(params);
+  if (!destination) return { count: 0 };
   return params.prisma.conversationRuntimeState.updateMany({
     where: {
       id: params.runtimeStateId,
@@ -82,8 +94,8 @@ export async function claimChatbotInactivityHandoff(params: {
       assignedUserId: null,
       assignedTo: null,
       assignedAt: null,
-      departmentId: params.departmentId,
-      queueId: params.queueId,
+      departmentId: destination.departmentId,
+      queueId: destination.queueId,
       answers: params.nextAnswers,
     },
   });
@@ -192,6 +204,29 @@ export async function processChatbotInactivityTimeouts(params: {
     if (decision.kind === "blocked") continue;
     const closedPolicy = getClosedHandoffPolicy(validated.definition);
     if (decision.kind === "closed" && !closedPolicy.queueClosed) continue;
+    const destination = resolveInactivityHandoffDestination({
+      departmentId: decision.departmentId ?? state.departmentId,
+      queueId: decision.queueId ?? state.queueId,
+    });
+    if (!destination) {
+      await params.prisma.event.create({
+        data: {
+          clientId: state.clientId,
+          waId: state.waId,
+          waIdCanonical: state.waIdCanonical,
+          requestId: `chatbot-inactivity:${state.id}:missing-destination:${now.toISOString()}`,
+          eventName: "chatbot.inactivity.handoff.skipped",
+          payloadJson: {
+            reason: "missing_operational_destination",
+            runtimeStateId: state.id,
+            decisionKind: decision.kind,
+            departmentId: decision.departmentId ?? state.departmentId ?? null,
+            queueId: decision.queueId ?? state.queueId ?? null,
+          } satisfies Prisma.InputJsonObject,
+        },
+      });
+      continue;
+    }
     const [client, conversation] = await Promise.all([
       params.prisma.client.findUnique({
         where: { id: state.clientId },
@@ -224,10 +259,26 @@ export async function processChatbotInactivityTimeouts(params: {
       expectedAnswers: state.answers,
       nextAnswers: nextAnswers as Prisma.InputJsonValue,
       now,
-      departmentId: decision.departmentId ?? state.departmentId,
-      queueId: decision.queueId ?? state.queueId,
+      departmentId: destination.departmentId,
+      queueId: destination.queueId,
     });
     if (claimed.count !== 1) continue;
+    if (decision.kind !== "closed") {
+      await applyBalancedQueueAssignment({
+        prisma: params.prisma,
+        clientId: state.clientId,
+        conversationId: conversation?.id ?? null,
+        runtimeStateId: state.id,
+        waId: state.waId,
+        waIdCanonical: state.waIdCanonical,
+        departmentId: destination.departmentId,
+        queueId: destination.queueId,
+        status: "WAITING",
+        assignedUserId: null,
+        requestId: `chatbot-inactivity:${state.id}`,
+        source: "whatsapp.web.chatbot.inactivity_handoff",
+      });
+    }
     if (cycleResult.created) {
       await recordServiceCycleEvent({
         prisma: params.prisma,
@@ -267,7 +318,7 @@ export async function processChatbotInactivityTimeouts(params: {
       prisma: params.prisma,
       clientId: state.clientId,
       runtimeStateId: state.id,
-      queueId: decision.queueId ?? state.queueId,
+      queueId: destination.queueId,
     });
     if (position) {
       await sendBotText({
