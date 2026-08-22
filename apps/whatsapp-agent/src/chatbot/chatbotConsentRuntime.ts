@@ -29,6 +29,12 @@ function getConsentNodes(definition: ChatbotFlowDefinition) {
   return Object.values(definition.nodes).filter((node): node is ChatbotConsentNode => node.type === "consent");
 }
 
+function hasAcceptedConsent(state: ConversationState, node: ChatbotConsentNode) {
+  const runtime = isRecord(state.answers?.chatbotRuntime) ? state.answers?.chatbotRuntime : {};
+  const acceptedConsents = isRecord(runtime.acceptedConsents) ? runtime.acceptedConsents : {};
+  return acceptedConsents[getChatbotConsentKey(node)] === true;
+}
+
 function withAcceptedConsent(state: ConversationState, node: ChatbotConsentNode): ConversationState {
   const runtime = isRecord(state.answers?.chatbotRuntime) ? state.answers?.chatbotRuntime : {};
   const acceptedConsents = isRecord(runtime.acceptedConsents) ? runtime.acceptedConsents : {};
@@ -69,6 +75,25 @@ async function hydrateAcceptedConsents(params: {
     }
   }
   return state;
+}
+
+export async function resolveChatbotConsentPrecedence(params: {
+  prisma: PrismaForChatbotConsent;
+  clientId: string;
+  waId: string;
+  state: ConversationState;
+  definition: ChatbotFlowDefinition;
+}) {
+  const consentNodes = getConsentNodes(params.definition);
+  if (consentNodes.length === 0) return { accepted: true as const, pendingNodeIds: [] as string[] };
+  const hydratedState = await hydrateAcceptedConsents(params);
+  const pendingNodeIds = Object.entries(params.definition.nodes)
+    .filter(([, node]) => node.type === "consent" && !hasAcceptedConsent(hydratedState, node))
+    .map(([nodeId]) => nodeId);
+  return {
+    accepted: pendingNodeIds.length === 0,
+    pendingNodeIds,
+  };
 }
 
 function getCurrentConsentNode(params: {

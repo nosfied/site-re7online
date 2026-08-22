@@ -1,5 +1,6 @@
 import { HandoffStatus, Prisma, type PrismaClient } from "@prisma/client";
 import { validateChatbotFlowDefinition } from "./chatbotFlow.js";
+import { resolveChatbotConsentPrecedence } from "./chatbotConsentRuntime.js";
 import { resolveDepartmentAwareHandoff } from "./departmentAwareHandoff.js";
 import type { ConversationState } from "../conversation/conversation.types.js";
 import {
@@ -61,6 +62,32 @@ function getClosedHandoffPolicy(definition: unknown) {
     queuePositionText: getNonEmptyString(raw.queuePositionText) ?? DEFAULT_QUEUE_POSITION_TEXT,
     offHoursMessage: getNonEmptyString(raw.offHoursMessage) ?? DEFAULT_OFF_HOURS_TEXT,
   };
+}
+
+async function recordInactivityHandoffSkipped(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  waId: string;
+  waIdCanonical: string | null;
+  runtimeStateId: string;
+  now: Date;
+  reason: string;
+  payload?: Prisma.InputJsonObject;
+}) {
+  await params.prisma.event.create({
+    data: {
+      clientId: params.clientId,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical,
+      requestId: `chatbot-inactivity:${params.runtimeStateId}:${params.reason}:${params.now.toISOString()}`,
+      eventName: "chatbot.inactivity.handoff.skipped",
+      payloadJson: {
+        reason: params.reason,
+        runtimeStateId: params.runtimeStateId,
+        ...(params.payload ?? {}),
+      } satisfies Prisma.InputJsonObject,
+    },
+  });
 }
 
 export async function claimChatbotInactivityHandoff(params: {
@@ -182,6 +209,28 @@ export async function processChatbotInactivityTimeouts(params: {
       isRecord(state.answers.chatbotRuntime) &&
       state.answers.chatbotRuntime.inactivityHandoffTriggeredAt;
     if (alreadyTriggered) continue;
+    const consentPrecedence = await resolveChatbotConsentPrecedence({
+      prisma: params.prisma,
+      clientId: state.clientId,
+      waId: state.waId,
+      state: { waId: state.waId, answers: state.answers } as ConversationState,
+      definition: validated.definition,
+    });
+    if (!consentPrecedence.accepted) {
+      await recordInactivityHandoffSkipped({
+        prisma: params.prisma,
+        clientId: state.clientId,
+        waId: state.waId,
+        waIdCanonical: state.waIdCanonical,
+        runtimeStateId: state.id,
+        now,
+        reason: "consent_pending",
+        payload: {
+          pendingConsentNodeIds: consentPrecedence.pendingNodeIds,
+        },
+      });
+      continue;
+    }
 
     const fallbackHandoff = {
       feedbackText: getNonEmptyString(validated.definition.handoffTransitionMessage) ??
@@ -209,20 +258,18 @@ export async function processChatbotInactivityTimeouts(params: {
       queueId: decision.queueId ?? state.queueId,
     });
     if (!destination) {
-      await params.prisma.event.create({
-        data: {
-          clientId: state.clientId,
-          waId: state.waId,
-          waIdCanonical: state.waIdCanonical,
-          requestId: `chatbot-inactivity:${state.id}:missing-destination:${now.toISOString()}`,
-          eventName: "chatbot.inactivity.handoff.skipped",
-          payloadJson: {
-            reason: "missing_operational_destination",
-            runtimeStateId: state.id,
-            decisionKind: decision.kind,
-            departmentId: decision.departmentId ?? state.departmentId ?? null,
-            queueId: decision.queueId ?? state.queueId ?? null,
-          } satisfies Prisma.InputJsonObject,
+      await recordInactivityHandoffSkipped({
+        prisma: params.prisma,
+        clientId: state.clientId,
+        waId: state.waId,
+        waIdCanonical: state.waIdCanonical,
+        runtimeStateId: state.id,
+        now,
+        reason: "missing_operational_destination",
+        payload: {
+          decisionKind: decision.kind,
+          departmentId: decision.departmentId ?? state.departmentId ?? null,
+          queueId: decision.queueId ?? state.queueId ?? null,
         },
       });
       continue;
