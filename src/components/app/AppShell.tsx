@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -38,6 +39,13 @@ import {
   type AppProfile,
   type TenantCapabilityKey,
 } from "@/lib/appFeatures";
+import {
+  DEFAULT_AGENT_HEARTBEAT_INTERVAL_MS,
+  DEFAULT_AGENT_ONLINE_TTL_MS,
+  normalizeAgentHeartbeatIntervalMs,
+  normalizeAgentOnlineTtlMs,
+  shouldRunImmediateAgentHeartbeat,
+} from "@/lib/agentAvailabilityHeartbeat";
 import { formatUserDisplayName } from "@/lib/userDisplayName";
 
 type AppShellProps = {
@@ -118,8 +126,6 @@ const NARROW_OPERATION_NAV_LIMIT = 1;
 const NARROW_ADMINISTRATION_NAV_LIMIT = 1;
 const SESSION_WARNING_THRESHOLD_MS = 60 * 1000;
 const APP_SESSION_STORAGE_KEYS = new Set(["wa_app_session_session_v1", "wa_app_session_local_v1"]);
-const DEFAULT_AGENT_HEARTBEAT_INTERVAL_MS = 10_000;
-
 function getDirectNavLimits(width: number) {
   if (width < 1024) {
     return {
@@ -184,6 +190,10 @@ function isAdminRole(role: string) {
 function canUseOperationalAvailability(role: string) {
   const normalized = role.trim().toUpperCase();
   return normalized === "AGENT" || normalized === "SUPERVISOR";
+}
+
+function buildAvailabilitySessionKey(session: AppSession) {
+  return `${session.user.clientId}:${session.user.id}:${session.token}`;
 }
 
 function formatCountdown(ms: number | null) {
@@ -420,10 +430,67 @@ export default function AppShell({
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityUpdating, setAvailabilityUpdating] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const agentAvailabilityRef = useRef<AppAgentAvailability | null>(null);
+  const heartbeatInFlightRef = useRef(false);
+  const heartbeatIntervalMsRef = useRef(DEFAULT_AGENT_HEARTBEAT_INTERVAL_MS);
+  const onlineTtlMsRef = useRef(DEFAULT_AGENT_ONLINE_TTL_MS);
+  const lastImmediateHeartbeatAtRef = useRef(0);
+  const availabilitySessionKeyRef = useRef(buildAvailabilitySessionKey(session));
   const canViewAdministration = isSupervisorRole(activeSession.user.role) || isAdminRole(activeSession.user.role);
   const canUseAvailability = canUseOperationalAvailability(activeSession.user.role);
   const capabilities = getTenantCapabilities(activeSession);
   const profile = tenantSummary?.profile ?? getAppProfile(activeSession);
+
+  const applyAvailabilityResponse = useCallback(
+    (response: {
+      availability: AppAgentAvailability;
+      heartbeatIntervalMs?: number | null;
+      onlineTtlMs?: number | null;
+    }) => {
+      agentAvailabilityRef.current = response.availability;
+      heartbeatIntervalMsRef.current = normalizeAgentHeartbeatIntervalMs(response.heartbeatIntervalMs);
+      onlineTtlMsRef.current = normalizeAgentOnlineTtlMs(response.onlineTtlMs);
+      setAgentAvailability(response.availability);
+    },
+    []
+  );
+
+  const runAvailabilityHeartbeat = useCallback(
+    async (options: { force?: boolean; immediate?: boolean } = {}) => {
+      if (!canUseAvailability) return null;
+      if (!options.force && agentAvailabilityRef.current?.available !== true) return null;
+      if (heartbeatInFlightRef.current) return null;
+      const requestSessionKey = buildAvailabilitySessionKey(activeSession);
+      heartbeatInFlightRef.current = true;
+      if (options.immediate) lastImmediateHeartbeatAtRef.current = Date.now();
+      try {
+        const response = await heartbeatAppAgentAvailability(activeSession);
+        if (availabilitySessionKeyRef.current !== requestSessionKey) return null;
+        applyAvailabilityResponse(response);
+        setAvailabilityError(null);
+        return response;
+      } catch (error) {
+        if (availabilitySessionKeyRef.current === requestSessionKey) {
+          const currentAvailability = agentAvailabilityRef.current;
+          if (currentAvailability?.available === true) {
+            applyAvailabilityResponse({
+              availability: {
+                ...currentAvailability,
+                effectiveAvailable: false,
+              },
+            });
+          }
+          setAvailabilityError("Não foi possível atualizar sua presença.");
+        }
+        return null;
+      } finally {
+        if (availabilitySessionKeyRef.current === requestSessionKey) {
+          heartbeatInFlightRef.current = false;
+        }
+      }
+    },
+    [activeSession, applyAvailabilityResponse, canUseAvailability]
+  );
 
   useEffect(() => {
     setActiveSession(session);
@@ -437,6 +504,12 @@ export default function AppShell({
 
   useEffect(() => {
     if (!canUseAvailability) {
+      availabilitySessionKeyRef.current = buildAvailabilitySessionKey(activeSession);
+      agentAvailabilityRef.current = null;
+      heartbeatInFlightRef.current = false;
+      heartbeatIntervalMsRef.current = DEFAULT_AGENT_HEARTBEAT_INTERVAL_MS;
+      onlineTtlMsRef.current = DEFAULT_AGENT_ONLINE_TTL_MS;
+      lastImmediateHeartbeatAtRef.current = 0;
       setAgentAvailability(null);
       setAvailabilityLoading(false);
       setAvailabilityUpdating(false);
@@ -445,33 +518,30 @@ export default function AppShell({
     }
 
     let cancelled = false;
-    let intervalMs = DEFAULT_AGENT_HEARTBEAT_INTERVAL_MS;
+    availabilitySessionKeyRef.current = buildAvailabilitySessionKey(activeSession);
+    heartbeatInFlightRef.current = false;
     setAvailabilityLoading(true);
     setAvailabilityError(null);
 
-    const applyResponse = (response: {
+    const applySessionResponse = (response: {
       availability: AppAgentAvailability;
       heartbeatIntervalMs?: number | null;
+      onlineTtlMs?: number | null;
     }) => {
       if (cancelled) return;
-      setAgentAvailability(response.availability);
-      if (typeof response.heartbeatIntervalMs === "number" && response.heartbeatIntervalMs >= 1000) {
-        intervalMs = response.heartbeatIntervalMs;
-      }
+      applyAvailabilityResponse(response);
     };
 
-    const heartbeat = () => {
-      void heartbeatAppAgentAvailability(activeSession)
-        .then(applyResponse)
-        .catch(() => {
-          if (!cancelled) setAvailabilityError("Não foi possível atualizar sua presença.");
-        });
+    const heartbeat = (options?: { force?: boolean; immediate?: boolean }) => {
+      void runAvailabilityHeartbeat(options);
     };
 
     fetchAppAgentAvailability(activeSession)
-      .then((response) => {
-        applyResponse(response);
-        heartbeat();
+      .then(async (response) => {
+        applySessionResponse(response);
+        if (response.availability.available) {
+          await runAvailabilityHeartbeat({ force: true, immediate: true });
+        }
       })
       .catch(() => {
         if (!cancelled) setAvailabilityError("Não foi possível carregar sua disponibilidade.");
@@ -480,12 +550,33 @@ export default function AppShell({
         if (!cancelled) setAvailabilityLoading(false);
       });
 
-    const timer = window.setInterval(heartbeat, intervalMs);
+    const timer = window.setInterval(() => {
+      heartbeat();
+    }, heartbeatIntervalMsRef.current);
+    const handlePresenceResume = () => {
+      if (document.visibilityState === "hidden") return;
+      const nowMs = Date.now();
+      if (
+        shouldRunImmediateAgentHeartbeat({
+          availability: agentAvailabilityRef.current,
+          nowMs,
+          onlineTtlMs: onlineTtlMsRef.current,
+          lastImmediateHeartbeatAtMs: lastImmediateHeartbeatAtRef.current,
+        })
+      ) {
+        heartbeat({ immediate: true });
+      }
+    };
+    document.addEventListener("visibilitychange", handlePresenceResume);
+    window.addEventListener("focus", handlePresenceResume);
     return () => {
       cancelled = true;
+      heartbeatInFlightRef.current = false;
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handlePresenceResume);
+      window.removeEventListener("focus", handlePresenceResume);
     };
-  }, [activeSession, canUseAvailability]);
+  }, [activeSession, applyAvailabilityResponse, canUseAvailability, runAvailabilityHeartbeat]);
 
   useEffect(() => {
     let frame = 0;
@@ -683,11 +774,22 @@ export default function AppShell({
     setAvailabilityError(null);
     void updateAppAgentAvailability(activeSession, nextAvailable)
       .then((response) => {
-        setAgentAvailability(response.availability);
-        if (!nextAvailable) return response;
-        return heartbeatAppAgentAvailability(activeSession).then((heartbeatResponse) => {
-          setAgentAvailability(heartbeatResponse.availability);
-          return heartbeatResponse;
+        if (!nextAvailable) {
+          applyAvailabilityResponse(response);
+          return response;
+        }
+        applyAvailabilityResponse({
+          ...response,
+          availability: {
+            ...response.availability,
+            effectiveAvailable: false,
+          },
+        });
+        return runAvailabilityHeartbeat({ force: true, immediate: true }).then((heartbeatResponse) => {
+          if (!heartbeatResponse) {
+            setAvailabilityError("Disponibilidade ativada, mas a presença recente ainda não foi confirmada.");
+          }
+          return heartbeatResponse ?? response;
         });
       })
       .catch(() => {
