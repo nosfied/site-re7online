@@ -126,6 +126,10 @@ async function readInboxReadStateScope(clientId: string, scope: ConversationRead
   }
 }
 
+export async function getInboxReadStateForScope(clientId: string, scope: ConversationReadScope) {
+  return readInboxReadStateScope(clientId, scope);
+}
+
 function mergeReadStates(shared: InboxReadState, assigned: InboxReadState): InboxReadState {
   return {
     lastReadAtByConversationKey: {
@@ -160,6 +164,26 @@ function getLatestReadAtForKeys(state: InboxReadState, conversationKeys: string[
     latestTimestamp = timestamp;
   }
   return latestReadAt;
+}
+
+export function isInboxReadStateMutationNoop(params: {
+  current: InboxReadState;
+  conversationKeys: string[];
+  unread: boolean;
+  activityAt?: string | null;
+}) {
+  const conversationKeys = normalizeConversationKeys(params.conversationKeys);
+  if (conversationKeys.length === 0) return true;
+  if (params.unread) {
+    return conversationKeys.every((key) => params.current.manuallyUnreadByConversationKey[key] === true);
+  }
+  if (conversationKeys.some((key) => params.current.manuallyUnreadByConversationKey[key])) return false;
+  const activityTimestamp = Date.parse(params.activityAt ?? "");
+  if (!Number.isFinite(activityTimestamp)) return false;
+  return conversationKeys.every((key) => {
+    const readTimestamp = Date.parse(params.current.lastReadAtByConversationKey[key] ?? "");
+    return Number.isFinite(readTimestamp) && readTimestamp >= activityTimestamp;
+  });
 }
 
 function projectConversationReadState(

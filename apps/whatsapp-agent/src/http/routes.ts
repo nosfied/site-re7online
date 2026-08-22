@@ -425,6 +425,8 @@ import { extractMessageLocation, formatMessageLocationText } from "../inbox/mess
 import {
   getInboxReadState,
   getInboxReadStateForConversations,
+  getInboxReadStateForScope,
+  isInboxReadStateMutationNoop,
   markInboxConversationRead,
   markInboxConversationUnread,
   markInboxConversationUnreadFromActivity,
@@ -5721,6 +5723,28 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const updatedAt = new Date().toISOString();
       const nextActivityAt = activityAt || updatedAt;
+      const currentScopeState = await getInboxReadStateForScope(client.id, readScope);
+      if (
+        isInboxReadStateMutationNoop({
+          current: currentScopeState,
+          conversationKeys,
+          unread,
+          activityAt: unread ? null : nextActivityAt,
+        })
+      ) {
+        const scopedState = await getInboxReadStateForConversations({
+          clientId: client.id,
+          userId: clientAuth.userId,
+          conversations: [
+            {
+              conversationKeys,
+              assignedUserId: scopedConversation?.assignedUserId ?? null,
+            },
+          ],
+        });
+        json(res, 200, { ok: true, readState: scopedState });
+        return;
+      }
       let scopeState;
       if (unread) {
         scopeState = await markInboxConversationUnread({

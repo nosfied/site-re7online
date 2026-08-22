@@ -33,6 +33,8 @@ import {
   addAutoReadSuppressionKeys,
   clearAutoReadSuppressionKeys,
   hasAutoReadSuppressionKey,
+  isConversationEffectivelyRead,
+  mergeReadStatePreservingUnrelated,
   retainAutoReadSuppressionKeys,
   removeAutoReadSuppressionKeys,
   shouldMarkReadAfterTimelineRefresh,
@@ -1010,13 +1012,6 @@ function getLatestReadAt(current?: string | null, incoming?: string | null) {
   return incomingTimestamp > currentTimestamp ? incoming : current;
 }
 
-function mergeReadStatePreservingLocal(_current: InboxReadState, incoming: InboxReadState): InboxReadState {
-  return {
-    lastReadAtByConversationKey: { ...incoming.lastReadAtByConversationKey },
-    manuallyUnreadByConversationKey: { ...incoming.manuallyUnreadByConversationKey },
-  };
-}
-
 function mergeSharedReadStatePreservingAssigned(
   current: InboxReadState,
   incomingShared: InboxReadState,
@@ -1024,7 +1019,7 @@ function mergeSharedReadStatePreservingAssigned(
   userId?: string | null
 ): InboxReadState {
   const normalizedUserId = String(userId ?? "").trim();
-  if (!normalizedUserId) return mergeReadStatePreservingLocal(current, incomingShared);
+  if (!normalizedUserId) return mergeReadStatePreservingUnrelated(current, incomingShared);
   const assignedConversationKeys = new Set<string>();
   for (const item of conversations) {
     if (String(item.assignedUserId ?? "").trim() !== normalizedUserId) continue;
@@ -1032,8 +1027,8 @@ function mergeSharedReadStatePreservingAssigned(
       assignedConversationKeys.add(key);
     }
   }
-  if (assignedConversationKeys.size === 0) return mergeReadStatePreservingLocal(current, incomingShared);
-  const nextState = mergeReadStatePreservingLocal(current, incomingShared);
+  if (assignedConversationKeys.size === 0) return mergeReadStatePreservingUnrelated(current, incomingShared);
+  const nextState = mergeReadStatePreservingUnrelated(current, incomingShared);
   for (const key of assignedConversationKeys) {
     if (current.lastReadAtByConversationKey[key] && !incomingShared.lastReadAtByConversationKey[key]) {
       nextState.lastReadAtByConversationKey[key] = current.lastReadAtByConversationKey[key];
@@ -1302,7 +1297,8 @@ function dedupeConversationsByIdentity(items: InboxConversationItem[], prioritiz
 function mergeConversationsPreservingStableOrder(
   current: InboxConversationItem[],
   incoming: InboxConversationItem[],
-  prioritizeLeads = false
+  prioritizeLeads = false,
+  options?: { removeMissing?: boolean }
 ) {
   if (current.length === 0) return incoming;
   const currentIndexByIdentity = new Map<string, number>();
@@ -1317,7 +1313,7 @@ function mergeConversationsPreservingStableOrder(
   }
 
   const merged = [
-    ...current.map((item) => {
+    ...current.filter((item) => !options?.removeMissing || incomingByIdentity.has(getConversationIdentity(item))).map((item) => {
       const incomingItem = incomingByIdentity.get(getConversationIdentity(item));
       return incomingItem ? mergeConversationStableFields(item, incomingItem) : item;
     }),
@@ -3121,6 +3117,15 @@ export default function AppInboxPage() {
       )
     );
     if (uniqueKeys.length === 0) return;
+    if (
+      isConversationEffectivelyRead({
+        readState,
+        conversationKeys: uniqueKeys,
+        activityAt,
+      })
+    ) {
+      return;
+    }
     setReadState((prev) => {
       const nextUnread = { ...prev.manuallyUnreadByConversationKey };
       for (const key of uniqueKeys) {
@@ -3140,7 +3145,7 @@ export default function AppInboxPage() {
         activityAt,
       }).catch(() => undefined);
     }
-  }, [session]);
+  }, [readState, session]);
 
   const completeHydrationRead = useCallback((conversationKey: string) => {
     const pendingRead = pendingReadAfterHydrationRef.current;
@@ -3203,6 +3208,29 @@ export default function AppInboxPage() {
   const isAutoReadSuppressedForConversation = useCallback((conversationKeys: Array<string | null | undefined>) => (
     hasAutoReadSuppressionKey(queueMutationAutoReadSuppressedKeysRef.current, conversationKeys)
   ), []);
+
+  const evictConversationFromLocalState = useCallback((conversationKeys: Array<string | null | undefined>) => {
+    const keys = Array.from(
+      new Set(conversationKeys.map((key) => String(key ?? "").trim()).filter(Boolean))
+    );
+    if (keys.length === 0) return;
+    setConversations((prev) =>
+      prev.filter((item) => !conversationIdentityMatches(getConversationIdentityCandidates(item), keys))
+    );
+    for (const key of keys) {
+      timelineCacheRef.current.delete(key);
+    }
+    if (
+      conversationIdentityMatches(keys, [
+        selectedConversationKey,
+        selectedConversationWaId,
+        ...selectedConversationIdentityCandidatesRef.current,
+      ])
+    ) {
+      clearSelectedConversation();
+    }
+    removeAutoReadSuppressionKeys(queueMutationAutoReadSuppressedKeysRef.current, keys);
+  }, [clearSelectedConversation, selectedConversationKey, selectedConversationWaId]);
 
   const applyRealtimeStatusUpdated = useCallback((
     event: Extract<AppRealtimeEvent, { type: "message.status.updated" }>
@@ -3274,7 +3302,7 @@ export default function AppInboxPage() {
       setReadState((current) =>
         event.readScope?.type === "shared"
           ? mergeSharedReadStatePreservingAssigned(current, event.readState, conversations, session.user.id)
-          : mergeReadStatePreservingLocal(current, event.readState)
+          : mergeReadStatePreservingUnrelated(current, event.readState)
       );
       return;
     }
@@ -3298,6 +3326,10 @@ export default function AppInboxPage() {
         event.reason === "conversation.deleted" ||
         event.reason === "conversation.anonymized" ||
         (!eventTargetsCurrentUser && !eventRepresentsClosed);
+      if (event.reason === "conversation.deleted" || event.reason === "conversation.anonymized") {
+        evictConversationFromLocalState(Array.from(matchedConversationKeys));
+        return;
+      }
       setConversations((prev) => {
         const nextItems = prev.flatMap((item) => {
           const itemKey = getConversationIdentity(item);
@@ -3593,6 +3625,7 @@ export default function AppInboxPage() {
   }, [
     applyRealtimeStatusUpdated,
     clearSelectedConversation,
+    evictConversationFromLocalState,
     markConversationIdentitiesAsUnread,
     markConversationAsUnread,
     isTimelineNearBottom,
@@ -3686,7 +3719,7 @@ export default function AppInboxPage() {
       return;
     }
     if (response.readState) {
-      setReadState((current) => mergeReadStatePreservingLocal(current, response.readState!));
+      setReadState((current) => mergeReadStatePreservingUnrelated(current, response.readState!));
     }
     if (response.filterCounts) {
       setConversationFilterCounts({
@@ -3701,6 +3734,7 @@ export default function AppInboxPage() {
       });
     }
     const pageItems = response.conversations ?? response.items;
+    const shouldRemoveMissingItems = loadedConversationPageCountRef.current <= 1;
     if (!response.filterCounts && pageItems.length === 0) {
       setConversationFilterCounts({
         ALL: 0,
@@ -3790,7 +3824,9 @@ export default function AppInboxPage() {
     suppressNextConversationRefreshNotificationRef.current = false;
     const previousListScrollTop = conversationListRef.current?.scrollTop ?? null;
     setConversations((current) =>
-      mergeConversationsPreservingStableOrder(current, sortedItems, prioritizeLeads)
+      mergeConversationsPreservingStableOrder(current, sortedItems, prioritizeLeads, {
+        removeMissing: shouldRemoveMissingItems,
+      })
     );
     if (previousListScrollTop !== null) {
       window.requestAnimationFrame(() => {
@@ -3806,6 +3842,13 @@ export default function AppInboxPage() {
       (item) => getConversationIdentity(item) === selectedConversationKey
     );
     if (!selectedItem) {
+      if (shouldRemoveMissingItems) {
+        evictConversationFromLocalState([
+          selectedConversationKey,
+          selectedConversationWaId,
+          ...selectedConversationIdentityCandidatesRef.current,
+        ]);
+      }
       return;
     }
 
@@ -3843,8 +3886,8 @@ export default function AppInboxPage() {
 	      activeConversation &&
 	      !loadingMessages &&
 	      !waitingForUnreadAnchor &&
-        !skipSelectedConversationMarkRead &&
-        !isAutoReadSuppressedForConversation(getConversationIdentityCandidates(activeConversation)) &&
+	      !skipSelectedConversationMarkRead &&
+	      !isAutoReadSuppressedForConversation(getConversationIdentityCandidates(activeConversation)) &&
 	      canCurrentUserMutateConversationReadState(activeConversation, activeSession.user.id)
 	    ) {
 	      markConversationIdentitiesAsRead(
@@ -3858,6 +3901,7 @@ export default function AppInboxPage() {
 	    buildConversationNotificationRequest,
 	    clearSelectedConversation,
 	    conversationQueryKey,
+	    evictConversationFromLocalState,
 	    handleUnauthorized,
 	    loadingMessages,
 	    markConversationIdentitiesAsRead,
@@ -3877,7 +3921,7 @@ export default function AppInboxPage() {
         buildConversationFetchOptions(conversationNextCursor)
       );
       if (response.readState) {
-        setReadState((current) => mergeReadStatePreservingLocal(current, response.readState!));
+        setReadState((current) => mergeReadStatePreservingUnrelated(current, response.readState!));
       }
       setConversationNextCursor(response.nextCursor ?? null);
       loadedConversationPageCountRef.current += 1;

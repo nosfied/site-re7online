@@ -5,6 +5,8 @@ import {
   addAutoReadSuppressionKeys,
   clearAutoReadSuppressionKeys,
   hasAutoReadSuppressionKey,
+  isConversationEffectivelyRead,
+  mergeReadStatePreservingUnrelated,
   retainAutoReadSuppressionKeys,
   removeAutoReadSuppressionKeys,
   shouldMarkReadAfterTimelineRefresh,
@@ -120,4 +122,97 @@ test("queue mutation suppression does not leak across tenant cleanup", () => {
 
   assert.equal(hasAutoReadSuppressionKey(suppressedKeys, ["tenant-a:conversation-x"]), false);
   assert.equal(hasAutoReadSuppressionKey(suppressedKeys, ["tenant-b:conversation-x"]), true);
+});
+
+test("already read conversations do not need redundant mark-read mutations", () => {
+  assert.equal(
+    isConversationEffectivelyRead({
+      readState: {
+        lastReadAtByConversationKey: {
+          "558499049614": "2026-08-22T21:19:54.603Z",
+          "demo-converta:558499049614": "2026-08-22T21:19:54.603Z",
+        },
+        manuallyUnreadByConversationKey: {},
+      },
+      conversationKeys: ["558499049614", "demo-converta:558499049614"],
+      activityAt: "2026-08-22T21:19:53.000Z",
+    }),
+    true
+  );
+});
+
+test("manual unread and newer activity still require mark-read", () => {
+  assert.equal(
+    isConversationEffectivelyRead({
+      readState: {
+        lastReadAtByConversationKey: { "conversation-a": "2026-08-22T21:19:54.603Z" },
+        manuallyUnreadByConversationKey: { "conversation-a": true },
+      },
+      conversationKeys: ["conversation-a"],
+      activityAt: "2026-08-22T21:19:53.000Z",
+    }),
+    false
+  );
+  assert.equal(
+    isConversationEffectivelyRead({
+      readState: {
+        lastReadAtByConversationKey: { "conversation-a": "2026-08-22T21:19:54.603Z" },
+        manuallyUnreadByConversationKey: {},
+      },
+      conversationKeys: ["conversation-a"],
+      activityAt: "2026-08-22T21:19:55.000Z",
+    }),
+    false
+  );
+});
+
+test("missing canonical alias still requires mark-read", () => {
+  assert.equal(
+    isConversationEffectivelyRead({
+      readState: {
+        lastReadAtByConversationKey: { "558499049614": "2026-08-22T21:19:54.603Z" },
+        manuallyUnreadByConversationKey: {},
+      },
+      conversationKeys: ["558499049614", "demo-converta:558499049614"],
+      activityAt: "2026-08-22T21:19:53.000Z",
+    }),
+    false
+  );
+});
+
+test("partial read-state updates do not touch unrelated similar-name conversations", () => {
+  const current = {
+    lastReadAtByConversationKey: {
+      "558494786787": "2026-08-22T21:21:02.067Z",
+      "demo-converta:558494786787": "2026-08-22T21:21:02.067Z",
+      "558499049614": "2026-08-22T21:19:54.603Z",
+      "demo-converta:558499049614": "2026-08-22T21:19:54.603Z",
+    },
+    manuallyUnreadByConversationKey: {},
+  };
+
+  const merged = mergeReadStatePreservingUnrelated(current, {
+    lastReadAtByConversationKey: {
+      "558494786787": "2026-08-22T21:21:02.067Z",
+      "demo-converta:558494786787": "2026-08-22T21:21:02.067Z",
+    },
+    manuallyUnreadByConversationKey: {},
+  });
+
+  assert.equal(
+    isConversationEffectivelyRead({
+      readState: merged,
+      conversationKeys: ["558494786787", "demo-converta:558494786787"],
+      activityAt: "2026-08-22T21:21:00.000Z",
+    }),
+    true
+  );
+  assert.equal(
+    isConversationEffectivelyRead({
+      readState: merged,
+      conversationKeys: ["558499049614", "demo-converta:558499049614"],
+      activityAt: "2026-08-22T21:19:53.000Z",
+    }),
+    true
+  );
 });

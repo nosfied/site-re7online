@@ -333,11 +333,6 @@ export default function AppSettingsQueuePage() {
                     label: "Exigir atendente online",
                     help: "Sem confirmação confiável de presença online, esta opção mantém a distribuição automática sem atendentes elegíveis.",
                   },
-                  {
-                    key: "notifyAssignedOnly",
-                    label: "Notificar apenas o responsável",
-                    help: "Preferência operacional para notificações futuras; não altera a visibilidade da caixa de entrada nesta etapa.",
-                  },
                 ].map((item) => (
                   <label
                     key={item.key}

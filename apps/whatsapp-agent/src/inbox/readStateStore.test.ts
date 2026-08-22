@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   getInboxReadState,
   getInboxReadStateForConversations,
+  isInboxReadStateMutationNoop,
   markInboxConversationRead,
   markInboxConversationUnread,
   markInboxConversationUnreadFromActivity,
@@ -221,4 +222,45 @@ test("mark read clears all known aliases in the active read scope", async () => 
   assert.equal(scopedState.manuallyUnreadByConversationKey["demo-converta:558499049614"], undefined);
   assert.equal(scopedState.lastReadAtByConversationKey["558499049614"], "2026-08-21T12:04:39.256Z");
   assert.equal(scopedState.lastReadAtByConversationKey["demo-converta:558499049614"], "2026-08-21T12:04:39.256Z");
+});
+
+test("read-state mutation noop detects redundant read and preserves useful updates", () => {
+  const current = {
+    lastReadAtByConversationKey: {
+      "558499049614": "2026-08-22T21:19:54.603Z",
+      "demo-converta:558499049614": "2026-08-22T21:19:54.603Z",
+    },
+    manuallyUnreadByConversationKey: {},
+  };
+
+  assert.equal(
+    isInboxReadStateMutationNoop({
+      current,
+      conversationKeys: ["558499049614", "demo-converta:558499049614"],
+      unread: false,
+      activityAt: "2026-08-22T21:19:53.000Z",
+    }),
+    true
+  );
+  assert.equal(
+    isInboxReadStateMutationNoop({
+      current: {
+        ...current,
+        manuallyUnreadByConversationKey: { "demo-converta:558499049614": true },
+      },
+      conversationKeys: ["558499049614", "demo-converta:558499049614"],
+      unread: false,
+      activityAt: "2026-08-22T21:19:53.000Z",
+    }),
+    false
+  );
+  assert.equal(
+    isInboxReadStateMutationNoop({
+      current,
+      conversationKeys: ["558499049614", "demo-converta:558499049614"],
+      unread: false,
+      activityAt: "2026-08-22T21:19:55.000Z",
+    }),
+    false
+  );
 });
