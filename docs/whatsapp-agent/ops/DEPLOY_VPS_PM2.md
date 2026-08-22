@@ -71,6 +71,48 @@ pm2 logs re7-whatsapp-agent
 pm2 restart re7-whatsapp-agent
 ```
 
+## WhatsApp Web Worker — shared source dependency
+
+O `apps/whatsapp-web-worker` compila parte do codigo de `apps/whatsapp-agent/src`
+no proprio artefato. O `tsconfig.json` do worker inclui:
+
+- `apps/whatsapp-agent/src/channels/channelAccountSecretCrypto.ts`
+- `apps/whatsapp-agent/src/db.ts`
+- `apps/whatsapp-agent/src/features/clientFeatures.ts`
+- `apps/whatsapp-agent/src/logger/logger.ts`
+- `apps/whatsapp-agent/src/web-session/**/*.ts`
+- imports transitivos usados por esses modulos
+
+Regra operacional: se qualquer arquivo de `apps/whatsapp-agent/src` usado direta
+ou indiretamente pelo worker mudar, nao trate a alteracao como apenas
+`re7-whatsapp-agent`. Execute tambem:
+
+```bash
+npm --prefix apps/whatsapp-agent run build
+npm --prefix apps/whatsapp-web-worker run build
+pm2 reload re7-whatsapp-web-worker
+```
+
+Quando o artefato efetivo do worker mudar, o reload do
+`re7-whatsapp-web-worker` e obrigatorio. Um incidente real mostrou que uma
+mudanca em codigo compartilhado de fila ficou correta em
+`apps/whatsapp-agent/dist`, mas stale em
+`apps/whatsapp-web-worker/dist/whatsapp-agent/src/...` ate o worker ser
+rebuildado e recarregado.
+
+Checklist minimo de deploy:
+
+1. Conferir `git status` e `git diff --name-only`.
+2. Identificar arquivos alterados.
+3. Verificar se o worker importa esses arquivos direta ou indiretamente.
+4. Rodar build backend quando houver alteracao em `apps/whatsapp-agent`.
+5. Rodar build worker quando houver dependencia compartilhada.
+6. Confirmar que o `dist` do worker foi atualizado.
+7. Recarregar somente os servicos afetados no PM2.
+8. Confirmar health API/DB/agent-api.
+9. Confirmar canais Web Session esperados como `CONNECTED`.
+10. Confirmar ausencia de novo `QR_REQUIRED` ou 401 apos reload.
+
 ## Futuro: replicar para clientes
 - Mesmo código, outro subdomínio (ex.: `api.cliente.com`)
 - Outro `.env` por cliente (tokens/phone ID/verify token isolados)

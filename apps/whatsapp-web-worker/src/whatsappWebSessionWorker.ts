@@ -16,11 +16,17 @@ import {
   extractWebSessionDisconnectInfo,
   isWebSessionConnectRequested,
   readWebSessionLifecycle,
+  type WebSessionDisconnectInfo,
 } from "../../whatsapp-agent/src/web-session/webSessionLifecycle.js";
 import {
   extractWebSessionObservedIdentity,
   reconcileWebSessionObservedIdentity,
 } from "../../whatsapp-agent/src/web-session/webSessionIdentity.js";
+import {
+  closeWebSessionDisconnectAlertIncident,
+  notifyWebSessionDisconnectAlert,
+  WEB_SESSION_RECOVERABLE_DISCONNECT_ALERT_GRACE_MS,
+} from "../../whatsapp-agent/src/web-session/webSessionDisconnectAlerts.js";
 import { createDurableStagedWebSessionAuthStore } from "../../whatsapp-agent/src/web-session/webSessionAuthStore.js";
 import {
   clearWebSessionQrForRuntime,
@@ -95,6 +101,7 @@ type BaileysAuthKeysLike = {
 };
 
 const activeConnections = new Map<string, ActiveConnection>();
+const recoverableDisconnectAlertTimers = new Map<string, NodeJS.Timeout>();
 const DEFAULT_CONNECTION_OPEN_TIMEOUT_MS = 30_000;
 const STALE_ACTIVE_CONNECTING_TIMEOUT_MS = 45_000;
 const DEFAULT_SEND_TEXT_TIMEOUT_MS = 15_000;
@@ -137,6 +144,7 @@ function readExpectedWebSessionIdentity(metadata: unknown) {
 export function setActiveWebSessionConnectionForTesting(accountId: string, active: ActiveConnection | null) {
   if (!active) {
     activeConnections.delete(accountId);
+    clearRecoverableDisconnectAlertTimer(accountId);
     return;
   }
   activeConnections.set(accountId, active);
@@ -187,6 +195,125 @@ export function resolveWebSessionDisconnectRuntimeState(params: {
     eventName: "whatsapp.web_session.reconnecting" as const,
     eventReason: params.classification === "terminal_manual" ? "internal_socket_closed" : params.classification,
   };
+}
+
+export function buildWebSessionDisconnectObservabilityPayload(params: {
+  account: Pick<EligibleWebSessionAccount, "id" | "tenantKey" | "channelAccountId">;
+  disconnectInfo: WebSessionDisconnectInfo;
+  runtimeState: ReturnType<typeof resolveWebSessionDisconnectRuntimeState>;
+  occurredAt: string;
+}) {
+  const action = params.disconnectInfo.classification === "qr_required"
+    ? "auth_clear"
+    : params.runtimeState.observedState === "RECONNECTING"
+      ? "reconnect"
+      : params.runtimeState.observedState === "QR_REQUIRED"
+        ? "qr_required"
+        : "other";
+  return {
+    tenantKey: params.account.tenantKey,
+    channelAccountId: params.account.id,
+    provider: "web_session",
+    channel: "whatsapp",
+    channelAccountRef: webSessionLogAccount(params.account).channelAccountRef,
+    channelAccountIdLast4: webSessionLogAccount(params.account).channelAccountIdLast4,
+    rawStatusCode: params.disconnectInfo.statusCode,
+    boomOutputStatusCode: params.disconnectInfo.boomStatusCode,
+    disconnectReasonCode: params.disconnectInfo.reasonCode,
+    rawClassification: params.disconnectInfo.classification,
+    classificationSource: params.disconnectInfo.classificationSource,
+    observedState: params.runtimeState.observedState,
+    action,
+    timestamp: params.occurredAt,
+  };
+}
+
+function clearRecoverableDisconnectAlertTimer(accountId: string) {
+  const timer = recoverableDisconnectAlertTimers.get(accountId);
+  if (!timer) return;
+  clearTimeout(timer);
+  recoverableDisconnectAlertTimers.delete(accountId);
+}
+
+async function safeCloseWebSessionDisconnectAlert(params: {
+  prisma: WorkerPrismaClient;
+  account: EligibleWebSessionAccount;
+  observedState: string;
+}) {
+  clearRecoverableDisconnectAlertTimer(params.account.id);
+  try {
+    await closeWebSessionDisconnectAlertIncident({
+      prisma: params.prisma,
+      clientId: params.account.clientId,
+      channelAccountId: params.account.id,
+      observedState: params.observedState,
+    });
+  } catch (error) {
+    logger.warn({
+      event: "whatsapp.web.disconnect_alert.close_failed",
+      ...webSessionLogAccount(params.account),
+      message: error instanceof Error ? error.message.slice(0, 160) : "unknown_error",
+    });
+  }
+}
+
+function scheduleWebSessionDisconnectAlert(params: {
+  prisma: WorkerPrismaClient;
+  account: EligibleWebSessionAccount;
+  disconnectInfo: WebSessionDisconnectInfo;
+  runtimeState: ReturnType<typeof resolveWebSessionDisconnectRuntimeState>;
+}) {
+  clearRecoverableDisconnectAlertTimer(params.account.id);
+  const send = async (reconnectStatus: "falhou" | "nao disponivel") => {
+    try {
+      await notifyWebSessionDisconnectAlert({
+        prisma: params.prisma,
+        clientId: params.account.clientId,
+        clientKey: params.account.tenantKey,
+        tenantName: params.account.tenantKey,
+        channelAccountId: params.account.id,
+        observedState: params.runtimeState.observedState,
+        disconnectInfo: params.disconnectInfo,
+        reconnectStatus,
+      });
+    } catch (error) {
+      logger.warn({
+        event: "whatsapp.web.disconnect_alert.failed",
+        ...webSessionLogAccount(params.account),
+        message: error instanceof Error ? error.message.slice(0, 160) : "unknown_error",
+      });
+    }
+  };
+  if (params.runtimeState.observedState === "QR_REQUIRED" || params.disconnectInfo.classification === "qr_required") {
+    void send("nao disponivel");
+    return;
+  }
+  if (params.runtimeState.observedState !== "RECONNECTING") return;
+  const timer = setTimeout(async () => {
+    recoverableDisconnectAlertTimers.delete(params.account.id);
+    try {
+      const current = await params.prisma.channelAccount.findUnique({
+        where: { id: params.account.id },
+        select: { metadata: true },
+      });
+      if (readWebSessionLifecycle(current?.metadata).observedState === "CONNECTED") {
+        await safeCloseWebSessionDisconnectAlert({
+          prisma: params.prisma,
+          account: params.account,
+          observedState: "CONNECTED",
+        });
+        return;
+      }
+    } catch (error) {
+      logger.warn({
+        event: "whatsapp.web.disconnect_alert.state_check_failed",
+        ...webSessionLogAccount(params.account),
+        message: error instanceof Error ? error.message.slice(0, 160) : "unknown_error",
+      });
+    }
+    await send("falhou");
+  }, WEB_SESSION_RECOVERABLE_DISCONNECT_ALERT_GRACE_MS);
+  recoverableDisconnectAlertTimers.set(params.account.id, timer);
 }
 
 function eventRequestId(account: EligibleWebSessionAccount, eventName: string) {
@@ -755,6 +882,7 @@ async function reconcileActiveWebSessionConnections(prisma: WorkerPrismaClient) 
       });
     }
     activeConnections.delete(accountId);
+    clearRecoverableDisconnectAlertTimer(accountId);
     active.close?.();
     await active.release();
     logger.info({
@@ -813,11 +941,13 @@ export async function runWhatsAppWebSessionWorker(params: {
             onTerminal: async () => {
               const active = activeConnections.get(account.id);
               activeConnections.delete(account.id);
+              clearRecoverableDisconnectAlertTimer(account.id);
               await active?.release();
             },
           });
         } catch (error) {
           activeConnections.delete(account.id);
+          clearRecoverableDisconnectAlertTimer(account.id);
           await lock.release();
           await markWebSessionRuntimeState({
             prisma,
@@ -849,6 +979,7 @@ export async function runWhatsAppWebSessionWorker(params: {
 
   for (const [accountId, active] of activeConnections.entries()) {
     activeConnections.delete(accountId);
+    clearRecoverableDisconnectAlertTimer(accountId);
     await active.release();
   }
 }
@@ -1173,6 +1304,11 @@ async function connectWebSessionAccount(params: {
           identityAction: reconciliation.action,
         },
       });
+      await safeCloseWebSessionDisconnectAlert({
+        prisma: params.prisma,
+        account: effectiveAccount,
+        observedState: "CONNECTED",
+      });
     },
     onDisconnected: async (reason) => {
       clearConnectionOpenTimer();
@@ -1209,15 +1345,21 @@ async function connectWebSessionAccount(params: {
         requestSuffix: "disconnected",
         eventName: runtimeState.eventName,
         payloadJson: {
-          channel: "whatsapp",
-          provider: "web_session",
-          channelAccountRef: webSessionLogAccount(effectiveAccount).channelAccountRef,
-          channelAccountIdLast4: webSessionLogAccount(effectiveAccount).channelAccountIdLast4,
+          ...buildWebSessionDisconnectObservabilityPayload({
+            account: effectiveAccount,
+            disconnectInfo,
+            runtimeState,
+            occurredAt: new Date().toISOString(),
+          }),
           reason: runtimeState.eventReason,
-          rawClassification: classification,
-          disconnectReasonCode: disconnectInfo.reasonCode,
           disconnectStatusCode: disconnectInfo.statusCode,
         },
+      });
+      scheduleWebSessionDisconnectAlert({
+        prisma: params.prisma,
+        account: effectiveAccount,
+        disconnectInfo,
+        runtimeState,
       });
       await finishTerminal();
     },

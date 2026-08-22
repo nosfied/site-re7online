@@ -842,6 +842,7 @@ export type TenantConfigResponse = {
     quotaWarnAtPct?: number;
     quotaBlockedReplyText?: string;
     quotaExcludeWaIds?: string[];
+    webSessionAlertEmails?: string[];
     channelAccounts?: TenantChannelAccount[];
   };
 };

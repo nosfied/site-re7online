@@ -46,6 +46,7 @@ import {
   resolvePlanLimitsSettings,
   resolveRuntimeLimitsSettings,
   resolveWhatsappMediaPolicy,
+  resolveWebSessionAlertEmails,
   saveAiAssistantConfigSettings,
   saveAiIntentQualificationSettings,
   saveAgentSignatureSettings,
@@ -57,6 +58,7 @@ import {
   savePlanLimitsSettings,
   saveRuntimeLimitsSettings,
   saveWhatsappMediaPolicy,
+  saveWebSessionAlertEmails,
   isWhatsappMediaAllowed,
   type AiAssistantConfigSettings,
   type AiIntentQualificationSettings,
@@ -65,6 +67,7 @@ import {
   type HandoffLeadNotificationSettings,
   type FollowUpSettings,
   type PlanLimitsSettings,
+  type ResolvedWebSessionAlertEmails,
 } from "../config/tenantOperationalConfig.js";
 import { applyAgentSignature } from "../inbox/agentSignature.js";
 import { checkRateLimit } from "./rateLimit.js";
@@ -19266,25 +19269,37 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             settings: aiIntentQualificationFromTenantView(tenant),
             source: "json_fallback" as const,
           };
+      const resolvedWebSessionAlertEmails = client
+        ? await resolveWebSessionAlertEmails({
+            prisma,
+            clientId: client.id,
+          })
+        : {
+            emails: [] as string[],
+            source: "json_fallback" as const,
+          };
       const tenantWithDisplayPhone = applyAiIntentQualificationToTenantView(
         applyAiAssistantConfigToTenantView(
           applyAutomationFlagsToTenantView(
             applyPlanLimitsToTenantView(
-              {
-                ...tenant,
-                templates: {
-                  ...(tenant.templates ?? {}),
-                  ...(resolvedManualHandoff.templateName
-                    ? { manualHandoff: resolvedManualHandoff.templateName }
-                    : {}),
+              applyWebSessionAlertEmailsToTenantView(
+                {
+                  ...tenant,
+                  templates: {
+                    ...(tenant.templates ?? {}),
+                    ...(resolvedManualHandoff.templateName
+                      ? { manualHandoff: resolvedManualHandoff.templateName }
+                      : {}),
+                  },
+                  channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+                  displayPhoneNumber:
+                    tenant.displayPhoneNumber?.trim() ||
+                    extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
+                    phone?.display ||
+                    undefined,
                 },
-                channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
-                displayPhoneNumber:
-                  tenant.displayPhoneNumber?.trim() ||
-                  extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
-                  phone?.display ||
-                  undefined,
-              },
+                resolvedWebSessionAlertEmails
+              ),
               resolvedPlanLimits.settings
             ),
             resolvedAutomationFlags.settings
@@ -19312,6 +19327,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           automationFlags: resolvedAutomationFlags.source,
           aiAssistantConfig: resolvedAiAssistantConfig.source,
           aiIntentQualification: resolvedAiIntentQualification.source,
+          webSessionAlertEmails: resolvedWebSessionAlertEmails.source,
         },
         client: client
           ? {
@@ -20195,6 +20211,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantProfile,
           aiAssistantIntentCatalog,
           aiQualification,
+          webSessionAlertEmails: rawWebSessionAlertEmails,
           ...tenantPatch
         } = rawBody;
         const planLimitFieldsChanged = [
@@ -20254,6 +20271,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ? ["aiAssistantIntentCatalog"]
             : []),
           ...(Object.prototype.hasOwnProperty.call(rawBody, "aiQualification") ? ["aiQualification"] : []),
+        ];
+        const webSessionAlertFieldsChanged = [
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "webSessionAlertEmails")
+            ? ["webSessionAlertEmails"]
+            : []),
         ];
         for (const key of automationFlagFieldsChanged) {
           if (typeof rawBody[key] !== "boolean") {
@@ -20508,6 +20530,23 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             tenant: currentTenant,
           })).settings;
         }
+        let resolvedWebSessionAlertEmailsForUpdate: ResolvedWebSessionAlertEmails | null = null;
+        if (client && webSessionAlertFieldsChanged.length > 0) {
+          const savedWebSessionAlertEmails = await saveWebSessionAlertEmails({
+            prisma,
+            clientId: client.id,
+            emails: rawWebSessionAlertEmails,
+          });
+          resolvedWebSessionAlertEmailsForUpdate = {
+            emails: savedWebSessionAlertEmails.emails,
+            source: "db",
+          };
+        } else if (client) {
+          resolvedWebSessionAlertEmailsForUpdate = await resolveWebSessionAlertEmails({
+            prisma,
+            clientId: client.id,
+          });
+        }
         const phoneNumberId = normalizeOptionalString(saved.tenant.metaPhoneNumberId);
         if (phoneNumberId) {
           if (client) {
@@ -20529,6 +20568,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ...automationFlagFieldsChanged,
             ...aiAssistantConfigFieldsChanged,
             ...aiIntentQualificationFieldsChanged,
+            ...webSessionAlertFieldsChanged,
           ],
           backupPath: saved.backupPath,
           requestId,
@@ -20544,15 +20584,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ...automationFlagFieldsChanged,
             ...aiAssistantConfigFieldsChanged,
             ...aiIntentQualificationFieldsChanged,
+            ...webSessionAlertFieldsChanged,
           ],
           tenant: applyAiIntentQualificationToTenantView(
             applyAiAssistantConfigToTenantView(
               applyAutomationFlagsToTenantView(
                 applyPlanLimitsToTenantView(
-                  {
-                    ...saved.tenant,
-                    channelAccounts: redactTenantChannelAccounts(getSavedTenantChannelAccounts(saved.tenant)),
-                  },
+                  applyWebSessionAlertEmailsToTenantView(
+                    {
+                      ...saved.tenant,
+                      channelAccounts: redactTenantChannelAccounts(getSavedTenantChannelAccounts(saved.tenant)),
+                    },
+                    resolvedWebSessionAlertEmailsForUpdate ?? { emails: [], source: "json_fallback" }
+                  ),
                   planLimitsSettings ?? {
                     planName: typeof currentTenant.planName === "string" ? currentTenant.planName : null,
                     messagesLimit: typeof currentTenant.messagesLimit === "number" ? currentTenant.messagesLimit : null,
@@ -32149,6 +32193,16 @@ function applyPlanLimitsToTenantView<T extends Record<string, unknown>>(
     quotaWarnAtPct: planLimits.quotaWarnAtPct,
     quotaBlockedReplyText: planLimits.quotaBlockedReplyText ?? undefined,
     quotaExcludeWaIds: planLimits.quotaExcludeWaIds,
+  };
+}
+
+function applyWebSessionAlertEmailsToTenantView<T extends Record<string, unknown>>(
+  tenant: T,
+  resolved: ResolvedWebSessionAlertEmails
+) {
+  return {
+    ...tenant,
+    webSessionAlertEmails: resolved.emails,
   };
 }
 

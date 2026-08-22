@@ -63,11 +63,19 @@ type TenantFormState = {
   quotaWarnAtPct: string;
   quotaExcludeWaIdsInput: string;
   quotaBlockedReplyText: string;
+  webSessionAlertEmailsInput: string;
 };
 
 function optionalText(value: string) {
   const trimmed = value.trim();
   return trimmed || undefined;
+}
+
+function normalizeEmailList(value: string) {
+  return value
+    .split(/[\n,;]/)
+    .map((email) => email.trim())
+    .filter(Boolean);
 }
 
 function SaveNotice({ error, toast }: { error: string | null; toast: string | null }) {
@@ -198,6 +206,7 @@ export default function TenantEditPage() {
             typeof tenant.quotaWarnAtPct === "number" ? String(tenant.quotaWarnAtPct) : "",
           quotaExcludeWaIdsInput: (tenant.quotaExcludeWaIds ?? []).join("\n"),
           quotaBlockedReplyText: tenant.quotaBlockedReplyText ?? "",
+          webSessionAlertEmailsInput: (tenant.webSessionAlertEmails ?? []).join("\n"),
         });
       })
       .catch((err: { status?: number; message?: string }) => {
@@ -312,6 +321,7 @@ export default function TenantEditPage() {
       contractNotes: optionalText(form.contractNotes),
       allowlist: normalizeWaIdList(form.allowlistInput),
       quotaExcludeWaIds: normalizeWaIdList(form.quotaExcludeWaIdsInput),
+      webSessionAlertEmails: normalizeEmailList(form.webSessionAlertEmailsInput),
     };
 
     const maxActiveAppUsers = Number(form.maxActiveAppUsers);
@@ -722,6 +732,10 @@ export default function TenantEditPage() {
                 </p>
               </div>
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Alertas Web Session</p>
+                <p className="mt-2 text-sm">{tenantSnapshot?.webSessionAlertEmails?.length ?? 0} e-mails</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
                 <p className="text-xs uppercase tracking-wide text-white/50">Contexto da IA</p>
                 <p className="mt-2 text-sm">{tenantSnapshot?.aiBusinessContext?.trim() ? "Configurado" : "Ausente"}</p>
                 <Link
@@ -776,6 +790,29 @@ export default function TenantEditPage() {
                 />
                 <span className="text-xs text-white/50">
                   Padrao: 5. Use 0 para bloquear novos usuarios ativos.
+                </span>
+              </label>
+            </section>
+
+            <section className="grid gap-3 rounded-lg border border-white/10 bg-re7-navy/30 p-3">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
+                  Alertas operacionais
+                </h2>
+                <p className="mt-1 text-xs text-white/50">
+                  Destinatarios internos para incidentes do canal Web Session. Nao usa usuarios do App.
+                </p>
+              </div>
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">E-mails para alertas Web Session</span>
+                <textarea
+                  className="min-h-24 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={form.webSessionAlertEmailsInput}
+                  onChange={(event) => updateFormField("webSessionAlertEmailsInput", event.target.value)}
+                  placeholder={"operacao@empresa.com\nsuporte@empresa.com"}
+                />
+                <span className="text-xs text-white/50">
+                  Um e-mail por linha. Se vazio, desconexoes Web Session sao registradas sem envio de e-mail.
                 </span>
               </label>
             </section>

@@ -153,8 +153,10 @@ export type WebSessionDisconnectClassification = "reconnectable" | "qr_required"
 
 export type WebSessionDisconnectInfo = {
   statusCode: number | null;
+  boomStatusCode: number | null;
   reasonCode: string | null;
   classification: WebSessionDisconnectClassification;
+  classificationSource: string;
 };
 
 function disconnectReasonText(reason: unknown): string {
@@ -200,6 +202,32 @@ function extractDisconnectStatusCode(reason: unknown): number | null {
     normalizeStatusCode(getNestedRecord(getNestedRecord(record.lastDisconnect, "error"), "output").statusCode);
 }
 
+function extractBoomOutputStatusCode(reason: unknown): number | null {
+  if (!reason || typeof reason !== "object") return null;
+  const record = reason as Record<string, unknown>;
+  return normalizeStatusCode(getNestedRecord(reason, "output").statusCode) ??
+    normalizeStatusCode(getNestedRecord(record.error, "output").statusCode) ??
+    normalizeStatusCode(getNestedRecord(getNestedRecord(record.lastDisconnect, "error"), "output").statusCode);
+}
+
+function sanitizeReasonCode(value: unknown) {
+  if (typeof value !== "string") return null;
+  return value.trim().replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 80) || null;
+}
+
+function extractExplicitReasonCode(reason: unknown): string | null {
+  if (typeof reason === "string") return sanitizeReasonCode(reason);
+  if (reason instanceof Error) return sanitizeReasonCode(reason.message);
+  if (!reason || typeof reason !== "object") return null;
+  const record = reason as Record<string, unknown>;
+  return sanitizeReasonCode(record.reason) ??
+    sanitizeReasonCode(record.code) ??
+    sanitizeReasonCode(record.name) ??
+    sanitizeReasonCode(record.message) ??
+    extractExplicitReasonCode(record.error) ??
+    extractExplicitReasonCode(record.lastDisconnect);
+}
+
 function classifyByDisconnectStatusCode(statusCode: number): WebSessionDisconnectClassification | null {
   // @whiskeysockets/baileys@7.0.0-rc13 DisconnectReason:
   // 408 timedOut/connectionLost, 428 connectionClosed, 503 unavailableService, 515 restartRequired.
@@ -212,26 +240,54 @@ function classifyByDisconnectStatusCode(statusCode: number): WebSessionDisconnec
 export function extractWebSessionDisconnectInfo(reason: unknown): WebSessionDisconnectInfo {
   const normalized = disconnectReasonText(reason).toLowerCase();
   const statusCode = extractDisconnectStatusCode(reason);
+  const boomStatusCode = extractBoomOutputStatusCode(reason);
+  const explicitReasonCode = extractExplicitReasonCode(reason);
   if (
     normalized.includes("logout") ||
     normalized.includes("logged_out") ||
     normalized.includes("invalid") ||
     normalized.includes("401")
   ) {
-    return { statusCode, reasonCode: statusCode ? `baileys_${statusCode}` : "logged_out", classification: "qr_required" };
+    return {
+      statusCode,
+      boomStatusCode,
+      reasonCode: explicitReasonCode ?? (statusCode ? `baileys_${statusCode}` : "logged_out"),
+      classification: "qr_required",
+      classificationSource: "reason_text",
+    };
   }
   if (
     normalized.includes("manual") ||
     normalized.includes("disabled") ||
     normalized.includes("admin_disconnect")
   ) {
-    return { statusCode, reasonCode: "admin_disconnect", classification: "terminal_manual" };
+    return {
+      statusCode,
+      boomStatusCode,
+      reasonCode: explicitReasonCode ?? "admin_disconnect",
+      classification: "terminal_manual",
+      classificationSource: "reason_text",
+    };
   }
   if (statusCode !== null) {
     const classification = classifyByDisconnectStatusCode(statusCode);
-    if (classification) return { statusCode, reasonCode: `baileys_${statusCode}`, classification };
+    if (classification) {
+      return {
+        statusCode,
+        boomStatusCode,
+        reasonCode: explicitReasonCode ?? `baileys_${statusCode}`,
+        classification,
+        classificationSource: "status_code",
+      };
+    }
   }
-  return { statusCode, reasonCode: statusCode ? `baileys_${statusCode}` : "unknown_disconnect", classification: "reconnectable" };
+  return {
+    statusCode,
+    boomStatusCode,
+    reasonCode: explicitReasonCode ?? (statusCode ? `baileys_${statusCode}` : "unknown_disconnect"),
+    classification: "reconnectable",
+    classificationSource: "default",
+  };
 }
 
 export function classifyWebSessionDisconnect(reason: unknown): WebSessionDisconnectClassification {

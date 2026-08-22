@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
+  buildWebSessionDisconnectObservabilityPayload,
   buildWebSessionHandoffRealtimePayload,
   buildWebSessionReceiptRealtimePayload,
   connectionOpenTimeoutRuntimeState,
@@ -23,6 +24,7 @@ function account(overrides: Record<string, unknown> = {}) {
   return {
     id: "account-a",
     clientId: "client-a",
+    tenantKey: "tenant-a",
     channel: "whatsapp",
     provider: "web_session",
     channelAccountId: "session-a",
@@ -205,6 +207,87 @@ test("web session worker only requires QR for proven auth loss", () => {
   assert.equal(adminStopped.observedState, "DISCONNECTED");
   assert.equal(adminStopped.status, "disconnected");
   assert.equal(adminStopped.reconnectCount, 5);
+});
+
+test("web session worker builds safe disconnect observability payload", () => {
+  const qrRequired = resolveWebSessionDisconnectRuntimeState({
+    classification: "qr_required",
+    stillRequested: true,
+    reconnectCount: 4,
+  });
+  const loggedOut = buildWebSessionDisconnectObservabilityPayload({
+    account: account({ channelAccountId: "558491955328" }) as never,
+    disconnectInfo: {
+      statusCode: 401,
+      boomStatusCode: 401,
+      reasonCode: "loggedOut",
+      classification: "qr_required",
+      classificationSource: "reason_text",
+    },
+    runtimeState: qrRequired,
+    occurredAt: "2026-08-22T15:06:59.103Z",
+  });
+  assert.equal(loggedOut.rawStatusCode, 401);
+  assert.equal(loggedOut.boomOutputStatusCode, 401);
+  assert.equal(loggedOut.disconnectReasonCode, "loggedOut");
+  assert.equal(loggedOut.rawClassification, "qr_required");
+  assert.equal(loggedOut.classificationSource, "reason_text");
+  assert.equal(loggedOut.observedState, "QR_REQUIRED");
+  assert.equal(loggedOut.action, "auth_clear");
+  assert.equal(loggedOut.provider, "web_session");
+  assert.equal(loggedOut.channelAccountIdLast4, "5328");
+  assert.equal(JSON.stringify(loggedOut).includes("558491955328"), false);
+
+  const connectionReplaced = buildWebSessionDisconnectObservabilityPayload({
+    account: account() as never,
+    disconnectInfo: {
+      statusCode: 440,
+      boomStatusCode: 440,
+      reasonCode: "connectionReplaced",
+      classification: "qr_required",
+      classificationSource: "status_code",
+    },
+    runtimeState: qrRequired,
+    occurredAt: "2026-08-22T15:06:59.103Z",
+  });
+  assert.equal(connectionReplaced.disconnectReasonCode, "connectionReplaced");
+  assert.equal(connectionReplaced.rawStatusCode, 440);
+
+  const reconnecting = resolveWebSessionDisconnectRuntimeState({
+    classification: "reconnectable",
+    stillRequested: true,
+    reconnectCount: 2,
+  });
+  const connectionLost = buildWebSessionDisconnectObservabilityPayload({
+    account: account() as never,
+    disconnectInfo: {
+      statusCode: 408,
+      boomStatusCode: 408,
+      reasonCode: "baileys_408",
+      classification: "reconnectable",
+      classificationSource: "status_code",
+    },
+    runtimeState: reconnecting,
+    occurredAt: "2026-08-22T15:06:59.103Z",
+  });
+  assert.equal(connectionLost.rawClassification, "reconnectable");
+  assert.equal(connectionLost.action, "reconnect");
+
+  const unknown = buildWebSessionDisconnectObservabilityPayload({
+    account: account() as never,
+    disconnectInfo: {
+      statusCode: null,
+      boomStatusCode: null,
+      reasonCode: "unknown_disconnect",
+      classification: "reconnectable",
+      classificationSource: "default",
+    },
+    runtimeState: reconnecting,
+    occurredAt: "2026-08-22T15:06:59.103Z",
+  });
+  assert.equal(unknown.rawStatusCode, null);
+  assert.equal(unknown.disconnectReasonCode, "unknown_disconnect");
+  assert.equal(unknown.classificationSource, "default");
 });
 
 test("web session worker resolves LID sender through persisted reverse mapping", async () => {

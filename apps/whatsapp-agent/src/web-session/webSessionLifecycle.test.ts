@@ -68,7 +68,13 @@ test("web session disconnect classification and backoff are conservative", () =>
 test("web session disconnect classification uses Baileys 7 status codes explicitly", () => {
   assert.deepEqual(
     extractWebSessionDisconnectInfo({ lastDisconnect: { error: { output: { statusCode: 428 } } } }),
-    { statusCode: 428, reasonCode: "baileys_428", classification: "reconnectable" }
+    {
+      statusCode: 428,
+      boomStatusCode: 428,
+      reasonCode: "baileys_428",
+      classification: "reconnectable",
+      classificationSource: "status_code",
+    }
   );
   assert.equal(classifyWebSessionDisconnect({ error: { output: { statusCode: 408 } } }), "reconnectable");
   assert.equal(classifyWebSessionDisconnect({ output: { statusCode: 503 } }), "reconnectable");
@@ -79,6 +85,39 @@ test("web session disconnect classification uses Baileys 7 status codes explicit
   assert.equal(classifyWebSessionDisconnect({ output: { statusCode: 411 } }), "qr_required");
   assert.equal(classifyWebSessionDisconnect({ output: { statusCode: 440 } }), "qr_required");
   assert.equal(classifyWebSessionDisconnect({ output: { statusCode: 500 } }), "qr_required");
+});
+
+test("web session disconnect info preserves safe raw reason details", () => {
+  assert.deepEqual(
+    extractWebSessionDisconnectInfo({ error: { output: { statusCode: 401 } }, message: "loggedOut" }),
+    {
+      statusCode: 401,
+      boomStatusCode: 401,
+      reasonCode: "loggedOut",
+      classification: "qr_required",
+      classificationSource: "reason_text",
+    }
+  );
+  assert.deepEqual(
+    extractWebSessionDisconnectInfo({ reason: "connectionReplaced", output: { statusCode: 440 } }),
+    {
+      statusCode: 440,
+      boomStatusCode: 440,
+      reasonCode: "connectionReplaced",
+      classification: "qr_required",
+      classificationSource: "status_code",
+    }
+  );
+  assert.deepEqual(
+    extractWebSessionDisconnectInfo({ reason: "mystery disconnect" }),
+    {
+      statusCode: null,
+      boomStatusCode: null,
+      reasonCode: "mystery_disconnect",
+      classification: "reconnectable",
+      classificationSource: "default",
+    }
+  );
 });
 
 test("web session QR memory store expires without persistence", () => {

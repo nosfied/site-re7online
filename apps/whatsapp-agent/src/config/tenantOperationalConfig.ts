@@ -31,6 +31,7 @@ export type TenantOperationalConfigValue = {
   automationFlags?: AutomationFlagsSettings;
   aiAssistantConfig?: AiAssistantConfigSettings;
   aiIntentQualification?: AiIntentQualificationSettings;
+  webSessionAlertEmails?: string[];
 };
 
 export type TenantOperationalConfigSource = "db" | "json_fallback";
@@ -86,6 +87,11 @@ export type WhatsappMediaPolicy = {
 
 export type ResolvedWhatsappMediaPolicy = {
   policy: WhatsappMediaPolicy;
+  source: TenantOperationalConfigSource;
+};
+
+export type ResolvedWebSessionAlertEmails = {
+  emails: string[];
   source: TenantOperationalConfigSource;
 };
 
@@ -560,7 +566,87 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   if (Object.prototype.hasOwnProperty.call(value, "aiIntentQualification")) {
     config.aiIntentQualification = normalizeAiIntentQualificationSettings(value.aiIntentQualification);
   }
+  if (Object.prototype.hasOwnProperty.call(value, "webSessionAlertEmails")) {
+    config.webSessionAlertEmails = normalizeWebSessionAlertEmails(value.webSessionAlertEmails);
+  }
   return config;
+}
+
+function normalizeWebSessionAlertEmail(value: unknown) {
+  if (typeof value !== "string") return null;
+  const email = value.trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email.slice(0, 180) : null;
+}
+
+export function normalizeWebSessionAlertEmails(input: unknown): string[] {
+  const values = Array.isArray(input)
+    ? input
+    : typeof input === "string"
+      ? input.split(/[\n,;]/)
+      : [];
+  const emails: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const email = normalizeWebSessionAlertEmail(value);
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    emails.push(email);
+    if (emails.length >= 20) break;
+  }
+  return emails;
+}
+
+export async function resolveWebSessionAlertEmails(params: {
+  prisma: PrismaClient;
+  clientId: string;
+}): Promise<ResolvedWebSessionAlertEmails> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const dbConfig = parseOperationalConfig(record?.config);
+  return {
+    emails: dbConfig.webSessionAlertEmails ?? [],
+    source: dbConfig.webSessionAlertEmails ? "db" : "json_fallback",
+  };
+}
+
+export async function saveWebSessionAlertEmails(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  emails: unknown;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const nextEmails = normalizeWebSessionAlertEmails(params.emails);
+  const nextConfig = {
+    ...existingConfig,
+    webSessionAlertEmails: nextEmails,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+    },
+  });
+  return {
+    record: saved,
+    emails: nextEmails,
+  };
 }
 
 export async function resolveRuntimeLimitsSettings(params: {
