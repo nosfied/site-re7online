@@ -8,6 +8,8 @@ O Converta e um SaaS multitenant de atendimento omnichannel para operacoes B2B e
 
 O produto deve ser apresentado como solucao de atendimento, roteamento, chatbot/fluxos, humano assistido, campanhas controladas e evidencia operacional. Nao deve ser apresentado como plataforma de IA generativa ampla quando esse nao for o escopo contratado.
 
+O baseline funcional estavel de agosto de 2026 consolida hardenings de Inbox, filas, Web Session, read-state, presenca de agentes e politicas de visibilidade. O tenant `secult-pe` opera no mesmo codigo SaaS multitenant publicado em producao; nao existe fork, build exclusivo, frontend exclusivo ou deploy especifico para SECULT-PE. Depois de novo frontend publicado, um reload normal do navegador carrega a versao atual.
+
 ## Canais
 
 | Canal | Estado operacional | Observacao |
@@ -51,6 +53,48 @@ O Inbox concentra conversas operacionais por tenant. O fluxo atual inclui:
 - preservacao de isolamento entre tenants.
 
 Conversas removidas da operacao visivel ou anonimizadas nao devem voltar ao Inbox por reidratacao de dados antigos.
+
+### Visibilidade do Inbox
+
+A politica de visibilidade fica em `TenantOperationalConfig.config.inboxVisibilityPolicy`.
+
+Valores atuais:
+
+- `shared`: comportamento legado por setor/membership.
+- `assignee_only_after_assignment`: visibilidade individual depois da atribuicao.
+
+O default e `shared`.
+
+Em `assignee_only_after_assignment`, a regra para AGENT e:
+
+- `WAITING` sem responsavel e com membership no setor: visivel.
+- atribuido ao proprio agente: visivel.
+- atribuido a outro agente: oculto.
+- atribuicao direta ao proprio agente fora de membership: visivel conforme governanca operacional.
+- `CLOSED` com participacao propria: visivel.
+- `CLOSED` sem participacao propria, mesmo no mesmo setor: oculto.
+
+SUPERVISOR visualiza por escopo de departments dos memberships ativos. ADMIN visualiza tenant-wide. A participacao historica em conversa fechada usa evidencias estruturadas como `ConversationAssignment` e historico de assignment/runtime, sem inferencia por texto.
+
+A visibilidade e independente de autorizacao, notificacao e read-state. Ela decide projecao no Inbox, mas nao concede permissao de operacao por si so.
+
+### Read-state, notificacao e realtime
+
+O read-state do Inbox e hibrido:
+
+- conversa sem responsavel (`assignedUserId=null`): read-state compartilhado.
+- conversa atribuida: read-state direcionado ao `assignedUserId`.
+
+A notificacao segue a mesma distincao operacional:
+
+- conversa atribuida: direcionada ao responsavel.
+- conversa sem responsavel: compartilhada para a audiencia elegivel da fila/setor.
+- transferencia para usuario: direcionada ao novo responsavel.
+- devolucao para fila ou transferencia de setor sem responsavel: compartilhada enquanto `assignedUserId=null`.
+
+O read model e scope-aware para evitar residuos de escopos antigos, aliases legados e pisca-pisca de badge/dot entre conversas diferentes. Eventos `read_state.updated` fazem merge incremental no frontend, sem substituir o mapa inteiro por payload parcial. Mark-read e mark-unread sao idempotentes nos caminhos homologados.
+
+O realtime do Inbox segue paridade com `GET /app/conversations`: eventos ambiguos de `message.created` falham fechado ate reconciliacao canonica, mensagens `management_only` nao entram em timeline/preview humano, perda de visibilidade remove item do cache, e conversas anonimizadas/deletadas sao removidas sem depender de F5.
 
 ## Support Hub
 
@@ -187,6 +231,75 @@ A distribuicao balanceada usa os modelos operacionais existentes: `Conversation`
 
 O padrao permanece manual quando a policy esta ausente ou desativada. A configuracao fica em `/app/settings/queue`, e deve ser ativada por tenant somente com decisao operacional, smoke controlado e acompanhamento. A UI nao aceita `clientId` arbitrario vindo do frontend.
 
+Policies disponiveis:
+
+- `manual`: a conversa permanece `WAITING` e compartilhada ate acao humana, como assumir ou transferir.
+- `round_robin`: distribuicao sequencial entre candidatos elegiveis.
+- `least_active`: seleciona o candidato elegivel com menor carga ativa.
+
+A entrada canonica de fila cobre handoff do chatbot, transferencia de setor, devolucao para fila e handoff por inatividade quando ha destino valido e o setor esta aberto. A atribuicao automatica preserva atomicidade com lock por tenant + department; capacidade, atribuicao e ponteiro de round-robin permanecem no escopo protegido.
+
+Quando `requireOnline=true`, o candidato precisa atender aos criterios:
+
+- tenant correto;
+- usuario ativo;
+- role elegivel;
+- membership ativo no department;
+- abaixo da capacidade configurada;
+- `available=true`;
+- heartbeat recente dentro do TTL.
+
+O heartbeat de disponibilidade roda a cada 10 segundos e o TTL efetivo e 30 segundos. `available=true` representa intencao do agente receber novos auto-assignments; disponibilidade efetiva exige `available=true` mais heartbeat recente. Logout, queda de rede ou aba sem heartbeat removem o agente do pool apos o TTL. Se nao houver candidato, a conversa permanece `WAITING` e compartilhada.
+
+Disponibilidade nao remove atribuicoes existentes e nao bloqueia transferencia manual explicita autorizada. Transferencia manual continua sendo decisao humana autoritativa conforme governanca operacional.
+
+Horarios de funcionamento continuam prevalecendo sobre disponibilidade. Um department fechado nao passa a autoatribuir apenas porque um agente esta online. Em `CLOSED + QUEUE_FOR_NEXT_OPEN`, a conversa fica em fila compartilhada, sem responsavel, aguardando proximo expediente ou acao operacional. Nao existe rebalance automatico geral de backlog na abertura.
+
+## Chatbot, consentimento e inatividade
+
+O flow SECULT/Demo homologado usa:
+
+```json
+{
+  "inactivityPolicy": {
+    "action": "HANDOFF",
+    "timeoutMinutes": 60,
+    "resetAfterMinutes": 1440
+  }
+}
+```
+
+A precedencia funcional e:
+
+- consentimento pendente ou invalido: handoff por inatividade e ignorado, a conversa permanece em BOT e o skip registra `reason=consent_pending`.
+- consentimento recusado: caminho terminal, sem handoff automatico.
+- consentimento aceito com destino aberto: handoff humano canonico e balancer preservados.
+- consentimento aceito com setor fechado e `QUEUE_FOR_NEXT_OPEN`: `WAITING` compartilhado com department/queue validos, sem autoassign enquanto fechado.
+- sem destino valido: nao criar estado `WAITING`/`HUMAN`/`ACTIVE` invalido; permanece BOT e registra handoff skipped.
+
+## Web Session
+
+WEB_SESSION opera com worker hospedado, auth state persistente e lifecycle tenant-scoped de `ChannelAccount`. O fluxo operacional contempla `QR_REQUIRED`, pairing, reconnect, persistencia de auth, incidentes terminais e recuperaveis, e observabilidade de disconnect com campos brutos sanitizados.
+
+Durante pairing canonico, outbound pode ser bloqueado temporariamente. O valor anterior e preservado em `ChannelAccount.metadata.webSession.prePairingOutboundEnabled` e restaurado apos `CONNECTED` quando aplicavel. O snapshot transitorio deve ser consumido depois da restauracao bem-sucedida.
+
+Alertas de disconnect usam exclusivamente `TenantOperationalConfig.config.webSessionAlertEmails` como fonte de destinatarios. ADMIN, SUPERVISOR, AGENT ou usuarios do app nao sao fallback. Sem recipient configurado, nenhum email e enviado, mas o incidente/log permanece registrado. Incidente terminal alerta imediatamente; incidente recuperavel usa grace de 3 minutos; reconnect antes do grace cancela o alerta; dedup garante um alerta por incidente.
+
+Detalhes tecnicos do transporte estao em `docs/whatsapp/web-session.md`.
+
+## Build e worker
+
+O processo de deploy deve seguir `docs/whatsapp-agent/ops/DEPLOY_VPS_PM2.md`.
+
+O `re7-whatsapp-web-worker` incorpora codigo compartilhado de `apps/whatsapp-agent/src`. Quando um modulo compartilhado usado direta ou indiretamente pelo worker muda, o deploy precisa:
+
+1. buildar `apps/whatsapp-agent`;
+2. buildar `apps/whatsapp-web-worker`;
+3. validar que o dist do worker esta atualizado;
+4. reloadar o worker quando o artefato mudar.
+
+Essa regra existe para evitar artefato stale em runtime, especialmente em caminhos compartilhados de fila, Web Session, chatbot e inbound.
+
 ## RBAC e multitenancy
 
 O produto opera por tenant e capability:
@@ -196,6 +309,33 @@ O produto opera por tenant e capability:
 - capabilities controlam CRM, campanhas, templates e demais superficies;
 - rotas protegidas retornam erro seguro sem sessao;
 - payloads operacionais evitam expor identificadores sensiveis em listagens amplas.
+
+Configuracao administrativa de filas:
+
+- ADMIN: leitura e escrita.
+- SUPERVISOR: leitura.
+- AGENT: sem acesso administrativo.
+
+SUPERVISOR preserva as operacoes autorizadas no Inbox e demais superficies operacionais, sem receber permissao de escrita para politica de filas.
+
+Configuracoes delegadas ao ADMIN do tenant podem ser ajustadas via UX quando expostas pelo produto, como politica de fila, modo `manual`/`round_robin`/`least_active`, escopo, `requireOnline`, capacidade, `includeSupervisors` e politica de visibilidade do Inbox. Isso nao exige Codex, deploy ou alteracao por tenant quando a funcionalidade ja esta publicada.
+
+Configuracoes internas de plataforma, como `TenantOperationalConfig.config.webSessionAlertEmails`, pertencem ao console interno RE7ONLINE e nao devem ser tratadas como configuracao operacional do app cliente sem decisao futura de produto.
+
+## Marcos recentes confirmados
+
+Commits relevantes do baseline homologado:
+
+- `67bc092fa587fa599262d927396eac7c3e50a605`: worker mailer runtime dependency for Web Session alerts.
+- `afdcfb94a5cfc4fcbb98bd78b57d5f3215009799`: Web Session disconnect observability.
+- `2f82db80092427c7dbb5c82192eb18da3de2f84f`: inactivity handoff hardening.
+- `0bc31bad837af8f09e5af16282908205da4d7a17`: consent precedence in inactivity handoff.
+- `3f0f4819585d340e6359d365d853e0158abbe9ca`: read-state/cache cleanup.
+- `42eef3209b27c060ea6f2334ca1e6a542a4eeba6`: Inbox visibility policy.
+- `96e8c8646e95035a743db526e40b57fdef0de36b`: queue balancer volatile presence lookup.
+- `4ecaf12aa2c6f8d7da86b6807fc756606e12541b`: agent availability heartbeat lifecycle.
+- `893ba7d876b195d0c93fce8dbf1932eb355e0605`: agent availability heartbeat for queue balancing.
+- `1ed1b2d37ab2e8bd57fbc856ed1f48fca1afacdb`: atomic balanced queue assignment.
 
 ## Limites conhecidos
 

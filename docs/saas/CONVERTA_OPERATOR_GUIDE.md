@@ -74,6 +74,38 @@ No Inbox, o operador deve:
 
 Conversas com dados anonimizados não devem aparecer no uso normal. Se um contato tiver sido minimizado por LGPD, não se deve tentar restaurar nome, número, histórico ou contexto anterior.
 
+## Configuração de filas e visibilidade
+
+ADMIN pode ajustar as regras operacionais publicadas sem instalação local, pacote por tenant ou deploy específico. Depois de uma nova versão do frontend, use F5/reload normal do navegador antes de validar a tela.
+
+Checklist recomendado:
+
+1. Entrar como ADMIN na organização correta.
+2. Abrir `Configurações > Filas`.
+3. Escolher a policy: manual, distribuição alternada ou menor carga.
+4. Configurar disponibilidade obrigatória, capacidade e inclusão de supervisores conforme a operação.
+5. Salvar e revisar o estado exibido.
+6. Abrir `Configurações > Atendimento`.
+7. Escolher a política de visibilidade do Inbox: compartilhada ou individual após atribuição.
+8. Salvar.
+9. Orientar AGENTs a ajustarem Disponível/Indisponível.
+10. Fazer smoke com uma conversa controlada.
+11. Validar a visão de SUPERVISOR e ADMIN.
+
+SUPERVISOR pode consultar a configuração de filas quando autorizado, mas a escrita administrativa é de ADMIN. AGENT não acessa a configuração administrativa.
+
+Smoke mínimo após mudança de fila ou visibilidade:
+
+- conversa em espera compartilhada aparece para agentes elegíveis;
+- atribuição direciona conversa, dot/som/read-state ao responsável esperado;
+- transferência para usuário troca a visibilidade corretamente;
+- devolução para fila volta ao compartilhado quando sem responsável;
+- transferência de setor respeita a audiência do novo setor;
+- F5 não muda o resultado de visibilidade;
+- conversa fechada permanece visível para quem participou quando a política permitir;
+- SUPERVISOR e ADMIN preservam a visão esperada;
+- saúde do canal está operacional antes do teste real.
+
 ## Suporte da plataforma
 
 ADMIN e SUPERVISOR podem abrir e acompanhar suporte da plataforma em `Suporte`. O fluxo cria ou retoma uma `Conversation` no tenant de suporte configurado pela plataforma, com protocolo normal do Converta. Não existe módulo paralelo de ticket ou case.
