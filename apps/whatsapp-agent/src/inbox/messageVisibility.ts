@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 export type InboxMessageVisibility = "human_timeline" | "management_only";
+export type InboxVisibilityPolicy = "shared" | "assignee_only_after_assignment";
 
 export type HumanInboxProjectionInput = {
   status?: "WAITING" | "IN_PROGRESS" | "WAITING_USER" | "CLOSED" | string | null;
@@ -12,6 +13,19 @@ export type HumanInboxProjectionInput = {
   queueId?: string | null;
   handoffActivatedAt?: string | Date | null;
 };
+
+export type UserInboxVisibilityInput = HumanInboxProjectionInput & {
+  currentUserId?: string | null;
+  userRole?: string | null;
+  userDepartmentId?: string | null;
+  userDepartmentIds?: string[] | null;
+  policy?: InboxVisibilityPolicy | string | null;
+  userParticipated?: boolean;
+};
+
+export function normalizeInboxVisibilityPolicy(value: unknown): InboxVisibilityPolicy {
+  return value === "assignee_only_after_assignment" ? "assignee_only_after_assignment" : "shared";
+}
 
 export function isManagementOnlyInboxMessage(rawPayload: unknown) {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return false;
@@ -65,4 +79,51 @@ export function shouldProjectConversationToHumanInbox(input: HumanInboxProjectio
   }
 
   return false;
+}
+
+function isDepartmentScopedRole(role?: string | null) {
+  const normalized = String(role ?? "").trim().toUpperCase();
+  return normalized === "AGENT" || normalized === "SUPERVISOR";
+}
+
+function isAgentRole(role?: string | null) {
+  return String(role ?? "").trim().toUpperCase() === "AGENT";
+}
+
+function getUserDepartmentIds(input: {
+  userDepartmentId?: string | null;
+  userDepartmentIds?: string[] | null;
+}) {
+  const ids = Array.isArray(input.userDepartmentIds)
+    ? input.userDepartmentIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+    : [];
+  const primary = String(input.userDepartmentId ?? "").trim();
+  return ids.length ? ids : primary ? [primary] : [];
+}
+
+function userHasDepartmentAccess(input: UserInboxVisibilityInput) {
+  const departmentId = String(input.departmentId ?? "").trim();
+  if (!departmentId) return false;
+  return getUserDepartmentIds(input).includes(departmentId);
+}
+
+export function shouldUserSeeConversationInInbox(input: UserInboxVisibilityInput) {
+  if (!shouldProjectConversationToHumanInbox(input)) return false;
+
+  const role = String(input.userRole ?? "").trim().toUpperCase();
+  if (!isDepartmentScopedRole(role)) return true;
+
+  const currentUserId = String(input.currentUserId ?? "").trim();
+  const assignedUserId = String(input.assignedUserId ?? "").trim();
+  if (currentUserId && assignedUserId === currentUserId) return true;
+
+  const policy = normalizeInboxVisibilityPolicy(input.policy);
+  const status = String(input.status ?? "").trim().toUpperCase();
+
+  if (policy === "assignee_only_after_assignment" && isAgentRole(role)) {
+    if (assignedUserId) return false;
+    if (status === "CLOSED") return input.userParticipated === true;
+  }
+
+  return userHasDepartmentAccess(input);
 }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildRealtimeNotificationUserContext,
+  canUserSeeConversationInInboxByPolicy,
   canUserReceiveTargetedNotification,
   handleRealtimeNotificationCandidate,
 } from "./appRealtime";
@@ -162,6 +163,47 @@ test("an explicit assignment remains visible only to the assigned user", () => {
     canUserReceiveTargetedNotification(
       { assignedUserId: "agent-b", departmentId: "department-c" },
       { id: "agent-b", role: "AGENT", departmentId: "department-a", departmentIds: [] }
+    ),
+    true
+  );
+});
+
+test("assignee-only inbox visibility hides assigned conversations from other agents", () => {
+  assert.equal(
+    canUserSeeConversationInInboxByPolicy(
+      { assignedUserId: "agent-b", departmentId: "department-a", status: "IN_PROGRESS" },
+      { id: "agent-a", role: "AGENT", departmentId: "department-a", departmentIds: ["department-a"] },
+      "assignee_only_after_assignment"
+    ),
+    false
+  );
+  assert.equal(
+    canUserSeeConversationInInboxByPolicy(
+      { assignedUserId: "agent-b", departmentId: "department-a", status: "IN_PROGRESS" },
+      { id: "agent-b", role: "AGENT", departmentId: "department-b", departmentIds: [] },
+      "assignee_only_after_assignment"
+    ),
+    true
+  );
+});
+
+test("assignee-only inbox visibility keeps unassigned queue entries shared", () => {
+  assert.equal(
+    canUserSeeConversationInInboxByPolicy(
+      { assignedUserId: null, departmentId: "department-a", status: "WAITING" },
+      { id: "agent-a", role: "AGENT", departmentId: "department-b", departmentIds: ["department-a"] },
+      "assignee_only_after_assignment"
+    ),
+    true
+  );
+});
+
+test("shared inbox visibility preserves department-scoped visibility for assigned conversations", () => {
+  assert.equal(
+    canUserSeeConversationInInboxByPolicy(
+      { assignedUserId: "agent-b", departmentId: "department-a", status: "IN_PROGRESS" },
+      { id: "agent-a", role: "AGENT", departmentId: "department-a", departmentIds: ["department-a"] },
+      "shared"
     ),
     true
   );

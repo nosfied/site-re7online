@@ -3,6 +3,7 @@ import type { ConversationOperationalStatus, InboxMessageItem } from "@/lib/what
 export type AppRealtimeStatus = "connected" | "reconnecting" | "offline";
 export type AppConversationMode = "BOT" | "HUMAN";
 export type AppHandoffStatus = "none" | "pending" | "active";
+export type AppInboxVisibilityPolicy = "shared" | "assignee_only_after_assignment";
 
 export type AppRealtimeEvent =
   | {
@@ -351,6 +352,50 @@ export function canUserReceiveTargetedNotification(
   }
   if (!isDepartmentScopedRole(user.role)) return true;
   return false;
+}
+
+function normalizeInboxVisibilityPolicy(value?: string | null): AppInboxVisibilityPolicy {
+  return value === "assignee_only_after_assignment" ? "assignee_only_after_assignment" : "shared";
+}
+
+function userHasDepartmentAccess(
+  target: { departmentId?: string | null },
+  user: { role?: string | null; departmentId?: string | null; departmentIds?: string[] }
+) {
+  const departmentId = String(target.departmentId ?? "").trim();
+  if (!departmentId) return false;
+  if (!isDepartmentScopedRole(user.role)) return true;
+  const userDepartmentIds = Array.isArray(user.departmentIds)
+    ? user.departmentIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+    : [];
+  if (userDepartmentIds.length > 0) return userDepartmentIds.includes(departmentId);
+  return String(user.departmentId ?? "").trim() === departmentId;
+}
+
+export function canUserSeeConversationInInboxByPolicy(
+  target: {
+    assignedUserId?: string | null;
+    departmentId?: string | null;
+    status?: ConversationOperationalStatus | null;
+  },
+  user: {
+    id?: string | null;
+    role?: string | null;
+    departmentId?: string | null;
+    departmentIds?: string[];
+  },
+  policy?: string | null
+) {
+  const role = String(user.role ?? "").trim().toUpperCase();
+  if (!isDepartmentScopedRole(role)) return true;
+  const assignedUserId = String(target.assignedUserId ?? "").trim();
+  const currentUserId = String(user.id ?? "").trim();
+  if (assignedUserId && assignedUserId === currentUserId) return true;
+  if (normalizeInboxVisibilityPolicy(policy) === "assignee_only_after_assignment" && role === "AGENT") {
+    if (assignedUserId) return false;
+    if (target.status === "CLOSED") return false;
+  }
+  return userHasDepartmentAccess(target, user);
 }
 
 export function isConversationAssignedToAnotherUser(

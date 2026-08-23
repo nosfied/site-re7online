@@ -32,6 +32,7 @@ export type TenantOperationalConfigValue = {
   aiAssistantConfig?: AiAssistantConfigSettings;
   aiIntentQualification?: AiIntentQualificationSettings;
   webSessionAlertEmails?: string[];
+  inboxVisibilityPolicy?: InboxVisibilityPolicy;
 };
 
 export type TenantOperationalConfigSource = "db" | "json_fallback";
@@ -173,6 +174,13 @@ export type ResolvedAgentSignatureSettings = {
   source: TenantOperationalConfigSource;
 };
 
+export type InboxVisibilityPolicy = "shared" | "assignee_only_after_assignment";
+
+export type ResolvedInboxVisibilityPolicy = {
+  policy: InboxVisibilityPolicy;
+  source: TenantOperationalConfigSource;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -222,6 +230,10 @@ export function normalizeAgentSignatureSettings(input: unknown): AgentSignatureS
     mode: "user_name",
     format: "bold_line",
   };
+}
+
+export function normalizeInboxVisibilityPolicy(input: unknown): InboxVisibilityPolicy {
+  return input === "assignee_only_after_assignment" ? "assignee_only_after_assignment" : "shared";
 }
 
 export const WHATSAPP_MEDIA_KINDS: WhatsappMediaKind[] = ["image", "audio", "video", "document"];
@@ -569,6 +581,9 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   if (Object.prototype.hasOwnProperty.call(value, "webSessionAlertEmails")) {
     config.webSessionAlertEmails = normalizeWebSessionAlertEmails(value.webSessionAlertEmails);
   }
+  if (Object.prototype.hasOwnProperty.call(value, "inboxVisibilityPolicy")) {
+    config.inboxVisibilityPolicy = normalizeInboxVisibilityPolicy(value.inboxVisibilityPolicy);
+  }
   return config;
 }
 
@@ -791,6 +806,57 @@ export async function saveAgentSignatureSettings(params: {
   return {
     record: saved,
     settings: nextSettings,
+  };
+}
+
+export async function resolveInboxVisibilityPolicy(params: {
+  prisma: PrismaClient;
+  clientId: string;
+}): Promise<ResolvedInboxVisibilityPolicy> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const rawConfig = isRecord(record?.config) ? record.config : {};
+  const hasPolicy = Object.prototype.hasOwnProperty.call(rawConfig, "inboxVisibilityPolicy");
+  const policy = parseOperationalConfig(record?.config).inboxVisibilityPolicy ?? "shared";
+  return {
+    policy,
+    source: hasPolicy ? "db" : "json_fallback",
+  };
+}
+
+export async function saveInboxVisibilityPolicy(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  policy: InboxVisibilityPolicy;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const nextPolicy = normalizeInboxVisibilityPolicy(params.policy);
+  const nextConfig = {
+    ...existingConfig,
+    inboxVisibilityPolicy: nextPolicy,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: { config: true },
+  });
+  return {
+    policy: parseOperationalConfig(saved.config).inboxVisibilityPolicy ?? "shared",
+    source: "db" as const,
   };
 }
 

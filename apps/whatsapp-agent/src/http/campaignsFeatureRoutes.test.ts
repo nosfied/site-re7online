@@ -7062,10 +7062,17 @@ test("agent signature is tenant-scoped and applies only to human text and canned
       where: { clientId: businessClientId },
       create: {
         clientId: businessClientId,
-        config: { agentSignature: { enabled: false, mode: "user_name", format: "bold_line" } },
+        config: {
+          agentSignature: { enabled: false, mode: "user_name", format: "bold_line" },
+          inboxVisibilityPolicy: "shared",
+        },
       },
       update: {
-        config: { ...existingConfig, agentSignature: { enabled: false, mode: "user_name", format: "bold_line" } },
+        config: {
+          ...existingConfig,
+          agentSignature: { enabled: false, mode: "user_name", format: "bold_line" },
+          inboxVisibilityPolicy: "shared",
+        },
       },
     });
   });
@@ -7124,6 +7131,40 @@ test("agent signature is tenant-scoped and applies only to human text and canned
   });
   assert.equal(updatedSettings.status, 200);
   assert.deepEqual(updatedSettings.body.settings, { enabled: true, mode: "user_name", format: "bold_line" });
+
+  const supervisorPolicyBlocked = await request<ErrorPayload>(
+    "PUT",
+    "/app/settings/agent-signature",
+    businessSupervisor,
+    {
+      enabled: true,
+      inboxVisibilityPolicy: "assignee_only_after_assignment",
+    }
+  );
+  assert.equal(supervisorPolicyBlocked.status, 403);
+  assert.equal(getErrorCode(supervisorPolicyBlocked.body), "forbidden");
+
+  const adminPolicyUpdated = await request<{
+    ok: true;
+    inboxVisibilityPolicy: { value: string; source: string };
+    permissions: { canUpdateInboxVisibilityPolicy?: boolean };
+  }>("PUT", "/app/settings/agent-signature", businessAdmin, {
+    enabled: true,
+    inboxVisibilityPolicy: "assignee_only_after_assignment",
+  });
+  assert.equal(adminPolicyUpdated.status, 200, JSON.stringify(adminPolicyUpdated.body));
+  assert.equal(adminPolicyUpdated.body.inboxVisibilityPolicy.value, "assignee_only_after_assignment");
+  assert.equal(adminPolicyUpdated.body.inboxVisibilityPolicy.source, "db");
+  assert.equal(adminPolicyUpdated.body.permissions.canUpdateInboxVisibilityPolicy, true);
+
+  const supervisorPolicyView = await request<{
+    ok: true;
+    inboxVisibilityPolicy: { value: string; source: string };
+    permissions: { canUpdateInboxVisibilityPolicy?: boolean };
+  }>("GET", "/app/settings/agent-signature", businessSupervisor);
+  assert.equal(supervisorPolicyView.status, 200, JSON.stringify(supervisorPolicyView.body));
+  assert.equal(supervisorPolicyView.body.inboxVisibilityPolicy.value, "assignee_only_after_assignment");
+  assert.equal(supervisorPolicyView.body.permissions.canUpdateInboxVisibilityPolicy, false);
 
   const governmentSettings = await request<{ ok: true; settings: { enabled: boolean } }>(
     "GET",
@@ -10367,6 +10408,143 @@ test("inbox operations stay functional when tenant has no active general departm
   assert.equal(managementTimeline.status, 200, JSON.stringify(managementTimeline.body));
   assert.equal(managementTimeline.body.items.some((item) => item.body === "Pesquisa interna"), false);
   assert.equal(managementTimeline.body.items.some((item) => item.body === "Mensagem operacional"), true);
+
+  const readOperationalConfig = async () => {
+    const existing = await prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: businessClientId },
+      select: { config: true },
+    });
+    return existing?.config && typeof existing.config === "object" && !Array.isArray(existing.config)
+      ? (existing.config as Record<string, unknown>)
+      : {};
+  };
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    create: {
+      clientId: businessClientId,
+      config: { inboxVisibilityPolicy: "assignee_only_after_assignment" },
+    },
+    update: {
+      config: {
+        ...(await readOperationalConfig()),
+        inboxVisibilityPolicy: "assignee_only_after_assignment",
+      },
+    },
+  });
+
+  const policyAssignedOtherWaId = "5584993310150";
+  const policyAssignedSelfWaId = "5584993310151";
+  const policyClosedOwnWaId = "5584993310152";
+  const policyClosedOtherWaId = "5584993310153";
+  const createPolicyConversation = async (params: {
+    waId: string;
+    status: "IN_PROGRESS" | "CLOSED";
+    assignedUserId?: string | null;
+    assignedAt?: Date | null;
+  }) => {
+    await prisma.conversation.create({
+      data: {
+        clientId: businessClientId,
+        waId: params.waId,
+        waIdCanonical: params.waId,
+        channel: "whatsapp",
+        provider: "meta",
+        departmentId: departments[0].id,
+        windowIsOpen: true,
+        windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        lastInboundAt: new Date("2026-08-20T13:00:00.000Z"),
+      },
+    });
+    const runtimeState = await prisma.conversationRuntimeState.create({
+      data: {
+        clientId: businessClientId,
+        waId: params.waId,
+        waIdCanonical: params.waId,
+        conversationKey: `${prefix}-business:${params.waId}`,
+        channel: "whatsapp",
+        provider: "meta",
+        departmentId: departments[0].id,
+        queueId: departments[0].queueId,
+        windowIsOpen: true,
+        windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        mode: "HUMAN",
+        status: params.status,
+        handoffStatus: params.status === "CLOSED" ? "NONE" : "ACTIVE",
+        handoffActivatedAt: new Date("2026-08-20T12:50:00.000Z"),
+        assignedUserId: params.assignedUserId ?? null,
+        assignedTo: params.assignedUserId ? `user:${params.assignedUserId}` : null,
+        assignedAt: params.assignedAt ?? null,
+        closedAt: params.status === "CLOSED" ? new Date("2026-08-20T13:10:00.000Z") : null,
+        lastInboundAt: new Date("2026-08-20T13:00:00.000Z"),
+      },
+      select: { id: true },
+    });
+    await prisma.inboundMessage.create({
+      data: {
+        clientId: businessClientId,
+        waId: params.waId,
+        waIdCanonical: params.waId,
+        channel: "whatsapp",
+        provider: "meta",
+        messageId: `wamid.policy.${params.waId}.${safeTemplatePrefix}`,
+        type: "TEXT",
+        bodyText: `Policy ${params.waId}`,
+        allowlistHit: true,
+        createdAt: new Date("2026-08-20T13:00:00.000Z"),
+        rawPayload: { provider: "meta" },
+      },
+    });
+    return runtimeState;
+  };
+  await createPolicyConversation({
+    waId: policyAssignedOtherWaId,
+    status: "IN_PROGRESS",
+    assignedUserId: businessAdmin.id,
+    assignedAt: new Date("2026-08-20T13:01:00.000Z"),
+  });
+  await createPolicyConversation({
+    waId: policyAssignedSelfWaId,
+    status: "IN_PROGRESS",
+    assignedUserId: multiDepartmentAgent.id,
+    assignedAt: new Date("2026-08-20T13:02:00.000Z"),
+  });
+  const closedOwnRuntime = await createPolicyConversation({
+    waId: policyClosedOwnWaId,
+    status: "CLOSED",
+  });
+  await prisma.conversationAssignment.create({
+    data: {
+      conversationId: closedOwnRuntime.id,
+      toUserId: multiDepartmentAgent.id,
+      assignedAt: new Date("2026-08-20T13:03:00.000Z"),
+    },
+  });
+  await createPolicyConversation({
+    waId: policyClosedOtherWaId,
+    status: "CLOSED",
+  });
+
+  const policyAgentInbox = await request<{
+    ok: true;
+    inboxVisibilityPolicy?: string;
+    items: Array<{ waId: string; assignedUserId: string | null; status: string | null }>;
+  }>("GET", "/app/conversations", multiDepartmentAgent);
+  assert.equal(policyAgentInbox.status, 200, JSON.stringify(policyAgentInbox.body));
+  assert.equal(policyAgentInbox.body.inboxVisibilityPolicy, "assignee_only_after_assignment");
+  const policyAgentWaIds = new Set(policyAgentInbox.body.items.map((item) => item.waId));
+  assert.equal(policyAgentWaIds.has(waId), true);
+  assert.equal(policyAgentWaIds.has(policyAssignedOtherWaId), false);
+  assert.equal(policyAgentWaIds.has(policyAssignedSelfWaId), true);
+  assert.equal(policyAgentWaIds.has(policyClosedOwnWaId), true);
+  assert.equal(policyAgentWaIds.has(policyClosedOtherWaId), false);
+
+  const policyAdminInbox = await request<{ ok: true; items: Array<{ waId: string }> }>(
+    "GET",
+    "/app/conversations",
+    businessAdmin
+  );
+  assert.equal(policyAdminInbox.status, 200, JSON.stringify(policyAdminInbox.body));
+  assert.equal(policyAdminInbox.body.items.some((item) => item.waId === policyAssignedOtherWaId), true);
 
   const claim = await request<{ ok: true; assignedUserId: string | null; departmentId: string | null }>(
     "POST",

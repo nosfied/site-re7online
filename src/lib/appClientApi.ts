@@ -130,11 +130,16 @@ export type AppAgentSignatureSettingsResponse = {
   tenantId: string;
   settings: AppAgentSignatureSettings;
   source: "db" | "json_fallback";
+  inboxVisibilityPolicy?: {
+    value: AppInboxVisibilityPolicy;
+    source: "db" | "json_fallback";
+  };
   preview: {
     bodyText: string;
   };
   permissions: {
     canUpdate: boolean;
+    canUpdateInboxVisibilityPolicy?: boolean;
   };
 };
 
@@ -1599,6 +1604,8 @@ export type AppQueueAssignmentSettingsResponse = {
   };
 };
 
+export type AppInboxVisibilityPolicy = "shared" | "assignee_only_after_assignment";
+
 export type AppWhatsAppWebSessionObservedState =
   | "DISCONNECTED"
   | "CONNECTING"
@@ -2502,6 +2509,7 @@ export async function fetchAppConversations(
   filterCounts?: Record<string, number>;
   nextCursor?: string | null;
   readState?: AppInboxReadState;
+  inboxVisibilityPolicy?: AppInboxVisibilityPolicy;
 }> {
   const params = new URLSearchParams();
   if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
@@ -3180,7 +3188,7 @@ export async function fetchAppAgentSignatureSettings(
 
 export async function updateAppAgentSignatureSettings(
   session: AppSession,
-  settings: AppAgentSignatureSettings
+  settings: AppAgentSignatureSettings & { inboxVisibilityPolicy?: AppInboxVisibilityPolicy }
 ): Promise<AppAgentSignatureSettingsResponse> {
   return requestAppJson(session, "/app/settings/agent-signature", {
     method: "PUT",

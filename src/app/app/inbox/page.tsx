@@ -14,6 +14,7 @@ import {
 } from "@/lib/appUxLabels";
 import {
   addAppRealtimeListener,
+  canUserSeeConversationInInboxByPolicy,
   canUserReceiveTargetedNotification,
   handleRealtimeNotificationCandidate,
   requestAppNotificationAudioUnlock,
@@ -44,6 +45,7 @@ import { QUICK_EMOJIS } from "@/lib/quickEmojis";
 import { formatUserDisplayName } from "@/lib/userDisplayName";
 import {
   AppInboxReadState,
+  AppInboxVisibilityPolicy,
   AppContactTimelineItem,
   AppSession,
   claimAppConversation,
@@ -2302,6 +2304,7 @@ export default function AppInboxPage() {
   const [selectedConversationKey, setSelectedConversationKey] = useState<string | null>(null);
   const [selectedConversationWaId, setSelectedConversationWaId] = useState<string | null>(null);
   const [messages, setMessages] = useState<InboxMessageItem[]>([]);
+  const [inboxVisibilityPolicy, setInboxVisibilityPolicy] = useState<AppInboxVisibilityPolicy>("shared");
   const [messagesConversationKey, setMessagesConversationKey] = useState<string | null>(null);
   const [leadNotes, setLeadNotes] = useState<LeadNoteItem[]>([]);
   const [crmStatusOptions, setCrmStatusOptions] = useState<CrmBusinessStatusConfig[]>([]);
@@ -3310,6 +3313,18 @@ export default function AppInboxPage() {
       event.type === "message.created" || event.type === "conversation.handoff.updated"
         ? canUserReceiveTargetedNotification(event, session.user)
         : false;
+    const eventVisibleToCurrentUser =
+      event.type === "message.created" || event.type === "conversation.handoff.updated"
+        ? canUserSeeConversationInInboxByPolicy(
+            {
+              assignedUserId: event.assignedUserId ?? null,
+              departmentId: event.departmentId ?? null,
+              status: "status" in event ? event.status ?? null : null,
+            },
+            session.user,
+            inboxVisibilityPolicy
+          )
+        : false;
     if (event.type === "conversation.handoff.updated") {
       const humanInboxVisibility = getRealtimeHumanInboxVisibility(event);
       const conversationKey = event.waIdCanonical ?? event.waId;
@@ -3320,12 +3335,14 @@ export default function AppInboxPage() {
         return itemKey === conversationKey || item.waId === event.waId || item.waIdCanonical === event.waIdCanonical;
       });
       const eventRepresentsClosed = event.status === "CLOSED";
+      const shouldPreserveClosedWithoutPolicyDecision =
+        eventRepresentsClosed && inboxVisibilityPolicy === "shared" && !event.departmentId;
       const shouldRemoveFromHumanInbox =
         humanInboxVisibility === false ||
         event.reason === "released" ||
         event.reason === "conversation.deleted" ||
         event.reason === "conversation.anonymized" ||
-        (!eventTargetsCurrentUser && !eventRepresentsClosed);
+        (!eventVisibleToCurrentUser && !shouldPreserveClosedWithoutPolicyDecision);
       if (event.reason === "conversation.deleted" || event.reason === "conversation.anonymized") {
         evictConversationFromLocalState(Array.from(matchedConversationKeys));
         return;
@@ -3386,7 +3403,7 @@ export default function AppInboxPage() {
         }
         return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
       });
-      if (!eventTargetsCurrentUser && !eventRepresentsClosed) {
+      if (!eventVisibleToCurrentUser && !shouldPreserveClosedWithoutPolicyDecision) {
         void refreshConversationListRef.current?.(session);
       }
       if (
@@ -3508,6 +3525,26 @@ export default function AppInboxPage() {
       }
       return;
     }
+    if (!eventVisibleToCurrentUser) {
+      setConversations((prev) =>
+        prev.filter((item) => {
+          const itemKey = getConversationIdentity(item);
+          return itemKey !== conversationKey && item.waId !== event.waId && item.waIdCanonical !== event.waIdCanonical;
+        })
+      );
+      if (
+        realtimeEventTargetsSelectedConversation({
+          event,
+          selectedConversationKey,
+          selectedConversationWaId,
+          selectedConversationIdentityCandidates: selectedConversationIdentityCandidatesRef.current,
+        })
+      ) {
+        clearSelectedConversation();
+      }
+      void refreshConversationListRef.current?.(session);
+      return;
+    }
     setConversations((prev) => {
       const nextItems = prev.map((item) => {
         const itemKey = getConversationIdentity(item);
@@ -3549,7 +3586,7 @@ export default function AppInboxPage() {
           updatedAt: message.createdAt,
         };
         });
-      if (!matchedConversation && humanInboxVisibility === true) {
+      if (!matchedConversation && humanInboxVisibility === true && eventVisibleToCurrentUser) {
         void refreshConversationListRef.current?.(session);
       }
       return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
@@ -3634,6 +3671,7 @@ export default function AppInboxPage() {
     session,
     isBusinessTenant,
     conversations,
+    inboxVisibilityPolicy,
   ]);
 
   useEffect(() => {
@@ -3720,6 +3758,9 @@ export default function AppInboxPage() {
     }
     if (response.readState) {
       setReadState((current) => mergeReadStatePreservingUnrelated(current, response.readState!));
+    }
+    if (response.inboxVisibilityPolicy) {
+      setInboxVisibilityPolicy(response.inboxVisibilityPolicy);
     }
     if (response.filterCounts) {
       setConversationFilterCounts({
@@ -3922,6 +3963,9 @@ export default function AppInboxPage() {
       );
       if (response.readState) {
         setReadState((current) => mergeReadStatePreservingUnrelated(current, response.readState!));
+      }
+      if (response.inboxVisibilityPolicy) {
+        setInboxVisibilityPolicy(response.inboxVisibilityPolicy);
       }
       setConversationNextCursor(response.nextCursor ?? null);
       loadedConversationPageCountRef.current += 1;

@@ -7,6 +7,7 @@ import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/F
 import {
   AppAgentSignatureSettings,
   AppApiError,
+  AppInboxVisibilityPolicy,
   AppSession,
   clearAppSession,
   fetchAppAgentSignatureSettings,
@@ -34,6 +35,10 @@ function getDefaultSettings(): AppAgentSignatureSettings {
   };
 }
 
+function getDefaultInboxVisibilityPolicy(): AppInboxVisibilityPolicy {
+  return "shared";
+}
+
 function normalizeSettingsError(error: AppApiError, fallback: string) {
   if (error.status === 401) return "Sessão expirada. Faça login novamente.";
   if (error.status === 403) return "Sem permissão para alterar configurações de atendimento.";
@@ -58,7 +63,11 @@ export default function AppSettingsInboxPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
   const [settings, setSettings] = useState<AppAgentSignatureSettings>(getDefaultSettings);
+  const [inboxVisibilityPolicy, setInboxVisibilityPolicy] = useState<AppInboxVisibilityPolicy>(
+    getDefaultInboxVisibilityPolicy
+  );
   const [canUpdate, setCanUpdate] = useState(false);
+  const [canUpdateInboxVisibilityPolicy, setCanUpdateInboxVisibilityPolicy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +80,9 @@ export default function AppSettingsInboxPage() {
 
   const applyResponse = useCallback((response: Awaited<ReturnType<typeof fetchAppAgentSignatureSettings>>) => {
     setSettings(response.settings);
+    setInboxVisibilityPolicy(response.inboxVisibilityPolicy?.value ?? getDefaultInboxVisibilityPolicy());
     setCanUpdate(response.permissions.canUpdate);
+    setCanUpdateInboxVisibilityPolicy(response.permissions.canUpdateInboxVisibilityPolicy === true);
   }, []);
 
   const loadSettings = useCallback(
@@ -129,6 +140,10 @@ export default function AppSettingsInboxPage() {
   });
 
   const readOnly = useMemo(() => !session || !canManageInboxSettings(session.user.role) || !canUpdate, [canUpdate, session]);
+  const visibilityReadOnly = useMemo(
+    () => !session || !canUpdateInboxVisibilityPolicy || saving,
+    [canUpdateInboxVisibilityPolicy, saving, session]
+  );
 
   const handleSave = async () => {
     if (!session || readOnly) return;
@@ -140,9 +155,10 @@ export default function AppSettingsInboxPage() {
         enabled: settings.enabled,
         mode: "user_name",
         format: "bold_line",
+        ...(canUpdateInboxVisibilityPolicy ? { inboxVisibilityPolicy } : {}),
       });
       applyResponse(response);
-      setSuccess("Configuração de assinatura do atendente salva.");
+      setSuccess("Configurações de atendimento salvas.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
@@ -226,6 +242,52 @@ export default function AppSettingsInboxPage() {
                   </span>
                 </button>
               </label>
+
+              <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-white">Visibilidade das conversas</p>
+                    <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-white/60">
+                      Controla apenas a projeção da Inbox. Notificações, leitura, filas e permissões de ação seguem
+                      as regras operacionais atuais.
+                    </p>
+                  </div>
+                  {!canUpdateInboxVisibilityPolicy ? <SettingsBadge label="Somente leitura" tone="warning" /> : null}
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  {[
+                    {
+                      value: "shared" as const,
+                      title: "Compartilhada por setor",
+                      description: "Atendentes do setor podem acompanhar conversas atribuídas a colegas.",
+                    },
+                    {
+                      value: "assignee_only_after_assignment" as const,
+                      title: "Individual após atribuição",
+                      description:
+                        "Sem responsável, a fila é compartilhada. Após atribuição, só o responsável, supervisores e administradores autorizados visualizam.",
+                    },
+                  ].map((option) => {
+                    const active = inboxVisibilityPolicy === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setInboxVisibilityPolicy(option.value)}
+                        disabled={visibilityReadOnly}
+                        className={`rounded-lg border p-3 text-left transition ${
+                          active
+                            ? "border-re7-orange bg-re7-orange/15 text-white"
+                            : "border-white/10 bg-white/5 text-white/75 hover:bg-white/10"
+                        } ${visibilityReadOnly ? "cursor-not-allowed opacity-70" : ""}`}
+                      >
+                        <span className="block text-sm font-semibold">{option.title}</span>
+                        <span className="mt-1 block text-xs leading-relaxed text-white/60">{option.description}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm leading-relaxed text-white/68">
                 <p className="font-semibold text-white">Escopo</p>

@@ -37,6 +37,7 @@ import {
   resolveAiAssistantConfigSettings,
   resolveAiIntentQualificationSettings,
   resolveAgentSignatureSettings,
+  resolveInboxVisibilityPolicy,
   resolveCrmBusinessStatuses,
   resolveAutomationFlagsSettings,
   resolveFollowUpSettings,
@@ -50,6 +51,7 @@ import {
   saveAiAssistantConfigSettings,
   saveAiIntentQualificationSettings,
   saveAgentSignatureSettings,
+  saveInboxVisibilityPolicy,
   saveAutomationFlagsSettings,
   saveCrmBusinessStatuses,
   saveFollowUpSettings,
@@ -63,6 +65,7 @@ import {
   type AiAssistantConfigSettings,
   type AiIntentQualificationSettings,
   type AgentSignatureSettings,
+  type InboxVisibilityPolicy,
   type AutomationFlagsSettings,
   type HandoffLeadNotificationSettings,
   type FollowUpSettings,
@@ -440,6 +443,7 @@ import {
 import {
   isManagementOnlyInboxMessage,
   shouldProjectConversationToHumanInbox,
+  shouldUserSeeConversationInInbox,
 } from "../inbox/messageVisibility.js";
 import {
   buildServiceCycleHistoryMap,
@@ -4015,12 +4019,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         userId: clientAuth.userId,
         role: clientAuth.role,
       });
+      const visibilityPolicy = await resolveInboxVisibilityPolicy({
+        prisma,
+        clientId: client.id,
+      });
       recordInboxListTiming(client.id, "auth_rbac", authRbacStartedAt);
       const buildPayloadStartedAt = channelLatencyNow();
       const result = await buildConversationListPayload(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
         userId: clientAuth.userId,
+        userRole: clientAuth.role,
+        userDepartmentId: departmentAccess.departmentId,
+        userDepartmentIds: departmentAccess.departmentIds,
+        inboxVisibilityPolicy: visibilityPolicy.policy,
         limit,
         cursor,
         filters: {
@@ -7855,20 +7867,31 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
 
       if (req.method === "GET") {
-        const { settings, source } = await resolveAgentSignatureSettings({
-          prisma,
-          clientId: client.id,
-        });
+        const [{ settings, source }, visibility] = await Promise.all([
+          resolveAgentSignatureSettings({
+            prisma,
+            clientId: client.id,
+          }),
+          resolveInboxVisibilityPolicy({
+            prisma,
+            clientId: client.id,
+          }),
+        ]);
         json(res, 200, {
           ok: true,
           tenantId: client.clientKey,
           settings,
           source,
+          inboxVisibilityPolicy: {
+            value: visibility.policy,
+            source: visibility.source,
+          },
           preview: {
             bodyText: "*Maria*\nOla, como posso ajudar?",
           },
           permissions: {
             canUpdate: isAdminOrSupervisorRole(clientAuth.role),
+            canUpdateInboxVisibilityPolicy: isAdminRole(clientAuth.role),
           },
         });
         return;
@@ -7877,6 +7900,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       const record = body as Record<string, unknown>;
+      const requestedInboxVisibilityPolicy =
+        typeof record.inboxVisibilityPolicy === "string" ? record.inboxVisibilityPolicy.trim() : null;
+      if (requestedInboxVisibilityPolicy && !isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can update inbox visibility policy."));
+        return;
+      }
+      if (
+        requestedInboxVisibilityPolicy &&
+        requestedInboxVisibilityPolicy !== "shared" &&
+        requestedInboxVisibilityPolicy !== "assignee_only_after_assignment"
+      ) {
+        json(res, 400, httpError("invalid_inbox_visibility_policy", "Invalid inbox visibility policy."));
+        return;
+      }
       const settings: AgentSignatureSettings = {
         enabled: record.enabled === true,
         mode: "user_name",
@@ -7887,6 +7924,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         settings,
       });
+      const savedVisibility = requestedInboxVisibilityPolicy
+        ? await saveInboxVisibilityPolicy({
+            prisma,
+            clientId: client.id,
+            policy: requestedInboxVisibilityPolicy as InboxVisibilityPolicy,
+          })
+        : await resolveInboxVisibilityPolicy({
+            prisma,
+            clientId: client.id,
+          });
       await persistEvent({
         clientId: client.id,
         requestId: `${requestId}:agent-signature-updated`,
@@ -7896,6 +7943,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           enabled: saved.settings.enabled,
           mode: saved.settings.mode,
           format: saved.settings.format,
+          inboxVisibilityPolicy: savedVisibility.policy,
         },
       });
       json(res, 200, {
@@ -7903,11 +7951,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         tenantId: client.clientKey,
         settings: saved.settings,
         source: "db",
+        inboxVisibilityPolicy: {
+          value: savedVisibility.policy,
+          source: savedVisibility.source,
+        },
         preview: {
           bodyText: "*Maria*\nOla, como posso ajudar?",
         },
         permissions: {
           canUpdate: true,
+          canUpdateInboxVisibilityPolicy: isAdminRole(clientAuth.role),
         },
       });
     } catch (error) {
@@ -29252,6 +29305,54 @@ type ConversationListFilters = {
   search: string;
 };
 
+async function loadInboxParticipationKeysForUser(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    userId: string | null | undefined;
+    candidates: Array<{ waId: string; waIdCanonical: string; conversationKey?: string | null }>;
+  }
+) {
+  const userId = String(params.userId ?? "").trim();
+  if (!userId) return new Set<string>();
+  const identities = Array.from(
+    new Set(
+      params.candidates
+        .flatMap((item) => [item.waId, item.waIdCanonical, item.conversationKey])
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+  if (identities.length === 0) return new Set<string>();
+  const rows = await prisma.conversationRuntimeState.findMany({
+    where: {
+      clientId: params.clientId,
+      OR: [
+        { waId: { in: identities } },
+        { waIdCanonical: { in: identities } },
+        { conversationKey: { in: identities } },
+      ],
+      assignments: {
+        some: { toUserId: userId },
+      },
+    },
+    select: {
+      waId: true,
+      waIdCanonical: true,
+      conversationKey: true,
+    },
+  });
+  const keys = new Set<string>();
+  for (const row of rows) {
+    for (const value of [row.waId, row.waIdCanonical, row.conversationKey]) {
+      const key = String(value ?? "").trim();
+      if (key) keys.add(key);
+    }
+    keys.add(getWaIdGroupKey(row.waId, row.waIdCanonical));
+  }
+  return keys;
+}
+
 function decodeConversationListCursor(raw: string): ConversationListCursor | null {
   if (!raw) return null;
   try {
@@ -29967,6 +30068,10 @@ async function buildConversationListPayload(
     clientId: string;
     clientKey: string;
     userId?: string;
+    userRole?: string;
+    userDepartmentId?: string | null;
+    userDepartmentIds?: string[];
+    inboxVisibilityPolicy?: InboxVisibilityPolicy;
     limit: number;
     cursor: ConversationListCursor | null;
     filters: ConversationListFilters;
@@ -30087,6 +30192,7 @@ async function buildConversationListPayload(
       filterCounts: buildEmptyConversationFilterCounts(),
       nextCursor: null,
       readState,
+      inboxVisibilityPolicy: params.inboxVisibilityPolicy ?? "shared",
     };
   }
 
@@ -30293,6 +30399,21 @@ async function buildConversationListPayload(
   const runtimeByWaId = new Map(
     runtimeConversations.map((item) => [item.waIdCanonical, item.conversation])
   );
+  const userParticipationKeys =
+    params.inboxVisibilityPolicy === "assignee_only_after_assignment" && isAgentRole(params.userRole)
+      ? await loadInboxParticipationKeysForUser(prisma, {
+          clientId: params.clientId,
+          userId: params.userId ?? null,
+          candidates: winners.map((item) => {
+            const runtimeState = runtimeByWaId.get(item.waIdCanonical);
+            return {
+              waId: item.waId,
+              waIdCanonical: item.waIdCanonical,
+              conversationKey: runtimeState?.conversationKey ?? null,
+            };
+          }),
+        })
+      : new Set<string>();
   const activeChatbotNodeIds = new Set(
     runtimeConversations
       .map((item) =>
@@ -30545,15 +30666,30 @@ async function buildConversationListPayload(
   }));
   recordInboxListTiming(params.clientId, "assembly", assemblyStartedAt);
   const filteringSortingStartedAt = channelLatencyNow();
+  const itemMatchesUserInboxVisibility = (item: (typeof allItems)[number]) => {
+    const userParticipated = [item.waId, item.waIdCanonical]
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean)
+      .some((key) => userParticipationKeys.has(key));
+    return shouldUserSeeConversationInInbox({
+      ...item,
+      currentUserId: params.userId ?? null,
+      userRole: params.userRole ?? null,
+      userDepartmentId: params.userDepartmentId ?? null,
+      userDepartmentIds: params.userDepartmentIds ?? [],
+      policy: params.inboxVisibilityPolicy ?? "shared",
+      userParticipated,
+    });
+  };
   const filteredItems = sortConversationItemsByRecent(
     allItems.filter(
       (item) =>
-        conversationListItemIsVisibleInInbox(item) &&
+        itemMatchesUserInboxVisibility(item) &&
         conversationMatchesListFilters(item, params.filters)
     )
   );
   const filterCounts = buildConversationFilterCounts(
-    allItems.filter(conversationListItemIsVisibleInInbox),
+    allItems.filter(itemMatchesUserInboxVisibility),
     params.filters,
     params.userId ?? null
   );
@@ -30583,6 +30719,7 @@ async function buildConversationListPayload(
     filterCounts,
     nextCursor,
     readState,
+    inboxVisibilityPolicy: params.inboxVisibilityPolicy ?? "shared",
   };
 }
 
