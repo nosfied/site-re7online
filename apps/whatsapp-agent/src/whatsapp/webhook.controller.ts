@@ -113,6 +113,7 @@ import {
   buildMetaUsageEventPayload,
   recordMetaUsageLedgerEvent,
 } from "../billing/metaUsageLedger.js";
+import { recordActiveMessageDeliveryIfNeeded } from "../billing/activeMessageBilling.js";
 import { recordReceptiveSessionIfNeeded } from "../billing/receptiveSessionMeter.js";
 import {
   ConversationIntent,
@@ -2795,6 +2796,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             templateName: true,
             errorBody: true,
             rawPayload: true,
+            createdAt: true,
           },
         });
         if (!outbound) continue;
@@ -2927,6 +2929,28 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             waIdCanonical: outbound.waIdCanonical,
           },
         });
+        const activeBilling = await recordActiveMessageDeliveryIfNeeded({
+          prisma,
+          input: {
+            outbound,
+            deliveryStatus: item.status ?? "",
+            deliveredAt: normalizeStatusTimestamp(item.timestamp)
+              ? new Date(normalizeStatusTimestamp(item.timestamp) as string)
+              : new Date(),
+            pricingCategory,
+            providerMessageId: item.id ?? undefined,
+          },
+        });
+        if (!activeBilling.ok) {
+          logger.warn({
+            event: "billing.active_message.meter.failed",
+            clientId: outbound.clientId,
+            messageId: outbound.messageId,
+            metaMessageId: outbound.metaMessageId ?? item.id,
+            reason: activeBilling.reason,
+            error: activeBilling.error,
+          });
+        }
         publishRealtimeEvent({
           type: "message.status.updated",
           clientId: outbound.clientId,

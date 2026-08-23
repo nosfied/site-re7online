@@ -174,6 +174,11 @@ import {
   buildMonthlyMetaUsageReport,
 } from "../billing/metaUsageReport.js";
 import {
+  buildActiveMessageBillingCsv,
+  buildActiveMessageBillingReport,
+  parseActiveMessageBillingMonth,
+} from "../billing/activeMessageBillingReport.js";
+import {
   buildMonthlyReceptiveSessionCsv,
   buildMonthlyReceptiveSessionCsvFileName,
   buildMonthlyReceptiveSessionReport,
@@ -13385,6 +13390,71 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.usage.receptive_sessions.report.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "GET" &&
+    (pathname === "/app/usage/active-messages/report" ||
+      pathname === "/app/usage/active-messages/report.csv")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Forbidden"));
+        return;
+      }
+      const month = parseActiveMessageBillingMonth(typeof query.month === "string" ? query.month : null);
+      if (!month) {
+        json(res, 400, httpError("invalid_month", "Month must use YYYY-MM format"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const report = await buildActiveMessageBillingReport({
+        prisma,
+        clientId: client.id,
+        month,
+        campaignId: typeof query.campaignId === "string" ? query.campaignId : null,
+        unitPrice: typeof query.unitPrice === "string" ? query.unitPrice : null,
+        currency: typeof query.currency === "string" ? query.currency : "BRL",
+      });
+      if (pathname.endsWith(".csv") || query.format === "csv") {
+        const csv = buildActiveMessageBillingCsv(report);
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="active-message-billing-${client.clientKey}-${month}.csv"`
+        );
+        res.end(csv);
+        return;
+      }
+      json(res, 200, report);
+    } catch (error) {
+      logger.error({
+        event: "app.usage.active_messages.report.error",
         message: (error as Error).message,
         requestId,
       });

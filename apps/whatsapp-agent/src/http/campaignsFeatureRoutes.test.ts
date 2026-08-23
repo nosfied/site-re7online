@@ -291,6 +291,19 @@ async function requestUnauth<T = unknown>(
   };
 }
 
+async function waitForEventually(
+  predicate: () => Promise<boolean>,
+  timeoutMs = 1000,
+  intervalMs = 25
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return true;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  return predicate();
+}
+
 async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 3000) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
@@ -4898,6 +4911,396 @@ test("receptive sessions monthly report is tenant scoped, role protected and CSV
   assert.match(csv.text, /SUMMARY,2026-09,sessionCount,1,total,0.005,,/);
   assert.equal(csv.text.includes("5584999997777"), false);
   assert.equal(csv.text.includes("Nao deve aparecer"), false);
+});
+
+test("active message billing report is tenant scoped, role protected and CSV ready", async () => {
+  const campaign = await prisma.campaign.create({
+    data: {
+      clientId: businessClientId,
+      name: `${prefix} Active Billing Campaign`,
+      templateName: "cra_utility_notice",
+      status: "completed",
+      totalRecipients: 6,
+      sentCount: 5,
+      blockedCount: 1,
+    },
+    select: { id: true },
+  });
+  const otherCampaign = await prisma.campaign.create({
+    data: {
+      clientId: overrideClientId,
+      name: `${prefix} Other Active Billing Campaign`,
+      templateName: "other_notice",
+      status: "completed",
+      totalRecipients: 1,
+      sentCount: 1,
+      blockedCount: 0,
+    },
+    select: { id: true },
+  });
+  await prisma.outboundMessage.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        waId: "5584999991111",
+        waIdCanonical: "5584999991111",
+        messageId: `${prefix}.active.message.1`,
+        metaMessageId: `${prefix}.wamid.active.1`,
+        type: "TEMPLATE",
+        templateName: "cra_utility_notice",
+        status: "SENT",
+        rawPayload: {
+          source: "campaign",
+          campaignId: campaign.id,
+          templateCategory: "utility",
+          metaStatus: { lastStatus: "delivered", pricingCategory: "utility" },
+          metaUsage: { source: "campaign", metaCategory: "utility", estimatedMetaCostUsd: 0.01 },
+          rawBodyText: "Nao deve aparecer",
+        },
+        createdAt: new Date("2026-09-03T10:00:00.000Z"),
+      },
+      {
+        clientId: businessClientId,
+        waId: "5584999992222",
+        waIdCanonical: "5584999992222",
+        messageId: `${prefix}.active.message.2`,
+        metaMessageId: `${prefix}.wamid.active.2`,
+        type: "TEMPLATE",
+        templateName: "cra_utility_notice",
+        status: "SENT",
+        rawPayload: {
+          source: "campaign",
+          campaignId: campaign.id,
+          templateCategory: "utility",
+          metaStatus: { lastStatus: "read", pricingCategory: "utility" },
+          metaUsage: { source: "campaign", metaCategory: "utility", estimatedMetaCostUsd: 0.02 },
+        },
+        createdAt: new Date("2026-09-03T10:01:00.000Z"),
+      },
+      {
+        clientId: businessClientId,
+        waId: "5584999993333",
+        waIdCanonical: "5584999993333",
+        messageId: `${prefix}.active.message.3`,
+        metaMessageId: `${prefix}.wamid.active.3`,
+        type: "TEMPLATE",
+        templateName: "cra_utility_notice",
+        status: "FAILED",
+        rawPayload: {
+          source: "campaign",
+          campaignId: campaign.id,
+          templateCategory: "utility",
+          metaStatus: { lastStatus: "failed", pricingCategory: "utility", statusDetail: "rejected" },
+          metaUsage: { source: "campaign", metaCategory: "utility", billingRule: "rejected" },
+        },
+        createdAt: new Date("2026-09-03T10:02:00.000Z"),
+      },
+      {
+        clientId: overrideClientId,
+        waId: "5584999994444",
+        waIdCanonical: "5584999994444",
+        messageId: `${prefix}.active.message.other`,
+        metaMessageId: `${prefix}.wamid.active.other`,
+        type: "TEMPLATE",
+        templateName: "other_notice",
+        status: "SENT",
+        rawPayload: {
+          source: "campaign",
+          campaignId: otherCampaign.id,
+          templateCategory: "utility",
+          metaStatus: { lastStatus: "delivered", pricingCategory: "utility" },
+        },
+        createdAt: new Date("2026-09-03T10:00:00.000Z"),
+      },
+    ],
+  });
+  await prisma.event.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        waId: "5584999991111",
+        waIdCanonical: "5584999991111",
+        messageId: `${prefix}.active.message.1`,
+        requestId: `${prefix}.active.billing.1`,
+        eventName: "billing.active_message.delivered",
+        payloadJson: {
+          campaignId: campaign.id,
+          outboundMessageId: `${prefix}.active.outbound.1`,
+          providerMessageId: `${prefix}.wamid.active.1`,
+          templateCategory: "utility",
+          customerServiceWindowOpenAtSend: false,
+          rawBodyText: "Nao deve aparecer",
+        },
+        createdAt: new Date("2026-09-03T10:05:00.000Z"),
+      },
+      {
+        clientId: businessClientId,
+        waId: "5584999992222",
+        waIdCanonical: "5584999992222",
+        messageId: `${prefix}.active.message.2`,
+        requestId: `${prefix}.active.billing.2`,
+        eventName: "billing.active_message.delivered",
+        payloadJson: {
+          campaignId: campaign.id,
+          outboundMessageId: `${prefix}.active.outbound.2`,
+          providerMessageId: `${prefix}.wamid.active.2`,
+          templateCategory: "utility",
+          customerServiceWindowOpenAtSend: false,
+        },
+        createdAt: new Date("2026-09-03T10:06:00.000Z"),
+      },
+      {
+        clientId: businessClientId,
+        waId: "5584999995555",
+        waIdCanonical: "5584999995555",
+        messageId: campaign.id,
+        requestId: `${prefix}.active.optout.1`,
+        eventName: "campaign.recipient.opt_out_blocked",
+        payloadJson: {
+          campaignId: campaign.id,
+          templateName: "cra_utility_notice",
+          waId: "5584999995555",
+          waIdCanonical: "5584999995555",
+        },
+        createdAt: new Date("2026-09-03T09:00:00.000Z"),
+      },
+      {
+        clientId: overrideClientId,
+        waId: "5584999994444",
+        waIdCanonical: "5584999994444",
+        messageId: `${prefix}.active.message.other`,
+        requestId: `${prefix}.active.billing.other`,
+        eventName: "billing.active_message.delivered",
+        payloadJson: {
+          campaignId: otherCampaign.id,
+          templateCategory: "utility",
+          customerServiceWindowOpenAtSend: false,
+        },
+        createdAt: new Date("2026-09-03T10:05:00.000Z"),
+      },
+    ],
+  });
+
+  const agent = await request<ErrorPayload>(
+    "GET",
+    "/app/usage/active-messages/report?month=2026-09",
+    businessAgent
+  );
+  assert.equal(agent.status, 403);
+  assert.equal(getErrorCode(agent.body), "forbidden");
+
+  const report = await request<{
+    ok: true;
+    reportType: string;
+    unitPrice: string | null;
+    currency: string;
+    summary: { campaigns: number; billableDelivered: number; total: string | null; optOut: number };
+    rows: Array<{
+      campaignId: string;
+      sent: number;
+      delivered: number;
+      read: number;
+      failed: number;
+      rejected: number;
+      optOut: number;
+      billableDelivered: number;
+      total: string | null;
+      metaEstimatedCostUsd: string | null;
+    }>;
+  }>(
+    "GET",
+    `/app/usage/active-messages/report?month=2026-09&unitPrice=0.0444167&campaignId=${campaign.id}&clientId=malicious`,
+    businessSupervisor
+  );
+  assert.equal(report.status, 200, JSON.stringify(report.body));
+  assert.equal(report.body.reportType, "active_message_billing");
+  assert.equal(report.body.unitPrice, "0.0444167");
+  assert.equal(report.body.currency, "BRL");
+  assert.equal(report.body.summary.campaigns, 1);
+  assert.equal(report.body.summary.billableDelivered, 2);
+  assert.equal(report.body.summary.total, "0.0888334");
+  assert.equal(report.body.summary.optOut, 1);
+  assert.equal(report.body.rows[0]?.campaignId, campaign.id);
+  assert.equal(report.body.rows[0]?.sent, 0);
+  assert.equal(report.body.rows[0]?.delivered, 1);
+  assert.equal(report.body.rows[0]?.read, 1);
+  assert.equal(report.body.rows[0]?.failed, 1);
+  assert.equal(report.body.rows[0]?.rejected, 1);
+  assert.equal(report.body.rows[0]?.optOut, 1);
+  assert.equal(report.body.rows[0]?.billableDelivered, 2);
+  assert.equal(report.body.rows[0]?.total, "0.0888334");
+  assert.equal(report.body.rows[0]?.metaEstimatedCostUsd, "0.0300");
+  const serialized = JSON.stringify(report.body);
+  assert.equal(serialized.includes("5584999991111"), false);
+  assert.equal(serialized.includes("Nao deve aparecer"), false);
+  assert.equal(serialized.includes("rawPayload"), false);
+
+  const csv = await requestText(
+    "GET",
+    `/app/usage/active-messages/report.csv?month=2026-09&unitPrice=0.0444167&campaignId=${campaign.id}`,
+    businessAdmin
+  );
+  assert.equal(csv.status, 200);
+  assert.match(csv.contentType ?? "", /text\/csv/);
+  assert.match(
+    csv.text,
+    /^campaign,template,category,processed,sent,delivered,read,failed,rejected,blocked,optOut,billableDelivered,unitPrice,total,metaEstimatedCostUsd\n/
+  );
+  assert.match(csv.text, /Active Billing Campaign,cra_utility_notice,utility,6,0,1,1,1,1,1,1,2,0.0444167,0.0888334,0.0300/);
+  assert.equal(csv.text.includes("5584999991111"), false);
+  assert.equal(csv.text.includes("Nao deve aparecer"), false);
+});
+
+test("meta status webhook creates one active message billing event on delivered and not on read replay", async () => {
+  const campaign = await prisma.campaign.create({
+    data: {
+      clientId: businessClientId,
+      name: `${prefix} Webhook Active Billing`,
+      templateName: "webhook_utility_notice",
+      status: "sending",
+      totalRecipients: 1,
+      sentCount: 1,
+      blockedCount: 0,
+    },
+    select: { id: true },
+  });
+  const waId = "5584999901234";
+  const metaMessageId = `${prefix}.wamid.webhook.active.1`;
+  const phoneNumberId = `${prefix}.active-webhook-phone`;
+  await prisma.waPhoneNumber.create({
+    data: {
+      clientId: businessClientId,
+      phoneNumberId,
+      display: "+55 84 0000-0000",
+    },
+  });
+  await prisma.channelAccount.create({
+    data: {
+      clientId: businessClientId,
+      channel: "whatsapp",
+      provider: "meta_cloud",
+      channelAccountId: phoneNumberId,
+      enabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: true,
+      status: "connected",
+      tokenStatus: "ok",
+    },
+  });
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta_cloud",
+      lastInboundAt: new Date("2026-09-01T09:00:00.000Z"),
+    },
+  });
+  await prisma.outboundMessage.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      messageId: `${prefix}.active.webhook.message.1`,
+      metaMessageId,
+      channel: "whatsapp",
+      provider: "meta_cloud",
+      type: "TEMPLATE",
+      templateName: "webhook_utility_notice",
+      status: "SENT",
+      rawPayload: {
+        source: "campaign",
+        campaignId: campaign.id,
+        templateCategory: "utility",
+        metaUsage: { source: "campaign", metaCategory: "utility" },
+      },
+      createdAt: new Date("2026-09-03T10:00:00.000Z"),
+    },
+  });
+  const statusPayload = (status: "delivered" | "read") => ({
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: `${prefix}.waba`,
+        changes: [
+          {
+            field: "messages",
+            value: {
+              metadata: {
+                phone_number_id: phoneNumberId,
+                display_phone_number: "558400000000",
+              },
+              statuses: [
+                {
+                  id: metaMessageId,
+                  recipient_id: waId,
+                  status,
+                  timestamp: String(Math.floor(new Date("2026-09-03T10:05:00.000Z").getTime() / 1000)),
+                  pricing: {
+                    category: "utility",
+                    billable: true,
+                    pricing_model: "CBP",
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  const delivered = await fetch(`${baseUrl}/webhook`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(statusPayload("delivered")),
+  });
+  assert.equal(delivered.status, 200);
+  assert.equal(
+    await waitForEventually(async () => {
+      const count = await prisma.event.count({
+        where: {
+          clientId: businessClientId,
+          eventName: "billing.active_message.delivered",
+          requestId: `billing:active_message:delivered:${businessClientId}:whatsapp:meta_cloud:${metaMessageId}`,
+        },
+      });
+      return count === 1;
+    }),
+    true
+  );
+
+  const read = await fetch(`${baseUrl}/webhook`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(statusPayload("read")),
+  });
+  assert.equal(read.status, 200);
+  assert.equal(
+    await waitForEventually(async () => {
+      const message = await prisma.outboundMessage.findUnique({
+        where: { clientId_messageId: { clientId: businessClientId, messageId: `${prefix}.active.webhook.message.1` } },
+        select: { rawPayload: true },
+      });
+      const raw = message?.rawPayload && typeof message.rawPayload === "object" && !Array.isArray(message.rawPayload)
+        ? message.rawPayload as Record<string, unknown>
+        : {};
+      const metaStatus = raw.metaStatus && typeof raw.metaStatus === "object" && !Array.isArray(raw.metaStatus)
+        ? raw.metaStatus as Record<string, unknown>
+        : {};
+      if (metaStatus.lastStatus !== "read") return false;
+      const count = await prisma.event.count({
+        where: {
+          clientId: businessClientId,
+          eventName: "billing.active_message.delivered",
+          requestId: `billing:active_message:delivered:${businessClientId}:whatsapp:meta_cloud:${metaMessageId}`,
+        },
+      });
+      return count === 1;
+    }),
+    true
+  );
 });
 
 test("session audit report is tenant scoped, role protected and sanitized", async () => {
