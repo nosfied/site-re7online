@@ -113,6 +113,7 @@ import {
   buildMetaUsageEventPayload,
   recordMetaUsageLedgerEvent,
 } from "../billing/metaUsageLedger.js";
+import { recordReceptiveSessionIfNeeded } from "../billing/receptiveSessionMeter.js";
 import {
   ConversationIntent,
   ConversationState,
@@ -1574,8 +1575,36 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               messageId: params.messageId,
             },
           },
-          select: { id: true },
+          select: { id: true, createdAt: true, waIdCanonical: true },
         });
+        if (insertedMessage) {
+          const meterResult = await recordReceptiveSessionIfNeeded({
+            prisma: getPrisma(),
+            input: {
+              clientId: tenantClientId,
+              channel: "whatsapp",
+              provider: "meta",
+              channelAccountId: phoneNumberId ?? null,
+              waId: params.waId,
+              waIdCanonical: insertedMessage.waIdCanonical,
+              sourceInboundMessageId: insertedMessage.id,
+              providerMessageId: params.messageId,
+              occurredAt: insertedMessage.createdAt,
+              rawPayload: params.rawPayload,
+            },
+          });
+          if (meterResult.ok === false) {
+            logger.warn({
+              event: "billing.receptive_session.meter.failed",
+              clientId: tenantClientId,
+              waId: canonicalizeBrazilWaId(params.waId),
+              messageId: params.messageId,
+              reason: meterResult.reason,
+              error: meterResult.error,
+              requestId: meta?.requestId ?? null,
+            });
+          }
+        }
         const createdAt = (params.occurredAt ?? new Date()).toISOString();
         const realtimeConversation = await storage.getConversation(params.waId, tenantClientKey);
         const realtimeHandoffStatus =

@@ -4800,6 +4800,106 @@ test("meta usage monthly report exposes sanitized JSON and CSV", async () => {
   assert.equal(otherTenant.body.summary.deliveredEstimatedCostUsd, 7);
 });
 
+test("receptive sessions monthly report is tenant scoped, role protected and CSV ready", async () => {
+  await prisma.event.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        waId: "5584999997777",
+        waIdCanonical: "5584999997777",
+        messageId: `${prefix}.receptive.inbound.1`,
+        requestId: `${prefix}.receptive.session.1`,
+        eventName: "billing.receptive_session.created",
+        payloadJson: {
+          billingType: "receptive_session",
+          channel: "whatsapp",
+          provider: "meta_cloud",
+          sessionStartedAt: "2026-09-01T10:00:00.000Z",
+          sessionEndsAt: "2026-09-02T10:00:00.000Z",
+          sourceInboundMessageId: `${prefix}.receptive.inbound.1`,
+          providerMessageId: `${prefix}.wamid.1`,
+          waIdMasked: "***7777",
+          contactIdentityHash: "hash-not-pii",
+          meterVersion: "receptive-session-meter-v1",
+          rawBodyText: "Nao deve aparecer",
+        },
+        createdAt: new Date("2026-09-01T10:00:00.000Z"),
+      },
+      {
+        clientId: overrideClientId,
+        waId: "5584999998888",
+        waIdCanonical: "5584999998888",
+        messageId: `${prefix}.receptive.inbound.other`,
+        requestId: `${prefix}.receptive.session.other`,
+        eventName: "billing.receptive_session.created",
+        payloadJson: {
+          billingType: "receptive_session",
+          channel: "whatsapp",
+          provider: "meta_cloud",
+          sessionStartedAt: "2026-09-01T11:00:00.000Z",
+          sessionEndsAt: "2026-09-02T11:00:00.000Z",
+          sourceInboundMessageId: `${prefix}.receptive.inbound.other`,
+          providerMessageId: `${prefix}.wamid.other`,
+          waIdMasked: "***8888",
+          meterVersion: "receptive-session-meter-v1",
+        },
+        createdAt: new Date("2026-09-01T11:00:00.000Z"),
+      },
+    ],
+  });
+
+  const agent = await request<ErrorPayload>(
+    "GET",
+    "/app/usage/receptive-sessions/report?month=2026-09",
+    businessAgent
+  );
+  assert.equal(agent.status, 403);
+  assert.equal(getErrorCode(agent.body), "forbidden");
+
+  const report = await request<{
+    ok: true;
+    reportType: string;
+    unitPrice: number | null;
+    total: number | null;
+    summary: { sessionCount: number; evidenceCount: number; channel: string; provider: string };
+    rows: Array<{ maskedContact: string | null; providerMessageId: string | null }>;
+  }>(
+    "GET",
+    "/app/usage/receptive-sessions/report?month=2026-09&unitPrice=0,005&clientId=malicious",
+    businessAdmin
+  );
+  assert.equal(report.status, 200, JSON.stringify(report.body));
+  assert.equal(report.body.reportType, "receptive_sessions_monthly");
+  assert.equal(report.body.summary.sessionCount, 1);
+  assert.equal(report.body.summary.evidenceCount, 1);
+  assert.equal(report.body.summary.channel, "whatsapp");
+  assert.equal(report.body.summary.provider, "meta_cloud");
+  assert.equal(report.body.unitPrice, 0.005);
+  assert.equal(report.body.total, 0.005);
+  assert.equal(report.body.rows[0]?.maskedContact, "***7777");
+  assert.equal(report.body.rows[0]?.providerMessageId, `${prefix}.wamid.1`);
+  const serialized = JSON.stringify(report.body);
+  assert.equal(serialized.includes("5584999997777"), false);
+  assert.equal(serialized.includes("Nao deve aparecer"), false);
+  assert.equal(serialized.includes("rawPayload"), false);
+
+  const csv = await requestText(
+    "GET",
+    "/app/usage/receptive-sessions/report.csv?month=2026-09&unitPrice=0.005",
+    businessSupervisor
+  );
+  assert.equal(csv.status, 200);
+  assert.match(csv.contentType ?? "", /text\/csv/);
+  assert.match(
+    csv.text,
+    /^sessionStartedAt,sessionEndsAt,channel,provider,maskedContact,sourceInboundMessageId,providerMessageId,meterVersion,unitPrice,currency\n/
+  );
+  assert.match(csv.text, /2026-09-01T10:00:00.000Z/);
+  assert.match(csv.text, /SUMMARY,2026-09,sessionCount,1,total,0.005,,/);
+  assert.equal(csv.text.includes("5584999997777"), false);
+  assert.equal(csv.text.includes("Nao deve aparecer"), false);
+});
+
 test("session audit report is tenant scoped, role protected and sanitized", async () => {
   const from = new Date("2030-01-10T00:00:00.000Z");
   const to = new Date("2030-01-11T00:00:00.000Z");

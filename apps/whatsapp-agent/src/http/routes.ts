@@ -174,6 +174,12 @@ import {
   buildMonthlyMetaUsageReport,
 } from "../billing/metaUsageReport.js";
 import {
+  buildMonthlyReceptiveSessionCsv,
+  buildMonthlyReceptiveSessionCsvFileName,
+  buildMonthlyReceptiveSessionReport,
+  parseReceptiveSessionUnitPrice,
+} from "../billing/receptiveSessionReport.js";
+import {
   evaluateMetaUsageThresholdAlerts,
   getTenantMetaUsageSummary,
   parseMetaUsageMonth,
@@ -13314,6 +13320,71 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.usage.meta.report.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "GET" &&
+    (pathname === "/app/usage/receptive-sessions/report" ||
+      pathname === "/app/usage/receptive-sessions/report.csv")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Forbidden"));
+        return;
+      }
+      const month = parseMetaUsageMonth(typeof query.month === "string" ? query.month : null);
+      if (!month) {
+        json(res, 400, httpError("invalid_month", "Month must use YYYY-MM format"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const unitPrice = parseReceptiveSessionUnitPrice(
+        typeof query.unitPrice === "string" ? query.unitPrice : null
+      );
+      const report = await buildMonthlyReceptiveSessionReport({
+        prisma,
+        clientId: client.id,
+        tenantKey: client.clientKey,
+        tenantName: client.clientKey,
+        month,
+        unitPrice,
+        currency: typeof query.currency === "string" ? query.currency : "BRL",
+      });
+      if (pathname.endsWith(".csv") || query.format === "csv") {
+        const csv = buildMonthlyReceptiveSessionCsv(report);
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${buildMonthlyReceptiveSessionCsvFileName({
+            tenantKey: client.clientKey,
+            month,
+          })}"`
+        );
+        res.end(csv);
+        return;
+      }
+      json(res, 200, report);
+    } catch (error) {
+      logger.error({
+        event: "app.usage.receptive_sessions.report.error",
         message: (error as Error).message,
         requestId,
       });
