@@ -94,6 +94,11 @@ import {
   listCampaigns,
   type CampaignTemplateComponents,
 } from "../campaigns/campaignService.js";
+import {
+  assertCampaignTransition,
+  canTransitionCampaignStatus,
+  normalizeScheduledAt,
+} from "../campaigns/campaignLifecycle.js";
 import { startCampaignRun } from "../campaigns/campaignRunner.js";
 import { sendTemplate } from "../services/outboundTemplateService.js";
 import {
@@ -13983,6 +13988,172 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     req.method === "POST" &&
     pathname.startsWith("/app/campaigns/") &&
     pathname.split("/").length === 5 &&
+    pathname.endsWith("/schedule")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      const scheduledAt = normalizeScheduledAt(body.scheduledAt);
+      if (!campaignId) {
+        json(res, 400, httpError("bad_request", "Campaign id is required"));
+        return;
+      }
+      if (scheduledAt === "invalid") {
+        json(res, 400, httpError("invalid_scheduled_at", "Scheduled date is invalid"));
+        return;
+      }
+      if (scheduledAt === "past" || !scheduledAt) {
+        json(res, 400, httpError("scheduled_at_must_be_future", "Scheduled date must be in the future"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const scheduled = await scheduleScopedCampaignDraft({
+        clientId: client.id,
+        campaignId,
+        scheduledAt,
+        userId: clientAuth.userId,
+      });
+      if (!scheduled.ok) {
+        json(res, scheduled.status, httpError(scheduled.error, scheduled.error));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        campaign: serializeCampaign(scheduled.campaign),
+        schedule: { summary: scheduled.recipients.summary },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.campaign.schedule.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/campaigns/") &&
+    pathname.split("/").length === 5 &&
+    (pathname.endsWith("/pause") || pathname.endsWith("/resume") || pathname.endsWith("/test-send"))
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const body = pathname.endsWith("/test-send") ? await readJsonBody(req, res) : {};
+      if (!body) return;
+      const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!campaignId) {
+        json(res, 400, httpError("bad_request", "Campaign id is required"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+
+      if (pathname.endsWith("/pause")) {
+        const paused = await pauseScopedCampaign({
+          clientId: client.id,
+          campaignId,
+          userId: clientAuth.userId,
+        });
+        if (!paused.ok) {
+          json(res, paused.status, httpError(paused.error, paused.error));
+          return;
+        }
+        json(res, 200, { ok: true, campaign: serializeCampaign(paused.campaign) });
+        return;
+      }
+
+      if (pathname.endsWith("/resume")) {
+        const resumed = await resumeScopedCampaign({
+          clientId: client.id,
+          clientKey: client.clientKey,
+          campaignId,
+          userId: clientAuth.userId,
+        });
+        if (!resumed.ok) {
+          json(res, resumed.status, httpError(resumed.error, resumed.error));
+          return;
+        }
+        json(res, 200, {
+          ok: true,
+          campaign: {
+            ...serializeCampaign(resumed.campaign),
+            campaignRunId: resumed.campaignRunId,
+          },
+        });
+        return;
+      }
+
+      const waId = String(
+        (body as Record<string, unknown>).waId ??
+          (body as Record<string, unknown>).testWaId ??
+          (body as Record<string, unknown>).recipient ??
+          ""
+      );
+      const testSend = await sendScopedCampaignTest({
+        clientId: client.id,
+        clientKey: client.clientKey,
+        campaignId,
+        waId,
+        userId: clientAuth.userId,
+      });
+      if (!testSend.ok) {
+        json(res, testSend.status, httpError(testSend.error, testSend.error));
+        return;
+      }
+      json(res, 200, { ok: true, messageId: testSend.messageId });
+    } catch (error) {
+      logger.error({
+        event: "app.campaign.lifecycle.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/campaigns/") &&
+    pathname.split("/").length === 5 &&
     pathname.endsWith("/cancel")
   ) {
     const prisma = getPrisma();
@@ -14013,6 +14184,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const cancelled = await cancelScopedCampaign(prisma, {
         clientId: client.id,
         campaignId,
+        userId: clientAuth.userId,
+        requestId,
       });
       if (!cancelled) {
         json(res, 404, httpError("campaign_not_found", "Campaign not found"));
@@ -21211,7 +21384,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, httpError("campaign_not_found", "Campaign not found"));
           return;
         }
-        if (campaign.status !== "sending") {
+        if (!canTransitionCampaignStatus(campaign.status, "cancelled")) {
           json(
             res,
             409,
@@ -21222,6 +21395,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
         const cancelled = await cancelCampaign({ campaignId, clientId: client.id });
+        await persistEvent({
+          clientId: client.id,
+          messageId: campaign.id,
+          requestId: `admin-campaign-cancelled:${campaign.id}:${requestId}`,
+          eventName: "campaign.cancelled",
+          payloadJson: {
+            campaignId: campaign.id,
+            previousStatus: campaign.status,
+            nextStatus: cancelled.status,
+            cancelledBy: "admin",
+            cancelledAt: new Date().toISOString(),
+          },
+        });
         json(res, 200, {
           ok: true,
           campaign: serializeCampaign(cancelled),
@@ -25825,6 +26011,21 @@ function parseTemplateComponents(
   return [{ type: "body", parameters }];
 }
 
+function parseTemplateComponentsFromRaw(input: unknown): CampaignTemplateComponents | undefined {
+  if (!Array.isArray(input)) return undefined;
+  const components = input.filter((component): component is CampaignTemplateComponents[number] => {
+    if (!component || typeof component !== "object" || Array.isArray(component)) return false;
+    const typed = component as Record<string, unknown>;
+    if (typed.type !== "body" || !Array.isArray(typed.parameters)) return false;
+    return typed.parameters.every((parameter) => {
+      if (!parameter || typeof parameter !== "object" || Array.isArray(parameter)) return false;
+      const param = parameter as Record<string, unknown>;
+      return param.type === "text" && typeof param.text === "string";
+    });
+  });
+  return components.length > 0 ? components : undefined;
+}
+
 function serializeCampaign(campaign: {
   id: string;
   clientId: string;
@@ -25835,6 +26036,7 @@ function serializeCampaign(campaign: {
   totalRecipients: number;
   sentCount: number;
   blockedCount: number;
+  scheduledAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -25848,6 +26050,7 @@ function serializeCampaign(campaign: {
     totalRecipients: campaign.totalRecipients,
     sentCount: campaign.sentCount,
     blockedCount: campaign.blockedCount,
+    scheduledAt: campaign.scheduledAt ?? null,
     createdAt: campaign.createdAt,
     updatedAt: campaign.updatedAt,
     progress: {
@@ -25892,6 +26095,7 @@ type CampaignDraftSeed = {
   recipients: string[];
   manualRecipientInput?: string[];
   templateParams: string[];
+  componentsByWaId?: Record<string, CampaignTemplateComponents>;
   templateVariableMappings?: CampaignTemplateVariableMapping[];
   source?: string | null;
   summary?: CampaignDraftRecipientSummary | null;
@@ -26159,6 +26363,14 @@ function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null
         .map((value) => (typeof value === "string" ? value.trim() : ""))
         .filter((value): value is string => Boolean(value))
     : [];
+  const componentsByWaId =
+    typed.componentsByWaId && typeof typed.componentsByWaId === "object" && !Array.isArray(typed.componentsByWaId)
+      ? Object.fromEntries(
+          Object.entries(typed.componentsByWaId as Record<string, unknown>)
+            .map(([waId, components]) => [normalizeWaId(waId), parseTemplateComponentsFromRaw(components)] as const)
+            .filter((entry): entry is [string, CampaignTemplateComponents] => Boolean(entry[0] && entry[1]))
+        )
+      : undefined;
   const templateVariableMappings = extractCampaignTemplateVariableMappings(typed.templateVariableMappings);
   if (!name || !templateName) return null;
   return {
@@ -26169,6 +26381,7 @@ function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null
     recipients,
     manualRecipientInput,
     templateParams,
+    componentsByWaId,
     templateVariableMappings,
     source: typeof typed.source === "string" ? typed.source : null,
     summary:
@@ -31651,8 +31864,9 @@ async function buildCampaignDetailPayload(
       identifierDisplay: maskCampaignRecipientIdentifier(waId) ?? "WhatsApp User",
     })),
   };
+  const isDraftLikeCampaign = campaign.status === "draft" || campaign.status === "scheduled";
   const responseDraftSeed =
-    campaign.status === "draft"
+    isDraftLikeCampaign
       ? {
           ...draftSeed,
           recipients: draftSeed.recipients.map(
@@ -31661,7 +31875,7 @@ async function buildCampaignDetailPayload(
         }
       : draftSeed;
   const visibleMessagesMetaStatus =
-    campaign.status === "draft"
+    isDraftLikeCampaign
       ? optOutMetaStatus
       : messagesMetaStatus.length > 0
         ? [...messagesMetaStatus, ...optOutMetaStatus]
@@ -31861,6 +32075,7 @@ async function sendScopedCampaignDraft(params: {
           ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
           : undefined,
       templateVariableMappings: variableMappings.mappings,
+      componentsByWaId,
       source: seed.source ?? "crm_audience_preview",
       summary: recipients.summary,
     });
@@ -31888,6 +32103,7 @@ async function sendScopedCampaignDraft(params: {
         ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
         : undefined,
     templateVariableMappings: variableMappings.mappings,
+    componentsByWaId,
     source: seed.source ?? "crm_audience_preview",
     summary: recipients.summary,
   });
@@ -31917,6 +32133,318 @@ async function sendScopedCampaignDraft(params: {
     componentsByWaId,
   });
   return { ok: true as const, campaign: updated, campaignRunId, recipients };
+}
+
+async function scheduleScopedCampaignDraft(params: {
+  clientId: string;
+  campaignId: string;
+  scheduledAt: Date;
+  userId: string;
+}) {
+  const prisma = getPrisma();
+  const campaign = await getCampaignById(params.campaignId, params.clientId);
+  if (!campaign) return { ok: false as const, status: 404 as const, error: "campaign_not_found" as const };
+  if (campaign.status !== "draft") {
+    return { ok: false as const, status: 409 as const, error: "campaign_not_draft" as const };
+  }
+  if (!campaign.templateId) {
+    return { ok: false as const, status: 400 as const, error: "template_required" as const };
+  }
+  const resolvedTemplate = await resolveCampaignTemplateInput(prisma, {
+    clientId: params.clientId,
+    templateId: campaign.templateId,
+    templateName: campaign.templateName,
+  });
+  if ("error" in resolvedTemplate) {
+    return { ok: false as const, status: resolvedTemplate.status, error: resolvedTemplate.error };
+  }
+  const seed = await buildCampaignDraftSeed(prisma, {
+    clientId: params.clientId,
+    campaignId: campaign.id,
+    campaignName: campaign.name,
+    templateName: campaign.templateName,
+    outboundMessages: [],
+  });
+  const variableMappings = parseCampaignTemplateVariableMappings(
+    seed.templateVariableMappings ?? [],
+    resolvedTemplate.variableKeys
+  );
+  if (!variableMappings.ok) {
+    return { ok: false as const, status: 400 as const, error: variableMappings.error };
+  }
+  const resolvedRecipients =
+    seed.leadIds && seed.leadIds.length > 0
+      ? await resolveCampaignDraftRecipientsFromLeadIds(prisma, {
+          clientId: params.clientId,
+          selectedLeadIds: seed.leadIds,
+        })
+      : {
+          ...(await buildOptOutFilteredCampaignRecipients(prisma, {
+            clientId: params.clientId,
+            waIds: seed.recipients,
+          })),
+          summary: {
+            requested: seed.recipients.length,
+            accepted: seed.recipients.length,
+            blocked: 0,
+            duplicatesRemoved: 0,
+            blockedByReason: [],
+          },
+          safeRecipients: [],
+          blocked: [],
+          acceptedWaIds: seed.recipients,
+          acceptedVariableValues: seed.recipients.map((waId) => ({
+            leadId: "",
+            waId,
+            displayName: null,
+            companyName: null,
+            city: null,
+          })),
+        };
+  const { recipients, componentsByWaId } = applyCampaignTemplateVariableMappingsToRecipients({
+    recipients: resolvedRecipients,
+    mappings: variableMappings.mappings,
+  });
+  if (recipients.acceptedWaIds.length === 0) {
+    return { ok: false as const, status: 400 as const, error: "no_eligible_recipients" as const, campaign, recipients };
+  }
+  assertCampaignTransition(campaign.status, "scheduled");
+  const updated = await prisma.campaign.update({
+    where: { id: campaign.id },
+    data: {
+      status: "scheduled",
+      scheduledAt: params.scheduledAt,
+      totalRecipients: recipients.acceptedWaIds.length,
+      sentCount: 0,
+      blockedCount: recipients.summary.blocked,
+    },
+  });
+  await persistCampaignDraftSeed({
+    clientId: params.clientId,
+    campaignId: campaign.id,
+    templateId: campaign.templateId,
+    name: campaign.name,
+    templateName: resolvedTemplate.templateName,
+    leadIds: seed.leadIds ?? [],
+    waIds: recipients.acceptedWaIds,
+    components:
+      variableMappings.mappings.length === 0 && seed.templateParams.length > 0
+        ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
+        : undefined,
+    componentsByWaId,
+    templateVariableMappings: variableMappings.mappings,
+    source: seed.source ?? "crm_audience_preview",
+    summary: recipients.summary,
+  });
+  await persistEvent({
+    clientId: params.clientId,
+    messageId: campaign.id,
+    requestId: `campaign-scheduled:${campaign.id}`,
+    eventName: "campaign.scheduled",
+    payloadJson: {
+      campaignId: campaign.id,
+      templateId: campaign.templateId,
+      templateName: resolvedTemplate.templateName,
+      scheduledAt: params.scheduledAt.toISOString(),
+      scheduledBy: params.userId,
+      summary: recipients.summary,
+    },
+  });
+  return { ok: true as const, campaign: updated, recipients };
+}
+
+async function pauseScopedCampaign(params: { clientId: string; campaignId: string; userId: string }) {
+  const prisma = getPrisma();
+  const campaign = await getCampaignById(params.campaignId, params.clientId);
+  if (!campaign) return { ok: false as const, status: 404 as const, error: "campaign_not_found" as const };
+  if (!canTransitionCampaignStatus(campaign.status, "paused")) {
+    return { ok: false as const, status: 409 as const, error: "campaign_not_pausable" as const };
+  }
+  const updated = await prisma.campaign.update({
+    where: { id: campaign.id },
+    data: { status: "paused" },
+  });
+  await persistEvent({
+    clientId: params.clientId,
+    messageId: campaign.id,
+    requestId: `campaign-paused:${campaign.id}`,
+    eventName: "campaign.paused",
+    payloadJson: {
+      campaignId: campaign.id,
+      previousStatus: campaign.status,
+      pausedBy: params.userId,
+      pausedAt: new Date().toISOString(),
+    },
+  });
+  return { ok: true as const, campaign: updated };
+}
+
+async function resumeScopedCampaign(params: { clientId: string; clientKey: string; campaignId: string; userId: string }) {
+  const prisma = getPrisma();
+  const campaign = await getCampaignById(params.campaignId, params.clientId);
+  if (!campaign) return { ok: false as const, status: 404 as const, error: "campaign_not_found" as const };
+  if (!canTransitionCampaignStatus(campaign.status, "sending")) {
+    return { ok: false as const, status: 409 as const, error: "campaign_not_resumable" as const };
+  }
+  const seed = await buildCampaignDraftSeed(prisma, {
+    clientId: params.clientId,
+    campaignId: campaign.id,
+    campaignName: campaign.name,
+    templateName: campaign.templateName,
+    outboundMessages: [],
+  });
+  const updated = await prisma.campaign.update({
+    where: { id: campaign.id },
+    data: { status: "sending", scheduledAt: null },
+  });
+  await persistEvent({
+    clientId: params.clientId,
+    messageId: campaign.id,
+    requestId: `campaign-resumed:${campaign.id}`,
+    eventName: "campaign.resumed",
+    payloadJson: {
+      campaignId: campaign.id,
+      resumedBy: params.userId,
+      resumedAt: new Date().toISOString(),
+    },
+  });
+  const campaignRunId = startCampaignRun({
+    campaignId: campaign.id,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    name: campaign.name,
+    templateName: campaign.templateName,
+    waIds: seed.recipients,
+    components:
+      seed.templateParams.length > 0
+        ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
+        : undefined,
+    componentsByWaId: seed.componentsByWaId,
+  });
+  return { ok: true as const, campaign: updated, campaignRunId };
+}
+
+async function sendScopedCampaignTest(params: {
+  clientId: string;
+  clientKey: string;
+  campaignId: string;
+  waId: string;
+  userId: string;
+}) {
+  const prisma = getPrisma();
+  const campaign = await getCampaignById(params.campaignId, params.clientId);
+  if (!campaign) return { ok: false as const, status: 404 as const, error: "campaign_not_found" as const };
+  if (campaign.status !== "draft" && campaign.status !== "scheduled") {
+    return { ok: false as const, status: 409 as const, error: "campaign_test_not_allowed" as const };
+  }
+  if (!campaign.templateId) {
+    return { ok: false as const, status: 400 as const, error: "template_required" as const };
+  }
+  const resolvedTemplate = await resolveCampaignTemplateInput(prisma, {
+    clientId: params.clientId,
+    templateId: campaign.templateId,
+    templateName: campaign.templateName,
+  });
+  if ("error" in resolvedTemplate) {
+    return { ok: false as const, status: resolvedTemplate.status, error: resolvedTemplate.error };
+  }
+  const seed = await buildCampaignDraftSeed(prisma, {
+    clientId: params.clientId,
+    campaignId: campaign.id,
+    campaignName: campaign.name,
+    templateName: campaign.templateName,
+    outboundMessages: [],
+  });
+  const waId = normalizeWaId(params.waId);
+  if (!waId) return { ok: false as const, status: 400 as const, error: "invalid_test_recipient" as const };
+  const components =
+    seed.componentsByWaId?.[waId] ??
+    (seed.templateParams.length > 0
+      ? [{ type: "body" as const, parameters: seed.templateParams.map((text) => ({ type: "text" as const, text })) }]
+      : undefined);
+  const tenants = await getTenants();
+  const tenant = tenants[params.clientKey] ?? null;
+  const language = tenant?.defaultLanguage || "pt_BR";
+  const phoneNumberId = tenant?.metaPhoneNumberId || undefined;
+  const requestId = crypto.randomUUID();
+  const messageId = `campaign-test.${campaign.id}.${crypto.randomUUID()}`;
+  await persistEvent({
+    clientId: params.clientId,
+    messageId: campaign.id,
+    requestId: `campaign-test-requested:${campaign.id}:${requestId}`,
+    eventName: "campaign.test_send.requested",
+    payloadJson: {
+      campaignId: campaign.id,
+      requestedBy: params.userId,
+      waIdLast4: waId.slice(-4),
+      waIdLength: waId.length,
+    },
+  });
+  const result = await sendTemplate({
+    toE164: waId,
+    waId,
+    intent: undefined,
+    templateName: resolvedTemplate.templateName,
+    lang: language,
+    components,
+    requestId,
+    rid: requestId,
+    messageId,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+  });
+  const status = result.ok ? MessageStatus.SENT : MessageStatus.FAILED;
+  const template = await prisma.template.findFirst({
+    where: {
+      clientId: params.clientId,
+      name: resolvedTemplate.templateName,
+      language,
+    },
+    select: { content: true },
+  });
+  await persistOutboundMessage({
+    clientId: params.clientId,
+    phoneNumberId,
+    waId,
+    waIdCanonical: waId,
+    messageId,
+    type: MessageType.TEMPLATE,
+    status,
+    bodyText: renderTemplateBody(template?.content, components),
+    templateName: resolvedTemplate.templateName,
+    templateLang: language,
+    requestId,
+    metaMessageId: result.metaMessageId ?? null,
+    errorBody: result.errorBody ?? null,
+    rawPayload: {
+      source: "campaign_test_send",
+      campaignTestSend: true,
+      templateName: resolvedTemplate.templateName,
+      components: components ?? null,
+      metaUsage: {
+        source: "manual_campaign_send",
+        campaignTestSend: true,
+      },
+    },
+  });
+  await persistEvent({
+    clientId: params.clientId,
+    messageId: campaign.id,
+    requestId: `campaign-test-result:${campaign.id}:${requestId}`,
+    eventName: result.ok ? "campaign.test_send.sent" : "campaign.test_send.failed",
+    payloadJson: {
+      campaignId: campaign.id,
+      outboundMessageId: messageId,
+      waIdLast4: waId.slice(-4),
+      waIdLength: waId.length,
+      status: result.status ?? null,
+      errorBody: result.errorBody ?? null,
+    },
+  });
+  if (!result.ok) {
+    return { ok: false as const, status: 502 as const, error: "campaign_test_send_failed" as const };
+  }
+  return { ok: true as const, messageId };
 }
 
 async function resolveCampaignDraftRecipientsFromLeadIds(
@@ -32103,12 +32631,26 @@ async function buildOptOutFilteredCampaignRecipients(
 
 async function cancelScopedCampaign(
   prisma: ReturnType<typeof getPrisma>,
-  params: { clientId: string; campaignId: string }
+  params: { clientId: string; campaignId: string; userId?: string; requestId?: string }
 ) {
   const campaign = await getCampaignById(params.campaignId, params.clientId);
   if (!campaign) return null;
-  if (campaign.status !== "sending") return "not_cancelable" as const;
-  return cancelCampaign({ campaignId: params.campaignId, clientId: params.clientId });
+  if (!canTransitionCampaignStatus(campaign.status, "cancelled")) return "not_cancelable" as const;
+  const cancelled = await cancelCampaign({ campaignId: params.campaignId, clientId: params.clientId });
+  await persistEvent({
+    clientId: params.clientId,
+    messageId: campaign.id,
+    requestId: params.requestId ?? `campaign-cancelled:${campaign.id}`,
+    eventName: "campaign.cancelled",
+    payloadJson: {
+      campaignId: campaign.id,
+      previousStatus: campaign.status,
+      nextStatus: cancelled.status,
+      cancelledBy: params.userId ?? null,
+      cancelledAt: new Date().toISOString(),
+    },
+  });
+  return cancelled;
 }
 
 async function discardScopedCampaignDraft(
@@ -32164,6 +32706,7 @@ async function persistCampaignDraftSeed(params: {
     type: "body";
     parameters: Array<{ type: "text"; text: string }>;
   }>;
+  componentsByWaId?: Record<string, CampaignTemplateComponents>;
   templateVariableMappings?: CampaignTemplateVariableMapping[];
   source?: string | null;
   summary?: CampaignDraftRecipientSummary | null;
@@ -32182,6 +32725,7 @@ async function persistCampaignDraftSeed(params: {
       recipients: params.waIds,
       manualRecipientInput: params.manualRecipientInput ?? [],
       templateParams: extractTemplateParamsFromComponents(params.components ?? null),
+      componentsByWaId: params.componentsByWaId ?? undefined,
       templateVariableMappings: params.templateVariableMappings ?? [],
       source: params.source ?? null,
       summary: params.summary ?? null,

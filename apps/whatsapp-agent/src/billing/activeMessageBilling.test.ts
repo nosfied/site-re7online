@@ -156,3 +156,31 @@ test("excludes sent failed marketing unknown category opt-out and inside-window 
   assert.equal(insideWindow.billable, false);
   assert.equal(insideWindow.reason, "inside_window");
 });
+
+test("excludes formal campaign test-send from contractual active message billing", async () => {
+  const result = await recordActiveMessageDeliveryIfNeeded({
+    prisma: prismaMock().prisma,
+    input: {
+      outbound: outbound({
+        messageId: "campaign-test.campaign-1.1",
+        rawPayload: {
+          source: "campaign_test_send",
+          campaignTestSend: true,
+          metaUsage: {
+            source: "manual_campaign_send",
+            campaignTestSend: true,
+            metaCategory: "utility",
+          },
+        },
+      }),
+      deliveryStatus: "delivered",
+      deliveredAt: new Date("2026-09-02T12:01:00.000Z"),
+      pricingCategory: "utility",
+      providerMessageId: "wamid-test",
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.billable, false);
+  assert.equal(result.reason, "not_campaign");
+});

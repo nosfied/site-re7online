@@ -161,8 +161,12 @@ export function getCampaignStatusUxLabel(status: string | null | undefined) {
   switch (String(status ?? "").trim().toLowerCase()) {
     case "draft":
       return "Rascunho em revisão";
+    case "scheduled":
+      return "Agendada";
     case "sending":
       return "Enviando...";
+    case "paused":
+      return "Pausada";
     case "completed":
       return "Concluída";
     case "blocked":

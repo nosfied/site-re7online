@@ -4364,6 +4364,52 @@ export async function sendAppCampaignDraft(
   });
 }
 
+export async function scheduleAppCampaignDraft(
+  session: AppSession,
+  campaignId: string,
+  scheduledAt: string
+): Promise<{
+  ok: true;
+  campaign: CampaignItem;
+  schedule: {
+    summary: CampaignDraftSummary;
+  };
+}> {
+  return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}/schedule`, {
+    method: "POST",
+    body: JSON.stringify({ scheduledAt }),
+  });
+}
+
+export async function pauseAppCampaign(
+  session: AppSession,
+  campaignId: string
+): Promise<{ ok: true; campaign: CampaignItem }> {
+  return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}/pause`, {
+    method: "POST",
+  });
+}
+
+export async function resumeAppCampaign(
+  session: AppSession,
+  campaignId: string
+): Promise<{ ok: true; campaign: CampaignItem & { campaignRunId: string | null } }> {
+  return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}/resume`, {
+    method: "POST",
+  });
+}
+
+export async function sendAppCampaignTest(
+  session: AppSession,
+  campaignId: string,
+  waId: string
+): Promise<{ ok: true; messageId: string }> {
+  return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}/test-send`, {
+    method: "POST",
+    body: JSON.stringify({ waId }),
+  });
+}
+
 export async function discardAppCampaignDraft(
   session: AppSession,
   campaignId: string

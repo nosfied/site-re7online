@@ -141,8 +141,10 @@ function resolveTemplateCategory(input: ActiveMessageBillingInput, raw: RawRecor
 }
 
 function isCampaignSource(raw: RawRecord) {
+  if (raw.campaignTestSend === true) return false;
   const source = normalizeSource(raw.source);
   const metaUsage = getNestedRecord(raw, "metaUsage");
+  if (metaUsage?.campaignTestSend === true) return false;
   const usageSource = normalizeSource(metaUsage?.source);
   return (
     Boolean(resolveCampaignId(raw)) &&

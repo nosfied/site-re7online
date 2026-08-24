@@ -23,8 +23,12 @@ import {
   listAppCampaigns,
   listAppTemplates,
   loadAppSession,
+  pauseAppCampaign,
+  resumeAppCampaign,
+  scheduleAppCampaignDraft,
   saveAppSession,
   sendAppCampaignDraft,
+  sendAppCampaignTest,
 } from "@/lib/appClientApi";
 import { getBooleanUxLabel, getCampaignStatusUxLabel, getMetaTemplateCategoryUxLabel } from "@/lib/appUxLabels";
 import { CampaignItem, formatDateTime, normalizeWaIdList } from "@/lib/whatsappAdminApi";
@@ -51,7 +55,9 @@ type TemplateVariableMappingFormState = {
 type CampaignStatusFilter =
   | "all"
   | "draft"
+  | "scheduled"
   | "sending"
+  | "paused"
   | "completed"
   | "blocked"
   | "cancelled"
@@ -97,7 +103,9 @@ const PAGE_SIZE = 5;
 const STATUS_FILTER_OPTIONS: CampaignStatusFilter[] = [
   "all",
   "draft",
+  "scheduled",
   "sending",
+  "paused",
   "completed",
   "blocked",
   "cancelled",
@@ -321,8 +329,12 @@ function getStatusClasses(status: string) {
   switch (status) {
     case "draft":
       return "bg-sky-700 text-white";
+    case "scheduled":
+      return "bg-indigo-600 text-white";
     case "sending":
       return "bg-amber-500 text-slate-950";
+    case "paused":
+      return "bg-violet-600 text-white";
     case "completed":
       return "bg-emerald-600 text-white";
     case "blocked":
@@ -517,6 +529,12 @@ export default function AppCampaignsPage() {
   const [creating, setCreating] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [discardingDraft, setDiscardingDraft] = useState(false);
+  const [schedulingDraft, setSchedulingDraft] = useState(false);
+  const [pausingCampaign, setPausingCampaign] = useState(false);
+  const [resumingCampaign, setResumingCampaign] = useState(false);
+  const [testingCampaign, setTestingCampaign] = useState(false);
+  const [scheduleInput, setScheduleInput] = useState("");
+  const [testRecipientInput, setTestRecipientInput] = useState("");
   const [exportingConsumption, setExportingConsumption] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -916,6 +934,20 @@ export default function AppCampaignsPage() {
   }, [selectedCampaign, selectedCampaignId]);
 
   useEffect(() => {
+    if (!selectedCampaign) {
+      setScheduleInput("");
+      setTestRecipientInput("");
+      return;
+    }
+    if (selectedCampaign.scheduledAt) {
+      const value = new Date(selectedCampaign.scheduledAt);
+      if (Number.isFinite(value.getTime())) {
+        setScheduleInput(value.toISOString().slice(0, 16));
+      }
+    }
+  }, [selectedCampaign?.id, selectedCampaign?.scheduledAt]);
+
+  useEffect(() => {
     if (!detailModalOpen) return undefined;
     const previousBodyOverflow = document.body.style.overflow;
     const previousDocumentOverflow = document.documentElement.style.overflow;
@@ -1230,6 +1262,112 @@ export default function AppCampaignsPage() {
       showToast("error", "Envio não iniciado", message);
     } finally {
       setSendingDraft(false);
+    }
+  };
+
+  const handleScheduleDraftCampaign = async () => {
+    if (!session || !selectedCampaign || selectedCampaign.status !== "draft") return;
+    const scheduledAt = scheduleInput ? new Date(scheduleInput) : null;
+    if (!scheduledAt || !Number.isFinite(scheduledAt.getTime())) {
+      showToast("error", "Agendamento inválido", "Informe uma data e horário futuros.");
+      return;
+    }
+    if (scheduledAt.getTime() <= Date.now()) {
+      showToast("error", "Agendamento inválido", "A campanha deve ser agendada para um horário futuro.");
+      return;
+    }
+    setSchedulingDraft(true);
+    setDetailError(null);
+    try {
+      const response = await scheduleAppCampaignDraft(session, selectedCampaign.id, scheduledAt.toISOString());
+      setSelectedCampaign(response.campaign);
+      await refreshCampaigns(session, response.campaign.id);
+      setStatusFilter("scheduled");
+      showToast("success", "Campanha agendada", `Envio programado com ${response.schedule.summary.accepted} destinatários elegíveis.`);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const message = typed.message || "Não foi possível agendar a campanha.";
+      setDetailError(message);
+      showToast("error", "Agendamento não concluído", message);
+    } finally {
+      setSchedulingDraft(false);
+    }
+  };
+
+  const handlePauseCampaign = async () => {
+    if (!session || !selectedCampaign || selectedCampaign.status !== "sending") return;
+    setPausingCampaign(true);
+    setDetailError(null);
+    try {
+      const response = await pauseAppCampaign(session, selectedCampaign.id);
+      setSelectedCampaign(response.campaign);
+      await refreshCampaigns(session, response.campaign.id);
+      showToast("success", "Campanha pausada", "Nenhum novo destinatário será iniciado enquanto estiver pausada.");
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const message = typed.message || "Não foi possível pausar a campanha.";
+      setDetailError(message);
+      showToast("error", "Pausa não concluída", message);
+    } finally {
+      setPausingCampaign(false);
+    }
+  };
+
+  const handleResumeCampaign = async () => {
+    if (!session || !selectedCampaign || selectedCampaign.status !== "paused") return;
+    setResumingCampaign(true);
+    setDetailError(null);
+    try {
+      const response = await resumeAppCampaign(session, selectedCampaign.id);
+      setSelectedCampaign(response.campaign);
+      await refreshCampaigns(session, response.campaign.id);
+      setStatusFilter("sending");
+      showToast("success", "Campanha retomada", "O processamento dos destinatários pendentes foi retomado.");
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const message = typed.message || "Não foi possível retomar a campanha.";
+      setDetailError(message);
+      showToast("error", "Retomada não concluída", message);
+    } finally {
+      setResumingCampaign(false);
+    }
+  };
+
+  const handleTestSendCampaign = async () => {
+    if (!session || !selectedCampaign || (selectedCampaign.status !== "draft" && selectedCampaign.status !== "scheduled")) return;
+    const waId = normalizeWaIdList(testRecipientInput)[0] ?? "";
+    if (!waId) {
+      showToast("error", "Teste incompleto", "Informe um destinatário de teste autorizado.");
+      return;
+    }
+    setTestingCampaign(true);
+    setDetailError(null);
+    try {
+      await sendAppCampaignTest(session, selectedCampaign.id, waId);
+      showToast("success", "Teste enviado", "Uma mensagem de teste foi enviada sem alterar os agregados da campanha.");
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const message = typed.message || "Não foi possível enviar o teste.";
+      setDetailError(message);
+      showToast("error", "Teste não enviado", message);
+    } finally {
+      setTestingCampaign(false);
     }
   };
 
@@ -2374,6 +2512,113 @@ export default function AppCampaignsPage() {
                           </div>
                         </div>
                       ) : null}
+                    </div>
+                  ) : null}
+
+                  {selectedCampaign.status === "draft" || selectedCampaign.status === "scheduled" ? (
+                    <div className="grid gap-3 rounded-md border border-white/10 bg-white/5 p-3">
+                      <div>
+                        <p className="text-sm font-semibold">Teste e agendamento</p>
+                        <p className="mt-1 text-xs text-white/60">
+                          O teste envia uma única mensagem e não altera os agregados da campanha.
+                        </p>
+                      </div>
+                      <div className="grid gap-3 lg:grid-cols-2">
+                        <div className="grid gap-2">
+                          <label className="text-xs font-semibold uppercase tracking-wide text-white/60" htmlFor="campaign-test-recipient">
+                            Destinatário de teste
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            <input
+                              id="campaign-test-recipient"
+                              value={testRecipientInput}
+                              onChange={(event) => setTestRecipientInput(event.target.value)}
+                              placeholder="DDD + número"
+                              className="min-w-[220px] flex-1 rounded-md border border-white/15 bg-re7-navy/50 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                            />
+                            <button
+                              type="button"
+                              disabled={testingCampaign || !testRecipientInput.trim()}
+                              onClick={handleTestSendCampaign}
+                              className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {testingCampaign ? "Enviando..." : "Enviar teste"}
+                            </button>
+                          </div>
+                        </div>
+                        {selectedCampaign.status === "draft" ? (
+                          <div className="grid gap-2">
+                            <label className="text-xs font-semibold uppercase tracking-wide text-white/60" htmlFor="campaign-schedule-at">
+                              Agendar envio
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                              <input
+                                id="campaign-schedule-at"
+                                type="datetime-local"
+                                value={scheduleInput}
+                                onChange={(event) => setScheduleInput(event.target.value)}
+                                className="min-w-[220px] flex-1 rounded-md border border-white/15 bg-re7-navy/50 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                              />
+                              <button
+                                type="button"
+                                disabled={schedulingDraft || sendingDraft || discardingDraft || !scheduleInput}
+                                onClick={handleScheduleDraftCampaign}
+                                className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {schedulingDraft ? "Agendando..." : "Agendar"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rounded-md border border-indigo-300/25 bg-indigo-900/20 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-100/80">Envio agendado</p>
+                            <p className="mt-1 text-sm text-white">
+                              {selectedCampaign.scheduledAt ? formatDateTime(selectedCampaign.scheduledAt) : "Sem horário definido"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {selectedCampaign.status === "sending" || selectedCampaign.status === "paused" || selectedCampaign.status === "scheduled" ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-white/10 bg-white/5 p-3">
+                      <div>
+                        <p className="text-sm font-semibold">Controle operacional</p>
+                        <p className="mt-1 text-xs text-white/60">
+                          Pausar impede novos destinatários; cancelar torna a campanha terminal.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedCampaign.status === "sending" ? (
+                          <button
+                            type="button"
+                            disabled={pausingCampaign}
+                            onClick={handlePauseCampaign}
+                            className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {pausingCampaign ? "Pausando..." : "Pausar"}
+                          </button>
+                        ) : null}
+                        {selectedCampaign.status === "paused" ? (
+                          <button
+                            type="button"
+                            disabled={resumingCampaign}
+                            onClick={handleResumeCampaign}
+                            className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {resumingCampaign ? "Retomando..." : "Retomar"}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={cancelling}
+                          onClick={handleCancelCampaign}
+                          className="rounded-md border border-red-300/35 px-3 py-2 text-sm font-semibold text-red-100 hover:bg-red-900/30 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {cancelling ? "Cancelando..." : "Cancelar campanha"}
+                        </button>
+                      </div>
                     </div>
                   ) : null}
 

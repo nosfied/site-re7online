@@ -11,5 +11,6 @@ backups
 .data*
 backup_*.sql
 *.sql
+!prisma/migrations/**/migration.sql
 conversation-report.csv
 *.data-runtime-json-legacy-*.tar.gz

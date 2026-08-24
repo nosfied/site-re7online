@@ -9049,6 +9049,574 @@ test("campaign draft send revalidates recipients before starting", async () => {
   assert.equal(sentEventCount, 0);
 });
 
+test("campaign lifecycle supports schedule pause resume cancel and formal test-send", async (t) => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `draft_lifecycle_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso de teste",
+    },
+  });
+  const waId = "5541991189201";
+  const waIdSecond = "5541991189202";
+  const waIdThird = "5541991189203";
+  const lead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Lifecycle Draft",
+      phone: waId,
+      status: "RETORNO_FUTURO",
+    },
+  });
+  const leadSecond = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: waIdSecond,
+      waIdCanonical: waIdSecond,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Lifecycle Draft 2",
+      phone: waIdSecond,
+      status: "RETORNO_FUTURO",
+    },
+  });
+  const leadThird = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: waIdThird,
+      waIdCanonical: waIdThird,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Lifecycle Draft 3",
+      phone: waIdThird,
+      status: "RETORNO_FUTURO",
+    },
+  });
+
+  const created = await request<{
+    ok: true;
+    campaign: { id: string; status: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Rascunho lifecycle",
+    templateId: template.id,
+    selectedLeadIds: [lead.id],
+  });
+  assert.equal(created.status, 200);
+  assert.equal(created.body.campaign.status, "draft");
+
+  const originalFetch = globalThis.fetch;
+  const metaPayloads: unknown[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaPayloads.push(JSON.parse(String(init?.body ?? "{}")));
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.lifecycle.${metaPayloads.length}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const lifecyclePhoneNumberId = `phone-lifecycle-${prefix}-business`;
+  await prisma.waPhoneNumber.create({
+    data: {
+      clientId: businessClientId,
+      phoneNumberId: lifecyclePhoneNumberId,
+      display: "+55 41 99118-9200",
+    },
+  });
+  await prisma.channelAccount.create({
+    data: {
+      clientId: businessClientId,
+      channel: "whatsapp",
+      provider: "meta_cloud",
+      channelAccountId: lifecyclePhoneNumberId,
+      enabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: true,
+      status: "connected",
+      tokenStatus: "ok",
+    },
+  });
+
+  const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const scheduled = await request<{
+    ok: true;
+    campaign: { id: string; status: string; scheduledAt: string | null; sentCount: number };
+    schedule: { summary: { accepted: number } };
+  }>("POST", `/app/campaigns/${created.body.campaign.id}/schedule`, businessAdmin, {
+    scheduledAt,
+  });
+  assert.equal(scheduled.status, 200, JSON.stringify(scheduled.body));
+  assert.equal(scheduled.body.campaign.status, "scheduled");
+  assert.equal(scheduled.body.campaign.scheduledAt, scheduledAt);
+  assert.equal(scheduled.body.schedule.summary.accepted, 1);
+
+  const { processDueScheduledCampaigns } = await import("../campaigns/campaignRunner.js");
+  const futureTick = await processDueScheduledCampaigns({ now: new Date(), limit: 5 });
+  assert.equal(futureTick.claimed, 0);
+  assert.equal(
+    await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${created.body.campaign.id}.` } },
+    }),
+    0
+  );
+
+  const testSend = await request<{ ok: true; messageId: string }>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId }
+  );
+  assert.equal(testSend.status, 200, JSON.stringify(testSend.body));
+  assert.match(testSend.body.messageId, /^campaign-test\./);
+
+  const campaignAfterTest = await prisma.campaign.findUniqueOrThrow({
+    where: { id: created.body.campaign.id },
+    select: { status: true, sentCount: true, blockedCount: true },
+  });
+  assert.equal(campaignAfterTest.status, "scheduled");
+  assert.equal(campaignAfterTest.sentCount, 0);
+  assert.equal(campaignAfterTest.blockedCount, 0);
+  const testOutbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, messageId: testSend.body.messageId },
+    select: { rawPayload: true },
+  });
+  assert.equal((testOutbound.rawPayload as Record<string, unknown>).campaignTestSend, true);
+  assert.equal("campaignId" in (testOutbound.rawPayload as Record<string, unknown>), false);
+  const detailAfterTest = await request<{
+    campaign: {
+      metaSummary: { totalSent: number; totalDelivered: number; totalRead: number; totalFailed: number };
+      messagesMetaStatus: Array<{ status: string }>;
+    };
+  }>("GET", `/app/campaigns/${created.body.campaign.id}`, businessAdmin);
+  assert.equal(detailAfterTest.status, 200);
+  assert.equal(detailAfterTest.body.campaign.metaSummary.totalSent, 0);
+  assert.equal(detailAfterTest.body.campaign.messagesMetaStatus.length, 0);
+
+  const testStatusWebhook = await requestUnauth("POST", "/webhook", {
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: `${prefix}-waba`,
+        changes: [
+          {
+            field: "messages",
+            value: {
+              messaging_product: "whatsapp",
+              metadata: {
+                phone_number_id: lifecyclePhoneNumberId,
+              },
+              statuses: [
+                {
+                  id: "wamid.lifecycle.1",
+                  status: "delivered",
+                  timestamp: "1787564456",
+                  conversation: {
+                    id: `${prefix}-test-send-conversation`,
+                    origin: { type: "utility" },
+                  },
+                  pricing: {
+                    billable: true,
+                    category: "utility",
+                    pricing_model: "CBP",
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(testStatusWebhook.status, 200, JSON.stringify(testStatusWebhook.body));
+  await waitFor(async () => {
+    const outbound = await prisma.outboundMessage.findFirst({
+      where: { clientId: businessClientId, messageId: testSend.body.messageId },
+      select: { rawPayload: true },
+    });
+    const raw = outbound?.rawPayload as Record<string, unknown> | null | undefined;
+    const metaStatus = raw?.metaStatus as Record<string, unknown> | undefined;
+    return metaStatus?.lastStatus === "delivered";
+  });
+  const testSendUsage = await prisma.event.findFirstOrThrow({
+    where: {
+      clientId: businessClientId,
+      messageId: testSend.body.messageId,
+      eventName: "meta.usage.updated",
+    },
+  });
+  assert.equal((testSendUsage.payloadJson as Record<string, unknown>).source, "manual_campaign_send");
+  assert.equal(
+    await prisma.event.count({
+      where: {
+        clientId: businessClientId,
+        messageId: testSend.body.messageId,
+        eventName: "billing.active_message.delivered",
+      },
+    }),
+    0
+  );
+  const detailAfterTestStatus = await request<{
+    campaign: {
+      status: string;
+      metaSummary: { totalSent: number; totalDelivered: number; totalRead: number; totalFailed: number };
+      messagesMetaStatus: Array<{ status: string }>;
+    };
+  }>("GET", `/app/campaigns/${created.body.campaign.id}`, businessAdmin);
+  assert.equal(detailAfterTestStatus.status, 200);
+  assert.equal(detailAfterTestStatus.body.campaign.status, "scheduled");
+  assert.equal(detailAfterTestStatus.body.campaign.metaSummary.totalDelivered, 0);
+  assert.equal(detailAfterTestStatus.body.campaign.messagesMetaStatus.length, 0);
+
+  const cancelledDraft = await request<{
+    ok: true;
+    campaign: { id: string; status: string };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Rascunho agendado e cancelado",
+    templateId: template.id,
+    selectedLeadIds: [leadSecond.id],
+  });
+  assert.equal(cancelledDraft.status, 200, JSON.stringify(cancelledDraft.body));
+  const cancelledScheduledAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const cancelledSchedule = await request<{ ok: true; campaign: { status: string; scheduledAt: string | null } }>(
+    "POST",
+    `/app/campaigns/${cancelledDraft.body.campaign.id}/schedule`,
+    businessAdmin,
+    { scheduledAt: cancelledScheduledAt }
+  );
+  assert.equal(cancelledSchedule.status, 200, JSON.stringify(cancelledSchedule.body));
+  assert.equal(cancelledSchedule.body.campaign.status, "scheduled");
+  const cancelBeforeDue = await request<{ ok: true; campaign: { status: string; scheduledAt: string | null } }>(
+    "POST",
+    `/app/campaigns/${cancelledDraft.body.campaign.id}/cancel`,
+    businessAdmin
+  );
+  assert.equal(cancelBeforeDue.status, 200, JSON.stringify(cancelBeforeDue.body));
+  assert.equal(cancelBeforeDue.body.campaign.status, "cancelled");
+  assert.equal(cancelBeforeDue.body.campaign.scheduledAt, null);
+  const cancelledDue = await processDueScheduledCampaigns({
+    now: new Date(Date.now() + 45 * 60 * 1000),
+    limit: 5,
+  });
+  assert.equal(cancelledDue.claimed, 0);
+  assert.equal(
+    await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${cancelledDraft.body.campaign.id}.` } },
+    }),
+    0
+  );
+
+  const pausedCampaign = await prisma.campaign.create({
+    data: {
+      clientId: businessClientId,
+      templateId: template.id,
+      name: "Campanha pausar retomar",
+      templateName: template.name,
+      status: "sending",
+      totalRecipients: 1,
+    },
+  });
+  await prisma.event.create({
+    data: {
+      clientId: businessClientId,
+      messageId: pausedCampaign.id,
+      requestId: `campaign-seed:${pausedCampaign.id}:test`,
+      eventName: "campaign.seed.saved",
+      payloadJson: {
+        campaignId: pausedCampaign.id,
+        templateId: template.id,
+        name: pausedCampaign.name,
+        templateName: template.name,
+        recipients: [waId],
+        templateParams: [],
+      },
+    },
+  });
+  const paused = await request<{ ok: true; campaign: { status: string } }>(
+    "POST",
+    `/app/campaigns/${pausedCampaign.id}/pause`,
+    businessAdmin
+  );
+  assert.equal(paused.status, 200);
+  assert.equal(paused.body.campaign.status, "paused");
+  const resumed = await request<{ ok: true; campaign: { status: string; campaignRunId: string | null } }>(
+    "POST",
+    `/app/campaigns/${pausedCampaign.id}/resume`,
+    businessAdmin
+  );
+  assert.equal(resumed.status, 200);
+  assert.equal(resumed.body.campaign.status, "sending");
+  await waitFor(async () => {
+    const count = await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${pausedCampaign.id}.` } },
+    });
+    return count === 1;
+  });
+  const resumeAgain = await request<ErrorPayload>("POST", `/app/campaigns/${pausedCampaign.id}/resume`, businessAdmin);
+  assert.equal(resumeAgain.status, 409);
+  assert.equal(getErrorCode(resumeAgain.body), "campaign_not_resumable");
+
+  await prisma.campaign.update({
+    where: { id: created.body.campaign.id },
+    data: { scheduledAt: new Date(Date.now() - 1000) },
+  });
+  const [dueA, dueB] = await Promise.all([
+    processDueScheduledCampaigns({ limit: 5 }),
+    processDueScheduledCampaigns({ limit: 5 }),
+  ]);
+  assert.equal(dueA.claimed + dueB.claimed, 1);
+  await waitFor(async () => {
+    const count = await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${created.body.campaign.id}.` } },
+    });
+    return count === 1;
+  });
+  const finalCampaign = await prisma.campaign.findUniqueOrThrow({
+    where: { id: created.body.campaign.id },
+    select: { status: true, sentCount: true, scheduledAt: true },
+  });
+  assert.equal(finalCampaign.status, "completed");
+  assert.equal(finalCampaign.sentCount, 1);
+  assert.equal(finalCampaign.scheduledAt, null);
+
+  const cancelled = await request<{ ok: true; campaign: { status: string } }>(
+    "POST",
+    `/app/campaigns/${pausedCampaign.id}/cancel`,
+    businessAdmin
+  );
+  assert.equal([200, 409].includes(cancelled.status), true);
+
+  const pausableDraft = await request<{
+    ok: true;
+    campaign: { id: string; status: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Pausar em execucao",
+    templateId: template.id,
+    selectedLeadIds: [lead.id, leadSecond.id],
+  });
+  assert.equal(pausableDraft.status, 200, JSON.stringify(pausableDraft.body));
+  const pausableSend = await request<{ ok: true; campaign: { status: string } }>(
+    "POST",
+    `/app/campaigns/${pausableDraft.body.campaign.id}/send`,
+    businessAdmin
+  );
+  assert.equal(pausableSend.status, 200, JSON.stringify(pausableSend.body));
+  await waitFor(async () => {
+    const count = await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${pausableDraft.body.campaign.id}.` } },
+    });
+    return count === 1;
+  });
+  const pauseRunning = await request<{ ok: true; campaign: { status: string } }>(
+    "POST",
+    `/app/campaigns/${pausableDraft.body.campaign.id}/pause`,
+    businessAdmin
+  );
+  assert.equal(pauseRunning.status, 200, JSON.stringify(pauseRunning.body));
+  assert.equal(pauseRunning.body.campaign.status, "paused");
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  assert.equal(
+    await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${pausableDraft.body.campaign.id}.` } },
+    }),
+    1
+  );
+  const resumePausable = await request<{ ok: true; campaign: { status: string } }>(
+    "POST",
+    `/app/campaigns/${pausableDraft.body.campaign.id}/resume`,
+    businessAdmin
+  );
+  assert.equal(resumePausable.status, 200, JSON.stringify(resumePausable.body));
+  await waitFor(async () => {
+    const count = await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${pausableDraft.body.campaign.id}.` } },
+    });
+    return count === 2;
+  });
+  assert.deepEqual(
+    (
+      await prisma.outboundMessage.findMany({
+        where: { clientId: businessClientId, messageId: { startsWith: `campaign.${pausableDraft.body.campaign.id}.` } },
+        orderBy: { messageId: "asc" },
+        select: { messageId: true },
+      })
+    ).map((item) => item.messageId),
+    [`campaign.${pausableDraft.body.campaign.id}.1`, `campaign.${pausableDraft.body.campaign.id}.2`]
+  );
+
+  const cancellableDraft = await request<{
+    ok: true;
+    campaign: { id: string; status: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Cancelar em execucao",
+    templateId: template.id,
+    selectedLeadIds: [leadSecond.id, leadThird.id],
+  });
+  assert.equal(cancellableDraft.status, 200, JSON.stringify(cancellableDraft.body));
+  const cancellableSend = await request<{ ok: true; campaign: { status: string } }>(
+    "POST",
+    `/app/campaigns/${cancellableDraft.body.campaign.id}/send`,
+    businessAdmin
+  );
+  assert.equal(cancellableSend.status, 200, JSON.stringify(cancellableSend.body));
+  await waitFor(async () => {
+    const count = await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${cancellableDraft.body.campaign.id}.` } },
+    });
+    return count === 1;
+  });
+  const cancelRunning = await request<{ ok: true; campaign: { status: string } }>(
+    "POST",
+    `/app/campaigns/${cancellableDraft.body.campaign.id}/cancel`,
+    businessAdmin
+  );
+  assert.equal(cancelRunning.status, 200, JSON.stringify(cancelRunning.body));
+  assert.equal(cancelRunning.body.campaign.status, "cancelled");
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  assert.equal(
+    await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${cancellableDraft.body.campaign.id}.` } },
+    }),
+    1
+  );
+  const cancellableOutbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, messageId: { startsWith: `campaign.${cancellableDraft.body.campaign.id}.` } },
+    select: { metaMessageId: true },
+  });
+  const lateStatusWebhook = await requestUnauth("POST", "/webhook", {
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: `${prefix}-waba`,
+        changes: [
+          {
+            field: "messages",
+            value: {
+              messaging_product: "whatsapp",
+              metadata: {
+                phone_number_id: lifecyclePhoneNumberId,
+              },
+              statuses: [
+                {
+                  id: cancellableOutbound.metaMessageId,
+                  status: "delivered",
+                  timestamp: "1787564457",
+                  conversation: {
+                    id: `${prefix}-cancelled-conversation`,
+                    origin: { type: "utility" },
+                  },
+                  pricing: {
+                    billable: true,
+                    category: "utility",
+                    pricing_model: "CBP",
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(lateStatusWebhook.status, 200, JSON.stringify(lateStatusWebhook.body));
+  await waitFor(async () => {
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: cancellableDraft.body.campaign.id },
+      select: { status: true },
+    });
+    const outbound = await prisma.outboundMessage.findFirst({
+      where: { clientId: businessClientId, metaMessageId: cancellableOutbound.metaMessageId },
+      select: { rawPayload: true },
+    });
+    const raw = outbound?.rawPayload as Record<string, unknown> | null | undefined;
+    const metaStatus = raw?.metaStatus as Record<string, unknown> | undefined;
+    return campaign?.status === "cancelled" && metaStatus?.lastStatus === "delivered";
+  });
+  const cancelledAfterLateCallback = await prisma.campaign.findUniqueOrThrow({
+    where: { id: cancellableDraft.body.campaign.id },
+    select: { status: true },
+  });
+  assert.equal(cancelledAfterLateCallback.status, "cancelled");
+
+  const terminalStatuses = ["completed", "failed", "blocked", "cancelled"] as const;
+  for (const status of terminalStatuses) {
+    const terminalCampaign = await prisma.campaign.create({
+      data: {
+        clientId: businessClientId,
+        templateId: template.id,
+        name: `Terminal ${status}`,
+        templateName: template.name,
+        status,
+        totalRecipients: 1,
+      },
+    });
+    const resumeTerminal = await request<ErrorPayload>(
+      "POST",
+      `/app/campaigns/${terminalCampaign.id}/resume`,
+      businessAdmin
+    );
+    assert.equal(resumeTerminal.status, 409);
+    assert.equal(getErrorCode(resumeTerminal.body), "campaign_not_resumable");
+    const sendTerminal = await request<ErrorPayload>(
+      "POST",
+      `/app/campaigns/${terminalCampaign.id}/send`,
+      businessAdmin
+    );
+    assert.equal(sendTerminal.status, 409);
+    assert.equal(getErrorCode(sendTerminal.body), "campaign_not_draft");
+  }
+
+  const crossTenantSchedule = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/schedule`,
+    overrideAdmin,
+    { scheduledAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() }
+  );
+  assert.equal(crossTenantSchedule.status, 404);
+  assert.equal(getErrorCode(crossTenantSchedule.body), "campaign_not_found");
+  const crossTenantPause = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${pausableDraft.body.campaign.id}/pause`,
+    overrideAdmin
+  );
+  assert.equal(crossTenantPause.status, 404);
+  assert.equal(getErrorCode(crossTenantPause.body), "campaign_not_found");
+  const crossTenantResume = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${pausableDraft.body.campaign.id}/resume`,
+    overrideAdmin
+  );
+  assert.equal(crossTenantResume.status, 404);
+  assert.equal(getErrorCode(crossTenantResume.body), "campaign_not_found");
+  const crossTenantCancel = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${pausableDraft.body.campaign.id}/cancel`,
+    overrideAdmin
+  );
+  assert.equal(crossTenantCancel.status, 404);
+  assert.equal(getErrorCode(crossTenantCancel.body), "campaign_not_found");
+  const crossTenantTestSend = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/test-send`,
+    overrideAdmin,
+    { waId }
+  );
+  assert.equal(crossTenantTestSend.status, 404);
+  assert.equal(getErrorCode(crossTenantTestSend.body), "campaign_not_found");
+});
+
 test("campaign draft requires mappings for approved template variables", async () => {
   const template = await prisma.template.create({
     data: {

@@ -919,6 +919,7 @@ model Campaign {
   totalRecipients Int      @default(0)
   sentCount       Int      @default(0)
   blockedCount    Int      @default(0)
+  scheduledAt     DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -927,6 +928,7 @@ model Campaign {
 
   @@index([clientId, createdAt])
   @@index([clientId, status, createdAt])
+  @@index([clientId, status, scheduledAt])
   @@index([templateId])
 }
 

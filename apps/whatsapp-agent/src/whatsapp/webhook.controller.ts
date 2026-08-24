@@ -2866,6 +2866,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         const source =
           rawSource === "admin_inbox"
             ? "inbox_text"
+            : rawSource === "campaign_test_send"
+              ? "manual_campaign_send"
             : rawSource ?? (typeof currentMetaUsage?.source === "string" ? currentMetaUsage.source : "unknown");
         const templateCategory =
           pricingCategory ||

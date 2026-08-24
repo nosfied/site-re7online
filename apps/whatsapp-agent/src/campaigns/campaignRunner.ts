@@ -13,6 +13,7 @@ import {
   recordMetaUsageLedgerEvent,
 } from "../billing/metaUsageLedger.js";
 import type { CampaignTemplateComponents } from "./campaignService.js";
+import { isCampaignTerminalStatus } from "./campaignLifecycle.js";
 import {
   resolveCampaignRecipientConversationTarget,
   summarizeCampaignRecipientResolution,
@@ -24,7 +25,9 @@ import {
 } from "./optOutRegistry.js";
 
 const CAMPAIGN_THROTTLE_MS = 1000;
+const CAMPAIGN_SCHEDULE_TICK_MS = 60_000;
 const runningCampaigns = new Map<string, Promise<void>>();
+let scheduleTimer: NodeJS.Timeout | null = null;
 
 export type StartCampaignRunParams = {
   campaignId: string;
@@ -36,6 +39,13 @@ export type StartCampaignRunParams = {
   components?: CampaignTemplateComponents;
   componentsByWaId?: Record<string, CampaignTemplateComponents>;
   source?: Extract<MetaUsageSource, "campaign" | "manual_campaign_send">;
+};
+
+type ScheduledCampaignSeed = {
+  recipients: string[];
+  templateParams: string[];
+  components?: CampaignTemplateComponents;
+  componentsByWaId?: Record<string, CampaignTemplateComponents>;
 };
 
 function sleep(ms: number) {
@@ -59,6 +69,153 @@ export function startCampaignRun(params: StartCampaignRunParams) {
   });
   runningCampaigns.set(params.campaignId, task);
   return campaignRunId;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function extractComponents(value: unknown): CampaignTemplateComponents | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const components = value.filter((component): component is CampaignTemplateComponents[number] => {
+    if (!isRecord(component) || component.type !== "body" || !Array.isArray(component.parameters)) return false;
+    return component.parameters.every((parameter) => {
+      return isRecord(parameter) && parameter.type === "text" && typeof parameter.text === "string";
+    });
+  });
+  return components.length > 0 ? components : undefined;
+}
+
+function extractComponentsByWaId(value: unknown): Record<string, CampaignTemplateComponents> | undefined {
+  if (!isRecord(value)) return undefined;
+  const entries = Object.entries(value)
+    .map(([waId, components]) => [waId, extractComponents(components)] as const)
+    .filter((entry): entry is [string, CampaignTemplateComponents] => Boolean(entry[1]));
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function extractScheduledCampaignSeed(value: unknown): ScheduledCampaignSeed | null {
+  if (!isRecord(value)) return null;
+  const recipients = Array.isArray(value.recipients)
+    ? value.recipients.map((item) => String(item ?? "").trim()).filter(Boolean)
+    : [];
+  if (recipients.length === 0) return null;
+  const templateParams = Array.isArray(value.templateParams)
+    ? value.templateParams.map((item) => String(item ?? "").trim()).filter(Boolean)
+    : [];
+  return {
+    recipients,
+    templateParams,
+    components: extractComponents(value.components),
+    componentsByWaId: extractComponentsByWaId(value.componentsByWaId),
+  };
+}
+
+export async function processDueScheduledCampaigns(params: { now?: Date; limit?: number } = {}) {
+  const prisma = getPrisma();
+  const now = params.now ?? new Date();
+  const dueCampaigns = await prisma.campaign.findMany({
+    where: {
+      status: "scheduled",
+      scheduledAt: { lte: now },
+    },
+    include: {
+      client: {
+        select: {
+          id: true,
+          clientKey: true,
+        },
+      },
+    },
+    orderBy: { scheduledAt: "asc" },
+    take: params.limit ?? 10,
+  });
+  let claimed = 0;
+  for (const campaign of dueCampaigns) {
+    const claim = await prisma.campaign.updateMany({
+      where: {
+        id: campaign.id,
+        clientId: campaign.clientId,
+        status: "scheduled",
+        scheduledAt: { lte: now },
+      },
+      data: {
+        status: "sending",
+        scheduledAt: null,
+      },
+    });
+    if (claim.count !== 1) continue;
+    claimed += 1;
+    const seedEvent = await prisma.event.findFirst({
+      where: {
+        clientId: campaign.clientId,
+        messageId: campaign.id,
+        eventName: "campaign.seed.saved",
+      },
+      orderBy: { createdAt: "desc" },
+      select: { payloadJson: true },
+    });
+    const seed = extractScheduledCampaignSeed(seedEvent?.payloadJson);
+    if (!seed) {
+      await prisma.campaign.update({
+        where: { id: campaign.id },
+        data: { status: "failed" },
+      });
+      await persistEvent({
+        clientId: campaign.clientId,
+        messageId: campaign.id,
+        requestId: `campaign-scheduled-start-missing-seed:${campaign.id}`,
+        eventName: "campaign.scheduled.failed",
+        payloadJson: {
+          campaignId: campaign.id,
+          reason: "missing_seed",
+        },
+      });
+      continue;
+    }
+    await persistEvent({
+      clientId: campaign.clientId,
+      messageId: campaign.id,
+      requestId: `campaign-scheduled-start:${campaign.id}`,
+      eventName: "campaign.scheduled.started",
+      payloadJson: {
+        campaignId: campaign.id,
+        scheduledAt: campaign.scheduledAt?.toISOString() ?? null,
+        startedAt: now.toISOString(),
+      },
+    });
+    startCampaignRun({
+      campaignId: campaign.id,
+      clientId: campaign.clientId,
+      clientKey: campaign.client.clientKey,
+      name: campaign.name,
+      templateName: campaign.templateName,
+      waIds: seed.recipients,
+      components: seed.components,
+      componentsByWaId: seed.componentsByWaId,
+    });
+  }
+  return { checked: dueCampaigns.length, claimed };
+}
+
+export function startCampaignScheduleProcessor(params: { intervalMs?: number } = {}) {
+  if (scheduleTimer) return () => undefined;
+  const intervalMs = params.intervalMs ?? CAMPAIGN_SCHEDULE_TICK_MS;
+  scheduleTimer = setInterval(() => {
+    processDueScheduledCampaigns().catch((error) => {
+      logger.error({
+        event: "campaign.schedule.processor.error",
+        message: error instanceof Error ? error.message : "unknown_error",
+      });
+    });
+  }, intervalMs);
+  scheduleTimer.unref?.();
+  void processDueScheduledCampaigns();
+  return () => {
+    if (!scheduleTimer) return;
+    clearInterval(scheduleTimer);
+    scheduleTimer = null;
+  };
 }
 
 async function runCampaignInBackground(
@@ -130,13 +287,12 @@ async function runCampaignInBackground(
     },
     async () => {
       let sentCount = 0;
-      let blockedCount =
-        (
-          await prisma.campaign.findUnique({
-            where: { id: params.campaignId },
-            select: { blockedCount: true },
-          })
-        )?.blockedCount ?? 0;
+      const initialCounts = await prisma.campaign.findUnique({
+        where: { id: params.campaignId },
+        select: { sentCount: true, blockedCount: true },
+      });
+      sentCount = initialCounts?.sentCount ?? 0;
+      let blockedCount = initialCounts?.blockedCount ?? 0;
 
       for (let index = 0; index < waIds.length; index += 1) {
         const inputWaId = waIds[index];
@@ -152,6 +308,30 @@ async function runCampaignInBackground(
             clientId: params.clientId,
             clientKey: params.clientKey,
           });
+          return;
+        }
+        if (campaignState?.status === "paused") {
+          logger.info({
+            event: "campaign.paused",
+            campaignId: params.campaignId,
+            campaignRunId,
+            clientId: params.clientId,
+            clientKey: params.clientKey,
+          });
+          return;
+        }
+        if (!campaignState || isCampaignTerminalStatus(campaignState.status)) {
+          logger.info({
+            event: "campaign.runner.stopped_terminal_status",
+            campaignId: params.campaignId,
+            campaignRunId,
+            clientId: params.clientId,
+            clientKey: params.clientKey,
+            status: campaignState?.status ?? null,
+          });
+          return;
+        }
+        if (campaignState.status !== "sending") {
           return;
         }
         const resolvedRecipient = await resolveCampaignRecipientConversationTarget(prisma, {
@@ -195,6 +375,16 @@ async function runCampaignInBackground(
         });
         const requestId = crypto.randomUUID();
         const messageId = `campaign.${params.campaignId}.${index + 1}`;
+        const existingOutbound = await prisma.outboundMessage.findFirst({
+          where: {
+            clientId: params.clientId,
+            messageId,
+          },
+          select: { id: true },
+        });
+        if (existingOutbound) {
+          continue;
+        }
         const components = params.componentsByWaId?.[inputWaId] ?? params.componentsByWaId?.[waId] ?? params.components;
         const result = await sendTemplate({
           toE164: waId,
@@ -212,8 +402,8 @@ async function runCampaignInBackground(
 
         if (result.blockedByUsage) {
           blockedCount += 1;
-          await prisma.campaign.update({
-            where: { id: params.campaignId },
+          await prisma.campaign.updateMany({
+            where: { id: params.campaignId, status: "sending" },
             data: {
               status: "blocked",
               blockedCount,
@@ -335,8 +525,8 @@ async function runCampaignInBackground(
         });
 
         if (!result.ok) {
-          await prisma.campaign.update({
-            where: { id: params.campaignId },
+          await prisma.campaign.updateMany({
+            where: { id: params.campaignId, status: "sending" },
             data: {
               status: "failed",
               sentCount,
@@ -377,8 +567,8 @@ async function runCampaignInBackground(
         }
       }
 
-      await prisma.campaign.update({
-        where: { id: params.campaignId },
+      await prisma.campaign.updateMany({
+        where: { id: params.campaignId, status: "sending" },
         data: {
           status: "completed",
           sentCount,
@@ -398,8 +588,8 @@ async function runCampaignInBackground(
       });
     }
   ).catch(async (error) => {
-    await prisma.campaign.update({
-      where: { id: params.campaignId },
+    await prisma.campaign.updateMany({
+      where: { id: params.campaignId, status: "sending" },
       data: { status: "failed" },
     });
     logger.error({

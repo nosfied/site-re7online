@@ -508,6 +508,7 @@ export type CampaignItem = {
   totalRecipients: number;
   sentCount: number;
   blockedCount: number;
+  scheduledAt?: string | null;
   createdAt: string;
   updatedAt: string;
   progress: {

@@ -1,15 +1,6 @@
 import { getPrisma } from "../db.js";
-
-export const CAMPAIGN_STATUSES = [
-  "draft",
-  "sending",
-  "completed",
-  "blocked",
-  "failed",
-  "cancelled",
-] as const;
-
-export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
+import { CAMPAIGN_STATUSES, type CampaignStatus } from "./campaignLifecycle.js";
+export { CAMPAIGN_STATUSES, type CampaignStatus } from "./campaignLifecycle.js";
 
 export type CampaignTemplateComponents = Array<{
   type: "body";
@@ -23,6 +14,7 @@ export type CreateCampaignParams = {
   templateName: string;
   totalRecipients: number;
   status?: CampaignStatus;
+  scheduledAt?: Date | null;
 };
 
 export async function createCampaign(params: CreateCampaignParams) {
@@ -35,6 +27,7 @@ export async function createCampaign(params: CreateCampaignParams) {
       templateName: params.templateName,
       status: params.status ?? "sending",
       totalRecipients: params.totalRecipients,
+      scheduledAt: params.scheduledAt ?? null,
     },
   });
 }
@@ -53,7 +46,7 @@ export async function cancelCampaign(params: { campaignId: string; clientId: str
   const prisma = getPrisma();
   return prisma.campaign.update({
     where: { id: params.campaignId },
-    data: { status: "cancelled" },
+    data: { status: "cancelled", scheduledAt: null },
   });
 }
 

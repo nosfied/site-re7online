@@ -6,6 +6,7 @@ import { logger } from "./logger/logger.js";
 import { getPrisma } from "./db.js";
 import { loadTenantsJsonFallback } from "./config/tenantJsonFallback.js";
 import { startChatbotInactivityProcessor } from "./chatbot/chatbotInactivityProcessor.js";
+import { startCampaignScheduleProcessor } from "./campaigns/campaignRunner.js";
 
 async function bootstrap() {
   const { env } = await import("./config/env.js");
@@ -178,6 +179,12 @@ async function bootstrap() {
       intervalMs: Number(process.env.CHATBOT_INACTIVITY_PROCESSOR_INTERVAL_MS) || undefined,
     });
     logger.info({ event: "chatbot.inactivity.processor.started" });
+  }
+  if (String(process.env.CAMPAIGN_SCHEDULE_PROCESSOR_DISABLED ?? "").toLowerCase() !== "true") {
+    startCampaignScheduleProcessor({
+      intervalMs: Number(process.env.CAMPAIGN_SCHEDULE_PROCESSOR_INTERVAL_MS) || undefined,
+    });
+    logger.info({ event: "campaign.schedule.processor.started" });
   }
   server.listen(env.PORT, () => {
     logger.info({ event: "server.started", port: env.PORT });
