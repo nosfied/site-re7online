@@ -601,6 +601,42 @@ export type AppCampaignDraftRecipient = {
   identifierDisplay: string;
 };
 
+export type AppCampaignImportSummary = {
+  received: number;
+  valid: number;
+  invalid: number;
+  duplicates: number;
+  existingDuplicates: number;
+  optOutBlocked: number;
+  missingRequiredVariables: number;
+  readyToImport: number;
+  blockedByReason: Array<{ reason: string; label: string; count: number }>;
+};
+
+export type AppCampaignImportPreview = {
+  ok: true;
+  summary: AppCampaignImportSummary;
+  recipients: Array<{
+    rowNumber: number | null;
+    phoneDisplay: string;
+    identifierDisplay: string;
+    variables: Record<string, string>;
+  }>;
+  errors: Array<{
+    rowNumber: number | null;
+    reason: string;
+    label: string;
+    phoneDisplay: string | null;
+  }>;
+  truncatedErrors: boolean;
+  csv?: {
+    headers: string[];
+    delimiter: string;
+    maxRows?: number;
+    maxBytes?: number;
+  };
+};
+
 export type AppApiError = Error & {
   status?: number;
   errorCode?: string;
@@ -4344,6 +4380,54 @@ export async function createAppCampaignDraft(
   };
 }> {
   return requestAppJson(session, "/app/campaigns/drafts", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function previewAppCampaignCsv(
+  session: AppSession,
+  payload: {
+    templateId: string;
+    csvText: string;
+    mapping: {
+      phoneColumn?: string | null;
+      nameColumn?: string | null;
+      variableColumns?: Record<string, string | null>;
+    };
+  }
+): Promise<AppCampaignImportPreview> {
+  return requestAppJson(session, "/app/campaigns/csv-preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createAppCampaignDraftFromCsv(
+  session: AppSession,
+  payload: {
+    name: string;
+    templateId: string;
+    csvText: string;
+    mapping: {
+      phoneColumn?: string | null;
+      nameColumn?: string | null;
+      variableColumns?: Record<string, string | null>;
+    };
+  }
+): Promise<{
+  ok: true;
+  campaign: CampaignItem & { campaignId: string };
+  draft: {
+    summary: AppCampaignImportSummary;
+    recipients: AppCampaignImportPreview["recipients"];
+  };
+  csv: {
+    headers: string[];
+    delimiter: string;
+  };
+}> {
+  return requestAppJson(session, "/app/campaigns/drafts/csv", {
     method: "POST",
     body: JSON.stringify(payload),
   });

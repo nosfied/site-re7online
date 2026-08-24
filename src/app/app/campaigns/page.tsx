@@ -6,6 +6,7 @@ import AppShell from "@/components/app/AppShell";
 import { buildReplayFormFromCampaign, getFriendlyCampaignError } from "@/lib/campaignDrafts";
 import {
   AppCampaignAudiencePreviewResponse,
+  AppCampaignImportPreview,
   AppMetaCostPreview,
   AppSession,
   AppTemplateItem,
@@ -14,6 +15,7 @@ import {
   clearAppSession,
   createAppCampaign,
   createAppCampaignDraft,
+  createAppCampaignDraftFromCsv,
   discardAppCampaignDraft,
   exportAppCampaignConsumptionCsv,
   fetchAppCampaignAudiencePreview,
@@ -24,6 +26,7 @@ import {
   listAppTemplates,
   loadAppSession,
   pauseAppCampaign,
+  previewAppCampaignCsv,
   resumeAppCampaign,
   scheduleAppCampaignDraft,
   saveAppSession,
@@ -265,6 +268,36 @@ function countManualRecipientsInput(input: string) {
         .filter(Boolean)
     )
   ).length;
+}
+
+function parseCsvHeadersForUi(input: string) {
+  const firstLine = String(input ?? "").replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0] ?? "";
+  if (!firstLine.trim()) return [];
+  const delimiter = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
+  const headers: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let index = 0; index < firstLine.length; index += 1) {
+    const char = firstLine[index];
+    const next = firstLine[index + 1];
+    if (char === "\"") {
+      if (quoted && next === "\"") {
+        current += "\"";
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+      continue;
+    }
+    if (!quoted && char === delimiter) {
+      headers.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  headers.push(current.trim());
+  return headers.filter(Boolean);
 }
 
 function CostPreviewCard({ preview, loading, emptyText }: {
@@ -514,6 +547,16 @@ export default function AppCampaignsPage() {
   const [audiencePage, setAudiencePage] = useState(1);
   const [loadingAudiencePreview, setLoadingAudiencePreview] = useState(false);
   const [audiencePreviewError, setAudiencePreviewError] = useState<string | null>(null);
+  const [csvText, setCsvText] = useState("");
+  const [csvFileName, setCsvFileName] = useState("");
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvPhoneColumn, setCsvPhoneColumn] = useState("");
+  const [csvNameColumn, setCsvNameColumn] = useState("");
+  const [csvVariableColumns, setCsvVariableColumns] = useState<Record<string, string>>({});
+  const [csvPreview, setCsvPreview] = useState<AppCampaignImportPreview | null>(null);
+  const [csvPreviewError, setCsvPreviewError] = useState<string | null>(null);
+  const [loadingCsvPreview, setLoadingCsvPreview] = useState(false);
+  const [creatingCsvDraft, setCreatingCsvDraft] = useState(false);
   const [creatingDraft, setCreatingDraft] = useState(false);
   const [sendingDraft, setSendingDraft] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -683,6 +726,14 @@ export default function AppCampaignsPage() {
     () => audiencePreview?.items.filter((item) => item.eligible) ?? [],
     [audiencePreview]
   );
+
+  useEffect(() => {
+    setCsvVariableColumns((previous) =>
+      Object.fromEntries(templateVariableLabels.map((label) => [label, previous[label] ?? ""]))
+    );
+    setCsvPreview(null);
+    setCsvPreviewError(null);
+  }, [templateVariableLabels]);
 
   const manualRecipientCount = useMemo(
     () => countManualRecipientsInput(form.recipientsInput),
@@ -1233,6 +1284,155 @@ export default function AppCampaignsPage() {
       showToast("error", "Rascunho não criado", message);
     } finally {
       setCreatingDraft(false);
+    }
+  };
+
+  const handleCsvFileChange = async (file: File | null) => {
+    setCsvPreview(null);
+    setCsvPreviewError(null);
+    if (!file) {
+      setCsvText("");
+      setCsvFileName("");
+      setCsvHeaders([]);
+      setCsvPhoneColumn("");
+      setCsvNameColumn("");
+      setCsvVariableColumns({});
+      return;
+    }
+    const text = await file.text();
+    const headers = parseCsvHeadersForUi(text);
+    setCsvText(text);
+    setCsvFileName(file.name);
+    setCsvHeaders(headers);
+    setCsvPhoneColumn((previous) => (previous && headers.includes(previous) ? previous : headers[0] ?? ""));
+    setCsvNameColumn((previous) => (previous && headers.includes(previous) ? previous : ""));
+    setCsvVariableColumns((previous) =>
+      Object.fromEntries(templateVariableLabels.map((label) => [label, headers.includes(previous[label]) ? previous[label] : ""]))
+    );
+  };
+
+  const buildCsvMappingPayload = () => ({
+    phoneColumn: csvPhoneColumn || null,
+    nameColumn: csvNameColumn || null,
+    variableColumns: csvVariableColumns,
+  });
+
+  const handleCsvPreview = async () => {
+    if (!session) return;
+    const templateId = form.templateId.trim();
+    if (!templateId) {
+      const message = "Selecione um modelo aprovado antes de importar CSV.";
+      setCsvPreviewError(message);
+      showToast("error", "CSV incompleto", message);
+      return;
+    }
+    if (!csvText.trim()) {
+      const message = "Selecione um arquivo CSV antes de gerar a prévia.";
+      setCsvPreviewError(message);
+      showToast("error", "CSV incompleto", message);
+      return;
+    }
+    if (!csvPhoneColumn) {
+      const message = "Mapeie a coluna de telefone.";
+      setCsvPreviewError(message);
+      showToast("error", "CSV incompleto", message);
+      return;
+    }
+    setLoadingCsvPreview(true);
+    setCsvPreviewError(null);
+    try {
+      const preview = await previewAppCampaignCsv(session, {
+        templateId,
+        csvText,
+        mapping: buildCsvMappingPayload(),
+      });
+      setCsvPreview(preview);
+      showToast(
+        "info",
+        "Prévia CSV gerada",
+        `${preview.summary.readyToImport} destinatários prontos; ${preview.summary.received - preview.summary.readyToImport} bloqueados ou ignorados.`
+      );
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const message = typed.message || "Não foi possível gerar a prévia do CSV.";
+      setCsvPreviewError(message);
+      showToast("error", "Prévia CSV não gerada", message);
+    } finally {
+      setLoadingCsvPreview(false);
+    }
+  };
+
+  const handleCreateDraftFromCsv = async () => {
+    if (!session) return;
+    const name = form.name.trim() || defaultDraftName;
+    const templateId = form.templateId.trim();
+    if (!templateId) {
+      const message = "Selecione um modelo aprovado antes de criar o rascunho.";
+      setCsvPreviewError(message);
+      showToast("error", "Rascunho CSV incompleto", message);
+      return;
+    }
+    if (!csvText.trim() || !csvPhoneColumn) {
+      const message = "Selecione o CSV e mapeie a coluna de telefone.";
+      setCsvPreviewError(message);
+      showToast("error", "Rascunho CSV incompleto", message);
+      return;
+    }
+    if (csvPreview && csvPreview.summary.readyToImport === 0) {
+      const message = "Não há destinatários elegíveis nesta prévia para criar rascunho.";
+      setCsvPreviewError(message);
+      showToast("warning", "Sem CSV elegível", message);
+      return;
+    }
+    const confirmed = window.confirm("Criar rascunho com os destinatários elegíveis do CSV? Nenhuma mensagem será enviada.");
+    if (!confirmed) return;
+
+    setCreatingCsvDraft(true);
+    setCsvPreviewError(null);
+    try {
+      const created = await createAppCampaignDraftFromCsv(session, {
+        name,
+        templateId,
+        csvText,
+        mapping: buildCsvMappingPayload(),
+      });
+      await refreshCampaigns(session, created.campaign.id);
+      const detail = await getAppCampaign(session, created.campaign.id);
+      setSelectedCampaign(detail.campaign);
+      setSelectedCampaignId(created.campaign.id);
+      setDetailModalOpen(true);
+      setForm(EMPTY_FORM);
+      setCsvText("");
+      setCsvFileName("");
+      setCsvHeaders([]);
+      setCsvPhoneColumn("");
+      setCsvNameColumn("");
+      setCsvVariableColumns({});
+      setCsvPreview(null);
+      setFormError(null);
+      setStatusFilter("draft");
+      setActiveTab("drafts");
+      setCurrentPage(1);
+      showToast(
+        "success",
+        "Rascunho CSV criado",
+        `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.readyToImport} destinatários elegíveis.`
+      );
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const message = typed.message || "Não foi possível criar o rascunho pelo CSV.";
+      setCsvPreviewError(message);
+      showToast("error", "Rascunho CSV não criado", message);
+    } finally {
+      setCreatingCsvDraft(false);
     }
   };
 
@@ -1970,6 +2170,175 @@ export default function AppCampaignsPage() {
               </div>
             </div>
           ) : null}
+          <div className="rounded-md border border-white/10 bg-white/5 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Importação CSV</p>
+                <h3 className="mt-1 text-sm font-semibold">Criar rascunho por arquivo</h3>
+                <p className="mt-1 text-xs text-white/60">
+                  O arquivo é validado antes da criação do rascunho. Nenhuma mensagem é enviada nesta etapa.
+                </p>
+              </div>
+              <span className="rounded-full border border-sky-300/30 bg-sky-900/20 px-3 py-1 text-xs text-sky-100">
+                Rascunho
+              </span>
+            </div>
+            <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(180px,260px)_minmax(180px,260px)]">
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">Arquivo CSV</span>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white file:mr-3 file:rounded file:border-0 file:bg-re7-orange file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white"
+                  onChange={(event) => void handleCsvFileChange(event.target.files?.[0] ?? null)}
+                />
+                {csvFileName ? <span className="text-xs text-white/55">{csvFileName}</span> : null}
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">Coluna de telefone</span>
+                <select
+                  value={csvPhoneColumn}
+                  disabled={csvHeaders.length === 0}
+                  onChange={(event) => {
+                    setCsvPhoneColumn(event.target.value);
+                    setCsvPreview(null);
+                  }}
+                  className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white disabled:opacity-50"
+                >
+                  <option value="">Selecione</option>
+                  {csvHeaders.map((header) => (
+                    <option key={header} value={header}>
+                      {header}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">Coluna de nome</span>
+                <select
+                  value={csvNameColumn}
+                  disabled={csvHeaders.length === 0}
+                  onChange={(event) => {
+                    setCsvNameColumn(event.target.value);
+                    setCsvPreview(null);
+                  }}
+                  className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white disabled:opacity-50"
+                >
+                  <option value="">Não mapear</option>
+                  {csvHeaders.map((header) => (
+                    <option key={header} value={header}>
+                      {header}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {templateVariableLabels.length > 0 ? (
+                <div className="grid gap-2 lg:col-span-3 md:grid-cols-2 xl:grid-cols-3">
+                  {templateVariableLabels.map((label) => (
+                    <label key={label} className="grid gap-1 text-sm">
+                      <span className="text-white/70">{`Variável {{${label}}}`}</span>
+                      <select
+                        value={csvVariableColumns[label] ?? ""}
+                        disabled={csvHeaders.length === 0}
+                        onChange={(event) => {
+                          setCsvVariableColumns((prev) => ({ ...prev, [label]: event.target.value }));
+                          setCsvPreview(null);
+                        }}
+                        className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white disabled:opacity-50"
+                      >
+                        <option value="">Selecione</option>
+                        {csvHeaders.map((header) => (
+                          <option key={header} value={header}>
+                            {header}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            {csvPreviewError ? (
+              <p className="mt-3 rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
+                {csvPreviewError}
+              </p>
+            ) : null}
+            {csvPreview ? (
+              <div className="mt-3 grid gap-3">
+                <div className="grid gap-2 sm:grid-cols-4">
+                  <div className="rounded-md border border-white/10 bg-re7-navy/45 p-3">
+                    <p className="text-xs uppercase tracking-wide text-white/55">Linhas</p>
+                    <p className="mt-1 text-lg font-semibold">{csvPreview.summary.received}</p>
+                  </div>
+                  <div className="rounded-md border border-emerald-400/20 bg-emerald-900/20 p-3">
+                    <p className="text-xs uppercase tracking-wide text-emerald-100/70">Prontos</p>
+                    <p className="mt-1 text-lg font-semibold text-emerald-100">{csvPreview.summary.readyToImport}</p>
+                  </div>
+                  <div className="rounded-md border border-amber-400/20 bg-amber-900/20 p-3">
+                    <p className="text-xs uppercase tracking-wide text-amber-100/70">Duplicados</p>
+                    <p className="mt-1 text-lg font-semibold text-amber-100">
+                      {csvPreview.summary.duplicates + csvPreview.summary.existingDuplicates}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-red-400/20 bg-red-900/20 p-3">
+                    <p className="text-xs uppercase tracking-wide text-red-100/70">Bloqueados</p>
+                    <p className="mt-1 text-lg font-semibold text-red-100">
+                      {csvPreview.summary.invalid + csvPreview.summary.optOutBlocked + csvPreview.summary.missingRequiredVariables}
+                    </p>
+                  </div>
+                </div>
+                {csvPreview.summary.blockedByReason.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {csvPreview.summary.blockedByReason.map((item) => (
+                      <span key={item.reason} className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-white/75">
+                        {item.label}: {item.count}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {csvPreview.recipients.length > 0 ? (
+                  <div className="overflow-x-auto rounded-md border border-white/10">
+                    <table className="w-full min-w-[520px] text-sm">
+                      <thead className="bg-white/10 text-left">
+                        <tr>
+                          <th className="px-3 py-2">Linha</th>
+                          <th className="px-3 py-2">Contato</th>
+                          <th className="px-3 py-2">Referência</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {csvPreview.recipients.slice(0, 8).map((recipient) => (
+                          <tr key={`${recipient.rowNumber}-${recipient.phoneDisplay}`} className="border-t border-white/10">
+                            <td className="px-3 py-2 text-white/65">{recipient.rowNumber ?? "-"}</td>
+                            <td className="px-3 py-2 font-medium">{recipient.identifierDisplay}</td>
+                            <td className="px-3 py-2 font-mono text-xs text-white/70">{recipient.phoneDisplay}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            <div className="mt-3 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={loadingCsvPreview || !csvText || !form.templateId}
+                onClick={() => void handleCsvPreview()}
+                className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loadingCsvPreview ? "Validando..." : "Pré-visualizar CSV"}
+              </button>
+              <button
+                type="button"
+                disabled={creatingCsvDraft || !csvText || !form.templateId || (csvPreview ? csvPreview.summary.readyToImport === 0 : false)}
+                onClick={() => void handleCreateDraftFromCsv()}
+                className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {creatingCsvDraft ? "Criando..." : "Criar rascunho com CSV"}
+              </button>
+            </div>
+          </div>
           <details
             className="rounded-md border border-amber-300/20 bg-amber-950/10"
             open={manualSendOpen}

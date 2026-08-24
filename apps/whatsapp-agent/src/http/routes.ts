@@ -119,6 +119,17 @@ import {
   buildCampaignAudiencePreviewPayload,
   type CampaignAudienceBlockedReason,
 } from "../campaigns/campaignAudiencePreview.js";
+import {
+  buildCampaignImportRecipientsFromCsv,
+  CAMPAIGN_IMPORT_MAX_CSV_BYTES,
+  CAMPAIGN_IMPORT_MAX_ROWS,
+  importCampaignRecipients,
+  previewCampaignRecipientImport,
+  resolveCampaignRecipientImportPlan,
+  resolveCampaignImportTemplate,
+  type CampaignImportMapping,
+  type CampaignImportRecipientInput,
+} from "../campaigns/campaignRecipientImport.js";
 import { httpError } from "../utils/httpError.js";
 import {
   enrichMetaOnboardingResult,
@@ -205,6 +216,8 @@ import {
   toPublicQueueAssignmentPolicy,
   type BalancedQueueAssignmentResult,
 } from "../queue/assignmentPolicy.js";
+
+const CAMPAIGN_IMPORT_MAX_JSON_BODY_BYTES = 3 * 1024 * 1024;
 import {
   AGENT_HEARTBEAT_INTERVAL_MS,
   AGENT_ONLINE_TTL_MS,
@@ -1191,6 +1204,204 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           status: "active",
         },
       });
+      return;
+    }
+    if (req.method === "GET" && pathname === "/public-api/v1/campaigns") {
+      const startedAt = Date.now();
+      const publicAuth = await requirePublicApiAccess(req, res, {
+        prisma,
+        requestId,
+        pathname,
+        requiredScopes: ["read", "campaigns"],
+      });
+      if (!publicAuth) return;
+      const limitRaw = Number(query.limit ?? 50);
+      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.floor(limitRaw), 1), 100) : 50;
+      const result = await buildCampaignListPayload(prisma, {
+        clientId: publicAuth.clientId,
+        limit,
+      });
+      await recordPublicApiAuditEvent(prisma, {
+        clientId: publicAuth.clientId,
+        requestId,
+        eventName: "api.request",
+        payload: {
+          action: "api.campaigns.listed",
+          apiKeyId: publicAuth.apiKeyId,
+          keyPrefix: publicAuth.keyPrefix,
+          path: pathname,
+          method: req.method,
+          statusCode: 200,
+          durationMs: Date.now() - startedAt,
+          count: result.items.length,
+        },
+      });
+      json(res, 200, result);
+      return;
+    }
+    if (req.method === "POST" && pathname === "/public-api/v1/campaigns") {
+      const startedAt = Date.now();
+      const publicAuth = await requirePublicApiAccess(req, res, {
+        prisma,
+        requestId,
+        pathname,
+        requiredScopes: ["write", "campaigns"],
+      });
+      if (!publicAuth) return;
+      const body = await readJsonBodyWithLimit(req, res, CAMPAIGN_IMPORT_MAX_JSON_BODY_BYTES);
+      if (!body) return;
+      const name = String(body.name ?? body.campaignName ?? "").trim();
+      const templateId = typeof body.templateId === "string" ? body.templateId.trim() : "";
+      const templateName = typeof body.templateName === "string" ? body.templateName.trim() : "";
+      if (!name) {
+        json(res, 400, { error: { code: "bad_request", message: "Campaign name is required.", requestId } });
+        return;
+      }
+      const resolvedTemplate = await resolveCampaignTemplateInput(prisma, {
+        clientId: publicAuth.clientId,
+        templateId: templateId || null,
+        templateName,
+      });
+      if ("error" in resolvedTemplate || !resolvedTemplate.templateId) {
+        const code = "error" in resolvedTemplate ? resolvedTemplate.error : "template_required";
+        const message = "message" in resolvedTemplate ? resolvedTemplate.message : "Approved template is required.";
+        json(res, "status" in resolvedTemplate ? resolvedTemplate.status : 400, {
+          error: { code, message, requestId },
+        });
+        return;
+      }
+      const campaign = await createCampaign({
+        clientId: publicAuth.clientId,
+        templateId: resolvedTemplate.templateId,
+        templateName: resolvedTemplate.templateName,
+        name,
+        totalRecipients: 0,
+        status: "draft",
+      });
+      await persistEvent({
+        clientId: publicAuth.clientId,
+        messageId: campaign.id,
+        requestId: `public-api-campaign-created:${campaign.id}:${requestId}`,
+        eventName: "campaign.import.created",
+        payloadJson: {
+          campaignId: campaign.id,
+          templateId: campaign.templateId,
+          templateName: campaign.templateName,
+          source: "public_api",
+          apiKeyId: publicAuth.apiKeyId,
+          keyPrefix: publicAuth.keyPrefix,
+          timestamp: new Date().toISOString(),
+        },
+      });
+      await recordPublicApiAuditEvent(prisma, {
+        clientId: publicAuth.clientId,
+        requestId,
+        eventName: "api.request",
+        payload: {
+          action: "api.campaigns.created",
+          apiKeyId: publicAuth.apiKeyId,
+          keyPrefix: publicAuth.keyPrefix,
+          path: pathname,
+          method: req.method,
+          statusCode: 201,
+          durationMs: Date.now() - startedAt,
+          campaignId: campaign.id,
+        },
+      });
+      json(res, 201, { ok: true, campaign: serializeCampaign(campaign) });
+      return;
+    }
+    const publicCampaignImportMatch = pathname.match(/^\/public-api\/v1\/campaigns\/([^/]+)\/recipients$/);
+    if (req.method === "POST" && publicCampaignImportMatch) {
+      const startedAt = Date.now();
+      const publicAuth = await requirePublicApiAccess(req, res, {
+        prisma,
+        requestId,
+        pathname,
+        requiredScopes: ["write", "campaigns"],
+      });
+      if (!publicAuth) return;
+      const body = await readJsonBodyWithLimit(req, res, CAMPAIGN_IMPORT_MAX_JSON_BODY_BYTES);
+      if (!body) return;
+      const recipients = normalizePublicCampaignImportRecipients(body.recipients);
+      if (recipients.length === 0) {
+        json(res, 400, { error: { code: "invalid_recipients", message: "Recipients must be a non-empty array.", requestId } });
+        return;
+      }
+      if (recipients.length > CAMPAIGN_IMPORT_MAX_ROWS) {
+        json(res, 400, { error: { code: "too_many_recipients", message: "Recipients limit exceeded.", requestId, limit: CAMPAIGN_IMPORT_MAX_ROWS } });
+        return;
+      }
+      const imported = await importCampaignRecipients(prisma, {
+        clientId: publicAuth.clientId,
+        campaignId: decodeURIComponent(publicCampaignImportMatch[1] ?? ""),
+        requestId,
+        actorId: publicAuth.apiKeyId,
+        source: "public_api",
+        recipients,
+      });
+      if (!imported.ok) {
+        json(res, imported.status, { error: { code: imported.error, message: imported.error, requestId } });
+        return;
+      }
+      await recordPublicApiAuditEvent(prisma, {
+        clientId: publicAuth.clientId,
+        requestId,
+        eventName: "api.request",
+        payload: {
+          action: "api.campaigns.recipients_imported",
+          apiKeyId: publicAuth.apiKeyId,
+          keyPrefix: publicAuth.keyPrefix,
+          path: pathname,
+          method: req.method,
+          statusCode: 200,
+          durationMs: Date.now() - startedAt,
+          campaignId: decodeURIComponent(publicCampaignImportMatch[1] ?? ""),
+          summary: imported.preview.summary,
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        campaign: imported.campaign ? serializeCampaign(imported.campaign) : null,
+        import: imported.preview,
+      });
+      return;
+    }
+    const publicCampaignDetailMatch = pathname.match(/^\/public-api\/v1\/campaigns\/([^/]+)$/);
+    if (req.method === "GET" && publicCampaignDetailMatch) {
+      const startedAt = Date.now();
+      const publicAuth = await requirePublicApiAccess(req, res, {
+        prisma,
+        requestId,
+        pathname,
+        requiredScopes: ["read", "campaigns"],
+      });
+      if (!publicAuth) return;
+      const campaignId = decodeURIComponent(publicCampaignDetailMatch[1] ?? "");
+      const result = await buildCampaignDetailPayload(prisma, {
+        clientId: publicAuth.clientId,
+        campaignId,
+      });
+      if (!result) {
+        json(res, 404, { error: { code: "campaign_not_found", message: "Campaign not found.", requestId } });
+        return;
+      }
+      await recordPublicApiAuditEvent(prisma, {
+        clientId: publicAuth.clientId,
+        requestId,
+        eventName: "api.request",
+        payload: {
+          action: "api.campaigns.read",
+          apiKeyId: publicAuth.apiKeyId,
+          keyPrefix: publicAuth.keyPrefix,
+          path: pathname,
+          method: req.method,
+          statusCode: 200,
+          durationMs: Date.now() - startedAt,
+          campaignId,
+        },
+      });
+      json(res, 200, result);
       return;
     }
     if (req.method === "GET" && pathname === "/public-api/v1/contacts") {
@@ -13233,6 +13444,192 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (req.method === "POST" && pathname === "/app/campaigns/csv-preview") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const body = await readJsonBodyWithLimit(req, res, CAMPAIGN_IMPORT_MAX_JSON_BODY_BYTES);
+      if (!body) return;
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const csvText = String(body.csvText ?? "");
+      if (Buffer.byteLength(csvText, "utf8") > CAMPAIGN_IMPORT_MAX_CSV_BYTES) {
+        json(res, 413, httpError("csv_too_large", "Arquivo CSV grande demais.", {
+          limitBytes: CAMPAIGN_IMPORT_MAX_CSV_BYTES,
+        }));
+        return;
+      }
+      const mapping = normalizeCampaignCsvMapping(body.mapping);
+      const parsed = buildCampaignImportRecipientsFromCsv({ csvText, mapping });
+      if (!parsed.ok) {
+        json(res, 400, httpError(parsed.error, parsed.error, "headers" in parsed ? { headers: parsed.headers } : undefined));
+        return;
+      }
+      const template = await resolveCampaignImportTemplate(prisma, {
+        clientId: client.id,
+        templateId: typeof body.templateId === "string" ? body.templateId : null,
+      });
+      if (!template) {
+        json(res, 404, httpError("template_not_found", "Approved template not found"));
+        return;
+      }
+      const preview = await previewCampaignRecipientImport(prisma, {
+        clientId: client.id,
+        template,
+        recipients: parsed.recipients,
+      });
+      json(res, 200, {
+        ...preview,
+        csv: {
+          headers: parsed.headers,
+          delimiter: parsed.delimiter,
+          maxRows: CAMPAIGN_IMPORT_MAX_ROWS,
+          maxBytes: CAMPAIGN_IMPORT_MAX_CSV_BYTES,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.campaign.csv_preview.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/campaigns/drafts/csv") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const body = await readJsonBodyWithLimit(req, res, CAMPAIGN_IMPORT_MAX_JSON_BODY_BYTES);
+      if (!body) return;
+      const name = String(body.name ?? body.campaignName ?? "").trim();
+      const templateId = String(body.templateId ?? "").trim();
+      if (!name) {
+        json(res, 400, httpError("bad_request", "Campaign name is required"));
+        return;
+      }
+      if (!templateId) {
+        json(res, 400, httpError("template_required", "Approved template is required"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const resolvedTemplate = await resolveCampaignTemplateInput(prisma, {
+        clientId: client.id,
+        templateId,
+        templateName: "",
+      });
+      if ("error" in resolvedTemplate || !resolvedTemplate.templateId) {
+        const error = "error" in resolvedTemplate ? resolvedTemplate : {
+          status: 404 as const,
+          error: "template_not_found",
+          message: "Approved template not found",
+        };
+        json(res, error.status, httpError(error.error, error.message));
+        return;
+      }
+      const parsed = buildCampaignImportRecipientsFromCsv({
+        csvText: String(body.csvText ?? ""),
+        mapping: normalizeCampaignCsvMapping(body.mapping),
+      });
+      if (!parsed.ok) {
+        json(res, 400, httpError(parsed.error, parsed.error, "headers" in parsed ? { headers: parsed.headers } : undefined));
+        return;
+      }
+      const template = await resolveCampaignImportTemplate(prisma, {
+        clientId: client.id,
+        templateId: resolvedTemplate.templateId,
+      });
+      if (!template) {
+        json(res, 404, httpError("template_not_found", "Approved template not found"));
+        return;
+      }
+      const preview = await previewCampaignRecipientImport(prisma, {
+        clientId: client.id,
+        template,
+        recipients: parsed.recipients,
+      });
+      if (preview.summary.readyToImport === 0) {
+        json(res, 400, httpError("no_eligible_recipients", "No eligible recipients for this campaign draft", {
+          summary: preview.summary,
+        }));
+        return;
+      }
+      const campaign = await createCampaign({
+        clientId: client.id,
+        templateId: resolvedTemplate.templateId,
+        templateName: resolvedTemplate.templateName,
+        name,
+        totalRecipients: 0,
+        status: "draft",
+      });
+      const imported = await importCampaignRecipients(prisma, {
+        clientId: client.id,
+        campaignId: campaign.id,
+        actorId: clientAuth.userId,
+        requestId,
+        source: "csv",
+        recipients: parsed.recipients,
+      });
+      if (!imported.ok) {
+        json(res, imported.status, httpError(imported.error, imported.error));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        campaign: imported.campaign ? { ...serializeCampaign(imported.campaign), campaignId: imported.campaign.id } : null,
+        draft: {
+          summary: imported.preview.summary,
+          recipients: imported.preview.recipients,
+        },
+        csv: {
+          headers: parsed.headers,
+          delimiter: parsed.delimiter,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.campaign.csv_import.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
   if (req.method === "GET" && pathname === "/app/usage/meta/summary") {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
@@ -14292,16 +14689,50 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
+      const manualVariables =
+        resolvedTemplate.variableKeys.length > 0
+          ? Object.fromEntries(resolvedTemplate.variableKeys.map((key, index) => [key, components?.[0]?.parameters[index]?.text ?? ""]))
+          : {};
+      const importTemplate = resolvedTemplate.templateId
+        ? await resolveCampaignImportTemplate(prisma, {
+            clientId: client.id,
+            templateId: resolvedTemplate.templateId,
+          })
+        : null;
+      const importPlan = importTemplate
+        ? await resolveCampaignRecipientImportPlan(prisma, {
+            clientId: client.id,
+            template: importTemplate,
+            recipients: waIds.map((phone, index) => ({
+              phone,
+              variables: manualVariables,
+              rowNumber: index + 1,
+            })),
+          })
+        : null;
+      const recipientPayload = importPlan
+        ? {
+            waIds: importPlan.acceptedWaIds,
+            totalRecipients: importPlan.acceptedWaIds.length + importPlan.optOutBlocked.length,
+            optOutBlocked: importPlan.optOutBlocked,
+            seedWaIds: waIds,
+          }
+        : await buildOptOutFilteredCampaignRecipients(prisma, {
+            clientId: client.id,
+            waIds,
+          });
+      if (recipientPayload.waIds.length === 0 && recipientPayload.optOutBlocked.length === 0) {
+        json(res, 400, httpError("no_eligible_recipients", "No eligible recipients for this campaign"));
+        return;
+      }
+
       const created = await createScopedCampaign({
         clientId: client.id,
         clientKey: client.clientKey,
         name,
         templateId: resolvedTemplate.templateId,
         templateName: resolvedTemplate.templateName,
-        ...(await buildOptOutFilteredCampaignRecipients(prisma, {
-          clientId: client.id,
-          waIds,
-        })),
+        ...recipientPayload,
         manualRecipientInput: rawWaIds
           .map((value) => String(value ?? "").trim())
           .filter((value) => value.length > 0),
@@ -32845,6 +33276,145 @@ async function readJsonBody(req: IncomingMessage, res: ServerResponse) {
       json(res, 400, { error: "invalid_body", message: "Invalid request body." });
       resolve(null);
     });
+  });
+}
+
+async function readJsonBodyWithLimit(req: IncomingMessage, res: ServerResponse, maxBytes: number) {
+  const contentLength = Number.parseInt(String(req.headers["content-length"] ?? ""), 10);
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    json(res, 413, { error: "request_body_too_large", message: "Request body too large." });
+    return null;
+  }
+  return new Promise<Record<string, unknown> | null>((resolve) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let oversized = false;
+    req.on("data", (chunk) => {
+      if (oversized) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      total += buffer.length;
+      if (total > maxBytes) {
+        oversized = true;
+        chunks.length = 0;
+        json(res, 413, { error: "request_body_too_large", message: "Request body too large." });
+        return;
+      }
+      chunks.push(buffer);
+    });
+    req.on("end", () => {
+      if (oversized) {
+        resolve(null);
+        return;
+      }
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>);
+      } catch {
+        json(res, 400, { error: "invalid_json", message: "Invalid JSON payload." });
+        resolve(null);
+      }
+    });
+    req.on("error", () => {
+      if (!res.headersSent) {
+        json(res, 400, { error: "invalid_body", message: "Invalid request body." });
+      }
+      resolve(null);
+    });
+  });
+}
+
+async function requirePublicApiAccess(
+  req: IncomingMessage,
+  res: ServerResponse,
+  params: {
+    prisma: ReturnType<typeof getPrisma>;
+    requestId: string;
+    pathname: string;
+    requiredScopes: Parameters<typeof authenticatePublicApiRequest>[0]["requiredScopes"];
+  }
+) {
+  const authResult = await authenticatePublicApiRequest({
+    prisma: params.prisma,
+    req,
+    requestId: params.requestId,
+    requiredScopes: params.requiredScopes,
+  });
+  if (!authResult.ok) {
+    json(res, authResult.status, {
+      error: {
+        code: authResult.error,
+        message: authResult.reason,
+        requestId: params.requestId,
+      },
+    });
+    return null;
+  }
+  const rate = checkPublicApiRateLimit(authResult.auth);
+  res.setHeader("X-RateLimit-Limit", String(rate.limit));
+  res.setHeader("X-RateLimit-Remaining", String(rate.remaining));
+  res.setHeader("X-RateLimit-Reset", String(Math.ceil(rate.resetAt / 1000)));
+  if (rate.limited) {
+    res.setHeader("Retry-After", String(rate.retryAfterSec));
+    await recordPublicApiAuditEvent(params.prisma, {
+      clientId: authResult.auth.clientId,
+      requestId: params.requestId,
+      eventName: "api.rate_limited",
+      payload: {
+        apiKeyId: authResult.auth.apiKeyId,
+        keyPrefix: authResult.auth.keyPrefix,
+        path: params.pathname,
+        method: req.method,
+        limit: rate.limit,
+        windowMs: 60_000,
+      },
+    });
+    json(res, 429, {
+      error: {
+        code: "rate_limited",
+        message: "Rate limit exceeded.",
+        requestId: params.requestId,
+      },
+    });
+    return null;
+  }
+  return authResult.auth;
+}
+
+function normalizeCampaignCsvMapping(input: unknown): CampaignImportMapping {
+  const typed =
+    input && typeof input === "object" && !Array.isArray(input)
+      ? (input as Record<string, unknown>)
+      : {};
+  const variableColumns =
+    typed.variableColumns && typeof typed.variableColumns === "object" && !Array.isArray(typed.variableColumns)
+      ? Object.fromEntries(
+          Object.entries(typed.variableColumns as Record<string, unknown>)
+            .map(([position, column]) => [position.trim(), typeof column === "string" ? column.trim() : ""] as const)
+            .filter(([position]) => Boolean(position))
+        )
+      : {};
+  return {
+    phoneColumn: typeof typed.phoneColumn === "string" ? typed.phoneColumn.trim() : null,
+    nameColumn: typeof typed.nameColumn === "string" ? typed.nameColumn.trim() : null,
+    variableColumns,
+  };
+}
+
+function normalizePublicCampaignImportRecipients(input: unknown): CampaignImportRecipientInput[] {
+  if (!Array.isArray(input)) return [];
+  return input.slice(0, CAMPAIGN_IMPORT_MAX_ROWS + 1).map((item, index) => {
+    const typed =
+      item && typeof item === "object" && !Array.isArray(item)
+        ? (item as Record<string, unknown>)
+        : {};
+    return {
+      phone: String(typed.phone ?? typed.waId ?? typed.recipient ?? "").trim(),
+      name: typeof typed.name === "string" ? typed.name.trim() : null,
+      variables:
+        typed.variables && typeof typed.variables === "object" && !Array.isArray(typed.variables)
+          ? (typed.variables as Record<string, unknown>)
+          : {},
+      rowNumber: index + 1,
+    };
   });
 }
 

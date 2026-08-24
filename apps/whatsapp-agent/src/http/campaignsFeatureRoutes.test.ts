@@ -9,6 +9,7 @@ import { hashPassword, issueClientAuthToken } from "../auth/clientAuth.js";
 import { buildAppAuthSessionExpiresAt } from "../auth/sessionPolicy.js";
 import { saveWebSessionAuthState } from "../web-session/webSessionAuthStore.js";
 import { readWebSessionPrePairingOutboundState } from "../web-session/webSessionLifecycle.js";
+import { createPublicApiKey } from "../publicApi/publicApiKeyService.js";
 import { getPrisma } from "../db.js";
 import { MessageStatus, MessageType, Prisma, TrainingContentStatus, TrainingContentType } from "@prisma/client";
 import type { ConversationState } from "../conversation/conversation.types.js";
@@ -8976,6 +8977,237 @@ test("campaign draft uses approved template and stores safe seed without sending
   );
   assert.equal(discardSending.status, 409);
   assert.equal(getErrorCode(discardSending.body), "campaign_not_draft");
+});
+
+test("public campaign API creates draft and imports recipients without sending", async () => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `public_campaign_template_${prefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Mensagem oficial {{1}}",
+    },
+  });
+  const apiKey = await createPublicApiKey({
+    prisma,
+    clientId: businessClientId,
+    userId: businessAdmin.id,
+    name: "Campaign Public API",
+    scopes: ["read", "write", "campaigns"],
+    requestId: `${prefix}:campaign-public-key`,
+  });
+  assert.equal(apiKey.ok, true);
+  const otherApiKey = await createPublicApiKey({
+    prisma,
+    clientId: overrideClientId,
+    userId: overrideAdmin.id,
+    name: "Other Campaign Public API",
+    scopes: ["read", "campaigns"],
+    requestId: `${prefix}:campaign-public-key-other`,
+  });
+  assert.equal(otherApiKey.ok, true);
+  const contactsOnlyKey = await createPublicApiKey({
+    prisma,
+    clientId: businessClientId,
+    userId: businessAdmin.id,
+    name: "Contacts Only Public API",
+    scopes: ["read", "contacts"],
+    requestId: `${prefix}:campaign-public-key-denied`,
+  });
+  assert.equal(contactsOnlyKey.ok, true);
+
+  const denied = await requestWithBearer<ErrorPayload>(
+    "GET",
+    "/public-api/v1/campaigns",
+    contactsOnlyKey.secret
+  );
+  assert.equal(denied.status, 403);
+  assert.equal(getErrorCode(denied.body), "forbidden");
+  const invalidKey = await requestWithBearer<ErrorPayload>("GET", "/public-api/v1/campaigns", "invalid-public-key");
+  assert.equal(invalidKey.status, 401);
+
+  const otherTemplate = await prisma.template.create({
+    data: {
+      clientId: overrideClientId,
+      name: `other_public_campaign_template_${prefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Outro {{1}}",
+    },
+  });
+  const crossTemplate = await requestWithBearer<ErrorPayload>("POST", "/public-api/v1/campaigns", apiKey.secret, {
+    name: "Cross Tenant Template",
+    templateId: otherTemplate.id,
+  });
+  assert.equal(crossTemplate.status, 404);
+  assert.equal(getErrorCode(crossTemplate.body), "template_not_found");
+
+  const outboundBefore = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+  const created = await requestWithBearer<{
+    ok: true;
+    campaign: { id: string; status: string; templateId: string; totalRecipients: number };
+  }>("POST", "/public-api/v1/campaigns", apiKey.secret, {
+    name: "Public API Draft",
+    templateId: template.id,
+  });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.campaign.status, "draft");
+  assert.equal(created.body.campaign.templateId, template.id);
+  assert.equal(created.body.campaign.totalRecipients, 0);
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: "5541991200003",
+    source: "test",
+    reason: "public campaign block",
+  });
+
+  const imported = await requestWithBearer<{
+    ok: true;
+    campaign: { id: string; status: string; totalRecipients: number; sentCount: number };
+    import: {
+      summary: {
+        received: number;
+        readyToImport: number;
+        duplicates: number;
+        optOutBlocked: number;
+        invalid: number;
+        missingRequiredVariables: number;
+      };
+      recipients: Array<{ phoneDisplay: string }>;
+    };
+  }>("POST", `/public-api/v1/campaigns/${created.body.campaign.id}/recipients`, apiKey.secret, {
+    recipients: [
+      { phone: "5541991200001", name: "Maria", variables: { "1": "Maria" } },
+      { phone: "+55 (41) 99120-0001", name: "Maria duplicada", variables: { "1": "Maria" } },
+      { phone: "5541991200002", name: "Sem variável", variables: {} },
+      { phone: "5541991200003", name: "Opt-out", variables: { "1": "Opt" } },
+      { phone: "telefone ruim", name: "Inválido", variables: { "1": "X" } },
+    ],
+  });
+  assert.equal(imported.status, 200);
+  assert.equal(imported.body.campaign.status, "draft");
+  assert.equal(imported.body.campaign.totalRecipients, 1);
+  assert.equal(imported.body.campaign.sentCount, 0);
+  assert.equal(imported.body.import.summary.received, 5);
+  assert.equal(imported.body.import.summary.readyToImport, 1);
+  assert.equal(imported.body.import.summary.duplicates, 1);
+  assert.equal(imported.body.import.summary.optOutBlocked, 1);
+  assert.equal(imported.body.import.summary.invalid, 1);
+  assert.equal(imported.body.import.summary.missingRequiredVariables, 1);
+  assert.equal(JSON.stringify(imported.body).includes("5541991200001"), false);
+
+  const detail = await requestWithBearer<{
+    ok: true;
+    campaign: { id: string; status: string; totalRecipients: number; messagesMetaStatus: unknown[] };
+  }>("GET", `/public-api/v1/campaigns/${created.body.campaign.id}`, apiKey.secret);
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.campaign.status, "draft");
+  assert.equal(detail.body.campaign.totalRecipients, 1);
+  assert.equal(detail.body.campaign.messagesMetaStatus.length, 1);
+
+  const crossTenant = await requestWithBearer<ErrorPayload>(
+    "GET",
+    `/public-api/v1/campaigns/${created.body.campaign.id}`,
+    otherApiKey.secret
+  );
+  assert.equal(crossTenant.status, 404);
+  assert.equal(getErrorCode(crossTenant.body), "campaign_not_found");
+
+  const sendAttempt = await requestWithBearer<ErrorPayload>(
+    "POST",
+    `/public-api/v1/campaigns/${created.body.campaign.id}/send`,
+    apiKey.secret
+  );
+  assert.equal(sendAttempt.status, 404);
+
+  const outboundAfter = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+  const sendEvents = await prisma.event.count({
+    where: {
+      clientId: businessClientId,
+      messageId: created.body.campaign.id,
+      eventName: { in: ["campaign.draft.sent", "campaign.message.sent", "campaign.message.failed"] },
+    },
+  });
+  assert.equal(outboundAfter, outboundBefore);
+  assert.equal(sendEvents, 0);
+});
+
+test("app CSV import previews and creates draft without sending", async () => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `app_csv_template_${prefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Olá {{1}}",
+    },
+  });
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: "5541991300003",
+    source: "test",
+    reason: "app csv block",
+  });
+  const csvText = [
+    "telefone,nome,primeiro_nome",
+    "5541991300001,Ana,Ana",
+    "+55 (41) 99130-0001,Ana duplicada,Ana",
+    "5541991300002,João,João",
+    "5541991300003,Bloqueado,Bloqueado",
+  ].join("\n");
+  const mapping = {
+    phoneColumn: "telefone",
+    nameColumn: "nome",
+    variableColumns: { "1": "primeiro_nome" },
+  };
+
+  const preview = await request<{
+    ok: true;
+    summary: { received: number; readyToImport: number; duplicates: number; optOutBlocked: number };
+    csv: { headers: string[]; delimiter: string };
+  }>("POST", "/app/campaigns/csv-preview?clientId=malicious", businessAdmin, {
+    templateId: template.id,
+    csvText,
+    mapping,
+  });
+  assert.equal(preview.status, 200);
+  assert.equal(preview.body.summary.received, 4);
+  assert.equal(preview.body.summary.readyToImport, 2);
+  assert.equal(preview.body.summary.duplicates, 1);
+  assert.equal(preview.body.summary.optOutBlocked, 1);
+  assert.deepEqual(preview.body.csv.headers, ["telefone", "nome", "primeiro_nome"]);
+
+  const outboundBefore = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+  const created = await request<{
+    ok: true;
+    campaign: { id: string; status: string; totalRecipients: number; sentCount: number };
+    draft: { summary: { readyToImport: number } };
+  }>("POST", "/app/campaigns/drafts/csv?clientId=malicious", businessAdmin, {
+    name: "App CSV Draft",
+    templateId: template.id,
+    csvText,
+    mapping,
+  });
+  assert.equal(created.status, 200);
+  assert.equal(created.body.campaign.status, "draft");
+  assert.equal(created.body.campaign.totalRecipients, 2);
+  assert.equal(created.body.campaign.sentCount, 0);
+  assert.equal(created.body.draft.summary.readyToImport, 2);
+
+  const outboundAfter = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+  const sendEvents = await prisma.event.count({
+    where: {
+      clientId: businessClientId,
+      messageId: created.body.campaign.id,
+      eventName: { in: ["campaign.draft.sent", "campaign.message.sent", "campaign.message.failed"] },
+    },
+  });
+  assert.equal(outboundAfter, outboundBefore);
+  assert.equal(sendEvents, 0);
 });
 
 test("campaign draft send revalidates recipients before starting", async () => {
