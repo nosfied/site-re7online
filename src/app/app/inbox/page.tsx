@@ -2212,6 +2212,18 @@ function canSessionAccessConversationDepartment(
   return session.user.departmentId === targetDepartmentId;
 }
 
+function canSessionTransferConversation(
+  session: AppSession | null,
+  item: Pick<InboxConversationItem, "assignedUserId" | "departmentId"> | null
+) {
+  if (!session || !item) return false;
+  if (isAppAdmin(session)) return true;
+  if (isConversationAssignedToCurrentUser(item, session.user.id)) return true;
+  const role = String(session.user.role || "").trim().toUpperCase();
+  if (role !== "SUPERVISOR") return false;
+  return canSessionAccessConversationDepartment(session, item.departmentId);
+}
+
 function getTemplateBodyPreview(content: string | null | undefined) {
   const raw = String(content ?? "").trim();
   if (!raw) return "";
@@ -4896,14 +4908,15 @@ export default function AppInboxPage() {
   const canTransferSelectedConversation = useMemo(
     () =>
       Boolean(selectedConversationWaId) &&
-      (isAdminUser || isSelectedConversationOwnedByCurrentUser),
-    [isAdminUser, isSelectedConversationOwnedByCurrentUser, selectedConversationWaId]
+      canSessionTransferConversation(session, selectedConversation),
+    [selectedConversation, selectedConversationWaId, session]
   );
 
   const canTransferDepartment = useMemo(
     () =>
-      Boolean(selectedConversationWaId && (isAdminUser || isSelectedConversationOwnedByCurrentUser)),
-    [isAdminUser, isSelectedConversationOwnedByCurrentUser, selectedConversationWaId]
+      Boolean(selectedConversationWaId) &&
+      canSessionTransferConversation(session, selectedConversation),
+    [selectedConversation, selectedConversationWaId, session]
   );
 
   useEffect(() => {
@@ -7195,21 +7208,38 @@ export default function AppInboxPage() {
                       </button>
                     </>
                   ) : (
-                    <button
-                      type="button"
-                      className="block w-full px-4 py-3 text-left font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={
-                        !selectedConversationWaId ||
-                        Boolean(conversationAction) ||
-                        isSelectedConversationLocked
-                      }
-                      onClick={() => {
-                        setShowMoreActions(false);
-                        void handleClaimConversation();
-                      }}
-                    >
-                      {conversationAction === "claim" ? "Assumindo..." : "Assumir conversa"}
-                    </button>
+                    <>
+                      {isSelectedConversationLocked && canTransferSelectedConversation ? (
+                        <button
+                          type="button"
+                          className="block w-full px-4 py-3 text-left font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={!selectedConversationWaId || Boolean(conversationAction)}
+                          onClick={() => {
+                            setShowMoreActions(false);
+                            void handleReleaseConversationToGeneral();
+                          }}
+                        >
+                          {conversationAction === "release-general"
+                            ? "Liberando..."
+                            : "Devolver para fila atual"}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="block w-full px-4 py-3 text-left font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={
+                          !selectedConversationWaId ||
+                          Boolean(conversationAction) ||
+                          isSelectedConversationLocked
+                        }
+                        onClick={() => {
+                          setShowMoreActions(false);
+                          void handleClaimConversation();
+                        }}
+                      >
+                        {conversationAction === "claim" ? "Assumindo..." : "Assumir conversa"}
+                      </button>
+                    </>
                   )}
                   <button
                     type="button"
@@ -7286,20 +7316,34 @@ export default function AppInboxPage() {
                   </button>
                 </>
               ) : (
-                <button
-                  type="button"
-                  title="Assumir conversa"
-                  aria-label="Assumir conversa"
-                  disabled={
-                    !selectedConversationWaId ||
-                    Boolean(conversationAction) ||
-                    isSelectedConversationLocked
-                  }
-                  onClick={handleClaimConversation}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/70 text-base text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8 max-md:h-10 max-md:w-10"
-                >
-                  {conversationAction === "claim" ? "…" : "✓"}
-                </button>
+                <>
+                  {isSelectedConversationLocked && canTransferSelectedConversation ? (
+                    <button
+                      type="button"
+                      title="Devolver para fila atual"
+                      aria-label="Devolver conversa para fila atual"
+                      disabled={!selectedConversationWaId || Boolean(conversationAction)}
+                      onClick={handleReleaseConversationToGeneral}
+                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/25 bg-emerald-50 text-base text-emerald-900 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8 max-md:h-10 max-md:w-10"
+                    >
+                      {conversationAction === "release-general" ? "…" : "🎧"}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    title="Assumir conversa"
+                    aria-label="Assumir conversa"
+                    disabled={
+                      !selectedConversationWaId ||
+                      Boolean(conversationAction) ||
+                      isSelectedConversationLocked
+                    }
+                    onClick={handleClaimConversation}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/70 text-base text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8 max-md:h-10 max-md:w-10"
+                  >
+                    {conversationAction === "claim" ? "…" : "✓"}
+                  </button>
+                </>
               )}
               <button
                 type="button"
