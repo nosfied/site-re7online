@@ -31,6 +31,7 @@ import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import { getMetaTemplateCategoryUxLabel, getMetaTemplateStatusUxLabel } from "@/lib/appUxLabels";
 import { hasCapability } from "@/lib/appFeatures";
 import { QUICK_EMOJIS } from "@/lib/quickEmojis";
+import { MESSAGE_AREA_TABS, MessagesArea, resolveMessagesArea } from "@/lib/messagesInformationArchitecture";
 
 type TemplateRequestFormState = {
   name: string;
@@ -73,7 +74,6 @@ const TEMPLATE_VIEW_TABS = [
 ] as const;
 
 type TemplateViewTab = (typeof TEMPLATE_VIEW_TABS)[number]["id"];
-
 type CatalogItem = {
   id: string;
   templateId: string | null;
@@ -468,6 +468,7 @@ export default function AppTemplatesPage() {
   const [languageFilter, setLanguageFilter] = useState("all");
   const [campaignUseFilter, setCampaignUseFilter] = useState("all");
   const [cannedSearch, setCannedSearch] = useState("");
+  const [requestedArea, setRequestedArea] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -628,6 +629,9 @@ export default function AppTemplatesPage() {
   );
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      setRequestedArea(new URLSearchParams(window.location.search).get("tab"));
+    }
     const stored = loadAppSession();
     if (!stored?.token) {
       router.replace("/app/login");
@@ -1071,24 +1075,21 @@ export default function AppTemplatesPage() {
   const templatesFeatureEnabled = hasCapability(session, "templates");
   const cannedRepliesFeatureEnabled = hasCapability(session, "cannedReplies");
   const pageFeatureEnabled = templatesFeatureEnabled || cannedRepliesFeatureEnabled;
-  const pageTitle =
-    templatesFeatureEnabled && !cannedRepliesFeatureEnabled
-      ? "Modelos de mensagem"
-      : cannedRepliesFeatureEnabled && !templatesFeatureEnabled
-        ? "Mensagens prontas"
-        : "Modelos de mensagem";
-  const pageSubtitle =
-    templatesFeatureEnabled && !cannedRepliesFeatureEnabled
-      ? "Modelos aprovados pela Meta para campanhas e retomadas fora da janela de 24h."
-      : cannedRepliesFeatureEnabled && !templatesFeatureEnabled
-        ? "Respostas internas reutilizáveis no atendimento."
-        : "Modelos Meta e respostas internas reutilizáveis no atendimento.";
+  const activeArea = resolveMessagesArea(requestedArea, {
+    cannedReplies: cannedRepliesFeatureEnabled,
+    templates: templatesFeatureEnabled,
+  });
+  const showAreaTabs = cannedRepliesFeatureEnabled && templatesFeatureEnabled;
+  const handleSelectArea = (area: MessagesArea) => {
+    setRequestedArea(area);
+    router.replace(`/app/templates?tab=${area}`, { scroll: false });
+  };
 
   return (
     <AppShell
       session={session}
-      title={pageTitle}
-      subtitle={pageSubtitle}
+      title="Mensagens"
+      subtitle="Gerencie respostas prontas e modelos oficiais usados nos atendimentos."
     >
       <FeedbackToast message={success} onClose={() => setSuccess(null)} />
       <FeedbackToast message={error} variant="error" onClose={() => setError(null)} />
@@ -1100,15 +1101,37 @@ export default function AppTemplatesPage() {
             Funcionalidade indisponível para esta organização.
           </section>
         ) : null}
-        {templatesFeatureEnabled ? (
+        {showAreaTabs ? (
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Seções de mensagens">
+            {MESSAGE_AREA_TABS.map((tab) => {
+              const selected = activeArea === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => handleSelectArea(tab.id)}
+                  className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                    selected
+                      ? "border-re7-sky/50 bg-re7-sky/20 text-sky-100"
+                      : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+        {activeArea === "meta-templates" ? (
         <>
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-3xl">
-              <h2 className="text-lg font-semibold text-white">Central de modelos</h2>
+              <h2 className="text-lg font-semibold text-white">Modelos Meta</h2>
               <p className="mt-2 text-sm leading-relaxed text-white/70">
-                Modelos são mensagens aprovadas pela Meta para iniciar conversas fora da janela de atendimento do WhatsApp.
-                Eles são usados em campanhas e em retomadas de atendimento quando a janela de 24h estiver fechada.
+                Modelos Meta são mensagens aprovadas para campanhas e retomadas.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1157,14 +1180,14 @@ export default function AppTemplatesPage() {
         </>
         ) : null}
 
-        {cannedRepliesFeatureEnabled ? (
+        {activeArea === "canned-replies" ? (
         <section className="rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 p-3 sm:p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h2 className="text-sm font-semibold">Mensagens prontas</h2>
                 <p className="mt-1 max-w-3xl text-xs leading-relaxed text-white/60">
-                  Textos internos para respostas rápidas dentro da janela de atendimento. Não são modelos Meta e não reabrem conversa fora da janela de 24h.
+                  Mensagens prontas são respostas internas usadas no Inbox.
                 </p>
               </div>
               <label className="grid min-w-[min(100%,20rem)] gap-1 text-xs text-white/70">
@@ -1177,9 +1200,6 @@ export default function AppTemplatesPage() {
                 />
               </label>
             </div>
-            <p className="mt-3 rounded-lg border border-amber-300/20 bg-amber-900/15 px-3 py-2 text-xs text-amber-100">
-              Mensagem pronta é enviada como texto comum dentro da regra do canal. A cobrança depende da entrega e da política vigente da Meta.
-            </p>
           </div>
 
           <div className="grid gap-4 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.7fr)] sm:p-4">
@@ -1346,14 +1366,14 @@ export default function AppTemplatesPage() {
         </section>
         ) : null}
 
-        {templatesFeatureEnabled ? (
+        {activeArea === "meta-templates" ? (
         <section className="rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 p-3 sm:p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-sm font-semibold">Catálogo de modelos</h2>
+                <h2 className="text-sm font-semibold">Modelos Meta</h2>
                 <p className="mt-1 text-xs text-white/60">
-                  Veja o que pode ser usado em campanhas, o que está em revisão e o que depende da Meta.
+                  Modelos Meta são mensagens aprovadas para campanhas e retomadas.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">

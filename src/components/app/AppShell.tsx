@@ -246,7 +246,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     icon: "🧾",
     group: "operation",
     featureAny: ["templates", "cannedReplies"],
-    labels: { business: "Modelos", government: "Modelos" },
+    labels: { business: "Mensagens", government: "Mensagens" },
   },
   {
     href: "/app/chatbot",

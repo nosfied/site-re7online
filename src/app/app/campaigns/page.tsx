@@ -1964,13 +1964,13 @@ export default function AppCampaignsPage() {
                   <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100 lg:col-span-3">
                     <p className="font-semibold">Não há modelos ativos disponíveis para campanha.</p>
                     <p className="mt-1 text-amber-100/80">
-                      Verifique os modelos aprovados ou reative um modelo no Centro de Modelos.
+                      Verifique os modelos aprovados ou reative um modelo em Modelos Meta.
                     </p>
                     <a
-                      href="/app/templates"
+                      href="/app/templates?tab=meta-templates"
                       className="mt-2 inline-flex rounded-md border border-amber-200/40 px-3 py-1.5 font-semibold hover:bg-amber-200/10"
                     >
-                      Ir para Modelos
+                      Ir para Modelos Meta
                     </a>
                   </div>
                 ) : null}
