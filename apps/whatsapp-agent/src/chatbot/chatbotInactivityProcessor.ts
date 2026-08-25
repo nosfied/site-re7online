@@ -17,6 +17,8 @@ import { createWebSessionTextOutboundMessage } from "../web-session/webSessionOu
 const DEFAULT_QUEUE_POSITION_TEXT = "Você é o nº {position} da fila de atendimento.";
 const DEFAULT_OFF_HOURS_TEXT =
   "No momento não temos nenhum atendente disponível. Você será atendido no primeiro horário do próximo expediente.";
+const INACTIVITY_SKIP_EVENT_NAME = "chatbot.inactivity.handoff.skipped";
+export const CONSENT_PENDING_INACTIVITY_SKIP_EVENT_COOLDOWN_MS = 30 * 60 * 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -67,6 +69,7 @@ function getClosedHandoffPolicy(definition: unknown) {
 async function recordInactivityHandoffSkipped(params: {
   prisma: PrismaClient;
   clientId: string;
+  conversationId?: string | null;
   waId: string;
   waIdCanonical: string | null;
   runtimeStateId: string;
@@ -74,13 +77,15 @@ async function recordInactivityHandoffSkipped(params: {
   reason: string;
   payload?: Prisma.InputJsonObject;
 }) {
+  if (!(await shouldRecordInactivitySkipEvent(params))) return;
   await params.prisma.event.create({
     data: {
       clientId: params.clientId,
+      conversationId: params.conversationId ?? null,
       waId: params.waId,
       waIdCanonical: params.waIdCanonical,
       requestId: `chatbot-inactivity:${params.runtimeStateId}:${params.reason}:${params.now.toISOString()}`,
-      eventName: "chatbot.inactivity.handoff.skipped",
+      eventName: INACTIVITY_SKIP_EVENT_NAME,
       payloadJson: {
         reason: params.reason,
         runtimeStateId: params.runtimeStateId,
@@ -88,6 +93,38 @@ async function recordInactivityHandoffSkipped(params: {
       } satisfies Prisma.InputJsonObject,
     },
   });
+}
+
+export async function shouldRecordInactivitySkipEvent(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  conversationId?: string | null;
+  runtimeStateId: string;
+  now: Date;
+  reason: string;
+}) {
+  if (params.reason !== "consent_pending") return true;
+  const cutoff = new Date(params.now.getTime() - CONSENT_PENDING_INACTIVITY_SKIP_EVENT_COOLDOWN_MS);
+  const recent = await params.prisma.event.findFirst({
+    where: {
+      clientId: params.clientId,
+      eventName: INACTIVITY_SKIP_EVENT_NAME,
+      createdAt: { gte: cutoff },
+      ...(params.conversationId ? { conversationId: params.conversationId } : {}),
+      payloadJson: {
+        path: ["reason"],
+        equals: params.reason,
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, payloadJson: true },
+  });
+  if (!recent) return true;
+  if (params.conversationId) return false;
+  return !(
+    isRecord(recent.payloadJson) &&
+    recent.payloadJson.runtimeStateId === params.runtimeStateId
+  );
 }
 
 export async function claimChatbotInactivityHandoff(params: {
@@ -217,9 +254,14 @@ export async function processChatbotInactivityTimeouts(params: {
       definition: validated.definition,
     });
     if (!consentPrecedence.accepted) {
+      const conversation = await params.prisma.conversation.findUnique({
+        where: { clientId_waId: { clientId: state.clientId, waId: state.waId } },
+        select: { id: true },
+      });
       await recordInactivityHandoffSkipped({
         prisma: params.prisma,
         clientId: state.clientId,
+        conversationId: conversation?.id ?? null,
         waId: state.waId,
         waIdCanonical: state.waIdCanonical,
         runtimeStateId: state.id,

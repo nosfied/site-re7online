@@ -4,8 +4,10 @@ import { HandoffStatus } from "@prisma/client";
 import { buildConsentTextHash } from "../consent/contactConsent.js";
 import {
   claimChatbotInactivityHandoff,
+  CONSENT_PENDING_INACTIVITY_SKIP_EVENT_COOLDOWN_MS,
   processChatbotInactivityTimeouts,
   resolveInactivityHandoffDestination,
+  shouldRecordInactivitySkipEvent,
 } from "./chatbotInactivityProcessor.js";
 import { resolveChatbotConsentPrecedence } from "./chatbotConsentRuntime.js";
 
@@ -315,6 +317,42 @@ test("resolveChatbotConsentPrecedence requires accepted consent before inactivit
   assert.deepEqual(acceptedFromRuntime.pendingNodeIds, []);
 });
 
+type InactivityEventRow = {
+  id: string;
+  clientId: string;
+  conversationId: string | null;
+  eventName: string;
+  createdAt: Date;
+  payloadJson: Record<string, unknown>;
+};
+
+function makeInactivityEventPrisma(events: InactivityEventRow[]) {
+  return {
+    event: {
+      findFirst: async ({ where }: { where: Record<string, any> }) => {
+        const cutoff = where.createdAt?.gte instanceof Date ? where.createdAt.gte : null;
+        const reasonPath = where.payloadJson?.path?.[0] === "reason" ? where.payloadJson.equals : null;
+        return events
+          .filter((event) => event.clientId === where.clientId)
+          .filter((event) => event.eventName === where.eventName)
+          .filter((event) => !where.conversationId || event.conversationId === where.conversationId)
+          .filter((event) => !cutoff || event.createdAt >= cutoff)
+          .filter((event) => !reasonPath || event.payloadJson.reason === reasonPath)
+          .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0] ?? null;
+      },
+      create: async ({ data }: { data: Omit<InactivityEventRow, "id" | "createdAt"> & { createdAt?: Date } }) => {
+        const event = {
+          id: `event-${events.length + 1}`,
+          createdAt: data.createdAt ?? new Date(),
+          ...data,
+        };
+        events.push(event);
+        return event;
+      },
+    },
+  };
+}
+
 test("processChatbotInactivityTimeouts skips handoff while consent is pending", async () => {
   const row = makeRow({
     id: "runtime-pending-consent",
@@ -324,7 +362,7 @@ test("processChatbotInactivityTimeouts skips handoff while consent is pending", 
       },
     },
   });
-  const events: Array<{ eventName: string; payloadJson: Record<string, unknown> }> = [];
+  const events: InactivityEventRow[] = [];
   const prisma = {
     conversationRuntimeState: {
       findMany: async () => [row],
@@ -336,12 +374,10 @@ test("processChatbotInactivityTimeouts skips handoff while consent is pending", 
       findFirst: async () => ({ id: "flow-secult", definition: makeConsentFlow() }),
     },
     ...makeConsentPrisma(null),
-    event: {
-      create: async ({ data }: { data: { eventName: string; payloadJson: Record<string, unknown> } }) => {
-        events.push({ eventName: data.eventName, payloadJson: data.payloadJson });
-        return { id: `event-${events.length}` };
-      },
+    conversation: {
+      findUnique: async () => ({ id: "conversation-1" }),
     },
+    ...makeInactivityEventPrisma(events),
   };
 
   const result = await processChatbotInactivityTimeouts({
@@ -357,4 +393,167 @@ test("processChatbotInactivityTimeouts skips handoff while consent is pending", 
   assert.equal(events[0]?.eventName, "chatbot.inactivity.handoff.skipped");
   assert.equal(events[0]?.payloadJson.reason, "consent_pending");
   assert.deepEqual(events[0]?.payloadJson.pendingConsentNodeIds, ["consent"]);
+});
+
+test("consent_pending cooldown suppresses only persisted event while processor keeps evaluating", async () => {
+  const row = makeRow({
+    id: "runtime-pending-consent",
+    answers: {
+      chatbotRuntime: {
+        lastInteractionAt: "2026-08-15T10:00:00.000Z",
+      },
+    },
+  });
+  const events: InactivityEventRow[] = [];
+  let candidateEvaluations = 0;
+  const prisma = {
+    conversationRuntimeState: {
+      findMany: async () => {
+        candidateEvaluations += 1;
+        return [row];
+      },
+      updateMany: async () => {
+        throw new Error("pending consent must not claim inactivity handoff");
+      },
+    },
+    chatbotFlow: {
+      findFirst: async () => ({ id: "flow-secult", definition: makeConsentFlow() }),
+    },
+    ...makeConsentPrisma(null),
+    conversation: {
+      findUnique: async () => ({ id: "conversation-1" }),
+    },
+    ...makeInactivityEventPrisma(events),
+  };
+
+  await processChatbotInactivityTimeouts({
+    prisma: prisma as never,
+    now: new Date("2026-08-15T11:01:00.000Z"),
+  });
+  await processChatbotInactivityTimeouts({
+    prisma: prisma as never,
+    now: new Date("2026-08-15T11:02:00.000Z"),
+  });
+
+  assert.equal(candidateEvaluations, 2);
+  assert.equal(events.length, 1);
+  assert.equal(row.mode, "BOT");
+  assert.equal(row.handoffStatus, HandoffStatus.NONE);
+});
+
+test("consent_pending inactivity skip event is recorded once inside cooldown", async () => {
+  const events: InactivityEventRow[] = [];
+  const prisma = makeInactivityEventPrisma(events);
+  const now = new Date("2026-08-15T11:00:00.000Z");
+
+  assert.equal(
+    await shouldRecordInactivitySkipEvent({
+      prisma: prisma as never,
+      clientId: "client-1",
+      conversationId: "conversation-1",
+      runtimeStateId: "runtime-1",
+      now,
+      reason: "consent_pending",
+    }),
+    true
+  );
+  await prisma.event.create({
+    data: {
+      clientId: "client-1",
+      conversationId: "conversation-1",
+      eventName: "chatbot.inactivity.handoff.skipped",
+      payloadJson: { reason: "consent_pending", runtimeStateId: "runtime-1" },
+      createdAt: now,
+    },
+  });
+
+  for (let minute = 1; minute < 30; minute += 1) {
+    assert.equal(
+      await shouldRecordInactivitySkipEvent({
+        prisma: prisma as never,
+        clientId: "client-1",
+        conversationId: "conversation-1",
+        runtimeStateId: "runtime-1",
+        now: new Date(now.getTime() + minute * 60_000),
+        reason: "consent_pending",
+      }),
+      false
+    );
+  }
+});
+
+test("consent_pending inactivity skip event is recorded again after cooldown", async () => {
+  const base = new Date("2026-08-15T11:00:00.000Z");
+  const events: InactivityEventRow[] = [
+    {
+      id: "event-1",
+      clientId: "client-1",
+      conversationId: "conversation-1",
+      eventName: "chatbot.inactivity.handoff.skipped",
+      createdAt: base,
+      payloadJson: { reason: "consent_pending", runtimeStateId: "runtime-1" },
+    },
+  ];
+
+  assert.equal(
+    await shouldRecordInactivitySkipEvent({
+      prisma: makeInactivityEventPrisma(events) as never,
+      clientId: "client-1",
+      conversationId: "conversation-1",
+      runtimeStateId: "runtime-1",
+      now: new Date(base.getTime() + CONSENT_PENDING_INACTIVITY_SKIP_EVENT_COOLDOWN_MS + 1),
+      reason: "consent_pending",
+    }),
+    true
+  );
+});
+
+test("inactivity skip dedupe is scoped by reason tenant and conversation", async () => {
+  const now = new Date("2026-08-15T11:00:00.000Z");
+  const recent = new Date(now.getTime() - 5 * 60_000);
+  const events: InactivityEventRow[] = [
+    {
+      id: "event-1",
+      clientId: "client-1",
+      conversationId: "conversation-1",
+      eventName: "chatbot.inactivity.handoff.skipped",
+      createdAt: recent,
+      payloadJson: { reason: "consent_pending", runtimeStateId: "runtime-1" },
+    },
+  ];
+  const prisma = makeInactivityEventPrisma(events) as never;
+
+  assert.equal(
+    await shouldRecordInactivitySkipEvent({
+      prisma,
+      clientId: "client-1",
+      conversationId: "conversation-1",
+      runtimeStateId: "runtime-1",
+      now,
+      reason: "missing_operational_destination",
+    }),
+    true
+  );
+  assert.equal(
+    await shouldRecordInactivitySkipEvent({
+      prisma,
+      clientId: "client-2",
+      conversationId: "conversation-1",
+      runtimeStateId: "runtime-1",
+      now,
+      reason: "consent_pending",
+    }),
+    true
+  );
+  assert.equal(
+    await shouldRecordInactivitySkipEvent({
+      prisma,
+      clientId: "client-1",
+      conversationId: "conversation-2",
+      runtimeStateId: "runtime-2",
+      now,
+      reason: "consent_pending",
+    }),
+    true
+  );
 });
