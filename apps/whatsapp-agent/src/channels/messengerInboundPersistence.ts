@@ -12,6 +12,7 @@ import { publishRealtimeEvent } from "../realtime/hub.js";
 import { resolveMetaContactDisplayName, upsertMetaContactIdentity } from "./metaContactProfile.js";
 import { guardAgainstAnonymizedIdentityRehydration } from "../privacy/anonymizedIdentityGuard.js";
 import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
+import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
 
 export const MESSENGER_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
@@ -393,6 +394,7 @@ export async function persistMessengerInboundEvent(params: {
         clientId: client.id,
         waId: syntheticWaId,
         name: displayName,
+        lifecycle: CONTACT_LIFECYCLE_ACTIVE,
         ...channelFields,
       },
       update: {

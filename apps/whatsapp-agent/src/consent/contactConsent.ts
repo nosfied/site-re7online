@@ -1,9 +1,13 @@
 import crypto from "node:crypto";
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
+import { promoteContactLifecycleToActive } from "../contacts/contactLifecycle.js";
 
 type PrismaForConsent = Pick<PrismaClient, "contact" | "lead" | "conversation" | "contactConsent" | "event">;
+type PrismaWithTransactionForConsent = PrismaForConsent & Pick<PrismaClient, "$transaction">;
 
 export type ContactConsentStatus = "missing" | "accepted" | "revoked" | "blocked_anonymized";
+
+const CONSENT_TRANSACTION_MAX_ATTEMPTS = 3;
 
 export function normalizeConsentPurpose(value: string) {
   const normalized = value
@@ -147,6 +151,39 @@ export async function recordContactConsent(params: {
   textBody?: string | null;
   requestId: string;
 }) {
+  if (typeof (params.prisma as Partial<PrismaWithTransactionForConsent>).$transaction === "function") {
+    const prisma = params.prisma as PrismaWithTransactionForConsent;
+    for (let attempt = 1; attempt <= CONSENT_TRANSACTION_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        return await prisma.$transaction((tx) => recordContactConsentAtomic({ ...params, prisma: tx }), {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        });
+      } catch (error) {
+        if (!isTransactionRetryable(error) || attempt === CONSENT_TRANSACTION_MAX_ATTEMPTS) throw error;
+      }
+    }
+  }
+  return recordContactConsentAtomic(params);
+}
+
+function isTransactionRetryable(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
+}
+
+async function recordContactConsentAtomic(params: {
+  prisma: PrismaForConsent;
+  clientId: string;
+  contactId?: string | null;
+  leadId?: string | null;
+  waId?: string | null;
+  purpose: string;
+  sourceChannel?: string | null;
+  sourceProvider?: string | null;
+  source?: string | null;
+  textVersion?: string | null;
+  textBody?: string | null;
+  requestId: string;
+}) {
   const purpose = normalizeConsentPurpose(params.purpose);
   if (!purpose) return { ok: false as const, reason: "invalid_purpose" as const };
   const subject = await resolveConsentSubject(params);
@@ -181,6 +218,21 @@ export async function recordContactConsent(params: {
       acceptedAt: now,
     },
   });
+  await params.prisma.contactConsent.updateMany({
+    where: {
+      clientId: params.clientId,
+      purpose,
+      status: "accepted",
+      revokedAt: null,
+      id: { not: consent.id },
+      ...(subject.contactId ? { contactId: subject.contactId } : {}),
+      ...(subject.leadId ? { leadId: subject.leadId } : {}),
+    },
+    data: {
+      status: "revoked",
+      revokedAt: now,
+    },
+  });
   await params.prisma.event.create({
     data: {
       clientId: params.clientId,
@@ -197,6 +249,14 @@ export async function recordContactConsent(params: {
         hasLead: Boolean(subject.leadId),
       },
     },
+  });
+  await promoteContactLifecycleToActive({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    contactId: subject.contactId,
+    waId: subject.waId,
+    source: params.source,
+    requestId: params.requestId,
   });
   return { ok: true as const, consent };
 }

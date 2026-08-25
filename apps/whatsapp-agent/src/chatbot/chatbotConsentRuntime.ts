@@ -25,8 +25,12 @@ function normalizeAnswer(value: string | null | undefined) {
   return String(value ?? "").trim().toLowerCase();
 }
 
-function getConsentNodes(definition: ChatbotFlowDefinition) {
+export function getConsentNodes(definition: ChatbotFlowDefinition) {
   return Object.values(definition.nodes).filter((node): node is ChatbotConsentNode => node.type === "consent");
+}
+
+export function isChatbotConsentRequired(definition: ChatbotFlowDefinition) {
+  return getConsentNodes(definition).length > 0;
 }
 
 function hasAcceptedConsent(state: ConversationState, node: ChatbotConsentNode) {

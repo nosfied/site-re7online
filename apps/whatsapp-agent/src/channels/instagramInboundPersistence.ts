@@ -12,6 +12,7 @@ import { env } from "../config/env.js";
 import { resolveMetaContactDisplayName, upsertMetaContactIdentity } from "./metaContactProfile.js";
 import { guardAgainstAnonymizedIdentityRehydration } from "../privacy/anonymizedIdentityGuard.js";
 import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
+import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
 
 export const INSTAGRAM_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Instagram ainda não está habilitado neste canal.";
@@ -525,6 +526,7 @@ export async function persistInstagramInboundEvent(params: {
         clientId: client.id,
         waId: syntheticWaId,
         name: displayName ?? "Instagram User",
+        lifecycle: CONTACT_LIFECYCLE_ACTIVE,
         ...channelFields,
       },
       update: {

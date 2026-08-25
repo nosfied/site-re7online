@@ -1,6 +1,7 @@
 import { ConversationOperationalStatus, type PrismaClient } from "@prisma/client";
 import crypto from "node:crypto";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
+import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
 import { persistEvent } from "../db/persist.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
@@ -82,6 +83,7 @@ async function ensureCampaignOutboundCrmBootstrap(
       provider: "meta",
       channelAccountId,
       externalUserHash: identityHash,
+      lifecycle: CONTACT_LIFECYCLE_ACTIVE,
     },
     select: { id: true, name: true },
   });

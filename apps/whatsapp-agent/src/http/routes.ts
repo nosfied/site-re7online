@@ -73,6 +73,7 @@ import {
   type ResolvedWebSessionAlertEmails,
 } from "../config/tenantOperationalConfig.js";
 import { applyAgentSignature } from "../inbox/agentSignature.js";
+import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
 import { checkRateLimit } from "./rateLimit.js";
 import {
   fetchMediaContent,
@@ -10830,13 +10831,67 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           waId: true,
           waIdCanonical: true,
           externalUserHash: true,
+          externalUserRef: true,
+          legacyWaId: true,
+          contactChannelIdentity: {
+            select: {
+              contact: {
+                select: {
+                  lifecycle: true,
+                },
+              },
+            },
+          },
           status: true,
           updatedAt: true,
         },
       });
+      const lifecycleLookupKeys = Array.from(
+        new Set(
+          leads
+            .flatMap((lead) => [
+              lead.waId,
+              lead.waIdCanonical,
+              lead.externalUserRef,
+              lead.legacyWaId,
+              String(lead.phone ?? "").replace(/\D/g, ""),
+            ])
+            .map((value) => String(value ?? "").trim())
+            .filter(Boolean)
+        )
+      );
+      const contactsByLookupKey = new Map<string, { lifecycle: unknown }>();
+      if (lifecycleLookupKeys.length > 0) {
+        const contacts = await prisma.contact.findMany({
+          where: {
+            clientId: client.id,
+            OR: [
+              { waId: { in: lifecycleLookupKeys } },
+              { externalUserRef: { in: lifecycleLookupKeys } },
+              { legacyWaId: { in: lifecycleLookupKeys } },
+            ],
+          },
+          select: { waId: true, externalUserRef: true, legacyWaId: true, lifecycle: true },
+        });
+        for (const contact of contacts) {
+          for (const key of [contact.waId, contact.externalUserRef, contact.legacyWaId]) {
+            const normalizedKey = String(key ?? "").trim();
+            if (normalizedKey) contactsByLookupKey.set(normalizedKey, { lifecycle: contact.lifecycle });
+          }
+        }
+      }
       const seen = new Set<string>();
       const items = leads
         .map((lead) => {
+          const matchedContact =
+            lead.contactChannelIdentity?.contact ??
+            contactsByLookupKey.get(lead.waIdCanonical ?? "") ??
+            contactsByLookupKey.get(lead.waId) ??
+            contactsByLookupKey.get(lead.externalUserRef ?? "") ??
+            contactsByLookupKey.get(lead.legacyWaId ?? "") ??
+            contactsByLookupKey.get(String(lead.phone ?? "").replace(/\D/g, "")) ??
+            null;
+          if (matchedContact && !isOperationalContactLifecycle(matchedContact.lifecycle)) return null;
           if (
             [
               lead.waId,

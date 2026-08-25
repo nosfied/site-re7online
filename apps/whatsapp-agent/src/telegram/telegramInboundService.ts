@@ -5,6 +5,7 @@ import { encryptMessengerExternalUserRef } from "../channels/messengerOutbound.j
 import { getFeatures } from "../features/clientFeatures.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
+import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
 import {
   hasConfiguredTelegramToken,
   markTelegramWebhookReplay,
@@ -227,6 +228,7 @@ export async function persistTelegramInboundMessage(params: {
         clientId: account.clientId,
         waId: syntheticWaId,
         name: displayName,
+        lifecycle: CONTACT_LIFECYCLE_ACTIVE,
         ...channelFields,
       },
       update: {

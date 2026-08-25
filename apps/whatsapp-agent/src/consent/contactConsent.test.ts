@@ -9,22 +9,26 @@ import {
 } from "./contactConsent.js";
 
 function makePrisma() {
+  let transactionQueue = Promise.resolve();
   const state = {
     contacts: [
       {
         id: "contact-1",
         clientId: "11111111-1111-4111-8111-111111111111",
         waId: "support-user-1",
+        lifecycle: "ACTIVE",
       },
       {
         id: "contact-other",
         clientId: "22222222-2222-4222-8222-222222222222",
         waId: "support-user-1",
+        lifecycle: "ACTIVE",
       },
       {
         id: "contact-anonymized",
         clientId: "11111111-1111-4111-8111-111111111111",
         waId: "old-anonymized",
+        lifecycle: "ACTIVE",
       },
     ],
     leads: [
@@ -49,8 +53,10 @@ function makePrisma() {
     ],
     consents: [] as any[],
     events: [] as any[],
+    failConsentCreate: false,
+    failPromotion: false,
   };
-  const prisma = {
+  const prisma: any = {
     contact: {
       findFirst: async ({ where }: any) =>
         state.contacts.find((item) => {
@@ -59,6 +65,19 @@ function makePrisma() {
           if (where.waId) return item.waId === where.waId;
           return false;
         }) ?? null,
+      updateMany: async ({ where, data }: any) => {
+        let count = 0;
+        for (const item of state.contacts) {
+          if (item.clientId !== where.clientId) continue;
+          if (where.id && item.id !== where.id) continue;
+          if (where.waId && item.waId !== where.waId) continue;
+          if (where.lifecycle && item.lifecycle !== where.lifecycle) continue;
+          if (state.failPromotion && data.lifecycle === "ACTIVE") throw new Error("promotion failed");
+          Object.assign(item, data);
+          count += 1;
+        }
+        return { count };
+      },
     },
     lead: {
       findFirst: async ({ where }: any) =>
@@ -90,6 +109,7 @@ function makePrisma() {
         let count = 0;
         for (const item of state.consents) {
           if (item.clientId !== where.clientId || item.purpose !== where.purpose) continue;
+          if (where.id?.not && item.id === where.id.not) continue;
           if (where.status && item.status !== where.status) continue;
           if (where.revokedAt === null && item.revokedAt !== null) continue;
           if (where.contactId && item.contactId !== where.contactId) continue;
@@ -100,6 +120,7 @@ function makePrisma() {
         return { count };
       },
       create: async ({ data }: any) => {
+        if (state.failConsentCreate) throw new Error("consent create failed");
         const consent = {
           id: `consent-${state.consents.length + 1}`,
           createdAt: new Date(),
@@ -116,6 +137,34 @@ function makePrisma() {
         state.events.push(data);
         return data;
       },
+    },
+    $transaction: async (callback: (tx: any) => Promise<unknown>) => {
+      const snapshot = {
+        contacts: structuredClone(state.contacts),
+        leads: structuredClone(state.leads),
+        conversations: structuredClone(state.conversations),
+        consents: structuredClone(state.consents),
+        events: structuredClone(state.events),
+      };
+      const tx = { ...prisma };
+      delete tx.$transaction;
+      const run = transactionQueue.then(async () => {
+        try {
+          return await callback(tx);
+        } catch (error) {
+          state.contacts.splice(0, state.contacts.length, ...snapshot.contacts);
+          state.leads.splice(0, state.leads.length, ...snapshot.leads);
+          state.conversations.splice(0, state.conversations.length, ...snapshot.conversations);
+          state.consents.splice(0, state.consents.length, ...snapshot.consents);
+          state.events.splice(0, state.events.length, ...snapshot.events);
+          throw error;
+        }
+      });
+      transactionQueue = run.then(
+        () => undefined,
+        () => undefined
+      );
+      return run;
     },
   };
   return { prisma: prisma as any, state };
@@ -202,6 +251,137 @@ test("consent can be accepted, versioned and revoked per tenant subject", async 
   assert.equal(state.consents.length, 3);
   assert.equal(state.consents.filter((item) => item.purpose === "attendance" && item.status === "accepted").length, 1);
   assert.equal(state.consents.filter((item) => item.purpose === "attendance" && item.status === "revoked").length, 2);
+});
+
+test("accepted consent promotes an existing provisional contact to active", async () => {
+  const { prisma, state } = makePrisma();
+  state.contacts[0].lifecycle = "PROVISIONAL";
+
+  const accepted = await recordContactConsent({
+    prisma,
+    clientId: "11111111-1111-4111-8111-111111111111",
+    contactId: "contact-1",
+    leadId: "lead-1",
+    purpose: "attendance",
+    requestId: "consent-promote",
+  });
+
+  assert.equal(accepted.ok, true);
+  assert.equal(state.contacts[0].lifecycle, "ACTIVE");
+  assert.equal(state.events.some((event) => event.eventName === "privacy.contact.lifecycle.active"), true);
+});
+
+test("accepted consent and lifecycle promotion are atomic", async () => {
+  const { prisma, state } = makePrisma();
+  state.contacts[0].lifecycle = "PROVISIONAL";
+  state.failPromotion = true;
+
+  await assert.rejects(
+    recordContactConsent({
+      prisma,
+      clientId: "11111111-1111-4111-8111-111111111111",
+      contactId: "contact-1",
+      leadId: "lead-1",
+      purpose: "attendance",
+      requestId: "consent-promote-failure",
+    }),
+    /promotion failed/
+  );
+
+  assert.equal(state.contacts[0].lifecycle, "PROVISIONAL");
+  assert.equal(state.consents.length, 0);
+  assert.equal(state.events.length, 0);
+});
+
+test("failed consent write does not promote provisional contact", async () => {
+  const { prisma, state } = makePrisma();
+  state.contacts[0].lifecycle = "PROVISIONAL";
+  state.failConsentCreate = true;
+
+  await assert.rejects(
+    recordContactConsent({
+      prisma,
+      clientId: "11111111-1111-4111-8111-111111111111",
+      contactId: "contact-1",
+      leadId: "lead-1",
+      purpose: "attendance",
+      requestId: "consent-create-failure",
+    }),
+    /consent create failed/
+  );
+
+  assert.equal(state.contacts[0].lifecycle, "PROVISIONAL");
+  assert.equal(state.consents.length, 0);
+  assert.equal(state.events.length, 0);
+});
+
+test("accepted consent remains durable if a downstream chatbot step fails later", async () => {
+  const { prisma, state } = makePrisma();
+  state.contacts[0].lifecycle = "PROVISIONAL";
+
+  const accepted = await recordContactConsent({
+    prisma,
+    clientId: "11111111-1111-4111-8111-111111111111",
+    contactId: "contact-1",
+    leadId: "lead-1",
+    purpose: "attendance",
+    requestId: "consent-downstream-failure",
+  });
+  assert.equal(accepted.ok, true);
+  assert.throws(() => {
+    throw new Error("chatbot failed");
+  }, /chatbot failed/);
+
+  assert.equal(state.contacts[0].lifecycle, "ACTIVE");
+  assert.equal(state.consents.filter((item) => item.status === "accepted").length, 1);
+});
+
+test("repeated and concurrent accepts are idempotent for contact lifecycle", async () => {
+  const { prisma, state } = makePrisma();
+  state.contacts[0].lifecycle = "PROVISIONAL";
+
+  const first = await recordContactConsent({
+    prisma,
+    clientId: "11111111-1111-4111-8111-111111111111",
+    contactId: "contact-1",
+    leadId: "lead-1",
+    purpose: "attendance",
+    requestId: "consent-idempotent-first",
+  });
+  const second = await recordContactConsent({
+    prisma,
+    clientId: "11111111-1111-4111-8111-111111111111",
+    contactId: "contact-1",
+    leadId: "lead-1",
+    purpose: "attendance",
+    requestId: "consent-idempotent-second",
+  });
+  const concurrent = await Promise.all([
+    recordContactConsent({
+      prisma,
+      clientId: "11111111-1111-4111-8111-111111111111",
+      contactId: "contact-1",
+      leadId: "lead-1",
+      purpose: "attendance",
+      requestId: "consent-idempotent-concurrent-a",
+    }),
+    recordContactConsent({
+      prisma,
+      clientId: "11111111-1111-4111-8111-111111111111",
+      contactId: "contact-1",
+      leadId: "lead-1",
+      purpose: "attendance",
+      requestId: "consent-idempotent-concurrent-b",
+    }),
+  ]);
+
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, true);
+  assert.equal(concurrent.every((item) => item.ok), true);
+  assert.equal(state.contacts[0].lifecycle, "ACTIVE");
+  assert.equal(state.contacts.filter((item) => item.id === "contact-1").length, 1);
+  assert.equal(state.leads.filter((item) => item.id === "lead-1").length, 1);
+  assert.equal(state.consents.filter((item) => item.purpose === "attendance" && item.status === "accepted").length, 1);
 });
 
 test("consent supports independent purposes for the same subject", async () => {

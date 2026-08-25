@@ -6,6 +6,7 @@ import {
 } from "../campaigns/optOutRegistry.js";
 import { buildConversationProtocol } from "../inbox/conversationProtocol.js";
 import { getServiceCycleForDisplay } from "../conversation/serviceCycle.js";
+import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
 
 const DEFAULT_LIMIT = 50;
@@ -405,7 +406,7 @@ export async function buildCrmContactsPayload(
   const limit = normalizeLimit(params.query.limit);
   const statusLabelById = buildStatusLabelMap(params.statuses);
   const includeAnonymized = params.includeAnonymized === true;
-  const requiresPostFilter = hasConversation !== null || optOut !== null || !includeAnonymized;
+  const requiresPostFilter = true;
 
   const baseWhere = buildLeadWhere({
     clientId: params.clientId,
@@ -508,6 +509,7 @@ export async function buildCrmContactsPayload(
           provider: true,
           channelAccountId: true,
           externalUserHash: true,
+          lifecycle: true,
           updatedAt: true,
         },
       }),
@@ -523,6 +525,19 @@ export async function buildCrmContactsPayload(
               channelAccountId: true,
               externalUserHash: true,
               lastSeenAt: true,
+              contact: {
+                select: {
+                  id: true,
+                  waId: true,
+                  name: true,
+                  channel: true,
+                  provider: true,
+                  channelAccountId: true,
+                  externalUserHash: true,
+                  lifecycle: true,
+                  updatedAt: true,
+                },
+              },
             },
           })
         : Promise.resolve([]),
@@ -633,9 +648,8 @@ export async function buildCrmContactsPayload(
         ? identityById.get(lead.contactChannelIdentityId)
         : null;
       const contact =
-        (identity?.contactId
-          ? contacts.find((item) => item.id === identity.contactId)
-          : null) ??
+        identity?.contact ??
+        (identity?.contactId ? contacts.find((item) => item.id === identity.contactId) : null) ??
         contactByIdentity.get(lead.waIdCanonical ?? "") ??
         contactByIdentity.get(lead.waId) ??
         null;
@@ -647,6 +661,7 @@ export async function buildCrmContactsPayload(
       );
       const templateCandidate = buildTemplateCandidate(lead, activeOptOut);
       const isAnonymized = isAnonymizedContactRecord(lead, contact, identity);
+      const isOperationalContact = !contact || isOperationalContactLifecycle(contact.lifecycle);
       const displayName =
         normalizeOptionalText(lead.name) ??
         normalizeOptionalText(identity?.displayName) ??
@@ -685,14 +700,17 @@ export async function buildCrmContactsPayload(
         hasOpenConversationWindow: lastConversation ? lastConversation.windowIsOpen : null,
         createdAt: lead.createdAt.toISOString(),
         updatedAt: lead.updatedAt.toISOString(),
-      } satisfies CrmContactListItem;
+        isOperationalContact,
+      } satisfies CrmContactListItem & { isOperationalContact: boolean };
     })
     .filter((item) => {
+      if (!item.isOperationalContact) return false;
       if (!includeAnonymized && item.isAnonymized) return false;
       if (hasConversation !== null && item.hasConversation !== hasConversation) return false;
       if (optOut !== null && item.activeOptOut !== optOut) return false;
       return true;
-    });
+    })
+    .map(({ isOperationalContact: _isOperationalContact, ...item }) => item);
 
   const total = requiresPostFilter ? allItems.length : totalBeforePostFilter;
   const pagedItems = requiresPostFilter ? allItems.slice((page - 1) * limit, page * limit) : allItems;
@@ -775,6 +793,7 @@ export async function buildCrmContactDetailPayload(
           provider: true,
           channelAccountId: true,
           externalUserHash: true,
+          lifecycle: true,
           updatedAt: true,
         },
       }),
@@ -788,6 +807,19 @@ export async function buildCrmContactDetailPayload(
               channel: true,
               provider: true,
               lastSeenAt: true,
+              contact: {
+                select: {
+                  id: true,
+                  waId: true,
+                  name: true,
+                  channel: true,
+                  provider: true,
+                  channelAccountId: true,
+                  externalUserHash: true,
+                  lifecycle: true,
+                  updatedAt: true,
+                },
+              },
             },
           })
         : Promise.resolve(null),
@@ -904,6 +936,8 @@ export async function buildCrmContactDetailPayload(
   const activeOptOut = getOptOutCanonicalCandidates(lead).some((candidate) => activeOptOuts.has(candidate));
   const templateCandidate = buildTemplateCandidate(lead, activeOptOut);
   const isAnonymized = isAnonymizedContactRecord(lead, contact, identity);
+  const effectiveContact = identity?.contact ?? contact;
+  if (effectiveContact && !isOperationalContactLifecycle(effectiveContact.lifecycle)) return null;
   if (isAnonymized) return null;
   const displayName =
     normalizeOptionalText(lead.name) ??

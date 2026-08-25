@@ -8,7 +8,8 @@ import {
   type ChatbotFlowDefinition,
   validateChatbotFlowDefinition,
 } from "../chatbot/chatbotFlow.js";
-import { executeChatbotFlowWithConsent } from "../chatbot/chatbotConsentRuntime.js";
+import { executeChatbotFlowWithConsent, isChatbotConsentRequired } from "../chatbot/chatbotConsentRuntime.js";
+import { resolveInitialContactLifecycle } from "../contacts/contactLifecycle.js";
 import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
 import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
 import { activateHumanHandoff, updateOutbound } from "../conversation/conversation.service.js";
@@ -1921,6 +1922,7 @@ async function handleWebSessionSatisfactionInbound(params: {
 async function ensureWebSessionContactIdentity(params: {
   prisma: PrismaClient;
   message: NormalizedWebSessionInboundMessage;
+  consentRequired: boolean;
 }) {
   const providerObservedName = normalizeProviderObservedName(params.message.providerObservedName);
   const [existingContact, existingLead] = await Promise.all([
@@ -1931,7 +1933,7 @@ async function ensureWebSessionContactIdentity(params: {
           waId: params.message.sender,
         },
       },
-      select: { id: true, name: true },
+      select: { id: true, name: true, lifecycle: true },
     }),
     params.prisma.lead.findUnique({
       where: {
@@ -1977,6 +1979,7 @@ async function ensureWebSessionContactIdentity(params: {
       externalUserHash: externalUserHash(params.message.senderCanonical),
       externalUserRef: params.message.senderCanonical,
       legacyWaId: params.message.sender,
+      lifecycle: resolveInitialContactLifecycle({ consentRequired: params.consentRequired }),
     },
     select: { id: true },
   });
@@ -2150,7 +2153,6 @@ export async function ingestWebSessionInboundMessage(params: {
       where: { clientId_waId: { clientId: params.message.clientId, waId: params.message.sender } },
       select: { id: true },
     });
-    await ensureWebSessionContactIdentity({ prisma, message: params.message });
     const automationFlags = await resolveAutomationFlagsSettings({
       prisma,
       clientId: params.message.clientId,
@@ -2164,6 +2166,10 @@ export async function ingestWebSessionInboundMessage(params: {
             clientId: params.message.clientId,
             state: null,
           });
+    const validatedEntryPointFlow = entryPointFlow ? validateChatbotFlowDefinition(entryPointFlow.definition) : null;
+    const consentRequired =
+      validatedEntryPointFlow?.ok === true ? isChatbotConsentRequired(validatedEntryPointFlow.definition) : false;
+    await ensureWebSessionContactIdentity({ prisma, message: params.message, consentRequired });
     const runtime = await ensureWebSessionRuntimeState({
       prisma,
       message: params.message,

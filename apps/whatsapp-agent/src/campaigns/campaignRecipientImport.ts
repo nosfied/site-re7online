@@ -9,6 +9,7 @@ import {
 import type { CampaignTemplateComponents } from "./campaignService.js";
 import { buildTemplateComponentsFromVariables, extractTemplatePlaceholderKeys } from "../templates/templateRendering.js";
 import { normalizeWaIdDigits } from "../utils/waid.js";
+import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
 
 export const CAMPAIGN_IMPORT_MAX_CSV_BYTES = 2 * 1024 * 1024;
 export const CAMPAIGN_IMPORT_MAX_ROWS = 10_000;
@@ -19,6 +20,7 @@ export type CampaignImportBlockedReason =
   | "duplicate_recipient"
   | "existing_campaign_recipient"
   | "active_send_blocked"
+  | "provisional_contact"
   | "variable_missing_value";
 
 export type CampaignImportMapping = {
@@ -96,6 +98,8 @@ function labelForImportReason(reason: CampaignImportBlockedReason) {
       return "Destinatario ja importado nesta campanha";
     case "invalid_whatsapp_identity":
       return "Telefone invalido";
+    case "provisional_contact":
+      return "Contato pendente de consentimento";
     case "variable_missing_value":
       return "Variavel obrigatoria ausente";
   }
@@ -362,12 +366,37 @@ export async function resolveCampaignRecipientImportPlan(
     });
   }
 
+  const lifecycleLookupKeys = Array.from(new Set(normalizedCandidates.map((item) => item.waIdCanonical).filter(Boolean)));
+  const existingContacts = lifecycleLookupKeys.length
+    ? await prisma.contact.findMany({
+        where: {
+          clientId: params.clientId,
+          OR: [
+            { waId: { in: lifecycleLookupKeys } },
+            { externalUserRef: { in: lifecycleLookupKeys } },
+            { legacyWaId: { in: lifecycleLookupKeys } },
+          ],
+        },
+        select: { waId: true, externalUserRef: true, legacyWaId: true, lifecycle: true },
+      })
+    : [];
+  const blockedByProvisionalContact = new Set(
+    existingContacts
+      .filter((contact) => !isOperationalContactLifecycle(contact.lifecycle))
+      .flatMap((contact) => [contact.waId, contact.externalUserRef, contact.legacyWaId].filter(Boolean))
+  );
+  const lifecycleReady = normalizedCandidates.filter((item) => {
+    if (!blockedByProvisionalContact.has(item.waIdCanonical)) return true;
+    addBlocked(blocked, blockedCounts, { rowNumber: item.rowNumber, reason: "provisional_contact", phone: item.waIdCanonical });
+    return false;
+  });
+
   const optOutFiltered = await filterOptedOutCampaignRecipients(prisma, {
     clientId: params.clientId,
-    waIds: normalizedCandidates.map((item) => item.waIdCanonical),
+    waIds: lifecycleReady.map((item) => item.waIdCanonical),
   });
   const optOutBlocked = new Set(optOutFiltered.blocked.map((item) => item.waIdCanonical));
-  const ready = normalizedCandidates.filter((item) => {
+  const ready = lifecycleReady.filter((item) => {
     if (!optOutBlocked.has(item.waIdCanonical)) return true;
     addBlocked(blocked, blockedCounts, { rowNumber: item.rowNumber, reason: "active_send_blocked", phone: item.waIdCanonical });
     return false;

@@ -10,6 +10,7 @@ import {
 import { buildConversationProtocol } from "../inbox/conversationProtocol.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
+import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
 import { getFeatures } from "../features/clientFeatures.js";
 import { runWebchatChatbotFlow } from "../webchat/webchatInboundService.js";
 import {
@@ -703,6 +704,7 @@ export async function openSupportConversation(params: {
             provider: SUPPORT_PROVIDER,
             channelAccountId: SUPPORT_CHANNEL_ACCOUNT_ID,
             externalUserHash: sourceHash,
+            lifecycle: CONTACT_LIFECYCLE_ACTIVE,
           },
           select: { id: true },
         });

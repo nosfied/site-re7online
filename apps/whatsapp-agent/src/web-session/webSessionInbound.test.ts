@@ -317,6 +317,18 @@ function fakePrisma() {
         state.contacts[0] = row;
         return { id: row.id };
       },
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        let count = 0;
+        for (const contact of state.contacts) {
+          if (where.clientId && contact.clientId !== where.clientId) continue;
+          if (where.id && contact.id !== where.id) continue;
+          if (where.waId && contact.waId !== where.waId) continue;
+          if (where.lifecycle && contact.lifecycle !== where.lifecycle) continue;
+          Object.assign(contact, data);
+          count += 1;
+        }
+        return { count };
+      },
     },
     contactChannelIdentity: {
       upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
@@ -958,6 +970,86 @@ test("close command keeps legacy HUMAN_ONLY CSAT from waiting conversations with
   assert.equal(state.satisfactionSurveys.length, 0);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Encerrar o protocolo atual?")), true);
   assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Atendimento encerrado")), true);
+});
+
+test("web session creates provisional contact while entry flow consent is pending", async () => {
+  resetState({
+    chatbotFlow: {
+      id: "flow_consent",
+      definition: {
+        start: "consent",
+        nodes: {
+          consent: {
+            type: "consent",
+            purpose: "service_communications",
+            textVersion: "v1",
+            message: "Consentimento",
+            acceptOption: "1",
+            declineOption: "2",
+            onAccepted: "done",
+          },
+          done: { type: "text", text: "OK" },
+        },
+      },
+    },
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("Oi", "MSG_CONSENT_PROVISIONAL", "2026-08-11T12:00:00.000Z");
+  });
+
+  assert.equal(state.contacts[0]?.lifecycle, "PROVISIONAL");
+});
+
+test("web session creates active contact when no consent flow is configured", async () => {
+  resetState();
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("Oi", "MSG_NO_CONSENT_ACTIVE", "2026-08-11T12:00:00.000Z");
+  });
+
+  assert.equal(state.contacts[0]?.lifecycle, "ACTIVE");
+});
+
+test("web session does not downgrade an active contact when consent is pending", async () => {
+  resetState({
+    contacts: [
+      {
+        id: "contact_existing",
+        clientId: "client_1",
+        waId: "5584999997784",
+        name: "Contato Ativo",
+        lifecycle: "ACTIVE",
+      },
+    ],
+    chatbotFlow: {
+      id: "flow_consent",
+      definition: {
+        start: "consent",
+        nodes: {
+          consent: {
+            type: "consent",
+            purpose: "service_communications",
+            textVersion: "v1",
+            message: "Consentimento",
+            acceptOption: "1",
+            declineOption: "2",
+            onAccepted: "done",
+          },
+          done: { type: "text", text: "OK" },
+        },
+      },
+    },
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("Oi", "MSG_ACTIVE_NO_DOWNGRADE", "2026-08-11T12:00:00.000Z");
+  });
+
+  assert.equal(state.contacts[0]?.lifecycle, "ACTIVE");
 });
 
 test("close command creates unattributed CSAT for directed waiting service when policy allows it", async () => {

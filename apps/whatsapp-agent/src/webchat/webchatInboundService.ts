@@ -11,7 +11,8 @@ import {
   extractChatbotFlowId,
   validateChatbotFlowDefinition,
 } from "../chatbot/chatbotFlow.js";
-import { executeChatbotFlowWithConsent } from "../chatbot/chatbotConsentRuntime.js";
+import { executeChatbotFlowWithConsent, isChatbotConsentRequired } from "../chatbot/chatbotConsentRuntime.js";
+import { resolveInitialContactLifecycle } from "../contacts/contactLifecycle.js";
 import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import type { ConversationState, FlowContext } from "../conversation/conversation.types.js";
@@ -1024,10 +1025,13 @@ export async function createWebchatInboundMessage(params: {
   const activeEntryFlow = chatbotEnabled
     ? await params.prisma.chatbotFlow.findFirst({
         where: { clientId: session.clientId, isActive: true, entryPoint: true },
-        select: { id: true },
+        select: { id: true, definition: true },
       })
     : null;
   const startsInAutomation = Boolean(activeEntryFlow);
+  const activeEntryFlowDefinition = activeEntryFlow ? validateChatbotFlowDefinition(activeEntryFlow.definition) : null;
+  const consentRequired =
+    activeEntryFlowDefinition?.ok === true ? isChatbotConsentRequired(activeEntryFlowDefinition.definition) : false;
 
   const [conversation, runtimeState, inbound, contact] = await params.prisma.$transaction(async (tx) => {
     const contactRecord = await tx.contact.upsert({
@@ -1036,6 +1040,7 @@ export async function createWebchatInboundMessage(params: {
         clientId: session.clientId,
         waId: syntheticWaId,
         name: displayName,
+        lifecycle: resolveInitialContactLifecycle({ consentRequired }),
         ...channelFields,
       },
       update: contactUpdateData,

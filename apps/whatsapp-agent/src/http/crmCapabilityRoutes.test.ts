@@ -336,6 +336,24 @@ test.before(async () => {
     },
     select: { id: true },
   });
+  await prisma.contact.create({
+    data: {
+      clientId: businessClientId,
+      waId: "5511999999988",
+      name: "Lead Provisorio",
+      lifecycle: "PROVISIONAL",
+    },
+  });
+  await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: "5511999999988",
+      waIdCanonical: "5511999999988",
+      phone: "5511999999988",
+      name: "Lead Provisorio",
+      status: "QUALIFIED",
+    },
+  });
   leadConversationId = crypto.randomUUID();
   await prisma.conversation.create({
     data: {
@@ -535,7 +553,7 @@ test("business profile default can access CRM app routes without capability deni
   assert.equal(settings.status, 200);
   assert.equal(settings.body.ok, true);
 
-  const recipients = await request<{ ok: boolean; count: number }>(
+  const recipients = await request<{ ok: boolean; count: number; numbers: string[] }>(
     "GET",
     "/app/crm/campaign-recipients?statuses=QUALIFIED&limit=10",
     businessAdmin
@@ -543,6 +561,7 @@ test("business profile default can access CRM app routes without capability deni
   assert.equal(recipients.status, 200);
   assert.equal(recipients.body.ok, true);
   assert.equal(recipients.body.count, 1);
+  assert.deepEqual(recipients.body.numbers, ["5511999999999"]);
 
   const update = await request<{ ok: boolean; lead: { name: string | null } }>(
     "PATCH",

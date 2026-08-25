@@ -17,6 +17,7 @@ async function cleanup(clientId: string) {
   await prisma.event.deleteMany({ where: { clientId } });
   await prisma.campaign.deleteMany({ where: { clientId } });
   await prisma.template.deleteMany({ where: { clientId } });
+  await prisma.contact.deleteMany({ where: { clientId } });
   await prisma.client.deleteMany({ where: { id: clientId } });
 }
 
@@ -70,6 +71,23 @@ test("campaign CSV import previews and persists eligible recipients without send
     source: "test",
     reason: "csv import block",
   });
+  await prisma.contact.create({
+    data: {
+      clientId,
+      waId: "55419991100005",
+      name: "Pendente Consentimento",
+      lifecycle: "PROVISIONAL",
+    },
+  });
+  await prisma.contact.create({
+    data: {
+      clientId,
+      waId: "anon-campaign-provisional",
+      externalUserRef: "55419991100006",
+      name: "Pendente Consentimento Alias",
+      lifecycle: "PROVISIONAL",
+    },
+  });
 
   const csv = [
     "\uFEFFtelefone;nome;primeiro_nome;protocolo",
@@ -77,6 +95,8 @@ test("campaign CSV import previews and persists eligible recipients without send
     "\"+55 (41) 99110-0002\";Maria Duplicada;Maria;P-001",
     "5541991100003;João Souza;;P-002",
     "5541991100004;Opt Out;Opt;P-003",
+    "5541991100005;Pendente Consentimento;Pendente;P-005",
+    "5541991100006;Pendente Alias;Pendente;P-006",
     "5541991100001;Existente;Ja;P-004",
     "telefone ruim;Inválido;X;P-005",
   ].join("\r\n");
@@ -113,13 +133,14 @@ test("campaign CSV import previews and persists eligible recipients without send
   assert.equal(eventsAfterPreview, eventsBeforePreview);
   assert.equal(campaignAfterPreview.totalRecipients, campaignBeforePreview.totalRecipients);
   assert.equal(campaignAfterPreview.status, campaignBeforePreview.status);
-  assert.equal(preview.summary.received, 6);
+  assert.equal(preview.summary.received, 8);
   assert.equal(preview.summary.readyToImport, 1);
   assert.equal(preview.summary.duplicates, 1);
   assert.equal(preview.summary.existingDuplicates, 1);
   assert.equal(preview.summary.invalid, 1);
   assert.equal(preview.summary.missingRequiredVariables, 1);
   assert.equal(preview.summary.optOutBlocked, 1);
+  assert.equal(preview.summary.blockedByReason.find((item) => item.reason === "provisional_contact")?.count, 2);
   assert.equal(preview.recipients[0]?.identifierDisplay, "Maria Silva");
   assert.equal(JSON.stringify(preview).includes("5541991100002"), false);
 

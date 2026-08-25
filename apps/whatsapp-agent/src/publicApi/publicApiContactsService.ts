@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
@@ -158,6 +159,7 @@ export async function listPublicContacts(params: {
   const take = limit + 1;
   const where: Record<string, unknown> = {
     clientId: params.clientId,
+    lifecycle: CONTACT_LIFECYCLE_ACTIVE,
     ...(updatedSince ? { updatedAt: { gte: updatedSince } } : {}),
     ...(phoneDigits ? { waId: { contains: phoneDigits } } : {}),
     ...(name ? { name: { contains: name, mode: "insensitive" } } : {}),
@@ -269,6 +271,7 @@ export async function getPublicContact(params: {
     where: {
       id: params.contactId,
       clientId: params.clientId,
+      lifecycle: CONTACT_LIFECYCLE_ACTIVE,
     },
     select: {
       id: true,

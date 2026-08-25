@@ -378,6 +378,11 @@ model WaPhoneNumber {
   client Client @relation(fields: [clientId], references: [id])
 }
 
+enum ContactLifecycleStatus {
+  PROVISIONAL
+  ACTIVE
+}
+
 model Contact {
   id                 String   @id @default(uuid())
   clientId           String
@@ -389,6 +394,7 @@ model Contact {
   externalUserHash   String?
   externalUserRef    String?
   legacyWaId         String?
+  lifecycle          ContactLifecycleStatus @default(ACTIVE)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -400,6 +406,7 @@ model Contact {
   satisfactionResponses SatisfactionResponse[]
 
   @@unique([clientId, waId])
+  @@index([clientId, lifecycle])
   @@index([clientId, channel, provider, channelAccountId])
 }
 
