@@ -67,6 +67,13 @@ test("WhatsApp web session is disabled by default for controlled rollout", () =>
   assert.equal(getFeatures({ profile: "government" }).whatsappWebSession, false);
 });
 
+test("canned replies are enabled by default for existing tenants", () => {
+  assert.equal(getFeatures({ profile: "business" }).cannedReplies, true);
+  assert.equal(getFeatures({ profile: "government" }).cannedReplies, true);
+  assert.equal(resolveTenantCapabilities({ profile: "business" }).cannedReplies, true);
+  assert.equal(resolveTenantCapabilities({ profile: "government" }).cannedReplies, true);
+});
+
 test("webhooks is disabled by default for controlled rollout", () => {
   assert.equal(getFeatures({ profile: "business" }).webhooks, false);
   assert.equal(getFeatures({ profile: "government" }).webhooks, false);
@@ -167,6 +174,17 @@ test("WhatsApp web session can only be exposed by tenant-generic feature overrid
   const client = { profile: "business", features: { whatsappWebSession: true } };
   assert.equal(getFeatures(client).whatsappWebSession, true);
   assert.equal(hasFeature(client, "whatsappWebSession"), true);
+});
+
+test("canned replies can be disabled without changing templates", () => {
+  const client = {
+    profile: "government",
+    features: { cannedReplies: false, templates: true },
+  };
+  assert.equal(getFeatures(client).cannedReplies, false);
+  assert.equal(getFeatures(client).templates, true);
+  assert.equal(hasFeature(client, "cannedReplies"), false);
+  assert.equal(hasFeature(client, "templates"), true);
 });
 
 test("webhooks can be enabled by tenant feature override", () => {

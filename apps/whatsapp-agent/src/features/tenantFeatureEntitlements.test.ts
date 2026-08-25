@@ -20,6 +20,12 @@ test("buildTenantFeatureEntitlements separates enabled state from runtime availa
   assert.equal(campaigns.enabled, true);
   assert.equal(campaigns.status, "unavailable");
   assert.deepEqual(campaigns.unavailableReasons, ["Meta Cloud nao configurado"]);
+  const cannedReplies = items.find((item) => item.key === "cannedReplies");
+  assert.ok(cannedReplies);
+  assert.equal(cannedReplies.label, "Mensagens prontas");
+  assert.equal(cannedReplies.enabled, true);
+  assert.equal(cannedReplies.status, "enabled");
+  assert.deepEqual(cannedReplies.dependencies ?? [], []);
 });
 
 test("updateTenantFeatureOverrides preserves unknown legacy keys", () => {
@@ -55,4 +61,21 @@ test("updateTenantFeatureOverrides rejects unknown features and unavailable depe
   assert.equal(dependency.ok, false);
   assert.equal(dependency.ok ? "" : dependency.error, "feature_dependency_unavailable");
   assert.equal(dependency.ok ? "" : dependency.feature, "campaigns");
+});
+
+test("canned replies entitlement is independent from Meta templates", () => {
+  const result = updateTenantFeatureOverrides({
+    currentFeatures: { templates: false, cannedReplies: true },
+    updates: { cannedReplies: false, templates: true },
+    client: {
+      id: "tenant-1",
+      profile: "government",
+      features: { templates: false, cannedReplies: true },
+    },
+    runtime: { ...runtimeUnavailable, metaCloudConfigured: true },
+  });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.features.cannedReplies, false);
+  assert.equal(result.features.templates, true);
 });

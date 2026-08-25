@@ -64,6 +64,7 @@ type NavItem = {
   group: "operation" | "administration";
   labels: Record<AppProfile, string>;
   feature?: TenantCapabilityKey;
+  featureAny?: TenantCapabilityKey[];
   profiles?: AppProfile[];
   minRole?: "SUPERVISOR" | "ADMIN";
 };
@@ -244,7 +245,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     href: "/app/templates",
     icon: "🧾",
     group: "operation",
-    feature: "templates",
+    featureAny: ["templates", "cannedReplies"],
     labels: { business: "Modelos", government: "Modelos" },
   },
   {
@@ -801,6 +802,7 @@ export default function AppShell({
   const visibleNavItems = APP_NAV_ITEMS.filter((item) => {
     if (item.profiles && !item.profiles.includes(profile)) return false;
     if (item.feature && !capabilities[item.feature]) return false;
+    if (item.featureAny && !item.featureAny.some((feature) => capabilities[feature])) return false;
     if (item.minRole === "ADMIN" && !isAdminRole(activeSession.user.role)) return false;
     if (item.minRole === "SUPERVISOR" && !canViewAdministration) return false;
     return true;

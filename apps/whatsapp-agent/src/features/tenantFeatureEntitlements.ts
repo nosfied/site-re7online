@@ -117,6 +117,21 @@ export const TENANT_FEATURE_CATALOG: TenantFeatureCatalogItem[] = [
     dependencies: ["meta_cloud"],
   },
   {
+    key: "cannedReplies",
+    label: "Mensagens prontas",
+    description: "Respostas internas reutilizáveis no atendimento.",
+    category: "communication",
+    technicalCapabilitySource: "TenantOperationalConfig.config.cannedReplies",
+    entitlementSource: "Client.features",
+    runtimeDependency: "Nenhuma dependência operacional externa.",
+    frontendVisibilityGuard: "AppShell/templates e Inbox",
+    backendGuard: "Rotas /app/canned-replies e envio de mensagem pronta",
+    defaultByProfile: {
+      business: DEFAULT_BUSINESS_CLIENT_FEATURES.cannedReplies,
+      government: DEFAULT_GOVERNMENT_CLIENT_FEATURES.cannedReplies,
+    },
+  },
+  {
     key: "campaigns",
     label: "Campanhas",
     description: "Envios de campanha por template Meta para audiências controladas.",

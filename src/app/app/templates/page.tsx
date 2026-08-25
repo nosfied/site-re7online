@@ -29,6 +29,7 @@ import {
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import { getMetaTemplateCategoryUxLabel, getMetaTemplateStatusUxLabel } from "@/lib/appUxLabels";
+import { hasCapability } from "@/lib/appFeatures";
 import { QUICK_EMOJIS } from "@/lib/quickEmojis";
 
 type TemplateRequestFormState = {
@@ -602,10 +603,14 @@ export default function AppTemplatesPage() {
 
   const loadData = useCallback(
     async (activeSession: AppSession) => {
+      const templatesEnabled = hasCapability(activeSession, "templates");
+      const cannedRepliesEnabled = hasCapability(activeSession, "cannedReplies");
       const [templatesResponse, requestsResponse, cannedResponse] = await Promise.all([
-        listAppTemplates(activeSession),
-        listAppTemplateRequests(activeSession),
-        listAppCannedReplies(activeSession, { includeInactive: true }),
+        templatesEnabled ? listAppTemplates(activeSession) : Promise.resolve({ items: [] }),
+        templatesEnabled ? listAppTemplateRequests(activeSession) : Promise.resolve({ items: [] }),
+        cannedRepliesEnabled
+          ? listAppCannedReplies(activeSession, { includeInactive: true })
+          : Promise.resolve({ items: [], permissions: { canManage: false } }),
       ]);
       const nextTemplates = sortTemplates(templatesResponse.items);
       const nextRequests = requestsResponse.items;
@@ -1063,18 +1068,40 @@ export default function AppTemplatesPage() {
   );
 
   if (!session) return null;
+  const templatesFeatureEnabled = hasCapability(session, "templates");
+  const cannedRepliesFeatureEnabled = hasCapability(session, "cannedReplies");
+  const pageFeatureEnabled = templatesFeatureEnabled || cannedRepliesFeatureEnabled;
+  const pageTitle =
+    templatesFeatureEnabled && !cannedRepliesFeatureEnabled
+      ? "Modelos de mensagem"
+      : cannedRepliesFeatureEnabled && !templatesFeatureEnabled
+        ? "Mensagens prontas"
+        : "Modelos de mensagem";
+  const pageSubtitle =
+    templatesFeatureEnabled && !cannedRepliesFeatureEnabled
+      ? "Modelos aprovados pela Meta para campanhas e retomadas fora da janela de 24h."
+      : cannedRepliesFeatureEnabled && !templatesFeatureEnabled
+        ? "Respostas internas reutilizáveis no atendimento."
+        : "Modelos Meta e respostas internas reutilizáveis no atendimento.";
 
   return (
     <AppShell
       session={session}
-      title="Modelos de mensagem"
-      subtitle="Modelos aprovados pela Meta para campanhas e retomadas fora da janela de 24h."
+      title={pageTitle}
+      subtitle={pageSubtitle}
     >
       <FeedbackToast message={success} onClose={() => setSuccess(null)} />
       <FeedbackToast message={error} variant="error" onClose={() => setError(null)} />
       {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}
 
       <div className="grid min-w-0 gap-4">
+        {!loading && !pageFeatureEnabled ? (
+          <section className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+            Funcionalidade indisponível para esta organização.
+          </section>
+        ) : null}
+        {templatesFeatureEnabled ? (
+        <>
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-3xl">
@@ -1127,7 +1154,10 @@ export default function AppTemplatesPage() {
             </div>
           ))}
         </section>
+        </>
+        ) : null}
 
+        {cannedRepliesFeatureEnabled ? (
         <section className="rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 p-3 sm:p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1314,7 +1344,9 @@ export default function AppTemplatesPage() {
             </aside>
           </div>
         </section>
+        ) : null}
 
+        {templatesFeatureEnabled ? (
         <section className="rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 p-3 sm:p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1525,10 +1557,11 @@ export default function AppTemplatesPage() {
             </div>
           )}
         </section>
+        ) : null}
 
       </div>
 
-      {isDetailDrawerOpen ? (
+      {templatesFeatureEnabled && isDetailDrawerOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-6">
           <aside className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-white/10 bg-re7-navy text-white shadow-2xl">
             <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
@@ -1664,7 +1697,7 @@ export default function AppTemplatesPage() {
         </div>
       ) : null}
 
-      {isRequestDrawerOpen ? (
+      {templatesFeatureEnabled && isRequestDrawerOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-6">
           <aside className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-white/10 bg-re7-navy text-white shadow-2xl">
             <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">

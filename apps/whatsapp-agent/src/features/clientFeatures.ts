@@ -4,6 +4,7 @@ export type ClientFeatureKey =
   | "departments"
   | "users"
   | "templates"
+  | "cannedReplies"
   | "reports"
   | "campaigns"
   | "chatbot"
@@ -53,6 +54,7 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   departments: true,
   users: true,
   templates: true,
+  cannedReplies: true,
   sla: true,
   reports: true,
   campaigns: true,
@@ -90,6 +92,7 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   departments: true,
   users: true,
   templates: false,
+  cannedReplies: true,
   sla: true,
   reports: true,
   campaigns: false,
@@ -167,6 +170,7 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
     departments: normalizeFeatureValue(input.departments) ?? defaults.departments,
     users: normalizeFeatureValue(input.users) ?? defaults.users,
     templates: normalizeFeatureValue(input.templates) ?? defaults.templates,
+    cannedReplies: normalizeFeatureValue(input.cannedReplies) ?? defaults.cannedReplies,
     sla: normalizeFeatureValue(input.sla) ?? defaults.sla,
     reports: normalizeFeatureValue(input.reports) ?? defaults.reports,
     campaigns: normalizeFeatureValue(input.campaigns) ?? defaults.campaigns,

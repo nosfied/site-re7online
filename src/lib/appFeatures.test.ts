@@ -8,6 +8,7 @@ test("tenant capabilities preserve current app defaults", () => {
   assert.equal(capabilities.dashboard, true);
   assert.equal(capabilities.departments, true);
   assert.equal(capabilities.templates, false);
+  assert.equal(capabilities.cannedReplies, true);
   assert.equal(capabilities.crm, false);
   assert.equal(capabilities.protocols, true);
   assert.equal(capabilities.catalog, false);
@@ -36,6 +37,23 @@ test("tenant feature overrides win over profile defaults", () => {
   assert.equal(hasCapability(session, "webchat"), true);
   assert.equal(hasCapability(session, "catalog"), true);
   assert.equal(hasCapability(session, "operationsBoard"), true);
+});
+
+test("canned replies default on and remain independent from templates", () => {
+  assert.equal(hasCapability({ profile: "business" }, "cannedReplies"), true);
+  assert.equal(hasCapability({ profile: "government" }, "cannedReplies"), true);
+  assert.equal(
+    hasCapability({ profile: "government", features: { templates: false, cannedReplies: true } }, "cannedReplies"),
+    true
+  );
+  assert.equal(
+    hasCapability({ profile: "government", features: { templates: true, cannedReplies: false } }, "templates"),
+    true
+  );
+  assert.equal(
+    hasCapability({ profile: "government", features: { templates: true, cannedReplies: false } }, "cannedReplies"),
+    false
+  );
 });
 
 test("WhatsApp web session feature is disabled by default and tenant-generic when exposed", () => {

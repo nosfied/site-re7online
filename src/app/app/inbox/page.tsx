@@ -41,6 +41,7 @@ import {
   shouldMarkReadAfterTimelineRefresh,
   type TimelineRefreshReadIntent,
 } from "@/lib/inboxTimelineRefresh";
+import { hasCapability } from "@/lib/appFeatures";
 import { QUICK_EMOJIS } from "@/lib/quickEmojis";
 import { formatUserDisplayName } from "@/lib/userDisplayName";
 import {
@@ -4809,8 +4810,12 @@ export default function AppInboxPage() {
     getInboxMediaOutboundDisabledMessage(selectedConversationChannel, selectedConversation);
   const composerEnabled = canReply && selectedConversationSupportsOutbound;
   const templateComposerEnabled = canReply && selectedConversationSupportsTemplateOutbound;
+  const cannedRepliesFeatureEnabled = hasCapability(session, "cannedReplies");
   const cannedComposerEnabled =
-    canReply && selectedConversationChannel === "whatsapp" && selectedConversationSupportsOutbound;
+    cannedRepliesFeatureEnabled &&
+    canReply &&
+    selectedConversationChannel === "whatsapp" &&
+    selectedConversationSupportsOutbound;
   const canUseInboxTemplates = canUseInboxTemplatesForRole(session?.user.role);
   const usableInboxTemplates = useMemo(
     () =>
@@ -7849,21 +7854,23 @@ export default function AppInboxPage() {
                   Modelo
                 </button>
               ) : null}
-              <button
-                type="button"
-                disabled={
-                  !selectedConversationWaId ||
-                  !cannedComposerEnabled ||
-                  isHydratingSelectedTimeline ||
-                  sendingCannedReply
-                }
-                onClick={handleOpenCannedModal}
-                title="Usar mensagem pronta"
-                aria-label="Usar mensagem pronta"
-                className="flex h-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:rounded-xl max-[1366px]:px-2.5 max-[1366px]:text-xs max-md:h-11"
-              >
-                Prontas
-              </button>
+              {cannedRepliesFeatureEnabled ? (
+                <button
+                  type="button"
+                  disabled={
+                    !selectedConversationWaId ||
+                    !cannedComposerEnabled ||
+                    isHydratingSelectedTimeline ||
+                    sendingCannedReply
+                  }
+                  onClick={handleOpenCannedModal}
+                  title="Usar mensagem pronta"
+                  aria-label="Usar mensagem pronta"
+                  className="flex h-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:rounded-xl max-[1366px]:px-2.5 max-[1366px]:text-xs max-md:h-11"
+                >
+                  Prontas
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={

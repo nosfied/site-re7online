@@ -5453,7 +5453,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
-
       const resolvedConversation = await resolveConversationTarget(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
@@ -6523,6 +6522,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (client.status !== "ACTIVE") {
         json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (
+        !(await enforceAppFeature(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          feature: "cannedReplies",
+          endpoint: "/app/conversation/:waId/send-canned-reply",
+          requestId,
+        }))
+      ) {
         return;
       }
 
@@ -10272,6 +10282,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (client.status !== "ACTIVE") {
         json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (
+        !(await enforceAppFeature(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          feature: "cannedReplies",
+          endpoint: "/app/canned-replies",
+          requestId,
+        }))
+      ) {
         return;
       }
       const parts = pathname.split("/");
@@ -25403,6 +25424,7 @@ function normalizeTenantProvisioningFeatures(value: unknown): Prisma.InputJsonOb
     "departments",
     "users",
     "templates",
+    "cannedReplies",
     "reports",
     "campaigns",
     "chatbot",

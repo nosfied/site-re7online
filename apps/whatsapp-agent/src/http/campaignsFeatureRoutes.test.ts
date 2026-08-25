@@ -7349,6 +7349,80 @@ test("canned replies are tenant scoped and managed by admin or supervisor", asyn
   assert.equal(adminWithInactive.body.items.some((item) => item.id === created.body.item.id), true);
 });
 
+test("canned replies feature gate is independent from Meta templates and preserves data", async () => {
+  const isolatedClient = await prisma.client.create({
+    data: {
+      clientKey: `${prefix}-canned-replies-gate`,
+      name: "Canned Replies Gate",
+      profile: "government",
+      features: { templates: false, cannedReplies: true },
+    },
+    select: { id: true },
+  });
+  const isolatedAdmin = await createUser({
+    clientId: isolatedClient.id,
+    role: "ADMIN",
+    suffix: "canned-replies-gate-admin",
+  });
+
+  const created = await request<{ ok: true; item: { id: string } }>(
+    "POST",
+    "/app/canned-replies",
+    isolatedAdmin,
+    {
+      title: "Resposta preservada",
+      category: "Atendimento",
+      body: "Mensagem pronta existente.",
+    }
+  );
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+
+  const templatesStillDisabled = await request<ErrorPayload>("GET", "/app/templates", isolatedAdmin);
+  assert.equal(templatesStillDisabled.status, 403);
+  assert.equal(getErrorCode(templatesStillDisabled.body), "feature_not_enabled");
+
+  await prisma.client.update({
+    where: { id: isolatedClient.id },
+    data: { features: { templates: true, cannedReplies: false } },
+  });
+
+  const listBlocked = await request<ErrorPayload>("GET", "/app/canned-replies", isolatedAdmin);
+  assert.equal(listBlocked.status, 403);
+  assert.equal(getErrorCode(listBlocked.body), "feature_not_enabled");
+
+  const createBlocked = await request<ErrorPayload>("POST", "/app/canned-replies", isolatedAdmin, {
+    title: "Bloqueada",
+    body: "Nao deve criar.",
+  });
+  assert.equal(createBlocked.status, 403);
+  assert.equal(getErrorCode(createBlocked.body), "feature_not_enabled");
+
+  const sendBlocked = await request<ErrorPayload>(
+    "POST",
+    "/app/conversation/5511999999999/send-canned-reply",
+    isolatedAdmin,
+    { cannedReplyId: created.body.item.id }
+  );
+  assert.equal(sendBlocked.status, 403);
+  assert.equal(getErrorCode(sendBlocked.body), "feature_not_enabled");
+
+  const templatesEnabled = await request<{ ok: true }>("GET", "/app/templates", isolatedAdmin);
+  assert.equal(templatesEnabled.status, 200, JSON.stringify(templatesEnabled.body));
+
+  await prisma.client.update({
+    where: { id: isolatedClient.id },
+    data: { features: { templates: false, cannedReplies: true } },
+  });
+
+  const listRestored = await request<{ ok: true; items: Array<{ id: string }> }>(
+    "GET",
+    "/app/canned-replies?includeInactive=true",
+    isolatedAdmin
+  );
+  assert.equal(listRestored.status, 200, JSON.stringify(listRestored.body));
+  assert.equal(listRestored.body.items.some((item) => item.id === created.body.item.id), true);
+});
+
 test("inbox canned reply sends only in open owned WhatsApp conversations", async (t) => {
   const waId = "5541991177811";
   const created = await request<{ ok: true; item: { id: string; title: string; body: string } }>(

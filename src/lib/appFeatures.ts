@@ -6,6 +6,7 @@ export type AppFeatureKey =
   | "departments"
   | "users"
   | "templates"
+  | "cannedReplies"
   | "sla"
   | "reports"
   | "campaigns"
@@ -55,6 +56,7 @@ export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   departments: true,
   users: true,
   templates: true,
+  cannedReplies: true,
   sla: true,
   reports: true,
   campaigns: true,
@@ -89,6 +91,7 @@ export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   departments: true,
   users: true,
   templates: false,
+  cannedReplies: true,
   sla: true,
   reports: true,
   campaigns: false,
@@ -165,6 +168,7 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
     departments: normalizeBoolean(input.departments) ?? defaults.departments,
     users: normalizeBoolean(input.users) ?? defaults.users,
     templates: normalizeBoolean(input.templates) ?? defaults.templates,
+    cannedReplies: normalizeBoolean(input.cannedReplies) ?? defaults.cannedReplies,
     sla: normalizeBoolean(input.sla) ?? defaults.sla,
     reports: normalizeBoolean(input.reports) ?? defaults.reports,
     campaigns: normalizeBoolean(input.campaigns) ?? defaults.campaigns,
