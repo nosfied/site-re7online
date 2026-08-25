@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   fetchAppAgentAvailability,
+  formatAppWhatsappIdentityDisplay,
   heartbeatAppAgentAvailability,
   loadAppSession,
   updateAppAgentAvailability,
@@ -75,6 +76,37 @@ test("loadAppSession preserves membership department ids from storage", () => {
     "department-mapa",
   ]);
   assert.equal(session?.user.primaryDepartmentId, "department-mapa");
+});
+
+test("app WhatsApp identity display hides transport labels from end-user UX", () => {
+  assert.equal(
+    formatAppWhatsappIdentityDisplay({
+      phoneDisplay: "558184942630",
+      whatsappIdentityProvider: "web_session",
+    }),
+    "+55 (81) 8494-2630"
+  );
+  assert.equal(
+    formatAppWhatsappIdentityDisplay({
+      phoneDisplay: "558184942630",
+      whatsappIdentityProvider: "meta",
+    }),
+    "+55 (81) 8494-2630"
+  );
+  assert.equal(
+    formatAppWhatsappIdentityDisplay({
+      phoneDisplay: "558184942630",
+      whatsappIdentityProvider: "hybrid",
+    }),
+    "+55 (81) 8494-2630"
+  );
+  assert.equal(
+    formatAppWhatsappIdentityDisplay({
+      phoneDisplay: null,
+      whatsappIdentityProvider: "none",
+    }),
+    "Nenhum número conectado"
+  );
 });
 
 test("agent availability client calls session-scoped endpoints", async () => {

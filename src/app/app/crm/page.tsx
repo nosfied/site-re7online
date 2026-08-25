@@ -177,7 +177,6 @@ function CrmContactRow({
         <span className="inline-flex rounded-full border border-white/10 bg-white/7 px-2 py-1 text-xs font-semibold text-white/80">
           {getChannelLabel(item.channel)}
         </span>
-        <div className="mt-2 text-xs theme-muted">{item.provider || "-"}</div>
       </td>
       <td className="px-4 py-3">
         <div className="text-sm font-semibold text-white">{item.crmStatusLabel}</div>
@@ -532,7 +531,6 @@ function CrmContactDetailDrawer({
                 <div className="grid gap-x-5 gap-y-3 border-t border-white/10 pt-3 sm:grid-cols-2">
                   <DetailField label="Telefone/identificador" value={item.phoneDisplay || item.identifierDisplay} />
                   <DetailField label="Canal principal" value={getChannelLabel(item.channel)} />
-                  <DetailField label="Provedor" value={item.provider} />
                   <DetailField label="Situação no CRM" value={item.crmStatusLabel} />
                   <DetailField label="Código interno da situação" value={item.crmStatus} />
                   <DetailField label="Andamento interno" value={item.leadStatus} />

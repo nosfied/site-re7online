@@ -1759,10 +1759,7 @@ export function formatAppWhatsappIdentityDisplay(
   tenant: Pick<AppTenantSummary, "phoneDisplay" | "whatsappIdentityProvider">
 ) {
   if (!tenant.phoneDisplay || tenant.whatsappIdentityProvider === "none") return "Nenhum número conectado";
-  const phoneDisplay = formatAppBrazilPhone(tenant.phoneDisplay);
-  if (tenant.whatsappIdentityProvider === "web_session") return `${phoneDisplay} · Web Session`;
-  if (tenant.whatsappIdentityProvider === "hybrid") return `${phoneDisplay} · Cloud API + Web Session`;
-  return `${phoneDisplay} · Cloud API`;
+  return formatAppBrazilPhone(tenant.phoneDisplay);
 }
 
 function formatAppBrazilPhone(value: string) {

@@ -88,9 +88,9 @@ function webSessionErrorLabel(errorCode: string | null | undefined) {
 }
 
 function authStateLabel(status: AppWhatsAppWebSessionStatus | null) {
-  if (status?.authState.approvedConfigured || status?.authState.configured) return "Sessão aprovada salva";
-  if (status?.authState.stagingConfigured) return "Pareamento em andamento salvo";
-  return "Sem sessão salva";
+  if (status?.authState.approvedConfigured || status?.authState.configured) return "Conexão aprovada";
+  if (status?.authState.stagingConfigured) return "Conexão em andamento";
+  return "Sem conexão salva";
 }
 
 function authStateTone(status: AppWhatsAppWebSessionStatus | null) {
@@ -123,21 +123,21 @@ function Detail({ label, value }: { label: string; value: string | null | undefi
 function normalizeError(error: AppApiError, fallback: string) {
   if (error.status === 401) return "Sessão expirada. Faça login novamente.";
   if (error.status === 403 && error.errorCode === "web_session_feature_disabled") {
-    return "Sessão Web ainda não está habilitada para esta organização.";
+    return "A conexão do WhatsApp ainda não está habilitada para esta organização.";
   }
   if (error.status === 403) return "Sem permissão para alterar este canal.";
   if (error.status === 404) return "Prepare o canal antes de solicitar conexão.";
   if (error.errorCode === "web_session_meta_identity_mismatch") {
-    return "O número autorizado para sessão Web não corresponde ao número Meta Cloud deste tenant.";
+    return "O número conectado não corresponde ao número autorizado para esta organização.";
   }
   if (error.errorCode === "hybrid_identity_conflict") {
-    return "Os números configurados para Meta Cloud e sessão Web são diferentes.";
+    return "Os números configurados para o WhatsApp são diferentes.";
   }
   if (error.errorCode === "web_session_transport_unavailable") {
-    return "A sessão Web precisa estar conectada antes de ser definida como transporte principal.";
+    return "O WhatsApp precisa estar conectado antes de ser usado para envio.";
   }
   if (error.errorCode === "meta_transport_unavailable") {
-    return "Configure um número Meta Cloud válido antes de usar Meta como transporte principal.";
+    return "Configure um número válido antes de usar o WhatsApp para envio.";
   }
   return getAppErrorUxMessage({ ...error, fallback });
 }
@@ -446,9 +446,9 @@ export default function AppWhatsAppChannelSettingsPage() {
                   <Detail label="Número autorizado" value={status?.authorization.authorizedNumberCanonical ? formatBrazilPhone(status.authorization.authorizedNumberCanonical) : "Não autorizado"} />
                   <Detail label="Status da autorização" value={status?.authorization.status ?? "RELEASED"} />
                   <Detail label="Número conectado" value={connectedNumberDisplay} />
-                  <Detail label="Transporte principal" value={status?.primaryTransport === "web_session" ? "WhatsApp Business por sessão" : status?.primaryTransport === "meta" ? "Meta Cloud" : "Padrão da conversa"} />
+                  <Detail label="Canal de saída" value={status?.primaryTransport ? "WhatsApp" : "Padrão da conversa"} />
                   <Detail label="Número detectado" value={status?.account?.channelAccountId ? formatBrazilPhone(status.account.channelAccountId) : "Não preparado"} />
-                  <Detail label="Estado técnico" value={currentState} />
+                  <Detail label="Estado da conexão" value={currentState} />
                   <Detail label="Última conexão" value={lifecycle?.lastConnectedAt} />
                   <Detail label="Última desconexão" value={lifecycle?.lastDisconnectedAt} />
                   <Detail label="Último erro" value={webSessionErrorLabel(lifecycle?.lastErrorCode)} />
@@ -458,15 +458,15 @@ export default function AppWhatsAppChannelSettingsPage() {
                 <div className="rounded-lg border border-white/10 bg-re7-navy/35 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-white">Transporte principal para texto no Inbox</p>
+                      <p className="text-sm font-semibold text-white">Envio de texto no Inbox</p>
                       <p className="mt-1 text-xs text-white/60">
-                        Definido pela administração da plataforma. Campanhas e modelos continuam pelo caminho Meta.
+                        Definido pela administração da plataforma. Campanhas e modelos continuam disponíveis quando configurados.
                       </p>
                     </div>
                     {status?.hybridIdentity?.conflict ? <Pill label="Identidades divergentes" tone="danger" /> : null}
                   </div>
                   <p className="mt-3 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/65">
-                    Número autorizado e transporte de saída são governados no console interno.
+                    Número autorizado e envio são governados no console interno.
                   </p>
                 </div>
 

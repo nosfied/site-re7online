@@ -291,7 +291,7 @@ export function ChatbotFlowBuilder({
             <div><p className="text-xs uppercase text-white/45">Menus</p><p className="mt-2 text-lg font-semibold">{menuCount}</p></div>
             <div><p className="text-xs uppercase text-white/45">Encaminhamentos</p><p className="mt-2 text-lg font-semibold">{handoffCount}</p></div>
             <p className="text-xs text-white/55 sm:col-span-4">
-              Setores usados: {departmentIds.size || "nenhum"}. O transporte usado pelo canal não altera esta configuração.
+              Setores usados: {departmentIds.size || "nenhum"}. A conexão usada pelo canal não altera esta configuração.
             </p>
             <div className="grid gap-2 sm:col-span-2">
               <label className="grid gap-1 text-sm text-white/70">

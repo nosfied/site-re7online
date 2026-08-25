@@ -6555,7 +6555,7 @@ export default function AppInboxPage() {
                       <div>
                         <h3 className="text-sm font-semibold text-slate-950">{selectedCannedReply.title}</h3>
                         <p className="mt-1 text-xs text-slate-500">
-                          Mensagem interna. Em Meta Cloud, texto livre segue a janela de atendimento; em Web Session, segue o canal conectado.
+                          Mensagem interna. O envio respeita a janela de atendimento e o canal conectado.
                         </p>
                       </div>
                       <div>

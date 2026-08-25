@@ -15,7 +15,7 @@ import {
   saveAppSession,
 } from "@/lib/appClientApi";
 import { hasCapability } from "@/lib/appFeatures";
-import { getAppErrorUxMessage } from "@/lib/appUxLabels";
+import { getAppErrorUxMessage, getChannelUxLabel } from "@/lib/appUxLabels";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 function canViewAudioTranscriptions(role: string) {
@@ -40,6 +40,10 @@ function normalizeError(error: AppApiError) {
     return "Transcrição de áudio não está habilitada para esta organização.";
   }
   return getAppErrorUxMessage({ status: error.status, errorCode: error.errorCode, message: error.message, fallback: "Não foi possível carregar as transcrições." });
+}
+
+function getTranscriptionProviderLabel(provider: string | null | undefined) {
+  return provider ? "Transcrição automática" : "Não definido";
 }
 
 export default function AudioTranscriptionsPage() {
@@ -146,7 +150,7 @@ export default function AudioTranscriptionsPage() {
               <tr className="border-b border-white/10">
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 font-medium">Canal</th>
-                <th className="px-3 py-2 font-medium">Provider</th>
+                <th className="px-3 py-2 font-medium">Origem</th>
                 <th className="px-3 py-2 font-medium">Idioma</th>
                 <th className="px-3 py-2 font-medium">Transcript</th>
                 <th className="px-3 py-2 font-medium">Criado em</th>
@@ -171,8 +175,8 @@ export default function AudioTranscriptionsPage() {
                     <td className="px-3 py-3">
                       <StatusPill status={item.status} />
                     </td>
-                    <td className="px-3 py-3">{item.channel}</td>
-                    <td className="px-3 py-3">{item.provider ?? "Não definido"}</td>
+                    <td className="px-3 py-3">{getChannelUxLabel(item.channel)}</td>
+                    <td className="px-3 py-3">{getTranscriptionProviderLabel(item.provider)}</td>
                     <td className="px-3 py-3">{item.language ?? "Não definido"}</td>
                     <td className="max-w-lg px-3 py-3">
                       <p className="line-clamp-3 text-sm">{item.transcript || "Transcript ainda indisponivel."}</p>
@@ -195,7 +199,7 @@ export default function AudioTranscriptionsPage() {
             <thead className="theme-muted">
               <tr className="border-b border-white/10">
                 <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium">Provider</th>
+                <th className="px-3 py-2 font-medium">Origem</th>
                 <th className="px-3 py-2 font-medium">Inicio</th>
                 <th className="px-3 py-2 font-medium">Fim</th>
                 <th className="px-3 py-2 font-medium">Erro</th>
@@ -220,7 +224,7 @@ export default function AudioTranscriptionsPage() {
                     <td className="px-3 py-3">
                       <StatusPill status={item.status} />
                     </td>
-                    <td className="px-3 py-3">{item.provider ?? "Não definido"}</td>
+                    <td className="px-3 py-3">{getTranscriptionProviderLabel(item.provider)}</td>
                     <td className="px-3 py-3">{item.startedAt ? formatDateTime(item.startedAt) : "Não iniciado"}</td>
                     <td className="px-3 py-3">{item.finishedAt ? formatDateTime(item.finishedAt) : "Não finalizado"}</td>
                     <td className="max-w-md px-3 py-3">{item.error ?? "Sem erro registrado"}</td>
