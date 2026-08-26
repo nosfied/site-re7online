@@ -389,6 +389,7 @@ export type AppCrmContactDetailResponse = {
     notesCount: number;
   };
   conversations: AppCrmContactConversationItem[];
+  blockingConversation: AppHiddenBlockingConversation | null;
   generatedAt: string;
 };
 
@@ -694,8 +695,16 @@ export type AppApiError = Error & {
 export type AppHiddenBlockingConversation = {
   conversationId: string;
   conversationIdentity: string;
+  visibility?: "visible" | "hidden";
   status: string | null;
   mode: string | null;
+  handoffStatus?: string | null;
+  departmentId?: string | null;
+  departmentName?: string | null;
+  queueId?: string | null;
+  queueName?: string | null;
+  assignedUserId?: string | null;
+  assignedUserName?: string | null;
   updatedAt: string | null;
 };
 

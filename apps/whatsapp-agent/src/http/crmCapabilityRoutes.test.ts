@@ -986,6 +986,12 @@ test("CRM contact detail is tenant-scoped and returns safe related conversations
       queueName: string | null;
       assignedUserName: string | null;
     }>;
+    blockingConversation: {
+      conversationIdentity: string;
+      visibility: "visible" | "hidden";
+      status: string | null;
+      mode: string | null;
+    } | null;
   }>("GET", `/app/crm/contacts/${encodeURIComponent(leadId)}`, businessAdmin);
 
   assert.equal(response.status, 200);
@@ -998,6 +1004,10 @@ test("CRM contact detail is tenant-scoped and returns safe related conversations
   assert.equal(response.body.conversations[0]?.conversationIdentity, `${prefix}-lead-waid`);
   assert.match(response.body.conversations[0]?.protocol ?? "", /^CVT-[0-9A-F]{12}$/);
   assert.equal(response.body.conversations[0]?.status, "WAITING");
+  assert.equal(response.body.blockingConversation?.conversationIdentity, `${prefix}-lead-waid`);
+  assert.equal(response.body.blockingConversation?.visibility, "hidden");
+  assert.equal(response.body.blockingConversation?.status, "WAITING");
+  assert.equal(response.body.blockingConversation?.mode, null);
   assert.doesNotMatch(JSON.stringify(response.body), /rawPayload|hash:|externalUserHash|externalUserRef/);
 
   const foreign = await request<ErrorPayload>(
@@ -1138,6 +1148,12 @@ test("CRM and inbox resolve related conversations through confirmed WhatsApp leg
     ok: boolean;
     item: { displayName: string | null; conversationsCount: number; lastConversationId: string | null };
     conversations: Array<{ conversationId: string; conversationIdentity: string; assignedUserName: string | null }>;
+    blockingConversation: {
+      conversationId: string;
+      conversationIdentity: string;
+      visibility: "visible" | "hidden";
+      assignedUserName: string | null;
+    } | null;
   }>("GET", `/app/crm/contacts/${encodeURIComponent(lead.id)}`, businessAdmin);
   assert.equal(detail.status, 200);
   assert.equal(detail.body.item.displayName, "deifson setic");
@@ -1145,6 +1161,27 @@ test("CRM and inbox resolve related conversations through confirmed WhatsApp leg
   assert.equal(detail.body.item.lastConversationId, conversation.id);
   assert.equal(detail.body.conversations[0]?.conversationIdentity, "558494786787");
   assert.equal(detail.body.conversations[0]?.assignedUserName, businessAdmin.name);
+  assert.equal(detail.body.blockingConversation?.conversationId, conversation.id);
+  assert.equal(detail.body.blockingConversation?.conversationIdentity, "558494786787");
+  assert.equal(detail.body.blockingConversation?.visibility, "visible");
+  assert.equal(detail.body.blockingConversation?.assignedUserName, businessAdmin.name);
+
+  const blockedExclude = await request<
+    ErrorPayload & {
+      blockingConversation?: {
+        conversationId: string;
+        conversationIdentity: string;
+        visibility?: "visible" | "hidden";
+      };
+    }
+  >("POST", `/app/crm/contacts/${encodeURIComponent(lead.id)}/exclude`, businessAdmin, {
+    reason: "test active blocker",
+  });
+  assert.equal(blockedExclude.status, 409);
+  assert.equal(getErrorCode(blockedExclude.body), "active_conversation_exists");
+  assert.equal(blockedExclude.body.blockingConversation?.conversationId, "558494786787");
+  assert.equal(blockedExclude.body.blockingConversation?.conversationIdentity, "558494786787");
+  assert.equal(blockedExclude.body.blockingConversation?.visibility, "visible");
 
   const inbox = await request<{ ok: boolean; items: Array<{ waIdCanonical: string; leadId: string | null; leadName: string | null }> }>(
     "GET",

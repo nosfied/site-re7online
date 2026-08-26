@@ -373,6 +373,7 @@ async function assertNoActiveOperationalConversation(
     },
   });
   if (active) {
+    if (!isActiveOperationalBlockingConversation(active)) return;
     if (isHiddenTechnicalBlockingConversation(active)) {
       throw new CrmContactMutationError(
         "hidden_active_conversation_exists",
@@ -381,6 +382,7 @@ async function assertNoActiveOperationalConversation(
         {
           conversationId: active.waIdCanonical ?? active.waId,
           conversationIdentity: active.waIdCanonical ?? active.waId,
+          visibility: "hidden",
           status: active.status,
           mode: active.mode,
           updatedAt: active.updatedAt?.toISOString(),
@@ -390,7 +392,15 @@ async function assertNoActiveOperationalConversation(
     throw new CrmContactMutationError(
       "active_conversation_exists",
       "Contact has an active operational conversation",
-      409
+      409,
+      {
+        conversationId: active.waIdCanonical ?? active.waId,
+        conversationIdentity: active.waIdCanonical ?? active.waId,
+        visibility: "visible",
+        status: active.status,
+        mode: active.mode,
+        updatedAt: active.updatedAt?.toISOString(),
+      }
     );
   }
 }
@@ -426,6 +436,14 @@ export function isHiddenTechnicalBlockingConversation(conversation: {
   if (hasHumanEvidence) return false;
   if (status === "CLOSED") return false;
   return mode === "BOT" || handoffStatus === "NONE" || handoffStatus === "";
+}
+
+export function isActiveOperationalBlockingConversation(conversation: {
+  status?: string | null;
+  closedAt?: Date | string | null;
+}) {
+  const status = String(conversation.status ?? "").trim().toUpperCase();
+  return status === "WAITING" || status === "IN_PROGRESS" || status === "WAITING_USER" || (!conversation.closedAt && status !== "CLOSED");
 }
 
 export async function excludeCrmContactFromOperation(

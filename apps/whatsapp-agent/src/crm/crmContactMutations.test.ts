@@ -139,7 +139,10 @@ test("CRM operational exclusion blocks active conversations and does not mutate 
         userId: "admin_1",
         requestId: "req_1",
       }),
-    (error) => error instanceof CrmContactMutationError && error.code === "active_conversation_exists"
+    (error) =>
+      error instanceof CrmContactMutationError &&
+      error.code === "active_conversation_exists" &&
+      error.details?.conversationId === "5584951957784"
   );
   assert.equal(prisma.__contact.operationallyExcludedAt, null);
   assert.equal(prisma.__events.length, 0);

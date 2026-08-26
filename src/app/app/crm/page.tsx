@@ -77,8 +77,8 @@ function normalizeAppErrorMessage(error: AppApiError, fallback: string) {
   });
 }
 
-function getHiddenBlockingConversation(error: AppApiError): AppHiddenBlockingConversation | null {
-  if (error.errorCode !== "hidden_active_conversation_exists") return null;
+function getBlockingConversation(error: AppApiError): AppHiddenBlockingConversation | null {
+  if (error.errorCode !== "hidden_active_conversation_exists" && error.errorCode !== "active_conversation_exists") return null;
   const payload = error.payload;
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
   const blockingConversation = (payload as { blockingConversation?: unknown }).blockingConversation;
@@ -90,8 +90,16 @@ function getHiddenBlockingConversation(error: AppApiError): AppHiddenBlockingCon
   return {
     conversationId,
     conversationIdentity,
+    visibility: record.visibility === "hidden" ? "hidden" : "visible",
     status: typeof record.status === "string" ? record.status : null,
     mode: typeof record.mode === "string" ? record.mode : null,
+    handoffStatus: typeof record.handoffStatus === "string" ? record.handoffStatus : null,
+    departmentId: typeof record.departmentId === "string" ? record.departmentId : null,
+    departmentName: typeof record.departmentName === "string" ? record.departmentName : null,
+    queueId: typeof record.queueId === "string" ? record.queueId : null,
+    queueName: typeof record.queueName === "string" ? record.queueName : null,
+    assignedUserId: typeof record.assignedUserId === "string" ? record.assignedUserId : null,
+    assignedUserName: typeof record.assignedUserName === "string" ? record.assignedUserName : null,
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : null,
   };
 }
@@ -372,8 +380,8 @@ function CrmContactDetailDrawer({
       city: item.city || "",
     });
     setActionLoading(null);
-    setHiddenBlockingConversation(null);
-  }, [item?.leadId]);
+    setHiddenBlockingConversation(detail?.blockingConversation ?? null);
+  }, [detail?.blockingConversation, item?.leadId]);
 
   const saveBasics = async () => {
     if (!item) return;
@@ -705,7 +713,7 @@ function CrmContactDetailDrawer({
                   </div>
                 ) : canExcludeFromOperation ? (
                   <div className="grid gap-2 rounded-lg border border-red-300/30 bg-red-500/10 p-3">
-                    {hiddenBlockingConversation ? (
+                    {hiddenBlockingConversation?.visibility === "hidden" ? (
                       <div className="grid gap-2 rounded-md border border-amber-300/40 bg-amber-400/10 p-3">
                         <p className="text-sm text-amber-100">
                           Existe uma conversa pendente associada a este contato que precisa ser retirada da operação antes da exclusão.
@@ -721,20 +729,38 @@ function CrmContactDetailDrawer({
                           </button>
                         </div>
                       </div>
-                    ) : null}
-                    <p className="text-sm text-red-100">
-                      Este contato deixará de aparecer no CRM operacional e não poderá ser usado em campanhas. O histórico existente será preservado.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={excludeFromOperation}
-                        disabled={Boolean(actionLoading)}
-                        className="rounded-md border border-red-300/40 px-3 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {actionLoading === "exclude" ? "Excluindo..." : "Excluir contato da operação"}
-                      </button>
-                    </div>
+                    ) : hiddenBlockingConversation?.visibility === "visible" ? (
+                      <div className="grid gap-2 rounded-md border border-amber-300/40 bg-amber-400/10 p-3">
+                        <p className="text-sm text-amber-100">
+                          Este contato possui uma conversa em andamento. Retire ou encerre a conversa antes de excluir o contato da operação.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onOpenInbox(hiddenBlockingConversation.conversationIdentity)}
+                            className="rounded-md bg-re7-sky px-3 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110"
+                          >
+                            Abrir conversa
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm text-red-100">
+                          Este contato deixará de aparecer no CRM operacional e não poderá ser usado em campanhas. O histórico existente será preservado.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={excludeFromOperation}
+                            disabled={Boolean(actionLoading)}
+                            className="rounded-md border border-red-300/40 px-3 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {actionLoading === "exclude" ? "Excluindo..." : "Excluir contato da operação"}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ) : null}
               </DetailSection>
@@ -1370,10 +1396,14 @@ export default function AppCrmContactsPage() {
           handleUnauthorized();
           return null;
         }
-        const blockingConversation = getHiddenBlockingConversation(typed);
+        const blockingConversation = getBlockingConversation(typed);
         if (blockingConversation) {
-          setError(null);
-          setDetailError(null);
+          const message =
+            blockingConversation.visibility === "hidden"
+              ? "Existe uma conversa pendente associada a este contato que precisa ser retirada da operação antes da exclusão."
+              : "Este contato possui uma conversa em andamento. Resolva a conversa antes de excluir o contato da operação.";
+          setError(message);
+          setDetailError(message);
           return blockingConversation;
         }
         setError(normalizeAppErrorMessage(typed, "Não foi possível excluir o contato da operação."));

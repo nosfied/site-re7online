@@ -11249,10 +11249,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       json(res, 200, payload);
     } catch (error) {
       if (error instanceof CrmContactMutationError) {
-        const payload = httpError(error.code, error.message) as ReturnType<typeof httpError> & {
+        const payload: {
+          error: { code: string; message: string };
           blockingConversation?: Record<string, unknown>;
+        } = {
+          error: { code: error.code, message: error.message },
         };
-        if (error.details && error.code === "hidden_active_conversation_exists") {
+        if (
+          error.details &&
+          (error.code === "hidden_active_conversation_exists" || error.code === "active_conversation_exists")
+        ) {
           payload.blockingConversation = error.details;
         }
         json(res, error.status, payload);

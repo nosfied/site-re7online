@@ -13,6 +13,10 @@ import {
   buildCrmWhatsappIdentityCandidates,
   normalizeCrmWhatsappIdentity,
 } from "./crmWhatsappIdentity.js";
+import {
+  isActiveOperationalBlockingConversation,
+  isHiddenTechnicalBlockingConversation,
+} from "./crmContactMutations.js";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -121,6 +125,22 @@ export type CrmContactDetailConversation = {
   createdAt: string;
 };
 
+export type CrmContactBlockingConversation = {
+  conversationId: string;
+  conversationIdentity: string;
+  visibility: "visible" | "hidden";
+  status: string | null;
+  mode: string | null;
+  handoffStatus: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  queueId: string | null;
+  queueName: string | null;
+  assignedUserId: string | null;
+  assignedUserName: string | null;
+  updatedAt: string | null;
+};
+
 export type CrmContactDetailPayload = {
   ok: true;
   item: CrmContactListItem & {
@@ -133,6 +153,7 @@ export type CrmContactDetailPayload = {
     notesCount: number;
   };
   conversations: CrmContactDetailConversation[];
+  blockingConversation: CrmContactBlockingConversation | null;
   generatedAt: string;
 };
 
@@ -982,14 +1003,21 @@ export async function buildCrmContactDetailPayload(
           OR: [{ waId: { in: identityKeys } }, { waIdCanonical: { in: identityKeys } }],
         },
         select: {
+          id: true,
+          conversationKey: true,
           waId: true,
           waIdCanonical: true,
           channel: true,
           status: true,
+          mode: true,
+          handoffStatus: true,
           assignedUserId: true,
           assignedTo: true,
+          assignedAt: true,
           departmentId: true,
           queueId: true,
+          handoffActivatedAt: true,
+          closedAt: true,
           answers: true,
           updatedAt: true,
         },
@@ -1108,6 +1136,33 @@ export async function buildCrmContactDetailPayload(
     .find((value): value is string => Boolean(value)) ?? null;
   const latestConversation = conversations[0] ?? null;
   const latestRuntime = latestConversation ? runtimeByKey.get(getIdentityKey(latestConversation)) ?? null : null;
+  const blockingRuntime =
+    runtimeStates.find((runtime) => isActiveOperationalBlockingConversation(runtime)) ?? null;
+  const blockingConversation = blockingRuntime
+    ? (() => {
+        const blockingIdentity = getIdentityKey(blockingRuntime);
+        const conversation = conversations.find((item) => getIdentityKey(item) === blockingIdentity) ?? null;
+        const departmentId = blockingRuntime.departmentId ?? conversation?.departmentId ?? null;
+        const queueId = blockingRuntime.queueId ?? null;
+        const assignedUserId = blockingRuntime.assignedUserId ?? null;
+        return {
+          conversationId: conversation?.id ?? blockingIdentity,
+          conversationIdentity: blockingIdentity,
+          visibility: isHiddenTechnicalBlockingConversation(blockingRuntime) ? "hidden" as const : "visible" as const,
+          status: blockingRuntime.status ?? null,
+          mode: blockingRuntime.mode ?? null,
+          handoffStatus: blockingRuntime.handoffStatus ?? null,
+          departmentId,
+          departmentName: departmentId ? departmentNameById.get(departmentId) ?? null : null,
+          queueId,
+          queueName: queueId ? queueNameById.get(queueId) ?? null : null,
+          assignedUserId,
+          assignedUserName:
+            assignedUserId ? userNameById.get(assignedUserId) ?? blockingRuntime.assignedTo ?? null : blockingRuntime.assignedTo ?? null,
+          updatedAt: blockingRuntime.updatedAt?.toISOString() ?? conversation?.updatedAt.toISOString() ?? null,
+        };
+      })()
+    : null;
 
   return {
     ok: true,
@@ -1177,6 +1232,7 @@ export async function buildCrmContactDetailPayload(
         createdAt: conversation.createdAt.toISOString(),
       };
     }),
+    blockingConversation,
     generatedAt: (params.now ?? new Date()).toISOString(),
   };
 }
