@@ -8,6 +8,7 @@ import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/F
 import {
   AppApiError,
   AppCrmContactDetailResponse,
+  AppHiddenBlockingConversation,
   AppCrmContactImportConfirmResponse,
   AppCrmContactImportPreviewResponse,
   AppCrmContactItem,
@@ -16,6 +17,7 @@ import {
   clearAppSession,
   confirmAppCrmContactCsvImport,
   createAppCrmContact,
+  deleteAppConversationData,
   fetchAppCrmContactDetail,
   fetchAppCrmContacts,
   fetchAppCrmStatuses,
@@ -68,6 +70,25 @@ function normalizeAppErrorMessage(error: AppApiError, fallback: string) {
     message: error.message,
     fallback,
   });
+}
+
+function getHiddenBlockingConversation(error: AppApiError): AppHiddenBlockingConversation | null {
+  if (error.errorCode !== "hidden_active_conversation_exists") return null;
+  const payload = error.payload;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const blockingConversation = (payload as { blockingConversation?: unknown }).blockingConversation;
+  if (!blockingConversation || typeof blockingConversation !== "object" || Array.isArray(blockingConversation)) return null;
+  const record = blockingConversation as Partial<AppHiddenBlockingConversation>;
+  const conversationId = typeof record.conversationId === "string" ? record.conversationId.trim() : "";
+  const conversationIdentity = typeof record.conversationIdentity === "string" ? record.conversationIdentity.trim() : "";
+  if (!conversationId || !conversationIdentity) return null;
+  return {
+    conversationId,
+    conversationIdentity,
+    status: typeof record.status === "string" ? record.status : null,
+    mode: typeof record.mode === "string" ? record.mode : null,
+    updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : null,
+  };
 }
 
 function getChannelLabel(channel: string | null) {
@@ -297,6 +318,7 @@ function CrmContactDetailDrawer({
   onRecordOptOut,
   onRevokeOptOut,
   onExcludeFromOperation,
+  onRemoveBlockingConversation,
   onReactivateFromOperation,
   canExcludeFromOperation,
 }: {
@@ -317,7 +339,8 @@ function CrmContactDetailDrawer({
   onUpdateStatus: (leadId: string, status: string) => Promise<void>;
   onRecordOptOut: (leadId: string) => Promise<void>;
   onRevokeOptOut: (leadId: string) => Promise<void>;
-  onExcludeFromOperation: (leadId: string) => Promise<void>;
+  onExcludeFromOperation: (leadId: string) => Promise<AppHiddenBlockingConversation | null>;
+  onRemoveBlockingConversation: (conversationId: string) => Promise<void>;
   onReactivateFromOperation: (leadId: string) => Promise<void>;
   canExcludeFromOperation: boolean;
 }) {
@@ -325,6 +348,8 @@ function CrmContactDetailDrawer({
   const conversations = detail?.conversations ?? [];
   const [editingBasics, setEditingBasics] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [hiddenBlockingConversation, setHiddenBlockingConversation] =
+    useState<AppHiddenBlockingConversation | null>(null);
   const [draft, setDraft] = useState({
     displayName: "",
     companyName: "",
@@ -342,6 +367,7 @@ function CrmContactDetailDrawer({
       city: item.city || "",
     });
     setActionLoading(null);
+    setHiddenBlockingConversation(null);
   }, [item?.leadId]);
 
   const saveBasics = async () => {
@@ -400,7 +426,26 @@ function CrmContactDetailDrawer({
     if (!confirmed) return;
     setActionLoading("exclude");
     try {
-      await onExcludeFromOperation(item.leadId);
+      const blockingConversation = await onExcludeFromOperation(item.leadId);
+      setHiddenBlockingConversation(blockingConversation);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const removeBlockingConversation = async () => {
+    if (!item || !hiddenBlockingConversation) return;
+    const confirmed = window.confirm(
+      "A conversa deixará de aparecer como ativa, mas seu histórico será preservado."
+    );
+    if (!confirmed) return;
+    setActionLoading("remove-hidden-conversation");
+    try {
+      await onRemoveBlockingConversation(hiddenBlockingConversation.conversationId);
+      setHiddenBlockingConversation(null);
+      onRefresh();
+    } catch {
+      // Error state is handled by the parent mutation handler.
     } finally {
       setActionLoading(null);
     }
@@ -655,6 +700,23 @@ function CrmContactDetailDrawer({
                   </div>
                 ) : canExcludeFromOperation ? (
                   <div className="grid gap-2 rounded-lg border border-red-300/30 bg-red-500/10 p-3">
+                    {hiddenBlockingConversation ? (
+                      <div className="grid gap-2 rounded-md border border-amber-300/40 bg-amber-400/10 p-3">
+                        <p className="text-sm text-amber-100">
+                          Existe uma conversa pendente associada a este contato que precisa ser retirada da operação antes da exclusão.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={removeBlockingConversation}
+                            disabled={Boolean(actionLoading)}
+                            className="rounded-md bg-re7-sky px-3 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {actionLoading === "remove-hidden-conversation" ? "Retirando..." : "Retirar conversa da operação"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                     <p className="text-sm text-red-100">
                       Este contato deixará de aparecer no CRM operacional e não poderá ser usado em campanhas. O histórico existente será preservado.
                     </p>
@@ -1287,7 +1349,7 @@ export default function AppCrmContactsPage() {
 
   const excludeContactFromOperation = useCallback(
     async (leadId: string) => {
-      if (!session) return;
+      if (!session) return null;
       try {
         await excludeAppCrmContactFromOperation(session, leadId);
         setContactDetail(null);
@@ -1295,13 +1357,43 @@ export default function AppCrmContactsPage() {
         setNotice("Contato excluído da operação. O histórico existente foi preservado.");
         setOperationalStatus("active");
         await loadContacts(session, page);
+        return null;
+      } catch (err) {
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return null;
+        }
+        const blockingConversation = getHiddenBlockingConversation(typed);
+        if (blockingConversation) {
+          setError(null);
+          setDetailError(null);
+          return blockingConversation;
+        }
+        setError(normalizeAppErrorMessage(typed, "Não foi possível excluir o contato da operação."));
+        return null;
+      }
+    },
+    [handleUnauthorized, loadContacts, page, session]
+  );
+
+  const removeBlockingConversationFromOperation = useCallback(
+    async (conversationId: string) => {
+      if (!session) return;
+      try {
+        await deleteAppConversationData(session, conversationId);
+        setNotice("Conversa retirada da operação. O histórico foi preservado.");
+        await loadContacts(session, page);
       } catch (err) {
         const typed = err as AppApiError;
         if (typed.status === 401) {
           handleUnauthorized();
           return;
         }
-        setError(normalizeAppErrorMessage(typed, "Não foi possível excluir o contato da operação."));
+        const message = normalizeAppErrorMessage(typed, "Não foi possível retirar a conversa da operação.");
+        setDetailError(message);
+        setError(message);
+        throw typed;
       }
     },
     [handleUnauthorized, loadContacts, page, session]
@@ -1690,6 +1782,7 @@ export default function AppCrmContactsPage() {
           onRecordOptOut={recordContactOptOut}
           onRevokeOptOut={revokeContactOptOut}
           onExcludeFromOperation={excludeContactFromOperation}
+          onRemoveBlockingConversation={removeBlockingConversationFromOperation}
           onReactivateFromOperation={reactivateContactFromOperation}
           canExcludeFromOperation={canExcludeCrmContacts}
         />

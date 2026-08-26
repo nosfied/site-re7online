@@ -9,6 +9,7 @@ import {
   recordCrmContactOperationalReactivation,
 } from "../contacts/contactOperationalExclusion.js";
 import { persistEvent } from "../db/persist.js";
+import { shouldProjectConversationToHumanInbox } from "../inbox/messageVisibility.js";
 
 export const CRM_CONTACT_UPDATED_EVENT = "crm.contact.updated";
 export const CRM_LEAD_STATUS_CHANGED_EVENT = "crm.lead.status_changed";
@@ -36,9 +37,11 @@ export class CrmContactMutationError extends Error {
       | "invalid_email"
       | "status_not_configured"
       | "opt_out_identity_unavailable"
-      | "active_conversation_exists",
+      | "active_conversation_exists"
+      | "hidden_active_conversation_exists",
     message: string,
-    public status = 400
+    public status = 400,
+    public details?: Record<string, unknown>
   ) {
     super(message);
   }
@@ -352,15 +355,77 @@ async function assertNoActiveOperationalConversation(
         },
       ],
     },
-    select: { id: true },
+    select: {
+      id: true,
+      conversationKey: true,
+      waId: true,
+      waIdCanonical: true,
+      status: true,
+      mode: true,
+      handoffStatus: true,
+      assignedUserId: true,
+      assignedAt: true,
+      departmentId: true,
+      queueId: true,
+      handoffActivatedAt: true,
+      closedAt: true,
+      updatedAt: true,
+    },
   });
   if (active) {
+    if (isHiddenTechnicalBlockingConversation(active)) {
+      throw new CrmContactMutationError(
+        "hidden_active_conversation_exists",
+        "Este contato possui uma conversa pendente associada que precisa ser retirada da operacao antes da exclusao.",
+        409,
+        {
+          conversationId: active.waIdCanonical ?? active.waId,
+          conversationIdentity: active.waIdCanonical ?? active.waId,
+          status: active.status,
+          mode: active.mode,
+          updatedAt: active.updatedAt?.toISOString(),
+        }
+      );
+    }
     throw new CrmContactMutationError(
       "active_conversation_exists",
       "Contact has an active operational conversation",
       409
     );
   }
+}
+
+export function isHiddenTechnicalBlockingConversation(conversation: {
+  status?: string | null;
+  mode?: string | null;
+  handoffStatus?: string | null;
+  assignedUserId?: string | null;
+  assignedAt?: Date | string | null;
+  departmentId?: string | null;
+  queueId?: string | null;
+  handoffActivatedAt?: Date | string | null;
+  closedAt?: Date | string | null;
+}) {
+  const toProjectionDate = (value: Date | string | null | undefined) =>
+    value instanceof Date ? value.toISOString() : value;
+  if (
+    shouldProjectConversationToHumanInbox({
+      ...conversation,
+      assignedAt: toProjectionDate(conversation.assignedAt),
+      handoffActivatedAt: conversation.handoffActivatedAt,
+    })
+  ) return false;
+  const status = String(conversation.status ?? "").trim().toUpperCase();
+  const mode = String(conversation.mode ?? "").trim().toUpperCase();
+  const handoffStatus = String(conversation.handoffStatus ?? "").trim().toUpperCase();
+  const hasHumanEvidence =
+    Boolean(conversation.assignedUserId) ||
+    Boolean(conversation.assignedAt) ||
+    Boolean(conversation.handoffActivatedAt) ||
+    handoffStatus === "ACTIVE";
+  if (hasHumanEvidence) return false;
+  if (status === "CLOSED") return false;
+  return mode === "BOT" || handoffStatus === "NONE" || handoffStatus === "";
 }
 
 export async function excludeCrmContactFromOperation(

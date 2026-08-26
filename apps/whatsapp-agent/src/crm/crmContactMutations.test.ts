@@ -3,10 +3,43 @@ import test from "node:test";
 import {
   CrmContactMutationError,
   excludeCrmContactFromOperation,
+  isHiddenTechnicalBlockingConversation,
   reactivateCrmContactForOperation,
 } from "./crmContactMutations.js";
 
-function makePrisma(params: { runtimeStatus?: string | null; excludedAt?: Date | null } = {}) {
+function makeRuntime(params: {
+  status?: string | null;
+  mode?: string | null;
+  handoffStatus?: string | null;
+  assignedUserId?: string | null;
+  departmentId?: string | null;
+  queueId?: string | null;
+  handoffActivatedAt?: Date | null;
+}) {
+  const assignedUserId = params.assignedUserId === undefined ? "user_1" : params.assignedUserId;
+  return {
+    id: "runtime_1",
+    conversationKey: "conversation_1",
+    waId: "5584951957784",
+    waIdCanonical: "5584951957784",
+    status: params.status ?? "IN_PROGRESS",
+    mode: params.mode ?? "HUMAN",
+    handoffStatus: params.handoffStatus ?? "ACTIVE",
+    assignedUserId,
+    assignedAt: assignedUserId ? new Date("2026-08-26T10:00:00.000Z") : null,
+    departmentId: params.departmentId ?? "department_1",
+    queueId: params.queueId ?? "queue_1",
+    handoffActivatedAt: params.handoffActivatedAt ?? (assignedUserId ? new Date("2026-08-26T10:00:00.000Z") : null),
+    closedAt: null,
+    updatedAt: new Date("2026-08-26T10:05:00.000Z"),
+  };
+}
+
+function makePrisma(params: {
+  runtimeStatus?: string | null;
+  runtime?: ReturnType<typeof makeRuntime> | null;
+  excludedAt?: Date | null;
+} = {}) {
   const contact = {
     id: "contact_1",
     waId: "5584951957784",
@@ -41,7 +74,11 @@ function makePrisma(params: { runtimeStatus?: string | null; excludedAt?: Date |
     },
     conversationRuntimeState: {
       findFirst: async () =>
-        params.runtimeStatus && params.runtimeStatus !== "CLOSED" ? { id: "runtime_1" } : null,
+        params.runtime
+          ? params.runtime
+          : params.runtimeStatus && params.runtimeStatus !== "CLOSED"
+            ? makeRuntime({ status: params.runtimeStatus })
+            : null,
     },
     contact: {
       update: async ({ data }: { data: Record<string, unknown> }) => {
@@ -61,6 +98,37 @@ function makePrisma(params: { runtimeStatus?: string | null; excludedAt?: Date |
   return prisma;
 }
 
+test("hidden technical blocking conversation is detected without human inbox projection", () => {
+  assert.equal(
+    isHiddenTechnicalBlockingConversation(
+      makeRuntime({
+        status: "WAITING_USER",
+        mode: "BOT",
+        handoffStatus: "NONE",
+        assignedUserId: null,
+        departmentId: null,
+        queueId: null,
+        handoffActivatedAt: null,
+      })
+    ),
+    true
+  );
+  assert.equal(
+    isHiddenTechnicalBlockingConversation(
+      makeRuntime({
+        status: "IN_PROGRESS",
+        mode: "HUMAN",
+        handoffStatus: "ACTIVE",
+        assignedUserId: "user_1",
+        departmentId: "department_1",
+        queueId: "queue_1",
+      })
+    ),
+    false
+  );
+  assert.equal(isHiddenTechnicalBlockingConversation(makeRuntime({ status: "CLOSED", mode: "BOT", assignedUserId: null })), false);
+});
+
 test("CRM operational exclusion blocks active conversations and does not mutate contact", async () => {
   const prisma = makePrisma({ runtimeStatus: "IN_PROGRESS" });
   await assert.rejects(
@@ -72,6 +140,35 @@ test("CRM operational exclusion blocks active conversations and does not mutate 
         requestId: "req_1",
       }),
     (error) => error instanceof CrmContactMutationError && error.code === "active_conversation_exists"
+  );
+  assert.equal(prisma.__contact.operationallyExcludedAt, null);
+  assert.equal(prisma.__events.length, 0);
+});
+
+test("CRM operational exclusion returns actionable hidden conversation blocker", async () => {
+  const prisma = makePrisma({
+    runtime: makeRuntime({
+      status: "WAITING_USER",
+      mode: "BOT",
+      handoffStatus: "NONE",
+      assignedUserId: null,
+      departmentId: null,
+      queueId: null,
+      handoffActivatedAt: null,
+    }),
+  });
+  await assert.rejects(
+    () =>
+      excludeCrmContactFromOperation(prisma as never, {
+        clientId: "client_1",
+        leadId: "lead_1",
+        userId: "admin_1",
+        requestId: "req_hidden",
+      }),
+    (error) =>
+      error instanceof CrmContactMutationError &&
+      error.code === "hidden_active_conversation_exists" &&
+      error.details?.conversationId === "5584951957784"
   );
   assert.equal(prisma.__contact.operationallyExcludedAt, null);
   assert.equal(prisma.__events.length, 0);

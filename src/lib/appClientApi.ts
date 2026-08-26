@@ -691,6 +691,14 @@ export type AppApiError = Error & {
   payload?: unknown;
 };
 
+export type AppHiddenBlockingConversation = {
+  conversationId: string;
+  conversationIdentity: string;
+  status: string | null;
+  mode: string | null;
+  updatedAt: string | null;
+};
+
 export type AppPublicApiScope =
   | "read"
   | "write"
