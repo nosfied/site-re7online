@@ -410,8 +410,11 @@ export function createDualWriteStorage(
     if (!state.firstSeenAt || Number.isNaN(Date.parse(state.firstSeenAt))) {
       return { ok: false, reason: "invalid_first_seen_at" };
     }
-    if (!state.lastInboundAt || Number.isNaN(Date.parse(state.lastInboundAt))) {
+    if (state.lastInboundAt && Number.isNaN(Date.parse(state.lastInboundAt))) {
       return { ok: false, reason: "invalid_last_inbound_at" };
+    }
+    if (!state.lastInboundAt && (!state.lastOutboundAt || Number.isNaN(Date.parse(state.lastOutboundAt)))) {
+      return { ok: false, reason: "invalid_activity_at" };
     }
     if (!state.window || typeof state.window.isOpen !== "boolean") {
       return { ok: false, reason: "invalid_window" };

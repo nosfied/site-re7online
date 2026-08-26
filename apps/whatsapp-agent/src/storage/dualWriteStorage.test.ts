@@ -247,6 +247,59 @@ test("dual write reads Postgres state when read source is postgres", async () =>
   assert.equal(calls.get, 0);
 });
 
+test("dual write reads outbound-only Postgres state without last inbound timestamp", async () => {
+  installPrismaMock({
+    async findMany() {
+      return [
+        makeDbRow({
+          lastInboundAt: null,
+          lastOutboundAt: baseDate,
+          mode: "HUMAN",
+          status: ConversationOperationalStatus.IN_PROGRESS,
+          handoffStatus: HandoffStatus.ACTIVE,
+        }),
+      ];
+    },
+  });
+  const { storage: primary, calls } = makePrimaryStorage(makeState({ status: "CLOSED" }));
+  const storage = createDualWriteStorage(primary, {
+    readSource: "postgres",
+    jsonWriteEnabled: false,
+  });
+
+  const state = await storage.getConversation("5584999999999", "justa-advocacia");
+
+  assert.equal(state?.lastInboundAt, "");
+  assert.equal(state?.lastOutboundAt, baseDate.toISOString());
+  assert.equal(state?.mode, "HUMAN");
+  assert.equal(state?.status, "IN_PROGRESS");
+  assert.equal(calls.get, 0);
+});
+
+test("dual write rejects Postgres state without inbound or outbound activity timestamp", async () => {
+  installPrismaMock({
+    async findMany() {
+      return [
+        makeDbRow({
+          lastInboundAt: null,
+          lastOutboundAt: null,
+        }),
+      ];
+    },
+  });
+  const { storage: primary, calls } = makePrimaryStorage(makeState({ status: "CLOSED" }));
+  const storage = createDualWriteStorage(primary, {
+    readSource: "postgres",
+    jsonWriteEnabled: false,
+  });
+
+  await assert.rejects(
+    storage.getConversation("5584999999999", "justa-advocacia"),
+    /postgres_conversation_state_invalid:invalid_activity_at/
+  );
+  assert.equal(calls.get, 0);
+});
+
 test("dual write reads synthetic Messenger state with multichannel conversation key", async () => {
   const syntheticWaId = "messenger:8483671231fdbf90dd354fe2f43c85ae";
   installPrismaMock({

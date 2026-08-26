@@ -330,6 +330,34 @@ test("CRM contact start creates conversation only on first explicit Web Session 
       true
     );
     assert.equal(await prisma.outboundMessage.count({ where: { clientId, waId: identity.waIdCanonical } }), 1);
+
+    const secondSend = await request<{
+      ok: boolean;
+      waIdCanonical: string;
+      status: string;
+      mode: string;
+      handoffStatus: string;
+      assignedUserId: string;
+      message: { status: string; protocol: string | null; metaMessageId: string | null; bodyText: string | null };
+    }>(
+      "POST",
+      `/app/conversation/${encodeURIComponent(identity.waIdCanonical)}/send`,
+      admin,
+      { text: "Segunda mensagem" }
+    );
+    assert.equal(secondSend.status, 200, JSON.stringify(secondSend.body));
+    assert.equal(secondSend.body.waIdCanonical, identity.waIdCanonical);
+    assert.equal(secondSend.body.status, "IN_PROGRESS");
+    assert.equal(secondSend.body.mode, "HUMAN");
+    assert.equal(secondSend.body.handoffStatus, "active");
+    assert.equal(secondSend.body.assignedUserId, admin.id);
+    assert.equal(secondSend.body.message.status, "SENT");
+    assert.equal(secondSend.body.message.metaMessageId, null);
+    assert.equal(secondSend.body.message.protocol, started.body.message.protocol);
+    assert.equal(workerRequests.length, 3);
+    assert.equal(workerRequests[2]?.recipientWaId, identity.waIdCanonical);
+    assert.equal(await prisma.outboundMessage.count({ where: { clientId, waId: identity.waIdCanonical } }), 2);
+    assert.equal(await prisma.conversation.count({ where: { clientId, waId: identity.waIdCanonical } }), 1);
   } finally {
     process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = previousWorkerUrl;
     await new Promise<void>((resolve, reject) => {
