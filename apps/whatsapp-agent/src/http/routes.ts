@@ -74,6 +74,7 @@ import {
 } from "../config/tenantOperationalConfig.js";
 import { applyAgentSignature } from "../inbox/agentSignature.js";
 import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
+import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
 import { checkRateLimit } from "./rateLimit.js";
 import {
   fetchMediaContent,
@@ -131,6 +132,10 @@ import {
   type CampaignImportMapping,
   type CampaignImportRecipientInput,
 } from "../campaigns/campaignRecipientImport.js";
+import {
+  buildPrivateCampaignSeedFields,
+  readPrivateCampaignSeedFields,
+} from "../campaigns/campaignSeedPrivacy.js";
 import { httpError } from "../utils/httpError.js";
 import {
   enrichMetaOnboardingResult,
@@ -354,6 +359,8 @@ import {
 } from "../crm/crmConversationStart.js";
 import {
   CrmContactMutationError,
+  excludeCrmContactFromOperation,
+  reactivateCrmContactForOperation,
   recordCrmContactOptOut,
   revokeCrmContactOptOut,
   updateCrmContactBasics,
@@ -10463,6 +10470,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const tenants = await getTenants();
       const tenant = tenants[client.clientKey] ?? null;
+      if (query.operationalStatus === "excluded" && !isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can view excluded CRM contacts."));
+        return;
+      }
       const resolvedStatuses = await resolveCrmBusinessStatuses({
         prisma,
         clientId: client.id,
@@ -10531,7 +10542,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           });
       const payload = await buildCrmContactsPayload(prisma, {
         clientId: client.id,
-        query: isAgentRole(clientAuth.role) ? { ...query, hasConversation: null } : query,
+        query: isAgentRole(clientAuth.role) ? { ...query, hasConversation: null, operationalStatus: null } : query,
         statuses: resolvedStatuses.statuses,
         canStartWhatsappFreeform: startReadiness.allowed,
         startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
@@ -10618,6 +10629,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const message =
           error.code === "identity_conflict"
             ? "Encontramos mais de uma identificação possível para este número. Revise o contato antes de iniciar a conversa."
+            : error.code === "contact_operationally_excluded"
+              ? "Contato anteriormente excluído da operação. Reative o contato antes de reutilizá-lo."
             : error.message;
         json(res, error.status, {
           ...httpError(error.code, message),
@@ -10746,6 +10759,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const tenants = await getTenants();
       const tenant = tenants[client.clientKey] ?? null;
+      const includeOperationallyExcluded = query.operationalStatus === "excluded";
+      if (includeOperationallyExcluded && !isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can view excluded CRM contacts."));
+        return;
+      }
       const resolvedStatuses = await resolveCrmBusinessStatuses({
         prisma,
         clientId: client.id,
@@ -10765,6 +10783,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         statuses: resolvedStatuses.statuses,
         canStartWhatsappFreeform: startReadiness.allowed,
         startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
+        includeOperationallyExcluded,
       });
       if (!payload) {
         json(res, 404, httpError("contact_not_found", "Contact not found"));
@@ -10848,6 +10867,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               ? "Envio indisponivel neste canal."
               : eligibility.reason === "contact_not_active"
                 ? "Contato indisponivel para iniciar conversa."
+                : eligibility.reason === "contact_operationally_excluded"
+                  ? "Contato excluído da operação."
                 : eligibility.reason === "active_send_blocked"
                   ? "Contato bloqueado para envio ativo."
                   : "Nao foi possivel iniciar conversa para este contato.";
@@ -11107,11 +11128,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const isStatusUpdate = req.method === "PATCH" && parts.length === 6 && action === "status";
       const isOptOutRecord = req.method === "POST" && parts.length === 6 && action === "opt-out";
       const isOptOutRevoke = req.method === "DELETE" && parts.length === 6 && action === "opt-out";
+      const isOperationalExclude = req.method === "POST" && parts.length === 6 && action === "exclude";
+      const isOperationalReactivate = req.method === "POST" && parts.length === 6 && action === "reactivate";
       if (
         !leadId ||
-        (!isBasicUpdate && !isStatusUpdate && !isOptOutRecord && !isOptOutRevoke)
+        (!isBasicUpdate && !isStatusUpdate && !isOptOutRecord && !isOptOutRevoke && !isOperationalExclude && !isOperationalReactivate)
       ) {
         json(res, 404, httpError("not_found", "Not found"));
+        return;
+      }
+      if ((isOperationalExclude || isOperationalReactivate) && !isAdminRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only admin can exclude CRM contacts from operations."));
         return;
       }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
@@ -11187,6 +11214,23 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           userId: clientAuth.userId,
           requestId,
           reason: typeof body.reason === "string" ? body.reason : null,
+        });
+      } else if (isOperationalExclude) {
+        await excludeCrmContactFromOperation(prisma, {
+          clientId: client.id,
+          leadId,
+          userId: clientAuth.userId,
+          requestId,
+          reason: typeof body.reason === "string" ? body.reason : null,
+        });
+        json(res, 200, { ok: true, excluded: true });
+        return;
+      } else if (isOperationalReactivate) {
+        await reactivateCrmContactForOperation(prisma, {
+          clientId: client.id,
+          leadId,
+          userId: clientAuth.userId,
+          requestId,
         });
       }
 
@@ -11396,6 +11440,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             .filter(Boolean)
         )
       );
+      const [operationallyExcludedWaIds] = await Promise.all([
+        loadOperationallyExcludedWaIds(prisma, {
+          clientId: client.id,
+          waIds: lifecycleLookupKeys,
+        }),
+      ]);
       const contactsByLookupKey = new Map<string, { lifecycle: unknown }>();
       if (lifecycleLookupKeys.length > 0) {
         const contacts = await prisma.contact.findMany({
@@ -11428,6 +11478,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             contactsByLookupKey.get(String(lead.phone ?? "").replace(/\D/g, "")) ??
             null;
           if (matchedContact && !isOperationalContactLifecycle(matchedContact.lifecycle)) return null;
+          if (
+            [
+              lead.waId,
+              lead.waIdCanonical,
+              lead.externalUserRef,
+              lead.legacyWaId,
+              String(lead.phone ?? "").replace(/\D/g, ""),
+            ].some((candidate) => operationallyExcludedWaIds.has(String(candidate ?? "").trim()))
+          ) {
+            return null;
+          }
           if (
             [
               lead.waId,
@@ -27366,11 +27427,10 @@ function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null
   const name = typeof typed.name === "string" ? typed.name : null;
   const templateId = typeof typed.templateId === "string" ? typed.templateId : null;
   const templateName = typeof typed.templateName === "string" ? typed.templateName : null;
-  const recipients = Array.isArray(typed.recipients)
-    ? typed.recipients
-        .map((value) => (typeof value === "string" ? normalizeWaId(value) : ""))
-        .filter((value): value is string => Boolean(value))
-    : [];
+  const privateSeed = readPrivateCampaignSeedFields(typed);
+  const recipients = privateSeed.recipients
+    .map((value) => normalizeWaId(value))
+    .filter((value): value is string => Boolean(value));
   const manualRecipientInput = Array.isArray(typed.manualRecipientInput)
     ? typed.manualRecipientInput
         .map((value) => (typeof value === "string" ? value.trim() : ""))
@@ -27387,9 +27447,11 @@ function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null
         .filter((value): value is string => Boolean(value))
     : [];
   const componentsByWaId =
-    typed.componentsByWaId && typeof typed.componentsByWaId === "object" && !Array.isArray(typed.componentsByWaId)
+    privateSeed.componentsByWaId &&
+    typeof privateSeed.componentsByWaId === "object" &&
+    !Array.isArray(privateSeed.componentsByWaId)
       ? Object.fromEntries(
-          Object.entries(typed.componentsByWaId as Record<string, unknown>)
+          Object.entries(privateSeed.componentsByWaId as Record<string, unknown>)
             .map(([waId, components]) => [normalizeWaId(waId), parseTemplateComponentsFromRaw(components)] as const)
             .filter((entry): entry is [string, CampaignTemplateComponents] => Boolean(entry[0] && entry[1]))
         )
@@ -27418,6 +27480,8 @@ function getCampaignBlockedReasonLabel(reason: CampaignDraftBlockedReason) {
   switch (reason) {
     case "anonymized_contact":
       return "Contato anonimizado";
+    case "operationally_excluded_contact":
+      return "Contato excluído da operação";
     case "active_send_blocked":
       return "Envio ativo bloqueado";
     case "missing_whatsapp_identity":
@@ -33518,6 +33582,10 @@ async function resolveCampaignDraftRecipientsFromLeadIds(
       .map((item) => item.waIdCanonical)
       .filter((value): value is string => Boolean(value))
   );
+  const operationallyExcludedWaIds = await loadOperationallyExcludedWaIds(prisma, {
+    clientId: params.clientId,
+    waIds: optOutLookupWaIds,
+  });
   const acceptedByCanonical = new Map<
     string,
     {
@@ -33558,6 +33626,12 @@ async function resolveCampaignDraftRecipientsFromLeadIds(
       const normalized = normalizeOptOutWaId(lead.phone || lead.waIdCanonical || lead.waId);
       if (!normalized) {
         reason = "missing_whatsapp_identity";
+      } else if (
+        [lead.phone, lead.waIdCanonical, lead.waId]
+          .map((candidate) => String(candidate ?? "").replace(/\D/g, ""))
+          .some((candidate) => operationallyExcludedWaIds.has(candidate))
+      ) {
+        reason = "operationally_excluded_contact";
       } else if (activeOptOutCanonicals.has(normalized.waIdCanonical)) {
         reason = "active_send_blocked";
       } else {
@@ -33745,10 +33819,13 @@ async function persistCampaignDraftSeed(params: {
       name: params.name,
       templateName: params.templateName,
       leadIds: params.leadIds ?? [],
-      recipients: params.waIds,
-      manualRecipientInput: params.manualRecipientInput ?? [],
+      ...buildPrivateCampaignSeedFields({
+        clientId: params.clientId,
+        waIds: params.waIds,
+        componentsByWaId: params.componentsByWaId,
+      }),
+      manualRecipientInputCount: params.manualRecipientInput?.length ?? 0,
       templateParams: extractTemplateParamsFromComponents(params.components ?? null),
-      componentsByWaId: params.componentsByWaId ?? undefined,
       templateVariableMappings: params.templateVariableMappings ?? [],
       source: params.source ?? null,
       summary: params.summary ?? null,

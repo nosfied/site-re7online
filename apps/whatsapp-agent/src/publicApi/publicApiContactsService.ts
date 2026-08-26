@@ -107,6 +107,21 @@ function contactLookupKeys(contact: PublicContactRow) {
   return Array.from(keys);
 }
 
+function isAnonymizedContactRecord(contact: PublicContactRow, lead?: LeadRow | null) {
+  return [contact.waId, contact.name, contact.externalUserHash, lead?.waId, lead?.waIdCanonical, lead?.phone, lead?.name].some(
+    (value) => {
+      const normalized = String(value ?? "").trim().toLowerCase();
+      return (
+        normalized.startsWith("anon:") ||
+        normalized.startsWith("hash:anon:") ||
+        normalized === "usuario anonimizado" ||
+        normalized === "usuário anonimizado" ||
+        normalized.includes("******")
+      );
+    }
+  );
+}
+
 function pickLead(contact: PublicContactRow, leadsByWaId: Map<string, LeadRow>) {
   for (const key of contactLookupKeys(contact)) {
     const lead = leadsByWaId.get(key);
@@ -160,6 +175,7 @@ export async function listPublicContacts(params: {
   const where: Record<string, unknown> = {
     clientId: params.clientId,
     lifecycle: CONTACT_LIFECYCLE_ACTIVE,
+    operationallyExcludedAt: null,
     ...(updatedSince ? { updatedAt: { gte: updatedSince } } : {}),
     ...(phoneDigits ? { waId: { contains: phoneDigits } } : {}),
     ...(name ? { name: { contains: name, mode: "insensitive" } } : {}),
@@ -244,9 +260,13 @@ export async function listPublicContacts(params: {
     if (conversation.waIdCanonical) conversationsByWaId.set(conversation.waIdCanonical, conversation);
   }
 
+  const visibleContacts = pageContacts.filter((contact) => {
+    const lead = pickLead(contact, leadsByWaId);
+    return !isAnonymizedContactRecord(contact, lead);
+  });
   const nextCursorSource = contacts.length > limit ? pageContacts[pageContacts.length - 1] : null;
   return {
-    data: pageContacts.map((contact) =>
+    data: visibleContacts.map((contact) =>
       serializePublicContact(contact, {
         lead: pickLead(contact, leadsByWaId),
         conversation: pickConversation(contact, conversationsByWaId),
@@ -272,6 +292,7 @@ export async function getPublicContact(params: {
       id: params.contactId,
       clientId: params.clientId,
       lifecycle: CONTACT_LIFECYCLE_ACTIVE,
+      operationallyExcludedAt: null,
     },
     select: {
       id: true,
@@ -326,6 +347,7 @@ export async function getPublicContact(params: {
       },
     }),
   ]);
+  if (isAnonymizedContactRecord(contact, leads[0] ?? null)) return null;
   return serializePublicContact(contact, {
     lead: leads[0] ?? null,
     conversation: conversations[0] ?? null,

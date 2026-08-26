@@ -13,6 +13,7 @@ import {
 } from "../chatbot/chatbotFlow.js";
 import { executeChatbotFlowWithConsent, isChatbotConsentRequired } from "../chatbot/chatbotConsentRuntime.js";
 import { resolveInitialContactLifecycle } from "../contacts/contactLifecycle.js";
+import { reactivateOperationallyExcludedContactIfNeeded } from "../contacts/contactOperationalExclusion.js";
 import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import type { ConversationState, FlowContext } from "../conversation/conversation.types.js";
@@ -1033,7 +1034,7 @@ export async function createWebchatInboundMessage(params: {
   const consentRequired =
     activeEntryFlowDefinition?.ok === true ? isChatbotConsentRequired(activeEntryFlowDefinition.definition) : false;
 
-  const [conversation, runtimeState, inbound, contact] = await params.prisma.$transaction(async (tx) => {
+  const [conversation, runtimeState, inbound, contact, lead] = await params.prisma.$transaction(async (tx) => {
     const contactRecord = await tx.contact.upsert({
       where: { clientId_waId: { clientId: session.clientId, waId: syntheticWaId } },
       create: {
@@ -1154,7 +1155,7 @@ export async function createWebchatInboundMessage(params: {
       },
       select: { id: true, messageId: true, waId: true, waIdCanonical: true, bodyText: true, createdAt: true },
     });
-    await tx.lead.upsert({
+    const leadRecord = await tx.lead.upsert({
       where: { tenantId_waId: { tenantId: session.clientId, waId: syntheticWaId } },
       create: {
         tenantId: session.clientId,
@@ -1198,7 +1199,16 @@ export async function createWebchatInboundMessage(params: {
         } satisfies Prisma.InputJsonValue,
       },
     });
-    return [conversationRecord, runtimeRecord, inboundRecord, contactRecord] as const;
+    return [conversationRecord, runtimeRecord, inboundRecord, contactRecord, leadRecord] as const;
+  });
+  await reactivateOperationallyExcludedContactIfNeeded(params.prisma, {
+    clientId: session.clientId,
+    leadId: lead.id,
+    contactId: contact.id,
+    waId: syntheticWaId,
+    waIdCanonical: syntheticWaId,
+    requestId: params.requestId,
+    source: "webchat_inbound",
   });
   const assignment = await applyBalancedQueueAssignment({
     prisma: params.prisma,

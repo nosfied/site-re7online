@@ -6,6 +6,7 @@ import { getFeatures } from "../features/clientFeatures.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
 import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
+import { reactivateOperationallyExcludedContactIfNeeded } from "../contacts/contactOperationalExclusion.js";
 import {
   hasConfiguredTelegramToken,
   markTelegramWebhookReplay,
@@ -221,7 +222,7 @@ export async function persistTelegramInboundMessage(params: {
     select: { id: true },
   });
 
-  const [conversation, runtimeState, inbound, contact] = await params.prisma.$transaction(async (tx) => {
+  const [conversation, runtimeState, inbound, contact, lead] = await params.prisma.$transaction(async (tx) => {
     const contactRecord = await tx.contact.upsert({
       where: { clientId_waId: { clientId: account.clientId, waId: syntheticWaId } },
       create: {
@@ -350,7 +351,7 @@ export async function persistTelegramInboundMessage(params: {
       },
       select: { id: true },
     });
-    await tx.lead.upsert({
+    const leadRecord = await tx.lead.upsert({
       where: { tenantId_waId: { tenantId: account.clientId, waId: syntheticWaId } },
       create: {
         tenantId: account.clientId,
@@ -419,7 +420,16 @@ export async function persistTelegramInboundMessage(params: {
         } satisfies Prisma.InputJsonObject,
       },
     });
-    return [conversationRecord, runtimeRecord, inboundRecord, contactRecord] as const;
+    return [conversationRecord, runtimeRecord, inboundRecord, contactRecord, leadRecord] as const;
+  });
+  await reactivateOperationallyExcludedContactIfNeeded(params.prisma, {
+    clientId: account.clientId,
+    leadId: lead.id,
+    contactId: contact.id,
+    waId: syntheticWaId,
+    waIdCanonical: syntheticWaId,
+    requestId: params.requestId,
+    source: "telegram_inbound",
   });
   const assignment = await applyBalancedQueueAssignment({
     prisma: params.prisma,

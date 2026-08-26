@@ -303,6 +303,7 @@ export type AppCrmContactsFilter = {
   channel?: string | null;
   hasConversation?: boolean | null;
   optOut?: boolean | null;
+  operationalStatus?: "active" | "excluded" | null;
   updatedFrom?: string | null;
   updatedTo?: string | null;
   page?: number;
@@ -333,6 +334,7 @@ export type AppCrmContactItem = {
   canStartConversation?: boolean;
   startConversationBlockedReason?:
     | "contact_not_active"
+    | "contact_operationally_excluded"
     | "invalid_identity"
     | "channel_unavailable"
     | "new_freeform_requires_model"
@@ -342,6 +344,7 @@ export type AppCrmContactItem = {
     | null;
   activeOptOut: boolean;
   isAnonymized: boolean;
+  isOperationallyExcluded?: boolean;
   importedSource: string | null;
   hasValidWhatsappIdentity: boolean;
   canStartWhatsappTemplateCandidate: boolean;
@@ -406,6 +409,7 @@ export type AppCrmContactImportPreviewResponse = {
     phoneDisplay: string | null;
   }>;
   truncatedErrors: boolean;
+  excludedContacts?: number;
 };
 
 export type AppCrmContactImportConfirmResponse = {
@@ -418,6 +422,7 @@ export type AppCrmContactImportConfirmResponse = {
   invalid: number;
   readyToImport: number;
   promotedProvisional: number;
+  excludedContacts?: number;
 };
 
 export type AppCrmContactsResponse = {
@@ -428,6 +433,7 @@ export type AppCrmContactsResponse = {
     channel: string | null;
     hasConversation: boolean | null;
     optOut: boolean | null;
+    operationalStatus?: "active" | "excluded";
     updatedFrom: string | null;
     updatedTo: string | null;
   };
@@ -4058,6 +4064,9 @@ export async function fetchAppCrmContacts(
   if (typeof filters?.optOut === "boolean") {
     params.set("optOut", String(filters.optOut));
   }
+  if (filters?.operationalStatus === "excluded") {
+    params.set("operationalStatus", "excluded");
+  }
   if (typeof filters?.page === "number" && Number.isFinite(filters.page)) {
     params.set("page", String(Math.max(1, Math.floor(filters.page))));
   }
@@ -4149,9 +4158,13 @@ export async function downloadAppMetaUsageMonthlyReportCsv(
 
 export async function fetchAppCrmContactDetail(
   session: AppSession,
-  leadId: string
+  leadId: string,
+  options?: { operationalStatus?: "active" | "excluded" | null }
 ): Promise<AppCrmContactDetailResponse> {
-  return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}`);
+  const params = new URLSearchParams();
+  if (options?.operationalStatus === "excluded") params.set("operationalStatus", "excluded");
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}${suffix}`);
 }
 
 export async function createAppCrmContact(
@@ -4227,6 +4240,26 @@ export async function revokeAppCrmContactOptOut(
 ): Promise<AppCrmContactDetailResponse> {
   return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}/opt-out`, {
     method: "DELETE",
+  });
+}
+
+export async function excludeAppCrmContactFromOperation(
+  session: AppSession,
+  leadId: string
+): Promise<{ ok: true; excluded: true }> {
+  return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}/exclude`, {
+    method: "POST",
+    body: JSON.stringify({ reason: "manual_crm_operational_exclusion" }),
+  });
+}
+
+export async function reactivateAppCrmContactForOperation(
+  session: AppSession,
+  leadId: string
+): Promise<AppCrmContactDetailResponse> {
+  return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}/reactivate`, {
+    method: "POST",
+    body: JSON.stringify({}),
   });
 }
 

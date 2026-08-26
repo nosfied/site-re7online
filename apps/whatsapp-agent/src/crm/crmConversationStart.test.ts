@@ -13,6 +13,7 @@ function makePrisma(overrides: {
   outboundEnabled?: boolean;
   metaOperational?: boolean;
   optOut?: boolean;
+  operationallyExcluded?: boolean;
 } = {}) {
   const lead = {
     id: "lead-1",
@@ -27,6 +28,10 @@ function makePrisma(overrides: {
     id: "contact-1",
     name: "Maria CRM",
     lifecycle: overrides.contactLifecycle ?? "ACTIVE",
+    waId: "558499990001",
+    externalUserRef: "558499990001",
+    legacyWaId: "558499990001",
+    operationallyExcludedAt: overrides.operationallyExcluded ? new Date("2026-08-26T10:00:00.000Z") : null,
   };
   return {
     lead: {
@@ -37,6 +42,7 @@ function makePrisma(overrides: {
     },
     contact: {
       findFirst: async () => contact,
+      findMany: async () => (overrides.operationallyExcluded ? [contact] : []),
     },
     tenantOperationalConfig: {
       findUnique: async () => ({
@@ -96,8 +102,8 @@ function makePrisma(overrides: {
       }),
     },
     event: {
-      findMany: async () =>
-        overrides.optOut
+      findMany: async () => {
+        return overrides.optOut
           ? [
               {
                 waId: "558499990001",
@@ -106,7 +112,8 @@ function makePrisma(overrides: {
                 createdAt: new Date("2026-01-01T00:00:00.000Z"),
               },
             ]
-          : [],
+          : [];
+      },
     },
   };
 }
@@ -259,4 +266,14 @@ test("CRM start eligibility blocks non-authorized, provisional, non-WhatsApp, an
     actorRole: "ADMIN",
   });
   assert.deepEqual(optOut, { allowed: false, reason: "active_send_blocked" });
+
+  const excluded = await resolveCrmContactConversationStartEligibility({
+    prisma: makePrisma({ operationallyExcluded: true }) as never,
+    clientId: "client-1",
+    clientKey: "tenant-1",
+    clientStatus: "ACTIVE",
+    leadId: "lead-1",
+    actorRole: "ADMIN",
+  });
+  assert.deepEqual(excluded, { allowed: false, reason: "contact_operationally_excluded" });
 });

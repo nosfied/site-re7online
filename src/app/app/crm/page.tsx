@@ -19,8 +19,10 @@ import {
   fetchAppCrmContactDetail,
   fetchAppCrmContacts,
   fetchAppCrmStatuses,
+  excludeAppCrmContactFromOperation,
   loadAppSession,
   previewAppCrmContactCsvImport,
+  reactivateAppCrmContactForOperation,
   recordAppCrmContactOptOut,
   revokeAppCrmContactOptOut,
   saveAppSession,
@@ -179,6 +181,11 @@ function CrmContactRow({
               Envio ativo bloqueado
             </span>
           ) : null}
+          {item.isOperationallyExcluded ? (
+            <span className="rounded-full border border-amber-300/30 bg-amber-400/10 px-2 py-0.5 text-amber-100">
+              Excluído da operação
+            </span>
+          ) : null}
         </div>
         {item.email ? <div className="mt-1 text-xs theme-muted">{item.email}</div> : null}
       </td>
@@ -289,6 +296,9 @@ function CrmContactDetailDrawer({
   onUpdateStatus,
   onRecordOptOut,
   onRevokeOptOut,
+  onExcludeFromOperation,
+  onReactivateFromOperation,
+  canExcludeFromOperation,
 }: {
   detail: AppCrmContactDetailResponse | null;
   loading: boolean;
@@ -307,6 +317,9 @@ function CrmContactDetailDrawer({
   onUpdateStatus: (leadId: string, status: string) => Promise<void>;
   onRecordOptOut: (leadId: string) => Promise<void>;
   onRevokeOptOut: (leadId: string) => Promise<void>;
+  onExcludeFromOperation: (leadId: string) => Promise<void>;
+  onReactivateFromOperation: (leadId: string) => Promise<void>;
+  canExcludeFromOperation: boolean;
 }) {
   const item = detail?.item ?? null;
   const conversations = detail?.conversations ?? [];
@@ -374,6 +387,32 @@ function CrmContactDetailDrawer({
       } else {
         await onRecordOptOut(item.leadId);
       }
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const excludeFromOperation = async () => {
+    if (!item) return;
+    const confirmed = window.confirm(
+      "Este contato deixará de aparecer no CRM e não poderá ser usado em novos atendimentos ou campanhas. O histórico existente será preservado."
+    );
+    if (!confirmed) return;
+    setActionLoading("exclude");
+    try {
+      await onExcludeFromOperation(item.leadId);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const reactivateFromOperation = async () => {
+    if (!item) return;
+    const confirmed = window.confirm("Este contato voltará a aparecer no CRM operacional e poderá ser usado conforme as regras atuais.");
+    if (!confirmed) return;
+    setActionLoading("reactivate");
+    try {
+      await onReactivateFromOperation(item.leadId);
     } finally {
       setActionLoading(null);
     }
@@ -598,6 +637,39 @@ function CrmContactDetailDrawer({
                     </button>
                   </div>
                 </div>
+                {canExcludeFromOperation && item.isOperationallyExcluded ? (
+                  <div className="grid gap-2 rounded-lg border border-emerald-300/30 bg-emerald-500/10 p-3">
+                    <p className="text-sm text-emerald-100">
+                      Este contato está excluído da operação. Restaure apenas se a base cadastral estiver correta.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={reactivateFromOperation}
+                        disabled={Boolean(actionLoading)}
+                        className="rounded-md bg-re7-sky px-3 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {actionLoading === "reactivate" ? "Restaurando..." : "Restaurar contato"}
+                      </button>
+                    </div>
+                  </div>
+                ) : canExcludeFromOperation ? (
+                  <div className="grid gap-2 rounded-lg border border-red-300/30 bg-red-500/10 p-3">
+                    <p className="text-sm text-red-100">
+                      Este contato deixará de aparecer no CRM operacional e não poderá ser usado em campanhas. O histórico existente será preservado.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={excludeFromOperation}
+                        disabled={Boolean(actionLoading)}
+                        className="rounded-md border border-red-300/40 px-3 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {actionLoading === "exclude" ? "Excluindo..." : "Excluir da operação"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </DetailSection>
 
               {canViewHistory ? (
@@ -849,6 +921,7 @@ function CsvImportModal({
                   <DetailField label="Já cadastradas" value={preview.existingContacts} />
                   <DetailField label="Inválidas" value={preview.invalidRows} />
                   <DetailField label="Duplicadas" value={preview.duplicatesInFile} />
+                  <DetailField label="Excluídas" value={preview.excludedContacts ?? 0} />
                   <DetailField label="Delimitador" value={preview.delimiter} />
                 </div>
                 {preview.sampleErrors.length > 0 ? (
@@ -906,6 +979,7 @@ export default function AppCrmContactsPage() {
   const [channel, setChannel] = useState("");
   const [hasConversation, setHasConversation] = useState("");
   const [optOut, setOptOut] = useState("");
+  const [operationalStatus, setOperationalStatus] = useState<"active" | "excluded">("active");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -922,6 +996,7 @@ export default function AppCrmContactsPage() {
   });
   const canViewCrmHistory = String(session?.user.role ?? "").trim().toUpperCase() !== "AGENT";
   const canManageCrmContacts = canViewCrmHistory;
+  const canExcludeCrmContacts = String(session?.user.role ?? "").trim().toUpperCase() === "ADMIN";
 
   useEffect(() => {
     if (!selectedLeadId) return;
@@ -950,10 +1025,11 @@ export default function AppCrmContactsPage() {
       channel: channel || null,
       hasConversation: canViewCrmHistory && hasConversation !== "" ? hasConversation === "true" : null,
       optOut: optOut === "" ? null : optOut === "true",
+      operationalStatus: canExcludeCrmContacts ? operationalStatus : "active",
       page: targetPage,
       limit: PAGE_LIMIT,
     }),
-    [canViewCrmHistory, channel, hasConversation, optOut, page, q, status]
+    [canExcludeCrmContacts, canViewCrmHistory, channel, hasConversation, operationalStatus, optOut, page, q, status]
   );
 
   const loadContacts = useCallback(
@@ -1026,11 +1102,12 @@ export default function AppCrmContactsPage() {
     setChannel("");
     setHasConversation("");
     setOptOut("");
+    setOperationalStatus("active");
     setPage(1);
     if (!session) return;
     setLoading(true);
     setError(null);
-    fetchAppCrmContacts(session, { page: 1, limit: PAGE_LIMIT })
+    fetchAppCrmContacts(session, { page: 1, limit: PAGE_LIMIT, operationalStatus: "active" })
       .then(setContacts)
       .catch((err) => {
         const typed = err as AppApiError;
@@ -1069,7 +1146,7 @@ export default function AppCrmContactsPage() {
       if (!session) return;
       setLoadingDetail(true);
       setDetailError(null);
-      fetchAppCrmContactDetail(session, leadId)
+      fetchAppCrmContactDetail(session, leadId, { operationalStatus: canExcludeCrmContacts ? operationalStatus : "active" })
         .then((response) => {
           setContactDetail(response);
           setSelectedLeadId(leadId);
@@ -1084,7 +1161,7 @@ export default function AppCrmContactsPage() {
         })
         .finally(() => setLoadingDetail(false));
     },
-    [handleUnauthorized, session]
+    [canExcludeCrmContacts, handleUnauthorized, operationalStatus, session]
   );
 
   const openContactDetail = useCallback(
@@ -1208,6 +1285,41 @@ export default function AppCrmContactsPage() {
     [mutateContactDetail, session]
   );
 
+  const excludeContactFromOperation = useCallback(
+    async (leadId: string) => {
+      if (!session) return;
+      try {
+        await excludeAppCrmContactFromOperation(session, leadId);
+        setContactDetail(null);
+        setSelectedLeadId(null);
+        setNotice("Contato excluído da operação. O histórico existente foi preservado.");
+        setOperationalStatus("active");
+        await loadContacts(session, page);
+      } catch (err) {
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setError(normalizeAppErrorMessage(typed, "Não foi possível excluir o contato da operação."));
+      }
+    },
+    [handleUnauthorized, loadContacts, page, session]
+  );
+
+  const reactivateContactFromOperation = useCallback(
+    async (leadId: string) => {
+      if (!session) return;
+      await mutateContactDetail(
+        () => reactivateAppCrmContactForOperation(session, leadId),
+        "Contato restaurado para a operação.",
+        "Não foi possível restaurar o contato."
+      );
+      await loadContacts(session, page);
+    },
+    [loadContacts, mutateContactDetail, page, session]
+  );
+
   const createContact = useCallback(
     async (payload: { name: string | null; phone: string }) => {
       if (!session) return;
@@ -1270,8 +1382,8 @@ export default function AppCrmContactsPage() {
   }, []);
 
   const emptyWithFilters = useMemo(
-    () => Boolean(q || status || channel || (canViewCrmHistory && hasConversation) || optOut),
-    [canViewCrmHistory, channel, hasConversation, optOut, q, status]
+    () => Boolean(q || status || channel || (canViewCrmHistory && hasConversation) || optOut || operationalStatus !== "active"),
+    [canViewCrmHistory, channel, hasConversation, operationalStatus, optOut, q, status]
   );
 
   if (!session) {
@@ -1295,7 +1407,9 @@ export default function AppCrmContactsPage() {
             <div
               className={`grid gap-3 ${
                 canViewCrmHistory
-                  ? "lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_auto_auto]"
+                  ? canExcludeCrmContacts
+                    ? "lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_1fr_auto_auto]"
+                    : "lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_auto_auto]"
                   : "lg:grid-cols-[1.4fr_1fr_1fr_1fr_auto_auto]"
               } lg:items-end`}
             >
@@ -1311,6 +1425,19 @@ export default function AppCrmContactsPage() {
                   placeholder="Nome, empresa, email ou telefone"
                 />
               </label>
+              {canExcludeCrmContacts ? (
+                <label className="grid gap-1.5 text-sm">
+                  <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Operação</span>
+                  <select
+                    value={operationalStatus}
+                    onChange={(event) => setOperationalStatus(event.target.value === "excluded" ? "excluded" : "active")}
+                    className="theme-input h-10 rounded-md border px-3 text-sm"
+                  >
+                    <option value="active">Ativos</option>
+                    <option value="excluded">Excluídos</option>
+                  </select>
+                </label>
+              ) : null}
               <label className="grid gap-1.5 text-sm">
                 <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Situacao</span>
                 <select
@@ -1562,6 +1689,9 @@ export default function AppCrmContactsPage() {
           onUpdateStatus={updateContactStatus}
           onRecordOptOut={recordContactOptOut}
           onRevokeOptOut={revokeContactOptOut}
+          onExcludeFromOperation={excludeContactFromOperation}
+          onReactivateFromOperation={reactivateContactFromOperation}
+          canExcludeFromOperation={canExcludeCrmContacts}
         />
       ) : null}
     </AppShell>

@@ -5,6 +5,7 @@ import {
   CONTACT_LIFECYCLE_PROVISIONAL,
   promoteContactLifecycleToActive,
 } from "../contacts/contactLifecycle.js";
+import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
 import {
   CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT,
   CAMPAIGN_IMPORT_MAX_CSV_BYTES,
@@ -47,7 +48,8 @@ export class CrmContactUpsertError extends Error {
       | "csv_malformed"
       | "csv_missing_rows"
       | "csv_too_many_rows"
-      | "identity_conflict",
+      | "identity_conflict"
+      | "contact_operationally_excluded",
     message: string,
     public status = 400,
     public headers?: string[]
@@ -209,6 +211,17 @@ export async function upsertCrmContact(
       externalUserHash: normalized.externalUserHash,
       identityCandidates: normalized.identityCandidates,
     });
+    const excluded = await loadOperationallyExcludedWaIds(tx as PrismaClient, {
+      clientId: params.clientId,
+      waIds: normalized.identityCandidates,
+    });
+    if (normalized.identityCandidates.some((candidate) => excluded.has(candidate))) {
+      throw new CrmContactUpsertError(
+        "contact_operationally_excluded",
+        "Contact was previously excluded from operations",
+        409
+      );
+    }
     const contactName = existing.contact?.name ?? normalized.name;
     const contact = existing.contact
       ? await tx.contact.update({
@@ -412,7 +425,7 @@ export async function previewCrmContactCsvImport(
   }
 ) {
   const parsed = buildCrmContactImportRowsFromCsv(params);
-  const errors: Array<{ rowNumber: number; reason: "invalid_phone" | "duplicate_in_file"; label: string; phoneDisplay: string | null }> = [];
+  const errors: Array<{ rowNumber: number; reason: "invalid_phone" | "duplicate_in_file" | "excluded_contact"; label: string; phoneDisplay: string | null }> = [];
   const accepted: Array<{ rowNumber: number; phone: string; waIdCanonical: string; name: string | null }> = [];
   const seen = new Set<string>();
   for (const row of parsed.rows) {
@@ -462,6 +475,23 @@ export async function previewCrmContactCsvImport(
   const existingKeys = new Set(
     existingContacts.flatMap((contact) => [contact.waId, contact.externalUserRef, contact.legacyWaId].filter(Boolean))
   );
+  const excludedKeys = await loadOperationallyExcludedWaIds(prisma, {
+    clientId: params.clientId,
+    waIds: keys,
+  });
+  for (const row of accepted) {
+    if (buildCrmWhatsappIdentityCandidates([row.waIdCanonical]).some((candidate) => excludedKeys.has(candidate))) {
+      errors.push({
+        rowNumber: row.rowNumber,
+        reason: "excluded_contact",
+        label: "Contato excluído da operação",
+        phoneDisplay: maskPhone(row.waIdCanonical),
+      });
+    }
+  }
+  const excludedCount = accepted.filter((row) =>
+    buildCrmWhatsappIdentityCandidates([row.waIdCanonical]).some((candidate) => excludedKeys.has(candidate))
+  ).length;
   const existingCount = accepted.filter((row) =>
     buildCrmWhatsappIdentityCandidates([row.waIdCanonical]).some((candidate) => existingKeys.has(candidate))
   ).length;
@@ -473,8 +503,9 @@ export async function previewCrmContactCsvImport(
     validRows: accepted.length,
     invalidRows: errors.filter((error) => error.reason === "invalid_phone").length,
     duplicatesInFile: errors.filter((error) => error.reason === "duplicate_in_file").length,
+    excludedContacts: excludedCount,
     existingContacts: existingCount,
-    readyToImport: accepted.length,
+    readyToImport: accepted.length - excludedCount,
     sampleErrors: errors.slice(0, CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT),
     truncatedErrors: errors.length > CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT,
   };
@@ -493,10 +524,24 @@ export async function confirmCrmContactCsvImport(
   const preview = await previewCrmContactCsvImport(prisma, params);
   const parsed = buildCrmContactImportRowsFromCsv(params);
   const seen = new Set<string>();
+  const excludedKeys = await loadOperationallyExcludedWaIds(prisma, {
+    clientId: params.clientId,
+    waIds: Array.from(
+      new Set(
+        parsed.rows.flatMap((row) => {
+          const normalized = normalizeCrmWhatsappPhone(row.phone);
+          return normalized ? buildCrmWhatsappIdentityCandidates([normalized.waIdCanonical]) : [];
+        })
+      )
+    ),
+  });
   const readyRows = parsed.rows.flatMap((row) => {
     const normalized = normalizeCrmWhatsappPhone(row.phone);
     if (!normalized || seen.has(normalized.waIdCanonical)) return [];
     seen.add(normalized.waIdCanonical);
+    if (buildCrmWhatsappIdentityCandidates([normalized.waIdCanonical]).some((candidate) => excludedKeys.has(candidate))) {
+      return [];
+    }
     return [{ phone: normalized.waIdCanonical, name: normalizeOptionalName(row.name) }];
   });
   let created = 0;
@@ -527,6 +572,7 @@ export async function confirmCrmContactCsvImport(
       reused,
       invalid: preview.invalidRows,
       duplicates: preview.duplicatesInFile,
+      excludedContacts: preview.excludedContacts,
       promotedProvisional,
     },
   });
@@ -538,6 +584,7 @@ export async function confirmCrmContactCsvImport(
     updated: reused,
     duplicates: preview.duplicatesInFile,
     invalid: preview.invalidRows,
+    excludedContacts: preview.excludedContacts,
     readyToImport: preview.readyToImport,
     promotedProvisional,
   };

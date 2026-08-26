@@ -9,6 +9,9 @@ import {
   previewCampaignRecipientImport,
   resolveCampaignImportTemplate,
 } from "./campaignRecipientImport.js";
+import { readPrivateCampaignSeedFields } from "./campaignSeedPrivacy.js";
+
+process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "campaign-recipient-import-test-secret";
 
 const prisma = getPrisma();
 const prefix = `campaign-import-${process.pid}-${Date.now()}`;
@@ -60,7 +63,7 @@ test("campaign CSV import previews and persists eligible recipients without send
       requestId: `${prefix}:existing-seed`,
       eventName: "campaign.seed.saved",
       payloadJson: {
-        recipients: ["55419991100001"],
+        recipients: ["5541991100001"],
         componentsByWaId: {},
       },
     },
@@ -74,7 +77,7 @@ test("campaign CSV import previews and persists eligible recipients without send
   await prisma.contact.create({
     data: {
       clientId,
-      waId: "55419991100005",
+      waId: "5541991100005",
       name: "Pendente Consentimento",
       lifecycle: "PROVISIONAL",
     },
@@ -83,9 +86,18 @@ test("campaign CSV import previews and persists eligible recipients without send
     data: {
       clientId,
       waId: "anon-campaign-provisional",
-      externalUserRef: "55419991100006",
+      externalUserRef: "5541991100006",
       name: "Pendente Consentimento Alias",
       lifecycle: "PROVISIONAL",
+    },
+  });
+  await prisma.contact.create({
+    data: {
+      clientId,
+      waId: "5541991100007",
+      name: "Contato Excluido",
+      lifecycle: "ACTIVE",
+      operationallyExcludedAt: new Date("2026-08-26T10:00:00.000Z"),
     },
   });
 
@@ -97,6 +109,7 @@ test("campaign CSV import previews and persists eligible recipients without send
     "5541991100004;Opt Out;Opt;P-003",
     "5541991100005;Pendente Consentimento;Pendente;P-005",
     "5541991100006;Pendente Alias;Pendente;P-006",
+    "5541991100007;Contato Excluido;Excluido;P-007",
     "5541991100001;Existente;Ja;P-004",
     "telefone ruim;Inválido;X;P-005",
   ].join("\r\n");
@@ -133,7 +146,7 @@ test("campaign CSV import previews and persists eligible recipients without send
   assert.equal(eventsAfterPreview, eventsBeforePreview);
   assert.equal(campaignAfterPreview.totalRecipients, campaignBeforePreview.totalRecipients);
   assert.equal(campaignAfterPreview.status, campaignBeforePreview.status);
-  assert.equal(preview.summary.received, 8);
+  assert.equal(preview.summary.received, 9);
   assert.equal(preview.summary.readyToImport, 1);
   assert.equal(preview.summary.duplicates, 1);
   assert.equal(preview.summary.existingDuplicates, 1);
@@ -141,6 +154,7 @@ test("campaign CSV import previews and persists eligible recipients without send
   assert.equal(preview.summary.missingRequiredVariables, 1);
   assert.equal(preview.summary.optOutBlocked, 1);
   assert.equal(preview.summary.blockedByReason.find((item) => item.reason === "provisional_contact")?.count, 2);
+  assert.equal(preview.summary.blockedByReason.find((item) => item.reason === "excluded_contact")?.count, 1);
   assert.equal(preview.recipients[0]?.identifierDisplay, "Maria Silva");
   assert.equal(JSON.stringify(preview).includes("5541991100002"), false);
 
@@ -165,9 +179,12 @@ test("campaign CSV import previews and persists eligible recipients without send
     select: { payloadJson: true },
   });
   const seedPayload = seed.payloadJson as Record<string, unknown>;
-  assert.deepEqual(seedPayload.recipients, ["55419991100001", "55419991100002"]);
-  const componentsByWaId = seedPayload.componentsByWaId as Record<string, unknown>;
-  assert.ok(componentsByWaId["55419991100002"]);
+  assert.equal(JSON.stringify(seedPayload).includes("5541991100001"), false);
+  assert.equal(JSON.stringify(seedPayload).includes("5541991100002"), false);
+  const privateSeed = readPrivateCampaignSeedFields(seedPayload);
+  assert.deepEqual(privateSeed.recipients, ["5541991100001", "5541991100002"]);
+  const componentsByWaId = privateSeed.componentsByWaId as Record<string, unknown>;
+  assert.ok(componentsByWaId["5541991100002"]);
 
   const repeat = await importCampaignRecipients(prisma, {
     clientId,

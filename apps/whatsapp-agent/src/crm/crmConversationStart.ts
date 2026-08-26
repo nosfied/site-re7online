@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { filterOptedOutCampaignRecipients } from "../campaigns/optOutRegistry.js";
 import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
+import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
 import {
   isWebSessionTextOutboundReady,
   resolveWebSessionTextRecipient,
@@ -23,6 +24,7 @@ export type CrmConversationStartBlockedReason =
   | "new_freeform_requires_model"
   | "not_authorized"
   | "active_send_blocked"
+  | "contact_operationally_excluded"
   | "identity_conflict";
 
 export type CrmConversationStartEligibility =
@@ -181,6 +183,13 @@ export async function resolveCrmContactConversationStartEligibility(params: {
     }));
   if (contact && !isOperationalContactLifecycle(contact.lifecycle)) {
     return { allowed: false, reason: "contact_not_active" };
+  }
+  const excluded = await loadOperationallyExcludedWaIds(params.prisma, {
+    clientId: params.clientId,
+    waIds: identityCandidates,
+  });
+  if (identityCandidates.some((candidate) => excluded.has(candidate))) {
+    return { allowed: false, reason: "contact_operationally_excluded" };
   }
   const normalized = normalizeCrmWhatsappIdentity(lead.phone || lead.waIdCanonical || lead.waId);
   if (!normalized) return { allowed: false, reason: "invalid_identity" };

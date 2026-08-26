@@ -79,6 +79,7 @@ test("listPublicContacts scopes all queries by tenant", async () => {
   assert.equal(result.data[0]?.phone, "5584****9999");
   assert.equal((calls[0]?.where as { clientId?: string }).clientId, "client_a");
   assert.equal((calls[0]?.where as { lifecycle?: string }).lifecycle, "ACTIVE");
+  assert.equal((calls[0]?.where as { operationallyExcludedAt?: null }).operationallyExcludedAt, null);
   assert.equal((calls[1]?.where as { tenantId?: string }).tenantId, "client_a");
   assert.equal((calls[2]?.where as { clientId?: string }).clientId, "client_a");
   assert.equal((calls[2]?.where as { deletedAt?: null }).deletedAt, null);
@@ -156,4 +157,31 @@ test("public contacts require active lifecycle for direct lookup", async () => {
 
   assert.equal(result, null);
   assert.equal(calls[0]?.where.lifecycle, "ACTIVE");
+});
+
+test("public contacts hide operationally excluded contacts", async () => {
+  const calls: Array<{ where: Record<string, unknown> }> = [];
+  const prisma = {
+    contact: {
+      findFirst: async (args: { where: Record<string, unknown> }) => {
+        calls.push(args);
+        return null;
+      },
+    },
+    lead: {
+      findMany: async () => [],
+    },
+    conversation: {
+      findMany: async () => [],
+    },
+  };
+
+  const result = await getPublicContact({
+    prisma: prisma as never,
+    clientId: "client_a",
+    contactId: "contact_excluded",
+  });
+
+  assert.equal(result, null);
+  assert.equal(calls[0]?.where.operationallyExcludedAt, null);
 });

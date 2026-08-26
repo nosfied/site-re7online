@@ -10,6 +10,7 @@ import {
 } from "../chatbot/chatbotFlow.js";
 import { executeChatbotFlowWithConsent, isChatbotConsentRequired } from "../chatbot/chatbotConsentRuntime.js";
 import { resolveInitialContactLifecycle } from "../contacts/contactLifecycle.js";
+import { reactivateOperationallyExcludedContactIfNeeded } from "../contacts/contactOperationalExclusion.js";
 import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
 import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
 import { activateHumanHandoff, updateOutbound } from "../conversation/conversation.service.js";
@@ -2013,7 +2014,7 @@ async function ensureWebSessionContactIdentity(params: {
     },
     select: { id: true },
   });
-  await params.prisma.lead.upsert({
+  const lead = await params.prisma.lead.upsert({
     where: {
       tenantId_waId: {
         tenantId: params.message.clientId,
@@ -2047,6 +2048,15 @@ async function ensureWebSessionContactIdentity(params: {
       status: "NEW",
     },
     select: { id: true },
+  });
+  await reactivateOperationallyExcludedContactIfNeeded(params.prisma, {
+    clientId: params.message.clientId,
+    leadId: lead.id,
+    contactId: contact.id,
+    waId: params.message.sender,
+    waIdCanonical: params.message.senderCanonical,
+    requestId: `web-session-contact-reactivation:${params.message.channelAccountDbId}:${params.message.externalMessageId}`,
+    source: "web_session_inbound",
   });
 }
 

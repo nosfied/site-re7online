@@ -395,6 +395,7 @@ model Contact {
   externalUserRef    String?
   legacyWaId         String?
   lifecycle          ContactLifecycleStatus @default(ACTIVE)
+  operationallyExcludedAt DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -407,6 +408,7 @@ model Contact {
 
   @@unique([clientId, waId])
   @@index([clientId, lifecycle])
+  @@index([clientId, operationallyExcludedAt])
   @@index([clientId, channel, provider, channelAccountId])
 }
 

@@ -13,6 +13,7 @@ import { resolveMetaContactDisplayName, upsertMetaContactIdentity } from "./meta
 import { guardAgainstAnonymizedIdentityRehydration } from "../privacy/anonymizedIdentityGuard.js";
 import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
 import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
+import { reactivateOperationallyExcludedContactIfNeeded } from "../contacts/contactOperationalExclusion.js";
 
 export const INSTAGRAM_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Instagram ainda não está habilitado neste canal.";
@@ -444,7 +445,7 @@ export async function persistInstagramInboundEvent(params: {
     queueId: defaults.queue.id,
   };
 
-  const [conversation, runtimeState, inbound, contact] = await Promise.all([
+  const [conversation, runtimeState, inbound, contact, lead] = await Promise.all([
     prisma.conversation.upsert({
       where: { clientId_waId: { clientId: client.id, waId: syntheticWaId } },
       create: {
@@ -566,6 +567,15 @@ export async function persistInstagramInboundEvent(params: {
     legacyWaId: channelFields.legacyWaId,
     displayName,
     seenAt: createdAt,
+  });
+  await reactivateOperationallyExcludedContactIfNeeded(prisma, {
+    clientId: client.id,
+    leadId: lead.id,
+    contactId: contact.id,
+    waId: syntheticWaId,
+    waIdCanonical: syntheticWaId,
+    requestId,
+    source: "instagram_inbound",
   });
   const assignment = await applyBalancedQueueAssignment({
     prisma,

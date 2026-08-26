@@ -4,6 +4,10 @@ import {
   recordContactOptOut,
   revokeContactOptOut,
 } from "../campaigns/optOutRegistry.js";
+import {
+  recordCrmContactOperationalExclusion,
+  recordCrmContactOperationalReactivation,
+} from "../contacts/contactOperationalExclusion.js";
 import { persistEvent } from "../db/persist.js";
 
 export const CRM_CONTACT_UPDATED_EVENT = "crm.contact.updated";
@@ -31,7 +35,8 @@ export class CrmContactMutationError extends Error {
       | "bad_request"
       | "invalid_email"
       | "status_not_configured"
-      | "opt_out_identity_unavailable",
+      | "opt_out_identity_unavailable"
+      | "active_conversation_exists",
     message: string,
     public status = 400
   ) {
@@ -86,6 +91,20 @@ async function getLeadForTenant(prisma: PrismaClient, clientId: string, leadId: 
       email: true,
       company: true,
       status: true,
+      contactChannelIdentity: {
+        select: {
+          contactId: true,
+          contact: {
+            select: {
+              id: true,
+              waId: true,
+              externalUserRef: true,
+              legacyWaId: true,
+              operationallyExcludedAt: true,
+            },
+          },
+        },
+      },
     },
   });
   if (!lead) {
@@ -274,6 +293,151 @@ export async function recordCrmContactOptOut(
     requestId: `crm-contact-opt-out:${lead.id}:${params.requestId}`,
   });
   return { ok: true };
+}
+
+function resolveLeadOperationalIdentity(lead: {
+  waId: string;
+  waIdCanonical: string | null;
+  phone: string | null;
+}) {
+  return lead.waIdCanonical ?? normalizeOptOutWaId(lead.phone)?.waIdCanonical ?? lead.waId;
+}
+
+function resolveLeadOperationalIdentityKeys(lead: {
+  waId: string;
+  waIdCanonical: string | null;
+  phone: string | null;
+  contactChannelIdentity?: {
+    contact?: {
+      waId: string | null;
+      externalUserRef: string | null;
+      legacyWaId: string | null;
+    } | null;
+  } | null;
+}) {
+  return Array.from(
+    new Set(
+      [
+        lead.waId,
+        lead.waIdCanonical,
+        normalizeOptOutWaId(lead.phone)?.waIdCanonical,
+        lead.contactChannelIdentity?.contact?.waId,
+        lead.contactChannelIdentity?.contact?.externalUserRef,
+        lead.contactChannelIdentity?.contact?.legacyWaId,
+      ]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+async function assertNoActiveOperationalConversation(
+  prisma: PrismaClient,
+  params: { clientId: string; identityKeys: string[] }
+) {
+  if (params.identityKeys.length === 0) return;
+  const active = await prisma.conversationRuntimeState.findFirst({
+    where: {
+      clientId: params.clientId,
+      OR: [
+        { status: { in: ["WAITING", "IN_PROGRESS", "WAITING_USER"] } },
+        { closedAt: null, NOT: { status: "CLOSED" } },
+      ],
+      AND: [
+        {
+          OR: [
+            { waId: { in: params.identityKeys } },
+            { waIdCanonical: { in: params.identityKeys } },
+          ],
+        },
+      ],
+    },
+    select: { id: true },
+  });
+  if (active) {
+    throw new CrmContactMutationError(
+      "active_conversation_exists",
+      "Contact has an active operational conversation",
+      409
+    );
+  }
+}
+
+export async function excludeCrmContactFromOperation(
+  prisma: PrismaClient,
+  params: {
+    clientId: string;
+    leadId: string;
+    userId: string;
+    requestId: string;
+    reason?: string | null;
+  }
+) {
+  return prisma.$transaction(async (tx) => {
+    const lead = await getLeadForTenant(tx as PrismaClient, params.clientId, params.leadId);
+    const contactId = lead.contactChannelIdentity?.contactId ?? null;
+    if (!contactId) {
+      throw new CrmContactMutationError("contact_not_found", "Contact not found", 404);
+    }
+    await assertNoActiveOperationalConversation(tx as PrismaClient, {
+      clientId: params.clientId,
+      identityKeys: resolveLeadOperationalIdentityKeys(lead),
+    });
+    if (!lead.contactChannelIdentity?.contact?.operationallyExcludedAt) {
+      await tx.contact.update({
+        where: { id: contactId },
+        data: { operationallyExcludedAt: new Date() },
+      });
+    }
+    await recordCrmContactOperationalExclusion({
+      prisma: tx as PrismaClient,
+      clientId: params.clientId,
+      leadId: lead.id,
+      contactId,
+      waId: lead.waId,
+      waIdCanonical: resolveLeadOperationalIdentity(lead),
+      actorUserId: params.userId,
+      requestId: params.requestId,
+      reason: params.reason,
+    });
+    return { excluded: true };
+  });
+}
+
+export async function reactivateCrmContactForOperation(
+  prisma: PrismaClient,
+  params: {
+    clientId: string;
+    leadId: string;
+    userId: string;
+    requestId: string;
+  }
+) {
+  return prisma.$transaction(async (tx) => {
+    const lead = await getLeadForTenant(tx as PrismaClient, params.clientId, params.leadId);
+    const contactId = lead.contactChannelIdentity?.contactId ?? null;
+    if (!contactId) {
+      throw new CrmContactMutationError("contact_not_found", "Contact not found", 404);
+    }
+    if (lead.contactChannelIdentity?.contact?.operationallyExcludedAt) {
+      await tx.contact.update({
+        where: { id: contactId },
+        data: { operationallyExcludedAt: null },
+      });
+    }
+    await recordCrmContactOperationalReactivation({
+      prisma: tx as PrismaClient,
+      clientId: params.clientId,
+      leadId: lead.id,
+      contactId,
+      waId: lead.waId,
+      waIdCanonical: resolveLeadOperationalIdentity(lead),
+      actorUserId: params.userId,
+      requestId: params.requestId,
+      source: "manual_crm_reactivation",
+    });
+    return { reactivated: true };
+  });
 }
 
 export async function revokeCrmContactOptOut(

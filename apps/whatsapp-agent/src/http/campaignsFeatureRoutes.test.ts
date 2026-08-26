@@ -10091,7 +10091,6 @@ test("campaign draft explicit send renders mapped variables per contact", async 
     },
   });
   const waId = "5541991189103";
-  const normalizedWaId = "55419991189103";
   const lead = await prisma.lead.create({
     data: {
       tenantId: businessClientId,
@@ -10183,7 +10182,7 @@ test("campaign draft explicit send renders mapped variables per contact", async 
   assert.equal(metaPayloads.length, 1);
   assert.deepEqual(metaPayloads[0], {
     messaging_product: "whatsapp",
-    to: normalizedWaId,
+    to: waId,
     type: "template",
     template: {
       name: template.name,

@@ -11,6 +11,7 @@ const MAX_ANALYSIS_ITEMS = 5000;
 
 export type CampaignAudienceBlockedReason =
   | "anonymized_contact"
+  | "operationally_excluded_contact"
   | "active_send_blocked"
   | "missing_whatsapp_identity"
   | "non_whatsapp_channel"
@@ -131,6 +132,8 @@ function getBlockedReasonLabel(reason: CampaignAudienceBlockedReason) {
   switch (reason) {
     case "anonymized_contact":
       return "Contato anonimizado";
+    case "operationally_excluded_contact":
+      return "Contato excluído da operação";
     case "active_send_blocked":
       return "Envio ativo bloqueado";
     case "missing_whatsapp_identity":
@@ -151,6 +154,7 @@ function getBlockedReasonLabel(reason: CampaignAudienceBlockedReason) {
 
 function resolveBlockedReason(item: CrmContactListItem): CampaignAudienceBlockedReason | null {
   if (item.isAnonymized) return "anonymized_contact";
+  if (item.isOperationallyExcluded) return "operationally_excluded_contact";
   if (item.activeOptOut) return "active_send_blocked";
   if (!item.channel || item.channel.toLowerCase() === "whatsapp") {
     if (!item.hasValidWhatsappIdentity) {

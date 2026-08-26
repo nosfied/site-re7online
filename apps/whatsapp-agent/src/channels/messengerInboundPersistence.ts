@@ -13,6 +13,7 @@ import { resolveMetaContactDisplayName, upsertMetaContactIdentity } from "./meta
 import { guardAgainstAnonymizedIdentityRehydration } from "../privacy/anonymizedIdentityGuard.js";
 import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
 import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
+import { reactivateOperationallyExcludedContactIfNeeded } from "../contacts/contactOperationalExclusion.js";
 
 export const MESSENGER_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
@@ -312,7 +313,7 @@ export async function persistMessengerInboundEvent(params: {
   };
 
   const persistenceDbStartedAt = channelLatencyNow();
-  const [conversation, runtimeState, inbound, contact] = await Promise.all([
+  const [conversation, runtimeState, inbound, contact, lead] = await Promise.all([
     prisma.conversation.upsert({
       where: { clientId_waId: { clientId: client.id, waId: syntheticWaId } },
       create: {
@@ -434,6 +435,15 @@ export async function persistMessengerInboundEvent(params: {
     legacyWaId: channelFields.legacyWaId,
     displayName,
     seenAt: createdAt,
+  });
+  await reactivateOperationallyExcludedContactIfNeeded(prisma, {
+    clientId: client.id,
+    leadId: lead.id,
+    contactId: contact.id,
+    waId: syntheticWaId,
+    waIdCanonical: syntheticWaId,
+    requestId,
+    source: "messenger_inbound",
   });
   latency?.duration("persistenceDb", persistenceDbStartedAt);
   latency?.duration("persistence", persistenceStartedAt);

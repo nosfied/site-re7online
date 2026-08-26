@@ -5,6 +5,10 @@ import { setPrismaForTesting } from "../db.js";
 import { getActiveServiceCycle, getLastClosedServiceCycle } from "../conversation/serviceCycle.js";
 import type { InboxRealtimeEvent } from "../realtime/events.js";
 import {
+  CRM_CONTACT_REACTIVATED_EVENT,
+  loadOperationallyExcludedWaIds,
+} from "../contacts/contactOperationalExclusion.js";
+import {
   buildWebSessionHandoffNotificationPlan,
   extractPhoneFromBaileysJid,
   ingestBaileysWebSessionMessage,
@@ -211,9 +215,24 @@ function fakePrisma() {
     },
     event: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
-        state.events.push(data);
+        state.events.push({ createdAt: new Date(), ...data });
         return { id: `event_${state.events.length}` };
       },
+      findMany: async ({ where }: { where?: Record<string, unknown> } = {}) =>
+        state.events.filter((event) => {
+          if (where?.clientId && event.clientId !== where.clientId) return false;
+          const eventNames = (where?.eventName as { in?: string[] } | undefined)?.in;
+          if (eventNames && !eventNames.includes(String(event.eventName))) return false;
+          const clauses = Array.isArray(where?.OR) ? where.OR as Array<Record<string, unknown>> : [];
+          if (clauses.length === 0) return true;
+          return clauses.some((clause) => {
+            const waIds = (clause.waId as { in?: string[] } | undefined)?.in;
+            if (waIds && waIds.includes(String(event.waId))) return true;
+            const canonicalWaIds = (clause.waIdCanonical as { in?: string[] } | undefined)?.in;
+            if (canonicalWaIds && canonicalWaIds.includes(String(event.waIdCanonical))) return true;
+            return false;
+          });
+        }),
     },
     department: {
       findFirst: async ({ where }: { where?: Record<string, unknown> } = {}) =>
@@ -308,14 +327,39 @@ function fakePrisma() {
           if (where.clientId && contact.clientId !== where.clientId) return false;
           if (where.waId && contact.waId !== where.waId) return false;
           if (where.id && contact.id !== where.id) return false;
+          if (where.operationallyExcludedAt && !contact.operationallyExcludedAt) return false;
           return true;
         }) ?? null,
+      findMany: async ({ where }: { where?: Record<string, unknown> } = {}) =>
+        state.contacts.filter((contact) => {
+          if (where?.clientId && contact.clientId !== where.clientId) return false;
+          if (where?.operationallyExcludedAt && !contact.operationallyExcludedAt) return false;
+          const clauses = Array.isArray(where?.OR) ? where.OR as Array<Record<string, unknown>> : [];
+          if (clauses.length === 0) return true;
+          return clauses.some((clause) => {
+            const waIds = (clause.waId as { in?: string[] } | undefined)?.in;
+            if (waIds && waIds.includes(String(contact.waId))) return true;
+            const externalRefs = (clause.externalUserRef as { in?: string[] } | undefined)?.in;
+            if (externalRefs && externalRefs.includes(String(contact.externalUserRef))) return true;
+            const legacyWaIds = (clause.legacyWaId as { in?: string[] } | undefined)?.in;
+            if (legacyWaIds && legacyWaIds.includes(String(contact.legacyWaId))) return true;
+            return false;
+          });
+        }),
       findUnique: async () => state.contacts[0] ?? null,
       upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
         const existing = state.contacts[0];
         const row = existing ? { ...existing, ...update } : { id: "contact_1", ...create };
         state.contacts[0] = row;
         return { id: row.id };
+      },
+      update: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        const index = state.contacts.findIndex((contact) => {
+          if (where.id && contact.id !== where.id) return false;
+          return true;
+        });
+        if (index >= 0) state.contacts[index] = { ...state.contacts[index], ...data };
+        return index >= 0 ? state.contacts[index] : null;
       },
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         let count = 0;
@@ -1011,6 +1055,52 @@ test("web session creates active contact when no consent flow is configured", as
   });
 
   assert.equal(state.contacts[0]?.lifecycle, "ACTIVE");
+});
+
+test("web session inbound reactivates an operationally excluded contact", async () => {
+  resetState({
+    contacts: [
+      {
+        id: "contact_existing",
+        clientId: "client_1",
+        waId: "5584999997784",
+        externalUserRef: "55849999997784",
+        legacyWaId: "55849999997784",
+        name: "Contato Excluido",
+        lifecycle: "ACTIVE",
+        operationallyExcludedAt: new Date("2026-08-11T11:00:00.000Z"),
+      },
+    ],
+    leads: [
+      {
+        id: "lead_existing",
+        tenantId: "client_1",
+        waId: "5584999997784",
+        waIdCanonical: "55849999997784",
+        name: "Contato Excluido",
+      },
+    ],
+  });
+  withConnectedWebSession();
+
+  const excludedBeforeInbound = await loadOperationallyExcludedWaIds(fakePrisma() as never, {
+    clientId: "client_1",
+    waIds: ["5584999997784", "55849999997784"],
+  });
+  assert.equal(excludedBeforeInbound.has("5584999997784") || excludedBeforeInbound.has("55849999997784"), true);
+
+  await withFakeWorker(async () => {
+    await ingestText("Oi", "MSG_REACTIVATE_EXCLUDED_CONTACT", "2026-08-11T12:00:00.000Z");
+  });
+
+  assert.equal(state.contacts.length, 1);
+  assert.equal(state.leads.length, 1);
+  assert.equal(state.contacts[0]?.operationallyExcludedAt, null);
+  assert.equal(state.contacts[0]?.lifecycle, "ACTIVE");
+  assert.equal(
+    state.events.some((event) => event.eventName === CRM_CONTACT_REACTIVATED_EVENT),
+    true
+  );
 });
 
 test("web session does not downgrade an active contact when consent is pending", async () => {

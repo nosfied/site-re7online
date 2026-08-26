@@ -10,6 +10,12 @@ import type { CampaignTemplateComponents } from "./campaignService.js";
 import { buildTemplateComponentsFromVariables, extractTemplatePlaceholderKeys } from "../templates/templateRendering.js";
 import { normalizeWaIdDigits } from "../utils/waid.js";
 import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
+import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
+import { buildCrmWhatsappIdentityCandidates } from "../crm/crmWhatsappIdentity.js";
+import {
+  buildPrivateCampaignSeedFields,
+  readPrivateCampaignSeedFields,
+} from "./campaignSeedPrivacy.js";
 
 export const CAMPAIGN_IMPORT_MAX_CSV_BYTES = 2 * 1024 * 1024;
 export const CAMPAIGN_IMPORT_MAX_ROWS = 10_000;
@@ -20,6 +26,7 @@ export type CampaignImportBlockedReason =
   | "duplicate_recipient"
   | "existing_campaign_recipient"
   | "active_send_blocked"
+  | "excluded_contact"
   | "provisional_contact"
   | "variable_missing_value";
 
@@ -96,6 +103,8 @@ function labelForImportReason(reason: CampaignImportBlockedReason) {
       return "Destinatario duplicado no arquivo";
     case "existing_campaign_recipient":
       return "Destinatario ja importado nesta campanha";
+    case "excluded_contact":
+      return "Contato excluído da operação";
     case "invalid_whatsapp_identity":
       return "Telefone invalido";
     case "provisional_contact":
@@ -154,14 +163,13 @@ function extractComponentsByWaId(value: unknown): Record<string, CampaignTemplat
 
 function extractSeedPayload(payload: unknown): ExistingSeed {
   if (!isRecord(payload)) return { recipients: [] };
-  const recipients = Array.isArray(payload.recipients)
-    ? payload.recipients
-        .map((value) => normalizeOptOutWaId(value)?.waIdCanonical ?? "")
-        .filter(Boolean)
-    : [];
+  const privateSeed = readPrivateCampaignSeedFields(payload);
+  const recipients = privateSeed.recipients
+    .map((value) => normalizeOptOutWaId(value)?.waIdCanonical ?? "")
+    .filter(Boolean);
   return {
     recipients: Array.from(new Set(recipients)),
-    componentsByWaId: extractComponentsByWaId(payload.componentsByWaId),
+    componentsByWaId: extractComponentsByWaId(privateSeed.componentsByWaId),
   };
 }
 
@@ -330,6 +338,7 @@ export async function resolveCampaignRecipientImportPlan(
     rowNumber: number | null;
     variables: Record<string, string>;
     name: string | null;
+    identityCandidates: string[];
   }> = [];
   const blocked: CampaignImportPreview["errors"] = [];
   const blockedCounts = new Map<CampaignImportBlockedReason, number>();
@@ -347,7 +356,8 @@ export async function resolveCampaignRecipientImportPlan(
       continue;
     }
     seen.add(normalized.waIdCanonical);
-    if (existing.has(normalized.waIdCanonical)) {
+    const identityCandidates = buildCrmWhatsappIdentityCandidates([input.phone, normalized.waIdCanonical]);
+    if (identityCandidates.some((candidate) => existing.has(candidate))) {
       addBlocked(blocked, blockedCounts, { rowNumber, reason: "existing_campaign_recipient", phone: normalized.waIdCanonical });
       continue;
     }
@@ -363,10 +373,11 @@ export async function resolveCampaignRecipientImportPlan(
       rowNumber,
       variables,
       name: input.name?.trim() || null,
+      identityCandidates,
     });
   }
 
-  const lifecycleLookupKeys = Array.from(new Set(normalizedCandidates.map((item) => item.waIdCanonical).filter(Boolean)));
+  const lifecycleLookupKeys = Array.from(new Set(normalizedCandidates.flatMap((item) => item.identityCandidates).filter(Boolean)));
   const existingContacts = lifecycleLookupKeys.length
     ? await prisma.contact.findMany({
         where: {
@@ -377,16 +388,24 @@ export async function resolveCampaignRecipientImportPlan(
             { legacyWaId: { in: lifecycleLookupKeys } },
           ],
         },
-        select: { waId: true, externalUserRef: true, legacyWaId: true, lifecycle: true },
+        select: { waId: true, externalUserRef: true, legacyWaId: true, lifecycle: true, operationallyExcludedAt: true },
       })
     : [];
+  const operationallyExcludedWaIds = await loadOperationallyExcludedWaIds(prisma, {
+    clientId: params.clientId,
+    waIds: lifecycleLookupKeys,
+  });
   const blockedByProvisionalContact = new Set(
     existingContacts
       .filter((contact) => !isOperationalContactLifecycle(contact.lifecycle))
       .flatMap((contact) => [contact.waId, contact.externalUserRef, contact.legacyWaId].filter(Boolean))
   );
   const lifecycleReady = normalizedCandidates.filter((item) => {
-    if (!blockedByProvisionalContact.has(item.waIdCanonical)) return true;
+    if (item.identityCandidates.some((candidate) => operationallyExcludedWaIds.has(candidate))) {
+      addBlocked(blocked, blockedCounts, { rowNumber: item.rowNumber, reason: "excluded_contact", phone: item.waIdCanonical });
+      return false;
+    }
+    if (!item.identityCandidates.some((candidate) => blockedByProvisionalContact.has(candidate))) return true;
     addBlocked(blocked, blockedCounts, { rowNumber: item.rowNumber, reason: "provisional_contact", phone: item.waIdCanonical });
     return false;
   });
@@ -531,10 +550,13 @@ export async function importCampaignRecipients(
           templateId: campaign.templateId,
           name: campaign.name,
           templateName: campaign.templateName,
-          recipients: nextRecipients,
-          manualRecipientInput: params.recipients.map((item) => item.phone),
+          ...buildPrivateCampaignSeedFields({
+            clientId: params.clientId,
+            waIds: nextRecipients,
+            componentsByWaId,
+          }),
+          manualRecipientInputCount: params.recipients.length,
           templateParams: [],
-          componentsByWaId,
           templateVariableMappings: [],
           source: `recipient_import:${params.source}`,
           summary: preview.summary,

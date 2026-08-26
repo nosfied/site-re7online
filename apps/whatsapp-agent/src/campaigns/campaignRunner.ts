@@ -23,9 +23,12 @@ import {
   filterOptedOutCampaignRecipients,
   recordCampaignOptOutBlocks,
 } from "./optOutRegistry.js";
+import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
+import { readPrivateCampaignSeedFields } from "./campaignSeedPrivacy.js";
 
 const CAMPAIGN_THROTTLE_MS = 1000;
 const CAMPAIGN_SCHEDULE_TICK_MS = 60_000;
+const CAMPAIGN_EXCLUSION_LOOKUP_BATCH_SIZE = 50;
 const runningCampaigns = new Map<string, Promise<void>>();
 let scheduleTimer: NodeJS.Timeout | null = null;
 
@@ -96,9 +99,8 @@ function extractComponentsByWaId(value: unknown): Record<string, CampaignTemplat
 
 function extractScheduledCampaignSeed(value: unknown): ScheduledCampaignSeed | null {
   if (!isRecord(value)) return null;
-  const recipients = Array.isArray(value.recipients)
-    ? value.recipients.map((item) => String(item ?? "").trim()).filter(Boolean)
-    : [];
+  const privateSeed = readPrivateCampaignSeedFields(value);
+  const recipients = privateSeed.recipients.map((item) => String(item ?? "").trim()).filter(Boolean);
   if (recipients.length === 0) return null;
   const templateParams = Array.isArray(value.templateParams)
     ? value.templateParams.map((item) => String(item ?? "").trim()).filter(Boolean)
@@ -107,7 +109,7 @@ function extractScheduledCampaignSeed(value: unknown): ScheduledCampaignSeed | n
     recipients,
     templateParams,
     components: extractComponents(value.components),
-    componentsByWaId: extractComponentsByWaId(value.componentsByWaId),
+    componentsByWaId: extractComponentsByWaId(privateSeed.componentsByWaId),
   };
 }
 
@@ -294,201 +296,212 @@ async function runCampaignInBackground(
       sentCount = initialCounts?.sentCount ?? 0;
       let blockedCount = initialCounts?.blockedCount ?? 0;
 
-      for (let index = 0; index < waIds.length; index += 1) {
-        const inputWaId = waIds[index];
-        const campaignState = await prisma.campaign.findUnique({
-          where: { id: params.campaignId },
-          select: { status: true },
-        });
-        if (campaignState?.status === "cancelled") {
-          logger.info({
-            event: "campaign.cancelled",
-            campaignId: params.campaignId,
-            campaignRunId,
+      for (let batchStart = 0; batchStart < waIds.length; batchStart += CAMPAIGN_EXCLUSION_LOOKUP_BATCH_SIZE) {
+        const resolvedBatch: Array<{
+          index: number;
+          inputWaId: string;
+          resolvedRecipient: Awaited<ReturnType<typeof resolveCampaignRecipientConversationTarget>>;
+          resolutionSummary: ReturnType<typeof summarizeCampaignRecipientResolution>;
+          waId: string;
+          waIdCanonical: string;
+        }> = [];
+        const batchInputs = waIds.slice(batchStart, batchStart + CAMPAIGN_EXCLUSION_LOOKUP_BATCH_SIZE);
+        for (let batchOffset = 0; batchOffset < batchInputs.length; batchOffset += 1) {
+          const index = batchStart + batchOffset;
+          const inputWaId = batchInputs[batchOffset];
+          const resolvedRecipient = await resolveCampaignRecipientConversationTarget(prisma, {
             clientId: params.clientId,
-            clientKey: params.clientKey,
+            inputWaId,
           });
-          return;
-        }
-        if (campaignState?.status === "paused") {
-          logger.info({
-            event: "campaign.paused",
-            campaignId: params.campaignId,
-            campaignRunId,
-            clientId: params.clientId,
-            clientKey: params.clientKey,
-          });
-          return;
-        }
-        if (!campaignState || isCampaignTerminalStatus(campaignState.status)) {
-          logger.info({
-            event: "campaign.runner.stopped_terminal_status",
-            campaignId: params.campaignId,
-            campaignRunId,
-            clientId: params.clientId,
-            clientKey: params.clientKey,
-            status: campaignState?.status ?? null,
-          });
-          return;
-        }
-        if (campaignState.status !== "sending") {
-          return;
-        }
-        const resolvedRecipient = await resolveCampaignRecipientConversationTarget(prisma, {
-          clientId: params.clientId,
-          inputWaId,
-        });
-        const resolutionSummary = summarizeCampaignRecipientResolution(resolvedRecipient);
-        const waId = resolvedRecipient.winningWaId;
-        const waIdCanonical = resolvedRecipient.winningWaIdCanonical;
-        if (resolvedRecipient.resolved) {
-          await persistEvent({
-            clientId: params.clientId,
-            conversationId: resolvedRecipient.conversationId ?? null,
-            waId,
-            waIdCanonical,
-            requestId: `campaign-recipient-resolution:${params.campaignId}:${index + 1}`,
-            eventName: "campaign.recipient.conversation_resolved",
-            payloadJson: {
-              campaignId: params.campaignId,
-              campaignRunId,
-              ...resolutionSummary,
-            },
-          });
-        } else if (resolvedRecipient.reason === "ambiguous") {
-          await persistEvent({
-            clientId: params.clientId,
-            waId: inputWaId,
-            waIdCanonical: resolvedRecipient.inputWaIdCanonical,
-            requestId: `campaign-recipient-resolution:${params.campaignId}:${index + 1}`,
-            eventName: "campaign.recipient.conversation_resolution_ambiguous",
-            payloadJson: {
-              campaignId: params.campaignId,
-              campaignRunId,
-              ...resolutionSummary,
-            },
-          });
-        }
-        logger.updateContext({
-          waId,
-          conversationKey: makeConversationKey(params.clientKey, waId),
-        });
-        const requestId = crypto.randomUUID();
-        const messageId = `campaign.${params.campaignId}.${index + 1}`;
-        const existingOutbound = await prisma.outboundMessage.findFirst({
-          where: {
-            clientId: params.clientId,
-            messageId,
-          },
-          select: { id: true },
-        });
-        if (existingOutbound) {
-          continue;
-        }
-        const components = params.componentsByWaId?.[inputWaId] ?? params.componentsByWaId?.[waId] ?? params.components;
-        const result = await sendTemplate({
-          toE164: waId,
-          waId,
-          intent: undefined,
-          templateName: params.templateName,
-          lang: language,
-          components,
-          requestId,
-          rid: campaignRunId,
-          messageId,
-          clientId: params.clientId,
-          clientKey: params.clientKey,
-        });
-
-        if (result.blockedByUsage) {
-          blockedCount += 1;
-          await prisma.campaign.updateMany({
-            where: { id: params.campaignId, status: "sending" },
-            data: {
-              status: "blocked",
-              blockedCount,
-              sentCount,
-            },
-          });
-          logger.warn({
-            event: "campaign.blocked_by_limit",
-            campaignId: params.campaignId,
-            campaignRunId,
-            requestId,
-            waId,
-            templateName: params.templateName,
-            sentCount,
-            blockedCount,
-          });
-          return;
-        }
-
-        const status = result.ok ? MessageStatus.SENT : MessageStatus.FAILED;
-        const deliveredAt = new Date();
-        const conversationOutcome = result.ok
-          ? await ensureCampaignOutboundConversation(prisma, {
+          const resolutionSummary = summarizeCampaignRecipientResolution(resolvedRecipient);
+          const waId = resolvedRecipient.winningWaId;
+          const waIdCanonical = resolvedRecipient.winningWaIdCanonical;
+          if (resolvedRecipient.resolved) {
+            await persistEvent({
               clientId: params.clientId,
-              clientKey: params.clientKey,
+              conversationId: resolvedRecipient.conversationId ?? null,
               waId,
               waIdCanonical,
-              phoneNumberId,
-              messageId,
+              requestId: `campaign-recipient-resolution:${params.campaignId}:${index + 1}`,
+              eventName: "campaign.recipient.conversation_resolved",
+              payloadJson: {
+                campaignId: params.campaignId,
+                campaignRunId,
+                ...resolutionSummary,
+              },
+            });
+          } else if (resolvedRecipient.reason === "ambiguous") {
+            await persistEvent({
+              clientId: params.clientId,
+              waId: inputWaId,
+              waIdCanonical: resolvedRecipient.inputWaIdCanonical,
+              requestId: `campaign-recipient-resolution:${params.campaignId}:${index + 1}`,
+              eventName: "campaign.recipient.conversation_resolution_ambiguous",
+              payloadJson: {
+                campaignId: params.campaignId,
+                campaignRunId,
+                ...resolutionSummary,
+              },
+            });
+          }
+          resolvedBatch.push({ index, inputWaId, resolvedRecipient, resolutionSummary, waId, waIdCanonical });
+        }
+        const operationallyExcluded = await loadOperationallyExcludedWaIds(prisma, {
+          clientId: params.clientId,
+          waIds: resolvedBatch.flatMap((item) => [item.inputWaId, item.waId, item.waIdCanonical]),
+        });
+        for (const item of resolvedBatch) {
+          const { index, inputWaId, resolvedRecipient, resolutionSummary, waId, waIdCanonical } = item;
+          const campaignState = await prisma.campaign.findUnique({
+            where: { id: params.campaignId },
+            select: { status: true },
+          });
+          if (campaignState?.status === "cancelled") {
+            logger.info({
+              event: "campaign.cancelled",
               campaignId: params.campaignId,
               campaignRunId,
-              templateName: params.templateName,
-              sentAt: deliveredAt,
-              source: "campaign",
+              clientId: params.clientId,
+              clientKey: params.clientKey,
+            });
+            return;
+          }
+          if (campaignState?.status === "paused") {
+            logger.info({
+              event: "campaign.paused",
+              campaignId: params.campaignId,
+              campaignRunId,
+              clientId: params.clientId,
+              clientKey: params.clientKey,
+            });
+            return;
+          }
+          if (!campaignState || isCampaignTerminalStatus(campaignState.status)) {
+            logger.info({
+              event: "campaign.runner.stopped_terminal_status",
+              campaignId: params.campaignId,
+              campaignRunId,
+              clientId: params.clientId,
+              clientKey: params.clientKey,
+              status: campaignState?.status ?? null,
+            });
+            return;
+          }
+          if (campaignState.status !== "sending") {
+            return;
+          }
+          logger.updateContext({
+            waId,
+            conversationKey: makeConversationKey(params.clientKey, waId),
+          });
+          const requestId = crypto.randomUUID();
+          const messageId = `campaign.${params.campaignId}.${index + 1}`;
+          const existingOutbound = await prisma.outboundMessage.findFirst({
+            where: {
+              clientId: params.clientId,
+              messageId,
+            },
+            select: { id: true },
+          });
+          if (existingOutbound) {
+            continue;
+          }
+          const recipientOperationallyExcluded = [inputWaId, waId, waIdCanonical].some((identity) =>
+            operationallyExcluded.has(identity)
+          );
+          if (recipientOperationallyExcluded) {
+            blockedCount += 1;
+            await prisma.campaign.update({
+              where: { id: params.campaignId },
+              data: { blockedCount },
+            });
+            await persistEvent({
+              clientId: params.clientId,
               conversationId: resolvedRecipient.conversationId ?? null,
-            })
-          : null;
-        const usagePayload = buildMetaUsageEventPayload({
-          outboundMessageId: messageId,
-          conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
-          campaignId: params.campaignId,
-          source: usageSource,
-          messageKind: "template",
-          templateName: params.templateName,
-          templateCategory: templateForRendering?.category ?? null,
-          sentAt: deliveredAt,
-          status,
-          windowOpenAtSend: null,
-          waId,
-          waIdCanonical,
-        });
-        await persistOutboundMessage({
-          clientId: params.clientId,
-          phoneNumberId,
-          waId,
-          waIdCanonical,
-          messageId,
-          type: MessageType.TEMPLATE,
-          status,
-          bodyText: renderTemplateBody(templateForRendering?.content, components),
-          templateName: params.templateName,
-          templateLang: language,
-          requestId,
-          metaMessageId: result.metaMessageId ?? null,
-          errorBody: result.errorBody ?? null,
-          rawPayload: {
-            source: "campaign",
-            campaignId: params.campaignId,
-            campaignRunId,
+              waId,
+              waIdCanonical,
+              messageId,
+              requestId: `campaign-operational-exclusion:${params.campaignId}:${index + 1}`,
+              eventName: "campaign.recipient.operationally_excluded",
+              payloadJson: {
+                campaignId: params.campaignId,
+                campaignRunId,
+                templateName: params.templateName,
+                waIdLast4: waId.slice(-4),
+                waIdLength: waId.length,
+                reason: "contact_operationally_excluded",
+                timestamp: new Date().toISOString(),
+              },
+            });
+            logger.info({
+              event: "campaign.recipient.operationally_excluded",
+              campaignId: params.campaignId,
+              campaignRunId,
+              requestId,
+              waIdLast4: waId.slice(-4),
+              waIdLength: waId.length,
+              templateName: params.templateName,
+            });
+            continue;
+          }
+          const components =
+            params.componentsByWaId?.[inputWaId] ?? params.componentsByWaId?.[waId] ?? params.components;
+          const result = await sendTemplate({
+            toE164: waId,
+            waId,
+            intent: undefined,
             templateName: params.templateName,
-            components: components ?? null,
-            recipientResolution: resolutionSummary,
-            conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
-            metaUsage: usagePayload,
-          },
-        });
-        await recordMetaUsageLedgerEvent({
-          prisma,
-          clientId: params.clientId,
-          conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
-          waId,
-          waIdCanonical,
-          messageId,
-          requestId: `meta-usage:${messageId}:${usagePayload.deliveryStatus}`,
-          input: {
+            lang: language,
+            components,
+            requestId,
+            rid: campaignRunId,
+            messageId,
+            clientId: params.clientId,
+            clientKey: params.clientKey,
+          });
+
+          if (result.blockedByUsage) {
+            blockedCount += 1;
+            await prisma.campaign.updateMany({
+              where: { id: params.campaignId, status: "sending" },
+              data: {
+                status: "blocked",
+                blockedCount,
+                sentCount,
+              },
+            });
+            logger.warn({
+              event: "campaign.blocked_by_limit",
+              campaignId: params.campaignId,
+              campaignRunId,
+              requestId,
+              waId,
+              templateName: params.templateName,
+              sentCount,
+              blockedCount,
+            });
+            return;
+          }
+
+          const status = result.ok ? MessageStatus.SENT : MessageStatus.FAILED;
+          const deliveredAt = new Date();
+          const conversationOutcome = result.ok
+            ? await ensureCampaignOutboundConversation(prisma, {
+                clientId: params.clientId,
+                clientKey: params.clientKey,
+                waId,
+                waIdCanonical,
+                phoneNumberId,
+                messageId,
+                campaignId: params.campaignId,
+                campaignRunId,
+                templateName: params.templateName,
+                sentAt: deliveredAt,
+                source: "campaign",
+                conversationId: resolvedRecipient.conversationId ?? null,
+              })
+            : null;
+          const usagePayload = buildMetaUsageEventPayload({
             outboundMessageId: messageId,
             conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
             campaignId: params.campaignId,
@@ -501,69 +514,117 @@ async function runCampaignInBackground(
             windowOpenAtSend: null,
             waId,
             waIdCanonical,
-          },
-        });
-        await persistEvent({
-          clientId: params.clientId,
-          conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
-          waId,
-          waIdCanonical,
-          messageId,
-          requestId,
-          eventName: result.ok ? "campaign.message.sent" : "campaign.message.failed",
-          payloadJson: {
-            campaignId: params.campaignId,
-            campaignRunId,
+          });
+          await persistOutboundMessage({
+            clientId: params.clientId,
+            phoneNumberId,
+            waId,
+            waIdCanonical,
+            messageId,
+            type: MessageType.TEMPLATE,
+            status,
+            bodyText: renderTemplateBody(templateForRendering?.content, components),
             templateName: params.templateName,
-            waIdLast4: waId.slice(-4),
-            waIdLength: waId.length,
-            status: result.status ?? null,
+            templateLang: language,
+            requestId,
+            metaMessageId: result.metaMessageId ?? null,
             errorBody: result.errorBody ?? null,
-            components: components ?? null,
-            conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
-          },
-        });
-
-        if (!result.ok) {
-          await prisma.campaign.updateMany({
-            where: { id: params.campaignId, status: "sending" },
-            data: {
-              status: "failed",
-              sentCount,
-              blockedCount,
+            rawPayload: {
+              source: "campaign",
+              campaignId: params.campaignId,
+              campaignRunId,
+              templateName: params.templateName,
+              components: components ?? null,
+              recipientResolution: resolutionSummary,
+              conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
+              metaUsage: usagePayload,
             },
           });
-          logger.error({
-            event: "campaign.message.failed",
+          await recordMetaUsageLedgerEvent({
+            prisma,
+            clientId: params.clientId,
+            conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
+            waId,
+            waIdCanonical,
+            messageId,
+            requestId: `meta-usage:${messageId}:${usagePayload.deliveryStatus}`,
+            input: {
+              outboundMessageId: messageId,
+              conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
+              campaignId: params.campaignId,
+              source: usageSource,
+              messageKind: "template",
+              templateName: params.templateName,
+              templateCategory: templateForRendering?.category ?? null,
+              sentAt: deliveredAt,
+              status,
+              windowOpenAtSend: null,
+              waId,
+              waIdCanonical,
+            },
+          });
+          await persistEvent({
+            clientId: params.clientId,
+            conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
+            waId,
+            waIdCanonical,
+            messageId,
+            requestId,
+            eventName: result.ok ? "campaign.message.sent" : "campaign.message.failed",
+            payloadJson: {
+              campaignId: params.campaignId,
+              campaignRunId,
+              templateName: params.templateName,
+              waIdLast4: waId.slice(-4),
+              waIdLength: waId.length,
+              status: result.status ?? null,
+              errorBody: result.errorBody ?? null,
+              components: components ?? null,
+              conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
+            },
+          });
+
+          if (!result.ok) {
+            await prisma.campaign.updateMany({
+              where: { id: params.campaignId, status: "sending" },
+              data: {
+                status: "failed",
+                sentCount,
+                blockedCount,
+              },
+            });
+            logger.error({
+              event: "campaign.message.failed",
+              campaignId: params.campaignId,
+              campaignRunId,
+              requestId,
+              waId,
+              templateName: params.templateName,
+              errorBody: result.errorBody ?? null,
+              status: result.status ?? null,
+            });
+            return;
+          }
+
+          sentCount += 1;
+          await prisma.campaign.update({
+            where: { id: params.campaignId },
+            data: { sentCount },
+          });
+          logger.info({
+            event: "campaign.message.sent",
             campaignId: params.campaignId,
             campaignRunId,
             requestId,
             waId,
             templateName: params.templateName,
-            errorBody: result.errorBody ?? null,
-            status: result.status ?? null,
+            sentCount,
+            totalRecipients: waIds.length,
           });
-          return;
-        }
 
-        sentCount += 1;
-        await prisma.campaign.update({
-          where: { id: params.campaignId },
-          data: { sentCount },
-        });
-        logger.info({
-          event: "campaign.message.sent",
-          campaignId: params.campaignId,
-          campaignRunId,
-          requestId,
-          waId,
-          templateName: params.templateName,
-          sentCount,
-          totalRecipients: waIds.length,
-        });
-
-        if (index < waIds.length - 1) {
-          await sleep(CAMPAIGN_THROTTLE_MS);
+          if (index < waIds.length - 1) {
+            await sleep(CAMPAIGN_THROTTLE_MS);
+          }
         }
       }
 

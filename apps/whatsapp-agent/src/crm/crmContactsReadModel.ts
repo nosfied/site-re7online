@@ -7,6 +7,7 @@ import {
 import { buildConversationProtocol } from "../inbox/conversationProtocol.js";
 import { getServiceCycleForDisplay } from "../conversation/serviceCycle.js";
 import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
+import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
 import {
   buildCrmWhatsappIdentityCandidates,
@@ -23,6 +24,7 @@ export type CrmContactsQuery = {
   channel?: string | null;
   hasConversation?: string | boolean | null;
   optOut?: string | boolean | null;
+  operationalStatus?: string | null;
   updatedFrom?: string | null;
   updatedTo?: string | null;
   page?: string | number | null;
@@ -53,6 +55,7 @@ export type CrmContactListItem = {
   canStartConversation: boolean;
   startConversationBlockedReason:
     | "contact_not_active"
+    | "contact_operationally_excluded"
     | "invalid_identity"
     | "channel_unavailable"
     | "new_freeform_requires_model"
@@ -61,6 +64,7 @@ export type CrmContactListItem = {
     | null;
   activeOptOut: boolean;
   isAnonymized: boolean;
+  isOperationallyExcluded: boolean;
   importedSource: string | null;
   hasValidWhatsappIdentity: boolean;
   canStartWhatsappTemplateCandidate: boolean;
@@ -84,6 +88,7 @@ export type CrmContactsPayload = {
     channel: string | null;
     hasConversation: boolean | null;
     optOut: boolean | null;
+    operationalStatus: "active" | "excluded";
     updatedFrom: string | null;
     updatedTo: string | null;
   };
@@ -203,6 +208,10 @@ function normalizeChannel(value: unknown) {
 function normalizeStatus(value: unknown) {
   const status = normalizeText(value).toUpperCase();
   return /^[A-Z0-9_-]{2,80}$/.test(status) ? status : null;
+}
+
+function normalizeOperationalStatus(value: unknown): "active" | "excluded" {
+  return normalizeText(value).toLowerCase() === "excluded" ? "excluded" : "active";
 }
 
 function maskPhone(value: string | null | undefined) {
@@ -413,6 +422,7 @@ export async function buildCrmContactsPayload(
   const channel = normalizeChannel(params.query.channel);
   const hasConversation = normalizeBooleanFilter(params.query.hasConversation);
   const optOut = normalizeBooleanFilter(params.query.optOut);
+  const operationalStatus = normalizeOperationalStatus(params.query.operationalStatus);
   const updatedFromDate = parseDateFilter(params.query.updatedFrom);
   const updatedToDate = parseDateFilter(params.query.updatedTo);
   const page = normalizePage(params.query.page);
@@ -474,6 +484,7 @@ export async function buildCrmContactsPayload(
         channel,
         hasConversation,
         optOut,
+        operationalStatus,
         updatedFrom: updatedFromDate?.toISOString() ?? null,
         updatedTo: updatedToDate?.toISOString() ?? null,
       },
@@ -514,7 +525,7 @@ export async function buildCrmContactsPayload(
     OR: [{ waId: { in: identityKeys } }, { waIdCanonical: { in: identityKeys } }],
   };
 
-  const [contacts, identities, conversations, runtimeStates, optOutEvents, importEvents] =
+  const [contacts, identities, conversations, runtimeStates, optOutEvents, importEvents, operationallyExcludedWaIds] =
     await Promise.all([
       prisma.contact.findMany({
         where: contactWhere,
@@ -616,6 +627,10 @@ export async function buildCrmContactsPayload(
           createdAt: true,
         },
       }),
+      loadOperationallyExcludedWaIds(prisma, {
+        clientId: params.clientId,
+        waIds: identityKeys,
+      }),
     ]);
 
   const contactByIdentity = new Map<string, (typeof contacts)[number]>();
@@ -694,10 +709,13 @@ export async function buildCrmContactsPayload(
       const templateCandidate = buildTemplateCandidate(lead, activeOptOut);
       const isAnonymized = isAnonymizedContactRecord(lead, contact, identity);
       const isOperationalContact = !contact || isOperationalContactLifecycle(contact.lifecycle);
+      const isOperationallyExcluded = leadCandidates.some((candidate) => operationallyExcludedWaIds.has(candidate));
       const startConversationBlockedReason =
         hasConversationValue
           ? null
-          : !isOperationalContact
+          : isOperationallyExcluded
+            ? "contact_operationally_excluded"
+            : !isOperationalContact
             ? "contact_not_active"
             : !templateCandidate.hasValidWhatsappIdentity
               ? "invalid_identity"
@@ -744,6 +762,7 @@ export async function buildCrmContactsPayload(
         startConversationBlockedReason,
         activeOptOut,
         isAnonymized,
+        isOperationallyExcluded,
         importedSource: importSourceByKey.get(canonical) ?? null,
         ...templateCandidate,
         hasOpenConversationWindow: lastConversation ? lastConversation.windowIsOpen : null,
@@ -754,6 +773,7 @@ export async function buildCrmContactsPayload(
     })
     .filter((item) => {
       if (!item.isOperationalContact) return false;
+      if (operationalStatus === "excluded" ? !item.isOperationallyExcluded : item.isOperationallyExcluded) return false;
       if (!includeAnonymized && item.isAnonymized) return false;
       if (hasConversation !== null && item.hasConversation !== hasConversation) return false;
       if (optOut !== null && item.activeOptOut !== optOut) return false;
@@ -773,6 +793,7 @@ export async function buildCrmContactsPayload(
       channel,
       hasConversation,
       optOut,
+      operationalStatus,
       updatedFrom: updatedFromDate?.toISOString() ?? null,
       updatedTo: updatedToDate?.toISOString() ?? null,
     },
@@ -802,6 +823,7 @@ export async function buildCrmContactDetailPayload(
       | "not_authorized"
       | null;
     now?: Date;
+    includeOperationallyExcluded?: boolean;
   }
 ): Promise<CrmContactDetailPayload | null> {
   const statusLabelById = buildStatusLabelMap(params.statuses);
@@ -832,7 +854,7 @@ export async function buildCrmContactDetailPayload(
   const identityKeys = Array.from(new Set([lead.waId, lead.waIdCanonical ?? lead.waId].filter(Boolean)));
   const optOutCanonicalWaIds = getOptOutCanonicalCandidates(lead);
 
-  const [contact, identity, conversations, runtimeStates, optOutEvents, importEvents, notesCount] =
+  const [contact, identity, conversations, runtimeStates, optOutEvents, importEvents, operationallyExcludedWaIds, notesCount] =
     await Promise.all([
       prisma.contact.findFirst({
         where: {
@@ -946,6 +968,10 @@ export async function buildCrmContactDetailPayload(
           createdAt: true,
         },
       }),
+      loadOperationallyExcludedWaIds(prisma, {
+        clientId: params.clientId,
+        waIds: identityKeys,
+      }),
       prisma.leadNote.count({ where: { leadId: lead.id, tenantId: params.clientId } }),
     ]);
 
@@ -993,6 +1019,8 @@ export async function buildCrmContactDetailPayload(
   const isAnonymized = isAnonymizedContactRecord(lead, contact, identity);
   const effectiveContact = identity?.contact ?? contact;
   if (effectiveContact && !isOperationalContactLifecycle(effectiveContact.lifecycle)) return null;
+  const isOperationallyExcluded = identityKeys.some((candidate) => operationallyExcludedWaIds.has(candidate));
+  if (isOperationallyExcluded && params.includeOperationallyExcluded !== true) return null;
   if (isAnonymized) return null;
   const canStartConversation =
     conversations.length === 0 &&
@@ -1002,7 +1030,9 @@ export async function buildCrmContactDetailPayload(
   const startConversationBlockedReason =
     conversations.length > 0
       ? null
-      : !templateCandidate.hasValidWhatsappIdentity
+      : isOperationallyExcluded
+        ? "contact_operationally_excluded"
+        : !templateCandidate.hasValidWhatsappIdentity
         ? "invalid_identity"
         : activeOptOut
           ? "active_send_blocked"
@@ -1053,6 +1083,7 @@ export async function buildCrmContactDetailPayload(
       startConversationBlockedReason,
       activeOptOut,
       isAnonymized,
+      isOperationallyExcluded,
       importedSource: importSource,
       ...templateCandidate,
       hasOpenConversationWindow: latestConversation ? latestConversation.windowIsOpen : null,
