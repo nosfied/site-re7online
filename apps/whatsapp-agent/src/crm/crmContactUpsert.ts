@@ -11,9 +11,13 @@ import {
   CAMPAIGN_IMPORT_MAX_ROWS,
   parseCampaignCsv,
 } from "../campaigns/campaignRecipientImport.js";
-import { normalizeOptOutWaId } from "../campaigns/optOutRegistry.js";
 import { normalizeWaIdDigits } from "../utils/waid.js";
 import { persistEvent } from "../db/persist.js";
+import {
+  buildCrmWhatsappExternalUserHash,
+  buildCrmWhatsappIdentityCandidates,
+  normalizeCrmWhatsappIdentity,
+} from "./crmWhatsappIdentity.js";
 
 export const CRM_CONTACT_CREATED_EVENT = "crm.contact.created";
 export const CRM_CONTACT_IMPORT_SUMMARY_EVENT = "crm.contact.import.summary";
@@ -42,7 +46,8 @@ export class CrmContactUpsertError extends Error {
       | "csv_empty"
       | "csv_malformed"
       | "csv_missing_rows"
-      | "csv_too_many_rows",
+      | "csv_too_many_rows"
+      | "identity_conflict",
     message: string,
     public status = 400,
     public headers?: string[]
@@ -57,6 +62,7 @@ type NormalizedCrmContactInput = {
   waId: string;
   waIdCanonical: string;
   externalUserHash: string;
+  identityCandidates: string[];
 };
 
 type ExistingCrmIdentity = {
@@ -75,19 +81,16 @@ function normalizeOptionalName(value: unknown) {
 }
 
 export function normalizeCrmWhatsappPhone(value: unknown): NormalizedCrmContactInput | null {
-  const normalized = normalizeOptOutWaId(value);
+  const normalized = normalizeCrmWhatsappIdentity(value);
   if (!normalized) return null;
   return {
     name: null,
-    phone: normalized.waIdCanonical,
-    waId: normalized.waIdCanonical,
-    waIdCanonical: normalized.waIdCanonical,
-    externalUserHash: buildCrmWhatsappExternalUserHash(normalized.waIdCanonical),
+    phone: normalized.crmCanonicalPhone,
+    waId: normalized.crmCanonicalPhone,
+    waIdCanonical: normalized.crmCanonicalPhone,
+    externalUserHash: normalized.externalUserHash,
+    identityCandidates: buildCrmWhatsappIdentityCandidates([value as string, normalized.crmCanonicalPhone]),
   };
-}
-
-export function buildCrmWhatsappExternalUserHash(waIdCanonical: string) {
-  return `whatsapp:${crypto.createHash("sha256").update(waIdCanonical).digest("hex").slice(0, 32)}`;
 }
 
 export function normalizeCrmContactInput(input: CrmContactUpsertInput): NormalizedCrmContactInput {
@@ -111,49 +114,76 @@ function maskPhone(value: string | null | undefined) {
 
 async function findExistingCrmIdentity(
   prisma: PrismaClient | Prisma.TransactionClient,
-  params: { clientId: string; waIdCanonical: string; externalUserHash: string }
+  params: { clientId: string; waIdCanonical: string; externalUserHash: string; identityCandidates?: string[] }
 ): Promise<ExistingCrmIdentity> {
-  const [identity, contact, lead] = await Promise.all([
-    prisma.contactChannelIdentity.findUnique({
+  const identityCandidates = Array.from(
+    new Set([...(params.identityCandidates ?? []), ...buildCrmWhatsappIdentityCandidates([params.waIdCanonical])])
+  );
+  const hashCandidates = identityCandidates.map(buildCrmWhatsappExternalUserHash);
+  const [identities, contacts, leads] = await Promise.all([
+    prisma.contactChannelIdentity.findMany({
       where: {
-        clientId_channel_provider_channelAccountId_externalUserHash: {
-          clientId: params.clientId,
-          channel: "whatsapp",
-          provider: CRM_CONTACT_MANUAL_PROVIDER,
-          channelAccountId: CRM_CONTACT_MANUAL_CHANNEL_ACCOUNT_ID,
-          externalUserHash: params.externalUserHash,
-        },
+        clientId: params.clientId,
+        channel: "whatsapp",
+        provider: CRM_CONTACT_MANUAL_PROVIDER,
+        channelAccountId: CRM_CONTACT_MANUAL_CHANNEL_ACCOUNT_ID,
+        OR: [
+          { externalUserHash: { in: hashCandidates } },
+          { externalUserRef: { in: identityCandidates } },
+          { legacyWaId: { in: identityCandidates } },
+        ],
       },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 3,
       select: {
         contact: { select: { id: true, name: true, lifecycle: true } },
       },
     }),
-    prisma.contact.findFirst({
+    prisma.contact.findMany({
       where: {
         clientId: params.clientId,
         OR: [
-          { waId: params.waIdCanonical },
-          { externalUserRef: params.waIdCanonical },
-          { legacyWaId: params.waIdCanonical },
-          { externalUserHash: params.externalUserHash },
+          { waId: { in: identityCandidates } },
+          { externalUserRef: { in: identityCandidates } },
+          { legacyWaId: { in: identityCandidates } },
+          { externalUserHash: { in: hashCandidates } },
         ],
       },
       orderBy: [{ updatedAt: "desc" }],
+      take: 3,
       select: { id: true, name: true, lifecycle: true },
     }),
-    prisma.lead.findFirst({
+    prisma.lead.findMany({
       where: {
         tenantId: params.clientId,
         OR: [
-          { waId: params.waIdCanonical },
-          { waIdCanonical: params.waIdCanonical },
-          { externalUserHash: params.externalUserHash },
+          { waId: { in: identityCandidates } },
+          { waIdCanonical: { in: identityCandidates } },
+          { externalUserRef: { in: identityCandidates } },
+          { legacyWaId: { in: identityCandidates } },
+          { externalUserHash: { in: hashCandidates } },
         ],
       },
       orderBy: [{ updatedAt: "desc" }],
+      take: 3,
       select: { id: true, name: true, phone: true, contactChannelIdentityId: true },
     }),
   ]);
+  const contactIds = new Set([
+    ...identities.map((identity) => identity.contact?.id).filter((value): value is string => Boolean(value)),
+    ...contacts.map((contact) => contact.id),
+  ]);
+  const leadIds = new Set(leads.map((lead) => lead.id));
+  if (contactIds.size > 1 || leadIds.size > 1) {
+    throw new CrmContactUpsertError(
+      "identity_conflict",
+      "Multiple possible WhatsApp identities found",
+      409
+    );
+  }
+  const identity = identities[0] ?? null;
+  const contact = contacts[0] ?? null;
+  const lead = leads[0] ?? null;
   return {
     contact: identity?.contact ?? contact,
     lead,
@@ -177,6 +207,7 @@ export async function upsertCrmContact(
       clientId: params.clientId,
       waIdCanonical: normalized.waIdCanonical,
       externalUserHash: normalized.externalUserHash,
+      identityCandidates: normalized.identityCandidates,
     });
     const contactName = existing.contact?.name ?? normalized.name;
     const contact = existing.contact
@@ -259,7 +290,7 @@ export async function upsertCrmContact(
             externalUserRef: normalized.waIdCanonical,
             legacyWaId: normalized.waIdCanonical,
             contactChannelIdentityId: existing.lead.contactChannelIdentityId ?? identity.id,
-            phone: existing.lead.phone ?? normalized.phone,
+            phone: normalized.phone,
             name: leadName,
           },
           select: { id: true },
@@ -412,7 +443,9 @@ export async function previewCrmContactCsvImport(
       name: normalizeOptionalName(row.name),
     });
   }
-  const keys = accepted.map((row) => row.waIdCanonical);
+  const keys = Array.from(
+    new Set(accepted.flatMap((row) => buildCrmWhatsappIdentityCandidates([row.waIdCanonical])))
+  );
   const existingContacts = keys.length
     ? await prisma.contact.findMany({
         where: {
@@ -429,7 +462,9 @@ export async function previewCrmContactCsvImport(
   const existingKeys = new Set(
     existingContacts.flatMap((contact) => [contact.waId, contact.externalUserRef, contact.legacyWaId].filter(Boolean))
   );
-  const existingCount = accepted.filter((row) => existingKeys.has(row.waIdCanonical)).length;
+  const existingCount = accepted.filter((row) =>
+    buildCrmWhatsappIdentityCandidates([row.waIdCanonical]).some((candidate) => existingKeys.has(candidate))
+  ).length;
   return {
     ok: true as const,
     headers: parsed.headers,

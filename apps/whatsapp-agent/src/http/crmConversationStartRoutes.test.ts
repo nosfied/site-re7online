@@ -215,6 +215,14 @@ test("CRM contact start creates conversation only on first explicit Web Session 
     req.on("end", () => {
       workerRequests.push(JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>);
       res.writeHead(200, { "content-type": "application/json" });
+      if (req.url === "/web-session/resolve-recipient") {
+        const lastRequest = workerRequests[workerRequests.length - 1];
+        const firstCandidate = Array.isArray(lastRequest?.candidates)
+          ? String((lastRequest.candidates as unknown[])[0] ?? "")
+          : "";
+        res.end(JSON.stringify({ ok: true, recipientWaId: firstCandidate, resolvedJid: `${firstCandidate}@s.whatsapp.net` }));
+        return;
+      }
       res.end(JSON.stringify({ ok: true, externalMessageId: `worker-${workerRequests.length}` }));
     });
   });
@@ -306,8 +314,9 @@ test("CRM contact start creates conversation only on first explicit Web Session 
     assert.equal(started.body.message.status, "SENT");
     assert.equal(started.body.message.metaMessageId, null);
     assert.match(started.body.message.protocol, /^CVT-/);
-    assert.equal(workerRequests.length, 1);
-    assert.equal(workerRequests[0]?.recipientWaId, identity.waIdCanonical);
+    assert.equal(workerRequests.length, 2);
+    assert.deepEqual(workerRequests[0]?.candidates, [identity.waIdCanonical, "5584999991234"]);
+    assert.equal(workerRequests[1]?.recipientWaId, identity.waIdCanonical);
 
     const conversation = await prisma.conversation.findFirstOrThrow({
       where: { clientId, waId: identity.waIdCanonical },
@@ -321,6 +330,248 @@ test("CRM contact start creates conversation only on first explicit Web Session 
       true
     );
     assert.equal(await prisma.outboundMessage.count({ where: { clientId, waId: identity.waIdCanonical } }), 1);
+  } finally {
+    process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = previousWorkerUrl;
+    await new Promise<void>((resolve, reject) => {
+      worker.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+});
+
+test("CRM contact start enables domestic BR phone and resolves Web Session identity lazily", async () => {
+  const workerRequests: Array<Record<string, unknown>> = [];
+  const worker = createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    req.on("end", () => {
+      workerRequests.push(JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>);
+      res.writeHead(200, { "content-type": "application/json" });
+      if (req.url === "/web-session/resolve-recipient") {
+        res.end(JSON.stringify({ ok: true, recipientWaId: "5584951957784", resolvedJid: "5584951957784@s.whatsapp.net" }));
+        return;
+      }
+      res.end(JSON.stringify({ ok: true, externalMessageId: "worker-domestic" }));
+    });
+  });
+  await new Promise<void>((resolve) => worker.listen(0, "127.0.0.1", resolve));
+  const workerAddress = worker.address();
+  assert.equal(typeof workerAddress, "object");
+  const previousWorkerUrl = process.env.WHATSAPP_WEB_WORKER_CONTROL_URL;
+  process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = `http://127.0.0.1:${(workerAddress as AddressInfo).port}`;
+
+  try {
+    const created = await request<{ ok: true; item: { leadId: string; canStartConversation?: boolean; phoneDisplay: string | null } }>(
+      "POST",
+      "/app/crm/contacts",
+      supervisor,
+      { name: "Ediane Domestic", phone: "84 95195-7784" }
+    );
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    assert.equal(created.body.item.canStartConversation, true);
+    assert.equal(created.body.item.phoneDisplay, "5584*****7784");
+    assert.equal(workerRequests.length, 0);
+
+    const started = await request<{ ok: true; waIdCanonical: string; message: { status: string } }>(
+      "POST",
+      `/app/crm/contacts/${encodeURIComponent(created.body.item.leadId)}/start-conversation`,
+      supervisor,
+      { text: "Ola do CRM" }
+    );
+    assert.equal(started.status, 200, JSON.stringify(started.body));
+    assert.equal(started.body.waIdCanonical, "5584951957784");
+    assert.equal(started.body.message.status, "SENT");
+    assert.equal(workerRequests.length, 2);
+    assert.deepEqual(workerRequests[0]?.candidates, ["5584951957784", "558451957784"]);
+    assert.equal(workerRequests[1]?.recipientWaId, "5584951957784");
+    const persisted = await prisma.lead.findFirstOrThrow({
+      where: { id: created.body.item.leadId, tenantId: clientId },
+      select: {
+        externalUserRef: true,
+        legacyWaId: true,
+        contactChannelIdentity: {
+          select: {
+            externalUserRef: true,
+            legacyWaId: true,
+            contact: { select: { externalUserRef: true, legacyWaId: true } },
+          },
+        },
+      },
+    });
+    assert.equal(persisted.externalUserRef, "5584951957784");
+    assert.equal(persisted.legacyWaId, "5584951957784");
+    assert.equal(persisted.contactChannelIdentity?.externalUserRef, "5584951957784");
+    assert.equal(persisted.contactChannelIdentity?.legacyWaId, "5584951957784");
+    assert.ok(persisted.contactChannelIdentity?.contact);
+    assert.equal(persisted.contactChannelIdentity?.contact.externalUserRef, "5584951957784");
+    assert.equal(persisted.contactChannelIdentity?.contact.legacyWaId, "5584951957784");
+  } finally {
+    process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = previousWorkerUrl;
+    await new Promise<void>((resolve, reject) => {
+      worker.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+});
+
+test("CRM manual create dedupes domestic legacy record against E.164 BR input", async () => {
+  const legacyContact = await prisma.contact.create({
+    data: {
+      clientId,
+      waId: "85951957785",
+      name: "Ediane Legacy",
+      channel: "whatsapp",
+      provider: "whatsapp",
+      externalUserRef: "85951957785",
+      legacyWaId: "85951957785",
+      lifecycle: "ACTIVE",
+    },
+    select: { id: true },
+  });
+  const legacyIdentity = await prisma.contactChannelIdentity.create({
+    data: {
+      clientId,
+      contactId: legacyContact.id,
+      channel: "whatsapp",
+      provider: "whatsapp",
+      channelAccountId: "crm",
+      externalUserHash: "whatsapp:legacy-domestic-7784",
+      externalUserRef: "85951957785",
+      legacyWaId: "85951957785",
+      displayName: "Ediane Legacy",
+    },
+    select: { id: true },
+  });
+  const legacyLead = await prisma.lead.create({
+    data: {
+      tenantId: clientId,
+      waId: "85951957785",
+      waIdCanonical: "85951957785",
+      phone: "85951957785",
+      name: "Ediane Legacy",
+      channel: "whatsapp",
+      provider: "whatsapp",
+      channelAccountId: "crm",
+      externalUserRef: "85951957785",
+      legacyWaId: "85951957785",
+      contactChannelIdentityId: legacyIdentity.id,
+      status: "NEW",
+    },
+    select: { id: true },
+  });
+
+  const created = await request<{ ok: true; item: { leadId: string; contactId: string | null; phoneDisplay: string | null } }>(
+    "POST",
+    "/app/crm/contacts",
+    admin,
+    { name: "Ediane Duplicate Attempt", phone: "+55 85 95195-7785" }
+  );
+
+  assert.equal(created.status, 200, JSON.stringify(created.body));
+  assert.equal(created.body.item.leadId, legacyLead.id);
+  assert.equal(created.body.item.contactId, legacyContact.id);
+  assert.equal(created.body.item.phoneDisplay, "5585*****7785");
+  assert.equal(await prisma.contact.count({ where: { clientId, OR: [{ waId: "85951957785" }, { waId: "5585951957785" }] } }), 1);
+});
+
+test("CRM manual create blocks local candidate collision without auto-merging contacts", async () => {
+  const modernContact = await prisma.contact.create({
+    data: {
+      clientId,
+      waId: "5586951957790",
+      name: "Modern Candidate",
+      channel: "whatsapp",
+      provider: "whatsapp",
+      lifecycle: "ACTIVE",
+    },
+    select: { id: true },
+  });
+  const legacyContact = await prisma.contact.create({
+    data: {
+      clientId,
+      waId: "558651957790",
+      name: "Legacy Candidate",
+      channel: "whatsapp",
+      provider: "whatsapp",
+      lifecycle: "ACTIVE",
+    },
+    select: { id: true },
+  });
+
+  const created = await request<ErrorPayload>(
+    "POST",
+    "/app/crm/contacts",
+    admin,
+    { name: "Collision Attempt", phone: "86 95195-7790" }
+  );
+
+  assert.equal(created.status, 409);
+  assert.equal(getErrorCode(created.body), "identity_conflict");
+  assert.equal(await prisma.contact.count({ where: { id: { in: [modernContact.id, legacyContact.id] } } }), 2);
+  assert.equal(await prisma.contact.count({ where: { clientId, name: "Collision Attempt" } }), 0);
+});
+
+test("CRM contact start blocks dual conversation candidate collision before provider lookup", async () => {
+  const workerRequests: Array<Record<string, unknown>> = [];
+  const worker = createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    req.on("end", () => {
+      workerRequests.push(JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true, recipientWaId: "5587951957791", resolvedJid: "5587951957791@s.whatsapp.net" }));
+    });
+  });
+  await new Promise<void>((resolve) => worker.listen(0, "127.0.0.1", resolve));
+  const workerAddress = worker.address();
+  assert.equal(typeof workerAddress, "object");
+  const previousWorkerUrl = process.env.WHATSAPP_WEB_WORKER_CONTROL_URL;
+  process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = `http://127.0.0.1:${(workerAddress as AddressInfo).port}`;
+
+  try {
+    const lead = await prisma.lead.create({
+      data: {
+        tenantId: clientId,
+        waId: "5587951957791",
+        waIdCanonical: "5587951957791",
+        phone: "87 95195-7791",
+        name: "Dual Conversation",
+        channel: "whatsapp",
+        status: "QUALIFIED",
+      },
+      select: { id: true },
+    });
+    await prisma.conversation.createMany({
+      data: [
+        {
+          id: crypto.randomUUID(),
+          clientId,
+          waId: "5587951957791",
+          waIdCanonical: "5587951957791",
+          channel: "whatsapp",
+          provider: "web_session",
+          windowIsOpen: true,
+        },
+        {
+          id: crypto.randomUUID(),
+          clientId,
+          waId: "558751957791",
+          waIdCanonical: "558751957791",
+          channel: "whatsapp",
+          provider: "web_session",
+          windowIsOpen: true,
+        },
+      ],
+    });
+
+    const started = await request<ErrorPayload>(
+      "POST",
+      `/app/crm/contacts/${encodeURIComponent(lead.id)}/start-conversation`,
+      admin,
+      { text: "Ola do CRM" }
+    );
+
+    assert.equal(started.status, 409);
+    assert.equal(getErrorCode(started.body), "identity_conflict");
+    assert.equal(workerRequests.length, 0);
   } finally {
     process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = previousWorkerUrl;
     await new Promise<void>((resolve, reject) => {

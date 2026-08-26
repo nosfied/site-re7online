@@ -3,6 +3,7 @@ import { logger } from "../../whatsapp-agent/src/logger/logger.js";
 import { installSensitiveConsoleFilter } from "./web-session/sensitiveConsoleFilter.js";
 import {
   runWhatsAppWebSessionWorker,
+  resolveRecipientViaActiveWebSession,
   sendMediaViaActiveWebSession,
   sendTextViaActiveWebSession,
 } from "./whatsappWebSessionWorker.js";
@@ -19,6 +20,7 @@ const controlServer = Number.isInteger(controlPort) && controlPort > 0
       token: process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN,
       sendText: sendTextViaActiveWebSession,
       sendMedia: sendMediaViaActiveWebSession,
+      resolveRecipient: resolveRecipientViaActiveWebSession,
     })
   : null;
 

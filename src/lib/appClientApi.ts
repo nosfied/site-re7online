@@ -338,6 +338,7 @@ export type AppCrmContactItem = {
     | "new_freeform_requires_model"
     | "not_authorized"
     | "active_send_blocked"
+    | "identity_conflict"
     | null;
   activeOptOut: boolean;
   isAnonymized: boolean;

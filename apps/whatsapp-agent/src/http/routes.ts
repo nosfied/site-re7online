@@ -349,6 +349,7 @@ import {
 import { buildCrmContactDetailPayload, buildCrmContactsPayload } from "../crm/crmContactsReadModel.js";
 import {
   isWhatsappFreeformStartTransportReady,
+  resolveCrmWebSessionRecipient,
   resolveCrmContactConversationStartEligibility,
 } from "../crm/crmConversationStart.js";
 import {
@@ -10614,8 +10615,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       json(res, result.createdContact || result.createdLead ? 201 : 200, payload);
     } catch (error) {
       if (error instanceof CrmContactUpsertError) {
+        const message =
+          error.code === "identity_conflict"
+            ? "Encontramos mais de uma identificação possível para este número. Revise o contato antes de iniciar a conversa."
+            : error.message;
         json(res, error.status, {
-          ...httpError(error.code, error.message),
+          ...httpError(error.code, message),
           ...(error.headers ? { headers: error.headers } : {}),
         });
         return;
@@ -10849,11 +10854,28 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, eligibility.reason === "contact_not_found" ? 404 : 409, httpError(eligibility.reason, message));
         return;
       }
+      const recipientResolution = await resolveCrmWebSessionRecipient({
+        prisma,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        leadId,
+        candidates: eligibility.providerCandidates,
+        requestId,
+      });
+      if (!recipientResolution.ok) {
+        const code = recipientResolution.reason === "ambiguous" ? "identity_conflict" : recipientResolution.reason;
+        const message =
+          code === "identity_conflict"
+            ? "Encontramos mais de uma identificação possível para este número. Revise o contato antes de iniciar a conversa."
+            : "Não foi possível localizar este número no WhatsApp.";
+        json(res, 409, httpError(code, message));
+        return;
+      }
 
       const resolvedConversation = await resolveConversationTarget(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
-        rawWaId: eligibility.waId,
+        rawWaId: recipientResolution.waId,
         requestId,
         source: "app_crm_contact_start_conversation",
       });

@@ -16,6 +16,7 @@ import {
   resolveWebSessionSenderJid,
   sendMediaViaActiveWebSession,
   sendTextViaActiveWebSession,
+  resolveRecipientViaActiveWebSession,
   setActiveWebSessionConnectionForTesting,
   shouldKeepActiveWebSessionConnection,
 } from "./whatsappWebSessionWorker.js";
@@ -51,6 +52,95 @@ test("web session worker gates ignore non eligible accounts", () => {
   assert.equal(isEligibleWebSessionAccount(account({ enabled: false }) as never), false);
   assert.equal(isEligibleWebSessionAccount(account({ runtimeEnabled: false }) as never), false);
   assert.equal(isEligibleWebSessionAccount(account({ metadata: { webSession: { desiredState: "DISCONNECTED" } } }) as never), false);
+});
+
+test("web session worker resolves recipient candidates through active socket lookup", async (t) => {
+  const lookedUp: string[][] = [];
+  setActiveWebSessionConnectionForTesting("account-a", {
+    tenantKey: "tenant-a",
+    channelAccountId: "session-a",
+    startedAtMs: Date.now(),
+    socket: {
+      ev: { on() {} },
+      onWhatsApp: async (...jids) => {
+        lookedUp.push(jids);
+        return [{ jid: "5584951957784@s.whatsapp.net", exists: true }];
+      },
+    },
+    release: async () => {},
+  });
+  t.after(() => setActiveWebSessionConnectionForTesting("account-a", null));
+  const prisma = {
+    channelAccount: {
+      findFirst: async () => account({
+        metadata: {
+          webSession: {
+            desiredState: "CONNECTED",
+            observedState: "CONNECTED",
+          },
+        },
+      }),
+    },
+  };
+
+  const result = await resolveRecipientViaActiveWebSession({
+    prisma: prisma as never,
+    clientId: "client-a",
+    tenantKey: "tenant-a",
+    accountId: "account-a",
+    channelAccountId: "session-a",
+    candidates: ["5584951957784", "558451957784"],
+    requestId: "resolve-a",
+  });
+
+  assert.deepEqual(result, {
+    ok: true,
+    recipientWaId: "5584951957784",
+    resolvedJid: "5584951957784@s.whatsapp.net",
+  });
+  assert.deepEqual(lookedUp, [["5584951957784@s.whatsapp.net", "558451957784@s.whatsapp.net"]]);
+});
+
+test("web session worker blocks ambiguous recipient candidate lookup", async (t) => {
+  setActiveWebSessionConnectionForTesting("account-a", {
+    tenantKey: "tenant-a",
+    channelAccountId: "session-a",
+    startedAtMs: Date.now(),
+    socket: {
+      ev: { on() {} },
+      onWhatsApp: async () => [
+        { jid: "5584951957784@s.whatsapp.net", exists: true },
+        { jid: "558451957784@s.whatsapp.net", exists: true },
+      ],
+    },
+    release: async () => {},
+  });
+  t.after(() => setActiveWebSessionConnectionForTesting("account-a", null));
+  const prisma = {
+    channelAccount: {
+      findFirst: async () => account({
+        metadata: {
+          webSession: {
+            desiredState: "CONNECTED",
+            observedState: "CONNECTED",
+          },
+        },
+      }),
+    },
+  };
+
+  const result = await resolveRecipientViaActiveWebSession({
+    prisma: prisma as never,
+    clientId: "client-a",
+    tenantKey: "tenant-a",
+    accountId: "account-a",
+    channelAccountId: "session-a",
+    candidates: ["5584951957784", "558451957784"],
+    requestId: "resolve-b",
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.ok ? null : result.reason, "ambiguous");
 });
 
 test("web session worker finds only future eligible web session account", async () => {

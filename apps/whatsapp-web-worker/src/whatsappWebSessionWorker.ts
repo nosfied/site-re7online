@@ -638,6 +638,98 @@ export async function sendTextViaActiveWebSession(params: {
   }
 }
 
+export async function resolveRecipientViaActiveWebSession(params: {
+  prisma?: WorkerPrismaClient;
+  clientId: string;
+  tenantKey: string;
+  accountId: string;
+  channelAccountId: string;
+  candidates: string[];
+  requestId: string;
+  timeoutMs?: number;
+}) {
+  const prisma = params.prisma ?? getPrisma();
+  const candidateDigits = Array.from(
+    new Set(params.candidates.map(normalizeRecipientWaIdForJid).filter(Boolean))
+  ) as string[];
+  if (candidateDigits.length === 0) {
+    return { ok: false as const, statusCode: 400, error: "bad_request", reason: "not_registered" as const };
+  }
+  const account = await prisma.channelAccount.findFirst({
+    where: {
+      id: params.accountId,
+      clientId: params.clientId,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId: params.channelAccountId,
+    },
+    include: {
+      client: {
+        select: {
+          id: true,
+          clientKey: true,
+          status: true,
+          features: true,
+          profile: true,
+        },
+      },
+    },
+  }) as ChannelAccountRecord | null;
+  if (!account || account.client.clientKey !== params.tenantKey) {
+    return { ok: false as const, statusCode: 404, error: "web_session_account_not_found", reason: "worker_unavailable" as const };
+  }
+  if (!isEligibleWebSessionAccount(account) || account.status !== "connected") {
+    return { ok: false as const, statusCode: 409, error: "web_session_not_connected", reason: "worker_unavailable" as const };
+  }
+  const lifecycle = readWebSessionLifecycle(account.metadata);
+  if (lifecycle.observedState !== "CONNECTED") {
+    return { ok: false as const, statusCode: 409, error: "web_session_not_connected", reason: "worker_unavailable" as const };
+  }
+  const active = activeConnections.get(account.id);
+  if (!active?.socket?.onWhatsApp) {
+    return { ok: false as const, statusCode: 503, error: "web_session_resolver_unavailable", reason: "worker_unavailable" as const };
+  }
+  const jids = candidateDigits.map((candidate) => `${candidate}@s.whatsapp.net`);
+  try {
+    const result = await withTimeout(
+      active.socket.onWhatsApp(...jids),
+      params.timeoutMs ?? DEFAULT_SEND_TEXT_TIMEOUT_MS
+    );
+    const matches = (result ?? []).filter((item) => item?.exists && typeof item.jid === "string");
+    const matchedDigits = Array.from(
+      new Set(matches.map((item) => splitJid(item.jid).user).filter((item) => /^\d+$/.test(item)))
+    );
+    logger.info({
+      event: "whatsapp.web.recipient.resolved",
+      ...sanitizeWebSessionAccountRef(params),
+      requestId: params.requestId,
+      candidates: candidateDigits.length,
+      matches: matchedDigits.length,
+    });
+    if (matchedDigits.length === 1) {
+      return {
+        ok: true as const,
+        recipientWaId: matchedDigits[0],
+        resolvedJid: `${matchedDigits[0]}@s.whatsapp.net`,
+      };
+    }
+    return {
+      ok: false as const,
+      statusCode: 409,
+      error: matchedDigits.length > 1 ? "web_session_recipient_ambiguous" : "web_session_recipient_not_registered",
+      reason: matchedDigits.length > 1 ? "ambiguous" as const : "not_registered" as const,
+    };
+  } catch (error) {
+    logger.warn({
+      event: "whatsapp.web.recipient.resolve_failed",
+      ...sanitizeWebSessionAccountRef(params),
+      requestId: params.requestId,
+      reason: error instanceof Error ? error.message : "unknown_error",
+    });
+    return { ok: false as const, statusCode: 502, error: "web_session_recipient_resolution_failed", reason: "worker_unavailable" as const };
+  }
+}
+
 export async function sendMediaViaActiveWebSession(params: {
   prisma?: WorkerPrismaClient;
   clientId: string;

@@ -36,6 +36,19 @@ export type WebSessionControlSendMediaResult =
   | { ok: true; externalMessageId: string | null }
   | { ok: false; statusCode: number; error: string; message?: string };
 
+export type WebSessionControlResolveRecipientParams = {
+  clientId: string;
+  tenantKey: string;
+  accountId: string;
+  channelAccountId: string;
+  candidates: string[];
+  requestId: string;
+};
+
+export type WebSessionControlResolveRecipientResult =
+  | { ok: true; recipientWaId: string; resolvedJid: string | null }
+  | { ok: false; statusCode: number; error: string; reason?: "not_registered" | "ambiguous" | "worker_unavailable" };
+
 export type WebSessionControlReplyReference = {
   externalMessageId: string;
   remoteJid: string;
@@ -134,6 +147,21 @@ function parseSendMediaBody(body: Record<string, unknown>): WebSessionControlSen
   };
 }
 
+function parseResolveRecipientBody(body: Record<string, unknown>): WebSessionControlResolveRecipientParams | null {
+  const clientId = typeof body.clientId === "string" ? body.clientId.trim() : "";
+  const tenantKey = typeof body.tenantKey === "string" ? body.tenantKey.trim() : "";
+  const accountId = typeof body.accountId === "string" ? body.accountId.trim() : "";
+  const channelAccountId = typeof body.channelAccountId === "string" ? body.channelAccountId.trim() : "";
+  const candidates = Array.isArray(body.candidates)
+    ? Array.from(new Set(body.candidates.map((item) => typeof item === "string" ? item.replace(/\D/g, "") : "").filter(Boolean)))
+    : [];
+  const requestId = typeof body.requestId === "string" ? body.requestId.trim() : "";
+  if (!clientId || !tenantKey || !accountId || !channelAccountId || candidates.length === 0 || !requestId) {
+    return null;
+  }
+  return { clientId, tenantKey, accountId, channelAccountId, candidates, requestId };
+}
+
 function parseReplyReference(value: unknown): WebSessionControlReplyReference | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
@@ -165,6 +193,7 @@ export function startWebSessionControlServer(params: {
   token?: string;
   sendText?: (params: WebSessionControlSendTextParams) => Promise<WebSessionControlSendTextResult>;
   sendMedia?: (params: WebSessionControlSendMediaParams) => Promise<WebSessionControlSendMediaResult>;
+  resolveRecipient?: (params: WebSessionControlResolveRecipientParams) => Promise<WebSessionControlResolveRecipientResult>;
 }) {
   const host = params.host ?? "127.0.0.1";
   const server = createServer((req, res) => {
@@ -208,6 +237,38 @@ export function startWebSessionControlServer(params: {
       })().catch((error) => {
         logger.error({
           event: "whatsapp.web.worker.control.send_text_error",
+          message: error instanceof Error ? error.message : "unknown_error",
+        });
+        json(res, 500, { ok: false, error: "server_error" });
+      });
+      return;
+    }
+    if (url.pathname === "/web-session/resolve-recipient" && req.method === "POST") {
+      void (async () => {
+        if (!params.resolveRecipient) {
+          json(res, 503, { ok: false, error: "resolve_recipient_unavailable", reason: "worker_unavailable" });
+          return;
+        }
+        let parsed: WebSessionControlResolveRecipientParams | null = null;
+        try {
+          parsed = parseResolveRecipientBody(await readJsonBody(req));
+        } catch {
+          json(res, 400, { ok: false, error: "invalid_json" });
+          return;
+        }
+        if (!parsed) {
+          json(res, 400, { ok: false, error: "bad_request" });
+          return;
+        }
+        const result = await params.resolveRecipient(parsed);
+        if (!result.ok) {
+          json(res, result.statusCode, { ok: false, error: result.error, reason: result.reason });
+          return;
+        }
+        json(res, 200, { ok: true, recipientWaId: result.recipientWaId, resolvedJid: result.resolvedJid });
+      })().catch((error) => {
+        logger.error({
+          event: "whatsapp.web.worker.control.resolve_recipient_error",
           message: error instanceof Error ? error.message : "unknown_error",
         });
         json(res, 500, { ok: false, error: "server_error" });

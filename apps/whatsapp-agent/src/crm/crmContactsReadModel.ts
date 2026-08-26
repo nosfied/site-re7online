@@ -8,6 +8,10 @@ import { buildConversationProtocol } from "../inbox/conversationProtocol.js";
 import { getServiceCycleForDisplay } from "../conversation/serviceCycle.js";
 import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
+import {
+  buildCrmWhatsappIdentityCandidates,
+  normalizeCrmWhatsappIdentity,
+} from "./crmWhatsappIdentity.js";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -267,17 +271,11 @@ function buildIdentifierDisplay(lead: LeadRecord, contactDisplayName?: string | 
 
 function hasUsableWhatsappPhone(lead: LeadRecord) {
   if (!isWhatsappChannel(lead.channel)) return false;
-  return Boolean(normalizeOptOutWaId(lead.phone || lead.waIdCanonical || lead.waId));
+  return Boolean(normalizeCrmWhatsappIdentity(lead.phone || lead.waIdCanonical || lead.waId));
 }
 
 function getOptOutCanonicalCandidates(lead: LeadRecord) {
-  return Array.from(
-    new Set(
-      [lead.phone, lead.waIdCanonical, lead.waId]
-        .map((value) => normalizeOptOutWaId(value)?.waIdCanonical)
-        .filter((value): value is string => Boolean(value))
-    )
-  );
+  return buildCrmWhatsappIdentityCandidates([lead.phone, lead.waIdCanonical, lead.waId]);
 }
 
 function buildTemplateCandidate(lead: LeadRecord, activeOptOut: boolean) {
@@ -492,9 +490,9 @@ export async function buildCrmContactsPayload(
     };
   }
 
-  const identityKeys = Array.from(new Set(leads.map(getIdentityKey)));
-  const waIds = Array.from(new Set(leads.map((lead) => lead.waId)));
-  const canonicalWaIds = Array.from(new Set(leads.map((lead) => lead.waIdCanonical ?? lead.waId)));
+  const identityKeys = Array.from(new Set(leads.flatMap((lead) => buildCrmWhatsappIdentityCandidates([lead.phone, lead.waIdCanonical, lead.waId]))));
+  const waIds = Array.from(new Set(leads.flatMap((lead) => buildCrmWhatsappIdentityCandidates([lead.waId]))));
+  const canonicalWaIds = Array.from(new Set(leads.flatMap((lead) => buildCrmWhatsappIdentityCandidates([lead.waIdCanonical ?? lead.waId, lead.phone]))));
   const optOutCanonicalWaIds = Array.from(
     new Set(leads.flatMap((lead) => getOptOutCanonicalCandidates(lead)))
   );
@@ -503,13 +501,17 @@ export async function buildCrmContactsPayload(
     .filter((value): value is string => Boolean(value));
   const contactWhere = {
     clientId: params.clientId,
-    OR: [{ waId: { in: waIds } }, { waId: { in: canonicalWaIds } }],
+    OR: [
+      { waId: { in: identityKeys } },
+      { externalUserRef: { in: identityKeys } },
+      { legacyWaId: { in: identityKeys } },
+    ],
   };
   const conversationWhere = {
     clientId: params.clientId,
     deletedAt: null,
     anonymizedAt: null,
-    OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: canonicalWaIds } }],
+    OR: [{ waId: { in: identityKeys } }, { waIdCanonical: { in: identityKeys } }],
   };
 
   const [contacts, identities, conversations, runtimeStates, optOutEvents, importEvents] =
@@ -524,6 +526,8 @@ export async function buildCrmContactsPayload(
           provider: true,
           channelAccountId: true,
           externalUserHash: true,
+          externalUserRef: true,
+          legacyWaId: true,
           lifecycle: true,
           updatedAt: true,
         },
@@ -571,7 +575,7 @@ export async function buildCrmContactsPayload(
       prisma.conversationRuntimeState.findMany({
         where: {
           clientId: params.clientId,
-          OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: canonicalWaIds } }],
+          OR: [{ waId: { in: identityKeys } }, { waIdCanonical: { in: identityKeys } }],
         },
         select: {
           id: true,
@@ -616,29 +620,37 @@ export async function buildCrmContactsPayload(
 
   const contactByIdentity = new Map<string, (typeof contacts)[number]>();
   for (const contact of contacts) {
-    const key = contact.waId;
-    const current = contactByIdentity.get(key);
-    if (!current || contact.updatedAt > current.updatedAt) contactByIdentity.set(key, contact);
+    for (const key of [contact.waId, contact.externalUserRef, contact.legacyWaId].filter(Boolean) as string[]) {
+      const current = contactByIdentity.get(key);
+      if (!current || contact.updatedAt > current.updatedAt) contactByIdentity.set(key, contact);
+    }
   }
   const identityById = new Map(identities.map((identity) => [identity.id, identity]));
-  const conversationsByKey = new Map<
-    string,
-    { count: number; latest: (typeof conversations)[number] | null }
-  >();
+  const conversationsByKey = new Map<string, Array<(typeof conversations)[number]>>();
   for (const conversation of conversations) {
-    const key = getIdentityKey(conversation);
-    const current = conversationsByKey.get(key) ?? { count: 0, latest: null };
-    current.count += 1;
-    if (!current.latest || conversation.updatedAt > current.latest.updatedAt) {
-      current.latest = conversation;
+    for (const key of [conversation.waId, conversation.waIdCanonical].filter(Boolean) as string[]) {
+      const current = conversationsByKey.get(key) ?? [];
+      if (!current.some((item) => item.id === conversation.id)) current.push(conversation);
+      conversationsByKey.set(key, current);
     }
-    conversationsByKey.set(key, current);
   }
+  const getConversationSummary = (keys: string[]) => {
+    const byId = new Map<string, (typeof conversations)[number]>();
+    for (const candidate of keys) {
+      for (const conversation of conversationsByKey.get(candidate) ?? []) {
+        byId.set(conversation.id, conversation);
+      }
+    }
+    const values = Array.from(byId.values());
+    values.sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
+    return { count: values.length, latest: values[0] ?? null };
+  };
   const runtimeByKey = new Map<string, (typeof runtimeStates)[number]>();
   for (const runtime of runtimeStates) {
-    const key = getIdentityKey(runtime);
-    const current = runtimeByKey.get(key);
-    if (!current || runtime.updatedAt > current.updatedAt) runtimeByKey.set(key, runtime);
+    for (const key of [runtime.waId, runtime.waIdCanonical].filter(Boolean) as string[]) {
+      const current = runtimeByKey.get(key);
+      if (!current || runtime.updatedAt > current.updatedAt) runtimeByKey.set(key, runtime);
+    }
   }
   const activeOptOuts = resolveActiveOptOuts(optOutEvents);
   const importSourceByKey = new Map<string, string>();
@@ -658,6 +670,7 @@ export async function buildCrmContactsPayload(
   const allItems = leads
     .map((lead) => {
       const key = getIdentityKey(lead);
+      const leadCandidates = buildCrmWhatsappIdentityCandidates([lead.phone, lead.waIdCanonical, lead.waId]);
       const canonical = lead.waIdCanonical ?? lead.waId;
       const identity = lead.contactChannelIdentityId
         ? identityById.get(lead.contactChannelIdentityId)
@@ -665,11 +678,15 @@ export async function buildCrmContactsPayload(
       const contact =
         identity?.contact ??
         (identity?.contactId ? contacts.find((item) => item.id === identity.contactId) : null) ??
+        leadCandidates.map((candidate) => contactByIdentity.get(candidate)).find(Boolean) ??
         contactByIdentity.get(lead.waIdCanonical ?? "") ??
         contactByIdentity.get(lead.waId) ??
         null;
-      const conversationSummary = conversationsByKey.get(key) ?? { count: 0, latest: null };
-      const runtime = runtimeByKey.get(key) ?? null;
+      const conversationSummary = getConversationSummary([...leadCandidates, key]);
+      const runtime =
+        leadCandidates.map((candidate) => runtimeByKey.get(candidate)).find(Boolean) ??
+        runtimeByKey.get(key) ??
+        null;
       const hasConversationValue = conversationSummary.count > 0;
       const activeOptOut = getOptOutCanonicalCandidates(lead).some((candidate) =>
         activeOptOuts.has(candidate)

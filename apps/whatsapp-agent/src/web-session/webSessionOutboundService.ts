@@ -33,6 +33,10 @@ type WorkerSendMediaResult =
   | { ok: true; externalMessageId: string | null }
   | { ok: false; statusCode?: number; error?: string; message?: string };
 
+type WorkerResolveRecipientResult =
+  | { ok: true; recipientWaId: string; resolvedJid: string | null }
+  | { ok: false; statusCode?: number; error?: string; reason?: "not_registered" | "ambiguous" | "worker_unavailable" };
+
 export type WebSessionReplyReference = {
   externalMessageId: string;
   remoteJid: string;
@@ -292,6 +296,60 @@ async function callWorkerSendMedia(params: {
   }
 }
 
+async function callWorkerResolveRecipient(params: {
+  account: WebSessionChannelAccount;
+  tenantKey: string;
+  candidates: string[];
+  requestId: string;
+}) {
+  const baseUrl = process.env.WHATSAPP_WEB_WORKER_CONTROL_URL?.trim();
+  if (!baseUrl) {
+    return { ok: false as const, statusCode: 503, error: "web_session_worker_unavailable", reason: "worker_unavailable" as const };
+  }
+  const token = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN?.trim();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 16_000);
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/web-session/resolve-recipient`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        clientId: params.account.clientId,
+        tenantKey: params.tenantKey,
+        accountId: params.account.id,
+        channelAccountId: params.account.channelAccountId,
+        candidates: params.candidates,
+        requestId: params.requestId,
+      }),
+      signal: controller.signal,
+    });
+    const body = await response.json().catch(() => ({})) as WorkerResolveRecipientResult;
+    if (!response.ok || !body.ok) {
+      return {
+        ok: false as const,
+        statusCode: response.status || (!body.ok && body.statusCode) || 502,
+        error: body.ok ? "web_session_recipient_resolution_failed" : body.error ?? "web_session_recipient_resolution_failed",
+        reason: body.ok ? undefined : body.reason,
+      };
+    }
+    return body;
+  } catch (error) {
+    return {
+      ok: false as const,
+      statusCode: error instanceof Error && error.name === "AbortError" ? 504 : 502,
+      error: error instanceof Error && error.name === "AbortError"
+        ? "web_session_recipient_resolution_timeout"
+        : "web_session_worker_unavailable",
+      reason: "worker_unavailable" as const,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function isWebSessionTextOutboundReady(params: {
   prisma: PrismaClient;
   clientId: string;
@@ -300,6 +358,38 @@ export async function isWebSessionTextOutboundReady(params: {
 }) {
   const account = await findWebSessionAccount(params);
   return Boolean(account && isWebSessionAccountConnected(account));
+}
+
+export async function resolveWebSessionTextRecipient(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientKey: string;
+  channelAccountId?: string | null;
+  candidates: string[];
+  requestId: string;
+}) {
+  const account = await findWebSessionAccount(params);
+  if (!account) return { ok: false as const, reason: "not_registered" as const };
+  if (!isWebSessionAccountConnected(account)) {
+    return { ok: false as const, reason: "worker_unavailable" as const };
+  }
+  const candidates = Array.from(
+    new Set(params.candidates.map((candidate) => normalizeRecipientWaId(candidate)).filter(Boolean))
+  ) as string[];
+  if (candidates.length === 0) return { ok: false as const, reason: "not_registered" as const };
+  const result = await callWorkerResolveRecipient({
+    account,
+    tenantKey: params.clientKey,
+    candidates,
+    requestId: params.requestId,
+  });
+  if (!result.ok) {
+    return {
+      ok: false as const,
+      reason: result.reason === "ambiguous" ? "ambiguous" as const : "not_registered" as const,
+    };
+  }
+  return { ok: true as const, recipientWaId: result.recipientWaId, resolvedJid: result.resolvedJid };
 }
 
 export async function createWebSessionTextOutboundMessage(params: {

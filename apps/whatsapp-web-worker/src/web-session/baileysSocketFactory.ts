@@ -76,6 +76,7 @@ export type BaileysSocketLike = {
     process?: (handler: (events: Record<string, unknown>) => unknown) => unknown;
   };
   sendMessage?: (jid: string, content: Record<string, unknown>, options?: Record<string, unknown>) => Promise<unknown>;
+  onWhatsApp?: (...jids: string[]) => Promise<Array<{ jid?: string; exists?: boolean }> | undefined>;
   updateMediaMessage?: (message: unknown) => Promise<unknown>;
   user?: unknown;
   end?: (error?: Error) => void;
