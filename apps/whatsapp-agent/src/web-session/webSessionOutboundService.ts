@@ -50,6 +50,7 @@ type WebSessionChannelAccount = {
   provider: string;
   channelAccountId: string;
   enabled: boolean;
+  outboundEnabled: boolean;
   runtimeEnabled: boolean;
   status: string;
   metadata: unknown;
@@ -97,7 +98,7 @@ function isWebSessionAccountConnected(account: WebSessionChannelAccount) {
   if (account.client.status !== "ACTIVE") return false;
   if (getFeatures(account.client).whatsappWebSession !== true) return false;
   if (account.channel !== "whatsapp" || account.provider !== "web_session") return false;
-  if (!account.enabled || !account.runtimeEnabled) return false;
+  if (!account.enabled || !account.outboundEnabled || !account.runtimeEnabled) return false;
   if (account.status !== "connected") return false;
   return readWebSessionLifecycle(account.metadata).observedState === "CONNECTED";
 }

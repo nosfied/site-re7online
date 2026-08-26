@@ -330,6 +330,15 @@ export type AppCrmContactItem = {
   lastConversationUpdatedAt: string | null;
   conversationsCount: number;
   hasConversation: boolean;
+  canStartConversation?: boolean;
+  startConversationBlockedReason?:
+    | "contact_not_active"
+    | "invalid_identity"
+    | "channel_unavailable"
+    | "new_freeform_requires_model"
+    | "not_authorized"
+    | "active_send_blocked"
+    | null;
   activeOptOut: boolean;
   isAnonymized: boolean;
   importedSource: string | null;
@@ -778,6 +787,7 @@ type AppConversationOperationalPayload = {
   queueId: string | null;
   queueName: string | null;
   status: ConversationOperationalStatus | null;
+  humanInboxVisible?: boolean;
   closedAt: string | null;
   awaitingConsent?: boolean;
   lastInboundAt: string | null;
@@ -2766,6 +2776,30 @@ export async function sendAppConversationMessage(
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/send`, {
     method: "POST",
     body: JSON.stringify({ text, ...(replyTo ? { replyTo } : {}) }),
+  });
+}
+
+export async function startAppCrmContactConversation(
+  session: AppSession,
+  leadId: string,
+  text: string
+): Promise<AppConversationOperationalPayload & {
+  message: {
+    messageId: string;
+    internalMessageId?: string | null;
+    status: string;
+    metaMessageId: string | null;
+    createdAt: string;
+    bodyText?: string | null;
+    agentSignatureApplied?: boolean;
+    agentSignatureFormat?: "bold_line" | string | null;
+    replyTo?: InboxMessageItem["replyTo"];
+    actor?: InboxMessageItem["actor"];
+  };
+}> {
+  return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}/start-conversation`, {
+    method: "POST",
+    body: JSON.stringify({ text }),
   });
 }
 

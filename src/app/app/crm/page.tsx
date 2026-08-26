@@ -96,6 +96,14 @@ function getDisplayName(item: AppCrmContactItem) {
   return item.displayName || item.identifierDisplay || "Contato";
 }
 
+function canOpenOrStartConversation(item: AppCrmContactItem, canViewHistory: boolean) {
+  return canViewHistory && (Boolean(item.lastConversationIdentity || item.lastConversationId) || item.canStartConversation === true);
+}
+
+function getConversationActionLabel(item: AppCrmContactItem) {
+  return item.lastConversationIdentity || item.lastConversationId ? "Abrir conversa" : "Iniciar conversa";
+}
+
 function ActionIconButton({
   label,
   icon,
@@ -159,7 +167,7 @@ function CrmContactRow({
   onCopyIdentifier: (item: AppCrmContactItem) => void;
 }) {
   const identifier = item.phoneDisplay || item.identifierDisplay;
-  const canOpenConversation = canViewHistory && Boolean(item.lastConversationIdentity || item.lastConversationId);
+  const canOpenConversation = canOpenOrStartConversation(item, canViewHistory);
   return (
     <tr className="border-b border-white/10 align-top transition hover:bg-white/[0.04]">
       <td className="px-4 py-3">
@@ -194,7 +202,7 @@ function CrmContactRow({
               onClick={() => onOpenConversation(item)}
               className="text-left text-sm font-semibold text-re7-sky transition hover:brightness-125"
             >
-              {item.lastProtocol || "Abrir conversa"}
+              {item.lastProtocol || getConversationActionLabel(item)}
             </button>
           ) : (
             <span className="text-sm theme-muted">Sem conversa</span>
@@ -219,7 +227,7 @@ function CrmContactRow({
           <ActionIconButton label="Abrir cadastro" icon="i" onClick={() => onOpenDetail(item)} />
           <ActionIconButton label="Copiar referência" icon="#" onClick={() => onCopyIdentifier(item)} />
           <ActionIconButton
-            label="Abrir conversa na caixa de entrada"
+            label={`${getConversationActionLabel(item)} na caixa de entrada`}
             icon=">"
             onClick={() => onOpenConversation(item)}
             disabled={!canOpenConversation}
@@ -275,6 +283,7 @@ function CrmContactDetailDrawer({
   onClose,
   onRefresh,
   onOpenInbox,
+  onOpenContactStart,
   onCopyReference,
   onUpdateBasics,
   onUpdateStatus,
@@ -289,6 +298,7 @@ function CrmContactDetailDrawer({
   onClose: () => void;
   onRefresh: () => void;
   onOpenInbox: (conversationIdentity: string) => void;
+  onOpenContactStart: (item: AppCrmContactItem) => void;
   onCopyReference: (value: string) => void;
   onUpdateBasics: (
     leadId: string,
@@ -597,8 +607,16 @@ function CrmContactDetailDrawer({
                   </p>
                   <div className="mt-4 grid gap-2">
                     {conversations.length === 0 ? (
-                      <div className="rounded-lg border border-white/10 p-4 text-sm theme-muted">
-                        Nenhuma conversa relacionada encontrada.
+                      <div className="grid gap-3 rounded-lg border border-white/10 p-4 text-sm theme-muted md:grid-cols-[1fr_auto] md:items-center">
+                        <span>Nenhuma conversa relacionada encontrada.</span>
+                        {item.canStartConversation ? (
+                          <ActionIconButton
+                            label="Iniciar conversa na caixa de entrada"
+                            icon=">"
+                            onClick={() => onOpenContactStart(item)}
+                            variant="primary"
+                          />
+                        ) : null}
                       </div>
                     ) : (
                       conversations.map((conversation) => (
@@ -1081,7 +1099,12 @@ export default function AppCrmContactsPage() {
   const openConversation = useCallback(
     (item: AppCrmContactItem) => {
       const conversationIdentity = item.lastConversationIdentity || item.lastConversationId;
-      if (!conversationIdentity) return;
+      if (!conversationIdentity) {
+        if (item.canStartConversation === true) {
+          router.push(`/app/inbox?crmContact=${encodeURIComponent(item.leadId)}`);
+        }
+        return;
+      }
       router.push(`/app/inbox?conversation=${encodeURIComponent(conversationIdentity)}`);
     },
     [router]
@@ -1533,6 +1556,7 @@ export default function AppCrmContactsPage() {
           statuses={statuses}
           onRefresh={() => loadContactDetail(selectedLeadId)}
           onOpenInbox={openConversationIdentity}
+          onOpenContactStart={openConversation}
           onCopyReference={copyReference}
           onUpdateBasics={updateContactBasics}
           onUpdateStatus={updateContactStatus}

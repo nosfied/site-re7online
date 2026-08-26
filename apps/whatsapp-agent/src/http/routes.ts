@@ -348,6 +348,10 @@ import {
 } from "../operations/operationsBoardReadModel.js";
 import { buildCrmContactDetailPayload, buildCrmContactsPayload } from "../crm/crmContactsReadModel.js";
 import {
+  isWhatsappFreeformStartTransportReady,
+  resolveCrmContactConversationStartEligibility,
+} from "../crm/crmConversationStart.js";
+import {
   CrmContactMutationError,
   recordCrmContactOptOut,
   revokeCrmContactOptOut,
@@ -476,6 +480,7 @@ import {
   buildConversationProtocolNotice,
   normalizeConversationProtocol,
 } from "../inbox/conversationProtocol.js";
+import { makeConversationKey } from "../storage/conversationKey.js";
 import {
   isManagementOnlyInboxMessage,
   shouldProjectConversationToHumanInbox,
@@ -490,6 +495,7 @@ import {
   getServiceCycleForDisplay,
   getServiceCycleSnapshot,
   recordServiceCycleEvent,
+  startNewServiceCycle,
   type ServiceCycleHistory,
 } from "../conversation/serviceCycle.js";
 import { buildConversationOperationalTimingFields } from "../inbox/conversationOperationalTiming.js";
@@ -10514,10 +10520,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         tenant,
       });
+      const startReadiness = isAgentRole(clientAuth.role)
+        ? { allowed: false as const, reason: "not_authorized" as const }
+        : await isWhatsappFreeformStartTransportReady({
+            prisma,
+            clientId: client.id,
+            clientKey: client.clientKey,
+            clientStatus: client.status,
+          });
       const payload = await buildCrmContactsPayload(prisma, {
         clientId: client.id,
         query: isAgentRole(clientAuth.role) ? { ...query, hasConversation: null } : query,
         statuses: resolvedStatuses.statuses,
+        canStartWhatsappFreeform: startReadiness.allowed,
+        startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
       });
       json(res, 200, isAgentRole(clientAuth.role) ? stripCrmHistoryFromContactsPayload(payload) : payload);
     } catch (error) {
@@ -10576,10 +10592,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         tenant,
       });
+      const startReadiness = isAgentRole(clientAuth.role)
+        ? { allowed: false as const, reason: "not_authorized" as const }
+        : await isWhatsappFreeformStartTransportReady({
+            prisma,
+            clientId: client.id,
+            clientKey: client.clientKey,
+            clientStatus: client.status,
+          });
       const payload = await buildCrmContactDetailPayload(prisma, {
         clientId: client.id,
         leadId: result.leadId,
         statuses: resolvedStatuses.statuses,
+        canStartWhatsappFreeform: startReadiness.allowed,
+        startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
       });
       if (!payload) {
         json(res, 500, httpError("server_error", "Contact was created but read model was unavailable"));
@@ -10720,10 +10746,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         tenant,
       });
+      const startReadiness = isAgentRole(clientAuth.role)
+        ? { allowed: false as const, reason: "not_authorized" as const }
+        : await isWhatsappFreeformStartTransportReady({
+            prisma,
+            clientId: client.id,
+            clientKey: client.clientKey,
+            clientStatus: client.status,
+          });
       const payload = await buildCrmContactDetailPayload(prisma, {
         clientId: client.id,
         leadId,
         statuses: resolvedStatuses.statuses,
+        canStartWhatsappFreeform: startReadiness.allowed,
+        startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
       });
       if (!payload) {
         json(res, 404, httpError("contact_not_found", "Contact not found"));
@@ -10733,6 +10769,299 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.crm.contact_detail.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/crm/contacts/") &&
+    pathname.split("/").length === 6 &&
+    pathname.endsWith("/start-conversation")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (isPlatformSupportAuth(clientAuth)) {
+      blockPlatformSupportOperationalAction(res, "iniciar conversa pelo CRM");
+      return;
+    }
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can start CRM conversations."));
+        return;
+      }
+      const leadId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+      if (!leadId) {
+        json(res, 400, httpError("bad_request", "Invalid contact id"));
+        return;
+      }
+      const body = (await readJsonBody(req, res)) as Record<string, unknown> | null;
+      if (!body) return;
+      const text = String(body.text ?? "").trim();
+      if (!text) {
+        json(res, 400, httpError("bad_request", "Mensagem obrigatoria."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: "/app/crm/contacts/:leadId/start-conversation",
+          requestId,
+        }))
+      ) {
+        return;
+      }
+      const eligibility = await resolveCrmContactConversationStartEligibility({
+        prisma,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        clientStatus: client.status,
+        leadId,
+        actorRole: clientAuth.role,
+      });
+      if (!eligibility.allowed) {
+        const message =
+          eligibility.reason === "new_freeform_requires_model"
+            ? "Para iniciar um novo contato, utilize um Modelo Meta."
+            : eligibility.reason === "channel_unavailable"
+              ? "Envio indisponivel neste canal."
+              : eligibility.reason === "contact_not_active"
+                ? "Contato indisponivel para iniciar conversa."
+                : eligibility.reason === "active_send_blocked"
+                  ? "Contato bloqueado para envio ativo."
+                  : "Nao foi possivel iniciar conversa para este contato.";
+        json(res, eligibility.reason === "contact_not_found" ? 404 : 409, httpError(eligibility.reason, message));
+        return;
+      }
+
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: eligibility.waId,
+        requestId,
+        source: "app_crm_contact_start_conversation",
+      });
+      const currentConversation = await loadInboxConversationState(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: resolvedConversation.resolvedWaId,
+        channel: "whatsapp",
+      });
+      const currentStatus = normalizeConversationOperationalStatus(currentConversation?.status);
+      if (currentConversation && currentStatus !== ConversationOperationalStatus.CLOSED) {
+        json(res, 409, {
+          ...httpError("open_existing_conversation", "Abra a conversa existente na Caixa de entrada."),
+          conversationIdentity: resolvedConversation.resolvedWaIdCanonical,
+        });
+        return;
+      }
+
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
+      const departmentId = departmentAccess.departmentId ?? defaults.department?.id ?? null;
+      const queueId = departmentId
+        ? (
+            await ensureQueueForDepartment(prisma, {
+              clientId: client.id,
+              departmentId,
+            })
+          ).id
+        : null;
+      const assignedAt = new Date();
+      const assignedAtIso = assignedAt.toISOString();
+      const conversationRow = await prisma.conversation.upsert({
+        where: {
+          clientId_waId: {
+            clientId: client.id,
+            waId: resolvedConversation.resolvedWaId,
+          },
+        },
+        update: {
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          channel: "whatsapp",
+          provider: "web_session",
+          channelAccountId: null,
+          deletedAt: null,
+          closedAt: null,
+          lastOutboundAt: assignedAt,
+          departmentId,
+        },
+        create: {
+          clientId: client.id,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          channel: "whatsapp",
+          provider: "web_session",
+          channelAccountId: null,
+          windowIsOpen: true,
+          lastOutboundAt: assignedAt,
+          departmentId,
+        },
+        select: { id: true, createdAt: true },
+      });
+      const baseState: ConversationState = {
+        ...(currentConversation ?? {
+          clientKey: client.clientKey,
+          conversationKey: makeConversationKey(client.clientKey, resolvedConversation.resolvedWaId),
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          firstSeenAt: conversationRow.createdAt.toISOString(),
+          lastInboundAt: "",
+          window: { isOpen: true },
+          intent: "unknown",
+          handoff: { status: "none" },
+          answers: {},
+          mode: "HUMAN" as const,
+        }),
+        clientKey: client.clientKey,
+        conversationKey:
+          currentConversation?.conversationKey ?? makeConversationKey(client.clientKey, resolvedConversation.resolvedWaId),
+        waId: resolvedConversation.resolvedWaId,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        window: { ...(currentConversation?.window ?? {}), isOpen: true },
+        mode: "HUMAN",
+        handoff: {
+          ...(currentConversation?.handoff ?? {}),
+          status: "active",
+          activatedAt: assignedAtIso,
+        },
+        assignedUserId: clientAuth.userId,
+        assignedTo: `user:${clientAuth.userId}`,
+        assignedAt: assignedAtIso,
+        departmentId,
+        queueId,
+        status: ConversationOperationalStatus.IN_PROGRESS,
+        closedAt: null,
+      };
+      const cycleResult = startNewServiceCycle(
+        clearSatisfactionRuntimeForNewServiceCycle(baseState),
+        assignedAt,
+        "crm_contact_start"
+      );
+      const nextState = cycleResult.state;
+      await runtimeStorage.upsertConversation(nextState);
+      await recordServiceCycleEvent({
+        prisma,
+        clientId: client.id,
+        conversationId: conversationRow.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        requestId,
+        action: "started",
+        cycle: cycleResult.cycle,
+      });
+      await recordConversationAssignment(prisma, {
+        clientId: client.id,
+        waId: nextState.waId,
+        fromUserId: currentConversation?.assignedUserId ?? null,
+        toUserId: clientAuth.userId,
+        assignedAt: assignedAtIso,
+      });
+      await recordConversationAuditEvent(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        eventName: "conversation.assigned",
+        actorUserId: clientAuth.userId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: conversationRow.id,
+        payload: {
+          source: "crm_contact_start",
+          fromUserId: currentConversation?.assignedUserId ?? null,
+          toUserId: clientAuth.userId,
+          assignedAt: assignedAtIso,
+          departmentId,
+          queueId,
+          status: nextState.status,
+        },
+      });
+      const result = await createWebSessionTextOutboundMessage({
+        prisma,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        text,
+        clientKey: client.clientKey,
+        clientId: client.id,
+        requestId,
+        actorUserId: clientAuth.userId,
+        outboundSource: "inbox_text",
+        source: { channel: "whatsapp", provider: "web_session", channelAccountId: null },
+        conversation: nextState,
+        serviceCycle: cycleResult.cycle,
+      });
+      if (!result.ok) {
+        json(res, result.statusCode, httpError(result.error, result.message ?? "Falha ao enviar mensagem."));
+        return;
+      }
+      const updatedState: ConversationState = {
+        ...nextState,
+        lastOutboundAt: result.createdAt,
+        lastOutboundMessageId: result.messageId,
+      };
+      await runtimeStorage.upsertConversation(updatedState);
+      const payload = await publishConversationOperationalUpdate(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: updatedState,
+        waIdCanonical: updatedState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        updatedAt: result.createdAt,
+        reason: "claimed",
+        assignedUserName: await findAssignedUserName(prisma, client.id, clientAuth.userId),
+      });
+      const actorUser = await prisma.user.findFirst({
+        where: { id: clientAuth.userId, clientId: client.id },
+        select: { name: true },
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? updatedState.waId,
+        waIdCanonical: payload.waIdCanonical ?? updatedState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        channel: "whatsapp",
+        provider: "web_session",
+        channelAccountId: null,
+        message: {
+          protocol: cycleResult.cycle.protocol,
+          cycleId: cycleResult.cycle.cycleId,
+          messageId: result.messageId,
+          internalMessageId: result.internalMessageId ?? null,
+          status: result.status,
+          metaMessageId: result.metaMessageId,
+          createdAt: result.createdAt,
+          bodyText: result.bodyText,
+          agentSignatureApplied: result.agentSignatureApplied,
+          agentSignatureFormat: result.agentSignatureFormat,
+          replyTo: null,
+          actor: {
+            source: "human_inbox",
+            userId: clientAuth.userId,
+            displayName: actorUser?.name ?? null,
+          },
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.crm.contact_start_conversation.error",
         message: (error as Error).message,
         requestId,
       });
@@ -10792,6 +11121,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         tenant,
       });
+      const startReadiness = isAgentRole(clientAuth.role)
+        ? { allowed: false as const, reason: "not_authorized" as const }
+        : await isWhatsappFreeformStartTransportReady({
+            prisma,
+            clientId: client.id,
+            clientKey: client.clientKey,
+            clientStatus: client.status,
+          });
       const body =
         req.method === "DELETE" ? {} : ((await readJsonBody(req, res)) as Record<string, unknown> | null);
       if (!body) return;
@@ -10835,6 +11172,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         leadId,
         statuses: resolvedStatuses.statuses,
+        canStartWhatsappFreeform: startReadiness.allowed,
+        startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
       });
       if (!payload) {
         json(res, 404, httpError("contact_not_found", "Contact not found"));

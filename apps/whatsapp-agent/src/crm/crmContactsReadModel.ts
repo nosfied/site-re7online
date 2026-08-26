@@ -46,6 +46,15 @@ export type CrmContactListItem = {
   lastConversationUpdatedAt: string | null;
   conversationsCount: number;
   hasConversation: boolean;
+  canStartConversation: boolean;
+  startConversationBlockedReason:
+    | "contact_not_active"
+    | "invalid_identity"
+    | "channel_unavailable"
+    | "new_freeform_requires_model"
+    | "not_authorized"
+    | "active_send_blocked"
+    | null;
   activeOptOut: boolean;
   isAnonymized: boolean;
   importedSource: string | null;
@@ -391,6 +400,12 @@ export async function buildCrmContactsPayload(
     clientId: string;
     query: CrmContactsQuery;
     statuses: CrmStatusConfig[];
+    canStartWhatsappFreeform?: boolean;
+    startConversationBlockedReason?:
+      | "channel_unavailable"
+      | "new_freeform_requires_model"
+      | "not_authorized"
+      | null;
     now?: Date;
     includeAnonymized?: boolean;
   }
@@ -662,6 +677,18 @@ export async function buildCrmContactsPayload(
       const templateCandidate = buildTemplateCandidate(lead, activeOptOut);
       const isAnonymized = isAnonymizedContactRecord(lead, contact, identity);
       const isOperationalContact = !contact || isOperationalContactLifecycle(contact.lifecycle);
+      const startConversationBlockedReason =
+        hasConversationValue
+          ? null
+          : !isOperationalContact
+            ? "contact_not_active"
+            : !templateCandidate.hasValidWhatsappIdentity
+              ? "invalid_identity"
+              : activeOptOut
+                ? "active_send_blocked"
+                : params.canStartWhatsappFreeform === true
+                  ? null
+                  : params.startConversationBlockedReason ?? "channel_unavailable";
       const displayName =
         normalizeOptionalText(lead.name) ??
         normalizeOptionalText(identity?.displayName) ??
@@ -693,6 +720,11 @@ export async function buildCrmContactsPayload(
         lastConversationUpdatedAt: lastConversation?.updatedAt.toISOString() ?? null,
         conversationsCount: conversationSummary.count,
         hasConversation: hasConversationValue,
+        canStartConversation:
+          !hasConversationValue &&
+          !isAnonymized &&
+          startConversationBlockedReason === null,
+        startConversationBlockedReason,
         activeOptOut,
         isAnonymized,
         importedSource: importSourceByKey.get(canonical) ?? null,
@@ -746,6 +778,12 @@ export async function buildCrmContactDetailPayload(
     clientId: string;
     leadId: string;
     statuses: CrmStatusConfig[];
+    canStartWhatsappFreeform?: boolean;
+    startConversationBlockedReason?:
+      | "channel_unavailable"
+      | "new_freeform_requires_model"
+      | "not_authorized"
+      | null;
     now?: Date;
   }
 ): Promise<CrmContactDetailPayload | null> {
@@ -939,6 +977,21 @@ export async function buildCrmContactDetailPayload(
   const effectiveContact = identity?.contact ?? contact;
   if (effectiveContact && !isOperationalContactLifecycle(effectiveContact.lifecycle)) return null;
   if (isAnonymized) return null;
+  const canStartConversation =
+    conversations.length === 0 &&
+    templateCandidate.hasValidWhatsappIdentity &&
+    !activeOptOut &&
+    params.canStartWhatsappFreeform === true;
+  const startConversationBlockedReason =
+    conversations.length > 0
+      ? null
+      : !templateCandidate.hasValidWhatsappIdentity
+        ? "invalid_identity"
+        : activeOptOut
+          ? "active_send_blocked"
+          : canStartConversation
+            ? null
+            : params.startConversationBlockedReason ?? "channel_unavailable";
   const displayName =
     normalizeOptionalText(lead.name) ??
     normalizeOptionalText(identity?.displayName) ??
@@ -979,6 +1032,8 @@ export async function buildCrmContactDetailPayload(
       lastConversationUpdatedAt: latestConversation?.updatedAt.toISOString() ?? null,
       conversationsCount: conversations.length,
       hasConversation: conversations.length > 0,
+      canStartConversation,
+      startConversationBlockedReason,
       activeOptOut,
       isAnonymized,
       importedSource: importSource,

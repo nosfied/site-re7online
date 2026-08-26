@@ -55,6 +55,7 @@ import {
   createAppLeadNote,
   fetchAppConversation,
   fetchAppConversationTimeline,
+  fetchAppCrmContactDetail,
   fetchAppConversations,
   fetchAppCrmStatuses,
   fetchAppDepartments,
@@ -76,6 +77,7 @@ import {
   sendAppConversationCannedReply,
   sendAppConversationMessage,
   sendAppConversationTemplate,
+  startAppCrmContactConversation,
   transferAppConversation,
   transferAppConversationDepartment,
   updateAppConversationStatus,
@@ -1135,6 +1137,12 @@ type PendingOutgoingMessage = {
   conversationKey: string;
   text: string;
   replyTo: InboxReplyTarget | null;
+};
+
+type CrmConversationStartContext = {
+  leadId: string;
+  displayName: string;
+  identifierDisplay: string;
 };
 
 type InboxReplyMode = "reply" | "rectify";
@@ -2316,6 +2324,7 @@ export default function AppInboxPage() {
   const [transferDepartments, setTransferDepartments] = useState<AdminDepartmentItem[]>([]);
   const [selectedConversationKey, setSelectedConversationKey] = useState<string | null>(null);
   const [selectedConversationWaId, setSelectedConversationWaId] = useState<string | null>(null);
+  const [crmStartContext, setCrmStartContext] = useState<CrmConversationStartContext | null>(null);
   const [messages, setMessages] = useState<InboxMessageItem[]>([]);
   const [inboxVisibilityPolicy, setInboxVisibilityPolicy] = useState<AppInboxVisibilityPolicy>("shared");
   const [messagesConversationKey, setMessagesConversationKey] = useState<string | null>(null);
@@ -2502,6 +2511,7 @@ export default function AppInboxPage() {
     pendingUnreadAnchorMessageIdRef.current = null;
     setSelectedConversationKey(null);
     setSelectedConversationWaId(null);
+    setCrmStartContext(null);
     setActiveConversationIdentity(null);
     setMessages([]);
     setMessagesConversationKey(null);
@@ -2522,6 +2532,48 @@ export default function AppInboxPage() {
     setContactTimelineError(null);
     setOpenMessageActionsId(null);
   }, []);
+
+  useEffect(() => {
+    if (!session || typeof window === "undefined") return;
+    const leadId = new URLSearchParams(window.location.search).get("crmContact")?.trim() ?? "";
+    if (!leadId) return;
+    let cancelled = false;
+    fetchAppCrmContactDetail(session, leadId)
+      .then((response) => {
+        if (cancelled) return;
+        const conversationIdentity = response.item.lastConversationIdentity || response.item.lastConversationId;
+        if (conversationIdentity) {
+          router.replace(`/app/inbox?conversation=${encodeURIComponent(conversationIdentity)}`);
+          return;
+        }
+        if (response.item.canStartConversation !== true) {
+          setError("Não é possível iniciar conversa livre para este contato.");
+          setErrorDetails(null);
+          router.replace("/app/inbox");
+          return;
+        }
+        clearSelectedConversation();
+        setCrmStartContext({
+          leadId: response.item.leadId,
+          displayName: response.item.displayName || response.item.identifierDisplay || "Contato",
+          identifierDisplay: response.item.phoneDisplay || response.item.identifierDisplay,
+        });
+        router.replace("/app/inbox");
+      })
+      .catch((err: { status?: number; message?: string }) => {
+        if (cancelled) return;
+        if (err.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setError(getAppErrorUxMessage({ status: err.status, message: err.message, fallback: "Não foi possível preparar o contato." }));
+        setErrorDetails(null);
+        router.replace("/app/inbox");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clearSelectedConversation, handleUnauthorized, router, session]);
 
   const loadContactTimeline = useCallback(
     async (mode: "reset" | "append" = "reset") => {
@@ -4564,6 +4616,7 @@ export default function AppInboxPage() {
     setMessagesConversationKey(hasCachedTimeline ? conversationIdentity : null);
     setSelectedConversationKey(conversationIdentity);
     setSelectedConversationWaId(item.waId);
+    setCrmStartContext(null);
     setShowMoreActions(false);
     detailRequestSeqRef.current += 1;
     stabilizeMobileConversationViewport();
@@ -4808,7 +4861,8 @@ export default function AppInboxPage() {
     getInboxTextOutboundDisabledMessage(selectedConversationChannel, selectedConversation);
   const selectedConversationMediaOutboundDisabledMessage =
     getInboxMediaOutboundDisabledMessage(selectedConversationChannel, selectedConversation);
-  const composerEnabled = canReply && selectedConversationSupportsOutbound;
+  const crmStartComposerEnabled = Boolean(crmStartContext && session);
+  const composerEnabled = (canReply && selectedConversationSupportsOutbound) || crmStartComposerEnabled;
   const templateComposerEnabled = canReply && selectedConversationSupportsTemplateOutbound;
   const cannedRepliesFeatureEnabled = hasCapability(session, "cannedReplies");
   const cannedComposerEnabled =
@@ -4951,7 +5005,7 @@ export default function AppInboxPage() {
   ]);
 
   useEffect(() => {
-    if (!selectedConversationWaId || !composerEnabled || sendingMessage || conversationAction) {
+    if ((!selectedConversationWaId && !crmStartContext) || !composerEnabled || sendingMessage || conversationAction) {
       return;
     }
     const frame = window.requestAnimationFrame(() => {
@@ -4961,6 +5015,7 @@ export default function AppInboxPage() {
   }, [
     focusComposer,
     composerEnabled,
+    crmStartContext,
     selectedConversationKey,
     selectedConversationWaId,
     sendingMessage,
@@ -5315,7 +5370,113 @@ export default function AppInboxPage() {
   }, [handleUnauthorized, selectedConversationWaId, session]);
 
   const handleSendMessage = async () => {
-    if (!session || !selectedConversationWaId || !selectedConversation) return;
+    if (!session) return;
+    if (crmStartContext && !selectedConversationWaId && !selectedConversation) {
+      const text = messageDraft.trim();
+      if (!text) return;
+      setSendingMessage(true);
+      setError(null);
+      setErrorDetails(null);
+      setMessageDraft("");
+      try {
+        const response = await startAppCrmContactConversation(session, crmStartContext.leadId, text);
+        const conversationKey = response.waIdCanonical ?? response.waId;
+        const outboundMessage: InboxMessageItem = {
+          direction: "OUTBOUND",
+          type: "TEXT",
+          status: response.message.status,
+          intent: null,
+          bodyText: response.message.bodyText ?? text,
+          agentSignatureApplied: response.message.agentSignatureApplied ?? false,
+          agentSignatureFormat: response.message.agentSignatureFormat ?? null,
+          media: null,
+          templateName: null,
+          templateLang: null,
+          requestId: null,
+          messageId: response.message.messageId,
+          internalMessageId: response.message.internalMessageId ?? null,
+          metaMessageId: response.message.metaMessageId,
+          actor: response.message.actor ?? {
+            source: "human_inbox",
+            userId: session.user.id,
+            displayName: session.user.name || session.user.email || null,
+          },
+          replyTo: null,
+          errorBody: null,
+          createdAt: response.message.createdAt,
+        };
+        const startedConversation: InboxConversationItem = {
+          waId: response.waId,
+          waIdCanonical: response.waIdCanonical ?? null,
+          protocol: response.protocol ?? null,
+          cycleId: response.cycleId ?? null,
+          channel: response.channel ?? "whatsapp",
+          provider: response.provider ?? "web_session",
+          channelAccountId: response.channelAccountId ?? null,
+          channelOutboundEnabled: response.channelOutboundEnabled,
+          lastMessage: {
+            direction: "OUTBOUND",
+            type: "TEXT",
+            status: response.message.status,
+            messageId: response.message.messageId,
+            bodyText: response.message.bodyText ?? text,
+            templateName: null,
+            createdAt: response.message.createdAt,
+          },
+          leadId: crmStartContext.leadId,
+          leadStatus: null,
+          leadName: crmStartContext.displayName,
+          leadPhone: crmStartContext.identifierDisplay,
+          leadCity: null,
+          leadService: null,
+          leadEmail: null,
+          leadCompany: null,
+          mode: response.mode,
+          handoffStatus: response.handoffStatus ?? null,
+          assignedUserId: response.assignedUserId,
+          assignedTo: response.assignedTo,
+          assignedUserName: response.assignedUserName,
+          assignedAt: response.assignedAt,
+          departmentId: response.departmentId,
+          departmentName: response.departmentName,
+          queueId: response.queueId,
+          queueName: response.queueName,
+          status: response.status,
+          humanInboxVisible: response.humanInboxVisible,
+          closedAt: response.closedAt,
+          lastInboundAt: response.lastInboundAt,
+          lastOutboundAt: response.message.createdAt,
+          unreadCount: 0,
+          isUnassigned: response.isUnassigned,
+          flowContext: response.flowContext,
+          flowTags: response.flowTags,
+          continuation: response.continuation ?? null,
+          updatedAt: response.message.createdAt,
+        };
+        setCrmStartContext(null);
+        setConversations((prev) => dedupeConversationsByIdentity([startedConversation, ...prev], isBusinessTenant));
+        setSelectedConversationKey(conversationKey);
+        setSelectedConversationWaId(response.waId);
+        setMessages([outboundMessage]);
+        setMessagesConversationKey(conversationKey);
+        timelineCacheRef.current.set(response.waId, [outboundMessage]);
+        markConversationIdentitiesAsRead([response.waIdCanonical, response.waId, conversationKey], response.message.createdAt, response.waId);
+      } catch (err) {
+        const typed = err as { status?: number; message?: string; details?: string };
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setMessageDraft((current) => (current.trim() ? current : text));
+        setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível iniciar a conversa." }));
+        setErrorDetails(typed.details || null);
+      } finally {
+        setSendingMessage(false);
+        focusComposer();
+      }
+      return;
+    }
+    if (!selectedConversationWaId || !selectedConversation) return;
     if (!selectedConversationSupportsOutbound) {
       setError(selectedConversationOutboundDisabledMessage);
       setErrorDetails(null);
@@ -7487,10 +7648,12 @@ export default function AppInboxPage() {
                     ☰
                   </div>
                   <p className="mt-3 text-sm font-semibold text-slate-900">
-                    Selecione uma conversa
+                    {crmStartContext ? crmStartContext.displayName : "Selecione uma conversa"}
                   </p>
                   <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                    O histórico e as ações do atendimento aparecem aqui.
+                    {crmStartContext
+                      ? `${crmStartContext.identifierDisplay}. A conversa será criada somente ao enviar a primeira mensagem.`
+                      : "O histórico e as ações do atendimento aparecem aqui."}
                   </p>
                 </div>
               </div>
@@ -7911,19 +8074,19 @@ export default function AppInboxPage() {
                   placeholder={
                     selectedConversation && !selectedConversationSupportsOutbound
                       ? selectedConversationOutboundDisabledMessage
-                      : canReply
+                      : canReply || crmStartContext
                       ? isHydratingSelectedTimeline
                         ? "Carregando mensagens..."
                         : "Digite uma mensagem"
                       : "Assuma a conversa para responder"
                   }
-                  disabled={!selectedConversationWaId || !composerEnabled}
+                  disabled={(!selectedConversationWaId && !crmStartContext) || !composerEnabled}
                 />
               </label>
               <button
                 type="button"
                 disabled={
-                  !selectedConversationWaId ||
+                  (!selectedConversationWaId && !crmStartContext) ||
                   (!messageDraft.trim() && !selectedMediaFile) ||
                   (Boolean(selectedMediaFile) && !selectedConversationSupportsMediaOutbound) ||
                   !composerEnabled ||
