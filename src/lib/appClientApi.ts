@@ -379,6 +379,37 @@ export type AppCrmContactDetailResponse = {
   generatedAt: string;
 };
 
+export type AppCrmContactImportPreviewResponse = {
+  ok: true;
+  headers: string[];
+  delimiter: string;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  duplicatesInFile: number;
+  existingContacts: number;
+  readyToImport: number;
+  sampleErrors: Array<{
+    rowNumber: number;
+    reason: string;
+    label: string;
+    phoneDisplay: string | null;
+  }>;
+  truncatedErrors: boolean;
+};
+
+export type AppCrmContactImportConfirmResponse = {
+  ok: true;
+  received: number;
+  created: number;
+  reused: number;
+  updated: number;
+  duplicates: number;
+  invalid: number;
+  readyToImport: number;
+  promotedProvisional: number;
+};
+
 export type AppCrmContactsResponse = {
   ok: true;
   filters: {
@@ -4086,6 +4117,36 @@ export async function fetchAppCrmContactDetail(
   leadId: string
 ): Promise<AppCrmContactDetailResponse> {
   return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}`);
+}
+
+export async function createAppCrmContact(
+  session: AppSession,
+  payload: { name?: string | null; phone: string }
+): Promise<AppCrmContactDetailResponse> {
+  return requestAppJson(session, "/app/crm/contacts", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function previewAppCrmContactCsvImport(
+  session: AppSession,
+  payload: { csvText: string; mapping?: { phoneColumn?: string | null; nameColumn?: string | null } | null }
+): Promise<AppCrmContactImportPreviewResponse> {
+  return requestAppJson(session, "/app/crm/contacts/import/preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function confirmAppCrmContactCsvImport(
+  session: AppSession,
+  payload: { csvText: string; mapping?: { phoneColumn?: string | null; nameColumn?: string | null } | null }
+): Promise<AppCrmContactImportConfirmResponse> {
+  return requestAppJson(session, "/app/crm/contacts/import/confirm", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function updateAppCrmContactBasics(

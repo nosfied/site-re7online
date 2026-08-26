@@ -355,6 +355,12 @@ import {
   updateCrmLeadStatus,
 } from "../crm/crmContactMutations.js";
 import {
+  confirmCrmContactCsvImport,
+  CrmContactUpsertError,
+  previewCrmContactCsvImport,
+  upsertCrmContact,
+} from "../crm/crmContactUpsert.js";
+import {
   buildWaIdLookup,
   canonicalizeBrazilWaId,
   compareConversationLookupPriority,
@@ -10517,6 +10523,154 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.crm.contacts.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/crm/contacts") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can create CRM contacts."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: "/app/crm/contacts",
+          requestId,
+        }))
+      ) {
+        return;
+      }
+      const body = (await readJsonBody(req, res)) as Record<string, unknown> | null;
+      if (!body) return;
+      const result = await upsertCrmContact(prisma, {
+        clientId: client.id,
+        input: { name: body.name ?? body.displayName, phone: body.phone },
+        actorUserId: clientAuth.userId,
+        requestId,
+        source: "crm_manual",
+      });
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey] ?? null;
+      const resolvedStatuses = await resolveCrmBusinessStatuses({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const payload = await buildCrmContactDetailPayload(prisma, {
+        clientId: client.id,
+        leadId: result.leadId,
+        statuses: resolvedStatuses.statuses,
+      });
+      if (!payload) {
+        json(res, 500, httpError("server_error", "Contact was created but read model was unavailable"));
+        return;
+      }
+      json(res, result.createdContact || result.createdLead ? 201 : 200, payload);
+    } catch (error) {
+      if (error instanceof CrmContactUpsertError) {
+        json(res, error.status, {
+          ...httpError(error.code, error.message),
+          ...(error.headers ? { headers: error.headers } : {}),
+        });
+        return;
+      }
+      logger.error({
+        event: "app.crm.contact_create.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    (pathname === "/app/crm/contacts/import/preview" || pathname === "/app/crm/contacts/import/confirm")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    const isConfirm = pathname.endsWith("/confirm");
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can import CRM contacts."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: isConfirm ? "/app/crm/contacts/import/confirm" : "/app/crm/contacts/import/preview",
+          requestId,
+        }))
+      ) {
+        return;
+      }
+      const body = (await readJsonBody(req, res)) as Record<string, unknown> | null;
+      if (!body) return;
+      const csvText = typeof body.csvText === "string" ? body.csvText : "";
+      const mapping = body.mapping && typeof body.mapping === "object" ? body.mapping as Record<string, unknown> : {};
+      const payload = isConfirm
+        ? await confirmCrmContactCsvImport(prisma, {
+            clientId: client.id,
+            csvText,
+            mapping: {
+              phoneColumn: typeof mapping.phoneColumn === "string" ? mapping.phoneColumn : null,
+              nameColumn: typeof mapping.nameColumn === "string" ? mapping.nameColumn : null,
+            },
+            actorUserId: clientAuth.userId,
+            requestId,
+          })
+        : await previewCrmContactCsvImport(prisma, {
+            clientId: client.id,
+            csvText,
+            mapping: {
+              phoneColumn: typeof mapping.phoneColumn === "string" ? mapping.phoneColumn : null,
+              nameColumn: typeof mapping.nameColumn === "string" ? mapping.nameColumn : null,
+            },
+          });
+      json(res, 200, payload);
+    } catch (error) {
+      if (error instanceof CrmContactUpsertError) {
+        json(res, error.status, {
+          ...httpError(error.code, error.message),
+          ...(error.headers ? { headers: error.headers } : {}),
+        });
+        return;
+      }
+      logger.error({
+        event: isConfirm ? "app.crm.contact_import_confirm.error" : "app.crm.contact_import_preview.error",
         message: (error as Error).message,
         requestId,
       });

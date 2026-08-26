@@ -8,14 +8,19 @@ import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/F
 import {
   AppApiError,
   AppCrmContactDetailResponse,
+  AppCrmContactImportConfirmResponse,
+  AppCrmContactImportPreviewResponse,
   AppCrmContactItem,
   AppCrmContactsResponse,
   AppSession,
   clearAppSession,
+  confirmAppCrmContactCsvImport,
+  createAppCrmContact,
   fetchAppCrmContactDetail,
   fetchAppCrmContacts,
   fetchAppCrmStatuses,
   loadAppSession,
+  previewAppCrmContactCsvImport,
   recordAppCrmContactOptOut,
   revokeAppCrmContactOptOut,
   saveAppSession,
@@ -642,6 +647,237 @@ function CrmContactDetailDrawer({
   );
 }
 
+function CreateContactModal({
+  onClose,
+  onSubmit,
+}: {
+  onClose: () => void;
+  onSubmit: (payload: { name: string | null; phone: string }) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const phoneValid = phone.trim().length > 0;
+
+  const submit = async () => {
+    if (!phoneValid) return;
+    setSubmitting(true);
+    setLocalError(null);
+    try {
+      await onSubmit({ name: name.trim() || null, phone: phone.trim() });
+      onClose();
+    } catch (err) {
+      const typed = err as AppApiError;
+      setLocalError(normalizeAppErrorMessage(typed, "Não foi possível salvar o contato."));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 px-3 py-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+      <button type="button" aria-label="Fechar novo contato" className="absolute inset-0 cursor-default" onClick={onClose} />
+      <section className="theme-bg relative w-full max-w-lg overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
+        <header className="theme-surface-strong border-b p-4">
+          <h2 className="text-lg font-bold text-white">Novo contato</h2>
+          <p className="mt-1 text-sm theme-muted">Cadastro operacional no CRM. Nenhuma mensagem será enviada.</p>
+        </header>
+        <div className="grid gap-4 p-4">
+          <label className="grid gap-1.5 text-sm">
+            <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Nome opcional</span>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="theme-input h-10 rounded-md border px-3 text-sm"
+              maxLength={120}
+              autoFocus
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm">
+            <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Número do WhatsApp</span>
+            <input
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              className="theme-input h-10 rounded-md border px-3 text-sm"
+              placeholder="Ex.: 5541999999999"
+            />
+          </label>
+          {localError ? (
+            <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 p-3 text-sm text-rose-100">{localError}</div>
+          ) : null}
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={onClose} className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!phoneValid || submitting}
+              className="rounded-md bg-re7-sky px-4 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {submitting ? "Salvando..." : "Salvar contato"}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CsvImportModal({
+  onClose,
+  onPreview,
+  onConfirm,
+}: {
+  onClose: () => void;
+  onPreview: (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null } }) => Promise<AppCrmContactImportPreviewResponse>;
+  onConfirm: (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null } }) => Promise<AppCrmContactImportConfirmResponse>;
+}) {
+  const [csvText, setCsvText] = useState("");
+  const [phoneColumn, setPhoneColumn] = useState("");
+  const [nameColumn, setNameColumn] = useState("");
+  const [preview, setPreview] = useState<AppCrmContactImportPreviewResponse | null>(null);
+  const [summary, setSummary] = useState<AppCrmContactImportConfirmResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const headers = preview?.headers ?? [];
+  const mapping = { phoneColumn: phoneColumn || null, nameColumn: nameColumn || null };
+
+  const readFile = async (file: File | null) => {
+    if (!file) return;
+    setPreview(null);
+    setSummary(null);
+    setLocalError(null);
+    setCsvText(await file.text());
+  };
+
+  const runPreview = async () => {
+    if (!csvText.trim()) return;
+    setLoading(true);
+    setLocalError(null);
+    setSummary(null);
+    try {
+      const response = await onPreview({ csvText, mapping });
+      setPreview(response);
+      if (!phoneColumn && response.headers.length > 0) {
+        const guessed = response.headers.find((header) => /^(numero|número|telefone|phone|whatsapp)$/i.test(header.trim()));
+        if (guessed) setPhoneColumn(guessed);
+      }
+      if (!nameColumn && response.headers.length > 0) {
+        const guessed = response.headers.find((header) => /^(nome|name)$/i.test(header.trim()));
+        if (guessed) setNameColumn(guessed);
+      }
+    } catch (err) {
+      const typed = err as AppApiError;
+      setLocalError(normalizeAppErrorMessage(typed, "Não foi possível pré-visualizar o CSV."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runConfirm = async () => {
+    if (!csvText.trim() || !preview) return;
+    setLoading(true);
+    setLocalError(null);
+    try {
+      const response = await onConfirm({ csvText, mapping });
+      setSummary(response);
+    } catch (err) {
+      const typed = err as AppApiError;
+      setLocalError(normalizeAppErrorMessage(typed, "Não foi possível importar o CSV."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 px-3 py-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+      <button type="button" aria-label="Fechar importação" className="absolute inset-0 cursor-default" onClick={onClose} />
+      <section className="theme-bg relative grid max-h-[calc(100vh-2rem)] w-full max-w-3xl grid-rows-[auto_1fr] overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
+        <header className="theme-surface-strong border-b p-4">
+          <h2 className="text-lg font-bold text-white">Importar CSV</h2>
+          <p className="mt-1 text-sm theme-muted">Importação cadastra contatos no CRM sem criar conversas ou enviar mensagens.</p>
+        </header>
+        <div className="min-h-0 overflow-y-auto p-4">
+          <div className="grid gap-4">
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(event) => void readFile(event.target.files?.[0] ?? null)}
+              className="theme-input rounded-md border p-2 text-sm"
+            />
+            {preview ? (
+              <div className="grid gap-3 rounded-lg border border-white/10 p-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1.5 text-sm">
+                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Coluna do telefone</span>
+                    <select value={phoneColumn} onChange={(event) => setPhoneColumn(event.target.value)} className="theme-input h-10 rounded-md border px-3 text-sm">
+                      <option value="">Detectar automaticamente</option>
+                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5 text-sm">
+                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Coluna do nome</span>
+                    <select value={nameColumn} onChange={(event) => setNameColumn(event.target.value)} className="theme-input h-10 rounded-md border px-3 text-sm">
+                      <option value="">Sem nome</option>
+                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div className="grid gap-2 text-sm theme-muted sm:grid-cols-3">
+                  <DetailField label="Linhas" value={preview.totalRows} />
+                  <DetailField label="Prontas" value={preview.readyToImport} />
+                  <DetailField label="Já cadastradas" value={preview.existingContacts} />
+                  <DetailField label="Inválidas" value={preview.invalidRows} />
+                  <DetailField label="Duplicadas" value={preview.duplicatesInFile} />
+                  <DetailField label="Delimitador" value={preview.delimiter} />
+                </div>
+                {preview.sampleErrors.length > 0 ? (
+                  <div className="rounded-lg border border-amber-300/30 bg-amber-400/10 p-3 text-sm text-amber-100">
+                    {preview.sampleErrors.slice(0, 5).map((error) => (
+                      <div key={`${error.rowNumber}:${error.reason}`}>Linha {error.rowNumber}: {error.label}</div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {summary ? (
+              <div className="rounded-lg border border-emerald-300/30 bg-emerald-400/10 p-3 text-sm text-emerald-100">
+                Importação concluída: {summary.created} criado(s), {summary.reused} reutilizado(s), {summary.invalid} inválido(s), {summary.duplicates} duplicado(s).
+              </div>
+            ) : null}
+            {localError ? (
+              <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 p-3 text-sm text-rose-100">{localError}</div>
+            ) : null}
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={onClose} className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold">
+                Fechar
+              </button>
+              <button
+                type="button"
+                onClick={runPreview}
+                disabled={!csvText.trim() || loading}
+                className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading && !preview ? "Lendo..." : "Pré-visualizar"}
+              </button>
+              <button
+                type="button"
+                onClick={runConfirm}
+                disabled={!preview || loading || preview.readyToImport === 0}
+                className="rounded-md bg-re7-sky px-4 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading && preview ? "Importando..." : "Confirmar importação"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function AppCrmContactsPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
@@ -660,11 +896,14 @@ export default function AppCrmContactsPage() {
   const [contactDetail, setContactDetail] = useState<AppCrmContactDetailResponse | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
   const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || notice), () => {
     setError(null);
     setNotice(null);
   });
   const canViewCrmHistory = String(session?.user.role ?? "").trim().toUpperCase() !== "AGENT";
+  const canManageCrmContacts = canViewCrmHistory;
 
   useEffect(() => {
     if (!selectedLeadId) return;
@@ -946,6 +1185,48 @@ export default function AppCrmContactsPage() {
     [mutateContactDetail, session]
   );
 
+  const createContact = useCallback(
+    async (payload: { name: string | null; phone: string }) => {
+      if (!session) return;
+      try {
+        const response = await createAppCrmContact(session, payload);
+        replaceContactFromDetail(response);
+        setSelectedLeadId(response.item.leadId);
+        setNotice(response.item.displayName ? "Contato salvo." : "Contato salvo sem nome.");
+        await loadContacts(session, 1);
+        setPage(1);
+      } catch (err) {
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        throw typed;
+      }
+    },
+    [handleUnauthorized, loadContacts, replaceContactFromDetail, session]
+  );
+
+  const previewCsvImport = useCallback(
+    async (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null } }) => {
+      if (!session) throw new Error("Sessão indisponível.");
+      return previewAppCrmContactCsvImport(session, payload);
+    },
+    [session]
+  );
+
+  const confirmCsvImport = useCallback(
+    async (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null } }) => {
+      if (!session) throw new Error("Sessão indisponível.");
+      const response = await confirmAppCrmContactCsvImport(session, payload);
+      setNotice(`Importação concluída: ${response.created} criado(s), ${response.reused} reutilizado(s).`);
+      setPage(1);
+      await loadContacts(session, 1);
+      return response;
+    },
+    [loadContacts, session]
+  );
+
   const copyIdentifier = useCallback(async (item: AppCrmContactItem) => {
     const value = item.phoneDisplay || item.identifierDisplay;
     try {
@@ -1096,7 +1377,25 @@ export default function AppCrmContactsPage() {
               ) : null}
             </div>
             {contacts ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {canManageCrmContacts ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setCreateModalOpen(true)}
+                      className="rounded-md bg-re7-sky px-3 py-2 text-xs font-semibold text-slate-950 transition hover:brightness-110"
+                    >
+                      Novo contato
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCsvModalOpen(true)}
+                      className="theme-nav-link rounded-md border px-3 py-2 text-xs font-semibold"
+                    >
+                      Importar CSV
+                    </button>
+                  </>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => goToPage(1)}
@@ -1207,6 +1506,19 @@ export default function AppCrmContactsPage() {
         <FeedbackToast variant="error" message={error} {...toastHandlers} />
       ) : null}
       {notice ? <FeedbackToast variant="success" message={notice} {...toastHandlers} /> : null}
+      {createModalOpen && canManageCrmContacts ? (
+        <CreateContactModal
+          onClose={() => setCreateModalOpen(false)}
+          onSubmit={createContact}
+        />
+      ) : null}
+      {csvModalOpen && canManageCrmContacts ? (
+        <CsvImportModal
+          onClose={() => setCsvModalOpen(false)}
+          onPreview={previewCsvImport}
+          onConfirm={confirmCsvImport}
+        />
+      ) : null}
       {selectedLeadId ? (
         <CrmContactDetailDrawer
           detail={contactDetail}

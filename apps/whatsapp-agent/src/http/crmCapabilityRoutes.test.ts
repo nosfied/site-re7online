@@ -45,6 +45,7 @@ let businessClientId = "";
 let governmentClientId = "";
 let overrideClientId = "";
 let businessAdmin: TestUser;
+let businessSupervisor: TestUser;
 let businessAgent: TestUser;
 let governmentAdmin: TestUser;
 let overrideAdmin: TestUser;
@@ -297,6 +298,11 @@ test.before(async () => {
     role: "ADMIN",
     suffix: "business-admin",
   });
+  businessSupervisor = await createUser({
+    clientId: businessClientId,
+    role: "SUPERVISOR",
+    suffix: "business-supervisor",
+  });
   businessAgent = await createUser({
     clientId: businessClientId,
     role: "AGENT",
@@ -336,10 +342,12 @@ test.before(async () => {
     },
     select: { id: true },
   });
+  const provisionalIdentity = normalizeOptOutWaId("5511999999988");
+  assert.ok(provisionalIdentity);
   await prisma.contact.create({
     data: {
       clientId: businessClientId,
-      waId: "5511999999988",
+      waId: provisionalIdentity.waIdCanonical,
       name: "Lead Provisorio",
       lifecycle: "PROVISIONAL",
     },
@@ -347,9 +355,9 @@ test.before(async () => {
   await prisma.lead.create({
     data: {
       tenantId: businessClientId,
-      waId: "5511999999988",
-      waIdCanonical: "5511999999988",
-      phone: "5511999999988",
+      waId: provisionalIdentity.waIdCanonical,
+      waIdCanonical: provisionalIdentity.waIdCanonical,
+      phone: provisionalIdentity.waIdCanonical,
       name: "Lead Provisorio",
       status: "QUALIFIED",
     },
@@ -603,6 +611,211 @@ test("business profile default can access CRM app routes without capability deni
   assert.equal(listNotes.body.count, 1);
 });
 
+test("CRM contact create allows admin and supervisor, blocks agent, dedupes, and creates no conversation or outbound", async () => {
+  const conversationsBefore = await prisma.conversation.count({ where: { clientId: businessClientId } });
+  const messagesBefore = await prisma.message.count({
+    where: { conversation: { clientId: businessClientId } },
+  });
+
+  const adminCreate = await request<{
+    ok: boolean;
+    item: {
+      leadId: string;
+      contactId: string | null;
+      displayName: string | null;
+      phoneDisplay: string | null;
+      hasConversation: boolean;
+    };
+  }>("POST", "/app/crm/contacts", businessAdmin, {
+    name: "Contato Individual",
+    phone: "+55 (41) 99999-9999",
+  });
+  assert.equal(adminCreate.status, 201);
+  assert.equal(adminCreate.body.ok, true);
+  assert.equal(adminCreate.body.item.displayName, "Contato Individual");
+  assert.equal(adminCreate.body.item.hasConversation, false);
+
+  const duplicate = await request<{ ok: boolean; item: { leadId: string; contactId: string | null } }>(
+    "POST",
+    "/app/crm/contacts",
+    businessSupervisor,
+    {
+      name: "Nome que não deve sobrescrever",
+      phone: "+55 41 99999 9999",
+    }
+  );
+  assert.equal(duplicate.status, 200);
+  assert.equal(duplicate.body.ok, true);
+  assert.equal(duplicate.body.item.leadId, adminCreate.body.item.leadId);
+  assert.equal(duplicate.body.item.contactId, adminCreate.body.item.contactId);
+
+  const phoneOnly = await request<{ ok: boolean; item: { displayName: string | null; identifierDisplay: string } }>(
+    "POST",
+    "/app/crm/contacts",
+    businessSupervisor,
+    { phone: "5541999999988" }
+  );
+  assert.equal(phoneOnly.status, 201);
+  assert.equal(phoneOnly.body.ok, true);
+  assert.equal(phoneOnly.body.item.displayName, null);
+  assert.match(phoneOnly.body.item.identifierDisplay, /^5541\*{5}9988$/);
+
+  const agent = await request<ErrorPayload>("POST", "/app/crm/contacts", businessAgent, {
+    name: "Bloqueado",
+    phone: "5541999999977",
+  });
+  assert.equal(agent.status, 403);
+  assert.equal(getErrorCode(agent.body), "forbidden");
+
+  const invalid = await request<ErrorPayload>("POST", "/app/crm/contacts", businessAdmin, {
+    phone: "abc",
+  });
+  assert.equal(invalid.status, 400);
+  assert.equal(getErrorCode(invalid.body), "invalid_phone");
+
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId } }), conversationsBefore);
+  assert.equal(await prisma.message.count({ where: { conversation: { clientId: businessClientId } } }), messagesBefore);
+
+  const individualIdentity = normalizeOptOutWaId("+55 (41) 99999-9999");
+  assert.ok(individualIdentity);
+  const stored = await prisma.contact.findFirstOrThrow({
+    where: { clientId: businessClientId, waId: individualIdentity.waIdCanonical },
+    select: { lifecycle: true, name: true },
+  });
+  assert.equal(stored.lifecycle, "ACTIVE");
+  assert.equal(stored.name, "Contato Individual");
+
+  const crmEvent = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, eventName: "crm.contact.created" },
+    orderBy: { createdAt: "desc" },
+    select: { payloadJson: true },
+  });
+  assert.doesNotMatch(JSON.stringify(crmEvent.payloadJson), /9999999999|Contato Individual/);
+
+  const cleanupWaIds = ["+55 (41) 99999-9999", "5541999999988"]
+    .map((value) => normalizeOptOutWaId(value)?.waIdCanonical)
+    .filter((value): value is string => Boolean(value));
+  await prisma.lead.deleteMany({ where: { tenantId: businessClientId, waId: { in: cleanupWaIds } } });
+  await prisma.contactChannelIdentity.deleteMany({
+    where: { clientId: businessClientId, legacyWaId: { in: cleanupWaIds } },
+  });
+  await prisma.contact.deleteMany({ where: { clientId: businessClientId, waId: { in: cleanupWaIds } } });
+});
+
+test("CRM contact create promotes existing provisional contact without changing consent records", async () => {
+  const beforeConsents = await prisma.contactConsent.count({ where: { clientId: businessClientId } });
+  const response = await request<{ ok: boolean; item: { displayName: string | null } }>(
+    "POST",
+    "/app/crm/contacts",
+    businessSupervisor,
+    { name: "Lead Provisorio Importado", phone: "5511999999988" }
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+
+  const provisionalIdentity = normalizeOptOutWaId("5511999999988");
+  assert.ok(provisionalIdentity);
+  const contact = await prisma.contact.findFirstOrThrow({
+    where: { clientId: businessClientId, waId: provisionalIdentity.waIdCanonical },
+    select: { lifecycle: true, name: true },
+  });
+  assert.equal(contact.lifecycle, "ACTIVE");
+  assert.equal(contact.name, "Lead Provisorio");
+  assert.equal(await prisma.contactConsent.count({ where: { clientId: businessClientId } }), beforeConsents);
+});
+
+test("CRM CSV import previews without mutation and confirms idempotently", async () => {
+  const csvText = "\uFEFFnome;numero\nContato CSV;5541888877777\nSem Nome;5541888877778\nDuplicado;55 41 8888-77777\nInválido;abc\n";
+  const conversationsBefore = await prisma.conversation.count({ where: { clientId: businessClientId } });
+  const messagesBefore = await prisma.message.count({
+    where: { conversation: { clientId: businessClientId } },
+  });
+  const contactsBefore = await prisma.contact.count({ where: { clientId: businessClientId } });
+  const leadsBefore = await prisma.lead.count({ where: { tenantId: businessClientId } });
+
+  const preview = await request<{
+    ok: boolean;
+    totalRows: number;
+    validRows: number;
+    invalidRows: number;
+    duplicatesInFile: number;
+    existingContacts: number;
+    readyToImport: number;
+    sampleErrors: Array<{ reason: string }>;
+  }>("POST", "/app/crm/contacts/import/preview", businessSupervisor, {
+    csvText,
+    mapping: { phoneColumn: "numero", nameColumn: "nome" },
+  });
+  assert.equal(preview.status, 200);
+  assert.equal(preview.body.ok, true);
+  assert.equal(preview.body.totalRows, 4);
+  assert.equal(preview.body.validRows, 2);
+  assert.equal(preview.body.invalidRows, 1);
+  assert.equal(preview.body.duplicatesInFile, 1);
+  assert.equal(preview.body.readyToImport, 2);
+  assert.equal(preview.body.sampleErrors.length, 2);
+  assert.equal(await prisma.contact.count({ where: { clientId: businessClientId } }), contactsBefore);
+  assert.equal(await prisma.lead.count({ where: { tenantId: businessClientId } }), leadsBefore);
+
+  const confirm = await request<{
+    ok: boolean;
+    received: number;
+    created: number;
+    reused: number;
+    invalid: number;
+    duplicates: number;
+  }>("POST", "/app/crm/contacts/import/confirm", businessSupervisor, {
+    csvText,
+    mapping: { phoneColumn: "numero", nameColumn: "nome" },
+  });
+  assert.equal(confirm.status, 200);
+  assert.equal(confirm.body.ok, true);
+  assert.equal(confirm.body.received, 4);
+  assert.equal(confirm.body.created, 2);
+  assert.equal(confirm.body.reused, 0);
+  assert.equal(confirm.body.invalid, 1);
+  assert.equal(confirm.body.duplicates, 1);
+
+  const repeat = await request<{ ok: boolean; created: number; reused: number }>(
+    "POST",
+    "/app/crm/contacts/import/confirm",
+    businessSupervisor,
+    { csvText, mapping: { phoneColumn: "numero", nameColumn: "nome" } }
+  );
+  assert.equal(repeat.status, 200);
+  assert.equal(repeat.body.ok, true);
+  assert.equal(repeat.body.created, 0);
+  assert.equal(repeat.body.reused, 2);
+
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId } }), conversationsBefore);
+  assert.equal(await prisma.message.count({ where: { conversation: { clientId: businessClientId } } }), messagesBefore);
+
+  const summaryEvent = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, eventName: "crm.contact.import.summary" },
+    orderBy: { createdAt: "desc" },
+    select: { payloadJson: true },
+  });
+  assert.doesNotMatch(JSON.stringify(summaryEvent.payloadJson), /888877777|888877778|Contato CSV/);
+
+  const agentPreview = await request<ErrorPayload>(
+    "POST",
+    "/app/crm/contacts/import/preview",
+    businessAgent,
+    { csvText, mapping: { phoneColumn: "numero" } }
+  );
+  assert.equal(agentPreview.status, 403);
+  assert.equal(getErrorCode(agentPreview.body), "forbidden");
+
+  const cleanupWaIds = ["5541888877777", "5541888877778"]
+    .map((value) => normalizeOptOutWaId(value)?.waIdCanonical)
+    .filter((value): value is string => Boolean(value));
+  await prisma.lead.deleteMany({ where: { tenantId: businessClientId, waId: { in: cleanupWaIds } } });
+  await prisma.contactChannelIdentity.deleteMany({
+    where: { clientId: businessClientId, legacyWaId: { in: cleanupWaIds } },
+  });
+  await prisma.contact.deleteMany({ where: { clientId: businessClientId, waId: { in: cleanupWaIds } } });
+});
+
 test("CRM operational statuses are tenant-scoped and allow custom lead statuses", async () => {
   const statuses = await request<{
     ok: boolean;
@@ -651,7 +864,7 @@ test("CRM contacts read model lists tenant-scoped leads with safe identifiers", 
       templateSendBlockedReason: string | null;
       isAnonymized: boolean;
     }>;
-  }>("GET", "/app/crm/contacts?limit=20", businessAgent);
+  }>("GET", "/app/crm/contacts?limit=20", businessAdmin);
 
   assert.equal(response.status, 200);
   assert.equal(response.body.ok, true);
@@ -694,7 +907,7 @@ test("CRM contacts read model supports filters and partial records", async () =>
   const byStatus = await request<{ ok: boolean; items: Array<{ crmStatus: string }> }>(
     "GET",
     "/app/crm/contacts?status=RETORNO_FUTURO",
-    businessAgent
+    businessAdmin
   );
   assert.equal(byStatus.status, 200);
   assert.ok(byStatus.body.items.length >= 1);
@@ -729,7 +942,7 @@ test("CRM contacts read model supports filters and partial records", async () =>
   const noConversation = await request<{
     ok: boolean;
     items: Array<{ hasConversation: boolean; identifierDisplay: string; channel: string | null }>;
-  }>("GET", "/app/crm/contacts?hasConversation=false&channel=webchat", businessAgent);
+  }>("GET", "/app/crm/contacts?hasConversation=false&channel=webchat", businessAdmin);
   assert.equal(noConversation.status, 200);
   assert.equal(noConversation.body.items.length, 1);
   assert.equal(noConversation.body.items[0]?.hasConversation, false);
@@ -766,7 +979,7 @@ test("CRM contact detail is tenant-scoped and returns safe related conversations
       queueName: string | null;
       assignedUserName: string | null;
     }>;
-  }>("GET", `/app/crm/contacts/${encodeURIComponent(leadId)}`, businessAgent);
+  }>("GET", `/app/crm/contacts/${encodeURIComponent(leadId)}`, businessAdmin);
 
   assert.equal(response.status, 200);
   assert.equal(response.body.ok, true);
@@ -962,6 +1175,9 @@ test("government profile default is blocked by CRM capability on protected route
     { method: "GET", route: "/app/crm/settings" },
     { method: "GET", route: "/app/crm/statuses" },
     { method: "GET", route: "/app/crm/contacts" },
+    { method: "POST", route: "/app/crm/contacts", body: { phone: "5541999999999" } },
+    { method: "POST", route: "/app/crm/contacts/import/preview", body: { csvText: "numero\n5541999999999\n" } },
+    { method: "POST", route: "/app/crm/contacts/import/confirm", body: { csvText: "numero\n5541999999999\n" } },
     { method: "GET", route: "/app/crm/contacts/missing" },
     { method: "PATCH", route: "/app/crm/contacts/missing", body: { displayName: "x" } },
     { method: "PATCH", route: "/app/crm/contacts/missing/status", body: { status: "OPEN" } },
