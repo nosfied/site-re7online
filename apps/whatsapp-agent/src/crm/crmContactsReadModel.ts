@@ -150,6 +150,8 @@ type LeadRecord = {
   provider: string | null;
   channelAccountId: string | null;
   externalUserHash: string | null;
+  externalUserRef: string | null;
+  legacyWaId: string | null;
   contactChannelIdentityId: string | null;
   name: string | null;
   phone: string | null;
@@ -285,6 +287,35 @@ function hasUsableWhatsappPhone(lead: LeadRecord) {
 
 function getOptOutCanonicalCandidates(lead: LeadRecord) {
   return buildCrmWhatsappIdentityCandidates([lead.phone, lead.waIdCanonical, lead.waId]);
+}
+
+function buildLeadIdentityCandidates(
+  lead: Pick<
+    LeadRecord,
+    "phone" | "waIdCanonical" | "waId" | "externalUserRef" | "legacyWaId"
+  >,
+  identity?: {
+    externalUserRef?: string | null;
+    legacyWaId?: string | null;
+  } | null,
+  contact?: {
+    waId?: string | null;
+    externalUserRef?: string | null;
+    legacyWaId?: string | null;
+  } | null
+) {
+  return buildCrmWhatsappIdentityCandidates([
+    lead.phone,
+    lead.waIdCanonical,
+    lead.waId,
+    lead.externalUserRef,
+    lead.legacyWaId,
+    identity?.externalUserRef,
+    identity?.legacyWaId,
+    contact?.waId,
+    contact?.externalUserRef,
+    contact?.legacyWaId,
+  ]);
 }
 
 function buildTemplateCandidate(lead: LeadRecord, activeOptOut: boolean) {
@@ -461,6 +492,8 @@ export async function buildCrmContactsPayload(
         provider: true,
         channelAccountId: true,
         externalUserHash: true,
+        externalUserRef: true,
+        legacyWaId: true,
         contactChannelIdentityId: true,
         name: true,
         phone: true,
@@ -554,6 +587,8 @@ export async function buildCrmContactsPayload(
               provider: true,
               channelAccountId: true,
               externalUserHash: true,
+              externalUserRef: true,
+              legacyWaId: true,
               lastSeenAt: true,
               contact: {
                 select: {
@@ -564,6 +599,8 @@ export async function buildCrmContactsPayload(
                   provider: true,
                   channelAccountId: true,
                   externalUserHash: true,
+                  externalUserRef: true,
+                  legacyWaId: true,
                   lifecycle: true,
                   updatedAt: true,
                 },
@@ -685,18 +722,19 @@ export async function buildCrmContactsPayload(
   const allItems = leads
     .map((lead) => {
       const key = getIdentityKey(lead);
-      const leadCandidates = buildCrmWhatsappIdentityCandidates([lead.phone, lead.waIdCanonical, lead.waId]);
       const canonical = lead.waIdCanonical ?? lead.waId;
+      const seedLeadCandidates = buildLeadIdentityCandidates(lead);
       const identity = lead.contactChannelIdentityId
         ? identityById.get(lead.contactChannelIdentityId)
         : null;
       const contact =
         identity?.contact ??
         (identity?.contactId ? contacts.find((item) => item.id === identity.contactId) : null) ??
-        leadCandidates.map((candidate) => contactByIdentity.get(candidate)).find(Boolean) ??
+        seedLeadCandidates.map((candidate) => contactByIdentity.get(candidate)).find(Boolean) ??
         contactByIdentity.get(lead.waIdCanonical ?? "") ??
         contactByIdentity.get(lead.waId) ??
         null;
+      const leadCandidates = buildLeadIdentityCandidates(lead, identity, contact);
       const conversationSummary = getConversationSummary([...leadCandidates, key]);
       const runtime =
         leadCandidates.map((candidate) => runtimeByKey.get(candidate)).find(Boolean) ??
@@ -837,6 +875,8 @@ export async function buildCrmContactDetailPayload(
       provider: true,
       channelAccountId: true,
       externalUserHash: true,
+      externalUserRef: true,
+      legacyWaId: true,
       contactChannelIdentityId: true,
       name: true,
       phone: true,
@@ -851,15 +891,17 @@ export async function buildCrmContactDetailPayload(
   });
   if (!lead) return null;
 
-  const identityKeys = Array.from(new Set([lead.waId, lead.waIdCanonical ?? lead.waId].filter(Boolean)));
-  const optOutCanonicalWaIds = getOptOutCanonicalCandidates(lead);
-
-  const [contact, identity, conversations, runtimeStates, optOutEvents, importEvents, operationallyExcludedWaIds, notesCount] =
+  const seedIdentityKeys = buildLeadIdentityCandidates(lead);
+  const [contact, identity] =
     await Promise.all([
       prisma.contact.findFirst({
         where: {
           clientId: params.clientId,
-          OR: [{ waId: lead.waId }, { waId: lead.waIdCanonical ?? lead.waId }],
+          OR: [
+            { waId: { in: seedIdentityKeys } },
+            { externalUserRef: { in: seedIdentityKeys } },
+            { legacyWaId: { in: seedIdentityKeys } },
+          ],
         },
         orderBy: { updatedAt: "desc" },
         select: {
@@ -870,6 +912,8 @@ export async function buildCrmContactDetailPayload(
           provider: true,
           channelAccountId: true,
           externalUserHash: true,
+          externalUserRef: true,
+          legacyWaId: true,
           lifecycle: true,
           updatedAt: true,
         },
@@ -883,6 +927,8 @@ export async function buildCrmContactDetailPayload(
               displayName: true,
               channel: true,
               provider: true,
+              externalUserRef: true,
+              legacyWaId: true,
               lastSeenAt: true,
               contact: {
                 select: {
@@ -893,6 +939,8 @@ export async function buildCrmContactDetailPayload(
                   provider: true,
                   channelAccountId: true,
                   externalUserHash: true,
+                  externalUserRef: true,
+                  legacyWaId: true,
                   lifecycle: true,
                   updatedAt: true,
                 },
@@ -900,6 +948,13 @@ export async function buildCrmContactDetailPayload(
             },
           })
         : Promise.resolve(null),
+    ]);
+  const effectiveContactForIdentity = identity?.contact ?? contact;
+  const identityKeys = buildLeadIdentityCandidates(lead, identity, effectiveContactForIdentity);
+  const optOutCanonicalWaIds = getOptOutCanonicalCandidates(lead);
+
+  const [conversations, runtimeStates, optOutEvents, importEvents, operationallyExcludedWaIds, notesCount] =
+    await Promise.all([
       prisma.conversation.findMany({
         where: {
           clientId: params.clientId,

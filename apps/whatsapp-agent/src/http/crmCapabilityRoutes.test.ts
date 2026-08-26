@@ -183,6 +183,13 @@ async function cleanup() {
       },
     },
   });
+  await prisma.outboundMessage.deleteMany({
+    where: {
+      clientId: {
+        in: clientIds,
+      },
+    },
+  });
   await prisma.conversation.deleteMany({
     where: {
       clientId: {
@@ -1008,6 +1015,157 @@ test("CRM contact detail is tenant-scoped and returns safe related conversations
   );
   assert.equal(anonymized.status, 404);
   assert.equal(getErrorCode(anonymized.body), "contact_not_found");
+});
+
+test("CRM and inbox resolve related conversations through confirmed WhatsApp legacy aliases", async () => {
+  const department = await prisma.department.create({
+    data: {
+      clientId: businessClientId,
+      name: `${prefix} Alias Department`,
+      slug: `${prefix}-alias-department`,
+    },
+  });
+  const queue = await prisma.queue.create({
+    data: {
+      clientId: businessClientId,
+      departmentId: department.id,
+      name: `${prefix} Alias Queue`,
+    },
+  });
+  const contact = await prisma.contact.create({
+    data: {
+      clientId: businessClientId,
+      waId: "5584994786787",
+      name: "deifson setic",
+      channel: "whatsapp",
+      provider: "whatsapp",
+      channelAccountId: "crm",
+      externalUserRef: "558494786787",
+      legacyWaId: "558494786787",
+    },
+  });
+  const identity = await prisma.contactChannelIdentity.create({
+    data: {
+      clientId: businessClientId,
+      contactId: contact.id,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId: "web-session-alias",
+      externalUserHash: `${prefix}-alias-hash`,
+      externalUserRef: "558494786787",
+      legacyWaId: "558494786787",
+      displayName: "Provider Name",
+    },
+  });
+  const lead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: "5584994786787",
+      waIdCanonical: "5584994786787",
+      phone: "5584994786787",
+      name: "deifson setic",
+      channel: "whatsapp",
+      provider: "whatsapp",
+      channelAccountId: "crm",
+      externalUserRef: "558494786787",
+      legacyWaId: "558494786787",
+      contactChannelIdentityId: identity.id,
+      status: "NEW",
+    },
+  });
+  const conversation = await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId: "558494786787",
+      waIdCanonical: "558494786787",
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId: "web-session-alias",
+      departmentId: department.id,
+      firstAssignedAt: new Date("2026-08-26T14:13:55.219Z"),
+      lastOutboundAt: new Date("2026-08-26T14:13:57.594Z"),
+      updatedAt: new Date("2026-08-26T14:13:57.594Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId: "558494786787",
+      waIdCanonical: "558494786787",
+      conversationKey: `${prefix}-business:558494786787`,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId: "web-session-alias",
+      status: "IN_PROGRESS",
+      mode: "HUMAN",
+      handoffStatus: "ACTIVE",
+      assignedUserId: businessAdmin.id,
+      assignedAt: new Date("2026-08-26T14:13:55.219Z"),
+      departmentId: department.id,
+      queueId: queue.id,
+      answers: {},
+      updatedAt: new Date("2026-08-26T14:13:58.061Z"),
+    },
+  });
+  await prisma.outboundMessage.create({
+    data: {
+      clientId: businessClientId,
+      waId: "558494786787",
+      waIdCanonical: "558494786787",
+      messageId: `${prefix}-alias-outbound`,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId: "web-session-alias",
+      type: "TEXT",
+      status: "SENT",
+      bodyText: "Mensagem enviada pelo CRM",
+      rawPayload: { inboxVisibility: "human_timeline" },
+      createdAt: new Date("2026-08-26T14:13:57.594Z"),
+    },
+  });
+  const otherDddLead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: "5511994786787",
+      waIdCanonical: "5511994786787",
+      phone: "5511994786787",
+      name: "same suffix other ddd",
+      status: "NEW",
+    },
+  });
+
+  const detail = await request<{
+    ok: boolean;
+    item: { displayName: string | null; conversationsCount: number; lastConversationId: string | null };
+    conversations: Array<{ conversationId: string; conversationIdentity: string; assignedUserName: string | null }>;
+  }>("GET", `/app/crm/contacts/${encodeURIComponent(lead.id)}`, businessAdmin);
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.item.displayName, "deifson setic");
+  assert.equal(detail.body.item.conversationsCount, 1);
+  assert.equal(detail.body.item.lastConversationId, conversation.id);
+  assert.equal(detail.body.conversations[0]?.conversationIdentity, "558494786787");
+  assert.equal(detail.body.conversations[0]?.assignedUserName, businessAdmin.name);
+
+  const inbox = await request<{ ok: boolean; items: Array<{ waIdCanonical: string; leadId: string | null; leadName: string | null }> }>(
+    "GET",
+    "/app/conversations?limit=100",
+    businessAdmin
+  );
+  assert.equal(inbox.status, 200);
+  const inboxConversation = inbox.body.items.find((item) => item.waIdCanonical === "558494786787");
+  assert.ok(inboxConversation);
+  assert.equal(inboxConversation.leadId, lead.id);
+  assert.equal(inboxConversation.leadName, "deifson setic");
+
+  const otherDddDetail = await request<{
+    ok: boolean;
+    item: { conversationsCount: number; lastConversationId: string | null; hasConversation: boolean };
+    conversations: unknown[];
+  }>("GET", `/app/crm/contacts/${encodeURIComponent(otherDddLead.id)}`, businessAdmin);
+  assert.equal(otherDddDetail.status, 200);
+  assert.equal(otherDddDetail.body.item.conversationsCount, 0);
+  assert.equal(otherDddDetail.body.item.lastConversationId, null);
+  assert.equal(otherDddDetail.body.item.hasConversation, false);
 });
 
 test("CRM contact mutation routes update safe fields and audit without exposing forbidden payloads", async () => {

@@ -352,6 +352,7 @@ import {
   type OperationsBoardStatus,
 } from "../operations/operationsBoardReadModel.js";
 import { buildCrmContactDetailPayload, buildCrmContactsPayload } from "../crm/crmContactsReadModel.js";
+import { buildCrmWhatsappIdentityCandidates } from "../crm/crmWhatsappIdentity.js";
 import {
   isWhatsappFreeformStartTransportReady,
   resolveCrmWebSessionRecipient,
@@ -31688,6 +31689,9 @@ async function buildConversationListPayload(
   const winners = cursorFilteredConversations;
   const waIds = Array.from(new Set(winners.map((item) => item.waId)));
   const canonicalWaIds = Array.from(new Set(winners.map((item) => item.waIdCanonical)));
+  const crmIdentityWaIds = Array.from(
+    new Set(winners.flatMap((item) => buildCrmWhatsappIdentityCandidates([item.waId, item.waIdCanonical])))
+  );
   const historyVisibleAfterByWaId = new Map(
     winners.map((item) => [item.waIdCanonical, item.historyVisibleAfter])
   );
@@ -31706,12 +31710,20 @@ async function buildConversationListPayload(
     prisma.lead.findMany({
       where: {
         tenantId: params.clientId,
-        OR: [{ waIdCanonical: { in: canonicalWaIds } }, { waId: { in: waIds } }],
+        OR: [
+          { waIdCanonical: { in: crmIdentityWaIds } },
+          { waId: { in: crmIdentityWaIds } },
+          { phone: { in: crmIdentityWaIds } },
+          { externalUserRef: { in: crmIdentityWaIds } },
+          { legacyWaId: { in: crmIdentityWaIds } },
+        ],
       },
       select: {
         id: true,
         waId: true,
         waIdCanonical: true,
+        externalUserRef: true,
+        legacyWaId: true,
         name: true,
         phone: true,
         city: true,
@@ -31969,24 +31981,32 @@ async function buildConversationListPayload(
   const assemblyStartedAt = channelLatencyNow();
   const leadByWaId = new Map<string, (typeof leads)[number]>();
   for (const item of leads) {
-    const key = getWaIdGroupKey(item.waId, item.waIdCanonical);
-    const current = leadByWaId.get(key);
-    if (
-      !current ||
-      compareConversationLookupPriority(
-        {
-          updatedAt: item.updatedAt,
-          lastInboundAt: item.updatedAt,
-          lastOutboundAt: item.createdAt,
-        },
-        {
-          updatedAt: current.updatedAt,
-          lastInboundAt: current.updatedAt,
-          lastOutboundAt: current.createdAt,
-        }
-      ) < 0
-    ) {
-      leadByWaId.set(key, item);
+    const keys = buildCrmWhatsappIdentityCandidates([
+      item.phone,
+      item.waIdCanonical,
+      item.waId,
+      item.externalUserRef,
+      item.legacyWaId,
+    ]);
+    for (const key of keys) {
+      const current = leadByWaId.get(key);
+      if (
+        !current ||
+        compareConversationLookupPriority(
+          {
+            updatedAt: item.updatedAt,
+            lastInboundAt: item.updatedAt,
+            lastOutboundAt: item.createdAt,
+          },
+          {
+            updatedAt: current.updatedAt,
+            lastInboundAt: current.updatedAt,
+            lastOutboundAt: current.createdAt,
+          }
+        ) < 0
+      ) {
+        leadByWaId.set(key, item);
+      }
     }
   }
   const latestInboundByWaId = new Map<string, (typeof inbound)[number]>();
