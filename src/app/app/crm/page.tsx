@@ -36,6 +36,11 @@ import { getAppErrorUxMessage, getChannelUxLabel, getConversationStatusUxLabel }
 import { formatUserDisplayName } from "@/lib/userDisplayName";
 
 const PAGE_LIMIT = 50;
+const PERSISTENT_CRM_NOTICES = new Set([
+  "Contato excluído da operação. O histórico foi preservado.",
+  "Conversa retirada da operação. O histórico foi preservado.",
+  "Contato restaurado para a operação.",
+]);
 
 const CHANNEL_OPTIONS = [
   { value: "", label: "Todos" },
@@ -727,7 +732,7 @@ function CrmContactDetailDrawer({
                         disabled={Boolean(actionLoading)}
                         className="rounded-md border border-red-300/40 px-3 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {actionLoading === "exclude" ? "Excluindo..." : "Excluir da operação"}
+                        {actionLoading === "exclude" ? "Excluindo..." : "Excluir contato da operação"}
                       </button>
                     </div>
                   </div>
@@ -1052,7 +1057,8 @@ export default function AppCrmContactsPage() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [csvModalOpen, setCsvModalOpen] = useState(false);
-  const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || notice), () => {
+  const noticeIsPersistent = Boolean(notice && PERSISTENT_CRM_NOTICES.has(notice));
+  const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || (notice && !noticeIsPersistent)), () => {
     setError(null);
     setNotice(null);
   });
@@ -1354,7 +1360,7 @@ export default function AppCrmContactsPage() {
         await excludeAppCrmContactFromOperation(session, leadId);
         setContactDetail(null);
         setSelectedLeadId(null);
-        setNotice("Contato excluído da operação. O histórico existente foi preservado.");
+        setNotice("Contato excluído da operação. O histórico foi preservado.");
         setOperationalStatus("active");
         await loadContacts(session, page);
         return null;
@@ -1747,7 +1753,14 @@ export default function AppCrmContactsPage() {
       {error && contacts ? (
         <FeedbackToast variant="error" message={error} {...toastHandlers} />
       ) : null}
-      {notice ? <FeedbackToast variant="success" message={notice} {...toastHandlers} /> : null}
+      {notice ? (
+        <FeedbackToast
+          variant="success"
+          message={notice}
+          {...(noticeIsPersistent ? {} : toastHandlers)}
+          onClose={noticeIsPersistent ? () => setNotice(null) : undefined}
+        />
+      ) : null}
       {createModalOpen && canManageCrmContacts ? (
         <CreateContactModal
           onClose={() => setCreateModalOpen(false)}
