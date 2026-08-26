@@ -5,7 +5,11 @@ import {
   isWebSessionTextOutboundReady,
   resolveWebSessionTextRecipient,
 } from "../web-session/webSessionOutboundService.js";
-import { resolveWhatsappPrimaryTransport } from "../web-session/hybridIdentity.js";
+import {
+  resolveOperationalMetaWhatsappIdentity,
+  resolveWhatsappPrimaryTransport,
+  type WhatsappPrimaryTransport,
+} from "../web-session/hybridIdentity.js";
 import {
   buildCrmWhatsappIdentityCandidates,
   normalizeCrmWhatsappIdentity,
@@ -38,30 +42,74 @@ export function isCrmStartAuthorizedRole(role: string | null | undefined) {
   return normalized === "ADMIN" || normalized === "SUPERVISOR";
 }
 
+export type EffectiveWhatsappOutboundTransport =
+  | { status: "ready"; provider: WhatsappPrimaryTransport; source: "explicit" | "single_operational" }
+  | { status: "ambiguous"; source: "multiple_operational" }
+  | { status: "unavailable"; source: "explicit_unavailable" | "none_operational" };
+
+export async function resolveEffectiveWhatsappOutboundTransport(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientKey: string;
+  clientStatus: string | null | undefined;
+}): Promise<EffectiveWhatsappOutboundTransport> {
+  if (params.clientStatus !== "ACTIVE") {
+    return { status: "unavailable", source: "none_operational" };
+  }
+  const explicitPrimary = await resolveWhatsappPrimaryTransport({
+    prisma: params.prisma,
+    clientId: params.clientId,
+  });
+  const [webReady, metaIdentity] = await Promise.all([
+    isWebSessionTextOutboundReady({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+    }),
+    resolveOperationalMetaWhatsappIdentity({
+      prisma: params.prisma,
+      clientId: params.clientId,
+    }),
+  ]);
+  const metaReady = Boolean(metaIdentity.canonicalNumber);
+
+  if (explicitPrimary) {
+    const ready = explicitPrimary === "web_session" ? webReady : metaReady;
+    return ready
+      ? { status: "ready", provider: explicitPrimary, source: "explicit" }
+      : { status: "unavailable", source: "explicit_unavailable" };
+  }
+
+  const operational = [
+    ...(webReady ? (["web_session"] as const) : []),
+    ...(metaReady ? (["meta"] as const) : []),
+  ];
+  if (operational.length === 1) {
+    return { status: "ready", provider: operational[0], source: "single_operational" };
+  }
+  if (operational.length > 1) {
+    return { status: "ambiguous", source: "multiple_operational" };
+  }
+  return { status: "unavailable", source: "none_operational" };
+}
+
 export async function isWhatsappFreeformStartTransportReady(params: {
   prisma: PrismaClient;
   clientId: string;
   clientKey: string;
   clientStatus: string | null | undefined;
 }) {
-  if (params.clientStatus !== "ACTIVE") {
-    return { allowed: false as const, reason: "channel_unavailable" as const };
+  const transport = await resolveEffectiveWhatsappOutboundTransport(params);
+  if (transport.status === "ready" && transport.provider === "web_session") {
+    return { allowed: true as const };
   }
-  const primaryTransport = await resolveWhatsappPrimaryTransport({
-    prisma: params.prisma,
-    clientId: params.clientId,
-  });
-  if (primaryTransport !== "web_session") {
+  if (transport.status === "ready" && transport.provider === "meta") {
     return { allowed: false as const, reason: "new_freeform_requires_model" as const };
   }
-  const ready = await isWebSessionTextOutboundReady({
-    prisma: params.prisma,
-    clientId: params.clientId,
-    clientKey: params.clientKey,
-  });
-  return ready
-    ? { allowed: true as const }
-    : { allowed: false as const, reason: "channel_unavailable" as const };
+  if (transport.status === "ambiguous") {
+    return { allowed: false as const, reason: "new_freeform_requires_model" as const };
+  }
+  return { allowed: false as const, reason: "channel_unavailable" as const };
 }
 
 export async function resolveCrmContactConversationStartEligibility(params: {

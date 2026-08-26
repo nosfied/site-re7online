@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   isWhatsappFreeformStartTransportReady,
+  resolveEffectiveWhatsappOutboundTransport,
   resolveCrmContactConversationStartEligibility,
 } from "./crmConversationStart.js";
 
@@ -10,6 +11,7 @@ function makePrisma(overrides: {
   contactLifecycle?: string;
   channel?: string | null;
   outboundEnabled?: boolean;
+  metaOperational?: boolean;
   optOut?: boolean;
 } = {}) {
   const lead = {
@@ -38,10 +40,35 @@ function makePrisma(overrides: {
     },
     tenantOperationalConfig: {
       findUnique: async () => ({
-        config: {
-          whatsappPrimaryTransport: overrides.primaryTransport ?? "web_session",
-        },
+        config:
+          overrides.primaryTransport === null
+            ? {}
+            : {
+                whatsappPrimaryTransport: overrides.primaryTransport ?? "web_session",
+              },
       }),
+    },
+    tenantMetaConfig: {
+      findUnique: async () =>
+        overrides.metaOperational
+          ? {
+              phoneNumberId: "meta-phone-1",
+              wabaId: "waba-1",
+              businessToken: "token-1",
+              rawPayload: {
+                source: "unit_test",
+                phoneNumber: { display_phone_number: "+55 84 99990-0001" },
+              },
+            }
+          : null,
+    },
+    waPhoneNumber: {
+      findFirst: async () =>
+        overrides.metaOperational
+          ? {
+              display: "+55 84 99990-0001",
+            }
+          : null,
     },
     channelAccount: {
       findFirst: async () => ({
@@ -84,7 +111,65 @@ function makePrisma(overrides: {
   };
 }
 
-test("CRM start eligibility allows only active Web Session outbound transport", async () => {
+test("effective WhatsApp outbound transport honors explicit primary and legacy single transport fallback", async () => {
+  const explicitWeb = await resolveEffectiveWhatsappOutboundTransport({
+    prisma: makePrisma({ primaryTransport: "web_session", outboundEnabled: true, metaOperational: true }) as never,
+    clientId: "client-1",
+    clientKey: "tenant-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(explicitWeb, { status: "ready", provider: "web_session", source: "explicit" });
+
+  const explicitMeta = await resolveEffectiveWhatsappOutboundTransport({
+    prisma: makePrisma({ primaryTransport: "meta", outboundEnabled: true, metaOperational: true }) as never,
+    clientId: "client-1",
+    clientKey: "tenant-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(explicitMeta, { status: "ready", provider: "meta", source: "explicit" });
+
+  const webOnly = await resolveEffectiveWhatsappOutboundTransport({
+    prisma: makePrisma({ primaryTransport: null, outboundEnabled: true, metaOperational: false }) as never,
+    clientId: "client-1",
+    clientKey: "tenant-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(webOnly, { status: "ready", provider: "web_session", source: "single_operational" });
+
+  const metaOnly = await resolveEffectiveWhatsappOutboundTransport({
+    prisma: makePrisma({ primaryTransport: null, outboundEnabled: false, metaOperational: true }) as never,
+    clientId: "client-1",
+    clientKey: "tenant-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(metaOnly, { status: "ready", provider: "meta", source: "single_operational" });
+
+  const both = await resolveEffectiveWhatsappOutboundTransport({
+    prisma: makePrisma({ primaryTransport: null, outboundEnabled: true, metaOperational: true }) as never,
+    clientId: "client-1",
+    clientKey: "tenant-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(both, { status: "ambiguous", source: "multiple_operational" });
+
+  const none = await resolveEffectiveWhatsappOutboundTransport({
+    prisma: makePrisma({ primaryTransport: null, outboundEnabled: false, metaOperational: false }) as never,
+    clientId: "client-1",
+    clientKey: "tenant-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(none, { status: "unavailable", source: "none_operational" });
+
+  const explicitWebUnavailable = await resolveEffectiveWhatsappOutboundTransport({
+    prisma: makePrisma({ primaryTransport: "web_session", outboundEnabled: false, metaOperational: true }) as never,
+    clientId: "client-1",
+    clientKey: "tenant-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(explicitWebUnavailable, { status: "unavailable", source: "explicit_unavailable" });
+});
+
+test("CRM start eligibility allows active Web Session explicit primary or legacy single transport", async () => {
   const allowed = await resolveCrmContactConversationStartEligibility({
     prisma: makePrisma() as never,
     clientId: "client-1",
@@ -96,8 +181,19 @@ test("CRM start eligibility allows only active Web Session outbound transport", 
   assert.equal(allowed.allowed, true);
   assert.equal(allowed.allowed && allowed.waIdCanonical, "558499990001");
 
+  const legacyWebOnly = await resolveCrmContactConversationStartEligibility({
+    prisma: makePrisma({ primaryTransport: null, outboundEnabled: true, metaOperational: false }) as never,
+    clientId: "client-1",
+    clientKey: "tenant-1",
+    clientStatus: "ACTIVE",
+    leadId: "lead-1",
+    actorRole: "SUPERVISOR",
+  });
+  assert.equal(legacyWebOnly.allowed, true);
+  assert.equal(legacyWebOnly.allowed && legacyWebOnly.waIdCanonical, "558499990001");
+
   const meta = await resolveCrmContactConversationStartEligibility({
-    prisma: makePrisma({ primaryTransport: "meta" }) as never,
+    prisma: makePrisma({ primaryTransport: "meta", metaOperational: true }) as never,
     clientId: "client-1",
     clientKey: "tenant-1",
     clientStatus: "ACTIVE",
@@ -105,6 +201,14 @@ test("CRM start eligibility allows only active Web Session outbound transport", 
     actorRole: "ADMIN",
   });
   assert.deepEqual(meta, { allowed: false, reason: "new_freeform_requires_model" });
+
+  const ambiguous = await isWhatsappFreeformStartTransportReady({
+    prisma: makePrisma({ primaryTransport: null, outboundEnabled: true, metaOperational: true }) as never,
+    clientId: "client-1",
+    clientKey: "tenant-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(ambiguous, { allowed: false, reason: "new_freeform_requires_model" });
 
   const noOutbound = await isWhatsappFreeformStartTransportReady({
     prisma: makePrisma({ outboundEnabled: false }) as never,
