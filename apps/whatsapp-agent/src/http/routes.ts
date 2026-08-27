@@ -258,6 +258,7 @@ import {
   serializeWebSessionStatus,
 } from "../web-session/webSessionConnectionAdmin.js";
 import {
+  buildMetaPublicWhatsappIdentityPayload,
   clearOperationalMetaWhatsappIdentity,
   clearWhatsappPrimaryTransport,
   invalidateWebSessionForMetaIdentityChange,
@@ -21140,6 +21141,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           enriched?.phoneNumberId ??
           exchange.phoneNumberId;
         const rawPayload = {
+          source: "embedded_signup",
           exchange: exchange.rawPayload,
           enrich: enriched?.rawPayload ?? null,
           embeddedSignup: embeddedSignupInput
@@ -21154,6 +21156,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 raw: embeddedSignupInput.raw ?? null,
               }
             : null,
+          publicWhatsappIdentity: buildMetaPublicWhatsappIdentityPayload(
+            extractTenantDisplayPhoneFromRawPayload({
+              enrich: enriched?.rawPayload ?? null,
+            }) ?? embeddedDisplayPhoneNumber
+          ),
         };
         const displayPhoneNumber =
           embeddedDisplayPhoneNumber ?? extractTenantDisplayPhoneFromRawPayload(rawPayload);
@@ -21415,6 +21422,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           data: {
             rawPayload: {
               ...previousRawPayload,
+              source:
+                typeof previousRawPayload.source === "string" && previousRawPayload.source.trim()
+                  ? previousRawPayload.source
+                  : "phone_registration",
+              publicWhatsappIdentity:
+                buildMetaPublicWhatsappIdentityPayload(displayPhoneNumber) ??
+                previousRawPayload.publicWhatsappIdentity ??
+                null,
               phoneRegistration: {
                 success: registration.success,
                 registeredAt: new Date().toISOString(),
@@ -21570,6 +21585,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           source: "manual_bind_connected_number",
           phoneNumberId,
           displayPhoneNumber,
+          publicWhatsappIdentity: buildMetaPublicWhatsappIdentityPayload(displayPhoneNumber),
           businessId,
           businessPortfolioId,
           wabaId,

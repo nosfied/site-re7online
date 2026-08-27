@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildMetaPublicWhatsappIdentityPayload,
   clearOperationalMetaWhatsappIdentity,
   readWhatsappPrimaryTransportFromConfig,
+  resolveProviderConfirmedMetaPublicWhatsappIdentity,
   resolveHybridWhatsappIdentityStatus,
   resolveOperationalMetaWhatsappIdentity,
   resolveOperationalWhatsappDisplayIdentity,
@@ -170,6 +172,66 @@ test("operational Meta identity uses display number instead of phoneNumberId", a
   assert.equal(meta.phoneNumberIdPresent, true);
   assert.equal(meta.canonicalNumber, "558499990001");
   assert.equal(meta.maskedNumber, "****0001");
+});
+
+test("provider-confirmed Meta public identity preserves DDD and does not infer ninth digit", () => {
+  assert.deepEqual(resolveProviderConfirmedMetaPublicWhatsappIdentity("+55 84 9999-0001"), {
+    rawDisplayPhoneNumber: "+55 84 9999-0001",
+    canonicalNumber: "558499990001",
+    maskedNumber: "****0001",
+  });
+
+  assert.equal(
+    resolveProviderConfirmedMetaPublicWhatsappIdentity("+55 11 9999-0001")?.canonicalNumber,
+    "551199990001"
+  );
+  assert.notEqual(
+    resolveProviderConfirmedMetaPublicWhatsappIdentity("+55 84 9999-0001")?.canonicalNumber,
+    resolveProviderConfirmedMetaPublicWhatsappIdentity("+55 11 9999-0001")?.canonicalNumber
+  );
+  assert.notEqual(
+    resolveProviderConfirmedMetaPublicWhatsappIdentity("+55 84 9999-0001")?.canonicalNumber,
+    resolveProviderConfirmedMetaPublicWhatsappIdentity("+55 84 99999-0001")?.canonicalNumber
+  );
+  assert.equal(resolveProviderConfirmedMetaPublicWhatsappIdentity(""), null);
+  assert.equal(resolveProviderConfirmedMetaPublicWhatsappIdentity(null), null);
+});
+
+test("operational Meta identity prefers canonical public identity and falls back to legacy display", async () => {
+  const prisma = makePrisma();
+  prisma.state.metaConfigs.push({
+    clientId: "canonical-meta",
+    phoneNumberId: "phone-canonical-meta",
+    wabaId: "waba-canonical-meta",
+    businessToken: "token-canonical-meta",
+    rawPayload: {
+      source: "embedded_signup",
+      publicWhatsappIdentity: buildMetaPublicWhatsappIdentityPayload("+55 84 9999-0006"),
+      phoneNumber: { display_phone_number: "+55 84 9999-0007" },
+    },
+  });
+  prisma.state.waPhoneNumbers.push({
+    clientId: "canonical-meta",
+    phoneNumberId: "phone-canonical-meta",
+    display: "+55 84 9999-0008",
+  });
+
+  const canonical = await resolveOperationalMetaWhatsappIdentity({
+    prisma: prisma as never,
+    clientId: "canonical-meta",
+  });
+
+  assert.equal(canonical.configured, true);
+  assert.equal(canonical.canonicalNumber, "558499990006");
+
+  setMeta(prisma, "legacy-meta", "+55 84 9999-0009");
+  const legacy = await resolveOperationalMetaWhatsappIdentity({
+    prisma: prisma as never,
+    clientId: "legacy-meta",
+  });
+
+  assert.equal(legacy.configured, true);
+  assert.equal(legacy.canonicalNumber, "558499990009");
 });
 
 test("hybrid logical identity resolves Meta only, Web only, matching hybrid and legacy mismatch", async () => {

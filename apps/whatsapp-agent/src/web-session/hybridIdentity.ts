@@ -42,6 +42,38 @@ export function extractMetaDisplayPhoneFromRawPayload(rawPayload: unknown): stri
     : null;
 }
 
+export function resolveProviderConfirmedMetaPublicWhatsappIdentity(displayPhoneNumber: unknown) {
+  const rawDisplayPhoneNumber = typeof displayPhoneNumber === "string"
+    ? displayPhoneNumber.trim()
+    : "";
+  const canonicalNumber = normalizeHybridWhatsappNumber(rawDisplayPhoneNumber);
+  if (!rawDisplayPhoneNumber || !canonicalNumber) return null;
+  return {
+    rawDisplayPhoneNumber,
+    canonicalNumber,
+    maskedNumber: maskWebSessionNumber(canonicalNumber),
+  };
+}
+
+export function buildMetaPublicWhatsappIdentityPayload(displayPhoneNumber: unknown) {
+  const identity = resolveProviderConfirmedMetaPublicWhatsappIdentity(displayPhoneNumber);
+  if (!identity) return null;
+  return {
+    provider: "meta" as const,
+    evidence: "provider_confirmed_display_phone_number" as const,
+    rawDisplayPhoneNumber: identity.rawDisplayPhoneNumber,
+    canonicalNumber: identity.canonicalNumber,
+    maskedNumber: identity.maskedNumber,
+  };
+}
+
+function readCanonicalMetaPublicIdentityFromRawPayload(rawPayload: unknown): string | null {
+  if (!isRecord(rawPayload)) return null;
+  const publicWhatsappIdentity = rawPayload.publicWhatsappIdentity;
+  if (!isRecord(publicWhatsappIdentity)) return null;
+  return normalizeHybridWhatsappNumber(publicWhatsappIdentity.canonicalNumber);
+}
+
 export async function resolveOperationalMetaWhatsappIdentity(params: {
   prisma: PrismaClient;
   clientId: string;
@@ -96,10 +128,12 @@ export async function resolveOperationalMetaWhatsappIdentity(params: {
     ? await waPhoneNumber.findFirst({
         where: { clientId: params.clientId, phoneNumberId },
         select: { display: true },
-      })
+    })
     : null;
   const displayPhone = phoneMapping?.display?.trim() || extractMetaDisplayPhoneFromRawPayload(metaConfig?.rawPayload);
-  const canonicalNumber = normalizeHybridWhatsappNumber(displayPhone ?? "");
+  const canonicalNumber =
+    readCanonicalMetaPublicIdentityFromRawPayload(metaConfig?.rawPayload) ??
+    normalizeHybridWhatsappNumber(displayPhone ?? "");
   if (!canonicalNumber) {
     return {
       configured: true,

@@ -2112,7 +2112,7 @@ test("queue assignment settings are tenant scoped and admin managed with supervi
   assert.equal(saved.body.policy.notifyAssignedOnly, true);
   assert.equal(saved.body.policy.lastAssignedUserIdByScope, undefined);
   assert.equal(saved.body.effectiveMode, "round_robin");
-  assert.ok(saved.body.warnings.some((warning) => warning.includes("Presenca online")));
+  assert.deepEqual(saved.body.warnings, []);
   assert.equal(saved.body.permissions.canUpdate, true);
 
   const override = await request<{
@@ -2457,7 +2457,7 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
       enabled: true,
       runtimeEnabled: true,
       inboundPersistenceEnabled: false,
-      outboundEnabled: false,
+      outboundEnabled: true,
       automationEnabled: false,
       aiEnabled: false,
       handoffEnabled: false,
@@ -2706,7 +2706,7 @@ test("inbox routes WhatsApp web session outbound through worker without Meta fal
       enabled: true,
       runtimeEnabled: true,
       inboundPersistenceEnabled: true,
-      outboundEnabled: false,
+      outboundEnabled: true,
       status: "connected",
       tokenStatus: "configured",
       metadata: {
@@ -3161,7 +3161,7 @@ test("web session inbound uses shared chatbot flow and queue handoff", async (t)
       enabled: true,
       runtimeEnabled: true,
       inboundPersistenceEnabled: true,
-      outboundEnabled: false,
+      outboundEnabled: true,
       status: "connected",
       tokenStatus: "configured",
       metadata: {
@@ -3172,6 +3172,22 @@ test("web session inbound uses shared chatbot flow and queue handoff", async (t)
         },
       },
     },
+  });
+  const flowDepartment = await prisma.department.create({
+    data: {
+      clientId: businessClientId,
+      name: `${prefix} Flow Department`,
+      slug: `${prefix}-flow-department`,
+    },
+    select: { id: true },
+  });
+  const flowQueue = await prisma.queue.create({
+    data: {
+      clientId: businessClientId,
+      departmentId: flowDepartment.id,
+      name: `${prefix} Flow Queue`,
+    },
+    select: { id: true },
   });
   await prisma.chatbotFlow.create({
     data: {
@@ -3187,7 +3203,13 @@ test("web session inbound uses shared chatbot flow and queue handoff", async (t)
             text: "Como podemos ajudar?",
             options: [
               { label: "Informacoes gerais", next: "info" },
-              { label: "Falar com atendente", next: "human", tags: ["handoff"] },
+              {
+                label: "Falar com atendente",
+                next: "human",
+                tags: ["handoff"],
+                departmentId: flowDepartment.id,
+                queueId: flowQueue.id,
+              },
             ],
           },
           info: { type: "text", text: "Informacoes gerais do atendimento." },
@@ -3298,9 +3320,10 @@ test("web session inbound uses shared chatbot flow and queue handoff", async (t)
       rawPayload: { provider: "web_session", type: "text" },
     },
   });
-  assert.equal(workerRequests.length, 4);
+  assert.equal(workerRequests.length, 5);
   assert.match(String(workerRequests[2]?.text ?? ""), /atendimento humano/);
   assert.match(String(workerRequests[3]?.text ?? ""), /protocolo de atendimento/);
+  assert.match(String(workerRequests[4]?.text ?? ""), /fila de atendimento/);
   const handoffRuntime = await prisma.conversationRuntimeState.findUniqueOrThrow({
     where: { clientId_waId: { clientId: businessClientId, waId } },
   });
@@ -4419,11 +4442,18 @@ test("admin onboarding code exchange resolves WABA by displayed phone when OAuth
 
     const metaConfig = await prisma.tenantMetaConfig.findUnique({
       where: { clientId: client.id },
-      select: { phoneNumberId: true, wabaId: true, businessToken: true },
+      select: { phoneNumberId: true, wabaId: true, businessToken: true, rawPayload: true },
     });
     assert.equal(metaConfig?.phoneNumberId, `${prefix}-phone-display`);
     assert.equal(metaConfig?.wabaId, `${prefix}-waba-display`);
     assert.equal(metaConfig?.businessToken, `${prefix}-business-token-display`);
+    const rawPayload = metaConfig?.rawPayload as Record<string, unknown>;
+    const publicWhatsappIdentity = rawPayload.publicWhatsappIdentity as Record<string, unknown>;
+    assert.equal(rawPayload.source, "embedded_signup");
+    assert.equal(publicWhatsappIdentity.evidence, "provider_confirmed_display_phone_number");
+    assert.equal(publicWhatsappIdentity.rawDisplayPhoneNumber, "+55 84 9459-6848");
+    assert.equal(publicWhatsappIdentity.canonicalNumber, "558494596848");
+    assert.equal(publicWhatsappIdentity.maskedNumber, "****6848");
 
     const phoneNumber = await prisma.waPhoneNumber.findUnique({
       where: { phoneNumberId: `${prefix}-phone-display` },
@@ -4431,6 +4461,30 @@ test("admin onboarding code exchange resolves WABA by displayed phone when OAuth
     });
     assert.equal(phoneNumber?.clientId, client.id);
     assert.equal(phoneNumber?.display, "55 84 9459-6848");
+
+    const repeat = await requestSuperadmin<{ success: boolean }>(
+      "POST",
+      `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}/onboarding/exchange-code`,
+      {
+        code: "valid-display-resolution-code",
+        redirectUri: `https://converta.re7online.com/admin/tenants/${encodeURIComponent(
+          dbOnlyClientKey
+        )}/onboarding`,
+        embeddedSignup: {
+          displayPhoneNumber: "55 84 9459-6848",
+          raw: { code: "redacted-in-test" },
+        },
+      }
+    );
+
+    assert.equal(repeat.status, 200);
+    assert.equal(repeat.body.success, true);
+    assert.equal(
+      await prisma.waPhoneNumber.count({
+        where: { clientId: client.id, phoneNumberId: `${prefix}-phone-display` },
+      }),
+      1
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -11079,6 +11133,7 @@ test("campaign draft send blocks mapped recipients without value or fallback", a
 });
 
 test("tenant override can enable campaigns for a non-business profile", async () => {
+  const expectedCount = await prisma.campaign.count({ where: { clientId: overrideClientId } });
   const response = await request<{ ok: boolean; count: number }>(
     "GET",
     "/app/campaigns",
@@ -11087,7 +11142,7 @@ test("tenant override can enable campaigns for a non-business profile", async ()
 
   assert.equal(response.status, 200);
   assert.equal(response.body.ok, true);
-  assert.equal(response.body.count, 0);
+  assert.equal(response.body.count, expectedCount);
 });
 
 test("tenant kill switch can disable campaigns for business profile", async () => {
