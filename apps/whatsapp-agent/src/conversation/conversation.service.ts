@@ -221,6 +221,17 @@ export function getHandoffStatus(state: ConversationState) {
   return state.handoff.status;
 }
 
+export function shouldRunLegacyHandoffAutomation(params: {
+  disableLegacyFlows?: boolean;
+  supervisedAiHandoffEnabled: boolean;
+  wasPending: boolean;
+  hasConfigurableChatbotFlow: boolean;
+}) {
+  if (params.disableLegacyFlows === true) return false;
+  if (params.supervisedAiHandoffEnabled) return false;
+  return params.wasPending || !params.hasConfigurableChatbotFlow;
+}
+
 function withHandoff(
   state: ConversationState,
   handoff: Partial<HandoffState> & { status: HandoffState["status"] }

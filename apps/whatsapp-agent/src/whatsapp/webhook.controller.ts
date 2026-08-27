@@ -26,6 +26,7 @@ import {
   logConversationWindow,
   markTemplateNeeded,
   shouldAutoReply,
+  shouldRunLegacyHandoffAutomation,
   shouldStartQuoteSite,
   updateInbound,
   updateInboundMeta,
@@ -3717,7 +3718,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       continue;
     }
 
-    if (currentHandoffStatus === "pending" && !supervisedAiHandoffEnabled) {
+    if (
+      currentHandoffStatus === "pending" &&
+      shouldRunLegacyHandoffAutomation({
+        disableLegacyFlows: automationFlags.disableLegacyFlows,
+        supervisedAiHandoffEnabled,
+        wasPending: true,
+        hasConfigurableChatbotFlow: false,
+      })
+    ) {
       const pendingState = updateInboundMeta(
         currentConversation,
         message.messageId,
@@ -4651,8 +4660,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       await loadChatbotFlowForConversation(updatedConversation, message.text)
     );
     const inboundIntent = detectIntent(message.text);
-    const shouldRunLegacyHandoff =
-      !supervisedAiHandoffEnabled && (wasPending || !hasConfigurableChatbotFlow);
+    const shouldRunLegacyHandoff = shouldRunLegacyHandoffAutomation({
+      disableLegacyFlows: automationFlags.disableLegacyFlows,
+      supervisedAiHandoffEnabled,
+      wasPending,
+      hasConfigurableChatbotFlow,
+    });
     if (supervisedAiHandoffEnabled && inboundIntent === "handoff") {
       logger.info({
         event: "ai.orchestrator.handoff_legacy_blocked",
@@ -4703,7 +4716,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         clientId: tenantClientId,
         clientKey: tenantClientKey,
         waId: maskNumber(normalizedFrom),
-        reason: "chatbot_flow_available",
+        reason: automationFlags.disableLegacyFlows
+          ? "legacy_flows_disabled"
+          : "chatbot_flow_available",
         route: meta?.route,
         method: meta?.method,
         requestId: meta?.requestId,
