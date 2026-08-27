@@ -88,6 +88,12 @@ export type InboxConversationContinuation = {
   reason: "protocol_lookup";
 };
 
+export type InboxChannelSwitchWarning = {
+  pending: true;
+  previousIdentityMasked: string;
+  currentIdentityMasked: string;
+};
+
 export type InboxConversationItem = {
   waId: string;
   waIdCanonical?: string | null;
@@ -97,6 +103,7 @@ export type InboxConversationItem = {
   provider?: string | null;
   channelAccountId?: string | null;
   channelOutboundEnabled?: boolean;
+  channelSwitchWarning?: InboxChannelSwitchWarning | null;
   lastMessage: {
     protocol?: string | null;
     cycleId?: string | null;

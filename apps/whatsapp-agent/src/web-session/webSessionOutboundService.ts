@@ -66,9 +66,27 @@ type WebSessionChannelAccount = {
   };
 };
 
+export type WebSessionChannelSwitchWarning = {
+  pending: true;
+  previousIdentityMasked: string;
+  currentIdentityMasked: string;
+};
+
 function maskWaId(value: string) {
   const digits = value.replace(/\D/g, "");
   return digits ? `****${digits.slice(-4)}` : "unknown";
+}
+
+function normalizeWebSessionIdentityKey(value?: string | null) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return null;
+  const digits = normalized.replace(/\D/g, "");
+  return digits || normalized.toLowerCase();
+}
+
+function maskWebSessionIdentity(value?: string | null) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits ? `****${digits.slice(-4)}` : "****";
 }
 
 function normalizeRecipientWaId(value: string) {
@@ -149,26 +167,41 @@ async function findWebSessionAccount(params: {
   clientKey: string;
   channelAccountId?: string | null;
 }) {
-  const account = await params.prisma.channelAccount.findFirst({
-    where: {
-      clientId: params.clientId,
-      channel: "whatsapp",
-      provider: "web_session",
-      ...(params.channelAccountId ? { channelAccountId: params.channelAccountId } : {}),
-    },
-    include: {
-      client: {
-        select: {
-          id: true,
-          clientKey: true,
-          status: true,
-          features: true,
+  const findAccount = async (channelAccountId?: string | null) => (
+    await params.prisma.channelAccount.findFirst({
+      where: {
+        clientId: params.clientId,
+        channel: "whatsapp",
+        provider: "web_session",
+        ...(channelAccountId ? { channelAccountId } : {}),
+      },
+      include: {
+        client: {
+          select: {
+            id: true,
+            clientKey: true,
+            status: true,
+            features: true,
+          },
         },
       },
-    },
-    orderBy: [{ updatedAt: "desc" }],
-  }) as WebSessionChannelAccount | null;
-  if (!account || account.client.clientKey !== params.clientKey) return null;
+      orderBy: [{ updatedAt: "desc" }],
+    })
+  ) as WebSessionChannelAccount | null;
+
+  const account = await findAccount(params.channelAccountId);
+  if (account && account.client.clientKey !== params.clientKey) return null;
+  if (params.channelAccountId && (!account || !isWebSessionAccountConnected(account))) {
+    const currentAccount = await findAccount(null);
+    if (
+      currentAccount &&
+      currentAccount.client.clientKey === params.clientKey &&
+      isWebSessionAccountConnected(currentAccount)
+    ) {
+      return currentAccount;
+    }
+  }
+  if (!account) return null;
   return account;
 }
 
@@ -358,6 +391,53 @@ export async function isWebSessionTextOutboundReady(params: {
 }) {
   const account = await findWebSessionAccount(params);
   return Boolean(account && isWebSessionAccountConnected(account));
+}
+
+export async function resolveWebSessionChannelSwitchWarning(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientKey: string;
+  waId?: string | null;
+  waIdCanonical?: string | null;
+  channelAccountId?: string | null;
+}): Promise<WebSessionChannelSwitchWarning | null> {
+  const currentAccount = await findWebSessionAccount({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    channelAccountId: params.channelAccountId ?? null,
+  });
+  if (!currentAccount || !isWebSessionAccountConnected(currentAccount)) return null;
+
+  const currentIdentityKey = normalizeWebSessionIdentityKey(currentAccount.channelAccountId);
+  if (!currentIdentityKey) return null;
+  const identityCandidates = Array.from(
+    new Set([params.waId, params.waIdCanonical].map((value) => String(value ?? "").trim()).filter(Boolean))
+  );
+  if (identityCandidates.length === 0) return null;
+
+  const latestSentOutbound = await params.prisma.outboundMessage.findFirst({
+    where: {
+      clientId: params.clientId,
+      channel: "whatsapp",
+      provider: "web_session",
+      status: MessageStatus.SENT,
+      channelAccountId: { not: null },
+      OR: [
+        { waId: { in: identityCandidates } },
+        { waIdCanonical: { in: identityCandidates } },
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    select: { channelAccountId: true },
+  });
+  const previousIdentityKey = normalizeWebSessionIdentityKey(latestSentOutbound?.channelAccountId);
+  if (!previousIdentityKey || previousIdentityKey === currentIdentityKey) return null;
+  return {
+    pending: true,
+    previousIdentityMasked: maskWebSessionIdentity(latestSentOutbound?.channelAccountId),
+    currentIdentityMasked: maskWebSessionIdentity(currentAccount.channelAccountId),
+  };
 }
 
 export async function resolveWebSessionTextRecipient(params: {

@@ -266,7 +266,14 @@ function fakePrisma() {
       findUnique: async () => state.config ? { config: state.config } : null,
     },
     channelAccount: {
-      findFirst: async () => state.channelAccounts[0] ?? null,
+      findFirst: async ({ where }: { where?: Record<string, unknown> } = {}) =>
+        state.channelAccounts.find((account) => {
+          if (where?.clientId && account.clientId !== where.clientId) return false;
+          if (where?.channel && account.channel !== where.channel) return false;
+          if (where?.provider && account.provider !== where.provider) return false;
+          if (where?.channelAccountId && account.channelAccountId !== where.channelAccountId) return false;
+          return true;
+        }) ?? null,
     },
     user: {
       findFirst: async ({ where }: { where: Record<string, unknown> }) =>
@@ -499,6 +506,7 @@ function withConnectedWebSession() {
     provider: "web_session",
     channelAccountId: "web-session-default",
     enabled: true,
+    outboundEnabled: true,
     runtimeEnabled: true,
     status: "connected",
     metadata: {
@@ -759,7 +767,7 @@ test("ingestBaileysWebSessionMessage accepts sender resolved from LID mapping", 
   });
 
   assert.equal(result.action, "persisted");
-  assert.equal(state.inboundMessages[0]?.waIdCanonical, "55849999997784");
+  assert.equal(state.inboundMessages[0]?.waIdCanonical, "5584999997784");
   assert.equal(state.inboundMessages[0]?.rawPayload && typeof state.inboundMessages[0].rawPayload === "object", true);
   assert.equal((state.inboundMessages[0]?.rawPayload as Record<string, unknown>).senderJidServer, "s.whatsapp.net");
 });

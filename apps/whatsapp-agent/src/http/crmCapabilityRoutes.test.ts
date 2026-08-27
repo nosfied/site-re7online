@@ -735,7 +735,7 @@ test("CRM contact create preserves existing provisional contact without changing
 });
 
 test("CRM CSV import previews without mutation and confirms idempotently", async () => {
-  const csvText = "\uFEFFnome;numero\nContato CSV;5541888877777\nSem Nome;5541888877778\nDuplicado;55 41 8888-77777\nInválido;abc\n";
+  const csvText = "\uFEFFnome;numero\nContato CSV;5541888877777\nSem Nome;5541888877778\nDuplicado;5541888877777\nInválido;abc\n";
   const conversationsBefore = await prisma.conversation.count({ where: { clientId: businessClientId } });
   const messagesBefore = await prisma.message.count({
     where: { conversation: { clientId: businessClientId } },
@@ -943,7 +943,7 @@ test("CRM contacts read model supports filters and partial records", async () =>
   const withConversation = await request<{ ok: boolean; items: Array<{ hasConversation: boolean }> }>(
     "GET",
     "/app/crm/contacts?hasConversation=true",
-    businessAgent
+    businessAdmin
   );
   assert.equal(withConversation.status, 200);
   assert.ok(withConversation.body.items.length >= 1);

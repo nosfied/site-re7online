@@ -1801,6 +1801,7 @@ function applyConversationOperationalPayload(
     provider?: string | null;
     channelAccountId?: string | null;
     channelOutboundEnabled?: boolean;
+    channelSwitchWarning?: InboxConversationItem["channelSwitchWarning"];
     mode: "BOT" | "HUMAN";
     handoffStatus?: "none" | "pending" | "active" | null;
     assignedUserId: string | null;
@@ -1828,14 +1829,15 @@ function applyConversationOperationalPayload(
     nextAssignedUserId && payload.status === "WAITING" ? ("IN_PROGRESS" as const) : payload.status;
   return {
     ...item,
-	    waId: payload.waId ?? item.waId,
-	    waIdCanonical: payload.waIdCanonical ?? item.waIdCanonical,
-	    protocol: payload.protocol ?? item.protocol ?? null,
-	    cycleId: payload.cycleId ?? item.cycleId ?? null,
-	    channel: payload.channel ?? item.channel,
+    waId: payload.waId ?? item.waId,
+    waIdCanonical: payload.waIdCanonical ?? item.waIdCanonical,
+    protocol: payload.protocol ?? item.protocol ?? null,
+    cycleId: payload.cycleId ?? item.cycleId ?? null,
+    channel: payload.channel ?? item.channel,
     provider: payload.provider ?? item.provider,
     channelAccountId: payload.channelAccountId ?? item.channelAccountId,
     channelOutboundEnabled: payload.channelOutboundEnabled ?? item.channelOutboundEnabled,
+    channelSwitchWarning: payload.channelSwitchWarning ?? null,
     mode: payload.mode,
     handoffStatus: payload.handoffStatus ?? item.handoffStatus ?? "none",
     assignedUserId: nextAssignedUserId,
@@ -2347,6 +2349,7 @@ export default function AppInboxPage() {
   const [replyTarget, setReplyTarget] = useState<InboxReplyTarget | null>(null);
   const [openMessageActionsId, setOpenMessageActionsId] = useState<string | null>(null);
   const [selectedMediaFile, setSelectedMediaFile] = useState<File | null>(null);
+  const [channelSwitchConfirmationOpen, setChannelSwitchConfirmationOpen] = useState(false);
   const [audioRecordingState, setAudioRecordingState] = useState<"idle" | "recording" | "stopping">(
     "idle"
   );
@@ -2451,6 +2454,7 @@ export default function AppInboxPage() {
   const primedTimelineNotificationKeysRef = useRef(new Set<string>());
   const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
   const processingOutgoingRef = useRef(false);
+  const channelSwitchConfirmationResolveRef = useRef<((confirmed: boolean) => void) | null>(null);
   const detailRequestSeqRef = useRef(0);
   const selectedTimelineLastRefreshAtRef = useRef(0);
   const selectedTimelineRequestedActivityAtRef = useRef<number | null>(null);
@@ -4562,10 +4566,36 @@ export default function AppInboxPage() {
       conversations.find((item) => getConversationIdentity(item) === selectedConversationKey) ?? null,
     [conversations, selectedConversationKey]
   );
+  const selectedChannelSwitchWarning = selectedConversation?.channelSwitchWarning?.pending
+    ? selectedConversation.channelSwitchWarning
+    : null;
   const canMarkSelectedConversationUnread = useMemo(
     () => Boolean(selectedConversation && !isConversationAssignedToAnotherUser(selectedConversation, session?.user.id ?? "")),
     [selectedConversation, session?.user.id]
   );
+
+  const resolveChannelSwitchConfirmation = useCallback((confirmed: boolean) => {
+    channelSwitchConfirmationResolveRef.current?.(confirmed);
+    channelSwitchConfirmationResolveRef.current = null;
+    setChannelSwitchConfirmationOpen(false);
+  }, []);
+
+  const confirmChannelSwitchIfNeeded = useCallback(async () => {
+    if (!selectedChannelSwitchWarning) return true;
+    if (channelSwitchConfirmationOpen) return false;
+    setChannelSwitchConfirmationOpen(true);
+    return new Promise<boolean>((resolve) => {
+      channelSwitchConfirmationResolveRef.current = resolve;
+    });
+  }, [channelSwitchConfirmationOpen, selectedChannelSwitchWarning]);
+
+  useEffect(() => {
+    return () => {
+      channelSwitchConfirmationResolveRef.current?.(false);
+      channelSwitchConfirmationResolveRef.current = null;
+      setChannelSwitchConfirmationOpen(false);
+    };
+  }, [selectedConversationKey]);
 
   const openConversationItem = useCallback((item: InboxConversationItem, options?: { fromPush?: boolean }) => {
     const conversationIdentity = getConversationIdentity(item);
@@ -5414,6 +5444,7 @@ export default function AppInboxPage() {
           provider: response.provider ?? "web_session",
           channelAccountId: response.channelAccountId ?? null,
           channelOutboundEnabled: response.channelOutboundEnabled,
+          channelSwitchWarning: response.channelSwitchWarning ?? null,
           lastMessage: {
             direction: "OUTBOUND",
             type: "TEXT",
@@ -5491,6 +5522,7 @@ export default function AppInboxPage() {
     if (!text) return;
     const outgoingText = buildOutgoingTextForReplyMode(text, replyTarget?.mode ?? "reply");
     if (!outgoingText) return;
+    if (!(await confirmChannelSwitchIfNeeded())) return;
     const queuedMessage: PendingOutgoingMessage = {
       waId: selectedConversationWaId,
       conversationKey: getConversationIdentity(selectedConversation),
@@ -5524,6 +5556,7 @@ export default function AppInboxPage() {
         setErrorDetails(null);
         return;
       }
+      if (!(await confirmChannelSwitchIfNeeded())) return;
 
       setSendingMessage(true);
       setError(null);
@@ -5641,6 +5674,7 @@ export default function AppInboxPage() {
     },
     [
       canReply,
+      confirmChannelSwitchIfNeeded,
       focusComposer,
       handleUnauthorized,
       replyTarget,
@@ -5879,6 +5913,7 @@ export default function AppInboxPage() {
       setCannedReplyError("Assuma uma conversa WhatsApp para enviar mensagem pronta.");
       return;
     }
+    if (!(await confirmChannelSwitchIfNeeded())) return;
     setSendingCannedReply(true);
     setCannedReplyError(null);
     setError(null);
@@ -6461,6 +6496,36 @@ export default function AppInboxPage() {
         variant="error"
         onClick={dismissInboxFeedback}
       />
+      {channelSwitchConfirmationOpen && selectedChannelSwitchWarning ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+            <h2 className="text-base font-semibold text-slate-950">Enviar pelo número atual?</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-700">
+              O contato receberá esta mensagem pelo número atualmente conectado ao Converta.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium text-slate-600">
+              <span>Antes: {selectedChannelSwitchWarning.previousIdentityMasked}</span>
+              <span>Agora: {selectedChannelSwitchWarning.currentIdentityMasked}</span>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => resolveChannelSwitchConfirmation(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="rounded-xl bg-[#20b15a] px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
+                onClick={() => resolveChannelSwitchConfirmation(true)}
+              >
+                Enviar mensagem
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {templateModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-3 py-6">
           <section className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-950 shadow-2xl">
@@ -7917,6 +7982,18 @@ export default function AppInboxPage() {
               <div className="mb-2 flex items-center gap-2 text-sm font-medium text-[#b45309]">
                 <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#dc2626]" />
                 <span>Gravando áudio... clique no botão vermelho para enviar.</span>
+              </div>
+            ) : null}
+            {selectedChannelSwitchWarning ? (
+              <div className="mb-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                <p className="font-semibold">Esta conversa usava outro número</p>
+                <p className="mt-0.5">
+                  Este atendimento foi iniciado por outro número do WhatsApp. A próxima mensagem será enviada pelo número atualmente conectado ao Converta.
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-2 font-medium">
+                  <span>Antes: {selectedChannelSwitchWarning.previousIdentityMasked}</span>
+                  <span>Agora: {selectedChannelSwitchWarning.currentIdentityMasked}</span>
+                </div>
               </div>
             ) : null}
             {selectedConversation && !selectedConversationSupportsOutbound ? (

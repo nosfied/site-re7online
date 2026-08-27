@@ -277,6 +277,7 @@ import {
   createWebSessionTextOutboundMessage,
   createWebSessionMediaOutboundMessage,
   isWebSessionTextOutboundReady,
+  resolveWebSessionChannelSwitchWarning,
   type WebSessionReplyReference,
 } from "../web-session/webSessionOutboundService.js";
 import { closeWebSessionHumanService } from "../web-session/webSessionInbound.js";
@@ -29708,6 +29709,13 @@ async function buildConversationActionPayload(
     source: channelSource,
     features: clientFeatures,
   });
+  const channelSwitchWarning = await getInboxConversationChannelSwitchWarning({
+    prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    source: channelSource,
+    features: clientFeatures,
+  });
   const operationalFields = serializeConversationOperationalFields({
     conversation,
     assignedUserName,
@@ -29726,6 +29734,7 @@ async function buildConversationActionPayload(
     cycleId: getServiceCycleForDisplay(conversation)?.cycleId ?? null,
     ...serializeInboxChannelFields(channelSource ?? undefined),
     channelOutboundEnabled,
+    channelSwitchWarning,
     ...buildConversationOperationalTimingFields({
       source: channelSource,
       operational: conversation,
@@ -31079,6 +31088,28 @@ async function getInboxConversationChannelOutboundEnabled(params: {
   return getConversationChannelOutboundEnabled(params.tenant, params.source, params.features);
 }
 
+async function getInboxConversationChannelSwitchWarning(params: {
+  prisma: ReturnType<typeof getPrisma>;
+  clientId: string;
+  clientKey: string;
+  source?: { channel?: string | null; provider?: string | null; channelAccountId?: string | null; waId?: string | null; waIdCanonical?: string | null } | null;
+  features?: {
+    whatsappWebSession?: boolean | null;
+  } | null;
+}) {
+  const channelFields = serializeInboxChannelFields(params.source ?? undefined);
+  if (channelFields.channel !== "whatsapp" || channelFields.provider !== "web_session") return null;
+  if (params.features?.whatsappWebSession !== true) return null;
+  return resolveWebSessionChannelSwitchWarning({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    waId: params.source?.waId ?? null,
+    waIdCanonical: params.source?.waIdCanonical ?? null,
+    channelAccountId: channelFields.channelAccountId,
+  });
+}
+
 async function getTelegramConversationOutboundEnabled(params: {
   prisma: ReturnType<typeof getPrisma>;
   clientId: string;
@@ -32119,6 +32150,13 @@ async function buildConversationListPayload(
       source: conversation,
       features: clientFeatures,
     });
+    const channelSwitchWarning = await getInboxConversationChannelSwitchWarning({
+      prisma,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      source: conversation,
+      features: clientFeatures,
+    });
 
     return {
       waId: conversation.waId,
@@ -32127,6 +32165,7 @@ async function buildConversationListPayload(
       cycleId: displayServiceCycle?.cycleId ?? null,
       ...serializeInboxChannelFields(conversation),
       channelOutboundEnabled,
+      channelSwitchWarning,
       lastMessage,
       leadId: lead?.id ?? null,
       leadStatus: lead?.status ?? null,
@@ -32584,6 +32623,13 @@ async function buildConversationDetailPayload(
     source: resolved.winner ?? undefined,
     features: clientFeatures,
   });
+  const channelSwitchWarning = await getInboxConversationChannelSwitchWarning({
+    prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    source: resolved.winner ?? undefined,
+    features: clientFeatures,
+  });
 
   return {
     ok: true,
@@ -32595,6 +32641,7 @@ async function buildConversationDetailPayload(
     cycleId: getServiceCycleForDisplay(conversation)?.cycleId ?? null,
     ...serializeInboxChannelFields(resolved.winner ?? undefined),
     channelOutboundEnabled,
+    channelSwitchWarning,
     ...serializeConversationOperationalFields({
       conversation,
       assignedUserName: assignedUser?.name ?? null,

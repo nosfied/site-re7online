@@ -810,6 +810,7 @@ type AppConversationOperationalPayload = {
   provider?: string | null;
   channelAccountId?: string | null;
   channelOutboundEnabled?: boolean;
+  channelSwitchWarning?: InboxConversationItem["channelSwitchWarning"];
   mode: "BOT" | "HUMAN";
   handoffStatus?: "none" | "pending" | "active" | null;
   assignedUserId: string | null;
