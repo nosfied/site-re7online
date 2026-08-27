@@ -62,6 +62,14 @@ function buildArchivedChannelAccountId(accountId: string, channelAccountId: stri
   return `archived:${accountId}:${fingerprintWebSessionNumber(channelAccountId)}`;
 }
 
+export function resolveWebSessionPrePairingOutboundIntent(account: {
+  metadata: unknown;
+  outboundEnabled: boolean;
+}) {
+  const lifecycle = readWebSessionLifecycle(account.metadata);
+  return lifecycle.lastConnectedAt ? account.outboundEnabled : true;
+}
+
 export async function getWebSessionAccount(params: {
   prisma: PrismaClient;
   clientId: string;
@@ -336,10 +344,11 @@ export async function requestWebSessionConnect(params: {
     },
   });
   const prePairingOutbound = readWebSessionPrePairingOutboundState(account.metadata);
+  const outboundIntent = resolveWebSessionPrePairingOutboundIntent(account);
   const metadataWithOutboundSnapshot = prePairingOutbound
     ? metadata
     : writeWebSessionPrePairingOutboundMetadata(metadata, {
-      enabled: account.outboundEnabled,
+      enabled: outboundIntent,
       capturedAt: new Date().toISOString(),
     });
   await params.prisma.channelAccount.update({
