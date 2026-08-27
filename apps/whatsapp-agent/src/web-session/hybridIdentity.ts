@@ -102,6 +102,25 @@ export async function resolveOperationalMetaWhatsappIdentity(params: {
       rawPayload: true,
     },
   });
+  if (!metaConfig) {
+    const legacyPhoneMapping = waPhoneNumber
+      ? await waPhoneNumber.findFirst({
+          where: { clientId: params.clientId, display: { not: null } },
+          select: { display: true, phoneNumberId: true },
+          orderBy: { createdAt: "asc" },
+        })
+      : null;
+    const canonicalNumber = normalizeHybridWhatsappNumber(legacyPhoneMapping?.display ?? "");
+    if (canonicalNumber) {
+      return {
+        configured: true,
+        canonicalNumber,
+        maskedNumber: maskWebSessionNumber(canonicalNumber),
+        phoneNumberIdPresent: Boolean(String(legacyPhoneMapping?.phoneNumberId ?? "").trim()),
+        reason: "legacy_wa_phone_number_display" as const,
+      };
+    }
+  }
   const businessToken = typeof metaConfig?.businessToken === "string"
     ? metaConfig.businessToken.trim()
     : "";

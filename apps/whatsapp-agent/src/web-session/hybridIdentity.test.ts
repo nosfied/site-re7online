@@ -65,11 +65,12 @@ function makePrisma() {
       },
     },
     waPhoneNumber: {
-      findFirst: async (args: { where: { clientId: string; phoneNumberId: string } }) =>
+      findFirst: async (args: { where: { clientId: string; phoneNumberId?: string; display?: { not: null } } }) =>
         state.waPhoneNumbers.find(
           (item) =>
             item.clientId === args.where.clientId &&
-            item.phoneNumberId === args.where.phoneNumberId
+            (!args.where.phoneNumberId || item.phoneNumberId === args.where.phoneNumberId) &&
+            (!args.where.display || item.display !== args.where.display.not)
         ) ?? null,
     },
     channelAccount: {
@@ -234,6 +235,46 @@ test("operational Meta identity prefers canonical public identity and falls back
   assert.equal(legacy.canonicalNumber, "558499990009");
 });
 
+test("operational Meta identity supports legacy WaPhoneNumber display without TenantMetaConfig", async () => {
+  const prisma = makePrisma();
+  prisma.state.waPhoneNumbers.push({
+    clientId: "legacy-re7online",
+    phoneNumberId: "empty-legacy-phone-id",
+    display: null,
+  });
+  prisma.state.waPhoneNumbers.push({
+    clientId: "legacy-re7online",
+    phoneNumberId: "legacy-phone-id",
+    display: "+55 84 9999-2982",
+  });
+  prisma.state.waPhoneNumbers.push({
+    clientId: "other-tenant",
+    phoneNumberId: "other-phone-id",
+    display: "+55 84 9999-0001",
+  });
+
+  const identity = await resolveOperationalMetaWhatsappIdentity({
+    prisma: prisma as never,
+    clientId: "legacy-re7online",
+  });
+  const display = await resolveOperationalWhatsappDisplayIdentity({
+    prisma: prisma as never,
+    clientId: "legacy-re7online",
+  });
+  const isolated = await resolveOperationalWhatsappDisplayIdentity({
+    prisma: prisma as never,
+    clientId: "missing-tenant",
+  });
+
+  assert.equal(identity.configured, true);
+  assert.equal(identity.reason, "legacy_wa_phone_number_display");
+  assert.equal(identity.canonicalNumber, "558499992982");
+  assert.equal(identity.maskedNumber, "****2982");
+  assert.equal(display.provider, "meta");
+  assert.equal(display.canonicalNumber, "558499992982");
+  assert.equal(isolated.provider, "none");
+});
+
 test("hybrid logical identity resolves Meta only, Web only, matching hybrid and legacy mismatch", async () => {
   const prisma = makePrisma();
 
@@ -353,6 +394,21 @@ test("operational display reports Meta and matching hybrid identities", async ()
   assert.equal(hybrid.provider, "hybrid");
   assert.equal(hybrid.canonicalNumber, "558499990002");
   assert.equal(hybrid.maskedNumber, "****0002");
+
+  setWebAccount(prisma, "web-only-display", "558499990003");
+  const webOnly = await resolveOperationalWhatsappDisplayIdentity({
+    prisma: prisma as never,
+    clientId: "web-only-display",
+  });
+  assert.equal(webOnly.provider, "web_session");
+  assert.equal(webOnly.canonicalNumber, "558499990003");
+
+  const none = await resolveOperationalWhatsappDisplayIdentity({
+    prisma: prisma as never,
+    clientId: "no-channel",
+  });
+  assert.equal(none.provider, "none");
+  assert.equal(none.canonicalNumber, null);
 });
 
 test("web authorization is blocked only when operational Meta has a different logical number", async () => {
