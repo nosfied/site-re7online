@@ -49,10 +49,12 @@ export class CrmContactUpsertError extends Error {
       | "csv_missing_rows"
       | "csv_too_many_rows"
       | "identity_conflict"
-      | "contact_operationally_excluded",
+      | "contact_operationally_excluded"
+      | "contact_already_provisional",
     message: string,
     public status = 400,
-    public headers?: string[]
+    public headers?: string[],
+    public details?: CrmContactExistingMatch
   ) {
     super(message);
   }
@@ -68,13 +70,21 @@ type NormalizedCrmContactInput = {
 };
 
 type ExistingCrmIdentity = {
-  contact: { id: string; name: string | null; lifecycle: string | null } | null;
+  contact: { id: string; name: string | null; lifecycle: string | null; operationallyExcludedAt?: Date | string | null } | null;
   lead: {
     id: string;
     name: string | null;
     phone: string | null;
     contactChannelIdentityId: string | null;
   } | null;
+};
+
+export type CrmContactExistingMatch = {
+  state: "active" | "excluded" | "provisional";
+  contactId: string | null;
+  leadId: string | null;
+  name: string | null;
+  phoneDisplay: string | null;
 };
 
 function normalizeOptionalName(value: unknown) {
@@ -138,7 +148,7 @@ async function findExistingCrmIdentity(
       orderBy: [{ updatedAt: "desc" }],
       take: 3,
       select: {
-        contact: { select: { id: true, name: true, lifecycle: true } },
+        contact: { select: { id: true, name: true, lifecycle: true, operationallyExcludedAt: true } },
       },
     }),
     prisma.contact.findMany({
@@ -153,7 +163,7 @@ async function findExistingCrmIdentity(
       },
       orderBy: [{ updatedAt: "desc" }],
       take: 3,
-      select: { id: true, name: true, lifecycle: true },
+      select: { id: true, name: true, lifecycle: true, operationallyExcludedAt: true },
     }),
     prisma.lead.findMany({
       where: {
@@ -192,6 +202,21 @@ async function findExistingCrmIdentity(
   };
 }
 
+function buildExistingMatch(params: {
+  contact: ExistingCrmIdentity["contact"];
+  lead: { id: string; name?: string | null } | null;
+  state: CrmContactExistingMatch["state"];
+  phone: string;
+}): CrmContactExistingMatch {
+  return {
+    state: params.state,
+    contactId: params.contact?.id ?? null,
+    leadId: params.lead?.id ?? null,
+    name: params.lead?.name ?? params.contact?.name ?? null,
+    phoneDisplay: maskPhone(params.phone),
+  };
+}
+
 export async function upsertCrmContact(
   prisma: PrismaClient,
   params: {
@@ -211,6 +236,20 @@ export async function upsertCrmContact(
       externalUserHash: normalized.externalUserHash,
       identityCandidates: normalized.identityCandidates,
     });
+    if (existing.contact?.operationallyExcludedAt) {
+      throw new CrmContactUpsertError(
+        "contact_operationally_excluded",
+        "Contact was previously excluded from operations",
+        409,
+        undefined,
+        buildExistingMatch({
+          contact: existing.contact,
+          lead: existing.lead,
+          state: "excluded",
+          phone: normalized.waIdCanonical,
+        })
+      );
+    }
     const excluded = await loadOperationallyExcludedWaIds(tx as PrismaClient, {
       clientId: params.clientId,
       waIds: normalized.identityCandidates,
@@ -219,7 +258,28 @@ export async function upsertCrmContact(
       throw new CrmContactUpsertError(
         "contact_operationally_excluded",
         "Contact was previously excluded from operations",
-        409
+        409,
+        undefined,
+        buildExistingMatch({
+          contact: existing.contact,
+          lead: existing.lead,
+          state: "excluded",
+          phone: normalized.waIdCanonical,
+        })
+      );
+    }
+    if (params.source === "crm_manual" && existing.contact?.lifecycle === CONTACT_LIFECYCLE_PROVISIONAL) {
+      throw new CrmContactUpsertError(
+        "contact_already_provisional",
+        "Contact already exists as a provisional contact",
+        409,
+        undefined,
+        buildExistingMatch({
+          contact: existing.contact,
+          lead: existing.lead,
+          state: "provisional",
+          phone: normalized.waIdCanonical,
+        })
       );
     }
     const contactName = existing.contact?.name ?? normalized.name;
@@ -252,7 +312,8 @@ export async function upsertCrmContact(
           },
           select: { id: true, name: true, lifecycle: true },
         });
-    if (contact.lifecycle === CONTACT_LIFECYCLE_PROVISIONAL) {
+    const shouldPromoteProvisional = contact.lifecycle === CONTACT_LIFECYCLE_PROVISIONAL;
+    if (shouldPromoteProvisional) {
       await promoteContactLifecycleToActive({
         prisma: tx as PrismaClient,
         clientId: params.clientId,
@@ -331,7 +392,15 @@ export async function upsertCrmContact(
       leadId: lead.id,
       createdContact: !existing.contact,
       createdLead: !existing.lead,
-      promotedProvisional: contact.lifecycle === CONTACT_LIFECYCLE_PROVISIONAL,
+      promotedProvisional: shouldPromoteProvisional,
+      existingMatch: existing.contact
+        ? buildExistingMatch({
+            contact: existing.contact,
+            lead,
+            state: "active",
+            phone: normalized.waIdCanonical,
+          })
+        : null,
       waId: normalized.waId,
       waIdCanonical: normalized.waIdCanonical,
     };

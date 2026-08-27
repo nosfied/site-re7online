@@ -390,7 +390,17 @@ export type AppCrmContactDetailResponse = {
   };
   conversations: AppCrmContactConversationItem[];
   blockingConversation: AppHiddenBlockingConversation | null;
+  createStatus?: "created" | "existing_active" | "reused";
+  existingContact?: AppCrmExistingContactResolution | null;
   generatedAt: string;
+};
+
+export type AppCrmExistingContactResolution = {
+  state: "active" | "excluded" | "provisional";
+  contactId: string | null;
+  leadId: string | null;
+  name: string | null;
+  phoneDisplay: string | null;
 };
 
 export type AppCrmContactImportPreviewResponse = {

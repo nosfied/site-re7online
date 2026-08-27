@@ -88,6 +88,10 @@ export function getAppErrorUxMessage(input: {
       return "A mensagem marcada não está mais disponível. Escolha outra mensagem ou envie sem marcação.";
     case "unsupported_media_type":
       return "Este tipo de arquivo não pode ser enviado por aqui.";
+    case "contact_operationally_excluded":
+      return "Este contato foi retirado da operação.";
+    case "contact_already_provisional":
+      return "Este número já possui um contato associado.";
     case "internal_server_error":
       return "Não foi possível concluir esta ação. Tente novamente.";
   }

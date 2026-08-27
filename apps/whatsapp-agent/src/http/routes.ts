@@ -10624,17 +10624,29 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 500, httpError("server_error", "Contact was created but read model was unavailable"));
         return;
       }
-      json(res, result.createdContact || result.createdLead ? 201 : 200, payload);
+      json(res, result.createdContact || result.createdLead ? 201 : 200, {
+        ...payload,
+        createStatus:
+          result.createdContact || result.createdLead
+            ? "created"
+            : result.existingMatch?.state === "active"
+              ? "existing_active"
+              : "reused",
+        existingContact: result.existingMatch ?? null,
+      });
     } catch (error) {
       if (error instanceof CrmContactUpsertError) {
         const message =
           error.code === "identity_conflict"
             ? "Encontramos mais de uma identificação possível para este número. Revise o contato antes de iniciar a conversa."
             : error.code === "contact_operationally_excluded"
-              ? "Contato anteriormente excluído da operação. Reative o contato antes de reutilizá-lo."
+              ? "Este contato foi retirado da operação."
+            : error.code === "contact_already_provisional"
+              ? "Este número já possui um contato associado."
             : error.message;
         json(res, error.status, {
-          ...httpError(error.code, message),
+          error: { code: error.code, message },
+          existingContact: error.details ?? null,
           ...(error.headers ? { headers: error.headers } : {}),
         });
         return;

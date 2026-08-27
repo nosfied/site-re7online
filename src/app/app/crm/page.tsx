@@ -11,6 +11,7 @@ import {
   AppHiddenBlockingConversation,
   AppCrmContactImportConfirmResponse,
   AppCrmContactImportPreviewResponse,
+  AppCrmExistingContactResolution,
   AppCrmContactItem,
   AppCrmContactsResponse,
   AppSession,
@@ -129,7 +130,11 @@ function getTemplateHint(item: AppCrmContactItem) {
 }
 
 function getDisplayName(item: AppCrmContactItem) {
-  return item.displayName || item.identifierDisplay || "Contato";
+  return item.displayName || item.phoneDisplay || "Contato";
+}
+
+function getContactPhoneLabel(item: AppCrmContactItem) {
+  return item.phoneDisplay || "Telefone não informado";
 }
 
 function canOpenOrStartConversation(item: AppCrmContactItem, canViewHistory: boolean) {
@@ -138,6 +143,25 @@ function canOpenOrStartConversation(item: AppCrmContactItem, canViewHistory: boo
 
 function getConversationActionLabel(item: AppCrmContactItem) {
   return item.lastConversationIdentity || item.lastConversationId ? "Abrir conversa" : "Iniciar conversa";
+}
+
+function getStartBlockedLabel(reason: AppCrmContactItem["startConversationBlockedReason"]) {
+  switch (reason) {
+    case "contact_operationally_excluded":
+      return "Contato fora da operação";
+    case "contact_not_active":
+      return "Contato indisponível";
+    case "active_send_blocked":
+      return "Envio ativo bloqueado";
+    case "new_freeform_requires_model":
+      return "Use um modelo aprovado";
+    case "channel_unavailable":
+      return "Canal indisponível";
+    case "invalid_identity":
+      return "Número inválido";
+    default:
+      return "Início indisponível";
+  }
 }
 
 function ActionIconButton({
@@ -202,14 +226,14 @@ function CrmContactRow({
   onOpenConversation: (item: AppCrmContactItem) => void;
   onCopyIdentifier: (item: AppCrmContactItem) => void;
 }) {
-  const identifier = item.phoneDisplay || item.identifierDisplay;
+  const phoneLabel = getContactPhoneLabel(item);
   const canOpenConversation = canOpenOrStartConversation(item, canViewHistory);
   return (
     <tr className="border-b border-white/10 align-top transition hover:bg-white/[0.04]">
       <td className="px-4 py-3">
         <div className="font-semibold text-white">{getDisplayName(item)}</div>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs theme-muted">
-          <span>{identifier}</span>
+          <span>{phoneLabel}</span>
           {item.activeOptOut ? (
             <span className="rounded-full border border-rose-300/30 bg-rose-400/10 px-2 py-0.5 text-rose-100">
               Envio ativo bloqueado
@@ -266,7 +290,7 @@ function CrmContactRow({
       <td className="px-4 py-3 text-right">
         <div className="flex justify-end gap-2">
           <ActionIconButton label="Abrir cadastro" icon="i" onClick={() => onOpenDetail(item)} />
-          <ActionIconButton label="Copiar referência" icon="#" onClick={() => onCopyIdentifier(item)} />
+          <ActionIconButton label="Copiar telefone" icon="#" onClick={() => onCopyIdentifier(item)} disabled={!item.phoneDisplay} />
           <ActionIconButton
             label={`${getConversationActionLabel(item)} na caixa de entrada`}
             icon=">"
@@ -504,7 +528,7 @@ function CrmContactDetailDrawer({
                 {item ? getDisplayName(item) : "Carregando contato"}
               </h2>
               <p className="mt-1 text-sm theme-muted">
-                {item?.companyName || item?.identifierDisplay || "Detalhe operacional do contato"}
+                {item ? item.companyName || getContactPhoneLabel(item) : "Detalhe operacional do contato"}
               </p>
             </div>
             <div className="flex shrink-0 gap-2">
@@ -543,9 +567,10 @@ function CrmContactDetailDrawer({
                 action={
                   <div className="flex items-center gap-2">
                     <ActionIconButton
-                      label="Copiar referência"
+                      label="Copiar telefone"
                       icon="#"
-                      onClick={() => onCopyReference(item.phoneDisplay || item.identifierDisplay)}
+                      onClick={() => onCopyReference(item.phoneDisplay || "")}
+                      disabled={!item.phoneDisplay}
                     />
                     <ActionIconButton
                       label={editingBasics ? "Cancelar edicao" : "Editar dados"}
@@ -566,7 +591,7 @@ function CrmContactDetailDrawer({
                   </div>
                 }
               >
-                <p className="text-sm theme-muted">Identificadores tecnicos de canal permanecem protegidos.</p>
+                <p className="text-sm theme-muted">Dados principais usados para atendimento e relacionamento.</p>
                 {editingBasics ? (
                   <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2">
                     <label className="grid gap-1.5 text-sm">
@@ -641,19 +666,15 @@ function CrmContactDetailDrawer({
                   </div>
                 )}
                 <div className="grid gap-x-5 gap-y-3 border-t border-white/10 pt-3 sm:grid-cols-2">
-                  <DetailField label="Telefone/identificador" value={item.phoneDisplay || item.identifierDisplay} />
+                  <DetailField label="Telefone" value={getContactPhoneLabel(item)} />
                   <DetailField label="Canal principal" value={getChannelLabel(item.channel)} />
                   <DetailField label="Situação no CRM" value={item.crmStatusLabel} />
-                  <DetailField label="Código interno da situação" value={item.crmStatus} />
-                  <DetailField label="Andamento interno" value={item.leadStatus} />
                   <DetailField label="Bloqueio de envio ativo" value={item.activeOptOut ? "Ativo" : "Inativo"} />
-                  <DetailField label="Origem/importação" value={item.importedSource} />
+                  <DetailField label="Origem" value={item.importedSource} />
                   <DetailField label="Notas registradas" value={item.notesCount} />
                   <DetailField label="Uso com modelo aprovado" value={getTemplateHint(item)} />
                   <DetailField label="Criado em" value={formatDateTime(item.createdAt)} />
                   <DetailField label="Atualizado em" value={formatDateTime(item.updatedAt)} />
-                  <DetailField label="ID interno do cadastro" value={item.leadId} />
-                  <DetailField label="ID interno do contato" value={item.contactId} />
                 </div>
               </DetailSection>
 
@@ -766,14 +787,15 @@ function CrmContactDetailDrawer({
               </DetailSection>
 
               {canViewHistory ? (
-                <DetailSection title="Conversas relacionadas">
-                  <p className="mt-1 text-sm theme-muted">
-                    Abertura usa a identidade operacional esperada pela caixa de entrada, sempre na organização da sessão.
-                  </p>
+                <DetailSection title="Atendimento">
                   <div className="mt-4 grid gap-2">
                     {conversations.length === 0 ? (
                       <div className="grid gap-3 rounded-lg border border-white/10 p-4 text-sm theme-muted md:grid-cols-[1fr_auto] md:items-center">
-                        <span>Nenhuma conversa relacionada encontrada.</span>
+                        <span>
+                          {item.canStartConversation
+                            ? "Este contato ainda não possui atendimento."
+                            : getStartBlockedLabel(item.startConversationBlockedReason)}
+                        </span>
                         {item.canStartConversation ? (
                           <ActionIconButton
                             label="Iniciar conversa na caixa de entrada"
@@ -833,26 +855,49 @@ function CrmContactDetailDrawer({
 function CreateContactModal({
   onClose,
   onSubmit,
+  onOpenExisting,
+  onRestoreExisting,
+  canRestoreExisting,
 }: {
   onClose: () => void;
   onSubmit: (payload: { name: string | null; phone: string }) => Promise<void>;
+  onOpenExisting: (leadId: string) => void;
+  onRestoreExisting: (leadId: string) => Promise<void>;
+  canRestoreExisting: boolean;
 }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [existingContact, setExistingContact] = useState<AppCrmExistingContactResolution | null>(null);
   const phoneValid = phone.trim().length > 0;
 
   const submit = async () => {
     if (!phoneValid) return;
     setSubmitting(true);
     setLocalError(null);
+    setExistingContact(null);
     try {
       await onSubmit({ name: name.trim() || null, phone: phone.trim() });
       onClose();
     } catch (err) {
       const typed = err as AppApiError;
-      setLocalError(normalizeAppErrorMessage(typed, "Não foi possível salvar o contato."));
+      const payload = typed.payload && typeof typed.payload === "object" && !Array.isArray(typed.payload)
+        ? typed.payload as { existingContact?: AppCrmExistingContactResolution | null }
+        : null;
+      const match = payload?.existingContact ?? null;
+      if (match?.leadId) {
+        setExistingContact(match);
+        setLocalError(
+          match.state === "excluded"
+            ? "Este contato foi retirado da operação."
+            : match.state === "provisional"
+              ? "Este número já possui um contato associado."
+              : "Este contato já está cadastrado."
+        );
+      } else {
+        setLocalError(normalizeAppErrorMessage(typed, "Não foi possível salvar o contato."));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -887,7 +932,41 @@ function CreateContactModal({
             />
           </label>
           {localError ? (
-            <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 p-3 text-sm text-rose-100">{localError}</div>
+            <div className="grid gap-3 rounded-lg border border-rose-300/30 bg-rose-400/10 p-3 text-sm text-rose-100">
+              <p>{localError}</p>
+              {existingContact?.leadId ? (
+                <div className="flex flex-wrap gap-2">
+                  {existingContact.state === "excluded" && canRestoreExisting ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setSubmitting(true);
+                        try {
+                          await onRestoreExisting(existingContact.leadId as string);
+                          onClose();
+                        } finally {
+                          setSubmitting(false);
+                        }
+                      }}
+                      disabled={submitting}
+                      className="rounded-md bg-re7-sky px-3 py-2 text-xs font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {submitting ? "Restaurando..." : "Restaurar contato"}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenExisting(existingContact.leadId as string);
+                      onClose();
+                    }}
+                    className="theme-nav-link rounded-md border px-3 py-2 text-xs font-semibold"
+                  >
+                    Ver contato
+                  </button>
+                </div>
+              ) : null}
+            </div>
           ) : null}
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" onClick={onClose} className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold">
@@ -1455,7 +1534,13 @@ export default function AppCrmContactsPage() {
         const response = await createAppCrmContact(session, payload);
         replaceContactFromDetail(response);
         setSelectedLeadId(response.item.leadId);
-        setNotice(response.item.displayName ? "Contato salvo." : "Contato salvo sem nome.");
+        setNotice(
+          response.createStatus === "existing_active"
+            ? "Este contato já está cadastrado."
+            : response.item.displayName
+              ? "Contato salvo."
+              : "Contato salvo sem nome."
+        );
         await loadContacts(session, 1);
         setPage(1);
       } catch (err) {
@@ -1491,21 +1576,29 @@ export default function AppCrmContactsPage() {
   );
 
   const copyIdentifier = useCallback(async (item: AppCrmContactItem) => {
-    const value = item.phoneDisplay || item.identifierDisplay;
+    const value = item.phoneDisplay;
+    if (!value) {
+      setError("Este contato não possui telefone para copiar.");
+      return;
+    }
     try {
       await navigator.clipboard.writeText(value);
-      setNotice("Referencia segura copiada.");
+      setNotice("Telefone copiado.");
     } catch {
-      setError("Não foi possível copiar a referência.");
+      setError("Não foi possível copiar o telefone.");
     }
   }, []);
 
   const copyReference = useCallback(async (value: string) => {
+    if (!value) {
+      setError("Este contato não possui telefone para copiar.");
+      return;
+    }
     try {
       await navigator.clipboard.writeText(value);
-      setNotice("Referencia segura copiada.");
+      setNotice("Telefone copiado.");
     } catch {
-      setError("Não foi possível copiar a referência.");
+      setError("Não foi possível copiar o telefone.");
     }
   }, []);
 
@@ -1795,6 +1888,13 @@ export default function AppCrmContactsPage() {
         <CreateContactModal
           onClose={() => setCreateModalOpen(false)}
           onSubmit={createContact}
+          onOpenExisting={(leadId) => {
+            setSelectedLeadId(leadId);
+            setContactDetail(null);
+            loadContactDetail(leadId);
+          }}
+          onRestoreExisting={reactivateContactFromOperation}
+          canRestoreExisting={canExcludeCrmContacts}
         />
       ) : null}
       {csvModalOpen && canManageCrmContacts ? (

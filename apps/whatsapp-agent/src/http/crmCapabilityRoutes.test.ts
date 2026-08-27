@@ -709,16 +709,19 @@ test("CRM contact create allows admin and supervisor, blocks agent, dedupes, and
   await prisma.contact.deleteMany({ where: { clientId: businessClientId, waId: { in: cleanupWaIds } } });
 });
 
-test("CRM contact create promotes existing provisional contact without changing consent records", async () => {
+test("CRM contact create preserves existing provisional contact without changing consent records", async () => {
   const beforeConsents = await prisma.contactConsent.count({ where: { clientId: businessClientId } });
-  const response = await request<{ ok: boolean; item: { displayName: string | null } }>(
+  const response = await request<ErrorPayload & {
+    existingContact?: { state: string; leadId: string | null; contactId: string | null };
+  }>(
     "POST",
     "/app/crm/contacts",
     businessSupervisor,
     { name: "Lead Provisorio Importado", phone: "5511999999988" }
   );
-  assert.equal(response.status, 200);
-  assert.equal(response.body.ok, true);
+  assert.equal(response.status, 409);
+  assert.equal(getErrorCode(response.body), "contact_already_provisional");
+  assert.equal(response.body.existingContact?.state, "provisional");
 
   const provisionalIdentity = normalizeOptOutWaId("5511999999988");
   assert.ok(provisionalIdentity);
@@ -726,7 +729,7 @@ test("CRM contact create promotes existing provisional contact without changing 
     where: { clientId: businessClientId, waId: provisionalIdentity.waIdCanonical },
     select: { lifecycle: true, name: true },
   });
-  assert.equal(contact.lifecycle, "ACTIVE");
+  assert.equal(contact.lifecycle, "PROVISIONAL");
   assert.equal(contact.name, "Lead Provisorio");
   assert.equal(await prisma.contactConsent.count({ where: { clientId: businessClientId } }), beforeConsents);
 });
