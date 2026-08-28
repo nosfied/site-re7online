@@ -486,6 +486,7 @@ import {
   markInboxConversationUnreadFromActivity,
   resolveConversationReadScope,
 } from "../inbox/readStateStore.js";
+import { buildInboxWebSessionChannelStateBatch } from "../inbox/inboxWebSessionChannelState.js";
 import {
   buildConversationProtocol,
   buildConversationProtocolNotice,
@@ -32028,6 +32029,17 @@ async function buildConversationListPayload(
   recordInboxListTiming(params.clientId, "tenant_features", tenantFeaturesStartedAt);
   recordInboxListCount(params.clientId, "tenant_features", 1);
 
+  const channelStateBatchStartedAt = channelLatencyNow();
+  const channelStateBatch = await buildInboxWebSessionChannelStateBatch({
+    prisma,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    sources: winners,
+    features: clientFeatures,
+  });
+  recordInboxListTiming(params.clientId, "channel_state_batch", channelStateBatchStartedAt);
+  recordInboxListCount(params.clientId, "channel_state_batch", channelStateBatch.queryCount);
+
   const unreadCountersStartedAt = channelLatencyNow();
   const unreadInboundCountByWaId = new Map<string, number>();
   for (const conversation of winners) {
@@ -32169,21 +32181,28 @@ async function buildConversationListPayload(
             }
           : null;
 
-    const channelOutboundEnabled = await getInboxConversationChannelOutboundEnabled({
-      prisma,
-      clientId: params.clientId,
-      clientKey: params.clientKey,
-      tenant,
-      source: conversation,
-      features: clientFeatures,
-    });
-    const channelSwitchWarning = await getInboxConversationChannelSwitchWarning({
-      prisma,
-      clientId: params.clientId,
-      clientKey: params.clientKey,
-      source: conversation,
-      features: clientFeatures,
-    });
+    const batchedChannelOutboundEnabled = channelStateBatch.getOutboundEnabled(conversation);
+    const channelOutboundEnabled =
+      batchedChannelOutboundEnabled ??
+      await getInboxConversationChannelOutboundEnabled({
+        prisma,
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        tenant,
+        source: conversation,
+        features: clientFeatures,
+      });
+    const batchedChannelSwitchWarning = channelStateBatch.getSwitchWarning(conversation);
+    const channelSwitchWarning =
+      batchedChannelSwitchWarning !== undefined
+        ? batchedChannelSwitchWarning
+        : await getInboxConversationChannelSwitchWarning({
+            prisma,
+            clientId: params.clientId,
+            clientKey: params.clientKey,
+            source: conversation,
+            features: clientFeatures,
+          });
 
     return {
       waId: conversation.waId,
