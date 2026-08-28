@@ -14,13 +14,16 @@ import {
 } from "@/lib/whatsappAdminApi";
 import {
   EmbeddedSignupCaptureEntry,
-  buildMetaEmbeddedSignupOAuthUrl,
   extractMetaCodeFromUnknownPayload,
   extractEmbeddedSignupData,
   getRuntimeMetaEmbeddedSignupConfigId,
+  isTrustedMetaEmbeddedSignupOrigin,
   loadMetaEmbeddedSignupSdk,
+  parseEmbeddedSignupSessionMessage,
   readEmbeddedSignupQuery,
   safeParseEventData,
+  startMetaEmbeddedSignup,
+  type MetaEmbeddedSignupMode,
 } from "@/lib/metaEmbeddedSignup";
 
 type OnboardingStatus = "idle" | "processing" | "success" | "error";
@@ -107,7 +110,8 @@ function buildDebugPayload(input: unknown, origin?: string) {
       ? typed.status
       : typeof authResponse?.status === "string"
         ? authResponse.status
-        : "";
+          : "";
+  const sessionMessage = parseEmbeddedSignupSessionMessage(parsed);
 
   return {
     code: extracted.code || null,
@@ -115,7 +119,9 @@ function buildDebugPayload(input: unknown, origin?: string) {
     phoneNumberId: extracted.phoneNumberId || null,
     businessId: extracted.businessId || null,
     businessPortfolioId: extracted.businessPortfolioId || null,
-    status: statusCandidate || null,
+    status: sessionMessage.status || statusCandidate || null,
+    sessionStatus: sessionMessage.status,
+    errorMessage: sessionMessage.errorMessage || null,
     accessToken: tokenCandidate ? maskSensitiveValue(tokenCandidate) : null,
     signedRequest: signedRequestCandidate ? maskSensitiveValue(signedRequestCandidate) : null,
     origin: origin ?? null,
@@ -265,8 +271,9 @@ export default function TenantOnboardingPage() {
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      if (!event.origin.includes("facebook.com")) return;
+      if (!isTrustedMetaEmbeddedSignupOrigin(event.origin)) return;
       const parsed = safeParseEventData(event.data);
+      const sessionMessage = parseEmbeddedSignupSessionMessage(parsed);
       const debugPayload = buildDebugPayload(parsed, event.origin);
       setMessagesReceived((count) => count + 1);
       appendEntry({
@@ -276,7 +283,20 @@ export default function TenantOnboardingPage() {
         parsed: debugPayload,
         origin: event.origin,
       });
-      applyCapturedData(parsed);
+      if (sessionMessage.status !== "CANCEL" && sessionMessage.status !== "ERROR") {
+        applyCapturedData(parsed);
+      }
+      if (sessionMessage.status === "FINISH") {
+        setStatus("idle");
+        setSuccessMessage("Conexao Meta concluida. Confira os dados capturados e processe a conexao.");
+        setErrorMessage(null);
+      } else if (sessionMessage.status === "CANCEL") {
+        setStatus("idle");
+        setErrorMessage("Conexao Meta cancelada. Nenhuma configuracao foi salva.");
+      } else if (sessionMessage.status === "ERROR") {
+        setStatus("error");
+        setErrorMessage(sessionMessage.errorMessage || "A Meta retornou erro durante a conexao. Nenhuma configuracao foi salva.");
+      }
       const capturedCode = extractMetaCodeFromUnknownPayload(parsed);
       if (capturedCode) {
         debugLog("code captured via postMessage", { code: maskSensitiveValue(capturedCode) });
@@ -334,7 +354,7 @@ export default function TenantOnboardingPage() {
       });
   }, []);
 
-  const handleStart = async () => {
+  const handleStart = async (mode: MetaEmbeddedSignupMode = "standard") => {
     setStarting(true);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -350,17 +370,32 @@ export default function TenantOnboardingPage() {
     }, 60000);
 
     try {
-      const redirectUri = `${window.location.origin}${window.location.pathname}`;
       const configId = getRuntimeMetaEmbeddedSignupConfigId(window);
-      window.location.assign(
-        buildMetaEmbeddedSignupOAuthUrl({
-          configId,
-          redirectUri,
-          state: tenantId,
-        })
-      );
+      const response = await startMetaEmbeddedSignup({ configId, mode });
+      const sessionMessage = parseEmbeddedSignupSessionMessage(response);
+      appendEntry({
+        timestamp: new Date().toISOString(),
+        source: "fb.callback",
+        raw: response,
+        parsed: buildDebugPayload(response, "fb.callback"),
+      });
+      if (sessionMessage.status !== "CANCEL" && sessionMessage.status !== "ERROR") {
+        applyCapturedData(response);
+      }
+      if (sessionMessage.status === "CANCEL") {
+        setErrorMessage("Conexao Meta cancelada. Nenhuma configuracao foi salva.");
+      } else if (sessionMessage.status === "ERROR") {
+        setStatus("error");
+        setErrorMessage(sessionMessage.errorMessage || "A Meta retornou erro durante a conexao. Nenhuma configuracao foi salva.");
+      } else if (sessionMessage.status === "FINISH") {
+        setStatus("idle");
+        setSuccessMessage("Conexao Meta concluida. Confira os dados capturados e processe a conexao.");
+      }
+      setPopupClosed(true);
+      refreshLocationState("query");
     } catch (error) {
       setErrorMessage((error as Error).message);
+    } finally {
       setStarting(false);
     }
   };
@@ -836,11 +871,19 @@ export default function TenantOnboardingPage() {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                onClick={handleStart}
+                onClick={() => handleStart("standard")}
                 disabled={starting}
                 className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {starting ? "Abrindo..." : reconnectMode ? "Iniciar nova conexao" : "Iniciar conexao"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleStart("coexistence")}
+                disabled={starting}
+                className="rounded-md border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Conectar numero ja utilizado no WhatsApp Business
               </button>
               <button
                 type="button"

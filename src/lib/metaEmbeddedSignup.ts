@@ -2,6 +2,9 @@ const DEFAULT_META_EMBEDDED_SIGNUP_APP_ID = "2074361376674006";
 const DEFAULT_META_EMBEDDED_SIGNUP_CONFIG_ID = "1261464002116286";
 const META_SDK_VERSION = "v19.0";
 const CONFIG_ID_STORAGE_KEY = "meta_embedded_signup_config_id_override";
+export const META_EMBEDDED_SIGNUP_COEXISTENCE_FEATURE_TYPE =
+  "whatsapp_business_app_onboarding";
+export const META_EMBEDDED_SIGNUP_SESSION_INFO_VERSION = "3";
 
 export const META_EMBEDDED_SIGNUP_APP_ID =
   process.env.NEXT_PUBLIC_META_EMBEDDED_SIGNUP_APP_ID?.trim() ||
@@ -52,6 +55,17 @@ export type EmbeddedSignupCapturedData = {
   phoneNumberId: string;
   businessId: string;
   businessPortfolioId: string;
+  raw: unknown;
+};
+
+export type MetaEmbeddedSignupMode = "standard" | "coexistence";
+
+export type EmbeddedSignupSessionStatus = "FINISH" | "CANCEL" | "ERROR";
+
+export type EmbeddedSignupSessionMessage = {
+  status: EmbeddedSignupSessionStatus | null;
+  data: EmbeddedSignupCapturedData;
+  errorMessage: string;
   raw: unknown;
 };
 
@@ -133,6 +147,32 @@ function firstCandidate(input: unknown, matchers: RegExp[]) {
   return collectStringCandidates(input, matchers)[0] ?? "";
 }
 
+function readStringProperty(input: unknown, keys: string[]) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return "";
+  const record = input as Record<string, unknown>;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function readEmbeddedSignupDataNode(input: unknown) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const record = input as Record<string, unknown>;
+  const data = record.data;
+  return data && typeof data === "object" && !Array.isArray(data) ? data : record;
+}
+
+function normalizeSessionStatus(value: unknown): EmbeddedSignupSessionStatus | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toUpperCase();
+  if (normalized === "FINISH" || normalized === "CANCEL" || normalized === "ERROR") {
+    return normalized;
+  }
+  return null;
+}
+
 export function extractMetaCodeFromUnknownPayload(input: unknown): string | null {
   const parsed = safeParseEventData(input);
 
@@ -146,17 +186,57 @@ export function extractMetaCodeFromUnknownPayload(input: unknown): string | null
 }
 
 export function extractEmbeddedSignupData(input: unknown): EmbeddedSignupCapturedData {
+  const parsed = safeParseEventData(input);
+  const dataNode = readEmbeddedSignupDataNode(parsed);
   return {
-    code: extractMetaCodeFromUnknownPayload(input) ?? "",
-    wabaId: firstCandidate(input, [/^waba(_id)?$/i, /^whatsapp_?business_?account_?id$/i]),
-    phoneNumberId: firstCandidate(input, [/^phone_?number_?id$/i, /^phoneNumberId$/i]),
-    businessId: firstCandidate(input, [/^business_?id$/i, /^businessId$/i]),
-    businessPortfolioId: firstCandidate(input, [
+    code: extractMetaCodeFromUnknownPayload(parsed) ?? "",
+    wabaId:
+      readStringProperty(dataNode, ["waba_id", "wabaId", "whatsapp_business_account_id"]) ||
+      firstCandidate(parsed, [/^waba(_id)?$/i, /^whatsapp_?business_?account_?id$/i]),
+    phoneNumberId:
+      readStringProperty(dataNode, ["phone_number_id", "phoneNumberId"]) ||
+      firstCandidate(parsed, [/^phone_?number_?id$/i, /^phoneNumberId$/i]),
+    businessId:
+      readStringProperty(dataNode, ["business_id", "businessId"]) ||
+      firstCandidate(parsed, [/^business_?id$/i, /^businessId$/i]),
+    businessPortfolioId: firstCandidate(parsed, [
       /^business_?portfolio_?id$/i,
       /^businessPortfolioId$/i,
     ]),
-    raw: input,
+    raw: parsed,
   };
+}
+
+export function parseEmbeddedSignupSessionMessage(input: unknown): EmbeddedSignupSessionMessage {
+  const parsed = safeParseEventData(input);
+  const typed =
+    parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  const dataNode = readEmbeddedSignupDataNode(parsed);
+  const status =
+    normalizeSessionStatus(typed?.event) ||
+    normalizeSessionStatus(typed?.status) ||
+    normalizeSessionStatus(readStringProperty(dataNode, ["event", "status"]));
+  const errorMessage =
+    readStringProperty(dataNode, ["error_message", "errorMessage", "message"]) ||
+    readStringProperty(typed, ["error_message", "errorMessage", "message"]);
+
+  return {
+    status,
+    data: extractEmbeddedSignupData(parsed),
+    errorMessage,
+    raw: parsed,
+  };
+}
+
+export function isTrustedMetaEmbeddedSignupOrigin(origin: string) {
+  try {
+    const hostname = new URL(origin).hostname.toLowerCase();
+    return hostname === "facebook.com" || hostname.endsWith(".facebook.com");
+  } catch {
+    return false;
+  }
 }
 
 export async function loadMetaEmbeddedSignupSdk(): Promise<void> {
@@ -248,27 +328,52 @@ export function buildMetaEmbeddedSignupOAuthUrl(options: {
   return url.toString();
 }
 
-export async function startMetaEmbeddedSignup(options?: { configId?: string | null }): Promise<unknown> {
+export function buildMetaEmbeddedSignupLoginOptions(options: {
+  configId?: string | null;
+  mode?: MetaEmbeddedSignupMode;
+}) {
+  const configId = options.configId?.trim() || META_EMBEDDED_SIGNUP_CONFIG_ID;
+  if (!configId) {
+    throw new Error("Config ID do Embedded Signup não configurado.");
+  }
+
+  const loginOptions: Record<string, unknown> = {
+    config_id: configId,
+    response_type: "code",
+    override_default_response_type: true,
+    extras: {
+      setup: {},
+    },
+  };
+
+  if (options.mode === "coexistence") {
+    loginOptions.extras = {
+      setup: {},
+      featureType: META_EMBEDDED_SIGNUP_COEXISTENCE_FEATURE_TYPE,
+      sessionInfoVersion: META_EMBEDDED_SIGNUP_SESSION_INFO_VERSION,
+    };
+  }
+
+  return loginOptions;
+}
+
+export async function startMetaEmbeddedSignup(options?: {
+  configId?: string | null;
+  mode?: MetaEmbeddedSignupMode;
+}): Promise<unknown> {
   if (!window.FB) {
     throw new Error("Facebook SDK ainda não carregou.");
   }
 
   const configId = options?.configId?.trim() || getRuntimeMetaEmbeddedSignupConfigId();
-  if (!configId) {
-    throw new Error("Config ID do Embedded Signup não configurado.");
-  }
 
   return new Promise((resolve) => {
     window.FB?.login(
       (response) => resolve(response),
-      {
-        config_id: configId,
-        response_type: "code",
-        override_default_response_type: true,
-        extras: {
-          setup: {},
-        },
-      }
+      buildMetaEmbeddedSignupLoginOptions({
+        configId,
+        mode: options?.mode ?? "standard",
+      })
     );
   });
 }
