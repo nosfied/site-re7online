@@ -1541,7 +1541,16 @@ export default function AppCrmContactsPage() {
               ? "Contato salvo."
               : "Contato salvo sem nome."
         );
-        await loadContacts(session, 1);
+        try {
+          await loadContacts(session, 1);
+        } catch (err) {
+          const typed = err as AppApiError;
+          console.warn("crm.contact_create.refresh_failed", {
+            status: typed.status,
+            errorCode: typed.errorCode,
+          });
+          setError("Contato cadastrado. Não foi possível atualizar a tela agora.");
+        }
         setPage(1);
       } catch (err) {
         const typed = err as AppApiError;

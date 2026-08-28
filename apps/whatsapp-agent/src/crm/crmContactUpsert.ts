@@ -79,6 +79,14 @@ type ExistingCrmIdentity = {
   } | null;
 };
 
+type LeadContactChannelIdentitySnapshot = {
+  id: string;
+  contactId: string | null;
+  externalUserHash: string | null;
+  externalUserRef: string | null;
+  legacyWaId: string | null;
+};
+
 export type CrmContactExistingMatch = {
   state: "active" | "excluded" | "provisional";
   contactId: string | null;
@@ -217,6 +225,46 @@ function buildExistingMatch(params: {
   };
 }
 
+function isAnonymizedIdentityHash(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized.startsWith("anon:") || normalized.startsWith("hash:anon:") || normalized.includes("******");
+}
+
+function shouldRebindLeadContactChannelIdentity(identity: LeadContactChannelIdentitySnapshot | null) {
+  if (!identity) return true;
+  return (
+    !identity.contactId &&
+    !identity.externalUserRef &&
+    !identity.legacyWaId &&
+    isAnonymizedIdentityHash(identity.externalUserHash)
+  );
+}
+
+async function resolveLeadContactChannelIdentityId(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  params: {
+    clientId: string;
+    existingIdentityId: string | null | undefined;
+    operationalIdentityId: string;
+  }
+) {
+  if (!params.existingIdentityId) return params.operationalIdentityId;
+  if (params.existingIdentityId === params.operationalIdentityId) return params.existingIdentityId;
+  const currentIdentity = await prisma.contactChannelIdentity.findFirst({
+    where: { clientId: params.clientId, id: params.existingIdentityId },
+    select: {
+      id: true,
+      contactId: true,
+      externalUserHash: true,
+      externalUserRef: true,
+      legacyWaId: true,
+    },
+  });
+  return shouldRebindLeadContactChannelIdentity(currentIdentity)
+    ? params.operationalIdentityId
+    : params.existingIdentityId;
+}
+
 export async function upsertCrmContact(
   prisma: PrismaClient,
   params: {
@@ -352,6 +400,13 @@ export async function upsertCrmContact(
       select: { id: true },
     });
     const leadName = existing.lead?.name ?? contact.name ?? normalized.name;
+    const leadContactChannelIdentityId = existing.lead
+      ? await resolveLeadContactChannelIdentityId(tx, {
+          clientId: params.clientId,
+          existingIdentityId: existing.lead.contactChannelIdentityId,
+          operationalIdentityId: identity.id,
+        })
+      : identity.id;
     const lead = existing.lead
       ? await tx.lead.update({
           where: { id: existing.lead.id },
@@ -363,7 +418,7 @@ export async function upsertCrmContact(
             externalUserHash: normalized.externalUserHash,
             externalUserRef: normalized.waIdCanonical,
             legacyWaId: normalized.waIdCanonical,
-            contactChannelIdentityId: existing.lead.contactChannelIdentityId ?? identity.id,
+            contactChannelIdentityId: leadContactChannelIdentityId,
             phone: normalized.phone,
             name: leadName,
           },

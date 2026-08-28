@@ -92,6 +92,8 @@ export function getAppErrorUxMessage(input: {
       return "Este contato foi retirado da operação.";
     case "contact_already_provisional":
       return "Este número já possui um contato associado.";
+    case "crm_contact_created_read_model_unavailable":
+      return "Contato cadastrado. Não foi possível atualizar a tela agora.";
     case "internal_server_error":
       return "Não foi possível concluir esta ação. Tente novamente.";
   }

@@ -10623,7 +10623,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
       });
       if (!payload) {
-        json(res, 500, httpError("server_error", "Contact was created but read model was unavailable"));
+        logger.error({
+          event: "app.crm.contact_create.read_model_unavailable",
+          requestId,
+          clientId: client.id,
+          leadId: result.leadId,
+          contactId: result.contactId,
+        });
+        json(
+          res,
+          500,
+          httpError("crm_contact_created_read_model_unavailable", "Contact was created but read model was unavailable")
+        );
         return;
       }
       json(res, result.createdContact || result.createdLead ? 201 : 200, {

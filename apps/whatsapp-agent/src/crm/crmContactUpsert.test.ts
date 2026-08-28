@@ -18,6 +18,14 @@ function makeUpsertPrisma(params: {
     phone?: string | null;
     contactChannelIdentityId?: string | null;
   } | null;
+  identities?: Array<{
+    id: string;
+    contactId?: string | null;
+    externalUserHash?: string | null;
+    externalUserRef?: string | null;
+    legacyWaId?: string | null;
+  }>;
+  upsertedIdentityId?: string;
 } = {}) {
   const contact = params.contact
     ? {
@@ -43,6 +51,7 @@ function makeUpsertPrisma(params: {
     leads: lead ? [lead] : [] as typeof lead[],
     createdContacts: 0,
     updatedContacts: 0,
+    leadUpdates: [] as unknown[],
     events: [] as unknown[],
   };
   const matchesIdentityWhere = (item: typeof contact, where: unknown) => {
@@ -78,7 +87,9 @@ function makeUpsertPrisma(params: {
               },
             ]
           : [],
-      upsert: async () => ({ id: "identity_1" }),
+      findFirst: async ({ where }: { where?: { id?: string } } = {}) =>
+        params.identities?.find((identity) => identity.id === where?.id) ?? null,
+      upsert: async () => ({ id: params.upsertedIdentityId ?? "identity_1" }),
     },
     contact: {
       findMany: async ({ where }: { where?: { operationallyExcludedAt?: { not: null } } } = {}) =>
@@ -100,7 +111,10 @@ function makeUpsertPrisma(params: {
     },
     lead: {
       findMany: async ({ where }: { where?: unknown } = {}) => state.leads.filter((item) => matchesLeadWhere(item, where)),
-      update: async () => ({ id: lead?.id ?? "lead_1" }),
+      update: async ({ data }: { data: unknown }) => {
+        state.leadUpdates.push(data);
+        return { id: lead?.id ?? "lead_1" };
+      },
       create: async () => ({ id: "lead_created" }),
     },
     event: {
@@ -200,6 +214,86 @@ test("CRM manual create resolves excluded contacts through confirmed BR identity
       error instanceof CrmContactUpsertError &&
       error.code === "contact_operationally_excluded" &&
       error.details?.contactId === "contact_ddd84"
+  );
+});
+
+test("CRM manual create rebinds reused leads away from anonymized detached identities", async () => {
+  const prisma = makeUpsertPrisma({
+    contact: {
+      id: "contact_1",
+      name: "Deifson Oliveira",
+      waId: "5584999049614",
+    },
+    lead: {
+      id: "lead_1",
+      name: "Deifson Oliveira",
+      phone: "5584999049614",
+      contactChannelIdentityId: "identity_old",
+    },
+    identities: [
+      {
+        id: "identity_old",
+        contactId: null,
+        externalUserHash: "anon:conversation_1",
+        externalUserRef: null,
+        legacyWaId: null,
+      },
+    ],
+    upsertedIdentityId: "identity_new",
+  });
+
+  await upsertCrmContact(prisma as never, {
+    clientId: "client_a",
+    input: { phone: "5584999049614", name: "Deifson Oliveira" },
+    actorUserId: "admin_1",
+    requestId: "req_rebind",
+    source: "crm_manual",
+    audit: false,
+  });
+
+  assert.equal(
+    (prisma.__state.leadUpdates[0] as { contactChannelIdentityId?: string }).contactChannelIdentityId,
+    "identity_new"
+  );
+});
+
+test("CRM manual create preserves reused leads that already point to operational identities", async () => {
+  const prisma = makeUpsertPrisma({
+    contact: {
+      id: "contact_1",
+      name: "Deifson Oliveira",
+      waId: "5584999049614",
+    },
+    lead: {
+      id: "lead_1",
+      name: "Deifson Oliveira",
+      phone: "5584999049614",
+      contactChannelIdentityId: "identity_current",
+    },
+    identities: [
+      {
+        id: "identity_current",
+        contactId: "contact_1",
+        externalUserHash: "whatsapp:hash_1",
+        externalUserRef: "5584999049614",
+        legacyWaId: "5584999049614",
+      },
+    ],
+    upsertedIdentityId: "identity_new",
+  });
+
+  await upsertCrmContact(prisma as never, {
+    clientId: "client_a",
+    input: { phone: "5584999049614", name: "Deifson Oliveira" },
+    actorUserId: "admin_1",
+    requestId: "req_keep",
+    source: "crm_manual",
+    audit: false,
+  });
+
+  assert.equal(
+    (prisma.__state.leadUpdates[0] as { contactChannelIdentityId?: string }).contactChannelIdentityId,
+    "identity_current"
   );
 });
 
