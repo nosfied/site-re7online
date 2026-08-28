@@ -6123,12 +6123,12 @@ export default function AppInboxPage() {
       await refreshConversationList(session);
       await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
     } catch (err) {
-      const typed = err as { status?: number; message?: string };
+      const typed = err as { status?: number; errorCode?: string; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível assumir a conversa." }));
+      setError(getAppErrorUxMessage({ status: typed.status, errorCode: typed.errorCode, message: typed.message, fallback: "Não foi possível assumir a conversa." }));
     } finally {
       setConversationAction(null);
     }

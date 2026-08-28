@@ -94,6 +94,8 @@ export function getAppErrorUxMessage(input: {
       return "Este número já possui um contato associado.";
     case "crm_contact_created_read_model_unavailable":
       return "Contato cadastrado. Não foi possível atualizar a tela agora.";
+    case "max_active_reached":
+      return "Você atingiu o limite de atendimentos simultâneos. Encerre um atendimento antes de assumir outro.";
     case "internal_server_error":
       return "Não foi possível concluir esta ação. Tente novamente.";
   }
