@@ -8,6 +8,7 @@ import {
   CRM_CONTACT_REACTIVATED_EVENT,
   loadOperationallyExcludedWaIds,
 } from "../contacts/contactOperationalExclusion.js";
+import { buildCrmWhatsappExternalUserHash } from "../crm/crmWhatsappIdentity.js";
 import {
   buildWebSessionHandoffNotificationPlan,
   extractPhoneFromBaileysJid,
@@ -353,11 +354,20 @@ function fakePrisma() {
             return false;
           });
         }),
-      findUnique: async () => state.contacts[0] ?? null,
-      upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
-        const existing = state.contacts[0];
-        const row = existing ? { ...existing, ...update } : { id: "contact_1", ...create };
-        state.contacts[0] = row;
+      findUnique: async ({ where }: { where?: { clientId_waId?: { clientId: string; waId: string } } } = {}) => {
+        const unique = where?.clientId_waId;
+        if (!unique) return state.contacts[0] ?? null;
+        return state.contacts.find((contact) => contact.clientId === unique.clientId && contact.waId === unique.waId) ?? null;
+      },
+      upsert: async ({ where, create, update }: { where?: { clientId_waId?: { clientId: string; waId: string } }; create: Record<string, unknown>; update: Record<string, unknown> }) => {
+        const unique = where?.clientId_waId;
+        const existingIndex = unique
+          ? state.contacts.findIndex((contact) => contact.clientId === unique.clientId && contact.waId === unique.waId)
+          : state.contacts.length > 0 ? 0 : -1;
+        const existing = existingIndex >= 0 ? state.contacts[existingIndex] : null;
+        const row = existing ? { ...existing, ...update } : { id: `contact_${state.contacts.length + 1}`, ...create };
+        if (existingIndex >= 0) state.contacts[existingIndex] = row;
+        else state.contacts.push(row);
         return { id: row.id };
       },
       update: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
@@ -382,10 +392,40 @@ function fakePrisma() {
       },
     },
     contactChannelIdentity: {
-      upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
-        const existing = state.identities[0];
-        const row = existing ? { ...existing, ...update } : { id: "identity_1", ...create };
-        state.identities[0] = row;
+      findMany: async ({ where }: { where?: Record<string, unknown> } = {}) =>
+        state.identities.filter((identity) => {
+          if (where?.clientId && identity.clientId !== where.clientId) return false;
+          if (where?.channel && identity.channel !== where.channel) return false;
+          const clauses = Array.isArray(where?.OR) ? where.OR as Array<Record<string, unknown>> : [];
+          if (clauses.length === 0) return true;
+          return clauses.some((clause) => {
+            const externalRefs = (clause.externalUserRef as { in?: string[] } | undefined)?.in;
+            if (externalRefs && externalRefs.includes(String(identity.externalUserRef))) return true;
+            const legacyWaIds = (clause.legacyWaId as { in?: string[] } | undefined)?.in;
+            if (legacyWaIds && legacyWaIds.includes(String(identity.legacyWaId))) return true;
+            const hashes = (clause.externalUserHash as { in?: string[] } | undefined)?.in;
+            if (hashes && hashes.includes(String(identity.externalUserHash))) return true;
+            return false;
+          });
+        }).map((identity) => ({
+          ...identity,
+          contact: state.contacts.find((contact) => contact.id === identity.contactId) ?? null,
+        })),
+      upsert: async ({ where, create, update }: { where?: { clientId_channel_provider_channelAccountId_externalUserHash?: Record<string, string> }; create: Record<string, unknown>; update: Record<string, unknown> }) => {
+        const unique = where?.clientId_channel_provider_channelAccountId_externalUserHash;
+        const existingIndex = unique
+          ? state.identities.findIndex((identity) =>
+              identity.clientId === unique.clientId &&
+              identity.channel === unique.channel &&
+              identity.provider === unique.provider &&
+              identity.channelAccountId === unique.channelAccountId &&
+              identity.externalUserHash === unique.externalUserHash
+            )
+          : state.identities.length > 0 ? 0 : -1;
+        const existing = existingIndex >= 0 ? state.identities[existingIndex] : null;
+        const row = existing ? { ...existing, ...update } : { id: `identity_${state.identities.length + 1}`, ...create };
+        if (existingIndex >= 0) state.identities[existingIndex] = row;
+        else state.identities.push(row);
         return { id: row.id };
       },
     },
@@ -397,12 +437,49 @@ function fakePrisma() {
           if (where.id && lead.id !== where.id) return false;
           return true;
         }) ?? null,
-      findUnique: async () => state.leads[0] ?? null,
-      upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
-        const existing = state.leads[0];
-        const row = existing ? { ...existing, ...update } : { id: "lead_1", ...create };
-        state.leads[0] = row;
+      findMany: async ({ where }: { where?: Record<string, unknown> } = {}) =>
+        state.leads.filter((lead) => {
+          if (where?.tenantId && lead.tenantId !== where.tenantId) return false;
+          const clauses = Array.isArray(where?.OR) ? where.OR as Array<Record<string, unknown>> : [];
+          if (clauses.length === 0) return true;
+          return clauses.some((clause) => {
+            const waIds = (clause.waId as { in?: string[] } | undefined)?.in;
+            if (waIds && waIds.includes(String(lead.waId))) return true;
+            const canonicals = (clause.waIdCanonical as { in?: string[] } | undefined)?.in;
+            if (canonicals && canonicals.includes(String(lead.waIdCanonical))) return true;
+            const externalRefs = (clause.externalUserRef as { in?: string[] } | undefined)?.in;
+            if (externalRefs && externalRefs.includes(String(lead.externalUserRef))) return true;
+            const legacyWaIds = (clause.legacyWaId as { in?: string[] } | undefined)?.in;
+            if (legacyWaIds && legacyWaIds.includes(String(lead.legacyWaId))) return true;
+            const hashes = (clause.externalUserHash as { in?: string[] } | undefined)?.in;
+            if (hashes && hashes.includes(String(lead.externalUserHash))) return true;
+            return false;
+          });
+        }),
+      findUnique: async ({ where }: { where?: { tenantId_waId?: { tenantId: string; waId: string } } } = {}) => {
+        const unique = where?.tenantId_waId;
+        if (!unique) return state.leads[0] ?? null;
+        return state.leads.find((lead) => lead.tenantId === unique.tenantId && lead.waId === unique.waId) ?? null;
+      },
+      upsert: async ({ where, create, update }: { where?: { tenantId_waId?: { tenantId: string; waId: string } }; create: Record<string, unknown>; update: Record<string, unknown> }) => {
+        const unique = where?.tenantId_waId;
+        const existingIndex = unique
+          ? state.leads.findIndex((lead) => lead.tenantId === unique.tenantId && lead.waId === unique.waId)
+          : state.leads.length > 0 ? 0 : -1;
+        const existing = existingIndex >= 0 ? state.leads[existingIndex] : null;
+        const row = existing ? { ...existing, ...update } : { id: `lead_${state.leads.length + 1}`, ...create };
+        if (existingIndex >= 0) state.leads[existingIndex] = row;
+        else state.leads.push(row);
         return { id: row.id };
+      },
+      update: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        const index = state.leads.findIndex((lead) => {
+          if (where.id && lead.id !== where.id) return false;
+          return true;
+        });
+        if (index >= 0) state.leads[index] = { ...state.leads[index], ...data };
+        const row = state.leads[index] ?? null;
+        return row ? { id: row.id } : null;
       },
     },
     contactConsent: {
@@ -1063,6 +1140,139 @@ test("web session creates active contact when no consent flow is configured", as
   });
 
   assert.equal(state.contacts[0]?.lifecycle, "ACTIVE");
+});
+
+test("web session inbound reuses a manual contact when provider identity matches existing CCI", async () => {
+  resetState({
+    contacts: [
+      {
+        id: "contact_manual",
+        clientId: "client_1",
+        waId: "5584994786787",
+        externalUserRef: "558494786787",
+        legacyWaId: "558494786787",
+        externalUserHash: buildCrmWhatsappExternalUserHash("558494786787"),
+        name: "CETIC",
+        lifecycle: "ACTIVE",
+        channel: "whatsapp",
+        provider: "whatsapp",
+        channelAccountId: "crm",
+      },
+    ],
+    identities: [
+      {
+        id: "identity_manual_confirmed",
+        clientId: "client_1",
+        contactId: "contact_manual",
+        channel: "whatsapp",
+        provider: "whatsapp",
+        channelAccountId: "crm",
+        externalUserHash: buildCrmWhatsappExternalUserHash("558494786787"),
+        externalUserRef: "558494786787",
+        legacyWaId: "558494786787",
+        displayName: "CETIC",
+      },
+    ],
+    leads: [
+      {
+        id: "lead_manual",
+        tenantId: "client_1",
+        waId: "5584994786787",
+        waIdCanonical: "558494786787",
+        phone: "558494786787",
+        externalUserRef: "558494786787",
+        legacyWaId: "558494786787",
+        externalUserHash: buildCrmWhatsappExternalUserHash("558494786787"),
+        name: "CETIC",
+        contactChannelIdentityId: "identity_manual_confirmed",
+      },
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestBaileysWebSessionMessage({
+      clientId: "client_1",
+      tenantKey: "tenant_1",
+      channelAccountDbId: "account_1",
+      channelAccountId: "web-session-default",
+      message: {
+        key: { id: "MSG_MANUAL_CONFIRMED_CCI", remoteJid: "558494786787@s.whatsapp.net", fromMe: false },
+        pushName: "Provider Name",
+        messageTimestamp: 1786464000,
+        message: { conversation: "oi" },
+      },
+    });
+  });
+
+  assert.equal(state.contacts.length, 1);
+  assert.equal(state.leads.length, 1);
+  assert.equal(state.identities.length, 2);
+  assert.equal(state.contacts[0]?.id, "contact_manual");
+  assert.equal(state.leads[0]?.id, "lead_manual");
+  assert.equal(state.contacts[0]?.name, "CETIC");
+  assert.equal(state.leads[0]?.name, "CETIC");
+  assert.equal(state.contacts[0]?.provider, "web_session");
+  assert.equal(state.leads[0]?.provider, "web_session");
+  assert.equal(state.leads[0]?.contactChannelIdentityId, "identity_2");
+  assert.equal(state.identities[1]?.contactId, "contact_manual");
+});
+
+test("web session inbound does not merge modern and legacy variants without confirmed identity evidence", async () => {
+  resetState({
+    contacts: [
+      {
+        id: "contact_modern",
+        clientId: "client_1",
+        waId: "5584994786787",
+        externalUserRef: "5584994786787",
+        legacyWaId: "5584994786787",
+        externalUserHash: buildCrmWhatsappExternalUserHash("5584994786787"),
+        name: "CETIC",
+        lifecycle: "ACTIVE",
+        channel: "whatsapp",
+        provider: "whatsapp",
+        channelAccountId: "crm",
+      },
+    ],
+    leads: [
+      {
+        id: "lead_modern",
+        tenantId: "client_1",
+        waId: "5584994786787",
+        waIdCanonical: "5584994786787",
+        phone: "5584994786787",
+        externalUserRef: "5584994786787",
+        legacyWaId: "5584994786787",
+        externalUserHash: buildCrmWhatsappExternalUserHash("5584994786787"),
+        name: "CETIC",
+        contactChannelIdentityId: null,
+      },
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestBaileysWebSessionMessage({
+      clientId: "client_1",
+      tenantKey: "tenant_1",
+      channelAccountDbId: "account_1",
+      channelAccountId: "web-session-default",
+      message: {
+        key: { id: "MSG_UNCONFIRMED_VARIANT", remoteJid: "558494786787@s.whatsapp.net", fromMe: false },
+        pushName: "Provider Name",
+        messageTimestamp: 1786464000,
+        message: { conversation: "oi" },
+      },
+    });
+  });
+
+  assert.equal(state.contacts.length, 2);
+  assert.equal(state.leads.length, 2);
+  assert.equal(state.contacts[0]?.id, "contact_modern");
+  assert.equal(state.contacts[1]?.provider, "web_session");
+  assert.equal(state.leads[0]?.id, "lead_modern");
+  assert.equal(state.leads[1]?.provider, "web_session");
 });
 
 test("web session inbound reactivates an operationally excluded contact", async () => {

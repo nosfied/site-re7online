@@ -14,6 +14,7 @@ import { reactivateOperationallyExcludedContactIfNeeded } from "../contacts/cont
 import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
 import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
 import { activateHumanHandoff, updateOutbound } from "../conversation/conversation.service.js";
+import { buildCrmWhatsappExternalUserHash } from "../crm/crmWhatsappIdentity.js";
 import {
   clearActiveServiceCycle,
   clearSatisfactionRuntimeForNewServiceCycle,
@@ -1926,6 +1927,17 @@ async function ensureWebSessionContactIdentity(params: {
   consentRequired: boolean;
 }) {
   const providerObservedName = normalizeProviderObservedName(params.message.providerObservedName);
+  const confirmedIdentityCandidates = Array.from(
+    new Set([params.message.sender, params.message.senderCanonical].map(normalizeWaIdDigits).filter(Boolean))
+  );
+  const confirmedHashCandidates = Array.from(
+    new Set([
+      externalUserHash(params.message.senderCanonical),
+      externalUserHash(params.message.sender),
+      buildCrmWhatsappExternalUserHash(params.message.sender),
+      ...confirmedIdentityCandidates.map(buildCrmWhatsappExternalUserHash),
+    ])
+  );
   const [existingContact, existingLead] = await Promise.all([
     params.prisma.contact.findUnique({
       where: {
@@ -1946,44 +1958,68 @@ async function ensureWebSessionContactIdentity(params: {
       select: { id: true, name: true },
     }),
   ]);
+  const relatedIdentity =
+    existingContact
+      ? null
+      : await resolveSingleWebSessionInboundContactCandidate(params.prisma, {
+          clientId: params.message.clientId,
+          identityCandidates: confirmedIdentityCandidates,
+          externalUserHashCandidates: confirmedHashCandidates,
+        });
+  const reusableContact = existingContact ?? relatedIdentity?.contact ?? null;
+  const reusableLead = existingLead ?? relatedIdentity?.lead ?? null;
   const safeContactName =
-    providerObservedName && !existingContact?.name && !isAnonymizedMarker(existingContact?.name)
+    providerObservedName && !reusableContact?.name && !isAnonymizedMarker(reusableContact?.name)
       ? providerObservedName
       : undefined;
   const safeLeadName =
-    providerObservedName && !existingLead?.name && !isAnonymizedMarker(existingLead?.name)
+    providerObservedName && !reusableLead?.name && !isAnonymizedMarker(reusableLead?.name)
       ? providerObservedName
       : undefined;
-  const contact = await params.prisma.contact.upsert({
-    where: {
-      clientId_waId: {
-        clientId: params.message.clientId,
-        waId: params.message.sender,
-      },
-    },
-    update: {
-      channel: "whatsapp",
-      provider: "web_session",
-      channelAccountId: params.message.channelAccountId,
-      externalUserHash: externalUserHash(params.message.senderCanonical),
-      externalUserRef: params.message.senderCanonical,
-      legacyWaId: params.message.sender,
-      ...(safeContactName ? { name: safeContactName } : {}),
-    },
-    create: {
-      clientId: params.message.clientId,
-      waId: params.message.sender,
-      ...(safeContactName ? { name: safeContactName } : {}),
-      channel: "whatsapp",
-      provider: "web_session",
-      channelAccountId: params.message.channelAccountId,
-      externalUserHash: externalUserHash(params.message.senderCanonical),
-      externalUserRef: params.message.senderCanonical,
-      legacyWaId: params.message.sender,
-      lifecycle: resolveInitialContactLifecycle({ consentRequired: params.consentRequired }),
-    },
-    select: { id: true },
-  });
+  const contact = reusableContact
+    ? await params.prisma.contact.update({
+        where: { id: reusableContact.id },
+        data: {
+          channel: "whatsapp",
+          provider: "web_session",
+          channelAccountId: params.message.channelAccountId,
+          externalUserHash: externalUserHash(params.message.senderCanonical),
+          externalUserRef: params.message.senderCanonical,
+          legacyWaId: params.message.sender,
+          ...(safeContactName ? { name: safeContactName } : {}),
+        },
+        select: { id: true },
+      })
+    : await params.prisma.contact.upsert({
+        where: {
+          clientId_waId: {
+            clientId: params.message.clientId,
+            waId: params.message.sender,
+          },
+        },
+        update: {
+          channel: "whatsapp",
+          provider: "web_session",
+          channelAccountId: params.message.channelAccountId,
+          externalUserHash: externalUserHash(params.message.senderCanonical),
+          externalUserRef: params.message.senderCanonical,
+          legacyWaId: params.message.sender,
+          ...(safeContactName ? { name: safeContactName } : {}),
+        },
+        create: {
+          clientId: params.message.clientId,
+          waId: params.message.sender,
+          ...(safeContactName ? { name: safeContactName } : {}),
+          channel: "whatsapp",
+          provider: "web_session",
+          channelAccountId: params.message.channelAccountId,
+          externalUserHash: externalUserHash(params.message.senderCanonical),
+          externalUserRef: params.message.senderCanonical,
+          legacyWaId: params.message.sender,
+          lifecycle: resolveInitialContactLifecycle({ consentRequired: params.consentRequired }),
+        },
+        select: { id: true },
+      });
   const identity = await params.prisma.contactChannelIdentity.upsert({
     where: {
       clientId_channel_provider_channelAccountId_externalUserHash: {
@@ -2014,41 +2050,57 @@ async function ensureWebSessionContactIdentity(params: {
     },
     select: { id: true },
   });
-  const lead = await params.prisma.lead.upsert({
-    where: {
-      tenantId_waId: {
-        tenantId: params.message.clientId,
-        waId: params.message.sender,
-      },
-    },
-    update: {
-      waIdCanonical: params.message.senderCanonical,
-      channel: "whatsapp",
-      provider: "web_session",
-      channelAccountId: params.message.channelAccountId,
-      externalUserHash: externalUserHash(params.message.senderCanonical),
-      externalUserRef: params.message.senderCanonical,
-      legacyWaId: params.message.sender,
-      contactChannelIdentityId: identity.id,
-      ...(safeLeadName ? { name: safeLeadName } : {}),
-    },
-    create: {
-      tenantId: params.message.clientId,
-      waId: params.message.sender,
-      waIdCanonical: params.message.senderCanonical,
-      ...(safeLeadName ? { name: safeLeadName } : {}),
-      channel: "whatsapp",
-      provider: "web_session",
-      channelAccountId: params.message.channelAccountId,
-      externalUserHash: externalUserHash(params.message.senderCanonical),
-      externalUserRef: params.message.senderCanonical,
-      legacyWaId: params.message.sender,
-      contactChannelIdentityId: identity.id,
-      phone: params.message.sender,
-      status: "NEW",
-    },
-    select: { id: true },
-  });
+  const lead = reusableLead
+    ? await params.prisma.lead.update({
+        where: { id: reusableLead.id },
+        data: {
+          waIdCanonical: params.message.senderCanonical,
+          channel: "whatsapp",
+          provider: "web_session",
+          channelAccountId: params.message.channelAccountId,
+          externalUserHash: externalUserHash(params.message.senderCanonical),
+          externalUserRef: params.message.senderCanonical,
+          legacyWaId: params.message.sender,
+          contactChannelIdentityId: identity.id,
+          ...(safeLeadName ? { name: safeLeadName } : {}),
+        },
+        select: { id: true },
+      })
+    : await params.prisma.lead.upsert({
+        where: {
+          tenantId_waId: {
+            tenantId: params.message.clientId,
+            waId: params.message.sender,
+          },
+        },
+        update: {
+          waIdCanonical: params.message.senderCanonical,
+          channel: "whatsapp",
+          provider: "web_session",
+          channelAccountId: params.message.channelAccountId,
+          externalUserHash: externalUserHash(params.message.senderCanonical),
+          externalUserRef: params.message.senderCanonical,
+          legacyWaId: params.message.sender,
+          contactChannelIdentityId: identity.id,
+          ...(safeLeadName ? { name: safeLeadName } : {}),
+        },
+        create: {
+          tenantId: params.message.clientId,
+          waId: params.message.sender,
+          waIdCanonical: params.message.senderCanonical,
+          ...(safeLeadName ? { name: safeLeadName } : {}),
+          channel: "whatsapp",
+          provider: "web_session",
+          channelAccountId: params.message.channelAccountId,
+          externalUserHash: externalUserHash(params.message.senderCanonical),
+          externalUserRef: params.message.senderCanonical,
+          legacyWaId: params.message.sender,
+          contactChannelIdentityId: identity.id,
+          phone: params.message.sender,
+          status: "NEW",
+        },
+        select: { id: true },
+      });
   await reactivateOperationallyExcludedContactIfNeeded(params.prisma, {
     clientId: params.message.clientId,
     leadId: lead.id,
@@ -2058,6 +2110,79 @@ async function ensureWebSessionContactIdentity(params: {
     requestId: `web-session-contact-reactivation:${params.message.channelAccountDbId}:${params.message.externalMessageId}`,
     source: "web_session_inbound",
   });
+}
+
+async function resolveSingleWebSessionInboundContactCandidate(
+  prisma: PrismaClient,
+  params: {
+    clientId: string;
+    identityCandidates: string[];
+    externalUserHashCandidates: string[];
+  }
+) {
+  const [identities, contacts, leads] = await Promise.all([
+    prisma.contactChannelIdentity.findMany({
+      where: {
+        clientId: params.clientId,
+        channel: "whatsapp",
+        OR: [
+          { externalUserRef: { in: params.identityCandidates } },
+          { legacyWaId: { in: params.identityCandidates } },
+          { externalUserHash: { in: params.externalUserHashCandidates } },
+        ],
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 5,
+      select: {
+        id: true,
+        contactId: true,
+        contact: { select: { id: true, name: true, lifecycle: true } },
+      },
+    }),
+    prisma.contact.findMany({
+      where: {
+        clientId: params.clientId,
+        OR: [
+          { waId: { in: params.identityCandidates } },
+          { externalUserRef: { in: params.identityCandidates } },
+          { legacyWaId: { in: params.identityCandidates } },
+          { externalUserHash: { in: params.externalUserHashCandidates } },
+        ],
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 5,
+      select: { id: true, name: true, lifecycle: true },
+    }),
+    prisma.lead.findMany({
+      where: {
+        tenantId: params.clientId,
+        OR: [
+          { waId: { in: params.identityCandidates } },
+          { waIdCanonical: { in: params.identityCandidates } },
+          { externalUserRef: { in: params.identityCandidates } },
+          { legacyWaId: { in: params.identityCandidates } },
+          { externalUserHash: { in: params.externalUserHashCandidates } },
+        ],
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 5,
+      select: { id: true, name: true, contactChannelIdentityId: true },
+    }),
+  ]);
+  const contactById = new Map<string, { id: string; name: string | null; lifecycle: string | null }>();
+  for (const contact of contacts) contactById.set(contact.id, contact);
+  for (const identity of identities) {
+    if (identity.contact) contactById.set(identity.contact.id, identity.contact);
+  }
+  if (contactById.size !== 1) return null;
+  const contact = Array.from(contactById.values())[0] ?? null;
+  const leadCandidates = leads.filter((lead) => {
+    if (!lead.contactChannelIdentityId) return true;
+    return identities.some((identity) => identity.id === lead.contactChannelIdentityId || identity.contactId === contact?.id);
+  });
+  const uniqueLeadIds = new Set(leadCandidates.map((lead) => lead.id));
+  if (uniqueLeadIds.size > 1) return { contact, lead: null };
+  return { contact, lead: leadCandidates[0] ?? null };
 }
 
 export async function ingestWebSessionInboundMessage(params: {
