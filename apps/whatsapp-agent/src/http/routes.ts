@@ -161,7 +161,10 @@ import {
   syncTemplateStatus,
   validateTemplateForMeta,
 } from "../meta/template.service.js";
-import { validateMetaCloudReadiness } from "../meta/metaCloudReadiness.js";
+import {
+  shouldBlockMetaCloudPhoneRegister,
+  validateMetaCloudReadiness,
+} from "../meta/metaCloudReadiness.js";
 import {
   resolveTemplateReviewNotifyEmail,
   sanitizeTemplateReviewNotificationError,
@@ -20869,10 +20872,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const featureRuntime = client
         ? await getTenantFeatureRuntimeState({ prisma, clientId: client.id })
         : { metaCloudConfigured: false, whatsappWebSessionChannelPresent: false };
+      const webSessionStatus = client
+        ? await serializeWebSessionStatus({ prisma, client })
+        : null;
       json(res, 200, {
         ok: true,
         tenantId,
         tenant: tenantWithDisplayPhone,
+        webSessionStatus,
         supportAccess: supportAccessGrant,
         configSource: {
           templates: {
@@ -21425,6 +21432,29 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           httpError(
             "missing_business_token",
             "Tenant does not have a stored Meta business token for phone registration"
+          )
+        );
+        return;
+      }
+      const metaReadiness = await validateMetaCloudReadiness({
+        prisma,
+        clientId: client.id,
+      });
+      if (shouldBlockMetaCloudPhoneRegister(metaReadiness)) {
+        json(
+          res,
+          409,
+          httpError(
+            "coexistence_registration_requires_official_flow",
+            "Complete the official Meta coexistence flow before registering this phone number through Cloud API.",
+            {
+              stage: metaReadiness.adminStage,
+              reason: metaReadiness.reason,
+              phoneStatus: metaReadiness.phoneStatus,
+              codeVerificationStatus: metaReadiness.codeVerificationStatus,
+              platformType: metaReadiness.platformType,
+              checkedAt: metaReadiness.checkedAt,
+            }
           )
         );
         return;

@@ -601,6 +601,13 @@ export default function TenantOnboardingPage() {
       setErrorMessage("Informe o PIN de registro com 6 digitos.");
       return;
     }
+    if (!safeCloudOnlyRegisterCandidate) {
+      setStatus("error");
+      setErrorMessage(
+        "Conclua o fluxo oficial de coexistencia da Meta antes de ativar a Cloud API para este numero."
+      );
+      return;
+    }
 
     setRegisteringPhone(true);
     setStatus("processing");
@@ -662,6 +669,36 @@ export default function TenantOnboardingPage() {
     Boolean(effectivePhoneNumberId) &&
     phoneNumberId.trim() === effectivePhoneNumberId &&
     !reconnectMode;
+  const metaReadiness = tenantSnapshot?.webSessionStatus?.metaReadiness ?? null;
+  const metaStage = metaReadiness?.adminStage ?? (effectivePhoneNumberId ? "CONFIGURED" : "NOT_CONFIGURED");
+  const safeCloudOnlyRegisterCandidate =
+    Boolean(metaReadiness) &&
+    metaReadiness?.objectAccess === true &&
+    metaReadiness?.platformType === "CLOUD_API" &&
+    metaReadiness?.operational !== true;
+  const registerBlockedByCoexistence =
+    Boolean(metaReadiness) && metaReadiness?.platformType !== "CLOUD_API";
+  const metaStageLabel =
+    metaStage === "OPERATIONAL"
+      ? "Operacional"
+      : metaStage === "ACTION_REQUIRED"
+        ? "Acao necessaria"
+        : metaStage === "CONFIGURED"
+          ? "Configurado"
+          : "Nao configurado";
+  const metaStageTitle =
+    metaStage === "OPERATIONAL"
+      ? "Meta Cloud operacional"
+      : metaStage === "ACTION_REQUIRED"
+        ? "Meta Cloud ainda não está operacional"
+        : metaStage === "CONFIGURED"
+          ? "Meta Cloud configurada"
+          : "Meta Cloud não configurada";
+  const registerGuidance = registerBlockedByCoexistence
+    ? "Este numero esta vinculado a Meta, mas a ativacao para a Cloud API ainda nao foi concluida. Como o numero tambem esta em uso no WhatsApp Business, conclua o fluxo oficial de coexistencia antes de ativar a Meta Cloud."
+    : safeCloudOnlyRegisterCandidate
+      ? "Use o registro direto somente para um numero Cloud API confirmado pelo Graph."
+      : "Atualize o status da Meta ou refaca a conexao oficial antes de registrar este numero.";
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
@@ -903,6 +940,30 @@ export default function TenantOnboardingPage() {
             </div>
 
             <div className="theme-surface-strong rounded-lg border border-sky-300/25 p-3">
+              <div className="mb-3 rounded-lg border border-white/10 bg-re7-navy/45 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="theme-text text-sm font-semibold">{metaStageTitle}</p>
+                    <p className="theme-muted mt-1 text-xs leading-relaxed">{registerGuidance}</p>
+                  </div>
+                  <span className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-white/80">
+                    {metaStageLabel}
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-2 text-xs text-white/65 md:grid-cols-3">
+                  <span>Meta configurada: {metaReadiness?.configured ? "sim" : "nao"}</span>
+                  <span>Operacional: {metaReadiness?.operational ? "sim" : "nao"}</span>
+                  <span>Status: {metaReadiness?.phoneStatus ?? "nao validado"}</span>
+                  <span>Verificacao: {metaReadiness?.codeVerificationStatus ?? "-"}</span>
+                  <span>Plataforma: {metaReadiness?.platformType ?? "-"}</span>
+                  <span>
+                    Ultima validacao:{" "}
+                    {metaReadiness?.checkedAt
+                      ? new Date(metaReadiness.checkedAt).toLocaleString("pt-BR")
+                      : "-"}
+                  </span>
+                </div>
+              </div>
               <div className="flex flex-wrap items-end gap-3">
                 <label className="grid min-w-[180px] max-w-[220px] gap-1 text-sm">
                   <span className="theme-text font-semibold">PIN de registro Cloud API</span>
@@ -923,7 +984,8 @@ export default function TenantOnboardingPage() {
                   disabled={
                     registeringPhone ||
                     !phoneNumberId.trim() ||
-                    !/^\d{6}$/.test(registrationPin.trim())
+                    !/^\d{6}$/.test(registrationPin.trim()) ||
+                    !safeCloudOnlyRegisterCandidate
                   }
                   className="rounded-md border border-sky-300/45 bg-re7-sky px-4 py-2 text-sm font-semibold text-[#06132a] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                 >

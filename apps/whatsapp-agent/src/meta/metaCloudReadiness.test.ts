@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   evaluateMetaCloudReadiness,
+  shouldBlockMetaCloudPhoneRegister,
   validateMetaCloudReadiness,
 } from "./metaCloudReadiness.js";
 
@@ -44,6 +45,8 @@ test("Meta Cloud readiness rejects disconnected configured phone numbers", () =>
   assert.equal(readiness.operational, false);
   assert.equal(readiness.reason, "phone_disconnected");
   assert.equal(readiness.phoneStatus, "DISCONNECTED");
+  assert.equal(readiness.adminStage, "ACTION_REQUIRED");
+  assert.equal(shouldBlockMetaCloudPhoneRegister(readiness), true);
 });
 
 test("Meta Cloud readiness rejects object access failures", () => {
@@ -60,6 +63,8 @@ test("Meta Cloud readiness rejects object access failures", () => {
   assert.equal(readiness.operational, false);
   assert.equal(readiness.reason, "object_access_failed");
   assert.equal(readiness.objectAccess, false);
+  assert.equal(readiness.adminStage, "ACTION_REQUIRED");
+  assert.equal(shouldBlockMetaCloudPhoneRegister(readiness), true);
 });
 
 test("Meta Cloud readiness accepts fully operational Graph state", () => {
@@ -69,6 +74,38 @@ test("Meta Cloud readiness accepts fully operational Graph state", () => {
   assert.equal(readiness.objectAccess, true);
   assert.equal(readiness.phoneBelongsToWaba, true);
   assert.equal(readiness.publicIdentity?.maskedNumber, "****5328");
+  assert.equal(readiness.adminStage, "OPERATIONAL");
+});
+
+test("Meta Cloud readiness allows direct register only for Graph-confirmed Cloud API numbers", () => {
+  const cloudOnly = evaluateMetaCloudReadiness(
+    buildOperationalInput({
+      phoneObject: {
+        id: "phone-1",
+        display_phone_number: "+55 84 99999-5328",
+        status: "DISCONNECTED",
+        code_verification_status: "NOT_VERIFIED",
+        platform_type: "CLOUD_API",
+      },
+    })
+  );
+
+  assert.equal(cloudOnly.adminStage, "ACTION_REQUIRED");
+  assert.equal(shouldBlockMetaCloudPhoneRegister(cloudOnly), false);
+
+  const unknownPlatform = evaluateMetaCloudReadiness(
+    buildOperationalInput({
+      phoneObject: {
+        id: "phone-1",
+        display_phone_number: "+55 84 99999-5328",
+        status: "DISCONNECTED",
+        code_verification_status: "NOT_VERIFIED",
+      },
+    })
+  );
+
+  assert.equal(unknownPlatform.adminStage, "ACTION_REQUIRED");
+  assert.equal(shouldBlockMetaCloudPhoneRegister(unknownPlatform), true);
 });
 
 test("Meta Cloud readiness persists tenant-scoped snapshot only for requested client", async () => {

@@ -765,6 +765,7 @@ export type TenantWebSessionStatus = {
     qualityRating: string | null;
     operational: boolean;
     reason: string;
+    adminStage: "NOT_CONFIGURED" | "CONFIGURED" | "ACTION_REQUIRED" | "OPERATIONAL";
     checkedAt: string | null;
   } | null;
   primaryTransport?: "meta" | "web_session" | null;
@@ -797,6 +798,7 @@ export type TenantConfigResponse = {
     profile?: "business" | "government";
     features?: Record<string, unknown> | null;
   } | null;
+  webSessionStatus?: TenantWebSessionStatus | null;
   featureEntitlements?: Array<{
     key: string;
     label: string;

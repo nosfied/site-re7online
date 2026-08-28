@@ -33,10 +33,17 @@ export type MetaCloudReadinessResult = {
   qualityRating: string | null;
   operational: boolean;
   reason: MetaCloudReadinessReason;
+  adminStage: MetaCloudAdminStage;
   checkedAt: string | null;
 };
 
 type GraphPayload = Record<string, unknown>;
+
+export type MetaCloudAdminStage =
+  | "NOT_CONFIGURED"
+  | "CONFIGURED"
+  | "ACTION_REQUIRED"
+  | "OPERATIONAL";
 
 type GraphReadResult =
   | { ok: true; status: number; payload: GraphPayload }
@@ -71,6 +78,23 @@ function buildPublicIdentity(displayPhoneNumber: unknown) {
     : null;
 }
 
+export function resolveMetaCloudAdminStage(
+  readiness: Pick<MetaCloudReadinessResult, "configured" | "operational" | "reason">
+): MetaCloudAdminStage {
+  if (!readiness.configured) return "NOT_CONFIGURED";
+  if (readiness.operational) return "OPERATIONAL";
+  if (readiness.reason === "registration_incomplete") return "CONFIGURED";
+  return "ACTION_REQUIRED";
+}
+
+export function shouldBlockMetaCloudPhoneRegister(readiness: MetaCloudReadinessResult) {
+  const platformType = normalizeGraphStatus(readiness.platformType);
+  if (!readiness.configured || !readiness.phoneNumberIdPresent) return true;
+  if (readiness.objectAccess !== true) return true;
+  if (platformType !== "CLOUD_API") return true;
+  return false;
+}
+
 export function readMetaCloudReadinessSnapshot(rawPayload: unknown): MetaCloudReadinessResult | null {
   if (!isRecord(rawPayload)) return null;
   const snapshot = rawPayload[META_CLOUD_READINESS_SNAPSHOT_KEY];
@@ -98,6 +122,17 @@ export function readMetaCloudReadinessSnapshot(rawPayload: unknown): MetaCloudRe
     qualityRating: optionalString(snapshot.qualityRating),
     operational: snapshot.operational === true,
     reason: reason as MetaCloudReadinessReason,
+    adminStage:
+      optionalString(snapshot.adminStage) === "NOT_CONFIGURED" ||
+      optionalString(snapshot.adminStage) === "CONFIGURED" ||
+      optionalString(snapshot.adminStage) === "ACTION_REQUIRED" ||
+      optionalString(snapshot.adminStage) === "OPERATIONAL"
+        ? (optionalString(snapshot.adminStage) as MetaCloudAdminStage)
+        : resolveMetaCloudAdminStage({
+            configured: snapshot.configured === true,
+            operational: snapshot.operational === true,
+            reason: reason as MetaCloudReadinessReason,
+          }),
     checkedAt: optionalString(snapshot.checkedAt),
   };
 }
@@ -173,6 +208,7 @@ export function evaluateMetaCloudReadiness(input: {
     qualityRating,
     operational,
     reason,
+    adminStage: resolveMetaCloudAdminStage({ configured: Boolean(phoneNumberId && wabaId), operational, reason }),
     checkedAt: input.checkedAt ?? null,
   };
 }
@@ -327,6 +363,7 @@ export function writeMetaCloudReadinessSnapshot(
       qualityRating: readiness.qualityRating,
       operational: readiness.operational,
       reason: readiness.reason,
+      adminStage: readiness.adminStage,
     },
   } as Prisma.InputJsonValue;
 }

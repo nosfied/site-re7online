@@ -2376,8 +2376,14 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
 
   const originalFetch = globalThis.fetch;
   try {
+    let unsafeRegisterCalled = false;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? "GET";
+      if (method === "POST" && url.includes("/meta-phone-id-business/register")) {
+        unsafeRegisterCalled = true;
+        return Response.json({ success: true });
+      }
       if (url.includes("/meta-phone-id-business?")) {
         return Response.json({
           id: "meta-phone-id-business",
@@ -2416,9 +2422,29 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
       ((blockedSnapshot.rawPayload as Record<string, unknown>).metaReadiness as Record<string, unknown>).reason,
       "phone_disconnected"
     );
+    assert.equal(
+      ((blockedSnapshot.rawPayload as Record<string, unknown>).metaReadiness as Record<string, unknown>).adminStage,
+      "ACTION_REQUIRED"
+    );
+
+    const blockedRegistration = await requestSuperadmin<ErrorPayload>(
+      "POST",
+      `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/onboarding/register-phone`,
+      { phoneNumberId: "meta-phone-id-business", pin: "123456" }
+    );
+    assert.equal(blockedRegistration.status, 409, JSON.stringify(blockedRegistration.body));
+    assert.equal(getErrorCode(blockedRegistration.body), "coexistence_registration_requires_official_flow");
+    assert.equal(unsafeRegisterCalled, false);
 
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? "GET";
+      if (method === "POST" && url.includes("/meta-phone-id-business/register")) {
+        return Response.json({ success: true });
+      }
+      if (method === "POST" && url.includes("/meta-waba-id-business/subscribed_apps")) {
+        return Response.json({ success: true });
+      }
       if (url.includes("/meta-phone-id-business?")) {
         return Response.json({
           id: "meta-phone-id-business",
@@ -2442,6 +2468,18 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
       }
       return originalFetch(input, init);
     }) as typeof fetch;
+    const cloudOnlyRegistration = await requestSuperadmin<{
+      success: true;
+      registered: boolean;
+      phoneNumberId: string;
+    }>(
+      "POST",
+      `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/onboarding/register-phone`,
+      { phoneNumberId: "meta-phone-id-business", pin: "123456" }
+    );
+    assert.equal(cloudOnlyRegistration.status, 200, JSON.stringify(cloudOnlyRegistration.body));
+    assert.equal(cloudOnlyRegistration.body.registered, true);
+
     const savedMetaPrimary = await requestSuperadmin<{
       ok: true;
       primaryTransport: "meta";

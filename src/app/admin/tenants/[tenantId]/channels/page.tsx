@@ -246,6 +246,14 @@ function getMetaReadinessLabel(status: TenantWebSessionStatus | null) {
   return "Meta Cloud pendente";
 }
 
+function getMetaReadinessStageLabel(status: TenantWebSessionStatus | null) {
+  const stage = status?.metaReadiness?.adminStage;
+  if (stage === "OPERATIONAL") return "Operacional";
+  if (stage === "ACTION_REQUIRED") return "Ação necessária";
+  if (stage === "CONFIGURED") return "Configurado";
+  return "Não configurado";
+}
+
 function getMetaReadinessTone(status: TenantWebSessionStatus | null): "success" | "warning" | "danger" | "neutral" {
   const readiness = status?.metaReadiness;
   if (!readiness) return "neutral";
@@ -605,6 +613,10 @@ export default function TenantChannelsPage() {
               <TechnicalValue
                 label="Readiness Meta"
                 value={webSessionStatus?.metaReadiness?.checkedAt ? getMetaReadinessLabel(webSessionStatus) : "Não validado"}
+              />
+              <TechnicalValue
+                label="Estágio Meta"
+                value={getMetaReadinessStageLabel(webSessionStatus)}
               />
               <TechnicalValue
                 label="Status Meta"
