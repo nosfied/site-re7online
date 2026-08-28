@@ -10,6 +10,7 @@ import {
   getTenantChannelAccounts,
   getTenantWhatsAppMediaPolicy,
   Provider,
+  refreshTenantMetaCloudReadiness,
   releaseTenantWebSessionNumber,
   startTenantInstagramBusinessConnect,
   TenantChannelAccount,
@@ -233,6 +234,35 @@ function getStatusTone(status: ChannelAccountDraft["status"], enabled: boolean) 
   return "neutral";
 }
 
+function getMetaReadinessLabel(status: TenantWebSessionStatus | null) {
+  const readiness = status?.metaReadiness;
+  if (!readiness) return "Meta Cloud nao validado";
+  if (readiness.operational) return "Meta Cloud operacional";
+  if (readiness.reason === "phone_disconnected") return "Meta Cloud desconectado";
+  if (readiness.reason === "phone_not_verified") return "Numero Meta nao verificado";
+  if (readiness.reason === "object_access_failed") return "Token sem acesso ao ativo";
+  if (readiness.reason === "not_configured") return "Meta Cloud nao configurado";
+  if (readiness.reason === "token_missing") return "Token Meta ausente";
+  return "Meta Cloud pendente";
+}
+
+function getMetaReadinessTone(status: TenantWebSessionStatus | null): "success" | "warning" | "danger" | "neutral" {
+  const readiness = status?.metaReadiness;
+  if (!readiness) return "neutral";
+  return readiness.operational ? "success" : "warning";
+}
+
+function getMetaReadinessAction(status: TenantWebSessionStatus | null) {
+  const readiness = status?.metaReadiness;
+  if (!readiness) return "Valide o status pelo Graph antes de tornar Meta Cloud primario.";
+  if (readiness.operational) return "Meta Cloud pode ser selecionado como transporte principal.";
+  if (readiness.reason === "phone_disconnected") return "Conclua o registro oficial do numero Meta antes de selecionar.";
+  if (readiness.reason === "object_access_failed") return "Reautorize o token para o WABA e phone_number_id configurados.";
+  if (readiness.reason === "phone_not_in_waba") return "Confirme se o phone_number_id pertence ao WABA configurado.";
+  if (readiness.reason === "public_identity_mismatch") return "Corrija a identidade publica antes de selecionar.";
+  return "Conclua a configuracao Meta antes de selecionar.";
+}
+
 function getChannelModeNote(draft: ChannelAccountDraft) {
   if (draft.channel === "messenger" || draft.channel === "instagram") {
     return "Human-only recomendado: sem IA, sem automacao e sem handoff automatico.";
@@ -442,6 +472,25 @@ export default function TenantChannelsPage() {
     }
   };
 
+  const handleRefreshMetaReadiness = async () => {
+    setWebSessionWorking("meta-readiness");
+    setError(null);
+    setToast(null);
+    try {
+      const response = await refreshTenantMetaCloudReadiness(connection, tenantId);
+      setWebSessionStatus(response.status);
+      setToast(
+        response.metaReadiness.operational
+          ? "Meta Cloud validado como operacional."
+          : "Meta Cloud validado como nao operacional."
+      );
+    } catch (err) {
+      setError((err as Error).message || "Falha ao validar Meta Cloud.");
+    } finally {
+      setWebSessionWorking(null);
+    }
+  };
+
   const updateMediaPolicyDraft = (
     direction: keyof WhatsappMediaPolicy,
     kind: WhatsappMediaKind,
@@ -554,6 +603,14 @@ export default function TenantChannelsPage() {
               <TechnicalValue label="Feature" value={webSessionStatus?.featureEnabled ? "enabled" : "disabled"} />
               <TechnicalValue label="Identidade Meta" value={webSessionStatus?.hybridIdentity?.meta.maskedNumber ?? "Não configurada"} />
               <TechnicalValue
+                label="Readiness Meta"
+                value={webSessionStatus?.metaReadiness?.checkedAt ? getMetaReadinessLabel(webSessionStatus) : "Não validado"}
+              />
+              <TechnicalValue
+                label="Status Meta"
+                value={webSessionStatus?.metaReadiness?.phoneStatus ?? "-"}
+              />
+              <TechnicalValue
                 label="Número autorizado Web"
                 value={
                   webSessionStatus?.hybridIdentity?.web.canonicalNumber
@@ -577,12 +634,43 @@ export default function TenantChannelsPage() {
                 Identidade Meta e identidade Web estão divergentes. Corrija antes de permitir uso operacional híbrido.
               </div>
             ) : null}
+            <div className="rounded-lg border border-white/10 bg-re7-navy/35 px-3 py-3">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-white">Meta Cloud</p>
+                    <StatusBadge
+                      label={getMetaReadinessLabel(webSessionStatus)}
+                      tone={getMetaReadinessTone(webSessionStatus)}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-white/60">{getMetaReadinessAction(webSessionStatus)}</p>
+                  {webSessionStatus?.metaReadiness?.checkedAt ? (
+                    <p className="mt-1 text-xs text-white/45">
+                      Validado em {new Date(webSessionStatus.metaReadiness.checkedAt).toLocaleString("pt-BR")}
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleRefreshMetaReadiness()}
+                  disabled={Boolean(webSessionWorking)}
+                  className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {webSessionWorking === "meta-readiness" ? "Validando..." : "Validar Meta Cloud"}
+                </button>
+              </div>
+            </div>
 
             <div className="flex flex-wrap items-end gap-2">
               <button
                 type="button"
                 onClick={() => void handlePrimaryTransport("meta")}
-                disabled={Boolean(webSessionWorking) || webSessionStatus?.primaryTransport === "meta"}
+                disabled={
+                  Boolean(webSessionWorking) ||
+                  webSessionStatus?.primaryTransport === "meta" ||
+                  webSessionStatus?.metaReadiness?.operational === false
+                }
                 className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {webSessionWorking === "primary-meta" ? "Salvando..." : "Usar Meta Cloud"}

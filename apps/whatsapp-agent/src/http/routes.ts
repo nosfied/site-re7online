@@ -161,6 +161,7 @@ import {
   syncTemplateStatus,
   validateTemplateForMeta,
 } from "../meta/template.service.js";
+import { validateMetaCloudReadiness } from "../meta/metaCloudReadiness.js";
 import {
   resolveTemplateReviewNotifyEmail,
   sanitizeTemplateReviewNotificationError,
@@ -20547,9 +20548,34 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const adminWhatsappPrimaryTransportMatch = pathname.match(
       /^\/admin\/tenants\/([^/]+)\/whatsapp\/primary-transport$/
     );
+    const adminMetaReadinessRefreshMatch = pathname.match(
+      /^\/admin\/tenants\/([^/]+)\/meta\/readiness\/refresh$/
+    );
     const adminWhatsappMediaPolicyMatch = pathname.match(
       /^\/admin\/tenants\/([^/]+)\/whatsapp\/media-policy$/
     );
+    if (req.method === "POST" && adminMetaReadinessRefreshMatch) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(adminMetaReadinessRefreshMatch[1] ?? "").trim();
+      const prisma = getPrisma();
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true, status: true, features: true, profile: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const metaReadiness = await validateMetaCloudReadiness({ prisma, clientId: client.id });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        metaReadiness,
+        status: await serializeWebSessionStatus({ prisma, client }),
+        permissions: { canUpdate: true },
+      });
+      return;
+    }
     if ((req.method === "GET" || req.method === "PUT") && adminWhatsappMediaPolicyMatch) {
       if (requireSuperadmin()) return;
       const tenantId = decodeURIComponent(adminWhatsappMediaPolicyMatch[1] ?? "").trim();
@@ -20634,9 +20660,25 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 409, httpError("hybrid_identity_conflict", "WhatsApp transport identities do not match."));
         return;
       }
-      if (provider === "meta" && !hybrid.meta.canonicalNumber) {
-        json(res, 409, httpError("meta_transport_unavailable", "Meta Cloud number is not operational for this tenant."));
-        return;
+      if (provider === "meta") {
+        if (!hybrid.meta.canonicalNumber) {
+          json(res, 409, httpError("meta_transport_unavailable", "Meta Cloud number is not operational for this tenant."));
+          return;
+        }
+        const metaReadiness = await validateMetaCloudReadiness({ prisma, clientId: client.id });
+        if (!metaReadiness.operational) {
+          json(
+            res,
+            409,
+            httpError("meta_transport_unavailable", "Meta Cloud number is not operational for this tenant.", {
+              reason: metaReadiness.reason,
+              phoneStatus: metaReadiness.phoneStatus,
+              codeVerificationStatus: metaReadiness.codeVerificationStatus,
+              checkedAt: metaReadiness.checkedAt,
+            })
+          );
+          return;
+        }
       }
       if (provider === "web_session") {
         const ready = await isWebSessionTextOutboundReady({

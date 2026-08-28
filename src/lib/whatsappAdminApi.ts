@@ -701,6 +701,8 @@ export type TenantWebSessionStatus = {
     provider: "web_session";
     enabled: boolean;
     runtimeEnabled: boolean;
+    inboundPersistenceEnabled: boolean;
+    outboundEnabled: boolean;
     status: string;
     tokenStatus: string;
     lastUpdatedAt: string;
@@ -746,6 +748,25 @@ export type TenantWebSessionStatus = {
       maskedNumber: string | null;
     } | null;
   };
+  metaReadiness?: {
+    configured: boolean;
+    objectAccess: boolean | "unknown";
+    phoneBelongsToWaba: boolean | "unknown";
+    publicIdentity: {
+      canonicalNumber: string;
+      maskedNumber: string | null;
+      rawDisplayPhoneNumber: string;
+    } | null;
+    phoneNumberIdPresent: boolean;
+    wabaIdPresent: boolean;
+    phoneStatus: string | null;
+    codeVerificationStatus: string | null;
+    platformType: string | null;
+    qualityRating: string | null;
+    operational: boolean;
+    reason: string;
+    checkedAt: string | null;
+  } | null;
   primaryTransport?: "meta" | "web_session" | null;
   detectedNumber: {
     masked: string | null;
@@ -1599,6 +1620,24 @@ export async function updateTenantWhatsAppPrimaryTransport(
     {
       method: "PUT",
       body: JSON.stringify({ provider }),
+    }
+  );
+}
+
+export async function refreshTenantMetaCloudReadiness(
+  connection: AdminConnection,
+  tenantId: string
+): Promise<{
+  ok: true;
+  tenantId: string;
+  metaReadiness: NonNullable<TenantWebSessionStatus["metaReadiness"]>;
+  status: TenantWebSessionStatus;
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/meta/readiness/refresh`,
+    {
+      method: "POST",
     }
   );
 }

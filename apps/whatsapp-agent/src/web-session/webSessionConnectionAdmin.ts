@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { getFeatures } from "../features/clientFeatures.js";
 import { persistEvent } from "../db/persist.js";
+import { readMetaCloudReadinessSnapshot } from "../meta/metaCloudReadiness.js";
 import {
   DEFAULT_WEB_SESSION_LIFECYCLE,
   readWebSessionPrePairingOutboundState,
@@ -153,6 +154,10 @@ export async function serializeWebSessionStatus(params: {
     prisma: params.prisma,
     clientId: params.client.id,
   });
+  const metaConfig = await params.prisma.tenantMetaConfig.findUnique({
+    where: { clientId: params.client.id },
+    select: { rawPayload: true },
+  });
   const primaryTransport = await resolveWhatsappPrimaryTransport({
     prisma: params.prisma,
     clientId: params.client.id,
@@ -188,6 +193,7 @@ export async function serializeWebSessionStatus(params: {
     },
     authorization,
     hybridIdentity,
+    metaReadiness: readMetaCloudReadinessSnapshot(metaConfig?.rawPayload ?? null),
     primaryTransport,
     detectedNumber: account
       ? {

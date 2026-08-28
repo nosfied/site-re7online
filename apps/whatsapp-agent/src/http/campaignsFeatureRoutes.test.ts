@@ -2374,6 +2374,94 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   assert.equal(authorized.body.status.authorization.authorizedNumberCanonical, "558499990001");
   assert.equal(authorized.body.status.authorization.authorizedNumberMasked, "****0001");
 
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/meta-phone-id-business?")) {
+        return Response.json({
+          id: "meta-phone-id-business",
+          display_phone_number: "+55 84 9999-0001",
+          status: "DISCONNECTED",
+          code_verification_status: "NOT_VERIFIED",
+          platform_type: "ON_PREMISE",
+          quality_rating: "UNKNOWN",
+        });
+      }
+      if (url.includes("/meta-waba-id-business/phone_numbers")) {
+        return Response.json({
+          data: [{ id: "meta-phone-id-business", display_phone_number: "+55 84 9999-0001" }],
+        });
+      }
+      if (url.includes("/meta-waba-id-business?")) {
+        return Response.json({ id: "meta-waba-id-business", name: "Business test" });
+      }
+      if (url.startsWith("https://graph.facebook.com/")) {
+        return Response.json({ error: "unexpected" }, { status: 404 });
+      }
+      return originalFetch(input, init);
+    }) as typeof fetch;
+    const blockedMetaPrimary = await requestSuperadmin<ErrorPayload>(
+      "PUT",
+      `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/whatsapp/primary-transport`,
+      { provider: "meta" }
+    );
+    assert.equal(blockedMetaPrimary.status, 409, JSON.stringify(blockedMetaPrimary.body));
+    assert.equal(getErrorCode(blockedMetaPrimary.body), "meta_transport_unavailable");
+    const blockedSnapshot = await prisma.tenantMetaConfig.findUniqueOrThrow({
+      where: { clientId: businessClientId },
+      select: { rawPayload: true },
+    });
+    assert.equal(
+      ((blockedSnapshot.rawPayload as Record<string, unknown>).metaReadiness as Record<string, unknown>).reason,
+      "phone_disconnected"
+    );
+
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/meta-phone-id-business?")) {
+        return Response.json({
+          id: "meta-phone-id-business",
+          display_phone_number: "+55 84 9999-0001",
+          status: "CONNECTED",
+          code_verification_status: "VERIFIED",
+          platform_type: "CLOUD_API",
+          quality_rating: "GREEN",
+        });
+      }
+      if (url.includes("/meta-waba-id-business/phone_numbers")) {
+        return Response.json({
+          data: [{ id: "meta-phone-id-business", display_phone_number: "+55 84 9999-0001" }],
+        });
+      }
+      if (url.includes("/meta-waba-id-business?")) {
+        return Response.json({ id: "meta-waba-id-business", name: "Business test" });
+      }
+      if (url.startsWith("https://graph.facebook.com/")) {
+        return Response.json({ error: "unexpected" }, { status: 404 });
+      }
+      return originalFetch(input, init);
+    }) as typeof fetch;
+    const savedMetaPrimary = await requestSuperadmin<{
+      ok: true;
+      primaryTransport: "meta";
+      status: {
+        primaryTransport: "meta";
+        metaReadiness: { operational: boolean; publicIdentity: { maskedNumber: string | null } | null };
+      };
+    }>(
+      "PUT",
+      `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/whatsapp/primary-transport`,
+      { provider: "meta" }
+    );
+    assert.equal(savedMetaPrimary.status, 200, JSON.stringify(savedMetaPrimary.body));
+    assert.equal(savedMetaPrimary.body.primaryTransport, "meta");
+    assert.equal(savedMetaPrimary.body.status.metaReadiness.operational, true);
+    assert.equal(savedMetaPrimary.body.status.metaReadiness.publicIdentity?.maskedNumber, "****0001");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
   const webPrimaryBeforeConnect = await requestSuperadmin<ErrorPayload>(
     "PUT",
     `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/whatsapp/primary-transport`,
