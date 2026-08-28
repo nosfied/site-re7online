@@ -1,4 +1,4 @@
-import { type PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { getFeatures } from "../features/clientFeatures.js";
 import { persistEvent } from "../db/persist.js";
 import {
@@ -68,6 +68,18 @@ export function resolveWebSessionPrePairingOutboundIntent(account: {
 }) {
   const lifecycle = readWebSessionLifecycle(account.metadata);
   return lifecycle.lastConnectedAt ? account.outboundEnabled : true;
+}
+
+export function preserveWebSessionPrePairingOutboundIntent(account: {
+  metadata: unknown;
+  outboundEnabled: boolean;
+}): Prisma.InputJsonObject {
+  const existing = readWebSessionPrePairingOutboundState(account.metadata);
+  if (existing) return writeWebSessionPrePairingOutboundMetadata(account.metadata, existing);
+  return writeWebSessionPrePairingOutboundMetadata(account.metadata, {
+    enabled: resolveWebSessionPrePairingOutboundIntent(account),
+    capturedAt: new Date().toISOString(),
+  });
 }
 
 export async function getWebSessionAccount(params: {
@@ -202,14 +214,21 @@ export async function prepareWebSessionAccount(params: {
 }) {
   const channelAccountId = sanitizeChannelAccountId(params.input?.channelAccountId);
   const displayName = sanitizeDisplayName(params.input?.displayName) ?? "WhatsApp Business";
+  const accountKey = {
+    clientId: params.client.id,
+    provider: WEB_SESSION_PROVIDER,
+    channel: WEB_SESSION_CHANNEL,
+    channelAccountId,
+  };
+  const existingAccount = await params.prisma.channelAccount.findUnique({
+    where: {
+      clientId_provider_channel_channelAccountId: accountKey,
+    },
+    select: { metadata: true, outboundEnabled: true },
+  });
   const account = await params.prisma.channelAccount.upsert({
     where: {
-      clientId_provider_channel_channelAccountId: {
-        clientId: params.client.id,
-        provider: WEB_SESSION_PROVIDER,
-        channel: WEB_SESSION_CHANNEL,
-        channelAccountId,
-      },
+      clientId_provider_channel_channelAccountId: accountKey,
     },
     create: {
       clientId: params.client.id,
@@ -240,6 +259,11 @@ export async function prepareWebSessionAccount(params: {
       aiEnabled: false,
       handoffEnabled: false,
       tokenStatus: "not_required",
+      ...(existingAccount
+        ? {
+            metadata: preserveWebSessionPrePairingOutboundIntent(existingAccount),
+          }
+        : {}),
     },
   });
   await persistEvent({
@@ -390,7 +414,7 @@ export async function releaseWebSessionNumber(params: {
       provider: WEB_SESSION_PROVIDER,
       status: { not: "archived_duplicate" },
     },
-    select: { id: true, channelAccountId: true, metadata: true },
+    select: { id: true, channelAccountId: true, metadata: true, outboundEnabled: true },
   });
   for (const item of accounts) {
     clearWebSessionQrForRuntime(item.id);
@@ -410,11 +434,14 @@ export async function releaseWebSessionNumber(params: {
         inboundPersistenceEnabled: false,
         outboundEnabled: false,
         status: "disabled",
-        metadata: webSessionMetadataPatch(item.metadata, {
-          desiredState: "DISCONNECTED",
-          observedState: "DISCONNECTED",
-          lastErrorCode: null,
-          reconnectCount: 0,
+        metadata: preserveWebSessionPrePairingOutboundIntent({
+          metadata: webSessionMetadataPatch(item.metadata, {
+            desiredState: "DISCONNECTED",
+            observedState: "DISCONNECTED",
+            lastErrorCode: null,
+            reconnectCount: 0,
+          }),
+          outboundEnabled: item.outboundEnabled,
         }),
       },
     });
@@ -513,11 +540,14 @@ export async function resetWebSession(params: {
       inboundPersistenceEnabled: false,
       outboundEnabled: false,
       status: "pending",
-      metadata: webSessionMetadataPatch(account.metadata, {
-        desiredState: "DISCONNECTED",
-        observedState: "DISCONNECTED",
-        lastErrorCode: null,
-        reconnectCount: 0,
+      metadata: preserveWebSessionPrePairingOutboundIntent({
+        metadata: webSessionMetadataPatch(account.metadata, {
+          desiredState: "DISCONNECTED",
+          observedState: "DISCONNECTED",
+          lastErrorCode: null,
+          reconnectCount: 0,
+        }),
+        outboundEnabled: account.outboundEnabled,
       }),
     },
   });
