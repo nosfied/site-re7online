@@ -128,12 +128,23 @@ export async function resolveOperationalMetaWhatsappIdentity(params: {
   const phoneNumberId = typeof metaConfig?.phoneNumberId === "string"
     ? metaConfig.phoneNumberId.trim()
     : "";
+  const phoneMapping = waPhoneNumber
+    ? await waPhoneNumber.findFirst({
+        where: { clientId: params.clientId, phoneNumberId },
+        select: { display: true },
+      })
+    : null;
+  const providerConfirmedPhoneMappingIdentity =
+    phoneMapping?.display
+      ? resolveProviderConfirmedMetaPublicWhatsappIdentity(phoneMapping.display)
+      : null;
+
   if (
     !phoneNumberId ||
     !businessToken ||
     !wabaId ||
     isMetaOperationallyRemoved(metaConfig?.rawPayload) ||
-    !hasOperationalMetaSource(metaConfig?.rawPayload)
+    (!hasOperationalMetaSource(metaConfig?.rawPayload) && !providerConfirmedPhoneMappingIdentity)
   ) {
     return {
       configured: false,
@@ -143,12 +154,6 @@ export async function resolveOperationalMetaWhatsappIdentity(params: {
       reason: "meta_not_configured" as const,
     };
   }
-  const phoneMapping = waPhoneNumber
-    ? await waPhoneNumber.findFirst({
-        where: { clientId: params.clientId, phoneNumberId },
-        select: { display: true },
-    })
-    : null;
   const displayPhone = phoneMapping?.display?.trim() || extractMetaDisplayPhoneFromRawPayload(metaConfig?.rawPayload);
   const canonicalNumber =
     readCanonicalMetaPublicIdentityFromRawPayload(metaConfig?.rawPayload) ??
@@ -325,6 +330,13 @@ export async function resolveOperationalWhatsappDisplayIdentity(params: {
       provider: "hybrid" as const,
       canonicalNumber: meta.canonicalNumber,
       maskedNumber: meta.maskedNumber,
+    };
+  }
+  if (meta.canonicalNumber && webCanonicalNumber) {
+    return {
+      provider: "web_session" as const,
+      canonicalNumber: webCanonicalNumber,
+      maskedNumber: webMaskedNumber,
     };
   }
   if (meta.canonicalNumber) {

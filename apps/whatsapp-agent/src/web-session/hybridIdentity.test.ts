@@ -235,6 +235,97 @@ test("operational Meta identity prefers canonical public identity and falls back
   assert.equal(legacy.canonicalNumber, "558499990009");
 });
 
+test("operational Meta identity accepts matching provider-confirmed WaPhoneNumber for legacy config", async () => {
+  const prisma = makePrisma();
+  prisma.state.metaConfigs.push({
+    clientId: "demo-legacy",
+    phoneNumberId: "phone-demo",
+    wabaId: "waba-demo",
+    businessToken: "token-demo",
+    rawPayload: {},
+  });
+  prisma.state.waPhoneNumbers.push({
+    clientId: "demo-legacy",
+    phoneNumberId: "phone-demo",
+    display: "+55 84 9195-5328",
+  });
+
+  const meta = await resolveOperationalMetaWhatsappIdentity({
+    prisma: prisma as never,
+    clientId: "demo-legacy",
+  });
+
+  assert.equal(meta.configured, true);
+  assert.equal(meta.reason, "ok");
+  assert.equal(meta.phoneNumberIdPresent, true);
+  assert.equal(meta.canonicalNumber, "558491955328");
+  assert.equal(meta.maskedNumber, "****5328");
+});
+
+test("operational Meta identity rejects mismatched or cross-tenant legacy WaPhoneNumber fallback", async () => {
+  const prisma = makePrisma();
+  prisma.state.metaConfigs.push({
+    clientId: "tenant-a",
+    phoneNumberId: "phone-a",
+    wabaId: "waba-a",
+    businessToken: "token-a",
+    rawPayload: {},
+  });
+  prisma.state.waPhoneNumbers.push({
+    clientId: "tenant-a",
+    phoneNumberId: "phone-other",
+    display: "+55 84 9195-5328",
+  });
+  prisma.state.waPhoneNumbers.push({
+    clientId: "tenant-b",
+    phoneNumberId: "phone-a",
+    display: "+55 84 9195-5328",
+  });
+
+  const meta = await resolveOperationalMetaWhatsappIdentity({
+    prisma: prisma as never,
+    clientId: "tenant-a",
+  });
+
+  assert.equal(meta.configured, false);
+  assert.equal(meta.reason, "meta_not_configured");
+  assert.equal(meta.canonicalNumber, null);
+  assert.equal(meta.phoneNumberIdPresent, true);
+});
+
+test("same public identity legacy Meta plus Web Session is a matching hybrid without ownership conflict", async () => {
+  const prisma = makePrisma();
+  prisma.state.metaConfigs.push({
+    clientId: "hybrid-legacy",
+    phoneNumberId: "phone-hybrid",
+    wabaId: "waba-hybrid",
+    businessToken: "token-hybrid",
+    rawPayload: {},
+  });
+  prisma.state.waPhoneNumbers.push({
+    clientId: "hybrid-legacy",
+    phoneNumberId: "phone-hybrid",
+    display: "+55 84 9195-5328",
+  });
+  setWebAuthorization(prisma, "hybrid-legacy", "558491955328");
+  setWebAccount(prisma, "hybrid-legacy", "558491955328");
+
+  const hybrid = await resolveHybridWhatsappIdentityStatus({
+    prisma: prisma as never,
+    clientId: "hybrid-legacy",
+  });
+  const display = await resolveOperationalWhatsappDisplayIdentity({
+    prisma: prisma as never,
+    clientId: "hybrid-legacy",
+  });
+
+  assert.equal(hybrid.conflict, false);
+  assert.equal(hybrid.meta.canonicalNumber, "558491955328");
+  assert.equal(hybrid.web.canonicalNumber, "558491955328");
+  assert.equal(display.provider, "hybrid");
+  assert.equal(display.canonicalNumber, "558491955328");
+});
+
 test("operational Meta identity supports legacy WaPhoneNumber display without TenantMetaConfig", async () => {
   const prisma = makePrisma();
   prisma.state.waPhoneNumbers.push({
@@ -346,7 +437,7 @@ test("operational display prefers connected Web Session over residual Meta histo
   assert.equal(identity.maskedNumber, "****2218");
 });
 
-test("operational display does not expose authorized-only or historical WhatsApp numbers", async () => {
+test("operational display accepts legacy Meta but does not expose authorized-only Web numbers", async () => {
   const prisma = makePrisma();
   setWebAuthorization(prisma, "lab-websession", "558496712218");
   prisma.state.metaConfigs.push({
@@ -369,9 +460,9 @@ test("operational display does not expose authorized-only or historical WhatsApp
     clientId: "lab-websession",
   });
 
-  assert.equal(identity.provider, "none");
-  assert.equal(identity.canonicalNumber, null);
-  assert.equal(identity.maskedNumber, null);
+  assert.equal(identity.provider, "meta");
+  assert.equal(identity.canonicalNumber, "558499995328");
+  assert.equal(identity.maskedNumber, "****5328");
 });
 
 test("operational display reports Meta and matching hybrid identities", async () => {
@@ -520,8 +611,8 @@ test("cleared or partial Meta config is not treated as operational identity", as
     prisma: prisma as never,
     clientId: "residual-meta",
   });
-  assert.equal(residualMeta.configured, false);
-  assert.equal(residualMeta.canonicalNumber, null);
+  assert.equal(residualMeta.configured, true);
+  assert.equal(residualMeta.canonicalNumber, "558499990005");
   assert.equal(residualMeta.phoneNumberIdPresent, true);
 });
 
