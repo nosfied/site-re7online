@@ -669,7 +669,7 @@ export default function TenantChannelsPage() {
                 disabled={
                   Boolean(webSessionWorking) ||
                   webSessionStatus?.primaryTransport === "meta" ||
-                  webSessionStatus?.metaReadiness?.operational === false
+                  webSessionStatus?.metaReadiness?.operational !== true
                 }
                 className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
