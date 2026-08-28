@@ -421,6 +421,8 @@ export type AppCrmContactImportPreviewResponse = {
   }>;
   truncatedErrors: boolean;
   excludedContacts?: number;
+  provisionalContacts?: number;
+  identityConflicts?: number;
 };
 
 export type AppCrmContactImportConfirmResponse = {
@@ -434,6 +436,9 @@ export type AppCrmContactImportConfirmResponse = {
   readyToImport: number;
   promotedProvisional: number;
   excludedContacts?: number;
+  provisionalContacts?: number;
+  identityConflicts?: number;
+  failed?: number;
 };
 
 export type AppCrmContactsResponse = {

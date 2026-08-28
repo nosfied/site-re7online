@@ -861,7 +861,7 @@ function CreateContactModal({
 }: {
   onClose: () => void;
   onSubmit: (payload: { name: string | null; phone: string }) => Promise<void>;
-  onOpenExisting: (leadId: string) => void;
+  onOpenExisting: (match: AppCrmExistingContactResolution) => void;
   onRestoreExisting: (leadId: string) => Promise<void>;
   canRestoreExisting: boolean;
 }) {
@@ -890,7 +890,7 @@ function CreateContactModal({
         setExistingContact(match);
         setLocalError(
           match.state === "excluded"
-            ? "Este contato foi retirado da operação."
+            ? "Este contato está fora da operação."
             : match.state === "provisional"
               ? "Este número já possui um contato associado."
               : "Este contato já está cadastrado."
@@ -954,16 +954,18 @@ function CreateContactModal({
                       {submitting ? "Restaurando..." : "Restaurar contato"}
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpenExisting(existingContact.leadId as string);
-                      onClose();
-                    }}
-                    className="theme-nav-link rounded-md border px-3 py-2 text-xs font-semibold"
-                  >
-                    Ver contato
-                  </button>
+                  {existingContact.state === "active" || (existingContact.state === "excluded" && canRestoreExisting) ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenExisting(existingContact);
+                        onClose();
+                      }}
+                      className="theme-nav-link rounded-md border px-3 py-2 text-xs font-semibold"
+                    >
+                      Ver contato
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -1094,6 +1096,8 @@ function CsvImportModal({
                   <DetailField label="Inválidas" value={preview.invalidRows} />
                   <DetailField label="Duplicadas" value={preview.duplicatesInFile} />
                   <DetailField label="Excluídas" value={preview.excludedContacts ?? 0} />
+                  <DetailField label="Já associadas" value={preview.provisionalContacts ?? 0} />
+                  <DetailField label="Conflitos" value={preview.identityConflicts ?? 0} />
                   <DetailField label="Delimitador" value={preview.delimiter} />
                 </div>
                 {preview.sampleErrors.length > 0 ? (
@@ -1107,7 +1111,7 @@ function CsvImportModal({
             ) : null}
             {summary ? (
               <div className="rounded-lg border border-emerald-300/30 bg-emerald-400/10 p-3 text-sm text-emerald-100">
-                Importação concluída: {summary.created} criado(s), {summary.reused} reutilizado(s), {summary.invalid} inválido(s), {summary.duplicates} duplicado(s).
+                Importação concluída: {summary.created} criado(s), {summary.reused} já cadastrado(s), {summary.invalid} inválido(s), {summary.duplicates} duplicado(s), {summary.excludedContacts ?? 0} fora da operação, {summary.provisionalContacts ?? 0} já associado(s), {summary.identityConflicts ?? 0} conflito(s).
               </div>
             ) : null}
             {localError ? (
@@ -1315,11 +1319,12 @@ export default function AppCrmContactsPage() {
   );
 
   const loadContactDetail = useCallback(
-    (leadId: string) => {
+    (leadId: string, overrideOperationalStatus?: "active" | "excluded") => {
       if (!session) return;
       setLoadingDetail(true);
       setDetailError(null);
-      fetchAppCrmContactDetail(session, leadId, { operationalStatus: canExcludeCrmContacts ? operationalStatus : "active" })
+      const detailOperationalStatus = overrideOperationalStatus ?? (canExcludeCrmContacts ? operationalStatus : "active");
+      fetchAppCrmContactDetail(session, leadId, { operationalStatus: detailOperationalStatus })
         .then((response) => {
           setContactDetail(response);
           setSelectedLeadId(leadId);
@@ -1897,10 +1902,12 @@ export default function AppCrmContactsPage() {
         <CreateContactModal
           onClose={() => setCreateModalOpen(false)}
           onSubmit={createContact}
-          onOpenExisting={(leadId) => {
-            setSelectedLeadId(leadId);
+          onOpenExisting={(match) => {
+            if (!match.leadId) return;
+            const operationalStatusForDetail = match.state === "excluded" ? "excluded" : "active";
+            setSelectedLeadId(match.leadId);
             setContactDetail(null);
-            loadContactDetail(leadId);
+            loadContactDetail(match.leadId, operationalStatusForDetail);
           }}
           onRestoreExisting={reactivateContactFromOperation}
           canRestoreExisting={canExcludeCrmContacts}
