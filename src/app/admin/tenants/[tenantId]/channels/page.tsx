@@ -334,6 +334,27 @@ export default function TenantChannelsPage() {
       ? formatBrazilPhone(webSessionStatus.account.channelAccountId)
       : "Nenhum número conectado";
   const authorizedNumberDisplay = authorizedNumber.trim() ? formatBrazilPhone(authorizedNumber) : null;
+  const numberReplacement = webSessionStatus?.numberReplacement?.status === "ACTIVE"
+    ? webSessionStatus.numberReplacement
+    : null;
+  const webReplacementComplete = Boolean(
+    numberReplacement &&
+      webSessionStatus?.lifecycle.observedState === "CONNECTED" &&
+      webSessionStatus.account?.outboundEnabled === true &&
+      webSessionStatus.hybridIdentity?.web.canonicalNumber === numberReplacement.targetNumberCanonical
+  );
+  const metaReplacementComplete = Boolean(
+    numberReplacement &&
+      webSessionStatus?.hybridIdentity?.meta.configured === true &&
+      webSessionStatus.hybridIdentity.meta.canonicalNumber === numberReplacement.targetNumberCanonical
+  );
+  const replacementStatusText = numberReplacement
+    ? webReplacementComplete && !metaReplacementComplete
+      ? "Web concluída; Meta pendente"
+      : webReplacementComplete && metaReplacementComplete
+        ? "novo número pronto"
+        : "troca em andamento"
+    : "sem troca ativa";
 
   useEffect(() => {
     if (!tenantId || !connection.baseUrl || !connection.adminToken) return;
@@ -702,16 +723,17 @@ export default function TenantChannelsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold text-amber-100">Alterar número WhatsApp</p>
                     <StatusBadge
-                      label={webSessionStatus?.numberReplacement?.status === "ACTIVE" ? "troca em andamento" : "sem troca ativa"}
-                      tone={webSessionStatus?.numberReplacement?.status === "ACTIVE" ? "warning" : "neutral"}
+                      label={replacementStatusText}
+                      tone={numberReplacement ? "warning" : "neutral"}
                     />
                   </div>
                   <p className="mt-1 text-xs leading-relaxed text-amber-100/70">
-                    Use quando o número atual será substituído. Durante a configuração, a Meta antiga deixa de ser
-                    usada para novos envios e o Web Session só aceita o novo número informado.
+                    {numberReplacement && webReplacementComplete && !metaReplacementComplete
+                      ? "Novo número conectado na sessão Web. A troca continua aberta para garantir que a Meta Cloud, quando configurada, use o mesmo número."
+                      : "Use quando o número atual será substituído. Durante a configuração, a Meta antiga deixa de ser usada para novos envios e o Web Session só aceita o novo número informado."}
                   </p>
                 </div>
-                {webSessionStatus?.numberReplacement?.status === "ACTIVE" ? (
+                {numberReplacement ? (
                   <button
                     type="button"
                     onClick={() => void handleCancelWhatsappNumberReplacement()}
@@ -722,19 +744,27 @@ export default function TenantChannelsPage() {
                   </button>
                 ) : null}
               </div>
-              {webSessionStatus?.numberReplacement?.status === "ACTIVE" ? (
+              {numberReplacement ? (
                 <dl className="mt-3 grid gap-2 text-xs md:grid-cols-3">
                   <TechnicalValue
                     label="Anterior Meta"
-                    value={webSessionStatus.numberReplacement.previousMetaNumberMasked ?? "-"}
+                    value={numberReplacement.previousMetaNumberMasked ?? "-"}
                   />
                   <TechnicalValue
                     label="Anterior Web"
-                    value={webSessionStatus.numberReplacement.previousWebNumberMasked ?? "-"}
+                    value={numberReplacement.previousWebNumberMasked ?? "-"}
                   />
                   <TechnicalValue
                     label="Novo número"
-                    value={formatBrazilPhone(webSessionStatus.numberReplacement.targetNumberCanonical)}
+                    value={formatBrazilPhone(numberReplacement.targetNumberCanonical)}
+                  />
+                  <TechnicalValue
+                    label="Sessão Web"
+                    value={webReplacementComplete ? "Concluída / conectada" : "Pendente"}
+                  />
+                  <TechnicalValue
+                    label="Meta Cloud"
+                    value={metaReplacementComplete ? "Concluída" : "Pendente / não configurada"}
                   />
                 </dl>
               ) : null}
