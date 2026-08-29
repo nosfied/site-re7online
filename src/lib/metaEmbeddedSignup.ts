@@ -1,7 +1,8 @@
 const DEFAULT_META_EMBEDDED_SIGNUP_APP_ID = "2074361376674006";
-const DEFAULT_META_EMBEDDED_SIGNUP_CONFIG_ID = "1261464002116286";
+const DEFAULT_META_EMBEDDED_SIGNUP_CONFIG_ID = "1543311723765403";
 const META_SDK_VERSION = "v19.0";
 const CONFIG_ID_STORAGE_KEY = "meta_embedded_signup_config_id_override";
+const META_EMBEDDED_SIGNUP_REDACTED_VALUE = "[REDACTED]";
 export const META_EMBEDDED_SIGNUP_COEXISTENCE_FEATURE_TYPE =
   "whatsapp_business_app_onboarding";
 
@@ -102,6 +103,35 @@ function readRecord(input: unknown) {
     : null;
 }
 
+export function sanitizeMetaEmbeddedSignupDiagnosticValue(input: unknown): unknown {
+  if (Array.isArray(input)) {
+    return input.map((item) => sanitizeMetaEmbeddedSignupDiagnosticValue(item));
+  }
+  if (!input || typeof input !== "object") return input;
+
+  const sensitiveKeys = new Set([
+    "accesscode",
+    "accesstoken",
+    "access_token",
+    "authcode",
+    "businesstoken",
+    "code",
+    "signedrequest",
+    "signed_request",
+    "token",
+  ]);
+  const next: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    const normalizedKey = key.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase();
+    if (sensitiveKeys.has(normalizedKey) || normalizedKey.endsWith("token")) {
+      next[key] = value == null || value === "" ? value : META_EMBEDDED_SIGNUP_REDACTED_VALUE;
+      continue;
+    }
+    next[key] = sanitizeMetaEmbeddedSignupDiagnosticValue(value);
+  }
+  return next;
+}
+
 export function createMetaEmbeddedSignupCorrelationId() {
   const random =
     typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -116,6 +146,20 @@ export function maskMetaEmbeddedSignupReference(value: unknown) {
   if (!trimmed) return null;
   if (trimmed.length <= 8) return "***";
   return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
+}
+
+export function resolveMetaEmbeddedSignupExchangeSubmission(params: {
+  correlationId?: string | null;
+  code?: string | null;
+  submittedKey?: string | null;
+}) {
+  const code = params.code?.trim() ?? "";
+  if (!code) return { shouldSubmit: false, key: null };
+  const key = `${params.correlationId?.trim() || "no-correlation"}:${code}`;
+  return {
+    shouldSubmit: params.submittedKey !== key,
+    key,
+  };
 }
 
 function readStatus(input: unknown, sessionMessage: EmbeddedSignupSessionMessage) {
@@ -343,6 +387,9 @@ function normalizeSessionStatus(value: unknown): EmbeddedSignupSessionStatus | n
   if (normalized === "FINISH" || normalized === "CANCEL" || normalized === "ERROR") {
     return normalized;
   }
+  if (normalized.startsWith("FINISH_")) return "FINISH";
+  if (normalized.startsWith("CANCEL")) return "CANCEL";
+  if (normalized.startsWith("ERROR")) return "ERROR";
   return null;
 }
 

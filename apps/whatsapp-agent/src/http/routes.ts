@@ -21373,8 +21373,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           (!exchange.businessToken ? normalizeOptionalString(embeddedSignupInput?.phoneNumberId) : null);
         const rawPayload = {
           source: "embedded_signup",
-          exchange: exchange.rawPayload,
-          enrich: enriched?.rawPayload ?? null,
+          exchange: sanitizeMetaOnboardingStoredPayload(exchange.rawPayload),
+          enrich: sanitizeMetaOnboardingStoredPayload(enriched?.rawPayload ?? null),
           embeddedSignup: embeddedSignupInput
             ? {
                 businessId: normalizeOptionalString(embeddedSignupInput.businessId),
@@ -21384,7 +21384,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 wabaId: normalizeOptionalString(embeddedSignupInput.wabaId),
                 phoneNumberId: normalizeOptionalString(embeddedSignupInput.phoneNumberId),
                 displayPhoneNumber: embeddedDisplayPhoneNumber,
-                raw: embeddedSignupInput.raw ?? null,
+                raw: sanitizeMetaOnboardingStoredPayload(embeddedSignupInput.raw ?? null),
               }
             : null,
           publicWhatsappIdentity: buildMetaPublicWhatsappIdentityPayload(
@@ -21393,8 +21393,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             }) ?? embeddedDisplayPhoneNumber
           ),
         };
+        const providerConfirmedDisplayPhoneNumber = extractTenantDisplayPhoneFromRawPayload({
+          enrich: enriched?.rawPayload ?? null,
+        });
         const displayPhoneNumber =
-          embeddedDisplayPhoneNumber ?? extractTenantDisplayPhoneFromRawPayload(rawPayload);
+          providerConfirmedDisplayPhoneNumber ??
+          embeddedDisplayPhoneNumber ??
+          extractTenantDisplayPhoneFromRawPayload(rawPayload);
         const hybridGuard = await enforceMetaIdentityChangeAgainstWebSession({
           prisma,
           client,
@@ -21702,9 +21707,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 success: registration.success,
                 registeredAt: new Date().toISOString(),
                 phoneNumberId: requestedPhoneNumberId,
-                rawPayload: registration.rawPayload,
+                rawPayload: sanitizeMetaOnboardingStoredPayload(registration.rawPayload),
               },
-              phoneRegistrationEnrich: enriched.rawPayload,
+              phoneRegistrationEnrich: sanitizeMetaOnboardingStoredPayload(enriched.rawPayload),
               wabaSubscription,
             } as Prisma.InputJsonValue,
           },
@@ -21859,7 +21864,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           wabaId,
           raw:
             body.raw && typeof body.raw === "object" && !Array.isArray(body.raw)
-              ? body.raw
+              ? sanitizeMetaOnboardingStoredPayload(body.raw)
               : null,
         };
 
@@ -26271,6 +26276,38 @@ function normalizeOptionalString(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed || null;
+}
+
+function sanitizeMetaOnboardingStoredPayload(input: unknown): unknown {
+  if (Array.isArray(input)) {
+    return input.map((item) => sanitizeMetaOnboardingStoredPayload(item));
+  }
+  if (!input || typeof input !== "object") return input;
+
+  const sensitiveKeys = new Set([
+    "accesscode",
+    "accesstoken",
+    "access_token",
+    "authcode",
+    "authresponse",
+    "businesstoken",
+    "clientsecret",
+    "client_secret",
+    "code",
+    "signedrequest",
+    "signed_request",
+    "token",
+  ]);
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    const normalizedKey = key.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase();
+    if (sensitiveKeys.has(normalizedKey) || normalizedKey.endsWith("token")) {
+      sanitized[key] = value == null || value === "" ? value : "[REDACTED]";
+      continue;
+    }
+    sanitized[key] = sanitizeMetaOnboardingStoredPayload(value);
+  }
+  return sanitized;
 }
 
 const META_EMBEDDED_SIGNUP_AUDIT_EVENTS = new Set([

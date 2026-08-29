@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   META_EMBEDDED_SIGNUP_COEXISTENCE_FEATURE_TYPE,
+  META_EMBEDDED_SIGNUP_CONFIG_ID,
   buildMetaEmbeddedSignupCallbackAuditPayload,
   buildMetaEmbeddedSignupPopupClosedAuditPayload,
   buildMetaEmbeddedSignupLoginOptions,
@@ -9,7 +10,13 @@ import {
   buildMetaEmbeddedSignupStartedAuditPayload,
   isTrustedMetaEmbeddedSignupOrigin,
   parseEmbeddedSignupSessionMessage,
+  resolveMetaEmbeddedSignupExchangeSubmission,
+  sanitizeMetaEmbeddedSignupDiagnosticValue,
 } from "./metaEmbeddedSignup";
+
+test("canonical WhatsApp Embedded Signup config defaults to the homologated Meta config", () => {
+  assert.equal(META_EMBEDDED_SIGNUP_CONFIG_ID, "1543311723765403");
+});
 
 test("coexistence launcher uses WhatsApp Business App onboarding without legacy session info", () => {
   const options = buildMetaEmbeddedSignupLoginOptions({ configId: "config-123", mode: "coexistence" });
@@ -62,6 +69,23 @@ test("session parser captures FINISH data without relying on generic traversal f
   assert.equal(parsed.data.businessPortfolioId, "portfolio-1");
 });
 
+test("session parser treats coexistence finish event names as completed", () => {
+  const parsed = parseEmbeddedSignupSessionMessage({
+    type: "WA_EMBEDDED_SIGNUP",
+    event: "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING",
+    data: {
+      waba_id: "waba-2",
+      phone_number_id: "phone-2",
+      business_id: "business-2",
+    },
+  });
+
+  assert.equal(parsed.status, "FINISH");
+  assert.equal(parsed.data.wabaId, "waba-2");
+  assert.equal(parsed.data.phoneNumberId, "phone-2");
+  assert.equal(parsed.data.businessId, "business-2");
+});
+
 test("session parser captures CANCEL and ERROR without ids", () => {
   const cancelled = parseEmbeddedSignupSessionMessage({
     type: "WA_EMBEDDED_SIGNUP",
@@ -91,14 +115,14 @@ test("audit payload records signup start with correlation and masked config refe
   const payload = buildMetaEmbeddedSignupStartedAuditPayload({
     correlationId: "signup-1",
     mode: "coexistence",
-    configId: "1050567334003366",
+    configId: "1543311723765403",
     timestamp: "2026-08-28T10:00:00.000Z",
   });
 
   assert.equal(payload.eventName, "meta.embedded_signup.started");
   assert.equal(payload.correlationId, "signup-1");
   assert.equal(payload.mode, "coexistence");
-  assert.equal(payload.configIdRef, "1050...3366");
+  assert.equal(payload.configIdRef, "1543...5403");
   assert.equal(payload.timestamp, "2026-08-28T10:00:00.000Z");
 });
 
@@ -125,6 +149,64 @@ test("audit callback payload stores code presence but never stores the code", ()
   assert.equal(payload.status, "connected");
   assert.equal(serialized.includes("SECRET_CODE_SHOULD_NOT_APPEAR"), false);
   assert.equal(serialized.includes("SECRET_TOKEN_SHOULD_NOT_APPEAR"), false);
+});
+
+test("frontend diagnostics redact auth codes and tokens while preserving safe ids", () => {
+  const sanitized = sanitizeMetaEmbeddedSignupDiagnosticValue({
+    code: "SECRET_CODE_SHOULD_NOT_APPEAR",
+    authResponse: {
+      code: "NESTED_SECRET_CODE_SHOULD_NOT_APPEAR",
+      accessToken: "SECRET_TOKEN_SHOULD_NOT_APPEAR",
+    },
+    data: {
+      phone_number_id: "phone-123",
+      waba_id: "waba-123",
+    },
+  }) as Record<string, unknown>;
+  const serialized = JSON.stringify(sanitized);
+
+  assert.equal(serialized.includes("SECRET_CODE_SHOULD_NOT_APPEAR"), false);
+  assert.equal(serialized.includes("NESTED_SECRET_CODE_SHOULD_NOT_APPEAR"), false);
+  assert.equal(serialized.includes("SECRET_TOKEN_SHOULD_NOT_APPEAR"), false);
+  assert.equal(serialized.includes("phone-123"), true);
+  assert.equal(serialized.includes("waba-123"), true);
+});
+
+test("exchange submission guard submits a captured code exactly once per correlation", () => {
+  assert.deepEqual(
+    resolveMetaEmbeddedSignupExchangeSubmission({
+      correlationId: "signup-1",
+      code: "",
+      submittedKey: null,
+    }),
+    { shouldSubmit: false, key: null }
+  );
+
+  const first = resolveMetaEmbeddedSignupExchangeSubmission({
+    correlationId: "signup-1",
+    code: " CODE-1 ",
+    submittedKey: null,
+  });
+  assert.equal(first.shouldSubmit, true);
+  assert.equal(first.key, "signup-1:CODE-1");
+
+  assert.deepEqual(
+    resolveMetaEmbeddedSignupExchangeSubmission({
+      correlationId: "signup-1",
+      code: "CODE-1",
+      submittedKey: first.key,
+    }),
+    { shouldSubmit: false, key: "signup-1:CODE-1" }
+  );
+
+  assert.equal(
+    resolveMetaEmbeddedSignupExchangeSubmission({
+      correlationId: "signup-2",
+      code: "CODE-1",
+      submittedKey: first.key,
+    }).shouldSubmit,
+    true
+  );
 });
 
 test("audit session payload classifies FINISH, CANCEL and ERROR safely", () => {

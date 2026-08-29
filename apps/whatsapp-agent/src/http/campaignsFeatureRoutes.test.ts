@@ -4669,7 +4669,7 @@ test("admin onboarding code exchange sends canonical manual oauth redirect uri f
       `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}/onboarding/exchange-code`,
       {
         code: "valid-test-code",
-        redirectUri: `${redirectUri}?metaConfigId=1050567334003366`,
+        redirectUri: `${redirectUri}?metaConfigId=1543311723765403`,
       }
     );
 
@@ -4839,18 +4839,22 @@ test("admin onboarding code exchange resolves WABA by displayed phone when OAuth
     assert.equal(metaConfig?.businessToken, `${prefix}-business-token-display`);
     const rawPayload = metaConfig?.rawPayload as Record<string, unknown>;
     const publicWhatsappIdentity = rawPayload.publicWhatsappIdentity as Record<string, unknown>;
+    const serializedRawPayload = JSON.stringify(rawPayload);
     assert.equal(rawPayload.source, "embedded_signup");
     assert.equal(publicWhatsappIdentity.evidence, "provider_confirmed_display_phone_number");
     assert.equal(publicWhatsappIdentity.rawDisplayPhoneNumber, "+55 84 9459-6848");
     assert.equal(publicWhatsappIdentity.canonicalNumber, "558494596848");
     assert.equal(publicWhatsappIdentity.maskedNumber, "****6848");
+    assert.equal(serializedRawPayload.includes("redacted-in-test"), false);
+    assert.equal(serializedRawPayload.includes("valid-display-resolution-code"), false);
+    assert.equal(serializedRawPayload.includes(`${prefix}-business-token-display`), false);
 
     const phoneNumber = await prisma.waPhoneNumber.findUnique({
       where: { phoneNumberId: `${prefix}-phone-display` },
       select: { clientId: true, display: true },
     });
     assert.equal(phoneNumber?.clientId, client.id);
-    assert.equal(phoneNumber?.display, "55 84 9459-6848");
+    assert.equal(phoneNumber?.display, "+55 84 9459-6848");
 
     const repeat = await requestSuperadmin<{ success: boolean }>(
       "POST",
@@ -4874,6 +4878,183 @@ test("admin onboarding code exchange resolves WABA by displayed phone when OAuth
         where: { clientId: client.id, phoneNumberId: `${prefix}-phone-display` },
       }),
       1
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("admin onboarding code exchange prefers provider display over stale signup display during replacement", async () => {
+  const dbOnlyClientKey = `${prefix}-db-only-replacement-display`;
+  const client = await prisma.client.create({
+    data: {
+      clientKey: dbOnlyClientKey,
+      name: "DB Only Replacement Display Tenant",
+      profile: "business",
+      features: {},
+    },
+    select: { id: true },
+  });
+  await prisma.tenantOperationalConfig.create({
+    data: {
+      clientId: client.id,
+      schemaVersion: 1,
+      config: {
+        whatsappNumberReplacement: {
+          status: "ACTIVE",
+          targetNumberCanonical: "558494784366",
+          targetNumberMasked: "****4366",
+          previousMetaNumberMasked: "****5328",
+          previousWebNumberMasked: null,
+          startedAt: "2026-08-29T00:00:00.000Z",
+          startedBy: "unit-test",
+        },
+      },
+    },
+  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.hostname !== "graph.facebook.com") {
+      return originalFetch(input, init);
+    }
+    if (url.pathname.endsWith("/oauth/access_token")) {
+      return new Response(
+        JSON.stringify({
+          access_token: `${prefix}-business-token-replacement`,
+          token_type: "bearer",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (url.pathname.endsWith("/debug_token")) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            is_valid: true,
+            granular_scopes: [
+              {
+                scope: "whatsapp_business_management",
+                target_ids: [`${prefix}-waba-replacement`],
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (url.pathname.endsWith("/me/businesses")) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: `${prefix}-portfolio-replacement`, name: "Portfolio" }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (url.pathname.endsWith(`/${prefix}-portfolio-replacement/owned_whatsapp_business_accounts`)) {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: `${prefix}-waba-replacement`, name: "WABA" }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (url.pathname.endsWith(`/${prefix}-portfolio-replacement/client_whatsapp_business_accounts`)) {
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.pathname.endsWith(`/${prefix}-waba-replacement`)) {
+      return new Response(
+        JSON.stringify({
+          id: `${prefix}-waba-replacement`,
+          name: "WABA",
+          account_review_status: "APPROVED",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (url.pathname.endsWith(`/${prefix}-waba-replacement/phone_numbers`)) {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: `${prefix}-phone-replacement`,
+              display_phone_number: "+55 84 9478-4366",
+              verified_name: "Converta DEMO",
+              status: "CONNECTED",
+              code_verification_status: "VERIFIED",
+              platform_type: "NOT_APPLICABLE",
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (url.pathname.endsWith(`/${prefix}-waba-replacement/subscribed_apps`)) {
+      assert.equal(init?.method, "POST");
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({ error: { message: `unexpected ${url.pathname}` } }), {
+      status: 500,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const response = await requestSuperadmin<{
+      success: boolean;
+      phoneNumberId: string | null;
+      wabaId: string | null;
+    }>(
+      "POST",
+      `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}/onboarding/exchange-code`,
+      {
+        code: "valid-replacement-code",
+        redirectUri: `https://converta.re7online.com/admin/tenants/${encodeURIComponent(
+          dbOnlyClientKey
+        )}/onboarding`,
+        embeddedSignup: {
+          displayPhoneNumber: "+55 84 9195-5328",
+          phoneNumberId: `${prefix}-phone-replacement`,
+          wabaId: `${prefix}-waba-replacement`,
+          raw: {
+            code: "raw-code-must-not-persist",
+            event: "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING",
+          },
+        },
+      }
+    );
+
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.equal(response.body.success, true);
+    assert.equal(response.body.phoneNumberId, `${prefix}-phone-replacement`);
+    assert.equal(response.body.wabaId, `${prefix}-waba-replacement`);
+
+    const metaConfig = await prisma.tenantMetaConfig.findUniqueOrThrow({
+      where: { clientId: client.id },
+      select: { phoneNumberId: true, wabaId: true, rawPayload: true },
+    });
+    assert.equal(metaConfig.phoneNumberId, `${prefix}-phone-replacement`);
+    assert.equal(metaConfig.wabaId, `${prefix}-waba-replacement`);
+    const rawPayload = metaConfig.rawPayload as Record<string, unknown>;
+    const publicWhatsappIdentity = rawPayload.publicWhatsappIdentity as Record<string, unknown>;
+    assert.equal(publicWhatsappIdentity.rawDisplayPhoneNumber, "+55 84 9478-4366");
+    assert.equal(publicWhatsappIdentity.canonicalNumber, "558494784366");
+    assert.equal(JSON.stringify(rawPayload).includes("raw-code-must-not-persist"), false);
+    assert.equal(JSON.stringify(rawPayload).includes("valid-replacement-code"), false);
+
+    const replacement = await prisma.tenantOperationalConfig.findUnique({
+      where: { clientId: client.id },
+      select: { config: true },
+    });
+    assert.equal(
+      JSON.stringify(replacement?.config ?? {}).includes("whatsappNumberReplacement"),
+      false
     );
   } finally {
     globalThis.fetch = originalFetch;

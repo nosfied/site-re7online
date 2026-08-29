@@ -28,6 +28,8 @@ import {
   maskMetaEmbeddedSignupReference,
   parseEmbeddedSignupSessionMessage,
   readEmbeddedSignupQuery,
+  resolveMetaEmbeddedSignupExchangeSubmission,
+  sanitizeMetaEmbeddedSignupDiagnosticValue,
   safeParseEventData,
   startMetaEmbeddedSignup,
   type MetaEmbeddedSignupMode,
@@ -38,6 +40,15 @@ type UserFormState = {
   name: string;
   email: string;
   password: string;
+};
+
+type CapturedSignupData = {
+  code: string;
+  wabaId: string;
+  phoneNumberId: string;
+  businessId: string;
+  businessPortfolioId: string;
+  rawPayload: unknown;
 };
 
 const EMPTY_USER_FORM: UserFormState = {
@@ -59,32 +70,7 @@ function maskSensitiveValue(value: string) {
 }
 
 function sanitizeDebugValue(input: unknown): unknown {
-  if (Array.isArray(input)) {
-    return input.map((item) => sanitizeDebugValue(item));
-  }
-
-  if (!input || typeof input !== "object") {
-    return input;
-  }
-
-  const sensitiveKeys = new Set([
-    "accessToken",
-    "access_token",
-    "signedRequest",
-    "signed_request",
-    "token",
-    "accessTokenData",
-  ]);
-
-  const next: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    if (sensitiveKeys.has(key) && typeof value === "string") {
-      next[key] = maskSensitiveValue(value);
-      continue;
-    }
-    next[key] = sanitizeDebugValue(value);
-  }
-  return next;
+  return sanitizeMetaEmbeddedSignupDiagnosticValue(input);
 }
 
 function buildDebugPayload(input: unknown, origin?: string) {
@@ -121,7 +107,8 @@ function buildDebugPayload(input: unknown, origin?: string) {
   const sessionMessage = parseEmbeddedSignupSessionMessage(parsed);
 
   return {
-    code: extracted.code || null,
+    code: extracted.code ? "[REDACTED]" : null,
+    codePresent: Boolean(extracted.code),
     wabaId: extracted.wabaId || null,
     phoneNumberId: extracted.phoneNumberId || null,
     businessId: extracted.businessId || null,
@@ -152,6 +139,16 @@ export default function TenantOnboardingPage() {
   const signupCallbackInvokedRef = useRef(false);
   const signupSessionEventReceivedRef = useRef(false);
   const signupPopupClosedLoggedRef = useRef(false);
+  const exchangeSubmittedKeyRef = useRef<string | null>(null);
+  const processingRef = useRef(false);
+  const capturedSignupDataRef = useRef<CapturedSignupData>({
+    code: "",
+    wabaId: "",
+    phoneNumberId: "",
+    businessId: "",
+    businessPortfolioId: "",
+    rawPayload: null,
+  });
   const { connection } = useAdminConsole();
   const [sdkReady, setSdkReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
@@ -238,19 +235,29 @@ export default function TenantOnboardingPage() {
 
   const applyCapturedData = useCallback((input: unknown) => {
     const extracted = extractEmbeddedSignupData(input);
+    const sanitizedPayload = input != null ? sanitizeMetaEmbeddedSignupDiagnosticValue(input) : capturedSignupDataRef.current.rawPayload;
+    const next = {
+      ...capturedSignupDataRef.current,
+      code: extracted.code || capturedSignupDataRef.current.code,
+      wabaId: extracted.wabaId || capturedSignupDataRef.current.wabaId,
+      phoneNumberId: extracted.phoneNumberId || capturedSignupDataRef.current.phoneNumberId,
+      businessId: extracted.businessId || capturedSignupDataRef.current.businessId,
+      businessPortfolioId: extracted.businessPortfolioId || capturedSignupDataRef.current.businessPortfolioId,
+      rawPayload: sanitizedPayload,
+    };
+    capturedSignupDataRef.current = next;
     if (extracted.code) setCode(extracted.code);
-    if (extracted.wabaId) setWabaId((current) => (reconnectMode ? extracted.wabaId : current || extracted.wabaId));
+    if (extracted.wabaId) setWabaId(extracted.wabaId);
     if (extracted.phoneNumberId) {
-      setPhoneNumberId((current) => (reconnectMode ? extracted.phoneNumberId : current || extracted.phoneNumberId));
+      setPhoneNumberId(extracted.phoneNumberId);
     }
-    if (extracted.businessId) setBusinessId((current) => (reconnectMode ? extracted.businessId : current || extracted.businessId));
+    if (extracted.businessId) setBusinessId(extracted.businessId);
     if (extracted.businessPortfolioId) {
-      setBusinessPortfolioId((current) =>
-        reconnectMode ? extracted.businessPortfolioId : current || extracted.businessPortfolioId
-      );
+      setBusinessPortfolioId(extracted.businessPortfolioId);
     }
-    if (input != null) setRawPayload(input);
-  }, [reconnectMode]);
+    if (input != null) setRawPayload(sanitizedPayload);
+    return next;
+  }, []);
 
   const refreshLocationState = useCallback(
     (source: EmbeddedSignupCaptureEntry["source"]) => {
@@ -414,6 +421,128 @@ export default function TenantOnboardingPage() {
       });
   }, []);
 
+  const processOnboardingExchange = useCallback(
+    async (options?: { captured?: CapturedSignupData; source?: "auto" | "manual" }) => {
+      const captured = options?.captured ?? capturedSignupDataRef.current;
+      const codeToSubmit = (captured.code || code).trim();
+      if (processingRef.current || processing) return;
+      if (!tenantId) return;
+      if (!connection.baseUrl || !connection.adminToken) {
+        setStatus("error");
+        setErrorMessage("Configure a conexao admin antes de processar.");
+        return;
+      }
+      if (!codeToSubmit) {
+        setStatus("error");
+        setErrorMessage("Informe o code antes de processar.");
+        return;
+      }
+
+      const autoSubmission =
+        options?.source === "auto"
+          ? resolveMetaEmbeddedSignupExchangeSubmission({
+              correlationId: signupCorrelationRef.current,
+              code: codeToSubmit,
+              submittedKey: exchangeSubmittedKeyRef.current,
+            })
+          : { shouldSubmit: true, key: null };
+      if (!autoSubmission.shouldSubmit) return;
+      if (autoSubmission.key) exchangeSubmittedKeyRef.current = autoSubmission.key;
+
+      processingRef.current = true;
+      setProcessing(true);
+      setStatus("processing");
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      debugLog("processing started", {
+        tenantId,
+        source: options?.source ?? "manual",
+        hasCode: true,
+        hasWabaId: Boolean(captured.wabaId.trim()),
+        hasPhoneNumberId: Boolean(captured.phoneNumberId.trim()),
+      });
+      if (signupCorrelationRef.current) {
+        recordSignupEvent({
+          eventName: "meta.embedded_signup.session_event",
+          correlationId: signupCorrelationRef.current,
+          mode: signupModeRef.current,
+          configIdRef: maskMetaEmbeddedSignupReference(signupConfigIdRef.current),
+          timestamp: new Date().toISOString(),
+          eventType: "exchange_code.submit",
+          flowStatus: "EXCHANGE_ATTEMPT",
+          codePresent: true,
+        });
+      }
+
+      try {
+        const response = await onboardingExchangeCode(connection, tenantId, {
+          code: codeToSubmit,
+          redirectUri:
+            typeof window !== "undefined"
+              ? `${window.location.origin}${window.location.pathname}`
+              : null,
+          replaceExistingMetaIdentity: reconnectMode,
+          embeddedSignup: {
+            wabaId: captured.wabaId.trim() || null,
+            phoneNumberId: captured.phoneNumberId.trim() || null,
+            displayPhoneNumber: displayPhoneNumber.trim() || null,
+            businessId: captured.businessId.trim() || null,
+            businessPortfolioId: captured.businessPortfolioId.trim() || null,
+            raw: captured.rawPayload ?? null,
+          },
+        });
+        setResultSnapshot(response);
+        if (response.phoneNumberId) setPhoneNumberId(response.phoneNumberId);
+        if (response.wabaId) setWabaId(response.wabaId);
+        if (response.businessId) setBusinessId(response.businessId);
+        if (response.businessPortfolioId) setBusinessPortfolioId(response.businessPortfolioId);
+        if (response.phoneNumberId) {
+          setTenantSnapshot((current) =>
+            current
+              ? {
+                  ...current,
+                  tenant: {
+                    ...current.tenant,
+                    metaPhoneNumberId: response.phoneNumberId || current.tenant.metaPhoneNumberId,
+                  },
+                }
+              : current
+          );
+        }
+        setReconnectMode(false);
+        setStatus("success");
+        setSuccessMessage(
+          response.warning ||
+            "Conexao Meta processada com sucesso. Credenciais do tenant salvas."
+        );
+      } catch (error) {
+        if (autoSubmission.key) exchangeSubmittedKeyRef.current = null;
+        const typed = error as { message?: string; status?: number };
+        setStatus("error");
+        setErrorMessage(
+          typed.message ||
+            (typed.status ? `Falha ao processar conexao (${typed.status}).` : "Falha ao processar conexao.")
+        );
+      } finally {
+        processingRef.current = false;
+        setProcessing(false);
+      }
+    },
+    [
+      code,
+      connection,
+      displayPhoneNumber,
+      processing,
+      reconnectMode,
+      recordSignupEvent,
+      tenantId,
+    ]
+  );
+
+  const handleProcess = () => {
+    void processOnboardingExchange({ source: "manual" });
+  };
+
   const handleStart = async (mode: MetaEmbeddedSignupMode = "standard") => {
     setStarting(true);
     setErrorMessage(null);
@@ -428,6 +557,15 @@ export default function TenantOnboardingPage() {
     signupCallbackInvokedRef.current = false;
     signupSessionEventReceivedRef.current = false;
     signupPopupClosedLoggedRef.current = false;
+    exchangeSubmittedKeyRef.current = null;
+    capturedSignupDataRef.current = {
+      code: "",
+      wabaId: "",
+      phoneNumberId: "",
+      businessId: "",
+      businessPortfolioId: "",
+      rawPayload: null,
+    };
     recordSignupEvent(
       buildMetaEmbeddedSignupStartedAuditPayload({
         correlationId,
@@ -463,8 +601,12 @@ export default function TenantOnboardingPage() {
         raw: response,
         parsed: buildDebugPayload(response, "fb.callback"),
       });
+      let capturedAfterCallback = capturedSignupDataRef.current;
       if (sessionMessage.status !== "CANCEL" && sessionMessage.status !== "ERROR") {
-        applyCapturedData(response);
+        capturedAfterCallback = applyCapturedData(response);
+      }
+      if (capturedAfterCallback.code.trim()) {
+        void processOnboardingExchange({ captured: capturedAfterCallback, source: "auto" });
       }
       if (sessionMessage.status === "CANCEL") {
         setErrorMessage("Conexao Meta cancelada. Nenhuma configuracao foi salva.");
@@ -508,6 +650,15 @@ export default function TenantOnboardingPage() {
     setBusinessId("");
     setBusinessPortfolioId("");
     setRawPayload(null);
+    capturedSignupDataRef.current = {
+      code: "",
+      wabaId: "",
+      phoneNumberId: "",
+      businessId: "",
+      businessPortfolioId: "",
+      rawPayload: null,
+    };
+    exchangeSubmittedKeyRef.current = null;
     setResultSnapshot(null);
     setEntries([]);
     setStatus("idle");
@@ -526,6 +677,15 @@ export default function TenantOnboardingPage() {
     setBusinessId("");
     setBusinessPortfolioId("");
     setStatus("idle");
+    capturedSignupDataRef.current = {
+      code: "",
+      wabaId: "",
+      phoneNumberId: "",
+      businessId: "",
+      businessPortfolioId: "",
+      rawPayload: null,
+    };
+    exchangeSubmittedKeyRef.current = null;
     setErrorMessage(null);
     setSuccessMessage(null);
   };
@@ -560,96 +720,6 @@ export default function TenantOnboardingPage() {
       );
     } finally {
       setCreatingUser(false);
-    }
-  };
-
-  const handleProcess = async () => {
-    if (processing) return;
-    if (!tenantId) return;
-    if (!connection.baseUrl || !connection.adminToken) {
-      setStatus("error");
-      setErrorMessage("Configure a conexao admin antes de processar.");
-      return;
-    }
-    if (!code.trim()) {
-      setStatus("error");
-      setErrorMessage("Informe o code antes de processar.");
-      return;
-    }
-
-    setProcessing(true);
-    setStatus("processing");
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    debugLog("processing started", {
-      tenantId,
-      hasCode: Boolean(code.trim()),
-      hasWabaId: Boolean(wabaId.trim()),
-      hasPhoneNumberId: Boolean(phoneNumberId.trim()),
-    });
-    if (signupCorrelationRef.current) {
-      recordSignupEvent({
-        eventName: "meta.embedded_signup.session_event",
-        correlationId: signupCorrelationRef.current,
-        mode: signupModeRef.current,
-        configIdRef: maskMetaEmbeddedSignupReference(signupConfigIdRef.current),
-        timestamp: new Date().toISOString(),
-        eventType: "exchange_code.submit",
-        flowStatus: "EXCHANGE_ATTEMPT",
-        codePresent: true,
-      });
-    }
-
-    try {
-      const response = await onboardingExchangeCode(connection, tenantId, {
-        code: code.trim(),
-        redirectUri:
-          typeof window !== "undefined"
-            ? `${window.location.origin}${window.location.pathname}`
-            : null,
-        replaceExistingMetaIdentity: reconnectMode,
-        embeddedSignup: {
-          wabaId: wabaId.trim() || null,
-          phoneNumberId: phoneNumberId.trim() || null,
-          displayPhoneNumber: displayPhoneNumber.trim() || null,
-          businessId: businessId.trim() || null,
-          businessPortfolioId: businessPortfolioId.trim() || null,
-          raw: rawPayload ?? null,
-        },
-      });
-      setResultSnapshot(response);
-      if (response.phoneNumberId) setPhoneNumberId(response.phoneNumberId);
-      if (response.wabaId) setWabaId(response.wabaId);
-      if (response.businessId) setBusinessId(response.businessId);
-      if (response.businessPortfolioId) setBusinessPortfolioId(response.businessPortfolioId);
-      if (response.phoneNumberId) {
-        setTenantSnapshot((current) =>
-          current
-            ? {
-                ...current,
-                tenant: {
-                  ...current.tenant,
-                  metaPhoneNumberId: response.phoneNumberId || current.tenant.metaPhoneNumberId,
-                },
-              }
-            : current
-        );
-      }
-      setReconnectMode(false);
-      setStatus("success");
-      setSuccessMessage(
-        response.warning ||
-          "Conexao Meta processada com sucesso. Credenciais do tenant salvas."
-      );
-    } catch (error) {
-      const typed = error as { message?: string; status?: number };
-      setStatus("error");
-      setErrorMessage(
-        typed.message ||
-          (typed.status ? `Falha ao processar conexao (${typed.status}).` : "Falha ao processar conexao.")
-      );
-    } finally {
-      setProcessing(false);
     }
   };
 
