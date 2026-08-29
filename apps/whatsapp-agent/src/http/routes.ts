@@ -38,6 +38,7 @@ import {
   resolveAiIntentQualificationSettings,
   resolveAgentSignatureSettings,
   resolveInboxVisibilityPolicy,
+  resolveInteractiveContactStartPolicy,
   resolveCrmBusinessStatuses,
   resolveAutomationFlagsSettings,
   resolveFollowUpSettings,
@@ -52,6 +53,7 @@ import {
   saveAiIntentQualificationSettings,
   saveAgentSignatureSettings,
   saveInboxVisibilityPolicy,
+  saveInteractiveContactStartPolicy,
   saveAutomationFlagsSettings,
   saveCrmBusinessStatuses,
   saveFollowUpSettings,
@@ -20634,6 +20636,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const adminWhatsappMediaPolicyMatch = pathname.match(
       /^\/admin\/tenants\/([^/]+)\/whatsapp\/media-policy$/
     );
+    const adminWhatsappContactStartPolicyMatch = pathname.match(
+      /^\/admin\/tenants\/([^/]+)\/whatsapp\/contact-start-policy$/
+    );
     if (req.method === "POST" && adminMetaReadinessRefreshMatch) {
       if (requireSuperadmin()) return;
       const tenantId = decodeURIComponent(adminMetaReadinessRefreshMatch[1] ?? "").trim();
@@ -20709,6 +20714,69 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         source: "db",
         fieldsChanged: ["whatsappMediaPolicy"],
         whatsappMediaPolicy: saved.policy,
+        permissions: { canUpdate: true },
+      });
+      return;
+    }
+
+    if ((req.method === "GET" || req.method === "PUT") && adminWhatsappContactStartPolicyMatch) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(adminWhatsappContactStartPolicyMatch[1] ?? "").trim();
+      const prisma = getPrisma();
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      if (req.method === "GET") {
+        const resolved = await resolveInteractiveContactStartPolicy({ prisma, clientId: client.id });
+        json(res, 200, {
+          ok: true,
+          tenantId: client.clientKey,
+          source: resolved.source,
+          allowInteractiveContactStartViaWebSession: resolved.allowInteractiveContactStartViaWebSession,
+          permissions: { canUpdate: true },
+        });
+        return;
+      }
+
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const rawValue = body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>).allowInteractiveContactStartViaWebSession
+        : false;
+      const before = await resolveInteractiveContactStartPolicy({ prisma, clientId: client.id });
+      const saved = await saveInteractiveContactStartPolicy({
+        prisma,
+        clientId: client.id,
+        allowInteractiveContactStartViaWebSession: rawValue,
+      });
+      await persistEvent({
+        clientId: client.id,
+        requestId: `${requestId}:admin-whatsapp-contact-start-policy`,
+        eventName: "whatsapp.contact_start_policy.updated",
+        payloadJson: {
+          actorUserId: `admin:${authToken.source}`,
+          tenantKey: client.clientKey,
+          previous: {
+            allowInteractiveContactStartViaWebSession: before.allowInteractiveContactStartViaWebSession,
+            source: before.source,
+          },
+          next: {
+            allowInteractiveContactStartViaWebSession: saved.allowInteractiveContactStartViaWebSession,
+            source: saved.source,
+          },
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        source: saved.source,
+        fieldsChanged: ["allowInteractiveContactStartViaWebSession"],
+        allowInteractiveContactStartViaWebSession: saved.allowInteractiveContactStartViaWebSession,
         permissions: { canUpdate: true },
       });
       return;

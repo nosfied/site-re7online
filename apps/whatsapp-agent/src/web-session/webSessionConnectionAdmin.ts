@@ -1,5 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { getFeatures } from "../features/clientFeatures.js";
+import { resolveInteractiveContactStartPolicy } from "../config/tenantOperationalConfig.js";
+import { resolveConfiguredWhatsappTenantMode } from "../crm/crmConversationStart.js";
 import { persistEvent } from "../db/persist.js";
 import { readMetaCloudReadinessSnapshot } from "../meta/metaCloudReadiness.js";
 import {
@@ -162,6 +164,27 @@ export async function serializeWebSessionStatus(params: {
     prisma: params.prisma,
     clientId: params.client.id,
   });
+  const contactStartPolicy = await resolveInteractiveContactStartPolicy({
+    prisma: params.prisma,
+    clientId: params.client.id,
+  });
+  const configuredMode = await resolveConfiguredWhatsappTenantMode({
+    prisma: params.prisma,
+    clientId: params.client.id,
+  });
+  const webReady = Boolean(
+    account &&
+      params.client.status === "ACTIVE" &&
+      getFeatures(params.client).whatsappWebSession === true &&
+      account.channel === "whatsapp" &&
+      account.provider === "web_session" &&
+      account.enabled &&
+      account.outboundEnabled &&
+      account.runtimeEnabled &&
+      account.status === "connected" &&
+      lifecycle.observedState === "CONNECTED"
+  );
+  const metaReadiness = readMetaCloudReadinessSnapshot(metaConfig?.rawPayload ?? null);
   return {
     configured: Boolean(account),
     featureEnabled: getFeatures(params.client).whatsappWebSession === true,
@@ -194,8 +217,24 @@ export async function serializeWebSessionStatus(params: {
     authorization,
     hybridIdentity,
     numberReplacement: hybridIdentity.numberReplacement,
-    metaReadiness: readMetaCloudReadinessSnapshot(metaConfig?.rawPayload ?? null),
+    metaReadiness,
+    transportPolicy: {
+      configuredMode: configuredMode.mode,
+      webConfigured: configuredMode.webConfigured,
+      metaConfigured: configuredMode.metaConfigured,
+      webReady,
+      metaReady: metaReadiness?.operational === true,
+      interactiveDefault:
+        configuredMode.mode === "HYBRID" || configuredMode.mode === "WEB_ONLY"
+          ? "web_session"
+          : configuredMode.mode === "CLOUD_ONLY"
+            ? "meta"
+            : null,
+      templateTransport: "meta",
+      campaignTransport: "meta",
+    },
     primaryTransport,
+    contactStartPolicy,
     detectedNumber: account
       ? {
           masked: maskWebSessionNumber(account.channelAccountId),

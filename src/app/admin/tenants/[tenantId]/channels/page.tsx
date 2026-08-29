@@ -19,6 +19,7 @@ import {
   TenantWebSessionStatus,
   updateTenantChannelAccounts,
   updateTenantWhatsAppMediaPolicy,
+  updateTenantWhatsAppContactStartPolicy,
   updateTenantWhatsAppPrimaryTransport,
   WhatsappMediaKind,
   WhatsappMediaPolicy,
@@ -274,6 +275,25 @@ function getMetaReadinessAction(status: TenantWebSessionStatus | null) {
   if (readiness.reason === "phone_not_in_waba") return "Confirme se o phone_number_id pertence ao WABA configurado.";
   if (readiness.reason === "public_identity_mismatch") return "Corrija a identidade publica antes de selecionar.";
   return "Conclua a configuracao Meta antes de selecionar.";
+}
+
+function getConfiguredWhatsappModeLabel(status: TenantWebSessionStatus | null) {
+  const mode = status?.transportPolicy?.configuredMode;
+  if (mode === "HYBRID") return "Hibrido";
+  if (mode === "CLOUD_ONLY") return "Somente Meta Cloud";
+  if (mode === "WEB_ONLY") return "Somente sessao Web";
+  return "Sem WhatsApp configurado";
+}
+
+function getInteractiveDefaultLabel(status: TenantWebSessionStatus | null) {
+  const selected = status?.transportPolicy?.interactiveDefault;
+  if (selected === "web_session") return "Sessao Web";
+  if (selected === "meta") return "Meta Cloud";
+  return "-";
+}
+
+function getRuntimeReadinessLabel(value: boolean | undefined) {
+  return value ? "Operacional" : "Indisponivel";
 }
 
 function getChannelModeNote(draft: ChannelAccountDraft) {
@@ -554,6 +574,40 @@ export default function TenantChannelsPage() {
     }
   };
 
+  const handleContactStartPolicy = async (allowInteractiveContactStartViaWebSession: boolean) => {
+    setWebSessionWorking("contact-start-policy");
+    setError(null);
+    setToast(null);
+    try {
+      const response = await updateTenantWhatsAppContactStartPolicy(
+        connection,
+        tenantId,
+        allowInteractiveContactStartViaWebSession
+      );
+      setWebSessionStatus((current) =>
+        current
+          ? {
+              ...current,
+              contactStartPolicy: {
+                allowInteractiveContactStartViaWebSession:
+                  response.allowInteractiveContactStartViaWebSession,
+                source: response.source,
+              },
+            }
+          : current
+      );
+      setToast(
+        response.allowInteractiveContactStartViaWebSession
+          ? "Início livre por sessão Web habilitado."
+          : "Início livre por sessão Web desabilitado."
+      );
+    } catch (err) {
+      setError((err as Error).message || "Falha ao atualizar política de início de conversa.");
+    } finally {
+      setWebSessionWorking(null);
+    }
+  };
+
   const handleRefreshMetaReadiness = async () => {
     setWebSessionWorking("meta-readiness");
     setError(null);
@@ -679,6 +733,18 @@ export default function TenantChannelsPage() {
             </div>
 
             <dl className="grid gap-2 md:grid-cols-3">
+              <TechnicalValue label="Modo configurado" value={getConfiguredWhatsappModeLabel(webSessionStatus)} />
+              <TechnicalValue
+                label="Web runtime"
+                value={getRuntimeReadinessLabel(webSessionStatus?.transportPolicy?.webReady)}
+              />
+              <TechnicalValue
+                label="Meta runtime"
+                value={getRuntimeReadinessLabel(webSessionStatus?.transportPolicy?.metaReady)}
+              />
+              <TechnicalValue label="Interativo padrao" value={getInteractiveDefaultLabel(webSessionStatus)} />
+              <TechnicalValue label="Modelos" value="Meta Cloud" />
+              <TechnicalValue label="Campanhas" value="Meta Cloud" />
               <TechnicalValue label="Número autorizado" value={webSessionStatus?.authorization.authorizedNumberCanonical ? formatBrazilPhone(webSessionStatus.authorization.authorizedNumberCanonical) : "Não autorizado"} />
               <TechnicalValue label="Número conectado" value={webSessionConnectedNumber} />
               <TechnicalValue label="Número detectado" value={webSessionStatus?.account?.channelAccountId ? formatBrazilPhone(webSessionStatus.account.channelAccountId) : "-"} />
@@ -712,6 +778,14 @@ export default function TenantChannelsPage() {
                     : webSessionStatus?.primaryTransport === "meta"
                       ? "Meta Cloud"
                       : "Padrão da conversa"
+                }
+              />
+              <TechnicalValue
+                label="Início livre por sessão Web"
+                value={
+                  webSessionStatus?.contactStartPolicy?.allowInteractiveContactStartViaWebSession
+                    ? "Habilitado"
+                    : "Desabilitado"
                 }
               />
             </dl>
@@ -852,6 +926,34 @@ export default function TenantChannelsPage() {
               <p className="min-w-64 flex-1 text-xs text-emerald-100/60">
                 Transporte primário é governança interna da plataforma. O app do tenant apenas exibe o valor atual.
               </p>
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-re7-navy/35 px-3 py-3">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-white">Iniciar contato livre pela sessão Web</p>
+                  <p className="mt-1 text-xs text-white/60">
+                    Exceção interna para permitir que Contatos/CRM iniciem conversa com texto livre via sessão Web.
+                    Campanhas e modelos continuam exclusivos da Meta Cloud.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void handleContactStartPolicy(
+                      !webSessionStatus?.contactStartPolicy?.allowInteractiveContactStartViaWebSession
+                    )
+                  }
+                  disabled={Boolean(webSessionWorking)}
+                  className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {webSessionWorking === "contact-start-policy"
+                    ? "Salvando..."
+                    : webSessionStatus?.contactStartPolicy?.allowInteractiveContactStartViaWebSession
+                      ? "Desabilitar"
+                      : "Habilitar"}
+                </button>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-end gap-2">

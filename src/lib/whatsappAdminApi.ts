@@ -781,6 +781,20 @@ export type TenantWebSessionStatus = {
     checkedAt: string | null;
   } | null;
   primaryTransport?: "meta" | "web_session" | null;
+  transportPolicy?: {
+    configuredMode: "WEB_ONLY" | "CLOUD_ONLY" | "HYBRID" | "NONE";
+    webConfigured: boolean;
+    metaConfigured: boolean;
+    webReady: boolean;
+    metaReady: boolean;
+    interactiveDefault: "web_session" | "meta" | null;
+    templateTransport: "meta";
+    campaignTransport: "meta";
+  };
+  contactStartPolicy?: {
+    allowInteractiveContactStartViaWebSession: boolean;
+    source: "db" | "json_fallback";
+  };
   detectedNumber: {
     masked: string | null;
     matchesAuthorized: boolean;
@@ -1672,6 +1686,28 @@ export async function updateTenantWhatsAppPrimaryTransport(
     {
       method: "PUT",
       body: JSON.stringify({ provider }),
+    }
+  );
+}
+
+export async function updateTenantWhatsAppContactStartPolicy(
+  connection: AdminConnection,
+  tenantId: string,
+  allowInteractiveContactStartViaWebSession: boolean
+): Promise<{
+  ok: true;
+  tenantId: string;
+  source: "db";
+  fieldsChanged: string[];
+  allowInteractiveContactStartViaWebSession: boolean;
+  permissions: { canUpdate: boolean };
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/whatsapp/contact-start-policy`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ allowInteractiveContactStartViaWebSession }),
     }
   );
 }

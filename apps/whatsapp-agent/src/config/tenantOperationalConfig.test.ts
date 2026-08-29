@@ -11,6 +11,8 @@ import {
   resolveWhatsappMediaPolicy,
   normalizeWhatsappMediaPolicy,
   isWhatsappMediaAllowed,
+  resolveInteractiveContactStartPolicy,
+  saveInteractiveContactStartPolicy,
 } from "./tenantOperationalConfig.js";
 
 function prismaWithConfig(config: unknown) {
@@ -129,6 +131,42 @@ test("resolveRuntimeLimitsSettings falls back to tenants.json runtime limits", a
   assert.equal(resolved.source, "json_fallback");
   assert.deepEqual(resolved.settings, {
     maxActiveAppUsers: 7,
+  });
+});
+
+test("resolveInteractiveContactStartPolicy defaults Web Session contact start to disabled", async () => {
+  const resolved = await resolveInteractiveContactStartPolicy({
+    prisma: prismaWithConfig({}),
+    clientId: "client-1",
+  });
+
+  assert.equal(resolved.source, "json_fallback");
+  assert.equal(resolved.allowInteractiveContactStartViaWebSession, false);
+});
+
+test("saveInteractiveContactStartPolicy persists explicit Web Session contact start opt-in", async () => {
+  let storedConfig: unknown = { whatsappPrimaryTransport: "web_session" };
+  const prisma = {
+    tenantOperationalConfig: {
+      findUnique: async () => ({ config: storedConfig }),
+      upsert: async ({ update, create }: { update: { config: unknown }; create: { config: unknown } }) => {
+        storedConfig = update.config ?? create.config;
+        return { config: storedConfig };
+      },
+    },
+  } as never;
+
+  const saved = await saveInteractiveContactStartPolicy({
+    prisma,
+    clientId: "client-1",
+    allowInteractiveContactStartViaWebSession: true,
+  });
+
+  assert.equal(saved.source, "db");
+  assert.equal(saved.allowInteractiveContactStartViaWebSession, true);
+  assert.deepEqual(storedConfig, {
+    whatsappPrimaryTransport: "web_session",
+    allowInteractiveContactStartViaWebSession: true,
   });
 });
 

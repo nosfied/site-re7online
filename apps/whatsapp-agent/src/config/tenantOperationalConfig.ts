@@ -33,6 +33,7 @@ export type TenantOperationalConfigValue = {
   aiIntentQualification?: AiIntentQualificationSettings;
   webSessionAlertEmails?: string[];
   inboxVisibilityPolicy?: InboxVisibilityPolicy;
+  allowInteractiveContactStartViaWebSession?: boolean;
 };
 
 export type TenantOperationalConfigSource = "db" | "json_fallback";
@@ -93,6 +94,11 @@ export type ResolvedWhatsappMediaPolicy = {
 
 export type ResolvedWebSessionAlertEmails = {
   emails: string[];
+  source: TenantOperationalConfigSource;
+};
+
+export type ResolvedInteractiveContactStartPolicy = {
+  allowInteractiveContactStartViaWebSession: boolean;
   source: TenantOperationalConfigSource;
 };
 
@@ -234,6 +240,10 @@ export function normalizeAgentSignatureSettings(input: unknown): AgentSignatureS
 
 export function normalizeInboxVisibilityPolicy(input: unknown): InboxVisibilityPolicy {
   return input === "assignee_only_after_assignment" ? "assignee_only_after_assignment" : "shared";
+}
+
+export function normalizeAllowInteractiveContactStartViaWebSession(input: unknown) {
+  return input === true;
 }
 
 export const WHATSAPP_MEDIA_KINDS: WhatsappMediaKind[] = ["image", "audio", "video", "document"];
@@ -584,6 +594,11 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   if (Object.prototype.hasOwnProperty.call(value, "inboxVisibilityPolicy")) {
     config.inboxVisibilityPolicy = normalizeInboxVisibilityPolicy(value.inboxVisibilityPolicy);
   }
+  if (Object.prototype.hasOwnProperty.call(value, "allowInteractiveContactStartViaWebSession")) {
+    config.allowInteractiveContactStartViaWebSession = normalizeAllowInteractiveContactStartViaWebSession(
+      value.allowInteractiveContactStartViaWebSession
+    );
+  }
   return config;
 }
 
@@ -823,6 +838,60 @@ export async function resolveInboxVisibilityPolicy(params: {
   return {
     policy,
     source: hasPolicy ? "db" : "json_fallback",
+  };
+}
+
+export async function resolveInteractiveContactStartPolicy(params: {
+  prisma: PrismaClient;
+  clientId: string;
+}): Promise<ResolvedInteractiveContactStartPolicy> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const rawConfig = isRecord(record?.config) ? record.config : {};
+  const hasPolicy = Object.prototype.hasOwnProperty.call(rawConfig, "allowInteractiveContactStartViaWebSession");
+  return {
+    allowInteractiveContactStartViaWebSession: parseOperationalConfig(record?.config)
+      .allowInteractiveContactStartViaWebSession ?? false,
+    source: hasPolicy ? "db" : "json_fallback",
+  };
+}
+
+export async function saveInteractiveContactStartPolicy(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  allowInteractiveContactStartViaWebSession: unknown;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const nextValue = normalizeAllowInteractiveContactStartViaWebSession(
+    params.allowInteractiveContactStartViaWebSession
+  );
+  const nextConfig = {
+    ...existingConfig,
+    allowInteractiveContactStartViaWebSession: nextValue,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: { config: true },
+  });
+  return {
+    allowInteractiveContactStartViaWebSession: parseOperationalConfig(saved.config)
+      .allowInteractiveContactStartViaWebSession ?? false,
+    source: "db" as const,
   };
 }
 

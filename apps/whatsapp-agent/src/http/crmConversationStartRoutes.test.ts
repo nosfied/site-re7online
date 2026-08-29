@@ -155,7 +155,10 @@ test.before(async () => {
     data: {
       clientId,
       schemaVersion: 1,
-      config: { whatsappPrimaryTransport: "web_session" },
+      config: {
+        whatsappPrimaryTransport: "web_session",
+        allowInteractiveContactStartViaWebSession: true,
+      },
     },
   });
   await prisma.channelAccount.create({
