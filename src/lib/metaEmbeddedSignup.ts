@@ -4,7 +4,6 @@ const META_SDK_VERSION = "v19.0";
 const CONFIG_ID_STORAGE_KEY = "meta_embedded_signup_config_id_override";
 export const META_EMBEDDED_SIGNUP_COEXISTENCE_FEATURE_TYPE =
   "whatsapp_business_app_onboarding";
-export const META_EMBEDDED_SIGNUP_SESSION_INFO_VERSION = "3";
 
 export const META_EMBEDDED_SIGNUP_APP_ID =
   process.env.NEXT_PUBLIC_META_EMBEDDED_SIGNUP_APP_ID?.trim() ||
@@ -524,7 +523,6 @@ export function buildMetaEmbeddedSignupLoginOptions(options: {
     loginOptions.extras = {
       setup: {},
       featureType: META_EMBEDDED_SIGNUP_COEXISTENCE_FEATURE_TYPE,
-      sessionInfoVersion: META_EMBEDDED_SIGNUP_SESSION_INFO_VERSION,
     };
   }
 

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   META_EMBEDDED_SIGNUP_COEXISTENCE_FEATURE_TYPE,
-  META_EMBEDDED_SIGNUP_SESSION_INFO_VERSION,
   buildMetaEmbeddedSignupCallbackAuditPayload,
   buildMetaEmbeddedSignupPopupClosedAuditPayload,
   buildMetaEmbeddedSignupLoginOptions,
@@ -12,17 +11,25 @@ import {
   parseEmbeddedSignupSessionMessage,
 } from "./metaEmbeddedSignup";
 
-test("coexistence launcher uses WhatsApp Business App onboarding session info", () => {
-  assert.deepEqual(buildMetaEmbeddedSignupLoginOptions({ configId: "config-123", mode: "coexistence" }), {
+test("coexistence launcher uses WhatsApp Business App onboarding without legacy session info", () => {
+  const options = buildMetaEmbeddedSignupLoginOptions({ configId: "config-123", mode: "coexistence" });
+
+  assert.deepEqual(options, {
     config_id: "config-123",
     response_type: "code",
     override_default_response_type: true,
     extras: {
       setup: {},
       featureType: META_EMBEDDED_SIGNUP_COEXISTENCE_FEATURE_TYPE,
-      sessionInfoVersion: META_EMBEDDED_SIGNUP_SESSION_INFO_VERSION,
     },
   });
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(
+      options.extras as Record<string, unknown>,
+      "sessionInfoVersion"
+    ),
+    false
+  );
 });
 
 test("standard launcher preserves the existing Cloud-only options", () => {
