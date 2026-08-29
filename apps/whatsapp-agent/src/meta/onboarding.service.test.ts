@@ -75,6 +75,78 @@ test("Meta onboarding discovery selects a debug-token WABA phone matching the ta
   }
 });
 
+test("Embedded Signup code exchange omits redirect_uri even when a legacy redirect is provided", async () => {
+  const { exchangeEmbeddedSignupCode } = await loadService();
+  const previousFetch = globalThis.fetch;
+  let capturedUrl: URL | null = null;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    capturedUrl = new URL(String(input));
+    return jsonResponse({
+      access_token: "business-token",
+      token_type: "bearer",
+      business_id: "business-123",
+      waba_id: "waba-123",
+      phone_number_id: "phone-123",
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await exchangeEmbeddedSignupCode({
+      code: "oauth-code",
+      redirectUri: "https://converta.re7online.com/admin/tenants/demo-converta/onboarding",
+    });
+
+    assert.equal(result.businessToken, "business-token");
+    assert.ok(capturedUrl);
+    const requestUrl = capturedUrl as URL;
+    assert.equal(requestUrl.pathname.endsWith("/oauth/access_token"), true);
+    assert.equal(requestUrl.searchParams.get("client_id"), "2074361376674006");
+    assert.equal(requestUrl.searchParams.get("client_secret"), "test-app-secret");
+    assert.equal(requestUrl.searchParams.get("code"), "oauth-code");
+    assert.equal(requestUrl.searchParams.has("redirect_uri"), false);
+    assert.equal(requestUrl.searchParams.has("grant_type"), false);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("Embedded Signup code exchange preserves Meta 36008 diagnostics without exposing the raw code", async () => {
+  const { exchangeEmbeddedSignupCode, MetaOnboardingExchangeError } = await loadService();
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    jsonResponse(
+      {
+        error: {
+          message:
+            "Error validating verification code. Please make sure your redirect_uri is identical to the one you used in the OAuth dialog request",
+          type: "OAuthException",
+          code: 100,
+          error_subcode: 36008,
+          fbtrace_id: "trace-123",
+        },
+      },
+      400
+    )) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () => exchangeEmbeddedSignupCode({ code: "sensitive-oauth-code" }),
+      (error: unknown) => {
+        assert.ok(error instanceof MetaOnboardingExchangeError);
+        assert.equal(error.status, 400);
+        assert.equal(error.message, "Meta code exchange failed");
+        assert.equal(error.errorBody?.includes('"code":100'), true);
+        assert.equal(error.errorBody?.includes('"error_subcode":36008'), true);
+        assert.equal(error.errorBody?.includes("trace-123"), true);
+        assert.equal(error.errorBody?.includes("sensitive-oauth-code"), false);
+        return true;
+      }
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("Meta onboarding discovery refuses to bind an old phone during controlled replacement", async () => {
   const { enrichMetaOnboardingResult } = await loadService();
   const previousFetch = globalThis.fetch;

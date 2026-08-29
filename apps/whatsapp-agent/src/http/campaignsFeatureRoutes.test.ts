@@ -4680,7 +4680,7 @@ test("admin onboarding code exchange sends canonical manual oauth redirect uri f
     const metaRequestUrl = capturedOauthUrl as URL;
     assert.equal(metaRequestUrl.pathname.endsWith("/oauth/access_token"), true);
     assert.equal(metaRequestUrl.searchParams.get("code"), "valid-test-code");
-    assert.equal(metaRequestUrl.searchParams.get("redirect_uri"), redirectUri);
+    assert.equal(metaRequestUrl.searchParams.has("redirect_uri"), false);
 
     const metaConfig = await prisma.tenantMetaConfig.findUnique({
       where: { clientId: client.id },
