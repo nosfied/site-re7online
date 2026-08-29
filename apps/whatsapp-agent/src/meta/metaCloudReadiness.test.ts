@@ -74,7 +74,107 @@ test("Meta Cloud readiness accepts fully operational Graph state", () => {
   assert.equal(readiness.objectAccess, true);
   assert.equal(readiness.phoneBelongsToWaba, true);
   assert.equal(readiness.publicIdentity?.maskedNumber, "****5328");
+  assert.equal(readiness.cloudMode, "STANDARD_CLOUD");
   assert.equal(readiness.adminStage, "OPERATIONAL");
+});
+
+test("Meta Cloud readiness treats provider-confirmed coexistence as operational despite NOT_VERIFIED", () => {
+  const readiness = evaluateMetaCloudReadiness(
+    buildOperationalInput({
+      phoneObject: {
+        id: "phone-1",
+        display_phone_number: "+55 84 99999-5328",
+        status: "CONNECTED",
+        code_verification_status: "NOT_VERIFIED",
+        platform_type: "CLOUD_API",
+        account_mode: "LIVE",
+        is_on_biz_app: true,
+        quality_rating: "UNKNOWN",
+      },
+      wabaPhoneNumbers: [
+        {
+          id: "phone-1",
+          display_phone_number: "+55 84 99999-5328",
+          platform_type: "CLOUD_API",
+          is_on_biz_app: true,
+        },
+      ],
+    })
+  );
+
+  assert.equal(readiness.operational, true);
+  assert.equal(readiness.reason, "unknown");
+  assert.equal(readiness.cloudMode, "COEXISTENCE");
+  assert.equal(readiness.isOnBizApp, true);
+  assert.equal(readiness.codeVerificationStatus, "NOT_VERIFIED");
+  assert.equal(readiness.adminStage, "OPERATIONAL");
+});
+
+test("Meta Cloud readiness preserves the verification gate for standard Cloud API numbers", () => {
+  const readiness = evaluateMetaCloudReadiness(
+    buildOperationalInput({
+      phoneObject: {
+        id: "phone-1",
+        display_phone_number: "+55 84 99999-5328",
+        status: "CONNECTED",
+        code_verification_status: "NOT_VERIFIED",
+        platform_type: "CLOUD_API",
+        account_mode: "LIVE",
+        is_on_biz_app: false,
+      },
+    })
+  );
+
+  assert.equal(readiness.operational, false);
+  assert.equal(readiness.reason, "phone_not_verified");
+  assert.equal(readiness.cloudMode, "STANDARD_CLOUD");
+});
+
+test("Meta Cloud readiness fails closed for incomplete coexistence evidence", () => {
+  const disconnected = evaluateMetaCloudReadiness(
+    buildOperationalInput({
+      phoneObject: {
+        id: "phone-1",
+        display_phone_number: "+55 84 99999-5328",
+        status: "DISCONNECTED",
+        code_verification_status: "NOT_VERIFIED",
+        platform_type: "CLOUD_API",
+        account_mode: "LIVE",
+        is_on_biz_app: true,
+      },
+    })
+  );
+  assert.equal(disconnected.operational, false);
+  assert.equal(disconnected.reason, "phone_disconnected");
+
+  const noAccess = evaluateMetaCloudReadiness(
+    buildOperationalInput({
+      phoneObjectAccess: false,
+      wabaObjectAccess: false,
+      phoneObject: null,
+      wabaObject: null,
+      wabaPhoneNumbers: [],
+    })
+  );
+  assert.equal(noAccess.operational, false);
+  assert.equal(noAccess.reason, "object_access_failed");
+
+  const identityMismatch = evaluateMetaCloudReadiness(
+    buildOperationalInput({
+      expectedPublicIdentity: "5584999990000",
+      phoneObject: {
+        id: "phone-1",
+        display_phone_number: "+55 84 99999-5328",
+        status: "CONNECTED",
+        code_verification_status: "NOT_VERIFIED",
+        platform_type: "CLOUD_API",
+        account_mode: "LIVE",
+        is_on_biz_app: true,
+      },
+    })
+  );
+  assert.equal(identityMismatch.operational, false);
+  assert.equal(identityMismatch.reason, "public_identity_mismatch");
 });
 
 test("Meta Cloud readiness allows direct register only for Graph-confirmed Cloud API numbers", () => {

@@ -239,6 +239,9 @@ function getStatusTone(status: ChannelAccountDraft["status"], enabled: boolean) 
 function getMetaReadinessLabel(status: TenantWebSessionStatus | null) {
   const readiness = status?.metaReadiness;
   if (!readiness) return "Meta Cloud nao validado";
+  if (readiness.operational && readiness.cloudMode === "COEXISTENCE") {
+    return "WhatsApp Business App + Cloud API conectados";
+  }
   if (readiness.operational) return "Meta Cloud operacional";
   if (readiness.reason === "phone_disconnected") return "Meta Cloud desconectado";
   if (readiness.reason === "phone_not_verified") return "Numero Meta nao verificado";

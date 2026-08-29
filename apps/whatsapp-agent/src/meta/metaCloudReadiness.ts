@@ -30,6 +30,9 @@ export type MetaCloudReadinessResult = {
   phoneStatus: string | null;
   codeVerificationStatus: string | null;
   platformType: string | null;
+  accountMode: string | null;
+  isOnBizApp: boolean | "unknown";
+  cloudMode: "STANDARD_CLOUD" | "COEXISTENCE" | "UNKNOWN";
   qualityRating: string | null;
   operational: boolean;
   reason: MetaCloudReadinessReason;
@@ -119,6 +122,15 @@ export function readMetaCloudReadinessSnapshot(rawPayload: unknown): MetaCloudRe
     phoneStatus: optionalString(snapshot.phoneStatus),
     codeVerificationStatus: optionalString(snapshot.codeVerificationStatus),
     platformType: optionalString(snapshot.platformType),
+    accountMode: optionalString(snapshot.accountMode),
+    isOnBizApp:
+      typeof snapshot.isOnBizApp === "boolean" ? snapshot.isOnBizApp : "unknown",
+    cloudMode:
+      optionalString(snapshot.cloudMode) === "STANDARD_CLOUD" ||
+      optionalString(snapshot.cloudMode) === "COEXISTENCE" ||
+      optionalString(snapshot.cloudMode) === "UNKNOWN"
+        ? (optionalString(snapshot.cloudMode) as MetaCloudReadinessResult["cloudMode"])
+        : "UNKNOWN",
     qualityRating: optionalString(snapshot.qualityRating),
     operational: snapshot.operational === true,
     reason: reason as MetaCloudReadinessReason,
@@ -154,6 +166,15 @@ export function evaluateMetaCloudReadiness(input: {
   const phoneStatus = normalizeGraphStatus(input.phoneObject?.status);
   const codeVerificationStatus = normalizeGraphStatus(input.phoneObject?.code_verification_status);
   const platformType = normalizeGraphStatus(input.phoneObject?.platform_type);
+  const accountMode = normalizeGraphStatus(input.phoneObject?.account_mode);
+  const isOnBizApp =
+    typeof input.phoneObject?.is_on_biz_app === "boolean" ? input.phoneObject.is_on_biz_app : "unknown";
+  const cloudMode =
+    isOnBizApp === true && platformType === "CLOUD_API"
+      ? "COEXISTENCE"
+      : platformType === "CLOUD_API"
+        ? "STANDARD_CLOUD"
+        : "UNKNOWN";
   const qualityRating = normalizeGraphStatus(input.phoneObject?.quality_rating);
   const publicIdentity = buildPublicIdentity(input.phoneObject?.display_phone_number);
   const expectedPublicIdentity = normalizeHybridWhatsappNumber(input.expectedPublicIdentity ?? "");
@@ -186,8 +207,14 @@ export function evaluateMetaCloudReadiness(input: {
     reason = "public_identity_mismatch";
   } else if (phoneStatus && phoneStatus !== "CONNECTED") {
     reason = "phone_disconnected";
-  } else if (codeVerificationStatus === "NOT_VERIFIED") {
+  } else if (codeVerificationStatus === "NOT_VERIFIED" && cloudMode !== "COEXISTENCE") {
     reason = "phone_not_verified";
+  } else if (
+    cloudMode === "COEXISTENCE" &&
+    accountMode &&
+    accountMode !== "LIVE"
+  ) {
+    reason = "registration_incomplete";
   } else if (!phoneStatus || objectAccess !== true || phoneBelongsToWaba !== true || !publicIdentity) {
     reason = "registration_incomplete";
   } else {
@@ -205,6 +232,9 @@ export function evaluateMetaCloudReadiness(input: {
     phoneStatus,
     codeVerificationStatus,
     platformType,
+    accountMode,
+    isOnBizApp,
+    cloudMode,
     qualityRating,
     operational,
     reason,
@@ -284,7 +314,7 @@ export async function validateMetaCloudReadiness(params: {
   if (businessToken && phoneNumberId) {
     phoneRead = await fetchMetaGraphJson({
       path: `${encodeURIComponent(phoneNumberId)}?fields=${encodeURIComponent(
-        "id,display_phone_number,verified_name,status,code_verification_status,quality_rating,platform_type,name_status,new_name_status,throughput,account_mode"
+        "id,display_phone_number,verified_name,status,code_verification_status,quality_rating,platform_type,name_status,new_name_status,throughput,account_mode,is_on_biz_app"
       )}`,
       accessToken: businessToken,
       fetchImpl: params.fetchImpl,
@@ -300,7 +330,7 @@ export async function validateMetaCloudReadiness(params: {
     });
     wabaPhonesRead = await fetchMetaGraphJson({
       path: `${encodeURIComponent(wabaId)}/phone_numbers?fields=${encodeURIComponent(
-        "id,display_phone_number,verified_name,status,quality_rating,code_verification_status,platform_type"
+        "id,display_phone_number,verified_name,status,quality_rating,code_verification_status,platform_type,account_mode,is_on_biz_app"
       )}`,
       accessToken: businessToken,
       fetchImpl: params.fetchImpl,
@@ -360,6 +390,9 @@ export function writeMetaCloudReadinessSnapshot(
       phoneStatus: readiness.phoneStatus,
       codeVerificationStatus: readiness.codeVerificationStatus,
       platformType: readiness.platformType,
+      accountMode: readiness.accountMode,
+      isOnBizApp: readiness.isOnBizApp,
+      cloudMode: readiness.cloudMode,
       qualityRating: readiness.qualityRating,
       operational: readiness.operational,
       reason: readiness.reason,

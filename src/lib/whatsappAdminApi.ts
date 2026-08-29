@@ -771,6 +771,9 @@ export type TenantWebSessionStatus = {
     phoneStatus: string | null;
     codeVerificationStatus: string | null;
     platformType: string | null;
+    accountMode: string | null;
+    isOnBizApp: boolean | "unknown";
+    cloudMode: "STANDARD_CLOUD" | "COEXISTENCE" | "UNKNOWN";
     qualityRating: string | null;
     operational: boolean;
     reason: string;
