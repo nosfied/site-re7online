@@ -273,6 +273,7 @@ import {
   resolveOperationalMetaWhatsappIdentity,
   resolveOperationalWhatsappDisplayIdentity,
   resolveWhatsappPrimaryTransport,
+  resolveWhatsappNumberReplacement,
   saveWhatsappPrimaryTransport,
   startWhatsappNumberReplacement,
 } from "../web-session/hybridIdentity.js";
@@ -21339,12 +21340,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const embeddedDisplayPhoneNumber =
           normalizeOptionalString(embeddedSignupInput?.displayPhoneNumber) ??
           normalizeOptionalString(body.displayPhoneNumber);
+        const activeReplacement = await resolveWhatsappNumberReplacement({
+          prisma,
+          clientId: client.id,
+        });
+        const expectedPublicIdentity =
+          activeReplacement?.targetNumberCanonical ?? embeddedDisplayPhoneNumber;
         const candidatePhoneNumberId =
           normalizeOptionalString(embeddedSignupInput?.phoneNumberId) ??
           exchange.phoneNumberId;
         const enriched =
-          exchange.businessToken &&
-          (candidatePhoneNumberId || embeddedDisplayPhoneNumber)
+          exchange.businessToken
             ? await enrichMetaOnboardingResult({
                 businessToken: exchange.businessToken,
                 businessId: exchange.businessId,
@@ -21352,6 +21358,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 wabaId: exchange.wabaId,
                 phoneNumberId: candidatePhoneNumberId,
                 displayPhoneNumber: embeddedDisplayPhoneNumber,
+                expectedPublicIdentity,
               })
             : null;
         const finalBusinessId =
@@ -21360,12 +21367,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           manualBusinessPortfolioId ??
           enriched?.businessPortfolioId ??
           exchange.businessPortfolioId;
-        const finalWabaId =
-          manualWabaId ?? enriched?.wabaId ?? exchange.wabaId;
+        const finalWabaId = enriched?.wabaId ?? (!exchange.businessToken ? manualWabaId : null);
         const finalPhoneNumberId =
-          normalizeOptionalString(embeddedSignupInput?.phoneNumberId) ??
           enriched?.phoneNumberId ??
-          exchange.phoneNumberId;
+          (!exchange.businessToken ? normalizeOptionalString(embeddedSignupInput?.phoneNumberId) : null);
         const rawPayload = {
           source: "embedded_signup",
           exchange: exchange.rawPayload,

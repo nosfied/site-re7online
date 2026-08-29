@@ -4623,19 +4623,37 @@ test("admin onboarding code exchange sends canonical manual oauth redirect uri f
     select: { id: true },
   });
   const originalFetch = globalThis.fetch;
-  let capturedUrl: URL | null = null;
+  let capturedOauthUrl: URL | null = null;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     if (url.hostname !== "graph.facebook.com") {
       return originalFetch(input, init);
     }
-    capturedUrl = url;
+    if (url.pathname.endsWith("/oauth/access_token")) {
+      capturedOauthUrl = url;
+      return new Response(
+        JSON.stringify({
+          access_token: `${prefix}-business-token`,
+          token_type: "bearer",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (url.pathname.endsWith("/debug_token")) {
+      return new Response(JSON.stringify({ data: { is_valid: true } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.pathname.endsWith("/me/businesses")) {
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
     return new Response(
-      JSON.stringify({
-        access_token: `${prefix}-business-token`,
-        token_type: "bearer",
-      }),
-      { status: 200, headers: { "content-type": "application/json" } }
+      JSON.stringify({ error: { message: "unexpected graph request" } }),
+      { status: 500, headers: { "content-type": "application/json" } }
     );
   }) as typeof fetch;
 
@@ -4658,8 +4676,8 @@ test("admin onboarding code exchange sends canonical manual oauth redirect uri f
     assert.equal(response.status, 200);
     assert.equal(response.body.success, true);
     assert.equal(response.body.businessTokenStored, true);
-    assert.ok(capturedUrl);
-    const metaRequestUrl = capturedUrl as URL;
+    assert.ok(capturedOauthUrl);
+    const metaRequestUrl = capturedOauthUrl as URL;
     assert.equal(metaRequestUrl.pathname.endsWith("/oauth/access_token"), true);
     assert.equal(metaRequestUrl.searchParams.get("code"), "valid-test-code");
     assert.equal(metaRequestUrl.searchParams.get("redirect_uri"), redirectUri);
@@ -4700,6 +4718,23 @@ test("admin onboarding code exchange resolves WABA by displayed phone when OAuth
         { status: 200, headers: { "content-type": "application/json" } }
       );
     }
+    if (url.pathname.endsWith("/debug_token")) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            is_valid: true,
+            scopes: ["whatsapp_business_management"],
+            granular_scopes: [
+              {
+                scope: "whatsapp_business_management",
+                target_ids: [`${prefix}-waba-display`],
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
     if (url.pathname.endsWith("/me/businesses")) {
       return new Response(
         JSON.stringify({
@@ -4721,6 +4756,16 @@ test("admin onboarding code exchange resolves WABA by displayed phone when OAuth
         status: 200,
         headers: { "content-type": "application/json" },
       });
+    }
+    if (url.pathname.endsWith(`/${prefix}-waba-display`)) {
+      return new Response(
+        JSON.stringify({
+          id: `${prefix}-waba-display`,
+          name: "WABA",
+          account_review_status: "APPROVED",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
     }
     if (url.pathname.endsWith(`/${prefix}-waba-display/phone_numbers`)) {
       return new Response(

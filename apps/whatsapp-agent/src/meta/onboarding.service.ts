@@ -1,4 +1,5 @@
 import { env } from "../config/env.js";
+import { normalizeHybridWhatsappNumber } from "../web-session/hybridIdentity.js";
 
 const META_EMBEDDED_SIGNUP_APP_ID =
   process.env.META_EMBEDDED_SIGNUP_APP_ID?.trim() || "2074361376674006";
@@ -33,6 +34,25 @@ type EnrichOnboardingParams = {
   wabaId?: string | null;
   phoneNumberId?: string | null;
   displayPhoneNumber?: string | null;
+  expectedPublicIdentity?: string | null;
+};
+
+type DiscoveryStage = "DISCOVERED" | "CONFIGURED" | "OPERATIONAL";
+
+type WabaCandidate = {
+  id: string;
+  businessId: string | null;
+  source: string;
+};
+
+type PhoneCandidate = {
+  businessId: string | null;
+  wabaId: string;
+  phoneNumberId: string;
+  displayPhoneNumber: string | null;
+  canonicalNumber: string | null;
+  phonePayload: Record<string, unknown>;
+  source: string;
 };
 
 export class MetaOnboardingExchangeError extends Error {
@@ -105,10 +125,81 @@ function normalizeComparablePhone(value: string | null | undefined) {
 }
 
 function isSameDisplayedPhone(left: string | null | undefined, right: string | null | undefined) {
-  const leftDigits = normalizeComparablePhone(left);
-  const rightDigits = normalizeComparablePhone(right);
+  const leftDigits = normalizeHybridWhatsappNumber(left ?? "") || normalizeComparablePhone(left);
+  const rightDigits = normalizeHybridWhatsappNumber(right ?? "") || normalizeComparablePhone(right);
   if (!leftDigits || !rightDigits) return false;
   return leftDigits === rightDigits;
+}
+
+function normalizeGraphId(value: unknown) {
+  return typeof value === "string" ? value.trim() || null : null;
+}
+
+function buildSafeTokenDebugPayload(payload: MetaGraphPayload) {
+  const data =
+    payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)
+      ? (payload.data as Record<string, unknown>)
+      : {};
+  const granularScopes = Array.isArray(data.granular_scopes)
+    ? data.granular_scopes
+        .filter((scope): scope is Record<string, unknown> => Boolean(scope) && typeof scope === "object")
+        .map((scope) => ({
+          scope: normalizeGraphId(scope.scope),
+          target_ids: Array.isArray(scope.target_ids)
+            ? scope.target_ids.map(normalizeGraphId).filter((id): id is string => Boolean(id))
+            : [],
+        }))
+    : [];
+  return {
+    is_valid: data.is_valid === true,
+    app_id: normalizeGraphId(data.app_id),
+    type: normalizeGraphId(data.type),
+    user_id: normalizeGraphId(data.user_id),
+    scopes: Array.isArray(data.scopes)
+      ? data.scopes.map(normalizeGraphId).filter((scope): scope is string => Boolean(scope))
+      : [],
+    granular_scopes: granularScopes,
+  };
+}
+
+function sanitizeExchangePayload(payload: ExchangeResponse) {
+  const sanitized: Record<string, unknown> = { ...payload };
+  if (typeof sanitized.access_token === "string") {
+    sanitized.access_token = "[stored_in_businessToken]";
+  }
+  return sanitized;
+}
+
+function addWabaCandidate(
+  candidates: Map<string, WabaCandidate>,
+  id: unknown,
+  source: string,
+  businessId: string | null = null
+) {
+  const normalizedId = normalizeGraphId(id);
+  if (!normalizedId) return;
+  const existing = candidates.get(normalizedId);
+  if (existing) {
+    if (!existing.businessId && businessId) {
+      candidates.set(normalizedId, { ...existing, businessId });
+    }
+    return;
+  }
+  candidates.set(normalizedId, { id: normalizedId, businessId, source });
+}
+
+function readGraphDataArray(payload: MetaGraphPayload) {
+  return Array.isArray(payload.data) ? (payload.data as Array<Record<string, unknown>>) : [];
+}
+
+async function debugMetaBusinessToken(accessToken: string): Promise<MetaGraphPayload | null> {
+  const appSecret = env.META_APP_SECRET || process.env.META_APP_SECRET || "";
+  if (!META_EMBEDDED_SIGNUP_APP_ID || !appSecret) return null;
+  return fetchMetaGraphJson({
+    path: "debug_token",
+    accessToken: `${META_EMBEDDED_SIGNUP_APP_ID}|${appSecret}`,
+    query: { input_token: accessToken },
+  });
 }
 
 async function fetchMetaGraphJson(params: {
@@ -256,26 +347,48 @@ export async function enrichMetaOnboardingResult(
   rawPayload: Record<string, unknown>;
 }> {
   const accessToken = params.businessToken?.trim() || "";
+  const requestedPhoneNumberId = normalizeGraphId(params.phoneNumberId);
+  const requestedWabaId = normalizeGraphId(params.wabaId);
+  const expectedPublicIdentity =
+    normalizeHybridWhatsappNumber(params.expectedPublicIdentity ?? "") ||
+    normalizeHybridWhatsappNumber(params.displayPhoneNumber ?? "");
   if (!accessToken) {
     return {
       businessId: params.businessId ?? null,
       businessPortfolioId: params.businessPortfolioId ?? null,
-      wabaId: params.wabaId ?? null,
-      phoneNumberId: params.phoneNumberId ?? null,
+      wabaId: requestedWabaId,
+      phoneNumberId: requestedPhoneNumberId,
       rawPayload: {},
     };
   }
 
   let businessId = params.businessId ?? null;
   let businessPortfolioId = params.businessPortfolioId ?? null;
-  let wabaId = params.wabaId ?? null;
-  let phoneNumberId = params.phoneNumberId ?? null;
+  let wabaId: string | null = null;
+  let phoneNumberId: string | null = null;
   const rawPayload: Record<string, unknown> = {};
+  const wabaCandidates = new Map<string, WabaCandidate>();
+  const phoneCandidates: PhoneCandidate[] = [];
 
-  if (phoneNumberId && (!wabaId || !businessId || !businessPortfolioId)) {
+  const addPhoneCandidate = (candidate: PhoneCandidate) => {
+    if (
+      phoneCandidates.some(
+        (existing) =>
+          existing.wabaId === candidate.wabaId &&
+          existing.phoneNumberId === candidate.phoneNumberId
+      )
+    ) {
+      return;
+    }
+    phoneCandidates.push(candidate);
+  };
+
+  addWabaCandidate(wabaCandidates, requestedWabaId, "frontend_hint", businessId);
+
+  if (requestedPhoneNumberId) {
     try {
       const phonePayload = await fetchMetaGraphJson({
-        path: phoneNumberId,
+        path: requestedPhoneNumberId,
         accessToken,
         query: {
           fields: [
@@ -294,9 +407,7 @@ export async function enrichMetaOnboardingResult(
       });
       rawPayload.phoneNumber = phonePayload;
       const summary = summarizeExchangePayload(phonePayload);
-      wabaId = wabaId ?? summary.wabaId;
-      businessId = businessId ?? summary.businessId;
-      businessPortfolioId = businessPortfolioId ?? summary.businessPortfolioId;
+      addWabaCandidate(wabaCandidates, summary.wabaId, "phone_object", businessId);
     } catch (error) {
       rawPayload.phoneNumberError =
         error instanceof MetaOnboardingExchangeError
@@ -309,119 +420,98 @@ export async function enrichMetaOnboardingResult(
     }
   }
 
-  if (!phoneNumberId && !wabaId && params.displayPhoneNumber) {
-    try {
-      const businessesPayload = await fetchMetaGraphJson({
-        path: "me/businesses",
-        accessToken,
-        query: {
-          fields: "id,name,verification_status",
-        },
-      });
-      rawPayload.businesses = businessesPayload;
-      const businesses = Array.isArray(businessesPayload.data)
-        ? (businessesPayload.data as Array<Record<string, unknown>>)
-        : [];
-      const matches: Array<{
-        businessId: string;
-        wabaId: string;
-        phoneNumberId: string;
-        phonePayload: Record<string, unknown>;
-      }> = [];
-
-      for (const business of businesses) {
-        const graphBusinessId = typeof business.id === "string" ? business.id.trim() : "";
-        if (!graphBusinessId) continue;
-        for (const edge of [
-          "owned_whatsapp_business_accounts",
-          "client_whatsapp_business_accounts",
-        ]) {
-          const wabasPayload = await fetchMetaGraphJson({
-            path: `${encodeURIComponent(graphBusinessId)}/${edge}`,
-            accessToken,
-            query: {
-              fields: "id,name,account_review_status,business_verification_status",
-            },
-          });
-          rawPayload[edge] = wabasPayload;
-          const wabas = Array.isArray(wabasPayload.data)
-            ? (wabasPayload.data as Array<Record<string, unknown>>)
-            : [];
-          for (const waba of wabas) {
-            const graphWabaId = typeof waba.id === "string" ? waba.id.trim() : "";
-            if (!graphWabaId) continue;
-            const phonesPayload = await fetchMetaGraphJson({
-              path: `${encodeURIComponent(graphWabaId)}/phone_numbers`,
-              accessToken,
-              query: {
-                fields: [
-                  "id",
-                  "display_phone_number",
-                  "verified_name",
-                  "code_verification_status",
-                  "name_status",
-                  "new_name_status",
-                  "account_mode",
-                ].join(","),
-              },
-            });
-            rawPayload[`${edge}_${graphWabaId}_phone_numbers`] = phonesPayload;
-            const phones = Array.isArray(phonesPayload.data)
-              ? (phonesPayload.data as Array<Record<string, unknown>>)
-              : [];
-            for (const phone of phones) {
-              const graphPhoneNumberId = typeof phone.id === "string" ? phone.id.trim() : "";
-              const graphDisplayPhone =
-                typeof phone.display_phone_number === "string"
-                  ? phone.display_phone_number
-                  : "";
-              if (
-                graphPhoneNumberId &&
-                isSameDisplayedPhone(params.displayPhoneNumber, graphDisplayPhone)
-              ) {
-                matches.push({
-                  businessId: graphBusinessId,
-                  wabaId: graphWabaId,
-                  phoneNumberId: graphPhoneNumberId,
-                  phonePayload: phone,
-                });
-              }
-            }
-          }
+  try {
+    const debugTokenPayload = await debugMetaBusinessToken(accessToken);
+    if (debugTokenPayload) {
+      const safeDebugToken = buildSafeTokenDebugPayload(debugTokenPayload);
+      rawPayload.debugToken = safeDebugToken;
+      if (safeDebugToken.is_valid === false) {
+        rawPayload.discovery = {
+          stage: "DISCOVERED" satisfies DiscoveryStage,
+          selected: false,
+          reason: "invalid_debug_token",
+          wabaCandidateCount: 0,
+          phoneCandidateCount: 0,
+        };
+        return {
+          businessId,
+          businessPortfolioId,
+          wabaId: null,
+          phoneNumberId: null,
+          rawPayload,
+        };
+      }
+      for (const scope of safeDebugToken.granular_scopes) {
+        const scopeName = scope.scope ?? "";
+        if (
+          scopeName !== "whatsapp_business_management" &&
+          scopeName !== "whatsapp_business_messaging" &&
+          scopeName !== "business_management"
+        ) {
+          continue;
+        }
+        for (const targetId of scope.target_ids) {
+          addWabaCandidate(wabaCandidates, targetId, `debug_token:${scopeName}`);
         }
       }
-
-      const uniqueMatches = Array.from(
-        new Map(matches.map((match) => [`${match.wabaId}:${match.phoneNumberId}`, match])).values()
-      );
-      rawPayload.displayPhoneResolution = {
-        attempted: true,
-        matchCount: uniqueMatches.length,
-      };
-      if (uniqueMatches.length === 1) {
-        const match = uniqueMatches[0];
-        businessId = businessId ?? match.businessId;
-        businessPortfolioId = businessPortfolioId ?? match.businessId;
-        wabaId = match.wabaId;
-        phoneNumberId = match.phoneNumberId;
-        rawPayload.phoneNumber = match.phonePayload;
-      }
-    } catch (error) {
-      rawPayload.displayPhoneResolutionError =
-        error instanceof MetaOnboardingExchangeError
-          ? {
-              message: error.message,
-              status: error.status ?? null,
-              errorBody: error.errorBody ?? null,
-            }
-          : { message: (error as Error).message };
     }
+  } catch (error) {
+    rawPayload.debugTokenError =
+      error instanceof MetaOnboardingExchangeError
+        ? {
+            message: error.message,
+            status: error.status ?? null,
+            errorBody: error.errorBody ?? null,
+          }
+        : { message: (error as Error).message };
   }
 
-  if (wabaId && (!businessId || !businessPortfolioId)) {
+  try {
+    const businessesPayload = await fetchMetaGraphJson({
+      path: "me/businesses",
+      accessToken,
+      query: {
+        fields: "id,name,verification_status",
+      },
+    });
+    rawPayload.businesses = businessesPayload;
+    const businesses = readGraphDataArray(businessesPayload);
+
+    for (const business of businesses) {
+      const graphBusinessId = normalizeGraphId(business.id);
+      if (!graphBusinessId) continue;
+      for (const edge of [
+        "owned_whatsapp_business_accounts",
+        "client_whatsapp_business_accounts",
+      ]) {
+        const wabasPayload = await fetchMetaGraphJson({
+          path: `${encodeURIComponent(graphBusinessId)}/${edge}`,
+          accessToken,
+          query: {
+            fields: "id,name,account_review_status,business_verification_status",
+          },
+        });
+        rawPayload[`${edge}_${graphBusinessId}`] = wabasPayload;
+        for (const waba of readGraphDataArray(wabasPayload)) {
+          addWabaCandidate(wabaCandidates, waba.id, edge, graphBusinessId);
+        }
+      }
+    }
+  } catch (error) {
+    rawPayload.businessResolutionError =
+      error instanceof MetaOnboardingExchangeError
+        ? {
+            message: error.message,
+            status: error.status ?? null,
+            errorBody: error.errorBody ?? null,
+          }
+        : { message: (error as Error).message };
+  }
+
+  for (const candidate of wabaCandidates.values()) {
     try {
       const wabaPayload = await fetchMetaGraphJson({
-        path: wabaId,
+        path: candidate.id,
         accessToken,
         query: {
           fields: [
@@ -433,12 +523,44 @@ export async function enrichMetaOnboardingResult(
           ].join(","),
         },
       });
-      rawPayload.waba = wabaPayload;
+      rawPayload[`waba_${candidate.id}`] = wabaPayload;
       const summary = summarizeExchangePayload(wabaPayload);
-      businessId = businessId ?? summary.businessId;
-      businessPortfolioId = businessPortfolioId ?? summary.businessPortfolioId;
+      const candidateBusinessId = candidate.businessId ?? summary.businessId ?? null;
+      const phonesPayload = await fetchMetaGraphJson({
+        path: `${encodeURIComponent(candidate.id)}/phone_numbers`,
+        accessToken,
+        query: {
+          fields: [
+            "id",
+            "display_phone_number",
+            "verified_name",
+            "code_verification_status",
+            "name_status",
+            "new_name_status",
+            "account_mode",
+            "quality_rating",
+            "platform_type",
+            "throughput",
+          ].join(","),
+        },
+      });
+      rawPayload[`waba_${candidate.id}_phone_numbers`] = phonesPayload;
+      for (const phone of readGraphDataArray(phonesPayload)) {
+        const graphPhoneNumberId = normalizeGraphId(phone.id);
+        if (!graphPhoneNumberId) continue;
+        const graphDisplayPhone = normalizeGraphId(phone.display_phone_number);
+        addPhoneCandidate({
+          businessId: candidateBusinessId,
+          wabaId: candidate.id,
+          phoneNumberId: graphPhoneNumberId,
+          displayPhoneNumber: graphDisplayPhone,
+          canonicalNumber: normalizeHybridWhatsappNumber(graphDisplayPhone ?? "") || null,
+          phonePayload: phone,
+          source: candidate.source,
+        });
+      }
     } catch (error) {
-      rawPayload.wabaError =
+      rawPayload[`waba_${candidate.id}_error`] =
         error instanceof MetaOnboardingExchangeError
           ? {
               message: error.message,
@@ -447,6 +569,63 @@ export async function enrichMetaOnboardingResult(
             }
           : { message: (error as Error).message };
     }
+  }
+
+  const idFiltered = requestedPhoneNumberId
+    ? phoneCandidates.filter((candidate) => candidate.phoneNumberId === requestedPhoneNumberId)
+    : phoneCandidates;
+  const identityFiltered = expectedPublicIdentity
+    ? idFiltered.filter((candidate) => candidate.canonicalNumber === expectedPublicIdentity)
+    : idFiltered;
+  const displayFiltered =
+    !expectedPublicIdentity && params.displayPhoneNumber
+      ? identityFiltered.filter((candidate) =>
+          isSameDisplayedPhone(params.displayPhoneNumber, candidate.displayPhoneNumber)
+        )
+      : identityFiltered;
+  const uniqueMatches = Array.from(
+    new Map(
+      displayFiltered.map((match) => [`${match.wabaId}:${match.phoneNumberId}`, match])
+    ).values()
+  );
+
+  rawPayload.discovery = {
+    stage: (uniqueMatches.length === 1 ? "CONFIGURED" : "DISCOVERED") satisfies DiscoveryStage,
+    selected: uniqueMatches.length === 1,
+    reason:
+      uniqueMatches.length === 1
+        ? "single_graph_confirmed_candidate"
+        : phoneCandidates.length === 0
+          ? "no_authorized_phone_candidate"
+          : "ambiguous_or_mismatched_candidate",
+    expectedPublicIdentity: expectedPublicIdentity || null,
+    requestedPhoneNumberId,
+    requestedWabaId,
+    wabaCandidateCount: wabaCandidates.size,
+    phoneCandidateCount: phoneCandidates.length,
+    matchCount: uniqueMatches.length,
+    candidates: phoneCandidates.map((candidate) => ({
+      wabaId: candidate.wabaId,
+      phoneNumberId: candidate.phoneNumberId,
+      maskedNumber: candidate.canonicalNumber
+        ? `****${candidate.canonicalNumber.slice(-4)}`
+        : null,
+      source: candidate.source,
+    })),
+  };
+
+  if (uniqueMatches.length === 1) {
+    const match = uniqueMatches[0];
+    businessId = businessId ?? match.businessId;
+    businessPortfolioId = businessPortfolioId ?? match.businessId;
+    wabaId = match.wabaId;
+    phoneNumberId = match.phoneNumberId;
+    rawPayload.phoneNumber = match.phonePayload;
+    rawPayload.waba = rawPayload[`waba_${match.wabaId}`] ?? null;
+    rawPayload.discovery = {
+      ...(rawPayload.discovery as Record<string, unknown>),
+      stage: "CONFIGURED" satisfies DiscoveryStage,
+    };
   }
 
   return {
@@ -509,7 +688,7 @@ export async function exchangeEmbeddedSignupCode(
   const summary = summarizeExchangePayload(payload);
 
   return {
-    rawPayload: payload,
+    rawPayload: sanitizeExchangePayload(payload),
     businessToken: typeof payload.access_token === "string" ? payload.access_token : null,
     tokenType: typeof payload.token_type === "string" ? payload.token_type : null,
     businessId: summary.businessId,
