@@ -193,6 +193,7 @@ export async function serializeWebSessionStatus(params: {
     },
     authorization,
     hybridIdentity,
+    numberReplacement: hybridIdentity.numberReplacement,
     metaReadiness: readMetaCloudReadinessSnapshot(metaConfig?.rawPayload ?? null),
     primaryTransport,
     detectedNumber: account

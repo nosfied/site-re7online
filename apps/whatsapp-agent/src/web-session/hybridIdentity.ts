@@ -15,6 +15,16 @@ import {
 
 export type WhatsappPrimaryTransport = "meta" | "web_session";
 
+export type WhatsappNumberReplacement = {
+  status: "ACTIVE";
+  targetNumberCanonical: string;
+  targetNumberMasked: string | null;
+  previousMetaNumberMasked: string | null;
+  previousWebNumberMasked: string | null;
+  startedAt: string | null;
+  startedBy: string | null;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -200,6 +210,232 @@ function buildMetaRemovalRawPayload(rawPayload: unknown, actorUserId: string | n
   } as Prisma.InputJsonValue;
 }
 
+export function readWhatsappNumberReplacementFromConfig(config: unknown): WhatsappNumberReplacement | null {
+  const record = isRecord(config) ? config : {};
+  const replacement = isRecord(record.whatsappNumberReplacement)
+    ? record.whatsappNumberReplacement
+    : null;
+  if (!replacement || replacement.status !== "ACTIVE") return null;
+  const targetNumberCanonical = normalizeHybridWhatsappNumber(replacement.targetNumberCanonical);
+  if (!targetNumberCanonical) return null;
+  return {
+    status: "ACTIVE",
+    targetNumberCanonical,
+    targetNumberMasked: maskWebSessionNumber(targetNumberCanonical),
+    previousMetaNumberMasked:
+      typeof replacement.previousMetaNumberMasked === "string"
+        ? replacement.previousMetaNumberMasked
+        : null,
+    previousWebNumberMasked:
+      typeof replacement.previousWebNumberMasked === "string"
+        ? replacement.previousWebNumberMasked
+        : null,
+    startedAt: typeof replacement.startedAt === "string" ? replacement.startedAt : null,
+    startedBy: typeof replacement.startedBy === "string" ? replacement.startedBy : null,
+  };
+}
+
+export async function resolveWhatsappNumberReplacement(params: {
+  prisma: PrismaClient;
+  clientId: string;
+}) {
+  const config = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  return readWhatsappNumberReplacementFromConfig(config?.config);
+}
+
+export async function startWhatsappNumberReplacement(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  actorUserId: string | null;
+  requestId: string;
+  targetNumber: string;
+}) {
+  const targetNumberCanonical = normalizeHybridWhatsappNumber(params.targetNumber);
+  if (!targetNumberCanonical) {
+    return { ok: false as const, status: 400, code: "invalid_replacement_number" };
+  }
+  const now = new Date().toISOString();
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const [meta, webAuthorization] = await Promise.all([
+    resolveOperationalMetaWhatsappIdentity(params),
+    resolveWebSessionAuthorization(params),
+  ]);
+  const whatsappNumberReplacement = {
+    status: "ACTIVE",
+    targetNumberCanonical,
+    targetNumberMasked: maskWebSessionNumber(targetNumberCanonical),
+    targetNumberHash: fingerprintWebSessionNumber(targetNumberCanonical),
+    previousMetaNumberMasked: meta.maskedNumber,
+    previousMetaNumberHash: fingerprintWebSessionNumber(meta.canonicalNumber),
+    previousWebNumberMasked: webAuthorization.authorizedNumberMasked,
+    previousWebNumberHash: fingerprintWebSessionNumber(webAuthorization.authorizedNumberCanonical),
+    startedAt: now,
+    startedBy: params.actorUserId,
+  };
+  const nextConfig: Record<string, unknown> = {
+    ...existingConfig,
+    whatsappNumberReplacement,
+  };
+  delete nextConfig.whatsappPrimaryTransport;
+  await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: { schemaVersion: 1, config: nextConfig as Prisma.InputJsonValue },
+    create: {
+      clientId: params.clientId,
+      schemaVersion: 1,
+      config: nextConfig as Prisma.InputJsonValue,
+    },
+  });
+  await clearOperationalMetaWhatsappIdentity({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    actorUserId: params.actorUserId,
+    requestId: params.requestId,
+    reason: "admin_whatsapp_number_replacement_started",
+  });
+  const event = (params.prisma as unknown as { event?: PrismaClient["event"] }).event;
+  if (event) {
+    await event.create({
+      data: {
+        clientId: params.clientId,
+        requestId: `${params.requestId}:whatsapp-number-replacement-started`,
+        eventName: "whatsapp.number_replacement.started",
+        payloadJson: {
+          channel: "whatsapp",
+          actorUserId: params.actorUserId,
+          targetNumber: {
+            masked: maskWebSessionNumber(targetNumberCanonical),
+            hash: fingerprintWebSessionNumber(targetNumberCanonical),
+          },
+          previousMetaNumber: {
+            masked: meta.maskedNumber,
+            hash: fingerprintWebSessionNumber(meta.canonicalNumber),
+          },
+          previousWebNumber: {
+            masked: webAuthorization.authorizedNumberMasked,
+            hash: fingerprintWebSessionNumber(webAuthorization.authorizedNumberCanonical),
+          },
+          primaryTransportCleared: "whatsappPrimaryTransport" in existingConfig,
+          metaIdentityCleared: Boolean(meta.canonicalNumber || meta.phoneNumberIdPresent),
+        } as Prisma.InputJsonValue,
+      },
+    });
+  }
+  return {
+    ok: true as const,
+    replacement: readWhatsappNumberReplacementFromConfig({ whatsappNumberReplacement }),
+  };
+}
+
+export async function cancelWhatsappNumberReplacement(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  actorUserId: string | null;
+  requestId: string;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const current = readWhatsappNumberReplacementFromConfig(existingConfig);
+  if (!current) return { cancelled: false, replacement: null };
+  const nextConfig = { ...existingConfig };
+  delete nextConfig.whatsappNumberReplacement;
+  await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: { schemaVersion: 1, config: nextConfig as Prisma.InputJsonValue },
+    create: {
+      clientId: params.clientId,
+      schemaVersion: 1,
+      config: nextConfig as Prisma.InputJsonValue,
+    },
+  });
+  const event = (params.prisma as unknown as { event?: PrismaClient["event"] }).event;
+  if (event) {
+    await event.create({
+      data: {
+        clientId: params.clientId,
+        requestId: `${params.requestId}:whatsapp-number-replacement-cancelled`,
+        eventName: "whatsapp.number_replacement.cancelled",
+        payloadJson: {
+          channel: "whatsapp",
+          actorUserId: params.actorUserId,
+          targetNumber: {
+            masked: current.targetNumberMasked,
+            hash: fingerprintWebSessionNumber(current.targetNumberCanonical),
+          },
+        } as Prisma.InputJsonValue,
+      },
+    });
+  }
+  return { cancelled: true, replacement: null };
+}
+
+export async function completeWhatsappNumberReplacementIfMatched(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  actorUserId: string | null;
+  requestId: string;
+  confirmedNumber: string | null | undefined;
+  source: string;
+}) {
+  const confirmedNumberCanonical = normalizeHybridWhatsappNumber(params.confirmedNumber ?? "");
+  if (!confirmedNumberCanonical) {
+    return { completed: false as const, reason: "missing_confirmed_number" as const };
+  }
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const current = readWhatsappNumberReplacementFromConfig(existingConfig);
+  if (!current) {
+    return { completed: false as const, reason: "no_active_replacement" as const };
+  }
+  if (current.targetNumberCanonical !== confirmedNumberCanonical) {
+    return { completed: false as const, reason: "target_mismatch" as const };
+  }
+  const nextConfig = { ...existingConfig };
+  delete nextConfig.whatsappNumberReplacement;
+  await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: { schemaVersion: 1, config: nextConfig as Prisma.InputJsonValue },
+    create: {
+      clientId: params.clientId,
+      schemaVersion: 1,
+      config: nextConfig as Prisma.InputJsonValue,
+    },
+  });
+  const event = (params.prisma as unknown as { event?: PrismaClient["event"] }).event;
+  if (event) {
+    await event.create({
+      data: {
+        clientId: params.clientId,
+        requestId: `${params.requestId}:whatsapp-number-replacement-completed`,
+        eventName: "whatsapp.number_replacement.completed",
+        payloadJson: {
+          channel: "whatsapp",
+          actorUserId: params.actorUserId,
+          source: params.source,
+          targetNumber: {
+            masked: current.targetNumberMasked,
+            hash: fingerprintWebSessionNumber(current.targetNumberCanonical),
+          },
+        } as Prisma.InputJsonValue,
+      },
+    });
+  }
+  return { completed: true as const, replacement: null };
+}
+
 export async function clearOperationalMetaWhatsappIdentity(params: {
   prisma: PrismaClient | Prisma.TransactionClient;
   clientId: string;
@@ -262,9 +498,10 @@ export async function resolveHybridWhatsappIdentityStatus(params: {
   prisma: PrismaClient;
   clientId: string;
 }) {
-  const [meta, webAuthorization] = await Promise.all([
+  const [meta, webAuthorization, numberReplacement] = await Promise.all([
     resolveOperationalMetaWhatsappIdentity(params),
     resolveWebSessionAuthorization(params),
+    resolveWhatsappNumberReplacement(params),
   ]);
   const webNumber = webAuthorization.authorizedNumberCanonical;
   const conflict = Boolean(meta.canonicalNumber && webNumber && meta.canonicalNumber !== webNumber);
@@ -289,6 +526,7 @@ export async function resolveHybridWhatsappIdentityStatus(params: {
             maskedNumber: webAuthorization.authorizedNumberMasked,
           }
         : null,
+    numberReplacement,
   };
 }
 
@@ -369,10 +607,28 @@ export async function validateWebSessionNumberAgainstMeta(params: {
   if (!canonicalNumber) {
     return { ok: false as const, code: "invalid_authorized_number", status: 400 };
   }
-  const meta = await resolveOperationalMetaWhatsappIdentity({
-    prisma: params.prisma,
-    clientId: params.clientId,
-  });
+  const [meta, replacement] = await Promise.all([
+    resolveOperationalMetaWhatsappIdentity({
+      prisma: params.prisma,
+      clientId: params.clientId,
+    }),
+    resolveWhatsappNumberReplacement({
+      prisma: params.prisma,
+      clientId: params.clientId,
+    }),
+  ]);
+  if (replacement && replacement.targetNumberCanonical !== canonicalNumber) {
+    return {
+      ok: false as const,
+      code: "web_session_replacement_target_mismatch",
+      status: 409,
+      targetNumberMasked: replacement.targetNumberMasked,
+      webNumberMasked: maskWebSessionNumber(canonicalNumber),
+    };
+  }
+  if (replacement && replacement.targetNumberCanonical === canonicalNumber) {
+    return { ok: true as const, canonicalNumber };
+  }
   if (meta.canonicalNumber && meta.canonicalNumber !== canonicalNumber) {
     return {
       ok: false as const,
@@ -458,9 +714,14 @@ export async function clearWhatsappPrimaryTransport(params: {
   }
   const nextConfig = { ...existing.config };
   delete nextConfig.whatsappPrimaryTransport;
-  await params.prisma.tenantOperationalConfig.update({
+  await params.prisma.tenantOperationalConfig.upsert({
     where: { clientId: params.clientId },
-    data: {
+    update: {
+      schemaVersion: 1,
+      config: nextConfig as Prisma.InputJsonValue,
+    },
+    create: {
+      clientId: params.clientId,
       schemaVersion: 1,
       config: nextConfig as Prisma.InputJsonValue,
     },

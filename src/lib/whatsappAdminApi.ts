@@ -728,6 +728,15 @@ export type TenantWebSessionStatus = {
     invalidatedBy?: string | null;
     invalidationReason?: string | null;
   };
+  numberReplacement?: {
+    status: "ACTIVE";
+    targetNumberCanonical: string;
+    targetNumberMasked: string | null;
+    previousMetaNumberMasked: string | null;
+    previousWebNumberMasked: string | null;
+    startedAt: string | null;
+    startedBy: string | null;
+  } | null;
   hybridIdentity?: {
     meta: {
       configured: boolean;
@@ -1600,6 +1609,44 @@ export async function releaseTenantWebSessionNumber(
   return requestJson(
     connection,
     `/admin/tenants/${encodeURIComponent(tenantId)}/web-session/release-number`,
+    {
+      method: "POST",
+    }
+  );
+}
+
+export async function startTenantWhatsappNumberReplacement(
+  connection: AdminConnection,
+  tenantId: string,
+  targetNumber: string
+): Promise<{
+  ok: true;
+  tenantId: string;
+  replacement: NonNullable<TenantWebSessionStatus["numberReplacement"]>;
+  status: TenantWebSessionStatus;
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/whatsapp/number-replacement/start`,
+    {
+      method: "POST",
+      body: JSON.stringify({ targetNumber }),
+    }
+  );
+}
+
+export async function cancelTenantWhatsappNumberReplacement(
+  connection: AdminConnection,
+  tenantId: string
+): Promise<{
+  ok: true;
+  tenantId: string;
+  replacement: null;
+  status: TenantWebSessionStatus;
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/whatsapp/number-replacement/cancel`,
     {
       method: "POST",
     }

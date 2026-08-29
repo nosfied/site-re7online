@@ -7,11 +7,13 @@ import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
   Channel,
   authorizeTenantWebSessionNumber,
+  cancelTenantWhatsappNumberReplacement,
   getTenantChannelAccounts,
   getTenantWhatsAppMediaPolicy,
   Provider,
   refreshTenantMetaCloudReadiness,
   releaseTenantWebSessionNumber,
+  startTenantWhatsappNumberReplacement,
   startTenantInstagramBusinessConnect,
   TenantChannelAccount,
   TenantWebSessionStatus,
@@ -322,6 +324,7 @@ export default function TenantChannelsPage() {
   const [connectingInstagram, setConnectingInstagram] = useState(false);
   const [webSessionStatus, setWebSessionStatus] = useState<TenantWebSessionStatus | null>(null);
   const [authorizedNumber, setAuthorizedNumber] = useState("");
+  const [replacementNumber, setReplacementNumber] = useState("");
   const [webSessionWorking, setWebSessionWorking] = useState<string | null>(null);
   const [mediaPolicy, setMediaPolicy] = useState<WhatsappMediaPolicy>(DEFAULT_WHATSAPP_MEDIA_POLICY);
   const [mediaPolicySource, setMediaPolicySource] = useState<"db" | "json_fallback">("json_fallback");
@@ -348,6 +351,7 @@ export default function TenantChannelsPage() {
         setDrafts(response.channelAccounts.map(toDraft));
         setWebSessionStatus(response.webSessionStatus ?? null);
         setAuthorizedNumber(response.webSessionStatus?.authorization.authorizedNumberCanonical ?? "");
+        setReplacementNumber(response.webSessionStatus?.numberReplacement?.targetNumberCanonical ?? "");
         setMediaPolicy(policyResponse.whatsappMediaPolicy);
         setMediaPolicySource(policyResponse.source);
       })
@@ -406,6 +410,7 @@ export default function TenantChannelsPage() {
       setDrafts(response.channelAccounts.map(toDraft));
       setWebSessionStatus(response.webSessionStatus ?? null);
       setAuthorizedNumber(response.webSessionStatus?.authorization.authorizedNumberCanonical ?? authorizedNumber);
+      setReplacementNumber(response.webSessionStatus?.numberReplacement?.targetNumberCanonical ?? replacementNumber);
       setBackupPath(response.backupPath ?? null);
       setToast("Canais conectados salvos.");
     } catch (err) {
@@ -439,6 +444,51 @@ export default function TenantChannelsPage() {
       setToast("Número Web Session autorizado.");
     } catch (err) {
       setError((err as Error).message || "Falha ao autorizar número Web Session.");
+    } finally {
+      setWebSessionWorking(null);
+    }
+  };
+
+  const handleStartWhatsappNumberReplacement = async () => {
+    const target = replacementNumber.trim();
+    if (!target) {
+      setError("Informe o novo número antes de iniciar a troca.");
+      setToast(null);
+      return;
+    }
+    if (!window.confirm("Iniciar troca torna a identidade Meta atual indisponível para novos envios até a nova conexão ser concluída. Continuar?")) {
+      return;
+    }
+    setWebSessionWorking("replacement-start");
+    setError(null);
+    setToast(null);
+    try {
+      const response = await startTenantWhatsappNumberReplacement(connection, tenantId, target);
+      setWebSessionStatus(response.status);
+      setAuthorizedNumber(response.status.numberReplacement?.targetNumberCanonical ?? target);
+      setReplacementNumber(response.status.numberReplacement?.targetNumberCanonical ?? target);
+      setToast("Troca de número iniciada.");
+    } catch (err) {
+      setError((err as Error).message || "Falha ao iniciar troca de número.");
+    } finally {
+      setWebSessionWorking(null);
+    }
+  };
+
+  const handleCancelWhatsappNumberReplacement = async () => {
+    if (!window.confirm("Cancelar a troca remove apenas o estado transitório. A identidade Meta anterior não será restaurada automaticamente. Continuar?")) {
+      return;
+    }
+    setWebSessionWorking("replacement-cancel");
+    setError(null);
+    setToast(null);
+    try {
+      const response = await cancelTenantWhatsappNumberReplacement(connection, tenantId);
+      setWebSessionStatus(response.status);
+      setReplacementNumber("");
+      setToast("Troca de número cancelada.");
+    } catch (err) {
+      setError((err as Error).message || "Falha ao cancelar troca de número.");
     } finally {
       setWebSessionWorking(null);
     }
@@ -646,6 +696,68 @@ export default function TenantChannelsPage() {
                 Identidade Meta e identidade Web estão divergentes. Corrija antes de permitir uso operacional híbrido.
               </div>
             ) : null}
+            <div className="rounded-lg border border-amber-300/25 bg-amber-500/10 px-3 py-3">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-amber-100">Alterar número WhatsApp</p>
+                    <StatusBadge
+                      label={webSessionStatus?.numberReplacement?.status === "ACTIVE" ? "troca em andamento" : "sem troca ativa"}
+                      tone={webSessionStatus?.numberReplacement?.status === "ACTIVE" ? "warning" : "neutral"}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-amber-100/70">
+                    Use quando o número atual será substituído. Durante a configuração, a Meta antiga deixa de ser
+                    usada para novos envios e o Web Session só aceita o novo número informado.
+                  </p>
+                </div>
+                {webSessionStatus?.numberReplacement?.status === "ACTIVE" ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleCancelWhatsappNumberReplacement()}
+                    disabled={Boolean(webSessionWorking)}
+                    className="rounded-md border border-amber-200/45 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {webSessionWorking === "replacement-cancel" ? "Cancelando..." : "Cancelar troca"}
+                  </button>
+                ) : null}
+              </div>
+              {webSessionStatus?.numberReplacement?.status === "ACTIVE" ? (
+                <dl className="mt-3 grid gap-2 text-xs md:grid-cols-3">
+                  <TechnicalValue
+                    label="Anterior Meta"
+                    value={webSessionStatus.numberReplacement.previousMetaNumberMasked ?? "-"}
+                  />
+                  <TechnicalValue
+                    label="Anterior Web"
+                    value={webSessionStatus.numberReplacement.previousWebNumberMasked ?? "-"}
+                  />
+                  <TechnicalValue
+                    label="Novo número"
+                    value={formatBrazilPhone(webSessionStatus.numberReplacement.targetNumberCanonical)}
+                  />
+                </dl>
+              ) : null}
+              <div className="mt-3 flex flex-wrap items-end gap-2">
+                <label className="flex min-w-72 flex-1 flex-col gap-1 text-sm">
+                  <span className="text-amber-100/70">Novo número</span>
+                  <input
+                    value={replacementNumber}
+                    onChange={(event) => setReplacementNumber(event.target.value)}
+                    className="rounded-md border border-white/10 bg-re7-navy px-3 py-2 font-mono text-white"
+                    placeholder="+55..."
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void handleStartWhatsappNumberReplacement()}
+                  disabled={Boolean(webSessionWorking) || !replacementNumber.trim()}
+                  className="rounded-md border border-amber-200/45 bg-amber-500/15 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {webSessionWorking === "replacement-start" ? "Iniciando..." : "Iniciar troca"}
+                </button>
+              </div>
+            </div>
             <div className="rounded-lg border border-white/10 bg-re7-navy/35 px-3 py-3">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
@@ -681,6 +793,7 @@ export default function TenantChannelsPage() {
                 disabled={
                   Boolean(webSessionWorking) ||
                   webSessionStatus?.primaryTransport === "meta" ||
+                  webSessionStatus?.numberReplacement?.status === "ACTIVE" ||
                   webSessionStatus?.metaReadiness?.operational !== true
                 }
                 className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60"
@@ -690,7 +803,15 @@ export default function TenantChannelsPage() {
               <button
                 type="button"
                 onClick={() => void handlePrimaryTransport("web_session")}
-                disabled={Boolean(webSessionWorking) || webSessionStatus?.primaryTransport === "web_session"}
+                disabled={
+                  Boolean(webSessionWorking) ||
+                  webSessionStatus?.primaryTransport === "web_session" ||
+                  (
+                    webSessionStatus?.numberReplacement?.status === "ACTIVE" &&
+                    webSessionStatus?.hybridIdentity?.web.canonicalNumber !==
+                      webSessionStatus.numberReplacement.targetNumberCanonical
+                  )
+                }
                 className="rounded-md border border-emerald-300/40 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {webSessionWorking === "primary-web_session" ? "Salvando..." : "Usar sessão Web"}

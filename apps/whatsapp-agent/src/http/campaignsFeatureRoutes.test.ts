@@ -2356,6 +2356,155 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   assert.equal(mismatchedAuthorization.status, 409);
   assert.equal(getErrorCode(mismatchedAuthorization.body), "web_session_meta_identity_mismatch");
 
+  const replacementTenantKey = `${prefix}-replacement`;
+  const replacementClient = await prisma.client.create({
+    data: {
+      clientKey: replacementTenantKey,
+      name: replacementTenantKey,
+      status: "ACTIVE",
+      features: { whatsappWebSession: true },
+    },
+    select: { id: true },
+  });
+  await prisma.tenantMetaConfig.create({
+    data: {
+      clientId: replacementClient.id,
+      phoneNumberId: "meta-phone-id-replacement",
+      businessToken: "meta-business-token-replacement",
+      wabaId: "meta-waba-id-replacement",
+      rawPayload: { source: "unit_test", phoneNumber: { display_phone_number: "+55 84 9999-0001" } },
+    },
+  });
+  await prisma.waPhoneNumber.create({
+    data: {
+      clientId: replacementClient.id,
+      phoneNumberId: "meta-phone-id-replacement",
+      display: "+55 84 9999-0001",
+    },
+  });
+  await prisma.tenantOperationalConfig.create({
+    data: {
+      clientId: replacementClient.id,
+      config: { whatsappPrimaryTransport: "meta", supportChannel: { mode: "human" } },
+    },
+  });
+  const replacementStarted = await requestSuperadmin<{
+    ok: true;
+    status: {
+      numberReplacement: { status: string; targetNumberCanonical: string };
+      hybridIdentity: { meta: { configured: boolean; canonicalNumber: string | null } };
+      primaryTransport: string | null;
+    };
+  }>(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(replacementTenantKey)}/whatsapp/number-replacement/start`,
+    { targetNumber: "+55 84 9999-0002" }
+  );
+  assert.equal(replacementStarted.status, 200, JSON.stringify(replacementStarted.body));
+  assert.equal(replacementStarted.body.status.numberReplacement.status, "ACTIVE");
+  assert.equal(replacementStarted.body.status.numberReplacement.targetNumberCanonical, "558499990002");
+  assert.equal(replacementStarted.body.status.hybridIdentity.meta.configured, false);
+  assert.equal(replacementStarted.body.status.hybridIdentity.meta.canonicalNumber, null);
+  assert.equal(replacementStarted.body.status.primaryTransport, null);
+
+  const wrongReplacementTarget = await requestSuperadmin<ErrorPayload>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(replacementTenantKey)}/web-session/authorize-number`,
+    { number: "+55 84 9999-0003" }
+  );
+  assert.equal(wrongReplacementTarget.status, 409);
+  assert.equal(getErrorCode(wrongReplacementTarget.body), "web_session_replacement_target_mismatch");
+
+  const replacementTargetAuthorized = await requestSuperadmin<{
+    status: {
+      authorization: { status: string; authorizedNumberCanonical: string };
+      numberReplacement: { status: string; targetNumberCanonical: string };
+    };
+  }>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(replacementTenantKey)}/web-session/authorize-number`,
+    { number: "+55 84 9999-0002" }
+  );
+  assert.equal(replacementTargetAuthorized.status, 200, JSON.stringify(replacementTargetAuthorized.body));
+  assert.equal(replacementTargetAuthorized.body.status.authorization.status, "AUTHORIZED");
+  assert.equal(replacementTargetAuthorized.body.status.authorization.authorizedNumberCanonical, "558499990002");
+  assert.equal(replacementTargetAuthorized.body.status.numberReplacement.targetNumberCanonical, "558499990002");
+
+  const metaPrimaryDuringReplacement = await requestSuperadmin<ErrorPayload>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(replacementTenantKey)}/whatsapp/primary-transport`,
+    { provider: "meta" }
+  );
+  assert.equal(metaPrimaryDuringReplacement.status, 409);
+  assert.equal(getErrorCode(metaPrimaryDuringReplacement.body), "meta_transport_unavailable");
+
+  const replacementCancelled = await requestSuperadmin<{
+    ok: true;
+    status: { numberReplacement: null };
+  }>(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(replacementTenantKey)}/whatsapp/number-replacement/cancel`,
+    {}
+  );
+  assert.equal(replacementCancelled.status, 200, JSON.stringify(replacementCancelled.body));
+  assert.equal(replacementCancelled.body.status.numberReplacement, null);
+
+  const replacementRestarted = await requestSuperadmin<{
+    ok: true;
+    status: { numberReplacement: { status: string; targetNumberCanonical: string } };
+  }>(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(replacementTenantKey)}/whatsapp/number-replacement/start`,
+    { targetNumber: "+55 84 9999-0002" }
+  );
+  assert.equal(replacementRestarted.status, 200, JSON.stringify(replacementRestarted.body));
+  assert.equal(replacementRestarted.body.status.numberReplacement.targetNumberCanonical, "558499990002");
+
+  const wrongMetaTarget = await requestSuperadmin<ErrorPayload>(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(replacementTenantKey)}/onboarding/manual-bind`,
+    {
+      phoneNumberId: "meta-phone-id-replacement-wrong",
+      displayPhoneNumber: "+55 84 9999-0003",
+      wabaId: "meta-waba-id-replacement",
+    }
+  );
+  assert.equal(wrongMetaTarget.status, 409);
+  assert.equal(getErrorCode(wrongMetaTarget.body), "whatsapp_number_replacement_target_mismatch");
+
+  const targetMetaBound = await requestSuperadmin<{
+    success: true;
+  }>(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(replacementTenantKey)}/onboarding/manual-bind`,
+    {
+      phoneNumberId: "meta-phone-id-replacement-new",
+      displayPhoneNumber: "+55 84 9999-0002",
+      wabaId: "meta-waba-id-replacement-new",
+    }
+  );
+  assert.equal(targetMetaBound.status, 200, JSON.stringify(targetMetaBound.body));
+
+  const replacementCompletedStatus = await requestSuperadmin<{
+    webSessionStatus: {
+      numberReplacement: { status: string; targetNumberCanonical: string };
+      hybridIdentity: { meta: { configured: boolean; canonicalNumber: string | null }; conflict: boolean };
+    };
+  }>("GET", `/admin/tenants/${encodeURIComponent(replacementTenantKey)}`);
+  assert.equal(replacementCompletedStatus.status, 200, JSON.stringify(replacementCompletedStatus.body));
+  assert.equal(replacementCompletedStatus.body.webSessionStatus.numberReplacement.targetNumberCanonical, "558499990002");
+  assert.equal(replacementCompletedStatus.body.webSessionStatus.hybridIdentity.meta.configured, false);
+  assert.equal(replacementCompletedStatus.body.webSessionStatus.hybridIdentity.meta.canonicalNumber, null);
+  assert.equal(replacementCompletedStatus.body.webSessionStatus.hybridIdentity.conflict, false);
+
+  const metaPrimaryWithNonOperationalMeta = await requestSuperadmin<ErrorPayload>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(replacementTenantKey)}/whatsapp/primary-transport`,
+    { provider: "meta" }
+  );
+  assert.equal(metaPrimaryWithNonOperationalMeta.status, 409);
+  assert.equal(getErrorCode(metaPrimaryWithNonOperationalMeta.body), "meta_transport_unavailable");
+
   const authorized = await requestSuperadmin<{
     status: {
       authorization: {

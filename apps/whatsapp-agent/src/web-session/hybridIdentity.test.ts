@@ -3,12 +3,16 @@ import assert from "node:assert/strict";
 import {
   buildMetaPublicWhatsappIdentityPayload,
   clearOperationalMetaWhatsappIdentity,
+  cancelWhatsappNumberReplacement,
+  completeWhatsappNumberReplacementIfMatched,
   readWhatsappPrimaryTransportFromConfig,
+  readWhatsappNumberReplacementFromConfig,
   resolveProviderConfirmedMetaPublicWhatsappIdentity,
   resolveHybridWhatsappIdentityStatus,
   resolveOperationalMetaWhatsappIdentity,
   resolveOperationalWhatsappDisplayIdentity,
   saveWhatsappPrimaryTransport,
+  startWhatsappNumberReplacement,
   validateWebSessionNumberAgainstMeta,
 } from "./hybridIdentity.js";
 
@@ -614,6 +618,153 @@ test("cleared or partial Meta config is not treated as operational identity", as
   assert.equal(residualMeta.configured, true);
   assert.equal(residualMeta.canonicalNumber, "558499990005");
   assert.equal(residualMeta.phoneNumberIdPresent, true);
+});
+
+test("controlled number replacement retires old Meta authority and only allows target Web identity", async () => {
+  const prisma = makePrisma();
+  setMeta(prisma, "client-a", "+55 84 9999-0001");
+  setWebAuthorization(prisma, "client-a", "558499990001");
+  prisma.state.operationalConfigs[0]!.config = {
+    ...(prisma.state.operationalConfigs[0]!.config as Record<string, unknown>),
+    whatsappPrimaryTransport: "meta",
+  };
+
+  const normalMismatch = await validateWebSessionNumberAgainstMeta({
+    prisma: prisma as never,
+    clientId: "client-a",
+    number: "+55 84 9999-0002",
+  });
+  assert.equal(normalMismatch.ok, false);
+  if (!normalMismatch.ok) {
+    assert.equal(normalMismatch.code, "web_session_meta_identity_mismatch");
+  }
+
+  const started = await startWhatsappNumberReplacement({
+    prisma: prisma as never,
+    clientId: "client-a",
+    actorUserId: "admin:test",
+    requestId: "replacement-test",
+    targetNumber: "+55 84 9999-0002",
+  });
+  assert.equal(started.ok, true);
+  assert.equal(started.replacement?.targetNumberCanonical, "558499990002");
+  assert.equal(started.replacement?.previousMetaNumberMasked, "****0001");
+  assert.equal(
+    (prisma.state.operationalConfigs[0]?.config as { whatsappPrimaryTransport?: string }).whatsappPrimaryTransport,
+    undefined
+  );
+
+  const metaAfterStart = await resolveOperationalMetaWhatsappIdentity({
+    prisma: prisma as never,
+    clientId: "client-a",
+  });
+  assert.equal(metaAfterStart.configured, false);
+  assert.equal(metaAfterStart.canonicalNumber, null);
+
+  const targetAllowed = await validateWebSessionNumberAgainstMeta({
+    prisma: prisma as never,
+    clientId: "client-a",
+    number: "+55 84 9999-0002",
+  });
+  assert.deepEqual(targetAllowed, { ok: true, canonicalNumber: "558499990002" });
+
+  const otherBlocked = await validateWebSessionNumberAgainstMeta({
+    prisma: prisma as never,
+    clientId: "client-a",
+    number: "+55 84 9999-0003",
+  });
+  assert.equal(otherBlocked.ok, false);
+  if (!otherBlocked.ok) {
+    assert.equal(otherBlocked.code, "web_session_replacement_target_mismatch");
+  }
+
+  assert.equal(
+    prisma.state.events.some((event) => event.eventName === "whatsapp.meta.operational_identity_cleared"),
+    true
+  );
+  assert.equal(
+    prisma.state.events.some((event) => event.eventName === "whatsapp.number_replacement.started"),
+    true
+  );
+});
+
+test("cancelled number replacement removes transient target guard without restoring old Meta", async () => {
+  const prisma = makePrisma();
+  setMeta(prisma, "client-a", "+55 84 9999-0001");
+
+  await startWhatsappNumberReplacement({
+    prisma: prisma as never,
+    clientId: "client-a",
+    actorUserId: "admin:test",
+    requestId: "replacement-test",
+    targetNumber: "+55 84 9999-0002",
+  });
+
+  const beforeCancel = readWhatsappNumberReplacementFromConfig(prisma.state.operationalConfigs[0]?.config);
+  assert.equal(beforeCancel?.targetNumberCanonical, "558499990002");
+
+  const cancelled = await cancelWhatsappNumberReplacement({
+    prisma: prisma as never,
+    clientId: "client-a",
+    actorUserId: "admin:test",
+    requestId: "replacement-test",
+  });
+  assert.equal(cancelled.cancelled, true);
+  assert.equal(readWhatsappNumberReplacementFromConfig(prisma.state.operationalConfigs[0]?.config), null);
+
+  const metaAfterCancel = await resolveOperationalMetaWhatsappIdentity({
+    prisma: prisma as never,
+    clientId: "client-a",
+  });
+  assert.equal(metaAfterCancel.configured, false);
+  assert.equal(metaAfterCancel.canonicalNumber, null);
+  assert.equal(
+    prisma.state.events.some((event) => event.eventName === "whatsapp.number_replacement.cancelled"),
+    true
+  );
+});
+
+test("completed number replacement clears transient state only when Meta confirms the target number", async () => {
+  const prisma = makePrisma();
+  setMeta(prisma, "client-a", "+55 84 9999-0001");
+
+  await startWhatsappNumberReplacement({
+    prisma: prisma as never,
+    clientId: "client-a",
+    actorUserId: "admin:test",
+    requestId: "replacement-test",
+    targetNumber: "+55 84 9999-0002",
+  });
+
+  const wrongNumber = await completeWhatsappNumberReplacementIfMatched({
+    prisma: prisma as never,
+    clientId: "client-a",
+    actorUserId: "admin:test",
+    requestId: "replacement-wrong",
+    confirmedNumber: "+55 84 9999-0003",
+    source: "unit_test",
+  });
+  assert.equal(wrongNumber.completed, false);
+  assert.equal(wrongNumber.reason, "target_mismatch");
+  assert.equal(
+    readWhatsappNumberReplacementFromConfig(prisma.state.operationalConfigs[0]?.config)?.targetNumberCanonical,
+    "558499990002"
+  );
+
+  const completed = await completeWhatsappNumberReplacementIfMatched({
+    prisma: prisma as never,
+    clientId: "client-a",
+    actorUserId: "admin:test",
+    requestId: "replacement-complete",
+    confirmedNumber: "+55 84 9999-0002",
+    source: "unit_test",
+  });
+  assert.equal(completed.completed, true);
+  assert.equal(readWhatsappNumberReplacementFromConfig(prisma.state.operationalConfigs[0]?.config), null);
+  assert.equal(
+    prisma.state.events.some((event) => event.eventName === "whatsapp.number_replacement.completed"),
+    true
+  );
 });
 
 test("primary transport config accepts only explicit known providers and preserves sibling config", async () => {

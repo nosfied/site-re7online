@@ -265,12 +265,16 @@ import {
   buildMetaPublicWhatsappIdentityPayload,
   clearOperationalMetaWhatsappIdentity,
   clearWhatsappPrimaryTransport,
+  cancelWhatsappNumberReplacement,
+  completeWhatsappNumberReplacementIfMatched,
   invalidateWebSessionForMetaIdentityChange,
   normalizeHybridWhatsappNumber,
   resolveHybridWhatsappIdentityStatus,
+  resolveOperationalMetaWhatsappIdentity,
   resolveOperationalWhatsappDisplayIdentity,
   resolveWhatsappPrimaryTransport,
   saveWhatsappPrimaryTransport,
+  startWhatsappNumberReplacement,
 } from "../web-session/hybridIdentity.js";
 import {
   createPlatformSupportSession,
@@ -20548,6 +20552,78 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    const adminWhatsappNumberReplacementStartMatch = pathname.match(
+      /^\/admin\/tenants\/([^/]+)\/whatsapp\/number-replacement\/start$/
+    );
+    if (req.method === "POST" && adminWhatsappNumberReplacementStartMatch) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(adminWhatsappNumberReplacementStartMatch[1] ?? "").trim();
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const targetNumber = body && typeof body === "object" && !Array.isArray(body)
+        ? String((body as Record<string, unknown>).targetNumber ?? "")
+        : "";
+      const prisma = getPrisma();
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true, status: true, features: true, profile: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const result = await startWhatsappNumberReplacement({
+        prisma,
+        clientId: client.id,
+        actorUserId: `admin:${authToken.source}`,
+        requestId,
+        targetNumber,
+      });
+      if (!result.ok) {
+        json(res, result.status, httpError(result.code, result.code));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        replacement: result.replacement,
+        status: await serializeWebSessionStatus({ prisma, client }),
+        permissions: { canUpdate: true },
+      });
+      return;
+    }
+
+    const adminWhatsappNumberReplacementCancelMatch = pathname.match(
+      /^\/admin\/tenants\/([^/]+)\/whatsapp\/number-replacement\/cancel$/
+    );
+    if (req.method === "POST" && adminWhatsappNumberReplacementCancelMatch) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(adminWhatsappNumberReplacementCancelMatch[1] ?? "").trim();
+      const prisma = getPrisma();
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true, status: true, features: true, profile: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const result = await cancelWhatsappNumberReplacement({
+        prisma,
+        clientId: client.id,
+        actorUserId: `admin:${authToken.source}`,
+        requestId,
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        replacement: result.replacement,
+        status: await serializeWebSessionStatus({ prisma, client }),
+        permissions: { canUpdate: true },
+      });
+      return;
+    }
+
     const adminWhatsappPrimaryTransportMatch = pathname.match(
       /^\/admin\/tenants\/([^/]+)\/whatsapp\/primary-transport$/
     );
@@ -20664,6 +20740,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       if (provider === "meta") {
+        if (hybrid.numberReplacement?.status === "ACTIVE") {
+          json(res, 409, httpError("meta_transport_unavailable", "Meta Cloud is unavailable while WhatsApp number replacement is in progress."));
+          return;
+        }
         if (!hybrid.meta.canonicalNumber) {
           json(res, 409, httpError("meta_transport_unavailable", "Meta Cloud number is not operational for this tenant."));
           return;
@@ -20691,6 +20771,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         if (!ready || !hybrid.web.canonicalNumber) {
           json(res, 409, httpError("web_session_transport_unavailable", "WhatsApp Web Session is not connected for this tenant."));
+          return;
+        }
+        if (
+          hybrid.numberReplacement?.status === "ACTIVE" &&
+          hybrid.web.canonicalNumber !== hybrid.numberReplacement.targetNumberCanonical
+        ) {
+          json(res, 409, httpError("web_session_transport_unavailable", "WhatsApp Web Session is not connected with the replacement number."));
           return;
         }
       }
@@ -21350,6 +21437,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             rawPayload: rawPayload as Prisma.InputJsonValue,
           },
         });
+        const metaIdentityAfterUpsert = await resolveOperationalMetaWhatsappIdentity({
+          prisma,
+          clientId: client.id,
+        });
+        await completeWhatsappNumberReplacementIfMatched({
+          prisma,
+          clientId: client.id,
+          actorUserId: null,
+          requestId,
+          confirmedNumber: metaIdentityAfterUpsert.configured
+            ? metaIdentityAfterUpsert.canonicalNumber
+            : null,
+          source: "embedded_signup",
+        });
 
         let phoneMappingAction: "created" | "existing" | null = null;
         let tenantUpdate: SavedTenantPatch | undefined;
@@ -21781,6 +21882,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             phoneNumberId,
             rawPayload: rawPayload as Prisma.InputJsonValue,
           },
+        });
+        const metaIdentityAfterUpsert = await resolveOperationalMetaWhatsappIdentity({
+          prisma,
+          clientId: client.id,
+        });
+        await completeWhatsappNumberReplacementIfMatched({
+          prisma,
+          clientId: client.id,
+          actorUserId: null,
+          requestId,
+          confirmedNumber: metaIdentityAfterUpsert.configured
+            ? metaIdentityAfterUpsert.canonicalNumber
+            : null,
+          source: "manual_bind_connected_number",
         });
 
         const tenantUpdate = tenant
@@ -26478,6 +26593,23 @@ async function enforceMetaIdentityChangeAgainstWebSession(params: {
     prisma: params.prisma as ReturnType<typeof getPrisma>,
     clientId: params.client.id,
   });
+  if (
+    hybrid.numberReplacement?.status === "ACTIVE" &&
+    hybrid.numberReplacement.targetNumberCanonical !== nextMetaNumber
+  ) {
+    return {
+      ok: false as const,
+      status: 409,
+      body: httpError(
+        "whatsapp_number_replacement_target_mismatch",
+        "Meta Cloud number does not match the active WhatsApp number replacement target.",
+        {
+          metaNumberMasked: maskedNextMetaNumber,
+          targetNumberMasked: hybrid.numberReplacement.targetNumberMasked,
+        }
+      ),
+    };
+  }
   if (!hybrid.web.canonicalNumber || hybrid.web.canonicalNumber === nextMetaNumber) {
     return { ok: true as const, invalidated: false };
   }
