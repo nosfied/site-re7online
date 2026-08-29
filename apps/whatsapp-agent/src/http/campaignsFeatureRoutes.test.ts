@@ -4392,6 +4392,76 @@ test("admin onboarding manual bind rejects phone conflicts without partial meta 
   assert.equal(targetMetaConfig, null);
 });
 
+test("admin embedded signup audit events are tenant scoped and reject raw secrets", async () => {
+  const tenantKey = `${prefix}-embedded-signup-audit`;
+  const client = await prisma.client.create({
+    data: {
+      clientKey: tenantKey,
+      name: "Embedded Signup Audit Tenant",
+      profile: "business",
+      features: {},
+    },
+    select: { id: true },
+  });
+
+  const unauthenticated = await requestUnauth(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(tenantKey)}/onboarding/embedded-signup/events`,
+    {
+      eventName: "meta.embedded_signup.started",
+      correlationId: "signup-audit-unauth",
+      mode: "standard",
+    }
+  );
+  assert.equal(unauthenticated.status, 401);
+
+  const started = await requestSuperadmin<{ ok: boolean; eventName: string; correlationId: string }>(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(tenantKey)}/onboarding/embedded-signup/events`,
+    {
+      eventName: "meta.embedded_signup.started",
+      correlationId: "signup-audit-1",
+      mode: "coexistence",
+      configIdRef: "1050...3366",
+      timestamp: "2026-08-28T10:00:00.000Z",
+    }
+  );
+  assert.equal(started.status, 200, JSON.stringify(started.body));
+  assert.equal(started.body.ok, true);
+  assert.equal(started.body.eventName, "meta.embedded_signup.started");
+  assert.equal(started.body.correlationId, "signup-audit-1");
+
+  const callback = await requestSuperadmin(
+    "POST",
+    `/admin/tenants/${encodeURIComponent(tenantKey)}/onboarding/embedded-signup/events`,
+    {
+      eventName: "meta.embedded_signup.callback",
+      correlationId: "signup-audit-1",
+      mode: "coexistence",
+      callbackInvoked: true,
+      authResponsePresent: true,
+      codePresent: true,
+      status: "connected",
+      errorPresent: false,
+      code: "raw-code-must-be-rejected",
+    }
+  );
+  assert.equal(callback.status, 400);
+
+  const stored = await prisma.event.findFirstOrThrow({
+    where: { clientId: client.id, eventName: "meta.embedded_signup.started" },
+    select: { clientId: true, requestId: true, payloadJson: true },
+  });
+  assert.equal(stored.clientId, client.id);
+  assert.equal(stored.requestId?.startsWith("meta-embedded-signup:signup-audit-1:"), true);
+  const payload = stored.payloadJson as Record<string, unknown>;
+  assert.equal(payload.tenantId, tenantKey);
+  assert.equal(payload.correlationId, "signup-audit-1");
+  assert.equal(payload.mode, "coexistence");
+  assert.equal(payload.configIdRef, "1050...3366");
+  assert.equal(JSON.stringify(payload).includes("raw-code-must-be-rejected"), false);
+});
+
 test("admin onboarding code exchange sends canonical manual oauth redirect uri for db-only clients", async () => {
   const dbOnlyClientKey = `${prefix}-db-only-code-exchange`;
   const client = await prisma.client.create({

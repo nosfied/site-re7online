@@ -21112,6 +21112,84 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     if (
       req.method === "POST" &&
       pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 7 &&
+      pathname.endsWith("/onboarding/embedded-signup/events")
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, httpError("bad_request", "Tenant id is required"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        json(res, 400, httpError("bad_request", "Invalid audit payload"));
+        return;
+      }
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      const safePayload = buildSafeMetaEmbeddedSignupAuditPayload(
+        body as Record<string, unknown>
+      );
+      if (!safePayload) {
+        json(res, 400, httpError("invalid_audit_payload", "Invalid audit payload"));
+        return;
+      }
+      const payloadJson = Object.fromEntries(
+        Object.entries({
+          tenantId,
+          mode: safePayload.mode,
+          configIdRef: safePayload.configIdRef,
+          correlationId: safePayload.correlationId,
+          timestamp: safePayload.timestamp ?? new Date().toISOString(),
+          callbackInvoked: safePayload.callbackInvoked,
+          authResponsePresent: safePayload.authResponsePresent,
+          codePresent: safePayload.codePresent,
+          status: safePayload.status,
+          errorPresent: safePayload.errorPresent,
+          originClassification: safePayload.originClassification,
+          eventType: safePayload.eventType,
+          flowStatus: safePayload.flowStatus,
+          wabaIdRef: safePayload.wabaIdRef,
+          phoneNumberIdRef: safePayload.phoneNumberIdRef,
+          businessIdRef: safePayload.businessIdRef,
+          businessPortfolioIdRef: safePayload.businessPortfolioIdRef,
+        }).filter(([, value]) => value !== undefined)
+      );
+
+      await prisma.event.create({
+        data: {
+          clientId: client.id,
+          eventName: safePayload.eventName,
+          requestId: `meta-embedded-signup:${safePayload.correlationId}:${crypto.randomUUID()}`,
+          payloadJson: payloadJson as Prisma.InputJsonValue,
+        },
+      });
+      logger.info({
+        event: safePayload.eventName,
+        tenantId,
+        clientKey: client.clientKey,
+        correlationId: safePayload.correlationId,
+        mode: safePayload.mode,
+        requestId,
+      });
+      json(res, 200, {
+        ok: true,
+        eventName: safePayload.eventName,
+        correlationId: safePayload.correlationId,
+      });
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/tenants/") &&
       pathname.split("/").length === 6 &&
       pathname.endsWith("/onboarding/exchange-code")
     ) {
@@ -26073,6 +26151,116 @@ function normalizeOptionalString(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed || null;
+}
+
+const META_EMBEDDED_SIGNUP_AUDIT_EVENTS = new Set([
+  "meta.embedded_signup.started",
+  "meta.embedded_signup.callback",
+  "meta.embedded_signup.session_event",
+  "meta.embedded_signup.completed",
+  "meta.embedded_signup.cancelled",
+  "meta.embedded_signup.error",
+]);
+
+const META_EMBEDDED_SIGNUP_AUDIT_SAFE_KEYS = new Set([
+  "eventName",
+  "correlationId",
+  "mode",
+  "configIdRef",
+  "timestamp",
+  "callbackInvoked",
+  "authResponsePresent",
+  "codePresent",
+  "status",
+  "errorPresent",
+  "originClassification",
+  "eventType",
+  "flowStatus",
+  "wabaIdRef",
+  "phoneNumberIdRef",
+  "businessIdRef",
+  "businessPortfolioIdRef",
+]);
+
+const META_EMBEDDED_SIGNUP_AUDIT_SECRET_KEYS = new Set([
+  "accessToken",
+  "access_token",
+  "authResponse",
+  "businessToken",
+  "code",
+  "raw",
+  "signedRequest",
+  "signed_request",
+  "token",
+]);
+
+function hasForbiddenMetaEmbeddedSignupAuditKey(input: unknown): boolean {
+  if (!input || typeof input !== "object") return false;
+  if (Array.isArray(input)) {
+    return input.some((item) => hasForbiddenMetaEmbeddedSignupAuditKey(item));
+  }
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (META_EMBEDDED_SIGNUP_AUDIT_SECRET_KEYS.has(key)) return true;
+    if (value && typeof value === "object" && hasForbiddenMetaEmbeddedSignupAuditKey(value)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function readSafeMetaEmbeddedSignupAuditString(
+  body: Record<string, unknown>,
+  key: string,
+  maxLength = 160
+) {
+  const value = body[key];
+  if (value == null) return null;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, maxLength) : null;
+}
+
+function readSafeMetaEmbeddedSignupAuditBoolean(body: Record<string, unknown>, key: string) {
+  const value = body[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function buildSafeMetaEmbeddedSignupAuditPayload(body: Record<string, unknown>) {
+  if (hasForbiddenMetaEmbeddedSignupAuditKey(body)) return null;
+  if (Object.keys(body).some((key) => !META_EMBEDDED_SIGNUP_AUDIT_SAFE_KEYS.has(key))) {
+    return null;
+  }
+  const eventName = readSafeMetaEmbeddedSignupAuditString(body, "eventName");
+  if (!eventName || !META_EMBEDDED_SIGNUP_AUDIT_EVENTS.has(eventName)) return null;
+  const correlationId = readSafeMetaEmbeddedSignupAuditString(body, "correlationId", 120);
+  if (!correlationId) return null;
+  const mode = readSafeMetaEmbeddedSignupAuditString(body, "mode", 32);
+  if (mode !== "standard" && mode !== "coexistence") return null;
+  const timestamp = readSafeMetaEmbeddedSignupAuditString(body, "timestamp", 40);
+
+  return {
+    eventName,
+    correlationId,
+    mode,
+    configIdRef: readSafeMetaEmbeddedSignupAuditString(body, "configIdRef", 80),
+    timestamp,
+    callbackInvoked: readSafeMetaEmbeddedSignupAuditBoolean(body, "callbackInvoked"),
+    authResponsePresent: readSafeMetaEmbeddedSignupAuditBoolean(body, "authResponsePresent"),
+    codePresent: readSafeMetaEmbeddedSignupAuditBoolean(body, "codePresent"),
+    status: readSafeMetaEmbeddedSignupAuditString(body, "status", 80),
+    errorPresent: readSafeMetaEmbeddedSignupAuditBoolean(body, "errorPresent"),
+    originClassification: readSafeMetaEmbeddedSignupAuditString(body, "originClassification", 40),
+    eventType: readSafeMetaEmbeddedSignupAuditString(body, "eventType", 80),
+    flowStatus: readSafeMetaEmbeddedSignupAuditString(body, "flowStatus", 80),
+    wabaIdRef: readSafeMetaEmbeddedSignupAuditString(body, "wabaIdRef", 80),
+    phoneNumberIdRef: readSafeMetaEmbeddedSignupAuditString(body, "phoneNumberIdRef", 80),
+    businessIdRef: readSafeMetaEmbeddedSignupAuditString(body, "businessIdRef", 80),
+    businessPortfolioIdRef: readSafeMetaEmbeddedSignupAuditString(
+      body,
+      "businessPortfolioIdRef",
+      80
+    ),
+  };
 }
 
 function normalizeMetaEmbeddedSignupRedirectUri(value: unknown) {

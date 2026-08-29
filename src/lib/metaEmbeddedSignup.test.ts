@@ -3,7 +3,11 @@ import test from "node:test";
 import {
   META_EMBEDDED_SIGNUP_COEXISTENCE_FEATURE_TYPE,
   META_EMBEDDED_SIGNUP_SESSION_INFO_VERSION,
+  buildMetaEmbeddedSignupCallbackAuditPayload,
+  buildMetaEmbeddedSignupPopupClosedAuditPayload,
   buildMetaEmbeddedSignupLoginOptions,
+  buildMetaEmbeddedSignupSessionAuditPayload,
+  buildMetaEmbeddedSignupStartedAuditPayload,
   isTrustedMetaEmbeddedSignupOrigin,
   parseEmbeddedSignupSessionMessage,
 } from "./metaEmbeddedSignup";
@@ -74,4 +78,102 @@ test("origin validation accepts only Meta Facebook origins", () => {
   assert.equal(isTrustedMetaEmbeddedSignupOrigin("https://web.facebook.com"), true);
   assert.equal(isTrustedMetaEmbeddedSignupOrigin("https://evilfacebook.com"), false);
   assert.equal(isTrustedMetaEmbeddedSignupOrigin("not a url"), false);
+});
+
+test("audit payload records signup start with correlation and masked config reference", () => {
+  const payload = buildMetaEmbeddedSignupStartedAuditPayload({
+    correlationId: "signup-1",
+    mode: "coexistence",
+    configId: "1050567334003366",
+    timestamp: "2026-08-28T10:00:00.000Z",
+  });
+
+  assert.equal(payload.eventName, "meta.embedded_signup.started");
+  assert.equal(payload.correlationId, "signup-1");
+  assert.equal(payload.mode, "coexistence");
+  assert.equal(payload.configIdRef, "1050...3366");
+  assert.equal(payload.timestamp, "2026-08-28T10:00:00.000Z");
+});
+
+test("audit callback payload stores code presence but never stores the code", () => {
+  const payload = buildMetaEmbeddedSignupCallbackAuditPayload({
+    correlationId: "signup-2",
+    mode: "standard",
+    configId: "config-123456789",
+    timestamp: "2026-08-28T10:01:00.000Z",
+    response: {
+      status: "connected",
+      authResponse: {
+        code: "SECRET_CODE_SHOULD_NOT_APPEAR",
+        accessToken: "SECRET_TOKEN_SHOULD_NOT_APPEAR",
+      },
+    },
+  });
+  const serialized = JSON.stringify(payload);
+
+  assert.equal(payload.eventName, "meta.embedded_signup.callback");
+  assert.equal(payload.callbackInvoked, true);
+  assert.equal(payload.authResponsePresent, true);
+  assert.equal(payload.codePresent, true);
+  assert.equal(payload.status, "connected");
+  assert.equal(serialized.includes("SECRET_CODE_SHOULD_NOT_APPEAR"), false);
+  assert.equal(serialized.includes("SECRET_TOKEN_SHOULD_NOT_APPEAR"), false);
+});
+
+test("audit session payload classifies FINISH, CANCEL and ERROR safely", () => {
+  const finish = buildMetaEmbeddedSignupSessionAuditPayload({
+    correlationId: "signup-3",
+    mode: "coexistence",
+    configId: "config-123456789",
+    origin: "https://www.facebook.com",
+    timestamp: "2026-08-28T10:02:00.000Z",
+    message: {
+      type: "WA_EMBEDDED_SIGNUP",
+      event: "FINISH",
+      data: {
+        waba_id: "123456789012345",
+        phone_number_id: "987654321098765",
+        business_id: "456789012345678",
+        business_portfolio_id: "567890123456789",
+      },
+    },
+  });
+  const cancelled = buildMetaEmbeddedSignupSessionAuditPayload({
+    correlationId: "signup-3",
+    mode: "coexistence",
+    origin: "https://web.facebook.com",
+    message: { type: "WA_EMBEDDED_SIGNUP", event: "CANCEL" },
+  });
+  const failed = buildMetaEmbeddedSignupSessionAuditPayload({
+    correlationId: "signup-3",
+    mode: "coexistence",
+    origin: "https://www.facebook.com",
+    message: { type: "WA_EMBEDDED_SIGNUP", event: "ERROR", data: { error_message: "failed" } },
+  });
+
+  assert.equal(finish.eventName, "meta.embedded_signup.completed");
+  assert.equal(finish.originClassification, "facebook");
+  assert.equal(finish.flowStatus, "FINISH");
+  assert.equal(finish.wabaIdRef, "1234...2345");
+  assert.equal(finish.phoneNumberIdRef, "9876...8765");
+  assert.equal(cancelled.eventName, "meta.embedded_signup.cancelled");
+  assert.equal(cancelled.flowStatus, "CANCEL");
+  assert.equal(failed.eventName, "meta.embedded_signup.error");
+  assert.equal(failed.errorPresent, true);
+});
+
+test("audit popup close distinguishes missing callback and session event", () => {
+  const payload = buildMetaEmbeddedSignupPopupClosedAuditPayload({
+    correlationId: "signup-4",
+    mode: "standard",
+    configId: "config-123456789",
+    callbackInvoked: false,
+    sessionEventReceived: false,
+    timestamp: "2026-08-28T10:03:00.000Z",
+  });
+
+  assert.equal(payload.eventName, "meta.embedded_signup.session_event");
+  assert.equal(payload.eventType, "popup.closed");
+  assert.equal(payload.callbackInvoked, false);
+  assert.equal(payload.flowStatus, "POPUP_CLOSED_WITHOUT_SIGNAL");
 });

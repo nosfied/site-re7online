@@ -10,15 +10,22 @@ import {
   onboardingExchangeCode,
   onboardingManualBindNumber,
   onboardingRegisterPhoneNumber,
+  recordMetaEmbeddedSignupEvent,
   TenantConfigResponse,
 } from "@/lib/whatsappAdminApi";
 import {
   EmbeddedSignupCaptureEntry,
+  buildMetaEmbeddedSignupCallbackAuditPayload,
+  buildMetaEmbeddedSignupPopupClosedAuditPayload,
+  buildMetaEmbeddedSignupSessionAuditPayload,
+  buildMetaEmbeddedSignupStartedAuditPayload,
+  createMetaEmbeddedSignupCorrelationId,
   extractMetaCodeFromUnknownPayload,
   extractEmbeddedSignupData,
   getRuntimeMetaEmbeddedSignupConfigId,
   isTrustedMetaEmbeddedSignupOrigin,
   loadMetaEmbeddedSignupSdk,
+  maskMetaEmbeddedSignupReference,
   parseEmbeddedSignupSessionMessage,
   readEmbeddedSignupQuery,
   safeParseEventData,
@@ -139,6 +146,12 @@ export default function TenantOnboardingPage() {
   }, [params]);
 
   const popupCheckRef = useRef<number | null>(null);
+  const signupCorrelationRef = useRef<string | null>(null);
+  const signupConfigIdRef = useRef<string | null>(null);
+  const signupModeRef = useRef<MetaEmbeddedSignupMode>("standard");
+  const signupCallbackInvokedRef = useRef(false);
+  const signupSessionEventReceivedRef = useRef(false);
+  const signupPopupClosedLoggedRef = useRef(false);
   const { connection } = useAdminConsole();
   const [sdkReady, setSdkReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
@@ -196,6 +209,32 @@ export default function TenantOnboardingPage() {
       });
     }
   }, []);
+
+  const recordSignupEvent = useCallback(
+    (payload: Parameters<typeof recordMetaEmbeddedSignupEvent>[2]) => {
+      if (!tenantId || !connection.baseUrl || !connection.adminToken) return;
+      recordMetaEmbeddedSignupEvent(connection, tenantId, payload).catch((error) => {
+        console.warn("[tenant-onboarding] embedded signup audit failed", error);
+      });
+    },
+    [connection, tenantId]
+  );
+
+  const recordPopupClosedIfNeeded = useCallback(() => {
+    if (signupPopupClosedLoggedRef.current) return;
+    const correlationId = signupCorrelationRef.current;
+    if (!correlationId) return;
+    signupPopupClosedLoggedRef.current = true;
+    recordSignupEvent(
+      buildMetaEmbeddedSignupPopupClosedAuditPayload({
+        correlationId,
+        mode: signupModeRef.current,
+        configId: signupConfigIdRef.current,
+        callbackInvoked: signupCallbackInvokedRef.current,
+        sessionEventReceived: signupSessionEventReceivedRef.current,
+      })
+    );
+  }, [recordSignupEvent]);
 
   const applyCapturedData = useCallback((input: unknown) => {
     const extracted = extractEmbeddedSignupData(input);
@@ -275,6 +314,18 @@ export default function TenantOnboardingPage() {
       const parsed = safeParseEventData(event.data);
       const sessionMessage = parseEmbeddedSignupSessionMessage(parsed);
       const debugPayload = buildDebugPayload(parsed, event.origin);
+      signupSessionEventReceivedRef.current = true;
+      if (signupCorrelationRef.current) {
+        recordSignupEvent(
+          buildMetaEmbeddedSignupSessionAuditPayload({
+            correlationId: signupCorrelationRef.current,
+            mode: signupModeRef.current,
+            configId: signupConfigIdRef.current,
+            origin: event.origin,
+            message: parsed,
+          })
+        );
+      }
       setMessagesReceived((count) => count + 1);
       appendEntry({
         timestamp: new Date().toISOString(),
@@ -306,6 +357,7 @@ export default function TenantOnboardingPage() {
     const onFocus = () => {
       if (popupOpened && !popupClosed) {
         setPopupClosed(true);
+        recordPopupClosedIfNeeded();
         const queryState = readEmbeddedSignupQuery(window);
         appendEntry({
           timestamp: new Date().toISOString(),
@@ -341,7 +393,15 @@ export default function TenantOnboardingPage() {
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("blur", onBlur);
     };
-  }, [appendEntry, applyCapturedData, popupClosed, popupOpened, refreshLocationState]);
+  }, [
+    appendEntry,
+    applyCapturedData,
+    popupClosed,
+    popupOpened,
+    recordPopupClosedIfNeeded,
+    recordSignupEvent,
+    refreshLocationState,
+  ]);
 
   useEffect(() => {
     loadMetaEmbeddedSignupSdk()
@@ -360,19 +420,43 @@ export default function TenantOnboardingPage() {
     setSuccessMessage(null);
     setPopupOpened(true);
     setPopupClosed(false);
+    const configId = getRuntimeMetaEmbeddedSignupConfigId(window);
+    const correlationId = createMetaEmbeddedSignupCorrelationId();
+    signupCorrelationRef.current = correlationId;
+    signupConfigIdRef.current = configId;
+    signupModeRef.current = mode;
+    signupCallbackInvokedRef.current = false;
+    signupSessionEventReceivedRef.current = false;
+    signupPopupClosedLoggedRef.current = false;
+    recordSignupEvent(
+      buildMetaEmbeddedSignupStartedAuditPayload({
+        correlationId,
+        mode,
+        configId,
+      })
+    );
 
     if (popupCheckRef.current) {
       window.clearTimeout(popupCheckRef.current);
     }
     popupCheckRef.current = window.setTimeout(() => {
       setPopupClosed(true);
+      recordPopupClosedIfNeeded();
       refreshLocationState("query");
     }, 60000);
 
     try {
-      const configId = getRuntimeMetaEmbeddedSignupConfigId(window);
       const response = await startMetaEmbeddedSignup({ configId, mode });
+      signupCallbackInvokedRef.current = true;
       const sessionMessage = parseEmbeddedSignupSessionMessage(response);
+      recordSignupEvent(
+        buildMetaEmbeddedSignupCallbackAuditPayload({
+          correlationId,
+          mode,
+          configId,
+          response,
+        })
+      );
       appendEntry({
         timestamp: new Date().toISOString(),
         source: "fb.callback",
@@ -392,6 +476,7 @@ export default function TenantOnboardingPage() {
         setSuccessMessage("Conexao Meta concluida. Confira os dados capturados e processe a conexao.");
       }
       setPopupClosed(true);
+      recordPopupClosedIfNeeded();
       refreshLocationState("query");
     } catch (error) {
       setErrorMessage((error as Error).message);
@@ -502,6 +587,18 @@ export default function TenantOnboardingPage() {
       hasWabaId: Boolean(wabaId.trim()),
       hasPhoneNumberId: Boolean(phoneNumberId.trim()),
     });
+    if (signupCorrelationRef.current) {
+      recordSignupEvent({
+        eventName: "meta.embedded_signup.session_event",
+        correlationId: signupCorrelationRef.current,
+        mode: signupModeRef.current,
+        configIdRef: maskMetaEmbeddedSignupReference(signupConfigIdRef.current),
+        timestamp: new Date().toISOString(),
+        eventType: "exchange_code.submit",
+        flowStatus: "EXCHANGE_ATTEMPT",
+        codePresent: true,
+      });
+    }
 
     try {
       const response = await onboardingExchangeCode(connection, tenantId, {

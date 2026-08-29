@@ -62,12 +62,186 @@ export type MetaEmbeddedSignupMode = "standard" | "coexistence";
 
 export type EmbeddedSignupSessionStatus = "FINISH" | "CANCEL" | "ERROR";
 
+export type MetaEmbeddedSignupAuditEventName =
+  | "meta.embedded_signup.started"
+  | "meta.embedded_signup.callback"
+  | "meta.embedded_signup.session_event"
+  | "meta.embedded_signup.completed"
+  | "meta.embedded_signup.cancelled"
+  | "meta.embedded_signup.error";
+
+export type MetaEmbeddedSignupAuditPayload = {
+  eventName: MetaEmbeddedSignupAuditEventName;
+  correlationId: string;
+  mode: MetaEmbeddedSignupMode;
+  configIdRef: string | null;
+  timestamp: string;
+  callbackInvoked?: boolean;
+  authResponsePresent?: boolean;
+  codePresent?: boolean;
+  status?: string | null;
+  errorPresent?: boolean;
+  originClassification?: "facebook" | "unknown";
+  eventType?: string | null;
+  flowStatus?: string | null;
+  wabaIdRef?: string | null;
+  phoneNumberIdRef?: string | null;
+  businessIdRef?: string | null;
+  businessPortfolioIdRef?: string | null;
+};
+
 export type EmbeddedSignupSessionMessage = {
   status: EmbeddedSignupSessionStatus | null;
   data: EmbeddedSignupCapturedData;
   errorMessage: string;
   raw: unknown;
 };
+
+function readRecord(input: unknown) {
+  return input && typeof input === "object" && !Array.isArray(input)
+    ? (input as Record<string, unknown>)
+    : null;
+}
+
+export function createMetaEmbeddedSignupCorrelationId() {
+  const random =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `mes-${random}`;
+}
+
+export function maskMetaEmbeddedSignupReference(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length <= 8) return "***";
+  return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
+}
+
+function readStatus(input: unknown, sessionMessage: EmbeddedSignupSessionMessage) {
+  const parsed = safeParseEventData(input);
+  const typed = readRecord(parsed);
+  const authResponse = readRecord(typed?.authResponse);
+  return (
+    sessionMessage.status ||
+    readStringProperty(typed, ["status", "event", "type"]) ||
+    readStringProperty(authResponse, ["status"]) ||
+    null
+  );
+}
+
+function hasErrorSignal(input: unknown, sessionMessage: EmbeddedSignupSessionMessage) {
+  if (sessionMessage.status === "ERROR" || Boolean(sessionMessage.errorMessage)) return true;
+  const parsed = safeParseEventData(input);
+  const typed = readRecord(parsed);
+  return Boolean(
+    readStringProperty(typed, [
+      "error",
+      "errorMessage",
+      "error_message",
+      "errorDescription",
+      "error_description",
+    ])
+  );
+}
+
+function eventNameForSessionStatus(
+  status: EmbeddedSignupSessionStatus | null
+): MetaEmbeddedSignupAuditEventName {
+  if (status === "FINISH") return "meta.embedded_signup.completed";
+  if (status === "CANCEL") return "meta.embedded_signup.cancelled";
+  if (status === "ERROR") return "meta.embedded_signup.error";
+  return "meta.embedded_signup.session_event";
+}
+
+export function buildMetaEmbeddedSignupStartedAuditPayload(options: {
+  correlationId: string;
+  mode: MetaEmbeddedSignupMode;
+  configId?: string | null;
+  timestamp?: string;
+}): MetaEmbeddedSignupAuditPayload {
+  return {
+    eventName: "meta.embedded_signup.started",
+    correlationId: options.correlationId,
+    mode: options.mode,
+    configIdRef: maskMetaEmbeddedSignupReference(options.configId),
+    timestamp: options.timestamp ?? new Date().toISOString(),
+  };
+}
+
+export function buildMetaEmbeddedSignupCallbackAuditPayload(options: {
+  correlationId: string;
+  mode: MetaEmbeddedSignupMode;
+  configId?: string | null;
+  response: unknown;
+  timestamp?: string;
+}): MetaEmbeddedSignupAuditPayload {
+  const parsed = safeParseEventData(options.response);
+  const typed = readRecord(parsed);
+  const sessionMessage = parseEmbeddedSignupSessionMessage(parsed);
+  return {
+    eventName: "meta.embedded_signup.callback",
+    correlationId: options.correlationId,
+    mode: options.mode,
+    configIdRef: maskMetaEmbeddedSignupReference(options.configId),
+    timestamp: options.timestamp ?? new Date().toISOString(),
+    callbackInvoked: true,
+    authResponsePresent: Boolean(readRecord(typed?.authResponse)),
+    codePresent: Boolean(extractMetaCodeFromUnknownPayload(parsed)),
+    status: readStatus(parsed, sessionMessage),
+    errorPresent: hasErrorSignal(parsed, sessionMessage),
+  };
+}
+
+export function buildMetaEmbeddedSignupSessionAuditPayload(options: {
+  correlationId: string;
+  mode: MetaEmbeddedSignupMode;
+  configId?: string | null;
+  origin: string;
+  message: unknown;
+  timestamp?: string;
+}): MetaEmbeddedSignupAuditPayload {
+  const parsed = safeParseEventData(options.message);
+  const typed = readRecord(parsed);
+  const sessionMessage = parseEmbeddedSignupSessionMessage(parsed);
+  return {
+    eventName: eventNameForSessionStatus(sessionMessage.status),
+    correlationId: options.correlationId,
+    mode: options.mode,
+    configIdRef: maskMetaEmbeddedSignupReference(options.configId),
+    timestamp: options.timestamp ?? new Date().toISOString(),
+    originClassification: isTrustedMetaEmbeddedSignupOrigin(options.origin) ? "facebook" : "unknown",
+    eventType: readStringProperty(typed, ["type", "event"]) || null,
+    flowStatus: sessionMessage.status,
+    wabaIdRef: maskMetaEmbeddedSignupReference(sessionMessage.data.wabaId),
+    phoneNumberIdRef: maskMetaEmbeddedSignupReference(sessionMessage.data.phoneNumberId),
+    businessIdRef: maskMetaEmbeddedSignupReference(sessionMessage.data.businessId),
+    businessPortfolioIdRef: maskMetaEmbeddedSignupReference(sessionMessage.data.businessPortfolioId),
+    errorPresent: hasErrorSignal(parsed, sessionMessage),
+  };
+}
+
+export function buildMetaEmbeddedSignupPopupClosedAuditPayload(options: {
+  correlationId: string;
+  mode: MetaEmbeddedSignupMode;
+  configId?: string | null;
+  callbackInvoked: boolean;
+  sessionEventReceived: boolean;
+  timestamp?: string;
+}): MetaEmbeddedSignupAuditPayload {
+  return {
+    eventName: "meta.embedded_signup.session_event",
+    correlationId: options.correlationId,
+    mode: options.mode,
+    configIdRef: maskMetaEmbeddedSignupReference(options.configId),
+    timestamp: options.timestamp ?? new Date().toISOString(),
+    callbackInvoked: options.callbackInvoked,
+    eventType: "popup.closed",
+    flowStatus: options.sessionEventReceived ? "POPUP_CLOSED_AFTER_SIGNAL" : "POPUP_CLOSED_WITHOUT_SIGNAL",
+    errorPresent: false,
+  };
+}
 
 function readCodeFromString(input: string) {
   const trimmed = input.trim();

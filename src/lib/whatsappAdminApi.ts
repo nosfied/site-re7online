@@ -2492,6 +2492,39 @@ export async function onboardingExchangeCode(
   );
 }
 
+export async function recordMetaEmbeddedSignupEvent(
+  connection: AdminConnection,
+  tenantId: string,
+  payload: {
+    eventName: string;
+    correlationId: string;
+    mode: string;
+    configIdRef?: string | null;
+    timestamp?: string;
+    callbackInvoked?: boolean;
+    authResponsePresent?: boolean;
+    codePresent?: boolean;
+    status?: string | null;
+    errorPresent?: boolean;
+    originClassification?: string;
+    eventType?: string | null;
+    flowStatus?: string | null;
+    wabaIdRef?: string | null;
+    phoneNumberIdRef?: string | null;
+    businessIdRef?: string | null;
+    businessPortfolioIdRef?: string | null;
+  }
+): Promise<{ ok: true; eventName: string; correlationId: string }> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/onboarding/embedded-signup/events`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
 export async function onboardingManualBindNumber(
   connection: AdminConnection,
   tenantId: string,
