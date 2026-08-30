@@ -624,6 +624,7 @@ export type AdminTemplateRequestItem = {
   content: string;
   variables: unknown;
   variableDetails?: Array<{ key: string; description: string; example: string }>;
+  providerError?: unknown;
   category: string;
   language?: string;
   status: string;
@@ -781,10 +782,19 @@ export type TenantWebSessionStatus = {
     checkedAt: string | null;
   } | null;
   primaryTransport?: "meta" | "web_session" | null;
+  templateCategoryPolicy?: {
+    allowedCategories: string[] | null;
+    unrestricted: boolean;
+    source: "db" | "json_fallback";
+  };
   transportPolicy?: {
     configuredMode: "WEB_ONLY" | "CLOUD_ONLY" | "HYBRID" | "NONE";
     webConfigured: boolean;
     metaConfigured: boolean;
+    webTechnicallyConfigured?: boolean;
+    metaTechnicallyConfigured?: boolean;
+    webEnabledForRouting?: boolean;
+    metaEnabledForRouting?: boolean;
     webReady: boolean;
     metaReady: boolean;
     interactiveDefault: "web_session" | "meta" | null;
@@ -1673,11 +1683,11 @@ export async function cancelTenantWhatsappNumberReplacement(
 export async function updateTenantWhatsAppPrimaryTransport(
   connection: AdminConnection,
   tenantId: string,
-  provider: "meta" | "web_session"
+  provider: "meta" | "web_session" | null
 ): Promise<{
   ok: true;
   tenantId: string;
-  primaryTransport: "meta" | "web_session";
+  primaryTransport: "meta" | "web_session" | null;
   status: TenantWebSessionStatus;
 }> {
   return requestJson(
@@ -1686,6 +1696,59 @@ export async function updateTenantWhatsAppPrimaryTransport(
     {
       method: "PUT",
       body: JSON.stringify({ provider }),
+    }
+  );
+}
+
+export async function updateTenantWhatsAppTransportRouting(
+  connection: AdminConnection,
+  tenantId: string,
+  transport: "meta" | "web_session",
+  enabledForRouting: boolean
+): Promise<{
+  ok: true;
+  tenantId: string;
+  source: "db";
+  fieldsChanged: string[];
+  whatsappTransports: {
+    meta?: { enabledForRouting: boolean };
+    webSession?: { enabledForRouting: boolean };
+  };
+  status: TenantWebSessionStatus;
+  permissions: { canUpdate: boolean };
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/whatsapp/transport-routing`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ transport, enabledForRouting }),
+    }
+  );
+}
+
+export async function updateTenantWhatsAppTemplateCategoryPolicy(
+  connection: AdminConnection,
+  tenantId: string,
+  allowedCategories: string[]
+): Promise<{
+  ok: true;
+  tenantId: string;
+  source: "db";
+  fieldsChanged: string[];
+  whatsappTemplatePolicy: {
+    allowedCategories: string[];
+    unrestricted: boolean;
+  };
+  status: TenantWebSessionStatus;
+  permissions: { canUpdate: boolean };
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/whatsapp/template-category-policy`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ allowedCategories }),
     }
   );
 }

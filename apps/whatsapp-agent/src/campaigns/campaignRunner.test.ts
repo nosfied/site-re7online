@@ -26,6 +26,7 @@ async function cleanup(clientId: string) {
   await prisma.campaign.deleteMany({ where: { clientId } });
   await prisma.template.deleteMany({ where: { clientId } });
   await prisma.contact.deleteMany({ where: { clientId } });
+  await prisma.tenantOperationalConfig.deleteMany({ where: { clientId } });
   await prisma.client.deleteMany({ where: { id: clientId } });
 }
 
@@ -129,4 +130,102 @@ test("campaign runner skips operationally excluded recipients at send-time", asy
   });
   assert.ok(blockedEvent);
   assert.equal(JSON.stringify(blockedEvent.payloadJson).includes(recipients[1]), false);
+});
+
+test("campaign runner blocks send-time when template effective category is not allowed", async (t) => {
+  const clientId = crypto.randomUUID();
+  const clientKey = `campaign-runner-category-${process.pid}-${Date.now()}`;
+  const templateName = `campaign_runner_category_${Date.now()}`;
+  const recipients = ["5541991100201"];
+  await cleanup(clientId).catch(() => undefined);
+  t.after(() => {
+    void cleanup(clientId).catch(() => undefined);
+  });
+
+  await prisma.client.create({
+    data: {
+      id: clientId,
+      clientKey,
+      name: "Campaign Runner Category Test",
+      profile: "business",
+      features: { campaigns: true },
+    },
+  });
+  const template = await prisma.template.create({
+    data: {
+      clientId,
+      name: templateName,
+      category: "MARKETING",
+      submittedCategory: "UTILITY",
+      wasRecategorized: true,
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso",
+    },
+  });
+  await prisma.tenantOperationalConfig.create({
+    data: {
+      clientId,
+      schemaVersion: 1,
+      config: { whatsappTemplatePolicy: { allowedCategories: ["UTILITY"] } },
+    },
+  });
+  const campaign = await prisma.campaign.create({
+    data: {
+      clientId,
+      name: "Send-time category policy",
+      templateName,
+      templateId: template.id,
+      status: "sending",
+      totalRecipients: recipients.length,
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  let metaCalls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaCalls += 1;
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const runId = startCampaignRun({
+    campaignId: campaign.id,
+    clientId,
+    clientKey,
+    name: campaign.name,
+    templateName,
+    waIds: recipients,
+  });
+  assert.ok(runId);
+
+  await waitFor(async () => {
+    const refreshed = await prisma.campaign.findUnique({ where: { id: campaign.id } });
+    return refreshed?.status === "blocked";
+  });
+
+  const blocked = await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } });
+  assert.equal(blocked.sentCount, 0);
+  assert.equal(blocked.blockedCount, 0);
+  assert.equal(metaCalls, 0);
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId } }), 0);
+  const blockedEvent = await prisma.event.findFirst({
+    where: {
+      clientId,
+      eventName: "campaign.template.blocked",
+      messageId: campaign.id,
+    },
+    select: { payloadJson: true },
+  });
+  assert.ok(blockedEvent);
+  const payload = blockedEvent.payloadJson as Record<string, unknown>;
+  assert.equal(payload.templateId, template.id);
+  assert.equal(payload.templateCategory, "MARKETING");
+  assert.equal(payload.reason, "template_category_not_allowed");
+  assert.deepEqual(payload.allowedCategories, ["UTILITY"]);
 });

@@ -34,6 +34,8 @@ export type TenantOperationalConfigValue = {
   webSessionAlertEmails?: string[];
   inboxVisibilityPolicy?: InboxVisibilityPolicy;
   allowInteractiveContactStartViaWebSession?: boolean;
+  whatsappTransports?: WhatsappTransportRoutingSettings;
+  whatsappTemplatePolicy?: WhatsappTemplatePolicySettings;
 };
 
 export type TenantOperationalConfigSource = "db" | "json_fallback";
@@ -100,6 +102,40 @@ export type ResolvedWebSessionAlertEmails = {
 export type ResolvedInteractiveContactStartPolicy = {
   allowInteractiveContactStartViaWebSession: boolean;
   source: TenantOperationalConfigSource;
+};
+
+export type WhatsappTransportRoutingKey = "meta" | "webSession";
+
+export type WhatsappTransportRoutingSettings = {
+  meta?: {
+    enabledForRouting: boolean;
+  };
+  webSession?: {
+    enabledForRouting: boolean;
+  };
+};
+
+export type ResolvedWhatsappTransportRoutingSettings = {
+  settings: WhatsappTransportRoutingSettings;
+  source: TenantOperationalConfigSource;
+};
+
+export type WhatsappTemplateCategory = "UTILITY" | "MARKETING" | "AUTHENTICATION";
+
+export const WHATSAPP_TEMPLATE_CATEGORIES: WhatsappTemplateCategory[] = [
+  "UTILITY",
+  "MARKETING",
+  "AUTHENTICATION",
+];
+
+export type WhatsappTemplatePolicySettings = {
+  allowedCategories?: WhatsappTemplateCategory[];
+};
+
+export type ResolvedWhatsappTemplatePolicySettings = {
+  settings: WhatsappTemplatePolicySettings;
+  source: TenantOperationalConfigSource;
+  unrestricted: boolean;
 };
 
 export type PlanLimitsSettings = {
@@ -244,6 +280,63 @@ export function normalizeInboxVisibilityPolicy(input: unknown): InboxVisibilityP
 
 export function normalizeAllowInteractiveContactStartViaWebSession(input: unknown) {
   return input === true;
+}
+
+function normalizeWhatsappTransportRoutingEntry(input: unknown) {
+  if (!isRecord(input) || typeof input.enabledForRouting !== "boolean") return undefined;
+  return { enabledForRouting: input.enabledForRouting };
+}
+
+export function normalizeWhatsappTransportRoutingSettings(input: unknown): WhatsappTransportRoutingSettings {
+  const record = isRecord(input) ? input : {};
+  const settings: WhatsappTransportRoutingSettings = {};
+  const meta = normalizeWhatsappTransportRoutingEntry(record.meta);
+  const webSession = normalizeWhatsappTransportRoutingEntry(record.webSession);
+  if (meta) settings.meta = meta;
+  if (webSession) settings.webSession = webSession;
+  return settings;
+}
+
+export function isWhatsappTransportEnabledForRouting(
+  settings: WhatsappTransportRoutingSettings | null | undefined,
+  transport: WhatsappTransportRoutingKey,
+  fallbackEnabled: boolean
+) {
+  const explicit = settings?.[transport]?.enabledForRouting;
+  return typeof explicit === "boolean" ? explicit : fallbackEnabled;
+}
+
+export function normalizeWhatsappTemplateCategory(input: unknown): WhatsappTemplateCategory | null {
+  if (typeof input !== "string") return null;
+  const normalized = input.trim().toUpperCase();
+  return WHATSAPP_TEMPLATE_CATEGORIES.includes(normalized as WhatsappTemplateCategory)
+    ? (normalized as WhatsappTemplateCategory)
+    : null;
+}
+
+export function normalizeWhatsappTemplatePolicySettings(input: unknown): WhatsappTemplatePolicySettings {
+  const record = isRecord(input) ? input : {};
+  if (!Object.prototype.hasOwnProperty.call(record, "allowedCategories")) return {};
+  const allowedCategories = Array.isArray(record.allowedCategories)
+    ? Array.from(
+        new Set(
+          record.allowedCategories
+            .map((category) => normalizeWhatsappTemplateCategory(category))
+            .filter((category): category is WhatsappTemplateCategory => Boolean(category))
+        )
+      )
+    : [];
+  return { allowedCategories };
+}
+
+export function isWhatsappTemplateCategoryAllowed(
+  settings: WhatsappTemplatePolicySettings | null | undefined,
+  category: unknown
+) {
+  const normalized = normalizeWhatsappTemplateCategory(category);
+  const allowedCategories = settings?.allowedCategories;
+  if (!Array.isArray(allowedCategories)) return true;
+  return Boolean(normalized && allowedCategories.includes(normalized));
 }
 
 export const WHATSAPP_MEDIA_KINDS: WhatsappMediaKind[] = ["image", "audio", "video", "document"];
@@ -599,6 +692,12 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
       value.allowInteractiveContactStartViaWebSession
     );
   }
+  if (Object.prototype.hasOwnProperty.call(value, "whatsappTransports")) {
+    config.whatsappTransports = normalizeWhatsappTransportRoutingSettings(value.whatsappTransports);
+  }
+  if (Object.prototype.hasOwnProperty.call(value, "whatsappTemplatePolicy")) {
+    config.whatsappTemplatePolicy = normalizeWhatsappTemplatePolicySettings(value.whatsappTemplatePolicy);
+  }
   return config;
 }
 
@@ -892,6 +991,130 @@ export async function saveInteractiveContactStartPolicy(params: {
     allowInteractiveContactStartViaWebSession: parseOperationalConfig(saved.config)
       .allowInteractiveContactStartViaWebSession ?? false,
     source: "db" as const,
+  };
+}
+
+export async function resolveWhatsappTransportRoutingSettings(params: {
+  prisma: PrismaClient | Prisma.TransactionClient;
+  clientId: string;
+}): Promise<ResolvedWhatsappTransportRoutingSettings> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const rawConfig = isRecord(record?.config) ? record.config : {};
+  const hasPolicy = Object.prototype.hasOwnProperty.call(rawConfig, "whatsappTransports");
+  return {
+    settings: parseOperationalConfig(record?.config).whatsappTransports ?? {},
+    source: hasPolicy ? "db" : "json_fallback",
+  };
+}
+
+export async function saveWhatsappTransportRoutingEnabled(params: {
+  prisma: PrismaClient | Prisma.TransactionClient;
+  clientId: string;
+  transport: WhatsappTransportRoutingKey;
+  enabledForRouting: unknown;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const current = parseOperationalConfig(existing?.config).whatsappTransports ?? {};
+  const nextSettings: WhatsappTransportRoutingSettings = {
+    ...current,
+    [params.transport]: {
+      enabledForRouting: params.enabledForRouting === true,
+    },
+  };
+  const nextConfig = {
+    ...existingConfig,
+    whatsappTransports: nextSettings,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+      config: true,
+    },
+  });
+  return {
+    record: saved,
+    settings: parseOperationalConfig(saved.config).whatsappTransports ?? {},
+  };
+}
+
+export async function resolveWhatsappTemplatePolicySettings(params: {
+  prisma: PrismaClient | Prisma.TransactionClient;
+  clientId: string;
+}): Promise<ResolvedWhatsappTemplatePolicySettings> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const rawConfig = isRecord(record?.config) ? record.config : {};
+  const hasPolicy = Object.prototype.hasOwnProperty.call(rawConfig, "whatsappTemplatePolicy");
+  const settings = parseOperationalConfig(record?.config).whatsappTemplatePolicy ?? {};
+  return {
+    settings,
+    source: hasPolicy ? "db" : "json_fallback",
+    unrestricted: !Array.isArray(settings.allowedCategories),
+  };
+}
+
+export async function saveWhatsappTemplatePolicySettings(params: {
+  prisma: PrismaClient | Prisma.TransactionClient;
+  clientId: string;
+  allowedCategories: unknown;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const nextSettings = normalizeWhatsappTemplatePolicySettings({
+    allowedCategories: params.allowedCategories,
+  });
+  const nextConfig = {
+    ...existingConfig,
+    whatsappTemplatePolicy: nextSettings,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+      config: true,
+    },
+  });
+  const settings = parseOperationalConfig(saved.config).whatsappTemplatePolicy ?? {};
+  return {
+    record: saved,
+    settings,
+    source: "db" as const,
+    unrestricted: !Array.isArray(settings.allowedCategories),
   };
 }
 

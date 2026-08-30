@@ -47,6 +47,7 @@ import {
   resolveMediaHandoffPolicy,
   resolvePlanLimitsSettings,
   resolveRuntimeLimitsSettings,
+  resolveWhatsappTemplatePolicySettings,
   resolveWhatsappMediaPolicy,
   resolveWebSessionAlertEmails,
   saveAiAssistantConfigSettings,
@@ -61,6 +62,8 @@ import {
   saveMediaHandoffPolicy,
   savePlanLimitsSettings,
   saveRuntimeLimitsSettings,
+  saveWhatsappTemplatePolicySettings,
+  saveWhatsappTransportRoutingEnabled,
   saveWhatsappMediaPolicy,
   saveWebSessionAlertEmails,
   isWhatsappMediaAllowed,
@@ -163,6 +166,11 @@ import {
   syncTemplateStatus,
   validateTemplateForMeta,
 } from "../meta/template.service.js";
+import {
+  isWhatsappTemplateCategoryAllowedForTenant,
+  WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED,
+  WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED_LABEL,
+} from "../meta/templateCategoryPolicy.js";
 import {
   shouldBlockMetaCloudPhoneRegister,
   validateMetaCloudReadiness,
@@ -368,6 +376,7 @@ import { buildCrmContactDetailPayload, buildCrmContactsPayload } from "../crm/cr
 import { buildCrmWhatsappIdentityCandidates } from "../crm/crmWhatsappIdentity.js";
 import {
   isWhatsappFreeformStartTransportReady,
+  resolveConfiguredWhatsappTenantMode,
   resolveCrmWebSessionRecipient,
   resolveCrmContactConversationStartEligibility,
 } from "../crm/crmConversationStart.js";
@@ -4369,6 +4378,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         endpoint: pathname,
         requestId,
       }))) return;
+      const categoryPolicyBlock = await getTemplateCategoryPolicyUsageBlock(prisma, {
+        clientId: client.id,
+        category,
+      });
+      if (categoryPolicyBlock) {
+        json(res, 403, httpError(categoryPolicyBlock.reason, categoryPolicyBlock.label, {
+          category: categoryPolicyBlock.category,
+          allowedCategories: categoryPolicyBlock.allowedCategories,
+        }));
+        return;
+      }
 
       const existingTemplateByName = await prisma.template.findFirst({
         where: {
@@ -4794,6 +4814,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         templateIds: items.map((item) => item.id),
       });
+      const categoryPolicyByTemplateId = await getTemplateCategoryPolicyAvailabilityMap(prisma, {
+        clientId: client.id,
+        templates: items.map((item) => ({ id: item.id, category: item.category })),
+      });
+      const templateCategoryPolicy = await resolveWhatsappTemplatePolicySettings({
+        prisma,
+        clientId: client.id,
+      });
 
       triggerTemplateStatusSync({
         templateIds: await findTemplatesNeedingSync(prisma, { clientId: client.id }),
@@ -4804,11 +4832,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       json(res, 200, {
         ok: true,
         count: items.length,
+        templateCategoryPolicy: {
+          allowedCategories: templateCategoryPolicy.settings.allowedCategories ?? null,
+          unrestricted: templateCategoryPolicy.unrestricted,
+          source: templateCategoryPolicy.source,
+        },
         items: items.map((item) =>
           buildAppTemplateCatalogItem(
             item,
             latestRequestByName.get(normalizeTemplateLookupName(item.name)) ?? null,
-            localAvailabilityByTemplateId.get(item.id) ?? null
+            localAvailabilityByTemplateId.get(item.id) ?? null,
+            categoryPolicyByTemplateId.get(item.id) ?? null
           )
         ),
       });
@@ -5692,6 +5726,34 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (usageBlock?.reason) {
         json(res, 409, httpError(usageBlock.reason, usageBlock.label));
+        return;
+      }
+      const categoryPolicyBlock = await getTemplateCategoryPolicyUsageBlock(prisma, {
+        clientId: client.id,
+        category: template.category,
+      });
+      if (categoryPolicyBlock) {
+        await persistEvent({
+          clientId: client.id,
+          conversationId: conversationRow.id,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          requestId,
+          eventName: "inbox.template.blocked",
+          payloadJson: buildInboxTemplateEventPayload({
+            conversationId: conversationRow.id,
+            templateId: template.id,
+            templateName: template.name,
+            templateCategory: template.category,
+            templateLanguage: template.language,
+            windowOpenAtSend: currentConversation.window.isOpen === true,
+            reason: WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED,
+          }),
+        });
+        json(res, 403, httpError(categoryPolicyBlock.reason, categoryPolicyBlock.label, {
+          category: categoryPolicyBlock.category,
+          allowedCategories: categoryPolicyBlock.allowedCategories,
+        }));
         return;
       }
 
@@ -14190,6 +14252,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, httpError("template_not_found", "Approved template not found"));
         return;
       }
+      const categoryPolicyBlock = await getTemplateCategoryPolicyUsageBlock(prisma, {
+        clientId: client.id,
+        category: template.category,
+      });
+      if (categoryPolicyBlock) {
+        json(res, 403, httpError(categoryPolicyBlock.reason, categoryPolicyBlock.label));
+        return;
+      }
       const preview = await previewCampaignRecipientImport(prisma, {
         clientId: client.id,
         template,
@@ -14276,6 +14346,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       if (!template) {
         json(res, 404, httpError("template_not_found", "Approved template not found"));
+        return;
+      }
+      const categoryPolicyBlock = await getTemplateCategoryPolicyUsageBlock(prisma, {
+        clientId: client.id,
+        category: template.category,
+      });
+      if (categoryPolicyBlock) {
+        json(res, 403, httpError(categoryPolicyBlock.reason, categoryPolicyBlock.label));
         return;
       }
       const preview = await previewCampaignRecipientImport(prisma, {
@@ -15053,8 +15131,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                   ? "Approved template not found"
                   : sent.error === "template_locally_disabled"
                     ? "Template disabled locally in Converta"
-                  : sent.error === "template_variables_required"
-                    ? "Mapeie todas as variaveis do template antes de enviar"
+                    : sent.error === WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED
+                      ? WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED_LABEL
+                    : sent.error === "template_variables_required"
+                      ? "Mapeie todas as variaveis do template antes de enviar"
                     : sent.error === "invalid_template_variable_mapping"
                       ? "Mapeamento de variavel invalido"
                   : "Campaign not found";
@@ -15132,7 +15212,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         userId: clientAuth.userId,
       });
       if (!scheduled.ok) {
-        json(res, scheduled.status, httpError(scheduled.error, scheduled.error));
+        json(
+          res,
+          scheduled.status,
+          httpError(
+            scheduled.error,
+            scheduled.error === WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED
+              ? WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED_LABEL
+              : scheduled.error
+          )
+        );
         return;
       }
       json(res, 200, {
@@ -15207,7 +15296,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           userId: clientAuth.userId,
         });
         if (!resumed.ok) {
-          json(res, resumed.status, httpError(resumed.error, resumed.error));
+          json(
+            res,
+            resumed.status,
+            httpError(
+              resumed.error,
+              resumed.error === WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED
+                ? WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED_LABEL
+                : resumed.error
+            )
+          );
           return;
         }
         json(res, 200, {
@@ -15234,7 +15332,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         userId: clientAuth.userId,
       });
       if (!testSend.ok) {
-        json(res, testSend.status, httpError(testSend.error, testSend.error));
+        json(
+          res,
+          testSend.status,
+          httpError(
+            testSend.error,
+            testSend.error === WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED
+              ? WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED_LABEL
+              : testSend.error
+          )
+        );
         return;
       }
       json(res, 200, { ok: true, messageId: testSend.messageId });
@@ -20630,6 +20737,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const adminWhatsappPrimaryTransportMatch = pathname.match(
       /^\/admin\/tenants\/([^/]+)\/whatsapp\/primary-transport$/
     );
+    const adminWhatsappTransportRoutingMatch = pathname.match(
+      /^\/admin\/tenants\/([^/]+)\/whatsapp\/transport-routing$/
+    );
+    const adminWhatsappTemplateCategoryPolicyMatch = pathname.match(
+      /^\/admin\/tenants\/([^/]+)\/whatsapp\/template-category-policy$/
+    );
     const adminMetaReadinessRefreshMatch = pathname.match(
       /^\/admin\/tenants\/([^/]+)\/meta\/readiness\/refresh$/
     );
@@ -20782,6 +20895,183 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    if (req.method === "PUT" && adminWhatsappTransportRoutingMatch) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(adminWhatsappTransportRoutingMatch[1] ?? "").trim();
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const rawTransport = body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>).transport
+        : null;
+      const transport =
+        rawTransport === "meta"
+          ? "meta"
+          : rawTransport === "web_session" || rawTransport === "webSession"
+            ? "webSession"
+            : null;
+      if (!transport) {
+        json(res, 400, httpError("invalid_transport", "Invalid WhatsApp transport."));
+        return;
+      }
+      const enabledForRouting = body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>).enabledForRouting === true
+        : false;
+      const prisma = getPrisma();
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true, status: true, features: true, profile: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const beforeMode = await resolveConfiguredWhatsappTenantMode({
+        prisma,
+        clientId: client.id,
+      });
+      const previousEnabled =
+        transport === "meta"
+          ? beforeMode.metaEnabledForRouting === true
+          : beforeMode.webEnabledForRouting === true;
+      const saved = await saveWhatsappTransportRoutingEnabled({
+        prisma,
+        clientId: client.id,
+        transport,
+        enabledForRouting,
+      });
+      if (
+        (transport === "meta" && !enabledForRouting && beforeMode.metaConfigured) ||
+        (transport === "webSession" && !enabledForRouting && beforeMode.webConfigured)
+      ) {
+        const previousPrimary = await resolveWhatsappPrimaryTransport({
+          prisma,
+          clientId: client.id,
+        });
+        if (
+          (transport === "meta" && previousPrimary === "meta") ||
+          (transport === "webSession" && previousPrimary === "web_session")
+        ) {
+          const cleared = await clearWhatsappPrimaryTransport({
+            prisma,
+            clientId: client.id,
+          });
+          await persistEvent({
+            clientId: client.id,
+            requestId: `${requestId}:admin-whatsapp-primary-transport-cleared-by-routing`,
+            eventName: "whatsapp.primary_transport.updated",
+            payloadJson: {
+              actorUserId: `admin:${authToken.source}`,
+              tenantKey: client.clientKey,
+              previousProvider: previousPrimary,
+              provider: null,
+              cleared: cleared.cleared,
+              reason: "transport_disabled_for_routing",
+              transport: transport === "webSession" ? "web_session" : "meta",
+            },
+          });
+        }
+      }
+      const afterMode = await resolveConfiguredWhatsappTenantMode({
+        prisma,
+        clientId: client.id,
+      });
+      await persistEvent({
+        clientId: client.id,
+        requestId: `${requestId}:admin-whatsapp-transport-routing`,
+        eventName: "whatsapp.transport_routing.updated",
+        payloadJson: {
+          actorUserId: `admin:${authToken.source}`,
+          tenantKey: client.clientKey,
+          transport: transport === "webSession" ? "web_session" : "meta",
+          previousEnabled,
+          enabled: enabledForRouting,
+          configuredModeBefore: beforeMode.mode,
+          configuredModeAfter: afterMode.mode,
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        source: "db",
+        fieldsChanged: ["whatsappTransports"],
+        whatsappTransports: saved.settings,
+        status: await serializeWebSessionStatus({ prisma, client }),
+        permissions: { canUpdate: true },
+      });
+      return;
+    }
+
+    if ((req.method === "GET" || req.method === "PUT") && adminWhatsappTemplateCategoryPolicyMatch) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(adminWhatsappTemplateCategoryPolicyMatch[1] ?? "").trim();
+      const prisma = getPrisma();
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true, status: true, features: true, profile: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      if (req.method === "GET") {
+        const resolved = await resolveWhatsappTemplatePolicySettings({ prisma, clientId: client.id });
+        json(res, 200, {
+          ok: true,
+          tenantId: client.clientKey,
+          source: resolved.source,
+          whatsappTemplatePolicy: {
+            allowedCategories: resolved.settings.allowedCategories ?? null,
+            unrestricted: resolved.unrestricted,
+          },
+          permissions: { canUpdate: true },
+        });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const rawAllowedCategories = body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>).allowedCategories
+        : [];
+      const before = await resolveWhatsappTemplatePolicySettings({ prisma, clientId: client.id });
+      const saved = await saveWhatsappTemplatePolicySettings({
+        prisma,
+        clientId: client.id,
+        allowedCategories: rawAllowedCategories,
+      });
+      await persistEvent({
+        clientId: client.id,
+        requestId: `${requestId}:admin-whatsapp-template-category-policy`,
+        eventName: "whatsapp.template_category_policy.updated",
+        payloadJson: {
+          actorUserId: `admin:${authToken.source}`,
+          tenantKey: client.clientKey,
+          previous: {
+            allowedCategories: before.settings.allowedCategories ?? null,
+            unrestricted: before.unrestricted,
+            source: before.source,
+          },
+          next: {
+            allowedCategories: saved.settings.allowedCategories ?? [],
+            unrestricted: saved.unrestricted,
+            source: saved.source,
+          },
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        source: saved.source,
+        fieldsChanged: ["whatsappTemplatePolicy"],
+        whatsappTemplatePolicy: {
+          allowedCategories: saved.settings.allowedCategories ?? [],
+          unrestricted: saved.unrestricted,
+        },
+        status: await serializeWebSessionStatus({ prisma, client }),
+        permissions: { canUpdate: true },
+      });
+      return;
+    }
+
     if (req.method === "PUT" && adminWhatsappPrimaryTransportMatch) {
       if (requireSuperadmin()) return;
       const tenantId = decodeURIComponent(adminWhatsappPrimaryTransportMatch[1] ?? "").trim();
@@ -20790,7 +21080,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const provider = body && typeof body === "object" && !Array.isArray(body)
         ? (body as Record<string, unknown>).provider
         : null;
-      if (provider !== "meta" && provider !== "web_session") {
+      if (provider != null && provider !== "meta" && provider !== "web_session") {
         json(res, 400, httpError("invalid_primary_transport", "Invalid WhatsApp primary transport."));
         return;
       }
@@ -20801,6 +21091,62 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       if (!client) {
         json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      if (provider == null) {
+        const previousProvider = await resolveWhatsappPrimaryTransport({
+          prisma,
+          clientId: client.id,
+        });
+        const cleared = await clearWhatsappPrimaryTransport({
+          prisma,
+          clientId: client.id,
+        });
+        const hybrid = await resolveHybridWhatsappIdentityStatus({ prisma, clientId: client.id });
+        await persistEvent({
+          clientId: client.id,
+          requestId: `${requestId}:admin-whatsapp-primary-transport`,
+          eventName: "whatsapp.primary_transport.updated",
+          payloadJson: {
+            actorUserId: `admin:${authToken.source}`,
+            previousProvider,
+            provider: null,
+            cleared: cleared.cleared,
+            identity: hybrid.logicalIdentity
+              ? {
+                  provider: hybrid.logicalIdentity.provider,
+                  masked: hybrid.logicalIdentity.maskedNumber,
+                }
+              : null,
+          },
+        });
+        json(res, 200, {
+          ok: true,
+          tenantId: client.clientKey,
+          primaryTransport: null,
+          status: await serializeWebSessionStatus({ prisma, client }),
+        });
+        return;
+      }
+      const configuredMode = await resolveConfiguredWhatsappTenantMode({
+        prisma,
+        clientId: client.id,
+      });
+      if (
+        (
+          provider === "meta" &&
+          configuredMode.metaTechnicallyConfigured === true &&
+          configuredMode.metaRoutingPolicyExplicit === true &&
+          configuredMode.metaEnabledForRouting === false
+        ) ||
+        (
+          provider === "web_session" &&
+          configuredMode.webTechnicallyConfigured === true &&
+          configuredMode.webRoutingPolicyExplicit === true &&
+          configuredMode.webEnabledForRouting === false
+        )
+      ) {
+        json(res, 409, httpError("transport_disabled_for_routing", "WhatsApp transport is disabled for routing."));
         return;
       }
       const hybrid = await resolveHybridWhatsappIdentityStatus({ prisma, clientId: client.id });
@@ -23885,6 +24231,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           });
           return;
         }
+        if ((error as Error).message === WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED) {
+          json(res, 403, httpError(WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED, WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED_LABEL));
+          return;
+        }
         logger.error({
           event: "admin.templates.requests.submit.error",
           message: (error as Error).message,
@@ -23915,6 +24265,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const language = String(body.language ?? "").trim();
         if (!name || !content || !category || !language) {
           json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const categoryPolicyBlock = await getTemplateCategoryPolicyUsageBlock(prisma, {
+          clientId: client.id,
+          category,
+        });
+        if (categoryPolicyBlock) {
+          json(res, 403, httpError(categoryPolicyBlock.reason, categoryPolicyBlock.label));
           return;
         }
 
@@ -24692,7 +25050,7 @@ function contentHasAdjacentVariables(content: string) {
 
 function contentStartsOrEndsWithVariable(content: string) {
   const trimmed = content.trim();
-  return /^{{\s*\d+\s*}}/.test(trimmed) || /{{\s*\d+\s*}}$/.test(trimmed);
+  return /^{{\s*\d+\s*}}/.test(trimmed) || /{{\s*\d+\s*}}[\s.,;:!?]*$/.test(trimmed);
 }
 
 function isPromotionalTemplateContent(content: string) {
@@ -24810,12 +25168,17 @@ function serializeTemplateRequest<T extends {
   createdBy: string | null;
   createdAt: Date;
 }>(item: T) {
+  const variablesPayload =
+    item.variables && typeof item.variables === "object" && !Array.isArray(item.variables)
+      ? (item.variables as Record<string, unknown>)
+      : null;
   return {
     id: item.id,
     name: item.name,
     content: item.content,
     variables: item.variables,
     variableDetails: extractTemplateRequestVariableDetails(item.variables),
+    providerError: variablesPayload?.providerError ?? null,
     category: item.category,
     language: extractTemplateRequestLanguage(item.variables),
     status: item.status,
@@ -24861,6 +25224,13 @@ async function submitTemplateRequestToMeta(params: {
   const language = extractTemplateRequestLanguage(templateRequest.variables);
   const variableDetails = extractTemplateRequestVariableDetails(templateRequest.variables);
   const variablesPayload = buildTemplateRequestVariablesPayload({ language, variableDetails });
+  const categoryPolicyBlock = await getTemplateCategoryPolicyUsageBlock(params.prisma, {
+    clientId: templateRequest.clientId,
+    category: templateRequest.category,
+  });
+  if (categoryPolicyBlock) {
+    throw new Error(WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED);
+  }
 
   const tenantMetaConfig = await resolveMetaTemplateCredentialsForClient({
     clientId: templateRequest.clientId,
@@ -24928,10 +25298,14 @@ async function submitTemplateRequestToMeta(params: {
           submittedCategory: templateRequest.category,
           wasRecategorized: false,
           rejectionReason: null,
+          variables: variablesPayload,
         }
       : {
           status: "failed",
           rejectionReason: result.errorMessage,
+          variables: result.providerError
+            ? { ...variablesPayload, providerError: result.providerError }
+            : variablesPayload,
         },
     select: {
       id: true,
@@ -24952,6 +25326,9 @@ async function submitTemplateRequestToMeta(params: {
     where: { id: templateRequest.id },
     data: {
       status: result.ok ? "submitted_to_meta" : "failed",
+      variables: result.providerError
+        ? { ...variablesPayload, providerError: result.providerError }
+        : variablesPayload,
       ...(result.ok ? {} : { notes: summarizeMetaErrorMessage(result.errorMessage) }),
     },
     select: {
@@ -24978,6 +25355,7 @@ async function submitTemplateRequestToMeta(params: {
       status: updatedTemplate.status,
       submittedBy: params.actor,
       metaSubmitted: result.ok,
+      providerError: result.providerError,
     },
   });
   return {
@@ -24989,6 +25367,7 @@ async function submitTemplateRequestToMeta(params: {
       status: updatedTemplate.status,
       templateId: updatedTemplate.id,
       errorMessage: result.ok ? null : result.errorMessage,
+      providerError: result.providerError,
     },
   };
 }
@@ -25142,6 +25521,24 @@ function getTemplateUsageBlock(params: {
   return { reason: null, label: null };
 }
 
+async function getTemplateCategoryPolicyUsageBlock(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; category: string | null | undefined }
+) {
+  const decision = await isWhatsappTemplateCategoryAllowedForTenant({
+    prisma,
+    clientId: params.clientId,
+    effectiveCategory: params.category,
+  });
+  if (decision.allowed) return null;
+  return {
+    reason: decision.reason,
+    label: decision.label,
+    category: decision.category,
+    allowedCategories: decision.allowedCategories,
+  };
+}
+
 const TEMPLATE_LOCAL_DISABLED_EVENT = "template.local_disabled";
 const TEMPLATE_LOCAL_ENABLED_EVENT = "template.local_enabled";
 
@@ -25174,6 +25571,30 @@ async function getTemplateLocalAvailabilityMap(
     });
   }
   return result;
+}
+
+async function getTemplateCategoryPolicyAvailabilityMap(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; templates: Array<{ id: string; category: string | null | undefined }> }
+) {
+  const resolved = await resolveWhatsappTemplatePolicySettings({ prisma, clientId: params.clientId });
+  const result = new Map<string, { allowed: boolean; unrestricted: boolean; allowedCategories: string[] | null }>();
+  for (const template of params.templates) {
+    result.set(template.id, {
+      allowed: decisionAllowedByResolvedPolicy(resolved.settings, template.category),
+      unrestricted: resolved.unrestricted,
+      allowedCategories: resolved.settings.allowedCategories ?? null,
+    });
+  }
+  return result;
+}
+
+function decisionAllowedByResolvedPolicy(
+  settings: { allowedCategories?: Array<"UTILITY" | "MARKETING" | "AUTHENTICATION"> },
+  category: string | null | undefined
+) {
+  if (!Array.isArray(settings.allowedCategories)) return true;
+  return settings.allowedCategories.includes(normalizeTemplateCategory(category ?? "") as never);
 }
 
 async function recordTemplateLocalAvailability(
@@ -25248,10 +25669,20 @@ function buildAppTemplateCatalogItem(
     notes: string | null;
     createdAt: Date;
   } | null,
-  localAvailability?: { locallyDisabled: boolean; updatedAt: Date | null } | null
+  localAvailability?: { locallyDisabled: boolean; updatedAt: Date | null } | null,
+  categoryPolicyAvailability?: { allowed: boolean; unrestricted: boolean; allowedCategories: string[] | null } | null
 ) {
   const locallyDisabled = localAvailability?.locallyDisabled === true;
-  const block = getTemplateUsageBlock({ ...item, locallyDisabled });
+  const usageBlock = getTemplateUsageBlock({ ...item, locallyDisabled });
+  const block =
+    usageBlock.reason !== null
+      ? usageBlock
+      : categoryPolicyAvailability?.allowed === false
+        ? {
+            reason: WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED,
+            label: WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED_LABEL,
+          }
+        : usageBlock;
   const canUse = block.reason === null;
   const requestedCategory = item.submittedCategory || item.category;
   const effectiveCategory = item.category;
@@ -25305,8 +25736,12 @@ function mapTemplateValidationMessage(code: string) {
       return "O conteudo do template excede o limite permitido pela Meta.";
     case "template_variables_invalid":
       return "Revise as variaveis do template. Os placeholders devem ser sequenciais e coerentes.";
+    case "template_variable_at_edge":
+      return "O texto do modelo não pode começar ou terminar em uma variável. Inclua texto fixo após o último campo variável.";
     case "template_variable_example_required":
       return "Informe um exemplo para cada variavel do template.";
+    case "template_authentication_unsupported":
+      return "Modelos de autenticação exigem o formato OTP específico da Meta e ainda não estão disponíveis neste editor.";
     default:
       return "Nao foi possivel validar o template.";
   }
@@ -25355,7 +25790,10 @@ function isRetryableLocalTemplateFailure(
     normalizedReason === "template_language_invalid" ||
     normalizedReason === "template_content_required" ||
     normalizedReason === "template_content_too_long" ||
-    normalizedReason === "template_variables_invalid"
+    normalizedReason === "template_variables_invalid" ||
+    normalizedReason === "template_variable_at_edge" ||
+    normalizedReason === "template_variable_example_required" ||
+    normalizedReason === "template_authentication_unsupported"
   );
 }
 
@@ -28932,15 +29370,33 @@ async function resolveCampaignTemplateInput(
     templateName: string;
   }
 ): Promise<
-  | { templateId: string | null; templateName: string; language: string | null; variableKeys: string[] }
-  | { status: 400 | 404; error: string; message: string }
+  | {
+      templateId: string | null;
+      templateName: string;
+      language: string | null;
+      variableKeys: string[];
+      category: string | null;
+    }
+  | { status: 400 | 403 | 404; error: string; message: string }
 > {
   if (!params.templateId) {
+    const categoryPolicyBlock = await getTemplateCategoryPolicyUsageBlock(prisma, {
+      clientId: params.clientId,
+      category: null,
+    });
+    if (categoryPolicyBlock) {
+      return {
+        status: 403,
+        error: categoryPolicyBlock.reason,
+        message: categoryPolicyBlock.label,
+      };
+    }
     return {
       templateId: null,
       templateName: params.templateName,
       language: null,
       variableKeys: [],
+      category: null,
     };
   }
 
@@ -28953,6 +29409,7 @@ async function resolveCampaignTemplateInput(
     select: {
       id: true,
       name: true,
+      category: true,
       language: true,
       content: true,
       variables: true,
@@ -28977,11 +29434,23 @@ async function resolveCampaignTemplateInput(
       message: "Template locally disabled",
     };
   }
+  const categoryPolicyBlock = await getTemplateCategoryPolicyUsageBlock(prisma, {
+    clientId: params.clientId,
+    category: template.category,
+  });
+  if (categoryPolicyBlock) {
+    return {
+      status: 403,
+      error: categoryPolicyBlock.reason,
+      message: categoryPolicyBlock.label,
+    };
+  }
 
   return {
     templateId: template.id,
     templateName: template.name,
     language: template.language,
+    category: template.category,
     variableKeys: extractTemplatePlaceholderKeys(template.content),
   };
 }
@@ -34011,6 +34480,17 @@ async function resumeScopedCampaign(params: { clientId: string; clientKey: strin
   if (!campaign) return { ok: false as const, status: 404 as const, error: "campaign_not_found" as const };
   if (!canTransitionCampaignStatus(campaign.status, "sending")) {
     return { ok: false as const, status: 409 as const, error: "campaign_not_resumable" as const };
+  }
+  if (!campaign.templateId) {
+    return { ok: false as const, status: 400 as const, error: "template_required" as const };
+  }
+  const resolvedTemplate = await resolveCampaignTemplateInput(prisma, {
+    clientId: params.clientId,
+    templateId: campaign.templateId,
+    templateName: campaign.templateName,
+  });
+  if ("error" in resolvedTemplate) {
+    return { ok: false as const, status: resolvedTemplate.status, error: resolvedTemplate.error };
   }
   const seed = await buildCampaignDraftSeed(prisma, {
     clientId: params.clientId,

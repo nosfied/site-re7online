@@ -1,5 +1,9 @@
 import { env } from "../config/env.js";
 import { loadTenantsJsonFallback } from "../config/tenantJsonFallback.js";
+import {
+  isWhatsappTransportEnabledForRouting,
+  resolveWhatsappTransportRoutingSettings,
+} from "../config/tenantOperationalConfig.js";
 import { getPrisma } from "../db.js";
 
 export type TenantOutboundCredentials = {
@@ -13,7 +17,7 @@ export async function resolveTenantOutboundCredentials(params: {
   clientKey: string;
 }): Promise<TenantOutboundCredentials | null> {
   const prisma = getPrisma();
-  const [tenantMetaConfig, waPhoneNumber] = await Promise.all([
+  const [tenantMetaConfig, waPhoneNumber, routingSettings] = await Promise.all([
     prisma.tenantMetaConfig.findUnique({
       where: { clientId: params.clientId },
       select: {
@@ -26,6 +30,10 @@ export async function resolveTenantOutboundCredentials(params: {
       select: { phoneNumberId: true },
       orderBy: { createdAt: "asc" },
     }),
+    resolveWhatsappTransportRoutingSettings({
+      prisma,
+      clientId: params.clientId,
+    }),
   ]);
 
   const tenantMetaPhoneNumberId = String(tenantMetaConfig?.phoneNumberId ?? "").trim();
@@ -33,6 +41,15 @@ export async function resolveTenantOutboundCredentials(params: {
   const dbPhoneNumberId = String(waPhoneNumber?.phoneNumberId ?? "").trim();
   const envPhoneNumberId = String(env.WHATSAPP_PHONE_NUMBER_ID ?? "").trim();
   const envAccessToken = String(env.WHATSAPP_ACCESS_TOKEN ?? "").trim();
+  if (
+    !isWhatsappTransportEnabledForRouting(
+      routingSettings.settings,
+      "meta",
+      true
+    )
+  ) {
+    return null;
+  }
 
   if (tenantMetaBusinessToken && tenantMetaPhoneNumberId) {
     return {

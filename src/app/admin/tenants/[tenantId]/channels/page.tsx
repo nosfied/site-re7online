@@ -21,6 +21,8 @@ import {
   updateTenantWhatsAppMediaPolicy,
   updateTenantWhatsAppContactStartPolicy,
   updateTenantWhatsAppPrimaryTransport,
+  updateTenantWhatsAppTemplateCategoryPolicy,
+  updateTenantWhatsAppTransportRouting,
   WhatsappMediaKind,
   WhatsappMediaPolicy,
 } from "@/lib/whatsappAdminApi";
@@ -60,6 +62,12 @@ const TOKEN_STATUS_OPTIONS: Array<NonNullable<TenantChannelAccount["tokenStatus"
   "expired",
   "missing",
 ];
+const TEMPLATE_CATEGORY_OPTIONS = ["UTILITY", "MARKETING", "AUTHENTICATION"] as const;
+const TEMPLATE_CATEGORY_LABELS: Record<(typeof TEMPLATE_CATEGORY_OPTIONS)[number], string> = {
+  UTILITY: "Utilidade",
+  MARKETING: "Marketing",
+  AUTHENTICATION: "Autenticação",
+};
 function formatBrazilPhone(value: string | null | undefined) {
   const digits = String(value ?? "").replace(/\D/g, "");
   if (!digits) return value ?? "-";
@@ -282,7 +290,7 @@ function getConfiguredWhatsappModeLabel(status: TenantWebSessionStatus | null) {
   if (mode === "HYBRID") return "Hibrido";
   if (mode === "CLOUD_ONLY") return "Somente Meta Cloud";
   if (mode === "WEB_ONLY") return "Somente sessao Web";
-  return "Sem WhatsApp configurado";
+  return "Sem WhatsApp habilitado para roteamento";
 }
 
 function getInteractiveDefaultLabel(status: TenantWebSessionStatus | null) {
@@ -294,6 +302,39 @@ function getInteractiveDefaultLabel(status: TenantWebSessionStatus | null) {
 
 function getRuntimeReadinessLabel(value: boolean | undefined) {
   return value ? "Operacional" : "Indisponivel";
+}
+
+function getConfiguredFlagLabel(value: boolean | undefined) {
+  return value ? "Sim" : "Não";
+}
+
+function getRoutingEnabledLabel(value: boolean | undefined) {
+  return value ? "Habilitado" : "Desabilitado";
+}
+
+function getWhatsappModeLabelFromBooleans(metaConfigured: boolean, webConfigured: boolean) {
+  if (metaConfigured && webConfigured) return "Hibrido";
+  if (metaConfigured) return "Somente Meta Cloud";
+  if (webConfigured) return "Somente sessao Web";
+  return "Sem WhatsApp habilitado para roteamento";
+}
+
+function getRoutingTogglePreview(
+  status: TenantWebSessionStatus | null,
+  transport: "meta" | "web_session"
+) {
+  const policy = status?.transportPolicy;
+  if (!policy) return "-";
+  const nextMetaEnabled = transport === "meta"
+    ? !policy.metaEnabledForRouting
+    : policy.metaEnabledForRouting === true;
+  const nextWebEnabled = transport === "web_session"
+    ? !policy.webEnabledForRouting
+    : policy.webEnabledForRouting === true;
+  return getWhatsappModeLabelFromBooleans(
+    policy.metaTechnicallyConfigured === true && nextMetaEnabled,
+    policy.webTechnicallyConfigured === true && nextWebEnabled
+  );
 }
 
 function getChannelModeNote(draft: ChannelAccountDraft) {
@@ -352,6 +393,8 @@ export default function TenantChannelsPage() {
   const [mediaPolicy, setMediaPolicy] = useState<WhatsappMediaPolicy>(DEFAULT_WHATSAPP_MEDIA_POLICY);
   const [mediaPolicySource, setMediaPolicySource] = useState<"db" | "json_fallback">("json_fallback");
   const [savingMediaPolicy, setSavingMediaPolicy] = useState(false);
+  const [templateCategoryPolicy, setTemplateCategoryPolicy] = useState<string[]>([]);
+  const [templateCategoryPolicyUnrestricted, setTemplateCategoryPolicyUnrestricted] = useState(true);
   const webSessionConnectedNumber =
     webSessionStatus?.lifecycle.observedState === "CONNECTED" && webSessionStatus.account?.channelAccountId
       ? formatBrazilPhone(webSessionStatus.account.channelAccountId)
@@ -396,6 +439,8 @@ export default function TenantChannelsPage() {
         setWebSessionStatus(response.webSessionStatus ?? null);
         setAuthorizedNumber(response.webSessionStatus?.authorization.authorizedNumberCanonical ?? "");
         setReplacementNumber(response.webSessionStatus?.numberReplacement?.targetNumberCanonical ?? "");
+        setTemplateCategoryPolicy(response.webSessionStatus?.templateCategoryPolicy?.allowedCategories ?? [...TEMPLATE_CATEGORY_OPTIONS]);
+        setTemplateCategoryPolicyUnrestricted(response.webSessionStatus?.templateCategoryPolicy?.unrestricted !== false);
         setMediaPolicy(policyResponse.whatsappMediaPolicy);
         setMediaPolicySource(policyResponse.source);
       })
@@ -574,6 +619,82 @@ export default function TenantChannelsPage() {
     }
   };
 
+  const handleAutoPrimaryTransport = async () => {
+    setWebSessionWorking("primary-auto");
+    setError(null);
+    setToast(null);
+    try {
+      const response = await updateTenantWhatsAppPrimaryTransport(connection, tenantId, null);
+      setWebSessionStatus(response.status);
+      setToast("Transporte principal voltou para AUTO.");
+    } catch (err) {
+      setError((err as Error).message || "Falha ao limpar transporte principal.");
+    } finally {
+      setWebSessionWorking(null);
+    }
+  };
+
+  const handleTransportRouting = async (
+    transport: "meta" | "web_session",
+    enabledForRouting: boolean
+  ) => {
+    setWebSessionWorking(`routing-${transport}`);
+    setError(null);
+    setToast(null);
+    try {
+      const response = await updateTenantWhatsAppTransportRouting(
+        connection,
+        tenantId,
+        transport,
+        enabledForRouting
+      );
+      setWebSessionStatus(response.status);
+      setToast(
+        transport === "meta"
+          ? enabledForRouting
+            ? "Meta Cloud habilitado para roteamento."
+            : "Meta Cloud desabilitado para roteamento."
+          : enabledForRouting
+            ? "Sessão Web habilitada para roteamento."
+            : "Sessão Web desabilitada para roteamento."
+      );
+    } catch (err) {
+      setError((err as Error).message || "Falha ao atualizar roteamento do transporte.");
+    } finally {
+      setWebSessionWorking(null);
+    }
+  };
+
+  const handleTemplateCategoryToggle = (category: string, enabled: boolean) => {
+    setTemplateCategoryPolicy((current) => {
+      const next = new Set(current);
+      if (enabled) next.add(category);
+      else next.delete(category);
+      return TEMPLATE_CATEGORY_OPTIONS.filter((item) => next.has(item));
+    });
+  };
+
+  const handleSaveTemplateCategoryPolicy = async () => {
+    setWebSessionWorking("template-category-policy");
+    setError(null);
+    setToast(null);
+    try {
+      const response = await updateTenantWhatsAppTemplateCategoryPolicy(
+        connection,
+        tenantId,
+        templateCategoryPolicy
+      );
+      setWebSessionStatus(response.status);
+      setTemplateCategoryPolicy(response.whatsappTemplatePolicy.allowedCategories);
+      setTemplateCategoryPolicyUnrestricted(response.whatsappTemplatePolicy.unrestricted);
+      setToast("Categorias de modelos WhatsApp salvas.");
+    } catch (err) {
+      setError((err as Error).message || "Falha ao salvar categorias de modelos WhatsApp.");
+    } finally {
+      setWebSessionWorking(null);
+    }
+  };
+
   const handleContactStartPolicy = async (allowInteractiveContactStartViaWebSession: boolean) => {
     setWebSessionWorking("contact-start-policy");
     setError(null);
@@ -735,8 +856,24 @@ export default function TenantChannelsPage() {
             <dl className="grid gap-2 md:grid-cols-3">
               <TechnicalValue label="Modo configurado" value={getConfiguredWhatsappModeLabel(webSessionStatus)} />
               <TechnicalValue
+                label="Meta configurada"
+                value={getConfiguredFlagLabel(webSessionStatus?.transportPolicy?.metaTechnicallyConfigured)}
+              />
+              <TechnicalValue
+                label="Meta no roteamento"
+                value={getRoutingEnabledLabel(webSessionStatus?.transportPolicy?.metaEnabledForRouting)}
+              />
+              <TechnicalValue
                 label="Web runtime"
                 value={getRuntimeReadinessLabel(webSessionStatus?.transportPolicy?.webReady)}
+              />
+              <TechnicalValue
+                label="Web configurada"
+                value={getConfiguredFlagLabel(webSessionStatus?.transportPolicy?.webTechnicallyConfigured)}
+              />
+              <TechnicalValue
+                label="Web no roteamento"
+                value={getRoutingEnabledLabel(webSessionStatus?.transportPolicy?.webEnabledForRouting)}
               />
               <TechnicalValue
                 label="Meta runtime"
@@ -893,13 +1030,157 @@ export default function TenantChannelsPage() {
               </div>
             </div>
 
+            <div className="rounded-lg border border-white/10 bg-re7-navy/35 px-3 py-3">
+              <div className="flex flex-col gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">Política de roteamento</p>
+                  <p className="mt-1 text-xs text-white/60">
+                    Habilita ou desabilita o uso operacional do transporte sem apagar credenciais,
+                    histórico, sessão ou vínculo técnico.
+                  </p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-md border border-white/10 bg-white/5 px-3 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-white">Meta Cloud</p>
+                        <p className="text-xs text-white/55">
+                          Configurado: {getConfiguredFlagLabel(webSessionStatus?.transportPolicy?.metaTechnicallyConfigured)}
+                        </p>
+                        <p className="text-xs text-white/55">
+                          Roteamento: {getRoutingEnabledLabel(webSessionStatus?.transportPolicy?.metaEnabledForRouting)}
+                        </p>
+                        <p className="text-xs text-white/45">
+                          Após alterar: {getRoutingTogglePreview(webSessionStatus, "meta")}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void handleTransportRouting(
+                            "meta",
+                            !webSessionStatus?.transportPolicy?.metaEnabledForRouting
+                          )
+                        }
+                        disabled={
+                          Boolean(webSessionWorking) ||
+                          webSessionStatus?.transportPolicy?.metaTechnicallyConfigured !== true
+                        }
+                        className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {webSessionWorking === "routing-meta"
+                          ? "Salvando..."
+                          : webSessionStatus?.transportPolicy?.metaEnabledForRouting
+                            ? "Desabilitar"
+                            : "Habilitar"}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-white/10 bg-white/5 px-3 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-white">Sessão Web</p>
+                        <p className="text-xs text-white/55">
+                          Configurada: {getConfiguredFlagLabel(webSessionStatus?.transportPolicy?.webTechnicallyConfigured)}
+                        </p>
+                        <p className="text-xs text-white/55">
+                          Roteamento: {getRoutingEnabledLabel(webSessionStatus?.transportPolicy?.webEnabledForRouting)}
+                        </p>
+                        <p className="text-xs text-white/45">
+                          Após alterar: {getRoutingTogglePreview(webSessionStatus, "web_session")}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void handleTransportRouting(
+                            "web_session",
+                            !webSessionStatus?.transportPolicy?.webEnabledForRouting
+                          )
+                        }
+                        disabled={
+                          Boolean(webSessionWorking) ||
+                          webSessionStatus?.transportPolicy?.webTechnicallyConfigured !== true
+                        }
+                        className="rounded-md border border-emerald-300/40 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {webSessionWorking === "routing-web_session"
+                          ? "Salvando..."
+                          : webSessionStatus?.transportPolicy?.webEnabledForRouting
+                            ? "Desabilitar"
+                            : "Habilitar"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-white/55">
+                  Resultado atual: {getConfiguredWhatsappModeLabel(webSessionStatus)}.
+                  Se ambos forem desabilitados, nenhum transporte WhatsApp fica habilitado para roteamento.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-re7-navy/35 px-3 py-3">
+              <div className="flex flex-col gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">Categorias de modelos WhatsApp</p>
+                  <p className="mt-1 text-xs text-white/60">
+                    A Meta pode reclassificar modelos enviados. A permissão de envio usa a categoria atual atribuída pela Meta.
+                  </p>
+                  <p className="mt-1 text-xs text-white/45">
+                    {templateCategoryPolicyUnrestricted
+                      ? "Sem política explícita: comportamento atual preservado até salvar uma allowlist."
+                      : "Política explícita ativa para este tenant."}
+                  </p>
+                </div>
+                <div className="grid gap-2 md:grid-cols-3">
+                  {TEMPLATE_CATEGORY_OPTIONS.map((category) => (
+                    <label
+                      key={category}
+                      className="flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/85"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={templateCategoryPolicy.includes(category)}
+                        onChange={(event) => handleTemplateCategoryToggle(category, event.target.checked)}
+                        className="h-4 w-4 rounded border-white/20 bg-re7-navy"
+                      />
+                      {TEMPLATE_CATEGORY_LABELS[category]}
+                    </label>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveTemplateCategoryPolicy()}
+                    disabled={Boolean(webSessionWorking)}
+                    className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {webSessionWorking === "template-category-policy" ? "Salvando..." : "Salvar categorias"}
+                  </button>
+                  <span className="text-xs text-white/55">
+                    Modelos fora da allowlist continuam visíveis, mas não podem ser usados em envios.
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-end gap-2">
+              <button
+                type="button"
+                onClick={() => void handleAutoPrimaryTransport()}
+                disabled={Boolean(webSessionWorking) || webSessionStatus?.primaryTransport == null}
+                className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {webSessionWorking === "primary-auto" ? "Salvando..." : "AUTO"}
+              </button>
               <button
                 type="button"
                 onClick={() => void handlePrimaryTransport("meta")}
                 disabled={
                   Boolean(webSessionWorking) ||
                   webSessionStatus?.primaryTransport === "meta" ||
+                  webSessionStatus?.transportPolicy?.metaConfigured !== true ||
                   webSessionStatus?.numberReplacement?.status === "ACTIVE" ||
                   webSessionStatus?.metaReadiness?.operational !== true
                 }
@@ -913,6 +1194,7 @@ export default function TenantChannelsPage() {
                 disabled={
                   Boolean(webSessionWorking) ||
                   webSessionStatus?.primaryTransport === "web_session" ||
+                  webSessionStatus?.transportPolicy?.webConfigured !== true ||
                   (
                     webSessionStatus?.numberReplacement?.status === "ACTIVE" &&
                     webSessionStatus?.hybridIdentity?.web.canonicalNumber !==

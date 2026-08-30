@@ -2795,6 +2795,115 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   assert.equal(savedWebPrimary.body.status.primaryTransport, "web_session");
   assert.equal(savedWebPrimary.body.status.hybridIdentity.conflict, false);
 
+  const autoPrimary = await requestSuperadmin<{
+    ok: true;
+    primaryTransport: null;
+    status: { primaryTransport: null };
+  }>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/whatsapp/primary-transport`,
+    { provider: null }
+  );
+  assert.equal(autoPrimary.status, 200, JSON.stringify(autoPrimary.body));
+  assert.equal(autoPrimary.body.primaryTransport, null);
+  assert.equal(autoPrimary.body.status.primaryTransport, null);
+
+  const webRoutingOff = await requestSuperadmin<{
+    ok: true;
+    whatsappTransports: { webSession?: { enabledForRouting: boolean } };
+    status: {
+      transportPolicy: {
+        configuredMode: string;
+        webTechnicallyConfigured: boolean;
+        webEnabledForRouting: boolean;
+        webConfigured: boolean;
+        metaConfigured: boolean;
+      };
+    };
+  }>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/whatsapp/transport-routing`,
+    { transport: "web_session", enabledForRouting: false }
+  );
+  assert.equal(webRoutingOff.status, 200, JSON.stringify(webRoutingOff.body));
+  assert.equal(webRoutingOff.body.whatsappTransports.webSession?.enabledForRouting, false);
+  assert.equal(webRoutingOff.body.status.transportPolicy.configuredMode, "CLOUD_ONLY");
+  assert.equal(webRoutingOff.body.status.transportPolicy.webTechnicallyConfigured, true);
+  assert.equal(webRoutingOff.body.status.transportPolicy.webEnabledForRouting, false);
+  assert.equal(webRoutingOff.body.status.transportPolicy.webConfigured, false);
+  assert.equal(webRoutingOff.body.status.transportPolicy.metaConfigured, true);
+
+  const webPrimaryDisabled = await requestSuperadmin<ErrorPayload>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/whatsapp/primary-transport`,
+    { provider: "web_session" }
+  );
+  assert.equal(webPrimaryDisabled.status, 409, JSON.stringify(webPrimaryDisabled.body));
+  assert.equal(getErrorCode(webPrimaryDisabled.body), "transport_disabled_for_routing");
+
+  const webRoutingOn = await requestSuperadmin<{
+    ok: true;
+    status: { transportPolicy: { configuredMode: string; webConfigured: boolean; metaConfigured: boolean } };
+  }>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/whatsapp/transport-routing`,
+    { transport: "web_session", enabledForRouting: true }
+  );
+  assert.equal(webRoutingOn.status, 200, JSON.stringify(webRoutingOn.body));
+  assert.equal(webRoutingOn.body.status.transportPolicy.configuredMode, "HYBRID");
+  assert.equal(webRoutingOn.body.status.transportPolicy.webConfigured, true);
+  assert.equal(webRoutingOn.body.status.transportPolicy.metaConfigured, true);
+
+  const metaRoutingOff = await requestSuperadmin<{
+    ok: true;
+    status: { transportPolicy: { configuredMode: string; webConfigured: boolean; metaConfigured: boolean } };
+  }>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/whatsapp/transport-routing`,
+    { transport: "meta", enabledForRouting: false }
+  );
+  assert.equal(metaRoutingOff.status, 200, JSON.stringify(metaRoutingOff.body));
+  assert.equal(metaRoutingOff.body.status.transportPolicy.configuredMode, "WEB_ONLY");
+  assert.equal(metaRoutingOff.body.status.transportPolicy.webConfigured, true);
+  assert.equal(metaRoutingOff.body.status.transportPolicy.metaConfigured, false);
+
+  const metaPrimaryDisabled = await requestSuperadmin<ErrorPayload>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/whatsapp/primary-transport`,
+    { provider: "meta" }
+  );
+  assert.equal(metaPrimaryDisabled.status, 409, JSON.stringify(metaPrimaryDisabled.body));
+  assert.equal(getErrorCode(metaPrimaryDisabled.body), "transport_disabled_for_routing");
+
+  const metaRoutingOn = await requestSuperadmin<{
+    ok: true;
+    status: { transportPolicy: { configuredMode: string; webConfigured: boolean; metaConfigured: boolean } };
+  }>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(`${prefix}-business`)}/whatsapp/transport-routing`,
+    { transport: "meta", enabledForRouting: true }
+  );
+  assert.equal(metaRoutingOn.status, 200, JSON.stringify(metaRoutingOn.body));
+  assert.equal(metaRoutingOn.body.status.transportPolicy.configuredMode, "HYBRID");
+  assert.equal(metaRoutingOn.body.status.transportPolicy.webConfigured, true);
+  assert.equal(metaRoutingOn.body.status.transportPolicy.metaConfigured, true);
+
+  const routingEvents = await prisma.event.findMany({
+    where: {
+      clientId: businessClientId,
+      eventName: { in: ["whatsapp.transport_routing.updated", "whatsapp.primary_transport.updated"] },
+    },
+    select: { eventName: true, payloadJson: true },
+  });
+  assert.ok(routingEvents.some((event) => event.eventName === "whatsapp.transport_routing.updated"));
+  assert.ok(
+    routingEvents.some(
+      (event) =>
+        event.eventName === "whatsapp.primary_transport.updated" &&
+        (event.payloadJson as { previousProvider?: string | null; provider?: string | null }).provider === null
+    )
+  );
+
   const reset = await request<{
     status: {
       authState: { configured: boolean };
@@ -2970,6 +3079,28 @@ test("inbox routes WhatsApp web session outbound through worker without Meta fal
   await prisma.client.update({
     where: { id: businessClientId },
     data: { features: { whatsappWebSession: true } },
+  });
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      config: {
+        whatsappPrimaryTransport: "web_session",
+        whatsappTransports: {
+          meta: { enabledForRouting: false },
+          webSession: { enabledForRouting: true },
+        },
+      },
+    },
+    create: {
+      clientId: businessClientId,
+      config: {
+        whatsappPrimaryTransport: "web_session",
+        whatsappTransports: {
+          meta: { enabledForRouting: false },
+          webSession: { enabledForRouting: true },
+        },
+      },
+    },
   });
   await prisma.channelAccount.create({
     data: {
@@ -6933,6 +7064,109 @@ test("template catalog is tenant scoped and exposes campaign usage safely", asyn
   assert.match(recategorized.categoryChangeLabel ?? "", /UTILITY/);
 });
 
+test("template category policy blocks recategorized templates without hiding them", async (t) => {
+  const existingConfig = await prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: businessClientId },
+    select: { config: true },
+  });
+  t.after(async () => {
+    await prisma.tenantOperationalConfig.upsert({
+      where: { clientId: businessClientId },
+      update: { config: (existingConfig?.config ?? {}) as Prisma.InputJsonValue, schemaVersion: 1 },
+      create: {
+        clientId: businessClientId,
+        config: (existingConfig?.config ?? {}) as Prisma.InputJsonValue,
+        schemaVersion: 1,
+      },
+    });
+  });
+  const baseConfig =
+    existingConfig?.config && typeof existingConfig.config === "object" && !Array.isArray(existingConfig.config)
+      ? (existingConfig.config as Record<string, unknown>)
+      : {};
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      config: {
+        ...baseConfig,
+        whatsappTemplatePolicy: { allowedCategories: ["UTILITY"] },
+      },
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: businessClientId,
+      config: { whatsappTemplatePolicy: { allowedCategories: ["UTILITY"] } },
+      schemaVersion: 1,
+    },
+  });
+
+  const utility = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `utility_allowed_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      submittedCategory: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso utilitario",
+    },
+  });
+  const recategorized = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `utility_to_marketing_${safeTemplatePrefix}`,
+      category: "MARKETING",
+      submittedCategory: "UTILITY",
+      wasRecategorized: true,
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso recategorizado",
+    },
+  });
+
+  const listed = await request<{
+    ok: true;
+    templateCategoryPolicy: { allowedCategories: string[] | null; unrestricted: boolean };
+    items: Array<{
+      id: string;
+      category: string;
+      submittedCategory: string | null;
+      canUseInCampaign: boolean;
+      canUseInInbox: boolean;
+      blockedReason: string | null;
+      blockedReasonLabel: string | null;
+    }>;
+  }>("GET", "/app/templates", businessAdmin);
+
+  assert.equal(listed.status, 200, JSON.stringify(listed.body));
+  assert.deepEqual(listed.body.templateCategoryPolicy.allowedCategories, ["UTILITY"]);
+  assert.equal(listed.body.templateCategoryPolicy.unrestricted, false);
+
+  const listedUtility = listed.body.items.find((item) => item.id === utility.id);
+  assert.ok(listedUtility);
+  assert.equal(listedUtility.canUseInCampaign, true);
+  assert.equal(listedUtility.blockedReason, null);
+
+  const listedRecategorized = listed.body.items.find((item) => item.id === recategorized.id);
+  assert.ok(listedRecategorized);
+  assert.equal(listedRecategorized.submittedCategory, "UTILITY");
+  assert.equal(listedRecategorized.category, "MARKETING");
+  assert.equal(listedRecategorized.canUseInCampaign, false);
+  assert.equal(listedRecategorized.canUseInInbox, false);
+  assert.equal(listedRecategorized.blockedReason, "template_category_not_allowed");
+  assert.equal(listedRecategorized.blockedReasonLabel, "Categoria não habilitada para este tenant");
+
+  const marketingRequest = await request<ErrorPayload>("POST", "/app/templates/request", businessAdmin, {
+    name: `marketing_blocked_${safeTemplatePrefix}`,
+    category: "MARKETING",
+    language: "pt_BR",
+    content: "Oferta especial",
+    variableDetails: [],
+  });
+  assert.equal(marketingRequest.status, 403);
+  assert.equal(getErrorCode(marketingRequest.body), "template_category_not_allowed");
+});
+
 test("template local availability blocks campaign usage and preserves tenant isolation", async () => {
   const template = await prisma.template.create({
     data: {
@@ -8747,6 +8981,9 @@ test("template routes require auth and bulk sync fails safely without Meta confi
   assert.equal(sync.status, 401);
   assert.equal(getErrorCode(sync.body), "missing_token");
 
+  await prisma.tenantMetaConfig.deleteMany({ where: { clientId: businessClientId } });
+  await prisma.waPhoneNumber.deleteMany({ where: { clientId: businessClientId } });
+
   const response = await request<{
     error: string;
     message: string;
@@ -8764,6 +9001,38 @@ test("template routes require auth and bulk sync fails safely without Meta confi
   assert.equal(response.status, 400);
   assert.equal(getErrorCode(response.body), "meta_config_missing");
   assert.equal(JSON.stringify(response.body).includes("token"), false);
+
+  await prisma.tenantMetaConfig.create({
+    data: {
+      clientId: businessClientId,
+      phoneNumberId: "meta-phone-routing-disabled",
+      businessToken: "meta-business-token-routing-disabled",
+      wabaId: "meta-waba-routing-disabled",
+      rawPayload: {},
+    },
+  });
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      config: {
+        whatsappTransports: {
+          meta: { enabledForRouting: false },
+        },
+      },
+    },
+    create: {
+      clientId: businessClientId,
+      config: {
+        whatsappTransports: {
+          meta: { enabledForRouting: false },
+        },
+      },
+    },
+  });
+  const disabledMetaResponse = await request<ErrorPayload>("POST", "/app/templates/sync", businessAdmin);
+  assert.equal(disabledMetaResponse.status, 400);
+  assert.equal(getErrorCode(disabledMetaResponse.body), "meta_config_missing");
+  assert.equal(JSON.stringify(disabledMetaResponse.body).includes("token"), false);
 });
 
 test("bulk template sync can use env WABA only when env phone belongs to tenant", async (t) => {
@@ -8784,6 +9053,24 @@ test("bulk template sync can use env WABA only when env phone belongs to tenant"
   });
 
   await prisma.tenantMetaConfig.deleteMany({ where: { clientId: businessClientId } });
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      config: {
+        whatsappTransports: {
+          meta: { enabledForRouting: true },
+        },
+      },
+    },
+    create: {
+      clientId: businessClientId,
+      config: {
+        whatsappTransports: {
+          meta: { enabledForRouting: true },
+        },
+      },
+    },
+  });
   await prisma.waPhoneNumber.create({
     data: {
       clientId: businessClientId,
@@ -8950,6 +9237,27 @@ test("template request validation blocks unsafe variables and missing fields", a
   assert.equal(atEdge.status, 400);
   assert.equal(getErrorCode(atEdge.body), "validation_error");
 
+  const dangling = await request<ErrorPayload>("POST", "/app/templates/request", businessAdmin, {
+    name: `dangling_vars_${safeTemplatePrefix}`,
+    category: "UTILITY",
+    language: "pt_BR",
+    content: "Olá, seu exame foi marcado para {{1}}.",
+    variableDetails: [{ key: "1", description: "Data", example: "22/04/2026" }],
+  });
+  assert.equal(dangling.status, 400);
+  assert.equal(getErrorCode(dangling.body), "validation_error");
+  assert.equal((dangling.body as Record<string, unknown>).details, "template_variable_at_edge");
+
+  const malformed = await request<ErrorPayload>("POST", "/app/templates/request", businessAdmin, {
+    name: `malformed_vars_${safeTemplatePrefix}`,
+    category: "UTILITY",
+    language: "pt_BR",
+    content: "Olá {{nome}}, sua solicitação foi atualizada.",
+    variableDetails: [{ key: "nome", description: "Nome", example: "Maria" }],
+  });
+  assert.equal(malformed.status, 400);
+  assert.equal(getErrorCode(malformed.body), "validation_error");
+
   const missingExample = await request<ErrorPayload>("POST", "/app/templates/request", businessAdmin, {
     name: `missing_example_${safeTemplatePrefix}`,
     category: "UTILITY",
@@ -8959,6 +9267,32 @@ test("template request validation blocks unsafe variables and missing fields", a
   });
   assert.equal(missingExample.status, 400);
   assert.equal(getErrorCode(missingExample.body), "validation_error");
+
+  const unsupportedAuthentication = await request<ErrorPayload>("POST", "/app/templates/request", businessAdmin, {
+    name: `auth_unsupported_${safeTemplatePrefix}`,
+    category: "AUTHENTICATION",
+    language: "pt_BR",
+    content: "Olá, seu código de acesso é {{1}}.",
+    variableDetails: [{ key: "1", description: "Código", example: "123456" }],
+  });
+  assert.equal(unsupportedAuthentication.status, 400);
+  assert.equal(getErrorCode(unsupportedAuthentication.body), "validation_error");
+  assert.equal((unsupportedAuthentication.body as Record<string, unknown>).details, "template_authentication_unsupported");
+
+  const corrected = await request<{ ok: true; request: { status: string } }>(
+    "POST",
+    "/app/templates/request",
+    businessAdmin,
+    {
+      name: `corrected_vars_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      content: "Olá, seu exame foi marcado para {{1}}. Para confirmar ou remarcar, responda a esta mensagem.",
+      variableDetails: [{ key: "1", description: "Data", example: "22/04/2026" }],
+    }
+  );
+  assert.equal(corrected.status, 200);
+  assert.equal(corrected.body.request.status, "requested");
 });
 
 test("template request email failure is audited without failing creation", async (t) => {
@@ -9289,6 +9623,101 @@ test("admin submit uses saved variable examples in Meta payload", async (t) => {
       },
     ],
   });
+});
+
+test("admin submit persists safe structured Meta provider errors", async (t) => {
+  const created = await prisma.templateRequest.create({
+    data: {
+      clientId: businessClientId,
+      name: `submit_graph_error_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      content:
+        "Olá {{1}}, não conseguimos concluir sua solicitação. Responda esta mensagem para continuar com nossa equipe.",
+      variables: {
+        language: "pt_BR",
+        variableDetails: [{ key: "1", description: "nome do contato", example: "Maria" }],
+        variables: [{ key: "1", description: "nome do contato", example: "Maria" }],
+      },
+      status: "internal_approved",
+    },
+  });
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    create: {
+      clientId: businessClientId,
+      businessToken: "test-business-token-secret",
+      wabaId: "test-waba-id",
+      rawPayload: {},
+    },
+    update: {
+      businessToken: "test-business-token-secret",
+      wabaId: "test-waba-id",
+      rawPayload: {},
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      assert.equal(String((init?.headers as Record<string, string>).Authorization).includes("test-business-token-secret"), true);
+      return new Response(
+        JSON.stringify({
+          error: {
+            message: "Invalid parameter",
+            type: "OAuthException",
+            code: 100,
+            error_subcode: 2388043,
+            error_user_title: "O parâmetro components está incompleto",
+            error_user_msg: "O componente BODY precisa de exemplos válidos.",
+            error_data: {
+              details: "BODY example is missing",
+            },
+            fbtrace_id: "safe-trace-id",
+          },
+        }),
+        { status: 400, headers: { "content-type": "application/json" } }
+      );
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const response = await requestAdmin<{
+    ok: boolean;
+    request: { status: string; providerError?: Record<string, unknown> | null };
+    submission: {
+      submitted: boolean;
+      status: string;
+      errorMessage: string | null;
+      providerError?: Record<string, unknown> | null;
+    };
+  }>("POST", `/admin/templates/requests/${created.id}/submit`);
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, false);
+  assert.equal(response.body.request.status, "failed");
+  assert.equal(response.body.submission.submitted, false);
+  assert.equal(response.body.submission.errorMessage, "O componente BODY precisa de exemplos válidos.");
+  assert.deepEqual(response.body.submission.providerError, {
+    code: "100",
+    subcode: "2388043",
+    type: "OAuthException",
+    userTitle: "O parâmetro components está incompleto",
+    userMessage: "O componente BODY precisa de exemplos válidos.",
+    details: "BODY example is missing",
+    traceId: "safe-trace-id",
+  });
+
+  const storedRequest = await prisma.templateRequest.findUniqueOrThrow({
+    where: { id: created.id },
+    select: { notes: true, variables: true },
+  });
+  assert.equal(storedRequest.notes, "O componente BODY precisa de exemplos válidos.");
+  const serialized = JSON.stringify(storedRequest.variables);
+  assert.equal(serialized.includes("safe-trace-id"), true);
+  assert.equal(serialized.includes("test-business-token-secret"), false);
 });
 
 test("campaign audience preview is tenant scoped and does not create operational records", async () => {
@@ -10677,6 +11106,132 @@ test("campaign draft explicit send blocks locally disabled template without send
   assert.equal(campaign?.status, "draft");
   assert.equal(outboundCount, 0);
   assert.equal(sentEventCount, 0);
+  assert.equal(metaCalls, 0);
+});
+
+test("template category policy blocks campaign send schedule and test-send", async (t) => {
+  const existingConfig = await prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: businessClientId },
+    select: { config: true, schemaVersion: true },
+  });
+  t.after(async () => {
+    if (existingConfig) {
+      await prisma.tenantOperationalConfig.update({
+        where: { clientId: businessClientId },
+        data: {
+          config: existingConfig.config ?? {},
+          schemaVersion: existingConfig.schemaVersion,
+        },
+      });
+      return;
+    }
+    await prisma.tenantOperationalConfig.deleteMany({ where: { clientId: businessClientId } });
+  });
+
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `campaign_category_blocked_${safeTemplatePrefix}`,
+      category: "MARKETING",
+      submittedCategory: "UTILITY",
+      wasRecategorized: true,
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso sem variaveis.",
+    },
+  });
+  const waId = "5541991189106";
+  const lead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Categoria Bloqueada",
+      phone: waId,
+      status: "RETORNO_FUTURO",
+    },
+  });
+
+  const created = await request<{
+    ok: boolean;
+    campaign: { id: string; status: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Rascunho com categoria bloqueada",
+    templateId: template.id,
+    selectedLeadIds: [lead.id],
+  });
+  assert.equal(created.status, 200, JSON.stringify(created.body));
+  assert.equal(created.body.campaign.status, "draft");
+
+  const baseConfig =
+    existingConfig?.config && typeof existingConfig.config === "object" && !Array.isArray(existingConfig.config)
+      ? (existingConfig.config as Record<string, unknown>)
+      : {};
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      config: {
+        ...baseConfig,
+        whatsappTemplatePolicy: { allowedCategories: ["UTILITY"] },
+      },
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: businessClientId,
+      config: { whatsappTemplatePolicy: { allowedCategories: ["UTILITY"] } },
+      schemaVersion: 1,
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  let metaCalls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaCalls += 1;
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const send = await request<ErrorPayload>("POST", `/app/campaigns/${created.body.campaign.id}/send`, businessAdmin);
+  assert.equal(send.status, 403, JSON.stringify(send.body));
+  assert.equal(getErrorCode(send.body), "template_category_not_allowed");
+
+  const schedule = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/schedule`,
+    businessAdmin,
+    { scheduledAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() }
+  );
+  assert.equal(schedule.status, 403, JSON.stringify(schedule.body));
+  assert.equal(getErrorCode(schedule.body), "template_category_not_allowed");
+
+  const testSend = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId }
+  );
+  assert.equal(testSend.status, 403, JSON.stringify(testSend.body));
+  assert.equal(getErrorCode(testSend.body), "template_category_not_allowed");
+
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: created.body.campaign.id },
+    select: { status: true, scheduledAt: true },
+  });
+  assert.equal(campaign?.status, "draft");
+  assert.equal(campaign?.scheduledAt, null);
+  assert.equal(
+    await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${created.body.campaign.id}.` } },
+    }),
+    0
+  );
   assert.equal(metaCalls, 0);
 });
 

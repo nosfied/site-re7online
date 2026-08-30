@@ -81,6 +81,7 @@ type ExistingSeed = {
 type TemplateContext = {
   templateId: string | null;
   templateName: string;
+  category: string | null;
   templateContent: string | null;
 };
 
@@ -201,18 +202,18 @@ export async function resolveCampaignImportTemplate(
     if (!campaign?.templateId) return null;
     const template = await prisma.template.findFirst({
       where: { id: campaign.templateId, clientId: params.clientId },
-      select: { id: true, name: true, content: true },
+      select: { id: true, name: true, category: true, content: true },
     });
     if (!template) return null;
-    return { templateId: template.id, templateName: template.name, templateContent: template.content };
+    return { templateId: template.id, templateName: template.name, category: template.category, templateContent: template.content };
   }
   if (!params.templateId) return null;
   const template = await prisma.template.findFirst({
     where: { id: params.templateId, clientId: params.clientId, status: "approved" },
-    select: { id: true, name: true, content: true },
+    select: { id: true, name: true, category: true, content: true },
   });
   if (!template) return null;
-  return { templateId: template.id, templateName: template.name, templateContent: template.content };
+  return { templateId: template.id, templateName: template.name, category: template.category, templateContent: template.content };
 }
 
 export function parseCampaignCsv(text: string) {

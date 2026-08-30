@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   isWhatsappFreeformStartTransportReady,
+  resolveConfiguredWhatsappTenantMode,
   resolveEffectiveWhatsappOutboundTransport,
   resolveCrmContactConversationStartEligibility,
 } from "./crmConversationStart.js";
@@ -11,9 +12,14 @@ function makePrisma(overrides: {
   contactLifecycle?: string;
   channel?: string | null;
   webConfigured?: boolean;
+  runtimeEnabled?: boolean;
   outboundEnabled?: boolean;
   metaConfigured?: boolean;
   metaOperational?: boolean;
+  whatsappTransports?: {
+    meta?: { enabledForRouting: boolean };
+    webSession?: { enabledForRouting: boolean };
+  };
   allowInteractiveContactStartViaWebSession?: boolean;
   optOut?: boolean;
   operationallyExcluded?: boolean;
@@ -55,11 +61,17 @@ function makePrisma(overrides: {
                 ...(overrides.allowInteractiveContactStartViaWebSession === true
                   ? { allowInteractiveContactStartViaWebSession: true }
                   : {}),
+                ...(overrides.whatsappTransports
+                  ? { whatsappTransports: overrides.whatsappTransports }
+                  : {}),
               }
             : {
                 whatsappPrimaryTransport: overrides.primaryTransport ?? "web_session",
                 ...(overrides.allowInteractiveContactStartViaWebSession === true
                   ? { allowInteractiveContactStartViaWebSession: true }
+                  : {}),
+                ...(overrides.whatsappTransports
+                  ? { whatsappTransports: overrides.whatsappTransports }
                   : {}),
               },
       }),
@@ -102,7 +114,7 @@ function makePrisma(overrides: {
               channelAccountId: "web-session-1",
               enabled: true,
               outboundEnabled: overrides.outboundEnabled ?? true,
-              runtimeEnabled: true,
+              runtimeEnabled: overrides.runtimeEnabled ?? true,
               status: "connected",
               metadata: {
                 webSession: {
@@ -134,6 +146,127 @@ function makePrisma(overrides: {
     },
   };
 }
+
+test("configured WhatsApp mode keeps backward-compatible defaults without routing policy", async () => {
+  const hybrid = await resolveConfiguredWhatsappTenantMode({
+    prisma: makePrisma({ primaryTransport: null, outboundEnabled: true, metaOperational: true }) as never,
+    clientId: "client-1",
+  });
+  assert.equal(hybrid.mode, "HYBRID");
+  assert.equal(hybrid.webConfigured, true);
+  assert.equal(hybrid.metaConfigured, true);
+
+  const cloudOnly = await resolveConfiguredWhatsappTenantMode({
+    prisma: makePrisma({
+      primaryTransport: null,
+      webConfigured: false,
+      metaConfigured: true,
+      metaOperational: true,
+    }) as never,
+    clientId: "client-1",
+  });
+  assert.equal(cloudOnly.mode, "CLOUD_ONLY");
+
+  const webOnly = await resolveConfiguredWhatsappTenantMode({
+    prisma: makePrisma({ primaryTransport: null, outboundEnabled: true, metaOperational: false }) as never,
+    clientId: "client-1",
+  });
+  assert.equal(webOnly.mode, "WEB_ONLY");
+});
+
+test("configured WhatsApp mode honors explicit non-destructive routing toggles", async () => {
+  const cloudOnly = await resolveConfiguredWhatsappTenantMode({
+    prisma: makePrisma({
+      primaryTransport: null,
+      outboundEnabled: true,
+      metaOperational: true,
+      whatsappTransports: {
+        meta: { enabledForRouting: true },
+        webSession: { enabledForRouting: false },
+      },
+    }) as never,
+    clientId: "client-1",
+  });
+  assert.deepEqual(
+    {
+      mode: cloudOnly.mode,
+      webConfigured: cloudOnly.webConfigured,
+      metaConfigured: cloudOnly.metaConfigured,
+      webTechnicallyConfigured: cloudOnly.webTechnicallyConfigured,
+      metaTechnicallyConfigured: cloudOnly.metaTechnicallyConfigured,
+      webEnabledForRouting: cloudOnly.webEnabledForRouting,
+      metaEnabledForRouting: cloudOnly.metaEnabledForRouting,
+    },
+    {
+      mode: "CLOUD_ONLY",
+      webConfigured: false,
+      metaConfigured: true,
+      webTechnicallyConfigured: true,
+      metaTechnicallyConfigured: true,
+      webEnabledForRouting: false,
+      metaEnabledForRouting: true,
+    }
+  );
+
+  const webOnly = await resolveConfiguredWhatsappTenantMode({
+    prisma: makePrisma({
+      primaryTransport: null,
+      outboundEnabled: true,
+      metaOperational: true,
+      whatsappTransports: {
+        meta: { enabledForRouting: false },
+        webSession: { enabledForRouting: true },
+      },
+    }) as never,
+    clientId: "client-1",
+  });
+  assert.equal(webOnly.mode, "WEB_ONLY");
+
+  const none = await resolveConfiguredWhatsappTenantMode({
+    prisma: makePrisma({
+      primaryTransport: null,
+      outboundEnabled: true,
+      metaOperational: true,
+      whatsappTransports: {
+        meta: { enabledForRouting: false },
+        webSession: { enabledForRouting: false },
+      },
+    }) as never,
+    clientId: "client-1",
+  });
+  assert.equal(none.mode, "NONE");
+});
+
+test("configured WhatsApp mode separates technical Web configuration from legacy routing default", async () => {
+  const legacyRuntimeOff = await resolveConfiguredWhatsappTenantMode({
+    prisma: makePrisma({
+      primaryTransport: null,
+      runtimeEnabled: false,
+      metaConfigured: false,
+      metaOperational: false,
+    }) as never,
+    clientId: "client-1",
+  });
+  assert.equal(legacyRuntimeOff.webTechnicallyConfigured, true);
+  assert.equal(legacyRuntimeOff.webEnabledForRouting, false);
+  assert.equal(legacyRuntimeOff.mode, "NONE");
+
+  const explicitlyEnabledRuntimeOff = await resolveConfiguredWhatsappTenantMode({
+    prisma: makePrisma({
+      primaryTransport: null,
+      runtimeEnabled: false,
+      metaConfigured: false,
+      metaOperational: false,
+      whatsappTransports: {
+        webSession: { enabledForRouting: true },
+      },
+    }) as never,
+    clientId: "client-1",
+  });
+  assert.equal(explicitlyEnabledRuntimeOff.webTechnicallyConfigured, true);
+  assert.equal(explicitlyEnabledRuntimeOff.webEnabledForRouting, true);
+  assert.equal(explicitlyEnabledRuntimeOff.mode, "WEB_ONLY");
+});
 
 test("effective WhatsApp outbound transport honors explicit primary and legacy single transport fallback", async () => {
   const explicitWeb = await resolveEffectiveWhatsappOutboundTransport({
@@ -258,6 +391,48 @@ test("effective WhatsApp outbound transport honors explicit primary and legacy s
     configuredMode: "HYBRID",
   });
 
+  const webRoutingDisabled = await resolveEffectiveWhatsappOutboundTransport({
+    prisma: makePrisma({
+      primaryTransport: null,
+      outboundEnabled: true,
+      metaOperational: true,
+      whatsappTransports: {
+        meta: { enabledForRouting: true },
+        webSession: { enabledForRouting: false },
+      },
+    }) as never,
+    clientId: "client-1",
+    clientKey: "tenant-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(webRoutingDisabled, {
+    status: "ready",
+    provider: "meta",
+    source: "configured_cloud_only",
+    configuredMode: "CLOUD_ONLY",
+  });
+
+  const metaRoutingDisabled = await resolveEffectiveWhatsappOutboundTransport({
+    prisma: makePrisma({
+      primaryTransport: null,
+      outboundEnabled: true,
+      metaOperational: true,
+      whatsappTransports: {
+        meta: { enabledForRouting: false },
+        webSession: { enabledForRouting: true },
+      },
+    }) as never,
+    clientId: "client-1",
+    clientKey: "tenant-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(metaRoutingDisabled, {
+    status: "ready",
+    provider: "web_session",
+    source: "configured_web_only",
+    configuredMode: "WEB_ONLY",
+  });
+
   const none = await resolveEffectiveWhatsappOutboundTransport({
     prisma: makePrisma({
       primaryTransport: null,
@@ -364,6 +539,23 @@ test("CRM start eligibility requires explicit policy for Web Session freeform co
     clientStatus: "ACTIVE",
   });
   assert.deepEqual(noOutbound, { allowed: false, reason: "channel_unavailable" });
+
+  const webRoutingOff = await isWhatsappFreeformStartTransportReady({
+    prisma: makePrisma({
+      primaryTransport: null,
+      outboundEnabled: true,
+      metaOperational: true,
+      allowInteractiveContactStartViaWebSession: true,
+      whatsappTransports: {
+        meta: { enabledForRouting: true },
+        webSession: { enabledForRouting: false },
+      },
+    }) as never,
+    clientId: "client-1",
+    clientKey: "tenant-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(webRoutingOff, { allowed: false, reason: "new_freeform_requires_model" });
 });
 
 test("CRM start eligibility blocks non-authorized, provisional, non-WhatsApp, and opted-out contacts", async () => {

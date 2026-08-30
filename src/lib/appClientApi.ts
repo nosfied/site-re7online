@@ -998,12 +998,19 @@ export type AppTemplateItem = {
   updatedAt: string;
 };
 
+export type AppTemplateCategoryPolicy = {
+  allowedCategories: string[] | null;
+  unrestricted: boolean;
+  source: "db" | "json_fallback";
+};
+
 export type AppTemplateRequestItem = {
   id: string;
   name: string;
   content: string;
   variables: unknown;
   variableDetails?: Array<{ key: string; description: string; example: string }>;
+  providerError?: unknown;
   category: string;
   language?: string;
   status: string;
@@ -4673,7 +4680,7 @@ export async function cancelAppCampaign(
 
 export async function listAppTemplates(
   session: AppSession
-): Promise<{ ok: true; count: number; items: AppTemplateItem[] }> {
+): Promise<{ ok: true; count: number; items: AppTemplateItem[]; templateCategoryPolicy?: AppTemplateCategoryPolicy }> {
   return requestAppJson(session, "/app/templates");
 }
 

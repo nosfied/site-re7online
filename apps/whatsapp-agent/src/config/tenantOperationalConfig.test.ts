@@ -12,7 +12,13 @@ import {
   normalizeWhatsappMediaPolicy,
   isWhatsappMediaAllowed,
   resolveInteractiveContactStartPolicy,
+  resolveWhatsappTransportRoutingSettings,
+  resolveWhatsappTemplatePolicySettings,
   saveInteractiveContactStartPolicy,
+  saveWhatsappTemplatePolicySettings,
+  saveWhatsappTransportRoutingEnabled,
+  isWhatsappTemplateCategoryAllowed,
+  isWhatsappTransportEnabledForRouting,
 } from "./tenantOperationalConfig.js";
 
 function prismaWithConfig(config: unknown) {
@@ -167,6 +173,125 @@ test("saveInteractiveContactStartPolicy persists explicit Web Session contact st
   assert.deepEqual(storedConfig, {
     whatsappPrimaryTransport: "web_session",
     allowInteractiveContactStartViaWebSession: true,
+  });
+});
+
+test("resolveWhatsappTransportRoutingSettings is backward-compatible when absent", async () => {
+  const resolved = await resolveWhatsappTransportRoutingSettings({
+    prisma: prismaWithConfig({}),
+    clientId: "client-1",
+  });
+
+  assert.equal(resolved.source, "json_fallback");
+  assert.deepEqual(resolved.settings, {});
+  assert.equal(isWhatsappTransportEnabledForRouting(resolved.settings, "meta", true), true);
+  assert.equal(isWhatsappTransportEnabledForRouting(resolved.settings, "webSession", false), false);
+});
+
+test("saveWhatsappTransportRoutingEnabled persists one transport without touching other config", async () => {
+  let storedConfig: unknown = {
+    whatsappPrimaryTransport: "meta",
+    allowInteractiveContactStartViaWebSession: true,
+    whatsappTransports: {
+      meta: { enabledForRouting: true },
+    },
+  };
+  const prisma = {
+    tenantOperationalConfig: {
+      findUnique: async () => ({ config: storedConfig }),
+      upsert: async ({ update, create }: { update: { config: unknown }; create: { config: unknown } }) => {
+        storedConfig = update.config ?? create.config;
+        return { id: "cfg-1", schemaVersion: 1, updatedAt: new Date(), config: storedConfig };
+      },
+    },
+  } as never;
+
+  const saved = await saveWhatsappTransportRoutingEnabled({
+    prisma,
+    clientId: "client-1",
+    transport: "webSession",
+    enabledForRouting: false,
+  });
+
+  assert.deepEqual(saved.settings, {
+    meta: { enabledForRouting: true },
+    webSession: { enabledForRouting: false },
+  });
+  assert.deepEqual(storedConfig, {
+    whatsappPrimaryTransport: "meta",
+    allowInteractiveContactStartViaWebSession: true,
+    whatsappTransports: {
+      meta: { enabledForRouting: true },
+      webSession: { enabledForRouting: false },
+    },
+  });
+});
+
+test("resolveWhatsappTemplatePolicySettings is unrestricted when absent", async () => {
+  const resolved = await resolveWhatsappTemplatePolicySettings({
+    prisma: prismaWithConfig({}),
+    clientId: "client-1",
+  });
+
+  assert.equal(resolved.source, "json_fallback");
+  assert.equal(resolved.unrestricted, true);
+  assert.deepEqual(resolved.settings, {});
+  assert.equal(isWhatsappTemplateCategoryAllowed(resolved.settings, "UTILITY"), true);
+  assert.equal(isWhatsappTemplateCategoryAllowed(resolved.settings, "MARKETING"), true);
+});
+
+test("resolveWhatsappTemplatePolicySettings normalizes explicit allowlist", async () => {
+  const resolved = await resolveWhatsappTemplatePolicySettings({
+    prisma: prismaWithConfig({
+      whatsappTemplatePolicy: {
+        allowedCategories: ["utility", "UTILITY", "bad", "MARKETING"],
+      },
+    }),
+    clientId: "client-1",
+  });
+
+  assert.equal(resolved.source, "db");
+  assert.equal(resolved.unrestricted, false);
+  assert.deepEqual(resolved.settings, {
+    allowedCategories: ["UTILITY", "MARKETING"],
+  });
+  assert.equal(isWhatsappTemplateCategoryAllowed(resolved.settings, "UTILITY"), true);
+  assert.equal(isWhatsappTemplateCategoryAllowed(resolved.settings, "AUTHENTICATION"), false);
+});
+
+test("saveWhatsappTemplatePolicySettings persists allowlist without touching other config", async () => {
+  let storedConfig: unknown = {
+    whatsappPrimaryTransport: "meta",
+    whatsappTransports: {
+      meta: { enabledForRouting: true },
+    },
+  };
+  const prisma = {
+    tenantOperationalConfig: {
+      findUnique: async () => ({ config: storedConfig }),
+      upsert: async ({ update, create }: { update: { config: unknown }; create: { config: unknown } }) => {
+        storedConfig = update.config ?? create.config;
+        return { id: "cfg-1", schemaVersion: 1, updatedAt: new Date(), config: storedConfig };
+      },
+    },
+  } as never;
+
+  const saved = await saveWhatsappTemplatePolicySettings({
+    prisma,
+    clientId: "client-1",
+    allowedCategories: ["UTILITY"],
+  });
+
+  assert.equal(saved.unrestricted, false);
+  assert.deepEqual(saved.settings, { allowedCategories: ["UTILITY"] });
+  assert.deepEqual(storedConfig, {
+    whatsappPrimaryTransport: "meta",
+    whatsappTransports: {
+      meta: { enabledForRouting: true },
+    },
+    whatsappTemplatePolicy: {
+      allowedCategories: ["UTILITY"],
+    },
   });
 });
 

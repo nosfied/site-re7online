@@ -24,12 +24,23 @@ The platform must never silently fail over after a send failure. If the selected
 
 ## Tenant Modes
 
-Tenant mode is derived from durable configured capability, not from transient runtime readiness and not from tenant hardcode.
+Tenant mode is derived from durable configured capability plus explicit routing enablement, not from transient runtime readiness and not from tenant hardcode.
 
 Configured capability answers which transports are intentionally enabled for the tenant:
 
 - Meta Cloud: tenant has an active Meta configuration or provider-confirmed legacy Meta phone mapping.
-- Web Session: tenant has an enabled Web Session `ChannelAccount`, `runtimeEnabled=true`, and the `whatsappWebSession` feature enabled.
+- Web Session: tenant has an enabled Web Session `ChannelAccount` and the `whatsappWebSession` feature enabled.
+
+Routing enablement answers whether a configured transport is allowed to participate in product routing:
+
+`TenantOperationalConfig.config.whatsappTransports = { meta: { enabledForRouting }, webSession: { enabledForRouting } }`
+
+Tenants without this explicit policy keep backward-compatible defaults:
+
+- Meta defaults to enabled for routing when Meta is durably configured and not administratively removed.
+- Web Session defaults to enabled for routing only under the previous safe durable semantics, including `runtimeEnabled=true`.
+
+After an internal admin explicitly changes a transport policy, that value is authoritative. A transport may remain technically configured and runtime-ready while disabled for routing.
 
 Runtime readiness answers whether each configured transport is currently usable:
 
@@ -41,10 +52,11 @@ Modes:
 - `WEB_ONLY`: Web Session is intentionally configured and Meta Cloud is absent or intentionally removed.
 - `CLOUD_ONLY`: Meta Cloud is intentionally configured and Web Session is absent or intentionally disabled/removed.
 - `HYBRID`: Meta Cloud and Web Session are both intentionally configured.
+- `NONE`: no WhatsApp transport is enabled for routing.
 
 Runtime failure does not change mode. A `HYBRID` tenant with Meta operational and Web Session `QR_REQUIRED` remains `HYBRID`; interactive Web-routed operations return a typed unavailable result instead of silently becoming Cloud-only.
 
-Mode transitions are explicit administrative decisions. A tenant may move between `WEB_ONLY`, `CLOUD_ONLY` and `HYBRID` by enabling, disabling or removing configured transports, without tenant recreation, contact recreation, conversation migration or history loss.
+Mode transitions are explicit administrative decisions. A tenant may move between `WEB_ONLY`, `CLOUD_ONLY` and `HYBRID` by enabling or disabling configured transports for routing, without tenant recreation, contact recreation, conversation migration, history loss, Meta re-onboarding or Web Session re-pairing when the underlying configuration remains valid.
 
 CRA-PR may start in `HYBRID` to accelerate rollout with customer authorization and later move to `CLOUD_ONLY`. SECULT-PE must remain compatible with future `WEB_ONLY`, `HYBRID` or `CLOUD_ONLY` operation. These are operating examples, not code rules.
 
@@ -70,6 +82,32 @@ The following operations are Meta Cloud only:
 - Mass or bulk send
 
 Campaigns must never route through Web Session. A Meta campaign/template failure must never fall back to Web Session.
+
+If Meta Cloud is disabled for routing, templates, scheduled templates, campaigns and mass sends are unavailable even when Meta credentials still exist. The platform must return an explicit disabled or unavailable result and must not route those operations through Web Session.
+
+## Template Category Policy
+
+Template category authorization is tenant-scoped and independent from transport routing.
+
+The canonical storage is:
+
+`TenantOperationalConfig.config.whatsappTemplatePolicy = { allowedCategories: ["UTILITY", "MARKETING", "AUTHENTICATION"] }`
+
+When `whatsappTemplatePolicy` is absent, the tenant keeps the previous unrestricted behavior for backward compatibility. When it is present, the allowlist is authoritative. An explicit empty allowlist means no template categories are enabled for sending.
+
+The category used for authorization is the current provider-confirmed Meta category:
+
+- `Template.category`: effective/current Meta category.
+- `Template.submittedCategory`: category requested by the tenant or operator when submitted.
+- `Template.wasRecategorized`: audit signal that Meta changed the category.
+
+If Meta reclassifies a template from `UTILITY` to `MARKETING`, and the tenant only allows `UTILITY`, the template can remain approved and visible but must be disabled for use. The platform must block direct template send, campaign send, campaign test-send, scheduled campaign send and any other approved-template send path with `template_category_not_allowed`. It must not automatically expand the tenant allowlist and must not fall back to Web Session.
+
+The internal admin console may edit the allowlist and must audit updates through `whatsapp.template_category_policy.updated`. Normal tenant users only see allowed categories for new template requests. Existing templates outside the allowlist remain visible with a user-facing blocked reason.
+
+Category authorization is not the same as component-format support in the current editor. The generic tenant template editor supports freeform text templates for `UTILITY` and `MARKETING`. `AUTHENTICATION` remains a valid tenant policy category, but Meta authentication templates require the specialized OTP component model (`BODY` security recommendation, optional expiration footer and OTP buttons) and must not be faked as a freeform body with `{{1}}`.
+
+Before submitting a generic text template to Meta, the platform validates common format failures locally: malformed placeholders, non-sequential variables, missing examples and dangling variables at the beginning or effective end of the body. A trailing variable followed only by punctuation or whitespace is treated as dangling. When Meta still rejects a submission, the platform stores only safe provider diagnostics, such as code, subcode, user message, details and trace id. Tokens, secrets and raw Authorization data must never be persisted.
 
 ## Hybrid Default
 
@@ -141,6 +179,14 @@ Only the internal admin console should change this flag. Changes must be audited
 
 It is used for diagnostics, contingency, controlled switching and temporary Cloud-first/Web-first operation.
 
+The override values are:
+
+- `AUTO`: no `whatsappPrimaryTransport` value. Interactive routing follows the configured tenant mode.
+- `META_CLOUD`: stored as `whatsappPrimaryTransport="meta"`.
+- `WEB_SESSION`: stored as `whatsappPrimaryTransport="web_session"`.
+
+Selecting an explicit override is allowed only when that transport is enabled for routing. Returning to `AUTO` must be available from the internal admin console without manual backend intervention.
+
 Hard operation requirements have precedence. For example:
 
 - `primary=WEB_SESSION` and `CAMPAIGN` still routes to Meta Cloud.
@@ -161,6 +207,8 @@ It should not expose provider pickers, phone number ids, WABA ids, ChannelAccoun
 The internal `/admin` console may display:
 
 - mode: `WEB_ONLY`, `CLOUD_ONLY`, `HYBRID`;
+- technical configuration: whether assets or sessions exist;
+- enabled for routing: explicit policy toggles;
 - WhatsApp Business App state where relevant;
 - Meta Cloud readiness;
 - Web Session state;
@@ -168,6 +216,12 @@ The internal `/admin` console may display:
 - template/campaign routing;
 - Contact Start via Web policy;
 - operational primary override.
+
+The admin console should group actions by intent:
+
+- Policy, non-destructive: transport routing toggles, primary override and Contact Start via Web policy.
+- Technical: Meta onboarding/reconfigure and Web Session pair/reconnect.
+- Destructive: Meta binding removal, Web identity release and channel account removal.
 
 ## Meta Billing Readiness
 

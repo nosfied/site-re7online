@@ -1,6 +1,9 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { getFeatures } from "../features/clientFeatures.js";
-import { resolveInteractiveContactStartPolicy } from "../config/tenantOperationalConfig.js";
+import {
+  resolveInteractiveContactStartPolicy,
+  resolveWhatsappTemplatePolicySettings,
+} from "../config/tenantOperationalConfig.js";
 import { resolveConfiguredWhatsappTenantMode } from "../crm/crmConversationStart.js";
 import { persistEvent } from "../db/persist.js";
 import { readMetaCloudReadinessSnapshot } from "../meta/metaCloudReadiness.js";
@@ -168,6 +171,10 @@ export async function serializeWebSessionStatus(params: {
     prisma: params.prisma,
     clientId: params.client.id,
   });
+  const templateCategoryPolicy = await resolveWhatsappTemplatePolicySettings({
+    prisma: params.prisma,
+    clientId: params.client.id,
+  });
   const configuredMode = await resolveConfiguredWhatsappTenantMode({
     prisma: params.prisma,
     clientId: params.client.id,
@@ -222,6 +229,10 @@ export async function serializeWebSessionStatus(params: {
       configuredMode: configuredMode.mode,
       webConfigured: configuredMode.webConfigured,
       metaConfigured: configuredMode.metaConfigured,
+      webTechnicallyConfigured: configuredMode.webTechnicallyConfigured ?? configuredMode.webConfigured,
+      metaTechnicallyConfigured: configuredMode.metaTechnicallyConfigured ?? configuredMode.metaConfigured,
+      webEnabledForRouting: configuredMode.webEnabledForRouting ?? configuredMode.webConfigured,
+      metaEnabledForRouting: configuredMode.metaEnabledForRouting ?? configuredMode.metaConfigured,
       webReady,
       metaReady: metaReadiness?.operational === true,
       interactiveDefault:
@@ -234,6 +245,11 @@ export async function serializeWebSessionStatus(params: {
       campaignTransport: "meta",
     },
     primaryTransport,
+    templateCategoryPolicy: {
+      allowedCategories: templateCategoryPolicy.settings.allowedCategories ?? null,
+      unrestricted: templateCategoryPolicy.unrestricted,
+      source: templateCategoryPolicy.source,
+    },
     contactStartPolicy,
     detectedNumber: account
       ? {

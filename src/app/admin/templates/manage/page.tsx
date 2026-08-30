@@ -90,6 +90,28 @@ function isAdminTemplateRequestSyncable(status: string) {
   );
 }
 
+function readProviderError(item: AdminTemplateRequestItem | null) {
+  const providerError = item?.providerError;
+  if (!providerError || typeof providerError !== "object" || Array.isArray(providerError)) return null;
+  const raw = providerError as Record<string, unknown>;
+  const read = (key: string) => {
+    const value = raw[key];
+    if (typeof value !== "string" && typeof value !== "number") return null;
+    const normalized = String(value).trim();
+    return normalized || null;
+  };
+  const details = {
+    code: read("code"),
+    subcode: read("subcode"),
+    type: read("type"),
+    userTitle: read("userTitle"),
+    userMessage: read("userMessage"),
+    details: read("details"),
+    traceId: read("traceId"),
+  };
+  return Object.values(details).some(Boolean) ? details : null;
+}
+
 function buildTemplatePreviewWithExamples(
   content: string,
   variables: Array<{ key: string; example: string }>
@@ -344,6 +366,7 @@ export default function ManageTemplatesAdminPage() {
     () => visibleRequests.find((item) => item.id === selectedRequestId) ?? null,
     [selectedRequestId, visibleRequests]
   );
+  const selectedProviderError = useMemo(() => readProviderError(selectedRequest), [selectedRequest]);
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
@@ -690,6 +713,25 @@ export default function ManageTemplatesAdminPage() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                ) : null}
+                {selectedProviderError ? (
+                  <div className="rounded-lg border border-red-300/25 bg-red-950/20 p-3 text-sm text-red-100">
+                    <p className="text-xs font-semibold uppercase text-red-200/80">Diagnóstico Meta</p>
+                    <div className="mt-2 grid gap-2 text-xs text-red-50/80 sm:grid-cols-2">
+                      {selectedProviderError.code ? <p><span className="block text-red-200/55">Code</span>{selectedProviderError.code}</p> : null}
+                      {selectedProviderError.subcode ? <p><span className="block text-red-200/55">Subcode</span>{selectedProviderError.subcode}</p> : null}
+                      {selectedProviderError.type ? <p><span className="block text-red-200/55">Tipo</span>{selectedProviderError.type}</p> : null}
+                      {selectedProviderError.traceId ? <p><span className="block text-red-200/55">Trace</span>{selectedProviderError.traceId}</p> : null}
+                    </div>
+                    {selectedProviderError.userTitle ? (
+                      <p className="mt-2 text-xs font-semibold text-red-50">{selectedProviderError.userTitle}</p>
+                    ) : null}
+                    {selectedProviderError.userMessage || selectedProviderError.details ? (
+                      <p className="mt-1 whitespace-pre-wrap text-xs text-red-50/80">
+                        {selectedProviderError.userMessage || selectedProviderError.details}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
                 <div className="rounded-lg border border-white/10 bg-white/5 p-3">

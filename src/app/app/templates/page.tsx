@@ -64,6 +64,7 @@ const EMPTY_CANNED_FORM: CannedReplyFormState = {
 };
 
 const CATEGORY_OPTIONS = ["MARKETING", "UTILITY", "AUTHENTICATION"] as const;
+const GENERIC_TEMPLATE_REQUEST_CATEGORY_OPTIONS = ["MARKETING", "UTILITY"] as const;
 const TEMPLATE_VIEW_TABS = [
   { id: "all", label: "Todos" },
   { id: "usable", label: "Utilizáveis" },
@@ -197,7 +198,16 @@ function extractNumberedVariables(content: string) {
 
 function hasVariableAtContentEdge(content: string) {
   const trimmed = content.trim();
-  return /^{{\s*\d+\s*}}/.test(trimmed) || /{{\s*\d+\s*}}$/.test(trimmed);
+  return /^{{\s*\d+\s*}}/.test(trimmed) || /{{\s*\d+\s*}}[\s.,;:!?]*$/.test(trimmed);
+}
+
+function hasMalformedVariables(content: string) {
+  return /{{|}}/.test(content.replace(/{{\s*\d+\s*}}/g, ""));
+}
+
+function hasNonSequentialVariables(content: string) {
+  const keys = extractNumberedVariables(content).map((key) => Number(key));
+  return keys.some((key, index) => key !== index + 1);
 }
 
 function hasAdjacentVariables(content: string) {
@@ -467,6 +477,7 @@ export default function AppTemplatesPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [languageFilter, setLanguageFilter] = useState("all");
   const [campaignUseFilter, setCampaignUseFilter] = useState("all");
+  const [allowedTemplateCategories, setAllowedTemplateCategories] = useState<string[] | null>(null);
   const [cannedSearch, setCannedSearch] = useState("");
   const [requestedArea, setRequestedArea] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -484,6 +495,13 @@ export default function AppTemplatesPage() {
     }
     return warnings;
   }, [form.category, form.content]);
+  const requestCategoryOptions = useMemo(
+    () =>
+      allowedTemplateCategories
+        ? GENERIC_TEMPLATE_REQUEST_CATEGORY_OPTIONS.filter((category) => allowedTemplateCategories.includes(category))
+        : [...GENERIC_TEMPLATE_REQUEST_CATEGORY_OPTIONS],
+    [allowedTemplateCategories]
+  );
   const catalogItems = useMemo(() => buildCatalogItems(templates, requests), [templates, requests]);
   const filteredCannedReplies = useMemo(() => {
     const query = cannedSearch.trim().toLowerCase();
@@ -597,6 +615,11 @@ export default function AppTemplatesPage() {
     setIsDetailDrawerOpen(true);
   }, []);
 
+  const closeRequestDrawer = useCallback(() => {
+    if (submitting) return;
+    setIsRequestDrawerOpen(false);
+  }, [submitting]);
+
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
     router.replace("/app/login");
@@ -607,7 +630,7 @@ export default function AppTemplatesPage() {
       const templatesEnabled = hasCapability(activeSession, "templates");
       const cannedRepliesEnabled = hasCapability(activeSession, "cannedReplies");
       const [templatesResponse, requestsResponse, cannedResponse] = await Promise.all([
-        templatesEnabled ? listAppTemplates(activeSession) : Promise.resolve({ items: [] }),
+        templatesEnabled ? listAppTemplates(activeSession) : Promise.resolve({ items: [], templateCategoryPolicy: undefined }),
         templatesEnabled ? listAppTemplateRequests(activeSession) : Promise.resolve({ items: [] }),
         cannedRepliesEnabled
           ? listAppCannedReplies(activeSession, { includeInactive: true })
@@ -616,6 +639,18 @@ export default function AppTemplatesPage() {
       const nextTemplates = sortTemplates(templatesResponse.items);
       const nextRequests = requestsResponse.items;
       setTemplates(nextTemplates);
+      const allowedCategories = templatesResponse.templateCategoryPolicy?.allowedCategories ?? null;
+      setAllowedTemplateCategories(allowedCategories);
+      if (allowedCategories && allowedCategories.length > 0) {
+        const supportedAllowedCategories = GENERIC_TEMPLATE_REQUEST_CATEGORY_OPTIONS.filter((category) =>
+          allowedCategories.includes(category)
+        );
+        setForm((current) =>
+          supportedAllowedCategories.includes(current.category as (typeof GENERIC_TEMPLATE_REQUEST_CATEGORY_OPTIONS)[number])
+            ? current
+            : { ...current, category: supportedAllowedCategories[0] ?? "UTILITY" }
+        );
+      }
       setRequests(nextRequests);
       setCannedReplies(cannedResponse.items);
       setCanManageCannedReplies(cannedResponse.permissions.canManage);
@@ -688,7 +723,7 @@ export default function AppTemplatesPage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!session) return;
+    if (!session || submitting) return;
     setFormError(null);
     setSuccess(null);
 
@@ -700,8 +735,20 @@ export default function AppTemplatesPage() {
       setFormError("Preencha nome, categoria, idioma e conteudo.");
       return;
     }
+    if (category === "AUTHENTICATION") {
+      setFormError("Modelos de autenticação exigem o formato OTP específico da Meta e ainda não estão disponíveis neste editor.");
+      return;
+    }
+    if (allowedTemplateCategories && !allowedTemplateCategories.includes(category)) {
+      setFormError("Categoria não habilitada para este tenant.");
+      return;
+    }
+    if (hasMalformedVariables(content) || hasNonSequentialVariables(content)) {
+      setFormError("Revise as variáveis do modelo. Use campos sequenciais como {{1}}, {{2}}.");
+      return;
+    }
     if (hasVariableAtContentEdge(content)) {
-      setFormError("Evite variavel no inicio ou no fim do conteudo.");
+      setFormError("O texto do modelo não pode começar ou terminar em uma variável. Inclua texto fixo após o último campo variável.");
       return;
     }
     if (hasAdjacentVariables(content)) {
@@ -751,7 +798,9 @@ export default function AppTemplatesPage() {
       setSuccess(
         response.notification?.delivered === false
           ? "Solicitação criada, mas a notificação interna por e-mail não pôde ser enviada."
-          : "Solicitação enviada para análise da Re7online. Você poderá acompanhar a situação nesta tela."
+          : response.request.status.toLowerCase().includes("approved")
+            ? "Modelo aprovado pela Meta."
+            : "Solicitação enviada para análise da Meta."
       );
     } catch (err) {
       const typed = err as AppApiError;
@@ -788,7 +837,7 @@ export default function AppTemplatesPage() {
       if (recoveredAfterReload) {
         setForm(EMPTY_FORM);
         setIsRequestDrawerOpen(false);
-        setSuccess("Solicitação enviada para análise da Re7online. Você poderá acompanhar a situação nesta tela.");
+        setSuccess("Solicitação enviada para análise da Meta.");
         return;
       }
       if (isNetworkTimeoutLikeError(typed)) {
@@ -1729,13 +1778,14 @@ export default function AppTemplatesPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setIsRequestDrawerOpen(false)}
-                className="rounded-md border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10"
+                onClick={closeRequestDrawer}
+                disabled={submitting}
+                className="rounded-md border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Fechar
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto p-4">
+            <form onSubmit={handleSubmit} aria-busy={submitting} className="min-h-0 flex-1 overflow-y-auto p-4">
               <div className="mx-auto grid max-w-4xl gap-4">
                 <div className="grid gap-4">
                   <section className="rounded-lg border border-white/10 bg-white/5 p-4">
@@ -1746,8 +1796,9 @@ export default function AppTemplatesPage() {
                         <input
                           value={form.name}
                           onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                          disabled={submitting}
                           placeholder="ex: atendimento_retorno_v1"
-                          className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none focus:border-re7-sky/50"
+                          className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none focus:border-re7-sky/50 disabled:cursor-not-allowed disabled:opacity-60"
                         />
                       </label>
                       <label className="grid gap-1 text-sm text-white/80">
@@ -1755,9 +1806,10 @@ export default function AppTemplatesPage() {
                         <select
                           value={form.category}
                           onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
-                          className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none focus:border-re7-sky/50"
+                          disabled={submitting || requestCategoryOptions.length === 0}
+                          className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none focus:border-re7-sky/50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {CATEGORY_OPTIONS.map((option) => (
+                          {requestCategoryOptions.map((option) => (
                             <option key={option} value={option}>{getMetaTemplateCategoryUxLabel(option)}</option>
                           ))}
                         </select>
@@ -1767,12 +1819,15 @@ export default function AppTemplatesPage() {
                         <input
                           value={form.language}
                           onChange={(event) => setForm((current) => ({ ...current, language: event.target.value }))}
-                          className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none focus:border-re7-sky/50"
+                          disabled={submitting}
+                          className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none focus:border-re7-sky/50 disabled:cursor-not-allowed disabled:opacity-60"
                         />
                       </label>
                     </div>
                     <p className="mt-2 text-xs text-white/50">
-                      Utility: avisos e atendimento. Marketing: ofertas. Authentication: códigos de acesso.
+                      {requestCategoryOptions.length === 0
+                        ? "As categorias habilitadas para este tenant exigem um formato específico que ainda não está disponível neste editor."
+                        : "Utility: avisos e atendimento. Marketing: ofertas e comunicações promocionais."}
                     </p>
                   </section>
                   <section className="rounded-lg border border-white/10 bg-white/5 p-4">
@@ -1782,9 +1837,10 @@ export default function AppTemplatesPage() {
                       <textarea
                         value={form.content}
                         onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))}
+                        disabled={submitting}
                         rows={5}
                         placeholder="Olá {{1}}, tudo bem? Estamos retornando sobre sua solicitação."
-                        className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none focus:border-re7-sky/50"
+                        className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none focus:border-re7-sky/50 disabled:cursor-not-allowed disabled:opacity-60"
                       />
                     </label>
                     <p className="mt-2 text-xs text-white/50">
@@ -1815,8 +1871,9 @@ export default function AppTemplatesPage() {
                                   ),
                                 }))
                               }
+                              disabled={submitting}
                               placeholder="Descrição"
-                              className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none focus:border-re7-sky/50"
+                              className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none focus:border-re7-sky/50 disabled:cursor-not-allowed disabled:opacity-60"
                             />
                             <input
                               value={variable.example}
@@ -1828,8 +1885,9 @@ export default function AppTemplatesPage() {
                                   ),
                                 }))
                               }
+                              disabled={submitting}
                               placeholder="Exemplo"
-                              className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none focus:border-re7-sky/50"
+                              className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none focus:border-re7-sky/50 disabled:cursor-not-allowed disabled:opacity-60"
                             />
                           </div>
                         ))}
@@ -1855,15 +1913,31 @@ export default function AppTemplatesPage() {
                     <p className="mt-2 text-sm text-white/65">
                       Solicitação enviada. Acompanhe a situação nesta tela.
                     </p>
+                    {submitting ? (
+                      <p
+                        role="status"
+                        aria-live="polite"
+                        className="mt-3 rounded-lg border border-sky-300/25 bg-sky-900/20 p-3 text-sm text-sky-100"
+                      >
+                        Enviando solicitação para análise da Meta. Isso pode levar alguns segundos. Aguarde a conclusão antes de fechar esta janela.
+                      </p>
+                    ) : null}
                     {formError ? (
                       <p className="mt-3 rounded-lg border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">{formError}</p>
                     ) : null}
                     <button
                       type="submit"
-                      disabled={submitting}
-                      className="mt-3 rounded-lg bg-re7-orange px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={submitting || requestCategoryOptions.length === 0}
+                      className="mt-3 inline-flex items-center gap-2 rounded-lg bg-re7-orange px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {submitting ? "Enviando..." : "Enviar para análise da Re7online"}
+                      {submitting ? (
+                        <>
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
+                          Enviando solicitação...
+                        </>
+                      ) : (
+                        "Enviar para análise da Re7online"
+                      )}
                     </button>
                   </section>
                 </div>

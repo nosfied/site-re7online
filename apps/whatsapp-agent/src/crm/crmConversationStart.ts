@@ -1,6 +1,10 @@
 import type { PrismaClient } from "@prisma/client";
 import { filterOptedOutCampaignRecipients } from "../campaigns/optOutRegistry.js";
-import { resolveInteractiveContactStartPolicy } from "../config/tenantOperationalConfig.js";
+import {
+  isWhatsappTransportEnabledForRouting,
+  resolveInteractiveContactStartPolicy,
+  resolveWhatsappTransportRoutingSettings,
+} from "../config/tenantOperationalConfig.js";
 import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
 import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
 import { getFeatures } from "../features/clientFeatures.js";
@@ -61,6 +65,12 @@ export type ConfiguredWhatsappTenantModeSnapshot = {
   mode: WhatsappConfiguredTenantMode;
   webConfigured: boolean;
   metaConfigured: boolean;
+  webTechnicallyConfigured?: boolean;
+  metaTechnicallyConfigured?: boolean;
+  webEnabledForRouting?: boolean;
+  metaEnabledForRouting?: boolean;
+  webRoutingPolicyExplicit?: boolean;
+  metaRoutingPolicyExplicit?: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -119,14 +129,13 @@ export async function resolveConfiguredWhatsappTenantMode(params: {
   prisma: PrismaClient;
   clientId: string;
 }): Promise<ConfiguredWhatsappTenantModeSnapshot> {
-  const [webAccount, metaConfigured] = await Promise.all([
+  const [webAccount, metaTechnicallyConfigured, routingSettings] = await Promise.all([
     params.prisma.channelAccount.findFirst({
       where: {
         clientId: params.clientId,
         channel: "whatsapp",
         provider: "web_session",
         enabled: true,
-        runtimeEnabled: true,
       },
       include: {
         client: {
@@ -142,12 +151,32 @@ export async function resolveConfiguredWhatsappTenantMode(params: {
       prisma: params.prisma,
       clientId: params.clientId,
     }),
+    resolveWhatsappTransportRoutingSettings({
+      prisma: params.prisma,
+      clientId: params.clientId,
+    }),
   ]);
-  const webConfigured = Boolean(
+  const webTechnicallyConfigured = Boolean(
     webAccount &&
+      webAccount.enabled === true &&
       webAccount.client.status === "ACTIVE" &&
       getFeatures(webAccount.client).whatsappWebSession === true
   );
+  const legacyWebRoutingDefault = Boolean(webTechnicallyConfigured && webAccount?.runtimeEnabled === true);
+  const webEnabledForRouting = isWhatsappTransportEnabledForRouting(
+    routingSettings.settings,
+    "webSession",
+    legacyWebRoutingDefault
+  );
+  const metaEnabledForRouting = isWhatsappTransportEnabledForRouting(
+    routingSettings.settings,
+    "meta",
+    metaTechnicallyConfigured
+  );
+  const webConfigured = webTechnicallyConfigured && webEnabledForRouting;
+  const metaConfigured = metaTechnicallyConfigured && metaEnabledForRouting;
+  const webRoutingPolicyExplicit = Boolean(routingSettings.settings.webSession);
+  const metaRoutingPolicyExplicit = Boolean(routingSettings.settings.meta);
   const mode: WhatsappConfiguredTenantMode =
     webConfigured && metaConfigured
       ? "HYBRID"
@@ -156,7 +185,17 @@ export async function resolveConfiguredWhatsappTenantMode(params: {
         : metaConfigured
           ? "CLOUD_ONLY"
           : "NONE";
-  return { mode, webConfigured, metaConfigured };
+  return {
+    mode,
+    webConfigured,
+    metaConfigured,
+    webTechnicallyConfigured,
+    metaTechnicallyConfigured,
+    webEnabledForRouting,
+    metaEnabledForRouting,
+    webRoutingPolicyExplicit,
+    metaRoutingPolicyExplicit,
+  };
 }
 
 export async function resolveEffectiveWhatsappOutboundTransport(params: {

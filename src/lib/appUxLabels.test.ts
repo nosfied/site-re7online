@@ -25,3 +25,15 @@ test("other claim errors keep the caller fallback", () => {
     "Não foi possível assumir a conversa."
   );
 });
+
+test("template category policy errors use a friendly message", () => {
+  assert.equal(
+    getAppErrorUxMessage({
+      status: 403,
+      errorCode: "template_category_not_allowed",
+      message: "template_category_not_allowed",
+      fallback: "Não foi possível enviar o modelo.",
+    }),
+    "Categoria não habilitada para este tenant."
+  );
+});

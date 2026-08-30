@@ -25,6 +25,10 @@ import {
 } from "./optOutRegistry.js";
 import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
 import { readPrivateCampaignSeedFields } from "./campaignSeedPrivacy.js";
+import {
+  isWhatsappTemplateCategoryAllowedForTenant,
+  WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED,
+} from "../meta/templateCategoryPolicy.js";
 
 const CAMPAIGN_THROTTLE_MS = 1000;
 const CAMPAIGN_SCHEDULE_TICK_MS = 60_000;
@@ -234,8 +238,45 @@ async function runCampaignInBackground(
       name: params.templateName,
       language,
     },
-    select: { content: true, category: true },
+    select: { id: true, content: true, category: true },
   });
+  const categoryDecision = await isWhatsappTemplateCategoryAllowedForTenant({
+    prisma,
+    clientId: params.clientId,
+    effectiveCategory: templateForRendering?.category ?? null,
+  });
+  if (!categoryDecision.allowed) {
+    await prisma.campaign.updateMany({
+      where: { id: params.campaignId, clientId: params.clientId, status: "sending" },
+      data: { status: "blocked" },
+    });
+    await persistEvent({
+      clientId: params.clientId,
+      messageId: params.campaignId,
+      requestId: `campaign-template-category-blocked:${params.campaignId}:${campaignRunId}`,
+      eventName: "campaign.template.blocked",
+      payloadJson: {
+        campaignId: params.campaignId,
+        campaignRunId,
+        templateId: templateForRendering?.id ?? null,
+        templateName: params.templateName,
+        templateCategory: templateForRendering?.category ?? null,
+        reason: WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED,
+        allowedCategories: categoryDecision.allowedCategories,
+      },
+    });
+    logger.warn({
+      event: "campaign.template.blocked",
+      campaignId: params.campaignId,
+      campaignRunId,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      templateName: params.templateName,
+      templateCategory: templateForRendering?.category ?? null,
+      reason: WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED,
+    });
+    return;
+  }
   const usageSource = params.source ?? "campaign";
   const requestedWaIds = Array.from(new Set(params.waIds.map((waId) => waId.trim()).filter(Boolean)));
   const filteredRecipients = await filterOptedOutCampaignRecipients(prisma, {

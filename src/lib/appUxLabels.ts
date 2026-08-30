@@ -60,7 +60,9 @@ export function getAppErrorUxMessage(input: {
               ? "unsupported_media_type"
               : normalizedMessage.includes("template_locally_disabled")
                 ? "template_locally_disabled"
-                : null);
+                : normalizedMessage.includes("template_category_not_allowed")
+                  ? "template_category_not_allowed"
+                  : null);
   switch (inferredCode) {
     case "session_replaced":
       return "Sua sessão foi encerrada porque houve um novo login em outro dispositivo.";
@@ -82,6 +84,8 @@ export function getAppErrorUxMessage(input: {
       return "Este recurso não está disponível para seu perfil.";
     case "template_locally_disabled":
       return "Este modelo está inativo no Converta.";
+    case "template_category_not_allowed":
+      return "Categoria não habilitada para este tenant.";
     case "anonymized_contact":
       return "Este contato foi anonimizado e não pode ser usado em atendimentos ou envios.";
     case "reply_context_unavailable":

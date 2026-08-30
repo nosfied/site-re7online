@@ -1,5 +1,10 @@
 import { getPrisma } from "../db.js";
 import { getEnv } from "../config/env.js";
+import { persistEvent } from "../db/persist.js";
+import {
+  isWhatsappTransportEnabledForRouting,
+  resolveWhatsappTransportRoutingSettings,
+} from "../config/tenantOperationalConfig.js";
 import { logger } from "../logger/logger.js";
 
 type TenantMetaTemplateConfig = {
@@ -36,12 +41,23 @@ type MetaTemplatePayload = {
   components: MetaTemplateComponent[];
 };
 
+export type MetaTemplateProviderError = {
+  code: string | null;
+  subcode: string | null;
+  type: string | null;
+  userTitle: string | null;
+  userMessage: string | null;
+  details: string | null;
+  traceId: string | null;
+};
+
 type MetaTemplateSubmitSuccess = {
   ok: true;
   metaTemplateId: string | null;
   status: string | null;
   errorMessage: null;
   rawResponse: Record<string, unknown>;
+  providerError: null;
 };
 
 type MetaTemplateSubmitFailure = {
@@ -50,6 +66,7 @@ type MetaTemplateSubmitFailure = {
   status: string | null;
   errorMessage: string;
   rawResponse: Record<string, unknown> | null;
+  providerError: MetaTemplateProviderError | null;
 };
 
 export type MetaTemplateSubmitResult =
@@ -96,15 +113,30 @@ export async function resolveMetaTemplateCredentialsForClient(params: {
   clientId: string;
 }): Promise<MetaTemplateCredentials | null> {
   const prisma = getPrisma();
-  const tenantMetaConfig = await prisma.tenantMetaConfig.findUnique({
-    where: { clientId: params.clientId },
-    select: {
-      businessToken: true,
-      wabaId: true,
-    },
-  });
+  const [tenantMetaConfig, routingSettings] = await Promise.all([
+    prisma.tenantMetaConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: {
+        businessToken: true,
+        wabaId: true,
+      },
+    }),
+    resolveWhatsappTransportRoutingSettings({
+      prisma,
+      clientId: params.clientId,
+    }),
+  ]);
   const tenantBusinessToken = normalizeOptionalString(tenantMetaConfig?.businessToken);
   const tenantWabaId = normalizeOptionalString(tenantMetaConfig?.wabaId);
+  if (
+    !isWhatsappTransportEnabledForRouting(
+      routingSettings.settings,
+      "meta",
+      true
+    )
+  ) {
+    return null;
+  }
   if (tenantBusinessToken && tenantWabaId) {
     return {
       businessToken: tenantBusinessToken,
@@ -151,6 +183,16 @@ function extractPlaceholderIndexes(content: string) {
   }
 
   return Array.from(indexes).sort((a, b) => a - b);
+}
+
+function hasMalformedPlaceholders(content: string) {
+  const withoutValidPlaceholders = content.replace(/{{\s*\d+\s*}}/g, "");
+  return /{{|}}/.test(withoutValidPlaceholders);
+}
+
+function hasDanglingPlaceholder(content: string) {
+  const trimmed = content.trim();
+  return /^{{\s*\d+\s*}}/.test(trimmed) || /{{\s*\d+\s*}}[\s.,;:!?]*$/.test(trimmed);
 }
 
 function resolveVariableCount(variables: unknown) {
@@ -227,6 +269,40 @@ function buildMetaTemplatePayload(template: TemplateForMeta): MetaTemplatePayloa
   };
 }
 
+function readSafeString(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, 1000) : null;
+}
+
+function readSafeScalar(value: unknown) {
+  if (typeof value === "string" || typeof value === "number") {
+    const normalized = String(value).trim();
+    return normalized ? normalized.slice(0, 120) : null;
+  }
+  return null;
+}
+
+export function extractMetaTemplateProviderError(payload: unknown): MetaTemplateProviderError | null {
+  if (!payload || typeof payload !== "object") return null;
+  const error = (payload as Record<string, unknown>).error;
+  if (!error || typeof error !== "object") return null;
+  const raw = error as Record<string, unknown>;
+  const errorData = raw.error_data && typeof raw.error_data === "object"
+    ? (raw.error_data as Record<string, unknown>)
+    : null;
+  const providerError = {
+    code: readSafeScalar(raw.code),
+    subcode: readSafeScalar(raw.error_subcode),
+    type: readSafeString(raw.type),
+    userTitle: readSafeString(raw.error_user_title),
+    userMessage: readSafeString(raw.error_user_msg),
+    details: readSafeString(errorData?.details),
+    traceId: readSafeString(raw.fbtrace_id),
+  };
+  return Object.values(providerError).some(Boolean) ? providerError : null;
+}
+
 export function validateTemplateForMeta(template: TemplateForMeta) {
   const name = normalizeOptionalString(template.name);
   const category = normalizeOptionalString(template.category).toUpperCase();
@@ -244,6 +320,9 @@ export function validateTemplateForMeta(template: TemplateForMeta) {
   if (!category || !META_ALLOWED_CATEGORIES.has(category)) {
     throw new MetaTemplateValidationError("template_category_invalid");
   }
+  if (category === "AUTHENTICATION") {
+    throw new MetaTemplateValidationError("template_authentication_unsupported");
+  }
   if (!language) {
     throw new MetaTemplateValidationError("template_language_required");
   }
@@ -255,6 +334,12 @@ export function validateTemplateForMeta(template: TemplateForMeta) {
   }
   if (content.length > META_TEMPLATE_BODY_MAX_LENGTH) {
     throw new MetaTemplateValidationError("template_content_too_long");
+  }
+  if (hasMalformedPlaceholders(content)) {
+    throw new MetaTemplateValidationError("template_variables_invalid");
+  }
+  if (hasDanglingPlaceholder(content)) {
+    throw new MetaTemplateValidationError("template_variable_at_edge");
   }
 
   for (let index = 0; index < placeholderIndexes.length; index += 1) {
@@ -346,12 +431,19 @@ export async function submitTemplateToMeta(params: {
       : null;
 
   if (!response.ok) {
+    const providerError = extractMetaTemplateProviderError(rawResponse);
     return {
       ok: false,
       metaTemplateId: null,
       status,
-      errorMessage: errorMessage || rawText.slice(0, 2000) || "meta_template_submit_failed",
+      errorMessage:
+        providerError?.userMessage ||
+        providerError?.details ||
+        errorMessage ||
+        rawText.slice(0, 2000) ||
+        "meta_template_submit_failed",
       rawResponse,
+      providerError,
     };
   }
 
@@ -361,6 +453,7 @@ export async function submitTemplateToMeta(params: {
     status,
     errorMessage: null,
     rawResponse: rawResponse ?? {},
+    providerError: null,
   };
 }
 
@@ -525,6 +618,21 @@ export async function syncTemplateStatus(templateId: string) {
       templateName: template.name,
       previousCategory: template.category,
       metaCategory,
+    });
+    await persistEvent({
+      clientId: template.clientId,
+      messageId: template.id,
+      requestId: `template-category-changed:${template.id}:${Date.now()}`,
+      eventName: "whatsapp.template.category_changed",
+      payloadJson: {
+        templateId: template.id,
+        templateName: template.name,
+        previousCategory: template.category,
+        newCategory: metaCategory,
+        submittedCategory,
+        source: "meta_sync",
+        timestamp: new Date().toISOString(),
+      },
     });
   }
 

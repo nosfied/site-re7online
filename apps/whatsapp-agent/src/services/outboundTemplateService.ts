@@ -10,6 +10,11 @@ import {
 import { runtimeStorage } from "../storage/runtimeStorage.js";
 import { checkUsageGate } from "../usage/usageGate.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
+import { getPrisma } from "../db.js";
+import {
+  isWhatsappTemplateCategoryAllowedForTenant,
+  WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED,
+} from "../meta/templateCategoryPolicy.js";
 
 export type OutboundTemplateParams = {
   toE164: string;
@@ -103,6 +108,43 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
   });
 
   if (params.clientId && params.clientKey) {
+    const prisma = getPrisma();
+    const template = await prisma.template.findFirst({
+      where: {
+        clientId: params.clientId,
+        name: params.templateName,
+        language: resolvedLang,
+      },
+      select: {
+        category: true,
+      },
+    });
+    const categoryDecision = await isWhatsappTemplateCategoryAllowedForTenant({
+      prisma,
+      clientId: params.clientId,
+      effectiveCategory: template?.category ?? null,
+    });
+    if (!categoryDecision.allowed) {
+      logger.warn({
+        event: "outbound.template.blocked",
+        waId: maskNumber(params.waId),
+        to: maskNumber(params.toE164),
+        intent: params.intent ?? "unknown",
+        template: params.templateName,
+        language: resolvedLang,
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        isFallback: Boolean(params.isFallback),
+        fallbackReason: params.fallbackReason,
+        requestId: params.requestId,
+        rid: params.rid,
+        messageId: params.messageId,
+        reason: WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED,
+        templateCategory: template?.category ?? null,
+      });
+      return { ok: false, status: 403, errorBody: WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED };
+    }
+
     const usageGate = await checkUsageGate({
       clientId: params.clientId,
       clientKey: params.clientKey,
