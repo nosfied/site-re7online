@@ -1309,7 +1309,7 @@ function mergeConversationsPreservingStableOrder(
   current: InboxConversationItem[],
   incoming: InboxConversationItem[],
   prioritizeLeads = false,
-  options?: { removeMissing?: boolean }
+  options?: { removeMissing?: boolean; preserveMissingIdentities?: Array<string | null | undefined> }
 ) {
   if (current.length === 0) return incoming;
   const currentIndexByIdentity = new Map<string, number>();
@@ -1322,12 +1322,26 @@ function mergeConversationsPreservingStableOrder(
   for (const item of incoming) {
     incomingByIdentity.set(getConversationIdentity(item), item);
   }
+  const preservedMissingIdentities = new Set(
+    (options?.preserveMissingIdentities ?? [])
+      .map((identity) => String(identity ?? "").trim())
+      .filter(Boolean)
+  );
 
   const merged = [
-    ...current.filter((item) => !options?.removeMissing || incomingByIdentity.has(getConversationIdentity(item))).map((item) => {
-      const incomingItem = incomingByIdentity.get(getConversationIdentity(item));
-      return incomingItem ? mergeConversationStableFields(item, incomingItem) : item;
-    }),
+    ...current
+      .filter((item) => {
+        const identityCandidates = getConversationIdentityCandidates(item);
+        const isIncoming = identityCandidates.some((identity) => incomingByIdentity.has(identity));
+        const isPreserved = identityCandidates.some((identity) => preservedMissingIdentities.has(identity));
+        return !options?.removeMissing || isIncoming || isPreserved;
+      })
+      .map((item) => {
+        const incomingItem = getConversationIdentityCandidates(item)
+          .map((identity) => incomingByIdentity.get(identity))
+          .find(Boolean);
+        return incomingItem ? mergeConversationStableFields(item, incomingItem) : item;
+      }),
     ...incoming.filter((item) => !currentIndexByIdentity.has(getConversationIdentity(item))),
   ];
 
@@ -3936,6 +3950,11 @@ export default function AppInboxPage() {
     setConversations((current) =>
       mergeConversationsPreservingStableOrder(current, sortedItems, prioritizeLeads, {
         removeMissing: shouldRemoveMissingItems,
+        preserveMissingIdentities: [
+          selectedConversationKey,
+          selectedConversationWaId,
+          ...selectedConversationIdentityCandidatesRef.current,
+        ],
       })
     );
     if (previousListScrollTop !== null) {
@@ -3951,16 +3970,7 @@ export default function AppInboxPage() {
     const selectedItem = sortedItems.find(
       (item) => getConversationIdentity(item) === selectedConversationKey
     );
-    if (!selectedItem) {
-      if (shouldRemoveMissingItems) {
-        evictConversationFromLocalState([
-          selectedConversationKey,
-          selectedConversationWaId,
-          ...selectedConversationIdentityCandidatesRef.current,
-        ]);
-      }
-      return;
-    }
+    if (!selectedItem) return;
 
 	    if (!isAppForegroundFocused()) return;
 	    const waitingForUnreadAnchor =
@@ -6114,12 +6124,31 @@ export default function AppInboxPage() {
     if (!session || !selectedConversationWaId) return;
     setConversationAction("claim");
     setError(null);
+    setSuccess(null);
     try {
       const response = await claimAppConversation(
         session,
         selectedConversationWaId,
         session.user.id
       );
+      const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
+      setConversations((prev) =>
+        dedupeConversationsByIdentity(
+          prev.map((item) =>
+            conversationIdentityMatches(getConversationIdentityCandidates(item), [
+              responseIdentity,
+              response.waId,
+              response.waIdCanonical,
+              selectedConversationWaId,
+              selectedConversationKey,
+            ])
+              ? applyConversationOperationalPayload(item, response)
+              : item
+          ),
+          isBusinessTenant
+        )
+      );
+      setSuccess("Conversa assumida. Ela foi movida para Em atendimento.");
       await refreshConversationList(session);
       await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
     } catch (err) {
@@ -6270,14 +6299,14 @@ export default function AppInboxPage() {
       if (!stillInUserScope) {
         detailRequestSeqRef.current += 1;
         clearSelectedConversation();
-        setSuccess("Atendimento encerrado.");
+        setSuccess("Conversa encerrada. Ela foi movida para Encerradas.");
         void refreshConversationList(session).catch((err) => {
           if ((err as { status?: number }).status === 401) handleUnauthorized();
         });
         return;
       }
 
-      setSuccess("Atendimento encerrado.");
+      setSuccess("Conversa encerrada. Ela foi movida para Encerradas.");
       await refreshConversationList(session);
       await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
     } catch (err) {
