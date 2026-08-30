@@ -23,6 +23,7 @@ import {
   type AppRealtimeEvent,
 } from "@/lib/appRealtime";
 import {
+  conversationMutationTargetsSelectedConversation,
   getRealtimeHumanInboxVisibility,
   isHumanTimelineMessageItem,
   realtimeEventTargetsSelectedConversation,
@@ -2473,6 +2474,8 @@ export default function AppInboxPage() {
   const selectedTimelineLastRefreshAtRef = useRef(0);
   const selectedTimelineRequestedActivityAtRef = useRef<number | null>(null);
   const selectedConversationIdentityCandidatesRef = useRef<string[]>([]);
+  const selectedConversationKeyRef = useRef<string | null>(null);
+  const selectedConversationWaIdRef = useRef<string | null>(null);
   const skipNextSelectedConversationListMarkReadRef = useRef(false);
   const queueMutationAutoReadSuppressedKeysRef = useRef(new Set<string>());
   const autoReadSuppressionSessionKeyRef = useRef<string | null>(null);
@@ -2521,6 +2524,8 @@ export default function AppInboxPage() {
   const clearSelectedConversation = useCallback(() => {
     detailRequestSeqRef.current += 1;
     selectedConversationIdentityCandidatesRef.current = [];
+    selectedConversationKeyRef.current = null;
+    selectedConversationWaIdRef.current = null;
     timelineOutOfSyncRetryKeyRef.current = null;
     pendingUnreadScrollTargetRef.current = null;
     pendingReadAfterHydrationRef.current = null;
@@ -2639,6 +2644,15 @@ export default function AppInboxPage() {
     setContactTimelineCursor(null);
     setContactTimelineError(null);
   }, []);
+
+  const targetsCurrentSelectedConversation = useCallback((candidates: Array<string | null | undefined>) => (
+    conversationMutationTargetsSelectedConversation({
+      mutationConversationCandidates: candidates,
+      selectedConversationKey: selectedConversationKeyRef.current,
+      selectedConversationWaId: selectedConversationWaIdRef.current,
+      selectedConversationIdentityCandidates: selectedConversationIdentityCandidatesRef.current,
+    })
+  ), []);
 
   const handleCloseTemplateModal = useCallback(() => {
     setTemplateModalOpen(false);
@@ -3323,14 +3337,18 @@ export default function AppInboxPage() {
   ) => {
     if (!session || event.clientId !== session.user.clientId) return;
     const conversationKey = event.waIdCanonical ?? event.waId ?? null;
+    const targetsSelectedConversation =
+      targetsCurrentSelectedConversation([conversationKey, event.waId, event.waIdCanonical]);
 
-    setMessages((prev) => {
-      const nextMessages = applyStatusUpdateToMessages(prev, event);
-      if (nextMessages !== prev && selectedConversationWaId) {
-        timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
-      }
-      return nextMessages;
-    });
+    if (targetsSelectedConversation) {
+      setMessages((prev) => {
+        const nextMessages = applyStatusUpdateToMessages(prev, event);
+        if (nextMessages !== prev && selectedConversationWaIdRef.current) {
+          timelineCacheRef.current.set(selectedConversationWaIdRef.current, nextMessages);
+        }
+        return nextMessages;
+      });
+    }
 
     for (const [cacheKey, cacheMessages] of timelineCacheRef.current.entries()) {
       if (conversationKey && cacheKey !== conversationKey && cacheKey !== event.waId) {
@@ -3370,7 +3388,7 @@ export default function AppInboxPage() {
         };
       })
     );
-  }, [selectedConversationWaId, session]);
+  }, [session, targetsCurrentSelectedConversation]);
 
   const applyRealtimeEvent = useCallback((event: AppRealtimeEvent) => {
     if (event.type === "message.status.updated") {
@@ -3532,7 +3550,9 @@ export default function AppInboxPage() {
     const message = event.message;
     if (!shouldApplyRealtimeMessageToHumanTimeline(event)) {
       const messageIdentity = getMessageIdentity(message);
-      setMessages((prev) => prev.filter((item) => getMessageIdentity(item) !== messageIdentity));
+      if (targetsCurrentSelectedConversation([conversationKey, event.waId, event.waIdCanonical])) {
+        setMessages((prev) => prev.filter((item) => getMessageIdentity(item) !== messageIdentity));
+      }
       for (const [cacheKey, cacheMessages] of timelineCacheRef.current.entries()) {
         const nextMessages = cacheMessages.filter((item) => getMessageIdentity(item) !== messageIdentity);
         timelineCacheRef.current.set(cacheKey, nextMessages);
@@ -3752,6 +3772,7 @@ export default function AppInboxPage() {
     selectedConversationKey,
     selectedConversationWaId,
     session,
+    targetsCurrentSelectedConversation,
     isBusinessTenant,
     conversations,
     inboxVisibilityPolicy,
@@ -4576,6 +4597,17 @@ export default function AppInboxPage() {
       conversations.find((item) => getConversationIdentity(item) === selectedConversationKey) ?? null,
     [conversations, selectedConversationKey]
   );
+
+  useEffect(() => {
+    selectedConversationKeyRef.current = selectedConversationKey;
+    selectedConversationWaIdRef.current = selectedConversationWaId;
+    if (selectedConversation) {
+      selectedConversationIdentityCandidatesRef.current = getConversationIdentityCandidates(selectedConversation);
+    } else if (!selectedConversationKey && !selectedConversationWaId) {
+      selectedConversationIdentityCandidatesRef.current = [];
+    }
+  }, [selectedConversation, selectedConversationKey, selectedConversationWaId]);
+
   const selectedChannelSwitchWarning = selectedConversation?.channelSwitchWarning?.pending
     ? selectedConversation.channelSwitchWarning
     : null;
@@ -4648,6 +4680,8 @@ export default function AppInboxPage() {
     });
     shouldScrollToBottomRef.current = !shouldOpenAtUnread;
     selectedConversationIdentityCandidatesRef.current = conversationIdentityCandidates;
+    selectedConversationKeyRef.current = conversationIdentity;
+    selectedConversationWaIdRef.current = item.waId;
     setUnreadSeparatorIndex(null);
     setUnreadAnchorMessageIdentity(null);
     setActiveConversationIdentity(conversationIdentity);
@@ -5305,8 +5339,15 @@ export default function AppInboxPage() {
           );
           const requestMs = performance.now() - requestStartedAt;
           const uiStartedAt = performance.now();
-          shouldScrollToBottomRef.current = true;
-          if (selectedConversationWaId === next.waId) {
+          if (
+            targetsCurrentSelectedConversation([
+              next.conversationKey,
+              next.waId,
+              response.waId,
+              response.waIdCanonical,
+            ])
+          ) {
+            shouldScrollToBottomRef.current = true;
             const outboundMessage: InboxMessageItem = {
               direction: "OUTBOUND",
               type: "TEXT",
@@ -5383,7 +5424,7 @@ export default function AppInboxPage() {
             uiMergeMs: Math.round(performance.now() - uiStartedAt),
             totalMs: Math.round(performance.now() - latencyStartedAt),
           });
-          if (selectedConversationWaId === next.waId) {
+          if (targetsCurrentSelectedConversation([next.conversationKey, next.waId, response.waId, response.waIdCanonical])) {
             setReplyTarget(null);
           }
         } catch (err) {
@@ -5392,7 +5433,7 @@ export default function AppInboxPage() {
             handleUnauthorized();
             return;
           }
-          if (selectedConversationWaId === next.waId) {
+          if (targetsCurrentSelectedConversation([next.conversationKey, next.waId])) {
             setMessageDraft((current) => (current.trim() ? `${current}\n${next.text}` : next.text));
             setReplyTarget(next.replyTo);
           }
@@ -5407,7 +5448,7 @@ export default function AppInboxPage() {
       setSendingMessage(false);
       focusComposer();
     }
-  }, [handleUnauthorized, selectedConversationWaId, session]);
+  }, [handleUnauthorized, session, targetsCurrentSelectedConversation]);
 
   const handleSendMessage = async () => {
     if (!session) return;
@@ -5496,6 +5537,9 @@ export default function AppInboxPage() {
         };
         setCrmStartContext(null);
         setConversations((prev) => dedupeConversationsByIdentity([startedConversation, ...prev], isBusinessTenant));
+        selectedConversationIdentityCandidatesRef.current = getConversationIdentityCandidates(startedConversation);
+        selectedConversationKeyRef.current = conversationKey;
+        selectedConversationWaIdRef.current = response.waId;
         setSelectedConversationKey(conversationKey);
         setSelectedConversationWaId(response.waId);
         setMessages([outboundMessage]);
@@ -5591,7 +5635,6 @@ export default function AppInboxPage() {
         if (mediaInputRef.current) {
           mediaInputRef.current.value = "";
         }
-        shouldScrollToBottomRef.current = true;
         const outboundMessage: InboxMessageItem = {
           direction: "OUTBOUND",
           type: response.message.type,
@@ -5631,12 +5674,22 @@ export default function AppInboxPage() {
           errorBody: null,
           createdAt: response.message.createdAt,
         };
-        setMessages((prev) => {
-          const nextMessages = mergeMessagesByIdentity(prev, [outboundMessage]);
-          timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
-          return nextMessages;
-        });
-        setMessagesConversationKey(getConversationIdentity(selectedConversation));
+        if (
+          targetsCurrentSelectedConversation([
+            selectedConversationWaId,
+            getConversationIdentity(selectedConversation),
+            response.waId,
+            response.waIdCanonical,
+          ])
+        ) {
+          shouldScrollToBottomRef.current = true;
+          setMessages((prev) => {
+            const nextMessages = mergeMessagesByIdentity(prev, [outboundMessage]);
+            timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
+            return nextMessages;
+          });
+          setMessagesConversationKey(getConversationIdentity(selectedConversation));
+        }
         setConversations((prev) =>
           dedupeConversationsByIdentity(
             prev.map((item) =>
@@ -5695,6 +5748,7 @@ export default function AppInboxPage() {
       selectedConversationSupportsOutbound,
       selectedConversationWaId,
       session,
+      targetsCurrentSelectedConversation,
     ]
   );
 
@@ -5782,7 +5836,6 @@ export default function AppInboxPage() {
         templateId: selectedTemplate.id,
         variables: templateVariables,
       });
-      shouldScrollToBottomRef.current = true;
       const outboundMessage: InboxMessageItem = {
         direction: "OUTBOUND",
         type: response.message.type,
@@ -5806,12 +5859,22 @@ export default function AppInboxPage() {
         errorBody: null,
         createdAt: response.message.createdAt,
       };
-      setMessages((prev) => {
-        const nextMessages = mergeMessagesByIdentity(prev, [outboundMessage]);
-        timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
-        return nextMessages;
-      });
-      setMessagesConversationKey(getConversationIdentity(selectedConversation));
+      if (
+        targetsCurrentSelectedConversation([
+          selectedConversationWaId,
+          getConversationIdentity(selectedConversation),
+          response.waId,
+          response.waIdCanonical,
+        ])
+      ) {
+        shouldScrollToBottomRef.current = true;
+        setMessages((prev) => {
+          const nextMessages = mergeMessagesByIdentity(prev, [outboundMessage]);
+          timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
+          return nextMessages;
+        });
+        setMessagesConversationKey(getConversationIdentity(selectedConversation));
+      }
       setConversations((prev) =>
         dedupeConversationsByIdentity(
           prev.map((item) =>
@@ -5935,7 +5998,6 @@ export default function AppInboxPage() {
         selectedCannedReply.id,
         replyTarget ? { kind: replyTarget.kind, id: replyTarget.id, mode: replyTarget.mode } : null
       );
-      shouldScrollToBottomRef.current = true;
       const outboundMessage: InboxMessageItem = {
         direction: "OUTBOUND",
         type: response.message.type,
@@ -5971,12 +6033,22 @@ export default function AppInboxPage() {
         errorBody: null,
         createdAt: response.message.createdAt,
       };
-      setMessages((prev) => {
-        const nextMessages = mergeMessagesByIdentity(prev, [outboundMessage]);
-        timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
-        return nextMessages;
-      });
-      setMessagesConversationKey(getConversationIdentity(selectedConversation));
+      if (
+        targetsCurrentSelectedConversation([
+          selectedConversationWaId,
+          getConversationIdentity(selectedConversation),
+          response.waId,
+          response.waIdCanonical,
+        ])
+      ) {
+        shouldScrollToBottomRef.current = true;
+        setMessages((prev) => {
+          const nextMessages = mergeMessagesByIdentity(prev, [outboundMessage]);
+          timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
+          return nextMessages;
+        });
+        setMessagesConversationKey(getConversationIdentity(selectedConversation));
+      }
       setConversations((prev) =>
         dedupeConversationsByIdentity(
           prev.map((item) =>

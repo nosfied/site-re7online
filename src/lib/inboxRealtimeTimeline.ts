@@ -68,6 +68,18 @@ export function realtimeEventTargetsSelectedConversation(input: {
   return eventCandidates.some((candidate) => selectedCandidates.includes(candidate));
 }
 
+export function conversationMutationTargetsSelectedConversation(input: {
+  mutationConversationCandidates: Array<string | null | undefined>;
+  selectedConversationKey: string | null;
+  selectedConversationWaId: string | null;
+  selectedConversationIdentityCandidates: string[];
+}) {
+  const selectedCandidates = selectedConversationCandidates(input);
+  if (selectedCandidates.length === 0) return false;
+  const mutationCandidates = uniqueConversationIdentities(input.mutationConversationCandidates);
+  return mutationCandidates.some((candidate) => selectedCandidates.includes(candidate));
+}
+
 export function resolveRealtimeTimelineConversationKey(input: {
   event: Pick<AppRealtimeEvent, "waId" | "waIdCanonical">;
   selectedConversationKey: string | null;

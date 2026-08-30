@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  conversationMutationTargetsSelectedConversation,
   getRealtimeHumanInboxVisibility,
   isHumanTimelineMessageItem,
   isManagementOnlyRealtimeMessage,
@@ -170,6 +171,30 @@ test("realtime timeline rejects unrelated selected conversation", () => {
       selectedConversationIdentityCandidates: ["conversation-b"],
     }),
     false
+  );
+});
+
+test("delayed timeline mutation for previous selection is rejected", () => {
+  assert.equal(
+    conversationMutationTargetsSelectedConversation({
+      mutationConversationCandidates: ["conversation-a", "558400002291"],
+      selectedConversationKey: "conversation-b",
+      selectedConversationWaId: "558400009933",
+      selectedConversationIdentityCandidates: ["conversation-b", "558400009933"],
+    }),
+    false
+  );
+});
+
+test("delayed timeline mutation still applies to selected canonical aliases", () => {
+  assert.equal(
+    conversationMutationTargetsSelectedConversation({
+      mutationConversationCandidates: ["5584999996787", "558499996787"],
+      selectedConversationKey: "558499996787",
+      selectedConversationWaId: "5584999996787",
+      selectedConversationIdentityCandidates: ["558499996787", "5584999996787"],
+    }),
+    true
   );
 });
 
