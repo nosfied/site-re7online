@@ -194,6 +194,51 @@ function toPayload(drafts: ChannelAccountDraft[], tenantId: string) {
   }));
 }
 
+function sameStringSet(left: readonly string[], right: readonly string[]) {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right);
+  return left.every((item) => rightSet.has(item));
+}
+
+function draftKey(draft: ChannelAccountDraft) {
+  return `${draft.provider}:${draft.channel}:${draft.channelAccountId.trim()}`;
+}
+
+function isExistingWebSessionDraft(draft: ChannelAccountDraft, saved: ChannelAccountDraft[]) {
+  return draft.channel === "whatsapp" && draft.provider === "web_session" && saved.some((item) => draftKey(item) === draftKey(draft));
+}
+
+function getTechnicalDraftChanges(saved: ChannelAccountDraft[], current: ChannelAccountDraft[]) {
+  const savedByKey = new Map(saved.map((draft) => [draftKey(draft), draft]));
+  const changes: string[] = [];
+  for (const draft of current) {
+    const previous = savedByKey.get(draftKey(draft));
+    const label = draft.displayName.trim() || `${formatLabel(draft.channel)} ${formatLabel(draft.provider)}`;
+    if (!previous) {
+      changes.push(`${label}: nova conta`);
+      continue;
+    }
+    const fields: Array<[keyof ChannelAccountDraft, string]> = [
+      ["enabled", "Ativo"],
+      ["runtimeEnabled", "Runtime"],
+      ["outboundEnabled", "Outbound"],
+      ...(isExistingWebSessionDraft(draft, saved) ? [] : ([["status", "Status"]] as Array<[keyof ChannelAccountDraft, string]>)),
+    ];
+    for (const [field, fieldLabel] of fields) {
+      if (previous[field] !== draft[field]) {
+        changes.push(`${label}: ${fieldLabel} ${String(previous[field])} -> ${String(draft[field])}`);
+      }
+    }
+  }
+  const currentKeys = new Set(current.map(draftKey));
+  for (const draft of saved) {
+    if (!currentKeys.has(draftKey(draft))) {
+      changes.push(`${draft.displayName.trim() || draft.channelAccountId}: conta removida`);
+    }
+  }
+  return changes;
+}
+
 function getValidationError(drafts: ChannelAccountDraft[]) {
   for (const [index, draft] of drafts.entries()) {
     const label = `Conta ${index + 1}`;
@@ -380,6 +425,7 @@ export default function TenantChannelsPage() {
   }, [params]);
   const { connection } = useAdminConsole();
   const [drafts, setDrafts] = useState<ChannelAccountDraft[]>([]);
+  const [savedDrafts, setSavedDrafts] = useState<ChannelAccountDraft[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -395,6 +441,15 @@ export default function TenantChannelsPage() {
   const [savingMediaPolicy, setSavingMediaPolicy] = useState(false);
   const [templateCategoryPolicy, setTemplateCategoryPolicy] = useState<string[]>([]);
   const [templateCategoryPolicyUnrestricted, setTemplateCategoryPolicyUnrestricted] = useState(true);
+  const [savedTemplateCategoryPolicy, setSavedTemplateCategoryPolicy] = useState<string[]>([]);
+  const [savedTemplateCategoryPolicyUnrestricted, setSavedTemplateCategoryPolicyUnrestricted] = useState(true);
+  const templateCategoryDirty =
+    templateCategoryPolicyUnrestricted !== savedTemplateCategoryPolicyUnrestricted ||
+    !sameStringSet(templateCategoryPolicy, savedTemplateCategoryPolicy);
+  const technicalDraftChanges = useMemo(
+    () => getTechnicalDraftChanges(savedDrafts, drafts),
+    [savedDrafts, drafts]
+  );
   const webSessionConnectedNumber =
     webSessionStatus?.lifecycle.observedState === "CONNECTED" && webSessionStatus.account?.channelAccountId
       ? formatBrazilPhone(webSessionStatus.account.channelAccountId)
@@ -435,12 +490,20 @@ export default function TenantChannelsPage() {
     ])
       .then(([response, policyResponse]) => {
         if (cancelled) return;
-        setDrafts(response.channelAccounts.map(toDraft));
+        const loadedDrafts = response.channelAccounts.map(toDraft);
+        const loadedTemplatePolicy =
+          response.webSessionStatus?.templateCategoryPolicy?.allowedCategories ?? [...TEMPLATE_CATEGORY_OPTIONS];
+        const loadedTemplatePolicyUnrestricted =
+          response.webSessionStatus?.templateCategoryPolicy?.unrestricted !== false;
+        setDrafts(loadedDrafts);
+        setSavedDrafts(loadedDrafts);
         setWebSessionStatus(response.webSessionStatus ?? null);
         setAuthorizedNumber(response.webSessionStatus?.authorization.authorizedNumberCanonical ?? "");
         setReplacementNumber(response.webSessionStatus?.numberReplacement?.targetNumberCanonical ?? "");
-        setTemplateCategoryPolicy(response.webSessionStatus?.templateCategoryPolicy?.allowedCategories ?? [...TEMPLATE_CATEGORY_OPTIONS]);
-        setTemplateCategoryPolicyUnrestricted(response.webSessionStatus?.templateCategoryPolicy?.unrestricted !== false);
+        setTemplateCategoryPolicy(loadedTemplatePolicy);
+        setTemplateCategoryPolicyUnrestricted(loadedTemplatePolicyUnrestricted);
+        setSavedTemplateCategoryPolicy(loadedTemplatePolicy);
+        setSavedTemplateCategoryPolicyUnrestricted(loadedTemplatePolicyUnrestricted);
         setMediaPolicy(policyResponse.whatsappMediaPolicy);
         setMediaPolicySource(policyResponse.source);
       })
@@ -496,7 +559,9 @@ export default function TenantChannelsPage() {
     setBackupPath(null);
     try {
       const response = await updateTenantChannelAccounts(connection, tenantId, toPayload(drafts, tenantId));
-      setDrafts(response.channelAccounts.map(toDraft));
+      const saved = response.channelAccounts.map(toDraft);
+      setDrafts(saved);
+      setSavedDrafts(saved);
       setWebSessionStatus(response.webSessionStatus ?? null);
       setAuthorizedNumber(response.webSessionStatus?.authorization.authorizedNumberCanonical ?? authorizedNumber);
       setReplacementNumber(response.webSessionStatus?.numberReplacement?.targetNumberCanonical ?? replacementNumber);
@@ -687,6 +752,8 @@ export default function TenantChannelsPage() {
       setWebSessionStatus(response.status);
       setTemplateCategoryPolicy(response.whatsappTemplatePolicy.allowedCategories);
       setTemplateCategoryPolicyUnrestricted(response.whatsappTemplatePolicy.unrestricted);
+      setSavedTemplateCategoryPolicy(response.whatsappTemplatePolicy.allowedCategories);
+      setSavedTemplateCategoryPolicyUnrestricted(response.whatsappTemplatePolicy.unrestricted);
       setToast("Categorias de modelos WhatsApp salvas.");
     } catch (err) {
       setError((err as Error).message || "Falha ao salvar categorias de modelos WhatsApp.");
@@ -1132,6 +1199,9 @@ export default function TenantChannelsPage() {
                       ? "Sem política explícita: comportamento atual preservado até salvar uma allowlist."
                       : "Política explícita ativa para este tenant."}
                   </p>
+                  {templateCategoryDirty ? (
+                    <p className="mt-2 text-xs font-semibold text-amber-200">Alterações não salvas.</p>
+                  ) : null}
                 </div>
                 <div className="grid gap-2 md:grid-cols-3">
                   {TEMPLATE_CATEGORY_OPTIONS.map((category) => (
@@ -1153,10 +1223,10 @@ export default function TenantChannelsPage() {
                   <button
                     type="button"
                     onClick={() => void handleSaveTemplateCategoryPolicy()}
-                    disabled={Boolean(webSessionWorking)}
+                    disabled={Boolean(webSessionWorking) || !templateCategoryDirty}
                     className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {webSessionWorking === "template-category-policy" ? "Salvando..." : "Salvar categorias"}
+                    {webSessionWorking === "template-category-policy" ? "Salvando..." : "Salvar categorias de modelos"}
                   </button>
                   <span className="text-xs text-white/55">
                     Modelos fora da allowlist continuam visíveis, mas não podem ser usados em envios.
@@ -1360,9 +1430,14 @@ export default function TenantChannelsPage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-white/70">
-              {loading ? "Carregando..." : `${drafts.length} conta(s) configurada(s).`}
-            </p>
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
+                Configuração técnica de canais
+              </h2>
+              <p className="mt-1 text-sm text-white/70">
+                {loading ? "Carregando..." : `${drafts.length} conta(s) configurada(s).`}
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => setDrafts((current) => [...current, createDraft()])}
@@ -1382,6 +1457,7 @@ export default function TenantChannelsPage() {
             const metadata = parseMetadataPreview(draft.metadata);
             const source = metadata.source;
             const warnings = getChannelWarnings(draft, metadata);
+            const statusManagedByLifecycle = isExistingWebSessionDraft(draft, savedDrafts);
             return (
             <section key={draft.id || index} className="rounded-xl border border-white/10 bg-white/5 p-4">
               <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
@@ -1584,6 +1660,7 @@ export default function TenantChannelsPage() {
                     onChange={(event) =>
                       updateDraft(index, "status", event.target.value as ChannelAccountDraft["status"])
                     }
+                    disabled={statusManagedByLifecycle}
                     className="rounded-md border border-white/10 bg-re7-navy px-3 py-2 text-white"
                   >
                     {STATUS_OPTIONS.map((status) => (
@@ -1592,6 +1669,11 @@ export default function TenantChannelsPage() {
                       </option>
                     ))}
                   </select>
+                  {statusManagedByLifecycle ? (
+                    <span className="text-xs text-white/50">
+                      Status da Sessão Web é controlado pelas ações de conectar e desconectar.
+                    </span>
+                  ) : null}
                 </label>
 
                 <label className="flex flex-col gap-1 text-sm">
@@ -1674,13 +1756,24 @@ export default function TenantChannelsPage() {
             );
           })}
 
+          {technicalDraftChanges.length > 0 ? (
+            <div className="rounded-lg border border-amber-300/25 bg-amber-500/10 p-3 text-sm text-amber-100">
+              <p className="font-semibold">Você está alterando configuração técnica</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {technicalDraftChanges.map((change) => (
+                  <li key={change}>{change}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           <div className="flex justify-end">
             <button
               type="submit"
               disabled={saving || loading}
               className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {saving ? "Salvando..." : "Salvar canais"}
+              {saving ? "Salvando..." : "Salvar configuração técnica"}
             </button>
           </div>
         </form>

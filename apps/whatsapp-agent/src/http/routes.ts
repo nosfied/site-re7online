@@ -639,6 +639,77 @@ import {
 } from "../channels/instagramOutbound.js";
 import type { TenantChannelAccount } from "../channels/tenantChannelAccount.types.js";
 
+const CHANNEL_ACCOUNT_SAFE_AUDIT_FIELDS = [
+  "displayName",
+  "enabled",
+  "automationEnabled",
+  "runtimeEnabled",
+  "inboundPersistenceEnabled",
+  "outboundEnabled",
+  "aiEnabled",
+  "handoffEnabled",
+  "status",
+  "tokenStatus",
+] as const;
+
+function channelAccountSafeRef(account: TenantChannelAccount) {
+  return {
+    accountRef: crypto
+      .createHash("sha256")
+      .update(`${account.tenantKey}:${account.provider}:${account.channel}:${account.channelAccountId}`)
+      .digest("hex")
+      .slice(0, 12),
+    channel: account.channel,
+    provider: account.provider,
+    channelAccountIdLast4: account.channelAccountId.slice(-4) || null,
+  };
+}
+
+function channelAccountAuditKey(account: TenantChannelAccount) {
+  return `${account.tenantKey}:${account.provider}:${account.channel}:${account.channelAccountId}`;
+}
+
+function buildSafeChannelAccountFieldDiff(params: {
+  before: TenantChannelAccount[];
+  after: TenantChannelAccount[];
+}) {
+  const beforeByKey = new Map(params.before.map((account) => [channelAccountAuditKey(account), account]));
+  const afterByKey = new Map(params.after.map((account) => [channelAccountAuditKey(account), account]));
+  const changes: Prisma.InputJsonObject[] = [];
+  for (const [key, after] of afterByKey) {
+    const before = beforeByKey.get(key);
+    if (!before) {
+      changes.push({ ...channelAccountSafeRef(after), action: "created" });
+      continue;
+    }
+    const changedFields: Record<string, { from: unknown; to: unknown }> = {};
+    for (const field of CHANNEL_ACCOUNT_SAFE_AUDIT_FIELDS) {
+      if (before[field] !== after[field]) {
+        changedFields[field] = { from: before[field] ?? null, to: after[field] ?? null };
+      }
+    }
+    const beforeAliases = before.externalAccountIds?.length ?? 0;
+    const afterAliases = after.externalAccountIds?.length ?? 0;
+    if (beforeAliases !== afterAliases) {
+      changedFields.externalAccountIds = { from: `${beforeAliases} item(s)`, to: `${afterAliases} item(s)` };
+    }
+    const beforeMetadataKeys = Object.keys(before.metadata ?? {}).filter((item) => item !== "webSession").sort();
+    const afterMetadataKeys = Object.keys(after.metadata ?? {}).filter((item) => item !== "webSession").sort();
+    if (beforeMetadataKeys.join(",") !== afterMetadataKeys.join(",")) {
+      changedFields.metadataKeys = { from: beforeMetadataKeys, to: afterMetadataKeys };
+    }
+    if (Object.keys(changedFields).length > 0) {
+      changes.push({ ...channelAccountSafeRef(after), action: "updated", changedFields: changedFields as Prisma.InputJsonObject });
+    }
+  }
+  for (const [key, before] of beforeByKey) {
+    if (!afterByKey.has(key)) {
+      changes.push({ ...channelAccountSafeRef(before), action: "removed" });
+    }
+  }
+  return changes;
+}
+
 const WEBCHAT_OUTBOUND_DISABLED_MESSAGE = "Envio por Webchat ainda não está habilitado neste canal.";
 
 const LEGACY_OPERATIONAL_DEPARTMENT_FILTER = {
@@ -20542,6 +20613,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             tenantKey: tenantId,
             accounts: channelAccounts,
           });
+          const savedChannelAccounts = await listTenantChannelAccountsFromDb({
+            prisma,
+            tenantKey: tenantId,
+            includeSecrets: false,
+          });
+          const channelAccountChanges = buildSafeChannelAccountFieldDiff({
+            before: existingAccounts,
+            after: savedChannelAccounts,
+          });
           let metaIdentityCleared = false;
           let primaryTransportCleared = false;
           if (hadOperationalMetaWhatsapp && !hasOperationalMetaWhatsapp) {
@@ -20559,12 +20639,25 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             });
             primaryTransportCleared = clearedPrimary.cleared;
           }
+          await persistEvent({
+            clientId: client.id,
+            requestId: `${requestId}:admin-channel-accounts`,
+            eventName: "admin.tenant.channel_accounts.updated",
+            payloadJson: {
+              actorUserId: `admin:${authToken.source}`,
+              tenantKey: client.clientKey,
+              accountCount: savedChannelAccounts.length,
+              changedAccounts: channelAccountChanges,
+              secretValuesIncluded: false,
+            },
+          });
           logger.info({
             event: "admin.tenant.channel_accounts.updated",
             tenantId,
             authSource: authToken.source,
-            accountCount: channelAccounts.length,
+            accountCount: savedChannelAccounts.length,
             fieldsChanged: ["channelAccounts"],
+            channelAccountChanges,
             metaIdentityCleared,
             primaryTransportCleared,
             source: "db",
@@ -20575,7 +20668,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             tenantId,
             source: "db",
             fieldsChanged: ["channelAccounts"],
-            channelAccounts: redactTenantChannelAccounts(channelAccounts),
+            channelAccounts: redactTenantChannelAccounts(savedChannelAccounts),
             webSessionStatus: await serializeWebSessionStatus({ prisma, client }),
           });
         } catch (error) {

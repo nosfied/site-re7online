@@ -20,6 +20,11 @@ type ReplaceTenantChannelAccountsParams = {
   accounts: TenantChannelAccount[];
 };
 
+type ExistingChannelAccountRuntimeState = {
+  metadata: Prisma.JsonValue | null;
+  status: string | null;
+};
+
 function getEncryptionKey() {
   return getChannelAccountSecretKey();
 }
@@ -44,6 +49,41 @@ function accountSecrets(account: TenantChannelAccount) {
 
 function accountKey(account: TenantChannelAccount) {
   return `${account.provider}:${account.channel}:${account.channelAccountId}`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function metadataWithPreservedWebSessionLifecycle(params: {
+  incoming: TenantChannelAccount["metadata"];
+  existing: ExistingChannelAccountRuntimeState | null;
+}) {
+  const incoming: Record<string, unknown> = isRecord(params.incoming) ? { ...params.incoming } : {};
+  const existingMetadata = isRecord(params.existing?.metadata) ? params.existing?.metadata : null;
+  if (existingMetadata && Object.prototype.hasOwnProperty.call(existingMetadata, "webSession")) {
+    incoming.webSession = existingMetadata.webSession;
+  } else {
+    delete incoming.webSession;
+  }
+  return Object.keys(incoming).length > 0 ? (incoming as TenantChannelAccount["metadata"]) : undefined;
+}
+
+export function preserveGenericWebSessionLifecycleState(
+  account: TenantChannelAccount,
+  existing: ExistingChannelAccountRuntimeState | null
+) {
+  if (account.channel !== "whatsapp" || account.provider !== "web_session" || !existing) {
+    return account;
+  }
+  return {
+    ...account,
+    status: (existing.status as TenantChannelAccount["status"]) ?? account.status,
+    metadata: metadataWithPreservedWebSessionLifecycle({
+      incoming: account.metadata,
+      existing,
+    }),
+  } satisfies TenantChannelAccount;
 }
 
 export async function listTenantChannelAccountsFromDb(params: {
@@ -81,7 +121,7 @@ export async function upsertTenantChannelAccountToDb(params: UpsertTenantChannel
   if (!client) throw new Error("client_not_found");
 
   const account = params.account;
-  const upserted = await params.prisma.channelAccount.upsert({
+  const existingAccount = await params.prisma.channelAccount.findUnique({
     where: {
       clientId_provider_channel_channelAccountId: {
         clientId: client.id,
@@ -90,39 +130,51 @@ export async function upsertTenantChannelAccountToDb(params: UpsertTenantChannel
         channelAccountId: account.channelAccountId,
       },
     },
+    select: { metadata: true, status: true },
+  });
+  const writableAccount = preserveGenericWebSessionLifecycleState(account, existingAccount);
+  const upserted = await params.prisma.channelAccount.upsert({
+    where: {
+      clientId_provider_channel_channelAccountId: {
+        clientId: client.id,
+        provider: writableAccount.provider,
+        channel: writableAccount.channel,
+        channelAccountId: writableAccount.channelAccountId,
+      },
+    },
     create: {
       clientId: client.id,
-      channel: account.channel,
-      provider: account.provider,
-      displayName: account.displayName ?? null,
-      channelAccountId: account.channelAccountId,
-      externalAccountIds: jsonOrNull(account.externalAccountIds),
-      externalBusinessId: account.externalBusinessId || null,
-      metadata: jsonOrNull(account.metadata),
-      enabled: account.enabled,
-      automationEnabled: account.automationEnabled === true,
-      runtimeEnabled: account.runtimeEnabled === true,
-      inboundPersistenceEnabled: account.inboundPersistenceEnabled === true,
-      outboundEnabled: account.outboundEnabled === true,
-      aiEnabled: account.aiEnabled === true,
-      handoffEnabled: account.handoffEnabled === true,
-      status: account.status ?? "pending",
-      tokenStatus: account.tokenStatus ?? "missing",
+      channel: writableAccount.channel,
+      provider: writableAccount.provider,
+      displayName: writableAccount.displayName ?? null,
+      channelAccountId: writableAccount.channelAccountId,
+      externalAccountIds: jsonOrNull(writableAccount.externalAccountIds),
+      externalBusinessId: writableAccount.externalBusinessId || null,
+      metadata: jsonOrNull(writableAccount.metadata),
+      enabled: writableAccount.enabled,
+      automationEnabled: writableAccount.automationEnabled === true,
+      runtimeEnabled: writableAccount.runtimeEnabled === true,
+      inboundPersistenceEnabled: writableAccount.inboundPersistenceEnabled === true,
+      outboundEnabled: writableAccount.outboundEnabled === true,
+      aiEnabled: writableAccount.aiEnabled === true,
+      handoffEnabled: writableAccount.handoffEnabled === true,
+      status: writableAccount.status ?? "pending",
+      tokenStatus: writableAccount.tokenStatus ?? "missing",
     },
     update: {
-      displayName: account.displayName ?? null,
-      externalAccountIds: jsonOrNull(account.externalAccountIds),
-      externalBusinessId: account.externalBusinessId || null,
-      metadata: jsonOrNull(account.metadata),
-      enabled: account.enabled,
-      automationEnabled: account.automationEnabled === true,
-      runtimeEnabled: account.runtimeEnabled === true,
-      inboundPersistenceEnabled: account.inboundPersistenceEnabled === true,
-      outboundEnabled: account.outboundEnabled === true,
-      aiEnabled: account.aiEnabled === true,
-      handoffEnabled: account.handoffEnabled === true,
-      status: account.status ?? "pending",
-      tokenStatus: account.tokenStatus ?? "missing",
+      displayName: writableAccount.displayName ?? null,
+      externalAccountIds: jsonOrNull(writableAccount.externalAccountIds),
+      externalBusinessId: writableAccount.externalBusinessId || null,
+      metadata: jsonOrNull(writableAccount.metadata),
+      enabled: writableAccount.enabled,
+      automationEnabled: writableAccount.automationEnabled === true,
+      runtimeEnabled: writableAccount.runtimeEnabled === true,
+      inboundPersistenceEnabled: writableAccount.inboundPersistenceEnabled === true,
+      outboundEnabled: writableAccount.outboundEnabled === true,
+      aiEnabled: writableAccount.aiEnabled === true,
+      handoffEnabled: writableAccount.handoffEnabled === true,
+      status: writableAccount.status ?? "pending",
+      tokenStatus: writableAccount.tokenStatus ?? "missing",
     },
   });
 
