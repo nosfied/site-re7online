@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
   Channel,
@@ -68,6 +68,25 @@ const TEMPLATE_CATEGORY_LABELS: Record<(typeof TEMPLATE_CATEGORY_OPTIONS)[number
   MARKETING: "Marketing",
   AUTHENTICATION: "Autenticação",
 };
+
+type ToastTone = "success" | "error" | "warning" | "info";
+
+type AdminToast = {
+  tone: ToastTone;
+  title: string;
+  message?: string;
+};
+
+const PRIMARY_BUTTON_CLASS =
+  "rounded-md border border-sky-300/40 bg-sky-500 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-sky-950/20 hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60";
+const SUCCESS_BUTTON_CLASS =
+  "rounded-md border border-emerald-300/40 bg-emerald-500 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-emerald-950/20 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60";
+const WARNING_BUTTON_CLASS =
+  "rounded-md border border-amber-300/40 bg-amber-500 px-3 py-2 text-sm font-semibold text-amber-950 shadow-sm shadow-amber-950/20 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60";
+const DANGER_BUTTON_CLASS =
+  "rounded-md border border-red-300/40 bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-red-950/20 hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60";
+const SECONDARY_BUTTON_CLASS =
+  "rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60";
 function formatBrazilPhone(value: string | null | undefined) {
   const digits = String(value ?? "").replace(/\D/g, "");
   if (!digits) return value ?? "-";
@@ -382,6 +401,200 @@ function getRoutingTogglePreview(
   );
 }
 
+function getMetaOperationalCard(status: TenantWebSessionStatus | null): {
+  label: string;
+  tone: "success" | "warning" | "danger" | "neutral";
+  detail: string;
+} {
+  const policy = status?.transportPolicy;
+  const readiness = status?.metaReadiness;
+  const configured = policy?.metaTechnicallyConfigured ?? policy?.metaConfigured ?? readiness?.configured ?? false;
+  const enabledForRouting = policy?.metaEnabledForRouting ?? policy?.metaConfigured ?? configured;
+  if (!configured) {
+    return {
+      label: "NAO CONFIGURADO",
+      tone: "neutral",
+      detail: "Meta Cloud ainda nao possui ativo operacional configurado para este tenant.",
+    };
+  }
+  if (!enabledForRouting) {
+    return {
+      label: "DESABILITADO PARA ROTEAMENTO",
+      tone: "neutral",
+      detail: "Meta Cloud existe, mas foi removido do roteamento operacional.",
+    };
+  }
+  if (readiness?.operational === true || policy?.metaReady === true) {
+    return {
+      label: "OPERACIONAL",
+      tone: "success",
+      detail: readiness?.cloudMode === "COEXISTENCE"
+        ? "WhatsApp Business App + Cloud API conectados."
+        : "Meta Cloud pronto para modelos e campanhas.",
+    };
+  }
+  if (readiness?.reason === "phone_disconnected" || readiness?.phoneStatus === "DISCONNECTED") {
+    return {
+      label: "DESCONECTADO",
+      tone: "danger",
+      detail: "O ativo Meta esta configurado, mas o numero nao esta operacional no Graph.",
+    };
+  }
+  return {
+    label: "ACAO NECESSARIA",
+    tone: "warning",
+    detail: getMetaReadinessAction(status),
+  };
+}
+
+function getWebOperationalCard(status: TenantWebSessionStatus | null): {
+  label: string;
+  tone: "success" | "warning" | "danger" | "neutral";
+  detail: string;
+} {
+  const policy = status?.transportPolicy;
+  const configured = policy?.webTechnicallyConfigured ?? status?.configured ?? false;
+  const enabledForRouting = policy?.webEnabledForRouting ?? policy?.webConfigured ?? configured;
+  const observedState = status?.lifecycle.observedState ?? "DISCONNECTED";
+  if (!configured) {
+    return {
+      label: "NAO CONFIGURADO",
+      tone: "neutral",
+      detail: "Sessao Web ainda nao foi autorizada para este tenant.",
+    };
+  }
+  if (!enabledForRouting) {
+    return {
+      label: "DESABILITADO PARA ROTEAMENTO",
+      tone: "neutral",
+      detail: "Sessao Web existe, mas foi removida do roteamento operacional.",
+    };
+  }
+  if (observedState === "CONNECTED" && status?.account?.outboundEnabled === true) {
+    return {
+      label: "CONECTADO",
+      tone: "success",
+      detail: "Sessao Web pronta para atendimento interativo.",
+    };
+  }
+  if (observedState === "QR_REQUIRED") {
+    return {
+      label: "QR NECESSARIO",
+      tone: "warning",
+      detail: "Reconecte a sessao pelo fluxo de QR para restaurar o atendimento interativo.",
+    };
+  }
+  if (observedState === "CONNECTING" || observedState === "RECONNECTING") {
+    return {
+      label: "RECONECTANDO",
+      tone: "warning",
+      detail: "A sessao esta tentando voltar. Aguarde ou acompanhe o worker antes de agir.",
+    };
+  }
+  if (observedState === "ERROR") {
+    return {
+      label: "DESCONECTADO",
+      tone: "danger",
+      detail: status?.lifecycle.lastErrorCode
+        ? `Ultimo erro registrado: ${status.lifecycle.lastErrorCode}.`
+        : "A sessao Web esta indisponivel.",
+    };
+  }
+  if (observedState === "CONNECTED") {
+    return {
+      label: "DESABILITADO PARA ROTEAMENTO",
+      tone: "warning",
+      detail: "A sessao esta conectada, mas o envio esta desabilitado neste ChannelAccount.",
+    };
+  }
+  return {
+    label: "DESCONECTADO",
+    tone: "danger",
+    detail: "A sessao Web nao esta conectada.",
+  };
+}
+
+function getOperationalSummary(status: TenantWebSessionStatus | null): {
+  label: string;
+  tone: "success" | "warning" | "danger" | "neutral";
+  detail: string;
+} {
+  const policy = status?.transportPolicy;
+  if (!policy) {
+    return {
+      label: "Estado nao carregado",
+      tone: "neutral",
+      detail: "Carregue o tenant para ver a condicao operacional dos transportes WhatsApp.",
+    };
+  }
+  const metaReady = policy.metaReady === true;
+  const webReady = policy.webReady === true;
+  if (policy.configuredMode === "HYBRID") {
+    if (metaReady && webReady) {
+      return {
+        label: "HYBRID operacional",
+        tone: "success",
+        detail: "Atendimento interativo usa Sessao Web; modelos e campanhas usam Meta Cloud.",
+      };
+    }
+    if (metaReady || webReady) {
+      return {
+        label: "HYBRID degradado",
+        tone: "warning",
+        detail: webReady
+          ? "Sessao Web operacional; Meta Cloud exige acao antes de modelos e campanhas."
+          : "Meta Cloud operacional; atendimento interativo por Sessao Web exige reconexao.",
+      };
+    }
+    return {
+      label: "HYBRID indisponivel",
+      tone: "danger",
+      detail: "Meta Cloud e Sessao Web estao configurados, mas nenhum transporte esta operacional.",
+    };
+  }
+  if (policy.configuredMode === "CLOUD_ONLY") {
+    return metaReady
+      ? { label: "Meta Cloud operacional", tone: "success", detail: "Modelos, campanhas e envios Meta estao disponiveis." }
+      : { label: "Meta Cloud indisponivel", tone: "danger", detail: "O tenant esta em modo Meta Cloud, mas o transporte exige acao." };
+  }
+  if (policy.configuredMode === "WEB_ONLY") {
+    return webReady
+      ? { label: "Sessao Web operacional", tone: "success", detail: "Atendimento interativo por Sessao Web esta disponivel." }
+      : { label: "Sessao Web indisponivel", tone: "danger", detail: "O tenant esta em modo Sessao Web, mas a sessao exige acao." };
+  }
+  return {
+    label: "Nenhum transporte operacional",
+    tone: "neutral",
+    detail: "Nenhum transporte WhatsApp esta habilitado para roteamento.",
+  };
+}
+
+function getIncidentBanners(status: TenantWebSessionStatus | null) {
+  const policy = status?.transportPolicy;
+  const incidents: Array<{ title: string; message: string }> = [];
+  if (!policy) return incidents;
+  if (policy.metaConfigured && policy.metaEnabledForRouting !== false && policy.metaReady !== true) {
+    incidents.push({
+      title: "Meta Cloud exige acao",
+      message: getMetaOperationalCard(status).detail,
+    });
+  }
+  if (policy.webConfigured && policy.webEnabledForRouting !== false && policy.webReady !== true) {
+    incidents.push({
+      title: "Sessao Web indisponivel",
+      message: getWebOperationalCard(status).detail,
+    });
+  }
+  return incidents;
+}
+
+function getToastClass(tone: ToastTone) {
+  if (tone === "success") return "border-emerald-300/40 bg-emerald-950 text-emerald-50";
+  if (tone === "error") return "border-red-300/40 bg-red-950 text-red-50";
+  if (tone === "warning") return "border-amber-300/40 bg-amber-950 text-amber-50";
+  return "border-sky-300/40 bg-sky-950 text-sky-50";
+}
+
 function getChannelModeNote(draft: ChannelAccountDraft) {
   if (draft.channel === "messenger" || draft.channel === "instagram") {
     return "Human-only recomendado: sem IA, sem automacao e sem handoff automatico.";
@@ -429,7 +642,7 @@ export default function TenantChannelsPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<AdminToast | null>(null);
   const [backupPath, setBackupPath] = useState<string | null>(null);
   const [connectingInstagram, setConnectingInstagram] = useState(false);
   const [webSessionStatus, setWebSessionStatus] = useState<TenantWebSessionStatus | null>(null);
@@ -476,6 +689,25 @@ export default function TenantChannelsPage() {
         ? "novo número pronto"
         : "troca em andamento"
     : "sem troca ativa";
+  const operationalSummary = getOperationalSummary(webSessionStatus);
+  const metaOperationalCard = getMetaOperationalCard(webSessionStatus);
+  const webOperationalCard = getWebOperationalCard(webSessionStatus);
+  const incidentBanners = getIncidentBanners(webSessionStatus);
+
+  const showToast = useCallback((tone: ToastTone, title: string, message?: string) => {
+    setToast({ tone, title, message });
+  }, []);
+
+  useEffect(() => {
+    if (error) showToast("error", "Ação não concluída", error);
+  }, [error, showToast]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeoutMs = toast.tone === "error" || toast.tone === "warning" ? 9000 : 5500;
+    const timeoutId = window.setTimeout(() => setToast(null), timeoutMs);
+    return () => window.clearTimeout(timeoutId);
+  }, [toast]);
 
   useEffect(() => {
     if (!tenantId || !connection.baseUrl || !connection.adminToken) return;
@@ -566,7 +798,7 @@ export default function TenantChannelsPage() {
       setAuthorizedNumber(response.webSessionStatus?.authorization.authorizedNumberCanonical ?? authorizedNumber);
       setReplacementNumber(response.webSessionStatus?.numberReplacement?.targetNumberCanonical ?? replacementNumber);
       setBackupPath(response.backupPath ?? null);
-      setToast("Canais conectados salvos.");
+      showToast("success", "Canais conectados salvos.");
     } catch (err) {
       setError((err as Error).message || "Falha ao salvar canais.");
     } finally {
@@ -595,7 +827,7 @@ export default function TenantChannelsPage() {
       const response = await authorizeTenantWebSessionNumber(connection, tenantId, authorizedNumber);
       setWebSessionStatus(response.status);
       setAuthorizedNumber(response.status.authorization.authorizedNumberCanonical ?? "");
-      setToast("Número Web Session autorizado.");
+      showToast("success", "Número Web Session autorizado.");
     } catch (err) {
       setError((err as Error).message || "Falha ao autorizar número Web Session.");
     } finally {
@@ -621,7 +853,7 @@ export default function TenantChannelsPage() {
       setWebSessionStatus(response.status);
       setAuthorizedNumber(response.status.numberReplacement?.targetNumberCanonical ?? target);
       setReplacementNumber(response.status.numberReplacement?.targetNumberCanonical ?? target);
-      setToast("Troca de número iniciada.");
+      showToast("success", "Troca de número iniciada.");
     } catch (err) {
       setError((err as Error).message || "Falha ao iniciar troca de número.");
     } finally {
@@ -640,7 +872,7 @@ export default function TenantChannelsPage() {
       const response = await cancelTenantWhatsappNumberReplacement(connection, tenantId);
       setWebSessionStatus(response.status);
       setReplacementNumber("");
-      setToast("Troca de número cancelada.");
+      showToast("success", "Troca de número cancelada.");
     } catch (err) {
       setError((err as Error).message || "Falha ao cancelar troca de número.");
     } finally {
@@ -657,7 +889,7 @@ export default function TenantChannelsPage() {
       const response = await releaseTenantWebSessionNumber(connection, tenantId);
       setWebSessionStatus(response.status);
       setAuthorizedNumber(response.status.authorization.authorizedNumberCanonical ?? "");
-      setToast("Número Web Session liberado.");
+      showToast("success", "Número Web Session liberado.");
     } catch (err) {
       setError((err as Error).message || "Falha ao liberar número Web Session.");
     } finally {
@@ -672,7 +904,8 @@ export default function TenantChannelsPage() {
     try {
       const response = await updateTenantWhatsAppPrimaryTransport(connection, tenantId, provider);
       setWebSessionStatus(response.status);
-      setToast(
+      showToast(
+        "success",
         provider === "meta"
           ? "Meta Cloud definido como transporte principal."
           : "WhatsApp Business por sessão definido como transporte principal."
@@ -691,7 +924,7 @@ export default function TenantChannelsPage() {
     try {
       const response = await updateTenantWhatsAppPrimaryTransport(connection, tenantId, null);
       setWebSessionStatus(response.status);
-      setToast("Transporte principal voltou para AUTO.");
+      showToast("success", "Transporte principal voltou para AUTO.");
     } catch (err) {
       setError((err as Error).message || "Falha ao limpar transporte principal.");
     } finally {
@@ -714,7 +947,8 @@ export default function TenantChannelsPage() {
         enabledForRouting
       );
       setWebSessionStatus(response.status);
-      setToast(
+      showToast(
+        "success",
         transport === "meta"
           ? enabledForRouting
             ? "Meta Cloud habilitado para roteamento."
@@ -754,7 +988,7 @@ export default function TenantChannelsPage() {
       setTemplateCategoryPolicyUnrestricted(response.whatsappTemplatePolicy.unrestricted);
       setSavedTemplateCategoryPolicy(response.whatsappTemplatePolicy.allowedCategories);
       setSavedTemplateCategoryPolicyUnrestricted(response.whatsappTemplatePolicy.unrestricted);
-      setToast("Categorias de modelos WhatsApp salvas.");
+      showToast("success", "Categorias de modelos WhatsApp salvas.");
     } catch (err) {
       setError((err as Error).message || "Falha ao salvar categorias de modelos WhatsApp.");
     } finally {
@@ -784,7 +1018,8 @@ export default function TenantChannelsPage() {
             }
           : current
       );
-      setToast(
+      showToast(
+        "success",
         response.allowInteractiveContactStartViaWebSession
           ? "Início livre por sessão Web habilitado."
           : "Início livre por sessão Web desabilitado."
@@ -803,7 +1038,8 @@ export default function TenantChannelsPage() {
     try {
       const response = await refreshTenantMetaCloudReadiness(connection, tenantId);
       setWebSessionStatus(response.status);
-      setToast(
+      showToast(
+        response.metaReadiness.operational ? "success" : "warning",
         response.metaReadiness.operational
           ? "Meta Cloud validado como operacional."
           : "Meta Cloud validado como nao operacional."
@@ -837,7 +1073,7 @@ export default function TenantChannelsPage() {
       const response = await updateTenantWhatsAppMediaPolicy(connection, tenantId, mediaPolicy);
       setMediaPolicy(response.whatsappMediaPolicy);
       setMediaPolicySource(response.source);
-      setToast("Politica de midias do WhatsApp salva.");
+      showToast("success", "Politica de midias do WhatsApp salva.");
     } catch (err) {
       setError((err as Error).message || "Falha ao salvar politica de midias.");
     } finally {
@@ -847,6 +1083,26 @@ export default function TenantChannelsPage() {
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
+      {toast ? (
+        <div className="fixed right-4 top-4 z-50 w-[min(92vw,28rem)]">
+          <div className={`rounded-lg border p-4 shadow-xl shadow-black/30 ${getToastClass(toast.tone)}`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">{toast.title}</p>
+                {toast.message ? <p className="mt-1 text-sm opacity-80">{toast.message}</p> : null}
+                {backupPath ? <p className="mt-2 break-all font-mono text-xs opacity-65">{backupPath}</p> : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setToast(null)}
+                className="rounded-md px-2 py-1 text-xs font-semibold opacity-70 hover:bg-white/10 hover:opacity-100"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -885,7 +1141,7 @@ export default function TenantChannelsPage() {
               type="button"
               onClick={handleConnectInstagram}
               disabled={connectingInstagram || !tenantId || !connection.baseUrl || !connection.adminToken}
-              className="inline-flex shrink-0 items-center justify-center rounded-md border border-sky-300/40 bg-sky-400/10 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+              className={`inline-flex shrink-0 items-center justify-center ${PRIMARY_BUTTON_CLASS}`}
             >
               {connectingInstagram ? "Abrindo Business Login..." : "Connect/Reconnect Instagram Business"}
             </button>
@@ -917,6 +1173,107 @@ export default function TenantChannelsPage() {
                   label={webSessionStatus?.lifecycle.observedState ?? "DISCONNECTED"}
                   tone={webSessionStatus?.lifecycle.observedState === "CONNECTED" ? "success" : webSessionStatus?.lifecycle.observedState === "ERROR" ? "danger" : "warning"}
                 />
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-white/50">
+                    Resumo operacional
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <StatusBadge label={operationalSummary.label} tone={operationalSummary.tone} />
+                    <StatusBadge label={`Modo ${getConfiguredWhatsappModeLabel(webSessionStatus)}`} />
+                  </div>
+                  <p className="mt-2 text-sm text-white/70">{operationalSummary.detail}</p>
+                </div>
+                <dl className="grid min-w-72 gap-2 text-xs sm:grid-cols-2">
+                  <TechnicalValue label="Interativo" value={getInteractiveDefaultLabel(webSessionStatus)} />
+                  <TechnicalValue label="Modelos" value="Meta Cloud" />
+                  <TechnicalValue label="Campanhas" value="Meta Cloud" />
+                  <TechnicalValue
+                    label="Início CRM livre"
+                    value={
+                      webSessionStatus?.contactStartPolicy?.allowInteractiveContactStartViaWebSession
+                        ? "Habilitado"
+                        : "Desabilitado"
+                    }
+                  />
+                </dl>
+              </div>
+            </div>
+
+            {incidentBanners.length ? (
+              <div className="grid gap-2">
+                {incidentBanners.map((incident) => (
+                  <div
+                    key={incident.title}
+                    className="rounded-lg border border-amber-300/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+                  >
+                    <p className="font-semibold">{incident.title}</p>
+                    <p className="mt-1 text-amber-100/75">{incident.message}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-white/10 bg-re7-navy/35 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-white">Meta Cloud</p>
+                    <p className="mt-1 text-xs text-white/55">
+                      {webSessionStatus?.metaReadiness?.publicIdentity?.maskedNumber ??
+                        webSessionStatus?.hybridIdentity?.meta.maskedNumber ??
+                        "Sem numero publico"}
+                    </p>
+                  </div>
+                  <StatusBadge label={metaOperationalCard.label} tone={metaOperationalCard.tone} />
+                </div>
+                <p className="mt-3 text-sm text-white/70">{metaOperationalCard.detail}</p>
+                <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                  <TechnicalValue
+                    label="Roteamento"
+                    value={getRoutingEnabledLabel(webSessionStatus?.transportPolicy?.metaEnabledForRouting)}
+                  />
+                  <TechnicalValue label="Status Graph" value={webSessionStatus?.metaReadiness?.phoneStatus ?? "-"} />
+                  <TechnicalValue label="Modo Meta" value={webSessionStatus?.metaReadiness?.cloudMode ?? "-"} />
+                  <TechnicalValue
+                    label="Modelos/campanhas"
+                    value={webSessionStatus?.transportPolicy?.metaReady ? "Disponivel" : "Indisponivel"}
+                  />
+                </dl>
+              </div>
+
+              <div className="rounded-lg border border-white/10 bg-re7-navy/35 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-white">Sessão Web</p>
+                    <p className="mt-1 text-xs text-white/55">
+                      {webSessionStatus?.hybridIdentity?.web.maskedNumber ??
+                        webSessionStatus?.authorization.authorizedNumberMasked ??
+                        "Sem numero conectado"}
+                    </p>
+                  </div>
+                  <StatusBadge label={webOperationalCard.label} tone={webOperationalCard.tone} />
+                </div>
+                <p className="mt-3 text-sm text-white/70">{webOperationalCard.detail}</p>
+                <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                  <TechnicalValue
+                    label="Roteamento"
+                    value={getRoutingEnabledLabel(webSessionStatus?.transportPolicy?.webEnabledForRouting)}
+                  />
+                  <TechnicalValue label="Estado" value={webSessionStatus?.lifecycle.observedState ?? "-"} />
+                  <TechnicalValue
+                    label="Outbound"
+                    value={webSessionStatus?.account?.outboundEnabled ? "Habilitado" : "Desabilitado"}
+                  />
+                  <TechnicalValue
+                    label="Atendimento"
+                    value={webSessionStatus?.transportPolicy?.webReady ? "Disponivel" : "Indisponivel"}
+                  />
+                </dl>
               </div>
             </div>
 
@@ -1019,7 +1376,7 @@ export default function TenantChannelsPage() {
                     type="button"
                     onClick={() => void handleCancelWhatsappNumberReplacement()}
                     disabled={Boolean(webSessionWorking)}
-                    className="rounded-md border border-amber-200/45 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    className={DANGER_BUTTON_CLASS}
                   >
                     {webSessionWorking === "replacement-cancel" ? "Cancelando..." : "Cancelar troca"}
                   </button>
@@ -1063,7 +1420,7 @@ export default function TenantChannelsPage() {
                   type="button"
                   onClick={() => void handleStartWhatsappNumberReplacement()}
                   disabled={Boolean(webSessionWorking) || !replacementNumber.trim()}
-                  className="rounded-md border border-amber-200/45 bg-amber-500/15 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={WARNING_BUTTON_CLASS}
                 >
                   {webSessionWorking === "replacement-start" ? "Iniciando..." : "Iniciar troca"}
                 </button>
@@ -1090,7 +1447,7 @@ export default function TenantChannelsPage() {
                   type="button"
                   onClick={() => void handleRefreshMetaReadiness()}
                   disabled={Boolean(webSessionWorking)}
-                  className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={PRIMARY_BUTTON_CLASS}
                 >
                   {webSessionWorking === "meta-readiness" ? "Validando..." : "Validar Meta Cloud"}
                 </button>
@@ -1133,7 +1490,11 @@ export default function TenantChannelsPage() {
                           Boolean(webSessionWorking) ||
                           webSessionStatus?.transportPolicy?.metaTechnicallyConfigured !== true
                         }
-                        className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        className={
+                          webSessionStatus?.transportPolicy?.metaEnabledForRouting
+                            ? DANGER_BUTTON_CLASS
+                            : PRIMARY_BUTTON_CLASS
+                        }
                       >
                         {webSessionWorking === "routing-meta"
                           ? "Salvando..."
@@ -1169,7 +1530,11 @@ export default function TenantChannelsPage() {
                           Boolean(webSessionWorking) ||
                           webSessionStatus?.transportPolicy?.webTechnicallyConfigured !== true
                         }
-                        className="rounded-md border border-emerald-300/40 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        className={
+                          webSessionStatus?.transportPolicy?.webEnabledForRouting
+                            ? DANGER_BUTTON_CLASS
+                            : SUCCESS_BUTTON_CLASS
+                        }
                       >
                         {webSessionWorking === "routing-web_session"
                           ? "Salvando..."
@@ -1224,7 +1589,7 @@ export default function TenantChannelsPage() {
                     type="button"
                     onClick={() => void handleSaveTemplateCategoryPolicy()}
                     disabled={Boolean(webSessionWorking) || !templateCategoryDirty}
-                    className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    className={PRIMARY_BUTTON_CLASS}
                   >
                     {webSessionWorking === "template-category-policy" ? "Salvando..." : "Salvar categorias de modelos"}
                   </button>
@@ -1240,7 +1605,7 @@ export default function TenantChannelsPage() {
                 type="button"
                 onClick={() => void handleAutoPrimaryTransport()}
                 disabled={Boolean(webSessionWorking) || webSessionStatus?.primaryTransport == null}
-                className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className={SECONDARY_BUTTON_CLASS}
               >
                 {webSessionWorking === "primary-auto" ? "Salvando..." : "AUTO"}
               </button>
@@ -1254,7 +1619,7 @@ export default function TenantChannelsPage() {
                   webSessionStatus?.numberReplacement?.status === "ACTIVE" ||
                   webSessionStatus?.metaReadiness?.operational !== true
                 }
-                className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className={PRIMARY_BUTTON_CLASS}
               >
                 {webSessionWorking === "primary-meta" ? "Salvando..." : "Usar Meta Cloud"}
               </button>
@@ -1271,7 +1636,7 @@ export default function TenantChannelsPage() {
                       webSessionStatus.numberReplacement.targetNumberCanonical
                   )
                 }
-                className="rounded-md border border-emerald-300/40 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className={SUCCESS_BUTTON_CLASS}
               >
                 {webSessionWorking === "primary-web_session" ? "Salvando..." : "Usar sessão Web"}
               </button>
@@ -1297,7 +1662,11 @@ export default function TenantChannelsPage() {
                     )
                   }
                   disabled={Boolean(webSessionWorking)}
-                  className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={
+                    webSessionStatus?.contactStartPolicy?.allowInteractiveContactStartViaWebSession
+                      ? DANGER_BUTTON_CLASS
+                      : SECONDARY_BUTTON_CLASS
+                  }
                 >
                   {webSessionWorking === "contact-start-policy"
                     ? "Salvando..."
@@ -1327,7 +1696,7 @@ export default function TenantChannelsPage() {
                 type="button"
                 onClick={handleAuthorizeWebSessionNumber}
                 disabled={Boolean(webSessionWorking) || !authorizedNumber.trim()}
-                className="rounded-md border border-emerald-300/40 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                className={SUCCESS_BUTTON_CLASS}
               >
                 {webSessionWorking === "authorize" ? "Autorizando..." : "Autorizar número"}
               </button>
@@ -1335,7 +1704,7 @@ export default function TenantChannelsPage() {
                 type="button"
                 onClick={handleReleaseWebSessionNumber}
                 disabled={Boolean(webSessionWorking) || !webSessionStatus?.configured}
-                className="rounded-md border border-amber-300/40 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className={DANGER_BUTTON_CLASS}
               >
                 {webSessionWorking === "release" ? "Liberando..." : "Liberar número"}
               </button>
@@ -1385,7 +1754,7 @@ export default function TenantChannelsPage() {
               type="button"
               onClick={handleSaveMediaPolicy}
               disabled={savingMediaPolicy || loading}
-              className="rounded-md border border-re7-orange/40 bg-re7-orange/20 px-3 py-2 text-sm font-semibold text-orange-100 hover:bg-re7-orange/30 disabled:cursor-not-allowed disabled:opacity-60"
+              className={WARNING_BUTTON_CLASS}
             >
               {savingMediaPolicy ? "Salvando..." : "Salvar politica de midias"}
             </button>
@@ -1416,18 +1785,6 @@ export default function TenantChannelsPage() {
           </ol>
         </section>
 
-        {error ? (
-          <p className="rounded-md border border-red-400/30 bg-red-900/70 p-3 text-sm text-red-100">
-            {error}
-          </p>
-        ) : null}
-        {toast ? (
-          <p className="rounded-md border border-emerald-400/30 bg-emerald-900/70 p-3 text-sm text-emerald-100">
-            {toast}
-            {backupPath ? <span className="ml-2 font-mono text-xs text-emerald-100/70">{backupPath}</span> : null}
-          </p>
-        ) : null}
-
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -1441,7 +1798,7 @@ export default function TenantChannelsPage() {
             <button
               type="button"
               onClick={() => setDrafts((current) => [...current, createDraft()])}
-              className="rounded-md border border-re7-sky/40 bg-re7-sky/20 px-3 py-2 text-sm text-re7-sky hover:bg-re7-sky/30"
+              className={PRIMARY_BUTTON_CLASS}
             >
               Adicionar conta
             </button>
@@ -1473,7 +1830,7 @@ export default function TenantChannelsPage() {
                 <button
                   type="button"
                   onClick={() => removeDraft(index)}
-                  className="rounded-md border border-red-400/30 px-3 py-2 text-sm text-red-100 hover:bg-red-900/30"
+                  className={DANGER_BUTTON_CLASS}
                 >
                   Remover
                 </button>
@@ -1529,7 +1886,7 @@ export default function TenantChannelsPage() {
                     type="button"
                     onClick={handleConnectInstagram}
                     disabled={connectingInstagram || !tenantId || !connection.baseUrl || !connection.adminToken}
-                    className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-400/10"
+                    className={PRIMARY_BUTTON_CLASS}
                   >
                     {connectingInstagram ? "Abrindo Business Login..." : "Connect/Reconnect Instagram Business"}
                   </button>
@@ -1546,7 +1903,7 @@ export default function TenantChannelsPage() {
                         "https://converta.re7online.com/agent-api/meta/instagram/oauth/callback"
                       )
                     }
-                    className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                    className={SECONDARY_BUTTON_CLASS}
                   >
                     Copy redirect URI
                   </button>
@@ -1771,7 +2128,7 @@ export default function TenantChannelsPage() {
             <button
               type="submit"
               disabled={saving || loading}
-              className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              className={WARNING_BUTTON_CLASS}
             >
               {saving ? "Salvando..." : "Salvar configuração técnica"}
             </button>
