@@ -16,12 +16,15 @@ import {
   AppSession,
   AppSessionAuditReport,
   AppSessionAuditStatus,
+  AppSatisfactionReport,
   clearAppSession,
   exportAppConversationReportCsv,
   exportAppSessionAuditReportCsv,
+  exportAppSatisfactionReportCsv,
   fetchAppConversationReport,
   fetchAppDepartments,
   fetchAppRetentionConfig,
+  fetchAppSatisfactionReport,
   fetchAppSessionAuditReport,
   fetchAppTenantSummary,
   fetchAppUsers,
@@ -62,16 +65,25 @@ const SESSION_STARTED_AT_FILTER_COPY =
 const SESSION_AUDIT_DISCLAIMER_COPY =
   "Sessões refletem autenticação e atividade observada. Não representam controle de jornada.";
 
-type ReportsTab = "overview" | "conversations" | "sla" | "agents" | "sessions" | "exports";
+type ReportsTab = "overview" | "conversations" | "sla" | "agents" | "satisfaction" | "sessions" | "exports";
 
 const REPORT_TABS: Array<{ id: ReportsTab; label: string; description: string }> = [
   { id: "overview", label: "Visão geral", description: "Resumo executivo do período" },
   { id: "conversations", label: "Conversas", description: "Volume, canais, setores e protocolos" },
   { id: "sla", label: "SLA de atendimento", description: "Tempos e pontos de atenção" },
   { id: "agents", label: "Atendentes", description: "Atividade humana e atribuição" },
+  { id: "satisfaction", label: "Satisfação", description: "CSAT, distribuição e comentários" },
   { id: "sessions", label: "Acessos/Sessões", description: "Auditoria de autenticação" },
   { id: "exports", label: "Exportações", description: "CSV e impressão/PDF" },
 ];
+
+const SATISFACTION_SCORE_LABELS = [
+  { score: 5, label: "Muito Satisfeito", tone: "ok" },
+  { score: 4, label: "Satisfeito", tone: "ok" },
+  { score: 3, label: "Neutro", tone: "neutral" },
+  { score: 2, label: "Insatisfeito", tone: "warn" },
+  { score: 1, label: "Muito Insatisfeito", tone: "risk" },
+] as const;
 
 function canAccessReports(role: string) {
   const normalized = role.trim().toUpperCase();
@@ -126,6 +138,38 @@ function dateTimeLocalToIso(value: string) {
   return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
+function reportRangeToIsoBounds(range: ConversationReportRange) {
+  const now = new Date();
+  if (range === "month") {
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return {
+      from: previousMonthStart.toISOString(),
+      to: new Date(currentMonthStart.getTime() - 1).toISOString(),
+    };
+  }
+  const days = range === "1d" ? 1 : range === "7d" ? 7 : 30;
+  return {
+    from: new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString(),
+    to: now.toISOString(),
+  };
+}
+
+function getReportPeriodIsoBounds(params: {
+  periodMode: "preset" | "custom";
+  range: ConversationReportRange;
+  customFrom: string;
+  customTo: string;
+}) {
+  if (params.periodMode === "custom") {
+    return {
+      from: dateTimeLocalToIso(params.customFrom),
+      to: dateTimeLocalToIso(params.customTo),
+    };
+  }
+  return reportRangeToIsoBounds(params.range);
+}
+
 function formatDateTime(value?: string | null) {
   if (!value) return "-";
   const date = new Date(value);
@@ -134,6 +178,23 @@ function formatDateTime(value?: string | null) {
     dateStyle: "short",
     timeStyle: "short",
   }).format(date);
+}
+
+function formatPercent(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "percent",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatScore(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 function getSlaOperational(report: ConversationReportResponse | null) {
@@ -301,9 +362,13 @@ export default function AppReportsPage() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [exportingSessions, setExportingSessions] = useState(false);
+  const [exportingSatisfaction, setExportingSatisfaction] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [report, setReport] = useState<ConversationReportResponse | null>(null);
+  const [satisfactionReport, setSatisfactionReport] = useState<AppSatisfactionReport | null>(null);
+  const [satisfactionLoading, setSatisfactionLoading] = useState(false);
+  const [satisfactionPage, setSatisfactionPage] = useState(1);
   const [sessionReport, setSessionReport] = useState<AppSessionAuditReport | null>(null);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionFrom, setSessionFrom] = useState(() => toDateTimeLocalValue(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
@@ -448,6 +513,50 @@ export default function AppReportsPage() {
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
+    const { from, to } = getReportPeriodIsoBounds({ periodMode, range, customFrom, customTo });
+    if (!from || !to || Date.parse(from) > Date.parse(to)) {
+      setSatisfactionReport(null);
+      setError("Informe um período exato válido para satisfação.");
+      return;
+    }
+    setSatisfactionLoading(true);
+    fetchAppSatisfactionReport(session, {
+      from,
+      to,
+      channel: channel || null,
+      assignedUserId: userId || null,
+      departmentId: isAdminRole(session.user.role) || isSupervisorRole(session.user.role) ? departmentId || null : null,
+      page: satisfactionPage,
+      limit: 25,
+    })
+      .then((response) => {
+        if (!cancelled) setSatisfactionReport(response);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        if (typed.status === 403) {
+          router.replace("/app/inbox");
+          return;
+        }
+        setSatisfactionReport(null);
+        setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível carregar o relatório de satisfação." }));
+      })
+      .finally(() => {
+        if (!cancelled) setSatisfactionLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [channel, customFrom, customTo, departmentId, handleUnauthorized, periodMode, range, router, satisfactionPage, session, userId]);
+
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
     const fromIso = sessionOpenNowMode
       ? new Date(Date.now() - APP_SESSION_OPEN_LOOKBACK_MS).toISOString()
       : dateTimeLocalToIso(sessionFrom);
@@ -496,6 +605,10 @@ export default function AppReportsPage() {
   useEffect(() => {
     setSessionPage(1);
   }, [sessionFrom, sessionOpenNowMode, sessionRole, sessionStatus, sessionTo, sessionUserId]);
+
+  useEffect(() => {
+    setSatisfactionPage(1);
+  }, [channel, customFrom, customTo, departmentId, periodMode, range, userId]);
 
   const userNameById = useMemo(
     () => new Map(users.map((item) => [item.id, formatUserDisplayName(item.name, item.email)])),
@@ -601,6 +714,46 @@ export default function AppReportsPage() {
       setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível exportar acessos/sessões." }));
     } finally {
       setExportingSessions(false);
+    }
+  };
+
+  const handleExportSatisfaction = async () => {
+    if (!session) return;
+    const { from, to } = getReportPeriodIsoBounds({ periodMode, range, customFrom, customTo });
+    if (!from || !to || Date.parse(from) > Date.parse(to)) {
+      setError("Informe um período válido para exportar satisfação.");
+      return;
+    }
+    setExportingSatisfaction(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const csv = await exportAppSatisfactionReportCsv(session, {
+        from,
+        to,
+        channel: channel || null,
+        assignedUserId: userId || null,
+        departmentId: isAdminRole(session.user.role) || isSupervisorRole(session.user.role) ? departmentId || null : null,
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "satisfaction-report.csv";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setSuccess("CSV de satisfação exportado com sucesso.");
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível exportar satisfação." }));
+    } finally {
+      setExportingSatisfaction(false);
     }
   };
 
@@ -1341,6 +1494,124 @@ export default function AppReportsPage() {
               ) : (
                 <EmptyState>Nenhuma atribuição registrada no período.</EmptyState>
               )}
+            </ReportSection>
+          </>
+        ) : null}
+
+        {activeTab === "satisfaction" ? (
+          <>
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <KpiCard label="Média CSAT" value={formatScore(satisfactionReport?.summary.averageScore ?? null)} tone="ok" />
+              <KpiCard label="Pesquisas enviadas" value={satisfactionReport?.summary.sent ?? "-"} tone="info" />
+              <KpiCard label="Respostas recebidas" value={satisfactionReport?.summary.responded ?? "-"} tone="neutral" />
+              <KpiCard label="Taxa de resposta" value={formatPercent(satisfactionReport?.summary.responseRate ?? null)} tone="neutral" />
+            </section>
+            <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-white">Satisfação</h2>
+                <p className="mt-1 text-xs leading-relaxed text-white/55">
+                  Usa o período, setor, atendente e canal selecionados nos filtros acima.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleExportSatisfaction}
+                disabled={exportingSatisfaction}
+                className="w-full rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-2 text-sm font-semibold text-white hover:bg-re7-sky/20 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+              >
+                {exportingSatisfaction ? "Exportando..." : "Exportar CSV"}
+              </button>
+            </div>
+            <ReportSection title="Distribuição" description="Percentuais calculados sobre as respostas recebidas.">
+              {satisfactionLoading ? <p className="px-4 pt-3 text-sm text-white/70">Carregando satisfação...</p> : null}
+              {(satisfactionReport?.summary.responded ?? 0) > 0 ? (
+                <div className="grid gap-2 p-4">
+                  {SATISFACTION_SCORE_LABELS.map((item) => {
+                    const count = satisfactionReport?.summary.distribution[String(item.score)] ?? 0;
+                    const percentage = satisfactionReport?.summary.responded ? count / satisfactionReport.summary.responded : 0;
+                    return (
+                      <div
+                        key={item.score}
+                        className="grid gap-2 rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm md:grid-cols-[minmax(0,1fr)_9rem_7rem]"
+                      >
+                        <div className="flex items-center gap-2">
+                          <ReportBadge tone={item.tone}>{item.score}</ReportBadge>
+                          <span>{item.label}</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-white/10 md:self-center">
+                          <div className="h-full rounded-full bg-re7-sky" style={{ width: `${Math.min(100, Math.max(0, percentage * 100))}%` }} />
+                        </div>
+                        <div className="text-left text-white/70 md:text-right">
+                          <span className="font-semibold text-white">{count}</span> · {formatPercent(percentage)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyState>Nenhuma resposta de satisfação no período selecionado.</EmptyState>
+              )}
+            </ReportSection>
+            <ReportSection title="Respostas" description="Tabela analítica das avaliações recebidas.">
+              <div className="overflow-x-auto">
+                {satisfactionReport?.rows.length ? (
+                  <table className="w-full min-w-[920px] text-sm">
+                    <thead className="bg-white/10 text-left">
+                      <tr>
+                        <th className="px-3 py-2">Data</th>
+                        <th className="px-3 py-2">Protocolo</th>
+                        <th className="px-3 py-2">Setor</th>
+                        <th className="px-3 py-2">Atendente</th>
+                        <th className="px-3 py-2">Nota</th>
+                        <th className="px-3 py-2">Comentário</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {satisfactionReport.rows.map((item) => (
+                        <tr key={item.surveyId} className="border-t border-white/10">
+                          <td className="px-3 py-2">{formatDateTime(item.answeredAt ?? item.sentAt)}</td>
+                          <td className="px-3 py-2">{item.protocol ?? "-"}</td>
+                          <td className="px-3 py-2">{item.departmentName ?? "Sem setor"}</td>
+                          <td className="px-3 py-2">{item.assignedUserName ?? "Sem atendente"}</td>
+                          <td className="px-3 py-2">
+                            <span className="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-1 text-xs text-white/80">
+                              {item.score} - {item.scoreLabel}
+                            </span>
+                          </td>
+                          <td className="max-w-[24rem] px-3 py-2 text-white/70">{item.comment || "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <EmptyState>Nenhuma resposta de satisfação no período selecionado.</EmptyState>
+                )}
+              </div>
+              {satisfactionReport ? (
+                <div className="flex flex-col gap-2 border-t border-white/10 px-4 py-3 text-xs text-white/55 sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    Total: {satisfactionReport.total} respostas. Página {satisfactionReport.page} de {satisfactionReport.totalPages}.
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="rounded-md border border-white/15 px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={satisfactionPage <= 1}
+                      onClick={() => setSatisfactionPage((current) => Math.max(1, current - 1))}
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md border border-white/15 px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={satisfactionPage >= satisfactionReport.totalPages}
+                      onClick={() => setSatisfactionPage((current) => Math.min(satisfactionReport.totalPages, current + 1))}
+                    >
+                      Próxima
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </ReportSection>
           </>
         ) : null}

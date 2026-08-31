@@ -25,6 +25,11 @@ type SatisfactionReportFilters = {
   channel?: string | null;
 };
 
+type SatisfactionReportPagination = {
+  page?: number | null;
+  limit?: number | null;
+};
+
 const MAX_KEY_LENGTH = 80;
 const MAX_TITLE_LENGTH = 160;
 const MAX_TEXT_LENGTH = 1000;
@@ -216,9 +221,13 @@ export function satisfactionScoreLabel(score: number) {
   return "Sem resposta";
 }
 
+function protectSpreadsheetCell(value: string) {
+  return /^[=+\-@]/.test(value) ? `'${value}` : value;
+}
+
 function csvCell(value: string | number | null | undefined) {
   if (value === null || value === undefined) return "";
-  const text = String(value);
+  const text = protectSpreadsheetCell(String(value));
   if (!/[",\n]/.test(text)) return text;
   return `"${text.replace(/"/g, "\"\"")}"`;
 }
@@ -350,50 +359,74 @@ export async function buildSatisfactionReport(params: {
   prisma: PrismaClient;
   clientId: string;
   filters?: SatisfactionReportFilters;
+  pagination?: SatisfactionReportPagination | null;
 }) {
   const filters = params.filters ?? {};
-  const [surveys, responses] = await Promise.all([
-    params.prisma.satisfactionSurvey.findMany({
-      where: buildSurveyWhere(params.clientId, filters),
-      orderBy: [{ createdAt: "desc" }],
-      take: 1000,
+  const page = Math.max(1, Math.trunc(params.pagination?.page ?? 1));
+  const rawLimit = params.pagination?.limit;
+  const limit =
+    rawLimit === null
+      ? null
+      : Math.min(100, Math.max(1, Math.trunc(rawLimit ?? 25)));
+  const skip = limit === null ? undefined : (page - 1) * limit;
+  const surveyWhere = buildSurveyWhere(params.clientId, filters);
+  const responseWhere = {
+    clientId: params.clientId,
+    survey: { is: surveyWhere },
+  };
+  const [responseRows, responses, total, summarySurveys] = await Promise.all([
+    params.prisma.satisfactionResponse.findMany({
+      where: responseWhere,
+      orderBy: [{ respondedAt: "desc" }],
+      ...(limit === null ? {} : { skip, take: limit }),
       include: {
-        response: true,
-        department: { select: { id: true, name: true } },
-        assignedUser: { select: { id: true, name: true } },
+        survey: {
+          include: {
+            department: { select: { id: true, name: true } },
+            assignedUser: { select: { id: true, name: true } },
+          },
+        },
       },
     }),
     params.prisma.satisfactionResponse.findMany({
-      where: {
-        clientId: params.clientId,
-        survey: buildSurveyWhere(params.clientId, filters),
-      },
+      where: responseWhere,
       orderBy: [{ respondedAt: "desc" }],
-      take: 1000,
+    }),
+    params.prisma.satisfactionResponse.count({
+      where: responseWhere,
+    }),
+    params.prisma.satisfactionSurvey.findMany({
+      where: surveyWhere,
+      select: {
+        id: true,
+        status: true,
+        assignedUserId: true,
+        departmentId: true,
+        metadata: true,
+      },
     }),
   ]);
-
-  const summary = buildSatisfactionSummary({ surveys, responses });
-  const rows = surveys.map((survey) => {
-    const response = survey.response ?? null;
-    const score = typeof response?.score === "number" ? response.score : null;
+  const summary = buildSatisfactionSummary({ surveys: summarySurveys, responses });
+  const rows = responseRows.map((response) => {
+    const survey = response.survey;
+    const score = response.score;
     return {
       surveyId: survey.id,
       conversationId: survey.conversationId,
       protocol: metadataString(survey.metadata, "protocol"),
       channel: survey.channel,
       departmentId: survey.departmentId,
-      departmentName: survey.department?.name ?? null,
+      departmentName: metadataString(survey.metadata, "departmentName") ?? survey.department?.name ?? null,
       assignedUserId: survey.assignedUserId,
-      assignedUserName: survey.assignedUser?.name ?? null,
+      assignedUserName: metadataString(survey.metadata, "assignedUserName") ?? survey.assignedUser?.name ?? null,
       attribution: survey.assignedUserId ? "agent" : "unattributed_directed_service",
       status: normalizeSurveyStatus(survey.status),
       sentAt: serializeDate(survey.sentAt),
-      answeredAt: serializeDate(survey.answeredAt),
+      answeredAt: serializeDate(response.respondedAt ?? survey.answeredAt),
       expiresAt: serializeDate(survey.expiresAt),
       score,
-      scoreLabel: score === null ? null : satisfactionScoreLabel(score),
-      comment: response?.comment ?? null,
+      scoreLabel: satisfactionScoreLabel(score),
+      comment: response.comment ?? null,
     };
   });
 
@@ -408,6 +441,10 @@ export async function buildSatisfactionReport(params: {
     },
     summary,
     rows,
+    page,
+    limit,
+    total,
+    totalPages: limit === null ? 1 : Math.max(1, Math.ceil(total / limit)),
     notes: [
       "Pesquisas de atendimento direcionado sem atendente atribuido nao sao contabilizadas como desempenho individual.",
       "Comentarios sao feedback operacional; nao incluem telefone, token, waId ou payload bruto.",
@@ -417,39 +454,23 @@ export async function buildSatisfactionReport(params: {
 
 export function buildSatisfactionReportCsv(report: Awaited<ReturnType<typeof buildSatisfactionReport>>) {
   const headers = [
-    "surveyId",
-    "protocol",
-    "channel",
-    "departmentId",
-    "departmentName",
-    "assignedUserId",
-    "assignedUserName",
-    "attribution",
-    "status",
-    "sentAt",
-    "answeredAt",
-    "expiresAt",
-    "score",
-    "scoreLabel",
-    "comment",
+    "DATA",
+    "PROTOCOLO",
+    "SETOR",
+    "ATENDENTE",
+    "CANAL",
+    "NOTA",
+    "COMENTÁRIO",
   ];
   return [
     headers.join(","),
     ...report.rows.map((row) =>
       [
-        row.surveyId,
+        row.answeredAt ?? row.sentAt,
         row.protocol,
-        row.channel,
-        row.departmentId,
         row.departmentName,
-        row.assignedUserId,
         row.assignedUserName,
-        row.attribution,
-        row.status,
-        row.sentAt,
-        row.answeredAt,
-        row.expiresAt,
-        row.score,
+        row.channel,
         row.scoreLabel,
         row.comment,
       ]

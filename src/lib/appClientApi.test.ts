@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   fetchAppAgentAvailability,
+  fetchAppSatisfactionReport,
   formatAppWhatsappIdentityDisplay,
   heartbeatAppAgentAvailability,
   loadAppSession,
@@ -165,4 +166,77 @@ test("agent availability client calls session-scoped endpoints", async () => {
   ]);
   assert.equal(calls[1].body, JSON.stringify({ available: true }));
   assert.equal(calls[2].body, JSON.stringify({}));
+});
+
+test("satisfaction report client sends business filters to app endpoint", async () => {
+  const calls: string[] = [];
+  const originalFetch = globalThis.fetch;
+  Object.assign(globalThis, {
+    fetch: async (url: string | URL) => {
+      calls.push(String(url));
+      return {
+        ok: true,
+        json: async () => ({
+          ok: true,
+          filters: {},
+          summary: {
+            sent: 0,
+            responded: 0,
+            pending: 0,
+            expired: 0,
+            responseRate: 0,
+            averageScore: null,
+            distribution: { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 },
+            byAgent: [],
+            byDepartment: [],
+            byQueue: [],
+          },
+          rows: [],
+          page: 2,
+          limit: 25,
+          total: 0,
+          totalPages: 1,
+          notes: [],
+        }),
+      };
+    },
+  });
+
+  const session: AppSession = {
+    baseUrl: "https://app.example.test",
+    token: "token",
+    user: {
+      id: "supervisor-a",
+      name: "Supervisor A",
+      email: "supervisor@example.test",
+      clientId: "tenant-a",
+      role: "SUPERVISOR",
+    },
+    features: {},
+    profile: "business",
+  };
+
+  try {
+    await fetchAppSatisfactionReport(session, {
+      from: "2026-08-01T00:00:00.000Z",
+      to: "2026-08-31T23:59:59.999Z",
+      departmentId: "department-1",
+      assignedUserId: "user-1",
+      channel: "whatsapp",
+      page: 2,
+      limit: 25,
+    });
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
+
+  const url = new URL(calls[0]);
+  assert.equal(url.pathname, "/app/reports/satisfaction");
+  assert.equal(url.searchParams.get("from"), "2026-08-01T00:00:00.000Z");
+  assert.equal(url.searchParams.get("to"), "2026-08-31T23:59:59.999Z");
+  assert.equal(url.searchParams.get("departmentId"), "department-1");
+  assert.equal(url.searchParams.get("assignedUserId"), "user-1");
+  assert.equal(url.searchParams.get("channel"), "whatsapp");
+  assert.equal(url.searchParams.get("page"), "2");
+  assert.equal(url.searchParams.get("limit"), "25");
 });

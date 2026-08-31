@@ -226,7 +226,7 @@ test("buildSatisfactionReport keeps directed service CSAT unattributed to agents
       status: "responded",
       assignedUserId: "user-1",
       departmentId: "department-1",
-      metadata: { protocol: "CVT-1" },
+      metadata: { protocol: "CVT-1", departmentName: "Historico Geral", assignedUserName: "Historico Atendente" },
       sentAt: now,
       answeredAt: now,
       department: { id: "department-1", name: "Geral" },
@@ -255,12 +255,20 @@ test("buildSatisfactionReport keeps directed service CSAT unattributed to agents
         calls.push(args);
         return surveys;
       },
+      count: async () => surveys.length,
     },
     satisfactionResponse: {
-      findMany: async (args: { where: Record<string, unknown> }) => {
+      findMany: async (args: { where: Record<string, unknown>; include?: unknown }) => {
         calls.push(args);
+        if (args.include) {
+          return responses.map((response) => ({
+            ...response,
+            survey: surveys.find((survey) => survey.id === response.surveyId),
+          }));
+        }
         return responses;
       },
+      count: async () => responses.length,
     },
   };
 
@@ -280,12 +288,14 @@ test("buildSatisfactionReport keeps directed service CSAT unattributed to agents
   assert.equal(report.summary.averageScore, 4);
   assert.equal(report.summary.byAgent.length, 1);
   assert.equal(report.summary.byAgent[0]?.id, "user-1");
+  assert.equal(report.rows.find((row) => row.surveyId === "survey-agent")?.departmentName, "Historico Geral");
+  assert.equal(report.rows.find((row) => row.surveyId === "survey-agent")?.assignedUserName, "Historico Atendente");
   assert.equal(report.rows.find((row) => row.surveyId === "survey-directed")?.attribution, "unattributed_directed_service");
   assert.equal(report.rows.find((row) => row.surveyId === "survey-directed")?.assignedUserName, null);
   assert.equal(report.rows.find((row) => row.surveyId === "survey-directed")?.scoreLabel, "Neutro");
   assert.equal((calls[0]?.where as { clientId?: string }).clientId, "tenant-1");
-  assert.deepEqual(calls[0]?.where.departmentId, "department-1");
-  assert.deepEqual(calls[0]?.where.channel, "whatsapp");
+  assert.deepEqual((calls[0]?.where.survey as { is?: { departmentId?: unknown } }).is?.departmentId, "department-1");
+  assert.deepEqual((calls[0]?.where.survey as { is?: { channel?: unknown } }).is?.channel, "whatsapp");
 });
 
 test("buildSatisfactionReport accepts multi-department report scope", async () => {
@@ -302,6 +312,10 @@ test("buildSatisfactionReport accepts multi-department report scope", async () =
         calls.push(args);
         return [];
       },
+      count: async (args: { where: Record<string, unknown> }) => {
+        calls.push(args);
+        return 0;
+      },
     },
   };
 
@@ -314,37 +328,128 @@ test("buildSatisfactionReport accepts multi-department report scope", async () =
     },
   });
 
-  assert.deepEqual(calls[0]?.where.departmentId, { in: ["department-a", "department-b"] });
-  assert.deepEqual((calls[1]?.where.survey as { departmentId?: unknown }).departmentId, {
+  assert.deepEqual((calls[0]?.where.survey as { is?: { departmentId?: unknown } }).is?.departmentId, {
+    in: ["department-a", "department-b"],
+  });
+  assert.deepEqual((calls[1]?.where.survey as { is?: { departmentId?: unknown } }).is?.departmentId, {
     in: ["department-a", "department-b"],
   });
 });
 
 test("buildSatisfactionReportCsv exports comments without PII-only technical fields", async () => {
+  const survey = makeSurvey({
+    id: "survey-1",
+    status: "responded",
+    assignedUserId: null,
+    departmentId: "department-1",
+    metadata: { protocol: "CVT-1" },
+    response: makeResponse({ surveyId: "survey-1", score: 1, comment: "Precisa melhorar, por favor" }),
+  });
   const report = await buildSatisfactionReport({
     prisma: {
       satisfactionSurvey: {
-        findMany: async () => [
-          makeSurvey({
-            id: "survey-1",
-            status: "responded",
-            assignedUserId: null,
-            departmentId: "department-1",
-            metadata: { protocol: "CVT-1" },
-            response: makeResponse({ surveyId: "survey-1", score: 1, comment: "Precisa melhorar, por favor" }),
-          }),
-        ],
+        findMany: async () => [survey],
       },
       satisfactionResponse: {
-        findMany: async () => [makeResponse({ surveyId: "survey-1", score: 1, comment: "Precisa melhorar, por favor" })],
+        findMany: async (args: { include?: unknown }) => {
+          const response = makeResponse({ surveyId: "survey-1", score: 1, comment: "Precisa melhorar, por favor" });
+          return args.include ? [{ ...response, survey }] : [response];
+        },
+        count: async () => 1,
       },
     } as never,
     clientId: "tenant-1",
   });
 
   const csv = buildSatisfactionReportCsv(report);
-  assert.match(csv, /surveyId,protocol,channel,departmentId/);
+  assert.match(csv, /DATA,PROTOCOLO,SETOR,ATENDENTE,CANAL,NOTA,COMENTÁRIO/);
+  assert.doesNotMatch(csv, /surveyId|departmentId|assignedUserId|conversationId/);
   assert.match(csv, /Muito Insatisfeito/);
   assert.match(csv, /Precisa melhorar/);
   assert.doesNotMatch(csv, /waId|token|rawPayload|phone/i);
+});
+
+test("buildSatisfactionReport treats SatisfactionResponse as authoritative even when survey is pending", async () => {
+  const survey = makeSurvey({
+    id: "survey-pending",
+    status: "pending",
+    assignedUserId: "user-1",
+    departmentId: "department-1",
+    sentAt: now,
+    answeredAt: null,
+    department: { id: "department-1", name: "Atendimento" },
+    assignedUser: { id: "user-1", name: "Maria" },
+  });
+  const response = makeResponse({ surveyId: "survey-pending", score: 4, respondedAt: now });
+  const report = await buildSatisfactionReport({
+    prisma: {
+      satisfactionSurvey: {
+        findMany: async () => [survey],
+      },
+      satisfactionResponse: {
+        findMany: async (args: { include?: unknown }) => (args.include ? [{ ...response, survey }] : [response]),
+        count: async () => 1,
+      },
+    } as never,
+    clientId: "tenant-1",
+  });
+
+  assert.equal(report.summary.sent, 1);
+  assert.equal(report.summary.responded, 1);
+  assert.equal(report.summary.averageScore, 4);
+  assert.equal(report.rows.length, 1);
+  assert.equal(report.rows[0]?.status, "pending");
+  assert.equal(report.rows[0]?.scoreLabel, "Satisfeito");
+});
+
+test("buildSatisfactionReportCsv exports all response rows and protects spreadsheet formulas", async () => {
+  const surveys = Array.from({ length: 1001 }, (_, index) =>
+    makeSurvey({
+      id: `survey-${index}`,
+      status: "responded",
+      metadata: { protocol: index === 0 ? "=CMD" : `CVT-${index}` },
+      department: { id: "department-1", name: index === 0 ? "+Setor" : "Setor" },
+      assignedUser: { id: "user-1", name: index === 0 ? "@Maria" : "Maria" },
+    })
+  );
+  const responses = surveys.map((survey, index) =>
+    makeResponse({
+      id: `response-${index}`,
+      surveyId: survey.id,
+      score: 5,
+      comment: index === 0 ? "-comentario" : "ok",
+    })
+  );
+  const calls: Array<{ take?: number; skip?: number; include?: unknown }> = [];
+  const report = await buildSatisfactionReport({
+    prisma: {
+      satisfactionSurvey: {
+        findMany: async () => surveys,
+      },
+      satisfactionResponse: {
+        findMany: async (args: { take?: number; skip?: number; include?: unknown }) => {
+          calls.push(args);
+          if (args.include) {
+            return responses.map((response) => ({
+              ...response,
+              survey: surveys.find((survey) => survey.id === response.surveyId),
+            }));
+          }
+          return responses;
+        },
+        count: async () => responses.length,
+      },
+    } as never,
+    clientId: "tenant-1",
+    pagination: { page: 1, limit: null },
+  });
+
+  const csv = buildSatisfactionReportCsv(report);
+  assert.equal(report.rows.length, 1001);
+  assert.equal(csv.split("\n").length, 1002);
+  assert.equal(calls[0]?.take, undefined);
+  assert.match(csv, /'=CMD/);
+  assert.match(csv, /'\+Setor/);
+  assert.match(csv, /'@Maria/);
+  assert.match(csv, /'-comentario/);
 });

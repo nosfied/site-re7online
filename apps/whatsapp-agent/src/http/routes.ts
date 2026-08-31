@@ -12000,6 +12000,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           assignedUserId: reportScope.requestedUserId,
           channel,
         },
+        pagination: pathname.endsWith("/export")
+          ? { page: 1, limit: null }
+          : {
+              page: parsePositiveInteger(query.page) ?? undefined,
+              limit: parsePositiveInteger(query.limit) ?? undefined,
+            },
       });
       if (pathname.endsWith("/export")) {
         const safeClientKey = client.clientKey.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();

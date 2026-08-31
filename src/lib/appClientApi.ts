@@ -657,6 +657,77 @@ export type AppSessionAuditReport = {
   notes: string[];
 };
 
+export type AppSatisfactionReportSummary = {
+  sent: number;
+  responded: number;
+  pending: number;
+  expired: number;
+  responseRate: number;
+  averageScore: number | null;
+  distribution: Record<string, number>;
+  byAgent: Array<{
+    id: string;
+    sent: number;
+    responded: number;
+    responseRate: number;
+    averageScore: number | null;
+    distribution: Record<string, number>;
+  }>;
+  byDepartment: Array<{
+    id: string;
+    sent: number;
+    responded: number;
+    responseRate: number;
+    averageScore: number | null;
+    distribution: Record<string, number>;
+  }>;
+  byQueue: Array<{
+    id: string;
+    sent: number;
+    responded: number;
+    responseRate: number;
+    averageScore: number | null;
+    distribution: Record<string, number>;
+  }>;
+};
+
+export type AppSatisfactionReportRow = {
+  surveyId: string;
+  conversationId: string | null;
+  protocol: string | null;
+  channel: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  assignedUserId: string | null;
+  assignedUserName: string | null;
+  attribution: string;
+  status: string;
+  sentAt: string | null;
+  answeredAt: string | null;
+  expiresAt: string | null;
+  score: number;
+  scoreLabel: string;
+  comment: string | null;
+};
+
+export type AppSatisfactionReport = {
+  ok: true;
+  filters: {
+    from: string | null;
+    to: string | null;
+    departmentId: string | null;
+    assignedUserId: string | null;
+    channel: string | null;
+  };
+  summary: AppSatisfactionReportSummary;
+  rows: AppSatisfactionReportRow[];
+  page: number;
+  limit: number | null;
+  total: number;
+  totalPages: number;
+  notes: string[];
+};
+
 export type AppCampaignDraftRecipient = {
   leadId: string;
   displayName: string | null;
@@ -3872,6 +3943,30 @@ export async function fetchAppSessionAuditReport(
   return requestAppJson(session, `/app/reports/sessions${suffix}`);
 }
 
+export async function fetchAppSatisfactionReport(
+  session: AppSession,
+  params: {
+    from?: string | null;
+    to?: string | null;
+    assignedUserId?: string | null;
+    departmentId?: string | null;
+    channel?: string | null;
+    page?: number | null;
+    limit?: number | null;
+  }
+): Promise<AppSatisfactionReport> {
+  const query = new URLSearchParams();
+  if (params.from) query.set("from", params.from);
+  if (params.to) query.set("to", params.to);
+  if (params.assignedUserId) query.set("assignedUserId", params.assignedUserId);
+  if (params.departmentId) query.set("departmentId", params.departmentId);
+  if (params.channel) query.set("channel", params.channel);
+  if (params.page) query.set("page", String(params.page));
+  if (params.limit) query.set("limit", String(params.limit));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestAppJson(session, `/app/reports/satisfaction${suffix}`);
+}
+
 export async function fetchAppDashboardOverview(
   session: AppSession,
   filters?: {
@@ -3968,6 +4063,26 @@ export async function exportAppSessionAuditReportCsv(
   if (params.status) query.set("status", params.status);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return requestAppText(session, `/app/reports/sessions/export${suffix}`);
+}
+
+export async function exportAppSatisfactionReportCsv(
+  session: AppSession,
+  params: {
+    from?: string | null;
+    to?: string | null;
+    assignedUserId?: string | null;
+    departmentId?: string | null;
+    channel?: string | null;
+  }
+) {
+  const query = new URLSearchParams();
+  if (params.from) query.set("from", params.from);
+  if (params.to) query.set("to", params.to);
+  if (params.assignedUserId) query.set("assignedUserId", params.assignedUserId);
+  if (params.departmentId) query.set("departmentId", params.departmentId);
+  if (params.channel) query.set("channel", params.channel);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestAppText(session, `/app/reports/satisfaction/export${suffix}`);
 }
 
 export async function fetchAppInstagramBusinessStatus(
