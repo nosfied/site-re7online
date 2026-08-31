@@ -6579,6 +6579,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           requestId,
           action: "closed",
           cycle: closedCycle.cycle,
+          completedService: {
+            assignedUserId: closingAssignedUserId,
+            departmentId: conversation.departmentId ?? null,
+            queueId: conversation.queueId ?? null,
+            closedByUserId: clientAuth.userId,
+          },
         });
       }
       await runtimeStorage.upsertConversation(nextState);
@@ -13761,6 +13767,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           state: conversation,
           now: nextState.closedAt ? new Date(nextState.closedAt) : new Date(),
           assignedUserId: closingAssignedUserId,
+          closedByUserId: clientAuth.userId,
           closeReason: "operator_close",
           closeSource: "app_inbox",
         });
@@ -13782,6 +13789,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             requestId,
             action: "closed",
             cycle: closedCycle.cycle,
+            completedService: {
+              assignedUserId: closingAssignedUserId,
+              departmentId: nextState.departmentId ?? null,
+              queueId: nextState.queueId ?? null,
+              closedByUserId: clientAuth.userId,
+            },
           });
         }
       }
@@ -19115,6 +19128,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               requestId,
               action: "closed",
               cycle: closedCycle.cycle,
+              completedService: {
+                assignedUserId: nextState.assignedUserId ?? null,
+                departmentId: nextState.departmentId ?? null,
+                queueId: nextState.queueId ?? null,
+                closedByUserId: resolveAssignedTo(adminAuth),
+              },
             });
           }
         }

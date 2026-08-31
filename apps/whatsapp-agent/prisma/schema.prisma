@@ -126,6 +126,7 @@ model Client {
   agentAvailabilities AgentAvailability[]
   departmentBusinessHours DepartmentBusinessHour[]
   departmentBusinessHourExceptions DepartmentBusinessHourException[]
+  completedServiceSnapshots CompletedServiceSnapshot[]
 }
 
 model User {
@@ -906,6 +907,30 @@ model ConversationMetrics {
 
   @@index([clientId, startedAt])
   @@index([clientId, closedAt])
+}
+
+model CompletedServiceSnapshot {
+  id             String   @id @default(cuid())
+  clientId       String   @db.Uuid
+  conversationId String?
+  cycleId        String
+  protocol       String
+  closedAt       DateTime
+  assignedUserId String?
+  departmentId   String?
+  queueId        String?
+  closedByUserId String?
+  closeReason    String?
+  closeSource    String?
+  createdAt      DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, cycleId])
+  @@index([clientId, closedAt])
+  @@index([clientId, assignedUserId, closedAt])
+  @@index([clientId, departmentId, closedAt])
+  @@index([clientId, departmentId, assignedUserId, closedAt])
 }
 
 model SLAConfig {

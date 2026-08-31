@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MessageType } from "@prisma/client";
+import { MessageType, Prisma } from "@prisma/client";
 import { setPrismaForTesting } from "../db.js";
 import { getActiveServiceCycle, getLastClosedServiceCycle } from "../conversation/serviceCycle.js";
 import type { InboxRealtimeEvent } from "../realtime/events.js";
@@ -73,6 +73,7 @@ const state = {
   satisfactionResponses: [] as Array<Record<string, unknown>>,
   chatbotFlow: null as Record<string, unknown> | null,
   contactConsents: [] as Array<Record<string, unknown>>,
+  completedServiceSnapshots: [] as Array<Record<string, unknown>>,
 };
 
 function resetState(overrides: Partial<typeof state> = {}) {
@@ -95,6 +96,7 @@ function resetState(overrides: Partial<typeof state> = {}) {
   state.satisfactionResponses = overrides.satisfactionResponses ?? [];
   state.chatbotFlow = overrides.chatbotFlow ?? null;
   state.contactConsents = overrides.contactConsents ?? [];
+  state.completedServiceSnapshots = overrides.completedServiceSnapshots ?? [];
 }
 
 function protocolStartedEvents() {
@@ -234,6 +236,28 @@ function fakePrisma() {
             return false;
           });
         }),
+    },
+    completedServiceSnapshot: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        const duplicate = state.completedServiceSnapshots.find(
+          (item) => item.clientId === data.clientId && item.cycleId === data.cycleId
+        );
+        if (duplicate) {
+          throw new Prisma.PrismaClientKnownRequestError("duplicate", {
+            code: "P2002",
+            clientVersion: "test",
+          });
+        }
+        const row = { id: `completed_service_${state.completedServiceSnapshots.length + 1}`, ...data };
+        state.completedServiceSnapshots.push(row);
+        return row;
+      },
+      findUnique: async ({ where }: { where: { clientId_cycleId: { clientId: string; cycleId: string } } }) =>
+        state.completedServiceSnapshots.find(
+          (item) =>
+            item.clientId === where.clientId_cycleId.clientId &&
+            item.cycleId === where.clientId_cycleId.cycleId
+        ) ?? null,
     },
     department: {
       findFirst: async ({ where }: { where?: Record<string, unknown> } = {}) =>

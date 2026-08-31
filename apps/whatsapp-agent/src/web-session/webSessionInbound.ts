@@ -808,6 +808,7 @@ async function safeRecordServiceCycleEvent(params: Parameters<typeof recordServi
     await recordServiceCycleEvent(params);
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return;
+    if (params.completedService) throw error;
     logger.warn({
       event: "conversation.protocol.event_write_failed",
       action: params.action,
@@ -1550,6 +1551,7 @@ export async function closeWebSessionHumanService(params: {
   state: ConversationState;
   now: Date;
   assignedUserId?: string | null;
+  closedByUserId?: string | null;
   contactName?: string | null;
   closeReason?: string;
   closeSource?: string;
@@ -1575,6 +1577,12 @@ export async function closeWebSessionHumanService(params: {
       requestId: params.requestId,
       action: "closed",
       cycle: closedCycleResult.cycle,
+      completedService: {
+        assignedUserId: closingAssignedUserId,
+        departmentId: params.state.departmentId ?? null,
+        queueId: params.state.queueId ?? null,
+        closedByUserId: params.closedByUserId ?? null,
+      },
     });
   }
   const closedProtocol = closedCycleResult.cycle?.protocol ?? params.protocol;

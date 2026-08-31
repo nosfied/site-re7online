@@ -169,6 +169,54 @@ Cobertura por modulo via rota:
 
 Essas limitacoes sao intencionais nesta sprint. A proxima etapa deve decidir persistencia/exportacao/alertas.
 
+## Completed Service Snapshot
+
+Adicionado em 2026-08-31 como projecao historica duravel para relatorios de atendimentos concluidos.
+
+Definicao:
+
+- um atendimento concluido = um ciclo de servico/protocolo fechado;
+- contagem por periodo usa `closedAt`;
+- atribuicao usa o responsavel final no instante do fechamento;
+- transferencias antes do fechamento contam para o atendente/setor final;
+- participacao de multiplos atendentes/setores no mesmo ciclo e metrica separada futura;
+- fechamentos sem atendente ou setor devem aparecer como `Sem atendente` / `Sem setor`;
+- uma mesma Conversation pode gerar multiplos ciclos e, portanto, multiplos atendimentos concluidos.
+
+Fonte canonica:
+
+- o fechamento continua sendo `conversation.protocol.closed`;
+- `CompletedServiceSnapshot` e uma projecao de reporting gravada no mesmo ponto de fechamento;
+- o snapshot nao substitui o evento de protocolo e nao cria novo motor de fechamento.
+
+Campos preservados:
+
+- `clientId`;
+- `conversationId`;
+- `cycleId`;
+- `protocol`;
+- `closedAt`;
+- `assignedUserId`;
+- `departmentId`;
+- `queueId`;
+- `closedByUserId`;
+- `closeReason`;
+- `closeSource`;
+- `createdAt`.
+
+Minimizacao:
+
+- nao copia corpo de mensagem;
+- nao copia telefone, waId ou nome do contato;
+- nao copia dados pessoais de contato/lead;
+- guarda apenas IDs operacionais e metadados de fechamento necessarios ao relatorio.
+
+Limite historico:
+
+- nao ha backfill inferido para atribuicao historica;
+- relatorios por atendente/setor devem considerar como periodo confiavel o intervalo que possui snapshots capturados;
+- a UI futura deve derivar o inicio disponivel pelo menor `closedAt` existente em `CompletedServiceSnapshot` para o tenant, ou exibir aviso quando nao houver snapshot no periodo.
+
 ## Testes
 
 Arquivo:

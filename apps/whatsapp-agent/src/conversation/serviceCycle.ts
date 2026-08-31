@@ -16,6 +16,13 @@ export type ClosedServiceCycleSnapshot = ServiceCycleSnapshot & {
   closeSource: string;
 };
 
+export type CompletedServiceAttributionSnapshot = {
+  assignedUserId?: string | null;
+  departmentId?: string | null;
+  queueId?: string | null;
+  closedByUserId?: string | null;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -225,8 +232,18 @@ export async function recordServiceCycleEvent(params: {
   requestId: string;
   action: "started" | "closed";
   cycle: ServiceCycleSnapshot | ClosedServiceCycleSnapshot;
+  completedService?: CompletedServiceAttributionSnapshot;
 }) {
   const closed = "closedAt" in params.cycle ? params.cycle : null;
+  if (closed && params.completedService) {
+    await recordCompletedServiceSnapshot({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      conversationId: params.conversationId ?? null,
+      cycle: closed,
+      attribution: params.completedService,
+    });
+  }
   await params.prisma.event.create({
     data: {
       clientId: params.clientId,
@@ -252,4 +269,99 @@ export async function recordServiceCycleEvent(params: {
       },
     },
   });
+}
+
+function normalizeNullableId(value: string | null | undefined) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return normalized || null;
+}
+
+function sameNullableDate(left: Date, right: Date) {
+  return left.getTime() === right.getTime();
+}
+
+function assertCompletedSnapshotMatches(existing: {
+  conversationId: string | null;
+  protocol: string;
+  closedAt: Date;
+  assignedUserId: string | null;
+  departmentId: string | null;
+  queueId: string | null;
+  closedByUserId: string | null;
+  closeReason: string | null;
+  closeSource: string | null;
+}, expected: {
+  conversationId: string | null;
+  protocol: string;
+  closedAt: Date;
+  assignedUserId: string | null;
+  departmentId: string | null;
+  queueId: string | null;
+  closedByUserId: string | null;
+  closeReason: string | null;
+  closeSource: string | null;
+}) {
+  const matches =
+    existing.conversationId === expected.conversationId &&
+    existing.protocol === expected.protocol &&
+    sameNullableDate(existing.closedAt, expected.closedAt) &&
+    existing.assignedUserId === expected.assignedUserId &&
+    existing.departmentId === expected.departmentId &&
+    existing.queueId === expected.queueId &&
+    existing.closedByUserId === expected.closedByUserId &&
+    existing.closeReason === expected.closeReason &&
+    existing.closeSource === expected.closeSource;
+  if (!matches) {
+    throw new Error("completed_service_snapshot_conflict");
+  }
+}
+
+export async function recordCompletedServiceSnapshot(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  conversationId?: string | null;
+  cycle: ClosedServiceCycleSnapshot;
+  attribution: CompletedServiceAttributionSnapshot;
+}) {
+  const expected = {
+    clientId: params.clientId,
+    conversationId: normalizeNullableId(params.conversationId),
+    cycleId: params.cycle.cycleId,
+    protocol: params.cycle.protocol,
+    closedAt: new Date(params.cycle.closedAt),
+    assignedUserId: normalizeNullableId(params.attribution.assignedUserId),
+    departmentId: normalizeNullableId(params.attribution.departmentId),
+    queueId: normalizeNullableId(params.attribution.queueId),
+    closedByUserId: normalizeNullableId(params.attribution.closedByUserId),
+    closeReason: normalizeNullableId(params.cycle.closeReason),
+    closeSource: normalizeNullableId(params.cycle.closeSource),
+  };
+  try {
+    await params.prisma.completedServiceSnapshot.create({ data: expected });
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+      throw error;
+    }
+    const existing = await params.prisma.completedServiceSnapshot.findUnique({
+      where: {
+        clientId_cycleId: {
+          clientId: params.clientId,
+          cycleId: params.cycle.cycleId,
+        },
+      },
+      select: {
+        conversationId: true,
+        protocol: true,
+        closedAt: true,
+        assignedUserId: true,
+        departmentId: true,
+        queueId: true,
+        closedByUserId: true,
+        closeReason: true,
+        closeSource: true,
+      },
+    });
+    if (!existing) throw error;
+    assertCompletedSnapshotMatches(existing, expected);
+  }
 }

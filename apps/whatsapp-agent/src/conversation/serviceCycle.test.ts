@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Prisma } from "@prisma/client";
 import { ConversationState } from "./conversation.types.js";
 import {
   buildServiceCycleHistoryMap,
@@ -9,6 +10,7 @@ import {
   getActiveServiceCycle,
   getLastClosedServiceCycle,
   getServiceCycleSnapshot,
+  recordCompletedServiceSnapshot,
   recordServiceCycleEvent,
   startNewServiceCycle,
   withServiceCycleSnapshot,
@@ -187,6 +189,249 @@ test("protocol lifecycle events keep the acting tenant and cycle snapshot", asyn
   assert.equal(writes[0]?.conversationId, "conversation_a");
   assert.equal((writes[0]?.payloadJson as Record<string, unknown>).cycleId, active.cycle.cycleId);
   assert.equal((writes[0]?.payloadJson as Record<string, unknown>).source, "meta_cloud");
+});
+
+test("closed protocol events create an immutable completed service snapshot without contact pii", async () => {
+  const writes: Array<{ model: string; data: Record<string, unknown> }> = [];
+  const closed = closeCurrentServiceCycle({
+    state: startNewServiceCycle(state(), new Date("2026-08-18T12:00:00.000Z"), "web_session").state,
+    at: new Date("2026-08-18T12:20:00.000Z"),
+    reason: "operator_close",
+    source: "app_inbox",
+  });
+  assert.ok(closed.cycle);
+
+  await recordServiceCycleEvent({
+    prisma: {
+      completedServiceSnapshot: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          writes.push({ model: "completedServiceSnapshot", data });
+          return data;
+        },
+      },
+      event: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          writes.push({ model: "event", data });
+          return data;
+        },
+      },
+    } as never,
+    clientId: "tenant_a",
+    conversationId: "conversation_a",
+    waId: "558499999999",
+    waIdCanonical: "558499999999",
+    requestId: "request_close",
+    action: "closed",
+    cycle: closed.cycle,
+    completedService: {
+      assignedUserId: "agent_b",
+      departmentId: "department_ti",
+      queueId: "queue_ti",
+      closedByUserId: "supervisor_1",
+    },
+  });
+
+  const snapshot = writes.find((write) => write.model === "completedServiceSnapshot")?.data;
+  assert.equal(snapshot?.clientId, "tenant_a");
+  assert.equal(snapshot?.conversationId, "conversation_a");
+  assert.equal(snapshot?.cycleId, closed.cycle.cycleId);
+  assert.equal(snapshot?.protocol, closed.cycle.protocol);
+  assert.equal((snapshot?.closedAt as Date).toISOString(), "2026-08-18T12:20:00.000Z");
+  assert.equal(snapshot?.assignedUserId, "agent_b");
+  assert.equal(snapshot?.departmentId, "department_ti");
+  assert.equal(snapshot?.queueId, "queue_ti");
+  assert.equal(snapshot?.closedByUserId, "supervisor_1");
+  assert.equal(snapshot?.closeReason, "operator_close");
+  assert.equal(snapshot?.closeSource, "app_inbox");
+  assert.equal("waId" in (snapshot ?? {}), false);
+  assert.equal("waIdCanonical" in (snapshot ?? {}), false);
+});
+
+test("completed service snapshots allow system closes without an assigned owner", async () => {
+  const writes: Array<Record<string, unknown>> = [];
+  await recordCompletedServiceSnapshot({
+    prisma: {
+      completedServiceSnapshot: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          writes.push(data);
+          return data;
+        },
+      },
+    } as never,
+    clientId: "tenant_a",
+    conversationId: "conversation_a",
+    cycle: {
+      protocol: "CVT-SYSTEMCLOSE",
+      cycleId: "cycle_system",
+      issuedAt: "2026-08-18T12:00:00.000Z",
+      source: "web_session",
+      closedAt: "2026-08-18T12:30:00.000Z",
+      closeReason: "service_closed",
+      closeSource: "web_session",
+    },
+    attribution: {},
+  });
+
+  assert.equal(writes[0]?.assignedUserId, null);
+  assert.equal(writes[0]?.departmentId, null);
+  assert.equal(writes[0]?.queueId, null);
+  assert.equal(writes[0]?.closedByUserId, null);
+});
+
+test("completed service snapshots are idempotent for an identical duplicate close", async () => {
+  const existing = {
+    conversationId: "conversation_a",
+    protocol: "CVT-DUPLICATE1",
+    closedAt: new Date("2026-08-18T12:30:00.000Z"),
+    assignedUserId: "agent_1",
+    departmentId: "department_1",
+    queueId: "queue_1",
+    closedByUserId: "agent_1",
+    closeReason: "operator_close",
+    closeSource: "app_inbox",
+  };
+  let createCalls = 0;
+  let findUniqueWhere: unknown = null;
+  await recordCompletedServiceSnapshot({
+    prisma: {
+      completedServiceSnapshot: {
+        create: async () => {
+          createCalls += 1;
+          throw new Prisma.PrismaClientKnownRequestError("duplicate", {
+            code: "P2002",
+            clientVersion: "test",
+          });
+        },
+        findUnique: async ({ where }: { where: unknown }) => {
+          findUniqueWhere = where;
+          return existing;
+        },
+      },
+    } as never,
+    clientId: "tenant_a",
+    conversationId: existing.conversationId,
+    cycle: {
+      protocol: existing.protocol,
+      cycleId: "cycle_duplicate",
+      issuedAt: "2026-08-18T12:00:00.000Z",
+      source: "web_session",
+      closedAt: existing.closedAt.toISOString(),
+      closeReason: existing.closeReason,
+      closeSource: existing.closeSource,
+    },
+    attribution: {
+      assignedUserId: existing.assignedUserId,
+      departmentId: existing.departmentId,
+      queueId: existing.queueId,
+      closedByUserId: existing.closedByUserId,
+    },
+  });
+
+  assert.equal(createCalls, 1);
+  assert.deepEqual(findUniqueWhere, {
+    clientId_cycleId: {
+      clientId: "tenant_a",
+      cycleId: "cycle_duplicate",
+    },
+  });
+});
+
+test("completed service snapshots reject conflicting duplicate attribution", async () => {
+  await assert.rejects(
+    recordCompletedServiceSnapshot({
+      prisma: {
+        completedServiceSnapshot: {
+          create: async () => {
+            throw new Prisma.PrismaClientKnownRequestError("duplicate", {
+              code: "P2002",
+              clientVersion: "test",
+            });
+          },
+          findUnique: async () => ({
+            conversationId: "conversation_a",
+            protocol: "CVT-CONFLICT1",
+            closedAt: new Date("2026-08-18T12:30:00.000Z"),
+            assignedUserId: "agent_old",
+            departmentId: "department_1",
+            queueId: "queue_1",
+            closedByUserId: "agent_old",
+            closeReason: "operator_close",
+            closeSource: "app_inbox",
+          }),
+        },
+      } as never,
+      clientId: "tenant_a",
+      conversationId: "conversation_a",
+      cycle: {
+        protocol: "CVT-CONFLICT1",
+        cycleId: "cycle_conflict",
+        issuedAt: "2026-08-18T12:00:00.000Z",
+        source: "web_session",
+        closedAt: "2026-08-18T12:30:00.000Z",
+        closeReason: "operator_close",
+        closeSource: "app_inbox",
+      },
+      attribution: {
+        assignedUserId: "agent_new",
+        departmentId: "department_1",
+        queueId: "queue_1",
+        closedByUserId: "agent_new",
+      },
+    }),
+    /completed_service_snapshot_conflict/
+  );
+});
+
+test("completed service snapshot idempotency is scoped by tenant and cycle", async () => {
+  const rows: Array<Record<string, unknown>> = [];
+  const prisma = {
+    completedServiceSnapshot: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        const duplicate = rows.find((row) => row.clientId === data.clientId && row.cycleId === data.cycleId);
+        if (duplicate) {
+          throw new Prisma.PrismaClientKnownRequestError("duplicate", {
+            code: "P2002",
+            clientVersion: "test",
+          });
+        }
+        rows.push(data);
+        return data;
+      },
+      findUnique: async ({ where }: { where: { clientId_cycleId: { clientId: string; cycleId: string } } }) =>
+        rows.find(
+          (row) =>
+            row.clientId === where.clientId_cycleId.clientId &&
+            row.cycleId === where.clientId_cycleId.cycleId
+        ) ?? null,
+    },
+  } as never;
+  const cycle = {
+    protocol: "CVT-TENANTCYCLE",
+    cycleId: "cycle_shared",
+    issuedAt: "2026-08-18T12:00:00.000Z",
+    source: "web_session",
+    closedAt: "2026-08-18T12:30:00.000Z",
+    closeReason: "operator_close",
+    closeSource: "app_inbox",
+  };
+
+  await recordCompletedServiceSnapshot({
+    prisma,
+    clientId: "tenant_a",
+    conversationId: "conversation_a",
+    cycle,
+    attribution: { assignedUserId: "agent_a" },
+  });
+  await recordCompletedServiceSnapshot({
+    prisma,
+    clientId: "tenant_b",
+    conversationId: "conversation_b",
+    cycle,
+    attribution: { assignedUserId: "agent_b" },
+  });
+
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((row) => row.clientId), ["tenant_a", "tenant_b"]);
 });
 
 test("report history keeps multiple service cycles for one conversation", () => {
