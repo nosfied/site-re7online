@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   fetchAppAgentAvailability,
+  fetchAppCompletedServiceReport,
   fetchAppSatisfactionReport,
   formatAppWhatsappIdentityDisplay,
   heartbeatAppAgentAvailability,
@@ -239,4 +240,64 @@ test("satisfaction report client sends business filters to app endpoint", async 
   assert.equal(url.searchParams.get("channel"), "whatsapp");
   assert.equal(url.searchParams.get("page"), "2");
   assert.equal(url.searchParams.get("limit"), "25");
+});
+
+test("completed service report client sends snapshot filters to app endpoint", async () => {
+  const calls: string[] = [];
+  const originalFetch = globalThis.fetch;
+  Object.assign(globalThis, {
+    fetch: async (url: string | URL) => {
+      calls.push(String(url));
+      return {
+        ok: true,
+        json: async () => ({
+          ok: true,
+          periodFrom: "2026-08-01T00:00:00.000Z",
+          periodTo: "2026-08-31T23:59:59.999Z",
+          departmentId: "department-1",
+          assignedUserId: "user-1",
+          timezone: "America/Fortaleza",
+          availableSince: null,
+          totalCompleted: 0,
+          byAgent: [],
+          byDepartment: [],
+          byDepartmentAgent: [],
+          daily: [],
+          notes: [],
+        }),
+      };
+    },
+  });
+
+  const session: AppSession = {
+    baseUrl: "https://app.example.test",
+    token: "token",
+    user: {
+      id: "supervisor-a",
+      name: "Supervisor A",
+      email: "supervisor@example.test",
+      clientId: "tenant-a",
+      role: "SUPERVISOR",
+    },
+    features: {},
+    profile: "business",
+  };
+
+  try {
+    await fetchAppCompletedServiceReport(session, {
+      from: "2026-08-01T00:00:00.000Z",
+      to: "2026-08-31T23:59:59.999Z",
+      departmentId: "department-1",
+      assignedUserId: "user-1",
+    });
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
+
+  const url = new URL(calls[0]);
+  assert.equal(url.pathname, "/app/reports/completed-services");
+  assert.equal(url.searchParams.get("from"), "2026-08-01T00:00:00.000Z");
+  assert.equal(url.searchParams.get("to"), "2026-08-31T23:59:59.999Z");
+  assert.equal(url.searchParams.get("departmentId"), "department-1");
+  assert.equal(url.searchParams.get("assignedUserId"), "user-1");
 });

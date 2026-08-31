@@ -547,6 +547,10 @@ import {
   normalizeSessionAuditStatus,
 } from "../reports/sessionAuditReport.js";
 import {
+  buildCompletedServiceReport,
+  buildCompletedServiceReportCsv,
+} from "../reports/completedServiceReport.js";
+import {
   closeRealtimeConnectionsForClientSupport,
   closeRealtimeConnectionsForSupportGrant,
   closeRealtimeConnectionsForSupportSession,
@@ -12046,6 +12050,106 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.reports.satisfaction.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && (pathname === "/app/reports/completed-services" || pathname === "/app/reports/completed-services/export")) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can view reports."));
+        return;
+      }
+      const period = parseSessionAuditPeriod(query);
+      if (!period) {
+        json(res, 400, httpError("invalid_period", "Invalid period"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "reports",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const requestedDepartmentId =
+        typeof query.departmentId === "string" ? query.departmentId.trim() : "";
+      const requestedUserId =
+        typeof query.assignedUserId === "string"
+          ? query.assignedUserId.trim()
+          : typeof query.userId === "string"
+            ? query.userId.trim()
+            : "";
+      const reportScope = await loadAppReportAccessScope(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+        requestedDepartmentId,
+        requestedUserId,
+      });
+      if (!reportScope.ok) {
+        json(res, reportScope.status, httpError(reportScope.code, "Report filter not allowed"));
+        return;
+      }
+      const timezone = await resolveTenantOperationalTimezone(prisma, client.id);
+      const report = await buildCompletedServiceReport(prisma, {
+        clientId: client.id,
+        from: period.from,
+        to: period.to,
+        departmentId: reportScope.requestedDepartmentId,
+        departmentIds: reportScope.requestedDepartmentId ? null : reportScope.effectiveDepartmentIds,
+        assignedUserId: reportScope.requestedUserId,
+        timezone,
+      });
+      if (pathname.endsWith("/export")) {
+        const view = String(query.view ?? "").trim() === "department-agent" ? "department-agent" : "by-agent";
+        const safeClientKey = client.clientKey.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
+        res.writeHead(200, {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename=\"completed-services-${view}-${safeClientKey}.csv\"`,
+        });
+        res.end(buildCompletedServiceReportCsv(report, view));
+        logger.info({
+          event: "app.reports.completed_services.exported",
+          requestId,
+          clientId: client.id,
+          userId: clientAuth.userId,
+          role: clientAuth.role,
+          departmentId: reportScope.requestedDepartmentId,
+          assignedUserId: reportScope.requestedUserId,
+          view,
+        });
+        return;
+      }
+      json(res, 200, report);
+      logger.info({
+        event: "app.reports.completed_services.viewed",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+        departmentId: reportScope.requestedDepartmentId,
+        assignedUserId: reportScope.requestedUserId,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.reports.completed_services.error",
         message: (error as Error).message,
         requestId,
       });

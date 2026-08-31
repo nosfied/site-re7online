@@ -6521,6 +6521,238 @@ test("conversation reports separate human message activity from assignment metri
   );
 });
 
+test("completed service reports aggregate immutable snapshots with RBAC scope", async () => {
+  const periodFrom = new Date("2031-04-01T00:00:00.000Z");
+  const periodTo = new Date("2031-04-03T00:00:00.000Z");
+  const [departmentA, departmentB, departmentC] = await Promise.all(
+    ["A", "B", "C"].map((label) =>
+      prisma.department.create({
+        data: {
+          clientId: businessClientId,
+          name: `${prefix} Completed Services ${label}`,
+          slug: `${prefix}-completed-services-${label.toLowerCase()}`,
+        },
+        select: { id: true, name: true },
+      })
+    )
+  );
+  const supervisor = await createUser({
+    clientId: businessClientId,
+    role: "SUPERVISOR",
+    suffix: "completed-services-supervisor",
+  });
+  const agentA = await createUser({ clientId: businessClientId, role: "AGENT", suffix: "completed-services-agent-a" });
+  const agentB = await createUser({ clientId: businessClientId, role: "AGENT", suffix: "completed-services-agent-b" });
+  const removedAgentId = `${prefix}-completed-services-removed`;
+  await assignUserDepartments({
+    clientId: businessClientId,
+    userId: supervisor.id,
+    departmentIds: [departmentA.id],
+  });
+  await assignUserDepartments({ clientId: businessClientId, userId: agentA.id, departmentIds: [departmentA.id] });
+  await assignUserDepartments({ clientId: businessClientId, userId: agentB.id, departmentIds: [departmentB.id] });
+  await prisma.completedServiceSnapshot.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        conversationId: null,
+        cycleId: `${prefix}-completed-cycle-a-local-previous-day`,
+        protocol: "CVT-COMPLETED-A0",
+        closedAt: new Date("2031-04-01T02:30:00.000Z"),
+        assignedUserId: agentA.id,
+        departmentId: departmentA.id,
+        queueId: null,
+        closedByUserId: supervisor.id,
+        closeReason: "resolved",
+        closeSource: "app",
+      },
+      {
+        clientId: businessClientId,
+        conversationId: null,
+        cycleId: `${prefix}-completed-cycle-a-1`,
+        protocol: "CVT-COMPLETED-A1",
+        closedAt: new Date("2031-04-01T10:00:00.000Z"),
+        assignedUserId: agentA.id,
+        departmentId: departmentA.id,
+        queueId: null,
+        closedByUserId: supervisor.id,
+        closeReason: "resolved",
+        closeSource: "app",
+      },
+      {
+        clientId: businessClientId,
+        conversationId: null,
+        cycleId: `${prefix}-completed-cycle-a-2`,
+        protocol: "CVT-COMPLETED-A2",
+        closedAt: new Date("2031-04-01T14:00:00.000Z"),
+        assignedUserId: agentA.id,
+        departmentId: departmentA.id,
+        queueId: null,
+        closedByUserId: supervisor.id,
+        closeReason: "resolved",
+        closeSource: "app",
+      },
+      {
+        clientId: businessClientId,
+        conversationId: null,
+        cycleId: `${prefix}-completed-cycle-b-1`,
+        protocol: "CVT-COMPLETED-B1",
+        closedAt: new Date("2031-04-02T10:00:00.000Z"),
+        assignedUserId: agentB.id,
+        departmentId: departmentB.id,
+        queueId: null,
+        closedByUserId: businessAdmin.id,
+        closeReason: "resolved",
+        closeSource: "app",
+      },
+      {
+        clientId: businessClientId,
+        conversationId: null,
+        cycleId: `${prefix}-completed-cycle-null`,
+        protocol: "CVT-COMPLETED-NULL",
+        closedAt: new Date("2031-04-02T11:00:00.000Z"),
+        assignedUserId: null,
+        departmentId: null,
+        queueId: null,
+        closedByUserId: businessAdmin.id,
+        closeReason: "system",
+        closeSource: "system",
+      },
+      {
+        clientId: businessClientId,
+        conversationId: null,
+        cycleId: `${prefix}-completed-cycle-removed-user`,
+        protocol: "CVT-COMPLETED-REMOVED",
+        closedAt: new Date("2031-04-02T12:00:00.000Z"),
+        assignedUserId: removedAgentId,
+        departmentId: departmentC.id,
+        queueId: null,
+        closedByUserId: businessAdmin.id,
+        closeReason: "resolved",
+        closeSource: "app",
+      },
+      {
+        clientId: governmentClientId,
+        conversationId: null,
+        cycleId: `${prefix}-completed-cycle-other-tenant`,
+        protocol: "CVT-COMPLETED-OTHER",
+        closedAt: new Date("2031-04-02T13:00:00.000Z"),
+        assignedUserId: governmentAdmin.id,
+        departmentId: null,
+        queueId: null,
+        closedByUserId: governmentAdmin.id,
+        closeReason: "resolved",
+        closeSource: "app",
+      },
+    ],
+  });
+  const agentForbidden = await request<ErrorPayload>(
+    "GET",
+    `/app/reports/completed-services?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}`,
+    businessAgent
+  );
+  assert.equal(agentForbidden.status, 403);
+
+  const adminReport = await request<{
+    ok: true;
+    availableSince: string | null;
+    totalCompleted: number;
+    byAgent: Array<{ id: string | null; name: string; completedCount: number }>;
+    byDepartment: Array<{ id: string | null; name: string; completedCount: number }>;
+    byDepartmentAgent: Array<{ departmentId: string | null; assignedUserId: string | null; completedCount: number }>;
+    daily: Array<{ date: string; completedCount: number }>;
+    notes: string[];
+  }>(
+    "GET",
+    `/app/reports/completed-services?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&clientId=malicious`,
+    businessAdmin
+  );
+  assert.equal(adminReport.status, 200, JSON.stringify(adminReport.body));
+  assert.equal(adminReport.body.totalCompleted, 6);
+  assert.equal(adminReport.body.availableSince, "2031-04-01T02:30:00.000Z");
+  assert.equal(adminReport.body.byAgent.reduce((sum, item) => sum + item.completedCount, 0), adminReport.body.totalCompleted);
+  assert.equal(adminReport.body.byDepartment.reduce((sum, item) => sum + item.completedCount, 0), adminReport.body.totalCompleted);
+  assert.equal(adminReport.body.byAgent.find((item) => item.id === agentA.id)?.completedCount, 3);
+  assert.equal(adminReport.body.byAgent.find((item) => item.id === null)?.name, "Sem atendente");
+  assert.equal(adminReport.body.byAgent.find((item) => item.id === removedAgentId)?.name, "Usuario removido");
+  assert.equal(adminReport.body.byDepartment.find((item) => item.id === null)?.name, "Sem setor");
+  assert.equal(adminReport.body.byDepartment.find((item) => item.id === departmentA.id)?.completedCount, 3);
+  assert.equal(adminReport.body.daily.find((item) => item.date === "2031-03-31")?.completedCount, 1, JSON.stringify(adminReport.body.daily));
+  assert.equal(adminReport.body.daily.find((item) => item.date === "2031-04-01")?.completedCount, 2, JSON.stringify(adminReport.body.daily));
+  assert.equal(adminReport.body.daily.find((item) => item.date === "2031-04-02")?.completedCount, 3, JSON.stringify(adminReport.body.daily));
+  assert.equal(adminReport.body.notes.some((note) => note.includes("ciclo/protocolo encerrado")), true);
+
+  const supervisorReport = await request<{ ok: true; totalCompleted: number; byDepartment: Array<{ id: string | null; completedCount: number }> }>(
+    "GET",
+    `/app/reports/completed-services?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}`,
+    supervisor
+  );
+  assert.equal(supervisorReport.status, 200, JSON.stringify(supervisorReport.body));
+  assert.equal(supervisorReport.body.totalCompleted, 3);
+  assert.deepEqual(supervisorReport.body.byDepartment.map((item) => item.id), [departmentA.id]);
+
+  const forbiddenDepartment = await request<ErrorPayload>(
+    "GET",
+    `/app/reports/completed-services?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&departmentId=${departmentB.id}`,
+    supervisor
+  );
+  assert.equal(forbiddenDepartment.status, 403);
+  assert.equal(getErrorCode(forbiddenDepartment.body), "department_forbidden");
+
+  const filteredAgent = await request<{ ok: true; totalCompleted: number; byAgent: Array<{ id: string | null }> }>(
+    "GET",
+    `/app/reports/completed-services?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&assignedUserId=${agentB.id}`,
+    businessAdmin
+  );
+  assert.equal(filteredAgent.status, 200, JSON.stringify(filteredAgent.body));
+  assert.equal(filteredAgent.body.totalCompleted, 1);
+  assert.equal(filteredAgent.body.byAgent[0]?.id, agentB.id);
+
+  const emptyReport = await request<{ ok: true; totalCompleted: number; availableSince: string | null; notes: string[] }>(
+    "GET",
+    `/app/reports/completed-services?from=2031-05-01T00:00:00.000Z&to=2031-05-02T00:00:00.000Z`,
+    governmentAdmin
+  );
+  assert.equal(emptyReport.status, 200, JSON.stringify(emptyReport.body));
+  assert.equal(emptyReport.body.totalCompleted, 0);
+  assert.equal(emptyReport.body.availableSince, "2031-04-02T13:00:00.000Z");
+
+  const noHistoryClient = await prisma.client.create({
+    data: {
+      clientKey: `${prefix}-completed-no-history`,
+      name: "Completed No History",
+      profile: "business",
+      features: { reports: true },
+    },
+    select: { id: true },
+  });
+  const noHistoryAdmin = await createUser({
+    clientId: noHistoryClient.id,
+    role: "ADMIN",
+    suffix: "completed-no-history-admin",
+  });
+  const noHistoryReport = await request<{ ok: true; totalCompleted: number; availableSince: string | null; notes: string[] }>(
+    "GET",
+    `/app/reports/completed-services?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}`,
+    noHistoryAdmin
+  );
+  assert.equal(noHistoryReport.status, 200, JSON.stringify(noHistoryReport.body));
+  assert.equal(noHistoryReport.body.totalCompleted, 0);
+  assert.equal(noHistoryReport.body.availableSince, null);
+  assert.equal(noHistoryReport.body.notes.some((note) => note.includes("historico disponivel")), true);
+
+  const csv = await requestText(
+    "GET",
+    `/app/reports/completed-services/export?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&view=department-agent`,
+    businessAdmin
+  );
+  assert.equal(csv.status, 200, csv.text);
+  assert.match(csv.contentType ?? "", /text\/csv/);
+  assert.match(csv.text, /SETOR/);
+  assert.match(csv.text, new RegExp(departmentA.name));
+  assert.doesNotMatch(csv.text, /CVT-COMPLETED-OTHER/);
+});
+
 test("app reports scope supervisors to all active department memberships", async () => {
   const periodFrom = new Date("2031-03-01T00:00:00.000Z");
   const periodTo = new Date("2031-03-02T00:00:00.000Z");

@@ -13,14 +13,17 @@ import {
 } from "@/lib/appUxLabels";
 import {
   AppApiError,
+  AppCompletedServiceReport,
   AppSession,
   AppSessionAuditReport,
   AppSessionAuditStatus,
   AppSatisfactionReport,
   clearAppSession,
+  exportAppCompletedServiceReportCsv,
   exportAppConversationReportCsv,
   exportAppSessionAuditReportCsv,
   exportAppSatisfactionReportCsv,
+  fetchAppCompletedServiceReport,
   fetchAppConversationReport,
   fetchAppDepartments,
   fetchAppRetentionConfig,
@@ -348,6 +351,45 @@ function SatisfactionAggregateTable({
   );
 }
 
+function CompletedServiceBucketTable({
+  titleColumn,
+  rows,
+  emptyMessage,
+}: {
+  titleColumn: string;
+  rows: AppCompletedServiceReport["byAgent"];
+  emptyMessage: string;
+}) {
+  return rows.length ? (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[480px] text-sm">
+        <thead className="bg-white/10 text-left">
+          <tr>
+            <th className="px-3 py-2">{titleColumn}</th>
+            <th className="px-3 py-2 text-right">Atendimentos concluídos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((item) => (
+            <tr key={item.id ?? `none-${item.name}`} className="border-t border-white/10">
+              <td className="px-3 py-2">{item.name}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{item.completedCount}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ) : (
+    <EmptyState>{emptyMessage}</EmptyState>
+  );
+}
+
+function completedServiceHistoryMessage(report: AppCompletedServiceReport | null) {
+  if (!report) return null;
+  if (!report.availableSince) return "Este indicador ainda não possui histórico disponível.";
+  return `Dados disponíveis a partir de ${formatDateTime(report.availableSince)}.`;
+}
+
 function printEmptyRow(columns: number, message = "Não há dados para o período selecionado.") {
   return `<tr><td colspan="${columns}" class="empty">${escapeHtml(message)}</td></tr>`;
 }
@@ -414,6 +456,7 @@ export default function AppReportsPage() {
   const [exporting, setExporting] = useState(false);
   const [exportingSessions, setExportingSessions] = useState(false);
   const [exportingSatisfaction, setExportingSatisfaction] = useState(false);
+  const [exportingCompletedServices, setExportingCompletedServices] = useState<"by-agent" | "department-agent" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [report, setReport] = useState<ConversationReportResponse | null>(null);
@@ -421,6 +464,8 @@ export default function AppReportsPage() {
   const [satisfactionLoading, setSatisfactionLoading] = useState(false);
   const [satisfactionPage, setSatisfactionPage] = useState(1);
   const [sessionReport, setSessionReport] = useState<AppSessionAuditReport | null>(null);
+  const [completedServiceReport, setCompletedServiceReport] = useState<AppCompletedServiceReport | null>(null);
+  const [completedServiceLoading, setCompletedServiceLoading] = useState(false);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionFrom, setSessionFrom] = useState(() => toDateTimeLocalValue(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
   const [sessionTo, setSessionTo] = useState(() => toDateTimeLocalValue(new Date()));
@@ -604,6 +649,47 @@ export default function AppReportsPage() {
       cancelled = true;
     };
   }, [channel, customFrom, customTo, departmentId, handleUnauthorized, periodMode, range, router, satisfactionPage, session, userId]);
+
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    const { from, to } = getReportPeriodIsoBounds({ periodMode, range, customFrom, customTo });
+    if (!from || !to || Date.parse(from) > Date.parse(to)) {
+      setCompletedServiceReport(null);
+      setError("Informe um período válido para atendimentos concluídos.");
+      return;
+    }
+    setCompletedServiceLoading(true);
+    fetchAppCompletedServiceReport(session, {
+      from,
+      to,
+      assignedUserId: userId || null,
+      departmentId: isAdminRole(session.user.role) || isSupervisorRole(session.user.role) ? departmentId || null : null,
+    })
+      .then((response) => {
+        if (!cancelled) setCompletedServiceReport(response);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        if (typed.status === 403) {
+          router.replace("/app/inbox");
+          return;
+        }
+        setCompletedServiceReport(null);
+        setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível carregar atendimentos concluídos." }));
+      })
+      .finally(() => {
+        if (!cancelled) setCompletedServiceLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [customFrom, customTo, departmentId, handleUnauthorized, periodMode, range, router, session, userId]);
 
   useEffect(() => {
     if (!session) return;
@@ -805,6 +891,46 @@ export default function AppReportsPage() {
       setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível exportar satisfação." }));
     } finally {
       setExportingSatisfaction(false);
+    }
+  };
+
+  const handleExportCompletedServices = async (view: "by-agent" | "department-agent") => {
+    if (!session) return;
+    const { from, to } = getReportPeriodIsoBounds({ periodMode, range, customFrom, customTo });
+    if (!from || !to || Date.parse(from) > Date.parse(to)) {
+      setError("Informe um período válido para exportar atendimentos concluídos.");
+      return;
+    }
+    setExportingCompletedServices(view);
+    setError(null);
+    setSuccess(null);
+    try {
+      const csv = await exportAppCompletedServiceReportCsv(session, {
+        from,
+        to,
+        assignedUserId: userId || null,
+        departmentId: isAdminRole(session.user.role) || isSupervisorRole(session.user.role) ? departmentId || null : null,
+        view,
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = view === "department-agent" ? "completed-services-department-agent.csv" : "completed-services-by-agent.csv";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setSuccess("CSV de atendimentos concluídos exportado com sucesso.");
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(getAppErrorUxMessage({ ...typed, fallback: "Não foi possível exportar atendimentos concluídos." }));
+    } finally {
+      setExportingCompletedServices(null);
     }
   };
 
@@ -1144,6 +1270,7 @@ export default function AppReportsPage() {
   const userLabel = userId ? userNameById.get(userId) ?? userId : "Todos";
   const hasGlobalFilters = channel || userId || departmentId || dedupe || periodMode === "custom";
   const assignedConversations = report?.assignedConversationsByAgent ?? report?.byAgent ?? [];
+  const completedServiceHistoryNote = completedServiceHistoryMessage(completedServiceReport);
 
   return (
     <AppShell
@@ -1348,6 +1475,12 @@ export default function AppReportsPage() {
               <KpiCard label="Em atendimento" value={slaOperational.inProgress} tone="info" detail="Conversas em andamento no recorte." />
               <KpiCard label="Aguardando" value={slaOperational.waitingFirstResponse} tone="warn" detail="Sem primeira resposta registrada." />
               <KpiCard label="Fechadas" value={slaOperational.closed} tone="neutral" detail="Conversas encerradas no read model atual." />
+              <KpiCard
+                label="Atendimentos concluídos"
+                value={completedServiceReport?.totalCompleted ?? "-"}
+                tone="ok"
+                detail="Ciclos/protocolos encerrados no fechamento."
+              />
               <KpiCard label="Primeira resposta média" value={formatSeconds(report?.avgFirstResponseTimeSec ?? null)} tone="ok" />
               <KpiCard label="Resolução média" value={formatSeconds(report?.avgResolutionTimeSec ?? null)} tone="ok" />
               <KpiCard
@@ -1361,6 +1494,37 @@ export default function AppReportsPage() {
             <section className="rounded-lg border border-sky-300/20 bg-sky-500/10 p-3 text-sm text-sky-50">
               A visão geral resume o período selecionado. As abas detalham conversas, SLA de atendimento, atendentes, sessões e exportações sem alterar as métricas originais.
             </section>
+            <ReportSection
+              title="Atendimentos concluídos por dia"
+              description="Cada atendimento concluído corresponde a um ciclo/protocolo encerrado, contabilizado no momento do fechamento."
+            >
+              {completedServiceLoading ? <p className="px-4 pt-3 text-sm text-white/70">Carregando atendimentos concluídos...</p> : null}
+              {completedServiceReport?.daily.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[420px] text-sm">
+                    <thead className="bg-white/10 text-left">
+                      <tr>
+                        <th className="px-3 py-2">Dia</th>
+                        <th className="px-3 py-2 text-right">Atendimentos concluídos</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {completedServiceReport.daily.map((item) => (
+                        <tr key={item.date} className="border-t border-white/10">
+                          <td className="px-3 py-2">{item.date.split("-").reverse().join("/")}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{item.completedCount}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState>{completedServiceHistoryNote ?? "Não há atendimentos concluídos no período selecionado."}</EmptyState>
+              )}
+              {completedServiceHistoryNote ? (
+                <p className="border-t border-white/10 px-4 py-3 text-xs text-white/55">{completedServiceHistoryNote}</p>
+              ) : null}
+            </ReportSection>
           </>
         ) : null}
 
@@ -1420,6 +1584,16 @@ export default function AppReportsPage() {
                 ) : (
                   <EmptyState>Não há dados por setor no período selecionado.</EmptyState>
                 )}
+              </ReportSection>
+              <ReportSection
+                title="Atendimentos concluídos por setor"
+                description="Usa o setor registrado no fechamento do ciclo/protocolo."
+              >
+                <CompletedServiceBucketTable
+                  titleColumn="Setor"
+                  rows={completedServiceReport?.byDepartment ?? []}
+                  emptyMessage={completedServiceHistoryNote ?? "Não há atendimentos concluídos por setor no período selecionado."}
+                />
               </ReportSection>
             </div>
             <ReportSection title="Protocolos" description="Amostra dos primeiros 100 protocolos do recorte atual.">
@@ -1544,6 +1718,48 @@ export default function AppReportsPage() {
                 </div>
               ) : (
                 <EmptyState>Nenhuma atribuição registrada no período.</EmptyState>
+              )}
+            </ReportSection>
+            <ReportSection
+              title="Atendimentos concluídos por atendente"
+              description="Cada atendimento concluído corresponde a um ciclo/protocolo encerrado, contabilizado no momento do fechamento."
+            >
+              <CompletedServiceBucketTable
+                titleColumn="Atendente"
+                rows={completedServiceReport?.byAgent ?? []}
+                emptyMessage={completedServiceHistoryNote ?? "Nenhum atendimento concluído por atendente no período selecionado."}
+              />
+            </ReportSection>
+            <ReportSection
+              title="Atendimentos concluídos por setor e atendente"
+              description="Usa setor e atendente registrados no snapshot de fechamento; mudanças posteriores da conversa não alteram esta leitura."
+            >
+              {completedServiceReport?.byDepartmentAgent.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[720px] text-sm">
+                    <thead className="bg-white/10 text-left">
+                      <tr>
+                        <th className="px-3 py-2">Setor</th>
+                        <th className="px-3 py-2">Atendente</th>
+                        <th className="px-3 py-2 text-right">Atendimentos concluídos</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {completedServiceReport.byDepartmentAgent.map((item) => (
+                        <tr
+                          key={`${item.departmentId ?? "__none_department__"}:${item.assignedUserId ?? "__none_agent__"}`}
+                          className="border-t border-white/10"
+                        >
+                          <td className="px-3 py-2">{item.departmentName}</td>
+                          <td className="px-3 py-2">{item.agentName}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{item.completedCount}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState>{completedServiceHistoryNote ?? "Nenhum atendimento concluído por setor e atendente no período selecionado."}</EmptyState>
               )}
             </ReportSection>
           </>
@@ -1890,6 +2106,30 @@ export default function AppReportsPage() {
               >
                 {exportingSessions ? "Exportando..." : "Exportar CSV de sessões"}
               </button>
+            </section>
+            <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <h2 className="text-sm font-semibold">CSV de atendimentos concluídos</h2>
+              <p className="mt-1 text-xs leading-relaxed text-white/55">
+                Exporta ciclos/protocolos encerrados por atendente ou por setor e atendente.
+              </p>
+              <div className="mt-4 grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleExportCompletedServices("by-agent")}
+                  disabled={Boolean(exportingCompletedServices)}
+                  className="w-full rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-2 text-sm text-white hover:bg-re7-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {exportingCompletedServices === "by-agent" ? "Exportando..." : "Exportar por atendente"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportCompletedServices("department-agent")}
+                  disabled={Boolean(exportingCompletedServices)}
+                  className="w-full rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-2 text-sm text-white hover:bg-re7-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {exportingCompletedServices === "department-agent" ? "Exportando..." : "Exportar setor e atendente"}
+                </button>
+              </div>
             </section>
             <section className="rounded-xl border border-white/10 bg-white/5 p-4">
               <h2 className="text-sm font-semibold">Impressão/PDF</h2>

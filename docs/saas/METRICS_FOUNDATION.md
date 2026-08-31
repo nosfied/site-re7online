@@ -217,6 +217,49 @@ Limite historico:
 - relatorios por atendente/setor devem considerar como periodo confiavel o intervalo que possui snapshots capturados;
 - a UI futura deve derivar o inicio disponivel pelo menor `closedAt` existente em `CompletedServiceSnapshot` para o tenant, ou exibir aviso quando nao houver snapshot no periodo.
 
+## Relatorios De Atendimentos Concluidos
+
+Adicionado como leitura de produto sobre `CompletedServiceSnapshot`, sem reconstruir atribuicao a partir de estado mutavel de `Conversation`.
+
+Contrato:
+
+- fonte unica: `CompletedServiceSnapshot`;
+- periodo: `closedAt`;
+- total: quantidade de linhas de snapshot no escopo filtrado;
+- por atendente: agrupamento por `assignedUserId`;
+- por setor: agrupamento por `departmentId`;
+- setor por atendente: agrupamento por `departmentId` + `assignedUserId`;
+- serie diaria: agrupamento pelo dia local de `closedAt` no timezone operacional do tenant;
+- uma mesma Conversation pode aparecer mais de uma vez se tiver multiplos ciclos/protocolos encerrados;
+- alteracoes posteriores em `Conversation`, responsavel ou setor nao reatribuem fechamento historico.
+
+Cutoff:
+
+- a disponibilidade historica e derivada por `MIN(CompletedServiceSnapshot.closedAt)` por tenant;
+- se nao houver snapshots, a UI deve informar ausencia de historico disponivel;
+- zero snapshots no periodo nao deve ser apresentado como prova de que o historico anterior teve zero atendimentos;
+- nao ha backfill neste relatorio.
+
+Resolucao de nomes:
+
+- IDs de usuario e setor sao resolvidos em lote no diretorio atual apenas para rotulo;
+- se a entidade foi removida, a contagem permanece no bucket com `Usuario removido` ou `Setor removido`;
+- `assignedUserId = null` aparece como `Sem atendente`;
+- `departmentId = null` aparece como `Sem setor`.
+
+RBAC:
+
+- `ADMIN` ve o tenant inteiro;
+- `SUPERVISOR` ve apenas departamentos autorizados por membership ativo;
+- `AGENT` nao acessa relatorios de equipe;
+- filtros de supervisor usam `CompletedServiceSnapshot.departmentId`, nao o setor atual da Conversation.
+
+Performance:
+
+- agregacoes devem ser set-based no banco;
+- labels devem ser buscados em lote;
+- nao usar loop de consultas por atendente, setor ou Conversation.
+
 ## Testes
 
 Arquivo:

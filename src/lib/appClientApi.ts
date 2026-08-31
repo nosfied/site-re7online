@@ -657,6 +657,41 @@ export type AppSessionAuditReport = {
   notes: string[];
 };
 
+export type AppCompletedServiceReportBucket = {
+  id: string | null;
+  name: string;
+  completedCount: number;
+};
+
+export type AppCompletedServiceReportDepartmentAgentBucket = {
+  departmentId: string | null;
+  departmentName: string;
+  assignedUserId: string | null;
+  agentName: string;
+  completedCount: number;
+};
+
+export type AppCompletedServiceReportDailyBucket = {
+  date: string;
+  completedCount: number;
+};
+
+export type AppCompletedServiceReport = {
+  ok: true;
+  periodFrom: string;
+  periodTo: string | null;
+  departmentId: string | null;
+  assignedUserId: string | null;
+  timezone: string;
+  availableSince: string | null;
+  totalCompleted: number;
+  byAgent: AppCompletedServiceReportBucket[];
+  byDepartment: AppCompletedServiceReportBucket[];
+  byDepartmentAgent: AppCompletedServiceReportDepartmentAgentBucket[];
+  daily: AppCompletedServiceReportDailyBucket[];
+  notes: string[];
+};
+
 export type AppSatisfactionReportSummary = {
   sent: number;
   responded: number;
@@ -3970,6 +4005,24 @@ export async function fetchAppSatisfactionReport(
   return requestAppJson(session, `/app/reports/satisfaction${suffix}`);
 }
 
+export async function fetchAppCompletedServiceReport(
+  session: AppSession,
+  params: {
+    from?: string | null;
+    to?: string | null;
+    assignedUserId?: string | null;
+    departmentId?: string | null;
+  }
+): Promise<AppCompletedServiceReport> {
+  const query = new URLSearchParams();
+  if (params.from) query.set("from", params.from);
+  if (params.to) query.set("to", params.to);
+  if (params.assignedUserId) query.set("assignedUserId", params.assignedUserId);
+  if (params.departmentId) query.set("departmentId", params.departmentId);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestAppJson(session, `/app/reports/completed-services${suffix}`);
+}
+
 export async function fetchAppDashboardOverview(
   session: AppSession,
   filters?: {
@@ -4086,6 +4139,26 @@ export async function exportAppSatisfactionReportCsv(
   if (params.channel) query.set("channel", params.channel);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return requestAppText(session, `/app/reports/satisfaction/export${suffix}`);
+}
+
+export async function exportAppCompletedServiceReportCsv(
+  session: AppSession,
+  params: {
+    from?: string | null;
+    to?: string | null;
+    assignedUserId?: string | null;
+    departmentId?: string | null;
+    view?: "by-agent" | "department-agent";
+  }
+) {
+  const query = new URLSearchParams();
+  if (params.from) query.set("from", params.from);
+  if (params.to) query.set("to", params.to);
+  if (params.assignedUserId) query.set("assignedUserId", params.assignedUserId);
+  if (params.departmentId) query.set("departmentId", params.departmentId);
+  if (params.view) query.set("view", params.view);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestAppText(session, `/app/reports/completed-services/export${suffix}`);
 }
 
 export async function fetchAppInstagramBusinessStatus(

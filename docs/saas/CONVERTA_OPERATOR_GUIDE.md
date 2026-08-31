@@ -233,11 +233,11 @@ Em `Relatorios`, os filtros globais de periodo, canal, atendente, setor e dedupl
 As abas disponíveis são:
 
 - `Visao geral`: indicadores principais do periodo selecionado.
-- `Conversas`: volume por canal, setor e amostra de protocolos.
+- `Conversas`: volume por canal, setor, atendimentos concluidos por setor e amostra de protocolos.
 - `SLA`: tempos e risco operacional calculados pelas metricas existentes.
-- `Atendentes`: separa mensagens humanas enviadas de conversas atribuidas.
+- `Atendentes`: separa mensagens humanas enviadas, conversas atribuidas e atendimentos concluidos.
 - `Acessos/Sessoes`: auditoria de autenticacao com filtros locais proprios.
-- `Exportacoes`: CSV de conversas, CSV de sessoes e impressao/PDF consolidado.
+- `Exportacoes`: CSV de conversas, CSV de atendimentos concluidos, CSV de sessoes e impressao/PDF consolidado.
 
 Os filtros de `Acessos/Sessões` são locais dessa aba e não alteram o recorte global das conversas.
 
@@ -269,7 +269,15 @@ Essa métrica não conta bot, automação, campanha, mensagem pronta sem autoria
 
 A seção `Conversas atribuídas por atendente` tem outro significado: ela mede distribuição operacional de conversas por `ConversationRuntimeState` e `ConversationAssignment`. Não use essa seção como produtividade individual nem como substituto de mensagens realmente enviadas.
 
-Fechamentos por atendente e SLA por responsável só devem ser usados quando houver evidência confiável de registro no momento do fechamento ou da atribuição. Na ausência desse registro, ficam como melhoria P2 e não devem ser inferidos pelo responsável atual.
+## Relatorio Atendimentos concluidos
+
+Em `Relatorios`, `Atendimentos concluidos` conta ciclos/protocolos encerrados a partir de `CompletedServiceSnapshot`. A data do relatorio e sempre o momento do fechamento (`closedAt`), nao a data de abertura da conversa.
+
+Cada linha de snapshot corresponde a um atendimento concluido. Se a mesma conversa tiver dois ciclos/protocolos encerrados, o relatorio conta dois atendimentos. A atribuicao por atendente e setor usa o responsavel e o setor registrados no momento do fechamento; mudancas posteriores na conversa nao reatribuem o historico.
+
+Quando o fechamento nao possui atendente ou setor, a contagem aparece em `Sem atendente` ou `Sem setor`. Se um usuario ou setor for removido depois, a contagem permanece com rotulo de entidade removida.
+
+O historico comeca no primeiro fechamento registrado nesse formato. Quando nao houver snapshots para a organizacao, a tela mostra que o indicador ainda nao possui historico disponivel em vez de sugerir que periodos antigos tiveram zero atendimentos.
 
 ## O que não fazer
 
