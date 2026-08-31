@@ -139,6 +139,22 @@ export async function executeChatbotFlowWithConsent(params: {
     state: hydratedState,
     startNodeId: params.startNodeId,
   });
+  const isInitialConsentPrompt = Boolean(
+    params.startNodeId &&
+      currentConsent &&
+      (!hydratedState.chatbotActive || !hydratedState.chatbotNodeId)
+  );
+  if (isInitialConsentPrompt) {
+    return executeChatbotFlow({
+      flowId: params.flowId,
+      definition: params.definition,
+      state: hydratedState,
+      inboundText: params.inboundText,
+      nowIso: params.nowIso,
+      startNodeId: params.startNodeId,
+      options: params.options,
+    });
+  }
   if (currentConsent) {
     const answer = normalizeAnswer(params.inboundText);
     const accepted = answer === normalizeAnswer(currentConsent.node.acceptOption);

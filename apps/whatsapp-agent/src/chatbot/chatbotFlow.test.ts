@@ -410,6 +410,74 @@ test("executeChatbotFlowWithConsent repeats consent prompt for invalid answer wh
   assert.equal(accepted.managementInteraction?.inboundKind, "consent_positive");
 });
 
+test("executeChatbotFlowWithConsent prompts initial start consent without validating first inbound", async () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "consent",
+    nodes: {
+      consent: {
+        type: "consent",
+        purpose: "attendance",
+        textVersion: "v1",
+        message: "Digite 1 para aceitar ou 2 para encerrar.",
+        acceptOption: "1",
+        declineOption: "2",
+        invalidText: "Opção inválida.",
+        onAccepted: "menu",
+        onDeclined: "declined",
+      },
+      menu: {
+        type: "menu",
+        text: "Menu",
+        options: [{ label: "1 - Atendimento", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Tudo certo.",
+      },
+      declined: {
+        type: "text",
+        text: "Atendimento encerrado.",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const prisma = {
+    contact: { findFirst: async () => null },
+    lead: { findFirst: async () => null },
+    conversation: { findFirst: async () => null },
+    contactConsent: {
+      findFirst: async () => null,
+      updateMany: async () => ({ count: 0 }),
+      create: async () => ({ id: "consent_1", textHash: "hash" }),
+    },
+    event: { create: async () => ({ id: "event_1" }) },
+  } as any;
+
+  const result = await executeChatbotFlowWithConsent({
+    prisma,
+    clientId: "client_1",
+    waId: "5511999999999",
+    sourceChannel: "whatsapp",
+    sourceProvider: "web_session",
+    source: "test",
+    requestId: "request_initial",
+    flowId: "flow_consent",
+    definition: validated.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-04-17T10:00:01.000Z",
+    startNodeId: "consent",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotNodeId, "consent");
+  assert.equal(result.replyText, "Digite 1 para aceitar ou 2 para encerrar.");
+  assert.equal(result.managementInteraction?.outboundKind, "consent_prompt");
+  assert.equal(result.managementInteraction?.inboundKind, undefined);
+});
+
 test("executeChatbotFlow preserves explicit menu option numbers", () => {
   const validated = validateChatbotFlowDefinition({
     start: "menu",
