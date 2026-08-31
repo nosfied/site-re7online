@@ -238,6 +238,15 @@ function metadataString(metadata: unknown, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+type SatisfactionBucket = {
+  id: string;
+  name: string | null;
+  sent: number;
+  responded: number;
+  scoreTotal: number;
+  distribution: Record<string, number>;
+};
+
 function buildSatisfactionSummary(params: {
   surveys: Array<{
     id: string;
@@ -245,6 +254,8 @@ function buildSatisfactionSummary(params: {
     assignedUserId: string | null;
     departmentId: string | null;
     metadata?: unknown;
+    department?: { name: string | null } | null;
+    assignedUser?: { name: string | null } | null;
   }>;
   responses: Array<{
     surveyId: string;
@@ -253,16 +264,20 @@ function buildSatisfactionSummary(params: {
 }) {
   const surveyById = new Map(params.surveys.map((survey) => [survey.id, survey]));
   const distribution = emptyScoreDistribution();
-  const byAgent = new Map<string, { sent: number; responded: number; scoreTotal: number; distribution: Record<string, number> }>();
-  const byDepartment = new Map<string, { sent: number; responded: number; scoreTotal: number; distribution: Record<string, number> }>();
-  const byQueue = new Map<string, { sent: number; responded: number; scoreTotal: number; distribution: Record<string, number> }>();
+  const byAgent = new Map<string, SatisfactionBucket>();
+  const byDepartment = new Map<string, SatisfactionBucket>();
+  const byQueue = new Map<string, SatisfactionBucket>();
   const ensureBucket = (
-    map: Map<string, { sent: number; responded: number; scoreTotal: number; distribution: Record<string, number> }>,
-    key: string
+    map: Map<string, SatisfactionBucket>,
+    key: string,
+    name: string | null
   ) => {
     const existing = map.get(key);
-    if (existing) return existing;
-    const bucket = { sent: 0, responded: 0, scoreTotal: 0, distribution: emptyScoreDistribution() };
+    if (existing) {
+      if (!existing.name && name) existing.name = name;
+      return existing;
+    }
+    const bucket = { id: key, name, sent: 0, responded: 0, scoreTotal: 0, distribution: emptyScoreDistribution() };
     map.set(key, bucket);
     return bucket;
   };
@@ -273,10 +288,22 @@ function buildSatisfactionSummary(params: {
   };
 
   for (const survey of params.surveys) {
-    if (survey.assignedUserId) ensureBucket(byAgent, survey.assignedUserId).sent += 1;
-    if (survey.departmentId) ensureBucket(byDepartment, survey.departmentId).sent += 1;
+    if (survey.assignedUserId) {
+      ensureBucket(
+        byAgent,
+        survey.assignedUserId,
+        metadataString(survey.metadata, "assignedUserName") ?? survey.assignedUser?.name ?? null
+      ).sent += 1;
+    }
+    if (survey.departmentId) {
+      ensureBucket(
+        byDepartment,
+        survey.departmentId,
+        metadataString(survey.metadata, "departmentName") ?? survey.department?.name ?? null
+      ).sent += 1;
+    }
     const queueId = getQueueId(survey.metadata);
-    if (queueId) ensureBucket(byQueue, queueId).sent += 1;
+    if (queueId) ensureBucket(byQueue, queueId, metadataString(survey.metadata, "queueName")).sent += 1;
   }
 
   let scoreTotal = 0;
@@ -287,20 +314,28 @@ function buildSatisfactionSummary(params: {
     if (scoreKey in distribution) distribution[scoreKey] += 1;
     scoreTotal += response.score;
     if (survey.assignedUserId) {
-      const bucket = ensureBucket(byAgent, survey.assignedUserId);
+      const bucket = ensureBucket(
+        byAgent,
+        survey.assignedUserId,
+        metadataString(survey.metadata, "assignedUserName") ?? survey.assignedUser?.name ?? null
+      );
       bucket.responded += 1;
       bucket.scoreTotal += response.score;
       if (scoreKey in bucket.distribution) bucket.distribution[scoreKey] += 1;
     }
     if (survey.departmentId) {
-      const bucket = ensureBucket(byDepartment, survey.departmentId);
+      const bucket = ensureBucket(
+        byDepartment,
+        survey.departmentId,
+        metadataString(survey.metadata, "departmentName") ?? survey.department?.name ?? null
+      );
       bucket.responded += 1;
       bucket.scoreTotal += response.score;
       if (scoreKey in bucket.distribution) bucket.distribution[scoreKey] += 1;
     }
     const queueId = getQueueId(survey.metadata);
     if (queueId) {
-      const bucket = ensureBucket(byQueue, queueId);
+      const bucket = ensureBucket(byQueue, queueId, metadataString(survey.metadata, "queueName"));
       bucket.responded += 1;
       bucket.scoreTotal += response.score;
       if (scoreKey in bucket.distribution) bucket.distribution[scoreKey] += 1;
@@ -308,16 +343,22 @@ function buildSatisfactionSummary(params: {
   }
 
   const serializeBuckets = (
-    map: Map<string, { sent: number; responded: number; scoreTotal: number; distribution: Record<string, number> }>
+    map: Map<string, SatisfactionBucket>
   ) =>
-    Array.from(map.entries()).map(([id, bucket]) => ({
-      id,
-      sent: bucket.sent,
-      responded: bucket.responded,
-      responseRate: bucket.sent > 0 ? bucket.responded / bucket.sent : 0,
-      averageScore: bucket.responded > 0 ? bucket.scoreTotal / bucket.responded : null,
-      distribution: bucket.distribution,
-    }));
+    Array.from(map.values())
+      .map((bucket) => ({
+        id: bucket.id,
+        name: bucket.name,
+        sent: bucket.sent,
+        responded: bucket.responded,
+        responseRate: bucket.sent > 0 ? bucket.responded / bucket.sent : 0,
+        averageScore: bucket.responded > 0 ? bucket.scoreTotal / bucket.responded : null,
+        distribution: bucket.distribution,
+      }))
+      .sort((left, right) => {
+        if (right.responded !== left.responded) return right.responded - left.responded;
+        return (left.name ?? left.id).localeCompare(right.name ?? right.id);
+      });
 
   const sent = params.surveys.filter((survey) => survey.status !== "draft" && survey.status !== "cancelled").length;
   const responded = params.responses.length;
@@ -403,6 +444,8 @@ export async function buildSatisfactionReport(params: {
         assignedUserId: true,
         departmentId: true,
         metadata: true,
+        department: { select: { name: true } },
+        assignedUser: { select: { name: true } },
       },
     }),
   ]);
@@ -447,6 +490,7 @@ export async function buildSatisfactionReport(params: {
     totalPages: limit === null ? 1 : Math.max(1, Math.ceil(total / limit)),
     notes: [
       "Pesquisas de atendimento direcionado sem atendente atribuido nao sao contabilizadas como desempenho individual.",
+      "Agregados de CSAT por atendente e setor usam o snapshot historico da SatisfactionSurvey no envio da pesquisa.",
       "Comentarios sao feedback operacional; nao incluem telefone, token, waId ou payload bruto.",
     ],
   };

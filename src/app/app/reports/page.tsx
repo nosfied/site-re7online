@@ -297,6 +297,57 @@ function EmptyState({ children }: { children: ReactNode }) {
   return <p className="p-4 text-sm text-white/65">{children}</p>;
 }
 
+function SatisfactionAggregateTable({
+  titleColumn,
+  rows,
+  emptyMessage,
+  fallbackName,
+}: {
+  titleColumn: string;
+  rows: AppSatisfactionReport["summary"]["byAgent"];
+  emptyMessage: string;
+  fallbackName: string;
+}) {
+  return rows.length ? (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[900px] text-sm">
+        <thead className="bg-white/10 text-left">
+          <tr>
+            <th className="px-3 py-2">{titleColumn}</th>
+            <th className="px-3 py-2 text-right">Pesquisas enviadas</th>
+            <th className="px-3 py-2 text-right">Respostas</th>
+            <th className="px-3 py-2 text-right">Taxa</th>
+            <th className="px-3 py-2 text-right">Nota média</th>
+            {SATISFACTION_SCORE_LABELS.map((item) => (
+              <th key={item.score} className="px-3 py-2 text-right">
+                {item.score} {item.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((item) => (
+            <tr key={item.id} className="border-t border-white/10">
+              <td className="px-3 py-2">{item.name ?? fallbackName}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{item.sent}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{item.responded}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{formatPercent(item.responseRate)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{formatScore(item.averageScore)}</td>
+              {SATISFACTION_SCORE_LABELS.map((scoreLabel) => (
+                <td key={scoreLabel.score} className="px-3 py-2 text-right tabular-nums">
+                  {item.distribution[String(scoreLabel.score)] ?? 0}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ) : (
+    <EmptyState>{emptyMessage}</EmptyState>
+  );
+}
+
 function printEmptyRow(columns: number, message = "Não há dados para o período selecionado.") {
   return `<tr><td colspan="${columns}" class="empty">${escapeHtml(message)}</td></tr>`;
 }
@@ -1551,6 +1602,28 @@ export default function AppReportsPage() {
               ) : (
                 <EmptyState>Nenhuma resposta de satisfação no período selecionado.</EmptyState>
               )}
+            </ReportSection>
+            <ReportSection
+              title="Satisfação por atendente"
+              description="Usa o atendente registrado na pesquisa enviada; transferências posteriores não alteram a atribuição histórica."
+            >
+              <SatisfactionAggregateTable
+                titleColumn="Atendente"
+                rows={satisfactionReport?.summary.byAgent ?? []}
+                emptyMessage="Nenhuma resposta atribuída a atendentes neste período."
+                fallbackName="Atendente sem nome"
+              />
+            </ReportSection>
+            <ReportSection
+              title="Satisfação por setor"
+              description="Usa o setor registrado na pesquisa enviada; mudanças posteriores da conversa não alteram a atribuição histórica."
+            >
+              <SatisfactionAggregateTable
+                titleColumn="Setor"
+                rows={satisfactionReport?.summary.byDepartment ?? []}
+                emptyMessage="Nenhuma resposta atribuída a setores neste período."
+                fallbackName="Setor sem nome"
+              />
             </ReportSection>
             <ReportSection title="Respostas" description="Tabela analítica das avaliações recebidas.">
               <div className="overflow-x-auto">

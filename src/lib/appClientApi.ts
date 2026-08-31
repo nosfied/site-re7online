@@ -667,6 +667,7 @@ export type AppSatisfactionReportSummary = {
   distribution: Record<string, number>;
   byAgent: Array<{
     id: string;
+    name: string | null;
     sent: number;
     responded: number;
     responseRate: number;
@@ -675,6 +676,7 @@ export type AppSatisfactionReportSummary = {
   }>;
   byDepartment: Array<{
     id: string;
+    name: string | null;
     sent: number;
     responded: number;
     responseRate: number;
@@ -683,6 +685,7 @@ export type AppSatisfactionReportSummary = {
   }>;
   byQueue: Array<{
     id: string;
+    name: string | null;
     sent: number;
     responded: number;
     responseRate: number;

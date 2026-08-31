@@ -402,6 +402,76 @@ test("buildSatisfactionReport treats SatisfactionResponse as authoritative even 
   assert.equal(report.rows[0]?.scoreLabel, "Satisfeito");
 });
 
+test("buildSatisfactionReport aggregates CSAT by historical survey attribution", async () => {
+  const surveyA = makeSurvey({
+    id: "survey-a",
+    status: "responded",
+    assignedUserId: "agent-a",
+    departmentId: "department-a",
+    metadata: {
+      assignedUserName: "Agente Historico A",
+      departmentName: "Setor Historico A",
+    },
+    department: { id: "department-a", name: "Setor Atual B" },
+    assignedUser: { id: "agent-a", name: "Agente Atual B" },
+  });
+  const surveyB = makeSurvey({
+    id: "survey-b",
+    status: "sent",
+    assignedUserId: "agent-a",
+    departmentId: "department-a",
+    metadata: {
+      assignedUserName: "Agente Historico A",
+      departmentName: "Setor Historico A",
+    },
+  });
+  const surveyC = makeSurvey({
+    id: "survey-c",
+    status: "responded",
+    assignedUserId: "agent-c",
+    departmentId: "department-c",
+    metadata: {
+      assignedUserName: "Agente C",
+      departmentName: "Setor C",
+    },
+  });
+  const surveys = [surveyA, surveyB, surveyC];
+  const responses = [
+    makeResponse({ surveyId: "survey-a", score: 5 }),
+    makeResponse({ surveyId: "survey-c", score: 3 }),
+  ];
+  const report = await buildSatisfactionReport({
+    prisma: {
+      satisfactionSurvey: {
+        findMany: async () => surveys,
+      },
+      satisfactionResponse: {
+        findMany: async (args: { include?: unknown }) => {
+          if (!args.include) return responses;
+          return responses.map((response) => ({
+            ...response,
+            survey: surveys.find((survey) => survey.id === response.surveyId),
+          }));
+        },
+        count: async () => responses.length,
+      },
+    } as never,
+    clientId: "tenant-1",
+  });
+
+  const agentA = report.summary.byAgent.find((item) => item.id === "agent-a");
+  assert.equal(agentA?.name, "Agente Historico A");
+  assert.equal(agentA?.sent, 2);
+  assert.equal(agentA?.responded, 1);
+  assert.equal(agentA?.averageScore, 5);
+  assert.equal(agentA?.distribution["5"], 1);
+  const departmentA = report.summary.byDepartment.find((item) => item.id === "department-a");
+  assert.equal(departmentA?.name, "Setor Historico A");
+  assert.equal(departmentA?.sent, 2);
+  assert.equal(departmentA?.responded, 1);
+  assert.equal(departmentA?.distribution["5"], 1);
+});
+
 test("buildSatisfactionReportCsv exports all response rows and protects spreadsheet formulas", async () => {
   const surveys = Array.from({ length: 1001 }, (_, index) =>
     makeSurvey({
