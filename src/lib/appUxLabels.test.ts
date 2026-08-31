@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getAppErrorUxMessage } from "./appUxLabels";
+import { getAppErrorUxMessage, getSessionAuditStatusUxLabel } from "./appUxLabels";
 
 test("claim capacity errors use a friendly limit message", () => {
   assert.equal(
@@ -36,4 +36,8 @@ test("template category policy errors use a friendly message", () => {
     }),
     "Categoria não habilitada para este tenant."
   );
+});
+
+test("session audit open status does not imply realtime presence", () => {
+  assert.equal(getSessionAuditStatusUxLabel("OPEN"), "Aberta");
 });

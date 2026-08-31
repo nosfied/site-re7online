@@ -56,6 +56,11 @@ const REPORT_CHANNELS = [
 
 const AGENT_ACTIVITY_HISTORY_NOTE =
   "Mensagens por atendente usa a autoria registrada no momento do envio; mensagens históricas anteriores à captura de autoria podem não ser atribuíveis.";
+const APP_SESSION_OPEN_LOOKBACK_MS = 12 * 60 * 60 * 1000;
+const SESSION_STARTED_AT_FILTER_COPY =
+  "Este relatório considera a data e hora de início da sessão. Uma sessão iniciada antes do período selecionado não será exibida, mesmo que continue aberta.";
+const SESSION_AUDIT_DISCLAIMER_COPY =
+  "Sessões refletem autenticação e atividade observada. Não representam controle de jornada.";
 
 type ReportsTab = "overview" | "conversations" | "sla" | "agents" | "sessions" | "exports";
 
@@ -306,6 +311,7 @@ export default function AppReportsPage() {
   const [sessionUserId, setSessionUserId] = useState("");
   const [sessionRole, setSessionRole] = useState("");
   const [sessionStatus, setSessionStatus] = useState<"" | AppSessionAuditStatus>("");
+  const [sessionOpenNowMode, setSessionOpenNowMode] = useState(false);
   const [sessionPage, setSessionPage] = useState(1);
   const [retentionDays, setRetentionDays] = useState<number | null>(null);
   const [tenant, setTenant] = useState<AppTenantSummary | null>(null);
@@ -442,8 +448,10 @@ export default function AppReportsPage() {
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
-    const fromIso = dateTimeLocalToIso(sessionFrom);
-    const toIso = dateTimeLocalToIso(sessionTo);
+    const fromIso = sessionOpenNowMode
+      ? new Date(Date.now() - APP_SESSION_OPEN_LOOKBACK_MS).toISOString()
+      : dateTimeLocalToIso(sessionFrom);
+    const toIso = sessionOpenNowMode ? new Date().toISOString() : dateTimeLocalToIso(sessionTo);
     if (!fromIso || !toIso || Date.parse(fromIso) > Date.parse(toIso)) {
       setSessionReport(null);
       setError("Informe um período válido para Acessos/Sessões.");
@@ -455,7 +463,7 @@ export default function AppReportsPage() {
       to: toIso,
       userId: sessionUserId || null,
       role: sessionRole || null,
-      status: sessionStatus || null,
+      status: sessionOpenNowMode ? "OPEN" : sessionStatus || null,
       departmentId: isAdminRole(session.user.role) || isSupervisorRole(session.user.role) ? departmentId || null : null,
       page: sessionPage,
       limit: 25,
@@ -483,11 +491,11 @@ export default function AppReportsPage() {
     return () => {
       cancelled = true;
     };
-  }, [departmentId, handleUnauthorized, router, session, sessionFrom, sessionPage, sessionRole, sessionStatus, sessionTo, sessionUserId]);
+  }, [departmentId, handleUnauthorized, router, session, sessionFrom, sessionOpenNowMode, sessionPage, sessionRole, sessionStatus, sessionTo, sessionUserId]);
 
   useEffect(() => {
     setSessionPage(1);
-  }, [sessionFrom, sessionRole, sessionStatus, sessionTo, sessionUserId]);
+  }, [sessionFrom, sessionOpenNowMode, sessionRole, sessionStatus, sessionTo, sessionUserId]);
 
   const userNameById = useMemo(
     () => new Map(users.map((item) => [item.id, formatUserDisplayName(item.name, item.email)])),
@@ -501,6 +509,10 @@ export default function AppReportsPage() {
       (item.departmentIds ?? []).some((currentDepartmentId) => allowedDepartmentIds.has(currentDepartmentId))
     );
   }, [departmentId, departments, session, users]);
+  const sessionOpenCountInResult = useMemo(
+    () => sessionReport?.items.filter((item) => item.status === "OPEN").length ?? 0,
+    [sessionReport]
+  );
 
   useEffect(() => {
     if (!session || isAdminRole(session.user.role)) return;
@@ -550,8 +562,10 @@ export default function AppReportsPage() {
 
   const handleExportSessions = async () => {
     if (!session) return;
-    const fromIso = dateTimeLocalToIso(sessionFrom);
-    const toIso = dateTimeLocalToIso(sessionTo);
+    const fromIso = sessionOpenNowMode
+      ? new Date(Date.now() - APP_SESSION_OPEN_LOOKBACK_MS).toISOString()
+      : dateTimeLocalToIso(sessionFrom);
+    const toIso = sessionOpenNowMode ? new Date().toISOString() : dateTimeLocalToIso(sessionTo);
     if (!fromIso || !toIso || Date.parse(fromIso) > Date.parse(toIso)) {
       setError("Informe um período válido para exportar Acessos/Sessões.");
       return;
@@ -565,7 +579,7 @@ export default function AppReportsPage() {
         to: toIso,
         userId: sessionUserId || null,
         role: sessionRole || null,
-        status: sessionStatus || null,
+        status: sessionOpenNowMode ? "OPEN" : sessionStatus || null,
         departmentId: isAdminRole(session.user.role) || isSupervisorRole(session.user.role) ? departmentId || null : null,
       });
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -615,10 +629,19 @@ export default function AppReportsPage() {
       dedupe ? ["Duplicados", "Desconsiderados"] : null,
     ].filter((item): item is string[] => Boolean(item));
     const sessionFilters = [
-      ["Período", `${formatDateTime(sessionReport?.periodFrom ?? dateTimeLocalToIso(sessionFrom))} a ${formatDateTime(sessionReport?.periodTo ?? dateTimeLocalToIso(sessionTo))}`],
+      [
+        sessionOpenNowMode ? "Modo" : "Período",
+        sessionOpenNowMode
+          ? "Sessões abertas agora"
+          : `${formatDateTime(sessionReport?.periodFrom ?? dateTimeLocalToIso(sessionFrom))} a ${formatDateTime(sessionReport?.periodTo ?? dateTimeLocalToIso(sessionTo))}`,
+      ],
       sessionUserId ? ["Usuário", userNameById.get(sessionUserId) ?? "Usuário filtrado"] : null,
       sessionRole ? ["Perfil", getUserRoleUxLabel(sessionRole)] : null,
-      sessionStatus ? ["Situação", SESSION_STATUS_FILTERS.find((item) => item.value === sessionStatus)?.label ?? getSessionAuditStatusUxLabel(sessionStatus)] : null,
+      sessionOpenNowMode
+        ? ["Situação", "Abertas"]
+        : sessionStatus
+          ? ["Situação", SESSION_STATUS_FILTERS.find((item) => item.value === sessionStatus)?.label ?? getSessionAuditStatusUxLabel(sessionStatus)]
+          : null,
     ].filter((item): item is string[] => Boolean(item));
     const sessionItems = sessionReport?.items ?? [];
     const sessionOpenCount = sessionItems.filter((item) => item.status === "OPEN").length;
@@ -1325,25 +1348,33 @@ export default function AppReportsPage() {
         {activeTab === "sessions" ? (
           <ReportSection
             title="Acessos/Sessões"
-            description="Sessões refletem autenticação e atividade observada. Não representam controle de jornada."
+            description={SESSION_AUDIT_DISCLAIMER_COPY}
           >
+            <div className="border-b border-white/10 px-4 py-3">
+              <div className="rounded-lg border border-sky-300/25 bg-sky-500/10 p-3 text-sm text-sky-50">
+                <p className="font-semibold">Auditoria histórica por início da sessão</p>
+                <p className="mt-1 text-sky-50/80">{SESSION_STARTED_AT_FILTER_COPY}</p>
+              </div>
+            </div>
             <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-5">
               <label className="grid gap-1 text-sm">
-                <span className="text-white/70">Início do acesso</span>
+                <span className="text-white/70">Sessões iniciadas a partir de</span>
                 <input
                   type="datetime-local"
                   className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                   value={sessionFrom}
                   onChange={(event) => setSessionFrom(event.target.value)}
+                  disabled={sessionOpenNowMode}
                 />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="text-white/70">Fim do login</span>
+                <span className="text-white/70">Sessões iniciadas até</span>
                 <input
                   type="datetime-local"
                   className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                   value={sessionTo}
                   onChange={(event) => setSessionTo(event.target.value)}
+                  disabled={sessionOpenNowMode}
                 />
               </label>
               <label className="grid gap-1 text-sm">
@@ -1381,6 +1412,7 @@ export default function AppReportsPage() {
                   className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                   value={sessionStatus}
                   onChange={(event) => setSessionStatus(event.target.value as "" | AppSessionAuditStatus)}
+                  disabled={sessionOpenNowMode}
                 >
                   {SESSION_STATUS_FILTERS.map((item) => (
                     <option key={item.value || "all"} value={item.value}>
@@ -1390,9 +1422,31 @@ export default function AppReportsPage() {
                 </select>
               </label>
             </div>
-            <p className="px-4 pb-3 text-xs text-white/50">
-              Período filtrado por sessões iniciadas no intervalo. Sessões vencidas aparecem como expiradas sem inferir saída por última atividade observada.
-            </p>
+            <div className="flex flex-col gap-3 px-4 pb-3 text-xs text-white/55 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p>
+                  {sessionOpenNowMode
+                    ? "Modo operacional: mostra somente sessões abertas no intervalo técnico de validade atual. Não é indicador de presença online."
+                    : "Período filtrado por sessões iniciadas no intervalo. Sessões vencidas aparecem como expiradas sem inferir saída por última atividade observada."}
+                </p>
+                {sessionReport ? (
+                  <p className="mt-1">
+                    Sessões no resultado: {sessionReport.total}. Abertas carregadas nesta página: {sessionOpenCountInResult}.
+                  </p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setSessionOpenNowMode((current) => !current)}
+                className={`rounded-md border px-3 py-2 text-sm font-semibold ${
+                  sessionOpenNowMode
+                    ? "border-emerald-300/40 bg-emerald-500/20 text-emerald-50 hover:bg-emerald-500/30"
+                    : "border-white/15 text-white/80 hover:bg-white/10"
+                }`}
+              >
+                {sessionOpenNowMode ? "Voltar ao filtro histórico" : "Ver sessões abertas agora"}
+              </button>
+            </div>
             {sessionsLoading ? <p className="px-4 pb-3 text-sm text-white/70">Carregando acessos/sessões...</p> : null}
             <div className="overflow-x-auto border-t border-white/10">
               {sessionReport?.items.length ? (
@@ -1420,7 +1474,10 @@ export default function AppReportsPage() {
                         <td className="px-3 py-2">{formatObservedDuration(item.durationObservedSec)}</td>
                         <td className="px-3 py-2">{formatDateTime(item.lastSeenAt)}</td>
                         <td className="px-3 py-2">
-                          <span className={`inline-flex rounded-full border px-2 py-1 text-xs ${getSessionStatusTone(item.status)}`}>
+                          <span
+                            className={`inline-flex rounded-full border px-2 py-1 text-xs ${getSessionStatusTone(item.status)}`}
+                            title={item.status === "OPEN" ? "Sessão atualmente aberta pelos registros observados; não representa presença online ou jornada." : undefined}
+                          >
                             {getSessionAuditStatusUxLabel(item.status)}
                           </span>
                         </td>

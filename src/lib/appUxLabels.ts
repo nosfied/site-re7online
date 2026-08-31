@@ -215,7 +215,7 @@ export function getUserRoleUxLabel(role: string | null | undefined) {
 export function getSessionAuditStatusUxLabel(status: string | null | undefined) {
   switch (String(status ?? "").trim().toUpperCase()) {
     case "OPEN":
-      return "Ativa";
+      return "Aberta";
     case "CLOSED":
       return "Encerrada";
     case "EXPIRED":
