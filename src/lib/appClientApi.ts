@@ -2166,8 +2166,19 @@ async function requestAppJson<T>(
 
   const controller = new AbortController();
   const timeoutMs = typeof init?.timeoutMs === "number" ? init.timeoutMs : 10000;
-  const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   const { timeoutMs: _timeoutMs, ...requestInit } = init ?? {};
+  let didTimeout = false;
+  const timeout = globalThis.setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, timeoutMs);
+  const requestSignal = requestInit.signal;
+  const abortFromCaller = () => controller.abort();
+  if (requestSignal?.aborted) {
+    controller.abort();
+  } else {
+    requestSignal?.addEventListener("abort", abortFromCaller, { once: true });
+  }
   const isFormDataBody =
     typeof FormData !== "undefined" && requestInit.body instanceof FormData;
   let res: Response;
@@ -2188,10 +2199,12 @@ async function requestAppJson<T>(
     error.status = 0;
     error.errorCode = "network_error";
     if ((fetchError as Error).name === "AbortError") {
-      error.message = "Timeout de conexao com o servidor.";
-      error.errorCode = "network_timeout";
+      error.message = didTimeout ? "Timeout de conexao com o servidor." : "Requisicao cancelada.";
+      error.errorCode = didTimeout ? "network_timeout" : "request_aborted";
     }
     throw error;
+  } finally {
+    requestSignal?.removeEventListener("abort", abortFromCaller);
   }
   globalThis.clearTimeout(timeout);
 
@@ -2787,7 +2800,7 @@ export async function updateAppConversationReadState(
 export async function fetchAppConversation(
   session: AppSession,
   waId: string,
-  options?: { limit?: number; order?: "asc" | "desc"; after?: string | null }
+  options?: { limit?: number; order?: "asc" | "desc"; after?: string | null; signal?: AbortSignal }
 ): Promise<AppConversationOperationalPayload & {
   count: number;
   items: InboxMessageItem[];
@@ -2803,7 +2816,9 @@ export async function fetchAppConversation(
     params.set("after", options.after.trim());
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
-  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}${suffix}`);
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}${suffix}`, {
+    signal: options?.signal,
+  });
 }
 
 export async function fetchAppConversationTimeline(

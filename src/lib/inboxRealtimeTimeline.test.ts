@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { InboxMessageItem } from "./whatsappAdminApi";
 import {
+  compareTimelineMessagesAscending,
   conversationMutationTargetsSelectedConversation,
   getRealtimeHumanInboxVisibility,
   isHumanTimelineMessageItem,
@@ -12,6 +14,19 @@ import {
   resolveRealtimeTimelineConversationKey,
   shouldApplyRealtimeMessageToHumanTimeline,
 } from "./inboxRealtimeTimeline";
+
+function timelineMessage(overrides: Partial<InboxMessageItem>): InboxMessageItem {
+  return {
+    id: overrides.internalMessageId ?? overrides.messageId ?? overrides.requestId ?? "message",
+    direction: "INBOUND",
+    type: "TEXT",
+    bodyText: "mensagem",
+    status: "received",
+    actorName: null,
+    createdAt: "2026-08-28T12:00:00.000Z",
+    ...overrides,
+  } as InboxMessageItem;
+}
 
 test("realtime timeline matches selected conversation across canonical identity variants", () => {
   const event = {
@@ -134,6 +149,33 @@ test("timeline item visibility uses structured inbox visibility", () => {
   assert.equal(isHumanTimelineMessageItem({ inboxVisibility: "management_only" }), false);
   assert.equal(isHumanTimelineMessageItem({ inboxVisibility: "human_timeline" }), true);
   assert.equal(isHumanTimelineMessageItem({}), true);
+});
+
+test("timeline ordering is deterministic when timestamps match", () => {
+  const items = [
+    timelineMessage({
+      internalMessageId: "internal-3",
+      messageId: "provider-3",
+      createdAt: "2026-08-28T12:00:00.000Z",
+    }),
+    timelineMessage({
+      direction: "OUTBOUND",
+      internalMessageId: "internal-1",
+      messageId: "provider-1",
+      createdAt: "2026-08-28T12:00:00.000Z",
+    }),
+    timelineMessage({
+      internalMessageId: "internal-2",
+      messageId: "provider-2",
+      createdAt: "2026-08-28T12:00:00.000Z",
+    }),
+  ];
+
+  const firstSort = [...items].sort(compareTimelineMessagesAscending).map((item) => item.internalMessageId);
+  const secondSort = [...items].reverse().sort(compareTimelineMessagesAscending).map((item) => item.internalMessageId);
+
+  assert.deepEqual(firstSort, ["internal-2", "internal-3", "internal-1"]);
+  assert.deepEqual(secondSort, firstSort);
 });
 
 test("realtime human inbox visibility comes from structured backend projection", () => {

@@ -23,6 +23,7 @@ import {
   type AppRealtimeEvent,
 } from "@/lib/appRealtime";
 import {
+  compareTimelineMessagesAscending,
   conversationMutationTargetsSelectedConversation,
   getRealtimeHumanInboxVisibility,
   isHumanTimelineMessageItem,
@@ -1001,6 +1002,10 @@ function isConversationGoneError(error: unknown) {
   );
 }
 
+function isRequestAbortError(error: unknown) {
+  return (error as AppApiError).errorCode === "request_aborted";
+}
+
 type InboxReadState = AppInboxReadState;
 
 const EMPTY_READ_STATE: InboxReadState = {
@@ -1744,12 +1749,12 @@ function mergeMessagesByIdentity(current: InboxMessageItem[], incoming: InboxMes
     seen.add(identity);
     next.push(item);
   }
-  next.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  next.sort(compareTimelineMessagesAscending);
   return next;
 }
 
 function sortMessagesAscending(items: InboxMessageItem[]) {
-  return [...items].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  return [...items].sort(compareTimelineMessagesAscending);
 }
 
 function getLatestMessageTimestamp(items: InboxMessageItem[]) {
@@ -2471,6 +2476,7 @@ export default function AppInboxPage() {
   const processingOutgoingRef = useRef(false);
   const channelSwitchConfirmationResolveRef = useRef<((confirmed: boolean) => void) | null>(null);
   const detailRequestSeqRef = useRef(0);
+  const selectedTimelineAbortRef = useRef<AbortController | null>(null);
   const selectedTimelineLastRefreshAtRef = useRef(0);
   const selectedTimelineRequestedActivityAtRef = useRef<number | null>(null);
   const selectedConversationIdentityCandidatesRef = useRef<string[]>([]);
@@ -2499,6 +2505,11 @@ export default function AppInboxPage() {
     router.replace("/app/login");
   }, [router]);
 
+  const abortSelectedTimelineRequest = useCallback(() => {
+    selectedTimelineAbortRef.current?.abort();
+    selectedTimelineAbortRef.current = null;
+  }, []);
+
   const handleLogout = useCallback(() => {
     if (!session) return;
     void (async () => {
@@ -2522,6 +2533,7 @@ export default function AppInboxPage() {
   }, [router, session]);
 
   const clearSelectedConversation = useCallback(() => {
+    abortSelectedTimelineRequest();
     detailRequestSeqRef.current += 1;
     selectedConversationIdentityCandidatesRef.current = [];
     selectedConversationKeyRef.current = null;
@@ -2554,7 +2566,7 @@ export default function AppInboxPage() {
     setContactTimelineCursor(null);
     setContactTimelineError(null);
     setOpenMessageActionsId(null);
-  }, []);
+  }, [abortSelectedTimelineRequest]);
 
   useEffect(() => {
     if (!session || typeof window === "undefined") return;
@@ -4114,6 +4126,9 @@ export default function AppInboxPage() {
     mode: "replace" | "append" = "replace",
     readIntent?: TimelineRefreshReadIntent
   ) => {
+    abortSelectedTimelineRequest();
+    const controller = new AbortController();
+    selectedTimelineAbortRef.current = controller;
     const requestSeq = ++detailRequestSeqRef.current;
     const latestKnownAt =
       mode === "append" && selectedConversationWaId === waId && messages.length > 0
@@ -4121,11 +4136,19 @@ export default function AppInboxPage() {
         : null;
     const shouldStickToBottom = mode === "append" && isTimelineNearBottom();
     selectedTimelineLastRefreshAtRef.current = Date.now();
-    const response = await fetchAppConversation(activeSession, waId, {
-      order: mode === "append" ? "asc" : "desc",
-      limit: mode === "append" ? 80 : 300,
-      after: latestKnownAt,
-    });
+    let response: Awaited<ReturnType<typeof fetchAppConversation>>;
+    try {
+      response = await fetchAppConversation(activeSession, waId, {
+        order: mode === "append" ? "asc" : "desc",
+        limit: mode === "append" ? 80 : 300,
+        after: latestKnownAt,
+        signal: controller.signal,
+      });
+    } finally {
+      if (selectedTimelineAbortRef.current === controller) {
+        selectedTimelineAbortRef.current = null;
+      }
+    }
     if (requestSeq !== detailRequestSeqRef.current) return;
     const responseConversationKey = response.waIdCanonical ?? response.waId ?? waId;
     const selectedIdentityCandidates =
@@ -4208,6 +4231,7 @@ export default function AppInboxPage() {
       );
     }
   }, [
+    abortSelectedTimelineRequest,
     isTimelineNearBottom,
     markConversationIdentitiesAsRead,
     messages,
@@ -4275,11 +4299,15 @@ export default function AppInboxPage() {
 
   useEffect(() => {
     if (!session || !selectedConversationWaId) {
+      abortSelectedTimelineRequest();
       setLoadingMessages(false);
       selectedConversationIdentityCandidatesRef.current = [];
       return;
     }
     let cancelled = false;
+    abortSelectedTimelineRequest();
+    const controller = new AbortController();
+    selectedTimelineAbortRef.current = controller;
     const requestSeq = ++detailRequestSeqRef.current;
     const selectedIdentityCandidates =
       selectedConversationIdentityCandidatesRef.current.length > 0
@@ -4301,8 +4329,12 @@ export default function AppInboxPage() {
       order: "desc",
       limit: 500,
       after: null,
+      signal: controller.signal,
     })
       .then((response) => {
+        if (selectedTimelineAbortRef.current === controller) {
+          selectedTimelineAbortRef.current = null;
+        }
         if (cancelled || requestSeq !== detailRequestSeqRef.current) return;
         const responseConversationKey = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
         if (
@@ -4370,6 +4402,7 @@ export default function AppInboxPage() {
         );
       })
       .catch((err: { status?: number; message?: string }) => {
+        if (isRequestAbortError(err)) return;
         if (cancelled || requestSeq !== detailRequestSeqRef.current) return;
         if (err.status === 401) {
           handleUnauthorized();
@@ -4383,13 +4416,21 @@ export default function AppInboxPage() {
         setError(getAppErrorUxMessage({ status: err.status, message: err.message, fallback: "Não foi possível carregar o histórico da conversa." }));
       })
       .finally(() => {
-        if (!cancelled) setLoadingMessages(false);
+        if (selectedTimelineAbortRef.current === controller) {
+          selectedTimelineAbortRef.current = null;
+        }
+        if (!cancelled && requestSeq === detailRequestSeqRef.current) setLoadingMessages(false);
       });
 
     return () => {
       cancelled = true;
+      controller.abort();
+      if (selectedTimelineAbortRef.current === controller) {
+        selectedTimelineAbortRef.current = null;
+      }
     };
   }, [
+    abortSelectedTimelineRequest,
     clearSelectedConversation,
     handleUnauthorized,
     selectedConversationKey,
@@ -4414,6 +4455,7 @@ export default function AppInboxPage() {
     setLoadingMessages(true);
     refreshSelectedTimeline(session, selectedConversationWaId, "replace")
       .catch((err: { status?: number; message?: string }) => {
+        if (isRequestAbortError(err)) return;
         if (cancelled || timelineOutOfSyncRetryKeyRef.current !== retryKey) return;
         if (err.status === 401) {
           handleUnauthorized();

@@ -24,6 +24,45 @@ export function isHumanTimelineMessageItem(item: { inboxVisibility?: InboxMessag
   return item.inboxVisibility !== "management_only";
 }
 
+export function compareTimelineMessagesAscending(
+  left: Pick<
+    InboxMessageItem,
+    "createdAt" | "direction" | "type" | "internalMessageId" | "messageId" | "metaMessageId" | "requestId"
+  >,
+  right: Pick<
+    InboxMessageItem,
+    "createdAt" | "direction" | "type" | "internalMessageId" | "messageId" | "metaMessageId" | "requestId"
+  >
+) {
+  const leftCreatedAt = Date.parse(left.createdAt);
+  const rightCreatedAt = Date.parse(right.createdAt);
+  const leftTime = Number.isFinite(leftCreatedAt) ? leftCreatedAt : 0;
+  const rightTime = Number.isFinite(rightCreatedAt) ? rightCreatedAt : 0;
+  if (leftTime !== rightTime) return leftTime - rightTime;
+
+  const leftKey = [
+    left.createdAt,
+    left.direction,
+    left.type,
+    left.internalMessageId,
+    left.messageId,
+    left.metaMessageId,
+    left.requestId,
+  ].join(":");
+  const rightKey = [
+    right.createdAt,
+    right.direction,
+    right.type,
+    right.internalMessageId,
+    right.messageId,
+    right.metaMessageId,
+    right.requestId,
+  ].join(":");
+  if (leftKey < rightKey) return -1;
+  if (leftKey > rightKey) return 1;
+  return 0;
+}
+
 export function getRealtimeHumanInboxVisibility(
   event: Pick<Extract<AppRealtimeEvent, { type: "message.created" | "conversation.handoff.updated" }>, "humanInboxVisible">
 ) {

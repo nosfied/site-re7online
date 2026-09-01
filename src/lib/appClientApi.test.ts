@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  fetchAppConversation,
   fetchAppAgentAvailability,
   fetchAppCompletedServiceReport,
   fetchAppSatisfactionReport,
@@ -8,6 +9,7 @@ import {
   heartbeatAppAgentAvailability,
   loadAppSession,
   updateAppAgentAvailability,
+  type AppApiError,
   type AppSession,
 } from "./appClientApi";
 
@@ -167,6 +169,51 @@ test("agent availability client calls session-scoped endpoints", async () => {
   ]);
   assert.equal(calls[1].body, JSON.stringify({ available: true }));
   assert.equal(calls[2].body, JSON.stringify({}));
+});
+
+test("conversation detail request forwards caller abort signal", async () => {
+  const originalFetch = globalThis.fetch;
+  const controller = new AbortController();
+  let fetchSignal: AbortSignal | null = null;
+  Object.assign(globalThis, {
+    fetch: (_url: string | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        fetchSignal = init?.signal ?? null;
+        init?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+        });
+      }),
+  });
+
+  const session: AppSession = {
+    baseUrl: "https://app.example.test",
+    token: "token",
+    user: {
+      id: "agent-a",
+      name: "Agent A",
+      email: "agent@example.test",
+      clientId: "tenant-a",
+      role: "AGENT",
+    },
+    features: {},
+    profile: "business",
+  };
+
+  try {
+    const request = fetchAppConversation(session, "conversation-a", {
+      signal: controller.signal,
+    });
+    assert.ok(fetchSignal);
+    controller.abort();
+    await assert.rejects(request, (error: unknown) => {
+      const typed = error as AppApiError;
+      assert.equal(typed.errorCode, "request_aborted");
+      assert.equal(typed.status, 0);
+      return true;
+    });
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
 });
 
 test("satisfaction report client sends business filters to app endpoint", async () => {
