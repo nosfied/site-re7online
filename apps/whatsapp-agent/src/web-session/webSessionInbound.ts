@@ -12,6 +12,7 @@ import { executeChatbotFlowWithConsent, isChatbotConsentRequired } from "../chat
 import { resolveInitialContactLifecycle } from "../contacts/contactLifecycle.js";
 import { reactivateOperationallyExcludedContactIfNeeded } from "../contacts/contactOperationalExclusion.js";
 import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
+import { shouldResetClosedConversationForBotReentry } from "../conversation/automationRuntime.js";
 import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
 import { activateHumanHandoff, updateOutbound } from "../conversation/conversation.service.js";
 import { buildCrmWhatsappExternalUserHash } from "../crm/crmWhatsappIdentity.js";
@@ -872,6 +873,44 @@ async function ensureWebSessionRuntimeState(params: {
     (Boolean(existingPendingSurvey) ||
       hasSatisfactionLifecycleRuntime({ answers: existingAnswers }) ||
       existingCompletedSurveyDecision?.awaiting === true);
+  const shouldResetClosedConversation =
+    !shouldPreserveClosedSatisfactionLifecycle &&
+    shouldResetClosedConversationForBotReentry({
+      status: existing?.status ?? null,
+      closedAt: existing?.closedAt ? existing.closedAt.toISOString() : null,
+      inboundAt: params.message.timestamp,
+    });
+  const resetClosedState = shouldResetClosedConversation
+    ? clearWebSessionServiceCycleState(
+        clearChatbotRuntime({
+          clientKey: params.message.tenantKey,
+          conversationKey,
+          waId: params.message.sender,
+          waIdCanonical: params.message.senderCanonical,
+          channel: "whatsapp",
+          provider: "web_session",
+          channelAccountId: params.message.channelAccountId,
+          firstSeenAt: params.message.timestamp.toISOString(),
+          lastInboundAt: params.message.timestamp.toISOString(),
+          window: {
+            isOpen: true,
+            expiresAt: new Date(params.message.timestamp.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+          },
+          intent: "unknown",
+          handoff: { status: "none" },
+          flow: existing?.flow as ConversationState["flow"],
+          chatbotNodeId: existing?.chatbotNodeId ?? undefined,
+          chatbotActive: existing?.chatbotActive ?? false,
+          answers: existing?.answers as ConversationState["answers"],
+          mode: existing?.mode === "BOT" ? "BOT" : "HUMAN",
+          assignedUserId: existing?.assignedUserId ?? null,
+          departmentId: existing?.departmentId ?? null,
+          queueId: existing?.queueId ?? null,
+          status: existing?.status ?? null,
+          closedAt: existing?.closedAt ? existing.closedAt.toISOString() : null,
+        })
+      )
+    : null;
   const existingOperationalHumanDestination = Boolean(existing?.departmentId && existing?.queueId);
   const existingInvalidHumanHandoff =
     (existing?.handoffStatus === "ACTIVE" ||
@@ -883,12 +922,13 @@ async function ensureWebSessionRuntimeState(params: {
     !existing?.assignedUserId &&
     !shouldPreserveClosedSatisfactionLifecycle;
   const existingHumanTakeover =
-    ((existing?.handoffStatus === "ACTIVE" || existing?.handoffStatus === "PENDING") &&
+    !shouldResetClosedConversation &&
+    (((existing?.handoffStatus === "ACTIVE" || existing?.handoffStatus === "PENDING") &&
       existingOperationalHumanDestination) ||
-    Boolean(existing?.assignedUserId) ||
-    (existing?.status === "WAITING" && existingOperationalHumanDestination) ||
-    (existing?.status === "IN_PROGRESS" && existingOperationalHumanDestination) ||
-    shouldPreserveClosedSatisfactionLifecycle;
+      Boolean(existing?.assignedUserId) ||
+      (existing?.status === "WAITING" && existingOperationalHumanDestination) ||
+      (existing?.status === "IN_PROGRESS" && existingOperationalHumanDestination) ||
+      shouldPreserveClosedSatisfactionLifecycle);
   const shouldStartBot = params.chatbotEntryPointAvailable && !existingHumanTakeover;
   const runtime = await params.prisma.conversationRuntimeState.upsert({
     where: {
@@ -923,6 +963,17 @@ async function ensureWebSessionRuntimeState(params: {
             assignedTo: null,
             assignedAt: null,
             closedAt: null,
+            ...(shouldResetClosedConversation && resetClosedState
+              ? {
+                  flow: resetClosedState.flow,
+                  flowStep: resetClosedState.flowStep,
+                  chatbotNodeId: resetClosedState.chatbotNodeId ?? null,
+                  chatbotActive: resetClosedState.chatbotActive ?? false,
+                  answers: resetClosedState.answers ?? {},
+                  departmentId: null,
+                  queueId: null,
+                }
+              : {}),
             ...(existingInvalidHumanHandoff
               ? {
                   departmentId: null,
@@ -930,10 +981,30 @@ async function ensureWebSessionRuntimeState(params: {
                 }
               : {}),
           }
-        : {
-            status: existing?.status ?? "WAITING",
-            ...(shouldPreserveClosedSatisfactionLifecycle ? {} : { closedAt: null }),
-          }),
+        : shouldResetClosedConversation
+          ? {
+              mode: "HUMAN",
+              status: "WAITING",
+              handoffStatus: "NONE",
+              handoffRequestedAt: null,
+              handoffActivatedAt: null,
+              handoffReleasedAt: null,
+              assignedUserId: null,
+              assignedTo: null,
+              assignedAt: null,
+              closedAt: null,
+              flow: resetClosedState?.flow,
+              flowStep: resetClosedState?.flowStep,
+              chatbotNodeId: resetClosedState?.chatbotNodeId ?? null,
+              chatbotActive: resetClosedState?.chatbotActive ?? false,
+              answers: resetClosedState?.answers ?? {},
+              departmentId: department?.id ?? null,
+              queueId: null,
+            }
+          : {
+              status: existing?.status ?? "WAITING",
+              ...(shouldPreserveClosedSatisfactionLifecycle ? {} : { closedAt: null }),
+            }),
     },
     create: {
       clientId: params.message.clientId,
@@ -1004,7 +1075,7 @@ async function ensureWebSessionRuntimeState(params: {
       source: "whatsapp.web.inbound",
     });
   }
-  return runtime;
+  return { ...runtime, closedBotReentry: shouldResetClosedConversation };
 }
 
 type WebSessionRuntimeState = Awaited<ReturnType<typeof ensureWebSessionRuntimeState>>;
@@ -2723,7 +2794,9 @@ export async function ingestWebSessionInboundMessage(params: {
             flowId: chatbotFlow.id,
             definition: validatedDefinition.definition,
             state: runtimeConversationState,
-            inboundText: params.message.text,
+            inboundText: runtime.closedBotReentry || !runtimeConversationState.chatbotActive
+              ? null
+              : params.message.text,
             nowIso: params.message.timestamp.toISOString(),
             options: { departmentAvailabilityById },
           });

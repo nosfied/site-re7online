@@ -2351,9 +2351,19 @@ test("generic inbound after CLOSED starts a new service cycle", async () => {
     conversation: conversationFixture(),
     runtimeStates: [
       runtimeFixture({
+        mode: "HUMAN",
         status: "CLOSED",
+        handoffStatus: "ACTIVE",
+        handoffActivatedAt: new Date("2026-08-11T11:55:00.000Z"),
+        assignedUserId: "agent_legacy",
+        assignedTo: "Atendente legado",
+        assignedAt: new Date("2026-08-11T11:55:00.000Z"),
+        departmentId: "department_legacy",
+        queueId: "queue_legacy",
         closedAt: new Date("2026-08-11T12:00:00.000Z"),
         answers: {
+          flowContext: { currentMenu: "legacy_menu" },
+          flowTags: ["legacy"],
           lastClosedServiceCycle: {
             protocol: "CVT-PREVIOUS1234",
             issuedAt: "2026-08-11T11:50:00.000Z",
@@ -2391,7 +2401,194 @@ test("generic inbound after CLOSED starts a new service cycle", async () => {
   assert.equal(protocolStartedEvents().length, 1);
   assert.equal(Boolean(active), true);
   assert.notEqual(active?.protocol, "CVT-PREVIOUS1234");
+  assert.equal(state.runtimeStates[0]?.mode, "BOT");
   assert.equal(state.runtimeStates[0]?.status, null);
+  assert.equal(state.runtimeStates[0]?.closedAt, null);
+  assert.equal(state.runtimeStates[0]?.handoffStatus, "NONE");
+  assert.equal(state.runtimeStates[0]?.assignedUserId, null);
+  assert.equal(state.runtimeStates[0]?.departmentId, null);
+  assert.equal(state.runtimeStates[0]?.queueId, null);
+  assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("legacy_menu"), false);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), true);
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Tudo certo")), false);
+});
+
+for (const scenario of [
+  {
+    name: "residual assignee only",
+    overrides: {
+      assignedUserId: "agent_legacy",
+      assignedTo: "Atendente legado",
+      assignedAt: new Date("2026-08-11T11:55:00.000Z"),
+      departmentId: null,
+      queueId: null,
+    },
+  },
+  {
+    name: "residual department and queue only",
+    overrides: {
+      assignedUserId: null,
+      assignedTo: null,
+      assignedAt: null,
+      departmentId: "department_legacy",
+      queueId: "queue_legacy",
+    },
+  },
+] as const) {
+  test(`closed human reentry ignores ${scenario.name}`, async () => {
+    resetState({
+      conversation: conversationFixture(),
+      runtimeStates: [
+        runtimeFixture({
+          mode: "HUMAN",
+          status: "CLOSED",
+          handoffStatus: "ACTIVE",
+          closedAt: new Date("2026-08-11T12:00:00.000Z"),
+          ...scenario.overrides,
+        }),
+      ],
+      chatbotFlow: {
+        id: "flow_1",
+        definition: {
+          start: "menu",
+          nodes: {
+            menu: {
+              type: "menu",
+              text: "Menu inicial",
+              options: [{ label: "Atendimento", next: "done" }],
+            },
+            done: { type: "text", text: "Tudo certo" },
+          },
+        },
+      },
+    });
+    withConnectedWebSession();
+
+    await withFakeWorker(async () => {
+      await ingestText(
+        "Oi",
+        `MSG_CLOSED_${scenario.name.replace(/ /g, "_").toUpperCase()}`,
+        "2026-08-11T12:10:00.000Z"
+      );
+    });
+
+    assert.equal(state.runtimeStates[0]?.mode, "BOT");
+    assert.equal(state.runtimeStates[0]?.status, null);
+    assert.equal(state.runtimeStates[0]?.closedAt, null);
+    assert.equal(state.runtimeStates[0]?.handoffStatus, "NONE");
+    assert.equal(state.runtimeStates[0]?.assignedUserId, null);
+    assert.equal(state.runtimeStates[0]?.departmentId, null);
+    assert.equal(state.runtimeStates[0]?.queueId, null);
+    assert.equal(Boolean(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers })), true);
+    assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), true);
+  });
+}
+
+test("active human takeover remains human on inbound", async () => {
+  resetState({
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        mode: "HUMAN",
+        status: "IN_PROGRESS",
+        handoffStatus: "ACTIVE",
+        assignedUserId: "agent_1",
+        assignedTo: "Atendente",
+        assignedAt: new Date("2026-08-11T12:00:00.000Z"),
+        departmentId: "department_general",
+        queueId: "queue_general",
+        closedAt: null,
+        answers: {
+          operationalProtocol: {
+            protocol: "CVT-ACTIVE123456",
+            issuedAt: "2026-08-11T12:00:00.000Z",
+            cycleId: "cycle_active",
+            source: "web_session",
+          },
+        },
+      }),
+    ],
+    chatbotFlow: {
+      id: "flow_1",
+      definition: {
+        start: "menu",
+        nodes: {
+          menu: {
+            type: "menu",
+            text: "Menu inicial",
+            options: [{ label: "Atendimento", next: "done" }],
+          },
+          done: { type: "text", text: "Tudo certo" },
+        },
+      },
+    },
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("Oi", "MSG_ACTIVE_HUMAN", "2026-08-11T12:10:00.000Z");
+  });
+
+  assert.equal(protocolStartedEvents().length, 0);
+  assert.equal(state.runtimeStates[0]?.mode, "HUMAN");
+  assert.equal(state.runtimeStates[0]?.status, "IN_PROGRESS");
+  assert.equal(state.runtimeStates[0]?.handoffStatus, "ACTIVE");
+  assert.equal(state.runtimeStates[0]?.assignedUserId, "agent_1");
+  assert.equal(state.runtimeStates[0]?.departmentId, "department_general");
+  assert.equal(state.runtimeStates[0]?.queueId, "queue_general");
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), false);
+});
+
+test("waiting human takeover remains in queue on inbound", async () => {
+  resetState({
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        mode: "HUMAN",
+        status: "WAITING",
+        handoffStatus: "ACTIVE",
+        assignedUserId: null,
+        departmentId: "department_general",
+        queueId: "queue_general",
+        closedAt: null,
+        answers: {
+          operationalProtocol: {
+            protocol: "CVT-WAITING12345",
+            issuedAt: "2026-08-11T12:00:00.000Z",
+            cycleId: "cycle_waiting",
+            source: "web_session",
+          },
+        },
+      }),
+    ],
+    chatbotFlow: {
+      id: "flow_1",
+      definition: {
+        start: "menu",
+        nodes: {
+          menu: {
+            type: "menu",
+            text: "Menu inicial",
+            options: [{ label: "Atendimento", next: "done" }],
+          },
+          done: { type: "text", text: "Tudo certo" },
+        },
+      },
+    },
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("Oi", "MSG_WAITING_HUMAN", "2026-08-11T12:10:00.000Z");
+  });
+
+  assert.equal(protocolStartedEvents().length, 0);
+  assert.equal(state.runtimeStates[0]?.mode, "HUMAN");
+  assert.equal(state.runtimeStates[0]?.status, "WAITING");
+  assert.equal(state.runtimeStates[0]?.handoffStatus, "ACTIVE");
+  assert.equal(state.runtimeStates[0]?.departmentId, "department_general");
+  assert.equal(state.runtimeStates[0]?.queueId, "queue_general");
+  assert.equal(state.outboundMessages.some((message) => String(message.bodyText).includes("Menu inicial")), false);
 });
 
 test("expired CSAT asks for a new-service decision and option 1 returns to bot mode", async () => {

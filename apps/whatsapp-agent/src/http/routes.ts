@@ -13832,14 +13832,23 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
       const closingAssignedUserId = conversation.assignedUserId ?? null;
+      const closingDepartmentId = conversation.departmentId ?? defaults.department?.id ?? null;
+      const closingQueueId = conversation.queueId ?? defaults.queue?.id ?? null;
       let nextState: ConversationState = {
         ...conversation,
         mode:
           nextStatus === ConversationOperationalStatus.CLOSED
-            ? (conversation.mode ?? "HUMAN")
+            ? "BOT"
             : "HUMAN" as const,
-        departmentId: conversation.departmentId ?? defaults.department?.id ?? null,
-        queueId: conversation.queueId ?? defaults.queue?.id ?? null,
+        handoff:
+          nextStatus === ConversationOperationalStatus.CLOSED
+            ? { status: "none" as const, releasedAt: new Date().toISOString() }
+            : conversation.handoff,
+        assignedUserId: nextStatus === ConversationOperationalStatus.CLOSED ? null : conversation.assignedUserId ?? null,
+        assignedTo: nextStatus === ConversationOperationalStatus.CLOSED ? null : conversation.assignedTo ?? null,
+        assignedAt: nextStatus === ConversationOperationalStatus.CLOSED ? null : conversation.assignedAt ?? null,
+        departmentId: nextStatus === ConversationOperationalStatus.CLOSED ? null : closingDepartmentId,
+        queueId: nextStatus === ConversationOperationalStatus.CLOSED ? null : closingQueueId,
         status: nextStatus,
         closedAt:
           nextStatus === ConversationOperationalStatus.CLOSED
@@ -13895,8 +13904,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             cycle: closedCycle.cycle,
             completedService: {
               assignedUserId: closingAssignedUserId,
-              departmentId: nextState.departmentId ?? null,
-              queueId: nextState.queueId ?? null,
+              departmentId: closingDepartmentId,
+              queueId: closingQueueId,
               closedByUserId: clientAuth.userId,
             },
           });
@@ -19200,14 +19209,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
         const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
-        let nextState = {
+        const closingAssignedUserId = conversation.assignedUserId ?? null;
+        const closingDepartmentId = conversation.departmentId ?? defaults.department?.id ?? null;
+        const closingQueueId = conversation.queueId ?? defaults.queue?.id ?? null;
+        let nextState: ConversationState = {
           ...conversation,
           mode:
             nextStatus === ConversationOperationalStatus.CLOSED
-              ? (conversation.mode ?? "HUMAN")
+              ? "BOT"
               : "HUMAN" as const,
-          departmentId: conversation.departmentId ?? defaults.department?.id ?? null,
-          queueId: conversation.queueId ?? defaults.queue?.id ?? null,
+          handoff:
+            nextStatus === ConversationOperationalStatus.CLOSED
+              ? { status: "none" as const, releasedAt: new Date().toISOString() }
+              : conversation.handoff,
+          assignedUserId: nextStatus === ConversationOperationalStatus.CLOSED ? null : conversation.assignedUserId ?? null,
+          assignedTo: nextStatus === ConversationOperationalStatus.CLOSED ? null : conversation.assignedTo ?? null,
+          assignedAt: nextStatus === ConversationOperationalStatus.CLOSED ? null : conversation.assignedAt ?? null,
+          departmentId: nextStatus === ConversationOperationalStatus.CLOSED ? null : closingDepartmentId,
+          queueId: nextStatus === ConversationOperationalStatus.CLOSED ? null : closingQueueId,
           status: nextStatus,
           closedAt:
             nextStatus === ConversationOperationalStatus.CLOSED
@@ -19233,9 +19252,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               action: "closed",
               cycle: closedCycle.cycle,
               completedService: {
-                assignedUserId: nextState.assignedUserId ?? null,
-                departmentId: nextState.departmentId ?? null,
-                queueId: nextState.queueId ?? null,
+                assignedUserId: closingAssignedUserId,
+                departmentId: closingDepartmentId,
+                queueId: closingQueueId,
                 closedByUserId: resolveAssignedTo(adminAuth),
               },
             });
@@ -19248,7 +19267,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             clientId: client.id,
             waId: nextState.waId,
             closedAt: new Date(nextState.closedAt),
-            assignedUserId: nextState.assignedUserId ?? null,
+            assignedUserId: closingAssignedUserId,
             requestId,
           });
         }
