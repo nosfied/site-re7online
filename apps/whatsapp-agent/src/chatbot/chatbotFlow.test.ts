@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  CHATBOT_INVALID_REPLY_REPEAT_LIMIT,
   buildHandoffSummary,
   buildSuggestedReply,
   clearChatbotRuntime,
@@ -52,6 +53,14 @@ function makeCurrentChatbotState(
       },
     },
   });
+}
+
+function getInvalidReplyRepeatCount(state: ConversationState) {
+  const runtime = state.answers?.chatbotRuntime;
+  if (!runtime || typeof runtime !== "object" || Array.isArray(runtime)) return 0;
+  const repeat = runtime.invalidReplyRepeat;
+  if (!repeat || typeof repeat !== "object" || Array.isArray(repeat)) return 0;
+  return typeof repeat.repeatCount === "number" ? repeat.repeatCount : 0;
 }
 
 test("validateChatbotFlowDefinition accepts valid flow", () => {
@@ -433,6 +442,116 @@ test("executeChatbotFlowWithConsent repeats consent prompt for invalid answer wh
 
   assert.equal(accepted.handled, true);
   assert.equal(accepted.managementInteraction?.inboundKind, "consent_positive");
+});
+
+test("executeChatbotFlowWithConsent suppresses repeated invalid consent replies and still accepts later consent", async () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "consent",
+    nodes: {
+      consent: {
+        type: "consent",
+        purpose: "attendance",
+        textVersion: "v1",
+        message: "Digite 1 para aceitar ou 2 para encerrar.",
+        acceptOption: "1",
+        declineOption: "2",
+        invalidText: "Opção inválida.",
+        onAccepted: "menu",
+        onDeclined: "declined",
+      },
+      menu: {
+        type: "menu",
+        text: "Menu",
+        options: [{ label: "1 - Atendimento", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Tudo certo.",
+      },
+      declined: {
+        type: "text",
+        text: "Atendimento encerrado.",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const prisma = {
+    contact: { findFirst: async () => null },
+    lead: { findFirst: async () => null },
+    conversation: { findFirst: async () => null },
+    contactConsent: {
+      findFirst: async () => null,
+      updateMany: async () => ({ count: 0 }),
+      create: async () => ({ id: "consent_1", textHash: "hash" }),
+    },
+    event: { create: async () => ({ id: "event_1" }) },
+  } as any;
+
+  let state = makeCurrentChatbotState(validated.definition, {
+    flow: "chatbot:flow_consent_guard",
+    chatbotActive: true,
+    chatbotNodeId: "consent",
+  });
+
+  for (let index = 1; index <= CHATBOT_INVALID_REPLY_REPEAT_LIMIT; index += 1) {
+    const result = await executeChatbotFlowWithConsent({
+      prisma,
+      clientId: "client_1",
+      waId: "5511999999999",
+      sourceChannel: "whatsapp",
+      sourceProvider: "web_session",
+      source: "test",
+      requestId: `request_invalid_${index}`,
+      flowId: "flow_consent_guard",
+      definition: validated.definition,
+      state,
+      inboundText: "talvez",
+      nowIso: `2026-04-17T10:04:${String(index).padStart(2, "0")}.000Z`,
+    });
+    assert.match(result.replyText ?? "", /Opção inválida/);
+    assert.equal(getInvalidReplyRepeatCount(result.state), index);
+    state = result.state;
+  }
+
+  const suppressed = await executeChatbotFlowWithConsent({
+    prisma,
+    clientId: "client_1",
+    waId: "5511999999999",
+    sourceChannel: "whatsapp",
+    sourceProvider: "web_session",
+    source: "test",
+    requestId: "request_suppressed",
+    flowId: "flow_consent_guard",
+    definition: validated.definition,
+    state,
+    inboundText: "talvez",
+    nowIso: "2026-04-17T10:04:11.000Z",
+  });
+  assert.equal(suppressed.replyText, undefined);
+  assert.equal(
+    suppressed.events?.some((event) => event.event === "chatbot.invalid_reply_repeat_suppressed"),
+    true
+  );
+
+  const accepted = await executeChatbotFlowWithConsent({
+    prisma,
+    clientId: "client_1",
+    waId: "5511999999999",
+    sourceChannel: "whatsapp",
+    sourceProvider: "web_session",
+    source: "test",
+    requestId: "request_accepted_after_suppression",
+    flowId: "flow_consent_guard",
+    definition: validated.definition,
+    state: suppressed.state,
+    inboundText: "1",
+    nowIso: "2026-04-17T10:04:12.000Z",
+  });
+  assert.equal(accepted.state.chatbotNodeId, "menu");
+  assert.match(accepted.replyText ?? "", /Menu/);
+  assert.equal(getInvalidReplyRepeatCount(accepted.state), 0);
 });
 
 test("executeChatbotFlowWithConsent prompts initial start consent without validating first inbound", async () => {
@@ -1624,6 +1743,160 @@ test("executeChatbotFlow repeats menu on invalid answer", () => {
   assert.equal(result.state.chatbotActive, true);
   assert.equal(result.state.chatbotNodeId, "menu");
   assert.match(result.replyText ?? "", /Escolha/);
+});
+
+test("executeChatbotFlow suppresses repeated invalid menu replies after threshold and accepts valid input", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "menu",
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Escolha",
+        fallbackText: "Opção inválida.",
+        options: [{ label: "1 - Atendimento", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Tudo certo",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  let state = makeCurrentChatbotState(validated.definition, {
+    flow: "chatbot:flow_loop_guard",
+    chatbotActive: true,
+    chatbotNodeId: "menu",
+  });
+  let result: ReturnType<typeof executeChatbotFlow> | null = null;
+  for (let index = 1; index <= CHATBOT_INVALID_REPLY_REPEAT_LIMIT; index += 1) {
+    result = executeChatbotFlow({
+      flowId: "flow_loop_guard",
+      definition: validated.definition,
+      state,
+      inboundText: "invalid",
+      nowIso: `2026-04-17T10:00:${String(index).padStart(2, "0")}.000Z`,
+    });
+    assert.equal(result.handled, true);
+    assert.match(result.replyText ?? "", /Opção inválida/);
+    assert.equal(getInvalidReplyRepeatCount(result.state), index);
+    state = result.state;
+  }
+
+  const suppressed = executeChatbotFlow({
+    flowId: "flow_loop_guard",
+    definition: validated.definition,
+    state,
+    inboundText: "invalid",
+    nowIso: "2026-04-17T10:00:11.000Z",
+  });
+  assert.equal(suppressed.handled, true);
+  assert.equal(suppressed.replyText, undefined);
+  assert.equal(getInvalidReplyRepeatCount(suppressed.state), CHATBOT_INVALID_REPLY_REPEAT_LIMIT + 1);
+  assert.equal(
+    suppressed.events?.some((event) => event.event === "chatbot.invalid_reply_repeat_suppressed"),
+    true
+  );
+
+  const stillSuppressed = executeChatbotFlow({
+    flowId: "flow_loop_guard",
+    definition: validated.definition,
+    state: suppressed.state,
+    inboundText: "invalid",
+    nowIso: "2026-04-17T10:00:12.000Z",
+  });
+  assert.equal(stillSuppressed.replyText, undefined);
+  assert.equal(getInvalidReplyRepeatCount(stillSuppressed.state), CHATBOT_INVALID_REPLY_REPEAT_LIMIT + 2);
+
+  const valid = executeChatbotFlow({
+    flowId: "flow_loop_guard",
+    definition: validated.definition,
+    state: stillSuppressed.state,
+    inboundText: "1",
+    nowIso: "2026-04-17T10:00:13.000Z",
+  });
+  assert.equal(valid.handled, true);
+  assert.match(valid.replyText ?? "", /Tudo certo/);
+  assert.equal(valid.state.chatbotActive, false);
+  assert.equal(getInvalidReplyRepeatCount(valid.state), 0);
+});
+
+test("executeChatbotFlow keeps invalid repeat counters scoped to node and conversation state", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "menu_a",
+    nodes: {
+      menu_a: {
+        type: "menu",
+        text: "Menu A",
+        fallbackText: "Inválido A.",
+        options: [{ label: "1 - Ir para B", next: "menu_b" }],
+      },
+      menu_b: {
+        type: "menu",
+        text: "Menu B",
+        fallbackText: "Inválido B.",
+        options: [{ label: "1 - Finalizar", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Tudo certo",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  let stateA = makeCurrentChatbotState(validated.definition, {
+    flow: "chatbot:flow_node_scope",
+    chatbotActive: true,
+    chatbotNodeId: "menu_a",
+  });
+  for (let index = 1; index <= CHATBOT_INVALID_REPLY_REPEAT_LIMIT + 1; index += 1) {
+    const result = executeChatbotFlow({
+      flowId: "flow_node_scope",
+      definition: validated.definition,
+      state: stateA,
+      inboundText: "x",
+      nowIso: `2026-04-17T10:01:${String(index).padStart(2, "0")}.000Z`,
+    });
+    stateA = result.state;
+  }
+  assert.equal(getInvalidReplyRepeatCount(stateA), CHATBOT_INVALID_REPLY_REPEAT_LIMIT + 1);
+
+  const isolatedTenantConversation = executeChatbotFlow({
+    flowId: "flow_node_scope",
+    definition: validated.definition,
+    state: makeCurrentChatbotState(validated.definition, {
+      flow: "chatbot:flow_node_scope",
+      chatbotActive: true,
+      chatbotNodeId: "menu_a",
+    }),
+    inboundText: "x",
+    nowIso: "2026-04-17T10:02:01.000Z",
+  });
+  assert.match(isolatedTenantConversation.replyText ?? "", /Inválido A/);
+  assert.equal(getInvalidReplyRepeatCount(isolatedTenantConversation.state), 1);
+
+  const progressed = executeChatbotFlow({
+    flowId: "flow_node_scope",
+    definition: validated.definition,
+    state: stateA,
+    inboundText: "1",
+    nowIso: "2026-04-17T10:03:01.000Z",
+  });
+  assert.equal(progressed.state.chatbotNodeId, "menu_b");
+  assert.equal(getInvalidReplyRepeatCount(progressed.state), 0);
+
+  const invalidOnNextNode = executeChatbotFlow({
+    flowId: "flow_node_scope",
+    definition: validated.definition,
+    state: progressed.state,
+    inboundText: "x",
+    nowIso: "2026-04-17T10:03:02.000Z",
+  });
+  assert.match(invalidOnNextNode.replyText ?? "", /Inválido B/);
+  assert.equal(getInvalidReplyRepeatCount(invalidOnNextNode.state), 1);
 });
 
 test("executeChatbotFlow can answer text and remain on a menu without redisplay", () => {

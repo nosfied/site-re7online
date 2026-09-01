@@ -132,6 +132,7 @@ export type ChatbotPendingHandoff = {
 
 const CHATBOT_MAX_STEPS_PER_EXECUTION = 12;
 const CHATBOT_MAX_AUTO_ADVANCES_PER_EXECUTION = 5;
+export const CHATBOT_INVALID_REPLY_REPEAT_LIMIT = 10;
 const DEFAULT_HANDOFF_FEEDBACK_TEXT = "Vou te transferir para um atendente humano.";
 
 export type ChatbotExecutionEvent =
@@ -182,6 +183,12 @@ export type ChatbotExecutionEvent =
       fromNodeId: string;
       toNodeId: string;
       reason: "legacy_revision_missing" | "node_missing" | "structure_changed";
+    }
+  | {
+      event: "chatbot.invalid_reply_repeat_suppressed";
+      flowId: string;
+      nodeId: string;
+      repeatCount: number;
     };
 
 export function getInitialChatbotAwaitingNodeId(definition: ChatbotFlowDefinition) {
@@ -948,6 +955,102 @@ function withChatbotLastInteractionAt(state: ConversationState, nowIso: string):
   };
 }
 
+function getChatbotRuntimeObject(state: ConversationState) {
+  return isRecord(state.answers?.chatbotRuntime) ? state.answers?.chatbotRuntime : {};
+}
+
+function getInvalidReplyRepeatRuntime(state: ConversationState) {
+  const runtime = getChatbotRuntimeObject(state);
+  const repeat = isRecord(runtime.invalidReplyRepeat) ? runtime.invalidReplyRepeat : null;
+  if (!repeat) return null;
+  const flowId = getNonEmptyString(repeat.flowId);
+  const nodeId = getNonEmptyString(repeat.nodeId);
+  const outputFingerprint = getNonEmptyString(repeat.outputFingerprint);
+  const repeatCount = typeof repeat.repeatCount === "number" && Number.isFinite(repeat.repeatCount)
+    ? Math.max(0, Math.floor(repeat.repeatCount))
+    : 0;
+  if (!flowId || !nodeId || !outputFingerprint) return null;
+  return { flowId, nodeId, outputFingerprint, repeatCount };
+}
+
+function withInvalidReplyRepeatRuntime(params: {
+  state: ConversationState;
+  flowId: string;
+  nodeId: string;
+  outputFingerprint: string;
+  repeatCount: number;
+}): ConversationState {
+  const runtime = getChatbotRuntimeObject(params.state);
+  return {
+    ...params.state,
+    answers: {
+      ...(params.state.answers ?? {}),
+      chatbotRuntime: {
+        ...runtime,
+        invalidReplyRepeat: {
+          flowId: params.flowId,
+          nodeId: params.nodeId,
+          outputFingerprint: params.outputFingerprint,
+          repeatCount: params.repeatCount,
+        },
+      },
+    },
+  };
+}
+
+export function clearChatbotInvalidReplyRepeat(state: ConversationState): ConversationState {
+  const runtime = getChatbotRuntimeObject(state);
+  if (!isRecord(runtime.invalidReplyRepeat)) return state;
+  const nextRuntime = { ...runtime };
+  delete nextRuntime.invalidReplyRepeat;
+  return {
+    ...state,
+    answers: {
+      ...(state.answers ?? {}),
+      chatbotRuntime: nextRuntime,
+    },
+  };
+}
+
+export function applyChatbotInvalidReplyRepeatGuard(params: {
+  result: ChatbotExecutionResult;
+  flowId: string;
+  nodeId: string;
+  outputFingerprint: string;
+}): ChatbotExecutionResult {
+  if (!params.result.replyText?.trim()) return params.result;
+  const previous = getInvalidReplyRepeatRuntime(params.result.state);
+  const isSameRepeat =
+    previous?.flowId === params.flowId &&
+    previous.nodeId === params.nodeId &&
+    previous.outputFingerprint === params.outputFingerprint;
+  const repeatCount = isSameRepeat ? previous.repeatCount + 1 : 1;
+  const state = withInvalidReplyRepeatRuntime({
+    state: params.result.state,
+    flowId: params.flowId,
+    nodeId: params.nodeId,
+    outputFingerprint: params.outputFingerprint,
+    repeatCount,
+  });
+  if (repeatCount <= CHATBOT_INVALID_REPLY_REPEAT_LIMIT) {
+    return { ...params.result, state };
+  }
+  return {
+    ...params.result,
+    state,
+    replyText: undefined,
+    events: [
+      ...(params.result.events ?? []),
+      {
+        event: "chatbot.invalid_reply_repeat_suppressed",
+        flowId: params.flowId,
+        nodeId: params.nodeId,
+        repeatCount,
+      },
+    ],
+  };
+}
+
 function getChatbotLastInteractionAt(state: ConversationState) {
   const value = isRecord(state.answers?.chatbotRuntime)
     ? state.answers?.chatbotRuntime.lastInteractionAt
@@ -1663,7 +1766,7 @@ export function executeChatbotFlow(params: {
   if (params.startNodeId && params.definition.nodes[params.startNodeId]) {
     return markChatbotResultInteraction(applyChatbotFlowStructureHash(executeNodeChain({
       definition: params.definition,
-      state: params.state,
+      state: clearChatbotInvalidReplyRepeat(params.state),
       flowId: params.flowId,
       nodeId: params.startNodeId,
       nowIso: params.nowIso,
@@ -1674,7 +1777,7 @@ export function executeChatbotFlow(params: {
   if (!params.state.chatbotActive || !params.state.chatbotNodeId) {
     return markChatbotResultInteraction(applyChatbotFlowStructureHash(executeNodeChain({
       definition: params.definition,
-      state: params.state,
+      state: clearChatbotInvalidReplyRepeat(params.state),
       flowId: params.flowId,
       nodeId: params.definition.start,
       nowIso: params.nowIso,
@@ -1690,7 +1793,7 @@ export function executeChatbotFlow(params: {
   if (coherenceRestart) {
     const result = executeNodeChain({
       definition: params.definition,
-      state: withChatbotRuntime(params.state, params.flowId, null, false),
+      state: withChatbotRuntime(clearChatbotInvalidReplyRepeat(params.state), params.flowId, null, false),
       flowId: params.flowId,
       nodeId: params.definition.start,
       nowIso: params.nowIso,
@@ -1719,7 +1822,7 @@ export function executeChatbotFlow(params: {
   if (inactivityReset) {
     const result = executeNodeChain({
       definition: params.definition,
-      state: withChatbotRuntime(params.state, params.flowId, null, false),
+      state: withChatbotRuntime(clearChatbotInvalidReplyRepeat(params.state), params.flowId, null, false),
       flowId: params.flowId,
       nodeId: params.definition.start,
       nowIso: params.nowIso,
@@ -1754,18 +1857,23 @@ export function executeChatbotFlow(params: {
     const parentNodeId = findParentMenuNodeId(params.definition, params.state.chatbotNodeId);
     const currentMenuNode = params.definition.nodes[params.state.chatbotNodeId];
     if (!parentNodeId && currentMenuNode?.type === "menu") {
-      return markChatbotResultInteraction({
-        handled: true,
-        state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
-        replyText: `${currentMenuNode.fallbackText ?? "Opção inválida."}\n\n${renderMenu(params.definition, currentMenuNode, params.state, params.options)}`,
-        events: [],
-      }, params.nowIso);
+      return markChatbotResultInteraction(applyChatbotInvalidReplyRepeatGuard({
+        result: {
+          handled: true,
+          state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
+          replyText: `${currentMenuNode.fallbackText ?? "Opção inválida."}\n\n${renderMenu(params.definition, currentMenuNode, params.state, params.options)}`,
+          events: [],
+        },
+        flowId: params.flowId,
+        nodeId: params.state.chatbotNodeId,
+        outputFingerprint: `menu:${params.flowId}:${params.state.chatbotNodeId}:root_back_invalid`,
+      }), params.nowIso);
     }
     const initialNodeId = getInitialChatbotAwaitingNodeId(params.definition);
     const targetNodeId = parentNodeId ?? initialNodeId;
     const result = executeNodeChain({
       definition: params.definition,
-      state: params.state,
+      state: clearChatbotInvalidReplyRepeat(params.state),
       flowId: params.flowId,
       nodeId: targetNodeId,
       nowIso: params.nowIso,
@@ -1791,17 +1899,20 @@ export function executeChatbotFlow(params: {
     if (currentNode.type === "capture") {
       const captured = validateCapturedInput(currentNode, params.inboundText);
       if (!captured.ok) {
-        return {
-          ...markChatbotResultInteraction({
-          handled: true,
-          state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
-          replyText: renderChatbotTemplateText(currentNode.errorText ?? currentNode.text, params.state),
-          }, params.nowIso),
-        };
+        return markChatbotResultInteraction(applyChatbotInvalidReplyRepeatGuard({
+          result: {
+            handled: true,
+            state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
+            replyText: renderChatbotTemplateText(currentNode.errorText ?? currentNode.text, params.state),
+          },
+          flowId: params.flowId,
+          nodeId: params.state.chatbotNodeId,
+          outputFingerprint: `capture:${params.flowId}:${params.state.chatbotNodeId}:${currentNode.field}:${currentNode.validation ?? "none"}`,
+        }), params.nowIso);
       }
       const stateWithCapturedValue = mergeFlowMetadata({
         state: {
-          ...params.state,
+          ...clearChatbotInvalidReplyRepeat(params.state),
           answers: {
             ...(params.state.answers ?? {}),
             flowContext: {
@@ -1839,7 +1950,7 @@ export function executeChatbotFlow(params: {
     }
     return markChatbotResultInteraction(executeNodeChain({
       definition: params.definition,
-      state: params.state,
+      state: clearChatbotInvalidReplyRepeat(params.state),
       flowId: params.flowId,
       nodeId: params.state.chatbotNodeId,
       nowIso: params.nowIso,
@@ -1852,7 +1963,7 @@ export function executeChatbotFlow(params: {
     const selectedOption = visibleOptions[0]!;
     const events: ChatbotExecutionEvent[] = [];
     const stateWithOptionContext = mergeFlowMetadata({
-      state: params.state,
+      state: clearChatbotInvalidReplyRepeat(params.state),
       metadata: selectedOption,
       flowId: params.flowId,
       nodeId: params.state.chatbotNodeId,
@@ -1938,19 +2049,24 @@ export function executeChatbotFlow(params: {
     const fallbackText = currentNode.fallbackText
       ? renderChatbotTemplateText(String(currentNode.fallbackText), params.state)
       : null;
-    return markChatbotResultInteraction({
-      handled: true,
-      state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
-      replyText: fallbackText
-        ? `${fallbackText}\n\n${renderMenu(params.definition, currentNode, params.state, params.options)}`
-        : renderMenu(params.definition, currentNode, params.state, params.options),
-    }, params.nowIso);
+    return markChatbotResultInteraction(applyChatbotInvalidReplyRepeatGuard({
+      result: {
+        handled: true,
+        state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
+        replyText: fallbackText
+          ? `${fallbackText}\n\n${renderMenu(params.definition, currentNode, params.state, params.options)}`
+          : renderMenu(params.definition, currentNode, params.state, params.options),
+      },
+      flowId: params.flowId,
+      nodeId: params.state.chatbotNodeId,
+      outputFingerprint: `menu:${params.flowId}:${params.state.chatbotNodeId}:invalid_selection`,
+    }), params.nowIso);
   }
 
   const selectedOption = visibleOptions[selectedOptionIndex]!;
   const events: ChatbotExecutionEvent[] = [];
   const stateWithOptionContext = mergeFlowMetadata({
-    state: params.state,
+    state: clearChatbotInvalidReplyRepeat(params.state),
     metadata: selectedOption,
     flowId: params.flowId,
     nodeId: params.state.chatbotNodeId,

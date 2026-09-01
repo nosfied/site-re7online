@@ -158,6 +158,12 @@ export type QuoteSiteAnswers = {
     acceptedConsents?: Record<string, boolean>;
     flowStructureHash?: string | null;
     flowStartNodeId?: string | null;
+    invalidReplyRepeat?: {
+      flowId?: string | null;
+      nodeId?: string | null;
+      outputFingerprint?: string | null;
+      repeatCount?: number;
+    };
   };
   protocolContinuation?: {
     protocol: string;

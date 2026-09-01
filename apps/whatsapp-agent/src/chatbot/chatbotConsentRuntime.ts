@@ -3,6 +3,7 @@ import {
   ChatbotExecutionResult,
   ChatbotFlowDefinition,
   ChatbotConsentNode,
+  applyChatbotInvalidReplyRepeatGuard,
   type ChatbotExecutionOptions,
   clearChatbotRuntime,
   executeChatbotFlow,
@@ -220,15 +221,20 @@ export async function executeChatbotFlowWithConsent(params: {
       const replyText = currentConsent.node.invalidText
         ? `${renderChatbotTemplateText(currentConsent.node.invalidText, hydratedState)}\n\n${renderChatbotTemplateText(currentConsent.node.message, hydratedState)}`
         : renderChatbotTemplateText(currentConsent.node.message, hydratedState);
-      return {
-        handled: true,
-        state: hydratedState,
-        replyText,
-        managementInteraction: {
-          inboundKind: "consent_invalid",
-          outboundKind: "consent_prompt",
+      return applyChatbotInvalidReplyRepeatGuard({
+        result: {
+          handled: true,
+          state: hydratedState,
+          replyText,
+          managementInteraction: {
+            inboundKind: "consent_invalid",
+            outboundKind: "consent_prompt",
+          },
         },
-      };
+        flowId: params.flowId,
+        nodeId: currentConsent.nodeId,
+        outputFingerprint: `consent:${params.flowId}:${currentConsent.nodeId}:${currentConsent.node.purpose}:${currentConsent.node.textVersion}`,
+      });
     }
   }
 
