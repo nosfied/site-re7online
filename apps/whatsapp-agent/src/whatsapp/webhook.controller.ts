@@ -1116,6 +1116,97 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     });
     return conversation;
   };
+  const dateToIso = (value?: Date | null) => value?.toISOString();
+  const normalizeRuntimeHandoffStatus = (status?: string | null) => {
+    if (status === "PENDING") return "pending";
+    if (status === "ACTIVE") return "active";
+    return "none";
+  };
+  const loadPersistedRuntimeForInbound = async (
+    waId: string,
+    timestamp: string
+  ): Promise<ConversationState | null> => {
+    if (!tenantClientId) return null;
+    const runtime = await prisma.conversationRuntimeState.findUnique({
+      where: {
+        clientId_waId: {
+          clientId: tenantClientId,
+          waId,
+        },
+      },
+      select: {
+        firstSeenAt: true,
+        windowIsOpen: true,
+        windowExpiresAt: true,
+        lastInboundAt: true,
+        lastOutboundAt: true,
+        lastInboundMessageId: true,
+        lastOutboundMessageId: true,
+        intent: true,
+        handoffStatus: true,
+        handoffRequestedAt: true,
+        handoffActivatedAt: true,
+        handoffReleasedAt: true,
+        flow: true,
+        flowStep: true,
+        chatbotNodeId: true,
+        chatbotActive: true,
+        answers: true,
+        mode: true,
+        assignedUserId: true,
+        assignedTo: true,
+        assignedAt: true,
+        departmentId: true,
+        queueId: true,
+        status: true,
+        closedAt: true,
+      },
+    });
+    if (!runtime) return null;
+    const inboundIso = parseWebhookTimestampToDate(timestamp).toISOString();
+    const answers =
+      runtime.answers && typeof runtime.answers === "object" && !Array.isArray(runtime.answers)
+        ? runtime.answers
+        : {};
+    return {
+      clientKey: tenantClientKey,
+      conversationKey: makeConversationKey(tenantClientKey, waId),
+      waId,
+      waIdCanonical: canonicalizeBrazilWaId(waId),
+      firstSeenAt: dateToIso(runtime.firstSeenAt) ?? inboundIso,
+      lastInboundAt: dateToIso(runtime.lastInboundAt) ?? inboundIso,
+      lastOutboundAt: dateToIso(runtime.lastOutboundAt),
+      lastInboundMessageId: runtime.lastInboundMessageId ?? undefined,
+      lastOutboundMessageId: runtime.lastOutboundMessageId ?? undefined,
+      window: {
+        isOpen: runtime.windowIsOpen,
+        expiresAt: dateToIso(runtime.windowExpiresAt),
+      },
+      intent:
+        runtime.intent === "pricing" || runtime.intent === "support" || runtime.intent === "handoff"
+          ? runtime.intent
+          : "unknown",
+      handoff: {
+        status: normalizeRuntimeHandoffStatus(runtime.handoffStatus),
+        requestedAt: dateToIso(runtime.handoffRequestedAt),
+        activatedAt: dateToIso(runtime.handoffActivatedAt),
+        releasedAt: dateToIso(runtime.handoffReleasedAt),
+      },
+      flow: extractChatbotFlowId(runtime.flow) ? (runtime.flow as ConversationState["flow"]) : undefined,
+      flowStep: runtime.flowStep ?? undefined,
+      chatbotNodeId: runtime.chatbotNodeId ?? undefined,
+      chatbotActive: runtime.chatbotActive,
+      answers: answers as ConversationState["answers"],
+      mode: runtime.mode === "BOT" ? "BOT" : "HUMAN",
+      assignedUserId: runtime.assignedUserId ?? null,
+      assignedTo: runtime.assignedTo ?? null,
+      assignedAt: dateToIso(runtime.assignedAt) ?? null,
+      departmentId: runtime.departmentId ?? null,
+      queueId: runtime.queueId ?? null,
+      status: runtime.status ?? null,
+      closedAt: dateToIso(runtime.closedAt) ?? null,
+    };
+  };
   const resetConversationForBotReentry = (
     state: ConversationState,
     timestamp: string
@@ -1222,6 +1313,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         where: {
           id: activeFlowId,
           clientId: tenantClientId,
+          isActive: true,
         },
         select: {
           id: true,
@@ -3313,9 +3405,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     const existingRuntimeForInbound = await storage.getConversation(normalizedFrom, tenantClientKey);
+    const persistedRuntimeForInbound =
+      existingRuntimeForInbound ? null : await loadPersistedRuntimeForInbound(normalizedFrom, message.timestamp);
     const directConversationForInbound = await loadDirectConversationForInbound(normalizedFrom);
     let currentConversation =
       existingRuntimeForInbound ??
+      persistedRuntimeForInbound ??
       (await getOrCreateConversation(
         storage,
         tenantClientKey,
@@ -4695,9 +4790,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const hasConfigurableChatbotFlow = Boolean(
       await loadChatbotFlowForConversation(updatedConversation, message.text)
     );
+    const hasUnavailableActiveChatbotRuntime = Boolean(
+      updatedConversation.chatbotActive &&
+        extractChatbotFlowId(updatedConversation.flow) &&
+        !hasConfigurableChatbotFlow
+    );
     const inboundIntent = detectIntent(message.text);
     const shouldRunLegacyHandoff = shouldRunLegacyHandoffAutomation({
-      disableLegacyFlows: automationFlags.disableLegacyFlows,
+      disableLegacyFlows: automationFlags.disableLegacyFlows || hasUnavailableActiveChatbotRuntime,
       supervisedAiHandoffEnabled,
       wasPending,
       hasConfigurableChatbotFlow,
@@ -4754,7 +4854,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         waId: maskNumber(normalizedFrom),
         reason: automationFlags.disableLegacyFlows
           ? "legacy_flows_disabled"
-          : "chatbot_flow_available",
+          : hasUnavailableActiveChatbotRuntime
+            ? "chatbot_flow_unavailable"
+            : "chatbot_flow_available",
         route: meta?.route,
         method: meta?.method,
         requestId: meta?.requestId,
@@ -5290,6 +5392,25 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             });
           }
         }
+      } else if (updatedConversation.chatbotActive && extractChatbotFlowId(updatedConversation.flow)) {
+        const previousFlowId = extractChatbotFlowId(updatedConversation.flow);
+        updatedConversation = clearChatbotRuntime(updatedConversation);
+        chatbotFlowResult = {
+          handled: true,
+          state: updatedConversation,
+          replyText: undefined,
+          flowId: previousFlowId,
+          pendingHandoff: undefined,
+        };
+        logger.info({
+          event: "flow.runtime_coherence.cleared",
+          reason: "flow_not_executable",
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          flowId: previousFlowId,
+          provider: "meta",
+          requestId: meta?.requestId,
+        });
       }
     }
 

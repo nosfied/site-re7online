@@ -351,7 +351,17 @@ function fakePrisma() {
       },
     },
     chatbotFlow: {
-      findFirst: async () => state.chatbotFlow,
+      findFirst: async ({ where }: { where?: Record<string, unknown> } = {}) => {
+        const flow = state.chatbotFlow;
+        if (!flow) return null;
+        if (where?.id && flow.id !== where.id) return null;
+        if (where?.clientId && flow.clientId && flow.clientId !== where.clientId) return null;
+        if (where?.entryPoint !== undefined && flow.entryPoint !== undefined && flow.entryPoint !== where.entryPoint) {
+          return null;
+        }
+        if (where?.isActive === true && flow.isActive === false) return null;
+        return flow;
+      },
     },
     contact: {
       findFirst: async ({ where }: { where: Record<string, unknown> }) =>
@@ -1724,6 +1734,58 @@ test("chatbot handoff opens a new human service cycle with persisted operational
   assert.equal(handoffEvents[0]?.queueName, "Fila Geral");
   assert.equal(handoffEvents[0]?.lastInboundAt, "2026-08-11T12:00:00.000Z");
   assert.equal(handoffEvents[0]?.notificationMessage?.createdAt, "2026-08-11T12:00:00.000Z");
+});
+
+test("web session clears active chatbot runtime when persisted flow is inactive", async () => {
+  resetState({
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        mode: "BOT",
+        status: null,
+        handoffStatus: "NONE",
+        chatbotActive: true,
+        chatbotNodeId: "menu",
+        flow: "chatbot:flow_inactive",
+        answers: { chatbotRuntime: { flowStructureHash: "stale", flowStartNodeId: "menu" } },
+        assignedUserId: null,
+        departmentId: null,
+        queueId: null,
+      }),
+    ],
+    chatbotFlow: {
+      id: "flow_inactive",
+      clientId: "client_1",
+      isActive: false,
+      entryPoint: true,
+      definition: {
+        start: "menu",
+        nodes: {
+          menu: {
+            type: "menu",
+            text: "Menu inativo",
+            options: [{ label: "Atendimento", next: "handoff_1" }],
+          },
+          handoff_1: { type: "handoff", text: "Direcionando atendimento." },
+        },
+      },
+    },
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    const result = await ingestText("1", "MSG_INACTIVE_FLOW_RUNTIME");
+    assert.equal(result.action, "persisted");
+  });
+
+  const runtime = state.runtimeStates[0];
+  assert.equal(runtime?.mode, "BOT");
+  assert.equal(runtime?.handoffStatus, "NONE");
+  assert.equal(runtime?.chatbotActive, false);
+  assert.equal(runtime?.chatbotNodeId, null);
+  assert.equal(runtime?.flow, null);
+  assert.equal(runtime?.flowStep, null);
+  assert.equal(state.outboundMessages.length, 0);
 });
 
 test("chatbot handoff keeps queue and department coherent when a prior default department exists", async () => {

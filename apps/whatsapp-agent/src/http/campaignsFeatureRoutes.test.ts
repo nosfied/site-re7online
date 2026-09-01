@@ -2357,6 +2357,7 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   assert.equal(getErrorCode(mismatchedAuthorization.body), "web_session_meta_identity_mismatch");
 
   const replacementTenantKey = `${prefix}-replacement`;
+  const replacementMetaPhoneNumberId = `meta-phone-id-replacement-${safeTemplatePrefix}`;
   const replacementClient = await prisma.client.create({
     data: {
       clientKey: replacementTenantKey,
@@ -2369,7 +2370,7 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   await prisma.tenantMetaConfig.create({
     data: {
       clientId: replacementClient.id,
-      phoneNumberId: "meta-phone-id-replacement",
+      phoneNumberId: replacementMetaPhoneNumberId,
       businessToken: "meta-business-token-replacement",
       wabaId: "meta-waba-id-replacement",
       rawPayload: { source: "unit_test", phoneNumber: { display_phone_number: "+55 84 9999-0001" } },
@@ -2378,7 +2379,7 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
   await prisma.waPhoneNumber.create({
     data: {
       clientId: replacementClient.id,
-      phoneNumberId: "meta-phone-id-replacement",
+      phoneNumberId: replacementMetaPhoneNumberId,
       display: "+55 84 9999-0001",
     },
   });
@@ -2478,7 +2479,7 @@ test("whatsapp web session settings are tenant scoped and admin protected", asyn
     "POST",
     `/admin/tenants/${encodeURIComponent(replacementTenantKey)}/onboarding/manual-bind`,
     {
-      phoneNumberId: "meta-phone-id-replacement-new",
+      phoneNumberId: `meta-phone-id-replacement-new-${safeTemplatePrefix}`,
       displayPhoneNumber: "+55 84 9999-0002",
       wabaId: "meta-waba-id-replacement-new",
     }
@@ -3746,6 +3747,217 @@ test("web session inbound uses shared chatbot flow and queue handoff", async (t)
   assert.equal(JSON.stringify(botOutbound.rawPayload).includes(waId), false);
 });
 
+test("meta inbound clears active chatbot runtime when persisted flow is inactive", async (t) => {
+  const phoneNumberId = `inactive-flow-phone-${safeTemplatePrefix}`;
+  const waId = `55849922${String(Date.now()).slice(-6)}`;
+  const previousMetaConfig = await prisma.tenantMetaConfig.findUnique({
+    where: { clientId: businessClientId },
+    select: {
+      businessToken: true,
+      businessId: true,
+      businessPortfolioId: true,
+      wabaId: true,
+      phoneNumberId: true,
+      rawPayload: true,
+    },
+  });
+  const previousOperationalConfig = await prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: businessClientId },
+    select: { config: true },
+  });
+  t.after(async () => {
+    await prisma.waPhoneNumber.deleteMany({ where: { phoneNumberId } });
+    if (previousMetaConfig) {
+      const restoredMetaConfig = {
+        ...previousMetaConfig,
+        rawPayload: previousMetaConfig.rawPayload as Prisma.InputJsonValue,
+      };
+      await prisma.tenantMetaConfig.upsert({
+        where: { clientId: businessClientId },
+        update: restoredMetaConfig,
+        create: { clientId: businessClientId, ...restoredMetaConfig },
+      });
+    } else {
+      await prisma.tenantMetaConfig.deleteMany({ where: { clientId: businessClientId } });
+    }
+    if (previousOperationalConfig) {
+      const restoredOperationalConfig = previousOperationalConfig.config as Prisma.InputJsonValue;
+      await prisma.tenantOperationalConfig.upsert({
+        where: { clientId: businessClientId },
+        update: { config: restoredOperationalConfig },
+        create: { clientId: businessClientId, config: restoredOperationalConfig },
+      });
+    } else {
+      await prisma.tenantOperationalConfig.deleteMany({ where: { clientId: businessClientId } });
+    }
+  });
+
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      phoneNumberId,
+      businessToken: "inactive-flow-token",
+      rawPayload: { publicWhatsappIdentity: "558400000000" },
+    },
+    create: {
+      clientId: businessClientId,
+      phoneNumberId,
+      businessToken: "inactive-flow-token",
+      rawPayload: { publicWhatsappIdentity: "558400000000" },
+    },
+  });
+  await prisma.waPhoneNumber.create({
+    data: {
+      clientId: businessClientId,
+      phoneNumberId,
+      display: "558400000000",
+    },
+  });
+  const inactiveFlow = await prisma.chatbotFlow.create({
+    data: {
+      clientId: businessClientId,
+      name: "Inactive Meta runtime flow",
+      isActive: false,
+      entryPoint: false,
+      definition: {
+        start: "menu",
+        nodes: {
+          menu: {
+            type: "menu",
+            text: "Menu inativo",
+            options: [{ label: "Falar com atendente", next: "handoff" }],
+          },
+          handoff: { type: "handoff", text: "Direcionando atendimento." },
+        },
+      },
+    },
+    select: { id: true },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      conversationKey: `${prefix}-business:${waId}`,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: true,
+      windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      mode: "BOT",
+      status: null,
+      handoffStatus: "NONE",
+      chatbotActive: true,
+      chatbotNodeId: "menu",
+      flow: `chatbot:${inactiveFlow.id}`,
+      answers: { chatbotRuntime: { flowStructureHash: "stale", flowStartNodeId: "menu" } },
+      lastInboundAt: new Date("2026-08-12T11:59:00.000Z"),
+    },
+  });
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      config: {
+        automationFlags: {
+          disableChatbot: false,
+          disableAiFallback: true,
+          disableIntentClassifier: true,
+          disableLegacyFlows: false,
+          disableChatbotFlowEditing: false,
+        },
+      },
+    },
+    create: {
+      clientId: businessClientId,
+      config: {
+        automationFlags: {
+          disableChatbot: false,
+          disableAiFallback: true,
+          disableIntentClassifier: true,
+          disableLegacyFlows: false,
+          disableChatbotFlowEditing: false,
+        },
+      },
+    },
+  });
+
+  const response = await requestUnauth("POST", "/webhook", {
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: `${prefix}.inactive-flow-waba`,
+        changes: [
+          {
+            field: "messages",
+            value: {
+              messaging_product: "whatsapp",
+              metadata: {
+                phone_number_id: phoneNumberId,
+                display_phone_number: "558400000000",
+              },
+              contacts: [{ wa_id: waId, profile: { name: "Cliente Runtime Inativo" } }],
+              messages: [
+                {
+                  id: `wamid.inactive-flow.${safeTemplatePrefix}`,
+                  from: waId,
+                  timestamp: String(Math.floor(new Date("2026-08-12T12:00:00.000Z").getTime() / 1000)),
+                  type: "text",
+                  text: { body: "humano" },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+
+  await waitFor(async () => {
+    const runtime = await prisma.conversationRuntimeState.findUnique({
+      where: { clientId_waId: { clientId: businessClientId, waId } },
+      select: {
+        chatbotActive: true,
+        chatbotNodeId: true,
+        flow: true,
+        flowStep: true,
+      },
+    });
+    return Boolean(
+      runtime &&
+        runtime.chatbotActive === false &&
+        runtime.chatbotNodeId === null &&
+        runtime.flow === null &&
+        runtime.flowStep === null
+    );
+  });
+
+  const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+    select: {
+      mode: true,
+      status: true,
+      handoffStatus: true,
+      chatbotActive: true,
+      chatbotNodeId: true,
+      flow: true,
+      flowStep: true,
+    },
+  });
+  assert.equal(runtime.mode, "BOT");
+  assert.equal(runtime.status, null);
+  assert.equal(runtime.handoffStatus, "NONE");
+  assert.equal(runtime.chatbotActive, false);
+  assert.equal(runtime.chatbotNodeId, null);
+  assert.equal(runtime.flow, null);
+  assert.equal(runtime.flowStep, null);
+  assert.equal(
+    await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, waId, provider: "meta" },
+    }),
+    0
+  );
+});
+
 test("admin tenants summary includes db-only clients without activity", async () => {
   const dbOnlyClientKey = `${prefix}-db-only-summary`;
   await prisma.client.create({
@@ -4397,6 +4609,7 @@ test("admin tenant without channel can receive web session channel later", async
 
 test("admin channel removal clears operational Meta identity but preserves historical config", async () => {
   const tenantKey = `${prefix}-meta-teardown`;
+  const teardownMetaPhoneNumberId = `meta-phone-teardown-${safeTemplatePrefix}`;
   await requestSuperadmin("POST", "/admin/tenants", {
     clientKey: tenantKey,
     name: "Meta Teardown Tenant",
@@ -4414,14 +4627,14 @@ test("admin channel removal clears operational Meta identity but preserves histo
       businessId: "meta-business-teardown",
       businessPortfolioId: "meta-portfolio-teardown",
       wabaId: "meta-waba-teardown",
-      phoneNumberId: "meta-phone-teardown",
+      phoneNumberId: teardownMetaPhoneNumberId,
       rawPayload: { source: "unit_test", phoneNumber: { display_phone_number: "+55 84 9999-1001" } },
     },
   });
   await prisma.waPhoneNumber.create({
     data: {
       clientId: client.id,
-      phoneNumberId: "meta-phone-teardown",
+      phoneNumberId: teardownMetaPhoneNumberId,
       display: "+55 84 9999-1001",
     },
   });
@@ -4430,7 +4643,7 @@ test("admin channel removal clears operational Meta identity but preserves histo
       clientId: client.id,
       channel: "whatsapp",
       provider: "meta",
-      channelAccountId: "meta-phone-teardown",
+      channelAccountId: teardownMetaPhoneNumberId,
       displayName: "Meta Cloud",
       enabled: true,
       runtimeEnabled: true,
@@ -5428,6 +5641,7 @@ test("meta usage cost preview validates tenant template and returns sanitized es
 });
 
 test("meta usage monthly report exposes sanitized JSON and CSV", async () => {
+  const reportMonth = "2026-11";
   await prisma.outboundMessage.createMany({
     data: [
       {
@@ -5457,7 +5671,7 @@ test("meta usage monthly report exposes sanitized JSON and CSV", async () => {
             waIdLength: 13,
           },
         },
-        createdAt: new Date("2026-09-03T10:00:00.000Z"),
+        createdAt: new Date("2026-11-03T10:00:00.000Z"),
       },
       {
         clientId: businessClientId,
@@ -5483,7 +5697,7 @@ test("meta usage monthly report exposes sanitized JSON and CSV", async () => {
             waIdLength: 13,
           },
         },
-        createdAt: new Date("2026-09-03T10:01:00.000Z"),
+        createdAt: new Date("2026-11-03T10:01:00.000Z"),
       },
       {
         clientId: overrideClientId,
@@ -5508,16 +5722,16 @@ test("meta usage monthly report exposes sanitized JSON and CSV", async () => {
             waIdLength: 13,
           },
         },
-        createdAt: new Date("2026-09-03T10:02:00.000Z"),
+        createdAt: new Date("2026-11-03T10:02:00.000Z"),
       },
     ],
   });
 
-  const unauth = await requestUnauth<ErrorPayload>("GET", "/app/usage/meta/report?month=2026-09");
+  const unauth = await requestUnauth<ErrorPayload>("GET", `/app/usage/meta/report?month=${reportMonth}`);
   assert.equal(unauth.status, 401);
   assert.equal(getErrorCode(unauth.body), "missing_token");
 
-  const agent = await request<ErrorPayload>("GET", "/app/usage/meta/report?month=2026-09", businessAgent);
+  const agent = await request<ErrorPayload>("GET", `/app/usage/meta/report?month=${reportMonth}`, businessAgent);
   assert.equal(agent.status, 403);
   assert.equal(getErrorCode(agent.body), "forbidden");
 
@@ -5537,11 +5751,11 @@ test("meta usage monthly report exposes sanitized JSON and CSV", async () => {
     };
     byCategory: Record<string, { deliveredBillableCount: number }>;
     bySource: Record<string, { sentPendingCount: number }>;
-  }>("GET", "/app/usage/meta/report?month=2026-09&clientId=malicious", businessAdmin);
+  }>("GET", `/app/usage/meta/report?month=${reportMonth}&clientId=malicious`, businessAdmin);
   assert.equal(jsonReport.status, 200, JSON.stringify(jsonReport.body));
   assert.equal(jsonReport.body.ok, true);
   assert.equal(jsonReport.body.reportType, "meta_usage_monthly");
-  assert.equal(jsonReport.body.month, "2026-09");
+  assert.equal(jsonReport.body.month, reportMonth);
   assert.equal(jsonReport.body.summary.totalOutboundWithUsage, 2);
   assert.equal(jsonReport.body.summary.deliveredBillableCount, 1);
   assert.equal(jsonReport.body.summary.deliveredEstimatedCostUsd, 0.008);
@@ -5558,14 +5772,14 @@ test("meta usage monthly report exposes sanitized JSON and CSV", async () => {
   assert.equal(serialized.includes("metaMessageId"), false);
   assert.equal(serialized.includes("token-nao-deve-vazar"), false);
 
-  const csv = await requestText("GET", "/app/usage/meta/report.csv?month=2026-09", businessSupervisor);
+  const csv = await requestText("GET", `/app/usage/meta/report.csv?month=${reportMonth}`, businessSupervisor);
   assert.equal(csv.status, 200);
   assert.match(csv.contentType ?? "", /text\/csv/);
   assert.match(
     csv.text,
     /^month,groupType,groupKey,source,metaCategory,deliveryStatus,messageKind,deliveredBillableCount,deliveredEstimatedCostUsd,billableUnknownCostCount,sentPendingCount,failedCount,nonBillableCount,rateCardVersion,billingRule,notes\n/
   );
-  assert.match(csv.text, /2026-09,category,utility,,utility,,/);
+  assert.match(csv.text, /2026-11,category,utility,,utility,,/);
   assert.equal(csv.text.includes("5584999993333"), false);
   assert.equal(csv.text.includes("3333"), false);
   assert.equal(csv.text.includes("Nao deve aparecer"), false);
@@ -5576,7 +5790,7 @@ test("meta usage monthly report exposes sanitized JSON and CSV", async () => {
   const otherTenant = await request<{
     ok: true;
     summary: { totalOutboundWithUsage: number; deliveredBillableCount: number; deliveredEstimatedCostUsd: number };
-  }>("GET", "/app/usage/meta/report?month=2026-09", overrideAdmin);
+  }>("GET", `/app/usage/meta/report?month=${reportMonth}`, overrideAdmin);
   assert.equal(otherTenant.status, 200, JSON.stringify(otherTenant.body));
   assert.equal(otherTenant.body.summary.totalOutboundWithUsage, 1);
   assert.equal(otherTenant.body.summary.deliveredBillableCount, 1);
@@ -5584,6 +5798,7 @@ test("meta usage monthly report exposes sanitized JSON and CSV", async () => {
 });
 
 test("receptive sessions monthly report is tenant scoped, role protected and CSV ready", async () => {
+  const reportMonth = "2026-11";
   await prisma.event.createMany({
     data: [
       {
@@ -5597,8 +5812,8 @@ test("receptive sessions monthly report is tenant scoped, role protected and CSV
           billingType: "receptive_session",
           channel: "whatsapp",
           provider: "meta_cloud",
-          sessionStartedAt: "2026-09-01T10:00:00.000Z",
-          sessionEndsAt: "2026-09-02T10:00:00.000Z",
+          sessionStartedAt: "2026-11-01T10:00:00.000Z",
+          sessionEndsAt: "2026-11-02T10:00:00.000Z",
           sourceInboundMessageId: `${prefix}.receptive.inbound.1`,
           providerMessageId: `${prefix}.wamid.1`,
           waIdMasked: "***7777",
@@ -5606,7 +5821,7 @@ test("receptive sessions monthly report is tenant scoped, role protected and CSV
           meterVersion: "receptive-session-meter-v1",
           rawBodyText: "Nao deve aparecer",
         },
-        createdAt: new Date("2026-09-01T10:00:00.000Z"),
+        createdAt: new Date("2026-11-01T10:00:00.000Z"),
       },
       {
         clientId: overrideClientId,
@@ -5619,21 +5834,21 @@ test("receptive sessions monthly report is tenant scoped, role protected and CSV
           billingType: "receptive_session",
           channel: "whatsapp",
           provider: "meta_cloud",
-          sessionStartedAt: "2026-09-01T11:00:00.000Z",
-          sessionEndsAt: "2026-09-02T11:00:00.000Z",
+          sessionStartedAt: "2026-11-01T11:00:00.000Z",
+          sessionEndsAt: "2026-11-02T11:00:00.000Z",
           sourceInboundMessageId: `${prefix}.receptive.inbound.other`,
           providerMessageId: `${prefix}.wamid.other`,
           waIdMasked: "***8888",
           meterVersion: "receptive-session-meter-v1",
         },
-        createdAt: new Date("2026-09-01T11:00:00.000Z"),
+        createdAt: new Date("2026-11-01T11:00:00.000Z"),
       },
     ],
   });
 
   const agent = await request<ErrorPayload>(
     "GET",
-    "/app/usage/receptive-sessions/report?month=2026-09",
+    `/app/usage/receptive-sessions/report?month=${reportMonth}`,
     businessAgent
   );
   assert.equal(agent.status, 403);
@@ -5648,7 +5863,7 @@ test("receptive sessions monthly report is tenant scoped, role protected and CSV
     rows: Array<{ maskedContact: string | null; providerMessageId: string | null }>;
   }>(
     "GET",
-    "/app/usage/receptive-sessions/report?month=2026-09&unitPrice=0,005&clientId=malicious",
+    `/app/usage/receptive-sessions/report?month=${reportMonth}&unitPrice=0,005&clientId=malicious`,
     businessAdmin
   );
   assert.equal(report.status, 200, JSON.stringify(report.body));
@@ -5668,7 +5883,7 @@ test("receptive sessions monthly report is tenant scoped, role protected and CSV
 
   const csv = await requestText(
     "GET",
-    "/app/usage/receptive-sessions/report.csv?month=2026-09&unitPrice=0.005",
+    `/app/usage/receptive-sessions/report.csv?month=${reportMonth}&unitPrice=0.005`,
     businessSupervisor
   );
   assert.equal(csv.status, 200);
@@ -5677,8 +5892,8 @@ test("receptive sessions monthly report is tenant scoped, role protected and CSV
     csv.text,
     /^sessionStartedAt,sessionEndsAt,channel,provider,maskedContact,sourceInboundMessageId,providerMessageId,meterVersion,unitPrice,currency\n/
   );
-  assert.match(csv.text, /2026-09-01T10:00:00.000Z/);
-  assert.match(csv.text, /SUMMARY,2026-09,sessionCount,1,total,0.005,,/);
+  assert.match(csv.text, /2026-11-01T10:00:00.000Z/);
+  assert.match(csv.text, /SUMMARY,2026-11,sessionCount,1,total,0.005,,/);
   assert.equal(csv.text.includes("5584999997777"), false);
   assert.equal(csv.text.includes("Nao deve aparecer"), false);
 });

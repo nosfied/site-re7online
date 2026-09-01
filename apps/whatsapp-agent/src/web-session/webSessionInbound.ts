@@ -3057,6 +3057,24 @@ export async function ingestWebSessionInboundMessage(params: {
             reason: chatbotResult.handled ? "handled" : "not_handled",
           });
         }
+      } else if (runtimeConversationState.chatbotActive && extractChatbotFlowId(runtimeConversationState.flow)) {
+        const previousFlowId = extractChatbotFlowId(runtimeConversationState.flow);
+        runtimeConversationState = clearChatbotRuntime(runtimeConversationState);
+        await persistWebSessionRuntimeState({
+          prisma,
+          clientId: params.message.clientId,
+          waId: params.message.sender,
+          state: runtimeConversationState,
+        });
+        logger.info({
+          event: "flow.runtime_coherence.cleared",
+          reason: "flow_not_executable",
+          clientId: params.message.clientId,
+          clientKey: params.message.tenantKey,
+          flowId: previousFlowId,
+          provider: "web_session",
+          requestId,
+        });
       }
     }
     await safeRecordInboundEvent({

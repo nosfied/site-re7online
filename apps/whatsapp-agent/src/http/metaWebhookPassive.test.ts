@@ -11,6 +11,8 @@ import { clearDryRunSessions, listDryRunSessions } from "../channels/channelDryR
 import { clearObservedChannelEvents } from "../channels/observedChannelEvents.js";
 import { saveTenants, type TenantConfig } from "../config/tenantConfig.js";
 
+const originalMetaWebhookVerifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
+process.env.META_WEBHOOK_VERIFY_TOKEN = "meta-webhook-test-token";
 process.env.WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || "meta-webhook-test-token";
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "meta-webhook-test-secret";
 process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || "meta-webhook-admin-test-token";
@@ -262,6 +264,7 @@ test.after(async () => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
   process.chdir(originalCwd);
+  restoreEnv("META_WEBHOOK_VERIFY_TOKEN", originalMetaWebhookVerifyToken);
   restoreEnv("META_APP_SECRET", originalMetaAppSecret);
   restoreEnv("META_INSTAGRAM_APP_SECRET", originalMetaInstagramAppSecret);
   restoreEnv("NODE_ENV", originalNodeEnv);
