@@ -44,6 +44,72 @@ Atualizacao 78N.6: a fixture de Inbox Detail foi ajustada para respeitar o model
 
 Atualizacao 78N.3 final-final: laboratorio estabilizado. `health`, `public-api`, `search`, `inbox-read` e `inbox-detail` passaram em `vu5`; os mesmos cenarios passaram em `vu10`; em `vu20`, `health`, `public-api` e `search` passaram com 0% erro, mas `inbox-read` cruzou threshold de latencia com p95 `2.085 ms`. O primeiro gargalo real medido e a listagem do Inbox, nao autenticacao, RBAC, Search, Public API ou infraestrutura caindo.
 
+Atualizacao 2026-09-01: apos investigacao de CPU em producao, foi removido o
+dual-read multichannel do hot path de leitura de runtime.
+
+Commit:
+
+```text
+d163c5eff36f6eba0f744dfb9ba5285e65f40dbd
+perf(multichannel): remove dual-read from runtime reads
+```
+
+Estado validado:
+
+- runtime dual-read removed;
+- Meta inbound dual-read preserved;
+- Lead/CRM dual-read preserved;
+- runtime polling fan-out reduced;
+- `multichannel.dual_read` em runtime sampled at 0 pos-deploy.
+
+Ambiente runtime observado:
+
+- Node: `v20.20.0`;
+- Prisma package: `6.19.2`;
+- generated runtime client: `6.19.3`;
+- provider: `prisma-client-js`;
+- engine padrao: Node-API `libquery-engine`;
+- runtime PrismaClient singleton: YES;
+- multiple engine/pool risk: LOW.
+
+CPU observada:
+
+- antes, chegou a aproximadamente 100%+ de um core;
+- apos o deploy, caiu progressivamente;
+- fora do expediente SECULT foi observada em torno de 17-20%;
+- hipotese atual: carga correlacionada ao uso/polling da Inbox.
+
+Importante: a causa raiz de CPU ainda nao esta comprovada. E necessario medir
+durante expediente antes de declarar conclusao.
+
+```text
+INBOX / BACKEND PERFORMANCE:
+OPEN / NON-BLOCKING INVESTIGATION
+```
+
+Modelo de escala atual estimado:
+
+```text
+Inbox list polling: ~2000ms
+Selected timeline refresh: ~10000ms
+1 operador: ~30 list polls/min
+10 operadores: ~300 list polls/min
+30 operadores: ~900 list polls/min
+50 operadores: ~1500 list polls/min
+GET /app/conversations: ~12-18 Prisma queries por poll, antes de fallbacks
+30 agentes: ~10.800-16.200 queries/min somente na lista
+```
+
+Este modelo e estimativa operacional, nao benchmark contratual.
+
+```text
+CURRENT POLLING MODEL:
+SCALES LINEARLY WITH ACTIVE INBOX TABS
+
+CRA 30-AGENT SCALE READINESS:
+PARTIAL
+```
+
 ## Confirmacao De Nao Alteracao Funcional
 
 Esta sprint nao:
@@ -644,6 +710,20 @@ Status 78N.3 final-final: executado. A metodologia do laboratorio de carga v1 es
 - abrir 78O para Capacity & Swap Hardening preventivo;
 - abrir investigacao tecnica para `inbox-read`/query path antes de declarar capacidade contratual acima de `vu10`;
 - manter fixtures congeladas salvo mudanca funcional relevante no produto.
+
+Status 2026-09-01: antes de avancar a declaracao de escala CRA 30 agentes, medir
+durante expediente SECULT em janelas START, MID e END:
+
+- active app users;
+- realtime connections;
+- inbox presence;
+- `/app/conversations` requests/min;
+- query counts;
+- runtime fallbacks;
+- backend CPU;
+- DB pressure.
+
+Objetivo: confirmar ou rejeitar a hipotese `active Inbox use <-> backend CPU`.
 
 ### 78P - HA Runtime
 

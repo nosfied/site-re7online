@@ -34,6 +34,35 @@ Eficiência operacional interna + uso real do produto.
 
 ## RISCOS E PENDÊNCIAS ATUAIS — 2026-05-03
 
+### Atualizacao operacional consolidada — 2026-09-01
+
+Estado fechado/validado:
+
+- hybrid exactly-once: CLOSED / REAL VALIDATED;
+- flow/runtime coherence: CLOSED / REAL VALIDATED;
+- closed HUMAN reentry: CLOSED / REAL VALIDATED;
+- SECULT CompletedServiceSnapshot: CLOSED / REAL ORGANIC VALIDATED;
+- SECULT completed-service reporting: CLOSED / PRODUCTION VALIDATED;
+- Inbox Timeline Phase 1: CLOSED / PRODUCTION VALIDATED;
+- multichannel reconciliation migration: CLOSED / PRODUCTION VALIDATED;
+- CRA Demo V1: READY FOR CUSTOMER VALIDATION.
+
+Pendencias proximas:
+
+1. medir CPU/Inbox da SECULT em expediente, com janelas START/MID/END;
+2. decidir Inbox Phase 2 com base nessa evidencia;
+3. reduzir polling na Phase 3 depois de invalidacao segmentada;
+4. validar escala 10/30/50 sessoes antes de declarar capacidade CRA 30 agentes;
+5. desenhar waiting-on-customer 1h como regra funcional separada.
+
+Dividas tecnicas abertas:
+
+- `multichannel.shadow_write.failed` / `missing_channel_account_id`: preexistente, non-strict, sem retry loop, associado a projection/data-quality gap de Web Session, non-blocking;
+- drift historico global Prisma schema/migrations: separado da migration de reconciliacao multichannel ja validada;
+- baselines CRA locais permanecem fora de commits tecnicos nao relacionados:
+  - `docs/bids/2026/cra-pr/CRA_PR_DEMO_FLOW_V1_CUSTOMER_VALIDATION_BASELINE.md`;
+  - `docs/bids/2026/cra-pr/cra-pr-demo-flow-v1-customer-validation.definition.json`.
+
 ### Contact Timeline / Histórico do contato
 
 Status:

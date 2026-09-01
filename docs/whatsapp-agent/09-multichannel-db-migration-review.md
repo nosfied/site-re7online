@@ -414,3 +414,38 @@ Proximo passo recomendado:
 - criar Sprint 65Z para script de backfill WhatsApp em modo dry-run, sem alterar banco por padrao;
 - em paralelo, revisar o SQL com foco em partial indexes, nomes de indices e ordem de criacao;
 - somente depois preparar uma migration staging.
+
+## Atualizacao de reconciliacao - 2026-09-01
+
+Migration oficial criada e deployada:
+
+```text
+20260901121302_reconcile_multichannel_persistence_schema
+```
+
+Commit:
+
+```text
+79dcb80b919bdff1bb549191ca010b70fb71342d
+fix(db): reconcile multichannel persistence migration
+```
+
+Objetivo: reconciliar o delta multichannel que ja existia em producao/schema,
+mas nao estava representado na cadeia oficial de migrations.
+
+Estado validado:
+
+- fresh DB validation: PASS;
+- production-like validation: PASS;
+- production deploy: PASS;
+- final migration count: 58;
+- `ContactChannelIdentity`: present;
+- expected multichannel columns/indexes/FKs: PASS.
+
+Essa reconciliacao nao declara resolvido o drift historico global entre
+migrations e `schema.prisma`.
+
+```text
+GLOBAL HISTORICAL PRISMA SCHEMA/MIGRATION DRIFT:
+OPEN / SEPARATE TECHNICAL DEBT
+```

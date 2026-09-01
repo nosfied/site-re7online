@@ -260,6 +260,44 @@ Performance:
 - labels devem ser buscados em lote;
 - nao usar loop de consultas por atendente, setor ou Conversation.
 
+### Validacao organica SECULT-PE - 2026-09-01
+
+Validado em producao na base:
+
+```text
+9881521b712173dbe8cb66e0d55a7ae710a0e903
+```
+
+Resultado observado para SECULT-PE:
+
+- `CompletedServiceSnapshot` presente;
+- total de snapshots do tenant: 41;
+- intervalo observado: `2026-09-01T11:04:44.834Z` a `2026-09-01T20:12:17.209Z`;
+- primeiro snapshot organico: protocolo `CVT-87DEB8652B73`, conversa `58390734-e9c6-414b-81e9-08ea88a1adc5`, ciclo `5ccf535c-7665-4fa9-a58b-f88a4af88ed5`;
+- agente e ator de fechamento: Jéssica Campelo Bernardo;
+- setor/fila: Duvidas Gerais - SECULT / PE;
+- `closeSource`: `app_inbox`;
+- `closeReason`: `operator_close`.
+
+Consistencias validadas:
+
+- evento `conversation.protocol.closed` coerente com o snapshot;
+- atribuicao historica preservada no fechamento;
+- relatorio por atendente, setor, setor por atendente e serie diaria reconcilia com o total 41;
+- `availableSince` deriva do menor `closedAt`;
+- ADMIN ve o tenant inteiro, SUPERVISOR fica limitado aos departamentos autorizados, AGENT nao acessa relatorios de equipe;
+- nao houve fechamento artificial, backfill, mutation de snapshot ou mutation de tenant.
+
+Status:
+
+```text
+SECULT COMPLETED SERVICE SNAPSHOT:
+CLOSED / REAL ORGANIC VALIDATED
+
+SECULT COMPLETED SERVICE REPORTING:
+CLOSED / PRODUCTION VALIDATED
+```
+
 ## Testes
 
 Arquivo:

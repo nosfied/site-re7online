@@ -111,6 +111,48 @@ Validacoes operacionais executadas:
 - close em conversa demo alterou estado para `CLOSED`;
 - sem ocorrencias recentes de `state.read.fallback_json`, `state.read.fallback_json_failed`, `state.postgres.read_failed`, `Prisma` ou `error` nos logs filtrados.
 
+## Coerencia de runtime de chatbot - 2026-09-01
+
+Commits consolidados:
+
+```text
+8f38e0fbc0937690d1da73ef8f48b97ac1ef5003
+fix(chatbot): align persisted runtime coherence across providers
+
+d902206f0640c62798a5287715f8f99b26a3b556
+fix(chatbot): reset closed human state on bot reentry
+```
+
+Contrato atual:
+
+- a decisao de continuar, reconciliar ou reiniciar runtime de flow e regra de dominio, nao regra especifica de provider;
+- Meta Cloud e Web Session devem respeitar a mesma semantica para runtime persistido;
+- `flowStructureHash` e `flowStartNodeId` identificam incompatibilidades estruturais;
+- node removido ou estruturalmente incompativel aciona restart controlado;
+- runtime legado pode ser reconciliado de forma lazy;
+- mudanca apenas de copy nao forca restart;
+- flow inativo ou indisponivel nao continua executando.
+
+Closed HUMAN reentry:
+
+- ciclo `CLOSED` domina residuos antigos de atribuicao/handoff humano;
+- novo inbound pode iniciar novo ciclo de servico;
+- entryPoint atual e respeitado;
+- primeiro inbound atua como trigger do fluxo e nao como resposta de menu;
+- `IN_PROGRESS`/`HUMAN` ativo permanece humano;
+- `WAITING`/`HUMAN` com handoff valido permanece humano;
+- ciclo CSAT e preservado.
+
+Status:
+
+```text
+FLOW/RUNTIME COHERENCE:
+CLOSED / REAL VALIDATED
+
+CLOSED HUMAN REENTRY:
+CLOSED / REAL VALIDATED
+```
+
 Comandos de monitoramento recomendados durante a janela:
 
 ```bash

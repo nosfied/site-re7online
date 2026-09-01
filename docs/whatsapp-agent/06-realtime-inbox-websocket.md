@@ -228,6 +228,44 @@ Importante:
 - resposta atrasada de timeline e ignorada por `detailRequestSeqRef`;
 - polling de timeline nao roda enquanto a conversa selecionada ainda esta hidratando.
 
+## Consistencia da timeline - incidentes SECULT
+
+Incidente real auditado em 2026-09-01:
+
+- causa raiz: resposta frontend obsoleta/race ao alternar rapidamente entre conversas;
+- nao houve evidencia de mistura de dados no banco;
+- backend tenant isolation e timeline cache isolation permaneceram corretos.
+
+Hotfix anterior:
+
+```text
+5e020a78126e5a095bcf7eb6b30d837052901652
+fix(inbox): reject stale cross-conversation timeline updates
+```
+
+Phase 1 validada em producao:
+
+```text
+9881521b712173dbe8cb66e0d55a7ae710a0e903
+fix(inbox): harden timeline request isolation and ordering
+```
+
+Estado atual:
+
+- active request abort: PASS;
+- sequence guard: PRESERVED;
+- identity guard: PRESERVED;
+- cross-conversation protection: PASS;
+- timeline ordering: DETERMINISTIC;
+- polling: UNCHANGED;
+- realtime: UNCHANGED;
+- multitenant isolation: PASS.
+
+```text
+INBOX TIMELINE CONSISTENCY PHASE 1:
+CLOSED / PRODUCTION VALIDATED
+```
+
 ## Lista lateral do inbox
 
 A lista lateral foi estabilizada para evitar efeito visual de sobe/desce:
@@ -261,6 +299,33 @@ Regra operacional:
 
 - WebSocket melhora latencia;
 - REST/polling preserva consistencia.
+
+Direcao alvo ainda nao totalmente implementada:
+
+```text
+Initial REST load
++
+WebSocket as primary change signal
++
+conversation-scoped invalidation/refetch
++
+slow reconciliation polling
++
+focus/reconnect reconciliation
++
+active request cancellation
++
+stale-response guard
++
+deterministic timeline ordering
+```
+
+Plano:
+
+- Phase 1, consistency hardening: DONE / PRODUCTION VALIDATED;
+- Phase 2, WebSocket primary plus targeted list/timeline invalidation: OPEN;
+- Phase 3, reduce polling to reconciliation/fallback and pause hidden tabs: OPEN;
+- Phase 4, scale/load validation with 10/30/50 sessions: OPEN.
 
 ## Nginx em producao
 
@@ -310,3 +375,4 @@ location /agent-api/app/realtime {
 - Migrar token da query string para `Sec-WebSocket-Protocol`.
 - `conversation.updated` e `handoff.updated` dedicados.
 - Pub/sub externo se houver multiplas instancias do backend.
+- Medicao START/MID/END em expediente SECULT para correlacionar active app users, realtime connections, inbox presence, `/app/conversations` requests/min, query counts, runtime fallbacks, backend CPU e pressao DB.

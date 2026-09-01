@@ -21,6 +21,64 @@ Para SECULT-PE, o posicionamento recomendado e operacao predominantemente recept
 - RBAC e isolamento por tenant.
 - LGPD com anonimizacao operacional e bloqueios de reidratacao.
 
+## Validacao organica de atendimentos concluidos - 2026-09-01
+
+Base de producao validada:
+
+```text
+9881521b712173dbe8cb66e0d55a7ae710a0e903
+```
+
+`CompletedServiceSnapshot` foi validado com dados organicos da SECULT-PE, sem
+fechamento artificial, sem backfill, sem mutation de snapshot e sem mutation de
+tenant.
+
+Resumo observado:
+
+- snapshots SECULT: 41;
+- primeiro `closedAt`: `2026-09-01T11:04:44.834Z`;
+- ultimo `closedAt`: `2026-09-01T20:12:17.209Z`.
+
+Primeiro snapshot organico:
+
+```text
+conversationId: 58390734-e9c6-414b-81e9-08ea88a1adc5
+cycleId: 5ccf535c-7665-4fa9-a58b-f88a4af88ed5
+protocol: CVT-87DEB8652B73
+agent: Jéssica Campelo Bernardo
+department: Duvidas Gerais - SECULT / PE
+queue: Duvidas Gerais - SECULT / PE
+closeSource: app_inbox
+closeReason: operator_close
+closeActor: Jéssica Campelo Bernardo
+```
+
+Resultado:
+
+- close event consistency: PASS;
+- agent at close: PASS;
+- department at close: PASS;
+- queue at close: PASS;
+- close actor: PASS;
+- multitenant isolation: PASS;
+- SECULT report: PASS;
+- reporting cutoff: PASS;
+- count reconciliation: PASS;
+- RBAC: PASS;
+- PM2: PASS;
+- health: PASS;
+- SECULT: CONNECTED.
+
+Status:
+
+```text
+SECULT COMPLETED SERVICE SNAPSHOT:
+CLOSED / REAL ORGANIC VALIDATED
+
+SECULT COMPLETED SERVICE REPORTING:
+CLOSED / PRODUCTION VALIDATED
+```
+
 ## Pontos de atencao
 
 - Confirmar canais exigidos no edital e disponibilidade real no tenant antes da proposta final.
@@ -55,3 +113,4 @@ Para SECULT-PE, o posicionamento recomendado e operacao predominantemente recept
 - Realizar treinamento inicial.
 - Rodar smoke operacional sem envio em massa.
 - Entregar relatorio de prontidao pos-implantacao.
+- Medir CPU/Inbox durante expediente em janelas START, MID e END para confirmar ou rejeitar a hipotese de correlacao entre uso ativo da Inbox e CPU do backend.

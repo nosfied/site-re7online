@@ -31,6 +31,82 @@ O caso CRA-PR e estrategico por exigir combinacao de atendimento receptivo, volu
 - RBAC e tenant isolation.
 - Politica LGPD documentada.
 
+## Estado operacional atual - 2026-09-01
+
+Base de producao validada:
+
+```text
+9881521b712173dbe8cb66e0d55a7ae710a0e903
+```
+
+### CRA Demo Flow V1
+
+Flow de validacao:
+
+```text
+CRA-PR - Atendimento Institucional (Demo)
+cmtg2g15t003d4sjghwhina8b
+```
+
+Estado persistido observado:
+
+- active: true;
+- entryPoint: true;
+- nodes: 31;
+- start: `consent`.
+
+Validacao real por WhatsApp:
+
+```text
+oi
+-> consent/LGPD UMA VEZ
+
+consent
+-> Menu Principal UMA VEZ
+
+1
+-> Registro UMA VEZ
+
+1
+-> Pessoa Fisica UMA VEZ
+```
+
+Resultado operacional:
+
+- fresh service cycle: PASS;
+- stale human state did not block reentry;
+- hybrid exactly-once: PASS;
+- no duplicate reply;
+- active HUMAN control conversation remained HUMAN;
+- health: PASS;
+- SECULT remained CONNECTED.
+
+Status:
+
+```text
+CRA DEMO FLOW:
+READY FOR CUSTOMER VALIDATION
+
+FLOW/RUNTIME COHERENCE:
+CLOSED / REAL VALIDATED
+
+HYBRID EXACTLY-ONCE:
+CLOSED / REAL VALIDATED
+
+CLOSED HUMAN REENTRY:
+CLOSED / REAL VALIDATED
+```
+
+### Escala CRA
+
+O fluxo V1 esta pronto para apresentacao funcional ao cliente, mas a prova de
+30 atendentes simultaneos ainda nao foi concluida.
+
+```text
+CRA 30-AGENT SCALE READINESS:
+PARTIAL / OPEN
+```
+
 ## Custo Meta e risco
 
 O volume ativo mensal exige controle de categoria, aprovacao e acompanhamento de consumo. O Converta possui ledger, preview, resumo e relatorio mensal estimativo.
@@ -54,3 +130,4 @@ O custo Meta deve ser tratado como risco operacional/comercial controlado, nao c
 - A modelagem dedicada de opt-out pode ser evolucao futura se o contrato avancar.
 - Evidencias visuais devem ser capturadas em ambiente sanitizado.
 - Regras de retencao e privacidade devem constar no onboarding operacional.
+- Regra waiting-on-customer 1h permanece aberta: encerrar apos 1h somente quando o sistema/atendente estiver aguardando resposta do cidadao, nao como simples `lastActivityAt + 1h`.
