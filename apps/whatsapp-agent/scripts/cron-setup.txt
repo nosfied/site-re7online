@@ -1,4 +1,5 @@
 # Daily backup at 03:15
 # Edit with: crontab -e
 15 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && ./scripts/backup-data.sh >> /opt/re7online/site-re7online/apps/whatsapp-agent/.backups/backup-cron.log 2>&1
-20 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && npm run backup:postgres >> /opt/re7online/site-re7online/apps/whatsapp-agent/backups/postgres/postgres-backup-cron.log 2>&1
+20 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && npm run backup:postgres:alerted >> /opt/re7online/site-re7online/apps/whatsapp-agent/backups/postgres/postgres-backup-cron.log 2>&1
+0 4 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && npm run backup:postgres:check >> /opt/re7online/site-re7online/apps/whatsapp-agent/backups/postgres/postgres-backup-alert.log 2>&1

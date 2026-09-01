@@ -494,14 +494,14 @@ Variaveis operacionais:
 Cron recomendado:
 
 ```text
-20 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && npm run backup:postgres >> /opt/re7online/site-re7online/apps/whatsapp-agent/backups/postgres/postgres-backup-cron.log 2>&1
+20 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && npm run backup:postgres:alerted >> /opt/re7online/site-re7online/apps/whatsapp-agent/backups/postgres/postgres-backup-cron.log 2>&1
+0 4 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && npm run backup:postgres:check >> /opt/re7online/site-re7online/apps/whatsapp-agent/backups/postgres/postgres-backup-alert.log 2>&1
 ```
 
 O que ainda falta:
 
 - ativar cron em producao depois do pre-release;
 - configurar destino offsite real em producao;
-- alerta persistente/externo se backup falhar ou envelhecer;
 - executar restore drill recorrente usando o dump diario atual;
 - backup criptografado de `.env`, Nginx, PM2 e inventario de certificados.
 
@@ -512,9 +512,14 @@ Status: implementado como hardening operacional minimo, sem schema, sem credenci
 Artefatos:
 
 - `apps/whatsapp-agent/scripts/backup-postgres.sh`;
+- `apps/whatsapp-agent/scripts/backup-postgres-with-alert.sh`;
+- `apps/whatsapp-agent/scripts/postgres-backup-alert.ts`;
 - `npm run backup:postgres`;
+- `npm run backup:postgres:alerted`;
+- `npm run backup:postgres:check`;
 - `npm run backup:evidence`;
 - `apps/whatsapp-agent/src/ops/backupEvidence.ts`.
+- `apps/whatsapp-agent/src/ops/postgresBackupAlert.ts`.
 
 O que foi adicionado:
 
@@ -524,17 +529,28 @@ O que foi adicionado:
 - falha explicita `backup.offsite_upload_failed` quando offsite configurado falha;
 - avaliacao operacional de backup ausente, antigo, sem checksum, pequeno, sem objeto ou sem offsite;
 - registro JSONL de restore drill sem restaurar sobre producao e com redaction de dados sensiveis.
+- alerta operacional por e-mail reutilizando SMTP existente para falha de execucao, falha de verificacao e backup ausente/antigo;
+- dedupe local de alertas por 24h em `.postgres-backup-alert-state.json`, resetado por novo sucesso confirmado no manifest;
+- wrapper `backup:postgres:alerted` que preserva o exit code original do backup mesmo quando o envio do alerta falha;
+- check diario recomendado as 04:00 UTC via `backup:postgres:check`, sem e-mail de sucesso.
 
 Variaveis adicionais:
 
 | Variavel | Default | Uso |
 | --- | --- | --- |
 | `POSTGRES_BACKUP_OFFSITE_TARGET` | vazio | destino offsite opcional. Quando vazio, backup continua local e registra `offsiteStatus=not_configured`. |
+| `POSTGRES_BACKUP_ALERT_EMAILS` | vazio | destinatarios operacionais do alerta de backup, separados por virgula ou ponto e virgula. |
+| `OPERATIONAL_ALERT_EMAILS` | vazio | fallback operacional generico para alertas sem tenant. |
+| `POSTGRES_BACKUP_ALERT_STATE` | `backups/postgres/.postgres-backup-alert-state.json` | estado local de dedupe dos alertas. |
+| `POSTGRES_BACKUP_STALE_HOURS` | `26` | idade maxima aceita para o ultimo `backup.success` no manifest. |
+| `POSTGRES_BACKUP_ALERT_DEDUPE_HOURS` | `24` | janela de supressao de repeticao do mesmo alerta. |
+| `POSTGRES_BACKUP_REQUIRE_OFFSITE` | `false` | quando `true`, `backup:postgres:check` exige `offsiteStatus=success`. |
 
 Comandos operacionais:
 
 ```bash
-npm run backup:postgres
+npm run backup:postgres:alerted
+npm run backup:postgres:check
 npm run backup:evidence -- status --manifest backups/postgres/manifest.jsonl --require-offsite
 npm run backup:evidence -- restore-drill --backup-file backups/postgres/<arquivo>.dump --sha256-file backups/postgres/<arquivo>.dump.sha256 --restored-into restore_validation_<data>
 ```
@@ -544,7 +560,6 @@ Limites:
 - nao configura credenciais reais;
 - nao contrata servico externo;
 - nao cria persistencia no banco;
-- nao substitui alerta externo/persistente;
 - nao executa restore automaticamente.
 
 ### 2026-08 - Persistent Content Backup Hardening
