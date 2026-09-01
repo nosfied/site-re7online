@@ -122,6 +122,7 @@ function makePrimaryStorage(state = makeState()) {
 
 let activePrismaMock: {
   findMany?: (args?: unknown) => Promise<unknown[]>;
+  findFirst?: (args?: unknown) => Promise<unknown>;
   upsert?: () => Promise<unknown>;
   deleteMany?: () => Promise<unknown>;
 } = {};
@@ -129,10 +130,12 @@ let activePrismaCalls = {
   upsert: 0,
   deleteMany: 0,
   findMany: 0,
+  findFirst: 0,
 };
 
 function installPrismaMock(params: {
   findMany?: (args?: unknown) => Promise<unknown[]>;
+  findFirst?: (args?: unknown) => Promise<unknown>;
   upsert?: () => Promise<unknown>;
   deleteMany?: () => Promise<unknown>;
 } = {}) {
@@ -141,6 +144,7 @@ function installPrismaMock(params: {
     upsert: 0,
     deleteMany: 0,
     findMany: 0,
+    findFirst: 0,
   };
   const globalWithPrisma = globalThis as unknown as { prisma?: unknown };
   if (!globalWithPrisma.prisma) {
@@ -158,6 +162,10 @@ function installPrismaMock(params: {
         async findMany(args?: unknown) {
           activePrismaCalls.findMany += 1;
           return activePrismaMock.findMany ? activePrismaMock.findMany(args) : [];
+        },
+        async findFirst(args?: unknown) {
+          activePrismaCalls.findFirst += 1;
+          return activePrismaMock.findFirst ? activePrismaMock.findFirst(args) : null;
         },
         async deleteMany() {
           activePrismaCalls.deleteMany += 1;
@@ -245,6 +253,101 @@ test("dual write reads Postgres state when read source is postgres", async () =>
 
   assert.equal(state?.status, "WAITING");
   assert.equal(calls.get, 0);
+});
+
+test("runtime reads do not invoke multichannel dual-read when dual-read flag is enabled", async () => {
+  const previousDualReadFlag = process.env.MULTICHANNEL_DUAL_READ;
+  process.env.MULTICHANNEL_DUAL_READ = "true";
+  const prismaCalls = installPrismaMock({
+    async findMany() {
+      return [
+        makeDbRow({
+          status: ConversationOperationalStatus.WAITING,
+          channelAccountId: "phone-number-id",
+          externalUserHash: "external-user-hash",
+          legacyWaId: "5584999999999",
+        }),
+      ];
+    },
+    async findFirst() {
+      throw new Error("runtime reads must not invoke multichannel dual-read");
+    },
+  });
+  const { storage: primary, calls } = makePrimaryStorage(makeState({ status: "CLOSED" }));
+  const consoleCapture = captureConsole();
+  try {
+    const storage = createDualWriteStorage(primary, {
+      readSource: "postgres",
+      jsonWriteEnabled: false,
+    });
+
+    const state = await storage.getConversation("5584999999999", "justa-advocacia");
+
+    assert.equal(state?.status, "WAITING");
+    assert.equal(calls.get, 0);
+    assert.equal(prismaCalls.findMany, 1);
+    assert.equal(prismaCalls.findFirst, 0);
+    assert.equal(
+      consoleCapture.records.some((record) =>
+        String(record.event ?? "").startsWith("multichannel.dual_read")
+      ),
+      false
+    );
+  } finally {
+    if (previousDualReadFlag === undefined) {
+      delete process.env.MULTICHANNEL_DUAL_READ;
+    } else {
+      process.env.MULTICHANNEL_DUAL_READ = previousDualReadFlag;
+    }
+    consoleCapture.restore();
+  }
+});
+
+test("repeated runtime reads avoid per-item multichannel dual-read fan-out", async () => {
+  const previousDualReadFlag = process.env.MULTICHANNEL_DUAL_READ;
+  process.env.MULTICHANNEL_DUAL_READ = "true";
+  const prismaCalls = installPrismaMock({
+    async findMany() {
+      return [
+        makeDbRow({
+          status: ConversationOperationalStatus.WAITING,
+          channelAccountId: "phone-number-id",
+          externalUserHash: "external-user-hash",
+          legacyWaId: "5584999999999",
+        }),
+      ];
+    },
+    async findFirst() {
+      throw new Error("runtime read fan-out must not invoke multichannel dual-read");
+    },
+  });
+  const { storage: primary, calls } = makePrimaryStorage(makeState({ status: "CLOSED" }));
+  const storage = createDualWriteStorage(primary, {
+    readSource: "postgres",
+    jsonWriteEnabled: false,
+  });
+
+  try {
+    const states = await Promise.all([
+      storage.getConversation("5584999999999", "justa-advocacia"),
+      storage.getConversation("5584999999999", "justa-advocacia"),
+      storage.getConversation("5584999999999", "justa-advocacia"),
+    ]);
+
+    assert.deepEqual(
+      states.map((state) => state?.status),
+      ["WAITING", "WAITING", "WAITING"]
+    );
+    assert.equal(calls.get, 0);
+    assert.equal(prismaCalls.findMany, 3);
+    assert.equal(prismaCalls.findFirst, 0);
+  } finally {
+    if (previousDualReadFlag === undefined) {
+      delete process.env.MULTICHANNEL_DUAL_READ;
+    } else {
+      process.env.MULTICHANNEL_DUAL_READ = previousDualReadFlag;
+    }
+  }
 });
 
 test("dual write reads outbound-only Postgres state without last inbound timestamp", async () => {

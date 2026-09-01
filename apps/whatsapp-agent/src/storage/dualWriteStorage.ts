@@ -10,7 +10,6 @@ import {
   canonicalizeBrazilWaId,
   compareConversationLookupPriority,
 } from "../utils/waid.js";
-import { runWhatsAppDualReadShadow } from "../channels/whatsappDualReadShadow.js";
 
 type ShadowCompareFields = {
   conversationKey?: string | null;
@@ -691,23 +690,6 @@ export function createDualWriteStorage(
         source: "runtime_shadow",
       });
     }
-    await runWhatsAppDualReadShadow({
-      prisma,
-      model: "ConversationRuntimeState",
-      ownerId: clientId,
-      waId: lookup.raw,
-      phoneNumberId: db?.channelAccountId ?? env.WHATSAPP_PHONE_NUMBER_ID,
-      phase: "before_persist",
-      legacyRecord: db
-        ? {
-            id: db.id,
-            ownerId: clientId,
-            channelAccountId: db.channelAccountId,
-            externalUserHash: db.externalUserHash,
-            legacyWaId: db.legacyWaId,
-          }
-        : null,
-    });
     return db
       ? {
           clientId,
