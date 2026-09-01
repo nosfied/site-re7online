@@ -5,6 +5,7 @@ import {
   buildSuggestedReply,
   clearChatbotRuntime,
   executeChatbotFlow,
+  getChatbotFlowStructureHash,
   getInitialChatbotAwaitingNodeId,
   validateChatbotFlowDefinition,
 } from "./chatbotFlow.js";
@@ -27,6 +28,30 @@ function makeState(overrides?: Partial<ConversationState>): ConversationState {
     chatbotActive: false,
     ...overrides,
   };
+}
+
+function makeCurrentChatbotState(
+  definition: ReturnType<typeof getChatbotFlowStructureHash> extends string
+    ? Parameters<typeof getChatbotFlowStructureHash>[0]
+    : never,
+  overrides: Partial<ConversationState>
+): ConversationState {
+  const runtime =
+    overrides.answers?.chatbotRuntime &&
+    typeof overrides.answers.chatbotRuntime === "object" &&
+    !Array.isArray(overrides.answers.chatbotRuntime)
+      ? overrides.answers.chatbotRuntime
+      : {};
+  return makeState({
+    ...overrides,
+    answers: {
+      ...(overrides.answers ?? {}),
+      chatbotRuntime: {
+        ...runtime,
+        flowStructureHash: getChatbotFlowStructureHash(definition),
+      },
+    },
+  });
 }
 
 test("validateChatbotFlowDefinition accepts valid flow", () => {
@@ -478,6 +503,303 @@ test("executeChatbotFlowWithConsent prompts initial start consent without valida
   assert.equal(result.managementInteraction?.inboundKind, undefined);
 });
 
+test("executeChatbotFlow restarts legacy active runtime without validating inbound against stale node", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "consent",
+    nodes: {
+      consent: {
+        type: "consent",
+        purpose: "attendance",
+        textVersion: "v1",
+        message: "Digite 1 para aceitar.",
+        acceptOption: "1",
+        onAccepted: "menu",
+      },
+      menu: {
+        type: "menu",
+        text: "Menu atual",
+        options: [{ label: "1 - Atendimento", next: "done" }],
+      },
+      stale_menu: {
+        type: "menu",
+        text: "Menu antigo",
+        options: [{ label: "1 - Antigo", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Tudo certo.",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_1",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_1",
+      chatbotActive: true,
+      chatbotNodeId: "stale_menu",
+      answers: {
+        flowContext: { currentMenu: "old_menu" },
+      },
+    }),
+    inboundText: "Oi",
+    nowIso: "2026-09-01T10:00:00.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotNodeId, "consent");
+  assert.equal(result.replyText, "Digite 1 para aceitar.");
+  assert.equal(result.events?.[0]?.event, "flow.runtime_coherence.restart_applied");
+  assert.equal(result.events?.[0]?.reason, "legacy_revision_missing");
+  assert.equal(result.state.answers?.flowContext?.currentMenu, "old_menu");
+  assert.equal(
+    result.state.answers?.chatbotRuntime?.flowStructureHash,
+    getChatbotFlowStructureHash(validated.definition)
+  );
+});
+
+test("executeChatbotFlow preserves active runtime when structural revision is current", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "consent",
+    nodes: {
+      consent: {
+        type: "consent",
+        purpose: "attendance",
+        textVersion: "v1",
+        message: "Digite 1 para aceitar.",
+        acceptOption: "1",
+        onAccepted: "menu",
+      },
+      menu: {
+        type: "menu",
+        text: "Menu atual",
+        options: [{ label: "1 - Atendimento", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Tudo certo.",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_1",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_1",
+      chatbotActive: true,
+      chatbotNodeId: "menu",
+      answers: {
+        chatbotRuntime: {
+          flowStructureHash: getChatbotFlowStructureHash(validated.definition),
+        },
+      },
+    }),
+    inboundText: "1",
+    nowIso: "2026-09-01T10:00:00.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.replyText, "Tudo certo.");
+  assert.equal(result.events?.some((event) => event.event === "flow.runtime_coherence.restart_applied"), false);
+});
+
+test("getChatbotFlowStructureHash ignores copy-only text changes", () => {
+  const first = validateChatbotFlowDefinition({
+    start: "menu",
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Menu v1",
+        fallbackText: "Inválido v1",
+        options: [{ label: "1 - Atendimento", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Texto v1.",
+      },
+    },
+  });
+  const second = validateChatbotFlowDefinition({
+    start: "menu",
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Menu v2",
+        fallbackText: "Inválido v2",
+        options: [{ label: "1 - Atendimento", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Texto v2.",
+      },
+    },
+  });
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, true);
+  if (!first.ok || !second.ok) return;
+
+  assert.equal(getChatbotFlowStructureHash(first.definition), getChatbotFlowStructureHash(second.definition));
+});
+
+test("getChatbotFlowStructureHash is deterministic across non-semantic object key order", () => {
+  const first = validateChatbotFlowDefinition({
+    start: "menu",
+    globalCommands: [{ command: "0", next: "menu", label: "Menu principal" }],
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Menu",
+        options: [{ label: "1 - Atendimento", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Tudo certo.",
+      },
+    },
+  });
+  const second = validateChatbotFlowDefinition({
+    nodes: {
+      done: {
+        text: "Tudo certo.",
+        type: "text",
+      },
+      menu: {
+        options: [{ next: "done", label: "1 - Atendimento" }],
+        text: "Menu",
+        type: "menu",
+      },
+    },
+    globalCommands: [{ label: "Menu principal", next: "menu", command: "0" }],
+    start: "menu",
+  });
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, true);
+  if (!first.ok || !second.ok) return;
+
+  assert.equal(getChatbotFlowStructureHash(first.definition), getChatbotFlowStructureHash(second.definition));
+});
+
+test("executeChatbotFlow restarts active runtime when structural revision changes", () => {
+  const previous = validateChatbotFlowDefinition({
+    start: "menu",
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Menu",
+        options: [{ label: "1 - Atendimento", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Tudo certo.",
+      },
+    },
+  });
+  const current = validateChatbotFlowDefinition({
+    start: "consent",
+    nodes: {
+      consent: {
+        type: "consent",
+        purpose: "attendance",
+        textVersion: "v1",
+        message: "Digite 1 para aceitar.",
+        acceptOption: "1",
+        onAccepted: "menu",
+      },
+      menu: {
+        type: "menu",
+        text: "Menu",
+        options: [{ label: "1 - Atendimento", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Tudo certo.",
+      },
+    },
+  });
+  assert.equal(previous.ok, true);
+  assert.equal(current.ok, true);
+  if (!previous.ok || !current.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_1",
+    definition: current.definition,
+    state: makeState({
+      flow: "chatbot:flow_1",
+      chatbotActive: true,
+      chatbotNodeId: "menu",
+      answers: {
+        chatbotRuntime: {
+          flowStructureHash: getChatbotFlowStructureHash(previous.definition),
+        },
+      },
+    }),
+    inboundText: "Oi",
+    nowIso: "2026-09-01T10:00:00.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotNodeId, "consent");
+  assert.equal(result.replyText, "Digite 1 para aceitar.");
+  assert.equal(result.events?.[0]?.event, "flow.runtime_coherence.restart_applied");
+  assert.equal(result.events?.[0]?.reason, "structure_changed");
+});
+
+test("executeChatbotFlow restarts active runtime when current node no longer exists", () => {
+  const current = validateChatbotFlowDefinition({
+    start: "consent",
+    nodes: {
+      consent: {
+        type: "consent",
+        purpose: "attendance",
+        textVersion: "v1",
+        message: "Digite 1 para aceitar.",
+        acceptOption: "1",
+        onAccepted: "menu",
+      },
+      menu: {
+        type: "menu",
+        text: "Menu atual",
+        options: [{ label: "1 - Atendimento", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Tudo certo.",
+      },
+    },
+  });
+  assert.equal(current.ok, true);
+  if (!current.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_1",
+    definition: current.definition,
+    state: makeState({
+      flow: "chatbot:flow_1",
+      chatbotActive: true,
+      chatbotNodeId: "removed_menu",
+      answers: {
+        chatbotRuntime: {
+          flowStructureHash: getChatbotFlowStructureHash(current.definition),
+        },
+      },
+    }),
+    inboundText: "Oi",
+    nowIso: "2026-09-01T10:00:00.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotNodeId, "consent");
+  assert.equal(result.replyText, "Digite 1 para aceitar.");
+  assert.equal(result.events?.[0]?.event, "flow.runtime_coherence.restart_applied");
+  assert.equal(result.events?.[0]?.reason, "node_missing");
+});
+
 test("executeChatbotFlow preserves explicit menu option numbers", () => {
   const validated = validateChatbotFlowDefinition({
     start: "menu",
@@ -517,7 +839,7 @@ test("executeChatbotFlow preserves explicit menu option numbers", () => {
   const selected = executeChatbotFlow({
     flowId: "flow_explicit_menu_numbers",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_explicit_menu_numbers",
       chatbotActive: true,
       chatbotNodeId: "menu",
@@ -623,7 +945,7 @@ test("executeChatbotFlow does not map hidden explicit options by visible array i
   const result = executeChatbotFlow({
     flowId: "flow_consolidated",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_consolidated",
       chatbotActive: true,
       chatbotNodeId: "mapa_menu",
@@ -652,7 +974,7 @@ test("executeChatbotFlow keeps global close command outside consolidated flow co
   const result = executeChatbotFlow({
     flowId: "flow_consolidated",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_consolidated",
       chatbotActive: true,
       chatbotNodeId: "fundarpe_menu",
@@ -693,7 +1015,7 @@ test("executeChatbotFlow applies configured global back command without hardcodi
   const result = executeChatbotFlow({
     flowId: "flow_back",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_back",
       chatbotActive: true,
       chatbotNodeId: "submenu",
@@ -730,7 +1052,7 @@ test("executeChatbotFlow treats root back command as invalid option and redispla
   const result = executeChatbotFlow({
     flowId: "flow_back_root",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_back_root",
       chatbotActive: true,
       chatbotNodeId: "main",
@@ -783,7 +1105,7 @@ test("executeChatbotFlow can hide the rendered back command on selected menus", 
   const submenu = executeChatbotFlow({
     flowId: "flow_hidden_back",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_hidden_back",
       chatbotActive: true,
       chatbotNodeId: "main",
@@ -831,7 +1153,7 @@ test("executeChatbotFlow treats root menu after consent as invalid option on bac
   const result = executeChatbotFlow({
     flowId: "flow_back_root_after_consent",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_back_root_after_consent",
       chatbotActive: true,
       chatbotNodeId: "main",
@@ -872,7 +1194,7 @@ test("executeChatbotFlow ignores global back command during human handoff", () =
   const result = executeChatbotFlow({
     flowId: "flow_back_human",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_back_human",
       chatbotActive: true,
       chatbotNodeId: "main",
@@ -913,7 +1235,7 @@ test("executeChatbotFlow ignores global back command when conversation is assign
   const result = executeChatbotFlow({
     flowId: "flow_back_assigned",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_back_assigned",
       chatbotActive: true,
       chatbotNodeId: "submenu",
@@ -953,7 +1275,7 @@ test("executeChatbotFlow resets submenu after configured inactivity while preser
   const result = executeChatbotFlow({
     flowId: "flow_timeout",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_timeout",
       chatbotActive: true,
       chatbotNodeId: "submenu",
@@ -997,7 +1319,7 @@ test("executeChatbotFlow keeps submenu inside inactivity window", () => {
   const result = executeChatbotFlow({
     flowId: "flow_timeout",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_timeout",
       chatbotActive: true,
       chatbotNodeId: "submenu",
@@ -1252,7 +1574,7 @@ test("executeChatbotFlow can reroute from initial menu free text without repeati
   const result = executeChatbotFlow({
     flowId: "flow_classifier",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_classifier",
       chatbotActive: true,
       chatbotNodeId: "menu_principal",
@@ -1289,7 +1611,7 @@ test("executeChatbotFlow repeats menu on invalid answer", () => {
   const result = executeChatbotFlow({
     flowId: "flow_1",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_1",
       chatbotActive: true,
       chatbotNodeId: "menu",
@@ -1326,7 +1648,7 @@ test("executeChatbotFlow can answer text and remain on a menu without redisplay"
   const result = executeChatbotFlow({
     flowId: "flow_1",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_1",
       chatbotActive: true,
       chatbotNodeId: "menu",
@@ -1382,7 +1704,7 @@ test("executeChatbotFlow can hand off on invalid menu answer when configured", (
   const result = executeChatbotFlow({
     flowId: "flow_1",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_1",
       chatbotActive: true,
       chatbotNodeId: "menu",
@@ -1429,7 +1751,7 @@ test("executeChatbotFlow follows text next and reaches handoff", () => {
   const result = executeChatbotFlow({
     flowId: "flow_1",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_1",
       chatbotActive: true,
       chatbotNodeId: "menu",
@@ -1468,7 +1790,7 @@ test("executeChatbotFlow returns handoff feedback before human activation", () =
   const result = executeChatbotFlow({
     flowId: "flow_1",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_1",
       chatbotActive: true,
       chatbotNodeId: "menu",
@@ -1559,7 +1881,7 @@ test("executeChatbotFlow merges selected option context", () => {
   const result = executeChatbotFlow({
     flowId: "flow_option_context",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_option_context",
       chatbotActive: true,
       chatbotNodeId: "menu",
@@ -1608,7 +1930,7 @@ test("executeChatbotFlow applies selected option routing", () => {
   const result = executeChatbotFlow({
     flowId: "flow_option_routing",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_option_routing",
       chatbotActive: true,
       chatbotNodeId: "menu",
@@ -1654,7 +1976,7 @@ test("executeChatbotFlow exposes department handoff closed text", () => {
   const result = executeChatbotFlow({
     flowId: "flow_option_routing_closed",
     definition: validated.definition,
-    state: makeState({
+    state: makeCurrentChatbotState(validated.definition, {
       flow: "chatbot:flow_option_routing_closed",
       chatbotActive: true,
       chatbotNodeId: "menu",

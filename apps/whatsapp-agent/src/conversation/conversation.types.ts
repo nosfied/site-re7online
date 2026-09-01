@@ -156,6 +156,8 @@ export type QuoteSiteAnswers = {
   chatbotRuntime?: {
     lastInteractionAt?: string | null;
     acceptedConsents?: Record<string, boolean>;
+    flowStructureHash?: string | null;
+    flowStartNodeId?: string | null;
   };
   protocolContinuation?: {
     protocol: string;
