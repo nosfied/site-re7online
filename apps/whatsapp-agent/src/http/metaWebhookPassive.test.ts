@@ -9,7 +9,7 @@ import path from "node:path";
 import { ChannelAdapterRegistry } from "../channels/channelAdapterRegistry.js";
 import { clearDryRunSessions, listDryRunSessions } from "../channels/channelDryRunSessions.js";
 import { clearObservedChannelEvents } from "../channels/observedChannelEvents.js";
-import type { TenantConfig } from "../config/tenantConfig.js";
+import { saveTenants, type TenantConfig } from "../config/tenantConfig.js";
 
 process.env.WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || "meta-webhook-test-token";
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "meta-webhook-test-secret";
@@ -147,36 +147,28 @@ function tenantWithQualification(): TenantConfig {
   };
 }
 
-async function writeTenants() {
+async function writeTenants(channelAccounts?: NonNullable<TenantConfig["channelAccounts"]>) {
   await fs.mkdir(path.dirname(tenantsPath), { recursive: true });
-  await fs.writeFile(
-    tenantsPath,
-    JSON.stringify(
-      {
-        "tenant-a": {
-          id: "tenant-a",
-          name: "Tenant A",
-          metaPhoneNumberId: "phone-tenant-a",
-          allowlist: [],
-          handoffAttendantWaid: "",
-          defaultLanguage: "pt_BR",
-          channelAccounts: [
-            {
-              id: "messenger-page-1",
-              tenantKey: "tenant-a",
-              channel: "messenger",
-              provider: "meta",
-              channelAccountId: "page-1",
-              enabled: true,
-            },
-          ],
+  await saveTenants({
+    "tenant-a": {
+      id: "tenant-a",
+      name: "Tenant A",
+      metaPhoneNumberId: "phone-tenant-a",
+      allowlist: [],
+      handoffAttendantWaid: "",
+      defaultLanguage: "pt_BR",
+      channelAccounts: channelAccounts ?? [
+        {
+          id: "messenger-page-1",
+          tenantKey: "tenant-a",
+          channel: "messenger",
+          provider: "meta",
+          channelAccountId: "page-1",
+          enabled: true,
         },
-      },
-      null,
-      2
-    ),
-    "utf-8"
-  );
+      ],
+    },
+  });
 }
 
 function signRawBody(rawBody: string, secret: string) {
@@ -502,26 +494,23 @@ test("channel runtime preflight endpoint reports runtime candidate blocked by un
   const previousSecret = process.env.META_APP_SECRET;
   process.env.META_APP_SECRET = "configured-secret";
   try {
-    const updated = await adminJsonRequest("PUT", "/admin/tenants/tenant-a/channel-accounts", {
-      channelAccounts: [
-        {
-          id: "messenger-page-1",
-          tenantKey: "tenant-a",
-          channel: "messenger",
-          provider: "meta",
-          channelAccountId: "page-1",
-          enabled: true,
-          automationEnabled: true,
-          runtimeEnabled: true,
-          outboundEnabled: false,
-          aiEnabled: true,
-          handoffEnabled: true,
-          status: "connected",
-          tokenStatus: "configured",
-        },
-      ],
-    });
-    assert.equal(updated.status, 200);
+    await writeTenants([
+      {
+        id: "messenger-page-1",
+        tenantKey: "tenant-a",
+        channel: "messenger",
+        provider: "meta",
+        channelAccountId: "page-1",
+        enabled: true,
+        automationEnabled: true,
+        runtimeEnabled: true,
+        outboundEnabled: false,
+        aiEnabled: true,
+        handoffEnabled: true,
+        status: "connected",
+        tokenStatus: "configured",
+      },
+    ]);
 
     const response = await adminJsonRequest("POST", "/admin/channel-runtime-preflight", {
       tenantKey: "tenant-a",

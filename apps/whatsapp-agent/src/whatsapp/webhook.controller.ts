@@ -120,6 +120,7 @@ import {
   ConversationIntent,
   ConversationState,
 } from "../conversation/conversation.types.js";
+import { claimHybridInboundLogicalMessage } from "../channels/hybridInboundDedupe.js";
 import { resolveTenant, TenantResolutionError } from "../tenancy/tenantResolver.js";
 import { ensureLeadForConversation, upsertLeadFromCapture } from "../crm/lead.service.js";
 import { runWhatsAppDualReadShadow } from "../channels/whatsappDualReadShadow.js";
@@ -3122,6 +3123,41 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       normalizedFrom,
       message.messageId
     );
+
+    if (tenantClientId) {
+      const logicalClaim = await claimHybridInboundLogicalMessage({
+        prisma,
+        clientId: tenantClientId,
+        senderWaIdCanonical: canonicalWaId,
+        provider: "meta",
+        providerMessageId: message.messageId,
+        requestId: meta?.requestId ?? `meta-inbound:${message.messageId}`,
+      });
+      if (!logicalClaim.claimed) {
+        logger.info({
+          event: "whatsapp.meta.inbound.duplicate",
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          reason: "hybrid_logical_message_exists",
+          logicalInboundKeyHash: logicalClaim.key.hash,
+          winningProvider: logicalClaim.winningProvider,
+          duplicateProvider: "meta",
+          requestId: meta?.requestId,
+        });
+        await persistEventSafe(
+          "whatsapp.meta.inbound.duplicate",
+          {
+            reason: "hybrid_logical_message_exists",
+            logicalInboundKeyHash: logicalClaim.key.hash,
+            winningProvider: logicalClaim.winningProvider,
+            duplicateProvider: "meta",
+          },
+          normalizedFrom,
+          message.messageId
+        );
+        continue;
+      }
+    }
 
     if (
       allowlistHit &&

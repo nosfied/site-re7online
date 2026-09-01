@@ -56,6 +56,7 @@ import {
 } from "../config/tenantOperationalConfig.js";
 import { getDepartmentAvailability } from "../departments/businessHours.js";
 import { createWebSessionTextOutboundMessage, normalizeBotMenuOptionMarkdown } from "./webSessionOutboundService.js";
+import { claimHybridInboundLogicalMessage } from "../channels/hybridInboundDedupe.js";
 
 export type WebSessionInboundMessageType = "text" | "image" | "audio" | "video" | "document" | "unknown";
 
@@ -2227,6 +2228,26 @@ export async function ingestWebSessionInboundMessage(params: {
       })
     ) {
       rawPayload = withInboxMessageVisibility(rawPayload, "management_only", "satisfaction");
+    }
+    const logicalClaim = await claimHybridInboundLogicalMessage({
+      prisma,
+      clientId: params.message.clientId,
+      senderWaIdCanonical: params.message.senderCanonical,
+      provider: "web_session",
+      providerMessageId: params.message.externalMessageId,
+      requestId,
+    });
+    if (!logicalClaim.claimed) {
+      await deleteWebSessionStoredMedia(params.message.media);
+      await safeRecordInboundEvent({
+        prisma,
+        message: params.message,
+        clientId: params.message.clientId,
+        eventName: "whatsapp.web.inbound.duplicate",
+        requestId: `${requestId}:logical-duplicate`,
+        reason: "hybrid_logical_message_exists",
+      });
+      return { ok: true, action: "duplicate", waId: params.message.sender, messageId };
     }
     const inserted = await persistInboundMessage({
       clientId: params.message.clientId,
