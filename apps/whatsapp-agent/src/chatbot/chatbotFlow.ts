@@ -1102,7 +1102,7 @@ function renderMenu(
   state: ConversationState,
   options?: ChatbotExecutionOptions
 ) {
-  const lines = getVisibleMenuOptions(node, state, options).map((option, index) => {
+  const optionLines = getVisibleMenuOptions(node, state, options).map((option, index) => {
     const explicit = parseExplicitMenuOptionNumber(option.label);
     return explicit ? `*${explicit.number}* - ${explicit.text}` : `*${index + 1}* - ${option.label}`;
   });
@@ -1110,7 +1110,10 @@ function renderMenu(
   const commandLines = backCommand && node.showBackCommand !== false
     ? [`${backCommand} - Voltar às opções anteriores.`]
     : [];
-  return [renderChatbotTemplateText(node.text, state), ...lines, ...commandLines].join("\n");
+  return [renderChatbotTemplateText(node.text, state), ...optionLines, ...commandLines]
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export function getChatbotConsentKey(node: Pick<ChatbotConsentNode, "purpose" | "textVersion">) {

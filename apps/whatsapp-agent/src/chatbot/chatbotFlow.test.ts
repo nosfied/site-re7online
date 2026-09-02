@@ -970,6 +970,87 @@ test("executeChatbotFlow preserves explicit menu option numbers", () => {
   assert.equal(selected.replyText, "Voltando ao início.");
 });
 
+test("executeChatbotFlow renders menu options with one blank line between blocks", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "menu",
+    globalCommands: [{ command: "#", action: "BACK", allowedModes: ["BOT"] }],
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "MENU PRINCIPAL\n\nEscolha uma opção:\n",
+        options: [
+          { label: "1 - Registro", next: "registro" },
+          { label: "2 - Fiscalização", next: "fiscalizacao" },
+        ],
+      },
+      registro: { type: "text", text: "Registro." },
+      fiscalizacao: { type: "text", text: "Fiscalização." },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_menu_spacing",
+    definition: validated.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-09-02T10:00:00.000Z",
+  });
+
+  assert.equal(
+    result.replyText,
+    [
+      "MENU PRINCIPAL\n\nEscolha uma opção:",
+      "*1* - Registro",
+      "*2* - Fiscalização",
+      "# - Voltar às opções anteriores.",
+    ].join("\n\n")
+  );
+  assert.doesNotMatch(result.replyText ?? "", /\n{3,}/);
+
+  const selected = executeChatbotFlow({
+    flowId: "flow_menu_spacing",
+    definition: validated.definition,
+    state: makeCurrentChatbotState(validated.definition, {
+      flow: "chatbot:flow_menu_spacing",
+      chatbotActive: true,
+      chatbotNodeId: "menu",
+    }),
+    inboundText: "2",
+    nowIso: "2026-09-02T10:00:01.000Z",
+  });
+  assert.equal(selected.replyText, "Fiscalização.");
+});
+
+test("executeChatbotFlow renders single-option menu without trailing blank lines", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "menu",
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Escolha",
+        showBackCommand: false,
+        options: [{ label: "Atendimento", next: "done" }],
+      },
+      done: { type: "text", text: "Tudo certo." },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_single_menu_spacing",
+    definition: validated.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-09-02T10:00:00.000Z",
+  });
+
+  assert.equal(result.replyText, "Escolha\n\n*1* - Atendimento");
+  assert.doesNotMatch(result.replyText ?? "", /\n$/);
+});
+
 function makeConsolidatedMenuFixture() {
   return validateChatbotFlowDefinition({
     metadata: {
