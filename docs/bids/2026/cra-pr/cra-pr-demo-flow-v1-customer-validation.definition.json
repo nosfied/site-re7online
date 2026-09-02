@@ -1,0 +1,666 @@
+{
+  "closedHandoffPolicy": {
+    "action": "QUEUE_FOR_NEXT_OPEN",
+    "holidayMessage": "Olá! Hoje não haverá atendimento em razão de feriado ou recesso. Sua mensagem ficará registrada e o atendimento será retomado no próximo período de atendimento.",
+    "offHoursMessage": "🕘 Olá! Recebemos sua mensagem. O atendimento do CRA-PR ocorre de segunda a sexta-feira, das 09h00 às 17h00. Sua solicitação ficará registrada e será atendida no próximo período de atendimento.\n\nDigite 0 para acessar o menu de serviços automatizados.",
+    "queuePositionText": "Você é o nº {position} da fila de atendimento."
+  },
+  "metadata": {
+    "demoOnly": true,
+    "latestCraMaterialOverrides": [
+      "Fiscalização option 2 uses latest supplied Acerto Técnico, Atestado e RCA wording",
+      "Cobrança option 4 routes to Cobrança, not legacy Eventos bug",
+      "Eventos routes to Relações Institucionais per CRA clarification"
+    ],
+    "legacyContentDiscarded": [
+      "Global # back command discarded to avoid hidden navigation/state drift",
+      "Manual menu option blocks discarded because engine renders structured options",
+      "Cobrança option 4 to Eventos discarded as known legacy bug",
+      "Generic inactivity workaround discarded; waiting-on-customer 1h remains product gap"
+    ],
+    "legacyReconciledAt": "2026-09-01T01:18:00.433Z",
+    "preset": "cra-pr-demo-validation",
+    "sourcePdf": "Usuários Converta DEA - Fluxo.pdf",
+    "sourceSheets": [
+      "usuários",
+      "Fluxo"
+    ],
+    "sourceTrace": {
+      "cobranca": [
+        "LATEST_SPREADSHEET",
+        "LATEST_PDF",
+        "LEGACY_COLLECTED_REFERENCE"
+      ],
+      "concurso": [
+        "LATEST_SPREADSHEET",
+        "LATEST_PDF"
+      ],
+      "eventos": [
+        "CRA_WRITTEN_CLARIFICATION",
+        "LATEST_SPREADSHEET",
+        "LATEST_PDF"
+      ],
+      "fiscalizacao": [
+        "LATEST_SPREADSHEET",
+        "LATEST_PDF",
+        "LEGACY_COLLECTED_REFERENCE"
+      ],
+      "licitacoes_juridico_rh_contabil": [
+        "LATEST_SPREADSHEET",
+        "LATEST_PDF"
+      ],
+      "main_menu": [
+        "LATEST_SPREADSHEET",
+        "LATEST_PDF",
+        "CONVERTA_UX_ADAPTATION"
+      ],
+      "navigation": [
+        "LEGACY_COLLECTED_REFERENCE",
+        "CONVERTA_UX_ADAPTATION"
+      ],
+      "outOfHours": [
+        "LEGACY_COLLECTED_REFERENCE",
+        "CONVERTA_UX_ADAPTATION"
+      ],
+      "registro_pf": [
+        "LATEST_SPREADSHEET",
+        "LATEST_PDF",
+        "LEGACY_COLLECTED_REFERENCE"
+      ],
+      "registro_pj": [
+        "LATEST_SPREADSHEET",
+        "LATEST_PDF",
+        "LEGACY_COLLECTED_REFERENCE"
+      ]
+    },
+    "sourceWorkbook": "Usuários Converta DEA (1).xlsx (latest local copy; requested (2) not found)",
+    "unresolvedInactivityClose": "Product cannot safely express close only when agent/system is waiting for caller; no CRA inactivity close configured in demo flow",
+    "unresolvedRouting": [],
+    "updatedFromLatestCraMaterialsAt": "2026-09-01T01:03:25.096Z"
+  },
+  "nodes": {
+    "cobranca_emissao_boleto_info": {
+      "returnTo": "cobranca_menu",
+      "text": "🧾 EMISSÃO DE BOLETO\n\nPara receber seu boleto da anuidade de 2026, por favor envie solicitação pelo e-mail cobranca@cra-pr.org.br informando seu CPF. Obrigado\n\n0 - Voltar ao Menu Principal",
+      "type": "text"
+    },
+    "cobranca_handoff": {
+      "departmentId": "cmtg2g0zs00154sjgd1kez3iv",
+      "queueId": "cmtg2g10000174sjgmir39vno",
+      "text": "🔄 Certo. Vou direcionar seu atendimento para o setor responsável.",
+      "type": "handoff"
+    },
+    "cobranca_menu": {
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "departmentId": "cmtg2g0zs00154sjgd1kez3iv",
+          "label": "1 - Débitos pendentes",
+          "next": "cobranca_handoff",
+          "queueId": "cmtg2g10000174sjgmir39vno"
+        },
+        {
+          "label": "2 - Emissão de boleto",
+          "next": "cobranca_emissao_boleto_info"
+        },
+        {
+          "departmentId": "cmtg2g0zs00154sjgd1kez3iv",
+          "label": "3 - Vencimento de boleto",
+          "next": "cobranca_handoff",
+          "queueId": "cmtg2g10000174sjgmir39vno"
+        },
+        {
+          "departmentId": "cmtg2g0zs00154sjgd1kez3iv",
+          "label": "4 - Formas de pagamento",
+          "next": "cobranca_handoff",
+          "queueId": "cmtg2g10000174sjgmir39vno"
+        },
+        {
+          "departmentId": "cmtg2g0zs00154sjgd1kez3iv",
+          "label": "5 - Negociação de dívida",
+          "next": "cobranca_handoff",
+          "queueId": "cmtg2g10000174sjgmir39vno"
+        },
+        {
+          "departmentId": "cmtg2g0zs00154sjgd1kez3iv",
+          "label": "6 - Anuidade 2026",
+          "next": "cobranca_handoff",
+          "queueId": "cmtg2g10000174sjgmir39vno"
+        },
+        {
+          "departmentId": "cmtg2g0zs00154sjgd1kez3iv",
+          "label": "7 - Descontos",
+          "next": "cobranca_handoff",
+          "queueId": "cmtg2g10000174sjgmir39vno"
+        },
+        {
+          "departmentId": "cmtg2g0zs00154sjgd1kez3iv",
+          "label": "8 - Vencimento anuidade 2026",
+          "next": "cobranca_handoff",
+          "queueId": "cmtg2g10000174sjgmir39vno"
+        },
+        {
+          "departmentId": "cmtg2g0zs00154sjgd1kez3iv",
+          "label": "9 - Restrições (SPC/SERASA/PROTESTO)",
+          "next": "cobranca_handoff",
+          "queueId": "cmtg2g10000174sjgmir39vno"
+        },
+        {
+          "departmentId": "cmtg2g0zs00154sjgd1kez3iv",
+          "label": "10 - Bloqueio Judicial",
+          "next": "cobranca_handoff",
+          "queueId": "cmtg2g10000174sjgmir39vno"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "💳 SETOR DE COBRANÇA\nEscolha uma opção:",
+      "type": "menu"
+    },
+    "concurso_info": {
+      "returnTo": "main_menu",
+      "text": "📝 CONCURSO PÚBLICO\n\nInformações e dúvidas poderão ser sanadas junto à Central de Atendimento do Instituto Consulplan, pelo menu \"Fale Conosco\" disponível no endereço eletrônico www.institutoconsulplan.org.br ou pelo telefone 0800-100-4790, no horário das 8h00min às 17h30min, considerando-se o horário oficial de Brasília/DF.\n\n0 - Voltar ao Menu Principal",
+      "type": "text"
+    },
+    "consent": {
+      "acceptOption": "1",
+      "declineOption": "2",
+      "invalidText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "message": "🔐 Para prosseguir com o atendimento, alguns dados pessoais poderão ser utilizados exclusivamente para identificação e tratamento da sua solicitação, conforme a legislação aplicável de proteção de dados. Evite enviar informações pessoais que não sejam necessárias ao atendimento.\n\nDigite 1 para continuar ou 2 para encerrar.",
+      "onAccepted": "main_menu",
+      "onDeclined": "declined",
+      "purpose": "attendance",
+      "textVersion": "cra-pr-demo-v1",
+      "type": "consent"
+    },
+    "contabil_info": {
+      "returnTo": "main_menu",
+      "text": "📊 DEPARTAMENTO CONTÁBIL\n\nAcesse o Portal da Transparência: https://cra-pr.implanta.net.br/portaltransparencia/#publico/inicio\n\n0 - Voltar ao Menu Principal",
+      "type": "text"
+    },
+    "declined": {
+      "text": "✅ Atendimento encerrado. Caso precise, envie uma nova mensagem para iniciar novamente.",
+      "type": "text"
+    },
+    "eventos_handoff": {
+      "departmentId": "cmtg2g115001p4sjgo9cke0ny",
+      "queueId": "cmtg2g11c001r4sjgy9iw36dh",
+      "text": "🔄 Certo. Vou direcionar seu atendimento para o setor responsável.",
+      "type": "handoff"
+    },
+    "fiscalizacao_handoff": {
+      "departmentId": "cmtg2g0x2000l4sjg3voybk97",
+      "queueId": "cmtg2g0x7000n4sjg5bysxh7j",
+      "text": "🔄 Certo. Vou direcionar seu atendimento para o setor responsável.",
+      "type": "handoff"
+    },
+    "fiscalizacao_menu": {
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "departmentId": "cmtg2g0x2000l4sjg3voybk97",
+          "label": "1 - Denúncias",
+          "next": "fiscalizacao_handoff",
+          "queueId": "cmtg2g0x7000n4sjg5bysxh7j"
+        },
+        {
+          "departmentId": "cmtg2g0x2000l4sjg3voybk97",
+          "label": "2 - Acerto Técnico, Atestado e RCA",
+          "next": "fiscalizacao_handoff",
+          "queueId": "cmtg2g0x7000n4sjg5bysxh7j"
+        },
+        {
+          "departmentId": "cmtg2g0x2000l4sjg3voybk97",
+          "label": "3 - Outras demandas de Fiscalização",
+          "next": "fiscalizacao_handoff",
+          "queueId": "cmtg2g0x7000n4sjg5bysxh7j"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "🔍 SETOR DE FISCALIZAÇÃO\nEscolha uma opção:",
+      "type": "menu"
+    },
+    "gabinete_handoff": {
+      "departmentId": "cmtg2g13q002t4sjg9yjqagfy",
+      "queueId": "cmtg2g13w002v4sjgy1y39adx",
+      "text": "🔄 Certo. Vou direcionar seu atendimento para o setor responsável.",
+      "type": "handoff"
+    },
+    "juridico_info": {
+      "returnTo": "main_menu",
+      "text": "⚖️ DEPARTAMENTO JURÍDICO\n\nEnvie um e-mail para: juridico@cra-pr.org.br. Ou entre em contato pelo telefone (41) 3311-5567.\n\n0 - Voltar ao Menu Principal",
+      "type": "text"
+    },
+    "licitacoes_info": {
+      "returnTo": "main_menu",
+      "text": "📑 LICITAÇÕES E CONTRATOS\n\nEnvie um e-mail para: licitacoes@cra-pr.org.br.\n\n0 - Voltar ao Menu Principal",
+      "type": "text"
+    },
+    "main_menu": {
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "label": "1 - Setor de Registro",
+          "next": "registro_menu"
+        },
+        {
+          "label": "2 - Setor de Fiscalização",
+          "next": "fiscalizacao_menu"
+        },
+        {
+          "label": "3 - Setor de Cobrança",
+          "next": "cobranca_menu"
+        },
+        {
+          "departmentId": "cmtg2g115001p4sjgo9cke0ny",
+          "label": "4 - Setor de Eventos",
+          "next": "eventos_handoff",
+          "queueId": "cmtg2g11c001r4sjgy9iw36dh"
+        },
+        {
+          "label": "5 - Setor de Licitações e Contratos",
+          "next": "licitacoes_info"
+        },
+        {
+          "label": "6 - Departamento Jurídico",
+          "next": "juridico_info"
+        },
+        {
+          "label": "7 - Departamento de RH",
+          "next": "rh_info"
+        },
+        {
+          "label": "8 - Departamento Contábil",
+          "next": "contabil_info"
+        },
+        {
+          "departmentId": "cmtg2g12h00294sjg07ynh2bi",
+          "label": "9 - Departamento de TI",
+          "next": "ti_handoff",
+          "queueId": "cmtg2g12q002b4sjgigsskidm"
+        },
+        {
+          "departmentId": "cmtg2g13q002t4sjg9yjqagfy",
+          "label": "10 - Gabinete da Presidência",
+          "next": "gabinete_handoff",
+          "queueId": "cmtg2g13w002v4sjgy1y39adx"
+        },
+        {
+          "label": "11 - Concurso Público",
+          "next": "concurso_info"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "🏛️ ATENDIMENTO CRA-PR\nEscolha uma opção:",
+      "type": "menu"
+    },
+    "registro_handoff": {
+      "departmentId": "cmtg2g0u800014sjgjjeud8tp",
+      "queueId": "cmtg2g0uo00034sjgh37pwiy1",
+      "text": "🔄 Certo. Vou direcionar seu atendimento para o setor responsável.",
+      "type": "handoff"
+    },
+    "registro_menu": {
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "label": "1 - Pessoa Física",
+          "next": "registro_pf_menu"
+        },
+        {
+          "label": "2 - Pessoa Jurídica",
+          "next": "registro_pj_menu"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "📋 SETOR DE REGISTRO\nEscolha uma opção:",
+      "type": "menu"
+    },
+    "registro_pf_cancelamento": {
+      "context": {
+        "returnMenu": "registro_pf_menu"
+      },
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "departmentId": "cmtg2g0u800014sjgjjeud8tp",
+          "label": "9 - Ainda estou com dúvidas, falar com atendente",
+          "next": "registro_handoff",
+          "queueId": "cmtg2g0uo00034sjgh37pwiy1"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "❌ CANCELAMENTO DE REGISTRO\n\nAcesse o link abaixo:\n🔗 https://cra-pr.org.br/pessoas-fisicas-novo/\n📌 Na aba Cancelamento de Registro",
+      "type": "menu"
+    },
+    "registro_pf_demais": {
+      "context": {
+        "returnMenu": "registro_pf_menu"
+      },
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "departmentId": "cmtg2g0u800014sjgjjeud8tp",
+          "label": "9 - Ainda estou com dúvidas, falar com atendente",
+          "next": "registro_handoff",
+          "queueId": "cmtg2g0uo00034sjgh37pwiy1"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "📁 DEMAIS SERVIÇOS\n\nAcesse sua área restrita:\n🔗 https://cra-pr.implanta.net.br/servicosonline/\n📌 Entre com login e senha e acesse o Menu Requerimentos",
+      "type": "menu"
+    },
+    "registro_pf_isencao": {
+      "context": {
+        "returnMenu": "registro_pf_menu"
+      },
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "departmentId": "cmtg2g0u800014sjgjjeud8tp",
+          "label": "9 - Ainda estou com dúvidas, falar com atendente",
+          "next": "registro_handoff",
+          "queueId": "cmtg2g0uo00034sjgh37pwiy1"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "💰 ISENÇÃO DE ANUIDADE\n\nAcesse o link abaixo:\n🔗 https://cra-pr.org.br/pessoas-fisicas-novo/\n📌 Na aba Isenção de Anuidade",
+      "type": "menu"
+    },
+    "registro_pf_licenca": {
+      "context": {
+        "returnMenu": "registro_pf_menu"
+      },
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "departmentId": "cmtg2g0u800014sjgjjeud8tp",
+          "label": "9 - Ainda estou com dúvidas, falar com atendente",
+          "next": "registro_handoff",
+          "queueId": "cmtg2g0uo00034sjgh37pwiy1"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "🔄 LICENÇA DE REGISTRO\n\nAcesse o link abaixo:\n🔗 https://cra-pr.org.br/pessoas-fisicas-novo/\n📌 Na aba Licença de Registro",
+      "type": "menu"
+    },
+    "registro_pf_menu": {
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "label": "1 - Novo Registro/Estudante",
+          "next": "registro_pf_novo"
+        },
+        {
+          "label": "2 - Cancelamento",
+          "next": "registro_pf_cancelamento"
+        },
+        {
+          "label": "3 - Licença",
+          "next": "registro_pf_licenca"
+        },
+        {
+          "label": "4 - Isenção",
+          "next": "registro_pf_isencao"
+        },
+        {
+          "label": "5 - Registro Remido",
+          "next": "registro_pf_remido"
+        },
+        {
+          "label": "6 - Demais Serviços",
+          "next": "registro_pf_demais"
+        },
+        {
+          "departmentId": "cmtg2g0u800014sjgjjeud8tp",
+          "label": "7 - Falar com Atendente",
+          "next": "registro_handoff",
+          "queueId": "cmtg2g0uo00034sjgh37pwiy1"
+        },
+        {
+          "label": "9 - Voltar ao Menu Anterior",
+          "next": "registro_menu"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "👤 REGISTRO - PESSOA FÍSICA\nEscolha uma opção:",
+      "type": "menu"
+    },
+    "registro_pf_novo": {
+      "context": {
+        "returnMenu": "registro_pf_menu"
+      },
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "departmentId": "cmtg2g0u800014sjgjjeud8tp",
+          "label": "9 - Ainda estou com dúvidas, falar com atendente",
+          "next": "registro_handoff",
+          "queueId": "cmtg2g0uo00034sjgh37pwiy1"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "📝 NOVO REGISTRO / ESTUDANTE\n\nAcesse o link abaixo:\n🔗 https://cra-pr.implanta.net.br/ServicosOnline/Precadastro/PreCadastro/",
+      "type": "menu"
+    },
+    "registro_pf_remido": {
+      "context": {
+        "returnMenu": "registro_pf_menu"
+      },
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "departmentId": "cmtg2g0u800014sjgjjeud8tp",
+          "label": "9 - Ainda estou com dúvidas, falar com atendente",
+          "next": "registro_handoff",
+          "queueId": "cmtg2g0uo00034sjgh37pwiy1"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "📋 REGISTRO REMIDO\n\nAcesse o link abaixo:\n🔗 https://cra-pr.org.br/pessoas-fisicas-novo/\n📌 Na aba Registro Remido",
+      "type": "menu"
+    },
+    "registro_pj_cancelamento": {
+      "context": {
+        "returnMenu": "registro_pj_menu"
+      },
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "departmentId": "cmtg2g0u800014sjgjjeud8tp",
+          "label": "9 - Ainda estou com dúvidas, falar com atendente",
+          "next": "registro_handoff",
+          "queueId": "cmtg2g0uo00034sjgh37pwiy1"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "❌ CANCELAMENTO DE REGISTRO - PESSOA JURÍDICA\n\nAcesse o link abaixo:\n🔗 https://cra-pr.org.br/pessoas-juridicas-novo/\n📌 Na aba Cancelamento de Registro",
+      "type": "menu"
+    },
+    "registro_pj_demais": {
+      "context": {
+        "returnMenu": "registro_pj_menu"
+      },
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "departmentId": "cmtg2g0u800014sjgjjeud8tp",
+          "label": "9 - Ainda estou com dúvidas, falar com atendente",
+          "next": "registro_handoff",
+          "queueId": "cmtg2g0uo00034sjgh37pwiy1"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "📁 DEMAIS SERVIÇOS - PESSOA JURÍDICA\n\nAcesse a área restrita da empresa:\n🔗 https://cra-pr.implanta.net.br/servicosonline/\n📌 Entre com login e senha e acesse o Menu Requerimentos",
+      "type": "menu"
+    },
+    "registro_pj_licenca": {
+      "context": {
+        "returnMenu": "registro_pj_menu"
+      },
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "departmentId": "cmtg2g0u800014sjgjjeud8tp",
+          "label": "9 - Ainda estou com dúvidas, falar com atendente",
+          "next": "registro_handoff",
+          "queueId": "cmtg2g0uo00034sjgh37pwiy1"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "🔄 LICENÇA DE REGISTRO - PESSOA JURÍDICA\n\nAcesse o link abaixo:\n🔗 https://cra-pr.org.br/pessoas-juridicas-novo/\n📌 Na aba Licença de Registro",
+      "type": "menu"
+    },
+    "registro_pj_menu": {
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "label": "1 - Novo Registro",
+          "next": "registro_pj_novo"
+        },
+        {
+          "label": "2 - Cancelamento",
+          "next": "registro_pj_cancelamento"
+        },
+        {
+          "label": "3 - Licença",
+          "next": "registro_pj_licenca"
+        },
+        {
+          "label": "4 - Transferência",
+          "next": "registro_pj_transferencia"
+        },
+        {
+          "label": "5 - Demais Serviços",
+          "next": "registro_pj_demais"
+        },
+        {
+          "departmentId": "cmtg2g0u800014sjgjjeud8tp",
+          "label": "6 - Falar com Atendente",
+          "next": "registro_handoff",
+          "queueId": "cmtg2g0uo00034sjgh37pwiy1"
+        },
+        {
+          "label": "9 - Voltar ao Menu Anterior",
+          "next": "registro_menu"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "🏢 REGISTRO - PESSOA JURÍDICA\nEscolha uma opção:",
+      "type": "menu"
+    },
+    "registro_pj_novo": {
+      "context": {
+        "returnMenu": "registro_pj_menu"
+      },
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "departmentId": "cmtg2g0u800014sjgjjeud8tp",
+          "label": "9 - Ainda estou com dúvidas, falar com atendente",
+          "next": "registro_handoff",
+          "queueId": "cmtg2g0uo00034sjgh37pwiy1"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "📝 NOVO REGISTRO - PESSOA JURÍDICA\n\nAcesse o link abaixo:\n🔗 https://cra-pr.implanta.net.br/ServicosOnline/Precadastro/PreCadastro/",
+      "type": "menu"
+    },
+    "registro_pj_transferencia": {
+      "context": {
+        "returnMenu": "registro_pj_menu"
+      },
+      "fallbackText": "⚠️ Opção inválida. Digite apenas o número correspondente ao menu.",
+      "options": [
+        {
+          "departmentId": "cmtg2g0u800014sjgjjeud8tp",
+          "label": "9 - Ainda estou com dúvidas, falar com atendente",
+          "next": "registro_handoff",
+          "queueId": "cmtg2g0uo00034sjgh37pwiy1"
+        },
+        {
+          "label": "0 - Voltar ao Menu Principal",
+          "next": "main_menu"
+        }
+      ],
+      "showBackCommand": false,
+      "text": "🔄 TRANSFERÊNCIA DE REGISTRO - PESSOA JURÍDICA\n\nAcesse o link abaixo:\n🔗 https://cra-pr.org.br/pessoas-juridicas-novo/\n📌 Na aba Transferência de Registro",
+      "type": "menu"
+    },
+    "rh_info": {
+      "returnTo": "main_menu",
+      "text": "👥 DEPARTAMENTO DE RH\n\nLigue para (41) 3311-5565.\n\n0 - Voltar ao Menu Principal",
+      "type": "text"
+    },
+    "ti_handoff": {
+      "departmentId": "cmtg2g12h00294sjg07ynh2bi",
+      "queueId": "cmtg2g12q002b4sjgigsskidm",
+      "text": "🔄 Certo. Vou direcionar seu atendimento para o setor responsável.",
+      "type": "handoff"
+    }
+  },
+  "start": "consent"
+}

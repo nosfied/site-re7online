@@ -51,11 +51,12 @@ Estado fechado/validado:
 - SECULT completed-service reporting: CLOSED / PRODUCTION VALIDATED;
 - Inbox Timeline Phase 1: CLOSED / PRODUCTION VALIDATED;
 - multichannel reconciliation migration: CLOSED / PRODUCTION VALIDATED;
+- SECULT auto-assignment incident 2026-08-31: AUDITED / BUG NOT CONFIRMED; UX clarification deployed in `c91671e9`;
 - CRA Demo V1: READY FOR CUSTOMER VALIDATION.
 
 Pendencias proximas:
 
-1. medir CPU/Inbox da SECULT em expediente, com janelas START/MID/END;
+1. concluir medicao CPU/Inbox da SECULT em expediente; START, MID e passada extra 14:17 capturados em 2026-09-02, END apos 17h pendente; polling de `/app/conversations` esta STRONGLY SUSPECTED / NOT YET PROVEN como contribuidor de CPU;
 2. decidir Inbox Phase 2 com base nessa evidencia;
 3. reduzir polling na Phase 3 depois de invalidacao segmentada;
 4. validar escala 10/30/50 sessoes antes de declarar capacidade CRA 30 agentes;
@@ -65,7 +66,7 @@ Dividas tecnicas abertas:
 
 - `multichannel.shadow_write.failed` / `missing_channel_account_id`: preexistente, non-strict, sem retry loop, associado a projection/data-quality gap de Web Session, non-blocking;
 - drift historico global Prisma schema/migrations: separado da migration de reconciliacao multichannel ja validada;
-- baselines CRA locais permanecem fora de commits tecnicos nao relacionados:
+- baselines CRA versionados nesta consolidacao como evidencia de validacao, nao como dump operacional:
   - `docs/bids/2026/cra-pr/CRA_PR_DEMO_FLOW_V1_CUSTOMER_VALIDATION_BASELINE.md`;
   - `docs/bids/2026/cra-pr/cra-pr-demo-flow-v1-customer-validation.definition.json`.
 

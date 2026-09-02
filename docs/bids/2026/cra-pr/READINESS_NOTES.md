@@ -97,6 +97,48 @@ CLOSED HUMAN REENTRY:
 CLOSED / REAL VALIDATED
 ```
 
+### CRA real tenant rollout state - 2026-09-02
+
+Estado observado em producao por leitura:
+
+- tenant: `cra-pr`;
+- status: ACTIVE;
+- departments: 6;
+- queues: 6;
+- users: 18 active total;
+- role split: 3 ADMIN, 5 SUPERVISOR, 10 AGENT;
+- active department memberships: 18;
+- RBAC and tenant isolation: PASS by provisioning validation.
+
+Flow publicado:
+
+```text
+CRA-PR - Atendimento Institucional
+cmtkhhxtq002p4spns3fp0yux
+```
+
+Estado do flow:
+
+- active: true;
+- entryPoint: true;
+- nodes: 31;
+- start: `consent`;
+- destination remap: PASS.
+
+Configuracao operacional:
+
+- CSAT: ENABLED;
+- WhatsApp Web feature: ENABLED;
+- Meta assets: PENDING;
+- Web Session pairing: PENDING;
+- HYBRID: PENDING / platform capability ready;
+- invites: READY;
+- training: READY;
+- Instagram/Facebook/Web: contracted but not activated initially.
+
+Nao registrar Meta/HYBRID como concluido ate onboarding e smoke reais do tenant
+CRA-PR.
+
 ### Escala CRA
 
 O fluxo V1 esta pronto para apresentacao funcional ao cliente, mas a prova de

@@ -82,6 +82,122 @@ CPU observada:
 Importante: a causa raiz de CPU ainda nao esta comprovada. E necessario medir
 durante expediente antes de declarar conclusao.
 
+### SECULT Inbox / CPU correlation - START/MID windows
+
+Primeiro ponto de medicao em producao:
+
+```text
+timestamp: 2026-09-02T08:21:14-03:00
+production HEAD: 08598293c1cc15360b5cfe02a21a779c8a040dec
+status: START WINDOW CAPTURED
+```
+
+Estado observado:
+
+- SECULT: CONNECTED;
+- Demo: CONNECTED;
+- health: PASS;
+- SECULT active app users: 7 seen in 5m / 10 active sessions;
+- SECULT Inbox presence: 7;
+- realtime connections: NOT_OBSERVED;
+- `/app/conversations` requests/min: NOT_OBSERVED;
+- inbox query count: NOT_OBSERVED;
+- runtime fallback count: NOT_OBSERVED;
+- backend CPU range: 0-106.7% instant;
+- backend CPU average: ~50.6%;
+- system load: 3.08 / 3.06 / 2.23 on 2 cores;
+- DB pressure: NORMAL;
+- dual-read rate: 0;
+- timeline incident: NO.
+
+Segundo ponto de medicao em producao:
+
+```text
+timestamp: 2026-09-02T12:47:39-03:00
+production HEAD: b9bc61eda4a8ec8ef919e1ab6112da119a9729cd
+status: MID WINDOW CAPTURED
+```
+
+Estado observado:
+
+- SECULT: CONNECTED;
+- Demo: CONNECTED;
+- health: PASS;
+- SECULT active app users: 5 seen in 5m / 10 active sessions;
+- SECULT realtime connections: ~3 active observed, fanout up to 5 delivered;
+- SECULT Inbox presence: 2 observed;
+- `/app/conversations` requests/min: NOT_OBSERVED;
+- inbox query count: NOT_OBSERVED;
+- runtime fallback count: NOT_OBSERVED;
+- backend CPU range: 76.2-76.4%;
+- backend CPU average: ~76.3%;
+- system load: 2.65 / 2.38 / 2.62 on 2 cores;
+- DB pressure: NORMAL;
+- dual-read rate: 0;
+- timeline incident: NO.
+
+Passada extra antes da janela END:
+
+```text
+timestamp: 2026-09-02T14:17:12-03:00 to 2026-09-02T14:18:12-03:00
+production HEAD: b9bc61eda4a8ec8ef919e1ab6112da119a9729cd
+status: EXTRA WINDOW CAPTURED
+```
+
+Estado observado:
+
+- SECULT: CONNECTED;
+- Demo: CONNECTED;
+- health: PASS;
+- SECULT active app users: 6 seen in 5m / 11 active sessions;
+- SECULT realtime connections: observed through logs, fanout up to 7 delivered;
+- SECULT Inbox presence: NOT_OBSERVED;
+- `/app/conversations` requests/min: ~103;
+- inbox query count: 1232 in 60s;
+- runtime fallback count: 0 in 60s;
+- backend CPU range: 63.3-100%;
+- backend CPU average: ~87.5%;
+- system load: 3.30 / 3.19 / 2.75 on 2 cores;
+- DB pressure: NORMAL;
+- dual-read rate: 0;
+- timeline incident: NO.
+
+Hipotese de trabalho:
+
+```text
+SECULT active Inbox usage may correlate with backend CPU.
+NOT PROVEN.
+```
+
+Interpretacao apos EXTRA 14:17:
+
+- MID nao confirma correlacao linear simples entre quantidade de usuarios/presenca Inbox e CPU;
+- CPU foi maior no MID apesar de menor quantidade observada de usuarios/presencas;
+- Inbox ainda pode contribuir por frequencia real de requests, multiplas abas, atividades nao observadas ou custo por request;
+- o EXTRA fortalece a hipotese de que a carga base do polling de `/app/conversations` e um contribuidor relevante para CPU;
+- runtime fallback = 0 e dual-read = 0 eliminam dois fatores anteriormente suspeitos nessa janela;
+- a rota ainda executa aproximadamente 12 queries por request;
+- ~103 requests/min resultam em ~1232 queries/min apenas nessa janela;
+- DB pressure permaneceu NORMAL, compativel com muitas queries curtas;
+- ainda nao declarar causalidade definitiva antes da janela END;
+- aguardar END antes de qualquer decisao sobre polling/realtime.
+
+Classificacao atual:
+
+```text
+INBOX POLLING AS CPU CONTRIBUTOR:
+STRONGLY SUSPECTED / NOT YET PROVEN
+```
+
+Comparacao START/MID/END:
+
+| Window | Active users | Inbox presence | /app/conversations req/min | Query count/min | Approx queries/request | Backend CPU avg | DB pressure |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| START | 7 seen / 10 sessions | 7 | NOT_OBSERVED | NOT_OBSERVED | NOT_OBSERVED | ~50.6% | NORMAL |
+| MID | 5 seen / 10 sessions | 2 | NOT_OBSERVED | NOT_OBSERVED | NOT_OBSERVED | ~76.3% | NORMAL |
+| EXTRA 14:17 | 6 seen / 11 sessions | NOT_OBSERVED | ~103 | 1232 | ~12 | ~87.5% | NORMAL |
+| END | pending | pending | pending | pending | pending | pending | pending |
+
 ```text
 INBOX / BACKEND PERFORMANCE:
 OPEN / NON-BLOCKING INVESTIGATION
