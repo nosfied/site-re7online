@@ -89,6 +89,43 @@ A Sprint 87M.4 criou:
 
 O CSV nao contem dados pessoais, conteudo de mensagem ou identificadores externos crus.
 
+## Homologacao real em tenant hibrido
+
+Status: CLOSED / REAL VALIDATED.
+
+Baseline:
+
+- production HEAD: `08598293c1cc15360b5cfe02a21a779c8a040dec`;
+- tenant controlado: `demo-converta`;
+- modo: `HYBRID`;
+- primary override: `AUTO` / null;
+- template aprovado: `data_exame`.
+
+Resultado validado:
+
+- template enviado pelo Inbox usou Meta Cloud;
+- envio do template gerou exatamente uma trilha logica de uso Meta;
+- status Meta do template chegou a `read`;
+- resposta do destinatario foi recebida por Meta Cloud e Web Session, mas gerou uma unica mensagem inbound canonica;
+- freeform posterior pelo Inbox usou Web Session;
+- freeform por Web Session nao gerou ledger Meta;
+- nao houve duplicidade de outbound, timeline ou flow/bot causada por coexistencia Meta + Web Session;
+- clientId, conversation e eventos permaneceram no tenant correto.
+
+Matriz de uso homologada:
+
+```text
+HYBRID + template
+-> META_CLOUD
+-> Meta usage logical count = 1
+
+HYBRID + post-reply freeform
+-> WEB_SESSION
+-> Meta usage logical count = 0
+```
+
+Essa homologacao confirma que billing evidence acompanha o provider efetivo do envio ativo. Echoes, receipts, dedupe events e inbound deliveries nao devem criar custo Meta adicional.
+
 ## Uso em editais e contratos
 
 Em propostas como SECULT-PE e CRA-PR, o controle deve ser descrito como:

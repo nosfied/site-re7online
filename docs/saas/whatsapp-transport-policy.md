@@ -120,6 +120,65 @@ For `HYBRID` tenants:
 - Templates, campaigns and scheduled templates use Meta Cloud.
 - Contact-start freeform is blocked by default.
 
+### Real-World Hybrid Homologation
+
+Status: CLOSED / REAL VALIDATED.
+
+Validation baseline:
+
+- production HEAD: `08598293c1cc15360b5cfe02a21a779c8a040dec`;
+- controlled tenant: `demo-converta`;
+- mode: `HYBRID`;
+- primary override: `AUTO` / null;
+- approved Meta template: `data_exame`.
+
+The validated real sequence was:
+
+1. Inbox template outbound used Meta Cloud.
+2. Recipient reply was delivered by both Meta Cloud and Web Session.
+3. Hybrid inbound dedupe produced exactly one canonical inbound message.
+4. Post-reply Inbox freeform used Web Session.
+
+Validated matrix:
+
+```text
+HYBRID + template
+-> META_CLOUD
+
+recipient reply
+-> Meta Cloud and Web Session may both deliver
+-> logical dedupe = 1
+
+HYBRID + post-reply freeform
+-> WEB_SESSION
+
+Meta usage:
+template = 1 logical Meta usage event stream
+Web Session freeform = 0 Meta usage
+```
+
+Observed controls:
+
+- canonical template outbound count: 1;
+- template timeline entries: 1;
+- Meta status reached `read`;
+- Web Session template outbound: no;
+- Web Session echo observed for the Meta template: yes;
+- Web Session echo duplicate: no;
+- recipient reply canonical inbound count: 1;
+- recipient reply timeline entries: 1;
+- duplicate flow/bot effect after reply: no;
+- freeform canonical outbound count: 1;
+- freeform timeline entries: 1;
+- freeform duplicate outbound: no;
+- freeform Meta echo: no;
+- freeform recipient receipt observed through Web Session;
+- conversation continuity: pass;
+- service cycle/protocol continuity: pass;
+- multitenant isolation: pass.
+
+The literal freeform body used in the real validation is not a product requirement. The requirement closed by this validation is provider selection: post-reply freeform in `HYBRID` / `AUTO` used Web Session.
+
 ## Contact Start Via Web Session
 
 An operational Web Session does not automatically allow `Contact -> Iniciar conversa` from CRM/Contacts.
@@ -172,6 +231,15 @@ Only the internal admin console should change this flag. Changes must be audited
 - Contact-start freeform: blocked unless explicitly enabled.
 - Template and campaign: Meta Cloud.
 - Explicit primary transport may influence only intents where policy allows provider choice.
+
+Configured mode template matrix:
+
+- `META_ONLY` / `CLOUD_ONLY` + template -> Meta Cloud.
+- `WEB_ONLY` + template -> blocked.
+- `HYBRID` + template -> Meta Cloud.
+- `NONE` + template -> blocked.
+
+There is no Meta-to-Web fallback for template sends.
 
 ## Primary Transport
 

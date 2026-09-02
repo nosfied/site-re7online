@@ -39,6 +39,12 @@ Eficiência operacional interna + uso real do produto.
 Estado fechado/validado:
 
 - hybrid exactly-once: CLOSED / REAL VALIDATED;
+- Meta template routing in configured modes: CLOSED / REAL VALIDATED;
+- HYBRID template outbound: CLOSED / REAL VALIDATED;
+- Meta-to-Web echo safety: CLOSED / REAL VALIDATED;
+- HYBRID inbound dedupe after Meta template reply: CLOSED / REAL VALIDATED;
+- post-reply freeform routing in HYBRID/AUTO: CLOSED / REAL VALIDATED;
+- Meta usage accounting for template vs Web Session freeform: CLOSED / REAL VALIDATED;
 - flow/runtime coherence: CLOSED / REAL VALIDATED;
 - closed HUMAN reentry: CLOSED / REAL VALIDATED;
 - SECULT CompletedServiceSnapshot: CLOSED / REAL ORGANIC VALIDATED;
