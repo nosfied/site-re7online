@@ -1989,8 +1989,7 @@ function canSendInboxMedia(channel: InboxChannel, item?: Pick<InboxConversationI
   return channel === "whatsapp";
 }
 
-function canSendInboxTemplate(channel: InboxChannel, item?: Pick<InboxConversationItem, "provider"> | null) {
-  if (channel === "whatsapp" && item?.provider === "web_session") return false;
+function canSendInboxTemplate(channel: InboxChannel) {
   return channel === "whatsapp";
 }
 
@@ -4970,8 +4969,7 @@ export default function AppInboxPage() {
     selectedConversation
   );
   const selectedConversationSupportsTemplateOutbound = canSendInboxTemplate(
-    selectedConversationChannel,
-    selectedConversation
+    selectedConversationChannel
   );
   const selectedConversationOutboundDisabledMessage =
     getInboxTextOutboundDisabledMessage(selectedConversationChannel, selectedConversation);
