@@ -104,6 +104,58 @@ async function writeTenants(clientKeys: string[]) {
   );
 }
 
+async function configureBusinessTemplateMetaTransport(params?: { webSessionEnabled?: boolean; suffix?: string }) {
+  const suffix = params?.suffix ?? safeTemplatePrefix;
+  const display = "+55 41 99117-7801";
+  const phoneNumberId = `template-meta-phone-${suffix}`;
+  const currentConfig = await prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: businessClientId },
+    select: { config: true },
+  });
+  const baseConfig =
+    currentConfig?.config && typeof currentConfig.config === "object" && !Array.isArray(currentConfig.config)
+      ? (currentConfig.config as Record<string, unknown>)
+      : {};
+  const config = {
+    ...baseConfig,
+    whatsappTransports: {
+      meta: { enabledForRouting: true },
+      webSession: { enabledForRouting: params?.webSessionEnabled === true },
+    },
+  };
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      config: config as Prisma.InputJsonValue,
+    },
+    create: {
+      clientId: businessClientId,
+      config: config as Prisma.InputJsonValue,
+    },
+  });
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      businessToken: `template-meta-token-${suffix}`,
+      phoneNumberId,
+      wabaId: `template-meta-waba-${suffix}`,
+      rawPayload: { phoneNumber: { display_phone_number: display } },
+    },
+    create: {
+      clientId: businessClientId,
+      businessToken: `template-meta-token-${suffix}`,
+      phoneNumberId,
+      wabaId: `template-meta-waba-${suffix}`,
+      rawPayload: { phoneNumber: { display_phone_number: display } },
+    },
+  });
+  await prisma.waPhoneNumber.upsert({
+    where: { phoneNumberId },
+    update: { clientId: businessClientId, display },
+    create: { clientId: businessClientId, phoneNumberId, display },
+  });
+}
+
 async function createUser(params: {
   clientId: string;
   role: string;
@@ -3065,6 +3117,7 @@ test("inbox routes WhatsApp web session outbound through worker without Meta fal
     else process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN = previousWorkerToken;
     globalThis.fetch = previousFetch;
     await prisma.client.update({ where: { id: businessClientId }, data: { features: {} } });
+    await prisma.tenantOperationalConfig.deleteMany({ where: { clientId: businessClientId } });
   });
   const address = fakeWorker.address() as AddressInfo;
   process.env.WHATSAPP_WEB_WORKER_CONTROL_URL = `http://127.0.0.1:${address.port}`;
@@ -3201,7 +3254,7 @@ test("inbox routes WhatsApp web session outbound through worker without Meta fal
     templateId: "template-web-session-blocked",
   });
   assert.equal(blockedTemplate.status, 409);
-  assert.equal(getErrorCode(blockedTemplate.body), "unsupported_transport");
+  assert.equal(getErrorCode(blockedTemplate.body), "template_transport_unavailable");
 
   const response = await request<{
     ok: true;
@@ -7702,6 +7755,7 @@ test("template local availability blocks campaign usage and preserves tenant iso
 
 test("inbox template send uses approved active template and updates timeline safely", async (t) => {
   const waId = "5541991177801";
+  await configureBusinessTemplateMetaTransport({ suffix: `${safeTemplatePrefix}-success` });
   const template = await prisma.template.create({
     data: {
       clientId: businessClientId,
@@ -7832,6 +7886,208 @@ test("inbox template send uses approved active template and updates timeline saf
   assert.equal(usagePayload.billingRule, "utility_billable");
   assert.equal(usagePayload.estimatedMetaUnitCostUsd, 0.008);
   assert.equal(JSON.stringify(usagePayload).includes(waId), false);
+});
+
+test("inbox template send routes hard template intent through Meta in hybrid Web-origin conversation", async (t) => {
+  const waId = "5541991177820";
+  const channelAccountId = `hybrid-web-origin-${safeTemplatePrefix}`;
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `inbox_hybrid_template_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Ola {{1}}, continuamos seu atendimento.",
+    },
+  });
+  await prisma.client.update({
+    where: { id: businessClientId },
+    data: { features: { whatsappWebSession: true } },
+  });
+  await configureBusinessTemplateMetaTransport({ webSessionEnabled: true, suffix: `${safeTemplatePrefix}-hybrid` });
+  await prisma.channelAccount.create({
+    data: {
+      clientId: businessClientId,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId,
+      enabled: true,
+      runtimeEnabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: true,
+      status: "connected",
+      tokenStatus: "configured",
+      metadata: {
+        webSession: {
+          observedState: "CONNECTED",
+          lastConnectedAt: new Date("2026-08-11T12:00:00.000Z").toISOString(),
+        },
+      },
+    },
+  });
+  const conversation = await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId,
+      windowIsOpen: false,
+      windowExpiresAt: new Date("2026-01-01T10:00:00.000Z"),
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      conversationKey: `${prefix}-business:${waId}`,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId,
+      windowIsOpen: false,
+      mode: "HUMAN",
+      status: "IN_PROGRESS",
+      assignedUserId: businessAdmin.id,
+      assignedTo: businessAdmin.name,
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  const metaPayloads: unknown[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaPayloads.push(JSON.parse(String(init?.body ?? "{}")));
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.hybrid.${safeTemplatePrefix}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const response = await request<{
+    ok: true;
+    message: { type: string; status: string; metaMessageId: string | null; templateName: string };
+  }>("POST", `/app/conversation/${waId}/send-template`, businessAdmin, {
+    templateId: template.id,
+    variables: { "1": "Maria" },
+  });
+
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  assert.equal(response.body.message.type, "TEMPLATE");
+  assert.equal(response.body.message.status, "SENT");
+  assert.equal(response.body.message.metaMessageId, `wamid.hybrid.${safeTemplatePrefix}`);
+  assert.equal(response.body.message.templateName, template.name);
+  assert.equal(metaPayloads.length, 1);
+  assert.equal((metaPayloads[0] as { type?: string; template?: { name?: string }; to?: string }).type, "template");
+  assert.equal((metaPayloads[0] as { template?: { name?: string } }).template?.name, template.name);
+  assert.equal((metaPayloads[0] as { to?: string }).to, waId);
+
+  const outbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, waId, messageId: { startsWith: "inbox.template." } },
+  });
+  assert.equal(outbound.channel, "whatsapp");
+  assert.equal(outbound.provider, "meta_cloud");
+  assert.equal(outbound.metaMessageId, `wamid.hybrid.${safeTemplatePrefix}`);
+  assert.equal(outbound.templateName, template.name);
+  const usageEvents = await prisma.event.count({
+    where: { clientId: businessClientId, conversationId: conversation.id, eventName: "meta.usage.estimated" },
+  });
+  assert.equal(usageEvents, 1);
+  const webSessionOutbounds = await prisma.outboundMessage.count({
+    where: { clientId: businessClientId, waId, provider: "web_session" },
+  });
+  assert.equal(webSessionOutbounds, 0);
+});
+
+test("inbox template send does not use global env credentials for tenant template", async () => {
+  const waId = "5541991177821";
+  const phoneNumberId = `legacy-template-phone-${safeTemplatePrefix}`;
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `inbox_credential_block_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso operacional.",
+    },
+  });
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      config: {
+        whatsappTransports: {
+          meta: { enabledForRouting: true },
+          webSession: { enabledForRouting: false },
+        },
+      },
+    },
+    create: {
+      clientId: businessClientId,
+      config: {
+        whatsappTransports: {
+          meta: { enabledForRouting: true },
+          webSession: { enabledForRouting: false },
+        },
+      },
+    },
+  });
+  await prisma.tenantMetaConfig.deleteMany({ where: { clientId: businessClientId } });
+  await prisma.waPhoneNumber.upsert({
+    where: { phoneNumberId },
+    update: { clientId: businessClientId, display: "+55 41 99117-7821" },
+    create: {
+      clientId: businessClientId,
+      phoneNumberId,
+      display: "+55 41 99117-7821",
+    },
+  });
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      conversationKey: `${prefix}-business:${waId}`,
+      channel: "whatsapp",
+      provider: "meta",
+      mode: "HUMAN",
+      status: "IN_PROGRESS",
+      assignedUserId: businessAdmin.id,
+      assignedTo: businessAdmin.name,
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+
+  const response = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send-template`, businessAdmin, {
+    templateId: template.id,
+  });
+
+  assert.equal(response.status, 503, JSON.stringify(response.body));
+  assert.equal(getErrorCode(response.body), "tenant_outbound_credentials_missing");
+  const outboundCount = await prisma.outboundMessage.count({
+    where: { clientId: businessClientId, waId, messageId: { startsWith: "inbox.template." } },
+  });
+  assert.equal(outboundCount, 0);
 });
 
 test("inbox text contextual reply resolves internal message references safely", async (t) => {
@@ -8358,6 +8614,7 @@ test("inbox text contextual reply resolves internal message references safely", 
 
 test("inbox template send blocks opt-out, inactive templates, missing variables and cross tenant template", async (t) => {
   const waId = "5541991177802";
+  await configureBusinessTemplateMetaTransport({ suffix: `${safeTemplatePrefix}-blocks` });
   const template = await prisma.template.create({
     data: {
       clientId: businessClientId,
@@ -8463,6 +8720,7 @@ test("inbox template send blocks unsafe conversations and records Meta failure w
   const deletedWaId = "5541991177804";
   const anonymizedWaId = "5541991177805";
   const markedWaId = "5541991177806";
+  await configureBusinessTemplateMetaTransport({ suffix: `${safeTemplatePrefix}-failure` });
   const approved = await prisma.template.create({
     data: {
       clientId: businessClientId,
@@ -8932,20 +9190,7 @@ test("agent signature is tenant-scoped and applies only to human text and canned
       content: "Ola {{1}}, seu atendimento continua.",
     },
   });
-  await prisma.tenantMetaConfig.upsert({
-    where: { clientId: businessClientId },
-    create: {
-      clientId: businessClientId,
-      businessToken: "test-agent-signature-token",
-      phoneNumberId: `phone-signature-${safeTemplatePrefix}`,
-      rawPayload: {},
-    },
-    update: {
-      businessToken: "test-agent-signature-token",
-      phoneNumberId: `phone-signature-${safeTemplatePrefix}`,
-      rawPayload: {},
-    },
-  });
+  await configureBusinessTemplateMetaTransport({ suffix: `${safeTemplatePrefix}-signature` });
   t.after(async () => {
     const existing = await prisma.tenantOperationalConfig.findUnique({
       where: { clientId: businessClientId },

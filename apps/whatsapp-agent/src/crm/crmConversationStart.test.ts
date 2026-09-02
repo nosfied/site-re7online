@@ -5,6 +5,7 @@ import {
   resolveConfiguredWhatsappTenantMode,
   resolveEffectiveWhatsappOutboundTransport,
   resolveCrmContactConversationStartEligibility,
+  resolveWhatsappTemplateOutboundTransport,
 } from "./crmConversationStart.js";
 
 function makePrisma(overrides: {
@@ -473,6 +474,91 @@ test("effective WhatsApp outbound transport honors explicit primary and legacy s
     status: "unavailable",
     source: "explicit_unavailable",
     configuredMode: "HYBRID",
+  });
+});
+
+test("template outbound transport is Meta-only by configured tenant mode", async () => {
+  const metaOnly = await resolveWhatsappTemplateOutboundTransport({
+    prisma: makePrisma({
+      primaryTransport: null,
+      webConfigured: false,
+      metaConfigured: true,
+      metaOperational: true,
+    }) as never,
+    clientId: "client-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(metaOnly, {
+    status: "ready",
+    provider: "meta",
+    source: "configured_cloud_only",
+    configuredMode: "CLOUD_ONLY",
+  });
+
+  const hybrid = await resolveWhatsappTemplateOutboundTransport({
+    prisma: makePrisma({ primaryTransport: null, outboundEnabled: true, metaOperational: true }) as never,
+    clientId: "client-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(hybrid, {
+    status: "ready",
+    provider: "meta",
+    source: "hybrid_template",
+    configuredMode: "HYBRID",
+  });
+
+  const webOnly = await resolveWhatsappTemplateOutboundTransport({
+    prisma: makePrisma({
+      primaryTransport: null,
+      outboundEnabled: true,
+      metaOperational: true,
+      whatsappTransports: {
+        meta: { enabledForRouting: false },
+        webSession: { enabledForRouting: true },
+      },
+    }) as never,
+    clientId: "client-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(webOnly, {
+    status: "unavailable",
+    source: "configured_unavailable",
+    configuredMode: "WEB_ONLY",
+    reason: "web_only",
+  });
+
+  const none = await resolveWhatsappTemplateOutboundTransport({
+    prisma: makePrisma({
+      primaryTransport: null,
+      webConfigured: false,
+      metaConfigured: false,
+      metaOperational: false,
+    }) as never,
+    clientId: "client-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(none, {
+    status: "unavailable",
+    source: "none_operational",
+    configuredMode: "NONE",
+    reason: "none",
+  });
+
+  const metaUnavailable = await resolveWhatsappTemplateOutboundTransport({
+    prisma: makePrisma({
+      primaryTransport: null,
+      webConfigured: false,
+      metaConfigured: true,
+      metaOperational: false,
+    }) as never,
+    clientId: "client-1",
+    clientStatus: "ACTIVE",
+  });
+  assert.deepEqual(metaUnavailable, {
+    status: "unavailable",
+    source: "configured_unavailable",
+    configuredMode: "CLOUD_ONLY",
+    reason: "meta_not_operational",
   });
 });
 

@@ -61,6 +61,20 @@ export type EffectiveWhatsappOutboundTransport =
 
 export type WhatsappConfiguredTenantMode = "WEB_ONLY" | "CLOUD_ONLY" | "HYBRID" | "NONE";
 
+export type WhatsappTemplateOutboundTransport =
+  | {
+      status: "ready";
+      provider: "meta";
+      source: "configured_cloud_only" | "hybrid_template";
+      configuredMode: WhatsappConfiguredTenantMode;
+    }
+  | {
+      status: "unavailable";
+      source: "client_inactive" | "configured_unavailable" | "none_operational";
+      configuredMode: WhatsappConfiguredTenantMode;
+      reason: "client_inactive" | "meta_not_operational" | "web_only" | "none";
+    };
+
 export type ConfiguredWhatsappTenantModeSnapshot = {
   mode: WhatsappConfiguredTenantMode;
   webConfigured: boolean;
@@ -254,6 +268,61 @@ export async function resolveEffectiveWhatsappOutboundTransport(params: {
       : { status: "unavailable", source: "configured_unavailable", configuredMode: configuredMode.mode };
   }
   return { status: "unavailable", source: "none_operational", configuredMode: configuredMode.mode };
+}
+
+export async function resolveWhatsappTemplateOutboundTransport(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientStatus: string | null | undefined;
+}): Promise<WhatsappTemplateOutboundTransport> {
+  if (params.clientStatus !== "ACTIVE") {
+    return {
+      status: "unavailable",
+      source: "client_inactive",
+      configuredMode: "NONE",
+      reason: "client_inactive",
+    };
+  }
+  const [configuredMode, metaIdentity] = await Promise.all([
+    resolveConfiguredWhatsappTenantMode({
+      prisma: params.prisma,
+      clientId: params.clientId,
+    }),
+    resolveOperationalMetaWhatsappIdentity({
+      prisma: params.prisma,
+      clientId: params.clientId,
+    }),
+  ]);
+  if (configuredMode.mode === "NONE") {
+    return {
+      status: "unavailable",
+      source: "none_operational",
+      configuredMode: configuredMode.mode,
+      reason: "none",
+    };
+  }
+  if (configuredMode.mode === "WEB_ONLY") {
+    return {
+      status: "unavailable",
+      source: "configured_unavailable",
+      configuredMode: configuredMode.mode,
+      reason: "web_only",
+    };
+  }
+  if (!configuredMode.metaConfigured || !metaIdentity.canonicalNumber) {
+    return {
+      status: "unavailable",
+      source: "configured_unavailable",
+      configuredMode: configuredMode.mode,
+      reason: "meta_not_operational",
+    };
+  }
+  return {
+    status: "ready",
+    provider: "meta",
+    source: configuredMode.mode === "HYBRID" ? "hybrid_template" : "configured_cloud_only",
+    configuredMode: configuredMode.mode,
+  };
 }
 
 export async function isWhatsappFreeformStartTransportReady(params: {

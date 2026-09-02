@@ -379,6 +379,7 @@ import {
   resolveConfiguredWhatsappTenantMode,
   resolveCrmWebSessionRecipient,
   resolveCrmContactConversationStartEligibility,
+  resolveWhatsappTemplateOutboundTransport,
 } from "../crm/crmConversationStart.js";
 import {
   CrmContactMutationError,
@@ -5615,8 +5616,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 409, httpError("unsupported_channel", "Envio de template pelo Inbox esta disponivel apenas para WhatsApp."));
         return;
       }
-      if (resolvedChannelFields.provider === "web_session") {
-        json(res, 409, httpError("unsupported_transport", "Templates nao estao disponiveis para WhatsApp por sessao nesta etapa."));
+      const templateTransport = await resolveWhatsappTemplateOutboundTransport({
+        prisma,
+        clientId: client.id,
+        clientStatus: client.status,
+      });
+      if (templateTransport.status !== "ready") {
+        json(res, 409, httpError("template_transport_unavailable", "Templates exigem Meta Cloud operacional para este tenant."));
         return;
       }
 
@@ -5844,6 +5850,31 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, httpError("template_variables_required", "Preencha todas as variaveis obrigatorias."));
         return;
       }
+      const credentials = await resolveTenantOutboundCredentials({
+        clientId: client.id,
+        clientKey: client.clientKey,
+      });
+      if (!credentials || credentials.source !== "tenant_meta") {
+        await persistEvent({
+          clientId: client.id,
+          conversationId: conversationRow.id,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          requestId,
+          eventName: "inbox.template.blocked",
+          payloadJson: buildInboxTemplateEventPayload({
+            conversationId: conversationRow.id,
+            templateId: template.id,
+            templateName: template.name,
+            templateCategory: template.category,
+            templateLanguage: template.language,
+            windowOpenAtSend: currentConversation.window.isOpen === true,
+            reason: "tenant_outbound_credentials_missing",
+          }),
+        });
+        json(res, 503, httpError("tenant_outbound_credentials_missing", "Credenciais Meta do tenant indisponiveis."));
+        return;
+      }
 
       const tenants = await getTenants();
       const phoneNumberId = tenants[client.clientKey]?.metaPhoneNumberId || undefined;
@@ -5903,6 +5934,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       await persistOutboundMessage({
         clientId: client.id,
         phoneNumberId,
+        channel: "whatsapp",
+        provider: "meta_cloud",
         waId: resolvedConversation.resolvedWaId,
         waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
         messageId,
