@@ -676,6 +676,17 @@ export type AppCompletedServiceReportDailyBucket = {
   completedCount: number;
 };
 
+export type AppCompletedServiceReportDetailRow = {
+  id: string;
+  protocol: string;
+  closedAt: string;
+  agentName: string;
+  departmentName: string;
+  queueName: string;
+  closeReason: string | null;
+  closeSource: string | null;
+};
+
 export type AppCompletedServiceReport = {
   ok: true;
   periodFrom: string;
@@ -689,6 +700,7 @@ export type AppCompletedServiceReport = {
   byDepartment: AppCompletedServiceReportBucket[];
   byDepartmentAgent: AppCompletedServiceReportDepartmentAgentBucket[];
   daily: AppCompletedServiceReportDailyBucket[];
+  details: AppCompletedServiceReportDetailRow[];
   notes: string[];
 };
 
@@ -4163,7 +4175,7 @@ export async function exportAppCompletedServiceReportCsv(
     to?: string | null;
     assignedUserId?: string | null;
     departmentId?: string | null;
-    view?: "by-agent" | "department-agent";
+    view?: "by-agent" | "department-agent" | "detail";
   }
 ) {
   const query = new URLSearchParams();

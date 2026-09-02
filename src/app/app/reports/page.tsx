@@ -456,7 +456,7 @@ export default function AppReportsPage() {
   const [exporting, setExporting] = useState(false);
   const [exportingSessions, setExportingSessions] = useState(false);
   const [exportingSatisfaction, setExportingSatisfaction] = useState(false);
-  const [exportingCompletedServices, setExportingCompletedServices] = useState<"by-agent" | "department-agent" | null>(null);
+  const [exportingCompletedServices, setExportingCompletedServices] = useState<"by-agent" | "department-agent" | "detail" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [report, setReport] = useState<ConversationReportResponse | null>(null);
@@ -894,11 +894,20 @@ export default function AppReportsPage() {
     }
   };
 
-  const handleExportCompletedServices = async (view: "by-agent" | "department-agent") => {
+  const handleExportCompletedServices = async (view: "by-agent" | "department-agent" | "detail") => {
     if (!session) return;
     const { from, to } = getReportPeriodIsoBounds({ periodMode, range, customFrom, customTo });
     if (!from || !to || Date.parse(from) > Date.parse(to)) {
       setError("Informe um período válido para exportar atendimentos concluídos.");
+      return;
+    }
+    if (view === "detail" && completedServiceReport?.totalCompleted === 0) {
+      const historyMessage = completedServiceHistoryMessage(completedServiceReport);
+      setError(
+        historyMessage
+          ? `Não há atendimentos detalhados disponíveis para o período selecionado. ${historyMessage}`
+          : "Não há atendimentos detalhados disponíveis para o período selecionado."
+      );
       return;
     }
     setExportingCompletedServices(view);
@@ -916,7 +925,12 @@ export default function AppReportsPage() {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = view === "department-agent" ? "completed-services-department-agent.csv" : "completed-services-by-agent.csv";
+      anchor.download =
+        view === "detail"
+          ? "completed-services-detail.csv"
+          : view === "department-agent"
+            ? "completed-services-department-agent.csv"
+            : "completed-services-by-agent.csv";
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -2128,6 +2142,14 @@ export default function AppReportsPage() {
                   className="w-full rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-2 text-sm text-white hover:bg-re7-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {exportingCompletedServices === "department-agent" ? "Exportando..." : "Exportar setor e atendente"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportCompletedServices("detail")}
+                  disabled={Boolean(exportingCompletedServices)}
+                  className="w-full rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-2 text-sm text-white hover:bg-re7-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {exportingCompletedServices === "detail" ? "Exportando..." : "Exportar detalhado por atendimento"}
                 </button>
               </div>
             </section>

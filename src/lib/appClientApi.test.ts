@@ -5,6 +5,7 @@ import {
   fetchAppAgentAvailability,
   fetchAppCompletedServiceReport,
   fetchAppSatisfactionReport,
+  exportAppCompletedServiceReportCsv,
   formatAppWhatsappIdentityDisplay,
   heartbeatAppAgentAvailability,
   loadAppSession,
@@ -307,11 +308,12 @@ test("completed service report client sends snapshot filters to app endpoint", a
           availableSince: null,
           totalCompleted: 0,
           byAgent: [],
-          byDepartment: [],
-          byDepartmentAgent: [],
-          daily: [],
-          notes: [],
-        }),
+            byDepartment: [],
+            byDepartmentAgent: [],
+            daily: [],
+            details: [],
+            notes: [],
+          }),
       };
     },
   });
@@ -347,4 +349,52 @@ test("completed service report client sends snapshot filters to app endpoint", a
   assert.equal(url.searchParams.get("to"), "2026-08-31T23:59:59.999Z");
   assert.equal(url.searchParams.get("departmentId"), "department-1");
   assert.equal(url.searchParams.get("assignedUserId"), "user-1");
+});
+
+test("completed service CSV export supports detailed snapshot view", async () => {
+  const calls: string[] = [];
+  const originalFetch = globalThis.fetch;
+  Object.assign(globalThis, {
+    fetch: async (url: string | URL) => {
+      calls.push(String(url));
+      return {
+        ok: true,
+        text: async () => "\"PROTOCOLO\"\n",
+      };
+    },
+  });
+
+  const session: AppSession = {
+    baseUrl: "https://app.example.test",
+    token: "token",
+    user: {
+      id: "supervisor-a",
+      name: "Supervisor A",
+      email: "supervisor@example.test",
+      clientId: "tenant-a",
+      role: "SUPERVISOR",
+    },
+    features: {},
+    profile: "business",
+  };
+
+  try {
+    await exportAppCompletedServiceReportCsv(session, {
+      from: "2026-08-01T00:00:00.000Z",
+      to: "2026-08-31T23:59:59.999Z",
+      departmentId: "department-1",
+      assignedUserId: "user-1",
+      view: "detail",
+    });
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
+
+  const url = new URL(calls[0]);
+  assert.equal(url.pathname, "/app/reports/completed-services/export");
+  assert.equal(url.searchParams.get("from"), "2026-08-01T00:00:00.000Z");
+  assert.equal(url.searchParams.get("to"), "2026-08-31T23:59:59.999Z");
+  assert.equal(url.searchParams.get("departmentId"), "department-1");
+  assert.equal(url.searchParams.get("assignedUserId"), "user-1");
+  assert.equal(url.searchParams.get("view"), "detail");
 });

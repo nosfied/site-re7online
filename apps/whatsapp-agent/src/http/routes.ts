@@ -12140,6 +12140,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, reportScope.status, httpError(reportScope.code, "Report filter not allowed"));
         return;
       }
+      const requestedView = String(query.view ?? "").trim();
+      const view = requestedView === "department-agent" || requestedView === "detail" ? requestedView : "by-agent";
       const timezone = await resolveTenantOperationalTimezone(prisma, client.id);
       const report = await buildCompletedServiceReport(prisma, {
         clientId: client.id,
@@ -12149,9 +12151,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         departmentIds: reportScope.requestedDepartmentId ? null : reportScope.effectiveDepartmentIds,
         assignedUserId: reportScope.requestedUserId,
         timezone,
+        includeDetails: pathname.endsWith("/export") && view === "detail",
       });
       if (pathname.endsWith("/export")) {
-        const view = String(query.view ?? "").trim() === "department-agent" ? "department-agent" : "by-agent";
         const safeClientKey = client.clientKey.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
         res.writeHead(200, {
           "Content-Type": "text/csv; charset=utf-8",

@@ -6804,6 +6804,14 @@ test("completed service reports aggregate immutable snapshots with RBAC scope", 
       })
     )
   );
+  const queueA = await prisma.queue.create({
+    data: {
+      clientId: businessClientId,
+      departmentId: departmentA.id,
+      name: `${prefix} Completed Services Queue A`,
+    },
+    select: { id: true, name: true },
+  });
   const supervisor = await createUser({
     clientId: businessClientId,
     role: "SUPERVISOR",
@@ -6829,7 +6837,7 @@ test("completed service reports aggregate immutable snapshots with RBAC scope", 
         closedAt: new Date("2031-04-01T02:30:00.000Z"),
         assignedUserId: agentA.id,
         departmentId: departmentA.id,
-        queueId: null,
+        queueId: queueA.id,
         closedByUserId: supervisor.id,
         closeReason: "resolved",
         closeSource: "app",
@@ -7019,6 +7027,44 @@ test("completed service reports aggregate immutable snapshots with RBAC scope", 
   assert.match(csv.text, /SETOR/);
   assert.match(csv.text, new RegExp(departmentA.name));
   assert.doesNotMatch(csv.text, /CVT-COMPLETED-OTHER/);
+
+  const aggregateCsv = await requestText(
+    "GET",
+    `/app/reports/completed-services/export?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&view=by-agent`,
+    businessAdmin
+  );
+  assert.equal(aggregateCsv.status, 200, aggregateCsv.text);
+  assert.match(aggregateCsv.text, /^"ATENDENTE","TOTAL"\n/);
+  assert.doesNotMatch(aggregateCsv.text, /"PROTOCOLO"/);
+
+  const detailCsv = await requestText(
+    "GET",
+    `/app/reports/completed-services/export?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&view=detail`,
+    businessAdmin
+  );
+  assert.equal(detailCsv.status, 200, detailCsv.text);
+  assert.match(detailCsv.contentType ?? "", /text\/csv/);
+  assert.match(
+    detailCsv.text,
+    /^"PROTOCOLO","DATA\/HORA FECHAMENTO","ATENDENTE","SETOR","FILA","MOTIVO FECHAMENTO","ORIGEM FECHAMENTO"\n/
+  );
+  assert.match(detailCsv.text, /"CVT-COMPLETED-A0"/);
+  assert.match(detailCsv.text, /"CVT-COMPLETED-A1"/);
+  assert.match(detailCsv.text, new RegExp(`"${queueA.name}"`));
+  assert.match(detailCsv.text, /"Sem atendente","Sem setor","Sem fila","system","system"/);
+  assert.doesNotMatch(detailCsv.text, /CVT-COMPLETED-OTHER/);
+  assert.equal(detailCsv.text.split("\n").filter(Boolean).length, 7);
+
+  const supervisorDetailCsv = await requestText(
+    "GET",
+    `/app/reports/completed-services/export?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&view=detail`,
+    supervisor
+  );
+  assert.equal(supervisorDetailCsv.status, 200, supervisorDetailCsv.text);
+  assert.match(supervisorDetailCsv.text, /"CVT-COMPLETED-A0"/);
+  assert.match(supervisorDetailCsv.text, /"CVT-COMPLETED-A1"/);
+  assert.match(supervisorDetailCsv.text, /"CVT-COMPLETED-A2"/);
+  assert.doesNotMatch(supervisorDetailCsv.text, /CVT-COMPLETED-B1/);
 });
 
 test("app reports scope supervisors to all active department memberships", async () => {

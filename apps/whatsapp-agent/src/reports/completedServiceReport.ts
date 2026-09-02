@@ -8,6 +8,7 @@ export type CompletedServiceReportFilters = {
   departmentIds?: string[] | null;
   assignedUserId?: string | null;
   timezone: string;
+  includeDetails?: boolean;
 };
 
 export type CompletedServiceReportBucket = {
@@ -29,6 +30,17 @@ export type CompletedServiceReportDailyBucket = {
   completedCount: number;
 };
 
+export type CompletedServiceReportDetailRow = {
+  id: string;
+  protocol: string;
+  closedAt: string;
+  agentName: string;
+  departmentName: string;
+  queueName: string;
+  closeReason: string | null;
+  closeSource: string | null;
+};
+
 export type CompletedServiceReportResponse = {
   ok: true;
   periodFrom: string;
@@ -42,6 +54,7 @@ export type CompletedServiceReportResponse = {
   byDepartment: CompletedServiceReportBucket[];
   byDepartmentAgent: CompletedServiceReportDepartmentAgentBucket[];
   daily: CompletedServiceReportDailyBucket[];
+  details: CompletedServiceReportDetailRow[];
   notes: string[];
 };
 
@@ -77,11 +90,13 @@ async function loadNameMaps(
   params: {
     userIds: Array<string | null>;
     departmentIds: Array<string | null>;
+    queueIds?: Array<string | null>;
   }
 ) {
   const userIds = Array.from(new Set(params.userIds.filter((id): id is string => Boolean(id))));
   const departmentIds = Array.from(new Set(params.departmentIds.filter((id): id is string => Boolean(id))));
-  const [users, departments] = await Promise.all([
+  const queueIds = Array.from(new Set((params.queueIds ?? []).filter((id): id is string => Boolean(id))));
+  const [users, departments, queues] = await Promise.all([
     userIds.length
       ? prisma.user.findMany({
           where: { clientId, id: { in: userIds } },
@@ -94,10 +109,17 @@ async function loadNameMaps(
           select: { id: true, name: true },
         })
       : [],
+    queueIds.length
+      ? prisma.queue.findMany({
+          where: { clientId, id: { in: queueIds } },
+          select: { id: true, name: true },
+        })
+      : [],
   ]);
   return {
     userNameById: new Map(users.map((user) => [user.id, user.name || user.email || "Usuario removido"])),
     departmentNameById: new Map(departments.map((department) => [department.id, department.name || "Setor removido"])),
+    queueNameById: new Map(queues.map((queue) => [queue.id, queue.name || "Fila removida"])),
   };
 }
 
@@ -109,6 +131,11 @@ function agentName(userId: string | null, userNameById: Map<string, string>) {
 function departmentName(departmentId: string | null, departmentNameById: Map<string, string>) {
   if (!departmentId) return "Sem setor";
   return departmentNameById.get(departmentId) ?? "Setor removido";
+}
+
+function queueName(queueId: string | null, queueNameById: Map<string, string>) {
+  if (!queueId) return "Sem fila";
+  return queueNameById.get(queueId) ?? "Fila removida";
 }
 
 function sortBuckets<T extends { completedCount: number; name?: string; agentName?: string; departmentName?: string }>(
@@ -158,7 +185,7 @@ export async function buildCompletedServiceReport(
   params: CompletedServiceReportFilters
 ): Promise<CompletedServiceReportResponse> {
   const where = buildWhere(params);
-  const [tenantCutoff, totalCompleted, byAgentRaw, byDepartmentRaw, byDepartmentAgentRaw, daily] =
+  const [tenantCutoff, totalCompleted, byAgentRaw, byDepartmentRaw, byDepartmentAgentRaw, daily, detailRaw] =
     await Promise.all([
       (prisma.completedServiceSnapshot as CompletedServiceDelegate).aggregate({
         where: { clientId: params.clientId },
@@ -181,17 +208,36 @@ export async function buildCompletedServiceReport(
         _count: { _all: true },
       }),
       loadDailyBuckets(prisma, params),
+      params.includeDetails
+        ? (prisma.completedServiceSnapshot as CompletedServiceDelegate).findMany({
+            where,
+            orderBy: [{ closedAt: "asc" }, { id: "asc" }],
+            select: {
+              id: true,
+              protocol: true,
+              closedAt: true,
+              assignedUserId: true,
+              departmentId: true,
+              queueId: true,
+              closeReason: true,
+              closeSource: true,
+            },
+          })
+        : [],
     ]);
 
-  const { userNameById, departmentNameById } = await loadNameMaps(prisma, params.clientId, {
+  const { userNameById, departmentNameById, queueNameById } = await loadNameMaps(prisma, params.clientId, {
     userIds: [
       ...byAgentRaw.map((row) => row.assignedUserId),
       ...byDepartmentAgentRaw.map((row) => row.assignedUserId),
+      ...detailRaw.map((row) => row.assignedUserId),
     ],
     departmentIds: [
       ...byDepartmentRaw.map((row) => row.departmentId),
       ...byDepartmentAgentRaw.map((row) => row.departmentId),
+      ...detailRaw.map((row) => row.departmentId),
     ],
+    queueIds: detailRaw.map((row) => row.queueId),
   });
 
   return {
@@ -227,6 +273,16 @@ export async function buildCompletedServiceReport(
       }))
     ),
     daily,
+    details: detailRaw.map((row) => ({
+      id: row.id,
+      protocol: row.protocol,
+      closedAt: row.closedAt.toISOString(),
+      agentName: agentName(row.assignedUserId, userNameById),
+      departmentName: departmentName(row.departmentId, departmentNameById),
+      queueName: queueName(row.queueId, queueNameById),
+      closeReason: row.closeReason ?? null,
+      closeSource: row.closeSource ?? null,
+    })),
     notes: [
       "Cada atendimento concluido corresponde a um ciclo/protocolo encerrado, contabilizado no momento do fechamento.",
       tenantCutoff._min.closedAt
@@ -243,8 +299,23 @@ function csvCell(value: string | number | null | undefined) {
 
 export function buildCompletedServiceReportCsv(
   report: CompletedServiceReportResponse,
-  view: "by-agent" | "department-agent"
+  view: "by-agent" | "department-agent" | "detail"
 ) {
+  if (view === "detail") {
+    const rows = [
+      ["PROTOCOLO", "DATA/HORA FECHAMENTO", "ATENDENTE", "SETOR", "FILA", "MOTIVO FECHAMENTO", "ORIGEM FECHAMENTO"],
+      ...report.details.map((item) => [
+        item.protocol,
+        item.closedAt,
+        item.agentName,
+        item.departmentName,
+        item.queueName,
+        item.closeReason ?? "",
+        item.closeSource ?? "",
+      ]),
+    ];
+    return `${rows.map((row) => row.map((cell) => csvCell(cell)).join(",")).join("\n")}\n`;
+  }
   const rows =
     view === "by-agent"
       ? [["ATENDENTE", "TOTAL"], ...report.byAgent.map((item) => [item.name, item.completedCount] as const)]
