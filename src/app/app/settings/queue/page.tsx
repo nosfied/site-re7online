@@ -147,6 +147,16 @@ export default function AppSettingsQueuePage() {
   const effectiveModeLabel = policy.enabled
     ? getQueueAssignmentModeUxLabel(policy.mode)
     : "Manual";
+  const modeHelp =
+    policy.mode === "round_robin"
+      ? "Alterna os novos atendimentos entre os usuários elegíveis, considerando setor, presença online quando exigida e limite máximo de atendimentos ativos."
+      : policy.mode === "least_active"
+        ? "Direciona novos atendimentos para o usuário elegível com menor quantidade de atendimentos ativos no escopo configurado."
+        : "Novas conversas ficam disponíveis para serem assumidas manualmente.";
+  const scopeHelp =
+    policy.scope === "tenant"
+      ? "Usa os usuários elegíveis da organização, respeitando o setor da conversa quando houver direcionamento prévio."
+      : "Usa os usuários elegíveis do setor direcionado na conversa.";
 
   const updatePolicy = (patch: Partial<AppQueueAssignmentPolicy>) => {
     setPolicy((current) => {
@@ -284,6 +294,7 @@ export default function AppSettingsQueuePage() {
                     <option value="round_robin">Distribuição alternada</option>
                     <option value="least_active">Menor carga</option>
                   </select>
+                  <span className="text-xs leading-relaxed text-white/58">{modeHelp}</span>
                 </label>
 
                 <label className="flex flex-col gap-1.5 text-sm text-white/75">
@@ -299,6 +310,7 @@ export default function AppSettingsQueuePage() {
                     <option value="department">Respeitar setor</option>
                     <option value="tenant">Organização inteira</option>
                   </select>
+                  <span className="text-xs leading-relaxed text-white/58">{scopeHelp}</span>
                 </label>
 
                 <label className="flex flex-col gap-1.5 text-sm text-white/75">
@@ -331,7 +343,7 @@ export default function AppSettingsQueuePage() {
                   {
                     key: "requireOnline",
                     label: "Exigir atendente online",
-                    help: "Sem confirmação confiável de presença online, esta opção mantém a distribuição automática sem atendentes elegíveis.",
+                    help: "Quando ativado, somente atendentes com presença online confirmada entram na distribuição automática. Quando desativado, atendentes elegíveis podem receber novas conversas mesmo sem presença online recente.",
                   },
                 ].map((item) => (
                   <label
