@@ -9,6 +9,7 @@ import {
   createAppRealtimeClient,
   dispatchAppAudioState,
   dispatchAppRealtimeEvent,
+  dispatchAppRealtimeStatus,
   getConversationIdentityFromRealtimeEvent,
   handleRealtimeNotificationCandidate,
   setActiveConversationIdentity,
@@ -529,6 +530,7 @@ export default function AppRealtimeBridge() {
       baseUrl: session.baseUrl,
       token: session.token,
       onMessage: (event) => handleRealtimeEvent(event, session),
+      onStatus: dispatchAppRealtimeStatus,
     });
     clientRef.current = realtime;
     realtime.connect();

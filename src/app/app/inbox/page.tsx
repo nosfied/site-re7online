@@ -14,6 +14,7 @@ import {
 } from "@/lib/appUxLabels";
 import {
   addAppRealtimeListener,
+  addAppRealtimeStatusListener,
   canUserSeeConversationInInboxByPolicy,
   canUserReceiveTargetedNotification,
   handleRealtimeNotificationCandidate,
@@ -21,7 +22,18 @@ import {
   setActiveConversationIdentity,
   setActiveInboxConversation,
   type AppRealtimeEvent,
+  type AppRealtimeStatus,
 } from "@/lib/appRealtime";
+import {
+  createCoalescedAsyncRefetchScheduler,
+  INBOX_LIST_FALLBACK_POLL_MS,
+  INBOX_REALTIME_REFETCH_DEBOUNCE_MS,
+  SELECTED_TIMELINE_FALLBACK_POLL_MS,
+  shouldRealtimeEventRefreshInboxList,
+  shouldRealtimeEventRefreshSelectedTimeline,
+  shouldRealtimeStatusReconcile,
+  type RealtimeRefetchScheduler,
+} from "@/lib/inboxRealtimeInvalidation";
 import {
   compareTimelineMessagesAscending,
   conversationMutationTargetsSelectedConversation,
@@ -176,7 +188,6 @@ const INBOX_PUSH_DISABLED_STORAGE_KEY = "wa_app_inbox_push_disabled_v1";
 const INBOX_UX_DEBUG_STORAGE_KEY = "converta_inbox_ux_debug";
 const MEDIA_NOT_FOUND_TTL_MS = 5 * 60 * 1000;
 const CONVERSATION_PAGE_SIZE = 30;
-const SELECTED_TIMELINE_BACKGROUND_REFRESH_MS = 10000;
 const MEDIA_UPLOAD_SOFT_LIMIT_BYTES = 9.2 * 1024 * 1024;
 const IMAGE_UPLOAD_TARGET_BYTES = 7.5 * 1024 * 1024;
 const mediaBlobCache = new Map<string, Blob>();
@@ -2484,6 +2495,7 @@ export default function AppInboxPage() {
   const skipNextSelectedConversationListMarkReadRef = useRef(false);
   const queueMutationAutoReadSuppressedKeysRef = useRef(new Set<string>());
   const autoReadSuppressionSessionKeyRef = useRef<string | null>(null);
+  const conversationListRefreshPromiseRef = useRef<Promise<void> | null>(null);
   const refreshConversationListRef = useRef<((activeSession: AppSession) => Promise<void>) | null>(null);
   const refreshSelectedTimelineRef = useRef<
     ((
@@ -2493,10 +2505,15 @@ export default function AppInboxPage() {
       readIntent?: TimelineRefreshReadIntent
     ) => Promise<void>) | null
   >(null);
+  const realtimeListRefetchSchedulerRef = useRef<RealtimeRefetchScheduler | null>(null);
+  const realtimeTimelineRefetchSchedulerRef = useRef<RealtimeRefetchScheduler | null>(null);
+  const lastRealtimeStatusRef = useRef<AppRealtimeStatus | null>(null);
+  const loadingMessagesRef = useRef(false);
   const timelineCacheRef = useRef(new Map<string, InboxMessageItem[]>());
   const highlightedReferenceTimeoutRef = useRef<number | null>(null);
   const renderedPriorityLogKeysRef = useRef(new Set<string>());
   const sortedLogSignatureRef = useRef<string | null>(null);
+  loadingMessagesRef.current = loadingMessages;
 
   const handleUnauthorized = useCallback(() => {
     clearAutoReadSuppressionKeys(queueMutationAutoReadSuppressedKeysRef.current);
@@ -3402,11 +3419,24 @@ export default function AppInboxPage() {
   }, [session, targetsCurrentSelectedConversation]);
 
   const applyRealtimeEvent = useCallback((event: AppRealtimeEvent) => {
+    if (!session || event.clientId !== session.user.clientId) return;
+    if (shouldRealtimeEventRefreshInboxList(event)) {
+      realtimeListRefetchSchedulerRef.current?.schedule();
+    }
+    if (
+      shouldRealtimeEventRefreshSelectedTimeline({
+        event,
+        selectedConversationKey,
+        selectedConversationWaId,
+        selectedConversationIdentityCandidates: selectedConversationIdentityCandidatesRef.current,
+      })
+    ) {
+      realtimeTimelineRefetchSchedulerRef.current?.schedule();
+    }
     if (event.type === "message.status.updated") {
       applyRealtimeStatusUpdated(event);
       return;
     }
-    if (!session || event.clientId !== session.user.clientId) return;
     if (event.type === "conversation.read_state.updated") {
       if (
         event.readScope?.type === "assigned" &&
@@ -3787,11 +3817,9 @@ export default function AppInboxPage() {
     isBusinessTenant,
     conversations,
     inboxVisibilityPolicy,
+    shouldRealtimeEventRefreshInboxList,
+    shouldRealtimeEventRefreshSelectedTimeline,
   ]);
-
-  useEffect(() => {
-    return addAppRealtimeListener(applyRealtimeEvent);
-  }, [applyRealtimeEvent]);
 
   const buildConversationNotificationRequest = useCallback((
     item: InboxConversationItem,
@@ -3864,6 +3892,10 @@ export default function AppInboxPage() {
   conversationQueryKeyRef.current = conversationQueryKey;
 
   const refreshConversationList = useCallback(async (activeSession: AppSession) => {
+    if (conversationListRefreshPromiseRef.current) {
+      return conversationListRefreshPromiseRef.current;
+    }
+    const refreshPromise = (async () => {
     const requestQueryKey = conversationQueryKey;
     const skipSelectedConversationMarkRead = skipNextSelectedConversationListMarkReadRef.current;
     skipNextSelectedConversationListMarkReadRef.current = false;
@@ -4048,6 +4080,15 @@ export default function AppInboxPage() {
 	        activeConversation.waId
 	      );
 	    }
+    })();
+    conversationListRefreshPromiseRef.current = refreshPromise;
+    try {
+      await refreshPromise;
+    } finally {
+      if (conversationListRefreshPromiseRef.current === refreshPromise) {
+        conversationListRefreshPromiseRef.current = null;
+      }
+    }
 	  }, [
 	    buildConversationFetchOptions,
 	    buildConversationNotificationRequest,
@@ -4246,6 +4287,70 @@ export default function AppInboxPage() {
       }
     };
   }, [refreshSelectedTimeline]);
+
+  useEffect(() => {
+    if (!session) {
+      realtimeListRefetchSchedulerRef.current?.cancel();
+      realtimeTimelineRefetchSchedulerRef.current?.cancel();
+      realtimeListRefetchSchedulerRef.current = null;
+      realtimeTimelineRefetchSchedulerRef.current = null;
+      lastRealtimeStatusRef.current = null;
+      return;
+    }
+
+    const handleRefetchError = (err: unknown) => {
+      const status = (err as { status?: number }).status;
+      if (status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (isConversationGoneError(err)) {
+        clearSelectedConversation();
+      }
+    };
+
+    realtimeListRefetchSchedulerRef.current = createCoalescedAsyncRefetchScheduler(
+      () => refreshConversationListRef.current?.(session),
+      {
+        delayMs: INBOX_REALTIME_REFETCH_DEBOUNCE_MS,
+        onError: handleRefetchError,
+      }
+    );
+    realtimeTimelineRefetchSchedulerRef.current = createCoalescedAsyncRefetchScheduler(
+      () => {
+        const selectedWaId = selectedConversationWaIdRef.current;
+        if (!selectedWaId || loadingMessagesRef.current) return;
+        return refreshSelectedTimelineRef.current?.(session, selectedWaId, "append");
+      },
+      {
+        delayMs: INBOX_REALTIME_REFETCH_DEBOUNCE_MS,
+        onError: handleRefetchError,
+      }
+    );
+
+    return () => {
+      realtimeListRefetchSchedulerRef.current?.cancel();
+      realtimeTimelineRefetchSchedulerRef.current?.cancel();
+      realtimeListRefetchSchedulerRef.current = null;
+      realtimeTimelineRefetchSchedulerRef.current = null;
+    };
+  }, [clearSelectedConversation, handleUnauthorized, session]);
+
+  useEffect(() => {
+    if (!session) return;
+    return addAppRealtimeListener(applyRealtimeEvent);
+  }, [applyRealtimeEvent, session]);
+
+  useEffect(() => {
+    if (!session) return;
+    return addAppRealtimeStatusListener((nextStatus) => {
+      const previousStatus = lastRealtimeStatusRef.current;
+      lastRealtimeStatusRef.current = nextStatus;
+      if (!shouldRealtimeStatusReconcile({ previousStatus, nextStatus })) return;
+      realtimeListRefetchSchedulerRef.current?.schedule();
+      realtimeTimelineRefetchSchedulerRef.current?.schedule();
+    });
+  }, [session]);
 
 	  useEffect(() => {
 	    if (!session) return;
@@ -4602,7 +4707,7 @@ export default function AppInboxPage() {
           selectedConversationWaId &&
           !loadingMessages &&
           messagesConversationKey === selectedConversationKey &&
-          now - selectedTimelineLastRefreshAtRef.current >= SELECTED_TIMELINE_BACKGROUND_REFRESH_MS
+          now - selectedTimelineLastRefreshAtRef.current >= SELECTED_TIMELINE_FALLBACK_POLL_MS
         ) {
           selectedTimelineLastRefreshAtRef.current = now;
           await refreshSelectedTimeline(session, selectedConversationWaId, "append");
@@ -4618,7 +4723,7 @@ export default function AppInboxPage() {
       } finally {
         polling = false;
       }
-    }, 2000);
+    }, INBOX_LIST_FALLBACK_POLL_MS);
 
     return () => window.clearInterval(interval);
   }, [
@@ -5138,7 +5243,10 @@ export default function AppInboxPage() {
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (!isAppForegroundFocused() || !selectedConversation) return;
+      if (!isAppForegroundFocused()) return;
+      realtimeListRefetchSchedulerRef.current?.schedule();
+      realtimeTimelineRefetchSchedulerRef.current?.schedule();
+      if (!selectedConversation) return;
       if (!canCurrentUserMutateConversationReadState(selectedConversation, session?.user.id)) return;
       markConversationIdentitiesAsRead(
         getConversationIdentityCandidates(selectedConversation),
@@ -5146,8 +5254,12 @@ export default function AppInboxPage() {
         selectedConversation.waId
       );
     };
+    window.addEventListener("focus", handleVisibilityChange);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [markConversationIdentitiesAsRead, selectedConversation, session?.user.id]);
 
   const selectedLead = useMemo(() => {

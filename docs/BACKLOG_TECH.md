@@ -52,15 +52,15 @@ Estado fechado/validado:
 - Inbox Timeline Phase 1: CLOSED / PRODUCTION VALIDATED;
 - multichannel reconciliation migration: CLOSED / PRODUCTION VALIDATED;
 - SECULT auto-assignment incident 2026-08-31: AUDITED / BUG NOT CONFIRMED; UX clarification deployed in `c91671e9`;
+- SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / LOAD VALIDATION STILL PENDING;
 - CRA Demo V1: READY FOR CUSTOMER VALIDATION.
 
 Pendencias proximas:
 
-1. concluir medicao CPU/Inbox da SECULT em expediente; START, MID e passada extra 14:17 capturados em 2026-09-02, END apos 17h pendente; polling de `/app/conversations` esta STRONGLY SUSPECTED / NOT YET PROVEN como contribuidor de CPU;
-2. decidir Inbox Phase 2 com base nessa evidencia;
-3. reduzir polling na Phase 3 depois de invalidacao segmentada;
-4. validar escala 10/30/50 sessoes antes de declarar capacidade CRA 30 agentes;
-5. desenhar waiting-on-customer 1h como regra funcional separada.
+1. deployar Inbox Phase 2: WebSocket como sinal primario de invalidacao, polling lento como reconciliacao/fallback;
+2. medir pos-deploy `/app/conversations` req/min, CPU e incidentes de timeline durante uso real;
+3. validar escala 10/30/50 sessoes antes de declarar capacidade CRA 30 agentes;
+4. desenhar waiting-on-customer 1h como regra funcional separada.
 
 Dividas tecnicas abertas:
 

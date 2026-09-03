@@ -83,6 +83,7 @@ type AppRealtimeClientOptions = {
 };
 
 export const APP_REALTIME_EVENT_NAME = "re7:inbox-realtime";
+export const APP_REALTIME_STATUS_EVENT_NAME = "re7:inbox-realtime-status";
 export const APP_NOTIFICATION_EVENT_NAME = "re7:app-notification";
 export const APP_AUDIO_STATE_EVENT_NAME = "re7:app-audio-state";
 export const APP_AUDIO_UNLOCK_EVENT_NAME = "re7:app-audio-unlock";
@@ -212,6 +213,20 @@ export function addAppRealtimeListener(handler: (event: AppRealtimeEvent) => voi
   };
   window.addEventListener(APP_REALTIME_EVENT_NAME, listener);
   return () => window.removeEventListener(APP_REALTIME_EVENT_NAME, listener);
+}
+
+export function dispatchAppRealtimeStatus(status: AppRealtimeStatus) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<AppRealtimeStatus>(APP_REALTIME_STATUS_EVENT_NAME, { detail: status }));
+}
+
+export function addAppRealtimeStatusListener(handler: (status: AppRealtimeStatus) => void) {
+  if (typeof window === "undefined") return () => undefined;
+  const listener = (event: Event) => {
+    handler((event as CustomEvent<AppRealtimeStatus>).detail);
+  };
+  window.addEventListener(APP_REALTIME_STATUS_EVENT_NAME, listener);
+  return () => window.removeEventListener(APP_REALTIME_STATUS_EVENT_NAME, listener);
 }
 
 export function dispatchAppNotificationRequest(request: AppNotificationRequest) {

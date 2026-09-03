@@ -82,7 +82,7 @@ CPU observada:
 Importante: a causa raiz de CPU ainda nao esta comprovada. E necessario medir
 durante expediente antes de declarar conclusao.
 
-### SECULT Inbox / CPU correlation - START/MID windows
+### SECULT Inbox / CPU correlation - START/MID/END windows
 
 Primeiro ponto de medicao em producao:
 
@@ -162,6 +162,26 @@ Estado observado:
 - dual-read rate: 0;
 - timeline incident: NO.
 
+Janela END em producao:
+
+```text
+timestamp: 2026-09-02T17:27-03:00 approximately
+production HEAD: 80376a427d41ba4c34e978f989947054dcb6d8ab
+status: END WINDOW CAPTURED
+```
+
+Estado observado:
+
+- SECULT: CONNECTED;
+- Demo: CONNECTED;
+- health: PASS;
+- SECULT effective Inbox online: 0;
+- `/app/conversations` requests/min: effectively idle / not material;
+- backend CPU average: ~8.2%;
+- DB pressure: NORMAL;
+- dual-read rate: 0;
+- timeline incident: NO.
+
 Hipotese de trabalho:
 
 ```text
@@ -179,14 +199,17 @@ Interpretacao apos EXTRA 14:17:
 - a rota ainda executa aproximadamente 12 queries por request;
 - ~103 requests/min resultam em ~1232 queries/min apenas nessa janela;
 - DB pressure permaneceu NORMAL, compativel com muitas queries curtas;
-- ainda nao declarar causalidade definitiva antes da janela END;
-- aguardar END antes de qualquer decisao sobre polling/realtime.
+- a janela END mostrou CPU baixa quando nao havia uso efetivo de Inbox;
+- isso fecha a decisao operacional de Phase 2 para reduzir polling e usar
+  WebSocket como sinal primario de invalidacao;
+- ainda nao declarar causalidade absoluta: a evidencia e forte o suficiente
+  para priorizacao, mas nao substitui teste controlado de carga.
 
 Classificacao atual:
 
 ```text
 INBOX POLLING AS CPU CONTRIBUTOR:
-STRONGLY SUSPECTED / NOT YET PROVEN
+STRONGLY SUSPECTED / OPERATIONAL SIGNAL CLOSED
 ```
 
 Comparacao START/MID/END:
@@ -196,18 +219,18 @@ Comparacao START/MID/END:
 | START | 7 seen / 10 sessions | 7 | NOT_OBSERVED | NOT_OBSERVED | NOT_OBSERVED | ~50.6% | NORMAL |
 | MID | 5 seen / 10 sessions | 2 | NOT_OBSERVED | NOT_OBSERVED | NOT_OBSERVED | ~76.3% | NORMAL |
 | EXTRA 14:17 | 6 seen / 11 sessions | NOT_OBSERVED | ~103 | 1232 | ~12 | ~87.5% | NORMAL |
-| END | pending | pending | pending | pending | pending | pending | pending |
+| END | active sessions possible, effective Inbox online 0 | 0 effective | idle / not material | NOT_OBSERVED | NOT_OBSERVED | ~8.2% | NORMAL |
 
 ```text
 INBOX / BACKEND PERFORMANCE:
-OPEN / NON-BLOCKING INVESTIGATION
+CLOSED FOR PHASE 2 DECISION / LOAD VALIDATION STILL PENDING
 ```
 
 Modelo de escala atual estimado:
 
 ```text
-Inbox list polling: ~2000ms
-Selected timeline refresh: ~10000ms
+Inbox list polling before Phase 2: ~2000ms
+Selected timeline refresh before Phase 2: ~10000ms
 1 operador: ~30 list polls/min
 10 operadores: ~300 list polls/min
 30 operadores: ~900 list polls/min

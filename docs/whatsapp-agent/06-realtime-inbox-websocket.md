@@ -110,6 +110,8 @@ O bridge:
 O frontend usa eventos nativos do browser:
 
 - `re7:inbox-realtime`: entrega eventos realtime para o inbox;
+- `re7:inbox-realtime-status`: entrega status local do socket para reconciliacao
+  em reconnect;
 - `re7:app-notification`: entrega candidatos aceitos para som/notificacao.
 
 Nao ha biblioteca externa para event bus.
@@ -284,48 +286,57 @@ Motivo:
 - `Carregando conversas...` nao deve aparecer em selecao normal;
 - a barra de rolagem lateral nao deve pular em polling.
 
-## Polling fallback
+## WebSocket-driven invalidation + polling fallback
 
-O polling continua ativo.
+Phase 2 usa WebSocket como sinal primario de mudanca do Inbox e mantem polling
+como reconciliacao lenta/fallback.
 
 Uso atual:
 
-- atualiza a lista de conversas;
-- complementa timeline quando socket falha ou evento e perdido;
+- eventos `message.created`, `message.status.updated`,
+  `conversation.handoff.updated` e `conversation.read_state.updated` invalidam a
+  lista de conversas;
+- eventos de mensagem/status/handoff que pertencem a conversa selecionada
+  invalidam a timeline selecionada;
+- eventos de read-state nao recarregam timeline;
+- invalidacoes rapidas sao coalescidas antes do REST refetch;
+- reconnect do WebSocket refaz lista e timeline selecionada;
+- retorno de foco/visibilidade refaz lista e timeline selecionada;
+- polling lento complementa timeline quando socket falha ou evento e perdido;
 - usa a mesma deduplicacao de notificacao;
 - nao deve transformar hydration/historico em mensagem nova.
 
 Regra operacional:
 
 - WebSocket melhora latencia;
-- REST/polling preserva consistencia.
+- REST preserva consistencia;
+- polling nao e mais o mecanismo primario de atualizacao da lista.
 
-Direcao alvo ainda nao totalmente implementada:
+Intervalos atuais:
 
 ```text
-Initial REST load
-+
-WebSocket as primary change signal
-+
-conversation-scoped invalidation/refetch
-+
-slow reconciliation polling
-+
-focus/reconnect reconciliation
-+
-active request cancellation
-+
-stale-response guard
-+
-deterministic timeline ordering
+Inbox list fallback polling: 30000ms
+Selected timeline fallback refresh: 60000ms
+Realtime refetch debounce: 250ms
 ```
 
 Plano:
 
 - Phase 1, consistency hardening: DONE / PRODUCTION VALIDATED;
-- Phase 2, WebSocket primary plus targeted list/timeline invalidation: OPEN;
-- Phase 3, reduce polling to reconciliation/fallback and pause hidden tabs: OPEN;
+- Phase 2, WebSocket primary plus targeted list/timeline invalidation: DONE;
+- Phase 3, pause hidden-tab polling and broader route query optimization: OPEN;
 - Phase 4, scale/load validation with 10/30/50 sessions: OPEN.
+
+Evidencia que motivou Phase 2:
+
+- EXTRA 14:17 em 2026-09-02: `/app/conversations` ~103 req/min, 1232 queries/min,
+  ~12 queries/request, CPU media ~87.5%, DB pressure NORMAL;
+- END 17:27 em 2026-09-02: effective Inbox online 0, CPU media ~8.2%, DB
+  pressure NORMAL.
+
+Conclusao: polling de `/app/conversations` e contribuidor operacional
+fortemente suspeito para CPU em expediente. A decisao de Phase 2 esta fechada,
+mas capacidade final ainda exige validacao de carga/uso real pos-deploy.
 
 ## Nginx em producao
 
