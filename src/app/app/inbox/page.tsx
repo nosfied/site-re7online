@@ -2514,6 +2514,7 @@ export default function AppInboxPage() {
     ) => Promise<void>) | null
   >(null);
   const realtimeListRefetchSchedulerRef = useRef<RealtimeRefetchScheduler | null>(null);
+  const pendingRealtimeTimelineRefetchAfterLoadRef = useRef(false);
   const realtimeTimelineRefetchSchedulerRef = useRef<RealtimeRefetchScheduler | null>(null);
   const lastRealtimeStatusRef = useRef<AppRealtimeStatus | null>(null);
   const loadingMessagesRef = useRef(false);
@@ -4341,8 +4342,18 @@ export default function AppInboxPage() {
     );
     realtimeTimelineRefetchSchedulerRef.current = createCoalescedAsyncRefetchScheduler(
       () => {
+  useEffect(() => {
+    if (loadingMessages || !pendingRealtimeTimelineRefetchAfterLoadRef.current) return;
+    pendingRealtimeTimelineRefetchAfterLoadRef.current = false;
+    realtimeTimelineRefetchSchedulerRef.current?.schedule();
+  }, [loadingMessages]);
+
         const selectedWaId = selectedConversationWaIdRef.current;
-        if (!selectedWaId || loadingMessagesRef.current) return;
+        if (!selectedWaId) return;
+        if (loadingMessagesRef.current) {
+          pendingRealtimeTimelineRefetchAfterLoadRef.current = true;
+          return;
+        }
         return refreshSelectedTimelineRef.current?.(session, selectedWaId, "append");
       },
       {

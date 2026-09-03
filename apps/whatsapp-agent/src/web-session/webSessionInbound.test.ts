@@ -748,6 +748,38 @@ test("ingestBaileysWebSessionMessage persists tenant-scoped text inbound once", 
   assert.equal(state.events.some((event) => event.eventName === "whatsapp.web.inbound.duplicate"), true);
 });
 
+test("ingestBaileysWebSessionMessage publishes message realtime only for canonical insert", async () => {
+  resetState();
+  const messageEvents: Array<Extract<InboxRealtimeEvent, { type: "message.created" }>> = [];
+  const publishMessageCreatedRealtime = async (
+    event: Extract<InboxRealtimeEvent, { type: "message.created" }>
+  ) => {
+    messageEvents.push(event);
+  };
+
+  const result = await ingestText(
+    "teste inbound",
+    "MSG_REALTIME_1",
+    "2026-08-11T12:00:00.000Z",
+    publishMessageCreatedRealtime
+  );
+  const replay = await ingestText(
+    "teste inbound duplicado",
+    "MSG_REALTIME_1",
+    "2026-08-11T12:00:01.000Z",
+    publishMessageCreatedRealtime
+  );
+
+  assert.equal(result.action, "persisted");
+  assert.equal(replay.action, "duplicate");
+  assert.equal(messageEvents.length, 1);
+  assert.equal(messageEvents[0]?.type, "message.created");
+  assert.equal(messageEvents[0]?.clientId, "client_1");
+  assert.equal(messageEvents[0]?.waIdCanonical, "5584999997784");
+  assert.equal(messageEvents[0]?.message.direction, "INBOUND");
+  assert.equal(messageEvents[0]?.message.messageId, "web:account_1:MSG_REALTIME_1");
+});
+
 test("ingestBaileysWebSessionMessage does not recreate inactive default department", async () => {
   resetState({
     departments: [
@@ -1246,6 +1278,9 @@ async function ingestText(
   text: string,
   messageId: string,
   timestamp = "2026-08-11T12:00:00.000Z",
+  publishMessageCreatedRealtime?: (
+    event: Extract<InboxRealtimeEvent, { type: "message.created" }>
+  ) => Promise<void>,
   publishHandoffRealtime?: (
     event: Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>
   ) => Promise<void>
@@ -1260,6 +1295,7 @@ async function ingestText(
       messageTimestamp: Date.parse(timestamp) / 1000,
       message: { conversation: text },
     },
+    publishMessageCreatedRealtime,
     publishHandoffRealtime,
   });
 }
@@ -1838,6 +1874,7 @@ test("chatbot handoff opens a new human service cycle with persisted operational
       "1",
       "MSG_HANDOFF_CYCLE",
       "2026-08-11T12:00:00.000Z",
+      undefined,
       publishHandoffRealtime
     );
     assert.equal(result.action, "persisted");
@@ -1845,6 +1882,7 @@ test("chatbot handoff opens a new human service cycle with persisted operational
       "1",
       "MSG_HANDOFF_CYCLE",
       "2026-08-11T12:00:00.000Z",
+      undefined,
       publishHandoffRealtime
     );
     assert.equal(replay.action, "duplicate");
@@ -2020,6 +2058,7 @@ test("chatbot handoff keeps queue and department coherent when a prior default d
       "1",
       "MSG_HANDOFF_QUEUE_DEPARTMENT",
       "2026-08-11T12:00:00.000Z",
+      undefined,
       async (event) => {
         handoffEvents.push(event);
       }

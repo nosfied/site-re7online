@@ -767,6 +767,71 @@ test("internal web session handoff realtime endpoint requires worker auth and va
   }
 });
 
+test("internal web session message realtime endpoint requires worker auth and validates payload", async () => {
+  const previousToken = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN;
+  process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN = "message-realtime-test-token";
+  try {
+    const unauthorized = await requestWithBearer<ErrorPayload>(
+      "POST",
+      "/internal/web-session/message-realtime",
+      "wrong-token",
+      { clientId: businessClientId, waId: "5511955557784", message: {} }
+    );
+    assert.equal(unauthorized.status, 401);
+
+    const invalid = await requestWithBearer<ErrorPayload>(
+      "POST",
+      "/internal/web-session/message-realtime",
+      "message-realtime-test-token",
+      { clientId: businessClientId, waId: "", message: {} }
+    );
+    assert.equal(invalid.status, 400);
+
+    const valid = await requestWithBearer<{ ok: boolean }>(
+      "POST",
+      "/internal/web-session/message-realtime",
+      "message-realtime-test-token",
+      {
+        clientId: businessClientId,
+        waId: "5511955557784",
+        waIdCanonical: "55119555557784",
+        mode: "HUMAN",
+        handoffStatus: "active",
+        humanInboxVisible: true,
+        assignedUserId: null,
+        departmentId: "department-general",
+        protocol: "CVT-ABC123",
+        cycleId: "cycle-a",
+        message: {
+          inboxVisibility: "human_timeline",
+          protocol: "CVT-ABC123",
+          cycleId: "cycle-a",
+          internalMessageId: "inbound-a",
+          messageKind: "inbound",
+          direction: "INBOUND",
+          type: "TEXT",
+          status: "RECEIVED",
+          intent: null,
+          bodyText: "Atendimento",
+          templateName: null,
+          templateLang: null,
+          requestId: "request-a",
+          messageId: "web.session.inbound.1",
+          metaMessageId: null,
+          errorBody: null,
+          createdAt: "2026-08-18T12:00:00.000Z",
+          replyTo: null,
+        },
+      }
+    );
+    assert.equal(valid.status, 200);
+    assert.equal(valid.body.ok, true);
+  } finally {
+    if (previousToken === undefined) delete process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN;
+    else process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN = previousToken;
+  }
+});
+
 test("app chatbot flow builder uses session tenant and rejects cross-tenant routing ids", async () => {
   const businessDepartment = await prisma.department.create({
     data: {

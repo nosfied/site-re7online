@@ -558,6 +558,7 @@ import {
   closeRealtimeConnectionsForSupportSession,
   publishRealtimeEvent,
 } from "../realtime/hub.js";
+import type { InboxRealtimeEvent } from "../realtime/events.js";
 import {
   getBrowserPushTenantGate,
   getPushStatus,
@@ -1034,6 +1035,103 @@ async function handleInternalWebSessionReceiptRealtime(
   json(res, 200, { ok: true, requestId });
 }
 
+async function handleInternalWebSessionMessageRealtime(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestId: string
+) {
+  const expectedToken = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN?.trim();
+  if (!expectedToken || getBearerToken(req) !== expectedToken) {
+    json(res, 401, { ok: false, error: "unauthorized", requestId });
+    return;
+  }
+
+  const body = await readJsonBody(req, res);
+  if (!body) return;
+
+  const clientId = typeof body.clientId === "string" ? body.clientId.trim() : "";
+  const waId = typeof body.waId === "string" ? body.waId.trim() : "";
+  const waIdCanonical = typeof body.waIdCanonical === "string" ? body.waIdCanonical.trim() : null;
+  const rawMessage = body.message && typeof body.message === "object" && !Array.isArray(body.message)
+    ? body.message as Record<string, unknown>
+    : null;
+  const direction = rawMessage?.direction === "INBOUND" || rawMessage?.direction === "OUTBOUND"
+    ? rawMessage.direction
+    : null;
+  const status =
+    rawMessage?.status === "RECEIVED" ||
+    rawMessage?.status === "SENT" ||
+    rawMessage?.status === "DELIVERED" ||
+    rawMessage?.status === "READ" ||
+    rawMessage?.status === "FAILED"
+      ? rawMessage.status
+      : null;
+  const createdAt =
+    typeof rawMessage?.createdAt === "string" && !Number.isNaN(Date.parse(rawMessage.createdAt))
+      ? rawMessage.createdAt
+      : null;
+
+  if (!clientId || !waId || !rawMessage || !direction || !status || !createdAt) {
+    json(res, 400, { ok: false, error: "invalid_message_realtime_payload", requestId });
+    return;
+  }
+
+  publishRealtimeEvent({
+    type: "message.created",
+    clientId,
+    waId,
+    waIdCanonical: waIdCanonical ?? canonicalizeBrazilWaId(waId),
+    mode: body.mode === "HUMAN" || body.mode === "BOT" ? body.mode : null,
+    handoffStatus:
+      body.handoffStatus === "none" || body.handoffStatus === "pending" || body.handoffStatus === "active"
+        ? body.handoffStatus
+        : null,
+    humanInboxVisible: body.humanInboxVisible === true,
+    assignedUserId: typeof body.assignedUserId === "string" ? body.assignedUserId.trim() || null : null,
+    departmentId: typeof body.departmentId === "string" ? body.departmentId.trim() || null : null,
+    protocol: typeof body.protocol === "string" ? body.protocol.trim() || null : null,
+    cycleId: typeof body.cycleId === "string" ? body.cycleId.trim() || null : null,
+    message: {
+      inboxVisibility: rawMessage.inboxVisibility === "management_only" ? "management_only" : "human_timeline",
+      protocol: typeof rawMessage.protocol === "string" ? rawMessage.protocol.trim() || null : null,
+      cycleId: typeof rawMessage.cycleId === "string" ? rawMessage.cycleId.trim() || null : null,
+      internalMessageId:
+        typeof rawMessage.internalMessageId === "string" ? rawMessage.internalMessageId.trim() || null : null,
+      messageKind:
+        rawMessage.messageKind === "inbound" || rawMessage.messageKind === "outbound"
+          ? rawMessage.messageKind
+          : null,
+      direction,
+      type: typeof rawMessage.type === "string" ? rawMessage.type : "TEXT",
+      status,
+      intent: typeof rawMessage.intent === "string" ? rawMessage.intent : null,
+      bodyText: typeof rawMessage.bodyText === "string" ? rawMessage.bodyText : null,
+      location: rawMessage.location,
+      media: rawMessage.media,
+      templateName: null,
+      templateLang: null,
+      requestId: typeof rawMessage.requestId === "string" ? rawMessage.requestId : null,
+      messageId: typeof rawMessage.messageId === "string" ? rawMessage.messageId : null,
+      metaMessageId: null,
+      errorBody: null,
+      createdAt,
+      replyTo: rawMessage.replyTo && typeof rawMessage.replyTo === "object" && !Array.isArray(rawMessage.replyTo)
+        ? rawMessage.replyTo as Extract<InboxRealtimeEvent, { type: "message.created" }>["message"]["replyTo"]
+        : null,
+    },
+  });
+
+  logger.info({
+    event: "whatsapp.web_session.message.realtime_published",
+    requestId,
+    clientId,
+    direction,
+    hasMessageId: Boolean(rawMessage.messageId),
+    waIdLast4: (waIdCanonical ?? canonicalizeBrazilWaId(waId)).slice(-4),
+  });
+  json(res, 200, { ok: true, requestId });
+}
+
 async function handleInternalWebSessionHandoffRealtime(
   req: IncomingMessage,
   res: ServerResponse,
@@ -1127,6 +1225,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
   if (req.method === "POST" && pathname === "/internal/web-session/receipt-realtime") {
     return handleInternalWebSessionReceiptRealtime(req, res, requestId);
+  }
+
+  if (req.method === "POST" && pathname === "/internal/web-session/message-realtime") {
+    return handleInternalWebSessionMessageRealtime(req, res, requestId);
   }
 
   if (req.method === "POST" && pathname === "/internal/web-session/handoff-realtime") {

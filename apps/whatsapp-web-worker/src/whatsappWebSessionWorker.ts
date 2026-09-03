@@ -417,6 +417,63 @@ export function buildWebSessionHandoffRealtimePayload(
   };
 }
 
+export function buildWebSessionMessageCreatedRealtimePayload(
+  event: Extract<InboxRealtimeEvent, { type: "message.created" }>
+) {
+  return {
+    clientId: event.clientId,
+    waId: event.waId,
+    waIdCanonical: event.waIdCanonical ?? null,
+    mode: event.mode ?? null,
+    handoffStatus: event.handoffStatus ?? null,
+    humanInboxVisible: event.humanInboxVisible,
+    assignedUserId: event.assignedUserId ?? null,
+    departmentId: event.departmentId ?? null,
+    protocol: event.protocol ?? null,
+    cycleId: event.cycleId ?? null,
+    message: event.message,
+  };
+}
+
+async function notifyAgentWebSessionMessageCreatedRealtime(params: {
+  account: EligibleWebSessionAccount;
+  event: Extract<InboxRealtimeEvent, { type: "message.created" }>;
+}) {
+  const token = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN?.trim();
+  if (!token) return;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DEFAULT_AGENT_REALTIME_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${getAgentInternalBaseUrl()}/internal/web-session/message-realtime`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(buildWebSessionMessageCreatedRealtimePayload(params.event)),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      logger.warn({
+        event: "whatsapp.web.message.realtime_notify_failed",
+        ...webSessionLogAccount(params.account),
+        direction: params.event.message.direction,
+        reason: `http_${response.status}`,
+      });
+    }
+  } catch (error) {
+    logger.warn({
+      event: "whatsapp.web.message.realtime_notify_failed",
+      ...webSessionLogAccount(params.account),
+      direction: params.event.message.direction,
+      reason: error instanceof Error ? error.name : "unknown_error",
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function notifyAgentWebSessionHandoffRealtime(params: {
   account: EligibleWebSessionAccount;
   event: Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>;
@@ -1805,6 +1862,10 @@ async function handleWebSessionMessagesUpsert(params: {
         message: preparedMessage,
         resolvedSenderJid,
         cutoverAt: params.cutoverAt ?? null,
+        publishMessageCreatedRealtime: (event) => notifyAgentWebSessionMessageCreatedRealtime({
+          account: params.account,
+          event,
+        }),
         publishHandoffRealtime: (event) => notifyAgentWebSessionHandoffRealtime({
           account: params.account,
           event,

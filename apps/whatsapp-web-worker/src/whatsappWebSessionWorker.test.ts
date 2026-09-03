@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   buildWebSessionDisconnectObservabilityPayload,
   buildWebSessionHandoffRealtimePayload,
+  buildWebSessionMessageCreatedRealtimePayload,
   buildWebSessionReceiptRealtimePayload,
   connectionOpenTimeoutRuntimeState,
   getBaileysInboundMediaDescriptor,
@@ -240,6 +241,49 @@ test("web session worker builds sanitized handoff realtime payload", () => {
   assert.equal(payload.handoffStatus, "active");
   assert.equal(payload.departmentId, "department-a");
   assert.equal(payload.notificationMessage?.messageId, "web.session.inbound.1");
+  assert.equal("rawPayload" in payload, false);
+  assert.equal("token" in payload, false);
+  assert.equal("senderJid" in payload, false);
+});
+
+test("web session worker builds sanitized message created realtime payload", () => {
+  const payload = buildWebSessionMessageCreatedRealtimePayload({
+    type: "message.created",
+    clientId: "client-a",
+    waId: "5584999997784",
+    waIdCanonical: "55849999997784",
+    mode: "HUMAN",
+    handoffStatus: "active",
+    humanInboxVisible: true,
+    assignedUserId: "user-a",
+    departmentId: "department-a",
+    protocol: "CVT-ABC123",
+    cycleId: "cycle-a",
+    message: {
+      inboxVisibility: "human_timeline",
+      protocol: "CVT-ABC123",
+      cycleId: "cycle-a",
+      internalMessageId: "inbound-a",
+      messageKind: "inbound",
+      direction: "INBOUND",
+      type: "TEXT",
+      status: "RECEIVED",
+      intent: null,
+      bodyText: "Ola",
+      templateName: null,
+      templateLang: null,
+      requestId: "request-a",
+      messageId: "web.session.inbound.1",
+      metaMessageId: null,
+      errorBody: null,
+      createdAt: "2026-08-18T12:00:00.000Z",
+      replyTo: null,
+    },
+  });
+
+  assert.equal(payload.clientId, "client-a");
+  assert.equal(payload.message.messageId, "web.session.inbound.1");
+  assert.equal(payload.message.direction, "INBOUND");
   assert.equal("rawPayload" in payload, false);
   assert.equal("token" in payload, false);
   assert.equal("senderJid" in payload, false);

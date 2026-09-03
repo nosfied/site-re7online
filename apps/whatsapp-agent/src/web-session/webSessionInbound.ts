@@ -59,6 +59,21 @@ import { getDepartmentAvailability } from "../departments/businessHours.js";
 import { createWebSessionTextOutboundMessage, normalizeBotMenuOptionMarkdown } from "./webSessionOutboundService.js";
 import { claimHybridInboundLogicalMessage } from "../channels/hybridInboundDedupe.js";
 
+type WebSessionMessageCreatedRealtimePublisher = (
+  event: Extract<InboxRealtimeEvent, { type: "message.created" }>
+) => Promise<void>;
+
+async function publishWebSessionMessageCreatedRealtime(
+  event: Extract<InboxRealtimeEvent, { type: "message.created" }>,
+  publisher?: WebSessionMessageCreatedRealtimePublisher
+) {
+  if (publisher) {
+    await publisher(event);
+    return;
+  }
+  publishRealtimeEvent(event);
+}
+
 export type WebSessionInboundMessageType = "text" | "image" | "audio" | "video" | "document" | "unknown";
 
 export type NormalizedWebSessionInboundMessage = {
@@ -1384,6 +1399,7 @@ async function sendWebSessionBotText(params: {
   serviceCycle?: ServiceCycleSnapshot | null;
   inboxVisibility?: InboxMessageVisibility;
   inboxInteractionKind?: string | null;
+  publishMessageCreatedRealtime?: WebSessionMessageCreatedRealtimePublisher;
 }) {
   if (!params.text.trim()) return params.state;
   const serviceCycle = params.serviceCycle ?? getServiceCycleForDisplay(params.state);
@@ -1415,7 +1431,7 @@ async function sendWebSessionBotText(params: {
     const humanInboxVisible =
       inboxVisibility === "management_only" ? false : shouldProjectStateToHumanInbox(nextState);
     const eventInboxVisibility: InboxMessageVisibility = humanInboxVisible ? "human_timeline" : "management_only";
-    publishRealtimeEvent({
+    await publishWebSessionMessageCreatedRealtime({
       type: "message.created",
       clientId: params.clientId,
       waId: params.waId,
@@ -1447,7 +1463,7 @@ async function sendWebSessionBotText(params: {
         errorBody: null,
         createdAt: outboundResult.createdAt,
       },
-    });
+    }, params.publishMessageCreatedRealtime);
     return nextState;
   }
   return params.state;
@@ -2349,6 +2365,7 @@ async function resolveSingleWebSessionInboundContactCandidate(
 export async function ingestWebSessionInboundMessage(params: {
   prisma?: PrismaClient;
   message: NormalizedWebSessionInboundMessage;
+  publishMessageCreatedRealtime?: WebSessionMessageCreatedRealtimePublisher;
   publishHandoffRealtime?: (
     event: Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>
   ) => Promise<void>;
@@ -2609,7 +2626,7 @@ export async function ingestWebSessionInboundMessage(params: {
     const humanInboxVisible =
       inboundInboxVisibility === "management_only" ? false : shouldProjectStateToHumanInbox(runtimeConversationState);
     const eventInboxVisibility: InboxMessageVisibility = humanInboxVisible ? "human_timeline" : "management_only";
-    publishRealtimeEvent({
+    await publishWebSessionMessageCreatedRealtime({
       type: "message.created",
       clientId: params.message.clientId,
       waId: params.message.sender,
@@ -2670,7 +2687,7 @@ export async function ingestWebSessionInboundMessage(params: {
               }
             : null,
       },
-    });
+    }, params.publishMessageCreatedRealtime);
     if (satisfactionResult?.handled === true) {
       await persistWebSessionRuntimeState({
         prisma,
@@ -2964,7 +2981,7 @@ export async function ingestWebSessionInboundMessage(params: {
               const eventInboxVisibility: InboxMessageVisibility = humanInboxVisible
                 ? "human_timeline"
                 : "management_only";
-              publishRealtimeEvent({
+              await publishWebSessionMessageCreatedRealtime({
                 type: "message.created",
                 clientId: params.message.clientId,
                 waId: params.message.sender,
@@ -2996,7 +3013,7 @@ export async function ingestWebSessionInboundMessage(params: {
                   errorBody: null,
                   createdAt: outboundResult.createdAt,
                 },
-              });
+              }, params.publishMessageCreatedRealtime);
             }
           }
           let handoffServiceCycle: ServiceCycleSnapshot | null = null;
@@ -3273,6 +3290,7 @@ export async function ingestBaileysWebSessionMessage(params: {
   message: BaileysInboundMessageLike;
   resolvedSenderJid?: string | null;
   cutoverAt?: Date | null;
+  publishMessageCreatedRealtime?: WebSessionMessageCreatedRealtimePublisher;
   publishHandoffRealtime?: (
     event: Extract<InboxRealtimeEvent, { type: "conversation.handoff.updated" }>
   ) => Promise<void>;
@@ -3332,6 +3350,7 @@ export async function ingestBaileysWebSessionMessage(params: {
   return ingestWebSessionInboundMessage({
     prisma,
     message: normalized.message,
+    publishMessageCreatedRealtime: params.publishMessageCreatedRealtime,
     publishHandoffRealtime: params.publishHandoffRealtime,
   });
 }
