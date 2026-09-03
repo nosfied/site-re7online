@@ -471,3 +471,26 @@ Still not implemented:
 Readiness after 88D: ready for a separately authorized laboratory pairing attempt after
 environment, local worker bridge and PM2 worker setup are reviewed; not ready for inbound or
 production customer traffic.
+
+## Inbound media normalization
+
+Incident reference: SECULT-PE reported frequent `Mensagem nao suportada` entries between
+2026-08-31 and 2026-09-03. Production audit found 85 `UNKNOWN` inbound rows across 29
+conversations, all from `WEB_SESSION`. In the same window, top-level media remained healthy:
+49 images, 5 documents and 1 audio were recognized and persisted with media references.
+
+Root cause: Web Session inbound normalization handled the common top-level Baileys shapes but
+did not unwrap known technical containers such as `ephemeralMessage` and
+`documentWithCaptionMessage`. Historical `UNKNOWN` rows preserved only sanitized structural
+metadata, so their exact original subtype cannot be recovered without guessing.
+
+Current policy:
+
+- unwrap only explicit known Baileys wrapper keys with a depth limit;
+- route wrapped text/image/audio/video/document through the existing normalizer, downloader,
+  storage and timeline paths;
+- preserve stanza/provider message identity so exactly-once semantics are unchanged;
+- store only safe structural diagnostics for future `UNKNOWN` messages;
+- do not persist or download view-once content as an ordinary retained attachment;
+- do not store raw Baileys payloads, media bytes, media keys, tokens, signed URLs, phone
+  numbers, contacts, coordinates or captions solely for diagnostics.

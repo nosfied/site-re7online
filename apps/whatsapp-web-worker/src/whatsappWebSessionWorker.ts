@@ -35,6 +35,7 @@ import {
 } from "../../whatsapp-agent/src/web-session/webSessionConnectionRuntime.js";
 import {
   ingestBaileysWebSessionMessage,
+  unwrapBaileysMessageContent,
   type BaileysInboundMessageLike,
 } from "../../whatsapp-agent/src/web-session/webSessionInbound.js";
 import type { InboxRealtimeEvent } from "../../whatsapp-agent/src/realtime/events.js";
@@ -1618,7 +1619,7 @@ function summarizeMessageUpdates(event: BaileysMessagesUpdateEvent) {
   return summary;
 }
 
-function getBaileysInboundMediaDescriptor(message: BaileysInboundMessageLike): {
+export function getBaileysInboundMediaDescriptor(message: BaileysInboundMessageLike): {
   kind: WebSessionMediaKind;
   mimeType: string;
   fileName: string | null;
@@ -1627,6 +1628,9 @@ function getBaileysInboundMediaDescriptor(message: BaileysInboundMessageLike): {
   const payload = message.message && typeof message.message === "object" && !Array.isArray(message.message)
     ? message.message as Record<string, unknown>
     : {};
+  const unwrapped = unwrapBaileysMessageContent(payload);
+  if (unwrapped.viewOnce) return null;
+  const content = unwrapped.content;
   const candidates: Array<{ key: string; kind: WebSessionMediaKind }> = [
     { key: "imageMessage", kind: "image" },
     { key: "audioMessage", kind: "audio" },
@@ -1634,7 +1638,7 @@ function getBaileysInboundMediaDescriptor(message: BaileysInboundMessageLike): {
     { key: "videoMessage", kind: "video" },
   ];
   for (const candidate of candidates) {
-    const value = payload[candidate.key];
+    const value = content[candidate.key];
     if (!value || typeof value !== "object" || Array.isArray(value)) continue;
     const record = value as Record<string, unknown>;
     const mimeType = typeof record.mimetype === "string" ? record.mimetype.trim() : "";

@@ -14,6 +14,7 @@ import {
   extractPhoneFromBaileysJid,
   ingestBaileysWebSessionMessage,
   shouldIgnoreBaileysInboundMessage,
+  unwrapBaileysMessageContent,
 } from "./webSessionInbound.js";
 
 test("handoff notification plan keeps OPEN base notifications ordered and unique", () => {
@@ -925,6 +926,159 @@ test("ingestBaileysWebSessionMessage persists web session media references witho
   assert.equal("base64" in (rawPayload?.media ?? {}), false);
   assert.equal(state.events.some((event) => event.eventName === "whatsapp.web.inbound.media.received"), true);
   assert.equal(state.events.some((event) => event.eventName === "whatsapp.web.inbound.media.persisted"), true);
+});
+
+test("ingestBaileysWebSessionMessage normalizes ephemeral wrapped document through existing media path", async () => {
+  resetState();
+
+  const result = await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    message: {
+      key: { id: "MSG_EPHEMERAL_DOC", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      messageTimestamp: 1786464000,
+      message: {
+        ephemeralMessage: {
+          message: {
+            documentMessage: {
+              mimetype: "application/pdf",
+              fileName: "comprovante.pdf",
+              caption: "segue comprovante",
+            },
+          },
+        },
+      },
+      webSessionMedia: {
+        kind: "document",
+        mediaId: "web-session:media_doc",
+        mediaRef: "media_doc",
+        storageRef: "client_1/web_MSG_EPHEMERAL_DOC-media_doc.pdf",
+        storageProvider: "local_web_session",
+        mimeType: "application/pdf",
+        fileName: "comprovante.pdf",
+        caption: "segue comprovante",
+        sizeBytes: 256,
+      },
+    },
+  });
+
+  assert.equal(result.action, "persisted");
+  assert.equal(state.inboundMessages[0]?.type, MessageType.DOCUMENT);
+  assert.equal(state.inboundMessages[0]?.bodyText, "segue comprovante");
+  const rawPayload = state.inboundMessages[0]?.rawPayload as {
+    contentDiagnostics?: { wrapperTypes?: string[]; normalizedInnerType?: string; viewOnce?: boolean };
+    media?: Record<string, unknown>;
+  } | undefined;
+  assert.deepEqual(rawPayload?.contentDiagnostics?.wrapperTypes, ["ephemeralMessage"]);
+  assert.equal(rawPayload?.contentDiagnostics?.normalizedInnerType, "documentMessage");
+  assert.equal(rawPayload?.contentDiagnostics?.viewOnce, false);
+  assert.equal(rawPayload?.media?.fileName, "comprovante.pdf");
+  assert.equal(rawPayload?.media?.mimeType, "application/pdf");
+});
+
+test("ingestBaileysWebSessionMessage normalizes documentWithCaptionMessage as document", async () => {
+  resetState();
+
+  const result = await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    message: {
+      key: { id: "MSG_DOC_CAPTION", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      messageTimestamp: 1786464000,
+      message: {
+        documentWithCaptionMessage: {
+          message: {
+            documentMessage: {
+              mimetype: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              fileName: "oficio.docx",
+              caption: "oficio assinado",
+            },
+          },
+        },
+      },
+      webSessionMedia: {
+        kind: "document",
+        mediaId: "web-session:media_docx",
+        mediaRef: "media_docx",
+        storageRef: "client_1/web_MSG_DOC_CAPTION-media_docx.docx",
+        storageProvider: "local_web_session",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        fileName: "oficio.docx",
+        caption: "oficio assinado",
+        sizeBytes: 512,
+      },
+    },
+  });
+
+  assert.equal(result.action, "persisted");
+  assert.equal(state.inboundMessages[0]?.type, MessageType.DOCUMENT);
+  assert.equal(state.inboundMessages[0]?.bodyText, "oficio assinado");
+  const rawPayload = state.inboundMessages[0]?.rawPayload as {
+    contentDiagnostics?: { wrapperTypes?: string[]; normalizedInnerType?: string };
+    media?: Record<string, unknown>;
+  } | undefined;
+  assert.deepEqual(rawPayload?.contentDiagnostics?.wrapperTypes, ["documentWithCaptionMessage"]);
+  assert.equal(rawPayload?.contentDiagnostics?.normalizedInnerType, "documentMessage");
+  assert.equal(rawPayload?.media?.fileName, "oficio.docx");
+});
+
+test("ingestBaileysWebSessionMessage detects view-once without persisting it as normal media", async () => {
+  resetState();
+
+  const result = await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    message: {
+      key: { id: "MSG_VIEW_ONCE", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      messageTimestamp: 1786464000,
+      message: {
+        viewOnceMessageV2: {
+          message: {
+            imageMessage: {
+              mimetype: "image/jpeg",
+              caption: "conteudo restrito",
+            },
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(result.action, "persisted");
+  assert.equal(state.inboundMessages[0]?.type, MessageType.UNKNOWN);
+  assert.equal(state.inboundMessages[0]?.bodyText ?? null, null);
+  const rawPayload = state.inboundMessages[0]?.rawPayload as {
+    contentDiagnostics?: { wrapperTypes?: string[]; normalizedInnerType?: string; viewOnce?: boolean };
+    media?: Record<string, unknown>;
+  } | undefined;
+  assert.deepEqual(rawPayload?.contentDiagnostics?.wrapperTypes, ["viewOnceMessageV2"]);
+  assert.equal(rawPayload?.contentDiagnostics?.normalizedInnerType, "imageMessage");
+  assert.equal(rawPayload?.contentDiagnostics?.viewOnce, true);
+  assert.equal(rawPayload?.media, undefined);
+  assert.equal(JSON.stringify(rawPayload).includes("conteudo restrito"), false);
+});
+
+test("unwrapBaileysMessageContent preserves unknown diagnostics without raw payload expansion", () => {
+  const result = unwrapBaileysMessageContent({
+    ephemeralMessage: {
+      message: {
+        customFutureMessage: {
+          secret: "not persisted by diagnostics",
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(result.wrapperTypes, ["ephemeralMessage"]);
+  assert.equal(result.originalTopLevelType, "ephemeralMessage");
+  assert.equal(result.normalizedInnerType, "customFutureMessage");
+  assert.equal(result.viewOnce, false);
 });
 
 test("ingestBaileysWebSessionMessage blocks inbound media disabled by tenant policy", async () => {

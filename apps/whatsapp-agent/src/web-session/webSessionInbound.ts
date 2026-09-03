@@ -119,6 +119,78 @@ function getBoolean(value: unknown, fallback = false) {
   return typeof value === "boolean" ? value : fallback;
 }
 
+const BAILEYS_WRAPPER_KEYS = [
+  "ephemeralMessage",
+  "viewOnceMessage",
+  "viewOnceMessageV2",
+  "viewOnceMessageV2Extension",
+  "documentWithCaptionMessage",
+] as const;
+
+const BAILEYS_CONTENT_KEYS = [
+  "conversation",
+  "extendedTextMessage",
+  "imageMessage",
+  "audioMessage",
+  "videoMessage",
+  "documentMessage",
+  "locationMessage",
+  "liveLocationMessage",
+  "contactMessage",
+  "contactsArrayMessage",
+  "stickerMessage",
+  "reactionMessage",
+  "buttonsResponseMessage",
+  "listResponseMessage",
+  "templateButtonReplyMessage",
+  "interactiveResponseMessage",
+  "protocolMessage",
+  "editedMessage",
+] as const;
+
+const BAILEYS_UNWRAP_MAX_DEPTH = 5;
+
+function detectBaileysContentKey(message: Record<string, unknown> | null) {
+  if (!message) return null;
+  for (const key of BAILEYS_CONTENT_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(message, key)) return key;
+  }
+  for (const key of Object.keys(message).sort()) {
+    if (Object.prototype.hasOwnProperty.call(message, key)) return key;
+  }
+  return null;
+}
+
+export function unwrapBaileysMessageContent(message: Record<string, unknown>) {
+  const wrapperTypes: string[] = [];
+  const visited = new Set<Record<string, unknown>>();
+  let content = message;
+  let viewOnce = false;
+  const originalTopLevelType = detectBaileysContentKey(content);
+
+  for (let depth = 0; depth < BAILEYS_UNWRAP_MAX_DEPTH; depth += 1) {
+    if (visited.has(content)) break;
+    visited.add(content);
+    const wrapperKey = BAILEYS_WRAPPER_KEYS.find((key) => {
+      const wrapper = isRecord(content[key]) ? content[key] : null;
+      return isRecord(wrapper?.message);
+    });
+    if (!wrapperKey) break;
+    wrapperTypes.push(wrapperKey);
+    if (wrapperKey.startsWith("viewOnceMessage")) viewOnce = true;
+    const wrapper = content[wrapperKey] as Record<string, unknown>;
+    content = wrapper.message as Record<string, unknown>;
+  }
+
+  return {
+    content,
+    originalTopLevelType,
+    normalizedInnerType: detectBaileysContentKey(content),
+    wrapperTypes,
+    viewOnce,
+  };
+}
+
 function getClosedHandoffPolicy(definition: ChatbotFlowDefinition) {
   const raw = isRecord(definition.closedHandoffPolicy) ? definition.closedHandoffPolicy : {};
   const action = getNonEmptyString(raw.action)?.toUpperCase();
@@ -686,15 +758,23 @@ export function normalizeBaileysInboundMessage(params: {
   const key = params.message.key ?? {};
   const message = params.message.message;
   if (!message) return { ok: false, reason: "empty_message" };
+  const unwrapped = unwrapBaileysMessageContent(message);
+  const content = unwrapped.viewOnce ? message : unwrapped.content;
   const senderJid = pickSenderJid({ key, resolvedSenderJid: params.resolvedSenderJid });
   const sender = extractPhoneFromBaileysJid(senderJid);
   if (!sender) return { ok: false, reason: "unsupported_jid" };
   const externalMessageId = String(key.id ?? "").trim();
-  const type = detectMessageType(message);
-  const text = type === MessageType.TEXT ? readTextPayload(message) : readMediaCaption(message, type);
+  const type = detectMessageType(content);
+  const text = type === MessageType.TEXT ? readTextPayload(content) : readMediaCaption(content, type);
   const senderCanonical = canonicalizeBrazilWaId(sender);
   const media = params.message.webSessionMedia ?? null;
   const providerObservedName = normalizeProviderObservedName(params.message.pushName);
+  const contentDiagnostics = {
+    originalTopLevelType: unwrapped.originalTopLevelType,
+    normalizedInnerType: unwrapped.normalizedInnerType,
+    wrapperTypes: unwrapped.wrapperTypes,
+    viewOnce: unwrapped.viewOnce,
+  };
   return {
     ok: true,
     message: {
@@ -726,6 +806,7 @@ export function normalizeBaileysInboundMessage(params: {
         hasText: Boolean(text),
         hasReplyReference: Boolean(extractReplyToExternalMessageId(message)),
         providerObservedNamePresent: Boolean(providerObservedName),
+        contentDiagnostics,
         ...(media
           ? {
               media: {

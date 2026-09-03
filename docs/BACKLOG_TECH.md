@@ -51,6 +51,7 @@ Estado fechado/validado:
 - SECULT completed-service reporting: CLOSED / PRODUCTION VALIDATED;
 - Inbox Timeline Phase 1: CLOSED / PRODUCTION VALIDATED;
 - multichannel reconciliation migration: CLOSED / PRODUCTION VALIDATED;
+- Web Session wrapped media normalization: CLOSED / SAFE NORMALIZATION PATCH;
 - SECULT auto-assignment incident 2026-08-31: AUDITED / BUG NOT CONFIRMED; UX clarification deployed in `c91671e9`;
 - SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / LOAD VALIDATION STILL PENDING;
 - CRA Demo V1: READY FOR CUSTOMER VALIDATION.
@@ -66,6 +67,8 @@ Dividas tecnicas abertas:
 
 - `multichannel.shadow_write.failed` / `missing_channel_account_id`: preexistente, non-strict, sem retry loop, associado a projection/data-quality gap de Web Session, non-blocking;
 - drift historico global Prisma schema/migrations: separado da migration de reconciliacao multichannel ja validada;
+- SECULT Web Session `UNKNOWN` media historical rows: no backfill; exact original subtype is
+  not recoverable from the sanitized persisted payload;
 - baselines CRA versionados nesta consolidacao como evidencia de validacao, nao como dump operacional:
   - `docs/bids/2026/cra-pr/CRA_PR_DEMO_FLOW_V1_CUSTOMER_VALIDATION_BASELINE.md`;
   - `docs/bids/2026/cra-pr/cra-pr-demo-flow-v1-customer-validation.definition.json`.

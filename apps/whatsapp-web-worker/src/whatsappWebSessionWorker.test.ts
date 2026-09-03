@@ -8,6 +8,7 @@ import {
   buildWebSessionHandoffRealtimePayload,
   buildWebSessionReceiptRealtimePayload,
   connectionOpenTimeoutRuntimeState,
+  getBaileysInboundMediaDescriptor,
   isTransientConnectingState,
   isEligibleWebSessionAccount,
   listEligibleWebSessionAccounts,
@@ -648,4 +649,69 @@ test("web session worker sends audio as WhatsApp voice note compatible opus", as
     mimetype: "audio/ogg; codecs=opus",
     ptt: true,
   });
+});
+
+test("web session worker detects ephemeral wrapped inbound media for the existing download path", () => {
+  const descriptor = getBaileysInboundMediaDescriptor({
+    key: { id: "MSG_EPHEMERAL_IMAGE", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+    message: {
+      ephemeralMessage: {
+        message: {
+          imageMessage: {
+            mimetype: "image/jpeg",
+            caption: "imagem do atendimento",
+          },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(descriptor, {
+    kind: "image",
+    mimeType: "image/jpeg",
+    fileName: null,
+    caption: "imagem do atendimento",
+  });
+});
+
+test("web session worker detects documentWithCaptionMessage for the existing download path", () => {
+  const descriptor = getBaileysInboundMediaDescriptor({
+    key: { id: "MSG_DOC_CAPTION", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+    message: {
+      documentWithCaptionMessage: {
+        message: {
+          documentMessage: {
+            mimetype: "application/pdf",
+            fileName: "requerimento.pdf",
+            caption: "requerimento preenchido",
+          },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(descriptor, {
+    kind: "document",
+    mimeType: "application/pdf",
+    fileName: "requerimento.pdf",
+    caption: "requerimento preenchido",
+  });
+});
+
+test("web session worker does not download view-once media as a normal retained attachment", () => {
+  const descriptor = getBaileysInboundMediaDescriptor({
+    key: { id: "MSG_VIEW_ONCE", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+    message: {
+      viewOnceMessageV2: {
+        message: {
+          imageMessage: {
+            mimetype: "image/jpeg",
+            caption: "restrito",
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(descriptor, null);
 });
