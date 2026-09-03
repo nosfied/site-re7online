@@ -992,6 +992,25 @@ export type AppDashboardOverview = {
     totalConversations: number;
   };
   queue: AppDashboardQueueItem[];
+  teamPresence: {
+    items: Array<{
+      userId: string;
+      name: string;
+      role: string;
+      departments: Array<{ id: string; name: string | null }>;
+      online: boolean;
+      available: boolean;
+      lastHeartbeatAt: string | null;
+      heartbeatAgeSec: number | null;
+      activeConversationCount: number;
+    }>;
+    summary: {
+      online: number;
+      offline: number;
+      inService: number;
+    };
+    onlineTtlMs: number;
+  };
   generatedAt: string;
 };
 

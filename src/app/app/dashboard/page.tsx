@@ -146,6 +146,20 @@ function QueueAgeBadge({ waitingSince, now }: { waitingSince: string | null; now
   );
 }
 
+function TeamPresenceBadge({ online }: { online: boolean }) {
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${
+        online
+          ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-100"
+          : "border-white/15 bg-white/10 text-white/65"
+      }`}
+    >
+      {online ? "Online" : "Offline"}
+    </span>
+  );
+}
+
 function DashboardSectionHeader({
   title,
   description,
@@ -498,6 +512,60 @@ export default function AppDashboardPage() {
             <KpiCard label="Tempo médio até encerrar" value={formatSeconds(kpis?.avgResolutionTimeSec ?? null)} />
             <KpiCard label="Prazos excedidos" value={kpis?.slaBreaches} tone={(kpis?.slaBreaches ?? 0) > 0 ? "critical" : "neutral"} />
             <KpiCard label={`Total de ${labels.people}`} value={kpis?.totalConversations} />
+          </section>
+
+          <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
+            <DashboardSectionHeader
+              title="Presença da equipe"
+              description="Online indica que o atendente está disponível na plataforma com presença recente confirmada. Esse é o mesmo status considerado pela distribuição automática quando a opção 'Exigir atendente online' está ativa."
+              right={overview?.teamPresence ? `${overview.teamPresence.summary.online} online · ${overview.teamPresence.summary.offline} offline · ${overview.teamPresence.summary.inService} em atendimento` : ""}
+            />
+            {overview?.teamPresence.items.length ? (
+              <table className="w-full min-w-[720px] text-sm">
+                <thead className="bg-white/10 text-left">
+                  <tr>
+                    <th className="px-3 py-2">Atendente</th>
+                    <th className="px-3 py-2">Setor</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Último sinal</th>
+                    <th className="px-3 py-2 text-right">Atendimentos ativos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overview.teamPresence.items.map((item) => (
+                    <tr key={item.userId} className="border-t border-white/10 transition-colors hover:bg-white/5">
+                      <td className="px-3 py-2">
+                        <span className="block font-medium text-white">{item.name}</span>
+                        <span className="block text-xs text-white/45">{item.role}</span>
+                      </td>
+                      <td className="px-3 py-2">
+                        {item.departments.length
+                          ? item.departments.map((department) => department.name ?? "Setor sem nome").join(", ")
+                          : "-"}
+                      </td>
+                      <td className="px-3 py-2"><TeamPresenceBadge online={item.online} /></td>
+                      <td className="px-3 py-2">
+                        {item.heartbeatAgeSec === null
+                          ? "-"
+                          : item.heartbeatAgeSec < 60
+                            ? `${item.heartbeatAgeSec}s`
+                            : formatElapsed(item.lastHeartbeatAt, now)}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">{item.activeConversationCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="grid min-h-32 place-items-center p-6 text-center">
+                <div>
+                  <p className="text-sm font-medium text-white">Nenhum atendente operacional visível.</p>
+                  <p className="mt-1 text-xs text-white/55">
+                    Verifique o vínculo dos usuários aos setores operacionais.
+                  </p>
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">

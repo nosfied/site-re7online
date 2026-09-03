@@ -74,6 +74,16 @@ No Inbox, o operador deve:
 
 Conversas com dados anonimizados não devem aparecer no uso normal. Se um contato tiver sido minimizado por LGPD, não se deve tentar restaurar nome, número, histórico ou contexto anterior.
 
+## Painel
+
+Em `Painel`, ADMIN e SUPERVISOR podem acompanhar a presenca operacional atual da equipe.
+
+A secao `Presenca da equipe` usa a mesma fonte da distribuicao automatica: o atendente so aparece como `Online` quando marcou disponibilidade e possui heartbeat recente dentro do TTL operacional atual. Sessao autenticada ativa, por si so, nao significa presenca online.
+
+ADMIN visualiza os atendentes e supervisores ativos do tenant. SUPERVISOR visualiza apenas usuarios dos setores em que possui escopo operacional. A carga `Atendimentos ativos` usa os atendimentos atribuidos em `IN_PROGRESS` e `WAITING`, preservando o mesmo recorte operacional usado para limite de carga.
+
+Esta visao e operacional e quase em tempo real. Ela nao e relatorio historico, controle de ponto, jornada de trabalho ou comprovacao de produtividade.
+
 ## Configuração de filas e visibilidade
 
 ADMIN pode ajustar as regras operacionais publicadas sem instalação local, pacote por tenant ou deploy específico. Depois de uma nova versão do frontend, use F5/reload normal do navegador antes de validar a tela.

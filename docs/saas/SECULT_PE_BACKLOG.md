@@ -11,7 +11,7 @@ Itens abaixo respondem a demandas levantadas pela SECULT-PE, mas nao devem ser p
 | Prioridade | Item | Descricao | Risco se implementar sem desenho |
 | --- | --- | --- | --- |
 | P1 | Balanced assignment | Foundation implementada para policy opcional por tenant/departamento com modos manual, round-robin e menor carga ativa. A configuracao multitenant existe em `/app/settings/queue`, com leitura para supervisao e alteracao administrativa. Falta runbook de ativacao por tenant e acompanhamento operacional de carga. | Sobrecarga indevida, disputa de claim, quebra de fila/departamento. |
-| P1 | Agent presence/session audit | Registro operacional de login, logout, expiracao, sessao substituida e atividade recente. | Confusao com controle oficial de ponto e risco trabalhista/compliance. |
+| P1 | Agent presence/session audit | Presenca operacional atual foi exposta no `Painel` para ADMIN/SUPERVISOR, reaproveitando disponibilidade + heartbeat da distribuicao automatica. Historico de login/logout, expiracao, sessao substituida e atividade recente continua pendente como frente separada. | Confusao com controle oficial de ponto e risco trabalhista/compliance. |
 | P2 | Contact social/display name polish | Refinar UX para nome de atendimento/nome social, mantendo historico minimizado e sem expor nome anterior indevido. | Reintroducao de dado sensivel ou conflito com anonimização. |
 | P2 | Report filters active/inactive agents | Padronizar relatorios para ocultar inativos por default e permitir historico quando autorizado. | Relatorio inconsistente ou exclusao indevida de evidencias historicas. |
 | P2 | Inbox heartbeat/reconnect | Melhorar heartbeat, reconexao, aviso de sessao e refresh controlado da fila/timeline. | Polling excessivo, carga no backend ou falsa sensacao de presenca. |
@@ -36,6 +36,7 @@ Itens abaixo respondem a demandas levantadas pela SECULT-PE, mas nao devem ser p
 
 ### Agent presence/session audit
 
+- Status parcial: `Painel > Presenca da equipe` mostra estado operacional atual para supervisao, com escopo por tenant/departamento e a mesma semantica de elegibilidade online usada pela distribuicao automatica.
 - Distinguir login/logout voluntario, expiracao, troca de sessao e heartbeat.
 - Nao chamar de controle oficial de ponto.
 - Exibir apenas agregados e filtros por permissao.

@@ -242,6 +242,7 @@ import {
   AGENT_HEARTBEAT_INTERVAL_MS,
   AGENT_ONLINE_TTL_MS,
   getAgentAvailability,
+  isAgentEffectivelyAvailable,
   recordAgentHeartbeat,
   setAgentAvailability,
 } from "../queue/agentAvailability.js";
@@ -4263,6 +4264,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         departmentId: departmentAccess.requiresDepartmentScope
           ? departmentAccess.departmentId
           : String(query.departmentId ?? "").trim() || null,
+        departmentIds: departmentAccess.requiresDepartmentScope ? departmentAccess.departmentIds : null,
         assignedUserId: String(query.assignedUserId ?? "").trim() || null,
         status: normalizeConversationStatusFilter(query.status),
       });
@@ -31649,7 +31651,41 @@ type ContactTimelineCursor = {
   createdAt: string;
 };
 
-function buildEmptyDashboardOverview() {
+type DashboardTeamPresenceItem = {
+  userId: string;
+  name: string;
+  role: string;
+  departments: Array<{ id: string; name: string | null }>;
+  online: boolean;
+  available: boolean;
+  lastHeartbeatAt: string | null;
+  heartbeatAgeSec: number | null;
+  activeConversationCount: number;
+};
+
+type DashboardTeamPresence = {
+  items: DashboardTeamPresenceItem[];
+  summary: {
+    online: number;
+    offline: number;
+    inService: number;
+  };
+  onlineTtlMs: number;
+};
+
+function buildEmptyTeamPresence(): DashboardTeamPresence {
+  return {
+    items: [],
+    summary: {
+      online: 0,
+      offline: 0,
+      inService: 0,
+    },
+    onlineTtlMs: AGENT_ONLINE_TTL_MS,
+  };
+}
+
+function buildEmptyDashboardOverview(teamPresence: DashboardTeamPresence = buildEmptyTeamPresence()) {
   return {
     ok: true,
     kpis: {
@@ -31663,6 +31699,7 @@ function buildEmptyDashboardOverview() {
       totalConversations: 0,
     },
     queue: [],
+    teamPresence,
     generatedAt: new Date().toISOString(),
   };
 }
@@ -31784,15 +31821,159 @@ function resolveDashboardOperationalStatus(state: {
   return null;
 }
 
+async function buildDashboardTeamPresence(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    departmentIds: string[] | null;
+  }
+): Promise<DashboardTeamPresence> {
+  const scopedDepartmentIds = params.departmentIds
+    ? Array.from(new Set(params.departmentIds.map((id) => id.trim()).filter(Boolean)))
+    : null;
+  if (scopedDepartmentIds && scopedDepartmentIds.length === 0) return buildEmptyTeamPresence();
+
+  const users = await prisma.user.findMany({
+    where: {
+      clientId: params.clientId,
+      isActive: true,
+      role: { in: ["AGENT", "SUPERVISOR"] },
+      ...(scopedDepartmentIds
+        ? {
+            OR: [
+              {
+                departmentMemberships: {
+                  some: {
+                    clientId: params.clientId,
+                    isActive: true,
+                    departmentId: { in: scopedDepartmentIds },
+                    department: { isActive: true },
+                  },
+                },
+              },
+              { departmentId: { in: scopedDepartmentIds } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ name: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      role: true,
+      departmentId: true,
+      department: { select: { id: true, name: true, isActive: true } },
+      departmentMemberships: {
+        where: {
+          clientId: params.clientId,
+          isActive: true,
+          ...(scopedDepartmentIds ? { departmentId: { in: scopedDepartmentIds } } : {}),
+          department: { isActive: true },
+        },
+        select: {
+          department: { select: { id: true, name: true } },
+        },
+        orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }, { id: "asc" }],
+      },
+    },
+  });
+  const userIds = users.map((user) => user.id);
+  if (userIds.length === 0) return buildEmptyTeamPresence();
+
+  const now = new Date();
+  const [availabilityRows, activeRows] = await Promise.all([
+    prisma.agentAvailability.findMany({
+      where: {
+        clientId: params.clientId,
+        userId: { in: userIds },
+      },
+      select: {
+        userId: true,
+        available: true,
+        lastHeartbeatAt: true,
+        availabilityChangedAt: true,
+      },
+    }),
+    prisma.conversationRuntimeState.findMany({
+      where: {
+        clientId: params.clientId,
+        assignedUserId: { in: userIds },
+        status: { in: [ConversationOperationalStatus.IN_PROGRESS, ConversationOperationalStatus.WAITING] },
+        ...(scopedDepartmentIds ? { departmentId: { in: scopedDepartmentIds } } : {}),
+      },
+      select: { assignedUserId: true },
+    }),
+  ]);
+  const availabilityByUserId = new Map(availabilityRows.map((row) => [row.userId, row]));
+  const activeCountByUserId = new Map<string, number>();
+  for (const row of activeRows) {
+    if (!row.assignedUserId) continue;
+    activeCountByUserId.set(row.assignedUserId, (activeCountByUserId.get(row.assignedUserId) ?? 0) + 1);
+  }
+
+  const items = users.map((user) => {
+    const availability = availabilityByUserId.get(user.id) ?? null;
+    const online = isAgentEffectivelyAvailable(availability, now);
+    const departmentMap = new Map<string, { id: string; name: string | null }>();
+    for (const membership of user.departmentMemberships) {
+      departmentMap.set(membership.department.id, {
+        id: membership.department.id,
+        name: membership.department.name,
+      });
+    }
+    if (
+      departmentMap.size === 0 &&
+      user.departmentId &&
+      user.department?.isActive !== false &&
+      (!scopedDepartmentIds || scopedDepartmentIds.includes(user.departmentId))
+    ) {
+      departmentMap.set(user.departmentId, {
+        id: user.departmentId,
+        name: user.department?.name ?? null,
+      });
+    }
+    const lastHeartbeatAt = availability?.lastHeartbeatAt ?? null;
+    const heartbeatAgeSec = lastHeartbeatAt
+      ? Math.max(0, Math.floor((now.getTime() - lastHeartbeatAt.getTime()) / 1000))
+      : null;
+    return {
+      userId: user.id,
+      name: user.name,
+      role: user.role,
+      departments: Array.from(departmentMap.values()),
+      online,
+      available: availability?.available ?? false,
+      lastHeartbeatAt: lastHeartbeatAt?.toISOString() ?? null,
+      heartbeatAgeSec,
+      activeConversationCount: activeCountByUserId.get(user.id) ?? 0,
+    };
+  });
+
+  return {
+    items,
+    summary: {
+      online: items.filter((item) => item.online).length,
+      offline: items.filter((item) => !item.online).length,
+      inService: items.filter((item) => item.activeConversationCount > 0).length,
+    },
+    onlineTtlMs: AGENT_ONLINE_TTL_MS,
+  };
+}
+
 async function buildAppDashboardOverview(
   prisma: ReturnType<typeof getPrisma>,
   params: {
     clientId: string;
     departmentId: string | null;
+    departmentIds: string[] | null;
     assignedUserId: string | null;
     status: ConversationOperationalStatus | null;
   }
 ) {
+  const teamPresence = await buildDashboardTeamPresence(prisma, {
+    clientId: params.clientId,
+    departmentIds: params.departmentIds,
+  });
   const dashboardStatuses = [
     ConversationOperationalStatus.WAITING,
     ConversationOperationalStatus.IN_PROGRESS,
@@ -31825,7 +32006,7 @@ async function buildAppDashboardOverview(
       updatedAt: true,
     },
   });
-  if (runtimeStates.length === 0) return buildEmptyDashboardOverview();
+  if (runtimeStates.length === 0) return buildEmptyDashboardOverview(teamPresence);
 
   const waIds = Array.from(new Set(runtimeStates.map((item) => item.waId)));
   const canonicalWaIds = Array.from(
@@ -31847,7 +32028,7 @@ async function buildAppDashboardOverview(
       updatedAt: true,
     },
   });
-  if (conversations.length === 0) return buildEmptyDashboardOverview();
+  if (conversations.length === 0) return buildEmptyDashboardOverview(teamPresence);
 
   const conversationIds = conversations.map((item) => item.id);
   const [metrics, slaConfig, leads] = await Promise.all([
@@ -32039,6 +32220,7 @@ async function buildAppDashboardOverview(
       totalConversations: operationalItems.length,
     },
     queue,
+    teamPresence,
     generatedAt: new Date().toISOString(),
   };
 }

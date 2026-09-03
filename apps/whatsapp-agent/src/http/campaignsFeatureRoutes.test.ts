@@ -7713,6 +7713,183 @@ test("template category policy blocks recategorized templates without hiding the
   assert.equal(getErrorCode(marketingRequest.body), "template_category_not_allowed");
 });
 
+test("dashboard team presence reuses queue availability semantics with tenant and department scope", async () => {
+  await prisma.client.update({
+    where: { id: businessClientId },
+    data: { features: { dashboard: true } },
+  });
+  const now = new Date();
+  const staleHeartbeat = new Date(now.getTime() - 60_000);
+  const freshHeartbeat = new Date(now.getTime() - 5_000);
+  const departments = await Promise.all(
+    ["Presence A", "Presence B", "Presence C"].map((label, index) =>
+      prisma.department.create({
+        data: {
+          clientId: businessClientId,
+          name: `${prefix} ${label}`,
+          slug: `${prefix}-presence-${index}`,
+        },
+        select: { id: true, name: true },
+      })
+    )
+  );
+  const supervisor = await createUser({
+    clientId: businessClientId,
+    role: "SUPERVISOR",
+    suffix: "dashboard-presence-supervisor",
+  });
+  const onlineAgent = await createUser({ clientId: businessClientId, role: "AGENT", suffix: "dashboard-presence-online" });
+  const staleAgent = await createUser({ clientId: businessClientId, role: "AGENT", suffix: "dashboard-presence-stale" });
+  const unavailableAgent = await createUser({ clientId: businessClientId, role: "AGENT", suffix: "dashboard-presence-unavailable" });
+  const outsideAgent = await createUser({ clientId: businessClientId, role: "AGENT", suffix: "dashboard-presence-outside" });
+  const crossTenantAgent = await createUser({ clientId: governmentClientId, role: "AGENT", suffix: "dashboard-presence-cross" });
+
+  await assignUserDepartments({
+    clientId: businessClientId,
+    userId: supervisor.id,
+    departmentIds: [departments[0].id, departments[1].id],
+    primaryDepartmentId: departments[0].id,
+  });
+  await assignUserDepartments({ clientId: businessClientId, userId: onlineAgent.id, departmentIds: [departments[0].id] });
+  await assignUserDepartments({ clientId: businessClientId, userId: staleAgent.id, departmentIds: [departments[1].id] });
+  await assignUserDepartments({ clientId: businessClientId, userId: unavailableAgent.id, departmentIds: [departments[1].id] });
+  await assignUserDepartments({ clientId: businessClientId, userId: outsideAgent.id, departmentIds: [departments[2].id] });
+
+  await prisma.agentAvailability.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        userId: onlineAgent.id,
+        available: true,
+        lastHeartbeatAt: freshHeartbeat,
+        availabilityChangedAt: freshHeartbeat,
+      },
+      {
+        clientId: businessClientId,
+        userId: staleAgent.id,
+        available: true,
+        lastHeartbeatAt: staleHeartbeat,
+        availabilityChangedAt: staleHeartbeat,
+      },
+      {
+        clientId: businessClientId,
+        userId: unavailableAgent.id,
+        available: false,
+        lastHeartbeatAt: freshHeartbeat,
+        availabilityChangedAt: freshHeartbeat,
+      },
+      {
+        clientId: governmentClientId,
+        userId: crossTenantAgent.id,
+        available: true,
+        lastHeartbeatAt: freshHeartbeat,
+        availabilityChangedAt: freshHeartbeat,
+      },
+    ],
+  });
+
+  await prisma.conversationRuntimeState.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        waId: `${prefix}-dashboard-presence-active`,
+        waIdCanonical: `${prefix}-dashboard-presence-active`,
+        channel: "whatsapp",
+        provider: "web_session",
+        mode: "HUMAN",
+        status: "IN_PROGRESS",
+        departmentId: departments[0].id,
+        assignedUserId: onlineAgent.id,
+        assignedTo: onlineAgent.name,
+      },
+      {
+        clientId: businessClientId,
+        waId: `${prefix}-dashboard-presence-waiting`,
+        waIdCanonical: `${prefix}-dashboard-presence-waiting`,
+        channel: "whatsapp",
+        provider: "web_session",
+        mode: "HUMAN",
+        status: "WAITING",
+        departmentId: departments[1].id,
+        assignedUserId: staleAgent.id,
+        assignedTo: staleAgent.name,
+      },
+      {
+        clientId: businessClientId,
+        waId: `${prefix}-dashboard-presence-closed`,
+        waIdCanonical: `${prefix}-dashboard-presence-closed`,
+        channel: "whatsapp",
+        provider: "web_session",
+        mode: "HUMAN",
+        status: "CLOSED",
+        departmentId: departments[1].id,
+        assignedUserId: unavailableAgent.id,
+        assignedTo: unavailableAgent.name,
+      },
+      {
+        clientId: governmentClientId,
+        waId: `${prefix}-dashboard-presence-cross`,
+        waIdCanonical: `${prefix}-dashboard-presence-cross`,
+        channel: "whatsapp",
+        provider: "web_session",
+        mode: "HUMAN",
+        status: "IN_PROGRESS",
+        assignedUserId: crossTenantAgent.id,
+        assignedTo: crossTenantAgent.name,
+      },
+    ],
+  });
+
+  const agentForbidden = await request<ErrorPayload>("GET", "/app/dashboard/overview", businessAgent);
+  assert.equal(agentForbidden.status, 403);
+  assert.equal(getErrorCode(agentForbidden.body), "forbidden");
+
+  const supervisorOverview = await request<{
+    ok: true;
+    teamPresence: {
+      summary: { online: number; offline: number; inService: number };
+      onlineTtlMs: number;
+      items: Array<{
+        userId: string;
+        name: string;
+        online: boolean;
+        available: boolean;
+        heartbeatAgeSec: number | null;
+        activeConversationCount: number;
+        departments: Array<{ id: string; name: string | null }>;
+      }>;
+    };
+  }>("GET", "/app/dashboard/overview", supervisor);
+  assert.equal(supervisorOverview.status, 200, JSON.stringify(supervisorOverview.body));
+  const supervisorPresenceById = new Map(supervisorOverview.body.teamPresence.items.map((item) => [item.userId, item]));
+  assert.equal(supervisorPresenceById.get(onlineAgent.id)?.online, true);
+  assert.equal(supervisorPresenceById.get(staleAgent.id)?.online, false);
+  assert.equal(supervisorPresenceById.get(unavailableAgent.id)?.online, false);
+  assert.equal(supervisorPresenceById.get(onlineAgent.id)?.activeConversationCount, 1);
+  assert.equal(supervisorPresenceById.get(staleAgent.id)?.activeConversationCount, 1);
+  assert.equal(supervisorPresenceById.get(unavailableAgent.id)?.activeConversationCount, 0);
+  assert.equal(supervisorPresenceById.has(outsideAgent.id), false);
+  assert.equal(supervisorPresenceById.has(crossTenantAgent.id), false);
+  assert.equal(supervisorOverview.body.teamPresence.summary.online, 1);
+  assert.ok(supervisorOverview.body.teamPresence.summary.offline >= 2);
+  assert.ok(supervisorOverview.body.teamPresence.summary.inService >= 2);
+  assert.equal(supervisorOverview.body.teamPresence.onlineTtlMs, 30_000);
+  assert.deepEqual(
+    supervisorPresenceById.get(onlineAgent.id)?.departments.map((item) => item.id),
+    [departments[0].id]
+  );
+
+  const adminOverview = await request<{
+    ok: true;
+    teamPresence: { items: Array<{ userId: string }> };
+  }>("GET", "/app/dashboard/overview", businessAdmin);
+  assert.equal(adminOverview.status, 200, JSON.stringify(adminOverview.body));
+  const adminUserIds = new Set(adminOverview.body.teamPresence.items.map((item) => item.userId));
+  assert.equal(adminUserIds.has(onlineAgent.id), true);
+  assert.equal(adminUserIds.has(outsideAgent.id), true);
+  assert.equal(adminUserIds.has(crossTenantAgent.id), false);
+});
+
 test("template local availability blocks campaign usage and preserves tenant isolation", async () => {
   const template = await prisma.template.create({
     data: {
