@@ -85,13 +85,15 @@ export type AppPushPresenceSnapshot = {
 export function buildAppPushPresenceSnapshot(input: {
   visibilityState: DocumentVisibilityState;
   focused: boolean;
+  mobileLike?: boolean;
 }): AppPushPresenceSnapshot {
   const visible = input.visibilityState === "visible";
+  const active = visible && (input.focused || input.mobileLike === true);
   return {
     visible,
     focused: input.focused,
-    active: visible,
-    serviceWorkerMessageType: visible ? "converta.app_foreground" : "converta.app_background",
+    active,
+    serviceWorkerMessageType: active ? "converta.app_foreground" : "converta.app_background",
   };
 }
 
@@ -650,6 +652,7 @@ export default function AppRealtimeBridge() {
       const presence = buildAppPushPresenceSnapshot({
         visibilityState: document.visibilityState,
         focused: document.hasFocus(),
+        mobileLike: isMobileLikeRuntime(),
       });
       if (presence.active) {
         notifyServiceWorkerAppForeground();
@@ -666,8 +669,8 @@ export default function AppRealtimeBridge() {
       await updateAppPushPresence(
         session,
         endpoint,
-        { visible: presence.visible, focused: presence.focused },
-        { keepalive: !presence.visible || !presence.focused }
+        { visible: presence.active, focused: presence.focused },
+        { keepalive: !presence.active }
       )
         .catch(() => undefined);
     };

@@ -53,15 +53,14 @@ Estado fechado/validado:
 - multichannel reconciliation migration: CLOSED / PRODUCTION VALIDATED;
 - Web Session wrapped media normalization: CLOSED / SAFE NORMALIZATION PATCH;
 - SECULT auto-assignment incident 2026-08-31: AUDITED / BUG NOT CONFIRMED; UX clarification deployed in `c91671e9`;
-- SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / LOAD VALIDATION STILL PENDING;
+- SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / POS-PHASE 2 LOAD VALIDATION PARTIAL;
 - CRA Demo V1: READY FOR CUSTOMER VALIDATION.
 
 Pendencias proximas:
 
 1. deployar Inbox Phase 2: WebSocket como sinal primario de invalidacao, polling lento como reconciliacao/fallback;
-2. medir pos-deploy `/app/conversations` req/min, CPU e incidentes de timeline durante uso real;
-3. validar escala 10/30/50 sessoes antes de declarar capacidade CRA 30 agentes;
-4. desenhar waiting-on-customer 1h como regra funcional separada.
+2. validar escala 10/30/50 sessoes antes de declarar capacidade CRA 30 agentes;
+3. desenhar waiting-on-customer 1h como regra funcional separada.
 
 Dividas tecnicas abertas:
 

@@ -182,6 +182,34 @@ Estado observado:
 - dual-read rate: 0;
 - timeline incident: NO.
 
+Janela END pos-Phase 2 em producao:
+
+```text
+timestamp: 2026-09-03T18:37:25-03:00 to 2026-09-03T18:42:28-03:00
+production HEAD: c50fb73c30c6be65a94d468a88b48190112a14ef
+status: END WINDOW CAPTURED
+```
+
+Estado observado:
+
+- SECULT: CONNECTED;
+- Demo: CONNECTED;
+- health: PASS;
+- SECULT active app users: 0 seen in 5m / 6 active sessions;
+- SECULT realtime connections: not observed for SECULT in this window;
+- SECULT Inbox presence: 0 observed;
+- `/app/conversations` requests/min: 0 observed;
+- inbox query count: 0 observed;
+- queries/request: not observed;
+- runtime fallback count: 0;
+- backend CPU range: 11.4-11.7%;
+- backend CPU average: ~11.6%;
+- system load final: ~0.10 / 0.26 / 0.30;
+- DB pressure: NORMAL;
+- dual-read rate: 0;
+- timeline incident: NO;
+- push error storm: NO.
+
 Hipotese de trabalho:
 
 ```text
@@ -200,10 +228,13 @@ Interpretacao apos EXTRA 14:17:
 - ~103 requests/min resultam em ~1232 queries/min apenas nessa janela;
 - DB pressure permaneceu NORMAL, compativel com muitas queries curtas;
 - a janela END mostrou CPU baixa quando nao havia uso efetivo de Inbox;
+- a janela END pos-Phase 2 de 03/09 tambem mostrou CPU materialmente menor que o MID do mesmo dia quando nao havia uso efetivo de Inbox;
 - isso fecha a decisao operacional de Phase 2 para reduzir polling e usar
   WebSocket como sinal primario de invalidacao;
-- ainda nao declarar causalidade absoluta: a evidencia e forte o suficiente
-  para priorizacao, mas nao substitui teste controlado de carga.
+- ainda nao declarar causalidade absoluta: a evidencia operacional apoia a
+  decisao de Phase 2, mas a performance permanece parcial porque nao houve uma
+  janela EXTRA pos-Phase 2 sob carga alta equivalente;
+- otimizacao imediata adicional de queries no backend: NOT YET justificada.
 
 Classificacao atual:
 
@@ -220,10 +251,11 @@ Comparacao START/MID/END:
 | MID | 5 seen / 10 sessions | 2 | NOT_OBSERVED | NOT_OBSERVED | NOT_OBSERVED | ~76.3% | NORMAL |
 | EXTRA 14:17 | 6 seen / 11 sessions | NOT_OBSERVED | ~103 | 1232 | ~12 | ~87.5% | NORMAL |
 | END | active sessions possible, effective Inbox online 0 | 0 effective | idle / not material | NOT_OBSERVED | NOT_OBSERVED | ~8.2% | NORMAL |
+| END 03/09 | 0 seen / 6 sessions | 0 | 0 observed | 0 observed | not observed | ~11.6% | NORMAL |
 
 ```text
 INBOX / BACKEND PERFORMANCE:
-CLOSED FOR PHASE 2 DECISION / LOAD VALIDATION STILL PENDING
+CLOSED FOR PHASE 2 DECISION / POS-PHASE 2 LOAD VALIDATION PARTIAL
 ```
 
 Modelo de escala atual estimado:

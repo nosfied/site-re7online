@@ -10,13 +10,26 @@ import {
 test("visible app presence sends foreground signal", () => {
   const presence = buildAppPushPresenceSnapshot({
     visibilityState: "visible",
+    focused: true,
+  });
+
+  assert.equal(presence.visible, true);
+  assert.equal(presence.focused, true);
+  assert.equal(presence.active, true);
+  assert.equal(presence.serviceWorkerMessageType, "converta.app_foreground");
+});
+
+test("visible desktop app without window focus sends background signal", () => {
+  const presence = buildAppPushPresenceSnapshot({
+    visibilityState: "visible",
     focused: false,
+    mobileLike: false,
   });
 
   assert.equal(presence.visible, true);
   assert.equal(presence.focused, false);
-  assert.equal(presence.active, true);
-  assert.equal(presence.serviceWorkerMessageType, "converta.app_foreground");
+  assert.equal(presence.active, false);
+  assert.equal(presence.serviceWorkerMessageType, "converta.app_background");
 });
 
 test("hidden app presence sends background signal", () => {
@@ -29,6 +42,19 @@ test("hidden app presence sends background signal", () => {
   assert.equal(presence.focused, false);
   assert.equal(presence.active, false);
   assert.equal(presence.serviceWorkerMessageType, "converta.app_background");
+});
+
+test("visible mobile/PWA presence preserves foreground semantics", () => {
+  const presence = buildAppPushPresenceSnapshot({
+    visibilityState: "visible",
+    focused: false,
+    mobileLike: true,
+  });
+
+  assert.equal(presence.visible, true);
+  assert.equal(presence.focused, false);
+  assert.equal(presence.active, true);
+  assert.equal(presence.serviceWorkerMessageType, "converta.app_foreground");
 });
 
 test("push presence heartbeat preserves the existing cadence", () => {
@@ -84,6 +110,17 @@ test("push presence heartbeat sends immediately for state changes and forced upd
 });
 
 test("local inbox sound plays for visible desktop when enabled", () => {
+  assert.equal(
+    shouldPlayLocalInboxSound({
+      visibilityState: "visible",
+      mobileLike: false,
+      soundEnabled: true,
+    }),
+    true
+  );
+});
+
+test("local inbox sound plays for visible blurred desktop window when enabled", () => {
   assert.equal(
     shouldPlayLocalInboxSound({
       visibilityState: "visible",
