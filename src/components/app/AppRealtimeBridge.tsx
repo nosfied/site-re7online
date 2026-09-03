@@ -63,16 +63,63 @@ function isAppOperationallyActive() {
   return document.visibilityState === "visible";
 }
 
+export type AppPushPresenceSnapshot = {
+  visible: boolean;
+  focused: boolean;
+  active: boolean;
+  serviceWorkerMessageType: "converta.app_foreground" | "converta.app_background";
+};
+
+export function buildAppPushPresenceSnapshot(input: {
+  visibilityState: DocumentVisibilityState;
+  focused: boolean;
+}): AppPushPresenceSnapshot {
+  const visible = input.visibilityState === "visible";
+  return {
+    visible,
+    focused: input.focused,
+    active: visible,
+    serviceWorkerMessageType: visible ? "converta.app_foreground" : "converta.app_background",
+  };
+}
+
+export function shouldSendAppPushPresenceHeartbeat(input: {
+  force: boolean;
+  key: string;
+  lastSentKey: string;
+  now: number;
+  lastSentAt: number;
+  intervalMs?: number;
+}) {
+  if (input.force) return true;
+  if (input.key !== input.lastSentKey) return true;
+  return input.now - input.lastSentAt >= (input.intervalMs ?? PUSH_PRESENCE_INTERVAL_MS);
+}
+
 function notifyServiceWorkerAppForeground() {
   if (typeof navigator === "undefined") return;
   if (!("serviceWorker" in navigator)) return;
   navigator.serviceWorker.controller?.postMessage({ type: "converta.app_foreground" });
+  void navigator.serviceWorker.getRegistration("/")
+    .then((registration) => {
+      if (!navigator.serviceWorker.controller) {
+        registration?.active?.postMessage({ type: "converta.app_foreground" });
+      }
+    })
+    .catch(() => undefined);
 }
 
 function notifyServiceWorkerAppBackground() {
   if (typeof navigator === "undefined") return;
   if (!("serviceWorker" in navigator)) return;
   navigator.serviceWorker.controller?.postMessage({ type: "converta.app_background" });
+  void navigator.serviceWorker.getRegistration("/")
+    .then((registration) => {
+      if (!navigator.serviceWorker.controller) {
+        registration?.active?.postMessage({ type: "converta.app_background" });
+      }
+    })
+    .catch(() => undefined);
 }
 
 function isMobileLikeRuntime() {
@@ -573,10 +620,11 @@ export default function AppRealtimeBridge() {
 
     const sendPresence = async (force = false) => {
       if (cancelled) return;
-      const visible = document.visibilityState === "visible";
-      const focused = document.hasFocus();
-      const active = visible;
-      if (active) {
+      const presence = buildAppPushPresenceSnapshot({
+        visibilityState: document.visibilityState,
+        focused: document.hasFocus(),
+      });
+      if (presence.active) {
         notifyServiceWorkerAppForeground();
       } else {
         notifyServiceWorkerAppBackground();
@@ -584,11 +632,16 @@ export default function AppRealtimeBridge() {
       const endpoint = await getCurrentPushEndpoint().catch(() => null);
       if (!endpoint || cancelled) return;
       const now = Date.now();
-      const key = `${endpoint}:${visible ? "1" : "0"}:${focused ? "1" : "0"}`;
-      if (!force && key === lastSentKey && now - lastSentAt < PUSH_PRESENCE_INTERVAL_MS) return;
+      const key = `${endpoint}:${presence.visible ? "1" : "0"}:${presence.focused ? "1" : "0"}`;
+      if (!shouldSendAppPushPresenceHeartbeat({ force, key, lastSentKey, now, lastSentAt })) return;
       lastSentKey = key;
       lastSentAt = now;
-      await updateAppPushPresence(session, endpoint, { visible, focused }, { keepalive: !visible || !focused })
+      await updateAppPushPresence(
+        session,
+        endpoint,
+        { visible: presence.visible, focused: presence.focused },
+        { keepalive: !presence.visible || !presence.focused }
+      )
         .catch(() => undefined);
     };
 
@@ -613,6 +666,7 @@ export default function AppRealtimeBridge() {
 
     return () => {
       cancelled = true;
+      notifyServiceWorkerAppBackground();
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", handlePresenceChange);
       window.removeEventListener("focus", handlePresenceChange);
