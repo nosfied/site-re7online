@@ -7243,7 +7243,6 @@ export default function AppInboxPage() {
                     type="button"
                     onClick={handleBrowserPushToggle}
                     disabled={browserPushActionDisabled}
-                    title={browserPushTooltip}
                     aria-label={browserPushTooltip}
                     className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm transition disabled:cursor-not-allowed disabled:opacity-55 ${
                       pushUiStatus === "enabled"
