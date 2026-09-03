@@ -163,6 +163,21 @@ export const TENANT_FEATURE_CATALOG: TenantFeatureCatalogItem[] = [
     },
   },
   {
+    key: "browserPushNotifications",
+    label: "Notificações do navegador",
+    description: "Permite que usuários ativem notificações nativas do navegador para novas mensagens e atendimentos.",
+    category: "communication",
+    technicalCapabilitySource: "Web Push + Service Worker + PushSubscription",
+    entitlementSource: "Client.features",
+    runtimeDependency: "VAPID configurado e navegador compatível com notificações push.",
+    frontendVisibilityGuard: "Controle de notificações da Inbox",
+    backendGuard: "Rotas /app/push e envio Web Push",
+    defaultByProfile: {
+      business: DEFAULT_BUSINESS_CLIENT_FEATURES.browserPushNotifications,
+      government: DEFAULT_GOVERNMENT_CLIENT_FEATURES.browserPushNotifications,
+    },
+  },
+  {
     key: "webchat",
     label: "Webchat",
     description: "Canal de atendimento incorporado em sites.",

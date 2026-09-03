@@ -65,6 +65,16 @@ test("WhatsApp web session feature is disabled by default and tenant-generic whe
   );
 });
 
+test("browser push notifications are disabled by default and tenant-generic when exposed", () => {
+  assert.equal(getTenantCapabilities({ profile: "business" }).browserPushNotifications, false);
+  assert.equal(getTenantCapabilities({ profile: "government" }).browserPushNotifications, false);
+  assert.equal(
+    getTenantCapabilities({ profile: "business", features: { browserPushNotifications: true } })
+      .browserPushNotifications,
+    true
+  );
+});
+
 test("invalid profile falls back to business and unknown capabilities are disabled", () => {
   const capabilities = getTenantCapabilities({ profile: "unsupported", features: { dashboard: true } });
 

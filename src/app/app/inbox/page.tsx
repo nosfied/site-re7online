@@ -2439,7 +2439,15 @@ export default function AppInboxPage() {
   const [soundPreferenceLoaded, setSoundPreferenceLoaded] = useState(false);
   const [pushStatus, setPushStatus] = useState<AppPushStatus | null>(null);
   const [pushUiStatus, setPushUiStatus] = useState<
-    "checking" | "ready" | "enabled" | "denied" | "unsupported" | "needs_install" | "not_configured" | "error"
+    | "checking"
+    | "ready"
+    | "enabled"
+    | "denied"
+    | "unsupported"
+    | "needs_install"
+    | "not_configured"
+    | "feature_disabled"
+    | "error"
   >("checking");
   const [pushBusy, setPushBusy] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
@@ -2813,6 +2821,10 @@ export default function AppInboxPage() {
     try {
       const status = await getAppPushStatus(session);
       setPushStatus(status);
+      if (status.disabledByTenant) {
+        setPushUiStatus("feature_disabled");
+        return;
+      }
       if (!status.configured || !status.publicKey) {
         setPushUiStatus("not_configured");
         return;
@@ -2844,7 +2856,7 @@ export default function AppInboxPage() {
   }, [refreshPushStatus]);
 
   const handleEnablePush = useCallback(async () => {
-    if (!session || !pushStatus?.publicKey || pushBusy) return;
+    if (!session || !pushStatus?.publicKey || pushStatus.disabledByTenant || pushBusy) return;
     setPushBusy(true);
     try {
       window.localStorage.removeItem(INBOX_PUSH_DISABLED_STORAGE_KEY);
@@ -2870,7 +2882,7 @@ export default function AppInboxPage() {
     } finally {
       setPushBusy(false);
     }
-  }, [pushBusy, pushStatus?.publicKey, refreshPushStatus, session]);
+  }, [pushBusy, pushStatus?.disabledByTenant, pushStatus?.publicKey, refreshPushStatus, session]);
 
   const handleDisablePush = useCallback(async () => {
     if (!session || pushBusy) return;
@@ -2884,14 +2896,14 @@ export default function AppInboxPage() {
         await subscription.unsubscribe();
       }
       await unsubscribeAppPush(session, endpoint);
-      setPushUiStatus("ready");
+      setPushUiStatus(pushStatus?.disabledByTenant ? "feature_disabled" : "ready");
       void refreshPushStatus();
     } catch {
       setPushUiStatus("error");
     } finally {
       setPushBusy(false);
     }
-  }, [pushBusy, refreshPushStatus, session]);
+  }, [pushBusy, pushStatus?.disabledByTenant, refreshPushStatus, session]);
 
   useEffect(() => {
     if (!isMobileViewport) return;
@@ -2924,6 +2936,17 @@ export default function AppInboxPage() {
       void handleDisablePush();
     }
   }, [handleDisablePush, handleEnablePush, pushBusy, pushUiStatus, soundEnabled]);
+
+  const handleBrowserPushToggle = useCallback(() => {
+    if (pushBusy) return;
+    if (pushUiStatus === "enabled") {
+      void handleDisablePush();
+      return;
+    }
+    if (pushUiStatus === "ready") {
+      void handleEnablePush();
+    }
+  }, [handleDisablePush, handleEnablePush, pushBusy, pushUiStatus]);
 
   useEffect(
     () => () => {
@@ -6721,17 +6744,47 @@ export default function AppInboxPage() {
   }
 
   const notificationToggleActive = soundEnabled;
-  const notificationToggleTitle = notificationToggleActive
-    ? isMobileViewport
-      ? pushUiStatus === "enabled"
-        ? "Desativar som local"
-        : "Desativar som"
-      : "Desativar som"
-    : isMobileViewport
-      ? pushUiStatus === "denied"
-        ? "Notificações bloqueadas no navegador"
-        : "Ativar notificações e som"
-      : "Ativar som";
+  const notificationToggleTitle =
+    pushUiStatus === "feature_disabled"
+      ? notificationToggleActive
+        ? "Desativar som local. Notificações do navegador indisponíveis para este tenant."
+        : "Ativar som local. Notificações do navegador indisponíveis para este tenant."
+      : notificationToggleActive
+        ? isMobileViewport
+          ? pushUiStatus === "enabled"
+            ? "Desativar som local e notificações do navegador"
+            : "Desativar som local"
+          : "Desativar som local"
+        : isMobileViewport
+          ? pushUiStatus === "denied"
+            ? "Notificações do navegador bloqueadas. Ativar som local."
+            : "Ativar som local e notificações do navegador"
+          : "Ativar som local";
+  const browserPushActionLabel =
+    pushUiStatus === "enabled"
+      ? "Desativar notificações"
+      : pushBusy
+        ? "Processando..."
+        : "Ativar notificações";
+  const browserPushActionDisabled =
+    pushBusy ||
+    (pushUiStatus !== "ready" && pushUiStatus !== "enabled");
+  const browserPushStateText =
+    pushUiStatus === "enabled"
+      ? "Ativadas neste navegador."
+      : pushUiStatus === "feature_disabled"
+        ? "Indisponíveis para este tenant."
+        : pushUiStatus === "denied"
+          ? "Bloqueadas nas permissões do navegador."
+          : pushUiStatus === "unsupported"
+            ? "Navegador sem suporte a Push."
+            : pushUiStatus === "needs_install"
+              ? "Instale o app na tela inicial para ativar."
+              : pushUiStatus === "not_configured"
+                ? "Ambiente sem configuração de Push."
+                : pushUiStatus === "error"
+                  ? "Não foi possível verificar agora."
+                  : "Desativadas neste navegador.";
 
   return (
     <AppShell
@@ -7206,6 +7259,7 @@ export default function AppInboxPage() {
                   type="button"
                   onClick={handleNotificationToggle}
                   title={notificationToggleTitle}
+                  aria-label={notificationToggleTitle}
                   className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm transition ${
                     notificationToggleActive
                       ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/20"
@@ -7228,6 +7282,32 @@ export default function AppInboxPage() {
               </div>
             </div>
             <div className="mt-3 space-y-2 max-[1440px]:mt-2 max-[1440px]:space-y-1.5">
+              <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-white/75">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-[11px] font-semibold text-white/85">
+                      Notificações do navegador
+                    </p>
+                    <p className="mt-0.5 text-[10px] leading-snug text-white/55">
+                      Receba avisos de novas mensagens em outras abas.
+                    </p>
+                    <p className="mt-0.5 text-[10px] leading-snug text-white/55">
+                      {browserPushStateText}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleBrowserPushToggle}
+                    disabled={browserPushActionDisabled}
+                    className="shrink-0 rounded-md border border-white/15 bg-white/5 px-2 py-1 text-[10px] font-semibold text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    {browserPushActionLabel}
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[10px] leading-snug text-white/45">
+                  O alerta visual e sonoro depende das permissões e configurações do navegador e do sistema operacional.
+                </p>
+              </div>
               {isAdminUser ? (
                 <select
                   value={departmentFilter}

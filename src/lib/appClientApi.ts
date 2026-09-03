@@ -155,6 +155,7 @@ export type AppPushStatus = {
   publicKey: string | null;
   subscribed: boolean;
   subscriptions: number;
+  disabledByTenant?: boolean;
 };
 
 export type AppAgentAvailability = {

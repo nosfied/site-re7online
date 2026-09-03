@@ -6,6 +6,7 @@ import {
   isOperationalMessagePushCandidate,
   isPushSubscriptionCurrentForActiveSession,
   normalizePushSubscriptionInput,
+  resolveBrowserPushTenantGate,
   shouldSuppressPushForForegroundSubscription,
   updatePushPresence,
 } from "./webPushService.js";
@@ -32,6 +33,43 @@ test("hashEndpoint redacts endpoint deterministically", () => {
   assert.equal(hashEndpoint(endpoint), hashEndpoint(endpoint));
   assert.equal(hashEndpoint(endpoint).length, 16);
   assert.equal(hashEndpoint(endpoint).includes("secret-token"), false);
+});
+
+test("browser push tenant gate defaults off without active legacy subscriptions", () => {
+  assert.deepEqual(
+    resolveBrowserPushTenantGate({
+      client: { profile: "government", features: {} },
+      activeSubscriptionCount: 0,
+    }),
+    { enabled: false, explicit: null, legacySubscriptionCompatibility: false }
+  );
+});
+
+test("browser push tenant gate preserves active legacy subscriptions unless explicitly disabled", () => {
+  assert.deepEqual(
+    resolveBrowserPushTenantGate({
+      client: { profile: "government", features: {} },
+      activeSubscriptionCount: 2,
+    }),
+    { enabled: true, explicit: null, legacySubscriptionCompatibility: true }
+  );
+  assert.deepEqual(
+    resolveBrowserPushTenantGate({
+      client: { profile: "government", features: { browserPushNotifications: false } },
+      activeSubscriptionCount: 2,
+    }),
+    { enabled: false, explicit: false, legacySubscriptionCompatibility: false }
+  );
+});
+
+test("browser push tenant gate honors explicit tenant enablement", () => {
+  assert.deepEqual(
+    resolveBrowserPushTenantGate({
+      client: { profile: "business", features: { browserPushNotifications: true } },
+      activeSubscriptionCount: 0,
+    }),
+    { enabled: true, explicit: true, legacySubscriptionCompatibility: false }
+  );
 });
 
 test("foreground presence suppresses push only for the matching device", () => {

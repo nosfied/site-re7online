@@ -27,6 +27,7 @@ export type ClientFeatureKey =
   | "telegramInbound"
   | "telegramOutbound"
   | "whatsappWebSession"
+  | "browserPushNotifications"
   | "webhooks"
   | "webhookDispatch"
   | "webhookDispatchExecute"
@@ -78,6 +79,7 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   telegramInbound: false,
   telegramOutbound: false,
   whatsappWebSession: false,
+  browserPushNotifications: false,
   webhooks: false,
   webhookDispatch: false,
   webhookDispatchExecute: false,
@@ -116,6 +118,7 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   telegramInbound: false,
   telegramOutbound: false,
   whatsappWebSession: false,
+  browserPushNotifications: false,
   webhooks: false,
   webhookDispatch: false,
   webhookDispatchExecute: false,
@@ -201,6 +204,8 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
     telegramOutbound: normalizeFeatureValue(input.telegramOutbound) ?? defaults.telegramOutbound,
     whatsappWebSession:
       normalizeFeatureValue(input.whatsappWebSession) ?? defaults.whatsappWebSession,
+    browserPushNotifications:
+      normalizeFeatureValue(input.browserPushNotifications) ?? defaults.browserPushNotifications,
     webhooks: normalizeFeatureValue(input.webhooks) ?? defaults.webhooks,
     webhookDispatch: normalizeFeatureValue(input.webhookDispatch) ?? defaults.webhookDispatch,
     webhookDispatchExecute:
@@ -261,6 +266,24 @@ export function hasFeature(
   featureName: ClientFeatureKey
 ) {
   return hasCapability(client, featureName);
+}
+
+export function getExplicitFeatureOverride(
+  client: ClientWithFeatures | null | undefined,
+  featureName: ClientFeatureKey
+) {
+  const raw = client?.features;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  return normalizeFeatureValue((raw as Record<string, unknown>)[featureName]) ?? null;
+}
+
+export function resolveBrowserPushNotificationsFeature(
+  client: ClientWithFeatures | null | undefined,
+  activeLegacySubscriptions = 0
+) {
+  const explicit = getExplicitFeatureOverride(client, "browserPushNotifications");
+  if (explicit !== null) return explicit;
+  return activeLegacySubscriptions > 0;
 }
 
 export function getClientProfile(client: ClientWithProfile | null | undefined): ClientProfile {

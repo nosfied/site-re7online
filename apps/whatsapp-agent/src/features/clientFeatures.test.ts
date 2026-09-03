@@ -67,6 +67,11 @@ test("WhatsApp web session is disabled by default for controlled rollout", () =>
   assert.equal(getFeatures({ profile: "government" }).whatsappWebSession, false);
 });
 
+test("browser push notifications are disabled by default for controlled rollout", () => {
+  assert.equal(getFeatures({ profile: "business" }).browserPushNotifications, false);
+  assert.equal(getFeatures({ profile: "government" }).browserPushNotifications, false);
+});
+
 test("canned replies are enabled by default for existing tenants", () => {
   assert.equal(getFeatures({ profile: "business" }).cannedReplies, true);
   assert.equal(getFeatures({ profile: "government" }).cannedReplies, true);
@@ -174,6 +179,12 @@ test("WhatsApp web session can only be exposed by tenant-generic feature overrid
   const client = { profile: "business", features: { whatsappWebSession: true } };
   assert.equal(getFeatures(client).whatsappWebSession, true);
   assert.equal(hasFeature(client, "whatsappWebSession"), true);
+});
+
+test("browser push notifications can only be exposed by tenant-generic feature override", () => {
+  const client = { profile: "business", features: { browserPushNotifications: true } };
+  assert.equal(getFeatures(client).browserPushNotifications, true);
+  assert.equal(hasFeature(client, "browserPushNotifications"), true);
 });
 
 test("canned replies can be disabled without changing templates", () => {

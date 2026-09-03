@@ -29,6 +29,7 @@ export type AppFeatureKey =
   | "telegramInbound"
   | "telegramOutbound"
   | "whatsappWebSession"
+  | "browserPushNotifications"
   | "webhooks"
   | "mfa"
   | "mfaRequired"
@@ -79,6 +80,7 @@ export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   telegramInbound: false,
   telegramOutbound: false,
   whatsappWebSession: false,
+  browserPushNotifications: false,
   webhooks: false,
   mfa: false,
   mfaRequired: false,
@@ -114,6 +116,7 @@ export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   telegramInbound: false,
   telegramOutbound: false,
   whatsappWebSession: false,
+  browserPushNotifications: false,
   webhooks: false,
   mfa: false,
   mfaRequired: false,
@@ -196,6 +199,8 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
     telegramOutbound: normalizeBoolean(input.telegramOutbound) ?? defaults.telegramOutbound,
     whatsappWebSession:
       normalizeBoolean(input.whatsappWebSession) ?? defaults.whatsappWebSession,
+    browserPushNotifications:
+      normalizeBoolean(input.browserPushNotifications) ?? defaults.browserPushNotifications,
     webhooks: normalizeBoolean(input.webhooks) ?? defaults.webhooks,
     mfa: normalizeBoolean(input.mfa) ?? defaults.mfa,
     mfaRequired: normalizeBoolean(input.mfaRequired) ?? defaults.mfaRequired,

@@ -2,6 +2,10 @@ import crypto from "node:crypto";
 import webPush from "web-push";
 import { Prisma } from "@prisma/client";
 import { getPrisma } from "../db.js";
+import {
+  getExplicitFeatureOverride,
+  resolveBrowserPushNotificationsFeature,
+} from "../features/clientFeatures.js";
 import { logger } from "../logger/logger.js";
 import type { InboxRealtimeEvent } from "../realtime/events.js";
 
@@ -80,6 +84,40 @@ export function normalizePushSubscriptionInput(input: BrowserPushSubscriptionInp
   return { endpoint, p256dh, auth };
 }
 
+export function resolveBrowserPushTenantGate(params: {
+  client: { features?: unknown; profile?: unknown } | null | undefined;
+  activeSubscriptionCount: number;
+}) {
+  const explicit = getExplicitFeatureOverride(params.client, "browserPushNotifications");
+  const enabled = resolveBrowserPushNotificationsFeature(
+    params.client,
+    params.activeSubscriptionCount
+  );
+  return {
+    enabled,
+    explicit,
+    legacySubscriptionCompatibility:
+      explicit === null && params.activeSubscriptionCount > 0 && enabled,
+  };
+}
+
+export async function getBrowserPushTenantGate(clientId: string) {
+  const prisma = getPrisma();
+  const [client, activeSubscriptionCount] = await Promise.all([
+    prisma.client.findUnique({
+      where: { id: clientId },
+      select: { features: true, profile: true },
+    }),
+    prisma.pushSubscription.count({
+      where: {
+        clientId,
+        revokedAt: null,
+      },
+    }),
+  ]);
+  return resolveBrowserPushTenantGate({ client, activeSubscriptionCount });
+}
+
 function pruneExpiredPushPresence(nowMs = Date.now()) {
   for (const [endpoint, presence] of pushPresenceByEndpoint.entries()) {
     if (nowMs - presence.updatedAtMs > PUSH_PRESENCE_TTL_MS) {
@@ -133,12 +171,23 @@ export function shouldSuppressPushForForegroundSubscription(params: {
 
 export async function getPushStatus(params: { clientId: string; userId: string }) {
   const configured = isWebPushConfigured();
+  const tenantGate = await getBrowserPushTenantGate(params.clientId);
+  if (!tenantGate.enabled) {
+    return {
+      configured: false,
+      publicKey: null,
+      subscribed: false,
+      subscriptions: 0,
+      disabledByTenant: true,
+    };
+  }
   if (!configured) {
     return {
       configured,
       publicKey: null,
       subscribed: false,
       subscriptions: 0,
+      disabledByTenant: false,
     };
   }
   const subscriptions = await getPrisma().pushSubscription.findMany({
@@ -172,6 +221,7 @@ export async function getPushStatus(params: { clientId: string; userId: string }
     publicKey: getWebPushPublicKey(),
     subscribed: activeSubscriptions > 0,
     subscriptions: activeSubscriptions,
+    disabledByTenant: false,
   };
 }
 
@@ -184,6 +234,10 @@ export async function upsertPushSubscription(params: {
 }) {
   if (!isWebPushConfigured()) {
     return { ok: false as const, reason: "push_not_configured" as const };
+  }
+  const tenantGate = await getBrowserPushTenantGate(params.clientId);
+  if (!tenantGate.enabled) {
+    return { ok: false as const, reason: "push_feature_disabled" as const };
   }
   const normalized = normalizePushSubscriptionInput(params.subscription);
   if (!normalized) {
@@ -393,6 +447,20 @@ export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent)
     });
     return;
   }
+  const prisma = getPrisma();
+  const client = await prisma.client.findUnique({
+    where: { id: event.clientId },
+    select: { features: true, profile: true },
+  });
+  const explicitBrowserPush = getExplicitFeatureOverride(client, "browserPushNotifications");
+  if (!client || explicitBrowserPush === false) {
+    logger.info({
+      event: "push.skipped",
+      reason: "tenant_feature_disabled",
+      clientId: event.clientId,
+    });
+    return;
+  }
   if (!configureWebPush()) {
     logger.info({ event: "push.skipped", reason: "vapid_not_configured", clientId: event.clientId });
     return;
@@ -403,7 +471,6 @@ export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent)
     return;
   }
 
-  const prisma = getPrisma();
   const userWhere = buildOperationalPushUserWhere(event);
 
   const subscriptions = await prisma.pushSubscription.findMany({

@@ -559,6 +559,7 @@ import {
   publishRealtimeEvent,
 } from "../realtime/hub.js";
 import {
+  getBrowserPushTenantGate,
   getPushStatus,
   getWebPushPublicKey,
   isWebPushConfigured,
@@ -3875,6 +3876,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         publicKey: status.publicKey,
         subscribed: status.subscribed,
         subscriptions: status.subscriptions,
+        disabledByTenant: status.disabledByTenant,
       });
     } catch (error) {
       logger.error({
@@ -3900,6 +3902,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
     try {
+      const tenantGate = await getBrowserPushTenantGate(clientAuth.clientId);
+      if (!tenantGate.enabled) {
+        json(res, 403, {
+          error: "push_feature_disabled",
+          message: "Notificacoes do navegador nao estao habilitadas para este tenant.",
+        });
+        return;
+      }
       const body = await readJsonBody(req, res);
       if (!body) return;
       const result = await upsertPushSubscription({
@@ -27276,6 +27286,7 @@ function normalizeTenantProvisioningFeatures(value: unknown): Prisma.InputJsonOb
     "telegramInbound",
     "telegramOutbound",
     "whatsappWebSession",
+    "browserPushNotifications",
     "webhooks",
     "webhookDispatch",
     "webhookDispatchExecute",

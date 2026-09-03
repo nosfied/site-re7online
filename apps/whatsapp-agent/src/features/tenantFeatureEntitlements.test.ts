@@ -26,6 +26,12 @@ test("buildTenantFeatureEntitlements separates enabled state from runtime availa
   assert.equal(cannedReplies.enabled, true);
   assert.equal(cannedReplies.status, "enabled");
   assert.deepEqual(cannedReplies.dependencies ?? [], []);
+  const browserPush = items.find((item) => item.key === "browserPushNotifications");
+  assert.ok(browserPush);
+  assert.equal(browserPush.label, "Notificações do navegador");
+  assert.equal(browserPush.enabled, false);
+  assert.equal(browserPush.status, "disabled");
+  assert.deepEqual(browserPush.dependencies ?? [], []);
 });
 
 test("updateTenantFeatureOverrides preserves unknown legacy keys", () => {
