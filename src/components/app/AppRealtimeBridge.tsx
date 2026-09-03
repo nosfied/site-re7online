@@ -58,9 +58,21 @@ function isAppOperationallyActive() {
   if (typeof document === "undefined") return true;
   // Notification contract:
   // - visible page: app is foreground for local sound, even if another desktop window has focus;
-  // - hidden/background page: no local JS sound, native Web Push is responsible.
+  // - hidden/background desktop page: local sound is allowed while native Web Push handles visual alerts;
+  // - hidden/background mobile/PWA page: native Web Push is responsible.
   // Do not add document.hasFocus() here; Chrome can report focused=false while the inbox is visible.
   return document.visibilityState === "visible";
+}
+
+export function shouldPlayLocalInboxSound(input: {
+  visibilityState: DocumentVisibilityState;
+  mobileLike: boolean;
+  soundEnabled: boolean;
+  browserPushEnabled?: boolean;
+}) {
+  if (!input.soundEnabled) return false;
+  if (input.visibilityState === "visible") return true;
+  return !input.mobileLike;
 }
 
 export type AppPushPresenceSnapshot = {
@@ -327,28 +339,37 @@ export default function AppRealtimeBridge() {
     const appIsFocused = document.hasFocus();
     const appIsActive = isAppOperationallyActive();
     const soundEnabled = isSoundEnabled();
+    const mobileLike = isMobileLikeRuntime();
+    const localSoundAllowed = shouldPlayLocalInboxSound({
+      visibilityState: document.visibilityState,
+      mobileLike,
+      soundEnabled,
+    });
     debugNotification("request_received", {
       visible: appIsVisible,
       focused: appIsFocused,
       active: appIsActive,
+      hiddenDesktopSound: !appIsVisible && !mobileLike,
+      localSoundAllowed,
       soundEnabled,
       sound: request.sound,
       notifyBrowser: request.notifyBrowser,
     });
-    if (!appIsActive) {
+    if (!localSoundAllowed) {
       if (notificationTimerRef.current !== null) {
         window.clearTimeout(notificationTimerRef.current);
         notificationTimerRef.current = null;
       }
-      debugNotification("request_skipped", { reason: "not_active", sound: request.sound });
+      debugNotification("request_skipped", {
+        reason: soundEnabled ? "mobile_or_unavailable_hidden_audio" : "sound_disabled",
+        sound: request.sound,
+      });
       return;
     }
-    if (soundEnabled) {
-      if (request.sound === "active") {
-        playNotificationSound("active");
-      } else {
-        enqueueNotification();
-      }
+    if (request.sound === "active") {
+      playNotificationSound("active");
+    } else {
+      enqueueNotification();
     }
   }, [enqueueNotification, playNotificationSound]);
 
@@ -449,7 +470,13 @@ export default function AppRealtimeBridge() {
       active: isAppOperationallyActive(),
       mobileLike: isMobileLikeRuntime(),
       iosLike: isIosLikeRuntime(),
-      hiddenLocalSound: false,
+      hiddenLocalSound: typeof document === "undefined"
+        ? false
+        : shouldPlayLocalInboxSound({
+          visibilityState: document.visibilityState,
+          mobileLike: isMobileLikeRuntime(),
+          soundEnabled: isSoundEnabled(),
+        }),
       hasPrimedAudio: hasPrimedAudioRef.current,
       iosAudioState: iosAudioContextRef.current?.state ?? null,
       primaryAudioReady: Boolean(primaryAudioRef.current),

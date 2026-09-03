@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildAppPushPresenceSnapshot,
+  shouldPlayLocalInboxSound,
   shouldSendAppPushPresenceHeartbeat,
 } from "./AppRealtimeBridge";
 
@@ -80,4 +81,67 @@ test("push presence heartbeat sends immediately for state changes and forced upd
     }),
     true
   );
+});
+
+test("local inbox sound plays for visible desktop when enabled", () => {
+  assert.equal(
+    shouldPlayLocalInboxSound({
+      visibilityState: "visible",
+      mobileLike: false,
+      soundEnabled: true,
+    }),
+    true
+  );
+});
+
+test("local inbox sound plays for hidden desktop when enabled", () => {
+  assert.equal(
+    shouldPlayLocalInboxSound({
+      visibilityState: "hidden",
+      mobileLike: false,
+      soundEnabled: true,
+    }),
+    true
+  );
+});
+
+test("local inbox sound does not play when disabled", () => {
+  assert.equal(
+    shouldPlayLocalInboxSound({
+      visibilityState: "hidden",
+      mobileLike: false,
+      soundEnabled: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldPlayLocalInboxSound({
+      visibilityState: "visible",
+      mobileLike: false,
+      soundEnabled: false,
+    }),
+    false
+  );
+});
+
+test("local inbox sound remains disabled for hidden mobile/PWA pages", () => {
+  assert.equal(
+    shouldPlayLocalInboxSound({
+      visibilityState: "hidden",
+      mobileLike: true,
+      soundEnabled: true,
+    }),
+    false
+  );
+});
+
+test("local inbox sound is independent from browser push feature state", () => {
+  const baseInput = {
+    visibilityState: "hidden" as const,
+    mobileLike: false,
+    soundEnabled: true,
+  };
+
+  assert.equal(shouldPlayLocalInboxSound({ ...baseInput, browserPushEnabled: false }), true);
+  assert.equal(shouldPlayLocalInboxSound({ ...baseInput, browserPushEnabled: true }), true);
 });
