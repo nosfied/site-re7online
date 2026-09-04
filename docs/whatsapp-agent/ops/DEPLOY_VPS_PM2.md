@@ -65,16 +65,22 @@ npm run pm2:reload
 
 ## Matriz de impacto por diff
 
-Antes de buildar ou recarregar servicos na VPS, calcule o impacto do range Git
-que sera publicado:
+O deploy da VPS integra a matriz de impacto por diff. O fluxo captura o HEAD
+antes do `git pull --ff-only`, captura o HEAD depois da atualizacao e calcula:
 
 ```bash
 cd /opt/re7online/site-re7online
-scripts/deploy-impact-matrix.sh <head-atual> <novo-head>
+apps/whatsapp-agent/scripts/deploy-vps.sh
 ```
 
-O script somente imprime a matriz. Ele nao faz build, reload, deploy, migration
-ou alteracao de dados.
+Para auditar o plano sem alterar o checkout, use:
+
+```bash
+apps/whatsapp-agent/scripts/deploy-vps.sh --dry-run origin/flow-executor-quote-hardening
+```
+
+O dry-run somente imprime a matriz. Ele nao faz pull, build, reload, deploy,
+migration ou alteracao de dados.
 
 Campos principais:
 
@@ -96,6 +102,10 @@ scripts/deploy-impact-matrix.sh HEAD origin/flow-executor-quote-hardening
 
 Se `REVIEW_REQUIRED=YES`, nao prossiga por memoria operacional. Atualize a
 matriz ou registre uma decisao manual explicita.
+
+Comportamento de migration: `deploy-vps.sh` roda `npm run db:deploy` somente
+quando a matriz marca `MIGRATION_REVIEW=YES`. A matriz nao valida schema nem
+substitui a revisao humana de migrations.
 
 ## 7) Operação
 
@@ -137,12 +147,13 @@ rebuildado e recarregado.
 Checklist minimo de deploy:
 
 1. Conferir `git status` e `git diff --name-only`.
-2. Rodar `scripts/deploy-impact-matrix.sh <head-atual> <novo-head>`.
+2. Rodar `apps/whatsapp-agent/scripts/deploy-vps.sh --dry-run <novo-head>` se
+   quiser revisar antes.
 3. Conferir se ha `REVIEW_REQUIRED=YES` ou `MIGRATION_REVIEW=YES`.
-4. Rodar build backend quando houver alteracao em `apps/whatsapp-agent`.
-5. Rodar build worker quando a matriz indicar `WORKER_BUILD=YES`.
-6. Confirmar que o `dist` do worker foi atualizado.
-7. Recarregar somente os servicos afetados no PM2.
+4. Rodar `apps/whatsapp-agent/scripts/deploy-vps.sh`.
+5. Confirmar que builds indicados pela matriz passaram antes de qualquer reload.
+6. Confirmar que o `dist` do worker foi atualizado quando `WORKER_BUILD=YES`.
+7. Confirmar que somente os servicos afetados foram recarregados no PM2.
 8. Confirmar health API/DB/agent-api.
 9. Confirmar canais Web Session esperados como `CONNECTED`.
 10. Confirmar ausencia de novo `QR_REQUIRED` ou 401 apos reload.

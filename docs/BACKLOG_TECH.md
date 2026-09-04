@@ -59,7 +59,7 @@ Estado fechado/validado:
 - true foreground Web Push detection: CLOSED / REAL VALIDATED in `670f392d`;
 - hidden desktop local sound: CLOSED / REAL VALIDATED in `c50fb73c`;
 - supervisor team presence panel: DEPLOYED / VISUAL SMOKE PENDING;
-- deploy impact matrix hardening: IMPLEMENTED / SCRIPT + RUNBOOK;
+- deploy impact matrix hardening: CLOSED / SCRIPT + DEPLOY INTEGRATION + RUNBOOK;
 - CRA Demo V1: READY FOR CUSTOMER VALIDATION.
 
 Pendencias proximas:
@@ -82,10 +82,8 @@ Dividas tecnicas abertas:
   - `docs/bids/2026/cra-pr/cra-pr-demo-flow-v1-customer-validation.definition.json`.
 - CRA Meta/HYBRID real permanece OPEN ate onboarding e smoke no tenant `cra-pr`;
 - billing measurement items ainda abertos: ciclo receptivo logico, template Utility fora de 24h entregue, ledger Meta apos 2026-10-01 e relatorio contratual mensal.
-- deploy script auto-integration ainda aberto: `scripts/deploy-impact-matrix.sh`
-  ja calcula builds/reloads por range Git e cobre o incidente CSAT de worker
-  `dist` stale, mas `apps/whatsapp-agent/scripts/deploy-vps.sh` ainda nao
-  consome a matriz automaticamente.
+- alteracoes externas de `.env`/segredos continuam como procedimento
+  operacional separado; a matriz de deploy cobre impacto derivado de diff Git.
 
 ### Contact Timeline / Histórico do contato
 

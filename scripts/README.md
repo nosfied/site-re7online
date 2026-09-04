@@ -25,3 +25,21 @@ para `apps/whatsapp-web-worker/dist/whatsapp-agent/src`.
 
 Se `REVIEW_REQUIRED=YES`, pare o deploy e classifique o caminho alterado antes
 de prosseguir.
+
+## `apps/whatsapp-agent/scripts/deploy-vps.sh`
+
+O deploy da VPS consome a matriz automaticamente:
+
+```bash
+apps/whatsapp-agent/scripts/deploy-vps.sh
+```
+
+Para revisar sem alterar o checkout nem executar build/reload:
+
+```bash
+apps/whatsapp-agent/scripts/deploy-vps.sh --dry-run origin/flow-executor-quote-hardening
+```
+
+O deploy integrado faz `git pull --ff-only`, calcula o range publicado, para em
+`REVIEW_REQUIRED=YES` ou `UNKNOWN_RUNTIME_IMPACT=YES`, builda todos os runtimes
+afetados e somente depois recarrega os processos PM2 correspondentes.
