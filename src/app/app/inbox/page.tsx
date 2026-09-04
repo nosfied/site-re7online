@@ -45,6 +45,13 @@ import {
   shouldApplyRealtimeMessageToHumanTimeline,
 } from "@/lib/inboxRealtimeTimeline";
 import {
+  CONVERSATION_FILTER_BY_VALUE,
+  CONVERSATION_FILTERS,
+  MORE_CONVERSATION_FILTERS,
+  PRIMARY_CONVERSATION_FILTERS,
+  type ConversationFilter,
+} from "@/lib/inboxConversationFilters";
+import {
   addAutoReadSuppressionKeys,
   clearAutoReadSuppressionKeys,
   hasAutoReadSuppressionKey,
@@ -1105,23 +1112,6 @@ function InboxAvailabilityButton() {
   );
 }
 
-const CONVERSATION_FILTERS = [
-  { value: "ALL", label: "Todas" },
-  { value: "WAITING", label: "Aguardando atendimento" },
-  { value: "AUTOMATION", label: "Automação" },
-  { value: "IN_PROGRESS", label: "Em atendimento" },
-  { value: "WAITING_USER", label: "Aguardando cliente" },
-  { value: "CLOSED", label: "Encerradas" },
-  { value: "MINE", label: "Minhas" },
-  { value: "UNASSIGNED", label: "Sem responsável" },
-] as const;
-
-type ConversationFilter = (typeof CONVERSATION_FILTERS)[number]["value"];
-const PRIMARY_CONVERSATION_FILTERS: ConversationFilter[] = ["ALL", "WAITING", "AUTOMATION"];
-const MORE_CONVERSATION_FILTERS = CONVERSATION_FILTERS.filter(
-  (item) => !PRIMARY_CONVERSATION_FILTERS.includes(item.value)
-);
-const CONVERSATION_FILTER_BY_VALUE = new Map(CONVERSATION_FILTERS.map((item) => [item.value, item]));
 type DepartmentFilter = "ALL" | string;
 type ConversationChannelFilter = "ALL" | InboxChannel;
 
