@@ -1114,6 +1114,188 @@ test("unwrapBaileysMessageContent preserves unknown diagnostics without raw payl
   assert.equal(result.viewOnce, false);
 });
 
+test("ingestBaileysWebSessionMessage ignores protocol control messages without UNKNOWN persistence", async () => {
+  resetState();
+  const messageEvents: Array<Extract<InboxRealtimeEvent, { type: "message.created" }>> = [];
+
+  const result = await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    publishMessageCreatedRealtime: async (event) => {
+      messageEvents.push(event);
+    },
+    message: {
+      key: { id: "MSG_PROTOCOL_CONTROL", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      messageTimestamp: 1786464000,
+      message: {
+        protocolMessage: {
+          type: 0,
+          key: { id: "referenced-message-id" },
+        },
+      },
+    },
+  });
+
+  assert.equal(result.action, "ignored");
+  assert.equal(result.reason, "non_content_protocolMessage");
+  assert.equal(state.inboundMessages.length, 0);
+  assert.equal(messageEvents.length, 0);
+  assert.equal(
+    state.events.some(
+      (event) =>
+        event.eventName === "whatsapp.web.inbound.ignored" &&
+        (event.payloadJson as { reason?: string } | undefined)?.reason === "non_content_protocolMessage"
+    ),
+    true
+  );
+});
+
+test("ingestBaileysWebSessionMessage keeps protocol messages with nested standalone content unsupported-visible", async () => {
+  resetState();
+
+  const result = await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    message: {
+      key: { id: "MSG_PROTOCOL_EDITED", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      messageTimestamp: 1786464000,
+      message: {
+        protocolMessage: {
+          type: 14,
+          editedMessage: {
+            conversation: "texto editado",
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(result.action, "persisted");
+  assert.equal(state.inboundMessages.length, 1);
+  assert.equal(state.inboundMessages[0]?.type, MessageType.UNKNOWN);
+  const rawPayload = rawPayloadOf(state.inboundMessages[0]) as
+    | { contentDiagnostics?: { normalizedInnerType?: string } }
+    | undefined;
+  assert.equal(rawPayload?.contentDiagnostics?.normalizedInnerType, "protocolMessage");
+});
+
+test("ingestBaileysWebSessionMessage ignores reaction messages without timeline content", async () => {
+  resetState();
+  const messageEvents: Array<Extract<InboxRealtimeEvent, { type: "message.created" }>> = [];
+
+  const result = await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    publishMessageCreatedRealtime: async (event) => {
+      messageEvents.push(event);
+    },
+    message: {
+      key: { id: "MSG_REACTION", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      messageTimestamp: 1786464000,
+      message: {
+        reactionMessage: {
+          key: { id: "referenced-message-id", remoteJid: "5584999997784@s.whatsapp.net", fromMe: true },
+          text: "👍",
+        },
+      },
+    },
+  });
+
+  assert.equal(result.action, "ignored");
+  assert.equal(result.reason, "non_content_reactionMessage");
+  assert.equal(state.inboundMessages.length, 0);
+  assert.equal(messageEvents.length, 0);
+});
+
+test("ingestBaileysWebSessionMessage ignores standalone messageContextInfo metadata", async () => {
+  resetState();
+
+  const result = await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    message: {
+      key: { id: "MSG_CONTEXT_ONLY", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      messageTimestamp: 1786464000,
+      message: {
+        messageContextInfo: {
+          deviceListMetadataVersion: 2,
+        },
+      },
+    },
+  });
+
+  assert.equal(result.action, "ignored");
+  assert.equal(result.reason, "non_content_messageContextInfo");
+  assert.equal(state.inboundMessages.length, 0);
+});
+
+test("ingestBaileysWebSessionMessage ignores album grouping metadata and preserves following image messages", async () => {
+  resetState();
+  const messageEvents: Array<Extract<InboxRealtimeEvent, { type: "message.created" }>> = [];
+  const publishMessageCreatedRealtime = async (event: Extract<InboxRealtimeEvent, { type: "message.created" }>) => {
+    messageEvents.push(event);
+  };
+
+  const albumResult = await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    publishMessageCreatedRealtime,
+    message: {
+      key: { id: "MSG_ALBUM_GROUP", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      messageTimestamp: 1786464000,
+      message: {
+        albumMessage: {
+          expectedImageCount: 2,
+        },
+      },
+    },
+  });
+  const imageResult = await ingestBaileysWebSessionMessage({
+    clientId: "client_1",
+    tenantKey: "tenant_1",
+    channelAccountDbId: "account_1",
+    channelAccountId: "web-session-default",
+    publishMessageCreatedRealtime,
+    message: {
+      key: { id: "MSG_ALBUM_IMAGE", remoteJid: "5584999997784@s.whatsapp.net", fromMe: false },
+      messageTimestamp: 1786464001,
+      message: {
+        imageMessage: {
+          mimetype: "image/jpeg",
+        },
+      },
+      webSessionMedia: {
+        kind: "image",
+        mediaId: "web-session:album_image",
+        mediaRef: "album_image",
+        storageRef: "client_1/web_MSG_ALBUM_IMAGE-album_image.jpg",
+        storageProvider: "local_web_session",
+        mimeType: "image/jpeg",
+        fileName: null,
+        caption: null,
+        sizeBytes: 256,
+      },
+    },
+  });
+
+  assert.equal(albumResult.action, "ignored");
+  assert.equal(albumResult.reason, "non_content_albumMessage");
+  assert.equal(imageResult.action, "persisted");
+  assert.equal(state.inboundMessages.length, 1);
+  assert.equal(state.inboundMessages[0]?.type, MessageType.IMAGE);
+  assert.equal(messageEvents.length, 1);
+});
+
 test("ingestBaileysWebSessionMessage blocks inbound media disabled by tenant policy", async () => {
   resetState({
     config: {

@@ -163,6 +163,26 @@ const BAILEYS_CONTENT_KEYS = [
   "interactiveResponseMessage",
   "protocolMessage",
   "editedMessage",
+  "messageContextInfo",
+  "albumMessage",
+] as const;
+
+const BAILEYS_STANDALONE_CONTENT_KEYS = [
+  "conversation",
+  "extendedTextMessage",
+  "imageMessage",
+  "audioMessage",
+  "videoMessage",
+  "documentMessage",
+  "locationMessage",
+  "liveLocationMessage",
+  "contactMessage",
+  "contactsArrayMessage",
+  "stickerMessage",
+  "buttonsResponseMessage",
+  "listResponseMessage",
+  "templateButtonReplyMessage",
+  "interactiveResponseMessage",
 ] as const;
 
 const BAILEYS_UNWRAP_MAX_DEPTH = 5;
@@ -673,6 +693,32 @@ function detectMessageType(message: Record<string, unknown>) {
   return MessageType.UNKNOWN;
 }
 
+function hasStandaloneBaileysContent(value: unknown, depth = 0): boolean {
+  if (!isRecord(value) || depth > BAILEYS_UNWRAP_MAX_DEPTH) return false;
+  if (BAILEYS_STANDALONE_CONTENT_KEYS.some((key) => Object.prototype.hasOwnProperty.call(value, key))) {
+    return true;
+  }
+  for (const key of ["message", "editedMessage"]) {
+    if (hasStandaloneBaileysContent(value[key], depth + 1)) return true;
+  }
+  return BAILEYS_WRAPPER_KEYS.some((key) => {
+    const wrapper = isRecord(value[key]) ? value[key] : null;
+    return hasStandaloneBaileysContent(wrapper?.message, depth + 1);
+  });
+}
+
+function classifyNonContentBaileysMessage(content: Record<string, unknown>) {
+  const type = detectBaileysContentKey(content);
+  if (type === "reactionMessage") return "reactionMessage";
+  if (type === "messageContextInfo") return hasStandaloneBaileysContent(content) ? null : "messageContextInfo";
+  if (type === "albumMessage") return hasStandaloneBaileysContent(content.albumMessage) ? null : "albumMessage";
+  if (type === "protocolMessage") {
+    const protocol = isRecord(content.protocolMessage) ? content.protocolMessage : null;
+    return hasStandaloneBaileysContent(protocol) ? null : "protocolMessage";
+  }
+  return null;
+}
+
 function extractReplyToExternalMessageId(message: Record<string, unknown>) {
   const keys = ["extendedTextMessage", "imageMessage", "audioMessage", "videoMessage", "documentMessage"];
   for (const key of keys) {
@@ -777,6 +823,8 @@ export function normalizeBaileysInboundMessage(params: {
   if (!message) return { ok: false, reason: "empty_message" };
   const unwrapped = unwrapBaileysMessageContent(message);
   const content = unwrapped.viewOnce ? message : unwrapped.content;
+  const nonContentType = classifyNonContentBaileysMessage(content);
+  if (nonContentType) return { ok: false, reason: `non_content_${nonContentType}` };
   const senderJid = pickSenderJid({ key, resolvedSenderJid: params.resolvedSenderJid });
   const sender = extractPhoneFromBaileysJid(senderJid);
   if (!sender) return { ok: false, reason: "unsupported_jid" };
