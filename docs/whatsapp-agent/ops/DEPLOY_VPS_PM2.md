@@ -63,6 +63,40 @@ npm run build
 npm run pm2:reload
 ```
 
+## Matriz de impacto por diff
+
+Antes de buildar ou recarregar servicos na VPS, calcule o impacto do range Git
+que sera publicado:
+
+```bash
+cd /opt/re7online/site-re7online
+scripts/deploy-impact-matrix.sh <head-atual> <novo-head>
+```
+
+O script somente imprime a matriz. Ele nao faz build, reload, deploy, migration
+ou alteracao de dados.
+
+Campos principais:
+
+- `BACKEND_BUILD` / `BACKEND_RELOAD`: `re7-whatsapp-agent`
+- `WORKER_BUILD` / `WORKER_RELOAD`: `re7-whatsapp-web-worker`
+- `FRONTEND_BUILD` / `FRONTEND_RELOAD`: `re7-admin-front`
+- `MIGRATION_REVIEW`: revisar separadamente Prisma schema/migrations
+- `REVIEW_REQUIRED`: parar e classificar manualmente antes do deploy
+
+Invariante operacional: se algum `*_RELOAD=YES`, o respectivo `*_BUILD` deve
+ter sido concluido com sucesso antes do reload, salvo caso explicito de reload
+apenas por configuracao runtime.
+
+Exemplo seguro:
+
+```bash
+scripts/deploy-impact-matrix.sh HEAD origin/flow-executor-quote-hardening
+```
+
+Se `REVIEW_REQUIRED=YES`, nao prossiga por memoria operacional. Atualize a
+matriz ou registre uma decisao manual explicita.
+
 ## 7) Operação
 
 ```bash
@@ -103,10 +137,10 @@ rebuildado e recarregado.
 Checklist minimo de deploy:
 
 1. Conferir `git status` e `git diff --name-only`.
-2. Identificar arquivos alterados.
-3. Verificar se o worker importa esses arquivos direta ou indiretamente.
+2. Rodar `scripts/deploy-impact-matrix.sh <head-atual> <novo-head>`.
+3. Conferir se ha `REVIEW_REQUIRED=YES` ou `MIGRATION_REVIEW=YES`.
 4. Rodar build backend quando houver alteracao em `apps/whatsapp-agent`.
-5. Rodar build worker quando houver dependencia compartilhada.
+5. Rodar build worker quando a matriz indicar `WORKER_BUILD=YES`.
 6. Confirmar que o `dist` do worker foi atualizado.
 7. Recarregar somente os servicos afetados no PM2.
 8. Confirmar health API/DB/agent-api.
