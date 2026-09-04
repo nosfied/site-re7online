@@ -36,7 +36,7 @@ O caso CRA-PR e estrategico por exigir combinacao de atendimento receptivo, volu
 Base de producao documentada nesta consolidacao:
 
 ```text
-670f392d9f6c65bf58922774fae7bf462c127227
+c308198aa97ea6a4233761eac9da9cbc945cbed6
 ```
 
 ### CRA Demo Flow V1
@@ -99,7 +99,7 @@ CLOSED / REAL VALIDATED
 
 ### CRA real tenant rollout state - 2026-09-04
 
-Estado observado em producao por leitura:
+Estado observado e homologado em producao:
 
 - tenant: `cra-pr`;
 - status: ACTIVE;
@@ -130,20 +130,48 @@ Configuracao operacional:
 - CSAT: ENABLED;
 - WhatsApp Web feature: ENABLED;
 - Browser Push feature: ENABLED;
-- Meta assets: PENDING;
-- Web Session pairing: PENDING;
-- HYBRID: PENDING / platform capability ready;
+- Web Session: CONNECTED;
+- Meta: READY / Graph validation PASS;
+- coexistence: PASS;
+- configured mode: HYBRID;
+- hybrid exactly-once: PASS;
 - invites: 18 sent, 0 final failures;
 - first invite batch hit Resend 429 after 17 sends, and the final user was
   retried successfully;
 - active accounts: do not assume activation count without current login
   evidence;
-- department hours: PENDING user configuration;
+- department hours: PENDING CUSTOMER CONFIGURATION;
+- no schedule currently means `NO_SCHEDULE` / open according to the current
+  domain rule; this is not a technical failure;
 - training: Wednesday 2026-09-09.
 - Instagram/Facebook/Web: contracted but not activated initially.
 
-Nao registrar Meta/HYBRID como concluido ate onboarding e smoke reais do tenant
-CRA-PR.
+Validacao real do tenant CRA-PR:
+
+- approved flow -> consent -> menu -> handoff: PASS;
+- human Inbox: PASS;
+- human outbound/inbound: PASS;
+- normal close: PASS;
+- `CompletedServiceSnapshot`: exactly 1;
+- CSAT score -> responded: PASS;
+- optional comment in the same response: PASS;
+- Browser Push background: REAL VALIDATED;
+- Web Session CONNECTED after validation;
+- Meta READY with Graph validation PASS;
+- HYBRID real operational validation: PASS.
+
+Status:
+
+```text
+CRA-PR REAL HYBRID OPERATIONAL VALIDATION:
+CLOSED / PASS
+
+CRA-PR READY FOR TRAINING 2026-09-09:
+YES
+
+CRA-PR DEPARTMENT HOURS:
+PENDING CUSTOMER CONFIGURATION
+```
 
 Administradores CRA podem configurar horarios dos departamentos em:
 
@@ -192,10 +220,10 @@ O custo Meta deve ser tratado como risco operacional/comercial controlado, nao c
 - Evidencias visuais devem ser capturadas em ambiente sanitizado.
 - Regras de retencao e privacidade devem constar no onboarding operacional.
 - Regra waiting-on-customer 1h permanece aberta: encerrar apos 1h somente quando o sistema/atendente estiver aguardando resposta do cidadao, nao como simples `lastActivityAt + 1h`.
-- Pendencias imediatas pre-treinamento: validar primeiro login/ativacao de
-  usuarios, especialmente 3 admins TI; configurar horarios; executar onboarding
-  real Meta/Web Session; validar inbound, flow, handoff, freeform, exactly-once,
-  opt-in Web Push e CSAT do tenant CRA quando aplicavel.
+- Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
+  usuarios, especialmente 3 admins TI, e guiar configuracao de horarios. A
+  ausencia de horario configurado permanece como pendencia operacional do
+  cliente, nao falha tecnica.
 - Pendencias contratuais/produto separadas: ciclo receptivo logico para
   mensuracao, template Utility fora de 24h entregue, ledger Meta apos
   2026-10-01, relatorio mensal contratual e alinhamento formal para

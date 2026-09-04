@@ -79,6 +79,36 @@ SECULT COMPLETED SERVICE REPORTING:
 CLOSED / PRODUCTION VALIDATED
 ```
 
+## Web Session unsupported-message incident - 2026-09-04
+
+Chamados organicos da SECULT-PE indicaram bolhas `Mensagem nao suportada` em
+atendimento humano normal, incluindo um caso em que uma imagem valida foi
+recebida/renderizada no mesmo minuto. A auditoria classificou esses casos como
+compativeis com eventos Web Session de controle/contexto persistidos como
+`UNKNOWN`, nao como perda comprovada de midia.
+
+Fix em producao:
+
+```text
+c308198aa97ea6a4233761eac9da9cbc945cbed6
+fix(whatsapp): suppress non-content web session events
+```
+
+Resultado:
+
+- control-only `protocolMessage`: suppressed;
+- standalone `reactionMessage`: suppressed;
+- standalone `messageContextInfo`: suppressed;
+- grouping-only `albumMessage`: suppressed;
+- standalone real content: preserved;
+- valid media: preserved;
+- view-once behavior: preserved;
+- Hybrid exactly-once: preserved;
+- schema/migration/frontend: unchanged;
+- backend + worker builds: PASS;
+- historical `UNKNOWN`: unchanged;
+- status: DEPLOYED / TESTED / ORGANIC VALIDATION PENDING.
+
 ## Pontos de atencao
 
 - Confirmar canais exigidos no edital e disponibilidade real no tenant antes da proposta final.

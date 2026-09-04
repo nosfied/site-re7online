@@ -505,3 +505,44 @@ Status:
 - view-once privacy semantics preserved;
 - no backfill for the 85 historical `UNKNOWN` rows; organic long-term validation continues
   passively.
+
+### Non-content Web Session control events - 2026-09-04
+
+SECULT-PE later reported additional organic `Mensagem nao suportada` bubbles during normal
+human service. Production audit correlated two customer screenshots from 2026-09-04:
+
+- around 15:30 local: human service active, visible `UNKNOWN` bubble, no screenshot evidence
+  of lost media;
+- around 15:58 local: human service active, visible `UNKNOWN` bubble, and valid images
+  received/rendered in the same minute.
+
+The 15:58 evidence showed the image path was healthy and the `UNKNOWN` row was compatible
+with a separate grouping/control event, not a failed image normalization.
+
+Patch deployed:
+
+```text
+c308198aa97ea6a4233761eac9da9cbc945cbed6
+fix(whatsapp): suppress non-content web session events
+```
+
+Current policy after `c308198a`:
+
+- suppress control-only `protocolMessage`;
+- suppress standalone `reactionMessage`;
+- suppress standalone `messageContextInfo`;
+- suppress grouping-only `albumMessage`;
+- preserve standalone real content, including supported text and media;
+- preserve valid media download/storage;
+- preserve view-once privacy behavior;
+- preserve Hybrid exactly-once semantics;
+- do not alter historical `UNKNOWN` rows.
+
+Deployment result:
+
+- backend build: PASS;
+- worker build: PASS;
+- worker source/dist aligned: PASS;
+- frontend change: NO;
+- schema/migration: NO;
+- status: DEPLOYED / TESTED / ORGANIC VALIDATION PENDING.

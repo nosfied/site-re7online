@@ -53,6 +53,8 @@ Estado fechado/validado:
 - Inbox Phase 2 WebSocket-driven invalidation: CLOSED / PRODUCTION VALIDATED;
 - multichannel reconciliation migration: CLOSED / PRODUCTION VALIDATED;
 - Web Session wrapped media normalization: CLOSED / SAFE NORMALIZATION PATCH;
+- SECULT Web Session non-content control event suppression: DEPLOYED / TESTED in
+  `c308198a`; organic validation pending;
 - SECULT auto-assignment incident 2026-08-31: AUDITED / BUG NOT CONFIRMED; UX clarification deployed in `c91671e9`;
 - SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / POS-PHASE 2 LOAD VALIDATION PARTIAL;
 - Browser Push / PWA notifications: CLOSED / REAL VALIDATED;
@@ -61,6 +63,13 @@ Estado fechado/validado:
 - supervisor team presence panel: DEPLOYED / VISUAL SMOKE PENDING;
 - deploy impact matrix hardening: CLOSED / SCRIPT + DEPLOY INTEGRATION + RUNBOOK;
 - CRA Demo V1: READY FOR CUSTOMER VALIDATION.
+- CRA-PR real HYBRID operational validation: CLOSED / PASS;
+- CRA-PR approved flow -> consent -> menu -> handoff: CLOSED / PASS;
+- CRA-PR human Inbox + human outbound/inbound + normal close: CLOSED / PASS;
+- CRA-PR `CompletedServiceSnapshot`: CLOSED / exactly 1 snapshot in validation;
+- CRA-PR CSAT score/responded and optional comment in same response: CLOSED / PASS;
+- CRA-PR Browser Push background: CLOSED / REAL VALIDATED;
+- CRA-PR ready for training 2026-09-09: YES.
 
 Pendencias proximas:
 
@@ -68,7 +77,9 @@ Pendencias proximas:
 2. validar escala 10/30/50 sessoes antes de declarar capacidade CRA 30 agentes;
 3. validar ativacao/primeiro login dos usuarios CRA-PR, especialmente 3 admins de TI;
 4. guiar configuracao de horarios dos departamentos CRA-PR;
-5. executar onboarding real CRA Meta/Web Session ate HYBRID e smoke do tenant;
+5. acompanhar a validacao organica SECULT para confirmar que novos eventos
+   `protocolMessage`, `reactionMessage`, `messageContextInfo` e grouping-only
+   `albumMessage` nao aparecem como `Mensagem nao suportada`;
 6. desenhar waiting-on-customer 1h como regra funcional separada.
 
 Dividas tecnicas abertas:
@@ -80,7 +91,9 @@ Dividas tecnicas abertas:
 - baselines CRA versionados nesta consolidacao como evidencia de validacao, nao como dump operacional:
   - `docs/bids/2026/cra-pr/CRA_PR_DEMO_FLOW_V1_CUSTOMER_VALIDATION_BASELINE.md`;
   - `docs/bids/2026/cra-pr/cra-pr-demo-flow-v1-customer-validation.definition.json`.
-- CRA Meta/HYBRID real permanece OPEN ate onboarding e smoke no tenant `cra-pr`;
+- CRA department hours remain PENDING CUSTOMER CONFIGURATION. Under the current
+  domain rule, no schedule means `NO_SCHEDULE` / open and must not be classified
+  as a technical failure;
 - billing measurement items ainda abertos: ciclo receptivo logico, template Utility fora de 24h entregue, ledger Meta apos 2026-10-01 e relatorio contratual mensal.
 - alteracoes externas de `.env`/segredos continuam como procedimento
   operacional separado; a matriz de deploy cobre impacto derivado de diff Git.
