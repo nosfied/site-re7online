@@ -14,6 +14,7 @@ export type AppRealtimeEvent =
       message: InboxMessageItem;
       mode?: AppConversationMode | null;
       handoffStatus?: AppHandoffStatus | null;
+      status?: ConversationOperationalStatus | null;
       humanInboxVisible?: boolean;
       assignedUserId?: string | null;
       departmentId?: string | null;
@@ -130,6 +131,8 @@ export type AppNotificationCandidate = {
   bodyText?: string | null;
   mode?: AppConversationMode | null;
   handoffStatus?: AppHandoffStatus | null;
+  status?: ConversationOperationalStatus | null;
+  humanInboxVisible?: boolean | null;
   assignedUserId?: string | null;
   departmentId?: string | null;
   userId?: string | null;
@@ -164,6 +167,8 @@ type InboundOrHandoffNotificationInput = {
   direction?: string | null;
   mode?: AppConversationMode | null;
   handoffStatus?: AppHandoffStatus | null;
+  status?: ConversationOperationalStatus | null;
+  humanInboxVisible?: boolean | null;
   assignedUserId?: string | null;
   departmentId?: string | null;
   userId?: string | null;
@@ -178,6 +183,8 @@ type InboundOrHandoffNotificationInput = {
 function resolveNotificationSound(input: InboundOrHandoffNotificationInput) {
   if (input.direction && input.direction.toUpperCase() !== "INBOUND") return null;
   if (!input.conversationIdentity) return null;
+  if (input.humanInboxVisible === false) return null;
+  if (input.status === "CLOSED") return null;
   if (!input.backendEligible && !canUserReceiveTargetedNotification(input, {
     id: input.userId,
     role: input.userRole,
@@ -463,6 +470,8 @@ export function handleRealtimeNotificationCandidate(candidate: AppNotificationCa
     direction: candidate.direction,
     mode: candidate.mode,
     handoffStatus: candidate.handoffStatus,
+    status: candidate.status,
+    humanInboxVisible: candidate.humanInboxVisible,
     assignedUserId: candidate.assignedUserId,
     departmentId: candidate.departmentId,
     userId: candidate.userId,

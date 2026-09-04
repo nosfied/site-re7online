@@ -1779,8 +1779,9 @@ function getLatestMessageTimestamp(items: InboxMessageItem[]) {
 }
 
 function shouldPlayInboundNotificationForConversation(
-  item: Pick<InboxConversationItem, "mode" | "handoffStatus">
+  item: Pick<InboxConversationItem, "mode" | "handoffStatus" | "status">
 ) {
+  if (item.status === "CLOSED") return false;
   return item.mode === "HUMAN" || item.handoffStatus === "active" || item.handoffStatus === "pending";
 }
 
@@ -3576,6 +3577,8 @@ export default function AppInboxPage() {
           direction: "INBOUND",
           mode: event.mode ?? null,
           handoffStatus: event.handoffStatus ?? "none",
+          status: event.status ?? null,
+          humanInboxVisible: event.humanInboxVisible,
           assignedUserId: event.assignedUserId ?? null,
           departmentId: event.departmentId ?? null,
           userId: session.user.id,
@@ -3794,6 +3797,8 @@ export default function AppInboxPage() {
           direction: message.direction,
           mode: event.mode ?? null,
           handoffStatus: event.handoffStatus ?? "none",
+          status: event.status ?? currentMatchedConversation?.status ?? null,
+          humanInboxVisible: event.humanInboxVisible,
           assignedUserId: event.assignedUserId ?? null,
           departmentId: event.departmentId ?? null,
           userId: session.user.id,
@@ -3840,6 +3845,8 @@ export default function AppInboxPage() {
       direction: "INBOUND",
       mode: item.mode,
       handoffStatus: item.handoffStatus ?? "none",
+      status: item.status,
+      humanInboxVisible: item.humanInboxVisible,
       assignedUserId: item.assignedUserId ?? null,
       departmentId: item.departmentId ?? null,
       userId: session?.user.id ?? null,

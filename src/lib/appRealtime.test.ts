@@ -144,6 +144,116 @@ test("backend eligible notification bypasses stale primary-only session membersh
   assert.equal(accepted, true);
 });
 
+test("active operational inbound notifications remain eligible for sound", () => {
+  const accepted = handleRealtimeNotificationCandidate({
+    source: "websocket",
+    kind: "message",
+    conversationIdentity: "conversation-active-operational",
+    messageId: "message-active-operational",
+    createdAt: "2026-09-04T10:00:00.000Z",
+    direction: "INBOUND",
+    mode: "HUMAN",
+    handoffStatus: "active",
+    status: "IN_PROGRESS",
+    humanInboxVisible: true,
+    assignedUserId: "agent-a",
+    userId: "agent-a",
+    userRole: "AGENT",
+    userDepartmentId: "department-a",
+    userDepartmentIds: ["department-a"],
+  });
+
+  assert.equal(accepted, true);
+});
+
+test("post-close CSAT score replies do not trigger local inbox sound", () => {
+  const accepted = handleRealtimeNotificationCandidate({
+    source: "websocket",
+    kind: "message",
+    conversationIdentity: "conversation-csat-score",
+    messageId: "message-csat-score",
+    createdAt: "2026-09-04T10:01:00.000Z",
+    direction: "INBOUND",
+    mode: "HUMAN",
+    handoffStatus: "none",
+    status: "CLOSED",
+    humanInboxVisible: false,
+    assignedUserId: "agent-a",
+    userId: "agent-a",
+    userRole: "AGENT",
+    userDepartmentId: "department-a",
+    userDepartmentIds: ["department-a"],
+  });
+
+  assert.equal(accepted, false);
+});
+
+test("post-close CSAT optional comment replies do not trigger local inbox sound", () => {
+  const accepted = handleRealtimeNotificationCandidate({
+    source: "websocket",
+    kind: "message",
+    conversationIdentity: "conversation-csat-comment",
+    messageId: "message-csat-comment",
+    createdAt: "2026-09-04T10:02:00.000Z",
+    direction: "INBOUND",
+    mode: "HUMAN",
+    handoffStatus: "none",
+    status: "CLOSED",
+    humanInboxVisible: false,
+    assignedUserId: "agent-a",
+    userId: "agent-a",
+    userRole: "AGENT",
+    userDepartmentId: "department-a",
+    userDepartmentIds: ["department-a"],
+  });
+
+  assert.equal(accepted, false);
+});
+
+test("CSAT and system outbound prompts do not trigger local inbox sound", () => {
+  const accepted = handleRealtimeNotificationCandidate({
+    source: "websocket",
+    kind: "message",
+    conversationIdentity: "conversation-csat-prompt",
+    messageId: "message-csat-prompt",
+    createdAt: "2026-09-04T10:03:00.000Z",
+    direction: "OUTBOUND",
+    mode: "HUMAN",
+    handoffStatus: "none",
+    status: "CLOSED",
+    humanInboxVisible: false,
+    assignedUserId: "agent-a",
+    userId: "agent-a",
+    userRole: "AGENT",
+    userDepartmentId: "department-a",
+    userDepartmentIds: ["department-a"],
+  });
+
+  assert.equal(accepted, false);
+});
+
+test("new service cycle after a closed conversation remains eligible for sound", () => {
+  const accepted = handleRealtimeNotificationCandidate({
+    source: "websocket",
+    kind: "message",
+    conversationIdentity: "conversation-new-cycle",
+    messageId: "message-new-cycle",
+    createdAt: "2026-09-04T10:04:00.000Z",
+    direction: "INBOUND",
+    mode: "HUMAN",
+    handoffStatus: "active",
+    status: "WAITING",
+    humanInboxVisible: true,
+    assignedUserId: "agent-a",
+    userId: "agent-a",
+    userRole: "AGENT",
+    userDepartmentId: "department-a",
+    userDepartmentIds: ["department-a"],
+  });
+
+  assert.equal(accepted, true);
+});
+
 test("an explicit assignment remains visible only to the assigned user", () => {
   assert.equal(
     canUserReceiveTargetedNotification(
