@@ -2142,7 +2142,7 @@ async function handleWebSessionSatisfactionInbound(params: {
   const shouldAskComment = survey.commentEnabled === true && closePolicy.satisfaction.commentEnabled;
   await params.prisma.satisfactionSurvey.update({
     where: { id: survey.id },
-    data: { status: shouldAskComment ? "pending" : "responded", answeredAt: respondedAt },
+    data: { status: "responded", answeredAt: respondedAt },
   });
   const state = await sendWebSessionBotText({
     prisma: params.prisma,

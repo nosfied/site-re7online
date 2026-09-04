@@ -2278,7 +2278,8 @@ test("CSAT accepts only scores 1 to 5 before TTL and records the response", asyn
 
   assert.equal(state.satisfactionResponses.length, 1);
   assert.equal(state.satisfactionResponses[0]?.score, 5);
-  assert.equal(state.satisfactionSurveys[0]?.status, "pending");
+  assert.equal(state.satisfactionResponses[0]?.comment ?? null, null);
+  assert.equal(state.satisfactionSurveys[0]?.status, "responded");
   assert.equal(protocolStartedEvents().length, 0);
   assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
   assert.equal(state.runtimeStates[0]?.mode, "HUMAN");
@@ -2393,7 +2394,7 @@ test("new CSAT score is not routed through stale completed survey decision", asy
 
   assert.equal(state.satisfactionResponses.length, 1);
   assert.equal(state.satisfactionResponses[0]?.score, 5);
-  assert.equal(state.satisfactionSurveys[0]?.status, "pending");
+  assert.equal(state.satisfactionSurveys[0]?.status, "responded");
   assert.equal(protocolStartedEvents().length, 0);
   assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
   assert.equal(JSON.stringify(state.runtimeStates[0]?.answers).includes("commentOffer"), true);
