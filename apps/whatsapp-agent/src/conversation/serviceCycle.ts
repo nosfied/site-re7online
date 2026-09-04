@@ -23,6 +23,18 @@ export type CompletedServiceAttributionSnapshot = {
   closedByUserId?: string | null;
 };
 
+export type CompletedServiceSnapshotComparable = {
+  conversationId: string | null;
+  protocol: string;
+  closedAt: Date;
+  assignedUserId: string | null;
+  departmentId: string | null;
+  queueId: string | null;
+  closedByUserId: string | null;
+  closeReason: string | null;
+  closeSource: string | null;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -301,29 +313,39 @@ function assertCompletedSnapshotMatches(existing: {
   closeReason: string | null;
   closeSource: string | null;
 }) {
-  const matches =
-    existing.conversationId === expected.conversationId &&
-    existing.protocol === expected.protocol &&
-    sameNullableDate(existing.closedAt, expected.closedAt) &&
-    existing.assignedUserId === expected.assignedUserId &&
-    existing.departmentId === expected.departmentId &&
-    existing.queueId === expected.queueId &&
-    existing.closedByUserId === expected.closedByUserId &&
-    existing.closeReason === expected.closeReason &&
-    existing.closeSource === expected.closeSource;
-  if (!matches) {
+  if (!isCompletedServiceSnapshotCompatible(existing, expected)) {
     throw new Error("completed_service_snapshot_conflict");
   }
 }
 
-export async function recordCompletedServiceSnapshot(params: {
-  prisma: PrismaClient;
+export function isCompletedServiceSnapshotCompatible(
+  existing: CompletedServiceSnapshotComparable,
+  expected: CompletedServiceSnapshotComparable,
+  options?: {
+    allowDifferentClosedAt?: boolean;
+    allowDifferentClosedByUserId?: boolean;
+  }
+) {
+  return (
+    existing.conversationId === expected.conversationId &&
+    existing.protocol === expected.protocol &&
+    (options?.allowDifferentClosedAt === true || sameNullableDate(existing.closedAt, expected.closedAt)) &&
+    existing.assignedUserId === expected.assignedUserId &&
+    existing.departmentId === expected.departmentId &&
+    existing.queueId === expected.queueId &&
+    (options?.allowDifferentClosedByUserId === true || existing.closedByUserId === expected.closedByUserId) &&
+    existing.closeReason === expected.closeReason &&
+    existing.closeSource === expected.closeSource
+  );
+}
+
+export function buildCompletedServiceSnapshotExpectation(params: {
   clientId: string;
   conversationId?: string | null;
   cycle: ClosedServiceCycleSnapshot;
   attribution: CompletedServiceAttributionSnapshot;
 }) {
-  const expected = {
+  return {
     clientId: params.clientId,
     conversationId: normalizeNullableId(params.conversationId),
     cycleId: params.cycle.cycleId,
@@ -336,6 +358,21 @@ export async function recordCompletedServiceSnapshot(params: {
     closeReason: normalizeNullableId(params.cycle.closeReason),
     closeSource: normalizeNullableId(params.cycle.closeSource),
   };
+}
+
+export async function recordCompletedServiceSnapshot(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  conversationId?: string | null;
+  cycle: ClosedServiceCycleSnapshot;
+  attribution: CompletedServiceAttributionSnapshot;
+}) {
+  const expected = buildCompletedServiceSnapshotExpectation({
+    clientId: params.clientId,
+    conversationId: params.conversationId,
+    cycle: params.cycle,
+    attribution: params.attribution,
+  });
   try {
     await params.prisma.completedServiceSnapshot.create({ data: expected });
   } catch (error) {

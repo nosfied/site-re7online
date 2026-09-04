@@ -17,12 +17,14 @@ import type { ConversationState, QuoteSiteAnswers } from "../conversation/conver
 import { activateHumanHandoff, updateOutbound } from "../conversation/conversation.service.js";
 import { buildCrmWhatsappExternalUserHash } from "../crm/crmWhatsappIdentity.js";
 import {
+  buildCompletedServiceSnapshotExpectation,
   clearActiveServiceCycle,
   clearSatisfactionRuntimeForNewServiceCycle,
   closeCurrentServiceCycle,
   ensureActiveServiceCycle,
   getActiveServiceCycle,
   getServiceCycleForDisplay,
+  isCompletedServiceSnapshotCompatible,
   recordServiceCycleEvent,
   startNewServiceCycle,
   type ServiceCycleSnapshot,
@@ -1736,6 +1738,71 @@ export async function closeWebSessionHumanService(params: {
     reason: params.closeReason ?? "service_closed",
     source: params.closeSource ?? "web_session",
   });
+  const completedService = {
+    assignedUserId: closingAssignedUserId,
+    departmentId: params.state.departmentId ?? null,
+    queueId: params.state.queueId ?? null,
+    closedByUserId: params.closedByUserId ?? null,
+  };
+  const existingSnapshot = closedCycleResult.cycle
+    ? await params.prisma.completedServiceSnapshot.findUnique({
+        where: {
+          clientId_cycleId: {
+            clientId: params.clientId,
+            cycleId: closedCycleResult.cycle.cycleId,
+          },
+        },
+        select: {
+          conversationId: true,
+          protocol: true,
+          closedAt: true,
+          assignedUserId: true,
+          departmentId: true,
+          queueId: true,
+          closedByUserId: true,
+          closeReason: true,
+          closeSource: true,
+        },
+      })
+    : null;
+  if (existingSnapshot && closedCycleResult.cycle) {
+    const expected = buildCompletedServiceSnapshotExpectation({
+      clientId: params.clientId,
+      conversationId: params.conversationId,
+      cycle: closedCycleResult.cycle,
+      attribution: completedService,
+    });
+    if (
+      !isCompletedServiceSnapshotCompatible(existingSnapshot, expected, {
+        allowDifferentClosedAt: true,
+        allowDifferentClosedByUserId: true,
+      })
+    ) {
+      throw new Error("completed_service_snapshot_conflict");
+    }
+    const answers = isRecord(closedCycleResult.state.answers)
+      ? { ...closedCycleResult.state.answers }
+      : {};
+    answers.lastClosedServiceCycle = {
+      ...closedCycleResult.cycle,
+      closedAt: existingSnapshot.closedAt.toISOString(),
+      closeReason: existingSnapshot.closeReason ?? closedCycleResult.cycle.closeReason,
+      closeSource: existingSnapshot.closeSource ?? closedCycleResult.cycle.closeSource,
+    };
+    return {
+      ...clearCloseConfirmation(clearChatbotRuntime({
+        ...closedCycleResult.state,
+        answers: answers as ConversationState["answers"],
+      })),
+      mode: "HUMAN" as const,
+      assignedUserId: null,
+      assignedTo: null,
+      assignedAt: null,
+      handoff: { ...params.state.handoff, status: "none" as const },
+      status: "CLOSED" as const,
+      closedAt: existingSnapshot.closedAt.toISOString(),
+    };
+  }
   if (closedCycleResult.cycle) {
     await safeRecordServiceCycleEvent({
       prisma: params.prisma,
@@ -1746,12 +1813,7 @@ export async function closeWebSessionHumanService(params: {
       requestId: params.requestId,
       action: "closed",
       cycle: closedCycleResult.cycle,
-      completedService: {
-        assignedUserId: closingAssignedUserId,
-        departmentId: params.state.departmentId ?? null,
-        queueId: params.state.queueId ?? null,
-        closedByUserId: params.closedByUserId ?? null,
-      },
+      completedService,
     });
   }
   const closedProtocol = closedCycleResult.cycle?.protocol ?? params.protocol;

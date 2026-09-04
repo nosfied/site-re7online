@@ -11,6 +11,7 @@ import {
 import { buildCrmWhatsappExternalUserHash } from "../crm/crmWhatsappIdentity.js";
 import {
   buildWebSessionHandoffNotificationPlan,
+  closeWebSessionHumanService,
   extractPhoneFromBaileysJid,
   ingestBaileysWebSessionMessage,
   shouldIgnoreBaileysInboundMessage,
@@ -1724,6 +1725,97 @@ test("close command creates a single attributed CSAT after human service", async
     assert.equal(serviceCycle?.protocol, "CVT-ABCDEF123456");
     assert.equal(serviceCycle?.cycleId, "cycle_1");
   }
+});
+
+test("close command retry reconciles a partial close without duplicate snapshot or CSAT", async () => {
+  resetState({
+    config: closeConfig(),
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        status: "IN_PROGRESS",
+        assignedUserId: "agent_1",
+        assignedTo: "Agente Um",
+        assignedAt: new Date("2026-08-11T11:55:00.000Z"),
+        answers: {
+          operationalProtocol: {
+            protocol: "CVT-ABCDEF123456",
+            issuedAt: "2026-08-11T11:50:00.000Z",
+            cycleId: "cycle_1",
+            source: "service_cycle",
+          },
+        },
+      }),
+    ],
+    completedServiceSnapshots: [
+      {
+        id: "completed_service_1",
+        clientId: "client_1",
+        conversationId: "conversation_1",
+        cycleId: "cycle_1",
+        protocol: "CVT-ABCDEF123456",
+        closedAt: new Date("2026-08-11T12:00:00.000Z"),
+        assignedUserId: "agent_1",
+        departmentId: "department_general",
+        queueId: "queue_general",
+        closedByUserId: "agent_1",
+        closeReason: "operator_close",
+        closeSource: "app_inbox",
+      },
+    ],
+    satisfactionSurveys: [
+      {
+        id: "survey_1",
+        clientId: "client_1",
+        conversationId: "conversation_1",
+        type: "csat",
+        source: "human_close",
+        status: "pending",
+        questionText: "Pesquisa de Satisfação do Protocolo #CVT-ABCDEF123456.",
+        sentAt: new Date("2026-08-11T12:00:00.000Z"),
+        answeredAt: new Date("2026-08-11T12:02:00.000Z"),
+        expiresAt: new Date("2026-08-11T12:15:00.000Z"),
+        metadata: {
+          protocol: "CVT-ABCDEF123456",
+          cycleId: "cycle_1",
+        },
+      },
+    ],
+  });
+  withConnectedWebSession();
+
+  const prisma = fakePrisma() as never;
+  await withFakeWorker(async () => {
+    const nextState = await closeWebSessionHumanService({
+      prisma,
+      clientId: "client_1",
+      clientKey: "tenant_1",
+      waId: "5584999997784",
+      waIdCanonical: "55849999997784",
+      channelAccountId: "web-session-default",
+      requestId: "close-partial-retry",
+      conversationId: "conversation_1",
+      protocol: "CVT-ABCDEF123456",
+      state: state.runtimeStates[0] as never,
+      now: new Date("2026-08-11T12:31:00.000Z"),
+      assignedUserId: "agent_1",
+      closedByUserId: "agent_1",
+      closeReason: "operator_close",
+      closeSource: "app_inbox",
+    });
+    state.runtimeStates[0] = { ...state.runtimeStates[0], ...nextState };
+  });
+
+  assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal(state.runtimeStates[0]?.handoffStatus, "NONE");
+  assert.equal(state.runtimeStates[0]?.assignedUserId, null);
+  assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
+  assert.equal(getLastClosedServiceCycle({ answers: state.runtimeStates[0]?.answers })?.protocol, "CVT-ABCDEF123456");
+  assert.equal(getLastClosedServiceCycle({ answers: state.runtimeStates[0]?.answers })?.closedAt, "2026-08-11T12:00:00.000Z");
+  assert.equal(state.completedServiceSnapshots.length, 1);
+  assert.equal(state.satisfactionSurveys.length, 1);
+  assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Atendimento encerrado")).length, 0);
+  assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Pesquisa de Satisfação")).length, 0);
 });
 
 test("close command creates a new CSAT after a previous survey was already answered", async () => {

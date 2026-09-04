@@ -3,6 +3,7 @@ import test from "node:test";
 import { Prisma } from "@prisma/client";
 import { ConversationState } from "./conversation.types.js";
 import {
+  buildCompletedServiceSnapshotExpectation,
   buildServiceCycleHistoryMap,
   clearSatisfactionRuntimeForNewServiceCycle,
   closeCurrentServiceCycle,
@@ -10,6 +11,7 @@ import {
   getActiveServiceCycle,
   getLastClosedServiceCycle,
   getServiceCycleSnapshot,
+  isCompletedServiceSnapshotCompatible,
   recordCompletedServiceSnapshot,
   recordServiceCycleEvent,
   startNewServiceCycle,
@@ -334,6 +336,48 @@ test("completed service snapshots are idempotent for an identical duplicate clos
       cycleId: "cycle_duplicate",
     },
   });
+});
+
+test("completed service snapshots can be matched as a prior same-cycle close for retry cleanup", () => {
+  const existing = {
+    conversationId: "conversation_a",
+    protocol: "CVT-DUPLICATE1",
+    closedAt: new Date("2026-08-18T12:30:00.000Z"),
+    assignedUserId: "agent_1",
+    departmentId: "department_1",
+    queueId: "queue_1",
+    closedByUserId: "agent_1",
+    closeReason: "operator_close",
+    closeSource: "app_inbox",
+  };
+  const expected = buildCompletedServiceSnapshotExpectation({
+    clientId: "tenant_a",
+    conversationId: existing.conversationId,
+    cycle: {
+      protocol: existing.protocol,
+      cycleId: "cycle_duplicate",
+      issuedAt: "2026-08-18T12:00:00.000Z",
+      source: "web_session",
+      closedAt: "2026-08-18T12:35:00.000Z",
+      closeReason: existing.closeReason,
+      closeSource: existing.closeSource,
+    },
+    attribution: {
+      assignedUserId: existing.assignedUserId,
+      departmentId: existing.departmentId,
+      queueId: existing.queueId,
+      closedByUserId: "supervisor_retry",
+    },
+  });
+
+  assert.equal(
+    isCompletedServiceSnapshotCompatible(existing, expected, {
+      allowDifferentClosedAt: true,
+      allowDifferentClosedByUserId: true,
+    }),
+    true
+  );
+  assert.equal(isCompletedServiceSnapshotCompatible(existing, expected), false);
 });
 
 test("completed service snapshots reject conflicting duplicate attribution", async () => {
