@@ -494,3 +494,14 @@ Current policy:
 - do not persist or download view-once content as an ordinary retained attachment;
 - do not store raw Baileys payloads, media bytes, media keys, tokens, signed URLs, phone
   numbers, contacts, coordinates or captions solely for diagnostics.
+
+Status:
+
+- fix deployed in `13acec7e`;
+- supported wrapper unwrapping includes explicit known wrappers such as ephemeral media and
+  `documentWithCaptionMessage`;
+- media download/storage path preserved;
+- exactly-once preserved;
+- view-once privacy semantics preserved;
+- no backfill for the 85 historical `UNKNOWN` rows; organic long-term validation continues
+  passively.

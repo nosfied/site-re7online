@@ -31,12 +31,12 @@ O caso CRA-PR e estrategico por exigir combinacao de atendimento receptivo, volu
 - RBAC e tenant isolation.
 - Politica LGPD documentada.
 
-## Estado operacional atual - 2026-09-01
+## Estado operacional atual - 2026-09-04
 
-Base de producao validada:
+Base de producao documentada nesta consolidacao:
 
 ```text
-9881521b712173dbe8cb66e0d55a7ae710a0e903
+670f392d9f6c65bf58922774fae7bf462c127227
 ```
 
 ### CRA Demo Flow V1
@@ -97,7 +97,7 @@ CLOSED HUMAN REENTRY:
 CLOSED / REAL VALIDATED
 ```
 
-### CRA real tenant rollout state - 2026-09-02
+### CRA real tenant rollout state - 2026-09-04
 
 Estado observado em producao por leitura:
 
@@ -129,15 +129,34 @@ Configuracao operacional:
 
 - CSAT: ENABLED;
 - WhatsApp Web feature: ENABLED;
+- Browser Push feature: ENABLED;
 - Meta assets: PENDING;
 - Web Session pairing: PENDING;
 - HYBRID: PENDING / platform capability ready;
-- invites: READY;
-- training: READY;
+- invites: 18 sent, 0 final failures;
+- first invite batch hit Resend 429 after 17 sends, and the final user was
+  retried successfully;
+- active accounts: do not assume activation count without current login
+  evidence;
+- department hours: PENDING user configuration;
+- training: Wednesday 2026-09-09.
 - Instagram/Facebook/Web: contracted but not activated initially.
 
 Nao registrar Meta/HYBRID como concluido ate onboarding e smoke reais do tenant
 CRA-PR.
+
+Administradores CRA podem configurar horarios dos departamentos em:
+
+```text
+/app/settings/departments
+```
+
+Diretriz operacional: `demo-converta` e espelho comportamental para validacao
+final antes do onboarding CRA-PR. Isso permite validar capacidades/politicas
+genericas primeiro, mas nunca autoriza copiar dados ou ativos operacionais do
+Demo para CRA-PR: WABA, phoneNumberId, token, Web Session auth, numero,
+PushSubscription, usuarios, conversas, contatos, runtime, mensagens,
+protocolos, ledgers e campanhas permanecem tenant-scoped.
 
 ### Escala CRA
 
@@ -173,3 +192,11 @@ O custo Meta deve ser tratado como risco operacional/comercial controlado, nao c
 - Evidencias visuais devem ser capturadas em ambiente sanitizado.
 - Regras de retencao e privacidade devem constar no onboarding operacional.
 - Regra waiting-on-customer 1h permanece aberta: encerrar apos 1h somente quando o sistema/atendente estiver aguardando resposta do cidadao, nao como simples `lastActivityAt + 1h`.
+- Pendencias imediatas pre-treinamento: validar primeiro login/ativacao de
+  usuarios, especialmente 3 admins TI; configurar horarios; executar onboarding
+  real Meta/Web Session; validar inbound, flow, handoff, freeform, exactly-once,
+  opt-in Web Push e CSAT do tenant CRA quando aplicavel.
+- Pendencias contratuais/produto separadas: ciclo receptivo logico para
+  mensuracao, template Utility fora de 24h entregue, ledger Meta apos
+  2026-10-01, relatorio mensal contratual e alinhamento formal para
+  Instagram/Facebook/site contratados mas nao ativados inicialmente.

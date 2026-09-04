@@ -255,6 +255,35 @@ Disponibilidade nao remove atribuicoes existentes e nao bloqueia transferencia m
 
 Horarios de funcionamento continuam prevalecendo sobre disponibilidade. Um department fechado nao passa a autoatribuir apenas porque um agente esta online. Em `CLOSED + QUEUE_FOR_NEXT_OPEN`, a conversa fica em fila compartilhada, sem responsavel, aguardando proximo expediente ou acao operacional. Nao existe rebalance automatico geral de backlog na abertura.
 
+Incidente SECULT-PE de 2026-08-31: a auditoria de 41 atribuicoes automaticas
+nao confirmou bug de algoritmo. A distribuicao observada refletiu elegibilidade,
+setor, presenca online e limite de atendimentos ativos, em um dia com alteracao
+operacional de `least_active` para `round_robin` e intervalo manual sem
+autoatribuicao. Mesmo quando o escopo esta como "Organizacao inteira", a
+distribuicao continua respeitando o setor da conversa quando ja existe
+direcionamento previo. O ajuste requerido foi de clareza UX e foi deployado em
+`c91671e9`.
+
+## Presenca da equipe
+
+O dashboard `/app/dashboard` possui a secao "Presenca da equipe", baseada em
+`AgentAvailability`.
+
+Contrato:
+
+- online efetivo: `available=true` com heartbeat fresco;
+- TTL operacional: 30000ms;
+- ADMIN ve o tenant inteiro;
+- SUPERVISOR ve usuarios dos seus departamentos;
+- AGENT nao acessa a secao;
+- exibe online/offline, departamento, conversas ativas e contadores de resumo;
+- carga ativa considera conversas `IN_PROGRESS` e `WAITING` atribuidas;
+- refresh reaproveita o dashboard existente de 15s e realtime, sem novo polling
+  de alta frequencia.
+
+Status: DEPLOYED em `adaf1b4f`; smoke visual humano ainda pendente se nao houver
+evidencia explicita.
+
 ## Chatbot, consentimento e inatividade
 
 O flow SECULT/Demo homologado usa:

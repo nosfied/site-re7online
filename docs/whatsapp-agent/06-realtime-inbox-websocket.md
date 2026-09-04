@@ -146,25 +146,30 @@ Regras atuais:
 
 Este contrato evita regressao entre desktop/notebook e mobile:
 
-- se `document.visibilityState === "visible"`, o app e considerado em foreground
-  para som local, mesmo que `document.hasFocus()` seja `false`;
-- isso cobre desktop/notebook com o inbox visivel e outra janela em foco;
+- som local e Web Push sao canais independentes;
+- para som local em desktop/notebook, uma pagina Converta viva pode tocar som
+  quando a preferencia local esta ativa, inclusive em aba oculta/background ou
+  janela desfocada, sujeito a politica de autoplay do navegador;
 - nao usar `document.hasFocus()` como bloqueio para tocar som local;
-- se `document.visibilityState !== "visible"`, o app nao deve tentar tocar som
-  local via JavaScript;
-- em background, aba oculta, PWA minimizado ou tela travada, a notificacao deve
-  ser feita via Web Push/Service Worker;
-- no mobile, especialmente iOS/Android, JavaScript, timers e websocket podem ser
-  suspensos em background; nao depender de audio local nesses estados.
+- em mobile/PWA, especialmente iOS/Android, JavaScript, timers e websocket podem
+  ser suspensos em background; nesses estados, a notificacao confiavel deve ser
+  Web Push/Service Worker;
+- para supressao de Web Push em desktop, foreground real exige
+  `document.visibilityState === "visible"` e `document.hasFocus() === true`;
+- uma aba Converta selecionada em uma janela atras de outro sistema deve ser
+  tratada como background para Web Push;
+- em mobile/PWA, a semantica de visibilidade validada permanece preservada.
 
 Fluxo esperado:
 
 1. WebSocket recebe `message.created`.
-2. `AppRealtimeBridge` avalia se a pagina esta `visible`.
-3. Se estiver `visible`, toca o som local configurado pelo sininho.
-4. Se estiver `hidden`, nao toca audio local; o backend deve enviar Web Push se
-   existir subscription elegivel.
-5. O backend suprime Web Push apenas para subscriptions com presenca `visible`
+2. `AppRealtimeBridge` avalia elegibilidade de som local e presenca Web Push
+   separadamente.
+3. Se o som local estiver habilitado e o runtime permitir, toca o som configurado
+   pelo sininho.
+4. Se a pagina nao estiver em foreground real para Web Push, o frontend envia
+   presenca background prontamente por `visibilitychange`, `focus` e `blur`.
+5. O backend suprime Web Push apenas para subscriptions com presenca foreground
    recente.
 
 Sons:
@@ -323,7 +328,8 @@ Realtime refetch debounce: 250ms
 Plano:
 
 - Phase 1, consistency hardening: DONE / PRODUCTION VALIDATED;
-- Phase 2, WebSocket primary plus targeted list/timeline invalidation: DONE;
+- Phase 2, WebSocket primary plus targeted list/timeline invalidation: DONE /
+  PRODUCTION VALIDATED;
 - Phase 3, pause hidden-tab polling and broader route query optimization: OPEN;
 - Phase 4, scale/load validation with 10/30/50 sessions: OPEN.
 
@@ -333,10 +339,30 @@ Evidencia que motivou Phase 2:
   ~12 queries/request, CPU media ~87.5%, DB pressure NORMAL;
 - END 17:27 em 2026-09-02: effective Inbox online 0, CPU media ~8.2%, DB
   pressure NORMAL.
+- MID 03/09 pos-Phase 2: 41 `/app/conversations` req/min, 432
+  `inbox.list.query_count`/60s, CPU media ~37.3%, DB pressure NORMAL.
+- END 03/09 pos-Phase 2: effective Inbox online 0, `/app/conversations` 0
+  observed, CPU media ~11.6%, DB pressure NORMAL.
 
 Conclusao: polling de `/app/conversations` e contribuidor operacional
 fortemente suspeito para CPU em expediente. A decisao de Phase 2 esta fechada,
 mas capacidade final ainda exige validacao de carga/uso real pos-deploy.
+
+Gap exposto por Phase 2: mensagens `message.created` geradas no worker Web
+Session nao chegavam ao WebSocket do backend e eram mascaradas pelo polling
+agressivo anterior. O fix `12eb83db` reutilizou a ponte worker->backend
+existente e foi validado com smoke real controlado no Demo. Isso nao justificou
+reverter o polling lento.
+
+Validacao real de notificacoes apos os fixes:
+
+- foreground real: Converta visivel e focado suprime Web Push, realtime e som
+  local funcionam;
+- aba em background: Web Push visual aparece e som local desktop permanece
+  independente;
+- todas as abas fechadas: Web Push visual aparece e clique abre/foca o Converta;
+- janela Converta atras de outro sistema: Web Push visual aparece, som local
+  continua funcionando e realtime permanece funcional.
 
 ## Nginx em producao
 
@@ -381,9 +407,10 @@ location /agent-api/app/realtime {
 
 ## Pendencias tecnicas conhecidas
 
-- RBAC realtime por departamento/ownership.
-- Resync explicito apos reconnect.
 - Migrar token da query string para `Sec-WebSocket-Protocol`.
 - `conversation.updated` e `handoff.updated` dedicados.
 - Pub/sub externo se houver multiplas instancias do backend.
-- Medicao START/MID/END em expediente SECULT para correlacionar active app users, realtime connections, inbox presence, `/app/conversations` requests/min, query counts, runtime fallbacks, backend CPU e pressao DB.
+- Proxima bateria de medicao de carga real em 2026-09-08, com START, MID, EXTRA
+  e END, para correlacionar active app users, realtime connections, inbox
+  presence, `/app/conversations` requests/min, query counts, runtime fallbacks,
+  backend CPU e pressao DB.

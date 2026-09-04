@@ -281,6 +281,44 @@ CRA 30-AGENT SCALE READINESS:
 PARTIAL
 ```
 
+Proxima bateria de observacao real:
+
+```text
+NEXT LOAD OBSERVATION:
+Tuesday, 2026-09-08
+```
+
+Motivo: primeiro dia util apos o feriado de 7 de setembro, com maior chance de
+demanda acumulada de atendimento.
+
+Plano:
+
+- START;
+- MID;
+- EXTRA;
+- END.
+
+Cada janela deve coletar:
+
+- active sessions;
+- effective Inbox users/presence;
+- realtime connections, se observavel;
+- `/app/conversations` requests/min;
+- `inbox.list.query_count`;
+- queries/request;
+- backend CPU min/max/avg;
+- system load;
+- top CPU processes;
+- DB pressure;
+- runtime fallback;
+- dual-read;
+- timeline incidents;
+- SECULT/Demo health.
+
+Nao pre-julgar resultado. A correlacao atual permanece PARTIAL, a melhoria
+operacional da Phase 2 esta documentada, e otimizacao adicional de query shape
+nao deve ser reaberta antes dessa bateria ou de evidencia equivalente.
+
 ## Confirmacao De Nao Alteracao Funcional
 
 Esta sprint nao:

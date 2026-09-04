@@ -50,17 +50,25 @@ Estado fechado/validado:
 - SECULT CompletedServiceSnapshot: CLOSED / REAL ORGANIC VALIDATED;
 - SECULT completed-service reporting: CLOSED / PRODUCTION VALIDATED;
 - Inbox Timeline Phase 1: CLOSED / PRODUCTION VALIDATED;
+- Inbox Phase 2 WebSocket-driven invalidation: CLOSED / PRODUCTION VALIDATED;
 - multichannel reconciliation migration: CLOSED / PRODUCTION VALIDATED;
 - Web Session wrapped media normalization: CLOSED / SAFE NORMALIZATION PATCH;
 - SECULT auto-assignment incident 2026-08-31: AUDITED / BUG NOT CONFIRMED; UX clarification deployed in `c91671e9`;
 - SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / POS-PHASE 2 LOAD VALIDATION PARTIAL;
+- Browser Push / PWA notifications: CLOSED / REAL VALIDATED;
+- true foreground Web Push detection: CLOSED / REAL VALIDATED in `670f392d`;
+- hidden desktop local sound: CLOSED / REAL VALIDATED in `c50fb73c`;
+- supervisor team presence panel: DEPLOYED / VISUAL SMOKE PENDING;
 - CRA Demo V1: READY FOR CUSTOMER VALIDATION.
 
 Pendencias proximas:
 
-1. deployar Inbox Phase 2: WebSocket como sinal primario de invalidacao, polling lento como reconciliacao/fallback;
+1. executar bateria CPU/Inbox em 2026-09-08 com START, MID, EXTRA e END;
 2. validar escala 10/30/50 sessoes antes de declarar capacidade CRA 30 agentes;
-3. desenhar waiting-on-customer 1h como regra funcional separada.
+3. validar ativacao/primeiro login dos usuarios CRA-PR, especialmente 3 admins de TI;
+4. guiar configuracao de horarios dos departamentos CRA-PR;
+5. executar onboarding real CRA Meta/Web Session ate HYBRID e smoke do tenant;
+6. desenhar waiting-on-customer 1h como regra funcional separada.
 
 Dividas tecnicas abertas:
 
@@ -71,6 +79,8 @@ Dividas tecnicas abertas:
 - baselines CRA versionados nesta consolidacao como evidencia de validacao, nao como dump operacional:
   - `docs/bids/2026/cra-pr/CRA_PR_DEMO_FLOW_V1_CUSTOMER_VALIDATION_BASELINE.md`;
   - `docs/bids/2026/cra-pr/cra-pr-demo-flow-v1-customer-validation.definition.json`.
+- CRA Meta/HYBRID real permanece OPEN ate onboarding e smoke no tenant `cra-pr`;
+- billing measurement items ainda abertos: ciclo receptivo logico, template Utility fora de 24h entregue, ledger Meta apos 2026-10-01 e relatorio contratual mensal.
 
 ### Contact Timeline / Histórico do contato
 

@@ -118,32 +118,62 @@ subscription/device.
 
 Contrato atual:
 
-- `visible=true`: a pagina esta em foreground operacional e deve receber
-  websocket + som local;
+- `visible=true`: a pagina esta em foreground real para Web Push e deve suprimir
+  notificacao nativa daquele device/subscription;
 - `visible=false`: a pagina esta em background/oculta e deve receber Web Push se
   elegivel;
-- `focused` e enviado para diagnostico, mas nao deve ser usado sozinho para
-  decidir som local ou supressao de push;
-- em desktop/notebook, o browser pode reportar `focused=false` quando outra
-  janela esta ativa, mesmo com o inbox visivel; o som local deve continuar
-  tocando;
-- em mobile/PWA, focus tambem e instavel; o critério confiavel para a fronteira
-  principal e `visibilityState`.
+- em desktop/notebook, foreground real para Web Push exige
+  `document.visibilityState === "visible"` e `document.hasFocus() === true`;
+- uma aba Converta selecionada em janela atras de outro sistema deve enviar
+  background para Web Push, mesmo que `visibilityState` continue `visible`;
+- `focused` continua enviado para diagnostico e para compor o estado foreground
+  real de desktop;
+- som local nao depende de `focused` e continua independente de Web Push;
+- em mobile/PWA, a semantica de visibilidade validada permanece preservada para
+  evitar regressao de lifecycle.
 
 Regra anti-duplicidade:
 
-- frontend visivel toca som local e envia presenca `visible=true`;
+- frontend em foreground real envia presenca `visible=true`;
 - backend suprime push somente para subscriptions com `visible=true` recente;
-- frontend hidden envia `visible=false`; backend pode enviar push;
+- frontend hidden ou desktop visivel sem foco envia `visible=false`; backend pode
+  enviar push;
 - service worker ignora push recebido logo apos mensagem `converta.app_foreground`
   para evitar duplicidade residual em Android/desktop.
 
 Nao reintroduzir:
 
 - bloqueio de som por `document.hasFocus()`;
-- tentativa de tocar audio local quando `visibilityState !== "visible"`;
+- acoplamento entre som local e a feature `browserPushNotifications`;
 - polling agressivo em background;
 - payload push com PII.
+
+### Estado validado em producao
+
+Status em 2026-09-03/2026-09-04:
+
+- feature gate `browserPushNotifications` por tenant: DEPLOYED;
+- opt-in por usuario no `/app`: DEPLOYED;
+- infraestrutura reutilizada: `public/sw.js`, `PushSubscription`, VAPID
+  canonico, `webPushService` e rotas `/app/push/*`;
+- nenhum novo Service Worker, nenhuma nova identidade VAPID e nenhuma migration
+  adicional na consolidacao semanal;
+- reparo operacional: o worker passou a reutilizar a mesma identidade VAPID
+  canonica de producao; nao documentar valores ou segredos;
+- mobile/PWA preservado.
+
+Matriz real validada:
+
+- TRUE FOREGROUND: Converta visivel e focado suprime Web Push, realtime funciona
+  e som local toca;
+- BACKGROUND TAB: aba Converta oculta/background recebe Web Push visual;
+- CLOSED TAB: todas as abas Converta fechadas, browser aberto, Web Push visual
+  aparece e clique abre/foca o Converta;
+- WINDOW BEHIND ANOTHER APPLICATION: aba Converta selecionada, mas janela sem
+  foco real, passa a receber Web Push visual e preserva som local desktop.
+
+Som nativo da notificacao continua controlado por navegador/sistema operacional
+e nao deve ser descrito como garantido.
 
 ## Objetivo futuro
 
