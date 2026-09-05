@@ -988,6 +988,27 @@ export function normalizeBaseUrl(input: string) {
   }
 }
 
+export function resolveAdminApiBaseUrl(input: string) {
+  const normalized = normalizeBaseUrl(input || getDefaultBaseUrl());
+  if (!normalized || normalized === "/") return "/agent-api";
+  if (normalized === "/agent-api") return "/agent-api";
+  if (normalized.startsWith("/agent-api/")) return "/agent-api";
+  if (normalized.startsWith("/")) return "";
+
+  try {
+    const parsed = new URL(normalized);
+    if (typeof window !== "undefined" && parsed.origin === window.location.origin) {
+      const path = parsed.pathname.replace(/\/+$/, "") || "/";
+      if (path === "/" || path === "/agent-api") return "/agent-api";
+      if (path.startsWith("/agent-api/")) return "/agent-api";
+      return "";
+    }
+    return normalized;
+  } catch {
+    return "";
+  }
+}
+
 export function loadAdminConnection(): AdminConnection {
   if (typeof window === "undefined") {
     return { baseUrl: getDefaultBaseUrl(), adminToken: "", rememberToken: false };
@@ -1002,7 +1023,7 @@ export function loadAdminConnection(): AdminConnection {
     const localToken = localStorage.getItem(LOCAL_TOKEN_KEY) || "";
     const adminToken = rememberToken ? localToken : sessionToken;
 
-    const storedBaseUrl = normalizeBaseUrl(String(parsed?.baseUrl || getDefaultBaseUrl()));
+    const storedBaseUrl = resolveAdminApiBaseUrl(String(parsed?.baseUrl || getDefaultBaseUrl()));
     return {
       baseUrl: shouldReplaceStoredBaseUrl(storedBaseUrl)
         ? getDefaultBaseUrl()
@@ -1017,7 +1038,7 @@ export function loadAdminConnection(): AdminConnection {
 
 export function saveAdminConnection(connection: AdminConnection) {
   if (typeof window === "undefined") return;
-  const normalizedBaseUrl = normalizeBaseUrl(connection.baseUrl);
+  const normalizedBaseUrl = resolveAdminApiBaseUrl(connection.baseUrl);
   const payload = {
     ...(normalizedBaseUrl ? { baseUrl: normalizedBaseUrl } : {}),
     rememberToken: Boolean(connection.rememberToken),
@@ -1043,9 +1064,9 @@ async function requestJson<T>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
-  const baseUrl = normalizeBaseUrl(connection.baseUrl);
+  const baseUrl = resolveAdminApiBaseUrl(connection.baseUrl);
   if (!baseUrl) {
-    const error = new Error("Base URL invalida. Use http(s)://... ou /agent-api.") as AdminApiError;
+    const error = new Error("Configuração de conexão da API inválida.") as AdminApiError;
     error.status = 400;
     throw error;
   }
@@ -1113,9 +1134,9 @@ async function requestText(
   path: string,
   init?: RequestInit
 ): Promise<string> {
-  const baseUrl = normalizeBaseUrl(connection.baseUrl);
+  const baseUrl = resolveAdminApiBaseUrl(connection.baseUrl);
   if (!baseUrl) {
-    const error = new Error("Base URL invalida. Use http(s)://... ou /agent-api.") as AdminApiError;
+    const error = new Error("Configuração de conexão da API inválida.") as AdminApiError;
     error.status = 400;
     throw error;
   }
@@ -1183,9 +1204,9 @@ async function requestFormJson<T>(
   formData: FormData,
   init?: RequestInit
 ): Promise<T> {
-  const baseUrl = normalizeBaseUrl(connection.baseUrl);
+  const baseUrl = resolveAdminApiBaseUrl(connection.baseUrl);
   if (!baseUrl) {
-    const error = new Error("Base URL invalida. Use http(s)://... ou /agent-api.") as AdminApiError;
+    const error = new Error("Configuração de conexão da API inválida.") as AdminApiError;
     error.status = 400;
     throw error;
   }
@@ -1227,9 +1248,9 @@ async function requestAdminBlob(
   connection: AdminConnection,
   path: string
 ): Promise<{ blob: Blob; contentType: string | null; fileName: string | null }> {
-  const baseUrl = normalizeBaseUrl(connection.baseUrl);
+  const baseUrl = resolveAdminApiBaseUrl(connection.baseUrl);
   if (!baseUrl) {
-    const error = new Error("Base URL invalida. Use http(s)://... ou /agent-api.") as AdminApiError;
+    const error = new Error("Configuração de conexão da API inválida.") as AdminApiError;
     error.status = 400;
     throw error;
   }
