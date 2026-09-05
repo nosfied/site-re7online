@@ -60,6 +60,8 @@ export default function AppCrmSettingsPage() {
   const [form, setForm] = useState<CrmBusinessStatusConfig>(EMPTY_STATUS);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [recipients, setRecipients] = useState<AppCrmCampaignRecipient[]>([]);
+  const [statusSearch, setStatusSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "campaign">("all");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [preparing, setPreparing] = useState(false);
@@ -127,6 +129,23 @@ export default function AppCrmSettingsPage() {
     () => statuses.filter((item) => item.isActive && item.campaignEligible),
     [statuses]
   );
+
+  const filteredStatuses = useMemo(() => {
+    const search = statusSearch.trim().toLowerCase();
+    return statuses.filter((status) => {
+      const matchesSearch =
+        !search ||
+        [status.id, status.label, status.description ?? ""].some((value) =>
+          value.toLowerCase().includes(search)
+        );
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" && status.isActive) ||
+        (statusFilter === "inactive" && !status.isActive) ||
+        (statusFilter === "campaign" && status.campaignEligible);
+      return matchesSearch && matchesStatus;
+    });
+  }, [statusFilter, statusSearch, statuses]);
 
   const resetForm = () => {
     setForm(EMPTY_STATUS);
@@ -240,6 +259,7 @@ export default function AppCrmSettingsPage() {
       <FeedbackToast message={success} variant="success" {...toastHandlers} />
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
 
+      <div className="crm-settings-theme grid gap-3 min-[1441px]:gap-4">
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px] min-[1441px]:gap-4 min-[1441px]:xl:grid-cols-[minmax(0,1fr)_420px]">
         <section className="theme-surface rounded-xl border p-3 sm:p-4 min-[1441px]:rounded-2xl min-[1441px]:p-6">
           <div className="mb-3 flex flex-col gap-1.5 min-[1441px]:mb-5 min-[1441px]:gap-2">
@@ -409,13 +429,57 @@ export default function AppCrmSettingsPage() {
           </button>
         </div>
 
+        <div className="settings-filter-panel mb-3 grid gap-2 rounded-xl border p-3 md:grid-cols-[minmax(0,1fr)_160px_auto] min-[1441px]:mb-4">
+          <label className="grid gap-1 text-xs">
+            <span className="theme-muted font-medium">Buscar</span>
+            <input
+              value={statusSearch}
+              onChange={(event) => setStatusSearch(event.target.value)}
+              placeholder="Nome, chave ou descrição"
+              className="theme-select rounded-md px-3 py-2 text-sm outline-none"
+            />
+          </label>
+          <label className="grid gap-1 text-xs">
+            <span className="theme-muted font-medium">Filtro</span>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+              className="theme-select rounded-md px-3 py-2 text-sm outline-none"
+            >
+              <option value="all">Todas</option>
+              <option value="active">Ativas</option>
+              <option value="inactive">Inativas</option>
+              <option value="campaign">Campanha</option>
+            </select>
+          </label>
+          <div className="flex items-end justify-between gap-2 md:justify-end">
+            <span className="theme-muted pb-2 text-xs">
+              {filteredStatuses.length}/{statuses.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setStatusSearch("");
+                setStatusFilter("all");
+              }}
+              className="theme-nav-link rounded-md border px-3 py-2 text-xs font-semibold"
+            >
+              Limpar
+            </button>
+          </div>
+        </div>
+
         {loading ? (
           <p className="theme-muted text-sm">Carregando situacoes...</p>
         ) : statuses.length === 0 ? (
           <p className="theme-muted text-sm">Nenhuma situacao cadastrada.</p>
+        ) : filteredStatuses.length === 0 ? (
+          <p className="theme-muted rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
+            Nenhuma situação encontrada com os filtros atuais.
+          </p>
         ) : (
           <div className="space-y-2 min-[1441px]:space-y-3">
-            {statuses.map((status, index) => (
+            {filteredStatuses.map((status, index) => (
               <article
                 key={status.id}
                 className={`theme-list-row ${
@@ -464,6 +528,7 @@ export default function AppCrmSettingsPage() {
           </div>
         )}
       </section>
+      </div>
     </AppShell>
   );
 }

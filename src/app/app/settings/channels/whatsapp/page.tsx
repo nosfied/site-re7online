@@ -405,7 +405,7 @@ export default function AppWhatsAppChannelSettingsPage() {
       <FeedbackToast message={success} variant="success" {...toastHandlers} />
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
 
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 md:px-6">
+      <div className="whatsapp-settings-theme mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 md:px-6">
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">

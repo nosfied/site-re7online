@@ -54,6 +54,8 @@ export default function AppApiKeysPage() {
   const [session, setSession] = useState<AppSession | null>(null);
   const [keys, setKeys] = useState<AppPublicApiKey[]>([]);
   const [availableScopes, setAvailableScopes] = useState<AppPublicApiScope[]>([]);
+  const [keySearch, setKeySearch] = useState("");
+  const [keyStatusFilter, setKeyStatusFilter] = useState<"all" | "active" | "revoked">("all");
   const [publicBasePath, setPublicBasePath] = useState("/public-api/v1");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -70,6 +72,20 @@ export default function AppApiKeysPage() {
   });
 
   const activeKeys = useMemo(() => keys.filter((item) => item.status === "active"), [keys]);
+
+  const filteredKeys = useMemo(() => {
+    const search = keySearch.trim().toLowerCase();
+    return keys.filter((key) => {
+      const status = key.status === "active" ? "active" : "revoked";
+      const matchesSearch =
+        !search ||
+        [key.name, key.keyPrefix, key.status, key.scopes.join(" ")].some((value) =>
+          value.toLowerCase().includes(search)
+        );
+      const matchesStatus = keyStatusFilter === "all" || status === keyStatusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [keySearch, keyStatusFilter, keys]);
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -218,6 +234,7 @@ export default function AppApiKeysPage() {
         onBlur={toastHandlers.onBlur}
       />
 
+      <div className="api-keys-theme grid gap-4">
       <section className="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
         <article className="theme-surface min-w-0 rounded-xl border p-4">
           <div className="flex min-w-0 items-start justify-between gap-3">
@@ -308,13 +325,56 @@ export default function AppApiKeysPage() {
             </div>
           </div>
 
+          <div className="settings-filter-panel mt-4 grid gap-2 rounded-xl border p-3 md:grid-cols-[minmax(0,1fr)_150px_auto]">
+            <label className="grid gap-1 text-xs">
+              <span className="theme-muted font-medium">Buscar</span>
+              <input
+                value={keySearch}
+                onChange={(event) => setKeySearch(event.target.value)}
+                placeholder="Nome, prefixo ou escopo"
+                className="theme-select rounded-md px-3 py-2 text-sm outline-none"
+              />
+            </label>
+            <label className="grid gap-1 text-xs">
+              <span className="theme-muted font-medium">Status</span>
+              <select
+                value={keyStatusFilter}
+                onChange={(event) => setKeyStatusFilter(event.target.value as typeof keyStatusFilter)}
+                className="theme-select rounded-md px-3 py-2 text-sm outline-none"
+              >
+                <option value="all">Todas</option>
+                <option value="active">Ativas</option>
+                <option value="revoked">Revogadas</option>
+              </select>
+            </label>
+            <div className="flex items-end justify-between gap-2 md:justify-end">
+              <span className="theme-muted pb-2 text-xs">
+                {filteredKeys.length}/{keys.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setKeySearch("");
+                  setKeyStatusFilter("all");
+                }}
+                className="theme-nav-link rounded-md border px-3 py-2 text-xs font-semibold"
+              >
+                Limpar
+              </button>
+            </div>
+          </div>
+
           {loading ? (
             <p className="mt-6 text-sm text-white/60">Carregando chaves...</p>
           ) : keys.length === 0 ? (
             <p className="mt-6 text-sm text-white/60">Nenhuma chave criada para esta organização.</p>
+          ) : filteredKeys.length === 0 ? (
+            <p className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/60">
+              Nenhuma chave encontrada com os filtros atuais.
+            </p>
           ) : (
             <div className="mt-4 grid gap-3">
-              {keys.map((key) => (
+              {filteredKeys.map((key) => (
                 <div key={key.id} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
                   <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -363,6 +423,7 @@ export default function AppApiKeysPage() {
           )}
         </article>
       </section>
+      </div>
     </AppShell>
   );
 }

@@ -249,6 +249,7 @@ export default function AppPrivacySettingsPage() {
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
       <FeedbackToast message={success} variant="success" {...toastHandlers} />
 
+      <div className="privacy-settings-theme grid gap-3 min-[1441px]:gap-4">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_310px] min-[1441px]:gap-4 min-[1441px]:lg:grid-cols-[minmax(0,1fr)_360px]">
         <section className="theme-surface rounded-xl border">
           <div className="theme-border border-b p-3 min-[1441px]:p-4">
@@ -484,6 +485,7 @@ export default function AppPrivacySettingsPage() {
           </div>
         </div>
       ) : null}
+      </div>
     </AppShell>
   );
 }

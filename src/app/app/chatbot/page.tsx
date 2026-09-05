@@ -266,7 +266,7 @@ function JsonSearchPreview({ text, query }: { text: string; query: string }) {
   if (occurrences === 0) {
     return (
       <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-        Nenhuma ocorrencia encontrada para "{trimmedQuery}".
+        Nenhuma ocorrencia encontrada para &quot;{trimmedQuery}&quot;.
       </p>
     );
   }
@@ -710,7 +710,8 @@ export default function AppChatbotPage() {
       <FeedbackToast message={success} {...toastHandlers} />
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
+      <div className="chatbot-theme grid gap-4">
+      <section className="chatbot-section rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-lg font-semibold">Automacao do atendimento</h2>
@@ -761,7 +762,7 @@ export default function AppChatbotPage() {
             ].map((item) => (
               <div
                 key={item.key}
-                className="flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-xl border border-white/10 bg-re7-navy/40 p-3 text-sm sm:p-4"
+                className="chatbot-setting-card flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-xl border border-white/10 bg-re7-navy/40 p-3 text-sm sm:p-4"
               >
                 <span className="space-y-1">
                   <span className="block font-medium text-white">{item.title}</span>
@@ -781,7 +782,7 @@ export default function AppChatbotPage() {
                 />
               </div>
             ))}
-            <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-xl border border-white/10 bg-re7-navy/40 p-3 text-sm sm:p-4">
+            <div className="chatbot-setting-card flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-xl border border-white/10 bg-re7-navy/40 p-3 text-sm sm:p-4">
               <span className="space-y-1">
                 <span className="block font-medium text-white">IA controlada</span>
                 <span className="block text-white/60">
@@ -806,7 +807,7 @@ export default function AppChatbotPage() {
                 />
               </label>
             </div>
-            <div className="md:col-span-2 rounded-xl border border-white/10 bg-re7-navy/40 p-3 text-sm sm:p-4">
+            <div className="chatbot-setting-card md:col-span-2 rounded-xl border border-white/10 bg-re7-navy/40 p-3 text-sm sm:p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                 <span className="block font-medium text-white">Notificação interna de novo contato</span>
@@ -838,7 +839,7 @@ export default function AppChatbotPage() {
               ) : null}
               <div className="mt-3 space-y-2">
                 {(automationDraft.handoffLeadNotificationRecipients ?? []).map((recipient, index) => (
-                  <div key={recipient.id || index} className="grid gap-2 rounded-lg border border-white/10 bg-black/10 p-2 md:grid-cols-[1fr_1fr_auto_auto]">
+                  <div key={recipient.id || index} className="chatbot-field-group grid gap-2 rounded-lg border border-white/10 bg-black/10 p-2 md:grid-cols-[1fr_1fr_auto_auto]">
                     <input
                       className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
                       value={recipient.label ?? ""}
@@ -916,7 +917,7 @@ export default function AppChatbotPage() {
         )}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
+      <section className="chatbot-section rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div className="mb-4 space-y-2">
           <span className="w-fit rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/70">
             Novo fluxo
@@ -1023,7 +1024,7 @@ export default function AppChatbotPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
+      <section className="chatbot-section rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-lg font-semibold">Fluxos cadastrados</h2>
@@ -1048,7 +1049,7 @@ export default function AppChatbotPage() {
               const draft = drafts[flow.id];
               if (!draft) return null;
               return (
-                <article key={flow.id} className="min-w-0 rounded-xl border border-white/10 bg-re7-navy/40 p-3 sm:p-4">
+                <article key={flow.id} className="chatbot-flow-card min-w-0 rounded-xl border border-white/10 bg-re7-navy/40 p-3 sm:p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-2">
                       <h3 className="text-lg font-semibold text-white">{flow.name}</h3>
@@ -1058,16 +1059,61 @@ export default function AppChatbotPage() {
                         <FlowBadge label={`Atualizado em ${formatDateTime(flow.updatedAt)}`} />
                       </div>
                     </div>
-                    {!flowReadOnly ? (
-                      <button
-                        type="button"
-                        onClick={() => void handleSave(flow)}
-                        disabled={savingId === flow.id}
-                        className="rounded-md border border-white/20 px-3 py-2 text-sm text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {savingId === flow.id ? "Salvando..." : "Salvar"}
-                      </button>
-                    ) : null}
+                    <div className="flex max-w-full flex-wrap items-center justify-end gap-3 text-sm text-white/80">
+                      {draftJsonErrors[flow.id] ? (
+                        <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                          JSON inválido: {draftJsonErrors[flow.id]}
+                        </p>
+                      ) : (
+                        <p className="rounded-md border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+                          JSON válido. Ao salvar, o conteúdo será reindentado automaticamente.
+                        </p>
+                      )}
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={draft.isActive}
+                          onChange={(event) =>
+                            setDrafts((current) => ({
+                              ...current,
+                              [flow.id]: {
+                                ...draft,
+                                isActive: event.target.checked,
+                              },
+                            }))
+                          }
+                          disabled={flowReadOnly}
+                        />
+                        Ativo
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={draft.entryPoint}
+                          onChange={(event) =>
+                            setDrafts((current) => ({
+                              ...current,
+                              [flow.id]: {
+                                ...draft,
+                                entryPoint: event.target.checked,
+                              },
+                            }))
+                          }
+                          disabled={flowReadOnly}
+                        />
+                        Entrada principal
+                      </label>
+                      {!flowReadOnly ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleSave(flow)}
+                          disabled={savingId === flow.id}
+                          className="rounded-md border border-white/20 px-3 py-2 text-sm text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {savingId === flow.id ? "Salvando..." : "Salvar"}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
 
                   <div className="mt-4 grid gap-3">
@@ -1166,51 +1212,6 @@ export default function AppChatbotPage() {
                         </>
                       }
                     />
-                    {draftJsonErrors[flow.id] ? (
-                      <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-                        JSON inválido: {draftJsonErrors[flow.id]}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-emerald-200/80">
-                        JSON válido. Ao salvar, o conteúdo será reindentado automaticamente.
-                      </p>
-                    )}
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-white/80">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={draft.isActive}
-                          onChange={(event) =>
-                            setDrafts((current) => ({
-                              ...current,
-                              [flow.id]: {
-                                ...draft,
-                                isActive: event.target.checked,
-                              },
-                            }))
-                          }
-                          disabled={flowReadOnly}
-                        />
-                        Ativo
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={draft.entryPoint}
-                          onChange={(event) =>
-                            setDrafts((current) => ({
-                              ...current,
-                              [flow.id]: {
-                                ...draft,
-                                entryPoint: event.target.checked,
-                              },
-                            }))
-                          }
-                          disabled={flowReadOnly}
-                        />
-                        Entry point
-                      </label>
-                    </div>
                   </div>
                 </article>
               );
@@ -1218,6 +1219,7 @@ export default function AppChatbotPage() {
           </div>
         )}
       </section>
+      </div>
     </AppShell>
   );
 }

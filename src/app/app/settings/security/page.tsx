@@ -319,6 +319,7 @@ export default function SecuritySettingsPage() {
       {error ? <FeedbackToast variant="error" message={error} {...toastHandlers} /> : null}
       {success ? <FeedbackToast variant="success" message={success} {...toastHandlers} /> : null}
 
+      <div className="security-settings-theme grid gap-5">
       <section className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
@@ -594,6 +595,7 @@ export default function SecuritySettingsPage() {
           </p>
         </section>
       )}
+      </div>
     </AppShell>
   );
 }

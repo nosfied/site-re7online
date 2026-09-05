@@ -190,6 +190,7 @@ export default function AppSettingsInboxPage() {
       <FeedbackToast message={success} {...toastHandlers} />
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
 
+      <div className="inbox-settings-theme grid gap-4">
       <section className="rounded-xl border border-white/10 bg-white/5 p-3 md:p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -337,6 +338,7 @@ export default function AppSettingsInboxPage() {
           </div>
         )}
       </section>
+      </div>
     </AppShell>
   );
 }

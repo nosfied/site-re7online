@@ -111,17 +111,17 @@ type CatalogItem = {
 function getStatusClasses(status: string) {
   switch (status.toLowerCase()) {
     case "submitting":
-      return "bg-amber-500 text-slate-950";
+      return "template-status-pending";
     case "approved":
-      return "bg-emerald-600 text-white";
+      return "template-status-approved";
     case "failed":
     case "rejected":
-      return "bg-red-600 text-white";
+      return "template-status-rejected";
     case "cancelled":
-      return "bg-slate-600 text-white";
+      return "template-status-cancelled";
     case "pending":
     default:
-      return "bg-amber-500 text-slate-950";
+      return "template-status-pending";
   }
 }
 
@@ -1144,7 +1144,7 @@ export default function AppTemplatesPage() {
       <FeedbackToast message={error} variant="error" onClose={() => setError(null)} />
       {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}
 
-      <div className="grid min-w-0 gap-4">
+      <div className="templates-theme grid min-w-0 gap-4">
         {!loading && !pageFeatureEnabled ? (
           <section className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
             Funcionalidade indisponível para esta organização.
@@ -1254,7 +1254,7 @@ export default function AppTemplatesPage() {
           <div className="grid gap-4 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.7fr)] sm:p-4">
             <div className="space-y-2">
               {filteredCannedReplies.length === 0 ? (
-                <p className="rounded-lg border border-white/10 bg-re7-navy/50 p-3 text-sm text-white/65">
+                <p className="template-empty-state rounded-lg border p-3 text-sm">
                   Nenhuma mensagem pronta encontrada.
                 </p>
               ) : (

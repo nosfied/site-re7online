@@ -268,7 +268,7 @@ function KpiCard({
             ? "border-rose-300/20 bg-rose-500/10"
             : "border-white/10 bg-white/5";
   return (
-    <article className={`min-w-0 rounded-lg border p-3 ${toneClass}`}>
+    <article className={`report-kpi-card min-w-0 rounded-lg border p-3 ${toneClass}`}>
       <p className="truncate text-xs font-medium uppercase tracking-wide text-white/55">{label}</p>
       <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
       {detail ? <p className="mt-1 text-xs leading-relaxed text-white/55">{detail}</p> : null}
@@ -286,8 +286,8 @@ function ReportSection({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-white/10 bg-white/5">
-      <div className="border-b border-white/10 px-4 py-3">
+    <section className="report-section rounded-xl border border-white/10 bg-white/5">
+      <div className="report-section-header border-b border-white/10 px-4 py-3">
         <h2 className="text-sm font-semibold text-white">{title}</h2>
         {description ? <p className="mt-1 max-w-3xl text-xs leading-relaxed text-white/55">{description}</p> : null}
       </div>
@@ -297,7 +297,7 @@ function ReportSection({
 }
 
 function EmptyState({ children }: { children: ReactNode }) {
-  return <p className="p-4 text-sm text-white/65">{children}</p>;
+  return <p className="report-empty-state p-4 text-sm text-white/65">{children}</p>;
 }
 
 function SatisfactionAggregateTable({
@@ -1295,14 +1295,15 @@ export default function AppReportsPage() {
       <FeedbackToast message={success} {...toastHandlers} />
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
 
-      {retentionDays !== null && retentionDays < 30 ? (
-        <section className="rounded-lg border border-amber-300/30 bg-amber-500/10 p-3 text-sm text-amber-50">
-          A retenção LGPD está configurada para {retentionDays} dia
-          {retentionDays === 1 ? "" : "s"}. Relatórios e histórico operacional podem ficar reduzidos quando a retenção for executada.
-        </section>
-      ) : null}
+      <div className="reports-theme grid gap-4">
+        {retentionDays !== null && retentionDays < 30 ? (
+          <section className="report-notice-panel rounded-lg border border-amber-300/30 bg-amber-500/10 p-3 text-sm text-amber-50">
+            A retenção LGPD está configurada para {retentionDays} dia
+            {retentionDays === 1 ? "" : "s"}. Relatórios e histórico operacional podem ficar reduzidos quando a retenção for executada.
+          </section>
+        ) : null}
 
-      <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+      <section className="report-filter-panel rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
         <div className="flex flex-col gap-3 border-b border-white/10 pb-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-white/45">Contexto global</p>
@@ -1444,7 +1445,7 @@ export default function AppReportsPage() {
       <nav
         aria-label="Seções de relatórios"
         role="tablist"
-        className="flex gap-2 overflow-x-auto rounded-xl border border-white/10 bg-white/5 p-2"
+        className="report-tabs flex gap-2 overflow-x-auto rounded-xl border border-white/10 bg-white/5 p-2"
       >
         {REPORT_TABS.map((tab) => {
           const selected = activeTab === tab.id;
@@ -1471,7 +1472,7 @@ export default function AppReportsPage() {
       </nav>
 
       {loading ? (
-        <section className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/65">
+        <section className="report-section rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/65">
           Carregando relatórios sem limpar o contexto da página...
         </section>
       ) : null}
@@ -1505,7 +1506,7 @@ export default function AppReportsPage() {
               />
               <KpiCard label="Transferências humano" value={report?.humanTransferCount ?? "-"} tone="neutral" />
             </section>
-            <section className="rounded-lg border border-sky-300/20 bg-sky-500/10 p-3 text-sm text-sky-50">
+            <section className="report-info-panel rounded-lg border border-sky-300/20 bg-sky-500/10 p-3 text-sm text-sky-50">
               A visão geral resume o período selecionado. As abas detalham conversas, SLA de atendimento, atendentes, sessões e exportações sem alterar as métricas originais.
             </section>
             <ReportSection
@@ -1663,7 +1664,7 @@ export default function AppReportsPage() {
                 detail="Mantém a fórmula existente."
               />
             </section>
-            <section className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white/65">
+            <section className="report-section rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white/65">
               SLA por responsável não é inferido nesta tela. Sem registro confiável do responsável no evento de SLA, essa leitura permanece fora do escopo.
             </section>
           </>
@@ -1700,7 +1701,7 @@ export default function AppReportsPage() {
                 <EmptyState>Nenhuma mensagem com autoria registrada neste período.</EmptyState>
               )}
             </ReportSection>
-            <section className="rounded-lg border border-sky-300/20 bg-sky-500/10 p-3 text-sm text-sky-50">
+            <section className="report-info-panel rounded-lg border border-sky-300/20 bg-sky-500/10 p-3 text-sm text-sky-50">
               {AGENT_ACTIVITY_HISTORY_NOTE}
             </section>
             <ReportSection
@@ -1787,7 +1788,7 @@ export default function AppReportsPage() {
               <KpiCard label="Respostas recebidas" value={satisfactionReport?.summary.responded ?? "-"} tone="neutral" />
               <KpiCard label="Taxa de resposta" value={formatPercent(satisfactionReport?.summary.responseRate ?? null)} tone="neutral" />
             </section>
-            <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-4 md:flex-row md:items-center md:justify-between">
+            <div className="report-section flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-white">Satisfação</h2>
                 <p className="mt-1 text-xs leading-relaxed text-white/55">
@@ -2093,7 +2094,7 @@ export default function AppReportsPage() {
 
         {activeTab === "exports" ? (
           <div className="grid gap-4 lg:grid-cols-3">
-            <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <section className="report-export-card rounded-xl border border-white/10 bg-white/5 p-4">
               <h2 className="text-sm font-semibold">CSV de conversas</h2>
               <p className="mt-1 text-xs leading-relaxed text-white/55">
                 Exporta o recorte operacional de conversas com os filtros globais atuais.
@@ -2107,7 +2108,7 @@ export default function AppReportsPage() {
                 {exporting ? "Exportando..." : "Exportar CSV de conversas"}
               </button>
             </section>
-            <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <section className="report-export-card rounded-xl border border-white/10 bg-white/5 p-4">
               <h2 className="text-sm font-semibold">CSV de acessos/sessões</h2>
               <p className="mt-1 text-xs leading-relaxed text-white/55">
                 Exporta auditoria de autenticação conforme filtros locais da aba Acessos/Sessões.
@@ -2121,7 +2122,7 @@ export default function AppReportsPage() {
                 {exportingSessions ? "Exportando..." : "Exportar CSV de sessões"}
               </button>
             </section>
-            <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <section className="report-export-card rounded-xl border border-white/10 bg-white/5 p-4">
               <h2 className="text-sm font-semibold">CSV de atendimentos concluídos</h2>
               <p className="mt-1 text-xs leading-relaxed text-white/55">
                 Exporta ciclos/protocolos encerrados por atendente ou por setor e atendente.
@@ -2153,7 +2154,7 @@ export default function AppReportsPage() {
                 </button>
               </div>
             </section>
-            <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <section className="report-export-card rounded-xl border border-white/10 bg-white/5 p-4">
               <h2 className="text-sm font-semibold">Impressão/PDF</h2>
               <p className="mt-1 text-xs leading-relaxed text-white/55">
                 Abre um relatório gerencial com resumo, conversas, SLA de atendimento, atendentes e acessos/sessões para imprimir ou salvar em PDF.
@@ -2169,6 +2170,7 @@ export default function AppReportsPage() {
             </section>
           </div>
         ) : null}
+      </div>
       </div>
     </AppShell>
   );

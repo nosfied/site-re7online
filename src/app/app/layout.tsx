@@ -16,9 +16,9 @@ export const metadata: Metadata = {
     title: "Converta",
   },
   icons: {
-    icon: [{ url: "/converta-favicon.png?v=converta-dark", type: "image/png" }],
-    shortcut: ["/converta-favicon.png?v=converta-dark"],
-    apple: [{ url: "/converta-favicon.png?v=converta-dark", type: "image/png" }],
+    icon: [{ url: "/images/cv-favicon.png", type: "image/png" }],
+    shortcut: ["/images/cv-favicon.png"],
+    apple: [{ url: "/images/cv-favicon.png", type: "image/png" }],
   },
 };
 

@@ -151,6 +151,9 @@ export default function AppSettingsUsersPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [userSearch, setUserSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [userDrafts, setUserDrafts] = useState<
     Record<
       string,
@@ -264,6 +267,34 @@ export default function AppSettingsUsersPage() {
     () => (session ? getUpdateRoleOptions(session.user.role) : USER_ROLE_OPTIONS),
     [session]
   );
+  const filteredUsers = useMemo(() => {
+    const search = userSearch.trim().toLowerCase();
+    return users.filter((item) => {
+      const draft = userDrafts[item.id];
+      const role = String(draft?.role ?? item.role ?? "").toUpperCase();
+      const isActive = draft?.isActive ?? item.isActive ?? true;
+      const departmentIds = draft?.departmentIds ?? getUserDepartmentIds(item);
+      const departmentLabel = departmentIds
+        .map((departmentId) => departmentNameById[departmentId] || departmentId)
+        .join(" ");
+      const searchable = [
+        draft?.name ?? item.name,
+        draft?.email ?? item.email,
+        role,
+        departmentLabel,
+        draft?.primaryDepartmentId ? departmentNameById[draft.primaryDepartmentId] || draft.primaryDepartmentId : "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      const matchesSearch = !search || searchable.includes(search);
+      const matchesRole = !roleFilter || role === roleFilter;
+      const matchesStatus =
+        !statusFilter ||
+        (statusFilter === "active" && isActive) ||
+        (statusFilter === "inactive" && !isActive);
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+  }, [departmentNameById, roleFilter, statusFilter, userDrafts, userSearch, users]);
 
   const handleCreateUser = async () => {
     if (!session) return;
@@ -406,7 +437,8 @@ export default function AppSettingsUsersPage() {
       <FeedbackToast message={userSuccess || actionSuccess} variant="success" {...toastHandlers} />
       <FeedbackToast message={userError || actionError} variant="error" {...toastHandlers} />
 
-      <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+      <div className="users-settings-theme grid gap-4">
+      <section className="users-settings-section users-settings-create rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1.5">
             <span className="w-fit rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white/70">
@@ -427,7 +459,7 @@ export default function AppSettingsUsersPage() {
 
         {showCreateUserForm ? (
           <>
-            <div className="mt-4 grid max-w-5xl min-w-0 gap-3 border-t border-white/10 pt-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="users-settings-form mt-4 grid max-w-5xl min-w-0 gap-3 border-t border-white/10 pt-4 sm:grid-cols-2 xl:grid-cols-3">
               <label className="flex flex-col gap-2 text-sm text-white/75">
                 <span>Nome</span>
                 <input
@@ -476,11 +508,11 @@ export default function AppSettingsUsersPage() {
               </label>
               <div className="flex flex-col gap-2 text-sm text-white/75 xl:col-span-2">
                 <span>Departamentos operacionais</span>
-                <div className="grid min-w-0 gap-2 rounded-md border border-white/15 bg-re7-navy/70 p-2 sm:grid-cols-2">
+                <div className="users-settings-field-group grid min-w-0 gap-2 rounded-md border border-white/15 bg-re7-navy/70 p-2 sm:grid-cols-2">
                   {departments.map((department) => {
                     const checked = userForm.departmentIds.includes(department.id);
                     return (
-                      <div key={department.id} className="flex min-w-0 items-center justify-between gap-2 rounded border border-white/10 px-2 py-1.5">
+                      <div key={department.id} className="users-settings-department-row flex min-w-0 items-center justify-between gap-2 rounded border border-white/10 px-2 py-1.5">
                         <label className="flex min-w-0 items-center gap-2">
                           <input
                             type="checkbox"
@@ -573,7 +605,7 @@ export default function AppSettingsUsersPage() {
         ) : null}
       </section>
 
-      <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+      <section className="users-settings-section users-settings-list rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
             <h2 className="text-base font-semibold">Usuários da organização</h2>
@@ -581,7 +613,60 @@ export default function AppSettingsUsersPage() {
               Edite os dados na linha do usuario e clique em Salvar.
             </p>
           </div>
-          <InfoBadge label={`${users.length} usuarios`} />
+          <InfoBadge label={`${filteredUsers.length}/${users.length} usuarios`} />
+        </div>
+
+        <div className="users-settings-filter-panel mb-3 grid min-w-0 gap-3 rounded-lg border border-white/10 bg-black/10 p-3 sm:grid-cols-[minmax(220px,1fr)_180px_180px_auto]">
+          <label className="grid gap-1 text-sm text-white/75">
+            <span>Buscar</span>
+            <input
+              value={userSearch}
+              onChange={(event) => setUserSearch(event.target.value)}
+              placeholder="Nome, email ou setor"
+              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+            />
+          </label>
+          <label className="grid gap-1 text-sm text-white/75">
+            <span>Perfil</span>
+            <select
+              value={roleFilter}
+              onChange={(event) => setRoleFilter(event.target.value)}
+              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+            >
+              <option value="">Todos</option>
+              {USER_ROLE_OPTIONS.map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm text-white/75">
+            <span>Status</span>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+            >
+              <option value="">Todos</option>
+              <option value="active">Ativos</option>
+              <option value="inactive">Inativos</option>
+            </select>
+          </label>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={() => {
+                setUserSearch("");
+                setRoleFilter("");
+                setStatusFilter("");
+              }}
+              disabled={!userSearch && !roleFilter && !statusFilter}
+              className="w-full rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Limpar
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -592,9 +677,13 @@ export default function AppSettingsUsersPage() {
           </p>
         ) : users.length === 0 ? (
           <p className="text-sm text-white/70">Nenhum usuario encontrado.</p>
+        ) : filteredUsers.length === 0 ? (
+          <p className="rounded-md border border-white/10 bg-white/5 p-3 text-sm text-white/70">
+            Nenhum usuario encontrado com os filtros atuais.
+          </p>
         ) : (
           <div className="space-y-2.5">
-            {users.map((item, index) => {
+            {filteredUsers.map((item, index) => {
               const draft = userDrafts[item.id];
               if (!draft) return null;
               const canEditThisUser = canEditUserForActor(session.user.role, item.role);
@@ -612,7 +701,7 @@ export default function AppSettingsUsersPage() {
                   key={item.id}
                   className={`theme-list-row ${
                     index % 2 === 0 ? "theme-list-row-even" : "theme-list-row-odd"
-                  } rounded-xl border p-3 ${
+                  } users-settings-user-card rounded-xl border p-3 ${
                     index % 2 === 0
                       ? "border-white/10 bg-re7-navy/45"
                       : "border-white/15 bg-white/[0.075]"
@@ -637,7 +726,7 @@ export default function AppSettingsUsersPage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 space-y-3 border-t border-white/10 pt-3">
+                  <div className="users-settings-user-body mt-3 space-y-3 border-t border-white/10 pt-3">
                     <div className="grid max-w-4xl min-w-0 gap-3 lg:grid-cols-[minmax(260px,0.9fr)_minmax(320px,1.1fr)]">
                       <label className="flex min-w-0 flex-col text-sm text-white/75">
                         <input
@@ -707,11 +796,11 @@ export default function AppSettingsUsersPage() {
                       </label>
                       <div className="flex flex-col gap-2 text-sm text-white/75">
                         <span>Departamentos</span>
-                        <div className="grid min-w-0 gap-2 rounded-md border border-white/15 bg-re7-navy/70 p-2">
+                        <div className="users-settings-field-group grid min-w-0 gap-2 rounded-md border border-white/15 bg-re7-navy/70 p-2">
                           {departments.map((department) => {
                             const checked = draft.departmentIds.includes(department.id);
                             return (
-                              <div key={department.id} className="flex min-w-0 items-center justify-between gap-2 rounded border border-white/10 px-2 py-1.5">
+                              <div key={department.id} className="users-settings-department-row flex min-w-0 items-center justify-between gap-2 rounded border border-white/10 px-2 py-1.5">
                                 <label className="flex min-w-0 items-center gap-2">
                                   <input
                                     type="checkbox"
@@ -789,7 +878,7 @@ export default function AppSettingsUsersPage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="users-settings-card-actions mt-3 flex flex-wrap items-center justify-between gap-2">
                     <p className="text-xs text-white/55">
                       Reset de senha ainda indisponivel no /app.
                     </p>
@@ -809,6 +898,7 @@ export default function AppSettingsUsersPage() {
           </div>
         )}
       </section>
+      </div>
     </AppShell>
   );
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -1085,21 +1084,15 @@ export default function AppShell({
       title="Abrir caixa de entrada"
       className="relative m-0 flex h-[82px] w-[195px] shrink-0 items-center justify-center overflow-visible p-0 sm:h-[95px] sm:w-[213px] lg:h-[66px] lg:w-[154px] min-[1441px]:h-[109px] min-[1441px]:w-[247px]"
     >
-      <Image
-        src="/images/converta-logo-light.png"
+      <img
+        src="/images/cv-transparent.png"
         alt="Converta"
-        width={160}
-        height={200}
-        priority
-        className="theme-logo-light absolute left-1/2 top-1/2 m-0 block h-[124px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain p-0 sm:h-[141px] lg:h-[104px] min-[1441px]:h-[177px]"
+        className="theme-logo-light absolute left-1/2 top-1/2 m-0 block h-[99px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain p-0 drop-shadow-[0_0_5px_rgba(255,255,255,0.35)] sm:h-[112px] lg:h-[81px] min-[1441px]:h-[127px]"
       />
-      <Image
-        src="/images/converta-logo-dark2.png"
+      <img
+        src="/images/cv-transparent.png"
         alt="Converta"
-        width={160}
-        height={200}
-        priority
-        className="theme-logo-dark absolute left-1/2 top-1/2 m-0 h-[67px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain p-0 sm:h-[77px] lg:h-[57px] min-[1441px]:h-[96px]"
+        className="theme-logo-dark absolute left-1/2 top-1/2 m-0 h-[99px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain p-0 drop-shadow-[0_0_5px_rgba(255,255,255,0.35)] sm:h-[112px] lg:h-[81px] min-[1441px]:h-[127px]"
       />
     </button>
   );
@@ -1121,20 +1114,14 @@ export default function AppShell({
           Fechar
         </button>
         <div className="flex min-h-[280px] items-center justify-center">
-          <Image
-            src="/images/converta-logo-light.png"
+          <img
+            src="/images/cv-transparent.png"
             alt="Converta ampliada"
-            width={900}
-            height={340}
-            priority
             className="theme-logo-light h-auto w-full max-w-[760px] object-contain"
           />
-          <Image
-            src="/images/converta-logo-dark2.png"
+          <img
+            src="/images/cv-transparent.png"
             alt="Converta ampliada"
-            width={900}
-            height={340}
-            priority
             className="theme-logo-dark h-auto w-full max-w-[520px] object-contain"
           />
         </div>

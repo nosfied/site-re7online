@@ -361,23 +361,23 @@ function CostPreviewCard({ preview, loading, emptyText }: {
 function getStatusClasses(status: string) {
   switch (status) {
     case "draft":
-      return "bg-sky-700 text-white";
+      return "campaign-status-draft";
     case "scheduled":
-      return "bg-indigo-600 text-white";
+      return "campaign-status-scheduled";
     case "sending":
-      return "bg-amber-500 text-slate-950";
+      return "campaign-status-sending";
     case "paused":
-      return "bg-violet-600 text-white";
+      return "campaign-status-paused";
     case "completed":
-      return "bg-emerald-600 text-white";
+      return "campaign-status-completed";
     case "blocked":
-      return "bg-orange-600 text-white";
+      return "campaign-status-blocked";
     case "cancelled":
-      return "bg-slate-600 text-white";
+      return "campaign-status-cancelled";
     case "failed":
-      return "bg-red-600 text-white";
+      return "campaign-status-failed";
     default:
-      return "bg-slate-500 text-white";
+      return "campaign-status-default";
   }
 }
 
@@ -436,21 +436,21 @@ function getCampaignConfidence(campaign: CampaignItem) {
     return {
       label: "Aguardando envio explícito",
       icon: "INFO",
-      classes: "border-sky-300/25 bg-sky-900/20 text-sky-100",
+      classes: "campaign-panel-info",
     };
   }
   if (campaign.status === "cancelled") {
     return {
       label: "Rascunho descartado",
       icon: "INFO",
-      classes: "border-slate-300/20 bg-slate-800/60 text-slate-100",
+      classes: "campaign-panel-neutral",
     };
   }
   if (campaign.status === "sending") {
     return {
       label: "Envio em andamento",
       icon: "INFO",
-      classes: "border-amber-300/25 bg-amber-900/20 text-amber-100",
+      classes: "campaign-panel-warning",
     };
   }
   const totalRecipients = campaign.totalRecipients || 0;
@@ -462,20 +462,20 @@ function getCampaignConfidence(campaign: CampaignItem) {
     return {
       label: "Falha na campanha",
       icon: "X",
-      classes: "border-red-400/30 bg-red-900/30 text-red-100",
+      classes: "campaign-panel-danger",
     };
   }
   if (totalRecipients > 0 && deliveredOrRead >= totalRecipients) {
     return {
       label: `Entregue para ${totalRecipients}/${totalRecipients} destinatários`,
       icon: "OK",
-      classes: "border-emerald-400/30 bg-emerald-900/20 text-emerald-100",
+      classes: "campaign-panel-success",
     };
   }
   return {
     label: "Entrega parcial",
     icon: "!",
-    classes: "border-amber-400/30 bg-amber-900/20 text-amber-100",
+    classes: "campaign-panel-warning",
   };
 }
 
@@ -496,8 +496,8 @@ function formatCampaignRecipientReference(value: string) {
 
 function getAudienceEligibilityClasses(eligible: boolean) {
   return eligible
-    ? "border-emerald-400/30 bg-emerald-900/20 text-emerald-100"
-    : "border-amber-400/30 bg-amber-900/20 text-amber-100";
+    ? "campaign-panel-success"
+    : "campaign-panel-warning";
 }
 
 function getToastClasses(tone: CampaignToastTone) {
@@ -1666,6 +1666,7 @@ export default function AppCampaignsPage() {
         ) : null}
       </div>
 
+      <div className="campaigns-theme grid gap-3">
       <section className="rounded-xl border border-white/10 bg-white/5 p-4">
         <div className="flex flex-col gap-4">
           <div className="max-w-5xl">
@@ -2583,7 +2584,7 @@ export default function AppCampaignsPage() {
 	                              setSelectedCampaignId(campaign.id);
 	                              setDetailModalOpen(true);
 	                            }}
-                            className="rounded-md border border-re7-sky/40 px-2 py-1 text-xs font-semibold text-sky-100 hover:bg-re7-sky/10"
+                            className="campaign-detail-action rounded-md border border-re7-sky/40 px-2 py-1 text-xs font-semibold text-sky-100 hover:bg-re7-sky/10"
                           >
                             Ver detalhes
                           </button>
@@ -3103,6 +3104,7 @@ export default function AppCampaignsPage() {
           ) : null}
         </div>
       </section>
+      </div>
     </AppShell>
   );
 }

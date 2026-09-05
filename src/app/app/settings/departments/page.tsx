@@ -264,6 +264,8 @@ export default function AppSettingsDepartmentsPage() {
   const [hoursEditor, setHoursEditor] = useState<HoursEditorDraft | null>(null);
   const [exceptionEditor, setExceptionEditor] = useState<BusinessHourExceptionDraft | null>(null);
   const [savingExceptions, setSavingExceptions] = useState(false);
+  const [departmentSearch, setDepartmentSearch] = useState("");
+  const [departmentStatusFilter, setDepartmentStatusFilter] = useState("");
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -386,6 +388,22 @@ export default function AppSettingsDepartmentsPage() {
     [departments]
   );
   const inactiveDepartmentCount = departments.length - activeDepartmentCount;
+  const filteredDepartments = useMemo(() => {
+    const search = departmentSearch.trim().toLowerCase();
+    return sortedDepartments.filter((item) => {
+      const draft = drafts[item.id];
+      const isActive = draft?.isActive ?? item.isActive;
+      const searchable = [draft?.name ?? item.name, item.name, item.slug, item.id]
+        .join(" ")
+        .toLowerCase();
+      const matchesSearch = !search || searchable.includes(search);
+      const matchesStatus =
+        !departmentStatusFilter ||
+        (departmentStatusFilter === "active" && isActive) ||
+        (departmentStatusFilter === "inactive" && !isActive);
+      return matchesSearch && matchesStatus;
+    });
+  }, [departmentSearch, departmentStatusFilter, drafts, sortedDepartments]);
 
   const handleCreate = async () => {
     if (!session) return;
@@ -876,7 +894,8 @@ export default function AppSettingsDepartmentsPage() {
       <FeedbackToast message={success} {...toastHandlers} />
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
 
-      <section className="rounded-xl border border-white/10 bg-white/5 p-2.5 md:p-3">
+      <div className="departments-settings-theme grid gap-4">
+      <section className="departments-settings-section departments-settings-create rounded-xl border border-white/10 bg-white/5 p-2.5 md:p-3">
         <div className="mb-3 flex flex-col gap-1.5">
           <span className="w-fit rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white/70">
             Novo setor
@@ -903,7 +922,7 @@ export default function AppSettingsDepartmentsPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-white/10 bg-white/5 p-2.5 md:p-3">
+      <section className="departments-settings-section departments-settings-list rounded-xl border border-white/10 bg-white/5 p-2.5 md:p-3">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
             <h2 className="text-base font-semibold">Setores da organização</h2>
@@ -918,7 +937,44 @@ export default function AppSettingsDepartmentsPage() {
             {!readOnly ? (
               <DepartmentBadge label={`${inactiveDepartmentCount} inativos`} tone="warning" />
             ) : null}
-            <DepartmentBadge label={`${departments.length} setores`} />
+            <DepartmentBadge label={`${filteredDepartments.length}/${departments.length} setores`} />
+          </div>
+        </div>
+
+        <div className="departments-settings-filter-panel mb-3 grid min-w-0 gap-3 rounded-lg border border-white/10 bg-black/10 p-3 sm:grid-cols-[minmax(220px,1fr)_180px_auto]">
+          <label className="grid gap-1 text-sm text-white/75">
+            <span>Buscar</span>
+            <input
+              value={departmentSearch}
+              onChange={(event) => setDepartmentSearch(event.target.value)}
+              placeholder="Nome ou slug"
+              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+            />
+          </label>
+          <label className="grid gap-1 text-sm text-white/75">
+            <span>Status</span>
+            <select
+              value={departmentStatusFilter}
+              onChange={(event) => setDepartmentStatusFilter(event.target.value)}
+              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+            >
+              <option value="">Todos</option>
+              <option value="active">Ativos</option>
+              {!readOnly ? <option value="inactive">Inativos</option> : null}
+            </select>
+          </label>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={() => {
+                setDepartmentSearch("");
+                setDepartmentStatusFilter("");
+              }}
+              disabled={!departmentSearch && !departmentStatusFilter}
+              className="w-full rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Limpar
+            </button>
           </div>
         </div>
 
@@ -926,9 +982,13 @@ export default function AppSettingsDepartmentsPage() {
           <p className="text-sm text-white/70">Carregando setores...</p>
         ) : sortedDepartments.length === 0 ? (
           <p className="text-sm text-white/70">Nenhum setor encontrado.</p>
+        ) : filteredDepartments.length === 0 ? (
+          <p className="rounded-md border border-white/10 bg-white/5 p-3 text-sm text-white/70">
+            Nenhum setor encontrado com os filtros atuais.
+          </p>
         ) : (
           <div className="space-y-5">
-            {sortedDepartments.map((item, index) => {
+            {filteredDepartments.map((item, index) => {
               const draft = drafts[item.id];
               if (!draft) return null;
               const isDraftActive = draft.isActive;
@@ -1307,6 +1367,7 @@ export default function AppSettingsDepartmentsPage() {
           </div>
         )}
       </section>
+      </div>
     </AppShell>
   );
 }

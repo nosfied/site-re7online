@@ -679,7 +679,7 @@ function CrmContactDetailDrawer({
               </DetailSection>
 
               <DetailSection title="Preferências e ciclo de vida">
-                <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                <div className="grid gap-3">
                   <label className="grid gap-1.5 text-sm">
                     <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Situação no CRM</span>
                     <select
@@ -695,7 +695,6 @@ function CrmContactDetailDrawer({
                       ))}
                     </select>
                   </label>
-                  <span className="text-sm font-semibold text-white">{item.crmStatusLabel}</span>
                 </div>
                 <div className="grid gap-2 rounded-lg border border-white/10 p-3">
                   <p className="text-sm theme-muted">

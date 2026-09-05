@@ -226,7 +226,7 @@ export function ChatbotFlowBuilder({
 
   if (!parsed.ok) {
     return (
-      <div className="grid gap-3">
+      <div className="chatbot-flow-builder grid gap-3">
         <div className="rounded-lg border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
           O editor guiado precisa de JSON valido para carregar. Corrija no modo avançado.
         </div>
@@ -246,8 +246,8 @@ export function ChatbotFlowBuilder({
   );
 
   return (
-    <div className="grid gap-4">
-      <div className="flex flex-wrap gap-2">
+    <div className="chatbot-flow-builder grid gap-4">
+      <div className="chatbot-mode-tabs flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => setMode("guided")}
@@ -273,7 +273,7 @@ export function ChatbotFlowBuilder({
         </div>
       ) : (
         <>
-          <section className="grid gap-3 rounded-xl border border-white/10 bg-black/10 p-3 sm:grid-cols-4">
+          <section className="chatbot-builder-summary grid gap-3 rounded-xl border border-white/10 bg-black/10 p-3 sm:grid-cols-4">
             <div>
               <p className="text-xs uppercase text-white/45">Etapa inicial</p>
               <select
@@ -342,14 +342,14 @@ export function ChatbotFlowBuilder({
           </section>
 
           {issues.length > 0 ? (
-            <div className="rounded-xl border border-amber-300/30 bg-amber-500/10 p-3 text-sm text-amber-100">
+            <div className="chatbot-alert-panel rounded-xl border border-amber-300/30 bg-amber-500/10 p-3 text-sm text-amber-100">
               <p className="font-semibold">Revise antes de salvar</p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {issues.map((issue, index) => <li key={`${issue}-${index}`}>{issue}</li>)}
               </ul>
             </div>
           ) : (
-            <p className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+            <p className="chatbot-success-panel rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
               Fluxo sem pendências visuais neste editor.
             </p>
           )}
@@ -394,7 +394,7 @@ export function ChatbotFlowBuilder({
               const type = stringValue(node.type);
               const nodeQueues = queues.filter((queue) => !node.departmentId || queue.departmentId === node.departmentId);
               return (
-                <article key={nodeId} className="rounded-xl border border-white/10 bg-re7-navy/40 p-3">
+                <article key={nodeId} className="chatbot-node-card rounded-xl border border-white/10 bg-re7-navy/40 p-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs uppercase text-white/45">{nodeId}</p>
@@ -438,7 +438,7 @@ export function ChatbotFlowBuilder({
                           onChange={(event) => commit(setNodeField(definition, nodeId, "text", event.target.value))}
                           className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
                         />
-                        <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/65 whitespace-pre-wrap">
+                        <span className="chatbot-preview rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/65 whitespace-pre-wrap">
                           {stringValue(node.text) || "Prévia da mensagem"}
                         </span>
                       </label>
@@ -500,7 +500,7 @@ export function ChatbotFlowBuilder({
                     ) : null}
 
                     {type === "consent" ? (
-                      <div className="grid gap-3 rounded-lg border border-white/10 bg-black/10 p-3">
+                      <div className="chatbot-field-group grid gap-3 rounded-lg border border-white/10 bg-black/10 p-3">
                         <div>
                           <p className="text-sm font-semibold text-white">Consentimento guiado</p>
                           <p className="mt-1 text-xs text-white/55">
@@ -537,7 +537,7 @@ export function ChatbotFlowBuilder({
                             onChange={(event) => commit(setNodeField(definition, nodeId, "message", event.target.value))}
                             className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
                           />
-                          <span className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/65 whitespace-pre-wrap">
+                          <span className="chatbot-preview rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/65 whitespace-pre-wrap">
                             {stringValue(node.message) || "Prévia da solicitação de consentimento"}
                           </span>
                         </label>
@@ -580,7 +580,7 @@ export function ChatbotFlowBuilder({
                     ) : null}
 
                     {(type === "menu" || type === "handoff") ? (
-                      <div className="grid gap-2 rounded-lg border border-white/10 bg-black/10 p-3">
+                      <div className="chatbot-field-group grid gap-2 rounded-lg border border-white/10 bg-black/10 p-3">
                         <p className="text-sm font-semibold text-white">Destino de atendimento</p>
                         <div className="grid gap-2 sm:grid-cols-2">
                           <label className="grid gap-1 text-sm text-white/70">
@@ -633,7 +633,7 @@ export function ChatbotFlowBuilder({
                     ) : null}
 
                     {type === "menu" ? (
-                      <div className="grid gap-2 rounded-lg border border-white/10 bg-black/10 p-3">
+                      <div className="chatbot-field-group grid gap-2 rounded-lg border border-white/10 bg-black/10 p-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-sm font-semibold text-white">Opções do menu</p>
                           <button
@@ -655,7 +655,7 @@ export function ChatbotFlowBuilder({
                             commit(setNodeField(definition, nodeId, "options", options));
                           };
                           return (
-                            <div key={optionIndex} className="grid gap-2 rounded-md border border-white/10 p-2">
+                            <div key={optionIndex} className="chatbot-option-card grid gap-2 rounded-md border border-white/10 p-2">
                               <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
                                 <input
                                   value={stringValue(option.label)}
