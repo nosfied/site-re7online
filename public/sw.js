@@ -58,8 +58,8 @@ self.addEventListener("push", (event) => {
           url: typeof data.url === "string" ? data.url : "/app/inbox",
           unreadTotal,
         },
-        icon: "/converta-favicon.png?v=converta-dark",
-        badge: "/converta-favicon.png?v=converta-dark",
+        icon: "/images/cv-icon-192.png",
+        badge: "/images/cv-icon-192.png",
         silent: false,
         timestamp: Date.now(),
       };

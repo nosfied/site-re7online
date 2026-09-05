@@ -19,9 +19,9 @@ export const metadata: Metadata = {
   description:
     "Central inteligente de operação comercial e atendimento para WhatsApp, Instagram e Messenger com CRM conversacional, IA supervisionada e previsibilidade de vendas.",
   icons: {
-    icon: [{ url: "/converta-favicon.png?v=converta-dark", type: "image/png" }],
-    shortcut: ["/converta-favicon.png?v=converta-dark"],
-    apple: [{ url: "/converta-favicon.png?v=converta-dark", type: "image/png" }],
+    icon: [{ url: "/images/cv-favicon.png", type: "image/png" }],
+    shortcut: ["/images/cv-favicon.png"],
+    apple: [{ url: "/images/cv-icon-192.png", sizes: "192x192", type: "image/png" }],
   },
   keywords: [
     "central de atendimento WhatsApp",
