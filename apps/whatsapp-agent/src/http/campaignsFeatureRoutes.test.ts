@@ -4113,6 +4113,132 @@ test("admin tenants summary includes db-only clients without activity", async ()
   assert.equal(item.counts.outbound.failed, 0);
 });
 
+test("admin tenant detail update saves db-backed fields for db-only tenant", async () => {
+  const dbOnlyClientKey = `${prefix}-db-only-alerts`;
+  const client = await prisma.client.create({
+    data: {
+      clientKey: dbOnlyClientKey,
+      name: "DB Only Alerts Tenant",
+      profile: "government",
+      features: {},
+    },
+    select: { id: true },
+  });
+
+  const detail = await requestSuperadmin<{
+    tenant: Record<string, unknown>;
+  }>("GET", `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}`);
+  assert.equal(detail.status, 200, JSON.stringify(detail.body));
+
+  const update = await requestSuperadmin<{
+    tenantId: string;
+    fieldsChanged: string[];
+    tenant: { webSessionAlertEmails?: string[] };
+  }>("PUT", `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}`, {
+    ...detail.body.tenant,
+    webSessionAlertEmails: ["ops@example.test"],
+  });
+
+  assert.equal(update.status, 200, JSON.stringify(update.body));
+  assert.equal(update.body.tenantId, dbOnlyClientKey);
+  assert.ok(update.body.fieldsChanged.includes("webSessionAlertEmails"));
+  assert.deepEqual(update.body.tenant.webSessionAlertEmails, ["ops@example.test"]);
+
+  const config = await prisma.tenantOperationalConfig.findUniqueOrThrow({
+    where: { clientId: client.id },
+    select: { config: true },
+  });
+  assert.deepEqual(
+    (config.config as { webSessionAlertEmails?: string[] }).webSessionAlertEmails,
+    ["ops@example.test"]
+  );
+
+  const tenantsFile = JSON.parse(
+    await fs.readFile(path.join(tempRoot, ".data", "tenants.json"), "utf-8")
+  ) as Record<string, unknown>;
+  assert.equal(Object.prototype.hasOwnProperty.call(tenantsFile, dbOnlyClientKey), false);
+
+  const refreshed = await requestSuperadmin<{
+    tenant: { webSessionAlertEmails?: string[] };
+  }>("GET", `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}`);
+  assert.equal(refreshed.status, 200, JSON.stringify(refreshed.body));
+  assert.deepEqual(refreshed.body.tenant.webSessionAlertEmails, ["ops@example.test"]);
+});
+
+test("admin tenant detail update rejects legacy field changes for db-only tenant", async () => {
+  const dbOnlyClientKey = `${prefix}-db-only-legacy-reject`;
+  await prisma.client.create({
+    data: {
+      clientKey: dbOnlyClientKey,
+      name: "DB Only Legacy Reject Tenant",
+      profile: "business",
+      features: {},
+    },
+  });
+
+  const response = await requestSuperadmin<ErrorPayload>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(dbOnlyClientKey)}`,
+    {
+      id: dbOnlyClientKey,
+      name: "DB Only Legacy Reject Tenant",
+      metaPhoneNumberId: "",
+      allowlist: [],
+      handoffAttendantWaid: "",
+      defaultLanguage: "pt_BR",
+      channelAccounts: [],
+      companyLegalName: "Should Not Be Dropped",
+    }
+  );
+
+  assert.equal(response.status, 409);
+  assert.equal(getErrorCode(response.body), "legacy_tenant_config_missing");
+});
+
+test("admin tenant detail update preserves legacy tenant patch behavior", async () => {
+  const tenantKey = `${prefix}-business`;
+  await writeTenants([
+    tenantKey,
+    `${prefix}-government`,
+    `${prefix}-override`,
+    `${prefix}-kill-switch`,
+    `${prefix}-support`,
+  ]);
+
+  const response = await requestSuperadmin<{
+    tenantId: string;
+    fieldsChanged: string[];
+    tenant: { companyLegalName?: string };
+  }>("PUT", `/admin/tenants/${encodeURIComponent(tenantKey)}`, {
+    id: tenantKey,
+    name: tenantKey,
+    metaPhoneNumberId: `phone-${tenantKey}`,
+    allowlist: [],
+    handoffAttendantWaid: "",
+    defaultLanguage: "pt_BR",
+    companyLegalName: "Legacy Company Updated",
+  });
+
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  assert.equal(response.body.tenantId, tenantKey);
+  assert.ok(response.body.fieldsChanged.includes("companyLegalName"));
+  assert.equal(response.body.tenant.companyLegalName, "Legacy Company Updated");
+});
+
+test("admin tenant detail update keeps unknown tenant 404 semantics", async () => {
+  const missingTenantKey = `${prefix}-missing-detail-update`;
+  const response = await requestSuperadmin<ErrorPayload>(
+    "PUT",
+    `/admin/tenants/${encodeURIComponent(missingTenantKey)}`,
+    {
+      webSessionAlertEmails: ["ops@example.test"],
+    }
+  );
+
+  assert.equal(response.status, 404);
+  assert.equal(getErrorCode(response.body), "tenant_not_found");
+});
+
 test("admin tenant provisioning creates tenant without initial channel and remains idempotent", async () => {
   const tenantKey = `${prefix}-no-channel`;
   const contractNotes = [

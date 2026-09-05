@@ -75,6 +75,7 @@ import {
   type HandoffLeadNotificationSettings,
   type FollowUpSettings,
   type PlanLimitsSettings,
+  type RuntimeLimitsSettings,
   type ResolvedWebSessionAlertEmails,
 } from "../config/tenantOperationalConfig.js";
 import { applyAgentSignature } from "../inbox/agentSignature.js";
@@ -22818,9 +22819,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantProfile,
           aiAssistantIntentCatalog,
           aiQualification,
+          maxActiveAppUsers,
           webSessionAlertEmails: rawWebSessionAlertEmails,
           ...tenantPatch
         } = rawBody;
+        const runtimeLimitFieldsChanged = [
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "maxActiveAppUsers") ? ["maxActiveAppUsers"] : []),
+        ];
         const planLimitFieldsChanged = [
           ...(Object.prototype.hasOwnProperty.call(rawBody, "planName") ? ["planName"] : []),
           ...(Object.prototype.hasOwnProperty.call(rawBody, "messagesLimit") ? ["messagesLimit"] : []),
@@ -22914,6 +22919,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           }
         }
         if (
+          Object.prototype.hasOwnProperty.call(rawBody, "maxActiveAppUsers") &&
+          (typeof maxActiveAppUsers !== "number" ||
+            !Number.isInteger(maxActiveAppUsers) ||
+            maxActiveAppUsers < 0)
+        ) {
+          json(res, 400, httpError("bad_request", "maxActiveAppUsers must be a non-negative integer"));
+          return;
+        }
+        if (
           Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantMaxReplies") &&
           (typeof aiAssistantMaxReplies !== "number" ||
             !Number.isInteger(aiAssistantMaxReplies) ||
@@ -22953,12 +22967,52 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           }
         }
         const tenants = await getTenants();
-        const currentTenant = tenants[tenantId];
+        const legacyTenant = tenants[tenantId];
+        const client = await prisma.client.findUnique({
+          where: { clientKey: tenantId },
+          include: {
+            metaConfig: true,
+            phoneNumbers: {
+              orderBy: { createdAt: "asc" },
+              take: 1,
+            },
+          },
+        });
+        const currentTenant = legacyTenant ?? (client
+          ? {
+              id: client.clientKey,
+              name: client.name,
+              metaPhoneNumberId:
+                normalizeOptionalString(client.metaConfig?.phoneNumberId) ??
+                normalizeOptionalString(client.phoneNumbers[0]?.phoneNumberId) ??
+                "",
+              allowlist: [],
+              handoffAttendantWaid: "",
+              defaultLanguage: "pt_BR",
+              companyAddressCountry: "Brasil",
+              channelAccounts: [],
+              displayPhoneNumber:
+                extractTenantDisplayPhoneFromRawPayload(client.metaConfig?.rawPayload) ??
+                normalizeOptionalString(client.phoneNumbers[0]?.display) ??
+                undefined,
+            }
+          : null);
         if (!currentTenant) {
           json(res, 404, { error: "tenant_not_found" });
           return;
         }
-        const saved = Object.keys(tenantPatch).length > 0
+        const legacyPatchFieldsChanged = diffTenantFields(currentTenant, {
+          ...currentTenant,
+          ...tenantPatch,
+          id: String((tenantPatch.id ?? tenantId)).trim() || tenantId,
+        });
+        if (!legacyTenant && legacyPatchFieldsChanged.length > 0) {
+          json(res, 409, httpError("legacy_tenant_config_missing", "Tenant does not have legacy tenant config for these fields", {
+            fields: legacyPatchFieldsChanged,
+          }));
+          return;
+        }
+        const saved = legacyTenant && Object.keys(tenantPatch).length > 0
           ? await saveTenantPatch(tenantId, tenantPatch)
           : {
               backupPath: "",
@@ -22966,10 +23020,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               tenant: currentTenant,
             };
         const clientFieldsChanged: string[] = [];
-        const client = await prisma.client.findUnique({
-          where: { clientKey: tenantId },
-          select: { id: true, clientKey: true, profile: true },
-        });
         if (requestedProfile) {
           if (client && getClientProfile(client) !== requestedProfile) {
             await prisma.client.update({
@@ -23017,6 +23067,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           planLimitsSettings = savedPlanLimits.settings;
         } else if (client) {
           planLimitsSettings = (await resolvePlanLimitsSettings({
+            prisma,
+            clientId: client.id,
+            tenant: currentTenant,
+          })).settings;
+        }
+        let runtimeLimitsSettings: RuntimeLimitsSettings | null = null;
+        if (client && runtimeLimitFieldsChanged.length > 0) {
+          const savedRuntimeLimits = await saveRuntimeLimitsSettings({
+            prisma,
+            clientId: client.id,
+            tenant: currentTenant,
+            settings: {
+              maxActiveAppUsers: typeof maxActiveAppUsers === "number" ? maxActiveAppUsers : null,
+            },
+          });
+          runtimeLimitsSettings = savedRuntimeLimits.settings;
+        } else if (client) {
+          runtimeLimitsSettings = (await resolveRuntimeLimitsSettings({
             prisma,
             clientId: client.id,
             tenant: currentTenant,
@@ -23155,7 +23223,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           });
         }
         const phoneNumberId = normalizeOptionalString(saved.tenant.metaPhoneNumberId);
-        if (phoneNumberId) {
+        if (legacyTenant && phoneNumberId) {
           if (client) {
             await syncTenantPhoneNumberMapping({
               clientId: client.id,
@@ -23171,6 +23239,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           fieldsChanged: [
             ...saved.fieldsChanged,
             ...clientFieldsChanged,
+            ...runtimeLimitFieldsChanged,
             ...planLimitFieldsChanged,
             ...automationFlagFieldsChanged,
             ...aiAssistantConfigFieldsChanged,
@@ -23187,6 +23256,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           fieldsChanged: [
             ...saved.fieldsChanged,
             ...clientFieldsChanged,
+            ...runtimeLimitFieldsChanged,
             ...planLimitFieldsChanged,
             ...automationFlagFieldsChanged,
             ...aiAssistantConfigFieldsChanged,
@@ -23198,10 +23268,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               applyAutomationFlagsToTenantView(
                 applyPlanLimitsToTenantView(
                   applyWebSessionAlertEmailsToTenantView(
-                    {
-                      ...saved.tenant,
-                      channelAccounts: redactTenantChannelAccounts(getSavedTenantChannelAccounts(saved.tenant)),
-                    },
+                    applyRuntimeLimitsToTenantView(
+                      {
+                        ...saved.tenant,
+                        channelAccounts: redactTenantChannelAccounts(getSavedTenantChannelAccounts(saved.tenant)),
+                      },
+                      runtimeLimitsSettings ?? { maxActiveAppUsers: null }
+                    ),
                     resolvedWebSessionAlertEmailsForUpdate ?? { emails: [], source: "json_fallback" }
                   ),
                   planLimitsSettings ?? {
@@ -35968,6 +36041,16 @@ function applyPlanLimitsToTenantView<T extends Record<string, unknown>>(
     quotaWarnAtPct: planLimits.quotaWarnAtPct,
     quotaBlockedReplyText: planLimits.quotaBlockedReplyText ?? undefined,
     quotaExcludeWaIds: planLimits.quotaExcludeWaIds,
+  };
+}
+
+function applyRuntimeLimitsToTenantView<T extends Record<string, unknown>>(
+  tenant: T,
+  runtimeLimits: RuntimeLimitsSettings
+) {
+  return {
+    ...tenant,
+    maxActiveAppUsers: runtimeLimits.maxActiveAppUsers ?? undefined,
   };
 }
 
