@@ -1003,7 +1003,8 @@ export function resolveAdminApiBaseUrl(input: string) {
       if (path.startsWith("/agent-api/")) return "/agent-api";
       return "";
     }
-    return normalized;
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") return "/agent-api";
+    return "";
   } catch {
     return "";
   }
@@ -1360,7 +1361,7 @@ export async function deleteAdminTrainingContent(
 }
 
 export function buildAdminTrainingContentUrl(connection: AdminConnection, path: string) {
-  const baseUrl = normalizeBaseUrl(connection.baseUrl);
+  const baseUrl = resolveAdminApiBaseUrl(connection.baseUrl);
   return `${baseUrl}${path}`;
 }
 
