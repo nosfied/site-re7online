@@ -21690,6 +21690,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             },
             source: "json_fallback" as const,
           };
+      const resolvedRuntimeLimits = client
+        ? await resolveRuntimeLimitsSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+          })
+        : {
+            settings: {
+              maxActiveAppUsers:
+                typeof tenant.maxActiveAppUsers === "number" ? tenant.maxActiveAppUsers : null,
+            },
+            source: "json_fallback" as const,
+          };
       const resolvedAutomationFlags = client
         ? await resolveAutomationFlagsSettings({
             prisma,
@@ -21734,21 +21747,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           applyAutomationFlagsToTenantView(
             applyPlanLimitsToTenantView(
               applyWebSessionAlertEmailsToTenantView(
-                {
-                  ...tenant,
-                  templates: {
-                    ...(tenant.templates ?? {}),
-                    ...(resolvedManualHandoff.templateName
-                      ? { manualHandoff: resolvedManualHandoff.templateName }
-                      : {}),
+                applyRuntimeLimitsToTenantView(
+                  {
+                    ...tenant,
+                    templates: {
+                      ...(tenant.templates ?? {}),
+                      ...(resolvedManualHandoff.templateName
+                        ? { manualHandoff: resolvedManualHandoff.templateName }
+                        : {}),
+                    },
+                    channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+                    displayPhoneNumber:
+                      tenant.displayPhoneNumber?.trim() ||
+                      extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
+                      phone?.display ||
+                      undefined,
                   },
-                  channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
-                  displayPhoneNumber:
-                    tenant.displayPhoneNumber?.trim() ||
-                    extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
-                    phone?.display ||
-                    undefined,
-                },
+                  resolvedRuntimeLimits.settings
+                ),
                 resolvedWebSessionAlertEmails
               ),
               resolvedPlanLimits.settings
@@ -21779,6 +21795,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             manualHandoff: resolvedManualHandoff.source,
           },
           planLimits: resolvedPlanLimits.source,
+          runtimeLimits: resolvedRuntimeLimits.source,
           automationFlags: resolvedAutomationFlags.source,
           aiAssistantConfig: resolvedAiAssistantConfig.source,
           aiIntentQualification: resolvedAiIntentQualification.source,

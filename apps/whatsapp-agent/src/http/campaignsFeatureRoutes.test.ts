@@ -623,6 +623,15 @@ test.before(async () => {
     },
     select: { id: true, clientKey: true },
   });
+  const legacyRuntimeClient = await prisma.client.create({
+    data: {
+      clientKey: `${prefix}-legacy-runtime`,
+      name: "Campaigns Feature Legacy Runtime",
+      profile: "business",
+      features: {},
+    },
+    select: { id: true, clientKey: true },
+  });
 
   businessClientId = businessClient.id;
   governmentClientId = governmentClient.id;
@@ -635,6 +644,7 @@ test.before(async () => {
     overrideClient.clientKey,
     killSwitchClient.clientKey,
     supportClient.clientKey,
+    legacyRuntimeClient.clientKey,
   ]);
 
   ({
@@ -4322,11 +4332,14 @@ test("admin tenant provisioning creates tenant without initial channel and remai
   );
 
   const detail = await requestSuperadmin<{
-    tenant: { id: string; metaPhoneNumberId: string; channelAccounts?: unknown[] };
+    configSource?: { runtimeLimits?: string };
+    tenant: { id: string; metaPhoneNumberId: string; channelAccounts?: unknown[]; maxActiveAppUsers?: number };
   }>("GET", `/admin/tenants/${encodeURIComponent(tenantKey)}`);
   assert.equal(detail.status, 200);
   assert.equal(detail.body.tenant.id, tenantKey);
   assert.equal(detail.body.tenant.metaPhoneNumberId, "");
+  assert.equal(detail.body.tenant.maxActiveAppUsers, 14);
+  assert.equal(detail.body.configSource?.runtimeLimits, "db");
   assert.deepEqual(detail.body.tenant.channelAccounts, []);
 
   const channels = await requestSuperadmin<{ channelAccounts: unknown[] }>(
@@ -5016,6 +5029,55 @@ test("admin tenant detail opens db-only clients with a safe default tenant view"
   assert.equal(response.body.tenant.handoffAttendantWaid, "");
   assert.equal(response.body.tenant.defaultLanguage, "pt_BR");
   assert.deepEqual(response.body.tenant.channelAccounts, []);
+});
+
+test("admin tenant detail resolves runtime limits from legacy tenant fallback", async () => {
+  const tenantKey = `${prefix}-legacy-runtime`;
+
+  const response = await requestSuperadmin<{
+    configSource?: { runtimeLimits?: string };
+    tenant: { maxActiveAppUsers?: number };
+  }>("GET", `/admin/tenants/${encodeURIComponent(tenantKey)}`);
+
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  assert.equal(response.body.tenant.maxActiveAppUsers, 5);
+  assert.equal(response.body.configSource?.runtimeLimits, "json_fallback");
+});
+
+test("admin tenant detail prefers DB runtime limits over legacy tenant fallback", async () => {
+  const tenantKey = `${prefix}-legacy-runtime`;
+  const client = await prisma.client.findUniqueOrThrow({
+    where: { clientKey: tenantKey },
+    select: { id: true },
+  });
+  await prisma.tenantOperationalConfig.create({
+    data: {
+      clientId: client.id,
+      config: {
+        runtimeLimits: { maxActiveAppUsers: 12 },
+      },
+    },
+  });
+
+  const response = await requestSuperadmin<{
+    configSource?: { runtimeLimits?: string };
+    tenant: { maxActiveAppUsers?: number };
+  }>("GET", `/admin/tenants/${encodeURIComponent(tenantKey)}`);
+
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  assert.equal(response.body.tenant.maxActiveAppUsers, 12);
+  assert.equal(response.body.configSource?.runtimeLimits, "db");
+});
+
+test("admin tenant detail keeps unknown tenant 404 semantics", async () => {
+  const missingTenantKey = `${prefix}-missing-detail-get`;
+  const response = await requestSuperadmin<ErrorPayload>(
+    "GET",
+    `/admin/tenants/${encodeURIComponent(missingTenantKey)}`
+  );
+
+  assert.equal(response.status, 404);
+  assert.equal(getErrorCode(response.body), "tenant_not_found");
 });
 
 test("admin onboarding manual bind supports db-only clients", async () => {
