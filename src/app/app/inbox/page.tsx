@@ -60,6 +60,7 @@ import {
   retainAutoReadSuppressionKeys,
   removeAutoReadSuppressionKeys,
   shouldMarkReadAfterTimelineRefresh,
+  shouldReportPostClaimRefreshError,
   type TimelineRefreshReadIntent,
 } from "@/lib/inboxTimelineRefresh";
 import { hasCapability } from "@/lib/appFeatures";
@@ -6358,32 +6359,13 @@ export default function AppInboxPage() {
     setConversationAction("claim");
     setError(null);
     setSuccess(null);
+    let response: Awaited<ReturnType<typeof claimAppConversation>>;
     try {
-      const response = await claimAppConversation(
+      response = await claimAppConversation(
         session,
         selectedConversationWaId,
         session.user.id
       );
-      const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
-      setConversations((prev) =>
-        dedupeConversationsByIdentity(
-          prev.map((item) =>
-            conversationIdentityMatches(getConversationIdentityCandidates(item), [
-              responseIdentity,
-              response.waId,
-              response.waIdCanonical,
-              selectedConversationWaId,
-              selectedConversationKey,
-            ])
-              ? applyConversationOperationalPayload(item, response)
-              : item
-          ),
-          isBusinessTenant
-        )
-      );
-      setSuccess("Conversa assumida. Ela foi movida para Em atendimento.");
-      await refreshConversationList(session);
-      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
     } catch (err) {
       const typed = err as { status?: number; errorCode?: string; message?: string };
       if (typed.status === 401) {
@@ -6391,6 +6373,44 @@ export default function AppInboxPage() {
         return;
       }
       setError(getAppErrorUxMessage({ status: typed.status, errorCode: typed.errorCode, message: typed.message, fallback: "Não foi possível assumir a conversa." }));
+      setConversationAction(null);
+      return;
+    }
+
+    const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
+    setConversations((prev) =>
+      dedupeConversationsByIdentity(
+        prev.map((item) =>
+          conversationIdentityMatches(getConversationIdentityCandidates(item), [
+            responseIdentity,
+            response.waId,
+            response.waIdCanonical,
+            selectedConversationWaId,
+            selectedConversationKey,
+          ])
+            ? applyConversationOperationalPayload(item, response)
+            : item
+        ),
+        isBusinessTenant
+      )
+    );
+    setError(null);
+    setSuccess("Conversa assumida. Ela foi movida para Em atendimento.");
+    try {
+      await refreshConversationList(session);
+      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+    } catch (refreshError) {
+      if ((refreshError as { status?: number }).status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (shouldReportPostClaimRefreshError(refreshError)) {
+        console.warn("[inbox] post-claim refresh failed", {
+          status: (refreshError as { status?: number }).status ?? null,
+          errorCode: (refreshError as { errorCode?: string }).errorCode ?? null,
+          message: (refreshError as { message?: string }).message ?? null,
+        });
+      }
     } finally {
       setConversationAction(null);
     }

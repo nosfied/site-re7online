@@ -9,6 +9,7 @@ import {
   mergeReadStatePreservingUnrelated,
   retainAutoReadSuppressionKeys,
   removeAutoReadSuppressionKeys,
+  shouldReportPostClaimRefreshError,
   shouldMarkReadAfterTimelineRefresh,
 } from "./inboxTimelineRefresh";
 
@@ -29,6 +30,24 @@ test("normal foreground refresh still marks read when the user can mutate read s
       canMutateReadState: true,
       isForegroundFocused: true,
     }),
+    true
+  );
+});
+
+test("post-claim refresh abort is non-reportable after successful mutation", () => {
+  assert.equal(
+    shouldReportPostClaimRefreshError({ errorCode: "request_aborted", status: 0 }),
+    false
+  );
+});
+
+test("post-claim unexpected refresh error is reportable without changing claim outcome", () => {
+  assert.equal(
+    shouldReportPostClaimRefreshError({ errorCode: "network_timeout", status: 0 }),
+    true
+  );
+  assert.equal(
+    shouldReportPostClaimRefreshError({ status: 500, message: "Server error" }),
     true
   );
 });

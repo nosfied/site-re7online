@@ -16,6 +16,10 @@ export function shouldMarkReadAfterTimelineRefresh(input: {
   return input.isForegroundFocused && input.canMutateReadState;
 }
 
+export function shouldReportPostClaimRefreshError(error: unknown) {
+  return (error as { errorCode?: string }).errorCode !== "request_aborted";
+}
+
 function normalizeConversationKey(key: string | null | undefined) {
   return String(key ?? "").trim();
 }
