@@ -59,8 +59,9 @@ import {
   mergeReadStatePreservingUnrelated,
   retainAutoReadSuppressionKeys,
   removeAutoReadSuppressionKeys,
+  runInboxPostMutationRefresh,
   shouldMarkReadAfterTimelineRefresh,
-  shouldReportPostClaimRefreshError,
+  shouldReportPostMutationRefreshError,
   type TimelineRefreshReadIntent,
 } from "@/lib/inboxTimelineRefresh";
 import { hasCapability } from "@/lib/appFeatures";
@@ -4288,6 +4289,23 @@ export default function AppInboxPage() {
     };
   }, [refreshSelectedTimeline]);
 
+  const runPostMutationRefresh = useCallback(async (
+    action: string,
+    refresh: () => Promise<void>
+  ) => {
+    await runInboxPostMutationRefresh({
+      action,
+      refresh,
+      handleUnauthorized,
+      logUnexpectedRefreshError: (refreshAction, metadata) => {
+        console.warn(`[inbox] post-${action} refresh failed`, {
+          ...metadata,
+          action: refreshAction,
+        });
+      },
+    });
+  }, [handleUnauthorized]);
+
   useEffect(() => {
     if (!session) {
       realtimeListRefetchSchedulerRef.current?.cancel();
@@ -6404,7 +6422,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      if (shouldReportPostClaimRefreshError(refreshError)) {
+      if (shouldReportPostMutationRefreshError(refreshError)) {
         console.warn("[inbox] post-claim refresh failed", {
           status: (refreshError as { status?: number }).status ?? null,
           errorCode: (refreshError as { errorCode?: string }).errorCode ?? null,
@@ -6454,32 +6472,47 @@ export default function AppInboxPage() {
     setConversationAction("release-general");
     setError(null);
     setSuccess(null);
+    let response: Awaited<ReturnType<typeof releaseAppConversationToGeneral>>;
     try {
-      const response = await releaseAppConversationToGeneral(session, selectedConversationWaId);
-      const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
-      const stillInUserScope = canSessionAccessConversationDepartment(session, response.departmentId);
-
-      if (!stillInUserScope) {
-        detailRequestSeqRef.current += 1;
-        setConversations((prev) =>
-          prev.filter((item) => getConversationIdentity(item) !== responseIdentity)
-        );
-        clearSelectedConversation();
-        setSuccess("Conversa devolvida para a fila atual.");
-        void refreshConversationList(session).catch((err) => {
-          if ((err as { status?: number }).status === 401) handleUnauthorized();
-        });
+      response = await releaseAppConversationToGeneral(session, selectedConversationWaId);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        setConversationAction(null);
+        handleUnauthorized();
         return;
       }
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível devolver a conversa para a fila atual." }));
+      setConversationAction(null);
+      return;
+    }
 
+    const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
+    const stillInUserScope = canSessionAccessConversationDepartment(session, response.departmentId);
+
+    if (!stillInUserScope) {
+      detailRequestSeqRef.current += 1;
+      setConversations((prev) =>
+        prev.filter((item) => getConversationIdentity(item) !== responseIdentity)
+      );
+      clearSelectedConversation();
       setSuccess("Conversa devolvida para a fila atual.");
-      suppressAutoReadForQueueMutation([
-        responseIdentity,
-        response.waId,
-        response.waIdCanonical,
-        selectedConversationWaId,
-        selectedConversationKey,
-      ]);
+      void refreshConversationList(session).catch((err) => {
+        if ((err as { status?: number }).status === 401) handleUnauthorized();
+      });
+      setConversationAction(null);
+      return;
+    }
+
+    setSuccess("Conversa devolvida para a fila atual.");
+    suppressAutoReadForQueueMutation([
+      responseIdentity,
+      response.waId,
+      response.waIdCanonical,
+      selectedConversationWaId,
+      selectedConversationKey,
+    ]);
+    await runPostMutationRefresh("release-to-general", async () => {
       try {
         await refreshConversationList(session);
       } finally {
@@ -6488,16 +6521,8 @@ export default function AppInboxPage() {
       await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId, "replace", {
         skipMarkRead: true,
       });
-    } catch (err) {
-      const typed = err as { status?: number; message?: string };
-      if (typed.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível devolver a conversa para a fila atual." }));
-    } finally {
-      setConversationAction(null);
-    }
+    });
+    setConversationAction(null);
   };
 
   const handleCloseConversationToGeneral = async () => {
@@ -6509,69 +6534,76 @@ export default function AppInboxPage() {
     setConversationAction("close-general");
     setError(null);
     setSuccess(null);
+    let response: Awaited<ReturnType<typeof closeAppConversation>>;
     try {
-      const response = await closeAppConversation(session, selectedConversationWaId);
-      const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
-      const stillInUserScope = canSessionAccessConversationDepartment(session, response.departmentId);
-
-      setConversations((prev) => {
-        const nextItems = prev
-          .map((item) => {
-            if (
-              getConversationIdentity(item) !== responseIdentity &&
-              item.waId !== selectedConversationWaId &&
-              item.waIdCanonical !== response.waIdCanonical
-            ) {
-              return item;
-            }
-            return {
-              ...item,
-              waId: response.waId ?? item.waId,
-              waIdCanonical: response.waIdCanonical ?? item.waIdCanonical ?? null,
-              mode: response.mode,
-              handoffStatus: response.handoffStatus ?? item.handoffStatus ?? "none",
-              assignedUserId: response.assignedUserId,
-              assignedTo: response.assignedTo,
-              assignedUserName: response.assignedUserName,
-              assignedAt: response.assignedAt,
-              departmentId: response.departmentId,
-              departmentName: response.departmentName,
-              queueId: response.queueId,
-              queueName: response.queueName,
-              status: response.status,
-              closedAt: response.closedAt,
-              lastInboundAt: response.lastInboundAt,
-              lastOutboundAt: response.lastOutboundAt,
-              isUnassigned: response.isUnassigned,
-            };
-          })
-          .filter((item) => stillInUserScope || getConversationIdentity(item) !== responseIdentity);
-        return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
-      });
-
-      if (!stillInUserScope) {
-        detailRequestSeqRef.current += 1;
-        clearSelectedConversation();
-        setSuccess("Conversa encerrada. Ela foi movida para Encerradas.");
-        void refreshConversationList(session).catch((err) => {
-          if ((err as { status?: number }).status === 401) handleUnauthorized();
-        });
-        return;
-      }
-
-      setSuccess("Conversa encerrada. Ela foi movida para Encerradas.");
-      await refreshConversationList(session);
-      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+      response = await closeAppConversation(session, selectedConversationWaId);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
+        setConversationAction(null);
         handleUnauthorized();
         return;
       }
       setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível finalizar o atendimento." }));
-    } finally {
       setConversationAction(null);
+      return;
     }
+
+    const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
+    const stillInUserScope = canSessionAccessConversationDepartment(session, response.departmentId);
+
+    setConversations((prev) => {
+      const nextItems = prev
+        .map((item) => {
+          if (
+            getConversationIdentity(item) !== responseIdentity &&
+            item.waId !== selectedConversationWaId &&
+            item.waIdCanonical !== response.waIdCanonical
+          ) {
+            return item;
+          }
+          return {
+            ...item,
+            waId: response.waId ?? item.waId,
+            waIdCanonical: response.waIdCanonical ?? item.waIdCanonical ?? null,
+            mode: response.mode,
+            handoffStatus: response.handoffStatus ?? item.handoffStatus ?? "none",
+            assignedUserId: response.assignedUserId,
+            assignedTo: response.assignedTo,
+            assignedUserName: response.assignedUserName,
+            assignedAt: response.assignedAt,
+            departmentId: response.departmentId,
+            departmentName: response.departmentName,
+            queueId: response.queueId,
+            queueName: response.queueName,
+            status: response.status,
+            closedAt: response.closedAt,
+            lastInboundAt: response.lastInboundAt,
+            lastOutboundAt: response.lastOutboundAt,
+            isUnassigned: response.isUnassigned,
+          };
+        })
+        .filter((item) => stillInUserScope || getConversationIdentity(item) !== responseIdentity);
+      return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
+    });
+
+    if (!stillInUserScope) {
+      detailRequestSeqRef.current += 1;
+      clearSelectedConversation();
+      setSuccess("Conversa encerrada. Ela foi movida para Encerradas.");
+      void refreshConversationList(session).catch((err) => {
+        if ((err as { status?: number }).status === 401) handleUnauthorized();
+      });
+      setConversationAction(null);
+      return;
+    }
+
+    setSuccess("Conversa encerrada. Ela foi movida para Encerradas.");
+    await runPostMutationRefresh("close", async () => {
+      await refreshConversationList(session);
+      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+    });
+    setConversationAction(null);
   };
 
   const handleTransferConversation = async () => {
@@ -6579,69 +6611,76 @@ export default function AppInboxPage() {
     setConversationAction("transfer");
     setError(null);
     setSuccess(null);
+    let response: Awaited<ReturnType<typeof transferAppConversation>>;
     try {
-      const response = await transferAppConversation(session, selectedConversationWaId, transferUserId);
-      const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
-      const stillInUserScope = canSessionAccessConversationDepartment(session, response.departmentId);
-
-      setConversations((prev) => {
-        const nextItems = prev
-          .map((item) => {
-            if (
-              getConversationIdentity(item) !== responseIdentity &&
-              item.waId !== selectedConversationWaId &&
-              item.waIdCanonical !== response.waIdCanonical
-            ) {
-              return item;
-            }
-            return {
-              ...item,
-              waId: response.waId ?? item.waId,
-              waIdCanonical: response.waIdCanonical ?? item.waIdCanonical ?? null,
-              mode: response.mode,
-              handoffStatus: response.handoffStatus ?? item.handoffStatus ?? "none",
-              assignedUserId: response.assignedUserId,
-              assignedTo: response.assignedTo,
-              assignedUserName: response.assignedUserName,
-              assignedAt: response.assignedAt,
-              departmentId: response.departmentId,
-              departmentName: response.departmentName,
-              queueId: response.queueId,
-              queueName: response.queueName,
-              status: response.status,
-              closedAt: response.closedAt,
-              lastInboundAt: response.lastInboundAt,
-              lastOutboundAt: response.lastOutboundAt,
-              isUnassigned: response.isUnassigned,
-            };
-          })
-          .filter((item) => stillInUserScope || getConversationIdentity(item) !== responseIdentity);
-        return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
-      });
-
-      if (!stillInUserScope) {
-        detailRequestSeqRef.current += 1;
-        clearSelectedConversation();
-        setSuccess("Conversa transferida para outro setor.");
-        void refreshConversationList(session).catch((err) => {
-          if ((err as { status?: number }).status === 401) handleUnauthorized();
-        });
-        return;
-      }
-
-      setSuccess("Conversa transferida.");
-      await refreshConversationList(session);
-      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+      response = await transferAppConversation(session, selectedConversationWaId, transferUserId);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
+        setConversationAction(null);
         handleUnauthorized();
         return;
       }
       setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível transferir a conversa." }));
-    } finally {
       setConversationAction(null);
+      return;
     }
+
+    const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
+    const stillInUserScope = canSessionAccessConversationDepartment(session, response.departmentId);
+
+    setConversations((prev) => {
+      const nextItems = prev
+        .map((item) => {
+          if (
+            getConversationIdentity(item) !== responseIdentity &&
+            item.waId !== selectedConversationWaId &&
+            item.waIdCanonical !== response.waIdCanonical
+          ) {
+            return item;
+          }
+          return {
+            ...item,
+            waId: response.waId ?? item.waId,
+            waIdCanonical: response.waIdCanonical ?? item.waIdCanonical ?? null,
+            mode: response.mode,
+            handoffStatus: response.handoffStatus ?? item.handoffStatus ?? "none",
+            assignedUserId: response.assignedUserId,
+            assignedTo: response.assignedTo,
+            assignedUserName: response.assignedUserName,
+            assignedAt: response.assignedAt,
+            departmentId: response.departmentId,
+            departmentName: response.departmentName,
+            queueId: response.queueId,
+            queueName: response.queueName,
+            status: response.status,
+            closedAt: response.closedAt,
+            lastInboundAt: response.lastInboundAt,
+            lastOutboundAt: response.lastOutboundAt,
+            isUnassigned: response.isUnassigned,
+          };
+        })
+        .filter((item) => stillInUserScope || getConversationIdentity(item) !== responseIdentity);
+      return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
+    });
+
+    if (!stillInUserScope) {
+      detailRequestSeqRef.current += 1;
+      clearSelectedConversation();
+      setSuccess("Conversa transferida para outro setor.");
+      void refreshConversationList(session).catch((err) => {
+        if ((err as { status?: number }).status === 401) handleUnauthorized();
+      });
+      setConversationAction(null);
+      return;
+    }
+
+    setSuccess("Conversa transferida.");
+    await runPostMutationRefresh("transfer", async () => {
+      await refreshConversationList(session);
+      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+    });
+    setConversationAction(null);
   };
 
   const handleTransferDepartment = async () => {
@@ -6655,20 +6694,40 @@ export default function AppInboxPage() {
     setConversationAction("transfer-department");
     setError(null);
     setSuccess(null);
+    let response: Awaited<ReturnType<typeof transferAppConversationDepartment>>;
     try {
-      const response = await transferAppConversationDepartment(
+      response = await transferAppConversationDepartment(
         session,
         selectedConversationWaId,
         transferDepartmentId
       );
-      const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
-      suppressAutoReadForQueueMutation([
-        responseIdentity,
-        response.waId,
-        response.waIdCanonical,
-        selectedConversationWaId,
-        selectedConversationKey,
-      ]);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        setConversationAction(null);
+        handleUnauthorized();
+        return;
+      }
+      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível transferir a conversa de setor." }));
+      setConversationAction(null);
+      return;
+    }
+
+    const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
+    suppressAutoReadForQueueMutation([
+      responseIdentity,
+      response.waId,
+      response.waIdCanonical,
+      selectedConversationWaId,
+      selectedConversationKey,
+    ]);
+    const targetDepartmentName =
+      transferDepartmentOptions.find((item) => item.id === transferDepartmentId)?.name ??
+      departmentOptions.find((item) => item.id === transferDepartmentId)?.name ??
+      response.departmentName ??
+      "setor selecionado";
+    setSuccess(`Conversa transferida para o setor ${targetDepartmentName}.`);
+    await runPostMutationRefresh("transfer-department", async () => {
       try {
         await refreshConversationList(session);
       } finally {
@@ -6690,35 +6749,25 @@ export default function AppInboxPage() {
           throw refreshError;
         }
       }
-      const targetDepartmentName =
-        transferDepartmentOptions.find((item) => item.id === transferDepartmentId)?.name ??
-        departmentOptions.find((item) => item.id === transferDepartmentId)?.name ??
-        response.departmentName ??
-        "setor selecionado";
-      setSuccess(`Conversa transferida para o setor ${targetDepartmentName}.`);
-    } catch (err) {
-      const typed = err as { status?: number; message?: string };
-      setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível transferir a conversa de setor." }));
-    } finally {
-      setConversationAction(null);
-    }
+    });
+    setConversationAction(null);
   };
 
   const handleUpdateConversationStatus = async (nextStatus: ConversationOperationalStatus) => {
     if (!session || !selectedConversationWaId) return;
     setConversationAction("status");
     setError(null);
+    let response: Awaited<ReturnType<typeof updateAppConversationStatus>>;
     try {
-      const response = await updateAppConversationStatus(
+      response = await updateAppConversationStatus(
         session,
         selectedConversationWaId,
         nextStatus
       );
-      await refreshConversationList(session);
-      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
+        setConversationAction(null);
         handleUnauthorized();
         return;
       }
@@ -6726,9 +6775,15 @@ export default function AppInboxPage() {
         selectedConversation ? getConversationOperationalStatus(selectedConversation) ?? "" : ""
       );
       setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível atualizar a situação do atendimento." }));
-    } finally {
       setConversationAction(null);
+      return;
     }
+
+    await runPostMutationRefresh("status", async () => {
+      await refreshConversationList(session);
+      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+    });
+    setConversationAction(null);
   };
 
   const contactTimelineGroups = contactTimelineItems.reduce<Array<{ date: string; items: AppContactTimelineItem[] }>>(

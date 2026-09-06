@@ -16,8 +16,49 @@ export function shouldMarkReadAfterTimelineRefresh(input: {
   return input.isForegroundFocused && input.canMutateReadState;
 }
 
-export function shouldReportPostClaimRefreshError(error: unknown) {
+export function shouldReportPostMutationRefreshError(error: unknown) {
   return (error as { errorCode?: string }).errorCode !== "request_aborted";
+}
+
+export const shouldReportPostClaimRefreshError = shouldReportPostMutationRefreshError;
+
+export type PostMutationRefreshLogMetadata = {
+  status: number | null;
+  errorCode: string | null;
+  message: string | null;
+};
+
+export type PostMutationRefreshResult =
+  | "completed"
+  | "non_fatal_error"
+  | "unauthorized";
+
+export async function runInboxPostMutationRefresh(input: {
+  action: string;
+  refresh: () => Promise<void>;
+  handleUnauthorized: () => void;
+  logUnexpectedRefreshError?: (
+    action: string,
+    metadata: PostMutationRefreshLogMetadata
+  ) => void;
+}): Promise<PostMutationRefreshResult> {
+  try {
+    await input.refresh();
+    return "completed";
+  } catch (refreshError) {
+    if ((refreshError as { status?: number }).status === 401) {
+      input.handleUnauthorized();
+      return "unauthorized";
+    }
+    if (shouldReportPostMutationRefreshError(refreshError)) {
+      input.logUnexpectedRefreshError?.(input.action, {
+        status: (refreshError as { status?: number }).status ?? null,
+        errorCode: (refreshError as { errorCode?: string }).errorCode ?? null,
+        message: (refreshError as { message?: string }).message ?? null,
+      });
+    }
+    return "non_fatal_error";
+  }
 }
 
 function normalizeConversationKey(key: string | null | undefined) {

@@ -9,8 +9,9 @@ import {
   mergeReadStatePreservingUnrelated,
   retainAutoReadSuppressionKeys,
   removeAutoReadSuppressionKeys,
-  shouldReportPostClaimRefreshError,
+  runInboxPostMutationRefresh,
   shouldMarkReadAfterTimelineRefresh,
+  shouldReportPostMutationRefreshError,
 } from "./inboxTimelineRefresh";
 
 test("technical queue mutation refresh can skip automatic mark-read", () => {
@@ -36,20 +37,128 @@ test("normal foreground refresh still marks read when the user can mutate read s
 
 test("post-claim refresh abort is non-reportable after successful mutation", () => {
   assert.equal(
-    shouldReportPostClaimRefreshError({ errorCode: "request_aborted", status: 0 }),
+    shouldReportPostMutationRefreshError({ errorCode: "request_aborted", status: 0 }),
     false
   );
 });
 
 test("post-claim unexpected refresh error is reportable without changing claim outcome", () => {
   assert.equal(
-    shouldReportPostClaimRefreshError({ errorCode: "network_timeout", status: 0 }),
+    shouldReportPostMutationRefreshError({ errorCode: "network_timeout", status: 0 }),
     true
   );
   assert.equal(
-    shouldReportPostClaimRefreshError({ status: 500, message: "Server error" }),
+    shouldReportPostMutationRefreshError({ status: 500, message: "Server error" }),
     true
   );
+});
+
+const confirmedPostMutationActions = [
+  "release-to-general",
+  "close",
+  "transfer",
+  "transfer-department",
+  "status",
+];
+
+test("confirmed Inbox mutations keep success ownership when refresh succeeds", async () => {
+  for (const action of confirmedPostMutationActions) {
+    let refreshCalls = 0;
+    let unauthorizedCalls = 0;
+    let logCalls = 0;
+
+    const result = await runInboxPostMutationRefresh({
+      action,
+      refresh: async () => {
+        refreshCalls += 1;
+      },
+      handleUnauthorized: () => {
+        unauthorizedCalls += 1;
+      },
+      logUnexpectedRefreshError: () => {
+        logCalls += 1;
+      },
+    });
+
+    assert.equal(result, "completed");
+    assert.equal(refreshCalls, 1);
+    assert.equal(unauthorizedCalls, 0);
+    assert.equal(logCalls, 0);
+  }
+});
+
+test("confirmed Inbox mutations treat request-aborted refreshes as non-fatal after success", async () => {
+  for (const action of confirmedPostMutationActions) {
+    let unauthorizedCalls = 0;
+    let logCalls = 0;
+
+    const result = await runInboxPostMutationRefresh({
+      action,
+      refresh: async () => {
+        throw { errorCode: "request_aborted", status: 0 };
+      },
+      handleUnauthorized: () => {
+        unauthorizedCalls += 1;
+      },
+      logUnexpectedRefreshError: () => {
+        logCalls += 1;
+      },
+    });
+
+    assert.equal(result, "non_fatal_error");
+    assert.equal(unauthorizedCalls, 0);
+    assert.equal(logCalls, 0);
+  }
+});
+
+test("confirmed Inbox mutations log unexpected refresh failures without changing success ownership", async () => {
+  for (const action of confirmedPostMutationActions) {
+    const logs: Array<{ action: string; status: number | null; errorCode: string | null }> = [];
+
+    const result = await runInboxPostMutationRefresh({
+      action,
+      refresh: async () => {
+        throw { errorCode: "network_timeout", status: 0, message: "Timeout" };
+      },
+      handleUnauthorized: () => {
+        throw new Error("unauthorized handler should not run");
+      },
+      logUnexpectedRefreshError: (loggedAction, metadata) => {
+        logs.push({
+          action: loggedAction,
+          status: metadata.status,
+          errorCode: metadata.errorCode,
+        });
+      },
+    });
+
+    assert.equal(result, "non_fatal_error");
+    assert.deepEqual(logs, [{ action, status: 0, errorCode: "network_timeout" }]);
+  }
+});
+
+test("confirmed Inbox mutations preserve unauthorized handling from post-success refreshes", async () => {
+  for (const action of confirmedPostMutationActions) {
+    let unauthorizedCalls = 0;
+    let logCalls = 0;
+
+    const result = await runInboxPostMutationRefresh({
+      action,
+      refresh: async () => {
+        throw { status: 401, message: "Unauthorized" };
+      },
+      handleUnauthorized: () => {
+        unauthorizedCalls += 1;
+      },
+      logUnexpectedRefreshError: () => {
+        logCalls += 1;
+      },
+    });
+
+    assert.equal(result, "unauthorized");
+    assert.equal(unauthorizedCalls, 1);
+    assert.equal(logCalls, 0);
+  }
 });
 
 test("background refresh and non-mutable read state do not mark read", () => {
