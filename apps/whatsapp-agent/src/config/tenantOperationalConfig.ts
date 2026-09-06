@@ -36,6 +36,7 @@ export type TenantOperationalConfigValue = {
   allowInteractiveContactStartViaWebSession?: boolean;
   whatsappTransports?: WhatsappTransportRoutingSettings;
   whatsappTemplatePolicy?: WhatsappTemplatePolicySettings;
+  satisfactionPolicy?: SatisfactionPolicySettings;
 };
 
 export type TenantOperationalConfigSource = "db" | "json_fallback";
@@ -158,6 +159,25 @@ export type RuntimeLimitsSettings = {
 
 export type ResolvedRuntimeLimitsSettings = {
   settings: RuntimeLimitsSettings;
+  source: TenantOperationalConfigSource;
+};
+
+export type SatisfactionEligibility = "HUMAN_ONLY" | "DIRECTED_SERVICE";
+
+export type SatisfactionPolicySettings = {
+  enabled: boolean;
+  questionText: string;
+  commentEnabled: boolean;
+  commentOfferText: string;
+  commentPromptText: string;
+  thankYouText: string;
+  newServiceGateText: string;
+  ttlMinutes: number;
+  eligibility: SatisfactionEligibility;
+};
+
+export type ResolvedSatisfactionPolicySettings = {
+  settings: SatisfactionPolicySettings;
   source: TenantOperationalConfigSource;
 };
 
@@ -454,6 +474,60 @@ function normalizeOptionalNonNegativeNumber(input: unknown) {
   return Math.floor(input);
 }
 
+function normalizeSatisfactionText(input: unknown, fallback: string) {
+  if (typeof input !== "string") return fallback;
+  const value = input.trim();
+  return value ? value.slice(0, 2000) : fallback;
+}
+
+export function getDefaultSatisfactionPolicySettings(): SatisfactionPolicySettings {
+  return {
+    enabled: false,
+    eligibility: "HUMAN_ONLY",
+    ttlMinutes: 15,
+    questionText:
+      "Pesquisa de Satisfação do Protocolo #{protocol}.\n\nComo você avalia este atendimento?\n5 - ⭐⭐⭐⭐⭐\n4 - ⭐⭐⭐⭐\n3 - ⭐⭐⭐\n2 - ⭐⭐\n1 - ⭐\n\nObs.: Você tem 15 minutos para responder à pesquisa.",
+    commentEnabled: false,
+    commentOfferText: "Poderia compartilhar conosco o que motivou essa avaliação?\n\n1 - Sim\n2 - Não",
+    commentPromptText: "Digite o texto:",
+    thankYouText: "Obrigad@ por participar da nossa pesquisa! 😊",
+    newServiceGateText: "Deseja iniciar um novo atendimento? 😀\n\n1 - Sim. 😁\n2 - Não. 😉",
+  };
+}
+
+export function normalizeSatisfactionPolicySettings(input: unknown): SatisfactionPolicySettings {
+  const defaults = getDefaultSatisfactionPolicySettings();
+  const record = isRecord(input) ? input : {};
+  const legacyComment = isRecord(record.comment) ? record.comment : {};
+  const eligibility =
+    typeof record.eligibility === "string" && record.eligibility.trim().toUpperCase() === "DIRECTED_SERVICE"
+      ? "DIRECTED_SERVICE"
+      : "HUMAN_ONLY";
+  const ttlInput = typeof record.expiresAfterMinutes === "number" ? record.expiresAfterMinutes : record.ttlMinutes;
+  return {
+    enabled: record.enabled === true,
+    eligibility,
+    ttlMinutes: normalizePositiveInteger(ttlInput, defaults.ttlMinutes),
+    questionText: normalizeSatisfactionText(record.questionText, defaults.questionText),
+    commentEnabled:
+      typeof record.commentEnabled === "boolean"
+        ? record.commentEnabled
+        : typeof legacyComment.enabled === "boolean"
+          ? legacyComment.enabled
+          : defaults.commentEnabled,
+    commentOfferText: normalizeSatisfactionText(
+      record.commentOfferText ?? legacyComment.offerText,
+      defaults.commentOfferText
+    ),
+    commentPromptText: normalizeSatisfactionText(
+      record.commentPromptText ?? legacyComment.promptText,
+      defaults.commentPromptText
+    ),
+    thankYouText: normalizeSatisfactionText(record.thankYouText ?? legacyComment.thankYouText, defaults.thankYouText),
+    newServiceGateText: normalizeSatisfactionText(record.newServiceGateText, defaults.newServiceGateText),
+  };
+}
+
 function normalizeQuotaWarnAtPct(input: unknown) {
   if (typeof input !== "number" || !Number.isFinite(input)) return 0.8;
   return Math.min(1, Math.max(0, input));
@@ -698,6 +772,9 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   if (Object.prototype.hasOwnProperty.call(value, "whatsappTemplatePolicy")) {
     config.whatsappTemplatePolicy = normalizeWhatsappTemplatePolicySettings(value.whatsappTemplatePolicy);
   }
+  if (Object.prototype.hasOwnProperty.call(value, "satisfactionPolicy")) {
+    config.satisfactionPolicy = normalizeSatisfactionPolicySettings(value.satisfactionPolicy);
+  }
   return config;
 }
 
@@ -841,6 +918,69 @@ export async function saveRuntimeLimitsSettings(params: {
   return {
     record: saved,
     settings: nextSettings,
+  };
+}
+
+export async function resolveSatisfactionPolicySettings(params: {
+  prisma: PrismaClient | Prisma.TransactionClient;
+  clientId: string;
+}): Promise<ResolvedSatisfactionPolicySettings> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const rawConfig = isRecord(record?.config) ? record.config : {};
+  const hasPolicy = Object.prototype.hasOwnProperty.call(rawConfig, "satisfactionPolicy");
+  return {
+    settings: hasPolicy
+      ? normalizeSatisfactionPolicySettings(rawConfig.satisfactionPolicy)
+      : getDefaultSatisfactionPolicySettings(),
+    source: hasPolicy ? "db" : "json_fallback",
+  };
+}
+
+export async function saveSatisfactionPolicySettings(params: {
+  prisma: PrismaClient | Prisma.TransactionClient;
+  clientId: string;
+  settings: unknown;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const currentSettings = normalizeSatisfactionPolicySettings(existingConfig.satisfactionPolicy);
+  const inputSettings = isRecord(params.settings) ? params.settings : {};
+  const nextSettings = normalizeSatisfactionPolicySettings({
+    ...currentSettings,
+    ...inputSettings,
+  });
+  const nextConfig = {
+    ...existingConfig,
+    satisfactionPolicy: nextSettings,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+      config: true,
+    },
+  });
+  return {
+    record: saved,
+    settings: parseOperationalConfig(saved.config).satisfactionPolicy ?? getDefaultSatisfactionPolicySettings(),
+    source: "db" as const,
   };
 }
 

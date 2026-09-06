@@ -1498,6 +1498,18 @@ export type AppSatisfactionPayload = {
   responses: AppSatisfactionResponse[];
 };
 
+export type AppSatisfactionPolicy = {
+  enabled: boolean;
+  questionText: string;
+  commentEnabled: boolean;
+  commentOfferText: string;
+  commentPromptText: string;
+  thankYouText: string;
+  newServiceGateText: string;
+  ttlMinutes: number;
+  eligibility: "HUMAN_ONLY" | "DIRECTED_SERVICE";
+};
+
 export type AppSatisfactionQuestionPayload = {
   key?: string;
   type?: AppSatisfactionType;
@@ -3782,6 +3794,22 @@ export async function updateAppAppointmentReminder(
 
 export async function fetchAppSatisfaction(session: AppSession): Promise<{ ok: true } & AppSatisfactionPayload> {
   return requestAppJson(session, "/app/satisfaction");
+}
+
+export async function fetchAppSatisfactionPolicy(
+  session: AppSession
+): Promise<{ ok: true; policy: AppSatisfactionPolicy; configSource: string }> {
+  return requestAppJson(session, "/app/satisfaction/policy");
+}
+
+export async function updateAppSatisfactionPolicy(
+  session: AppSession,
+  payload: Partial<AppSatisfactionPolicy>
+): Promise<{ ok: true; policy: AppSatisfactionPolicy; configSource: string }> {
+  return requestAppJson(session, "/app/satisfaction/policy", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function createAppSatisfactionQuestion(

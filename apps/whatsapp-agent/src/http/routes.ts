@@ -47,6 +47,7 @@ import {
   resolveMediaHandoffPolicy,
   resolvePlanLimitsSettings,
   resolveRuntimeLimitsSettings,
+  resolveSatisfactionPolicySettings,
   resolveWhatsappTemplatePolicySettings,
   resolveWhatsappMediaPolicy,
   resolveWebSessionAlertEmails,
@@ -62,6 +63,7 @@ import {
   saveMediaHandoffPolicy,
   savePlanLimitsSettings,
   saveRuntimeLimitsSettings,
+  saveSatisfactionPolicySettings,
   saveWhatsappTemplatePolicySettings,
   saveWhatsappTransportRoutingEnabled,
   saveWhatsappMediaPolicy,
@@ -9980,6 +9982,46 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         event: "app.telegram.error",
         message: (error as Error).message,
         requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (pathname === "/app/satisfaction/policy") {
+    const prisma = getPrisma();
+    const access = await requireSatisfactionAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    try {
+      if (req.method === "GET") {
+        const resolved = await resolveSatisfactionPolicySettings({
+          prisma,
+          clientId: access.client.id,
+        });
+        json(res, 200, { ok: true, policy: resolved.settings, configSource: resolved.source });
+        return;
+      }
+      if (req.method === "PUT") {
+        const body = await readJsonBody(req, res);
+        if (body === null) return;
+        const input = body && typeof body === "object" && !Array.isArray(body)
+          ? (body as Record<string, unknown>)
+          : {};
+        const saved = await saveSatisfactionPolicySettings({
+          prisma,
+          clientId: access.client.id,
+          settings: input,
+        });
+        json(res, 200, { ok: true, policy: saved.settings, configSource: saved.source });
+        return;
+      }
+      json(res, 405, httpError("method_not_allowed", "Method not allowed"));
+    } catch (error) {
+      logger.error({
+        event: "app.satisfaction.policy.error",
+        clientId: access.client.id,
+        requestId,
+        message: (error as Error).message,
       });
       json(res, 500, httpError("server_error", "Server error"));
     }

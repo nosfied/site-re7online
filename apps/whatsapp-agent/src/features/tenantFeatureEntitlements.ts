@@ -239,6 +239,21 @@ export const TENANT_FEATURE_CATALOG: TenantFeatureCatalogItem[] = [
     },
   },
   {
+    key: "satisfaction",
+    label: "Satisfação",
+    description: "Pesquisa de satisfação após atendimentos.",
+    category: "management",
+    technicalCapabilitySource: "SatisfactionQuestion + SatisfactionSurvey + SatisfactionResponse",
+    entitlementSource: "Client.features",
+    runtimeDependency: "Política operacional configurada no app do tenant para envio automático.",
+    frontendVisibilityGuard: "AppShell/satisfaction",
+    backendGuard: "Rotas /app/satisfaction",
+    defaultByProfile: {
+      business: DEFAULT_BUSINESS_CLIENT_FEATURES.satisfaction,
+      government: DEFAULT_GOVERNMENT_CLIENT_FEATURES.satisfaction,
+    },
+  },
+  {
     key: "training" as TenantCapabilityKey,
     label: "Treinamentos",
     description: "Central de aprendizagem interna do Converta.",

@@ -4,11 +4,13 @@ import {
   fetchAppConversation,
   fetchAppAgentAvailability,
   fetchAppCompletedServiceReport,
+  fetchAppSatisfactionPolicy,
   fetchAppSatisfactionReport,
   exportAppCompletedServiceReportCsv,
   formatAppWhatsappIdentityDisplay,
   heartbeatAppAgentAvailability,
   loadAppSession,
+  updateAppSatisfactionPolicy,
   updateAppAgentAvailability,
   type AppApiError,
   type AppSession,
@@ -397,4 +399,71 @@ test("completed service CSV export supports detailed snapshot view", async () =>
   assert.equal(url.searchParams.get("departmentId"), "department-1");
   assert.equal(url.searchParams.get("assignedUserId"), "user-1");
   assert.equal(url.searchParams.get("view"), "detail");
+});
+
+test("satisfaction policy helpers use the canonical policy route", async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const originalFetch = globalThis.fetch;
+  Object.assign(globalThis, {
+    fetch: async (url: string | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init });
+      return {
+        ok: true,
+        json: async () => ({
+          ok: true,
+          policy: {
+            enabled: true,
+            questionText: "Como voce avalia?",
+            commentEnabled: true,
+            commentOfferText: "Quer comentar?",
+            commentPromptText: "Digite o comentario",
+            thankYouText: "Obrigado",
+            newServiceGateText: "Novo atendimento?",
+            ttlMinutes: 20,
+            eligibility: "HUMAN_ONLY",
+          },
+          configSource: "db",
+        }),
+      };
+    },
+  });
+
+  const session: AppSession = {
+    baseUrl: "https://app.example.test",
+    token: "token",
+    user: {
+      id: "supervisor-a",
+      name: "Supervisor A",
+      email: "supervisor@example.test",
+      clientId: "tenant-a",
+      role: "SUPERVISOR",
+    },
+    features: { satisfaction: true },
+    profile: "business",
+  };
+
+  try {
+    await fetchAppSatisfactionPolicy(session);
+    await updateAppSatisfactionPolicy(session, {
+      enabled: true,
+      questionText: "Como voce avalia?",
+      commentEnabled: true,
+      ttlMinutes: 20,
+      eligibility: "HUMAN_ONLY",
+    });
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
+
+  assert.equal(new URL(calls[0].url).pathname, "/app/satisfaction/policy");
+  assert.equal(calls[0].init?.method, undefined);
+  assert.equal(new URL(calls[1].url).pathname, "/app/satisfaction/policy");
+  assert.equal(calls[1].init?.method, "PUT");
+  assert.deepEqual(JSON.parse(String(calls[1].init?.body)), {
+    enabled: true,
+    questionText: "Como voce avalia?",
+    commentEnabled: true,
+    ttlMinutes: 20,
+    eligibility: "HUMAN_ONLY",
+  });
 });

@@ -8,12 +8,15 @@ import {
   resolveAutomationFlagsSettings,
   resolvePlanLimitsSettings,
   resolveRuntimeLimitsSettings,
+  resolveSatisfactionPolicySettings,
   resolveWhatsappMediaPolicy,
   normalizeWhatsappMediaPolicy,
+  normalizeSatisfactionPolicySettings,
   isWhatsappMediaAllowed,
   resolveInteractiveContactStartPolicy,
   resolveWhatsappTransportRoutingSettings,
   resolveWhatsappTemplatePolicySettings,
+  saveSatisfactionPolicySettings,
   saveInteractiveContactStartPolicy,
   saveWhatsappTemplatePolicySettings,
   saveWhatsappTransportRoutingEnabled,
@@ -174,6 +177,87 @@ test("saveInteractiveContactStartPolicy persists explicit Web Session contact st
     whatsappPrimaryTransport: "web_session",
     allowInteractiveContactStartViaWebSession: true,
   });
+});
+
+test("resolveSatisfactionPolicySettings returns disabled defaults when absent", async () => {
+  const resolved = await resolveSatisfactionPolicySettings({
+    prisma: prismaWithConfig({}),
+    clientId: "client-1",
+  });
+
+  assert.equal(resolved.source, "json_fallback");
+  assert.equal(resolved.settings.enabled, false);
+  assert.equal(resolved.settings.commentEnabled, false);
+  assert.equal(resolved.settings.ttlMinutes, 15);
+  assert.equal(resolved.settings.eligibility, "HUMAN_ONLY");
+  assert.match(resolved.settings.questionText, /Pesquisa de Satisfação/);
+});
+
+test("normalizeSatisfactionPolicySettings reads legacy comment settings into canonical view", () => {
+  const policy = normalizeSatisfactionPolicySettings({
+    enabled: true,
+    expiresAfterMinutes: 30,
+    questionText: "Nota?",
+    comment: {
+      enabled: true,
+      offerText: "Quer comentar?",
+      promptText: "Digite o comentario",
+      thankYouText: "Obrigado",
+    },
+    eligibility: "DIRECTED_SERVICE",
+  });
+
+  assert.equal(policy.enabled, true);
+  assert.equal(policy.commentEnabled, true);
+  assert.equal(policy.ttlMinutes, 30);
+  assert.equal(policy.questionText, "Nota?");
+  assert.equal(policy.commentOfferText, "Quer comentar?");
+  assert.equal(policy.commentPromptText, "Digite o comentario");
+  assert.equal(policy.thankYouText, "Obrigado");
+  assert.equal(policy.eligibility, "DIRECTED_SERVICE");
+});
+
+test("saveSatisfactionPolicySettings writes canonical satisfaction policy only", async () => {
+  let savedConfig: Record<string, unknown> | null = null;
+  const prisma = {
+    tenantOperationalConfig: {
+      findUnique: async () => ({
+        config: {
+          satisfactionPolicy: {
+            enabled: false,
+            comment: { enabled: true },
+            questionText: "Old?",
+          },
+          runtimeLimits: { maxActiveAppUsers: 10 },
+        },
+      }),
+      upsert: async (args: { create: { config: unknown }; update: { config: unknown } }) => {
+        savedConfig = args.update.config as Record<string, unknown>;
+        return { id: "config-1", schemaVersion: 1, updatedAt: new Date(), config: savedConfig };
+      },
+    },
+  };
+
+  const saved = await saveSatisfactionPolicySettings({
+    prisma: prisma as never,
+    clientId: "client-1",
+    settings: {
+      enabled: true,
+      commentEnabled: false,
+      questionText: "Como voce avalia?",
+      ttlMinutes: 20,
+    },
+  });
+
+  assert.equal(saved.settings.enabled, true);
+  assert.equal(saved.settings.commentEnabled, false);
+  assert.equal(saved.settings.ttlMinutes, 20);
+  const storedConfig = savedConfig as unknown as Record<string, unknown>;
+  assert.equal((storedConfig.runtimeLimits as { maxActiveAppUsers?: number }).maxActiveAppUsers, 10);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(storedConfig.satisfactionPolicy as Record<string, unknown>, "comment"),
+    false
+  );
 });
 
 test("resolveWhatsappTransportRoutingSettings is backward-compatible when absent", async () => {

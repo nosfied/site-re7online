@@ -2068,6 +2068,7 @@ test("admin tenant feature entitlements are platform-scoped, audited, dependency
     assert.equal(detail.status, 200, JSON.stringify(detail.body));
     assert.equal(detail.body.client.features?.legacyExperimentalFlag, true);
     assert.ok(detail.body.featureEntitlements.some((item) => item.key === "crm" && item.enabled === true));
+    assert.ok(detail.body.featureEntitlements.some((item) => item.key === "satisfaction" && item.enabled === false));
     assert.ok(
       detail.body.featureEntitlements.some(
         (item) => item.key === "campaigns" && item.status === "unavailable"
@@ -2104,13 +2105,15 @@ test("admin tenant feature entitlements are platform-scoped, audited, dependency
       featureEntitlements: Array<{ key: string; enabled: boolean }>;
       fieldsChanged: string[];
     }>("PUT", `/admin/tenants/${prefix}-business/features`, {
-      features: { reports: false, crm: false },
+      features: { reports: false, crm: false, satisfaction: true },
     });
     assert.equal(updated.status, 200, JSON.stringify(updated.body));
-    assert.deepEqual(updated.body.fieldsChanged.sort(), ["features.crm", "features.reports"]);
+    assert.deepEqual(updated.body.fieldsChanged.sort(), ["features.crm", "features.reports", "features.satisfaction"]);
     assert.equal(updated.body.client.features?.legacyExperimentalFlag, true);
     assert.equal(updated.body.client.features?.reports, false);
     assert.equal(updated.body.client.features?.crm, false);
+    assert.equal(updated.body.client.features?.satisfaction, true);
+    assert.ok(updated.body.featureEntitlements.some((item) => item.key === "satisfaction" && item.enabled === true));
 
     const saved = await prisma.client.findUnique({
       where: { id: businessClientId },
@@ -2150,6 +2153,128 @@ test("admin tenant feature entitlements are platform-scoped, audited, dependency
       where: { id: businessClientId },
       data: { features: (originalClient?.features ?? {}) as Prisma.JsonObject },
     });
+  }
+});
+
+test("satisfaction policy is feature-gated and persists tenant runtime configuration", async () => {
+  const originalClient = await prisma.client.findUnique({
+    where: { id: businessClientId },
+    select: { features: true },
+  });
+  const originalConfig = await prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: businessClientId },
+    select: { config: true },
+  });
+  try {
+    await prisma.client.update({
+      where: { id: businessClientId },
+      data: { features: { satisfaction: false } },
+    });
+    const disabled = await request<ErrorPayload>("GET", "/app/satisfaction/policy", businessSupervisor);
+    assert.equal(disabled.status, 403);
+    assert.equal(getErrorCode(disabled.body), "feature_not_enabled");
+
+    await prisma.client.update({
+      where: { id: businessClientId },
+      data: { features: { satisfaction: true } },
+    });
+    await prisma.tenantOperationalConfig.upsert({
+      where: { clientId: businessClientId },
+      create: {
+        clientId: businessClientId,
+        config: {
+          satisfactionPolicy: {
+            enabled: false,
+            questionText: "Como voce avalia?",
+            comment: { enabled: true, offerText: "Quer comentar?" },
+            expiresAfterMinutes: 25,
+          },
+        },
+      },
+      update: {
+        config: {
+          satisfactionPolicy: {
+            enabled: false,
+            questionText: "Como voce avalia?",
+            comment: { enabled: true, offerText: "Quer comentar?" },
+            expiresAfterMinutes: 25,
+          },
+        },
+      },
+    });
+
+    const current = await request<{
+      ok: true;
+      policy: { enabled: boolean; commentEnabled: boolean; commentOfferText: string; ttlMinutes: number };
+      configSource: string;
+    }>("GET", "/app/satisfaction/policy", businessSupervisor);
+    assert.equal(current.status, 200, JSON.stringify(current.body));
+    assert.equal(current.body.configSource, "db");
+    assert.equal(current.body.policy.enabled, false);
+    assert.equal(current.body.policy.commentEnabled, true);
+    assert.equal(current.body.policy.commentOfferText, "Quer comentar?");
+    assert.equal(current.body.policy.ttlMinutes, 25);
+
+    const agent = await request<ErrorPayload>("PUT", "/app/satisfaction/policy", businessAgent, {
+      enabled: true,
+    });
+    assert.equal(agent.status, 403);
+
+    const saved = await request<{
+      ok: true;
+      policy: {
+        enabled: boolean;
+        questionText: string;
+        commentEnabled: boolean;
+        commentOfferText: string;
+        commentPromptText: string;
+        thankYouText: string;
+        newServiceGateText: string;
+        ttlMinutes: number;
+        eligibility: string;
+      };
+      configSource: string;
+    }>("PUT", "/app/satisfaction/policy", businessSupervisor, {
+      enabled: true,
+      questionText: "Pesquisa #{protocol}",
+      commentEnabled: false,
+      commentOfferText: "Deseja comentar?",
+      commentPromptText: "Digite seu comentario.",
+      thankYouText: "Obrigado.",
+      newServiceGateText: "Deseja novo atendimento?",
+      ttlMinutes: 30,
+      eligibility: "DIRECTED_SERVICE",
+    });
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+    assert.equal(saved.body.configSource, "db");
+    assert.equal(saved.body.policy.enabled, true);
+    assert.equal(saved.body.policy.commentEnabled, false);
+    assert.equal(saved.body.policy.ttlMinutes, 30);
+    assert.equal(saved.body.policy.eligibility, "DIRECTED_SERVICE");
+
+    const stored = await prisma.tenantOperationalConfig.findUniqueOrThrow({
+      where: { clientId: businessClientId },
+      select: { config: true },
+    });
+    const policy = (stored.config as { satisfactionPolicy?: Record<string, unknown> }).satisfactionPolicy;
+    assert.equal(policy?.enabled, true);
+    assert.equal(policy?.commentEnabled, false);
+    assert.equal(policy?.ttlMinutes, 30);
+    assert.equal(Object.prototype.hasOwnProperty.call(policy ?? {}, "comment"), false);
+  } finally {
+    await prisma.client.update({
+      where: { id: businessClientId },
+      data: { features: (originalClient?.features ?? {}) as Prisma.JsonObject },
+    });
+    if (originalConfig) {
+      await prisma.tenantOperationalConfig.upsert({
+        where: { clientId: businessClientId },
+        create: { clientId: businessClientId, config: originalConfig.config as Prisma.InputJsonValue },
+        update: { config: originalConfig.config as Prisma.InputJsonValue },
+      });
+    } else {
+      await prisma.tenantOperationalConfig.deleteMany({ where: { clientId: businessClientId } });
+    }
   }
 });
 

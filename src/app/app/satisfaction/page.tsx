@@ -9,6 +9,7 @@ import {
   AppApiError,
   AppSatisfactionQuestion,
   AppSatisfactionQuestionStatus,
+  AppSatisfactionPolicy,
   AppSatisfactionResponse,
   AppSatisfactionSurvey,
   AppSatisfactionSurveyStatus,
@@ -19,9 +20,11 @@ import {
   createAppSatisfactionResponse,
   createAppSatisfactionSurvey,
   fetchAppSatisfaction,
+  fetchAppSatisfactionPolicy,
   loadAppSession,
   saveAppSession,
   updateAppSatisfactionQuestion,
+  updateAppSatisfactionPolicy,
   updateAppSatisfactionSurvey,
 } from "@/lib/appClientApi";
 import { getAppErrorUxMessage } from "@/lib/appUxLabels";
@@ -48,6 +51,18 @@ type SurveyForm = {
   questionText: string;
   commentEnabled: boolean;
   expiresAt: string;
+};
+
+type PolicyForm = {
+  enabled: boolean;
+  questionText: string;
+  commentEnabled: boolean;
+  commentOfferText: string;
+  commentPromptText: string;
+  thankYouText: string;
+  newServiceGateText: string;
+  ttlMinutes: string;
+  eligibility: AppSatisfactionPolicy["eligibility"];
 };
 
 const QUESTION_EMPTY: QuestionForm = {
@@ -77,6 +92,32 @@ const RESPONSE_EMPTY = {
   score: 5,
   comment: "",
 };
+
+const POLICY_EMPTY: PolicyForm = {
+  enabled: false,
+  questionText: "",
+  commentEnabled: false,
+  commentOfferText: "",
+  commentPromptText: "",
+  thankYouText: "",
+  newServiceGateText: "",
+  ttlMinutes: "15",
+  eligibility: "HUMAN_ONLY",
+};
+
+function policyToForm(policy: AppSatisfactionPolicy): PolicyForm {
+  return {
+    enabled: policy.enabled,
+    questionText: policy.questionText,
+    commentEnabled: policy.commentEnabled,
+    commentOfferText: policy.commentOfferText,
+    commentPromptText: policy.commentPromptText,
+    thankYouText: policy.thankYouText,
+    newServiceGateText: policy.newServiceGateText,
+    ttlMinutes: String(policy.ttlMinutes),
+    eligibility: policy.eligibility,
+  };
+}
 
 function canManageSatisfaction(role: string) {
   const normalized = role.trim().toUpperCase();
@@ -129,6 +170,8 @@ export default function SatisfactionPage() {
   const [questions, setQuestions] = useState<AppSatisfactionQuestion[]>([]);
   const [surveys, setSurveys] = useState<AppSatisfactionSurvey[]>([]);
   const [responses, setResponses] = useState<AppSatisfactionResponse[]>([]);
+  const [policyForm, setPolicyForm] = useState<PolicyForm>(POLICY_EMPTY);
+  const [policySource, setPolicySource] = useState<string>("json_fallback");
   const [questionForm, setQuestionForm] = useState(QUESTION_EMPTY);
   const [surveyForm, setSurveyForm] = useState(SURVEY_EMPTY);
   const [responseForm, setResponseForm] = useState(RESPONSE_EMPTY);
@@ -151,10 +194,15 @@ export default function SatisfactionPage() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetchAppSatisfaction(activeSession);
+        const [response, policyResponse] = await Promise.all([
+          fetchAppSatisfaction(activeSession),
+          fetchAppSatisfactionPolicy(activeSession),
+        ]);
         setQuestions(response.questions);
         setSurveys(response.surveys);
         setResponses(response.responses);
+        setPolicyForm(policyToForm(policyResponse.policy));
+        setPolicySource(policyResponse.configSource);
       } catch (err) {
         const typed = err as AppApiError;
         if (typed.status === 401) {
@@ -214,6 +262,34 @@ export default function SatisfactionPage() {
       await loadSatisfaction(session);
     } catch (err) {
       setError(normalizeError(err as AppApiError, "Não foi possível salvar a pergunta."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const savePolicy = async () => {
+    if (!session || !policyForm.questionText.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const ttlMinutes = policyForm.ttlMinutes.trim() ? Number(policyForm.ttlMinutes) : undefined;
+      const response = await updateAppSatisfactionPolicy(session, {
+        enabled: policyForm.enabled,
+        questionText: policyForm.questionText,
+        commentEnabled: policyForm.commentEnabled,
+        commentOfferText: policyForm.commentOfferText,
+        commentPromptText: policyForm.commentPromptText,
+        thankYouText: policyForm.thankYouText,
+        newServiceGateText: policyForm.newServiceGateText,
+        ttlMinutes,
+        eligibility: policyForm.eligibility,
+      });
+      setPolicyForm(policyToForm(response.policy));
+      setPolicySource(response.configSource);
+      setSuccess("Configuração automática atualizada.");
+      await loadSatisfaction(session);
+    } catch (err) {
+      setError(normalizeError(err as AppApiError, "Não foi possível salvar a configuração automática."));
     } finally {
       setSaving(false);
     }
@@ -287,6 +363,85 @@ export default function SatisfactionPage() {
           <SummaryCard label="Pesquisas" value={surveys.length} />
           <SummaryCard label="Respostas" value={responses.length} />
         </div>
+
+        <FormPanel title="Envio automático após atendimento">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-sm theme-muted">
+              <input
+                type="checkbox"
+                checked={policyForm.enabled}
+                onChange={(event) => setPolicyForm({ ...policyForm, enabled: event.target.checked })}
+              />
+              Enviar pesquisa ao finalizar atendimento
+            </label>
+            <span className="rounded-full border px-2 py-1 text-xs theme-muted">
+              Fonte: {policySource === "db" ? "configuração salva" : "padrão"}
+            </span>
+          </div>
+          <Textarea
+            label="Pergunta enviada automaticamente"
+            value={policyForm.questionText}
+            onChange={(value) => setPolicyForm({ ...policyForm, questionText: value })}
+          />
+          <Input
+            label="Expiração em minutos"
+            type="number"
+            value={policyForm.ttlMinutes}
+            onChange={(value) => setPolicyForm({ ...policyForm, ttlMinutes: value })}
+          />
+          <label className="flex items-center gap-2 text-sm theme-muted">
+            <input
+              type="checkbox"
+              checked={policyForm.commentEnabled}
+              onChange={(event) => setPolicyForm({ ...policyForm, commentEnabled: event.target.checked })}
+            />
+            Permitir comentário opcional após a nota
+          </label>
+          <Textarea
+            label="Texto oferecendo comentário"
+            value={policyForm.commentOfferText}
+            onChange={(value) => setPolicyForm({ ...policyForm, commentOfferText: value })}
+            disabled={!policyForm.commentEnabled}
+          />
+          <Textarea
+            label="Prompt para comentário"
+            value={policyForm.commentPromptText}
+            onChange={(value) => setPolicyForm({ ...policyForm, commentPromptText: value })}
+            disabled={!policyForm.commentEnabled}
+          />
+          <Textarea
+            label="Mensagem de agradecimento"
+            value={policyForm.thankYouText}
+            onChange={(value) => setPolicyForm({ ...policyForm, thankYouText: value })}
+          />
+          <details className="border-t pt-3">
+            <summary className="cursor-pointer text-sm font-semibold theme-fg">Avançado</summary>
+            <div className="mt-3 space-y-3">
+              <Select
+                label="Elegibilidade"
+                value={policyForm.eligibility}
+                onChange={(value) => setPolicyForm({ ...policyForm, eligibility: value as AppSatisfactionPolicy["eligibility"] })}
+                options={[
+                  ["HUMAN_ONLY", "Somente atendimento humano atribuído"],
+                  ["DIRECTED_SERVICE", "Atendimento direcionado"],
+                ]}
+              />
+              <Textarea
+                label="Mensagem para novo atendimento"
+                value={policyForm.newServiceGateText}
+                onChange={(value) => setPolicyForm({ ...policyForm, newServiceGateText: value })}
+              />
+            </div>
+          </details>
+          <ActionRow
+            primaryLabel="Salvar configuração"
+            disabled={saving || !policyForm.questionText.trim()}
+            onPrimary={savePolicy}
+            onCancel={() => {
+              if (session) void loadSatisfaction(session);
+            }}
+          />
+        </FormPanel>
 
         <div className="flex flex-wrap gap-2">
           {(["questions", "surveys", "responses"] as TabKey[]).map((item) => (
@@ -591,15 +746,26 @@ function Input({
   );
 }
 
-function Textarea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function Textarea({
+  label,
+  value,
+  onChange,
+  disabled = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
   return (
     <label className="block space-y-1 text-sm">
       <span className="theme-muted">{label}</span>
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
         rows={4}
-        className="w-full rounded-md border px-3 py-2 text-sm theme-input"
+        className="w-full rounded-md border px-3 py-2 text-sm theme-input disabled:cursor-not-allowed disabled:opacity-60"
       />
     </label>
   );
