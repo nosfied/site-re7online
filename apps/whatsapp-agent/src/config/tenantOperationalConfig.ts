@@ -37,6 +37,7 @@ export type TenantOperationalConfigValue = {
   whatsappTransports?: WhatsappTransportRoutingSettings;
   whatsappTemplatePolicy?: WhatsappTemplatePolicySettings;
   satisfactionPolicy?: SatisfactionPolicySettings;
+  serviceMessages?: ServiceMessagePolicySettings;
 };
 
 export type TenantOperationalConfigSource = "db" | "json_fallback";
@@ -181,6 +182,35 @@ export type ResolvedSatisfactionPolicySettings = {
   source: TenantOperationalConfigSource;
 };
 
+export type ServiceMessageToggleTextSettings = {
+  enabled: boolean;
+  text: string | null;
+};
+
+export type ServiceMessageCloseNoticeSettings = {
+  enabled: boolean;
+};
+
+export type ServiceMessagePolicySettings = {
+  protocolNotice: ServiceMessageToggleTextSettings;
+  queuePositionNotice: ServiceMessageToggleTextSettings;
+  closeNotice: ServiceMessageCloseNoticeSettings;
+};
+
+export type ResolvedServiceMessagePolicySettings = {
+  settings: ServiceMessagePolicySettings;
+  source: TenantOperationalConfigSource;
+};
+
+export type ChatbotCloseMessageSettings = {
+  closedMessage: string;
+};
+
+export type ResolvedChatbotCloseMessageSettings = {
+  settings: ChatbotCloseMessageSettings;
+  source: TenantOperationalConfigSource;
+};
+
 export type AutomationFlagsSettings = {
   disableChatbot: boolean;
   disableAiFallback: boolean;
@@ -292,6 +322,88 @@ export function normalizeAgentSignatureSettings(input: unknown): AgentSignatureS
     mode: "user_name",
     format: "bold_line",
   };
+}
+
+function normalizeOptionalMessageText(value: unknown, maxLength = 500) {
+  return typeof value === "string" ? value.trim().slice(0, maxLength) || null : null;
+}
+
+export function getDefaultServiceMessagePolicySettings(): ServiceMessagePolicySettings {
+  return {
+    protocolNotice: {
+      enabled: true,
+      text: null,
+    },
+    queuePositionNotice: {
+      enabled: true,
+      text: null,
+    },
+    closeNotice: {
+      enabled: true,
+    },
+  };
+}
+
+export function normalizeServiceMessagePolicySettings(input: unknown): ServiceMessagePolicySettings {
+  const defaults = getDefaultServiceMessagePolicySettings();
+  const record = isRecord(input) ? input : {};
+  const protocolNotice = isRecord(record.protocolNotice) ? record.protocolNotice : {};
+  const queuePositionNotice = isRecord(record.queuePositionNotice) ? record.queuePositionNotice : {};
+  const closeNotice = isRecord(record.closeNotice) ? record.closeNotice : {};
+  return {
+    protocolNotice: {
+      enabled: typeof protocolNotice.enabled === "boolean" ? protocolNotice.enabled : defaults.protocolNotice.enabled,
+      text: normalizeOptionalMessageText(protocolNotice.text ?? protocolNotice.messageTemplate),
+    },
+    queuePositionNotice: {
+      enabled:
+        typeof queuePositionNotice.enabled === "boolean"
+          ? queuePositionNotice.enabled
+          : defaults.queuePositionNotice.enabled,
+      text: normalizeOptionalMessageText(queuePositionNotice.text),
+    },
+    closeNotice: {
+      enabled: typeof closeNotice.enabled === "boolean" ? closeNotice.enabled : defaults.closeNotice.enabled,
+    },
+  };
+}
+
+export function getDefaultChatbotCloseMessageSettings(): ChatbotCloseMessageSettings {
+  return {
+    closedMessage: "Atendimento encerrado. Obrigado pelo contato.",
+  };
+}
+
+export function normalizeChatbotCloseMessageSettings(input: unknown): ChatbotCloseMessageSettings {
+  const record = isRecord(input) ? input : {};
+  return {
+    closedMessage:
+      normalizeOptionalMessageText(record.closedMessage, 500) ??
+      getDefaultChatbotCloseMessageSettings().closedMessage,
+  };
+}
+
+function mergeServiceMessagePolicySettings(
+  current: ServiceMessagePolicySettings,
+  input: Record<string, unknown>
+) {
+  const protocolNotice = isRecord(input.protocolNotice) ? input.protocolNotice : {};
+  const queuePositionNotice = isRecord(input.queuePositionNotice) ? input.queuePositionNotice : {};
+  const closeNotice = isRecord(input.closeNotice) ? input.closeNotice : {};
+  return normalizeServiceMessagePolicySettings({
+    protocolNotice: {
+      ...current.protocolNotice,
+      ...protocolNotice,
+    },
+    queuePositionNotice: {
+      ...current.queuePositionNotice,
+      ...queuePositionNotice,
+    },
+    closeNotice: {
+      ...current.closeNotice,
+      ...closeNotice,
+    },
+  });
 }
 
 export function normalizeInboxVisibilityPolicy(input: unknown): InboxVisibilityPolicy {
@@ -775,6 +887,9 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   if (Object.prototype.hasOwnProperty.call(value, "satisfactionPolicy")) {
     config.satisfactionPolicy = normalizeSatisfactionPolicySettings(value.satisfactionPolicy);
   }
+  if (Object.prototype.hasOwnProperty.call(value, "serviceMessages")) {
+    config.serviceMessages = normalizeServiceMessagePolicySettings(value.serviceMessages);
+  }
   return config;
 }
 
@@ -980,6 +1095,135 @@ export async function saveSatisfactionPolicySettings(params: {
   return {
     record: saved,
     settings: parseOperationalConfig(saved.config).satisfactionPolicy ?? getDefaultSatisfactionPolicySettings(),
+    source: "db" as const,
+  };
+}
+
+export async function resolveServiceMessagePolicySettings(params: {
+  prisma: PrismaClient | Prisma.TransactionClient;
+  clientId: string;
+}): Promise<ResolvedServiceMessagePolicySettings> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const rawConfig = isRecord(record?.config) ? record.config : {};
+  const hasPolicy = Object.prototype.hasOwnProperty.call(rawConfig, "serviceMessages");
+  const serviceMessages = hasPolicy
+    ? normalizeServiceMessagePolicySettings(rawConfig.serviceMessages)
+    : getDefaultServiceMessagePolicySettings();
+  return {
+    settings: serviceMessages,
+    source: hasPolicy ? "db" : "json_fallback",
+  };
+}
+
+export async function saveServiceMessagePolicySettings(params: {
+  prisma: PrismaClient | Prisma.TransactionClient;
+  clientId: string;
+  settings: unknown;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const currentSettings = normalizeServiceMessagePolicySettings(existingConfig.serviceMessages);
+  const inputSettings = isRecord(params.settings) ? params.settings : {};
+  const nextSettings = mergeServiceMessagePolicySettings(currentSettings, inputSettings);
+  const nextConfig = {
+    ...existingConfig,
+    serviceMessages: nextSettings,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+      config: true,
+    },
+  });
+  return {
+    record: saved,
+    settings: parseOperationalConfig(saved.config).serviceMessages ?? getDefaultServiceMessagePolicySettings(),
+    source: "db" as const,
+  };
+}
+
+export async function resolveChatbotCloseMessageSettings(params: {
+  prisma: PrismaClient | Prisma.TransactionClient;
+  clientId: string;
+}): Promise<ResolvedChatbotCloseMessageSettings> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const rawConfig = isRecord(record?.config) ? record.config : {};
+  const hasCloseCommand = isRecord(rawConfig.chatbotCloseCommand) &&
+    Object.prototype.hasOwnProperty.call(rawConfig.chatbotCloseCommand, "closedMessage");
+  return {
+    settings: normalizeChatbotCloseMessageSettings(rawConfig.chatbotCloseCommand),
+    source: hasCloseCommand ? "db" : "json_fallback",
+  };
+}
+
+export async function saveChatbotCloseMessageSettings(params: {
+  prisma: PrismaClient | Prisma.TransactionClient;
+  clientId: string;
+  settings: unknown;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const existingCloseCommand = isRecord(existingConfig.chatbotCloseCommand)
+    ? { ...existingConfig.chatbotCloseCommand }
+    : {};
+  const nextSettings = normalizeChatbotCloseMessageSettings({
+    ...existingCloseCommand,
+    ...(isRecord(params.settings) ? params.settings : {}),
+  });
+  const nextConfig = {
+    ...existingConfig,
+    chatbotCloseCommand: {
+      ...existingCloseCommand,
+      closedMessage: nextSettings.closedMessage,
+    },
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+      config: true,
+    },
+  });
+  return {
+    record: saved,
+    settings: normalizeChatbotCloseMessageSettings(
+      isRecord(saved.config) ? saved.config.chatbotCloseCommand : null
+    ),
     source: "db" as const,
   };
 }

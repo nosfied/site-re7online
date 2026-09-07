@@ -32,6 +32,12 @@ test("buildTenantFeatureEntitlements separates enabled state from runtime availa
   assert.equal(browserPush.enabled, false);
   assert.equal(browserPush.status, "disabled");
   assert.deepEqual(browserPush.dependencies ?? [], []);
+  const serviceMessages = items.find((item) => item.key === "operationalServiceMessages");
+  assert.ok(serviceMessages);
+  assert.equal(serviceMessages.label, "Mensagens operacionais");
+  assert.equal(serviceMessages.enabled, false);
+  assert.equal(serviceMessages.status, "disabled");
+  assert.deepEqual(serviceMessages.dependencies ?? [], []);
 });
 
 test("updateTenantFeatureOverrides preserves unknown legacy keys", () => {

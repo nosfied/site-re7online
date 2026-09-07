@@ -8,6 +8,7 @@ import {
   AppAgentSignatureSettings,
   AppApiError,
   AppInboxVisibilityPolicy,
+  AppServiceMessagePolicy,
   AppSession,
   clearAppSession,
   fetchAppAgentSignatureSettings,
@@ -39,6 +40,23 @@ function getDefaultInboxVisibilityPolicy(): AppInboxVisibilityPolicy {
   return "shared";
 }
 
+function getDefaultServiceMessages(): AppServiceMessagePolicy {
+  return {
+    protocolNotice: {
+      enabled: true,
+      text: null,
+    },
+    queuePositionNotice: {
+      enabled: true,
+      text: null,
+    },
+    closeNotice: {
+      enabled: true,
+      text: "Atendimento encerrado. Obrigado pelo contato.",
+    },
+  };
+}
+
 function normalizeSettingsError(error: AppApiError, fallback: string) {
   if (error.status === 401) return "Sessão expirada. Faça login novamente.";
   if (error.status === 403) return "Sem permissão para alterar configurações de atendimento.";
@@ -66,8 +84,10 @@ export default function AppSettingsInboxPage() {
   const [inboxVisibilityPolicy, setInboxVisibilityPolicy] = useState<AppInboxVisibilityPolicy>(
     getDefaultInboxVisibilityPolicy
   );
+  const [serviceMessages, setServiceMessages] = useState<AppServiceMessagePolicy>(getDefaultServiceMessages);
   const [canUpdate, setCanUpdate] = useState(false);
   const [canUpdateInboxVisibilityPolicy, setCanUpdateInboxVisibilityPolicy] = useState(false);
+  const [canUpdateServiceMessages, setCanUpdateServiceMessages] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,8 +101,17 @@ export default function AppSettingsInboxPage() {
   const applyResponse = useCallback((response: Awaited<ReturnType<typeof fetchAppAgentSignatureSettings>>) => {
     setSettings(response.settings);
     setInboxVisibilityPolicy(response.inboxVisibilityPolicy?.value ?? getDefaultInboxVisibilityPolicy());
+    const nextServiceMessages = response.serviceMessages?.value ?? getDefaultServiceMessages();
+    setServiceMessages({
+      ...nextServiceMessages,
+      closeNotice: {
+        ...nextServiceMessages.closeNotice,
+        text: response.serviceMessages?.closeMessage?.value ?? nextServiceMessages.closeNotice.text,
+      },
+    });
     setCanUpdate(response.permissions.canUpdate);
     setCanUpdateInboxVisibilityPolicy(response.permissions.canUpdateInboxVisibilityPolicy === true);
+    setCanUpdateServiceMessages(response.permissions.canUpdateServiceMessages === true);
   }, []);
 
   const loadSettings = useCallback(
@@ -144,6 +173,11 @@ export default function AppSettingsInboxPage() {
     () => !session || !canUpdateInboxVisibilityPolicy || saving,
     [canUpdateInboxVisibilityPolicy, saving, session]
   );
+  const serviceMessagesVisible = session?.features.operationalServiceMessages === true;
+  const serviceMessagesReadOnly = useMemo(
+    () => !session || !canUpdateServiceMessages || saving,
+    [canUpdateServiceMessages, saving, session]
+  );
 
   const handleSave = async () => {
     if (!session || readOnly) return;
@@ -156,6 +190,7 @@ export default function AppSettingsInboxPage() {
         mode: "user_name",
         format: "bold_line",
         ...(canUpdateInboxVisibilityPolicy ? { inboxVisibilityPolicy } : {}),
+        ...(canUpdateServiceMessages ? { serviceMessages } : {}),
       });
       applyResponse(response);
       setSuccess("Configurações de atendimento salvas.");
@@ -289,6 +324,193 @@ export default function AppSettingsInboxPage() {
                   })}
                 </div>
               </div>
+
+              {serviceMessagesVisible ? (
+                <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Mensagens operacionais</p>
+                      <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-white/60">
+                        Controla avisos automáticos ao cliente. Desativar um aviso não altera protocolo, fila,
+                        encerramento ou pesquisa de satisfação.
+                      </p>
+                    </div>
+                    {serviceMessagesReadOnly ? <SettingsBadge label="Somente leitura" tone="warning" /> : null}
+                  </div>
+
+                  <div className="mt-3 grid gap-3">
+                    <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3">
+                      <span>
+                        <span className="block text-sm font-semibold text-white">
+                          Enviar número de protocolo ao iniciar atendimento humano
+                        </span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-white/60">
+                          O protocolo continua sendo gerado mesmo com este aviso desativado.
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setServiceMessages((current) => ({
+                            ...current,
+                            protocolNotice: {
+                              ...current.protocolNotice,
+                              enabled: !current.protocolNotice.enabled,
+                            },
+                          }))
+                        }
+                        disabled={serviceMessagesReadOnly}
+                        aria-pressed={serviceMessages.protocolNotice.enabled}
+                        className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full border transition ${
+                          serviceMessages.protocolNotice.enabled
+                            ? "border-emerald-400/40 bg-emerald-500/25"
+                            : "border-white/20 bg-white/10"
+                        } ${serviceMessagesReadOnly ? "cursor-not-allowed opacity-50" : ""}`}
+                      >
+                        <span
+                          className={`inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-white text-[9px] font-bold text-re7-navy transition ${
+                            serviceMessages.protocolNotice.enabled ? "translate-x-8" : "translate-x-1"
+                          }`}
+                        >
+                          {serviceMessages.protocolNotice.enabled ? "Sim" : "Não"}
+                        </span>
+                      </button>
+                    </label>
+                    <label className="grid gap-1 text-sm text-white/70">
+                      Texto do protocolo
+                      <textarea
+                        value={serviceMessages.protocolNotice.text ?? ""}
+                        onChange={(event) =>
+                          setServiceMessages((current) => ({
+                            ...current,
+                            protocolNotice: {
+                              ...current.protocolNotice,
+                              text: event.target.value,
+                            },
+                          }))
+                        }
+                        disabled={serviceMessagesReadOnly}
+                        className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                        placeholder="Seu protocolo de atendimento é {{protocol}}. Guarde este número para acompanhamento."
+                      />
+                      <span className="text-xs text-white/50">Use {"{{protocol}}"} para inserir o número do protocolo.</span>
+                    </label>
+
+                    <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3">
+                      <span>
+                        <span className="block text-sm font-semibold text-white">Informar posição na fila</span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-white/60">
+                          A fila e a distribuição continuam funcionando quando este aviso está desativado.
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setServiceMessages((current) => ({
+                            ...current,
+                            queuePositionNotice: {
+                              ...current.queuePositionNotice,
+                              enabled: !current.queuePositionNotice.enabled,
+                            },
+                          }))
+                        }
+                        disabled={serviceMessagesReadOnly}
+                        aria-pressed={serviceMessages.queuePositionNotice.enabled}
+                        className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full border transition ${
+                          serviceMessages.queuePositionNotice.enabled
+                            ? "border-emerald-400/40 bg-emerald-500/25"
+                            : "border-white/20 bg-white/10"
+                        } ${serviceMessagesReadOnly ? "cursor-not-allowed opacity-50" : ""}`}
+                      >
+                        <span
+                          className={`inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-white text-[9px] font-bold text-re7-navy transition ${
+                            serviceMessages.queuePositionNotice.enabled ? "translate-x-8" : "translate-x-1"
+                          }`}
+                        >
+                          {serviceMessages.queuePositionNotice.enabled ? "Sim" : "Não"}
+                        </span>
+                      </button>
+                    </label>
+                    <label className="grid gap-1 text-sm text-white/70">
+                      Texto da posição na fila
+                      <textarea
+                        value={serviceMessages.queuePositionNotice.text ?? ""}
+                        onChange={(event) =>
+                          setServiceMessages((current) => ({
+                            ...current,
+                            queuePositionNotice: {
+                              ...current.queuePositionNotice,
+                              text: event.target.value,
+                            },
+                          }))
+                        }
+                        disabled={serviceMessagesReadOnly}
+                        className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                        placeholder="Você é o nº {position} da fila de atendimento."
+                      />
+                      <span className="text-xs text-white/50">Use {"{position}"} para inserir a posição atual.</span>
+                    </label>
+
+                    <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3">
+                      <span>
+                        <span className="block text-sm font-semibold text-white">
+                          Enviar mensagem ao finalizar atendimento
+                        </span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-white/60">
+                          O encerramento e a pesquisa de satisfação continuam independentes deste aviso.
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setServiceMessages((current) => ({
+                            ...current,
+                            closeNotice: {
+                              enabled: !current.closeNotice.enabled,
+                            },
+                          }))
+                        }
+                        disabled={serviceMessagesReadOnly}
+                        aria-pressed={serviceMessages.closeNotice.enabled}
+                        className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full border transition ${
+                          serviceMessages.closeNotice.enabled
+                            ? "border-emerald-400/40 bg-emerald-500/25"
+                            : "border-white/20 bg-white/10"
+                        } ${serviceMessagesReadOnly ? "cursor-not-allowed opacity-50" : ""}`}
+                      >
+                        <span
+                          className={`inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-white text-[9px] font-bold text-re7-navy transition ${
+                            serviceMessages.closeNotice.enabled ? "translate-x-8" : "translate-x-1"
+                          }`}
+                        >
+                          {serviceMessages.closeNotice.enabled ? "Sim" : "Não"}
+                        </span>
+                      </button>
+                    </label>
+                    <label className="grid gap-1 text-sm text-white/70">
+                      Texto de encerramento
+                      <textarea
+                        value={serviceMessages.closeNotice.text ?? ""}
+                        onChange={(event) =>
+                          setServiceMessages((current) => ({
+                            ...current,
+                            closeNotice: {
+                              ...current.closeNotice,
+                              text: event.target.value,
+                            },
+                          }))
+                        }
+                        disabled={serviceMessagesReadOnly}
+                        className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                        placeholder="Atendimento encerrado. Obrigado pelo contato."
+                      />
+                      <span className="text-xs text-white/50">
+                        Placeholders disponíveis: {"{protocol}"}, {"{dataHora}"} e {"{contactName}"}.
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm leading-relaxed text-white/68">
                 <p className="font-semibold text-white">Escopo</p>

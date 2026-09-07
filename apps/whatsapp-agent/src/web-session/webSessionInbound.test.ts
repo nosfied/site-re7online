@@ -55,6 +55,20 @@ test("handoff notification plan adds only next-expedient message for CLOSED", ()
   assert.equal(new Set(plan.map((item) => item.requestSuffix)).size, 5);
 });
 
+test("handoff notification plan can suppress protocol and queue notices independently", () => {
+  const plan = buildWebSessionHandoffNotificationPlan({
+    handoffText: "Vou encaminhar seu atendimento para a equipe responsável.",
+    protocolText: "Protocolo CVT-TESTE",
+    protocolEnabled: false,
+    closeCommandGuidance: null,
+    queuePositionText: "Você é o nº 1 da fila.",
+    queuePositionEnabled: false,
+    offHoursMessage: null,
+  });
+
+  assert.deepEqual(plan.map((item) => item.requestSuffix), ["handoff"]);
+});
+
 const state = {
   conversation: null as Record<string, unknown> | null,
   inboundMessages: [] as Array<Record<string, unknown>>,
@@ -1907,6 +1921,50 @@ test("close command creates a single attributed CSAT after human service", async
     assert.equal(serviceCycle?.protocol, "CVT-ABCDEF123456");
     assert.equal(serviceCycle?.cycleId, "cycle_1");
   }
+});
+
+test("close notice can be suppressed while close lifecycle and CSAT remain active", async () => {
+  resetState({
+    config: {
+      ...closeConfig(),
+      serviceMessages: {
+        closeNotice: {
+          enabled: false,
+        },
+      },
+    },
+    conversation: conversationFixture(),
+    runtimeStates: [
+      runtimeFixture({
+        status: "IN_PROGRESS",
+        assignedUserId: "agent_1",
+        assignedTo: "Agente Um",
+        assignedAt: new Date("2026-08-11T11:55:00.000Z"),
+        answers: {
+          operationalProtocol: {
+            protocol: "CVT-ABCDEF123456",
+            issuedAt: "2026-08-11T11:50:00.000Z",
+            cycleId: "cycle_1",
+            source: "service_cycle",
+          },
+        },
+      }),
+    ],
+  });
+  withConnectedWebSession();
+
+  await withFakeWorker(async () => {
+    await ingestText("#ENCERRAR#", "MSG_CLOSE_HUMAN_REQUEST");
+    await ingestText("1", "MSG_CLOSE_HUMAN_CONFIRM");
+  });
+
+  assert.equal(state.runtimeStates[0]?.status, "CLOSED");
+  assert.equal(state.runtimeStates[0]?.assignedUserId, null);
+  assert.equal(state.satisfactionSurveys.length, 1);
+  assert.equal(getActiveServiceCycle({ answers: state.runtimeStates[0]?.answers }), null);
+  assert.equal(getLastClosedServiceCycle({ answers: state.runtimeStates[0]?.answers })?.protocol, "CVT-ABCDEF123456");
+  assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Atendimento encerrado")).length, 0);
+  assert.equal(state.outboundMessages.filter((message) => String(message.bodyText).includes("Pesquisa de Satisfação")).length, 1);
 });
 
 test("close command retry reconciles a partial close without duplicate snapshot or CSAT", async () => {

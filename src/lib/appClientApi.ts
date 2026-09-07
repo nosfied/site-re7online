@@ -125,6 +125,21 @@ export type AppAgentSignatureSettings = {
   format: "bold_line";
 };
 
+export type AppServiceMessagePolicy = {
+  protocolNotice: {
+    enabled: boolean;
+    text: string | null;
+  };
+  queuePositionNotice: {
+    enabled: boolean;
+    text: string | null;
+  };
+  closeNotice: {
+    enabled: boolean;
+    text?: string | null;
+  };
+};
+
 export type AppAgentSignatureSettingsResponse = {
   ok: true;
   tenantId: string;
@@ -134,12 +149,21 @@ export type AppAgentSignatureSettingsResponse = {
     value: AppInboxVisibilityPolicy;
     source: "db" | "json_fallback";
   };
+  serviceMessages?: {
+    value: AppServiceMessagePolicy;
+    source: "db" | "json_fallback";
+    closeMessage?: {
+      value: string;
+      source: "db" | "json_fallback";
+    };
+  };
   preview: {
     bodyText: string;
   };
   permissions: {
     canUpdate: boolean;
     canUpdateInboxVisibilityPolicy?: boolean;
+    canUpdateServiceMessages?: boolean;
   };
 };
 
@@ -3501,7 +3525,10 @@ export async function fetchAppAgentSignatureSettings(
 
 export async function updateAppAgentSignatureSettings(
   session: AppSession,
-  settings: AppAgentSignatureSettings & { inboxVisibilityPolicy?: AppInboxVisibilityPolicy }
+  settings: AppAgentSignatureSettings & {
+    inboxVisibilityPolicy?: AppInboxVisibilityPolicy;
+    serviceMessages?: AppServiceMessagePolicy;
+  }
 ): Promise<AppAgentSignatureSettingsResponse> {
   return requestAppJson(session, "/app/settings/agent-signature", {
     method: "PUT",

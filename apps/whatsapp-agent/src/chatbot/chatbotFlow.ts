@@ -51,6 +51,7 @@ export type ChatbotCaptureNode = Record<string, unknown> & ChatbotFlowMetadata &
 export type ChatbotHandoffNode = Record<string, unknown> & ChatbotFlowMetadata & {
   type: "handoff";
   text?: string;
+  sendFeedback?: boolean;
   handoffSummary?: string;
 };
 
@@ -645,9 +646,11 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
         "queueId",
         "closedText",
         "handoffSummary",
+        "sendFeedback",
       ]),
       type: "handoff",
       ...(text ? { text } : {}),
+      ...(typeof rawNode.sendFeedback === "boolean" ? { sendFeedback: rawNode.sendFeedback } : {}),
       ...(handoffSummary ? { handoffSummary } : {}),
       ...getNodeMetadata(rawNode),
     },
@@ -1725,13 +1728,18 @@ function executeNodeChain(params: {
       };
     }
 
-    const feedbackText = node.text ? renderChatbotTemplateText(node.text, currentState) : DEFAULT_HANDOFF_FEEDBACK_TEXT;
+    const sendFeedback = node.sendFeedback !== false;
+    const feedbackText = sendFeedback
+      ? node.text
+        ? renderChatbotTemplateText(node.text, currentState)
+        : DEFAULT_HANDOFF_FEEDBACK_TEXT
+      : "";
     const summary = buildHandoffSummary(currentState.answers?.flowContext, node);
     const suggestedReply = buildSuggestedReply(
       currentState.answers?.flowContext,
       currentState.answers?.flowTags
     );
-    messages.push(feedbackText);
+    if (feedbackText) messages.push(feedbackText);
     return {
       handled: true,
       state: clearChatbotRuntime(currentState),

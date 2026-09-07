@@ -55,6 +55,7 @@ import {
   isWhatsappMediaAllowed,
   isWhatsappMediaKind,
   resolveAutomationFlagsSettings,
+  resolveServiceMessagePolicySettings,
   resolveWhatsappMediaPolicy,
 } from "../config/tenantOperationalConfig.js";
 import { getDepartmentAvailability } from "../departments/businessHours.js";
@@ -231,11 +232,11 @@ export function unwrapBaileysMessageContent(message: Record<string, unknown>) {
 function getClosedHandoffPolicy(definition: ChatbotFlowDefinition) {
   const raw = isRecord(definition.closedHandoffPolicy) ? definition.closedHandoffPolicy : {};
   const action = getNonEmptyString(raw.action)?.toUpperCase();
+  const queuePositionText = getNonEmptyString(raw.queuePositionText);
   return {
     action: action === "QUEUE_FOR_NEXT_OPEN" ? "QUEUE_FOR_NEXT_OPEN" : "REJECT",
-    queuePositionText:
-      getNonEmptyString(raw.queuePositionText) ??
-      "Você é o nº {position} da fila de atendimento.",
+    queuePositionText: queuePositionText ?? "Você é o nº {position} da fila de atendimento.",
+    hasQueuePositionTextOverride: Boolean(queuePositionText),
     offHoursMessage:
       getNonEmptyString(raw.offHoursMessage) ??
       "No momento não temos nenhum atendente disponível. Você será atendido no primeiro horário do próximo expediente.",
@@ -353,6 +354,12 @@ function renderWebSessionCloseTemplate(input: string, params: { protocol: string
     .replace(/\{protocol\}/g, params.protocol)
     .replace(/\{dataHora\}/g, dateTime)
     .replace(/\{contactName\}/g, params.contactName?.trim() || "contato");
+}
+
+function renderProtocolNoticeTemplate(input: string | null, protocol: string) {
+  if (!input) return buildConversationProtocolNotice(protocol);
+  const rendered = input.replace(/\{\{\s*protocol\s*\}\}/gi, protocol).replace(/\{protocol\}/g, protocol);
+  return rendered.includes(protocol) ? rendered : `${rendered}\nProtocolo: ${protocol}`;
 }
 
 function getSatisfactionRuntime(state: ConversationState) {
@@ -1547,6 +1554,10 @@ async function sendWebSessionHandoffNotifications(params: {
     params.closePolicy.command && params.transitionText?.includes(params.closePolicy.command)
       ? null
       : params.closePolicy.guidanceText;
+  const serviceMessages = await resolveServiceMessagePolicySettings({
+    prisma: params.prisma,
+    clientId: params.clientId,
+  });
   const position = await getQueuePosition({
     prisma: params.prisma,
     clientId: params.clientId,
@@ -1555,11 +1566,17 @@ async function sendWebSessionHandoffNotifications(params: {
   });
   const notifications = buildWebSessionHandoffNotificationPlan({
     handoffText: params.transitionText,
-    protocolText: buildConversationProtocolNotice(protocol),
+    protocolText: renderProtocolNoticeTemplate(serviceMessages.settings.protocolNotice.text, protocol),
+    protocolEnabled: serviceMessages.settings.protocolNotice.enabled,
     closeCommandGuidance,
     queuePositionText: position
-      ? params.closedHandoffPolicy.queuePositionText.replace("{position}", String(position))
+      ? (
+          params.closedHandoffPolicy.hasQueuePositionTextOverride
+            ? params.closedHandoffPolicy.queuePositionText
+            : serviceMessages.settings.queuePositionNotice.text ?? params.closedHandoffPolicy.queuePositionText
+        ).replace("{position}", String(position))
       : null,
+    queuePositionEnabled: serviceMessages.settings.queuePositionNotice.enabled,
     offHoursMessage: params.includeOffHoursMessage ? params.closedHandoffPolicy.offHoursMessage : null,
   });
   let nextState = params.state;
@@ -1583,19 +1600,21 @@ async function sendWebSessionHandoffNotifications(params: {
 export function buildWebSessionHandoffNotificationPlan(params: {
   handoffText?: string | null;
   protocolText: string;
+  protocolEnabled?: boolean;
   closeCommandGuidance: string | null;
   queuePositionText: string | null;
+  queuePositionEnabled?: boolean;
   offHoursMessage: string | null;
 }) {
   return [
     ...(params.handoffText?.trim()
       ? [{ requestSuffix: "handoff", text: params.handoffText }]
       : []),
-    { requestSuffix: "protocol", text: params.protocolText },
+    ...(params.protocolEnabled === false ? [] : [{ requestSuffix: "protocol", text: params.protocolText }]),
     ...(params.closeCommandGuidance
       ? [{ requestSuffix: "close-command-guidance", text: params.closeCommandGuidance }]
       : []),
-    ...(params.queuePositionText
+    ...(params.queuePositionEnabled !== false && params.queuePositionText
       ? [{ requestSuffix: "queue-position", text: params.queuePositionText }]
       : []),
     ...(params.offHoursMessage
@@ -1865,6 +1884,10 @@ export async function closeWebSessionHumanService(params: {
     });
   }
   const closedProtocol = closedCycleResult.cycle?.protocol ?? params.protocol;
+  const serviceMessages = await resolveServiceMessagePolicySettings({
+    prisma: params.prisma,
+    clientId: params.clientId,
+  });
   let nextState: ConversationState = {
     ...clearCloseConfirmation(clearChatbotRuntime(closedCycleResult.state)),
     mode: "HUMAN" as const,
@@ -1875,21 +1898,23 @@ export async function closeWebSessionHumanService(params: {
     status: "CLOSED" as const,
     closedAt: params.now.toISOString(),
   };
-  nextState = await sendWebSessionBotText({
-    prisma: params.prisma,
-    clientId: params.clientId,
-    clientKey: params.clientKey,
-    waId: params.waId,
-    waIdCanonical: params.waIdCanonical,
-    channelAccountId: params.channelAccountId,
-    requestId: `${params.requestId}:close-message`,
-    text: renderWebSessionCloseTemplate(closePolicy.closedMessage, {
-      protocol: closedProtocol,
-      contactName: params.contactName,
-      at: params.now,
-    }),
-    state: nextState,
-  });
+  if (serviceMessages.settings.closeNotice.enabled) {
+    nextState = await sendWebSessionBotText({
+      prisma: params.prisma,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical,
+      channelAccountId: params.channelAccountId,
+      requestId: `${params.requestId}:close-message`,
+      text: renderWebSessionCloseTemplate(closePolicy.closedMessage, {
+        protocol: closedProtocol,
+        contactName: params.contactName,
+        at: params.now,
+      }),
+      state: nextState,
+    });
+  }
   return sendWebSessionSatisfactionSurvey({
     prisma: params.prisma,
     clientId: params.clientId,

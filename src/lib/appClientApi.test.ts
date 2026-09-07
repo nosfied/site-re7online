@@ -10,6 +10,7 @@ import {
   formatAppWhatsappIdentityDisplay,
   heartbeatAppAgentAvailability,
   loadAppSession,
+  updateAppAgentSignatureSettings,
   updateAppSatisfactionPolicy,
   updateAppAgentAvailability,
   type AppApiError,
@@ -465,5 +466,74 @@ test("satisfaction policy helpers use the canonical policy route", async () => {
     commentEnabled: true,
     ttlMinutes: 20,
     eligibility: "HUMAN_ONLY",
+  });
+});
+
+test("agent signature settings helper can persist operational service messages", async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const originalFetch = globalThis.fetch;
+  Object.assign(globalThis, {
+    fetch: async (url: string | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init });
+      return {
+        ok: true,
+        json: async () => ({
+          ok: true,
+          settings: { enabled: false, mode: "user_name", format: "bold_line" },
+          source: "db",
+          serviceMessages: {
+            value: {
+              protocolNotice: { enabled: false, text: "Protocolo {{protocol}}" },
+              queuePositionNotice: { enabled: false, text: "Fila {position}" },
+              closeNotice: { enabled: false },
+            },
+            source: "db",
+            closeMessage: {
+              value: "Atendimento encerrado {protocol}",
+              source: "db",
+            },
+          },
+          preview: { bodyText: "*Maria*\nOla" },
+          permissions: { canUpdate: true, canUpdateServiceMessages: true },
+        }),
+      };
+    },
+  });
+
+  const session: AppSession = {
+    baseUrl: "https://app.example.test",
+    token: "token",
+    user: {
+      id: "admin-a",
+      name: "Admin A",
+      email: "admin@example.test",
+      clientId: "tenant-a",
+      role: "ADMIN",
+    },
+    features: { operationalServiceMessages: true },
+    profile: "business",
+  };
+
+  try {
+    await updateAppAgentSignatureSettings(session, {
+      enabled: false,
+      mode: "user_name",
+      format: "bold_line",
+      serviceMessages: {
+        protocolNotice: { enabled: false, text: "Protocolo {{protocol}}" },
+        queuePositionNotice: { enabled: false, text: "Fila {position}" },
+        closeNotice: { enabled: false, text: "Atendimento encerrado {protocol}" },
+      },
+    });
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
+
+  assert.equal(new URL(calls[0].url).pathname, "/app/settings/agent-signature");
+  assert.equal(calls[0].init?.method, "PUT");
+  assert.deepEqual(JSON.parse(String(calls[0].init?.body)).serviceMessages, {
+    protocolNotice: { enabled: false, text: "Protocolo {{protocol}}" },
+    queuePositionNotice: { enabled: false, text: "Fila {position}" },
+    closeNotice: { enabled: false, text: "Atendimento encerrado {protocol}" },
   });
 });

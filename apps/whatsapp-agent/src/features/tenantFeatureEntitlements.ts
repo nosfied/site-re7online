@@ -254,6 +254,21 @@ export const TENANT_FEATURE_CATALOG: TenantFeatureCatalogItem[] = [
     },
   },
   {
+    key: "operationalServiceMessages",
+    label: "Mensagens operacionais",
+    description: "Permite configurar mensagens automáticas de protocolo, fila e encerramento.",
+    category: "management",
+    technicalCapabilitySource: "TenantOperationalConfig.serviceMessages",
+    entitlementSource: "Client.features",
+    runtimeDependency: "Nenhuma dependência externa.",
+    frontendVisibilityGuard: "App settings/inbox service messages",
+    backendGuard: "Rotas /app/settings/agent-signature serviceMessages",
+    defaultByProfile: {
+      business: DEFAULT_BUSINESS_CLIENT_FEATURES.operationalServiceMessages,
+      government: DEFAULT_GOVERNMENT_CLIENT_FEATURES.operationalServiceMessages,
+    },
+  },
+  {
     key: "training" as TenantCapabilityKey,
     label: "Treinamentos",
     description: "Central de aprendizagem interna do Converta.",

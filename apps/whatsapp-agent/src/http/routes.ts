@@ -39,6 +39,7 @@ import {
   resolveAgentSignatureSettings,
   resolveInboxVisibilityPolicy,
   resolveInteractiveContactStartPolicy,
+  resolveChatbotCloseMessageSettings,
   resolveCrmBusinessStatuses,
   resolveAutomationFlagsSettings,
   resolveFollowUpSettings,
@@ -48,12 +49,15 @@ import {
   resolvePlanLimitsSettings,
   resolveRuntimeLimitsSettings,
   resolveSatisfactionPolicySettings,
+  resolveServiceMessagePolicySettings,
   resolveWhatsappTemplatePolicySettings,
   resolveWhatsappMediaPolicy,
   resolveWebSessionAlertEmails,
+  normalizeServiceMessagePolicySettings,
   saveAiAssistantConfigSettings,
   saveAiIntentQualificationSettings,
   saveAgentSignatureSettings,
+  saveChatbotCloseMessageSettings,
   saveInboxVisibilityPolicy,
   saveInteractiveContactStartPolicy,
   saveAutomationFlagsSettings,
@@ -64,6 +68,7 @@ import {
   savePlanLimitsSettings,
   saveRuntimeLimitsSettings,
   saveSatisfactionPolicySettings,
+  saveServiceMessagePolicySettings,
   saveWhatsappTemplatePolicySettings,
   saveWhatsappTransportRoutingEnabled,
   saveWhatsappMediaPolicy,
@@ -8432,13 +8437,25 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
+      const features = getFeatures(client);
+      const canUpdateServiceMessages =
+        isAdminOrSupervisorRole(clientAuth.role) && features.operationalServiceMessages === true;
+
       if (req.method === "GET") {
-        const [{ settings, source }, visibility] = await Promise.all([
+        const [{ settings, source }, visibility, serviceMessages, closeMessage] = await Promise.all([
           resolveAgentSignatureSettings({
             prisma,
             clientId: client.id,
           }),
           resolveInboxVisibilityPolicy({
+            prisma,
+            clientId: client.id,
+          }),
+          resolveServiceMessagePolicySettings({
+            prisma,
+            clientId: client.id,
+          }),
+          resolveChatbotCloseMessageSettings({
             prisma,
             clientId: client.id,
           }),
@@ -8452,12 +8469,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             value: visibility.policy,
             source: visibility.source,
           },
+          serviceMessages: {
+            value: serviceMessages.settings,
+            source: serviceMessages.source,
+            closeMessage: {
+              value: closeMessage.settings.closedMessage,
+              source: closeMessage.source,
+            },
+          },
           preview: {
             bodyText: "*Maria*\nOla, como posso ajudar?",
           },
           permissions: {
             canUpdate: isAdminOrSupervisorRole(clientAuth.role),
             canUpdateInboxVisibilityPolicy: isAdminRole(clientAuth.role),
+            canUpdateServiceMessages,
           },
         });
         return;
@@ -8480,6 +8506,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, httpError("invalid_inbox_visibility_policy", "Invalid inbox visibility policy."));
         return;
       }
+      const requestedServiceMessages = Object.prototype.hasOwnProperty.call(record, "serviceMessages")
+        ? record.serviceMessages
+        : undefined;
+      if (requestedServiceMessages !== undefined && !canUpdateServiceMessages) {
+        json(res, 403, httpError("forbidden", "Only entitled supervisor or admin can update service messages."));
+        return;
+      }
       const settings: AgentSignatureSettings = {
         enabled: record.enabled === true,
         mode: "user_name",
@@ -8500,6 +8533,40 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             prisma,
             clientId: client.id,
           });
+      const savedServiceMessages = requestedServiceMessages !== undefined
+        ? await saveServiceMessagePolicySettings({
+            prisma,
+            clientId: client.id,
+            settings: requestedServiceMessages,
+          })
+        : await resolveServiceMessagePolicySettings({
+            prisma,
+            clientId: client.id,
+          });
+      const requestedServiceMessagesRecord =
+        requestedServiceMessages &&
+        typeof requestedServiceMessages === "object" &&
+        !Array.isArray(requestedServiceMessages)
+          ? (requestedServiceMessages as Record<string, unknown>)
+          : null;
+      const requestedCloseNotice =
+        requestedServiceMessagesRecord &&
+        requestedServiceMessagesRecord.closeNotice &&
+        typeof requestedServiceMessagesRecord.closeNotice === "object" &&
+        !Array.isArray(requestedServiceMessagesRecord.closeNotice)
+          ? (requestedServiceMessagesRecord.closeNotice as Record<string, unknown>)
+          : null;
+      const requestedCloseMessage = requestedCloseNotice ? requestedCloseNotice.text : undefined;
+      const savedCloseMessage = requestedCloseMessage !== undefined
+        ? await saveChatbotCloseMessageSettings({
+            prisma,
+            clientId: client.id,
+            settings: { closedMessage: requestedCloseMessage },
+          })
+        : await resolveChatbotCloseMessageSettings({
+            prisma,
+            clientId: client.id,
+          });
       await persistEvent({
         clientId: client.id,
         requestId: `${requestId}:agent-signature-updated`,
@@ -8510,6 +8577,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           mode: saved.settings.mode,
           format: saved.settings.format,
           inboxVisibilityPolicy: savedVisibility.policy,
+          serviceMessagesUpdated: requestedServiceMessages !== undefined,
         },
       });
       json(res, 200, {
@@ -8521,12 +8589,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           value: savedVisibility.policy,
           source: savedVisibility.source,
         },
+        serviceMessages: {
+          value: savedServiceMessages.settings,
+          source: savedServiceMessages.source,
+          closeMessage: {
+            value: savedCloseMessage.settings.closedMessage,
+            source: savedCloseMessage.source,
+          },
+        },
         preview: {
           bodyText: "*Maria*\nOla, como posso ajudar?",
         },
         permissions: {
           canUpdate: true,
           canUpdateInboxVisibilityPolicy: isAdminRole(clientAuth.role),
+          canUpdateServiceMessages,
         },
       });
     } catch (error) {
@@ -31748,6 +31825,15 @@ async function resolveProtocolNotificationSettings(
   const config = record?.config && typeof record.config === "object" && !Array.isArray(record.config)
     ? record.config as Record<string, unknown>
     : {};
+  if (Object.prototype.hasOwnProperty.call(config, "serviceMessages")) {
+    const serviceMessages = normalizeServiceMessagePolicySettings(config.serviceMessages);
+    return {
+      enabled: serviceMessages.protocolNotice.enabled,
+      trigger: "first_human_handoff",
+      includeProtocol: true,
+      messageTemplate: serviceMessages.protocolNotice.text,
+    };
+  }
   return normalizeProtocolNotificationSettings(config.protocolNotification);
 }
 

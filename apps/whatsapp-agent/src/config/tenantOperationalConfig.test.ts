@@ -9,14 +9,17 @@ import {
   resolvePlanLimitsSettings,
   resolveRuntimeLimitsSettings,
   resolveSatisfactionPolicySettings,
+  resolveServiceMessagePolicySettings,
   resolveWhatsappMediaPolicy,
   normalizeWhatsappMediaPolicy,
   normalizeSatisfactionPolicySettings,
+  normalizeServiceMessagePolicySettings,
   isWhatsappMediaAllowed,
   resolveInteractiveContactStartPolicy,
   resolveWhatsappTransportRoutingSettings,
   resolveWhatsappTemplatePolicySettings,
   saveSatisfactionPolicySettings,
+  saveServiceMessagePolicySettings,
   saveInteractiveContactStartPolicy,
   saveWhatsappTemplatePolicySettings,
   saveWhatsappTransportRoutingEnabled,
@@ -31,6 +34,101 @@ function prismaWithConfig(config: unknown) {
     },
   } as never;
 }
+
+function prismaWithMutableConfig(initialConfig: unknown) {
+  let config = initialConfig;
+  return {
+    tenantOperationalConfig: {
+      findUnique: async () => ({ config }),
+      upsert: async ({ update, create }: { update: { config: unknown }; create: { config: unknown } }) => {
+        config = update.config ?? create.config;
+        return {
+          id: "tenant-config-1",
+          schemaVersion: 1,
+          updatedAt: new Date("2026-09-06T12:00:00.000Z"),
+          config,
+        };
+      },
+    },
+  } as never;
+}
+
+test("service message policy defaults preserve existing runtime notices", async () => {
+  const resolved = await resolveServiceMessagePolicySettings({
+    prisma: prismaWithConfig({}),
+    clientId: "client-1",
+  });
+
+  assert.equal(resolved.source, "json_fallback");
+  assert.equal(resolved.settings.protocolNotice.enabled, true);
+  assert.equal(resolved.settings.queuePositionNotice.enabled, true);
+  assert.equal(resolved.settings.closeNotice.enabled, true);
+});
+
+test("service message policy keeps legacy protocol notification separate when canonical config is absent", async () => {
+  const resolved = await resolveServiceMessagePolicySettings({
+    prisma: prismaWithConfig({
+      protocolNotification: {
+        enabled: false,
+        messageTemplate: "Protocolo {{protocol}}",
+      },
+    }),
+    clientId: "client-1",
+  });
+
+  assert.equal(resolved.source, "json_fallback");
+  assert.equal(resolved.settings.protocolNotice.enabled, true);
+  assert.equal(resolved.settings.protocolNotice.text, null);
+  assert.equal(resolved.settings.queuePositionNotice.enabled, true);
+  assert.equal(resolved.settings.closeNotice.enabled, true);
+});
+
+test("saveServiceMessagePolicySettings persists canonical serviceMessages and preserves nested values", async () => {
+  const prisma = prismaWithMutableConfig({
+    serviceMessages: {
+      protocolNotice: {
+        enabled: true,
+        text: "Protocolo {{protocol}}",
+      },
+      queuePositionNotice: {
+        enabled: true,
+        text: "Fila {position}",
+      },
+      closeNotice: {
+        enabled: true,
+      },
+    },
+  });
+
+  const saved = await saveServiceMessagePolicySettings({
+    prisma,
+    clientId: "client-1",
+    settings: {
+      protocolNotice: {
+        enabled: false,
+      },
+    },
+  });
+
+  assert.equal(saved.settings.protocolNotice.enabled, false);
+  assert.equal(saved.settings.protocolNotice.text, "Protocolo {{protocol}}");
+  assert.equal(saved.settings.queuePositionNotice.text, "Fila {position}");
+  assert.equal(saved.settings.closeNotice.enabled, true);
+});
+
+test("normalizeServiceMessagePolicySettings treats absent fields as enabled", () => {
+  const settings = normalizeServiceMessagePolicySettings({
+    protocolNotice: { text: "Protocolo {{protocol}}" },
+    queuePositionNotice: { text: "Fila {position}" },
+    closeNotice: {},
+  });
+
+  assert.equal(settings.protocolNotice.enabled, true);
+  assert.equal(settings.protocolNotice.text, "Protocolo {{protocol}}");
+  assert.equal(settings.queuePositionNotice.enabled, true);
+  assert.equal(settings.queuePositionNotice.text, "Fila {position}");
+  assert.equal(settings.closeNotice.enabled, true);
+});
 
 test("resolvePlanLimitsSettings prefers DB plan limits over tenants.json", async () => {
   const resolved = await resolvePlanLimitsSettings({

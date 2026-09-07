@@ -19,6 +19,7 @@ export type AppFeatureKey =
   | "schedulingRemindersShadow"
   | "schedulingConfirmation"
   | "satisfaction"
+  | "operationalServiceMessages"
   | "audioTranscription"
   | "audioTranscriptionRuntime"
   | "advancedSearch"
@@ -70,6 +71,7 @@ export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   schedulingRemindersShadow: false,
   schedulingConfirmation: false,
   satisfaction: false,
+  operationalServiceMessages: false,
   audioTranscription: false,
   audioTranscriptionRuntime: false,
   advancedSearch: false,
@@ -106,6 +108,7 @@ export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   schedulingRemindersShadow: false,
   schedulingConfirmation: false,
   satisfaction: false,
+  operationalServiceMessages: false,
   audioTranscription: false,
   audioTranscriptionRuntime: false,
   advancedSearch: false,
@@ -186,6 +189,8 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
     schedulingConfirmation:
       normalizeBoolean(input.schedulingConfirmation) ?? defaults.schedulingConfirmation,
     satisfaction: normalizeBoolean(input.satisfaction) ?? defaults.satisfaction,
+    operationalServiceMessages:
+      normalizeBoolean(input.operationalServiceMessages) ?? defaults.operationalServiceMessages,
     audioTranscription: normalizeBoolean(input.audioTranscription) ?? defaults.audioTranscription,
     audioTranscriptionRuntime:
       normalizeBoolean(input.audioTranscriptionRuntime) ?? defaults.audioTranscriptionRuntime,

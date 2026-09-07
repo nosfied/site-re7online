@@ -224,6 +224,17 @@ test("mfa can be enabled by tenant feature override", () => {
   assert.equal(hasFeature(client, "mfaEnforced"), true);
 });
 
+test("operational service messages can be enabled by tenant feature override", () => {
+  const client = {
+    profile: "business",
+    features: { operationalServiceMessages: true },
+  };
+  assert.equal(getFeatures(client).operationalServiceMessages, true);
+  assert.equal(hasFeature(client, "operationalServiceMessages"), true);
+  assert.equal(getFeatures({ profile: "business" }).operationalServiceMessages, false);
+  assert.equal(getFeatures({ profile: "government" }).operationalServiceMessages, false);
+});
+
 test("resolveTenantCapabilities preserves current feature defaults and adds platform capabilities", () => {
   const business = resolveTenantCapabilities({ profile: "business" });
   const government = resolveTenantCapabilities({ profile: "government" });

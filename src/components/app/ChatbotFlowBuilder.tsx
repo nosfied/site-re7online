@@ -444,15 +444,33 @@ export function ChatbotFlowBuilder({
                       </label>
                     ) : (
                       type === "handoff" ? (
-                      <label className="grid gap-1 text-sm text-white/70">
-                        Mensagem antes de encaminhar
-                        <textarea
-                          value={stringValue(node.text)}
-                          disabled={disabled}
-                          onChange={(event) => commit(setNodeField(definition, nodeId, "text", event.target.value))}
-                          className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-                        />
-                      </label>
+                      <div className="grid gap-2">
+                        <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-sm text-white/70">
+                          <span>
+                            <span className="block font-semibold text-white">Enviar mensagem de encaminhamento</span>
+                            <span className="mt-0.5 block text-xs text-white/50">
+                              Quando desativado, o atendimento humano continua e o texto fica salvo para reativação.
+                            </span>
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={node.sendFeedback !== false}
+                            disabled={disabled}
+                            onChange={(event) =>
+                              commit(setNodeField(definition, nodeId, "sendFeedback", event.target.checked))
+                            }
+                          />
+                        </label>
+                        <label className="grid gap-1 text-sm text-white/70">
+                          Mensagem antes de encaminhar
+                          <textarea
+                            value={stringValue(node.text)}
+                            disabled={disabled || node.sendFeedback === false}
+                            onChange={(event) => commit(setNodeField(definition, nodeId, "text", event.target.value))}
+                            className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white disabled:opacity-50"
+                          />
+                        </label>
+                      </div>
                       ) : null
                     )}
 

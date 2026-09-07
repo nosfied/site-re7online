@@ -2446,3 +2446,34 @@ test("executeChatbotFlow stops long chains to avoid runaway execution", () => {
   assert.equal(result.state.chatbotActive, false);
   assert.equal(result.state.chatbotNodeId, undefined);
 });
+
+test("executeChatbotFlow can suppress handoff feedback without blocking handoff", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "handoff_1",
+    nodes: {
+      handoff_1: {
+        type: "handoff",
+        text: "Vou encaminhar.",
+        sendFeedback: false,
+        departmentId: "department_1",
+        queueId: "queue_1",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_handoff_silent",
+    definition: validated.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-04-17T10:00:04.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.replyText, "");
+  assert.equal(result.pendingHandoff?.feedbackText, "");
+  assert.equal(result.pendingHandoff?.departmentId, "department_1");
+  assert.equal(result.pendingHandoff?.queueId, "queue_1");
+});

@@ -75,6 +75,16 @@ test("browser push notifications are disabled by default and tenant-generic when
   );
 });
 
+test("operational service messages are disabled by default and tenant-generic when exposed", () => {
+  assert.equal(getTenantCapabilities({ profile: "business" }).operationalServiceMessages, false);
+  assert.equal(getTenantCapabilities({ profile: "government" }).operationalServiceMessages, false);
+  assert.equal(
+    getTenantCapabilities({ profile: "business", features: { operationalServiceMessages: true } })
+      .operationalServiceMessages,
+    true
+  );
+});
+
 test("invalid profile falls back to business and unknown capabilities are disabled", () => {
   const capabilities = getTenantCapabilities({ profile: "unsupported", features: { dashboard: true } });
 

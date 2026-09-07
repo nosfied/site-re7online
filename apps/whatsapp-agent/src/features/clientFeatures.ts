@@ -17,6 +17,7 @@ export type ClientFeatureKey =
   | "schedulingRemindersSend"
   | "schedulingConfirmation"
   | "satisfaction"
+  | "operationalServiceMessages"
   | "audioTranscription"
   | "audioTranscriptionRuntime"
   | "advancedSearch"
@@ -69,6 +70,7 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   schedulingRemindersSend: false,
   schedulingConfirmation: false,
   satisfaction: false,
+  operationalServiceMessages: false,
   audioTranscription: false,
   audioTranscriptionRuntime: false,
   advancedSearch: false,
@@ -108,6 +110,7 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   schedulingRemindersSend: false,
   schedulingConfirmation: false,
   satisfaction: false,
+  operationalServiceMessages: false,
   audioTranscription: false,
   audioTranscriptionRuntime: false,
   advancedSearch: false,
@@ -190,6 +193,8 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
     schedulingConfirmation:
       normalizeFeatureValue(input.schedulingConfirmation) ?? defaults.schedulingConfirmation,
     satisfaction: normalizeFeatureValue(input.satisfaction) ?? defaults.satisfaction,
+    operationalServiceMessages:
+      normalizeFeatureValue(input.operationalServiceMessages) ?? defaults.operationalServiceMessages,
     audioTranscription:
       normalizeFeatureValue(input.audioTranscription) ?? defaults.audioTranscription,
     audioTranscriptionRuntime:

@@ -13,6 +13,7 @@ import { logger } from "../logger/logger.js";
 import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
 import { getQueuePosition } from "../queue/queuePosition.js";
 import { createWebSessionTextOutboundMessage } from "../web-session/webSessionOutboundService.js";
+import { resolveServiceMessagePolicySettings } from "../config/tenantOperationalConfig.js";
 
 const DEFAULT_QUEUE_POSITION_TEXT = "Você é o nº {position} da fila de atendimento.";
 const DEFAULT_OFF_HOURS_TEXT =
@@ -59,11 +60,19 @@ function getClosedHandoffPolicy(definition: unknown) {
     ? definition.closedHandoffPolicy
     : {};
   const action = getNonEmptyString(raw.action)?.toUpperCase();
+  const queuePositionText = getNonEmptyString(raw.queuePositionText);
   return {
     queueClosed: action === "QUEUE_FOR_NEXT_OPEN",
-    queuePositionText: getNonEmptyString(raw.queuePositionText) ?? DEFAULT_QUEUE_POSITION_TEXT,
+    queuePositionText: queuePositionText ?? DEFAULT_QUEUE_POSITION_TEXT,
+    hasQueuePositionTextOverride: Boolean(queuePositionText),
     offHoursMessage: getNonEmptyString(raw.offHoursMessage) ?? DEFAULT_OFF_HOURS_TEXT,
   };
+}
+
+function renderProtocolNoticeTemplate(input: string | null, protocol: string) {
+  if (!input) return buildConversationProtocolNotice(protocol);
+  const rendered = input.replace(/\{\{\s*protocol\s*\}\}/gi, protocol).replace(/\{protocol\}/g, protocol);
+  return rendered.includes(protocol) ? rendered : `${rendered}\nProtocolo: ${protocol}`;
 }
 
 async function recordInactivityHandoffSkipped(params: {
@@ -392,24 +401,30 @@ export async function processChatbotInactivityTimeouts(params: {
       serviceCycle: cycleResult.cycle,
     });
     const protocol = cycleResult.cycle.protocol;
-    await sendBotText({
+    const serviceMessages = await resolveServiceMessagePolicySettings({
       prisma: params.prisma,
       clientId: state.clientId,
-      clientKey: client.clientKey,
-      waId: state.waId,
-      waIdCanonical: state.waIdCanonical,
-      channelAccountId: state.channelAccountId,
-      requestId: `chatbot-inactivity:${state.id}:protocol`,
-      text: buildConversationProtocolNotice(protocol),
-      serviceCycle: cycleResult.cycle,
     });
+    if (serviceMessages.settings.protocolNotice.enabled) {
+      await sendBotText({
+        prisma: params.prisma,
+        clientId: state.clientId,
+        clientKey: client.clientKey,
+        waId: state.waId,
+        waIdCanonical: state.waIdCanonical,
+        channelAccountId: state.channelAccountId,
+        requestId: `chatbot-inactivity:${state.id}:protocol`,
+        text: renderProtocolNoticeTemplate(serviceMessages.settings.protocolNotice.text, protocol),
+        serviceCycle: cycleResult.cycle,
+      });
+    }
     const position = await getQueuePosition({
       prisma: params.prisma,
       clientId: state.clientId,
       runtimeStateId: state.id,
       queueId: destination.queueId,
     });
-    if (position) {
+    if (position && serviceMessages.settings.queuePositionNotice.enabled) {
       await sendBotText({
         prisma: params.prisma,
         clientId: state.clientId,
@@ -418,7 +433,11 @@ export async function processChatbotInactivityTimeouts(params: {
         waIdCanonical: state.waIdCanonical,
         channelAccountId: state.channelAccountId,
         requestId: `chatbot-inactivity:${state.id}:position`,
-        text: closedPolicy.queuePositionText.replace("{position}", String(position)),
+        text: (
+          closedPolicy.hasQueuePositionTextOverride
+            ? closedPolicy.queuePositionText
+            : serviceMessages.settings.queuePositionNotice.text ?? closedPolicy.queuePositionText
+        ).replace("{position}", String(position)),
         serviceCycle: cycleResult.cycle,
       });
     }
