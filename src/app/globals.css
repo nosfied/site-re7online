@@ -1926,6 +1926,65 @@ html {
     border-color: rgba(15, 23, 42, 0.14) !important;
   }
 
+  :root[data-theme="light"] .theme-admin .chatbot-theme input,
+  :root[data-theme="light"] .theme-admin .chatbot-theme select,
+  :root[data-theme="light"] .theme-admin .chatbot-theme textarea {
+    background-color: #ffffff !important;
+    border-color: rgba(15, 23, 42, 0.18) !important;
+    color: #0f172a !important;
+  }
+
+  :root[data-theme="light"] .theme-admin .chatbot-theme input::placeholder,
+  :root[data-theme="light"] .theme-admin .chatbot-theme textarea::placeholder {
+    color: #64748b !important;
+  }
+
+  :root[data-theme="light"] .theme-admin .chatbot-theme .text-white,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .text-white\/80,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .text-white\/75,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .text-white\/70 {
+    color: #0f172a !important;
+  }
+
+  :root[data-theme="light"] .theme-admin .chatbot-theme .text-white\/65,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .text-white\/60,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .text-white\/55,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .text-white\/50,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .text-white\/45 {
+    color: #475569 !important;
+  }
+
+  :root[data-theme="light"] .theme-admin .chatbot-theme .border-white\/10,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .border-white\/15,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .border-white\/20 {
+    border-color: rgba(15, 23, 42, 0.16) !important;
+  }
+
+  :root[data-theme="light"] .theme-admin .chatbot-theme .bg-white\/5,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .bg-white\/10,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .bg-black\/10,
+  :root[data-theme="light"] .theme-admin .chatbot-theme [class*="bg-re7-navy"] {
+    background-color: #f8fafc !important;
+  }
+
+  :root[data-theme="light"] .theme-admin .chatbot-theme .bg-amber-500\/10 {
+    background-color: #fef3c7 !important;
+    border-color: rgba(217, 119, 6, 0.28) !important;
+    color: #78350f !important;
+  }
+
+  :root[data-theme="light"] .theme-admin .chatbot-theme .bg-emerald-500\/10 {
+    background-color: #dcfce7 !important;
+    border-color: rgba(22, 101, 52, 0.24) !important;
+    color: #14532d !important;
+  }
+
+  :root[data-theme="light"] .theme-admin .chatbot-theme .text-amber-100,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .text-emerald-100,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .text-emerald-200\/80 {
+    color: inherit !important;
+  }
+
   .wa-chat-canvas {
     background-color: #e8dece;
     background-image: url("/images/fundotimeline.png");

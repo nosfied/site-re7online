@@ -228,33 +228,29 @@ export default function AppSettingsInboxPage() {
 
       <div className="inbox-settings-theme grid gap-4">
       <section className="rounded-xl border border-white/10 bg-white/5 p-3 md:p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Assinatura do atendente</p>
-            <h2 className="mt-1 text-lg font-semibold text-white">Nome visível ao cliente</h2>
-            <p className="mt-1 max-w-3xl text-sm leading-relaxed text-white/65">
-              Opcional por organização. Quando ativa, adiciona o nome profissional do atendente no início de mensagens
-              humanas de texto e mensagens prontas enviadas pela caixa de entrada.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <SettingsBadge label={settings.enabled ? "Ativa" : "Desativada"} tone={settings.enabled ? "success" : "default"} />
-            {readOnly ? <SettingsBadge label="Somente leitura" tone="warning" /> : null}
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-xl border border-white/10 bg-white/5 p-3 md:p-4">
         {loading ? (
           <p className="text-sm text-white/70">Carregando configuração...</p>
         ) : (
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
             <div className="space-y-4">
               <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Assinatura do atendente</p>
-                <p className="mt-1 text-sm leading-relaxed text-white/65">
-                  Agrupa o nome visível, escopo de aplicação e prévia da mensagem humana.
-                </p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Assinatura do atendente</p>
+                    <h2 className="mt-1 text-lg font-semibold text-white">Nome visível ao cliente</h2>
+                    <p className="mt-1 text-sm leading-relaxed text-white/65">
+                      Agrupa ativação, escopo e prévia. Quando ativa, adiciona o nome profissional do atendente no
+                      início de mensagens humanas de texto e mensagens prontas enviadas pela caixa de entrada.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <SettingsBadge
+                      label={settings.enabled ? "Ativa" : "Desativada"}
+                      tone={settings.enabled ? "success" : "default"}
+                    />
+                    {readOnly ? <SettingsBadge label="Somente leitura" tone="warning" /> : null}
+                  </div>
+                </div>
               </div>
               <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/50 px-3 py-3">
                 <span>
@@ -296,8 +292,9 @@ export default function AppSettingsInboxPage() {
               <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-white">Visibilidade das conversas</p>
-                    <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-white/60">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Visibilidade das conversas</p>
+                    <h2 className="mt-1 text-lg font-semibold text-white">Quem enxerga atendimentos atribuídos</h2>
+                    <p className="mt-1 max-w-2xl text-sm leading-relaxed text-white/65">
                       Controla apenas a projeção da Inbox. Notificações, leitura, filas e permissões de ação seguem
                       as regras operacionais atuais.
                     </p>
@@ -343,13 +340,14 @@ export default function AppSettingsInboxPage() {
                 <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-white">Mensagens operacionais</p>
-                      <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-white/60">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Mensagens operacionais</p>
+                      <h2 className="mt-1 text-lg font-semibold text-white">Avisos automáticos do atendimento humano</h2>
+                      <p className="mt-1 max-w-2xl text-sm leading-relaxed text-white/65">
                         Controla avisos automáticos ao cliente. Desativar um aviso não altera protocolo, fila,
                         encerramento ou pesquisa de satisfação.
                       </p>
-                      <p className="mt-2 text-xs leading-relaxed text-white/60">
-                        Mensagem de encaminhamento humano é configurada no nó Atendimento humano do fluxo em{" "}
+                      <p className="mt-2 text-sm leading-relaxed text-white/65">
+                        A mensagem de encaminhamento humano é configurada no nó Atendimento humano do fluxo em{" "}
                         <Link href="/app/chatbot" className="font-semibold text-re7-sky hover:text-white">
                           Chatbot
                         </Link>

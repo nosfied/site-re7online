@@ -865,7 +865,7 @@ export default function AdminTenantChatbotPage() {
               ].map((item) => (
                 <div
                   key={item.key}
-                  className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm"
+                  className="chatbot-setting-card flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm"
                 >
                   <span className="space-y-1">
                     <span className="block font-medium text-white">{item.title}</span>
@@ -887,7 +887,7 @@ export default function AdminTenantChatbotPage() {
                   />
                 </div>
             ))}
-            <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm md:col-span-2">
+            <div className="chatbot-setting-card rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm md:col-span-2">
               <div className="mb-4 rounded-md border border-white/10 bg-re7-navy/50 p-3">
                 <div className="mb-3">
                   <h3 className="text-sm font-semibold text-white">Base da IA</h3>
@@ -1755,7 +1755,7 @@ export default function AdminTenantChatbotPage() {
                 if (!draft) return null;
                 const search = draftSearches[flow.id] ?? "";
                 return (
-                  <article key={flow.id} className="rounded-xl border border-white/10 bg-re7-navy/40 p-4">
+                  <article key={flow.id} className="chatbot-flow-card rounded-xl border border-white/10 bg-re7-navy/40 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="space-y-2">
                         <h3 className="text-lg font-semibold text-white">{flow.name}</h3>
