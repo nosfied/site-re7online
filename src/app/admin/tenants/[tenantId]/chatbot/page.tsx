@@ -761,9 +761,9 @@ export default function AdminTenantChatbotPage() {
   };
 
   return (
-    <div className="chatbot-theme px-4 pb-8 text-slate-900 dark:text-white md:px-8">
+    <div className="chatbot-theme px-4 pb-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
-        <header className="sticky top-0 z-30 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-re7-navy/95 md:-mx-8 md:px-8">
+        <header className="sticky top-0 z-30 -mx-4 border-b border-white/10 bg-re7-navy/95 px-4 py-4 shadow-sm backdrop-blur md:-mx-8 md:px-8">
           <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -775,17 +775,17 @@ export default function AdminTenantChatbotPage() {
                   />
                 ) : null}
               </div>
-              <p className="text-sm text-slate-600 dark:text-white/70">
+              <p className="text-sm text-white/70">
                 {tenantName || tenantId} {clientKey ? `(${clientKey})` : ""}
               </p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-white/50">
+              <p className="mt-1 text-xs text-white/50">
                 Configuracoes internas refletidas no /app do cliente. Revise IA, follow-up e flows antes de salvar.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Link
                 href={backHref}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-white/20 dark:text-white/80 dark:hover:bg-white/10"
+                className="rounded-md border border-white/20 px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10"
               >
                 Voltar ao tenant
               </Link>
@@ -813,14 +813,14 @@ export default function AdminTenantChatbotPage() {
           </p>
         ) : null}
 
-        <section className="chatbot-section rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-white/5">
+        <section className="chatbot-section rounded-xl border border-white/10 bg-white/5 p-4 shadow-sm">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">Automacao do atendimento</h2>
-              <p className="mt-1 text-sm text-slate-600 dark:text-white/65">
+              <p className="mt-1 text-sm text-white/65">
                 Controle interno refletido no portal do cliente.
               </p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-white/50">
+              <p className="mt-1 text-xs text-white/50">
                 IA: {automationDraft.aiConfigured ? "contexto configurado" : "contexto ausente"}.
               </p>
             </div>

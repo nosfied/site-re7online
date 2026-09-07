@@ -227,137 +227,155 @@ export default function AppSettingsInboxPage() {
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
 
       <div className="inbox-settings-theme grid gap-4">
-      <section className="rounded-xl border border-white/10 bg-white/5 p-3 md:p-4">
         {loading ? (
-          <p className="text-sm text-white/70">Carregando configuração...</p>
+          <section className="rounded-xl border border-white/10 bg-white/5 p-3 md:p-4">
+            <p className="text-sm text-white/70">Carregando configuração...</p>
+          </section>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
-            <div className="space-y-4">
-              <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Assinatura do atendente</p>
-                    <h2 className="mt-1 text-lg font-semibold text-white">Nome visível ao cliente</h2>
-                    <p className="mt-1 text-sm leading-relaxed text-white/65">
-                      Agrupa ativação, escopo e prévia. Quando ativa, adiciona o nome profissional do atendente no
-                      início de mensagens humanas de texto e mensagens prontas enviadas pela caixa de entrada.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    <SettingsBadge
-                      label={settings.enabled ? "Ativa" : "Desativada"}
-                      tone={settings.enabled ? "success" : "default"}
-                    />
-                    {readOnly ? <SettingsBadge label="Somente leitura" tone="warning" /> : null}
-                  </div>
-                </div>
-              </div>
-              <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/50 px-3 py-3">
-                <span>
-                  <span className="block text-sm font-semibold text-white">Mostrar nome do atendente ao cliente</span>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-white/60">
-                    Vale para mensagens humanas de texto e mensagens prontas. Modelos Meta, bot, automações e
-                    campanhas não recebem assinatura nesta etapa.
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSettings((current) => ({ ...current, enabled: !current.enabled }))}
-                  disabled={readOnly || saving}
-                  aria-pressed={settings.enabled}
-                  aria-label={settings.enabled ? "Desativar assinatura do atendente" : "Ativar assinatura do atendente"}
-                  className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full border transition ${
-                    settings.enabled
-                      ? "border-emerald-400/40 bg-emerald-500/25"
-                      : "border-white/20 bg-white/10"
-                  } ${readOnly || saving ? "cursor-not-allowed opacity-50" : ""}`}
-                >
-                  <span
-                    className={`inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-white text-[9px] font-bold text-re7-navy transition ${
-                      settings.enabled ? "translate-x-8" : "translate-x-1"
-                    }`}
-                  >
-                    {settings.enabled ? "Sim" : "Não"}
-                  </span>
-                </button>
-              </label>
-              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm leading-relaxed text-white/68">
-                <p className="font-semibold text-white">Escopo da assinatura</p>
-                <p className="mt-1">
-                  A assinatura usa somente o nome cadastrado do atendente que enviou a mensagem. Não usa email,
-                  cargo, telefone, organização técnica ou responsável atual da conversa.
-                </p>
-              </div>
-
-              <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Visibilidade das conversas</p>
-                    <h2 className="mt-1 text-lg font-semibold text-white">Quem enxerga atendimentos atribuídos</h2>
-                    <p className="mt-1 max-w-2xl text-sm leading-relaxed text-white/65">
-                      Controla apenas a projeção da Inbox. Notificações, leitura, filas e permissões de ação seguem
-                      as regras operacionais atuais.
-                    </p>
-                  </div>
-                  {!canUpdateInboxVisibilityPolicy ? <SettingsBadge label="Somente leitura" tone="warning" /> : null}
-                </div>
-                <div className="mt-3 grid gap-2 md:grid-cols-2">
-                  {[
-                    {
-                      value: "shared" as const,
-                      title: "Compartilhada por setor",
-                      description: "Atendentes do setor podem acompanhar conversas atribuídas a colegas.",
-                    },
-                    {
-                      value: "assignee_only_after_assignment" as const,
-                      title: "Individual após atribuição",
-                      description:
-                        "Sem responsável, a fila é compartilhada. Após atribuição, só o responsável, supervisores e administradores autorizados visualizam.",
-                    },
-                  ].map((option) => {
-                    const active = inboxVisibilityPolicy === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => setInboxVisibilityPolicy(option.value)}
-                        disabled={visibilityReadOnly}
-                        className={`rounded-lg border p-3 text-left transition ${
-                          active
-                            ? "border-re7-orange bg-re7-orange/15 text-white"
-                            : "border-white/10 bg-white/5 text-white/75 hover:bg-white/10"
-                        } ${visibilityReadOnly ? "cursor-not-allowed opacity-70" : ""}`}
-                      >
-                        <span className="block text-sm font-semibold">{option.title}</span>
-                        <span className="mt-1 block text-xs leading-relaxed text-white/60">{option.description}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {serviceMessagesVisible ? (
-                <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
+          <>
+            <section className="rounded-xl border border-white/10 bg-white/5 p-3 md:p-4">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
+                <div className="space-y-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Mensagens operacionais</p>
-                      <h2 className="mt-1 text-lg font-semibold text-white">Avisos automáticos do atendimento humano</h2>
-                      <p className="mt-1 max-w-2xl text-sm leading-relaxed text-white/65">
-                        Controla avisos automáticos ao cliente. Desativar um aviso não altera protocolo, fila,
-                        encerramento ou pesquisa de satisfação.
-                      </p>
-                      <p className="mt-2 text-sm leading-relaxed text-white/65">
-                        A mensagem de encaminhamento humano é configurada no nó Atendimento humano do fluxo em{" "}
-                        <Link href="/app/chatbot" className="font-semibold text-re7-sky hover:text-white">
-                          Chatbot
-                        </Link>
-                        .
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Assinatura do atendente</p>
+                      <h2 className="mt-1 text-lg font-semibold text-white">Nome visível ao cliente</h2>
+                      <p className="mt-1 text-sm leading-relaxed text-white/65">
+                        Quando ativa, adiciona o nome profissional do atendente no início de mensagens humanas de texto
+                        e mensagens prontas enviadas pela caixa de entrada.
                       </p>
                     </div>
-                    {serviceMessagesReadOnly ? <SettingsBadge label="Somente leitura" tone="warning" /> : null}
+                    <div className="flex flex-wrap gap-1.5">
+                      <SettingsBadge
+                        label={settings.enabled ? "Ativa" : "Desativada"}
+                        tone={settings.enabled ? "success" : "default"}
+                      />
+                      {readOnly ? <SettingsBadge label="Somente leitura" tone="warning" /> : null}
+                    </div>
                   </div>
+                  <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/35 px-3 py-3">
+                    <span>
+                      <span className="block text-sm font-semibold text-white">Mostrar nome do atendente ao cliente</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-white/60">
+                        Vale para mensagens humanas de texto e mensagens prontas. Modelos Meta, bot, automações e
+                        campanhas não recebem assinatura nesta etapa.
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSettings((current) => ({ ...current, enabled: !current.enabled }))}
+                      disabled={readOnly || saving}
+                      aria-pressed={settings.enabled}
+                      aria-label={settings.enabled ? "Desativar assinatura do atendente" : "Ativar assinatura do atendente"}
+                      className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full border transition ${
+                        settings.enabled
+                          ? "border-emerald-400/40 bg-emerald-500/25"
+                          : "border-white/20 bg-white/10"
+                      } ${readOnly || saving ? "cursor-not-allowed opacity-50" : ""}`}
+                    >
+                      <span
+                        className={`inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-white text-[9px] font-bold text-re7-navy transition ${
+                          settings.enabled ? "translate-x-8" : "translate-x-1"
+                        }`}
+                      >
+                        {settings.enabled ? "Sim" : "Não"}
+                      </span>
+                    </button>
+                  </label>
+                  <div className="text-sm leading-relaxed text-white/68">
+                    <p className="font-semibold text-white">Escopo da assinatura</p>
+                    <p className="mt-1">
+                      A assinatura usa somente o nome cadastrado do atendente que enviou a mensagem. Não usa email,
+                      cargo, telefone, organização técnica ou responsável atual da conversa.
+                    </p>
+                  </div>
+                </div>
 
-                  <div className="mt-3 grid gap-3">
+                <aside className="space-y-3 rounded-lg border border-white/10 bg-re7-navy/35 p-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Como o cliente verá</h3>
+                    <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-50 px-3 py-2 text-sm leading-relaxed text-slate-900">
+                      <p className="font-semibold">*Maria*</p>
+                      <p>Olá, como posso ajudar?</p>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-amber-300/25 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-100">
+                    Nome de atendente é dado pessoal. Ative somente quando isso estiver alinhado com a política
+                    operacional da organização.
+                  </div>
+                </aside>
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-white/10 bg-white/5 p-3 md:p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Visibilidade das conversas</p>
+                  <h2 className="mt-1 text-lg font-semibold text-white">Quem enxerga atendimentos atribuídos</h2>
+                  <p className="mt-1 max-w-3xl text-sm leading-relaxed text-white/65">
+                    Controla apenas a projeção da Inbox. Notificações, leitura, filas e permissões de ação seguem as
+                    regras operacionais atuais.
+                  </p>
+                </div>
+                {!canUpdateInboxVisibilityPolicy ? <SettingsBadge label="Somente leitura" tone="warning" /> : null}
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {[
+                  {
+                    value: "shared" as const,
+                    title: "Compartilhada por setor",
+                    description: "Atendentes do setor podem acompanhar conversas atribuídas a colegas.",
+                  },
+                  {
+                    value: "assignee_only_after_assignment" as const,
+                    title: "Individual após atribuição",
+                    description:
+                      "Sem responsável, a fila é compartilhada. Após atribuição, só o responsável, supervisores e administradores autorizados visualizam.",
+                  },
+                ].map((option) => {
+                  const active = inboxVisibilityPolicy === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setInboxVisibilityPolicy(option.value)}
+                      disabled={visibilityReadOnly}
+                      className={`rounded-lg border p-3 text-left transition ${
+                        active
+                          ? "border-re7-orange bg-re7-orange/15 text-white"
+                          : "border-white/10 bg-white/5 text-white/75 hover:bg-white/10"
+                      } ${visibilityReadOnly ? "cursor-not-allowed opacity-70" : ""}`}
+                    >
+                      <span className="block text-sm font-semibold">{option.title}</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-white/60">{option.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            {serviceMessagesVisible ? (
+              <section className="rounded-xl border border-white/10 bg-white/5 p-3 md:p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Mensagens operacionais</p>
+                    <h2 className="mt-1 text-lg font-semibold text-white">Avisos automáticos do atendimento humano</h2>
+                    <p className="mt-1 max-w-3xl text-sm leading-relaxed text-white/65">
+                      Controla avisos automáticos ao cliente. Desativar um aviso não altera protocolo, fila,
+                      encerramento ou pesquisa de satisfação.
+                    </p>
+                    <p className="mt-2 text-sm leading-relaxed text-white/65">
+                      A mensagem de encaminhamento humano é configurada no nó Atendimento humano do fluxo em{" "}
+                      <Link href="/app/chatbot" className="font-semibold text-re7-sky hover:text-white">
+                        Chatbot
+                      </Link>
+                      .
+                    </p>
+                  </div>
+                  {serviceMessagesReadOnly ? <SettingsBadge label="Somente leitura" tone="warning" /> : null}
+                </div>
+
+                <div className="mt-3 grid gap-3">
                     <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3">
                       <span>
                         <span className="block text-sm font-semibold text-white">
@@ -527,11 +545,12 @@ export default function AppSettingsInboxPage() {
                         Placeholders disponíveis: {"{protocol}"}, {"{dataHora}"} e {"{contactName}"}.
                       </span>
                     </label>
-                  </div>
                 </div>
-              ) : null}
+              </section>
+            ) : null}
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+            <section className="rounded-xl border border-white/10 bg-white/5 p-3 md:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => session && void loadSettings(session)}
@@ -553,24 +572,9 @@ export default function AppSettingsInboxPage() {
                   </button>
                 )}
               </div>
-            </div>
-
-            <aside className="space-y-3 rounded-lg border border-white/10 bg-re7-navy/45 p-3">
-              <div>
-                <h3 className="text-sm font-semibold text-white">Como o cliente verá</h3>
-                <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-50 px-3 py-2 text-sm leading-relaxed text-slate-900">
-                  <p className="font-semibold">*Maria*</p>
-                  <p>Olá, como posso ajudar?</p>
-                </div>
-              </div>
-              <div className="rounded-lg border border-amber-300/25 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-100">
-                Nome de atendente é dado pessoal. Ative somente quando isso estiver alinhado com a política
-                operacional da organização.
-              </div>
-            </aside>
-          </div>
+            </section>
+          </>
         )}
-      </section>
       </div>
     </AppShell>
   );
