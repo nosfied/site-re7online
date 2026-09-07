@@ -207,6 +207,111 @@ function getResetAfterMinutes(definition: FlowDefinition) {
     : "";
 }
 
+type NodeEditorSectionKey =
+  | "identity"
+  | "message"
+  | "handoffMessage"
+  | "next"
+  | "capture"
+  | "consent"
+  | "destination"
+  | "options"
+  | "fallback";
+
+type NodeEditorSectionPlan = {
+  key: NodeEditorSectionKey;
+  defaultExpanded: boolean;
+};
+
+export function getChatbotNodeEditorSectionPlan(type: string, hasIssue = false): NodeEditorSectionPlan[] {
+  const withIssue = (items: NodeEditorSectionPlan[]) =>
+    hasIssue ? items.map((item) => ({ ...item, defaultExpanded: true })) : items;
+
+  if (type === "menu") {
+    return withIssue([
+      { key: "identity", defaultExpanded: true },
+      { key: "message", defaultExpanded: true },
+      { key: "destination", defaultExpanded: true },
+      { key: "options", defaultExpanded: true },
+      { key: "fallback", defaultExpanded: false },
+    ]);
+  }
+  if (type === "handoff") {
+    return withIssue([
+      { key: "identity", defaultExpanded: true },
+      { key: "handoffMessage", defaultExpanded: true },
+      { key: "destination", defaultExpanded: true },
+    ]);
+  }
+  if (type === "capture") {
+    return withIssue([
+      { key: "identity", defaultExpanded: true },
+      { key: "message", defaultExpanded: true },
+      { key: "next", defaultExpanded: true },
+      { key: "capture", defaultExpanded: true },
+    ]);
+  }
+  if (type === "consent") {
+    return withIssue([
+      { key: "identity", defaultExpanded: true },
+      { key: "consent", defaultExpanded: true },
+    ]);
+  }
+  return withIssue([
+    { key: "identity", defaultExpanded: true },
+    { key: "message", defaultExpanded: true },
+    { key: "next", defaultExpanded: true },
+  ]);
+}
+
+type CollapsibleSectionProps = {
+  id: string;
+  title: string;
+  summary?: string;
+  defaultExpanded: boolean;
+  hasIssue?: boolean;
+  children: ReactNode;
+};
+
+function CollapsibleSection({
+  id,
+  title,
+  summary,
+  defaultExpanded,
+  hasIssue,
+  children,
+}: CollapsibleSectionProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
+  return (
+    <section className="chatbot-field-group rounded-lg border border-white/10 bg-black/10 p-3">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={id}
+        onClick={() => setExpanded((current) => !current)}
+        className="flex w-full items-start justify-between gap-3 text-left"
+      >
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-white">{title}</span>
+          {summary ? <span className="mt-0.5 block text-xs text-white/50">{summary}</span> : null}
+        </span>
+        <span className="flex shrink-0 items-center gap-2 text-xs font-semibold text-white/60">
+          {hasIssue ? (
+            <span className="rounded-full border border-amber-300/25 bg-amber-500/10 px-2 py-0.5 text-amber-100">
+              Revisar
+            </span>
+          ) : null}
+          <span aria-hidden="true">{expanded ? "v" : ">"}</span>
+        </span>
+      </button>
+      <div id={id} hidden={!expanded} className={expanded ? "mt-3 grid gap-3" : "hidden"}>
+        {children}
+      </div>
+    </section>
+  );
+}
+
 export function ChatbotFlowBuilder({
   definitionText,
   onDefinitionTextChange,
@@ -393,6 +498,15 @@ export function ChatbotFlowBuilder({
               const node = definition.nodes[nodeId];
               const type = stringValue(node.type);
               const nodeQueues = queues.filter((queue) => !node.departmentId || queue.departmentId === node.departmentId);
+              const nodeIssues = issues.filter((issue) => issue.includes(`"${nodeId}"`));
+              const hasNodeIssue = nodeIssues.length > 0;
+              const sectionPlan = new Map(
+                getChatbotNodeEditorSectionPlan(type, hasNodeIssue).map((section) => [
+                  section.key,
+                  section.defaultExpanded,
+                ])
+              );
+              const sectionDefaultExpanded = (key: NodeEditorSectionKey) => sectionPlan.get(key) ?? hasNodeIssue;
               return (
                 <article key={nodeId} className="chatbot-node-card rounded-xl border border-white/10 bg-re7-navy/40 p-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -417,110 +531,155 @@ export function ChatbotFlowBuilder({
                   </div>
 
                   <div className="mt-3 grid gap-3">
-                    <label className="grid gap-1 text-sm text-white/70">
-                      Tipo
-                      <select
-                        value={type}
-                        disabled={disabled}
-                        onChange={(event) => commit(setNodeField(definition, nodeId, "type", event.target.value))}
-                        className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-                      >
-                        {NODE_TYPES.map((item) => <option key={item} value={item}>{nodeTypeLabel(item)}</option>)}
-                      </select>
-                    </label>
+                    <CollapsibleSection
+                      id={`${nodeId}-identity-section`}
+                      title="Identificação e tipo"
+                      summary={nodeTypeLabel(type)}
+                      defaultExpanded={sectionDefaultExpanded("identity")}
+                      hasIssue={hasNodeIssue}
+                    >
+                      <label className="grid gap-1 text-sm text-white/70">
+                        Tipo
+                        <select
+                          value={type}
+                          disabled={disabled}
+                          onChange={(event) => commit(setNodeField(definition, nodeId, "type", event.target.value))}
+                          className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                        >
+                          {NODE_TYPES.map((item) => <option key={item} value={item}>{nodeTypeLabel(item)}</option>)}
+                        </select>
+                      </label>
+                    </CollapsibleSection>
 
                     {type !== "handoff" && type !== "consent" ? (
-                      <label className="grid gap-1 text-sm text-white/70">
-                        Mensagem
-                        <textarea
-                          value={stringValue(node.text)}
-                          disabled={disabled}
-                          onChange={(event) => commit(setNodeField(definition, nodeId, "text", event.target.value))}
-                          className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-                        />
-                        <span className="chatbot-preview rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/65 whitespace-pre-wrap">
-                          {stringValue(node.text) || "Prévia da mensagem"}
-                        </span>
-                      </label>
-                    ) : (
-                      type === "handoff" ? (
-                      <div className="grid gap-2">
-                        <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-sm text-white/70">
-                          <span>
-                            <span className="block font-semibold text-white">Enviar mensagem de encaminhamento humano</span>
-                            <span className="mt-0.5 block text-xs text-white/50">
-                              Quando desativado, o atendimento humano continua e o texto fica salvo para reativação neste nó.
-                            </span>
-                          </span>
-                          <input
-                            type="checkbox"
-                            checked={node.sendFeedback !== false}
-                            disabled={disabled}
-                            onChange={(event) =>
-                              commit(setNodeField(definition, nodeId, "sendFeedback", event.target.checked))
-                            }
-                          />
-                        </label>
+                      <CollapsibleSection
+                        id={`${nodeId}-message-section`}
+                        title="Conteúdo da mensagem"
+                        summary={stringValue(node.text) ? "Mensagem configurada" : "Sem mensagem"}
+                        defaultExpanded={sectionDefaultExpanded("message")}
+                        hasIssue={hasNodeIssue}
+                      >
                         <label className="grid gap-1 text-sm text-white/70">
-                          Mensagem enviada antes de encaminhar
+                          Mensagem
                           <textarea
                             value={stringValue(node.text)}
-                            disabled={disabled || node.sendFeedback === false}
+                            disabled={disabled}
                             onChange={(event) => commit(setNodeField(definition, nodeId, "text", event.target.value))}
-                            className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white disabled:opacity-50"
+                            className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
                           />
+                          <span className="chatbot-preview rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/65 whitespace-pre-wrap">
+                            {stringValue(node.text) || "Prévia da mensagem"}
+                          </span>
                         </label>
-                      </div>
+                      </CollapsibleSection>
+                    ) : (
+                      type === "handoff" ? (
+                      <CollapsibleSection
+                        id={`${nodeId}-handoff-message-section`}
+                        title="Mensagem de encaminhamento"
+                        summary={node.sendFeedback === false ? "Desativada" : "Ativa"}
+                        defaultExpanded={sectionDefaultExpanded("handoffMessage")}
+                        hasIssue={hasNodeIssue}
+                      >
+                        <div className="grid gap-2">
+                          <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-sm text-white/70">
+                            <span>
+                              <span className="block font-semibold text-white">Enviar mensagem de encaminhamento humano</span>
+                              <span className="mt-0.5 block text-xs text-white/50">
+                                Quando desativado, o atendimento humano continua e o texto fica salvo para reativação neste nó.
+                              </span>
+                            </span>
+                            <input
+                              type="checkbox"
+                              checked={node.sendFeedback !== false}
+                              disabled={disabled}
+                              onChange={(event) =>
+                                commit(setNodeField(definition, nodeId, "sendFeedback", event.target.checked))
+                              }
+                            />
+                          </label>
+                          <label className="grid gap-1 text-sm text-white/70">
+                            Mensagem enviada antes de encaminhar
+                            <textarea
+                              value={stringValue(node.text)}
+                              disabled={disabled || node.sendFeedback === false}
+                              onChange={(event) => commit(setNodeField(definition, nodeId, "text", event.target.value))}
+                              className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white disabled:opacity-50"
+                            />
+                          </label>
+                        </div>
+                      </CollapsibleSection>
                       ) : null
                     )}
 
                     {(type === "text" || type === "capture") ? (
-                      <label className="grid gap-1 text-sm text-white/70">
-                        Próxima etapa
-                        <select
-                          value={stringValue(node.next)}
-                          disabled={disabled}
-                          onChange={(event) => commit(setNodeField(definition, nodeId, "next", event.target.value))}
-                          className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-                        >
-                          <option value="">Encerrar neste ponto</option>
-                          {nodeIds.map((targetId) => <option key={targetId} value={targetId}>{targetId}</option>)}
-                        </select>
-                      </label>
+                      <CollapsibleSection
+                        id={`${nodeId}-next-section`}
+                        title="Próxima etapa"
+                        summary={stringValue(node.next) || "Encerrar neste ponto"}
+                        defaultExpanded={sectionDefaultExpanded("next")}
+                        hasIssue={hasNodeIssue}
+                      >
+                        <label className="grid gap-1 text-sm text-white/70">
+                          Próxima etapa
+                          <select
+                            value={stringValue(node.next)}
+                            disabled={disabled}
+                            onChange={(event) => commit(setNodeField(definition, nodeId, "next", event.target.value))}
+                            className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                          >
+                            <option value="">Encerrar neste ponto</option>
+                            {nodeIds.map((targetId) => <option key={targetId} value={targetId}>{targetId}</option>)}
+                          </select>
+                        </label>
+                      </CollapsibleSection>
                     ) : null}
 
                     {type === "capture" ? (
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <label className="grid gap-1 text-sm text-white/70">
-                          Campo salvo
-                          <input
-                            value={stringValue(node.field)}
-                            disabled={disabled}
-                            onChange={(event) => commit(setNodeField(definition, nodeId, "field", event.target.value))}
-                            className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-                          />
-                        </label>
-                        <label className="grid gap-1 text-sm text-white/70">
-                          Validação
-                          <select
-                            value={stringValue(node.validation)}
-                            disabled={disabled}
-                            onChange={(event) => commit(setNodeField(definition, nodeId, "validation", event.target.value))}
-                            className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-                          >
-                            <option value="">Sem validação especial</option>
-                            <option value="non_empty">Resposta obrigatória</option>
-                            <option value="email">E-mail</option>
-                            <option value="phone_br">Telefone brasileiro</option>
-                          </select>
-                        </label>
-                      </div>
+                      <CollapsibleSection
+                        id={`${nodeId}-capture-section`}
+                        title="Coleta e validação"
+                        summary={stringValue(node.field) || "Campo não definido"}
+                        defaultExpanded={sectionDefaultExpanded("capture")}
+                        hasIssue={hasNodeIssue}
+                      >
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <label className="grid gap-1 text-sm text-white/70">
+                            Campo salvo
+                            <input
+                              value={stringValue(node.field)}
+                              disabled={disabled}
+                              onChange={(event) => commit(setNodeField(definition, nodeId, "field", event.target.value))}
+                              className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                            />
+                          </label>
+                          <label className="grid gap-1 text-sm text-white/70">
+                            Validação
+                            <select
+                              value={stringValue(node.validation)}
+                              disabled={disabled}
+                              onChange={(event) => commit(setNodeField(definition, nodeId, "validation", event.target.value))}
+                              className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                            >
+                              <option value="">Sem validação especial</option>
+                              <option value="non_empty">Resposta obrigatória</option>
+                              <option value="email">E-mail</option>
+                              <option value="phone_br">Telefone brasileiro</option>
+                            </select>
+                          </label>
+                        </div>
+                      </CollapsibleSection>
                     ) : null}
 
                     {type === "consent" ? (
-                      <div className="chatbot-field-group grid gap-3 rounded-lg border border-white/10 bg-black/10 p-3">
+                      <CollapsibleSection
+                        id={`${nodeId}-consent-section`}
+                        title="Consentimento guiado"
+                        summary={stringValue(node.purpose) || "Finalidade não definida"}
+                        defaultExpanded={sectionDefaultExpanded("consent")}
+                        hasIssue={hasNodeIssue}
+                      >
                         <div>
-                          <p className="text-sm font-semibold text-white">Consentimento guiado</p>
                           <p className="mt-1 text-xs text-white/55">
                             O sistema consulta e grava o consentimento no servidor. O editor só define a finalidade, versão e caminhos do fluxo.
                           </p>
@@ -594,12 +753,17 @@ export function ChatbotFlowBuilder({
                             </select>
                           </label>
                         </div>
-                      </div>
+                      </CollapsibleSection>
                     ) : null}
 
                     {(type === "menu" || type === "handoff") ? (
-                      <div className="chatbot-field-group grid gap-2 rounded-lg border border-white/10 bg-black/10 p-3">
-                        <p className="text-sm font-semibold text-white">Destino de atendimento</p>
+                      <CollapsibleSection
+                        id={`${nodeId}-destination-section`}
+                        title="Destino de atendimento"
+                        summary={stringValue(node.departmentId) ? "Setor configurado" : "Sem setor definido"}
+                        defaultExpanded={sectionDefaultExpanded("destination")}
+                        hasIssue={hasNodeIssue}
+                      >
                         <div className="grid gap-2 sm:grid-cols-2">
                           <label className="grid gap-1 text-sm text-white/70">
                             Setor
@@ -647,13 +811,18 @@ export function ChatbotFlowBuilder({
                             Horários continuam no cadastro do setor. O fluxo apenas define a mensagem alternativa.
                           </span>
                         </label>
-                      </div>
+                      </CollapsibleSection>
                     ) : null}
 
                     {type === "menu" ? (
-                      <div className="chatbot-field-group grid gap-2 rounded-lg border border-white/10 bg-black/10 p-3">
+                      <CollapsibleSection
+                        id={`${nodeId}-options-section`}
+                        title="Opções do menu"
+                        summary={`${getOptions(node).length} opção(ões)`}
+                        defaultExpanded={sectionDefaultExpanded("options")}
+                        hasIssue={hasNodeIssue}
+                      >
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-white">Opções do menu</p>
                           <button
                             type="button"
                             disabled={disabled}
@@ -732,6 +901,17 @@ export function ChatbotFlowBuilder({
                             </div>
                           );
                         })}
+                      </CollapsibleSection>
+                    ) : null}
+
+                    {type === "menu" ? (
+                      <CollapsibleSection
+                        id={`${nodeId}-fallback-section`}
+                        title="Mensagem de opção inválida"
+                        summary={stringValue(node.fallbackText) ? "Configurada" : "Padrão da engine"}
+                        defaultExpanded={sectionDefaultExpanded("fallback")}
+                        hasIssue={hasNodeIssue}
+                      >
                         <label className="grid gap-1 text-sm text-white/70">
                           Mensagem para opção inválida
                           <textarea
@@ -744,7 +924,7 @@ export function ChatbotFlowBuilder({
                             Se a engine não usar este campo neste tenant, ele será preservado como metadado compatível.
                           </span>
                         </label>
-                      </div>
+                      </CollapsibleSection>
                     ) : null}
                   </div>
                 </article>

@@ -1434,11 +1434,11 @@ export default function AdminTenantChatbotPage() {
           ) : null}
 
           {settings ? (
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-re7-navy/40">
+            <div className="chatbot-setting-card mt-4 rounded-lg border border-white/10 bg-re7-navy/40 p-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-950 dark:text-white">Tratamento de midia no handoff</h3>
-                  <p className="mt-1 max-w-3xl text-xs text-slate-600 dark:text-white/60">
+                  <h3 className="text-sm font-semibold text-white">Tratamento de midia no handoff</h3>
+                  <p className="mt-1 max-w-3xl text-xs text-white/60">
                     Define, por tenant e canal, o que acontece quando uma mensagem com midia leva o atendimento para humano.
                     O texto nao cita o tipo de midia para evitar classificacao incorreta.
                   </p>
@@ -1450,8 +1450,8 @@ export default function AdminTenantChatbotPage() {
               </div>
 
               <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr]">
-                <div className="rounded-md border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-black/10">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-white/50">
+                <div className="chatbot-field-group rounded-md border border-white/10 bg-black/10 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-white/50">
                     Canais
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -1465,7 +1465,7 @@ export default function AdminTenantChatbotPage() {
                           className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                             checked
                               ? "border-re7-orange bg-re7-orange text-white"
-                              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
+                              : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10"
                           }`}
                         >
                           {channel.label}
@@ -1475,7 +1475,7 @@ export default function AdminTenantChatbotPage() {
                   </div>
                 </div>
 
-                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-white/50">
+                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-white/50">
                   Comportamento
                   <select
                     value={mediaHandoffPolicy.behavior}
@@ -1484,7 +1484,7 @@ export default function AdminTenantChatbotPage() {
                         behavior: event.target.value as MediaHandoffPolicy["behavior"],
                       })
                     }
-                    className="mt-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-900 outline-none focus:border-re7-sky dark:border-white/20 dark:bg-re7-navy/80 dark:text-white"
+                    className="mt-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-re7-sky"
                   >
                     {MEDIA_HANDOFF_BEHAVIOR_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -1496,20 +1496,20 @@ export default function AdminTenantChatbotPage() {
               </div>
 
               <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-white/50">
+                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-white/50">
                   Aviso ao cliente
                   <textarea
                     value={mediaHandoffPolicy.customerNoticeText}
                     onChange={(event) => updateMediaHandoffPolicy({ customerNoticeText: event.target.value })}
-                    className="mt-1 min-h-20 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-slate-900 outline-none focus:border-re7-sky dark:border-white/20 dark:bg-re7-navy/80 dark:text-white"
+                    className="mt-1 min-h-20 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm font-normal normal-case tracking-normal text-white outline-none focus:border-re7-sky"
                   />
                 </label>
-                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-white/50">
+                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-white/50">
                   Texto interno para equipe
                   <textarea
                     value={mediaHandoffPolicy.attendantSummaryText}
                     onChange={(event) => updateMediaHandoffPolicy({ attendantSummaryText: event.target.value })}
-                    className="mt-1 min-h-20 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-slate-900 outline-none focus:border-re7-sky dark:border-white/20 dark:bg-re7-navy/80 dark:text-white"
+                    className="mt-1 min-h-20 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm font-normal normal-case tracking-normal text-white outline-none focus:border-re7-sky"
                   />
                 </label>
               </div>
