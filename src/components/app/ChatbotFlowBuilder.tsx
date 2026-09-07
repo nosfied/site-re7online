@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 export type ChatbotFlowBuilderDepartment = {
@@ -223,45 +223,88 @@ type NodeEditorSectionPlan = {
   defaultExpanded: boolean;
 };
 
-export function getChatbotNodeEditorSectionPlan(type: string, hasIssue = false): NodeEditorSectionPlan[] {
-  const withIssue = (items: NodeEditorSectionPlan[]) =>
-    hasIssue ? items.map((item) => ({ ...item, defaultExpanded: true })) : items;
+export function getChatbotNodeIssueSectionKeys(type: string, nodeId: string, nodeIssues: string[]) {
+  const issueKeys = new Set<NodeEditorSectionKey>();
+  for (const issue of nodeIssues) {
+    if (!issue.includes(`"${nodeId}"`)) continue;
+    if (issue.includes("tipo desconhecido") || issue.includes("não é alcançada")) {
+      issueKeys.add("identity");
+    }
+    if (issue.includes("precisa de mensagem")) {
+      issueKeys.add(type === "handoff" ? "handoffMessage" : type === "consent" ? "consent" : "message");
+    }
+    if (
+      issue.includes("precisa de finalidade") ||
+      issue.includes("precisa de versão do texto") ||
+      issue.includes("precisa da mensagem de consentimento") ||
+      issue.includes("precisa da opção de aceite") ||
+      issue.includes("precisa do destino ao aceitar") ||
+      issue.includes("aceita e aponta") ||
+      issue.includes("recusa e aponta")
+    ) {
+      issueKeys.add("consent");
+    }
+    if (issue.includes("precisa do campo que será salvo")) {
+      issueKeys.add("capture");
+    }
+    if (issue.includes("opção") || issue.includes("opção duplicada")) {
+      issueKeys.add("options");
+    }
+    if (issue.includes("aponta para etapa inexistente") && !issue.includes("opção")) {
+      issueKeys.add(type === "consent" ? "consent" : "next");
+    }
+    if (issue.includes("encaminha para humano sem setor definido") || issue.includes("usa fila de outro setor")) {
+      issueKeys.add(type === "menu" && issue.includes("opção") ? "options" : "destination");
+    }
+  }
+  return [...issueKeys];
+}
+
+export function getChatbotNodeEditorSectionPlan(
+  type: string,
+  issueSectionKeys: NodeEditorSectionKey[] = []
+): NodeEditorSectionPlan[] {
+  const issues = new Set(issueSectionKeys);
+  const section = (key: NodeEditorSectionKey, defaultExpanded: boolean) => ({
+    key,
+    defaultExpanded: defaultExpanded || issues.has(key),
+  });
 
   if (type === "menu") {
-    return withIssue([
-      { key: "identity", defaultExpanded: true },
-      { key: "message", defaultExpanded: true },
-      { key: "destination", defaultExpanded: true },
-      { key: "options", defaultExpanded: true },
-      { key: "fallback", defaultExpanded: false },
-    ]);
+    return [
+      section("identity", true),
+      section("message", true),
+      section("destination", false),
+      section("options", true),
+      section("fallback", false),
+    ];
   }
   if (type === "handoff") {
-    return withIssue([
-      { key: "identity", defaultExpanded: true },
-      { key: "handoffMessage", defaultExpanded: true },
-      { key: "destination", defaultExpanded: true },
-    ]);
+    return [
+      section("identity", true),
+      section("handoffMessage", true),
+      section("destination", true),
+    ];
   }
   if (type === "capture") {
-    return withIssue([
-      { key: "identity", defaultExpanded: true },
-      { key: "message", defaultExpanded: true },
-      { key: "next", defaultExpanded: true },
-      { key: "capture", defaultExpanded: true },
-    ]);
+    return [
+      section("identity", true),
+      section("message", true),
+      section("next", false),
+      section("capture", false),
+    ];
   }
   if (type === "consent") {
-    return withIssue([
-      { key: "identity", defaultExpanded: true },
-      { key: "consent", defaultExpanded: true },
-    ]);
+    return [
+      section("identity", true),
+      section("consent", true),
+    ];
   }
-  return withIssue([
-    { key: "identity", defaultExpanded: true },
-    { key: "message", defaultExpanded: true },
-    { key: "next", defaultExpanded: true },
-  ]);
+  return [
+    section("identity", true),
+    section("message", true),
+    section("next", false),
+  ];
 }
 
 type CollapsibleSectionProps = {
@@ -283,29 +326,46 @@ function CollapsibleSection({
 }: CollapsibleSectionProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
+  useEffect(() => {
+    setExpanded(defaultExpanded);
+  }, [defaultExpanded, id]);
+
   return (
-    <section className="chatbot-field-group rounded-lg border border-white/10 bg-black/10 p-3">
+    <section
+      className={`chatbot-field-group overflow-hidden rounded-lg border transition ${
+        expanded
+          ? "border-re7-sky/35 bg-white/[0.07] shadow-sm shadow-re7-sky/10"
+          : "border-white/10 bg-black/15"
+      }`}
+    >
       <button
         type="button"
         aria-expanded={expanded}
         aria-controls={id}
         onClick={() => setExpanded((current) => !current)}
-        className="flex w-full items-start justify-between gap-3 text-left"
+        className="flex w-full items-start justify-between gap-3 px-3 py-3 text-left transition hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 focus:ring-offset-2 focus:ring-offset-re7-navy"
       >
         <span className="min-w-0">
           <span className="block text-sm font-semibold text-white">{title}</span>
           {summary ? <span className="mt-0.5 block text-xs text-white/50">{summary}</span> : null}
         </span>
-        <span className="flex shrink-0 items-center gap-2 text-xs font-semibold text-white/60">
+        <span className="flex shrink-0 items-center gap-2 text-xs font-semibold text-white/70">
           {hasIssue ? (
             <span className="rounded-full border border-amber-300/25 bg-amber-500/10 px-2 py-0.5 text-amber-100">
               Revisar
             </span>
           ) : null}
-          <span aria-hidden="true">{expanded ? "v" : ">"}</span>
+          <span
+            aria-hidden="true"
+            className={`grid h-7 w-7 place-items-center rounded-full border border-white/15 bg-white/10 text-base leading-none transition ${
+              expanded ? "rotate-90 text-re7-sky" : "text-white/75"
+            }`}
+          >
+            ›
+          </span>
         </span>
       </button>
-      <div id={id} hidden={!expanded} className={expanded ? "mt-3 grid gap-3" : "hidden"}>
+      <div id={id} hidden={!expanded} className={expanded ? "grid gap-3 border-t border-white/10 px-3 pb-3 pt-3" : "hidden"}>
         {children}
       </div>
     </section>
@@ -500,13 +560,15 @@ export function ChatbotFlowBuilder({
               const nodeQueues = queues.filter((queue) => !node.departmentId || queue.departmentId === node.departmentId);
               const nodeIssues = issues.filter((issue) => issue.includes(`"${nodeId}"`));
               const hasNodeIssue = nodeIssues.length > 0;
+              const issueSectionKeys = new Set(getChatbotNodeIssueSectionKeys(type, nodeId, nodeIssues));
               const sectionPlan = new Map(
-                getChatbotNodeEditorSectionPlan(type, hasNodeIssue).map((section) => [
+                getChatbotNodeEditorSectionPlan(type, [...issueSectionKeys]).map((section) => [
                   section.key,
                   section.defaultExpanded,
                 ])
               );
-              const sectionDefaultExpanded = (key: NodeEditorSectionKey) => sectionPlan.get(key) ?? hasNodeIssue;
+              const sectionDefaultExpanded = (key: NodeEditorSectionKey) => sectionPlan.get(key) ?? issueSectionKeys.has(key);
+              const sectionHasIssue = (key: NodeEditorSectionKey) => issueSectionKeys.has(key);
               return (
                 <article key={nodeId} className="chatbot-node-card rounded-xl border border-white/10 bg-re7-navy/40 p-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -536,7 +598,7 @@ export function ChatbotFlowBuilder({
                       title="Identificação e tipo"
                       summary={nodeTypeLabel(type)}
                       defaultExpanded={sectionDefaultExpanded("identity")}
-                      hasIssue={hasNodeIssue}
+                      hasIssue={sectionHasIssue("identity")}
                     >
                       <label className="grid gap-1 text-sm text-white/70">
                         Tipo
@@ -557,7 +619,7 @@ export function ChatbotFlowBuilder({
                         title="Conteúdo da mensagem"
                         summary={stringValue(node.text) ? "Mensagem configurada" : "Sem mensagem"}
                         defaultExpanded={sectionDefaultExpanded("message")}
-                        hasIssue={hasNodeIssue}
+                        hasIssue={sectionHasIssue("message")}
                       >
                         <label className="grid gap-1 text-sm text-white/70">
                           Mensagem
@@ -579,7 +641,7 @@ export function ChatbotFlowBuilder({
                         title="Mensagem de encaminhamento"
                         summary={node.sendFeedback === false ? "Desativada" : "Ativa"}
                         defaultExpanded={sectionDefaultExpanded("handoffMessage")}
-                        hasIssue={hasNodeIssue}
+                        hasIssue={sectionHasIssue("handoffMessage")}
                       >
                         <div className="grid gap-2">
                           <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-sm text-white/70">
@@ -618,7 +680,7 @@ export function ChatbotFlowBuilder({
                         title="Próxima etapa"
                         summary={stringValue(node.next) || "Encerrar neste ponto"}
                         defaultExpanded={sectionDefaultExpanded("next")}
-                        hasIssue={hasNodeIssue}
+                        hasIssue={sectionHasIssue("next")}
                       >
                         <label className="grid gap-1 text-sm text-white/70">
                           Próxima etapa
@@ -641,7 +703,7 @@ export function ChatbotFlowBuilder({
                         title="Coleta e validação"
                         summary={stringValue(node.field) || "Campo não definido"}
                         defaultExpanded={sectionDefaultExpanded("capture")}
-                        hasIssue={hasNodeIssue}
+                        hasIssue={sectionHasIssue("capture")}
                       >
                         <div className="grid gap-2 sm:grid-cols-2">
                           <label className="grid gap-1 text-sm text-white/70">
@@ -677,7 +739,7 @@ export function ChatbotFlowBuilder({
                         title="Consentimento guiado"
                         summary={stringValue(node.purpose) || "Finalidade não definida"}
                         defaultExpanded={sectionDefaultExpanded("consent")}
-                        hasIssue={hasNodeIssue}
+                        hasIssue={sectionHasIssue("consent")}
                       >
                         <div>
                           <p className="mt-1 text-xs text-white/55">
@@ -762,7 +824,7 @@ export function ChatbotFlowBuilder({
                         title="Destino de atendimento"
                         summary={stringValue(node.departmentId) ? "Setor configurado" : "Sem setor definido"}
                         defaultExpanded={sectionDefaultExpanded("destination")}
-                        hasIssue={hasNodeIssue}
+                        hasIssue={sectionHasIssue("destination")}
                       >
                         <div className="grid gap-2 sm:grid-cols-2">
                           <label className="grid gap-1 text-sm text-white/70">
@@ -820,7 +882,7 @@ export function ChatbotFlowBuilder({
                         title="Opções do menu"
                         summary={`${getOptions(node).length} opção(ões)`}
                         defaultExpanded={sectionDefaultExpanded("options")}
-                        hasIssue={hasNodeIssue}
+                        hasIssue={sectionHasIssue("options")}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <button
@@ -910,7 +972,7 @@ export function ChatbotFlowBuilder({
                         title="Mensagem de opção inválida"
                         summary={stringValue(node.fallbackText) ? "Configurada" : "Padrão da engine"}
                         defaultExpanded={sectionDefaultExpanded("fallback")}
-                        hasIssue={hasNodeIssue}
+                        hasIssue={sectionHasIssue("fallback")}
                       >
                         <label className="grid gap-1 text-sm text-white/70">
                           Mensagem para opção inválida

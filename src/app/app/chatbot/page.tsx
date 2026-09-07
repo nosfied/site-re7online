@@ -25,6 +25,7 @@ import {
   updateAppChatbotFlow,
 } from "@/lib/appClientApi";
 import { getAppErrorUxMessage } from "@/lib/appUxLabels";
+import { getAppChatbotAiMissingLabels } from "@/lib/appChatbotAiStatus";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 const DEFAULT_DEFINITION_TEXT = JSON.stringify(
@@ -700,6 +701,7 @@ export default function AppChatbotPage() {
     warnings: [],
     score: automationDraft.aiConfigured ? 100 : 0,
   };
+  const aiMissingLabels = getAppChatbotAiMissingLabels(aiConfigStatus.missing);
 
   return (
     <AppShell
@@ -719,13 +721,21 @@ export default function AppChatbotPage() {
               Acompanhe o que esta liberado para a organizacao e o estado atual da automacao.
             </p>
             <p className="mt-1 text-xs text-white/50">
-              Configuracao de IA: {aiConfigStatus.ready ? "pronta" : "pendente"} · {aiConfigStatus.score}%.
+              Configuração da IA {aiConfigStatus.ready ? "pronta" : "incompleta"} · {aiConfigStatus.score}%.
               {!aiConfigStatus.ready ? " Sem isso, a IA conversacional fica indisponivel." : ""}
             </p>
-            {!aiConfigStatus.ready && aiConfigStatus.missing.length ? (
-              <p className="mt-2 rounded-md border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                Pendências no console interno: {aiConfigStatus.missing.join(", ")}.
-              </p>
+            {!aiConfigStatus.ready && aiMissingLabels.length ? (
+              <div className="mt-2 rounded-md border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                <p className="font-semibold">Configurações pendentes no console interno:</p>
+                <ul className="mt-1 list-disc space-y-1 pl-4">
+                  {aiMissingLabels.map((label, index) => (
+                    <li key={`${label}-${index}`}>{label}</li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-amber-100/80">
+                  Essas configurações são gerenciadas no console interno.
+                </p>
+              </div>
             ) : null}
           </div>
           <span className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white/60">
