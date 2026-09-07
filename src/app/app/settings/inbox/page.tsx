@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
@@ -249,6 +250,12 @@ export default function AppSettingsInboxPage() {
         ) : (
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
             <div className="space-y-4">
+              <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Assinatura do atendente</p>
+                <p className="mt-1 text-sm leading-relaxed text-white/65">
+                  Agrupa o nome visível, escopo de aplicação e prévia da mensagem humana.
+                </p>
+              </div>
               <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/50 px-3 py-3">
                 <span>
                   <span className="block text-sm font-semibold text-white">Mostrar nome do atendente ao cliente</span>
@@ -278,6 +285,13 @@ export default function AppSettingsInboxPage() {
                   </span>
                 </button>
               </label>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm leading-relaxed text-white/68">
+                <p className="font-semibold text-white">Escopo da assinatura</p>
+                <p className="mt-1">
+                  A assinatura usa somente o nome cadastrado do atendente que enviou a mensagem. Não usa email,
+                  cargo, telefone, organização técnica ou responsável atual da conversa.
+                </p>
+              </div>
 
               <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -333,6 +347,13 @@ export default function AppSettingsInboxPage() {
                       <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-white/60">
                         Controla avisos automáticos ao cliente. Desativar um aviso não altera protocolo, fila,
                         encerramento ou pesquisa de satisfação.
+                      </p>
+                      <p className="mt-2 text-xs leading-relaxed text-white/60">
+                        Mensagem de encaminhamento humano é configurada no nó Atendimento humano do fluxo em{" "}
+                        <Link href="/app/chatbot" className="font-semibold text-re7-sky hover:text-white">
+                          Chatbot
+                        </Link>
+                        .
                       </p>
                     </div>
                     {serviceMessagesReadOnly ? <SettingsBadge label="Somente leitura" tone="warning" /> : null}
@@ -511,14 +532,6 @@ export default function AppSettingsInboxPage() {
                   </div>
                 </div>
               ) : null}
-
-              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm leading-relaxed text-white/68">
-                <p className="font-semibold text-white">Escopo</p>
-                <p className="mt-1">
-                  A assinatura usa somente o nome cadastrado do atendente que enviou a mensagem. Não usa email,
-                  cargo, telefone, organização técnica ou responsável atual da conversa.
-                </p>
-              </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
                 <button

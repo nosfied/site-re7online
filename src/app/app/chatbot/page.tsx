@@ -714,9 +714,9 @@ export default function AppChatbotPage() {
       <section className="chatbot-section rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold">Automacao do atendimento</h2>
+            <h2 className="text-lg font-semibold">Recursos e estado operacional</h2>
             <p className="mt-1 text-sm text-white/65">
-              Acompanhe os recursos liberados no console interno e configure notificacoes internas de novos leads.
+              Acompanhe o que esta liberado para a organizacao e o estado atual da automacao.
             </p>
             <p className="mt-1 text-xs text-white/50">
               Configuracao de IA: {aiConfigStatus.ready ? "pronta" : "pendente"} · {aiConfigStatus.score}%.
@@ -729,7 +729,7 @@ export default function AppChatbotPage() {
             ) : null}
           </div>
           <span className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white/60">
-            Controle limitado
+            Controles seguros
           </span>
         </div>
 
@@ -738,10 +738,10 @@ export default function AppChatbotPage() {
             {[
               {
                 key: "disableChatbot" as const,
-                title: "Fluxo configuravel",
+                title: "Executar chatbot configuravel",
                 help: automationDraft.chatbotLocked
                   ? "Bloqueado pelo console interno. A organização não pode reativar esta camada no app."
-                  : "Ativa os fluxos personalizados criados nesta tela para esta organização.",
+                  : "Quando desativado, mensagens recebidas não iniciam nem continuam os fluxos configuráveis. Se o atendimento humano depender do fluxo, a conversa pode não ser direcionada automaticamente.",
               },
               {
                 key: "disableAiFallback" as const,
@@ -786,7 +786,7 @@ export default function AppChatbotPage() {
               <span className="space-y-1">
                 <span className="block font-medium text-white">IA controlada</span>
                 <span className="block text-white/60">
-                  Responde apenas perguntas simples quando o fluxo e o atendimento humano não estiverem ativos.
+                  Recurso operacional liberado apenas pelo console interno. Responde perguntas simples quando o fluxo e o atendimento humano não estiverem ativos.
                 </span>
               </span>
               <TogglePill
@@ -920,10 +920,10 @@ export default function AppChatbotPage() {
       <section className="chatbot-section rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div className="mb-4 space-y-2">
           <span className="w-fit rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/70">
-            Novo fluxo
+            Conteudo do fluxo
           </span>
           <p className="text-sm text-white/65">
-            Fluxos configuráveis são definidos no console interno. Esta tela mostra o estado liberado para acompanhamento.
+            Crie ou edite mensagens, menus, encaminhamentos e destinos. Apenas um fluxo deve ser marcado como entrada principal.
           </p>
           {flowEditingLocked || flowReadOnly ? (
             <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
@@ -1033,7 +1033,7 @@ export default function AppChatbotPage() {
                 ? "Edicao bloqueada pelo console interno. Visualizacao liberada."
                 : readOnly
                 ? "Visualizacao somente para leitura."
-                : "Edite nome, JSON e ativacao sem sair do portal."}
+                : "Edite nome, ativacao, entrada principal e nos do fluxo sem sair do portal. A mensagem de encaminhamento humano fica no nó Atendimento humano."}
             </p>
           </div>
           <FlowBadge label={`${flows.length} fluxo(s)`} />

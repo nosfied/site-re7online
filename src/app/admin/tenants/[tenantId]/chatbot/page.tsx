@@ -761,7 +761,7 @@ export default function AdminTenantChatbotPage() {
   };
 
   return (
-    <div className="px-4 pb-8 text-slate-900 dark:text-white md:px-8">
+    <div className="chatbot-theme px-4 pb-8 text-slate-900 dark:text-white md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
         <header className="sticky top-0 z-30 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-re7-navy/95 md:-mx-8 md:px-8">
           <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3">
@@ -813,7 +813,7 @@ export default function AdminTenantChatbotPage() {
           </p>
         ) : null}
 
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-white/5">
+        <section className="chatbot-section rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-white/5">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">Automacao do atendimento</h2>
@@ -835,8 +835,8 @@ export default function AdminTenantChatbotPage() {
               {[
                 {
                   key: "disableChatbot" as const,
-                  title: "Fluxo configuravel",
-                  help: "On libera os flows personalizados para este tenant.",
+                  title: "Executar chatbot configuravel",
+                  help: "Quando desativado, mensagens recebidas não iniciam nem continuam os fluxos configuráveis deste tenant.",
                 },
                 {
                   key: "disableChatbotFlowEditing" as const,
@@ -1636,7 +1636,7 @@ export default function AdminTenantChatbotPage() {
           ) : null}
         </section>
 
-        <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <section className="chatbot-section rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="mb-4 space-y-2">
             <span className="w-fit rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/70">
               Novo flow
@@ -1735,7 +1735,7 @@ export default function AdminTenantChatbotPage() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <section className="chatbot-section rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">Fluxos cadastrados</h2>

@@ -1876,6 +1876,56 @@ html {
     color: #ffffff !important;
   }
 
+  .theme-admin .chatbot-theme .chatbot-section {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.04));
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.18);
+  }
+
+  .theme-admin .chatbot-theme .chatbot-setting-card,
+  .theme-admin .chatbot-theme .chatbot-flow-card,
+  .theme-admin .chatbot-theme .chatbot-node-card,
+  .theme-admin .chatbot-theme .chatbot-builder-summary {
+    background: linear-gradient(180deg, rgba(8, 24, 48, 0.78), rgba(8, 24, 48, 0.58));
+    border-color: rgba(125, 211, 252, 0.16);
+  }
+
+  :root[data-theme="light"] .theme-admin .chatbot-theme .chatbot-section {
+    background: #ffffff !important;
+    border-color: rgba(15, 23, 42, 0.14) !important;
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08) !important;
+  }
+
+  :root[data-theme="light"] .theme-admin .chatbot-theme .chatbot-section:nth-of-type(1) {
+    background: linear-gradient(180deg, #f0f9ff, #ffffff) !important;
+    border-left: 3px solid #0284c7 !important;
+  }
+
+  :root[data-theme="light"] .theme-admin .chatbot-theme .chatbot-section:nth-of-type(2) {
+    background: linear-gradient(180deg, #fff8e7, #ffffff) !important;
+    border-left: 3px solid #d97706 !important;
+  }
+
+  :root[data-theme="light"] .theme-admin .chatbot-theme .chatbot-section:nth-of-type(3) {
+    background: linear-gradient(180deg, #effcf5, #ffffff) !important;
+    border-left: 3px solid #059669 !important;
+  }
+
+  :root[data-theme="light"] .theme-admin .chatbot-theme .chatbot-setting-card,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .chatbot-flow-card,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .chatbot-node-card,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .chatbot-builder-summary {
+    background: #f7fbff !important;
+    border-color: rgba(12, 89, 132, 0.18) !important;
+  }
+
+  :root[data-theme="light"] .theme-admin .chatbot-theme .chatbot-field-group,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .chatbot-option-card,
+  :root[data-theme="light"] .theme-admin .chatbot-theme .chatbot-preview {
+    background-color: rgba(255, 255, 255, 0.78) !important;
+    border-color: rgba(15, 23, 42, 0.14) !important;
+  }
+
   .wa-chat-canvas {
     background-color: #e8dece;
     background-image: url("/images/fundotimeline.png");

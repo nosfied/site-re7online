@@ -447,9 +447,9 @@ export function ChatbotFlowBuilder({
                       <div className="grid gap-2">
                         <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-sm text-white/70">
                           <span>
-                            <span className="block font-semibold text-white">Enviar mensagem de encaminhamento</span>
+                            <span className="block font-semibold text-white">Enviar mensagem de encaminhamento humano</span>
                             <span className="mt-0.5 block text-xs text-white/50">
-                              Quando desativado, o atendimento humano continua e o texto fica salvo para reativação.
+                              Quando desativado, o atendimento humano continua e o texto fica salvo para reativação neste nó.
                             </span>
                           </span>
                           <input
@@ -462,7 +462,7 @@ export function ChatbotFlowBuilder({
                           />
                         </label>
                         <label className="grid gap-1 text-sm text-white/70">
-                          Mensagem antes de encaminhar
+                          Mensagem enviada antes de encaminhar
                           <textarea
                             value={stringValue(node.text)}
                             disabled={disabled || node.sendFeedback === false}
