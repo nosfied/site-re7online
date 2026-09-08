@@ -341,16 +341,16 @@ function FlowAccordionCard({
 }) {
   return (
     <article
+      data-chatbot-flow-container
       className={`chatbot-flow-card min-w-0 overflow-hidden rounded-2xl border transition ${
         expanded
-          ? "border-re7-sky/35 bg-re7-navy/35 shadow-lg shadow-black/15"
-          : "border-white/10 bg-white/[0.035] hover:border-white/20 hover:bg-white/[0.055]"
+          ? "border-re7-sky/40 bg-re7-navy/45 shadow-lg shadow-black/15"
+          : "border-white/10 bg-white/[0.035] hover:border-white/20 hover:bg-white/[0.05]"
       }`}
     >
       <div
-        className={`flex flex-wrap items-center gap-3 p-3 transition sm:p-4 ${
-          expanded ? "border-b border-re7-sky/20 bg-white/[0.055]" : ""
-        }`}
+        data-chatbot-flow-header
+        className={`flex flex-wrap items-center gap-3 p-3 transition sm:p-4 ${expanded ? "bg-white/[0.045]" : ""}`}
       >
         <button
           type="button"
@@ -358,7 +358,7 @@ function FlowAccordionCard({
           aria-controls={id}
           aria-label={`${expanded ? "Recolher" : "Expandir"} ${title}`}
           onClick={onToggle}
-          className="flex min-w-[240px] flex-1 items-center gap-3 rounded-lg py-1 text-left transition hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 focus:ring-offset-2 focus:ring-offset-re7-navy"
+          className="flex min-w-[220px] flex-1 items-center gap-3 rounded-lg py-1 text-left focus:outline-none focus:ring-2 focus:ring-re7-sky/70 focus:ring-offset-2 focus:ring-offset-re7-navy"
         >
           <span
             aria-hidden="true"
@@ -377,12 +377,17 @@ function FlowAccordionCard({
             </span>
           </span>
         </button>
-        {actions ? <div className="flex max-w-full flex-wrap items-center justify-end gap-3 self-center">{actions}</div> : null}
+        {actions ? (
+          <div data-chatbot-flow-actions className="flex max-w-full flex-wrap items-center justify-end gap-3 self-center">
+            {actions}
+          </div>
+        ) : null}
       </div>
       <div
         id={id}
         hidden={!expanded}
-        className={expanded ? "m-3 grid gap-4 rounded-xl border border-re7-sky/20 bg-re7-navy/55 p-3 sm:m-4 sm:p-4" : "hidden"}
+        data-chatbot-flow-content
+        className={expanded ? "grid gap-4 border-t border-re7-sky/20 bg-re7-navy/55 p-3 sm:p-4" : "hidden"}
       >
         {children}
       </div>
