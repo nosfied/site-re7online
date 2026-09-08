@@ -29,6 +29,8 @@ type Props = {
   definitionText: string;
   onDefinitionTextChange: (value: string) => void;
   disabled?: boolean;
+  isActive?: boolean;
+  entryPoint?: boolean;
   departments: ChatbotFlowBuilderDepartment[];
   queues: ChatbotFlowBuilderQueue[];
   advancedEditor: ReactNode;
@@ -307,6 +309,284 @@ export function getChatbotNodeEditorSectionPlan(
   ];
 }
 
+type GuidedStepKey =
+  | "objective"
+  | "start"
+  | "main"
+  | "questions"
+  | "handoff"
+  | "exceptions"
+  | "preview"
+  | "checklist"
+  | "activation";
+
+type GuidedStepStatus = "complete" | "incomplete" | "not_applicable" | "warning" | "error";
+
+type GuidedStep = {
+  key: GuidedStepKey;
+  number: number;
+  title: string;
+  summary: string;
+  status: GuidedStepStatus;
+  targetId: string;
+};
+
+const GUIDED_STATUS_LABELS: Record<GuidedStepStatus, string> = {
+  complete: "Completo",
+  incomplete: "Incompleto",
+  not_applicable: "Não aplicável",
+  warning: "Atenção",
+  error: "Erro",
+};
+
+function truncateText(value: string, maxLength = 120) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 1).trim()}...`;
+}
+
+function getDepartmentName(departments: ChatbotFlowBuilderDepartment[], id: unknown) {
+  if (typeof id !== "string" || !id.trim()) return "";
+  return departments.find((department) => department.id === id)?.name ?? "Setor não encontrado";
+}
+
+function getQueueName(queues: ChatbotFlowBuilderQueue[], id: unknown) {
+  if (typeof id !== "string" || !id.trim()) return "";
+  return queues.find((queue) => queue.id === id)?.name ?? "Fila não encontrada";
+}
+
+function describeDestination(
+  destination: Record<string, unknown>,
+  departments: ChatbotFlowBuilderDepartment[],
+  queues: ChatbotFlowBuilderQueue[]
+) {
+  const department = getDepartmentName(departments, destination.departmentId);
+  const queue = getQueueName(queues, destination.queueId);
+  if (!department && !queue) return "Destino ainda não configurado.";
+  return [department || "Setor não configurado", queue || "Fila padrão"].join(" · ");
+}
+
+function describeNodeForCitizen(nodeId: string, node: Record<string, unknown> | undefined) {
+  if (!node) return "Etapa inicial não configurada.";
+  const type = stringValue(node.type);
+  if (type === "menu") return truncateText(stringValue(node.text) || "Menu sem mensagem.");
+  if (type === "text") return truncateText(stringValue(node.text) || "Mensagem sem texto.");
+  if (type === "capture") return truncateText(stringValue(node.text) || "Pergunta sem texto.");
+  if (type === "consent") return truncateText(stringValue(node.message) || "Consentimento sem mensagem.");
+  if (type === "handoff") return stringValue(node.text) ? truncateText(stringValue(node.text)) : "Encaminhamento para atendimento humano.";
+  return `Etapa avançada preservada (${nodeId}).`;
+}
+
+function getClosestPattern(definition: FlowDefinition) {
+  const nodes = Object.values(definition.nodes);
+  const startNode = definition.nodes[definition.start];
+  if (startNode?.type === "consent") return "Solicitar consentimento antes de continuar";
+  if (startNode?.type === "handoff") return "Encaminhar direto para atendimento humano";
+  if (startNode?.type === "capture") return "Coletar uma informação";
+  if (startNode?.type === "text" && !stringValue(startNode.next)) return "Exibir uma mensagem informativa";
+  if (nodes.some((node) => node.type === "menu")) return "Apresentar um menu de opções";
+  return "Personalizado / avançado";
+}
+
+function getPrimaryMenuEntry(definition: FlowDefinition) {
+  if (definition.nodes[definition.start]?.type === "menu") {
+    return { id: definition.start, node: definition.nodes[definition.start] };
+  }
+  const entry = Object.entries(definition.nodes).find(([, node]) => node.type === "menu");
+  return entry ? { id: entry[0], node: entry[1] } : null;
+}
+
+function getHandoffEntries(definition: FlowDefinition) {
+  const entries: Array<{ source: string; nodeId: string; node: Record<string, unknown> }> = [];
+  for (const [nodeId, node] of Object.entries(definition.nodes)) {
+    if (node.type === "handoff") entries.push({ source: "Etapa de atendimento humano", nodeId, node });
+    if (node.type !== "menu") continue;
+    for (const option of getOptions(node)) {
+      const target = definition.nodes[stringValue(option.next)];
+      if (target?.type === "handoff") {
+        entries.push({ source: stringValue(option.label) || "Opção do menu", nodeId: stringValue(option.next), node: target });
+      }
+    }
+  }
+  return entries;
+}
+
+function getQuestionEntries(definition: FlowDefinition) {
+  return Object.entries(definition.nodes).filter(([, node]) => node.type === "capture" || node.type === "text" || node.type === "menu");
+}
+
+function hasAdvancedFields(definition: FlowDefinition) {
+  const simpleFields = new Set([
+    "type",
+    "text",
+    "options",
+    "next",
+    "field",
+    "validation",
+    "errorText",
+    "purpose",
+    "textVersion",
+    "message",
+    "acceptOption",
+    "declineOption",
+    "invalidText",
+    "onAccepted",
+    "onDeclined",
+    "departmentId",
+    "queueId",
+    "sendFeedback",
+    "handoffSummary",
+    "closedText",
+  ]);
+  return Object.values(definition.nodes).some((node) => Object.keys(node).some((key) => !simpleFields.has(key)));
+}
+
+function describeRoutedHandoff(
+  target: Record<string, unknown>,
+  option: Record<string, unknown>,
+  departments: ChatbotFlowBuilderDepartment[],
+  queues: ChatbotFlowBuilderQueue[]
+) {
+  return describeDestination(
+    {
+      ...target,
+      departmentId: option.departmentId ?? target.departmentId,
+      queueId: option.queueId ?? target.queueId,
+    },
+    departments,
+    queues
+  );
+}
+
+function buildJourneyLines(
+  definition: FlowDefinition,
+  departments: ChatbotFlowBuilderDepartment[],
+  queues: ChatbotFlowBuilderQueue[]
+) {
+  const lines: string[] = [];
+  const visited = new Set<string>();
+  const walk = (nodeId: string, depth: number) => {
+    const node = definition.nodes[nodeId];
+    const prefix = depth === 0 ? "INÍCIO" : `${"  ".repeat(depth)}↳`;
+    if (!node) {
+      lines.push(`${prefix} Destino ainda não configurado.`);
+      return;
+    }
+    if (visited.has(nodeId)) {
+      lines.push(`${prefix} Retorna para etapa já apresentada.`);
+      return;
+    }
+    visited.add(nodeId);
+    const type = stringValue(node.type);
+    if (type === "handoff") {
+      lines.push(`${prefix} HUMANO → ${describeDestination(node, departments, queues)}`);
+      return;
+    }
+    if (type === "menu") {
+      lines.push(`${prefix} MENU → ${describeNodeForCitizen(nodeId, node)}`);
+      getOptions(node).forEach((option) => {
+        const target = definition.nodes[stringValue(option.next)];
+        const label = stringValue(option.label) || "Opção sem título";
+        if (target?.type === "handoff") {
+          lines.push(`${"  ".repeat(depth + 1)}├─ ${label} → HUMANO → ${describeRoutedHandoff(target, option, departments, queues)}`);
+        } else {
+          lines.push(`${"  ".repeat(depth + 1)}├─ ${label} → ${target ? nodeTypeLabel(stringValue(target.type)) : "Destino ainda não configurado"}`);
+        }
+      });
+      return;
+    }
+    lines.push(`${prefix} ${nodeTypeLabel(type).toUpperCase()} → ${describeNodeForCitizen(nodeId, node)}`);
+    const next = type === "consent" ? stringValue(node.onAccepted) : stringValue(node.next);
+    if (next) walk(next, depth + 1);
+  };
+  walk(definition.start, 0);
+  return lines.slice(0, 24);
+}
+
+function buildExpectedResultLines(
+  definition: FlowDefinition,
+  departments: ChatbotFlowBuilderDepartment[],
+  queues: ChatbotFlowBuilderQueue[]
+) {
+  const startNode = definition.nodes[definition.start];
+  const primaryMenu = getPrimaryMenuEntry(definition);
+  const handoffs = getHandoffEntries(definition);
+  const lines = [`Quando o cidadão enviar a primeira mensagem, verá: "${describeNodeForCitizen(definition.start, startNode)}"`];
+  if (primaryMenu) {
+    lines.push(`Poderá escolher entre ${getOptions(primaryMenu.node).length} opção(ões).`);
+    getOptions(primaryMenu.node).slice(0, 5).forEach((option) => {
+      const target = definition.nodes[stringValue(option.next)];
+      if (target?.type === "handoff") {
+        lines.push(`Se escolher ${stringValue(option.label)}, será encaminhado para ${describeRoutedHandoff(target, option, departments, queues)}`);
+      }
+    });
+  }
+  if (handoffs.length > 0) {
+    lines.push(handoffs.some((entry) => entry.node.sendFeedback === false)
+      ? "Alguns encaminhamentos humanos estão sem mensagem automática antes da transferência."
+      : "No encaminhamento humano, a mensagem automática está ativa quando configurada.");
+  }
+  if (hasAdvancedFields(definition)) {
+    lines.push("Este fluxo possui configurações avançadas preservadas.");
+  }
+  return lines;
+}
+
+function buildChecklist(definition: FlowDefinition, issues: string[]) {
+  const hasStart = Boolean(definition.nodes[definition.start]);
+  const hasRequiredMessages = !issues.some((issue) => issue.includes("precisa de mensagem") || issue.includes("precisa da mensagem"));
+  const hasMenuOptions = !issues.some((issue) => issue.includes("precisa de título") || issue.includes("precisa de destino"));
+  const hasValidRoutes = !issues.some((issue) => issue.includes("aponta para etapa inexistente") || issue.includes("etapa inexistente"));
+  const hasHandoffDepartments = !issues.some((issue) => issue.includes("encaminha para humano sem setor definido"));
+  const hasCompatibleQueues = !issues.some((issue) => issue.includes("usa fila de outro setor"));
+  return [
+    { group: "Estrutura", label: "Etapa inicial definida", status: hasStart ? "PASS" : "ERROR" },
+    { group: "Estrutura", label: "Referências válidas", status: hasValidRoutes ? "PASS" : "ERROR" },
+    { group: "Conteúdo", label: "Mensagens obrigatórias preenchidas", status: hasRequiredMessages ? "PASS" : "ERROR" },
+    { group: "Conteúdo", label: "Menus possuem opções válidas", status: hasMenuOptions ? "PASS" : "ERROR" },
+    { group: "Roteamento", label: "Atendimentos humanos possuem setor", status: hasHandoffDepartments ? "PASS" : "WARNING" },
+    { group: "Roteamento", label: "Filas compatíveis com setores", status: hasCompatibleQueues ? "PASS" : "ERROR" },
+  ];
+}
+
+function buildGuidedSteps(params: {
+  definition: FlowDefinition;
+  issues: string[];
+  active?: boolean;
+  entryPoint?: boolean;
+}) {
+  const { definition, issues, active, entryPoint } = params;
+  const startNode = definition.nodes[definition.start];
+  const primaryMenu = getPrimaryMenuEntry(definition);
+  const handoffs = getHandoffEntries(definition);
+  const questionCount = getQuestionEntries(definition).filter(([nodeId]) => nodeId !== primaryMenu?.id).length;
+  const hasErrors = issues.length > 0;
+  return [
+    { key: "objective", number: 1, title: "Objetivo", summary: getClosestPattern(definition), status: "complete", targetId: "guided-step-objective" },
+    { key: "start", number: 2, title: "Início do atendimento", summary: describeNodeForCitizen(definition.start, startNode), status: startNode ? "complete" : "error", targetId: "guided-step-start" },
+    { key: "main", number: 3, title: "Menu / interação principal", summary: primaryMenu ? `${getOptions(primaryMenu.node).length} opção(ões)` : "Sem menu principal.", status: primaryMenu ? "complete" : "not_applicable", targetId: "guided-step-main" },
+    { key: "questions", number: 4, title: "Submenus e perguntas", summary: questionCount > 0 ? `${questionCount} etapa(s) de apoio` : "Nenhuma etapa adicional.", status: questionCount > 0 ? "complete" : "not_applicable", targetId: "guided-step-questions" },
+    { key: "handoff", number: 5, title: "Destinos humanos", summary: handoffs.length > 0 ? `${handoffs.length} destino(s)` : "Sem encaminhamento humano.", status: handoffs.length > 0 ? "complete" : "not_applicable", targetId: "guided-step-handoff" },
+    { key: "exceptions", number: 6, title: "Exceções", summary: "Opção inválida, voltar, inatividade e horários.", status: "complete", targetId: "guided-step-exceptions" },
+    { key: "preview", number: 7, title: "Prévia da jornada", summary: "Caminho legível do cidadão.", status: "complete", targetId: "guided-step-preview" },
+    { key: "checklist", number: 8, title: "Checklist", summary: hasErrors ? `${issues.length} pendência(s)` : "Sem pendências críticas.", status: hasErrors ? "error" : "complete", targetId: "guided-step-checklist" },
+    { key: "activation", number: 9, title: "Ativação", summary: active && entryPoint ? "Pode receber novas conversas." : "Revise ativo e entrada principal.", status: hasErrors ? "warning" : active && entryPoint ? "complete" : "incomplete", targetId: "guided-step-activation" },
+  ] as GuidedStep[];
+}
+
+function guidedStatusClass(status: GuidedStepStatus) {
+  if (status === "complete") return "border-emerald-300/25 bg-emerald-500/10 text-emerald-100";
+  if (status === "error") return "border-red-300/30 bg-red-500/10 text-red-100";
+  if (status === "warning" || status === "incomplete") return "border-amber-300/30 bg-amber-500/10 text-amber-100";
+  return "border-white/10 bg-white/5 text-white/60";
+}
+
+function checklistStatusClass(status: string) {
+  if (status === "PASS") return "text-emerald-100";
+  if (status === "WARNING") return "text-amber-100";
+  return "text-red-100";
+}
+
 type CollapsibleSectionProps = {
   id: string;
   title: string;
@@ -376,11 +656,14 @@ export function ChatbotFlowBuilder({
   definitionText,
   onDefinitionTextChange,
   disabled,
+  isActive,
+  entryPoint,
   departments,
   queues,
   advancedEditor,
 }: Props) {
   const [mode, setMode] = useState<"guided" | "advanced">("guided");
+  const [activeStep, setActiveStep] = useState<GuidedStepKey>("objective");
   const parsed = useMemo(() => parseDefinition(definitionText), [definitionText]);
   const issues = useMemo(
     () => (parsed.ok ? buildIssues(parsed.definition, queues) : [parsed.message]),
@@ -409,6 +692,16 @@ export function ChatbotFlowBuilder({
       .flatMap((node) => [node.departmentId, ...getOptions(node).map((option) => option.departmentId)])
       .filter((value): value is string => typeof value === "string" && Boolean(value))
   );
+  const guidedSteps = buildGuidedSteps({ definition, issues, active: isActive, entryPoint });
+  const selectedGuidedStep = guidedSteps.find((step) => step.key === activeStep) ?? guidedSteps[0];
+  const startNode = definition.nodes[definition.start];
+  const primaryMenu = getPrimaryMenuEntry(definition);
+  const handoffEntries = getHandoffEntries(definition);
+  const questionEntries = getQuestionEntries(definition).filter(([nodeId]) => nodeId !== primaryMenu?.id);
+  const expectedResultLines = buildExpectedResultLines(definition, departments, queues);
+  const journeyLines = buildJourneyLines(definition, departments, queues);
+  const checklist = buildChecklist(definition, issues);
+  const hasBlockingChecklistIssue = checklist.some((item) => item.status === "ERROR");
 
   return (
     <div className="chatbot-flow-builder grid gap-4">
@@ -438,6 +731,237 @@ export function ChatbotFlowBuilder({
         </div>
       ) : (
         <>
+          <section className="chatbot-guided-shell grid gap-4 rounded-xl border border-white/10 bg-white/[0.04] p-3">
+            <div className="grid gap-2">
+              <span className="text-xs font-semibold uppercase text-re7-sky/80">Criação guiada</span>
+              <h3 className="text-lg font-semibold text-white">Monte o atendimento pelo que o cidadão vai experimentar</h3>
+              <p className="text-sm text-white/65">
+                O modo guiado usa o mesmo rascunho do modo avançado. Nenhum campo é convertido ou descartado ao alternar entre os modos.
+              </p>
+            </div>
+
+            <nav aria-label="Etapas do fluxo guiado" className="grid gap-2 md:grid-cols-3">
+              {guidedSteps.map((step) => (
+                <button
+                  key={step.key}
+                  type="button"
+                  onClick={() => {
+                    setActiveStep(step.key);
+                    window.requestAnimationFrame(() => {
+                      document.getElementById(step.targetId)?.focus();
+                    });
+                  }}
+                  className={`rounded-lg border px-3 py-2 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 ${
+                    selectedGuidedStep.key === step.key
+                      ? "border-re7-sky/70 bg-re7-sky/15"
+                      : "border-white/10 bg-black/10"
+                  }`}
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase text-white/55">Passo {step.number}</span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${guidedStatusClass(step.status)}`}>
+                      {GUIDED_STATUS_LABELS[step.status]}
+                    </span>
+                  </span>
+                  <span className="mt-1 block text-sm font-semibold text-white">{step.title}</span>
+                  <span className="mt-1 block text-xs text-white/55">{step.summary}</span>
+                </button>
+              ))}
+            </nav>
+
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
+              <div className="grid gap-3">
+                <section
+                  id="guided-step-objective"
+                  tabIndex={-1}
+                  className="rounded-lg border border-white/10 bg-black/10 p-3 focus:outline-none focus:ring-2 focus:ring-re7-sky/70"
+                >
+                  <h4 className="text-sm font-semibold text-white">Passo 1 — Objetivo</h4>
+                  <p className="mt-1 text-sm text-white/65">O que este fluxo deve fazer?</p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {[
+                      "Encaminhar direto para atendimento humano",
+                      "Apresentar um menu de opções",
+                      "Solicitar consentimento antes de continuar",
+                      "Coletar uma informação",
+                      "Exibir uma mensagem informativa",
+                      "Personalizado / avançado",
+                    ].map((pattern) => (
+                      <span
+                        key={pattern}
+                        className={`rounded-md border px-3 py-2 text-sm ${
+                          pattern === getClosestPattern(definition)
+                            ? "border-re7-sky/50 bg-re7-sky/15 text-white"
+                            : "border-white/10 bg-white/[0.03] text-white/65"
+                        }`}
+                      >
+                        {pattern}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+
+                <section
+                  id="guided-step-start"
+                  tabIndex={-1}
+                  className="rounded-lg border border-white/10 bg-black/10 p-3 focus:outline-none focus:ring-2 focus:ring-re7-sky/70"
+                >
+                  <h4 className="text-sm font-semibold text-white">Passo 2 — Início do atendimento</h4>
+                  <p className="mt-1 text-sm text-white/65">O que o cidadão verá primeiro?</p>
+                  <div className="mt-3 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/80">
+                    {describeNodeForCitizen(definition.start, startNode)}
+                  </div>
+                </section>
+
+                <section
+                  id="guided-step-main"
+                  tabIndex={-1}
+                  className="rounded-lg border border-white/10 bg-black/10 p-3 focus:outline-none focus:ring-2 focus:ring-re7-sky/70"
+                >
+                  <h4 className="text-sm font-semibold text-white">Passo 3 — Menu / interação principal</h4>
+                  {primaryMenu ? (
+                    <div className="mt-3 grid gap-2">
+                      <p className="rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/80">
+                        {describeNodeForCitizen(primaryMenu.id, primaryMenu.node)}
+                      </p>
+                      {getOptions(primaryMenu.node).map((option, index) => {
+                        const target = definition.nodes[stringValue(option.next)];
+                        return (
+                          <div key={`${stringValue(option.label)}-${index}`} className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/75">
+                            <span className="font-semibold text-white">{stringValue(option.label) || `Opção ${index + 1}`}</span>
+                            <span className="mt-1 block text-xs text-white/55">
+                              {target?.type === "handoff"
+                                ? `Atendimento humano · ${describeRoutedHandoff(target, option, departments, queues)}`
+                                : target
+                                  ? nodeTypeLabel(stringValue(target.type))
+                                  : "Destino ainda não configurado."}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-white/60">Este fluxo não possui menu principal.</p>
+                  )}
+                </section>
+
+                <section
+                  id="guided-step-questions"
+                  tabIndex={-1}
+                  className="rounded-lg border border-white/10 bg-black/10 p-3 focus:outline-none focus:ring-2 focus:ring-re7-sky/70"
+                >
+                  <h4 className="text-sm font-semibold text-white">Passo 4 — Submenus e perguntas</h4>
+                  <div className="mt-3 grid gap-2">
+                    {questionEntries.length > 0 ? questionEntries.map(([nodeId, node]) => (
+                      <div key={nodeId} className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/75">
+                        <span className="font-semibold text-white">O cidadão vê</span>
+                        <span className="mt-1 block">{describeNodeForCitizen(nodeId, node)}</span>
+                        <span className="mt-1 block text-xs text-white/55">
+                          Depois: {stringValue(node.next) ? nodeTypeLabel(stringValue(definition.nodes[stringValue(node.next)]?.type)) : "encerra ou aguarda resposta, conforme a etapa."}
+                        </span>
+                      </div>
+                    )) : (
+                      <p className="text-sm text-white/60">Não há submenus ou perguntas adicionais neste fluxo.</p>
+                    )}
+                  </div>
+                </section>
+
+                <section
+                  id="guided-step-handoff"
+                  tabIndex={-1}
+                  className="rounded-lg border border-white/10 bg-black/10 p-3 focus:outline-none focus:ring-2 focus:ring-re7-sky/70"
+                >
+                  <h4 className="text-sm font-semibold text-white">Passo 5 — Destinos humanos</h4>
+                  <p className="mt-1 text-sm text-white/65">
+                    Escolha para qual setor e fila o cidadão será enviado quando chegar ao atendimento humano.
+                  </p>
+                  <div className="mt-3 grid gap-2">
+                    {handoffEntries.length > 0 ? handoffEntries.map((entry, index) => (
+                      <div key={`${entry.nodeId}-${index}`} className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/75">
+                        <span className="font-semibold text-white">{entry.source}</span>
+                        <span className="mt-1 block">{describeDestination(entry.node, departments, queues)}</span>
+                        <span className="mt-1 block text-xs text-white/55">
+                          Mensagem de encaminhamento: {entry.node.sendFeedback === false ? "desativada" : "ativa quando houver texto configurado"}
+                        </span>
+                      </div>
+                    )) : (
+                      <p className="text-sm text-white/60">Nenhum destino humano configurado.</p>
+                    )}
+                  </div>
+                </section>
+
+                <section
+                  id="guided-step-exceptions"
+                  tabIndex={-1}
+                  className="rounded-lg border border-white/10 bg-black/10 p-3 focus:outline-none focus:ring-2 focus:ring-re7-sky/70"
+                >
+                  <h4 className="text-sm font-semibold text-white">Passo 6 — Exceções</h4>
+                  <div className="mt-3 grid gap-2 text-sm text-white/75">
+                    <p>Opção inválida: {primaryMenu?.node.fallbackText ? truncateText(stringValue(primaryMenu.node.fallbackText)) : "usa a resposta padrão da automação."}</p>
+                    <p>Voltar: {getBackCommand(definition) || "não configurado."}</p>
+                    <p>Inatividade: {getResetAfterMinutes(definition) ? `${getResetAfterMinutes(definition)} minuto(s) para reiniciar.` : "sem reset configurado."}</p>
+                    <p>Horário de setor: usado somente quando representado no fluxo/destino.</p>
+                  </div>
+                </section>
+              </div>
+
+              <aside className="grid content-start gap-3">
+                <section
+                  id="guided-step-preview"
+                  tabIndex={-1}
+                  className="rounded-lg border border-white/10 bg-black/15 p-3 focus:outline-none focus:ring-2 focus:ring-re7-sky/70"
+                >
+                  <h4 className="text-sm font-semibold text-white">Como este fluxo funcionará</h4>
+                  <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-white/75">
+                    {expectedResultLines.map((line, index) => <li key={`${line}-${index}`}>{line}</li>)}
+                  </ol>
+                </section>
+
+                <section className="rounded-lg border border-white/10 bg-black/15 p-3">
+                  <h4 className="text-sm font-semibold text-white">Prévia da jornada</h4>
+                  <pre className="mt-3 whitespace-pre-wrap rounded-md border border-white/10 bg-re7-navy/70 px-3 py-2 text-xs leading-relaxed text-white/75">
+                    {journeyLines.join("\n")}
+                  </pre>
+                </section>
+
+                <section
+                  id="guided-step-checklist"
+                  tabIndex={-1}
+                  className="rounded-lg border border-white/10 bg-black/15 p-3 focus:outline-none focus:ring-2 focus:ring-re7-sky/70"
+                >
+                  <h4 className="text-sm font-semibold text-white">Checklist de conclusão</h4>
+                  <div className="mt-3 grid gap-2">
+                    {checklist.map((item) => (
+                      <p key={`${item.group}-${item.label}`} className="flex items-start justify-between gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm">
+                        <span>
+                          <span className="block text-xs uppercase text-white/45">{item.group}</span>
+                          <span className="text-white/75">{item.label}</span>
+                        </span>
+                        <span className={`text-xs font-semibold ${checklistStatusClass(item.status)}`}>{item.status}</span>
+                      </p>
+                    ))}
+                  </div>
+                </section>
+
+                <section
+                  id="guided-step-activation"
+                  tabIndex={-1}
+                  className="rounded-lg border border-white/10 bg-black/15 p-3 focus:outline-none focus:ring-2 focus:ring-re7-sky/70"
+                >
+                  <h4 className="text-sm font-semibold text-white">Ativação</h4>
+                  <p className="mt-2 text-sm text-white/70">
+                    Ativo permite execução. Entrada principal permite receber novas conversas como fluxo de entrada do tenant.
+                  </p>
+                  <p className={`mt-3 rounded-md border px-3 py-2 text-sm ${hasBlockingChecklistIssue ? "border-amber-300/30 bg-amber-500/10 text-amber-100" : "border-emerald-300/25 bg-emerald-500/10 text-emerald-100"}`}>
+                    {hasBlockingChecklistIssue
+                      ? "Existem pendências estruturais. Revise antes de ativar ou salvar como entrada principal."
+                      : "Checklist pronto para validação final antes de ativar."}
+                  </p>
+                </section>
+              </aside>
+            </div>
+          </section>
+
           <section className="chatbot-builder-summary grid gap-3 rounded-xl border border-white/10 bg-black/10 p-3 sm:grid-cols-4">
             <div>
               <p className="text-xs uppercase text-white/45">Etapa inicial</p>

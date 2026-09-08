@@ -1076,6 +1076,8 @@ export default function AppChatbotPage() {
               definitionText={newDefinition}
               onDefinitionTextChange={setNewDefinition}
               disabled={flowReadOnly || creating}
+              isActive={newIsActive}
+              entryPoint={newEntryPoint}
               departments={builderResources.departments}
               queues={builderResources.queues}
               advancedEditor={
@@ -1291,6 +1293,8 @@ export default function AppChatbotPage() {
                         }))
                       }
                       disabled={flowReadOnly}
+                      isActive={draft.isActive}
+                      entryPoint={draft.entryPoint}
                       departments={builderResources.departments}
                       queues={builderResources.queues}
                       advancedEditor={
