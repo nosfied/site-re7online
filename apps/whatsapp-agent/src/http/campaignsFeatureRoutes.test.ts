@@ -2326,6 +2326,15 @@ test("queue assignment settings are tenant scoped and admin managed with supervi
   assert.equal(invalid.status, 400);
   assert.equal(getErrorCode(invalid.body), "invalid_max_active");
 
+  const invalidPresenceMode = await request<ErrorPayload>("PUT", "/app/settings/queue-assignment", businessAdmin, {
+    enabled: true,
+    mode: "round_robin",
+    scope: "department",
+    presenceMode: "RECENT",
+  });
+  assert.equal(invalidPresenceMode.status, 400);
+  assert.equal(getErrorCode(invalidPresenceMode.body), "invalid_presence_mode");
+
   const saved = await request<{
     ok: boolean;
     tenantId: string;
@@ -2336,6 +2345,8 @@ test("queue assignment settings are tenant scoped and admin managed with supervi
       maxActivePerAgent: number | null;
       includeSupervisors: boolean;
       requireOnline: boolean;
+      presenceMode: string;
+      presenceModeSource: string;
       notifyAssignedOnly: boolean;
       lastAssignedUserIdByScope?: unknown;
     };
@@ -2349,6 +2360,7 @@ test("queue assignment settings are tenant scoped and admin managed with supervi
     maxActivePerAgent: 3,
     includeSupervisors: false,
     requireOnline: true,
+    presenceMode: "AVAILABLE",
     notifyAssignedOnly: true,
     clientId: overrideClientId,
   });
@@ -2360,7 +2372,9 @@ test("queue assignment settings are tenant scoped and admin managed with supervi
   assert.equal(saved.body.policy.scope, "department");
   assert.equal(saved.body.policy.maxActivePerAgent, 3);
   assert.equal(saved.body.policy.includeSupervisors, false);
-  assert.equal(saved.body.policy.requireOnline, true);
+  assert.equal(saved.body.policy.requireOnline, false);
+  assert.equal(saved.body.policy.presenceMode, "AVAILABLE");
+  assert.equal(saved.body.policy.presenceModeSource, "explicit");
   assert.equal(saved.body.policy.notifyAssignedOnly, true);
   assert.equal(saved.body.policy.lastAssignedUserIdByScope, undefined);
   assert.equal(saved.body.effectiveMode, "round_robin");
@@ -2378,10 +2392,12 @@ test("queue assignment settings are tenant scoped and admin managed with supervi
     where: { clientId: businessClientId },
     select: { config: true },
   });
-  const queuePolicy = (config?.config as { queueAssignmentPolicy?: { mode?: string; maxActivePerAgent?: number } })
+  const queuePolicy = (config?.config as { queueAssignmentPolicy?: { mode?: string; maxActivePerAgent?: number; presenceMode?: string; requireOnline?: boolean } })
     ?.queueAssignmentPolicy;
   assert.equal(queuePolicy?.mode, "round_robin");
   assert.equal(queuePolicy?.maxActivePerAgent, 3);
+  assert.equal(queuePolicy?.presenceMode, "AVAILABLE");
+  assert.equal(queuePolicy?.requireOnline, false);
 
   const event = await prisma.event.findFirst({
     where: { clientId: businessClientId, eventName: "queue.assignment.policy_updated" },

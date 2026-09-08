@@ -1883,6 +1883,12 @@ export type AppCrmCampaignRecipient = {
 
 export type AppQueueAssignmentMode = "manual" | "round_robin" | "least_active";
 export type AppQueueAssignmentScope = "tenant" | "department";
+export type AppQueueAssignmentPresenceMode = "FRESH" | "AVAILABLE" | "IGNORE";
+export type AppQueueAssignmentPresenceModeSource =
+  | "explicit"
+  | "legacy_require_online_true"
+  | "legacy_require_online_false"
+  | "default";
 
 export type AppQueueAssignmentPolicy = {
   enabled: boolean;
@@ -1891,6 +1897,8 @@ export type AppQueueAssignmentPolicy = {
   maxActivePerAgent: number | null;
   includeSupervisors: boolean;
   requireOnline: boolean;
+  presenceMode: AppQueueAssignmentPresenceMode;
+  presenceModeSource?: AppQueueAssignmentPresenceModeSource;
   notifyAssignedOnly: boolean;
 };
 

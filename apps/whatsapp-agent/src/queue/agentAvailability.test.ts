@@ -5,8 +5,10 @@ import {
   AGENT_ONLINE_TTL_MS,
   getAgentAvailability,
   getEffectivelyAvailableUserIds,
+  getPresenceEligibleUserIds,
   isAgentEffectivelyAvailable,
   recordAgentHeartbeat,
+  resolveAssignmentPresenceEligibility,
   setAgentAvailability,
 } from "./agentAvailability.js";
 
@@ -80,6 +82,32 @@ test("effective availability requires explicit available and recent heartbeat", 
   assert.equal(isAgentEffectivelyAvailable({ available: true, lastHeartbeatAt: null }, now), false);
 });
 
+test("assignment presence modes separate fresh heartbeat from explicit availability", async () => {
+  const now = new Date("2026-08-21T12:00:00.000Z");
+  const stale = new Date(now.getTime() - AGENT_ONLINE_TTL_MS - 1);
+
+  assert.equal(
+    resolveAssignmentPresenceEligibility({ mode: "FRESH", available: true, lastHeartbeatAt: now, now }),
+    true
+  );
+  assert.equal(
+    resolveAssignmentPresenceEligibility({ mode: "FRESH", available: true, lastHeartbeatAt: stale, now }),
+    false
+  );
+  assert.equal(
+    resolveAssignmentPresenceEligibility({ mode: "AVAILABLE", available: true, lastHeartbeatAt: stale, now }),
+    true
+  );
+  assert.equal(
+    resolveAssignmentPresenceEligibility({ mode: "AVAILABLE", available: false, lastHeartbeatAt: now, now }),
+    false
+  );
+  assert.equal(
+    resolveAssignmentPresenceEligibility({ mode: "IGNORE", available: false, lastHeartbeatAt: null, now }),
+    true
+  );
+});
+
 test("heartbeat does not turn unavailable user into available", async () => {
   const { client, user } = await createClientAndUser("heartbeat");
   await setAgentAvailability({ prisma, clientId: client.id, userId: user.id, available: false });
@@ -129,4 +157,70 @@ test("effective availability lookup is tenant scoped", async () => {
   });
 
   assert.deepEqual([...availableForA], [tenantA.user.id]);
+});
+
+test("presence eligibility lookup supports available without heartbeat freshness", async () => {
+  const now = new Date("2026-08-21T12:00:00.000Z");
+  const stale = new Date(now.getTime() - AGENT_ONLINE_TTL_MS - 1);
+  const { client, user: freshUser } = await createClientAndUser("presence-modes");
+  const staleUser = await prisma.user.create({
+    data: {
+      clientId: client.id,
+      name: "Agent presence stale",
+      email: `${prefix}-presence-stale@example.test`,
+      role: "AGENT",
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  const unavailableUser = await prisma.user.create({
+    data: {
+      clientId: client.id,
+      name: "Agent presence unavailable",
+      email: `${prefix}-presence-unavailable@example.test`,
+      role: "AGENT",
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  await prisma.agentAvailability.createMany({
+    data: [
+      { clientId: client.id, userId: freshUser.id, available: true, lastHeartbeatAt: now, availabilityChangedAt: now },
+      { clientId: client.id, userId: staleUser.id, available: true, lastHeartbeatAt: stale, availabilityChangedAt: stale },
+      {
+        clientId: client.id,
+        userId: unavailableUser.id,
+        available: false,
+        lastHeartbeatAt: now,
+        availabilityChangedAt: now,
+      },
+    ],
+  });
+
+  const userIds = [freshUser.id, staleUser.id, unavailableUser.id];
+  const fresh = await getPresenceEligibleUserIds({
+    prisma,
+    clientId: client.id,
+    userIds,
+    mode: "FRESH",
+    now,
+  });
+  const available = await getPresenceEligibleUserIds({
+    prisma,
+    clientId: client.id,
+    userIds,
+    mode: "AVAILABLE",
+    now,
+  });
+  const ignore = await getPresenceEligibleUserIds({
+    prisma,
+    clientId: client.id,
+    userIds,
+    mode: "IGNORE",
+    now,
+  });
+
+  assert.deepEqual([...fresh], [freshUser.id]);
+  assert.deepEqual([...available].sort(), [freshUser.id, staleUser.id].sort());
+  assert.deepEqual([...ignore].sort(), userIds.sort());
 });

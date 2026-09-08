@@ -40,6 +40,8 @@ test("summarizeOperationalConfig reads demo readiness signals without exposing c
     mode: "round_robin",
     scope: "department",
     requireOnline: true,
+    presenceMode: "FRESH",
+    presenceModeSource: "legacy_require_online_true",
   });
   assert.deepEqual(summary.metaUsagePolicy, {
     configured: true,

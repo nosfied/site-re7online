@@ -38,6 +38,7 @@ function getDefaultPolicy(): AppQueueAssignmentPolicy {
     maxActivePerAgent: null,
     includeSupervisors: true,
     requireOnline: false,
+    presenceMode: "IGNORE",
     notifyAssignedOnly: false,
   };
 }
@@ -157,6 +158,12 @@ export default function AppSettingsQueuePage() {
     policy.scope === "tenant"
       ? "Usa os usuários elegíveis da organização, respeitando o setor da conversa quando houver direcionamento prévio."
       : "Usa os usuários elegíveis do setor direcionado na conversa.";
+  const presenceModeHelp =
+    policy.presenceMode === "FRESH"
+      ? "Distribui apenas para atendentes disponíveis e com atividade recente na plataforma."
+      : policy.presenceMode === "AVAILABLE"
+        ? "Distribui para atendentes marcados como disponíveis, mesmo que a aba esteja em segundo plano."
+        : "Distribui sem considerar disponibilidade ou presença recente.";
 
   const updatePolicy = (patch: Partial<AppQueueAssignmentPolicy>) => {
     setPolicy((current) => {
@@ -187,6 +194,7 @@ export default function AppSettingsQueuePage() {
       ...policy,
       mode: policy.enabled ? policy.mode : "manual",
       maxActivePerAgent,
+      requireOnline: policy.presenceMode === "FRESH",
     };
     setSaving(true);
     setError(null);
@@ -328,10 +336,29 @@ export default function AppSettingsQueuePage() {
                   />
                 </label>
 
-                <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-xs leading-relaxed text-white/60">
-                  O limite considera conversas em atendimento ou aguardando com responsável atribuído no mesmo
-                  escopo configurado.
-                </div>
+                <label className="flex flex-col gap-1.5 text-sm text-white/75">
+                  <span>Critério de disponibilidade para distribuição</span>
+                  <select
+                    value={policy.presenceMode}
+                    onChange={(event) =>
+                      updatePolicy({
+                        presenceMode: event.target.value as AppQueueAssignmentPolicy["presenceMode"],
+                      })
+                    }
+                    disabled={readOnly || saving || !policy.enabled}
+                    className="rounded-md border border-white/15 bg-re7-navy px-2.5 py-2 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60 [&>option]:bg-re7-navy"
+                  >
+                    <option value="FRESH">Presença recente</option>
+                    <option value="AVAILABLE">Disponível</option>
+                    <option value="IGNORE">Ignorar disponibilidade</option>
+                  </select>
+                  <span className="text-xs leading-relaxed text-white/58">{presenceModeHelp}</span>
+                </label>
+              </div>
+
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-xs leading-relaxed text-white/60">
+                O limite considera conversas em atendimento ou aguardando com responsável atribuído no mesmo escopo
+                configurado. Disponibilidade e presença recente são critérios separados.
               </div>
 
               <div className="grid gap-2">
@@ -340,11 +367,6 @@ export default function AppSettingsQueuePage() {
                     key: "includeSupervisors",
                     label: "Incluir supervisores elegíveis",
                     help: "Supervisores ativos da organização podem receber conversas quando estiverem no escopo.",
-                  },
-                  {
-                    key: "requireOnline",
-                    label: "Exigir atendente online",
-                    help: "Quando ativado, somente atendentes com presença online confirmada entram na distribuição automática. Quando desativado, atendentes elegíveis podem receber novas conversas mesmo sem presença online recente.",
                   },
                 ].map((item) => (
                   <label
@@ -411,6 +433,14 @@ export default function AppSettingsQueuePage() {
                 <div className="rounded-md border border-white/10 bg-white/5 p-2">
                   <span className="font-semibold text-white">Limite:</span>{" "}
                   {policy.maxActivePerAgent === null ? "sem limite configurado" : `${policy.maxActivePerAgent} por atendente`}
+                </div>
+                <div className="rounded-md border border-white/10 bg-white/5 p-2">
+                  <span className="font-semibold text-white">Disponibilidade:</span>{" "}
+                  {policy.presenceMode === "FRESH"
+                    ? "presença recente"
+                    : policy.presenceMode === "AVAILABLE"
+                      ? "marcado como disponível"
+                      : "ignorada"}
                 </div>
               </div>
               {warnings.length > 0 ? (

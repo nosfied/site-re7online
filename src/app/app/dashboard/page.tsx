@@ -146,16 +146,23 @@ function QueueAgeBadge({ waitingSince, now }: { waitingSince: string | null; now
   );
 }
 
-function TeamPresenceBadge({ online }: { online: boolean }) {
+function TeamPresenceBadge({ available, online }: { available: boolean; online: boolean }) {
+  if (!available) {
+    return (
+      <span className="inline-flex rounded-full border border-red-300/25 bg-red-400/10 px-2 py-1 text-xs font-semibold text-red-100">
+        Indisponível
+      </span>
+    );
+  }
   return (
     <span
       className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${
         online
           ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-100"
-          : "border-white/15 bg-white/10 text-white/65"
+          : "border-amber-300/30 bg-amber-400/10 text-amber-100"
       }`}
     >
-      {online ? "Online" : "Offline"}
+      {online ? "Disponível · Ativo recentemente" : "Disponível · Sem atividade recente"}
     </span>
   );
 }
@@ -517,8 +524,8 @@ export default function AppDashboardPage() {
           <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
             <DashboardSectionHeader
               title="Presença da equipe"
-              description="Online indica que o atendente está disponível na plataforma com presença recente confirmada. Esse é o mesmo status considerado pela distribuição automática quando a opção 'Exigir atendente online' está ativa."
-              right={overview?.teamPresence ? `${overview.teamPresence.summary.online} online · ${overview.teamPresence.summary.offline} offline · ${overview.teamPresence.summary.inService} em atendimento` : ""}
+              description="Disponibilidade é uma escolha do atendente. Atividade recente indica o último sinal recebido da plataforma."
+              right={overview?.teamPresence ? `${overview.teamPresence.summary.online} ativos recentes · ${overview.teamPresence.summary.offline} sem atividade recente · ${overview.teamPresence.summary.inService} em atendimento` : ""}
             />
             {overview?.teamPresence.items.length ? (
               <table className="w-full min-w-[720px] text-sm">
@@ -543,7 +550,7 @@ export default function AppDashboardPage() {
                           ? item.departments.map((department) => department.name ?? "Setor sem nome").join(", ")
                           : "-"}
                       </td>
-                      <td className="px-3 py-2"><TeamPresenceBadge online={item.online} /></td>
+                      <td className="px-3 py-2"><TeamPresenceBadge available={item.available} online={item.online} /></td>
                       <td className="px-3 py-2">
                         {item.heartbeatAgeSec === null
                           ? "-"

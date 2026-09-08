@@ -4,10 +4,16 @@ import {
   getEligibleUsersForDepartmentAssignment,
   getUserDepartmentMemberships,
 } from "../users/departmentMemberships.js";
-import { getEffectivelyAvailableUserIds } from "./agentAvailability.js";
+import { getPresenceEligibleUserIds, type AssignmentPresenceMode } from "./agentAvailability.js";
 
 export type QueueAssignmentMode = "manual" | "round_robin" | "least_active";
 export type QueueAssignmentScope = "tenant" | "department";
+export type QueueAssignmentPresenceMode = AssignmentPresenceMode;
+export type QueueAssignmentPresenceModeSource =
+  | "explicit"
+  | "legacy_require_online_true"
+  | "legacy_require_online_false"
+  | "default";
 
 export type QueueAssignmentPolicy = {
   enabled: boolean;
@@ -16,14 +22,19 @@ export type QueueAssignmentPolicy = {
   maxActivePerAgent: number | null;
   includeSupervisors: boolean;
   requireOnline: boolean;
+  presenceMode: QueueAssignmentPresenceMode;
+  presenceModeSource: QueueAssignmentPresenceModeSource;
   notifyAssignedOnly: boolean;
   lastAssignedUserIdByScope: Record<string, string>;
 };
 
 export type PublicQueueAssignmentPolicy = Omit<QueueAssignmentPolicy, "lastAssignedUserIdByScope">;
+export type QueueAssignmentPolicyInput = Omit<PublicQueueAssignmentPolicy, "presenceModeSource"> & {
+  presenceModeSource?: QueueAssignmentPresenceModeSource;
+};
 
 export type QueueAssignmentPolicyValidationResult =
-  | { ok: true; policy: PublicQueueAssignmentPolicy }
+  | { ok: true; policy: QueueAssignmentPolicyInput }
   | { ok: false; status: number; code: string; message: string };
 
 export type BalancedQueueAssignmentResult =
@@ -71,6 +82,8 @@ const DEFAULT_QUEUE_ASSIGNMENT_POLICY: QueueAssignmentPolicy = {
   maxActivePerAgent: null,
   includeSupervisors: true,
   requireOnline: false,
+  presenceMode: "IGNORE",
+  presenceModeSource: "default",
   notifyAssignedOnly: false,
   lastAssignedUserIdByScope: {},
 };
@@ -89,6 +102,24 @@ function normalizeScope(value: unknown): QueueAssignmentScope {
   return value === "tenant" || value === "department" ? value : "department";
 }
 
+function normalizePresenceMode(value: unknown): QueueAssignmentPresenceMode | null {
+  return value === "FRESH" || value === "AVAILABLE" || value === "IGNORE" ? value : null;
+}
+
+function resolvePresenceMode(value: Record<string, unknown>): {
+  presenceMode: QueueAssignmentPresenceMode;
+  presenceModeSource: QueueAssignmentPresenceModeSource;
+} {
+  const explicit = normalizePresenceMode(value.presenceMode);
+  if (explicit) return { presenceMode: explicit, presenceModeSource: "explicit" };
+  if (value.requireOnline === true) return { presenceMode: "FRESH", presenceModeSource: "legacy_require_online_true" };
+  if (value.requireOnline === false) return { presenceMode: "IGNORE", presenceModeSource: "legacy_require_online_false" };
+  return {
+    presenceMode: DEFAULT_QUEUE_ASSIGNMENT_POLICY.presenceMode,
+    presenceModeSource: DEFAULT_QUEUE_ASSIGNMENT_POLICY.presenceModeSource,
+  };
+}
+
 function normalizePolicy(value: unknown): QueueAssignmentPolicy {
   if (!isRecord(value)) return DEFAULT_QUEUE_ASSIGNMENT_POLICY;
   const rawLast = isRecord(value.lastAssignedUserIdByScope) ? value.lastAssignedUserIdByScope : {};
@@ -102,6 +133,7 @@ function normalizePolicy(value: unknown): QueueAssignmentPolicy {
       ? Math.floor(value.maxActivePerAgent)
       : null;
   const maxActive = rawMaxActive && rawMaxActive > 0 ? rawMaxActive : null;
+  const presence = resolvePresenceMode(value);
   return {
     enabled: value.enabled === true,
     mode: normalizeMode(value.mode),
@@ -109,6 +141,8 @@ function normalizePolicy(value: unknown): QueueAssignmentPolicy {
     maxActivePerAgent: maxActive,
     includeSupervisors: value.includeSupervisors !== false,
     requireOnline: value.requireOnline === true,
+    presenceMode: presence.presenceMode,
+    presenceModeSource: presence.presenceModeSource,
     notifyAssignedOnly: value.notifyAssignedOnly === true,
     lastAssignedUserIdByScope,
   };
@@ -127,6 +161,8 @@ export function toPublicQueueAssignmentPolicy(policy: QueueAssignmentPolicy): Pu
     maxActivePerAgent: policy.maxActivePerAgent,
     includeSupervisors: policy.includeSupervisors,
     requireOnline: policy.requireOnline,
+    presenceMode: policy.presenceMode,
+    presenceModeSource: policy.presenceModeSource,
     notifyAssignedOnly: policy.notifyAssignedOnly,
   };
 }
@@ -162,6 +198,16 @@ export function parseQueueAssignmentPolicyInput(input: unknown): QueueAssignment
       message: "Invalid queue assignment scope.",
     };
   }
+  if (input.presenceMode !== undefined && normalizePresenceMode(input.presenceMode) === null) {
+    return {
+      ok: false,
+      status: 400,
+      code: "invalid_presence_mode",
+      message: "Invalid presence mode.",
+    };
+  }
+  const parsedPresenceMode = normalizePresenceMode(input.presenceMode);
+  const requireOnline = parsedPresenceMode ? parsedPresenceMode === "FRESH" : input.requireOnline === true;
 
   let maxActivePerAgent: number | null = null;
   if (input.maxActivePerAgent !== undefined && input.maxActivePerAgent !== null && input.maxActivePerAgent !== "") {
@@ -188,7 +234,13 @@ export function parseQueueAssignmentPolicyInput(input: unknown): QueueAssignment
       scope: normalizeScope(input.scope),
       maxActivePerAgent,
       includeSupervisors: input.includeSupervisors !== false,
-      requireOnline: input.requireOnline === true,
+      requireOnline,
+      presenceMode: parsedPresenceMode ?? (input.requireOnline === true ? "FRESH" : "IGNORE"),
+      presenceModeSource: parsedPresenceMode
+        ? "explicit"
+        : input.requireOnline === true
+          ? "legacy_require_online_true"
+          : "legacy_require_online_false",
       notifyAssignedOnly: input.notifyAssignedOnly === true,
     },
   };
@@ -433,7 +485,7 @@ export async function saveQueueAssignmentPolicy(params: {
   clientId: string;
   actorUserId: string;
   requestId: string;
-  policy: PublicQueueAssignmentPolicy;
+  policy: QueueAssignmentPolicyInput;
 }): Promise<{ policy: QueueAssignmentPolicy; config: Record<string, unknown> }> {
   const current = await resolveQueueAssignmentPolicy({
     prisma: params.prisma,
@@ -442,6 +494,7 @@ export async function saveQueueAssignmentPolicy(params: {
   const previousConfig = current.config ?? {};
   const nextPolicy: QueueAssignmentPolicy = {
     ...params.policy,
+    presenceModeSource: params.policy.presenceModeSource ?? "explicit",
     lastAssignedUserIdByScope: current.policy.lastAssignedUserIdByScope,
   };
   const config = {
@@ -468,6 +521,8 @@ export async function saveQueueAssignmentPolicy(params: {
       maxActivePerAgent: nextPolicy.maxActivePerAgent,
       includeSupervisors: nextPolicy.includeSupervisors,
       requireOnline: nextPolicy.requireOnline,
+      presenceMode: nextPolicy.presenceMode,
+      presenceModeSource: nextPolicy.presenceModeSource,
       notifyAssignedOnly: nextPolicy.notifyAssignedOnly,
     },
   });
@@ -605,16 +660,18 @@ async function applyBalancedQueueAssignmentLocked(params: {
     scope: policy.scope,
   });
 
-  const effectivelyAvailableUserIds = policy.requireOnline
-    ? await getEffectivelyAvailableUserIds({
-        prisma: params.availabilityPrisma,
-        clientId: params.clientId,
-        userIds: users.map((user) => user.id),
-      })
-    : null;
+  const presenceEligibleUserIds =
+    policy.presenceMode === "IGNORE"
+      ? null
+      : await getPresenceEligibleUserIds({
+          prisma: params.availabilityPrisma,
+          clientId: params.clientId,
+          userIds: users.map((user) => user.id),
+          mode: policy.presenceMode,
+        });
 
   const eligible = users.filter((user) => {
-    if (effectivelyAvailableUserIds && !effectivelyAvailableUserIds.has(user.id)) return false;
+    if (presenceEligibleUserIds && !presenceEligibleUserIds.has(user.id)) return false;
     const activeCount = activeByUser.get(user.id) ?? 0;
     return policy.maxActivePerAgent === null || activeCount < policy.maxActivePerAgent;
   });
@@ -633,10 +690,13 @@ async function applyBalancedQueueAssignmentLocked(params: {
         reason:
           users.length === 0
             ? "no_active_agents"
-            : policy.requireOnline && effectivelyAvailableUserIds?.size === 0
+            : policy.presenceMode !== "IGNORE" && presenceEligibleUserIds?.size === 0
               ? "online_presence_unavailable"
               : "max_active_reached",
         source: params.source,
+        requireOnline: policy.requireOnline,
+        presenceMode: policy.presenceMode,
+        presenceModeSource: policy.presenceModeSource,
       },
     });
     return { applied: false, reason: "no_eligible_agent" };
@@ -705,6 +765,9 @@ async function applyBalancedQueueAssignmentLocked(params: {
       eligibleCount: eligible.length,
       activeCount: activeByUser.get(selected.id) ?? 0,
       source: params.source,
+      requireOnline: policy.requireOnline,
+      presenceMode: policy.presenceMode,
+      presenceModeSource: policy.presenceModeSource,
     },
   });
 

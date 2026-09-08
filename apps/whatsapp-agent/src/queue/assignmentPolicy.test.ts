@@ -306,6 +306,9 @@ test("round robin assigns next active agent inside department and tenant", async
     "departmentId",
     "eligibleCount",
     "mode",
+    "presenceMode",
+    "presenceModeSource",
+    "requireOnline",
     "scope",
     "selectedUserId",
     "source",
@@ -569,6 +572,143 @@ test("requireOnline false preserves legacy assignment without availability rows"
 
   assert.equal(result.applied, true);
   assert.equal(result.selectedUserId, second.id);
+});
+
+test("presenceMode AVAILABLE includes stale available users and excludes unavailable users", async () => {
+  const client = await createClient("presence-available");
+  const now = new Date();
+  const stale = new Date(now.getTime() - AGENT_ONLINE_TTL_MS - 15_000);
+  const first = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "presence-available-a" });
+  const second = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "presence-available-b" });
+  const third = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "presence-available-c" });
+  await setAvailability({ clientId: client.id, userId: first.id, available: true, lastHeartbeatAt: now });
+  await setAvailability({ clientId: client.id, userId: second.id, available: true, lastHeartbeatAt: stale });
+  await setAvailability({ clientId: client.id, userId: third.id, available: false, lastHeartbeatAt: now });
+  await setPolicy(client.id, {
+    enabled: true,
+    mode: "round_robin",
+    scope: "department",
+    includeSupervisors: false,
+    requireOnline: false,
+    presenceMode: "AVAILABLE",
+    lastAssignedUserIdByScope: { [`department:${client.departmentId}`]: first.id },
+  });
+  const { conversation, runtime } = await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "presence-available-target",
+  });
+
+  const result = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: conversation.id,
+    runtimeStateId: runtime.id,
+    waId: runtime.waId,
+    waIdCanonical: runtime.waIdCanonical,
+    departmentId: runtime.departmentId,
+    queueId: runtime.queueId,
+    status: runtime.status,
+    assignedUserId: null,
+    requestId: "presence-available",
+    source: "test",
+  });
+
+  assert.equal(result.applied, true);
+  assert.equal(result.selectedUserId, second.id);
+  assert.equal(result.eligibleCount, 2);
+  const event = await prisma.event.findFirst({
+    where: { clientId: client.id, eventName: "queue.assignment.round_robin_applied" },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.equal((event?.payloadJson as Record<string, unknown> | undefined)?.presenceMode, "AVAILABLE");
+});
+
+test("presenceMode FRESH matches legacy online requirement", async () => {
+  const client = await createClient("presence-fresh");
+  const now = new Date();
+  const stale = new Date(now.getTime() - AGENT_ONLINE_TTL_MS - 15_000);
+  const first = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "presence-fresh-a" });
+  const second = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "presence-fresh-b" });
+  await setAvailability({ clientId: client.id, userId: first.id, available: true, lastHeartbeatAt: now });
+  await setAvailability({ clientId: client.id, userId: second.id, available: true, lastHeartbeatAt: stale });
+  await setPolicy(client.id, {
+    enabled: true,
+    mode: "round_robin",
+    scope: "department",
+    includeSupervisors: false,
+    requireOnline: false,
+    presenceMode: "FRESH",
+    lastAssignedUserIdByScope: { [`department:${client.departmentId}`]: first.id },
+  });
+  const { conversation, runtime } = await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "presence-fresh-target",
+  });
+
+  const result = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: conversation.id,
+    runtimeStateId: runtime.id,
+    waId: runtime.waId,
+    waIdCanonical: runtime.waIdCanonical,
+    departmentId: runtime.departmentId,
+    queueId: runtime.queueId,
+    status: runtime.status,
+    assignedUserId: null,
+    requestId: "presence-fresh",
+    source: "test",
+  });
+
+  assert.equal(result.applied, true);
+  assert.equal(result.selectedUserId, first.id);
+  assert.equal(result.eligibleCount, 1);
+});
+
+test("presenceMode IGNORE matches legacy offline-agnostic requirement", async () => {
+  const client = await createClient("presence-ignore");
+  const first = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "presence-ignore-a" });
+  const second = await createUser({ clientId: client.id, departmentId: client.departmentId, suffix: "presence-ignore-b" });
+  await setAvailability({ clientId: client.id, userId: first.id, available: false, lastHeartbeatAt: null });
+  await setAvailability({ clientId: client.id, userId: second.id, available: false, lastHeartbeatAt: null });
+  await setPolicy(client.id, {
+    enabled: true,
+    mode: "round_robin",
+    scope: "department",
+    includeSupervisors: false,
+    requireOnline: true,
+    presenceMode: "IGNORE",
+    lastAssignedUserIdByScope: { [`department:${client.departmentId}`]: first.id },
+  });
+  const { conversation, runtime } = await createRuntime({
+    clientId: client.id,
+    departmentId: client.departmentId,
+    queueId: client.queueId,
+    suffix: "presence-ignore-target",
+  });
+
+  const result = await applyBalancedQueueAssignment({
+    prisma,
+    clientId: client.id,
+    conversationId: conversation.id,
+    runtimeStateId: runtime.id,
+    waId: runtime.waId,
+    waIdCanonical: runtime.waIdCanonical,
+    departmentId: runtime.departmentId,
+    queueId: runtime.queueId,
+    status: runtime.status,
+    assignedUserId: null,
+    requestId: "presence-ignore",
+    source: "test",
+  });
+
+  assert.equal(result.applied, true);
+  assert.equal(result.selectedUserId, second.id);
+  assert.equal(result.eligibleCount, 2);
 });
 
 test("requireOnline true filters round robin to available users with recent heartbeat", async () => {

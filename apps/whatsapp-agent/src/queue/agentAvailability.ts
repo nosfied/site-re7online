@@ -3,6 +3,8 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 export const AGENT_HEARTBEAT_INTERVAL_MS = 10_000;
 export const AGENT_ONLINE_TTL_MS = 30_000;
 
+export type AssignmentPresenceMode = "FRESH" | "AVAILABLE" | "IGNORE";
+
 type PrismaLike = PrismaClient | Prisma.TransactionClient;
 
 export type AgentAvailabilityView = {
@@ -20,6 +22,23 @@ export function isAgentEffectivelyAvailable(
   const heartbeatAt = value.lastHeartbeatAt instanceof Date ? value.lastHeartbeatAt : new Date(value.lastHeartbeatAt);
   if (!Number.isFinite(heartbeatAt.getTime())) return false;
   return heartbeatAt.getTime() >= now.getTime() - AGENT_ONLINE_TTL_MS;
+}
+
+export function resolveAssignmentPresenceEligibility(
+  params: {
+    mode: AssignmentPresenceMode;
+    available?: boolean | null;
+    lastHeartbeatAt?: Date | string | null;
+    now?: Date;
+  }
+) {
+  if (params.mode === "IGNORE") return true;
+  if (params.available !== true) return false;
+  if (params.mode === "AVAILABLE") return true;
+  return isAgentEffectivelyAvailable(
+    { available: params.available, lastHeartbeatAt: params.lastHeartbeatAt },
+    params.now
+  );
 }
 
 function serializeAvailability(
@@ -116,6 +135,39 @@ export async function getEffectivelyAvailableUserIds(params: {
   return new Set(
     rows
       .filter((row) => isAgentEffectivelyAvailable(row, now))
+      .map((row) => row.userId)
+  );
+}
+
+export async function getPresenceEligibleUserIds(params: {
+  prisma: PrismaLike;
+  clientId: string;
+  userIds: string[];
+  mode: AssignmentPresenceMode;
+  now?: Date;
+}) {
+  const userIds = Array.from(new Set(params.userIds.map((id) => id.trim()).filter(Boolean)));
+  if (userIds.length === 0) return new Set<string>();
+  if (params.mode === "IGNORE") return new Set(userIds);
+  const rows = await params.prisma.agentAvailability.findMany({
+    where: {
+      clientId: params.clientId,
+      userId: { in: userIds },
+      available: true,
+    },
+    select: { userId: true, available: true, lastHeartbeatAt: true },
+  });
+  const now = params.now ?? new Date();
+  return new Set(
+    rows
+      .filter((row) =>
+        resolveAssignmentPresenceEligibility({
+          mode: params.mode,
+          available: row.available,
+          lastHeartbeatAt: row.lastHeartbeatAt,
+          now,
+        })
+      )
       .map((row) => row.userId)
   );
 }

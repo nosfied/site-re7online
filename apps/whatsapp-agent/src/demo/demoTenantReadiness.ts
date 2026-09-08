@@ -96,6 +96,22 @@ export function summarizeOperationalConfig(configValue: unknown) {
       mode: typeof queueAssignmentPolicy.mode === "string" ? queueAssignmentPolicy.mode : null,
       scope: typeof queueAssignmentPolicy.scope === "string" ? queueAssignmentPolicy.scope : null,
       requireOnline: queueAssignmentPolicy.requireOnline === true,
+      presenceMode:
+        queueAssignmentPolicy.presenceMode === "FRESH" ||
+        queueAssignmentPolicy.presenceMode === "AVAILABLE" ||
+        queueAssignmentPolicy.presenceMode === "IGNORE"
+          ? queueAssignmentPolicy.presenceMode
+          : queueAssignmentPolicy.requireOnline === true
+            ? "FRESH"
+            : "IGNORE",
+      presenceModeSource:
+        queueAssignmentPolicy.presenceMode === "FRESH" ||
+        queueAssignmentPolicy.presenceMode === "AVAILABLE" ||
+        queueAssignmentPolicy.presenceMode === "IGNORE"
+          ? "explicit"
+          : queueAssignmentPolicy.requireOnline === true
+            ? "legacy_require_online_true"
+            : "legacy_require_online_false",
     },
     metaUsagePolicy: {
       configured: Object.keys(metaUsagePolicy).length > 0,
