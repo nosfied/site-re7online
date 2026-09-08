@@ -360,11 +360,11 @@ function FlowAccordionCard({
           aria-controls={id}
           aria-label={`${expanded ? "Recolher" : "Expandir"} ${title}`}
           onClick={onToggle}
-          className="flex min-w-[220px] flex-1 items-center gap-3 text-left focus:outline-none focus:ring-2 focus:ring-re7-sky/70 focus:ring-offset-2 focus:ring-offset-re7-navy"
+          className="group flex min-w-[220px] flex-1 items-center gap-3 text-left focus:outline-none"
         >
           <span
             aria-hidden="true"
-            className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/15 bg-white/10 text-2xl leading-none text-white/80 transition ${
+            className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/15 bg-white/10 text-2xl leading-none text-white/80 transition group-focus-visible:ring-2 group-focus-visible:ring-re7-sky/70 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-re7-navy ${
               expanded ? "rotate-90 text-re7-sky" : ""
             }`}
           >
