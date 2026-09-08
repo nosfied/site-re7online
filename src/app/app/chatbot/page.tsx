@@ -343,21 +343,26 @@ function FlowAccordionCard({
     <article
       className={`chatbot-flow-card min-w-0 overflow-hidden rounded-2xl border transition ${
         expanded
-          ? "border-re7-sky/30 bg-re7-navy/40 shadow-md shadow-black/15"
-          : "border-white/10 bg-re7-navy/30"
+          ? "border-re7-sky/35 bg-re7-navy/35 shadow-lg shadow-black/15"
+          : "border-white/10 bg-white/[0.035] hover:border-white/20 hover:bg-white/[0.055]"
       }`}
     >
-      <div className="flex flex-wrap items-start gap-3 border-b border-white/10 p-3 sm:p-4">
+      <div
+        className={`flex flex-wrap items-center gap-3 p-3 transition sm:p-4 ${
+          expanded ? "border-b border-re7-sky/20 bg-white/[0.055]" : ""
+        }`}
+      >
         <button
           type="button"
           aria-expanded={expanded}
           aria-controls={id}
+          aria-label={`${expanded ? "Recolher" : "Expandir"} ${title}`}
           onClick={onToggle}
-          className="flex min-w-0 flex-1 items-start gap-3 rounded-lg text-left transition hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 focus:ring-offset-2 focus:ring-offset-re7-navy"
+          className="flex min-w-[240px] flex-1 items-center gap-3 rounded-lg py-1 text-left transition hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 focus:ring-offset-2 focus:ring-offset-re7-navy"
         >
           <span
             aria-hidden="true"
-            className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/15 bg-white/10 text-2xl leading-none text-white/80 transition ${
+            className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/15 bg-white/10 text-2xl leading-none text-white/80 transition ${
               expanded ? "rotate-90 text-re7-sky" : ""
             }`}
           >
@@ -372,9 +377,13 @@ function FlowAccordionCard({
             </span>
           </span>
         </button>
-        {actions ? <div className="flex max-w-full flex-wrap items-center justify-end gap-2">{actions}</div> : null}
+        {actions ? <div className="flex max-w-full flex-wrap items-center justify-end gap-3 self-center">{actions}</div> : null}
       </div>
-      <div id={id} hidden={!expanded} className={expanded ? "grid gap-3 p-3 sm:p-4" : "hidden"}>
+      <div
+        id={id}
+        hidden={!expanded}
+        className={expanded ? "m-3 grid gap-4 rounded-xl border border-re7-sky/20 bg-re7-navy/55 p-3 sm:m-4 sm:p-4" : "hidden"}
+      >
         {children}
       </div>
     </article>
@@ -452,8 +461,7 @@ export default function AppChatbotPage() {
     >
   >({});
   const [draftSearches, setDraftSearches] = useState<Record<string, string>>({});
-  const [newFlowExpanded, setNewFlowExpanded] = useState(false);
-  const [initializedNewFlowExpansion, setInitializedNewFlowExpansion] = useState(false);
+  const [newFlowExpanded, setNewFlowExpanded] = useState(getNewFlowDefaultExpanded());
   const [flowExpanded, setFlowExpanded] = useState<Record<string, boolean>>({});
 
   const updateHandoffNotificationRecipient = (
@@ -630,12 +638,6 @@ export default function AppChatbotPage() {
   );
 
   useEffect(() => {
-    if (loading || initializedNewFlowExpansion) return;
-    setNewFlowExpanded(getNewFlowDefaultExpanded(sortedFlows.length));
-    setInitializedNewFlowExpansion(true);
-  }, [initializedNewFlowExpansion, loading, sortedFlows.length]);
-
-  useEffect(() => {
     setFlowExpanded((current) => {
       let changed = false;
       const next: Record<string, boolean> = {};
@@ -643,10 +645,7 @@ export default function AppChatbotPage() {
         if (Object.prototype.hasOwnProperty.call(current, flow.id)) {
           next[flow.id] = current[flow.id];
         } else {
-          next[flow.id] = getExistingFlowDefaultExpanded({
-            isActive: flow.isActive,
-            entryPoint: flow.entryPoint,
-          });
+          next[flow.id] = getExistingFlowDefaultExpanded();
           changed = true;
         }
       }
@@ -1174,10 +1173,7 @@ export default function AppChatbotPage() {
               const draft = drafts[flow.id];
               if (!draft) return null;
               const flowPanelId = `chatbot-flow-panel-${flow.id}`;
-              const isExpanded = flowExpanded[flow.id] ?? getExistingFlowDefaultExpanded({
-                isActive: flow.isActive,
-                entryPoint: flow.entryPoint,
-              });
+              const isExpanded = flowExpanded[flow.id] ?? getExistingFlowDefaultExpanded();
               const flowNodeCount = getFlowNodeCountFromDefinitionText(draft.definitionText);
               const flowHasIssue = Boolean(draftJsonErrors[flow.id]);
               return (
@@ -1204,15 +1200,6 @@ export default function AppChatbotPage() {
                   }
                   actions={
                     <div className="flex max-w-full flex-wrap items-center justify-end gap-3 text-sm text-white/80">
-                      {flowHasIssue ? (
-                        <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                          JSON inválido: {draftJsonErrors[flow.id]}
-                        </p>
-                      ) : (
-                        <p className="rounded-md border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
-                          JSON válido. Ao salvar, o conteúdo será reindentado automaticamente.
-                        </p>
-                      )}
                       <label className="flex items-center gap-2">
                         <input
                           type="checkbox"
@@ -1261,6 +1248,13 @@ export default function AppChatbotPage() {
                   }
                 >
                   <div className="mt-4 grid gap-3">
+                    {flowHasIssue ? (
+                      <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                        JSON inválido: {draftJsonErrors[flow.id]}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-emerald-200/80">JSON válido. Ao salvar, o conteúdo será reindentado automaticamente.</p>
+                    )}
                     <input
                       className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
                       value={draft.name}

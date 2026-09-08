@@ -6,21 +6,24 @@ import {
   getNewFlowDefaultExpanded,
 } from "./appChatbotFlowAccordion";
 
-test("new flow starts collapsed when existing flows are available", () => {
-  assert.equal(getNewFlowDefaultExpanded(2), false);
+test("new flow starts collapsed", () => {
+  assert.equal(getNewFlowDefaultExpanded(), false);
 });
 
-test("new flow starts expanded when no flow exists", () => {
-  assert.equal(getNewFlowDefaultExpanded(0), true);
+test("existing flows start collapsed regardless of active or entrypoint state", () => {
+  assert.equal(getExistingFlowDefaultExpanded(), false);
 });
 
-test("entrypoint or active existing flows start expanded", () => {
-  assert.equal(getExistingFlowDefaultExpanded({ isActive: false, entryPoint: true }), true);
-  assert.equal(getExistingFlowDefaultExpanded({ isActive: true, entryPoint: false }), true);
-});
-
-test("inactive non-entrypoint existing flows start collapsed", () => {
-  assert.equal(getExistingFlowDefaultExpanded({ isActive: false, entryPoint: false }), false);
+test("active and entrypoint metadata does not change initial collapsed state", () => {
+  const metadata = [
+    { isActive: false, entryPoint: true },
+    { isActive: true, entryPoint: false },
+    { isActive: true, entryPoint: true },
+  ];
+  for (const item of metadata) {
+    assert.equal(Boolean(item.isActive || item.entryPoint), true);
+    assert.equal(getExistingFlowDefaultExpanded(), false);
+  }
 });
 
 test("counts nodes from valid flow definition text", () => {

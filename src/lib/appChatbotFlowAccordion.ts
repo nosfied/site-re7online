@@ -1,9 +1,9 @@
-export function getNewFlowDefaultExpanded(flowCount: number) {
-  return flowCount === 0;
+export function getNewFlowDefaultExpanded() {
+  return false;
 }
 
-export function getExistingFlowDefaultExpanded(input: { isActive: boolean; entryPoint: boolean }) {
-  return input.entryPoint || input.isActive;
+export function getExistingFlowDefaultExpanded() {
+  return false;
 }
 
 export function getFlowNodeCountFromDefinitionText(definitionText: string) {
