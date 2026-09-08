@@ -345,12 +345,14 @@ function FlowAccordionCard({
       className={`chatbot-flow-card min-w-0 overflow-hidden rounded-2xl border transition ${
         expanded
           ? "border-re7-sky/40 bg-re7-navy/45 shadow-lg shadow-black/15"
-          : "border-white/10 bg-white/[0.035] hover:border-white/20 hover:bg-white/[0.05]"
+          : "border-white/10 bg-re7-navy/30 hover:border-white/20"
       }`}
     >
       <div
         data-chatbot-flow-header
-        className={`flex flex-wrap items-center gap-3 p-3 transition sm:p-4 ${expanded ? "bg-white/[0.045]" : ""}`}
+        className={`flex flex-wrap items-center gap-3 p-3 transition sm:p-4 ${
+          expanded ? "bg-white/[0.045]" : "bg-white/[0.035]"
+        }`}
       >
         <button
           type="button"
@@ -358,7 +360,7 @@ function FlowAccordionCard({
           aria-controls={id}
           aria-label={`${expanded ? "Recolher" : "Expandir"} ${title}`}
           onClick={onToggle}
-          className="flex min-w-[220px] flex-1 items-center gap-3 rounded-lg py-1 text-left focus:outline-none focus:ring-2 focus:ring-re7-sky/70 focus:ring-offset-2 focus:ring-offset-re7-navy"
+          className="flex min-w-[220px] flex-1 items-center gap-3 text-left focus:outline-none focus:ring-2 focus:ring-re7-sky/70 focus:ring-offset-2 focus:ring-offset-re7-navy"
         >
           <span
             aria-hidden="true"
@@ -378,7 +380,10 @@ function FlowAccordionCard({
           </span>
         </button>
         {actions ? (
-          <div data-chatbot-flow-actions className="flex max-w-full flex-wrap items-center justify-end gap-3 self-center">
+          <div
+            data-chatbot-flow-actions
+            className="flex w-full max-w-full flex-wrap items-center gap-3 border-t border-white/10 pt-3 sm:w-auto sm:justify-end sm:border-t-0 sm:pt-0"
+          >
             {actions}
           </div>
         ) : null}
@@ -1204,7 +1209,7 @@ export default function AppChatbotPage() {
                     </>
                   }
                   actions={
-                    <div className="flex max-w-full flex-wrap items-center justify-end gap-3 text-sm text-white/80">
+                    <>
                       <label className="flex items-center gap-2">
                         <input
                           type="checkbox"
@@ -1249,7 +1254,7 @@ export default function AppChatbotPage() {
                           {savingId === flow.id ? "Salvando..." : "Salvar"}
                         </button>
                       ) : null}
-                    </div>
+                    </>
                   }
                 >
                   <div className="mt-4 grid gap-3">
