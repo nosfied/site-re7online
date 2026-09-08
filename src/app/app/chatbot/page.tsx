@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
@@ -26,6 +27,11 @@ import {
 } from "@/lib/appClientApi";
 import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 import { getAppChatbotAiMissingLabels } from "@/lib/appChatbotAiStatus";
+import {
+  getExistingFlowDefaultExpanded,
+  getFlowNodeCountFromDefinitionText,
+  getNewFlowDefaultExpanded,
+} from "@/lib/appChatbotFlowAccordion";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 const DEFAULT_DEFINITION_TEXT = JSON.stringify(
@@ -312,6 +318,69 @@ function FlowBadge({
   );
 }
 
+function FlowAccordionCard({
+  id,
+  title,
+  description,
+  expanded,
+  onToggle,
+  badges,
+  actions,
+  hasIssue,
+  children,
+}: {
+  id: string;
+  title: string;
+  description?: string;
+  expanded: boolean;
+  onToggle: () => void;
+  badges?: ReactNode;
+  actions?: ReactNode;
+  hasIssue?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <article
+      className={`chatbot-flow-card min-w-0 overflow-hidden rounded-2xl border transition ${
+        expanded
+          ? "border-re7-sky/30 bg-re7-navy/40 shadow-md shadow-black/15"
+          : "border-white/10 bg-re7-navy/30"
+      }`}
+    >
+      <div className="flex flex-wrap items-start gap-3 border-b border-white/10 p-3 sm:p-4">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={id}
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-start gap-3 rounded-lg text-left transition hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 focus:ring-offset-2 focus:ring-offset-re7-navy"
+        >
+          <span
+            aria-hidden="true"
+            className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/15 bg-white/10 text-2xl leading-none text-white/80 transition ${
+              expanded ? "rotate-90 text-re7-sky" : ""
+            }`}
+          >
+            ›
+          </span>
+          <span className="min-w-0 py-1">
+            <span className="block text-base font-semibold text-white sm:text-lg">{title}</span>
+            {description ? <span className="mt-1 block text-sm text-white/60">{description}</span> : null}
+            <span className="mt-2 flex flex-wrap items-center gap-2">
+              {badges}
+              {hasIssue ? <FlowBadge label="Revisar" tone="warning" /> : null}
+            </span>
+          </span>
+        </button>
+        {actions ? <div className="flex max-w-full flex-wrap items-center justify-end gap-2">{actions}</div> : null}
+      </div>
+      <div id={id} hidden={!expanded} className={expanded ? "grid gap-3 p-3 sm:p-4" : "hidden"}>
+        {children}
+      </div>
+    </article>
+  );
+}
+
 function TogglePill({
   checked,
   disabled,
@@ -383,6 +452,9 @@ export default function AppChatbotPage() {
     >
   >({});
   const [draftSearches, setDraftSearches] = useState<Record<string, string>>({});
+  const [newFlowExpanded, setNewFlowExpanded] = useState(false);
+  const [initializedNewFlowExpansion, setInitializedNewFlowExpansion] = useState(false);
+  const [flowExpanded, setFlowExpanded] = useState<Record<string, boolean>>({});
 
   const updateHandoffNotificationRecipient = (
     index: number,
@@ -556,6 +628,32 @@ export default function AppChatbotPage() {
       ),
     [drafts]
   );
+
+  useEffect(() => {
+    if (loading || initializedNewFlowExpansion) return;
+    setNewFlowExpanded(getNewFlowDefaultExpanded(sortedFlows.length));
+    setInitializedNewFlowExpansion(true);
+  }, [initializedNewFlowExpansion, loading, sortedFlows.length]);
+
+  useEffect(() => {
+    setFlowExpanded((current) => {
+      let changed = false;
+      const next: Record<string, boolean> = {};
+      for (const flow of sortedFlows) {
+        if (Object.prototype.hasOwnProperty.call(current, flow.id)) {
+          next[flow.id] = current[flow.id];
+        } else {
+          next[flow.id] = getExistingFlowDefaultExpanded({
+            isActive: flow.isActive,
+            entryPoint: flow.entryPoint,
+          });
+          changed = true;
+        }
+      }
+      if (Object.keys(current).length !== Object.keys(next).length) changed = true;
+      return changed ? next : current;
+    });
+  }, [sortedFlows]);
 
   const handleCreate = async () => {
     if (!session) return;
@@ -941,97 +1039,114 @@ export default function AppChatbotPage() {
             </p>
           ) : null}
         </div>
-        <div className="grid gap-3">
-          <input
-            className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
-            value={newName}
-            onChange={(event) => setNewName(event.target.value)}
-            placeholder="Fluxo principal"
-            disabled={flowReadOnly || creating}
-          />
-          <ChatbotFlowBuilder
-            definitionText={newDefinition}
-            onDefinitionTextChange={setNewDefinition}
-            disabled={flowReadOnly || creating}
-            departments={builderResources.departments}
-            queues={builderResources.queues}
-            advancedEditor={
-              <>
-                <JsonEditorWithSearch
-                  id="new-flow-definition"
-                  value={newDefinition}
-                  onChange={setNewDefinition}
-                  search={newSearch}
+        <FlowAccordionCard
+          id="new-chatbot-flow-panel"
+          title="Criar novo fluxo"
+          description="Rascunho local para cadastrar uma nova automação."
+          expanded={newFlowExpanded}
+          onToggle={() => setNewFlowExpanded((current) => !current)}
+          hasIssue={Boolean(newJsonError)}
+          badges={
+            <>
+              <FlowBadge label={newIsActive ? "Ativo" : "Inativo"} tone={newIsActive ? "success" : "warning"} />
+              {newEntryPoint ? <FlowBadge label="Entrada principal" /> : null}
+              <FlowBadge label={`${getFlowNodeCountFromDefinitionText(newDefinition) ?? "-"} nó(s)`} />
+              {newJsonError ? <FlowBadge label="JSON inválido" tone="warning" /> : <FlowBadge label="JSON válido" tone="success" />}
+            </>
+          }
+        >
+          <div className="grid gap-3">
+            <input
+              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              placeholder="Fluxo principal"
+              disabled={flowReadOnly || creating}
+            />
+            <ChatbotFlowBuilder
+              definitionText={newDefinition}
+              onDefinitionTextChange={setNewDefinition}
+              disabled={flowReadOnly || creating}
+              departments={builderResources.departments}
+              queues={builderResources.queues}
+              advancedEditor={
+                <>
+                  <JsonEditorWithSearch
+                    id="new-flow-definition"
+                    value={newDefinition}
+                    onChange={setNewDefinition}
+                    search={newSearch}
+                    disabled={flowReadOnly || creating}
+                  />
+                  <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-white/75">
+                    <input
+                      className="min-w-[220px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
+                      value={newSearch}
+                      onChange={(event) => setNewSearch(event.target.value)}
+                      placeholder="Localizar no JSON"
+                      disabled={readOnly || creating}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => selectJsonOccurrence("new-flow-definition", newDefinition, newSearch, true)}
+                      disabled={!newSearch.trim()}
+                      className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectJsonOccurrence("new-flow-definition", newDefinition, newSearch)}
+                      disabled={!newSearch.trim()}
+                      className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Próximo
+                    </button>
+                    <span className="text-xs text-white/50">{countOccurrences(newDefinition, newSearch)} ocorrência(s)</span>
+                  </div>
+                  <JsonSearchPreview text={newDefinition} query={newSearch} />
+                </>
+              }
+            />
+            {newJsonError ? (
+              <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                JSON inválido: {newJsonError}
+              </p>
+            ) : (
+              <p className="text-xs text-emerald-200/80">JSON válido. Ao salvar, o conteúdo será reindentado automaticamente.</p>
+            )}
+            <div className="flex flex-wrap items-center gap-4 text-sm text-white/80">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={newIsActive}
+                  onChange={(event) => setNewIsActive(event.target.checked)}
                   disabled={flowReadOnly || creating}
                 />
-                <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-white/75">
-                  <input
-                    className="min-w-[220px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
-                    value={newSearch}
-                    onChange={(event) => setNewSearch(event.target.value)}
-                    placeholder="Localizar no JSON"
-                    disabled={readOnly || creating}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => selectJsonOccurrence("new-flow-definition", newDefinition, newSearch, true)}
-                    disabled={!newSearch.trim()}
-                    className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Anterior
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectJsonOccurrence("new-flow-definition", newDefinition, newSearch)}
-                    disabled={!newSearch.trim()}
-                    className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Próximo
-                  </button>
-                  <span className="text-xs text-white/50">{countOccurrences(newDefinition, newSearch)} ocorrência(s)</span>
-                </div>
-                <JsonSearchPreview text={newDefinition} query={newSearch} />
-              </>
-            }
-          />
-          {newJsonError ? (
-            <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-              JSON inválido: {newJsonError}
-            </p>
-          ) : (
-            <p className="text-xs text-emerald-200/80">JSON válido. Ao salvar, o conteúdo será reindentado automaticamente.</p>
-          )}
-          <div className="flex flex-wrap items-center gap-4 text-sm text-white/80">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={newIsActive}
-                onChange={(event) => setNewIsActive(event.target.checked)}
+                Ativo
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={newEntryPoint}
+                  onChange={(event) => setNewEntryPoint(event.target.checked)}
+                  disabled={flowReadOnly || creating}
+                />
+                Entrada principal
+              </label>
+            </div>
+            <div>
+              <button
+                type="button"
+                onClick={handleCreate}
                 disabled={flowReadOnly || creating}
-              />
-              Ativo
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={newEntryPoint}
-                onChange={(event) => setNewEntryPoint(event.target.checked)}
-                disabled={flowReadOnly || creating}
-              />
-              Entrada principal
-            </label>
+                className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {creating ? "Criando..." : "Criar fluxo"}
+              </button>
+            </div>
           </div>
-          <div>
-            <button
-              type="button"
-              onClick={handleCreate}
-              disabled={flowReadOnly || creating}
-              className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {creating ? "Criando..." : "Criar fluxo"}
-            </button>
-          </div>
-        </div>
+        </FlowAccordionCard>
       </section>
 
       <section className="chatbot-section rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
@@ -1058,19 +1173,38 @@ export default function AppChatbotPage() {
             {sortedFlows.map((flow) => {
               const draft = drafts[flow.id];
               if (!draft) return null;
+              const flowPanelId = `chatbot-flow-panel-${flow.id}`;
+              const isExpanded = flowExpanded[flow.id] ?? getExistingFlowDefaultExpanded({
+                isActive: flow.isActive,
+                entryPoint: flow.entryPoint,
+              });
+              const flowNodeCount = getFlowNodeCountFromDefinitionText(draft.definitionText);
+              const flowHasIssue = Boolean(draftJsonErrors[flow.id]);
               return (
-                <article key={flow.id} className="chatbot-flow-card min-w-0 rounded-xl border border-white/10 bg-re7-navy/40 p-3 sm:p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-2">
-                      <h3 className="text-lg font-semibold text-white">{flow.name}</h3>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <FlowBadge label={flow.isActive ? "Ativo" : "Inativo"} tone={flow.isActive ? "success" : "warning"} />
-                        {flow.entryPoint ? <FlowBadge label="Entrada principal" /> : null}
-                        <FlowBadge label={`Atualizado em ${formatDateTime(flow.updatedAt)}`} />
-                      </div>
-                    </div>
+                <FlowAccordionCard
+                  key={flow.id}
+                  id={flowPanelId}
+                  title={draft.name || flow.name}
+                  description={`Atualizado em ${formatDateTime(flow.updatedAt)}`}
+                  expanded={isExpanded}
+                  onToggle={() =>
+                    setFlowExpanded((current) => ({
+                      ...current,
+                      [flow.id]: !isExpanded,
+                    }))
+                  }
+                  hasIssue={flowHasIssue}
+                  badges={
+                    <>
+                      <FlowBadge label={draft.isActive ? "Ativo" : "Inativo"} tone={draft.isActive ? "success" : "warning"} />
+                      {draft.entryPoint ? <FlowBadge label="Entrada principal" /> : null}
+                      <FlowBadge label={`${flowNodeCount ?? "-"} nó(s)`} />
+                      {flowHasIssue ? <FlowBadge label="JSON inválido" tone="warning" /> : <FlowBadge label="JSON válido" tone="success" />}
+                    </>
+                  }
+                  actions={
                     <div className="flex max-w-full flex-wrap items-center justify-end gap-3 text-sm text-white/80">
-                      {draftJsonErrors[flow.id] ? (
+                      {flowHasIssue ? (
                         <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                           JSON inválido: {draftJsonErrors[flow.id]}
                         </p>
@@ -1124,8 +1258,8 @@ export default function AppChatbotPage() {
                         </button>
                       ) : null}
                     </div>
-                  </div>
-
+                  }
+                >
                   <div className="mt-4 grid gap-3">
                     <input
                       className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
@@ -1223,7 +1357,7 @@ export default function AppChatbotPage() {
                       }
                     />
                   </div>
-                </article>
+                </FlowAccordionCard>
               );
             })}
           </div>
