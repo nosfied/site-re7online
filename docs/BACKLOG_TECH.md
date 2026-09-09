@@ -65,6 +65,9 @@ Estado fechado/validado:
 - closed-conversation access hardening: CLOSED / PRODUCTION VALIDATED in
   `93cd0e06`;
 - Inbox close terminal lifecycle: FIXED / DEPLOYED in `f62f1288`;
+- Web Session operational disconnect alert delivery: FIXED / DEPLOYED in
+  `b31fd976`; SMTP port `2465` now uses TLS, retryable transport failures have
+  bounded retry, and delivered alerts still dedupe by incident fingerprint;
 - CRA Demo V1: READY FOR CUSTOMER VALIDATION.
 - CRA-PR real HYBRID operational validation: CLOSED / PASS;
 - CRA-PR approved flow -> consent -> menu -> handoff: CLOSED / PASS;
@@ -101,6 +104,9 @@ Dividas tecnicas abertas:
   `close.succeeded` or `close.failed`, before post-close UI reconciliation can
   clear selection or remove the row. Backend close semantics, CSAT, protocol
   closure and snapshots remain unchanged.
+- Demo Web Session QR_REQUIRED remains OPEN as a channel recovery task; alert
+  delivery hardening does not reconnect or close the underlying disconnect
+  incident.
 - baselines CRA versionados nesta consolidacao como evidencia de validacao, nao como dump operacional:
   - `docs/bids/2026/cra-pr/CRA_PR_DEMO_FLOW_V1_CUSTOMER_VALIDATION_BASELINE.md`;
   - `docs/bids/2026/cra-pr/cra-pr-demo-flow-v1-customer-validation.definition.json`.
