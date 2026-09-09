@@ -14516,8 +14516,57 @@ test("inbox operations stay functional when tenant has no active general departm
   assert.equal(policyAgentWaIds.has(waId), true);
   assert.equal(policyAgentWaIds.has(policyAssignedOtherWaId), false);
   assert.equal(policyAgentWaIds.has(policyAssignedSelfWaId), true);
-  assert.equal(policyAgentWaIds.has(policyClosedOwnWaId), true);
+  assert.equal(policyAgentWaIds.has(policyClosedOwnWaId), false);
   assert.equal(policyAgentWaIds.has(policyClosedOtherWaId), false);
+  assert.equal(policyAgentInbox.body.items.some((item) => item.status === "CLOSED"), false);
+
+  const policyAgentClosedInbox = await request<{ ok: true; items: Array<{ waId: string }> }>(
+    "GET",
+    "/app/conversations?status=CLOSED",
+    multiDepartmentAgent
+  );
+  assert.equal(policyAgentClosedInbox.status, 200, JSON.stringify(policyAgentClosedInbox.body));
+  assert.equal(policyAgentClosedInbox.body.items.length, 0);
+
+  const policyAgentClosedSearch = await request<{ ok: true; items: Array<{ waId: string }> }>(
+    "GET",
+    `/app/conversations?search=${policyClosedOwnWaId}`,
+    multiDepartmentAgent
+  );
+  assert.equal(policyAgentClosedSearch.status, 200, JSON.stringify(policyAgentClosedSearch.body));
+  assert.equal(policyAgentClosedSearch.body.items.some((item) => item.waId === policyClosedOwnWaId), false);
+
+  const policyAgentClosedDetail = await request<ErrorPayload>(
+    "GET",
+    `/app/conversation/${policyClosedOwnWaId}`,
+    multiDepartmentAgent
+  );
+  assert.equal(policyAgentClosedDetail.status, 404, JSON.stringify(policyAgentClosedDetail.body));
+
+  const policyAgentClosedTimeline = await request<ErrorPayload>(
+    "GET",
+    `/app/conversation/${policyClosedOwnWaId}/timeline`,
+    multiDepartmentAgent
+  );
+  assert.equal(policyAgentClosedTimeline.status, 404, JSON.stringify(policyAgentClosedTimeline.body));
+
+  const policyAgentClosedSend = await request<ErrorPayload>(
+    "POST",
+    `/app/conversation/${policyClosedOwnWaId}/send`,
+    multiDepartmentAgent,
+    { text: "Tentativa em atendimento encerrado." }
+  );
+  assert.equal(policyAgentClosedSend.status, 409, JSON.stringify(policyAgentClosedSend.body));
+  assert.equal(getErrorCode(policyAgentClosedSend.body), "conversation_closed");
+
+  const policyAgentClosedStatus = await request<ErrorPayload>(
+    "POST",
+    `/app/conversation/${policyClosedOwnWaId}/status`,
+    multiDepartmentAgent,
+    { status: "IN_PROGRESS" }
+  );
+  assert.equal(policyAgentClosedStatus.status, 404, JSON.stringify(policyAgentClosedStatus.body));
+  assert.equal(getErrorCode(policyAgentClosedStatus.body), "conversation_not_found");
 
   const policyAdminInbox = await request<{ ok: true; items: Array<{ waId: string }> }>(
     "GET",
@@ -14526,6 +14575,24 @@ test("inbox operations stay functional when tenant has no active general departm
   );
   assert.equal(policyAdminInbox.status, 200, JSON.stringify(policyAdminInbox.body));
   assert.equal(policyAdminInbox.body.items.some((item) => item.waId === policyAssignedOtherWaId), true);
+  assert.equal(policyAdminInbox.body.items.some((item) => item.waId === policyClosedOwnWaId), true);
+
+  const policySupervisorClosedDetail = await request<{ ok: true; status: string | null }>(
+    "GET",
+    `/app/conversation/${policyClosedOwnWaId}`,
+    businessSupervisor
+  );
+  assert.equal(policySupervisorClosedDetail.status, 200, JSON.stringify(policySupervisorClosedDetail.body));
+  assert.equal(policySupervisorClosedDetail.body.status, "CLOSED");
+
+  const closedClaim = await request<ErrorPayload>(
+    "POST",
+    `/app/conversation/${policyClosedOwnWaId}/claim`,
+    businessAdmin,
+    {}
+  );
+  assert.equal(closedClaim.status, 409, JSON.stringify(closedClaim.body));
+  assert.equal(getErrorCode(closedClaim.body), "conversation_closed");
 
   const claim = await request<{ ok: true; assignedUserId: string | null; departmentId: string | null }>(
     "POST",

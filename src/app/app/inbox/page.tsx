@@ -47,7 +47,7 @@ import {
 import {
   CONVERSATION_FILTER_BY_VALUE,
   CONVERSATION_FILTERS,
-  MORE_CONVERSATION_FILTERS,
+  getMoreConversationFiltersForRole,
   PRIMARY_CONVERSATION_FILTERS,
   type ConversationFilter,
 } from "@/lib/inboxConversationFilters";
@@ -2252,6 +2252,10 @@ function isAppAdmin(session: AppSession | null) {
   return session?.user.role === "ADMIN";
 }
 
+function isAppAgent(session: AppSession | null) {
+  return session?.user.role === "AGENT";
+}
+
 function canUseInboxTemplatesForRole(role: string | null | undefined) {
   const normalized = String(role ?? "").trim().toUpperCase();
   return normalized === "ADMIN" || normalized === "SUPERVISOR";
@@ -3884,6 +3888,7 @@ export default function AppInboxPage() {
   }, [session?.user]);
 
   const isAdminUser = useMemo(() => isAppAdmin(session), [session]);
+  const isAgentUser = useMemo(() => isAppAgent(session), [session]);
   const canAccessCrmHistory = useMemo(
     () => String(session?.user.role ?? "").trim().toUpperCase() !== "AGENT",
     [session?.user.role]
@@ -3891,13 +3896,13 @@ export default function AppInboxPage() {
 
   const buildConversationFetchOptions = useCallback((cursor?: string | null) => {
     const search = conversationSearch.trim();
-    const status =
+    const supportsStatusFilter =
       conversationFilter === "WAITING" ||
       conversationFilter === "IN_PROGRESS" ||
       conversationFilter === "WAITING_USER" ||
-      conversationFilter === "CLOSED"
-        ? conversationFilter
-        : null;
+      (!isAgentUser && conversationFilter === "CLOSED");
+    const status =
+      supportsStatusFilter ? conversationFilter : null;
     return {
       limit: CONVERSATION_PAGE_SIZE,
       cursor,
@@ -3915,6 +3920,7 @@ export default function AppInboxPage() {
     conversationSearch,
     departmentFilter,
     isAdminUser,
+    isAgentUser,
     session?.user.id,
   ]);
 
@@ -4817,9 +4823,16 @@ export default function AppInboxPage() {
   const selectedChannelSwitchWarning = selectedConversation?.channelSwitchWarning?.pending
     ? selectedConversation.channelSwitchWarning
     : null;
+  const selectedConversationIsClosed =
+    selectedConversation ? getConversationOperationalStatus(selectedConversation) === "CLOSED" : false;
   const canMarkSelectedConversationUnread = useMemo(
-    () => Boolean(selectedConversation && !isConversationAssignedToAnotherUser(selectedConversation, session?.user.id ?? "")),
-    [selectedConversation, session?.user.id]
+    () =>
+      Boolean(
+        selectedConversation &&
+        !(isAgentUser && selectedConversationIsClosed) &&
+        !isConversationAssignedToAnotherUser(selectedConversation, session?.user.id ?? "")
+      ),
+    [isAgentUser, selectedConversation, selectedConversationIsClosed, session?.user.id]
   );
 
   const resolveChannelSwitchConfirmation = useCallback((confirmed: boolean) => {
@@ -5104,9 +5117,19 @@ export default function AppInboxPage() {
       });
     }
   }, [filteredConversations, isBusinessTenant, session]);
+  const visibleMoreConversationFilters = useMemo(
+    () => getMoreConversationFiltersForRole(session?.user.role),
+    [session?.user.role]
+  );
+  useEffect(() => {
+    if (isAgentUser && conversationFilter === "CLOSED") {
+      setConversationFilter("ALL");
+      setShowMoreConversationFilters(false);
+    }
+  }, [conversationFilter, isAgentUser]);
   const selectedMoreConversationFilter = useMemo(
-    () => MORE_CONVERSATION_FILTERS.find((item) => item.value === conversationFilter) ?? null,
-    [conversationFilter]
+    () => visibleMoreConversationFilters.find((item) => item.value === conversationFilter) ?? null,
+    [conversationFilter, visibleMoreConversationFilters]
   );
   const hasMoreConversationFilter =
     Boolean(selectedMoreConversationFilter) ||
@@ -5229,6 +5252,11 @@ export default function AppInboxPage() {
     () => (session ? isConversationAssignedToAnotherUser(selectedConversation, session.user.id) : false),
     [selectedConversation, session]
   );
+  const canClaimSelectedConversation =
+    Boolean(selectedConversationWaId) &&
+    Boolean(selectedConversation) &&
+    !selectedConversationIsClosed &&
+    !isSelectedConversationLocked;
 
   const isSelectedConversationOwnedByCurrentUser = useMemo(
     () =>
@@ -5239,8 +5267,11 @@ export default function AppInboxPage() {
   );
 
   const canManageSelectedConversation = useMemo(
-    () => Boolean(selectedConversationWaId) && isSelectedConversationOwnedByCurrentUser,
-    [isSelectedConversationOwnedByCurrentUser, selectedConversationWaId]
+    () =>
+      Boolean(selectedConversationWaId) &&
+      isSelectedConversationOwnedByCurrentUser &&
+      !(isAgentUser && selectedConversationIsClosed),
+    [isAgentUser, isSelectedConversationOwnedByCurrentUser, selectedConversationIsClosed, selectedConversationWaId]
   );
 
   const canTransferSelectedConversation = useMemo(
@@ -7652,7 +7683,7 @@ export default function AppInboxPage() {
                 </div>
                 {showMoreConversationFilters ? (
                   <div className="absolute left-0 top-7 z-30 mt-1 w-64 rounded-xl border border-white/10 bg-[#101f3a] p-1.5 shadow-[0_16px_32px_rgba(0,0,0,0.28)] max-[1440px]:w-56">
-                    {MORE_CONVERSATION_FILTERS.map((filter) => (
+                    {visibleMoreConversationFilters.map((filter) => (
                       <button
                         key={filter.value}
                         type="button"
@@ -7974,7 +8005,7 @@ export default function AppInboxPage() {
               </button>
               {showMoreActions && selectedConversation ? (
                 <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-[#d4c7b5] bg-white text-sm text-slate-800 shadow-2xl">
-                  {selectedConversation.assignedUserId === session.user.id ? (
+                  {selectedConversation.assignedUserId === session.user.id && !(isAgentUser && selectedConversationIsClosed) ? (
                     <>
                       <button
                         type="button"
@@ -8031,21 +8062,19 @@ export default function AppInboxPage() {
                             : "Devolver para fila atual"}
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        className="block w-full px-4 py-3 text-left font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={
-                          !selectedConversationWaId ||
-                          Boolean(conversationAction) ||
-                          isSelectedConversationLocked
-                        }
-                        onClick={() => {
-                          setShowMoreActions(false);
-                          void handleClaimConversation();
-                        }}
-                      >
-                        {conversationAction === "claim" ? "Assumindo..." : "Assumir conversa"}
-                      </button>
+                      {canClaimSelectedConversation ? (
+                        <button
+                          type="button"
+                          className="block w-full px-4 py-3 text-left font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={Boolean(conversationAction)}
+                          onClick={() => {
+                            setShowMoreActions(false);
+                            void handleClaimConversation();
+                          }}
+                        >
+                          {conversationAction === "claim" ? "Assumindo..." : "Assumir conversa"}
+                        </button>
+                      ) : null}
                     </>
                   )}
                   <button
@@ -8089,7 +8118,7 @@ export default function AppInboxPage() {
                   🔒
                 </button>
               ) : null}
-              {selectedConversation?.assignedUserId === session.user.id ? (
+              {selectedConversation?.assignedUserId === session.user.id && !(isAgentUser && selectedConversationIsClosed) ? (
                 <>
                   <button
                     type="button"
@@ -8136,20 +8165,18 @@ export default function AppInboxPage() {
                       {conversationAction === "release-general" ? "…" : "🎧"}
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    title="Assumir conversa"
-                    aria-label="Assumir conversa"
-                    disabled={
-                      !selectedConversationWaId ||
-                      Boolean(conversationAction) ||
-                      isSelectedConversationLocked
-                    }
-                    onClick={handleClaimConversation}
-                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/70 text-base text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8 max-md:h-10 max-md:w-10"
-                  >
-                    {conversationAction === "claim" ? "…" : "✓"}
-                  </button>
+                  {canClaimSelectedConversation ? (
+                    <button
+                      type="button"
+                      title="Assumir conversa"
+                      aria-label="Assumir conversa"
+                      disabled={Boolean(conversationAction)}
+                      onClick={handleClaimConversation}
+                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/70 text-base text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8 max-md:h-10 max-md:w-10"
+                    >
+                      {conversationAction === "claim" ? "…" : "✓"}
+                    </button>
+                  ) : null}
                 </>
               )}
               <button

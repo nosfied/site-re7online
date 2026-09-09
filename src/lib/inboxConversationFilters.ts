@@ -25,3 +25,10 @@ export const MORE_CONVERSATION_FILTERS = CONVERSATION_FILTERS.filter(
 export const CONVERSATION_FILTER_BY_VALUE = new Map(
   CONVERSATION_FILTERS.map((item) => [item.value, item])
 );
+
+export function getMoreConversationFiltersForRole(role: string | null | undefined) {
+  const normalizedRole = String(role ?? "").trim().toUpperCase();
+  return MORE_CONVERSATION_FILTERS.filter(
+    (item) => normalizedRole !== "AGENT" || item.value !== "CLOSED"
+  );
+}

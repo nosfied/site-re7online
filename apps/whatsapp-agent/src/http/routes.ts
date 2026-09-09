@@ -5508,6 +5508,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }),
         await loadOptionalDefaultDepartmentAndQueue(prisma, client.id)
       );
+      if (shouldDenyAgentClosedConversationAccess(clientAuth.role, scopedConversation)) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
@@ -5622,6 +5626,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         await loadOptionalDefaultDepartmentAndQueue(prisma, client.id)
       );
       latency.duration("routeOperationalState", routeOperationalStateStartedAt);
+      if (shouldDenyAgentClosedConversationAccess(clientAuth.role, scopedConversation)) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
@@ -5759,6 +5767,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       if (!currentConversation) {
         json(res, 404, httpError("conversation_not_found", "Conversa nao encontrada."));
+        return;
+      }
+      if (rejectAgentClosedConversationAction(res, clientAuth.role, currentConversation)) {
         return;
       }
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
@@ -6415,6 +6426,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waId: resolvedConversation.resolvedWaId,
         channel: resolvedConversation.winner?.channel ?? null,
       });
+      const materializedConversation = materializeConversationOperationalState(
+        scopedConversation,
+        await loadOptionalDefaultDepartmentAndQueue(prisma, client.id)
+      );
+      if (shouldDenyAgentClosedConversationAccess(clientAuth.role, materializedConversation)) {
+        json(res, 404, { error: "media_not_found" });
+        return;
+      }
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
@@ -6645,6 +6664,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       if (!conversation) {
         json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      if (rejectAgentClosedConversationAction(res, clientAuth.role, conversation)) {
         return;
       }
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
@@ -6900,6 +6922,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       if (!currentConversation) {
         json(res, 404, httpError("conversation_not_found", "Conversa nao encontrada."));
+        return;
+      }
+      if (rejectAgentClosedConversationAction(res, clientAuth.role, currentConversation)) {
         return;
       }
       if (isConversationOutboundBlocked(conversationRow) || resolvedChannel !== "whatsapp") {
@@ -7387,6 +7412,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
+      if (rejectAgentClosedConversationAction(res, clientAuth.role, currentConversation)) {
+        return;
+      }
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
         clientId: client.id,
         userId: clientAuth.userId,
@@ -7800,6 +7828,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       );
       if (!currentConversation) {
         json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      if (rejectAgentClosedConversationAction(res, clientAuth.role, currentConversation)) {
         return;
       }
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
@@ -12903,6 +12934,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
       const operationalConversation = materializeConversationOperationalState(conversation, defaults) ?? conversation;
+      if (isClosedConversation(operationalConversation)) {
+        json(res, 409, httpError("conversation_closed", "Atendimento encerrado nao pode ser assumido."));
+        return;
+      }
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
         clientId: client.id,
         userId: clientAuth.userId,
@@ -13177,6 +13212,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
+      if (rejectAgentClosedConversationAction(res, clientAuth.role, conversation)) {
+        return;
+      }
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
         clientId: client.id,
         userId: clientAuth.userId,
@@ -13336,6 +13374,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       );
       if (!conversation) {
         json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      if (rejectAgentClosedConversationAction(res, clientAuth.role, conversation)) {
         return;
       }
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
@@ -13612,6 +13653,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
+      if (rejectAgentClosedConversationAction(res, clientAuth.role, conversation)) {
+        return;
+      }
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
         clientId: client.id,
         userId: clientAuth.userId,
@@ -13853,6 +13897,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
+      if (rejectAgentClosedConversationAction(res, clientAuth.role, conversation)) {
+        return;
+      }
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
         clientId: client.id,
         userId: clientAuth.userId,
@@ -14051,6 +14098,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       );
       if (!conversation) {
         json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      if (rejectAgentClosedConversationAction(res, clientAuth.role, conversation)) {
         return;
       }
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
@@ -30866,6 +30916,27 @@ function canManageOwnedConversation(
   return assignedUserId === currentUserId;
 }
 
+function isClosedConversation(conversation: { status?: string | null } | null | undefined) {
+  return conversation?.status === ConversationOperationalStatus.CLOSED;
+}
+
+function shouldDenyAgentClosedConversationAccess(
+  role: string | null | undefined,
+  conversation: { status?: string | null } | null | undefined
+) {
+  return isAgentRole(role) && isClosedConversation(conversation);
+}
+
+function rejectAgentClosedConversationAction(
+  res: ServerResponse,
+  role: string | null | undefined,
+  conversation: { status?: string | null } | null | undefined
+) {
+  if (!shouldDenyAgentClosedConversationAccess(role, conversation)) return false;
+  json(res, 409, httpError("conversation_closed", "Atendimento encerrado nao permite esta acao."));
+  return true;
+}
+
 async function loadAppReportAccessScope(
   prisma: ReturnType<typeof getPrisma>,
   params: {
@@ -34067,6 +34138,7 @@ async function buildConversationListPayload(
   recordInboxListTiming(params.clientId, "assembly", assemblyStartedAt);
   const filteringSortingStartedAt = channelLatencyNow();
   const itemMatchesUserInboxVisibility = (item: (typeof allItems)[number]) => {
+    if (shouldDenyAgentClosedConversationAccess(params.userRole, item)) return false;
     const userParticipated = [item.waId, item.waIdCanonical]
       .map((value) => String(value ?? "").trim())
       .filter(Boolean)
