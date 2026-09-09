@@ -7613,13 +7613,76 @@ test("app reports scope supervisors to all active department memberships", async
   assert.equal(forbiddenDepartment.status, 403);
   assert.equal(getErrorCode(forbiddenDepartment.body), "department_forbidden");
 
-  const agentAReport = await request<{ ok: true; totalConversations: number }>(
+  const agentAReport = await request<{
+    ok: true;
+    totalConversations: number;
+    slaOperational: { inProgress: number };
+  }>(
     "GET",
     `/app/reports/conversations?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&userId=${agentA.id}`,
     supervisor
   );
   assert.equal(agentAReport.status, 200, JSON.stringify(agentAReport.body));
   assert.equal(agentAReport.body.totalConversations, 1);
+  assert.equal(agentAReport.body.slaOperational.inProgress, 1);
+
+  const oldAssignedConversation = await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId: `${prefix}-report-current-active-old`,
+      waIdCanonical: `${prefix}-report-current-active-old`,
+      channel: "whatsapp",
+      provider: "meta",
+      departmentId: departments[0].id,
+      createdAt: new Date(periodFrom.getTime() - 2 * 24 * 60 * 60 * 1000),
+      lastInboundAt: new Date(periodFrom.getTime() - 2 * 24 * 60 * 60 * 1000),
+    },
+    select: { id: true, waId: true },
+  });
+  await prisma.conversationMetrics.create({
+    data: {
+      conversationId: oldAssignedConversation.id,
+      clientId: businessClientId,
+      startedAt: new Date(periodFrom.getTime() - 2 * 24 * 60 * 60 * 1000),
+      firstResponseTimeSec: 15,
+      totalResponseTimeSec: 25,
+      responseCount: 1,
+      resolutionTimeSec: null,
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId: oldAssignedConversation.waId,
+      waIdCanonical: oldAssignedConversation.waId,
+      channel: "whatsapp",
+      provider: "meta",
+      mode: "HUMAN",
+      status: "IN_PROGRESS",
+      departmentId: departments[0].id,
+      assignedUserId: agentA.id,
+      assignedTo: agentA.name,
+      assignments: {
+        create: {
+          toUserId: agentA.id,
+          assignedAt: new Date(periodFrom.getTime() - 2 * 24 * 60 * 60 * 1000),
+        },
+      },
+    },
+  });
+
+  const agentAWithOldActiveReport = await request<{
+    ok: true;
+    totalConversations: number;
+    slaOperational: { inProgress: number };
+  }>(
+    "GET",
+    `/app/reports/conversations?from=${periodFrom.toISOString()}&to=${periodTo.toISOString()}&userId=${agentA.id}`,
+    supervisor
+  );
+  assert.equal(agentAWithOldActiveReport.status, 200, JSON.stringify(agentAWithOldActiveReport.body));
+  assert.equal(agentAWithOldActiveReport.body.totalConversations, 1);
+  assert.equal(agentAWithOldActiveReport.body.slaOperational.inProgress, 2);
 
   const forbiddenAgent = await request<ErrorPayload>(
     "GET",

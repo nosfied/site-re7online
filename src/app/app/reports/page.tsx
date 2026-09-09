@@ -1486,15 +1486,15 @@ export default function AppReportsPage() {
         {activeTab === "overview" ? (
           <>
             <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <KpiCard label="Conversas" value={report?.totalConversations ?? "-"} tone="info" detail="Total no período e filtros atuais." />
-              <KpiCard label="Em atendimento" value={slaOperational.inProgress} tone="info" detail="Conversas em andamento no recorte." />
-              <KpiCard label="Aguardando" value={slaOperational.waitingFirstResponse} tone="warn" detail="Sem primeira resposta registrada." />
-              <KpiCard label="Fechadas" value={slaOperational.closed} tone="neutral" detail="Conversas encerradas no read model atual." />
+              <KpiCard label="Conversas" value={report?.totalConversations ?? "-"} tone="info" detail="Criadas no período e filtros atuais." />
+              <KpiCard label="Em atendimento agora" value={slaOperational.inProgress} tone="info" detail="Conversas atualmente atribuídas conforme os filtros." />
+              <KpiCard label="Aguardando agora" value={slaOperational.waitingFirstResponse} tone="warn" detail="Conversas atualmente sem primeira resposta." />
+              <KpiCard label="Fechadas agora" value={slaOperational.closed} tone="neutral" detail="Conversas encerradas no estado atual." />
               <KpiCard
                 label="Atendimentos concluídos"
                 value={completedServiceReport?.totalCompleted ?? "-"}
                 tone="ok"
-                detail="Ciclos/protocolos encerrados no fechamento."
+                detail="Ciclos/protocolos encerrados no período."
               />
               <KpiCard label="Primeira resposta média" value={formatSeconds(report?.avgFirstResponseTimeSec ?? null)} tone="ok" />
               <KpiCard label="Resolução média" value={formatSeconds(report?.avgResolutionTimeSec ?? null)} tone="ok" />
@@ -1651,10 +1651,10 @@ export default function AppReportsPage() {
         {activeTab === "sla" ? (
           <>
             <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <KpiCard label="Aguardando primeira resposta" value={slaOperational.waitingFirstResponse} tone="warn" />
-              <KpiCard label="Em atendimento" value={slaOperational.inProgress} tone="info" />
-              <KpiCard label="Aguardando cliente" value={slaOperational.waitingUser} tone="neutral" />
-              <KpiCard label="Fechados" value={slaOperational.closed} tone="neutral" />
+              <KpiCard label="Aguardando primeira resposta agora" value={slaOperational.waitingFirstResponse} tone="warn" />
+              <KpiCard label="Em atendimento agora" value={slaOperational.inProgress} tone="info" />
+              <KpiCard label="Aguardando cliente agora" value={slaOperational.waitingUser} tone="neutral" />
+              <KpiCard label="Fechados agora" value={slaOperational.closed} tone="neutral" />
               <KpiCard label="Média primeira resposta" value={formatSeconds(slaOperational.avgFirstResponseTimeSec)} tone="ok" />
               <KpiCard label="Média resolução" value={formatSeconds(slaOperational.avgResolutionTimeSec)} tone="ok" />
               <KpiCard

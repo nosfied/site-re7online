@@ -549,7 +549,10 @@ import {
   parseConversationReportPeriod,
   parseConversationReportRange,
 } from "../reports/conversationReportPeriod.js";
-import { buildConversationSlaOperationalSummary } from "../reports/conversationSlaSummary.js";
+import {
+  buildConversationSlaOperationalSummary,
+  type ConversationSlaRuntimeState,
+} from "../reports/conversationSlaSummary.js";
 import {
   buildSessionAuditCsv,
   buildSessionAuditReport,
@@ -12711,6 +12714,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           requestedQueueId: requestedQueueId || null,
           filteredMetrics,
           stateByWaId: reportData.stateByWaId,
+          currentStateByWaId: reportData.currentStateByWaId,
           serviceCyclesByConversationId: reportData.serviceCyclesByConversationId,
           slaConfig: reportData.slaConfig,
           departmentNameById: reportData.departmentNameById,
@@ -26618,6 +26622,31 @@ async function loadConversationReportData(
         },
       })
     : [];
+  const currentRuntimeStates = await prisma.conversationRuntimeState.findMany({
+    where: {
+      clientId: options.clientId,
+      ...(options.requestedDepartmentId
+        ? { departmentId: options.requestedDepartmentId }
+        : options.requestedDepartmentIds
+          ? { departmentId: { in: options.requestedDepartmentIds } }
+          : {}),
+      ...(options.requestedQueueId ? { queueId: options.requestedQueueId } : {}),
+      ...(options.channel ? { channel: options.channel } : {}),
+    },
+    select: {
+      waId: true,
+      assignedUserId: true,
+      queueId: true,
+      status: true,
+      mode: true,
+      answers: true,
+      assignments: {
+        select: {
+          toUserId: true,
+        },
+      },
+    },
+  });
   const conversationIds = Array.from(new Set(metrics.map((item) => item.conversationId)));
   const serviceCycleEvents = conversationIds.length
     ? await prisma.event.findMany({
@@ -26691,6 +26720,7 @@ async function loadConversationReportData(
     ok: true as const,
     metrics,
     stateByWaId: buildReportRuntimeStateMap(runtimeStates),
+    currentStateByWaId: buildReportRuntimeStateMap(currentRuntimeStates),
     serviceCyclesByConversationId: buildServiceCycleHistoryMap(serviceCycleEvents),
     leadIdentityByWaId,
     slaConfig,
@@ -26783,6 +26813,7 @@ function buildConversationReportSummary(options: {
     };
   }>;
   stateByWaId: ReturnType<typeof buildReportRuntimeStateMap>;
+  currentStateByWaId: ReturnType<typeof buildReportRuntimeStateMap>;
   serviceCyclesByConversationId: Map<string, ServiceCycleHistory[]>;
   slaConfig: { firstResponseLimitSec: number; resolutionTimeLimitSec: number } | null;
   departmentNameById: Map<string, string>;
@@ -26822,12 +26853,14 @@ function buildConversationReportSummary(options: {
       item.resolutionTimeSec > resolutionTimeLimitSec;
     return count + (firstResponseBreached || resolutionBreached ? 1 : 0);
   }, 0);
+  const currentRuntimeStates: ConversationSlaRuntimeState[] = Array.from(options.currentStateByWaId.values())
+    .filter((state) => !options.requestedUserId || state.assignedUserId === options.requestedUserId);
   const slaOperational = buildConversationSlaOperationalSummary(
     options.filteredMetrics.map((item) => ({
       firstResponseTimeSec: item.firstResponseTimeSec,
       resolutionTimeSec: item.resolutionTimeSec,
     })),
-    options.filteredMetrics.map((item) => options.stateByWaId.get(item.conversation.waId) ?? {})
+    currentRuntimeStates
   );
   const assignedConversationsByAgentMap = new Map<
     string,
