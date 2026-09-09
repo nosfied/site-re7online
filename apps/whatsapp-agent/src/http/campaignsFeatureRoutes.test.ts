@@ -3772,6 +3772,92 @@ test("inbox routes WhatsApp web session outbound through worker without Meta fal
   assert.equal(mediaOutbound.externalMessageId, "baileys-test-message-id-6");
   assert.equal(mediaOutbound.metaMessageId, null);
   assert.equal((mediaOutbound.rawPayload as Record<string, unknown>).provider, "web_session");
+
+  const hybridAutoMetaWaId = "5511940008845";
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      config: {
+        whatsappTransports: {
+          meta: { enabledForRouting: true },
+          webSession: { enabledForRouting: true },
+        },
+      },
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: businessClientId,
+      config: {
+        whatsappTransports: {
+          meta: { enabledForRouting: true },
+          webSession: { enabledForRouting: true },
+        },
+      },
+      schemaVersion: 1,
+    },
+  });
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId: hybridAutoMetaWaId,
+      waIdCanonical: hybridAutoMetaWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: false,
+      windowExpiresAt: new Date("2026-01-01T10:00:00.000Z"),
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId: hybridAutoMetaWaId,
+      waIdCanonical: hybridAutoMetaWaId,
+      conversationKey: `${prefix}-business:${hybridAutoMetaWaId}`,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: false,
+      mode: "HUMAN",
+      status: "IN_PROGRESS",
+      assignedUserId: businessAdmin.id,
+      assignedTo: businessAdmin.name,
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+  const hybridAutoTextResponse = await request<{
+    ok: true;
+    message: { status: string; metaMessageId: string | null };
+  }>("POST", `/app/conversation/${hybridAutoMetaWaId}/send`, businessAdmin, {
+    text: "Mensagem web session em HYBRID AUTO.",
+  });
+  assert.equal(hybridAutoTextResponse.status, 200, JSON.stringify(hybridAutoTextResponse.body));
+  assert.equal(hybridAutoTextResponse.body.message.status, "SENT");
+  assert.equal(hybridAutoTextResponse.body.message.metaMessageId, null);
+  assert.equal(workerTextRequests.length, 6);
+  assert.equal(workerTextRequests[5]?.recipientWaId, hybridAutoMetaWaId);
+
+  const hybridAutoCanned = await request<{ ok: true; item: { id: string } }>(
+    "POST",
+    "/app/canned-replies",
+    businessAdmin,
+    {
+      title: "Resposta HYBRID AUTO",
+      body: "Mensagem pronta por Web Session em HYBRID AUTO.",
+    }
+  );
+  assert.equal(hybridAutoCanned.status, 201, JSON.stringify(hybridAutoCanned.body));
+  const hybridAutoCannedResponse = await request<{
+    ok: true;
+    message: { status: string; metaMessageId: string | null };
+  }>("POST", `/app/conversation/${hybridAutoMetaWaId}/send-canned-reply`, businessAdmin, {
+    cannedReplyId: hybridAutoCanned.body.item.id,
+  });
+  assert.equal(hybridAutoCannedResponse.status, 200, JSON.stringify(hybridAutoCannedResponse.body));
+  assert.equal(hybridAutoCannedResponse.body.message.status, "SENT");
+  assert.equal(hybridAutoCannedResponse.body.message.metaMessageId, null);
+  assert.equal(workerTextRequests.length, 7);
+  assert.equal(workerTextRequests[6]?.recipientWaId, hybridAutoMetaWaId);
+
   assert.equal((protocolOutbound.rawPayload as Record<string, unknown>).agentSignatureApplied, false);
   const protocolEvent = await prisma.event.findFirstOrThrow({
     where: { clientId: businessClientId, eventName: "conversation.protocol.notice.sent" },
@@ -13894,6 +13980,30 @@ test("inbox operations stay functional when tenant has no active general departm
   }) as typeof fetch;
   t.after(() => {
     globalThis.fetch = previousFetch;
+  });
+  await prisma.tenantOperationalConfig.upsert({
+    where: { clientId: businessClientId },
+    update: {
+      config: {
+        whatsappPrimaryTransport: "meta",
+        whatsappTransports: {
+          meta: { enabledForRouting: true },
+          webSession: { enabledForRouting: true },
+        },
+      },
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: businessClientId,
+      config: {
+        whatsappPrimaryTransport: "meta",
+        whatsappTransports: {
+          meta: { enabledForRouting: true },
+          webSession: { enabledForRouting: true },
+        },
+      },
+      schemaVersion: 1,
+    },
   });
 
   await prisma.department.updateMany({

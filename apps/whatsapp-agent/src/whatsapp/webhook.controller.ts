@@ -122,6 +122,7 @@ import {
 } from "../conversation/conversation.types.js";
 import { claimHybridInboundLogicalMessage } from "../channels/hybridInboundDedupe.js";
 import { resolveTenant, TenantResolutionError } from "../tenancy/tenantResolver.js";
+import { resolveEffectiveWhatsappOutboundTransport } from "../crm/crmConversationStart.js";
 import { ensureLeadForConversation, upsertLeadFromCapture } from "../crm/lead.service.js";
 import { runWhatsAppDualReadShadow } from "../channels/whatsappDualReadShadow.js";
 import {
@@ -155,6 +156,7 @@ import {
   isWhatsAppMultichannelShadowWriteEnabled,
   safeApplyWhatsAppMultichannelShadow,
 } from "../channels/whatsappMultichannelShadowWrite.js";
+import { createWebSessionTextOutboundMessage } from "../web-session/webSessionOutboundService.js";
 
 const agentBrain = createAgentBrain();
 const adminTemplateDedup = new Map<string, number>();
@@ -847,6 +849,56 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     return result;
   };
 
+  const sendPassiveOutboundText = async (params: {
+    toE164: string;
+    waId: string;
+    intent: ConversationIntent | undefined;
+    messageId: string;
+    replyText: string;
+    guard?: { version: number; lastInboundAt?: string };
+  }) => {
+    if (tenantClientId && tenantClientKey && !env.WHATSAPP_SANDBOX) {
+      const transport = await resolveEffectiveWhatsappOutboundTransport({
+        prisma,
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        clientStatus: tenantClientStatus,
+      });
+      if (transport.status === "ready" && transport.provider === "web_session") {
+        if (!shouldSendOutbound(params.waId, params.guard, params.messageId)) {
+          return { ok: false, errorBody: "late_reply_dropped" };
+        }
+        const result = await createWebSessionTextOutboundMessage({
+          prisma,
+          waId: params.waId,
+          waIdCanonical: canonicalizeBrazilWaId(params.waId),
+          text: params.replyText,
+          clientKey: tenantClientKey,
+          clientId: tenantClientId,
+          requestId: `web-session-inbound:${params.messageId}`,
+          outboundSource: "bot",
+          skipAgentSignature: true,
+          source: { channel: "whatsapp", provider: "web_session", channelAccountId: null },
+        });
+        if (!result.ok) {
+          return {
+            ok: false,
+            status: result.statusCode,
+            messageId: undefined,
+            errorBody: result.error,
+          };
+        }
+        return {
+          ok: result.status === MessageStatus.SENT,
+          status: result.status,
+          messageId: result.messageId,
+          errorBody: result.status === MessageStatus.SENT ? undefined : "web_session_send_failed",
+        };
+      }
+    }
+    return sendOutboundText(params);
+  };
+
   const typedPayload = payload as WhatsAppWebhookPayload;
   const normalized = normalizeWebhook(typedPayload);
   const phoneNumberId =
@@ -907,6 +959,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   }
   let tenantClientId = "";
   let tenantClientKey = env.CLIENT_ID;
+  let tenantClientStatus: string | null = null;
   let handoffLeadNotificationSettings = {
     enabled: false,
     recipients: [] as Array<{ id: string; waId: string; label?: string; isActive: boolean }>,
@@ -934,6 +987,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const tenant = await resolveTenant(phoneNumberId, meta);
     tenantClientId = tenant.clientId;
     tenantClientKey = tenant.clientKey;
+    tenantClientStatus =
+      (await prisma.client.findUnique({
+        where: { id: tenantClientId },
+        select: { status: true },
+      }))?.status ?? null;
     logger.updateContext({ clientKey: tenantClientKey });
     const resolvedTenantConfig = await getTenantByClientKeyOrPhoneNumberId(
       tenantClientKey,
@@ -2673,7 +2731,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     const replyText = mediaHandoffPolicy.customerNoticeText;
-    const result = await sendOutboundText({
+    const result = await sendPassiveOutboundText({
       toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || params.nextState.waId : params.toE164,
       waId: params.nextState.waId,
       intent: params.nextState.intent,
@@ -3377,7 +3435,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             ? maskNumber(appliedTenantConfig.handoffAttendantWaid)
             : "",
         });
-        await sendOutboundText({
+        await sendPassiveOutboundText({
           toE164: quotaReplyTo,
           waId: normalizedFrom,
           intent: undefined,
@@ -4163,7 +4221,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               decision.templateLanguage ?? "pt_BR",
               (await resolveCurrentTenantCredentials()) ?? undefined
             )
-          : sendOutboundText({
+          : sendPassiveOutboundText({
               toE164: toForReply,
               waId: normalizedFrom,
               intent: updatedConversation.intent,
@@ -4531,7 +4589,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         );
         if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
           const handoffReply = activatedHandoff.replyText;
-          const result = await sendOutboundText({
+          const result = await sendPassiveOutboundText({
             toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
             waId: normalizedFrom,
             intent: updatedConversation.intent,
@@ -4599,7 +4657,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           message.messageId
         );
         if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
-          const result = await sendOutboundText({
+          const result = await sendPassiveOutboundText({
             toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
             waId: normalizedFrom,
             intent: updatedConversation.intent,
@@ -4722,7 +4780,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         message.messageId
       );
       if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
-        const result = await sendOutboundText({
+        const result = await sendPassiveOutboundText({
           toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
           waId: normalizedFrom,
           intent: updatedConversation.intent,
@@ -5586,7 +5644,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       });
       if (chatbotHandoffDecision.closedText.trim() && env.outboundEnabled) {
         try {
-          const feedbackResult = await sendOutboundText({
+          const feedbackResult = await sendPassiveOutboundText({
             toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
             waId: normalizedFrom,
             intent: updatedConversation.intent,
@@ -5652,7 +5710,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           requestId: meta?.requestId,
         });
         try {
-          const feedbackResult = await sendOutboundText({
+          const feedbackResult = await sendPassiveOutboundText({
             toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
             waId: normalizedFrom,
             intent: updatedConversation.intent,
@@ -6054,7 +6112,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           });
           updatedConversation = await upsertConversationSafe(updatedConversation);
           if (demoReplyText) {
-            await sendOutboundText({
+            await sendPassiveOutboundText({
               toE164: message.from,
               waId: normalizedFrom,
               intent: updatedConversation.intent,
@@ -8047,7 +8105,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             decision.templateLanguage ?? "pt_BR",
             (await resolveCurrentTenantCredentials()) ?? undefined
           )
-        : sendOutboundText({
+        : sendPassiveOutboundText({
             toE164: toForReply,
             waId: normalizedFrom,
             intent: updatedConversation.intent,

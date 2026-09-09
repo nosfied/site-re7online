@@ -384,6 +384,7 @@ import {
 import { buildCrmContactDetailPayload, buildCrmContactsPayload } from "../crm/crmContactsReadModel.js";
 import { buildCrmWhatsappIdentityCandidates } from "../crm/crmWhatsappIdentity.js";
 import {
+  resolveEffectiveWhatsappOutboundTransport,
   isWhatsappFreeformStartTransportReady,
   resolveConfiguredWhatsappTenantMode,
   resolveCrmWebSessionRecipient,
@@ -6908,11 +6909,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const resolvedChannelFields = serializeInboxChannelFields(conversationRow);
       const resolvedChannel = resolvedChannelFields.channel;
-      const configuredPrimaryTransport =
+      const passiveTransport =
         resolvedChannel === "whatsapp"
-          ? await resolveWhatsappPrimaryTransport({ prisma, clientId: client.id })
+          ? await resolveEffectiveWhatsappOutboundTransport({
+              prisma,
+              clientId: client.id,
+              clientKey: client.clientKey,
+              clientStatus: client.status,
+            })
           : null;
-      const effectiveWhatsappProvider = configuredPrimaryTransport ?? resolvedChannelFields.provider;
+      const effectiveWhatsappProvider =
+        passiveTransport?.status === "ready" ? passiveTransport.provider : resolvedChannelFields.provider;
       const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && effectiveWhatsappProvider === "web_session";
       const currentConversation = await loadInboxConversationState(prisma, {
         clientId: client.id,
@@ -7382,11 +7389,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       const resolvedChannelFields = serializeInboxChannelFields(resolvedConversation.winner ?? undefined);
       const resolvedChannel = resolvedChannelFields.channel;
-      const configuredPrimaryTransport =
+      const passiveTransport =
         resolvedChannel === "whatsapp"
-          ? await resolveWhatsappPrimaryTransport({ prisma, clientId: client.id })
+          ? await resolveEffectiveWhatsappOutboundTransport({
+              prisma,
+              clientId: client.id,
+              clientKey: client.clientKey,
+              clientStatus: client.status,
+            })
           : null;
-      const effectiveWhatsappProvider = configuredPrimaryTransport ?? resolvedChannelFields.provider;
+      const effectiveWhatsappProvider =
+        passiveTransport?.status === "ready" ? passiveTransport.provider : resolvedChannelFields.provider;
       const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && effectiveWhatsappProvider === "web_session";
       if (isConversationOutboundBlocked(resolvedConversation.winner)) {
         json(res, 409, {
@@ -7783,11 +7796,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       const resolvedChannelFields = serializeInboxChannelFields(resolvedConversation.winner ?? undefined);
       const resolvedChannel = resolvedChannelFields.channel;
-      const configuredPrimaryTransport =
+      const passiveTransport =
         resolvedChannel === "whatsapp"
-          ? await resolveWhatsappPrimaryTransport({ prisma, clientId: client.id })
+          ? await resolveEffectiveWhatsappOutboundTransport({
+              prisma,
+              clientId: client.id,
+              clientKey: client.clientKey,
+              clientStatus: client.status,
+            })
           : null;
-      const effectiveWhatsappProvider = configuredPrimaryTransport ?? resolvedChannelFields.provider;
+      const effectiveWhatsappProvider =
+        passiveTransport?.status === "ready" ? passiveTransport.provider : resolvedChannelFields.provider;
       const isWebSessionWhatsApp = resolvedChannel === "whatsapp" && effectiveWhatsappProvider === "web_session";
       if (
         isConversationOutboundBlocked(resolvedConversation.winner) ||
