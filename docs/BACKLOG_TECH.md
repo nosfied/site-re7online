@@ -64,6 +64,7 @@ Estado fechado/validado:
 - deploy impact matrix hardening: CLOSED / SCRIPT + DEPLOY INTEGRATION + RUNBOOK;
 - closed-conversation access hardening: CLOSED / PRODUCTION VALIDATED in
   `93cd0e06`;
+- Inbox close terminal lifecycle: FIXED / DEPLOYED in `f62f1288`;
 - CRA Demo V1: READY FOR CUSTOMER VALIDATION.
 - CRA-PR real HYBRID operational validation: CLOSED / PASS;
 - CRA-PR approved flow -> consent -> menu -> handoff: CLOSED / PASS;
@@ -95,6 +96,11 @@ Dividas tecnicas abertas:
   ADMIN historical access is preserved. Claim/assume against `CLOSED`
   conversations is rejected with `conversation_closed` before assignment capacity
   checks.
+- SECULT Inbox close terminal telemetry incident 2026-09-09: fixed generically.
+  `close.requested` is followed by an awaited terminal client event,
+  `close.succeeded` or `close.failed`, before post-close UI reconciliation can
+  clear selection or remove the row. Backend close semantics, CSAT, protocol
+  closure and snapshots remain unchanged.
 - baselines CRA versionados nesta consolidacao como evidencia de validacao, nao como dump operacional:
   - `docs/bids/2026/cra-pr/CRA_PR_DEMO_FLOW_V1_CUSTOMER_VALIDATION_BASELINE.md`;
   - `docs/bids/2026/cra-pr/cra-pr-demo-flow-v1-customer-validation.definition.json`.
