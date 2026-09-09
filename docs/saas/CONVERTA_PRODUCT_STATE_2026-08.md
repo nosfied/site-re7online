@@ -237,9 +237,27 @@ Policies disponiveis:
 - `round_robin`: distribuicao sequencial entre candidatos elegiveis.
 - `least_active`: seleciona o candidato elegivel com menor carga ativa.
 
+Modos de elegibilidade por presenca:
+
+- `FRESH`: exige `available=true` e heartbeat recente. Preserva o comportamento
+  legado quando a politica antiga dependia de atendente online.
+- `AVAILABLE`: exige `available=true`, mas nao exclui candidato apenas por
+  heartbeat stale. Capacidade, membership, role, tenant e setor continuam
+  obrigatorios.
+- `IGNORE`: ignora disponibilidade/heartbeat e considera somente elegibilidade
+  operacional, capacidade e escopo.
+
+Status: `presenceMode` foi implementado em
+`3c68593637c9f8e9c97401457ceacaefa76a3699` e validado no Demo com
+`AVAILABLE`: stale + available elegivel, explicitamente indisponivel excluido,
+departamento incorreto excluido, round-robin preservado e atribuicao manual
+inalterada. SECULT-PE deve permanecer no modo atual ate configuracao explicita
+do cliente/TI.
+
 A entrada canonica de fila cobre handoff do chatbot, transferencia de setor, devolucao para fila e handoff por inatividade quando ha destino valido e o setor esta aberto. A atribuicao automatica preserva atomicidade com lock por tenant + department; capacidade, atribuicao e ponteiro de round-robin permanecem no escopo protegido.
 
-Quando `requireOnline=true`, o candidato precisa atender aos criterios:
+Quando a politica resolvida exige presenca fresca, o candidato precisa atender
+aos criterios:
 
 - tenant correto;
 - usuario ativo;
@@ -251,7 +269,9 @@ Quando `requireOnline=true`, o candidato precisa atender aos criterios:
 
 O heartbeat de disponibilidade roda a cada 10 segundos e o TTL efetivo e 30 segundos. `available=true` representa intencao do agente receber novos auto-assignments; disponibilidade efetiva exige `available=true` mais heartbeat recente. Logout, queda de rede ou aba sem heartbeat removem o agente do pool apos o TTL. Se nao houver candidato, a conversa permanece `WAITING` e compartilhada.
 
-Disponibilidade nao remove atribuicoes existentes e nao bloqueia transferencia manual explicita autorizada. Transferencia manual continua sendo decisao humana autoritativa conforme governanca operacional.
+Disponibilidade nao remove atribuicoes existentes e nao bloqueia transferencia
+manual explicita autorizada. Transferencia manual continua sendo decisao humana
+autoritativa conforme governanca operacional.
 
 Horarios de funcionamento continuam prevalecendo sobre disponibilidade. Um department fechado nao passa a autoatribuir apenas porque um agente esta online. Em `CLOSED + QUEUE_FOR_NEXT_OPEN`, a conversa fica em fila compartilhada, sem responsavel, aguardando proximo expediente ou acao operacional. Nao existe rebalance automatico geral de backlog na abertura.
 
@@ -262,7 +282,9 @@ operacional de `least_active` para `round_robin` e intervalo manual sem
 autoatribuicao. Mesmo quando o escopo esta como "Organizacao inteira", a
 distribuicao continua respeitando o setor da conversa quando ja existe
 direcionamento previo. O ajuste requerido foi de clareza UX e foi deployado em
-`c91671e9`.
+`c91671e9`. O achado principal remanescente foi semantica de presenca e
+instabilidade do pool de candidatos, enderecado pelo modo `AVAILABLE`; vies de
+cursor round-robin fica como watch item, nao como bug material confirmado.
 
 ## Presenca da equipe
 
@@ -271,20 +293,29 @@ O dashboard `/app/dashboard` possui a secao "Presenca da equipe", baseada em
 
 Contrato:
 
-- online efetivo: `available=true` com heartbeat fresco;
+- disponibilidade: `available=true` / `available=false`;
+- presenca: heartbeat fresco / sem atividade recente;
 - TTL operacional: 30000ms;
 - ADMIN ve o tenant inteiro;
 - SUPERVISOR ve usuarios dos seus departamentos;
 - AGENT nao acessa a secao;
-- exibe online/offline, departamento, conversas ativas e contadores de resumo;
+- exibe disponibilidade, presenca recente, departamento, conversas ativas e
+  contadores de resumo;
 - carga ativa considera conversas `IN_PROGRESS` e `WAITING` atribuidas;
 - refresh reaproveita o dashboard existente de 15s e realtime, sem novo polling
   de alta frequencia.
 
-Status: DEPLOYED em `adaf1b4f`; smoke visual humano ainda pendente se nao houver
-evidencia explicita.
+Status: DEPLOYED; a UX nao deve reduzir agente stale + disponivel a "offline"
+sem distinguir indisponibilidade explicita de ausencia recente de heartbeat.
 
 ## Chatbot, consentimento e inatividade
+
+Decisao de lifecycle humano: atendimentos `HUMAN` / `IN_PROGRESS` podem
+permanecer abertos indefinidamente. Nao existe regra generica de auto-close por
+inatividade humana ou por atendimento atribuido ha muito tempo. Qualquer regra
+de 60 minutos deve ser escopada a estado explicito `WAITING_FOR_CUSTOMER`, em
+que o sistema aguarda resposta do cidadao/cliente, e permanece como gap de
+produto nao implementado.
 
 O flow SECULT/Demo homologado usa:
 
@@ -347,7 +378,7 @@ Configuracao administrativa de filas:
 
 SUPERVISOR preserva as operacoes autorizadas no Inbox e demais superficies operacionais, sem receber permissao de escrita para politica de filas.
 
-Configuracoes delegadas ao ADMIN do tenant podem ser ajustadas via UX quando expostas pelo produto, como politica de fila, modo `manual`/`round_robin`/`least_active`, escopo, `requireOnline`, capacidade, `includeSupervisors` e politica de visibilidade do Inbox. Isso nao exige Codex, deploy ou alteracao por tenant quando a funcionalidade ja esta publicada.
+Configuracoes delegadas ao ADMIN do tenant podem ser ajustadas via UX quando expostas pelo produto, como politica de fila, modo `manual`/`round_robin`/`least_active`, escopo, `requireOnline`, `presenceMode`, capacidade, `includeSupervisors` e politica de visibilidade do Inbox. Isso nao exige Codex, deploy ou alteracao por tenant quando a funcionalidade ja esta publicada.
 
 Configuracoes internas de plataforma, como `TenantOperationalConfig.config.webSessionAlertEmails`, pertencem ao console interno RE7ONLINE e nao devem ser tratadas como configuracao operacional do app cliente sem decisao futura de produto.
 

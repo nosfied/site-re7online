@@ -79,6 +79,90 @@ SECULT COMPLETED SERVICE REPORTING:
 CLOSED / PRODUCTION VALIDATED
 ```
 
+## Relatorio operacional - estoque atual vs periodo - 2026-09-09
+
+Fix em producao:
+
+```text
+f84258d7e8dab157fec0cb9dad5d46245d9dd111
+fix(reports): count current active services in SLA cards
+```
+
+Resultado provado:
+
+- Maria Helena possuia duas conversas legitimas `HUMAN` / `IN_PROGRESS`
+  atribuidas (`****6185`, `****8282`);
+- ambas estavam com handoff ativo, sem fechamento, sem snapshot e sem CSAT;
+- antes do fix, o filtro `Ultimas 24 horas` + Maria exibia
+  `Em atendimento = 0`;
+- depois do fix, a metrica de estoque atual deve exibir
+  `Em atendimento agora = 2`;
+- validacao visual humana ainda pendente.
+
+Contrato atual do relatorio:
+
+- estado atual/estoque: `Em atendimento agora`, `Aguardando agora`,
+  `Fechadas agora`;
+- periodo/evento: `Conversas`, `Atendimentos concluidos`, medias de resposta e
+  resolucao, pontos fora do SLA e transferencias humano.
+
+Esta correcao foi uma divergencia real de semantica do relatorio, nao apenas
+interpretacao da usuaria.
+
+## Maria Helena - capacidade e fechamento
+
+Capacidade:
+
+- as conversas `****6185` e `****8282` eram atendimentos humanos atuais
+  legitimos;
+- capacidade 2/2 e exclusao de novas atribuicoes estavam corretas;
+- comportamento de capacidade/manual assignment foi validado no Demo com retorno
+  `409 max_active_reached`, feedback especifico na UI, preservacao do dono e
+  atribuicao abaixo da capacidade funcionando.
+
+Lifecycle humano:
+
+- atendimentos `HUMAN` / `IN_PROGRESS` podem permanecer abertos
+  indefinidamente;
+- nao existe auto-close generico por inatividade humana;
+- eventual regra de 60 minutos deve ser restrita a estado explicito
+  `WAITING_FOR_CUSTOMER`, ainda nao implementado.
+
+Fechamento:
+
+- a reproducao Demo de fechamento por AGENT passou;
+- idade dormente de 6 dias nao bloqueou fechamento;
+- nao foi encontrado request backend real de fechamento para o incidente da
+  Maria;
+- raiz permanece NOT PROVEN;
+- status: OPEN / NEEDS BETTER INTERNAL OBSERVABILITY.
+
+## Presence eligibility modes
+
+`presenceMode` foi implementado e validado no Demo em:
+
+```text
+3c68593637c9f8e9c97401457ceacaefa76a3699
+```
+
+Modos:
+
+- `FRESH`;
+- `AVAILABLE`;
+- `IGNORE`.
+
+Validacao Demo para `AVAILABLE`:
+
+- stale + available: elegivel;
+- explicit unavailable: excluido;
+- departamento incorreto: excluido;
+- round-robin preservado;
+- atribuicao manual inalterada.
+
+Para SECULT-PE, a migracao para `AVAILABLE` permanece pendente de configuracao
+explicita do cliente/TI e smoke controlado. Nao ha bug de round-robin provado
+apos essa validacao; cursor bias permanece apenas como watch item.
+
 ## Web Session unsupported-message incident - 2026-09-04
 
 Chamados organicos da SECULT-PE indicaram bolhas `Mensagem nao suportada` em

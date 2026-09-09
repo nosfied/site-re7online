@@ -56,6 +56,19 @@ Estado fechado/validado:
 - SECULT Web Session non-content control event suppression: DEPLOYED / TESTED in
   `c308198a`; organic validation pending;
 - SECULT auto-assignment incident 2026-08-31: AUDITED / BUG NOT CONFIRMED; UX clarification deployed in `c91671e9`;
+- SECULT report current-state truth bug: FIXED / DEPLOYED in
+  `f84258d7e8dab157fec0cb9dad5d46245d9dd111`; Maria Helena current active
+  conversations now appear as `Em atendimento agora = 2`; human visual
+  validation pending.
+- SECULT Maria Helena capacity incident: CLOSED AS PRODUCT BEHAVIOR / NO BUG
+  CONFIRMED. Maria had two legitimate active HUMAN / IN_PROGRESS services
+  (`****6185`, `****8282`), so capacity 2/2 and assignment exclusion were
+  correct.
+- SECULT Maria Helena close failure: OPEN / ROOT CAUSE NOT PROVEN. Demo close
+  reproduction passed and dormant age did not block close; no Maria backend
+  close request was found.
+- presence eligibility modes: IMPLEMENTED / TESTED / REAL VALIDATED ON DEMO in
+  `3c68593637c9f8e9c97401457ceacaefa76a3699`.
 - SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / POS-PHASE 2 LOAD VALIDATION PARTIAL;
 - Browser Push / PWA notifications: CLOSED / REAL VALIDATED;
 - true foreground Web Push detection: CLOSED / REAL VALIDATED in `670f392d`;
@@ -80,7 +93,10 @@ Pendencias proximas:
 5. acompanhar a validacao organica SECULT para confirmar que novos eventos
    `protocolMessage`, `reactionMessage`, `messageContextInfo` e grouping-only
    `albumMessage` nao aparecem como `Mensagem nao suportada`;
-6. desenhar waiting-on-customer 1h como regra funcional separada.
+6. desenhar `WAITING_FOR_CUSTOMER` 60 minutos como regra funcional separada,
+   restrita a conversas explicitamente aguardando o cidadao/cliente.
+7. configurar SECULT para `presenceMode=AVAILABLE` somente por decisao
+   operacional/UX do cliente e smoke controlado.
 
 Dividas tecnicas abertas:
 
@@ -97,6 +113,16 @@ Dividas tecnicas abertas:
 - billing measurement items ainda abertos: ciclo receptivo logico, template Utility fora de 24h entregue, ledger Meta apos 2026-10-01 e relatorio contratual mensal.
 - alteracoes externas de `.env`/segredos continuam como procedimento
   operacional separado; a matriz de deploy cobre impacto derivado de diff Git.
+- close observability: OPEN / TECHNICAL HARDENING. Mutacoes criticas do Inbox,
+  especialmente encerramento, devem registrar tentativa, ator, conversa,
+  `requestId`/correlacao, resultado e codigo de erro seguros, sem exigir
+  DevTools do cliente.
+- `****6194`: OPEN / TARGETED CYCLE-AWARE AUDIT. Ha snapshot antigo com CSAT
+  respondido e atividade/runtime atual; nao classificar como residuo de
+  capacidade sem analise por ciclo.
+- Demo Web Session: OPEN / PREEXISTING. Estado `disconnected` / `QR_REQUIRED`
+  foi observado antes da correcao de reports `f84258d7` e deve permanecer em
+  frente separada.
 
 ### Contact Timeline / Histórico do contato
 

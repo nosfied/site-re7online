@@ -260,6 +260,43 @@ Performance:
 - labels devem ser buscados em lote;
 - nao usar loop de consultas por atendente, setor ou Conversation.
 
+## Relatorio Operacional De Conversas
+
+Atualizacao em producao:
+
+```text
+commit: f84258d7e8dab157fec0cb9dad5d46245d9dd111
+message: fix(reports): count current active services in SLA cards
+```
+
+Contrato de semantica:
+
+- `Conversas`: metrica de periodo/evento, baseada nas conversas/metricas criadas
+  dentro do intervalo selecionado e filtros atuais.
+- `Em atendimento agora`: estoque atual, baseado em
+  `ConversationRuntimeState.status=IN_PROGRESS` e atribuicao atual. O periodo
+  selecionado nao deve esconder conversa atualmente ativa apenas porque ela
+  comecou antes da janela.
+- `Aguardando agora`: estoque atual de conversas aguardando primeira resposta
+  conforme estado runtime.
+- `Fechadas agora`: estado atual fechado no read model operacional.
+- `Atendimentos concluidos`: metrica de periodo/evento, baseada em
+  `CompletedServiceSnapshot.closedAt`.
+- `Primeira resposta media`, `Resolucao media` e `Pontos fora do SLA`: metricas
+  de periodo/evento derivadas de `ConversationMetrics` e configuracao de SLA.
+- `Transferencias humano`: metrica de periodo/evento quando baseada em eventos de
+  transferencia.
+
+Validacao SECULT-PE:
+
+- Maria Helena possuia duas conversas legitimas `HUMAN` / `IN_PROGRESS`
+  atribuidas (`****6185`, `****8282`);
+- antes do fix, filtro `Ultimas 24 horas` + Maria exibia `Em atendimento = 0`
+  porque o estoque atual era derivado apenas das metricas de conversas no
+  periodo;
+- depois do fix, `Em atendimento agora = 2`;
+- validacao visual humana ainda pendente.
+
 ### Validacao organica SECULT-PE - 2026-09-01
 
 Validado em producao na base:
