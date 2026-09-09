@@ -71,10 +71,14 @@ Em `assignee_only_after_assignment`, a regra para AGENT e:
 - atribuido ao proprio agente: visivel.
 - atribuido a outro agente: oculto.
 - atribuicao direta ao proprio agente fora de membership: visivel conforme governanca operacional.
-- `CLOSED` com participacao propria: visivel.
-- `CLOSED` sem participacao propria, mesmo no mesmo setor: oculto.
+- `CLOSED`: oculto para AGENT, inclusive com participacao propria.
 
 SUPERVISOR visualiza por escopo de departments dos memberships ativos. ADMIN visualiza tenant-wide. A participacao historica em conversa fechada usa evidencias estruturadas como `ConversationAssignment` e historico de assignment/runtime, sem inferencia por texto.
+
+Desde `93cd0e06`, conversas `CLOSED` tambem nao podem ser assumidas por nenhum
+papel. O backend rejeita a tentativa com `conversation_closed` antes de avaliar
+elegibilidade ou limite de atendimentos ativos, evitando falso diagnostico de
+capacidade para uma acao que ja e invalida por ciclo encerrado.
 
 A visibilidade e independente de autorizacao, notificacao e read-state. Ela decide projecao no Inbox, mas nao concede permissao de operacao por si so.
 
