@@ -59,16 +59,23 @@ Estado fechado/validado:
 - SECULT report current-state truth bug: FIXED / DEPLOYED in
   `f84258d7e8dab157fec0cb9dad5d46245d9dd111`; Maria Helena current active
   conversations now appear as `Em atendimento agora = 2`; human visual
-  validation pending.
+  validation PASS. Status: REAL VALIDATED / CLOSED.
 - SECULT Maria Helena capacity incident: CLOSED AS PRODUCT BEHAVIOR / NO BUG
   CONFIRMED. Maria had two legitimate active HUMAN / IN_PROGRESS services
   (`****6185`, `****8282`), so capacity 2/2 and assignment exclusion were
-  correct.
-- SECULT Maria Helena close failure: OPEN / ROOT CAUSE NOT PROVEN. Demo close
-  reproduction passed and dormant age did not block close; no Maria backend
-  close request was found.
+  correct. Demo validated `409 max_active_reached` and the specific UX.
+- SECULT Maria Helena close failure: OPEN / CLIENT TERMINAL/LIFECYCLE HANDLING
+  BUG CONFIRMED. Latest trace `inbox-close-0698...` proved attempt/requested,
+  backend close success, protocol closed, snapshot present, `closeSource=app_inbox`,
+  `closedBy=Maria`, runtime `CLOSED`, handoff `NONE`, assignee cleared, and close
+  message + CSAT sent. Backend close bug: NO. RBAC bug: NO. Residual: frontend
+  terminal `close.succeeded` / `close.failed` event absent after successful
+  backend close.
 - presence eligibility modes: IMPLEMENTED / TESTED / REAL VALIDATED ON DEMO in
   `3c68593637c9f8e9c97401457ceacaefa76a3699`.
+- SECULT presence mode: APPLIED. Current policy remains `round_robin`,
+  `scope=tenant`, `presenceMode=AVAILABLE`, `maxActivePerAgent=2`; organic
+  distribution validation pending.
 - SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / POS-PHASE 2 LOAD VALIDATION PARTIAL;
 - Browser Push / PWA notifications: CLOSED / REAL VALIDATED;
 - true foreground Web Push detection: CLOSED / REAL VALIDATED in `670f392d`;
@@ -95,8 +102,8 @@ Pendencias proximas:
    `albumMessage` nao aparecem como `Mensagem nao suportada`;
 6. desenhar `WAITING_FOR_CUSTOMER` 60 minutos como regra funcional separada,
    restrita a conversas explicitamente aguardando o cidadao/cliente.
-7. configurar SECULT para `presenceMode=AVAILABLE` somente por decisao
-   operacional/UX do cliente e smoke controlado.
+7. acompanhar distribuicao organica SECULT apos `presenceMode=AVAILABLE`, sem
+   alterar cursor round-robin antes de evidencia material.
 
 Dividas tecnicas abertas:
 
@@ -113,16 +120,20 @@ Dividas tecnicas abertas:
 - billing measurement items ainda abertos: ciclo receptivo logico, template Utility fora de 24h entregue, ledger Meta apos 2026-10-01 e relatorio contratual mensal.
 - alteracoes externas de `.env`/segredos continuam como procedimento
   operacional separado; a matriz de deploy cobre impacto derivado de diff Git.
-- close observability: OPEN / TECHNICAL HARDENING. Mutacoes criticas do Inbox,
-  especialmente encerramento, devem registrar tentativa, ator, conversa,
-  `requestId`/correlacao, resultado e codigo de erro seguros, sem exigir
-  DevTools do cliente.
+- close observability: IMPLEMENTED / PARTIALLY VALIDATED in
+  `a026b176e6a3f7b010ba247fe6b851b9c375ca70`. It successfully proved request
+  emission and backend completion for Maria's close action. Residual open bug:
+  terminal client outcome is missing after successful backend close.
 - `****6194`: OPEN / TARGETED CYCLE-AWARE AUDIT. Ha snapshot antigo com CSAT
   respondido e atividade/runtime atual; nao classificar como residuo de
   capacidade sem analise por ciclo.
 - Demo Web Session: OPEN / PREEXISTING. Estado `disconnected` / `QR_REQUIRED`
   foi observado antes da correcao de reports `f84258d7` e deve permanecer em
   frente separada.
+- Demo operational alert email: OPEN / ROOT CAUSE NOT YET PROVEN. A queda da
+  conexao Demo nao gerou email observado; auditar destinatarios tenant-scoped,
+  configuracao CRA-only vs suporte interno global, e se a transicao qualificava
+  para alerta.
 
 ### Contact Timeline / Histórico do contato
 

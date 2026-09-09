@@ -295,7 +295,7 @@ Validacao SECULT-PE:
   porque o estoque atual era derivado apenas das metricas de conversas no
   periodo;
 - depois do fix, `Em atendimento agora = 2`;
-- validacao visual humana ainda pendente.
+- validacao visual humana PASS; status REAL VALIDATED / CLOSED.
 
 ### Validacao organica SECULT-PE - 2026-09-01
 

@@ -97,7 +97,8 @@ Resultado provado:
   `Em atendimento = 0`;
 - depois do fix, a metrica de estoque atual deve exibir
   `Em atendimento agora = 2`;
-- validacao visual humana ainda pendente.
+- validacao visual humana PASS: Maria Helena / `Last 24h` exibiu 2
+  atendimentos ativos atuais. Status: REAL VALIDATED / CLOSED.
 
 Contrato atual do relatorio:
 
@@ -132,10 +133,17 @@ Fechamento:
 
 - a reproducao Demo de fechamento por AGENT passou;
 - idade dormente de 6 dias nao bloqueou fechamento;
-- nao foi encontrado request backend real de fechamento para o incidente da
-  Maria;
-- raiz permanece NOT PROVEN;
-- status: OPEN / NEEDS BETTER INTERNAL OBSERVABILITY.
+- a telemetria segura implantada em
+  `a026b176e6a3f7b010ba247fe6b851b9c375ca70` capturou a acao real da Maria
+  (`inbox-close-0698...`): tentativa e request presentes;
+- backend close sucedeu, protocolo foi fechado, snapshot existe,
+  `closeSource=app_inbox`, `closedBy=Maria`, runtime `CLOSED`, handoff `NONE`,
+  assignee limpo e mensagem de encerramento + CSAT foram enviados;
+- backend close bug: NO;
+- RBAC bug: NO;
+- residual confirmado: evento terminal frontend `close.succeeded` /
+  `close.failed` ausente apos backend close bem-sucedido;
+- status: OPEN / CLIENT TERMINAL-LIFECYCLE HANDLING BUG CONFIRMED.
 
 ## Presence eligibility modes
 
@@ -159,9 +167,16 @@ Validacao Demo para `AVAILABLE`:
 - round-robin preservado;
 - atribuicao manual inalterada.
 
-Para SECULT-PE, a migracao para `AVAILABLE` permanece pendente de configuracao
-explicita do cliente/TI e smoke controlado. Nao ha bug de round-robin provado
-apos essa validacao; cursor bias permanece apenas como watch item.
+SECULT-PE foi configurada para `presenceMode=AVAILABLE` apos validacao
+controlada no Demo. A politica atual deve permanecer:
+
+- `mode=round_robin`;
+- `scope=tenant`;
+- `presenceMode=AVAILABLE`;
+- `maxActivePerAgent=2`.
+
+Validacao organica de distribuicao permanece pendente. Nao ha bug de round-robin
+provado apos essa validacao; cursor bias permanece apenas como watch item.
 
 ## Web Session unsupported-message incident - 2026-09-04
 

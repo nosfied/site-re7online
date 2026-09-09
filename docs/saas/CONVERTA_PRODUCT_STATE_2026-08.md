@@ -251,8 +251,9 @@ Status: `presenceMode` foi implementado em
 `3c68593637c9f8e9c97401457ceacaefa76a3699` e validado no Demo com
 `AVAILABLE`: stale + available elegivel, explicitamente indisponivel excluido,
 departamento incorreto excluido, round-robin preservado e atribuicao manual
-inalterada. SECULT-PE deve permanecer no modo atual ate configuracao explicita
-do cliente/TI.
+inalterada. SECULT-PE foi configurada para `presenceMode=AVAILABLE`, mantendo
+`round_robin`, `scope=tenant` e `maxActivePerAgent=2`; validacao organica de
+distribuicao permanece pendente.
 
 A entrada canonica de fila cobre handoff do chatbot, transferencia de setor, devolucao para fila e handoff por inatividade quando ha destino valido e o setor esta aberto. A atribuicao automatica preserva atomicidade com lock por tenant + department; capacidade, atribuicao e ponteiro de round-robin permanecem no escopo protegido.
 
@@ -285,6 +286,12 @@ direcionamento previo. O ajuste requerido foi de clareza UX e foi deployado em
 `c91671e9`. O achado principal remanescente foi semantica de presenca e
 instabilidade do pool de candidatos, enderecado pelo modo `AVAILABLE`; vies de
 cursor round-robin fica como watch item, nao como bug material confirmado.
+
+Status SECULT 2026-09-09: capacidade Maria Helena foi reclassificada como
+comportamento correto do produto. Duas conversas legitimas `HUMAN` /
+`IN_PROGRESS` (`****6185`, `****8282`) explicavam carga 2/2; Demo validou
+`409 max_active_reached` e feedback especifico. Nao recomendar mudanca no
+cursor round-robin antes de evidencia organica com `presenceMode=AVAILABLE`.
 
 ## Presenca da equipe
 
@@ -344,6 +351,11 @@ WEB_SESSION opera com worker hospedado, auth state persistente e lifecycle tenan
 Durante pairing canonico, outbound pode ser bloqueado temporariamente. O valor anterior e preservado em `ChannelAccount.metadata.webSession.prePairingOutboundEnabled` e restaurado apos `CONNECTED` quando aplicavel. O snapshot transitorio deve ser consumido depois da restauracao bem-sucedida.
 
 Alertas de disconnect usam exclusivamente `TenantOperationalConfig.config.webSessionAlertEmails` como fonte de destinatarios. ADMIN, SUPERVISOR, AGENT ou usuarios do app nao sao fallback. Sem recipient configurado, nenhum email e enviado, mas o incidente/log permanece registrado. Incidente terminal alerta imediatamente; incidente recuperavel usa grace de 3 minutos; reconnect antes do grace cancela o alerta; dedup garante um alerta por incidente.
+
+Item aberto 2026-09-09: queda de conexao Demo nao gerou email observado.
+Raiz ainda nao provada; auditar se havia destinatario tenant-scoped, se a
+configuracao existia apenas para CRA, se ha alerta interno global esperado e se
+a transicao qualificava para alerta.
 
 Detalhes tecnicos do transporte estao em `docs/whatsapp/web-session.md`.
 
