@@ -110,6 +110,7 @@ import {
   getAppPushStatus,
   subscribeAppPush,
   unsubscribeAppPush,
+  type AppInboxEventName,
   type AppApiError,
   type AppCannedReplyItem,
   type AppMetaCostPreview,
@@ -391,7 +392,7 @@ function extractSuggestedReply(notes: LeadNoteItem[]) {
 
 function logInboxUxEvent(
   session: AppSession | null,
-  event: "inbox.priority.rendered" | "inbox.sorted" | "inbox.suggestion.used",
+  event: AppInboxEventName,
   payload: Record<string, unknown>
 ) {
   if (typeof window !== "undefined" && window.localStorage.getItem(INBOX_UX_DEBUG_STORAGE_KEY) === "1") {
@@ -401,6 +402,35 @@ function logInboxUxEvent(
   void logAppInboxEvent(session, event, payload).catch(() => {
     // UI logging must never affect inbox usage.
   });
+}
+
+function createInboxActionId(action: "send" | "close") {
+  const randomPart =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `inbox-${action}-${randomPart}`;
+}
+
+function maskInboxActionConversationRef(value: string | null | undefined) {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, "");
+  if (digits.length >= 4) return `****${digits.slice(-4)}`;
+  return value.length > 48 ? `${value.slice(0, 45)}...` : value;
+}
+
+function buildInboxActionPayload(
+  actionId: string,
+  conversation: InboxConversationItem | null,
+  extra: Record<string, unknown> = {}
+) {
+  return {
+    actionId,
+    conversationKey: conversation ? maskInboxActionConversationRef(getConversationIdentity(conversation)) : null,
+    conversationId: maskInboxActionConversationRef(conversation?.waIdCanonical ?? conversation?.waId ?? null),
+    provider: conversation?.provider ?? null,
+    ...extra,
+  };
 }
 
 function getTimelineDateGroup(value: string) {
@@ -1142,8 +1172,10 @@ type DepartmentOption = {
 };
 
 type PendingOutgoingMessage = {
+  actionId: string;
   waId: string;
   conversationKey: string;
+  provider: string | null;
   text: string;
   replyTo: InboxReplyTarget | null;
 };
@@ -5511,6 +5543,13 @@ export default function AppInboxPage() {
         try {
           const latencyStartedAt = performance.now();
           const requestStartedAt = performance.now();
+          logInboxUxEvent(session, "inbox.action.send.requested", {
+            actionId: next.actionId,
+            conversationKey: maskInboxActionConversationRef(next.conversationKey),
+            conversationId: maskInboxActionConversationRef(next.waId),
+            provider: next.provider,
+            queuedCount: outgoingQueueRef.current.length,
+          });
           const response = await sendAppConversationMessage(
             session,
             next.waId,
@@ -5519,6 +5558,19 @@ export default function AppInboxPage() {
           );
           const requestMs = performance.now() - requestStartedAt;
           const uiStartedAt = performance.now();
+          logInboxUxEvent(session, "inbox.action.send.succeeded", {
+            actionId: next.actionId,
+            conversationKey: maskInboxActionConversationRef(next.conversationKey),
+            conversationId: maskInboxActionConversationRef(response.waIdCanonical ?? response.waId ?? next.waId),
+            provider: response.provider ?? next.provider,
+            messageId: response.message.messageId,
+            selected: targetsCurrentSelectedConversation([
+              next.conversationKey,
+              next.waId,
+              response.waId,
+              response.waIdCanonical,
+            ]),
+          });
           if (
             targetsCurrentSelectedConversation([
               next.conversationKey,
@@ -5610,9 +5662,25 @@ export default function AppInboxPage() {
         } catch (err) {
           const typed = err as { status?: number; message?: string; details?: string };
           if (typed.status === 401) {
+            logInboxUxEvent(session, "inbox.action.send.failed", {
+              actionId: next.actionId,
+              conversationKey: maskInboxActionConversationRef(next.conversationKey),
+              conversationId: maskInboxActionConversationRef(next.waId),
+              provider: next.provider,
+              httpStatus: typed.status,
+              errorCode: "unauthorized",
+            });
             handleUnauthorized();
             return;
           }
+          logInboxUxEvent(session, "inbox.action.send.failed", {
+            actionId: next.actionId,
+            conversationKey: maskInboxActionConversationRef(next.conversationKey),
+            conversationId: maskInboxActionConversationRef(next.waId),
+            provider: next.provider,
+            httpStatus: typed.status ?? null,
+            errorCode: (typed as AppApiError).errorCode ?? null,
+          });
           if (targetsCurrentSelectedConversation([next.conversationKey, next.waId])) {
             setMessageDraft((current) => (current.trim() ? `${current}\n${next.text}` : next.text));
             setReplyTarget(next.replyTo);
@@ -5741,25 +5809,84 @@ export default function AppInboxPage() {
       }
       return;
     }
-    if (!selectedConversationWaId || !selectedConversation) return;
+    const actionId = createInboxActionId("send");
+    logInboxUxEvent(
+      session,
+      "inbox.action.send.attempt",
+      buildInboxActionPayload(actionId, selectedConversation, {
+        queuedCount: outgoingQueueRef.current.length,
+      })
+    );
+    if (!selectedConversationWaId || !selectedConversation) {
+      logInboxUxEvent(session, "inbox.action.send.blocked", {
+        actionId,
+        conversationKey: null,
+        conversationId: maskInboxActionConversationRef(selectedConversationWaId),
+        reason: "no_selected_conversation",
+      });
+      return;
+    }
     if (!selectedConversationSupportsOutbound) {
+      logInboxUxEvent(
+        session,
+        "inbox.action.send.blocked",
+        buildInboxActionPayload(actionId, selectedConversation, {
+          reason: "outbound_not_enabled",
+        })
+      );
       setError(selectedConversationOutboundDisabledMessage);
       setErrorDetails(null);
       return;
     }
     if (!canReply) {
+      logInboxUxEvent(
+        session,
+        "inbox.action.send.blocked",
+        buildInboxActionPayload(actionId, selectedConversation, {
+          reason: "invalid_state",
+        })
+      );
       setError("Assuma a conversa para responder manualmente.");
       setErrorDetails(null);
       return;
     }
     const text = messageDraft.trim();
-    if (!text) return;
+    if (!text) {
+      logInboxUxEvent(
+        session,
+        "inbox.action.send.blocked",
+        buildInboxActionPayload(actionId, selectedConversation, {
+          reason: "empty_message",
+        })
+      );
+      return;
+    }
     const outgoingText = buildOutgoingTextForReplyMode(text, replyTarget?.mode ?? "reply");
-    if (!outgoingText) return;
-    if (!(await confirmChannelSwitchIfNeeded())) return;
+    if (!outgoingText) {
+      logInboxUxEvent(
+        session,
+        "inbox.action.send.blocked",
+        buildInboxActionPayload(actionId, selectedConversation, {
+          reason: "empty_message",
+        })
+      );
+      return;
+    }
+    if (!(await confirmChannelSwitchIfNeeded())) {
+      logInboxUxEvent(
+        session,
+        "inbox.action.send.blocked",
+        buildInboxActionPayload(actionId, selectedConversation, {
+          reason: "confirm_cancelled",
+        })
+      );
+      return;
+    }
     const queuedMessage: PendingOutgoingMessage = {
+      actionId,
       waId: selectedConversationWaId,
       conversationKey: getConversationIdentity(selectedConversation),
+      provider: selectedConversation.provider ?? null,
       text: outgoingText,
       replyTo: replyTarget,
     };
@@ -6526,28 +6653,81 @@ export default function AppInboxPage() {
   };
 
   const handleCloseConversationToGeneral = async () => {
-    if (!session || !selectedConversationWaId) return;
+    if (!session) return;
+    const actionId = createInboxActionId("close");
+    logInboxUxEvent(
+      session,
+      "inbox.action.close.attempt",
+      buildInboxActionPayload(actionId, selectedConversation)
+    );
+    if (!selectedConversationWaId || !selectedConversation) {
+      logInboxUxEvent(session, "inbox.action.close.blocked", {
+        actionId,
+        conversationKey: null,
+        conversationId: maskInboxActionConversationRef(selectedConversationWaId),
+        reason: "no_selected_conversation",
+      });
+      return;
+    }
     const confirmed = window.confirm(
       "Encerrar este atendimento?\n\nAo confirmar, o protocolo será encerrado e a pesquisa de satisfação será enviada ao cliente."
     );
-    if (!confirmed) return;
+    if (!confirmed) {
+      logInboxUxEvent(
+        session,
+        "inbox.action.close.cancelled",
+        buildInboxActionPayload(actionId, selectedConversation, {
+          reason: "confirm_cancelled",
+        })
+      );
+      return;
+    }
     setConversationAction("close-general");
     setError(null);
     setSuccess(null);
     let response: Awaited<ReturnType<typeof closeAppConversation>>;
     try {
+      logInboxUxEvent(
+        session,
+        "inbox.action.close.requested",
+        buildInboxActionPayload(actionId, selectedConversation)
+      );
       response = await closeAppConversation(session, selectedConversationWaId);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
+        logInboxUxEvent(
+          session,
+          "inbox.action.close.failed",
+          buildInboxActionPayload(actionId, selectedConversation, {
+            httpStatus: typed.status,
+            errorCode: "unauthorized",
+          })
+        );
         setConversationAction(null);
         handleUnauthorized();
         return;
       }
+      logInboxUxEvent(
+        session,
+        "inbox.action.close.failed",
+        buildInboxActionPayload(actionId, selectedConversation, {
+          httpStatus: typed.status ?? null,
+          errorCode: (typed as AppApiError).errorCode ?? null,
+        })
+      );
       setError(getAppErrorUxMessage({ status: typed.status, message: typed.message, fallback: "Não foi possível finalizar o atendimento." }));
       setConversationAction(null);
       return;
     }
+    logInboxUxEvent(
+      session,
+      "inbox.action.close.succeeded",
+      buildInboxActionPayload(actionId, selectedConversation, {
+        conversationId: maskInboxActionConversationRef(response.waIdCanonical ?? response.waId ?? selectedConversationWaId),
+        provider: response.provider ?? selectedConversation.provider ?? null,
+      })
+    );
 
     const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
     const stillInUserScope = canSessionAccessConversationDepartment(session, response.departmentId);

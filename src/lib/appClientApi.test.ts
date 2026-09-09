@@ -10,6 +10,7 @@ import {
   formatAppWhatsappIdentityDisplay,
   heartbeatAppAgentAvailability,
   loadAppSession,
+  logAppInboxEvent,
   updateAppAgentSignatureSettings,
   updateAppSatisfactionPolicy,
   updateAppAgentAvailability,
@@ -173,6 +174,73 @@ test("agent availability client calls session-scoped endpoints", async () => {
   ]);
   assert.equal(calls[1].body, JSON.stringify({ available: true }));
   assert.equal(calls[2].body, JSON.stringify({}));
+});
+
+test("inbox action telemetry uses the existing app inbox event endpoint", async () => {
+  const calls: Array<{ url: string; method: string; body: string | null }> = [];
+  const originalFetch = globalThis.fetch;
+  Object.assign(globalThis, {
+    fetch: async (url: string | URL, init?: RequestInit) => {
+      calls.push({
+        url: String(url),
+        method: init?.method ?? "GET",
+        body: typeof init?.body === "string" ? init.body : null,
+      });
+      return {
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response;
+    },
+  });
+
+  const session: AppSession = {
+    token: encodeTokenPayload({
+      sid: "session-action",
+      sub: "agent-action",
+      clientId: "tenant-action",
+      role: "AGENT",
+    }),
+    expiresAt: "2026-08-21T12:00:00.000Z",
+    baseUrl: "https://app.example.test",
+    user: {
+      id: "agent-action",
+      name: "Agent",
+      email: "agent@example.test",
+      clientId: "tenant-action",
+      role: "AGENT",
+      departmentId: null,
+      departmentName: null,
+      departmentIds: [],
+      primaryDepartmentId: null,
+    },
+  };
+
+  try {
+    await logAppInboxEvent(session, "inbox.action.send.failed", {
+      actionId: "inbox-send-1",
+      conversationKey: "conversation-1",
+      conversationId: "conversation-1",
+      provider: "web_session",
+      httpStatus: 409,
+      errorCode: "conversation_not_assigned",
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.url, "https://app.example.test/app/inbox/events");
+  assert.equal(calls[0]?.method, "POST");
+  const payload = JSON.parse(calls[0]?.body ?? "{}") as {
+    event?: string;
+    payload?: Record<string, unknown>;
+  };
+  assert.equal(payload.event, "inbox.action.send.failed");
+  assert.equal(payload.payload?.actionId, "inbox-send-1");
+  assert.equal(payload.payload?.httpStatus, 409);
+  assert.equal(payload.payload?.errorCode, "conversation_not_assigned");
+  assert.equal("text" in (payload.payload ?? {}), false);
+  assert.equal("body" in (payload.payload ?? {}), false);
 });
 
 test("conversation detail request forwards caller abort signal", async () => {

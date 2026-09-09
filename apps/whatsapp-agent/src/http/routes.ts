@@ -31200,6 +31200,19 @@ const INBOX_UX_EVENT_NAMES = [
   "inbox.priority.rendered",
   "inbox.sorted",
   "inbox.suggestion.used",
+  "inbox.action.send.attempt",
+  "inbox.action.send.requested",
+  "inbox.action.send.succeeded",
+  "inbox.action.send.failed",
+  "inbox.action.send.blocked",
+  "inbox.action.send.client_error",
+  "inbox.action.close.attempt",
+  "inbox.action.close.requested",
+  "inbox.action.close.succeeded",
+  "inbox.action.close.failed",
+  "inbox.action.close.blocked",
+  "inbox.action.close.cancelled",
+  "inbox.action.close.client_error",
 ] as const;
 
 function isAllowedInboxUxEvent(value: string): value is (typeof INBOX_UX_EVENT_NAMES)[number] {
@@ -31212,7 +31225,19 @@ function sanitizeInboxUxEventPayload(value: unknown) {
   }
   const source = value as Record<string, unknown>;
   const result: Record<string, string | number | boolean | null> = {};
-  for (const key of ["conversationKey", "leadId", "leadTemp", "topPriority"] as const) {
+  for (const key of [
+    "actionId",
+    "conversationKey",
+    "conversationId",
+    "leadId",
+    "leadTemp",
+    "topPriority",
+    "provider",
+    "phase",
+    "reason",
+    "errorCode",
+    "messageId",
+  ] as const) {
     const item = source[key];
     if (typeof item === "string") {
       result[key] = item.slice(0, 180);
@@ -31223,6 +31248,18 @@ function sanitizeInboxUxEventPayload(value: unknown) {
   const count = source.count;
   if (typeof count === "number" && Number.isFinite(count)) {
     result.count = Math.max(0, Math.min(Math.floor(count), 1000));
+  }
+  const httpStatus = source.httpStatus;
+  if (typeof httpStatus === "number" && Number.isFinite(httpStatus)) {
+    result.httpStatus = Math.max(0, Math.min(Math.floor(httpStatus), 599));
+  }
+  const queuedCount = source.queuedCount;
+  if (typeof queuedCount === "number" && Number.isFinite(queuedCount)) {
+    result.queuedCount = Math.max(0, Math.min(Math.floor(queuedCount), 1000));
+  }
+  const selected = source.selected;
+  if (typeof selected === "boolean") {
+    result.selected = selected;
   }
   return result;
 }

@@ -5402,6 +5402,45 @@ test("admin embedded signup audit events are tenant scoped and reject raw secret
   assert.equal(JSON.stringify(payload).includes("raw-code-must-be-rejected"), false);
 });
 
+test("app inbox action telemetry is tenant scoped and sanitizes message content", async () => {
+  const response = await request<{ ok: true }>("POST", "/app/inbox/events", businessAgent, {
+    event: "inbox.action.close.failed",
+    payload: {
+      actionId: "inbox-close-test",
+      conversationKey: "conversation-key",
+      conversationId: "conversation-id",
+      provider: "web_session",
+      httpStatus: 409,
+      errorCode: "conversation_not_assigned",
+      text: "must not be stored",
+      body: "must not be stored",
+    },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+
+  const stored = await prisma.event.findFirst({
+    where: {
+      clientId: businessClientId,
+      eventName: "inbox.action.close.failed",
+      requestId: { contains: "inbox.action.close.failed" },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.ok(stored);
+  const payload = stored.payloadJson as Record<string, unknown>;
+  assert.equal(payload.action, "inbox.action.close.failed");
+  assert.equal(payload.actionId, "inbox-close-test");
+  assert.equal(payload.conversationKey, "conversation-key");
+  assert.equal(payload.conversationId, "conversation-id");
+  assert.equal(payload.provider, "web_session");
+  assert.equal(payload.httpStatus, 409);
+  assert.equal(payload.errorCode, "conversation_not_assigned");
+  assert.equal("text" in payload, false);
+  assert.equal("body" in payload, false);
+});
+
 test("admin onboarding code exchange sends canonical manual oauth redirect uri for db-only clients", async () => {
   const dbOnlyClientKey = `${prefix}-db-only-code-exchange`;
   const client = await prisma.client.create({

@@ -4719,9 +4719,27 @@ export async function createAppLeadNote(
   });
 }
 
+export type AppInboxEventName =
+  | "inbox.priority.rendered"
+  | "inbox.sorted"
+  | "inbox.suggestion.used"
+  | "inbox.action.send.attempt"
+  | "inbox.action.send.requested"
+  | "inbox.action.send.succeeded"
+  | "inbox.action.send.failed"
+  | "inbox.action.send.blocked"
+  | "inbox.action.send.client_error"
+  | "inbox.action.close.attempt"
+  | "inbox.action.close.requested"
+  | "inbox.action.close.succeeded"
+  | "inbox.action.close.failed"
+  | "inbox.action.close.blocked"
+  | "inbox.action.close.cancelled"
+  | "inbox.action.close.client_error";
+
 export function logAppInboxEvent(
   session: AppSession,
-  event: "inbox.priority.rendered" | "inbox.sorted" | "inbox.suggestion.used",
+  event: AppInboxEventName,
   payload: Record<string, unknown>
 ) {
   return requestAppJson<{ ok: true }>(session, "/app/inbox/events", {
