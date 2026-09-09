@@ -4740,13 +4740,29 @@ export type AppInboxEventName =
 export function logAppInboxEvent(
   session: AppSession,
   event: AppInboxEventName,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  options?: { keepalive?: boolean }
 ) {
   return requestAppJson<{ ok: true }>(session, "/app/inbox/events", {
     method: "POST",
     body: JSON.stringify({ event, payload }),
+    keepalive: options?.keepalive === true,
     timeoutMs: 3000,
   });
+}
+
+export async function logAppInboxEventSafely(
+  session: AppSession,
+  event: AppInboxEventName,
+  payload: Record<string, unknown>,
+  options?: { keepalive?: boolean }
+): Promise<boolean> {
+  try {
+    await logAppInboxEvent(session, event, payload, options);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function getAppPushStatus(session: AppSession): Promise<AppPushStatus> {

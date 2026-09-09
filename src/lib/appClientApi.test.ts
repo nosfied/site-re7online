@@ -11,6 +11,7 @@ import {
   heartbeatAppAgentAvailability,
   loadAppSession,
   logAppInboxEvent,
+  logAppInboxEventSafely,
   updateAppAgentSignatureSettings,
   updateAppSatisfactionPolicy,
   updateAppAgentAvailability,
@@ -241,6 +242,126 @@ test("inbox action telemetry uses the existing app inbox event endpoint", async 
   assert.equal(payload.payload?.errorCode, "conversation_not_assigned");
   assert.equal("text" in (payload.payload ?? {}), false);
   assert.equal("body" in (payload.payload ?? {}), false);
+});
+
+test("inbox action telemetry can be safely awaited with keepalive", async () => {
+  const calls: Array<{ url: string; keepalive: boolean | undefined; body: string | null }> = [];
+  const originalFetch = globalThis.fetch;
+  let resolveFetch: ((response: Response) => void) | null = null;
+  Object.assign(globalThis, {
+    fetch: (url: string | URL, init?: RequestInit) => {
+      calls.push({
+        url: String(url),
+        keepalive: init?.keepalive,
+        body: typeof init?.body === "string" ? init.body : null,
+      });
+      return new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      });
+    },
+  });
+
+  const session: AppSession = {
+    token: encodeTokenPayload({
+      sid: "session-close",
+      sub: "agent-close",
+      clientId: "tenant-close",
+      role: "AGENT",
+    }),
+    expiresAt: "2026-08-21T12:00:00.000Z",
+    baseUrl: "https://app.example.test",
+    user: {
+      id: "agent-close",
+      name: "Agent",
+      email: "agent@example.test",
+      clientId: "tenant-close",
+      role: "AGENT",
+    },
+  };
+
+  try {
+    let settled = false;
+    const result = logAppInboxEventSafely(
+      session,
+      "inbox.action.close.succeeded",
+      {
+        actionId: "inbox-close-1",
+        conversationKey: "conversation-1",
+        conversationId: "****1234",
+      },
+      { keepalive: true }
+    ).then((value) => {
+      settled = true;
+      return value;
+    });
+
+    await Promise.resolve();
+    assert.equal(settled, false);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.url, "https://app.example.test/app/inbox/events");
+    assert.equal(calls[0]?.keepalive, true);
+
+    const payload = JSON.parse(calls[0]?.body ?? "{}") as {
+      event?: string;
+      payload?: Record<string, unknown>;
+    };
+    assert.equal(payload.event, "inbox.action.close.succeeded");
+    assert.equal(payload.payload?.actionId, "inbox-close-1");
+    assert.equal("text" in (payload.payload ?? {}), false);
+    assert.equal("body" in (payload.payload ?? {}), false);
+
+    resolveFetch?.({
+      ok: true,
+      json: async () => ({ ok: true }),
+    } as Response);
+    assert.equal(await result, true);
+    assert.equal(settled, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("inbox action telemetry safe helper does not throw on logging failure", async () => {
+  const originalFetch = globalThis.fetch;
+  Object.assign(globalThis, {
+    fetch: async () => {
+      throw new Error("network down");
+    },
+  });
+
+  const session: AppSession = {
+    token: encodeTokenPayload({
+      sid: "session-close-failure",
+      sub: "agent-close",
+      clientId: "tenant-close",
+      role: "AGENT",
+    }),
+    expiresAt: "2026-08-21T12:00:00.000Z",
+    baseUrl: "https://app.example.test",
+    user: {
+      id: "agent-close",
+      name: "Agent",
+      email: "agent@example.test",
+      clientId: "tenant-close",
+      role: "AGENT",
+    },
+  };
+
+  try {
+    const result = await logAppInboxEventSafely(
+      session,
+      "inbox.action.close.failed",
+      {
+        actionId: "inbox-close-2",
+        conversationKey: "conversation-2",
+        errorCode: "server_error",
+      },
+      { keepalive: true }
+    );
+    assert.equal(result, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("conversation detail request forwards caller abort signal", async () => {

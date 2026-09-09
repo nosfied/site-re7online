@@ -107,6 +107,7 @@ import {
   updateAppLeadStatus,
   updateAppConversationReadState,
   logAppInboxEvent,
+  logAppInboxEventSafely,
   getAppPushStatus,
   subscribeAppPush,
   unsubscribeAppPush,
@@ -402,6 +403,18 @@ function logInboxUxEvent(
   void logAppInboxEvent(session, event, payload).catch(() => {
     // UI logging must never affect inbox usage.
   });
+}
+
+async function persistInboxUxEvent(
+  session: AppSession | null,
+  event: AppInboxEventName,
+  payload: Record<string, unknown>
+) {
+  if (typeof window !== "undefined" && window.localStorage.getItem(INBOX_UX_DEBUG_STORAGE_KEY) === "1") {
+    console.info(JSON.stringify({ event, ...payload }));
+  }
+  if (!session) return false;
+  return logAppInboxEventSafely(session, event, payload, { keepalive: true });
 }
 
 function createInboxActionId(action: "send" | "close") {
@@ -6686,13 +6699,14 @@ export default function AppInboxPage() {
   const handleCloseConversationToGeneral = async () => {
     if (!session) return;
     const actionId = createInboxActionId("close");
+    const closeActionPayload = buildInboxActionPayload(actionId, selectedConversation);
     logInboxUxEvent(
       session,
       "inbox.action.close.attempt",
-      buildInboxActionPayload(actionId, selectedConversation)
+      closeActionPayload
     );
     if (!selectedConversationWaId || !selectedConversation) {
-      logInboxUxEvent(session, "inbox.action.close.blocked", {
+      await persistInboxUxEvent(session, "inbox.action.close.blocked", {
         actionId,
         conversationKey: null,
         conversationId: maskInboxActionConversationRef(selectedConversationWaId),
@@ -6704,7 +6718,7 @@ export default function AppInboxPage() {
       "Encerrar este atendimento?\n\nAo confirmar, o protocolo será encerrado e a pesquisa de satisfação será enviada ao cliente."
     );
     if (!confirmed) {
-      logInboxUxEvent(
+      await persistInboxUxEvent(
         session,
         "inbox.action.close.cancelled",
         buildInboxActionPayload(actionId, selectedConversation, {
@@ -6718,16 +6732,16 @@ export default function AppInboxPage() {
     setSuccess(null);
     let response: Awaited<ReturnType<typeof closeAppConversation>>;
     try {
-      logInboxUxEvent(
+      await persistInboxUxEvent(
         session,
         "inbox.action.close.requested",
-        buildInboxActionPayload(actionId, selectedConversation)
+        closeActionPayload
       );
       response = await closeAppConversation(session, selectedConversationWaId);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
-        logInboxUxEvent(
+        await persistInboxUxEvent(
           session,
           "inbox.action.close.failed",
           buildInboxActionPayload(actionId, selectedConversation, {
@@ -6739,7 +6753,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      logInboxUxEvent(
+      await persistInboxUxEvent(
         session,
         "inbox.action.close.failed",
         buildInboxActionPayload(actionId, selectedConversation, {
@@ -6751,7 +6765,7 @@ export default function AppInboxPage() {
       setConversationAction(null);
       return;
     }
-    logInboxUxEvent(
+    await persistInboxUxEvent(
       session,
       "inbox.action.close.succeeded",
       buildInboxActionPayload(actionId, selectedConversation, {
