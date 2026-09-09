@@ -4,7 +4,10 @@ import {
   buildWebSessionDisconnectAlertEmail,
   closeWebSessionDisconnectAlertIncident,
   notifyWebSessionDisconnectAlert,
+  resolveWebSessionDisconnectAlertSmtpSecure,
+  setWebSessionDisconnectAlertRetryDelayForTests,
   setWebSessionDisconnectAlertSenderForTests,
+  WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS,
   WEB_SESSION_RECOVERABLE_DISCONNECT_ALERT_GRACE_MS,
 } from "./webSessionDisconnectAlerts.js";
 
@@ -67,6 +70,12 @@ function createPrismaMock() {
   };
 }
 
+test("web session disconnect alert SMTP secure mode supports Resend TLS ports", () => {
+  assert.equal(resolveWebSessionDisconnectAlertSmtpSecure(465), true);
+  assert.equal(resolveWebSessionDisconnectAlertSmtpSecure(2465), true);
+  assert.equal(resolveWebSessionDisconnectAlertSmtpSecure(587), false);
+});
+
 test("web session terminal disconnect alert sends once and dedupes duplicates", async () => {
   const db = createPrismaMock();
   const sent: Array<{ to: string[]; subject: string; text: string; html: string }> = [];
@@ -103,6 +112,7 @@ test("web session terminal disconnect alert sends once and dedupes duplicates", 
   assert.equal(duplicate.reason, "deduped");
   assert.equal(sent.length, 1);
   assert.equal(db.events.filter((event) => event.eventName === "web_session.disconnect_alert.sent").length, 1);
+  assert.equal(db.events.filter((event) => event.eventName === "web_session.disconnect_alert.attempt").length, 1);
   setWebSessionDisconnectAlertSenderForTests(null);
 });
 
@@ -200,8 +210,12 @@ test("web session disconnect alert skips email when no operational alert recipie
 
 test("web session alert email failure is recorded without throwing", async () => {
   const db = createPrismaMock();
+  const retryDelays: number[] = [];
   setWebSessionDisconnectAlertSenderForTests(async () => {
-    throw new Error("smtp_failed token=secret");
+    throw new Error("Greeting never received token=secret");
+  });
+  setWebSessionDisconnectAlertRetryDelayForTests(async (delayMs) => {
+    retryDelays.push(delayMs);
   });
   const result = await notifyWebSessionDisconnectAlert({
     prisma: db.prisma as never,
@@ -215,12 +229,151 @@ test("web session alert email failure is recorded without throwing", async () =>
   });
 
   assert.equal(result.sent, false);
-  assert.equal(result.reason, "email_failed");
-  const failure = db.events.find((event) => event.eventName === "web_session.disconnect_alert.failed");
+  assert.equal(result.reason, "email_failed_retryable");
+  assert.equal(retryDelays.length, WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS - 1);
+  assert.equal(db.events.filter((event) => event.eventName === "web_session.disconnect_alert.attempt").length, WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS);
+  assert.equal(db.events.filter((event) => event.eventName === "web_session.disconnect_alert.retry_scheduled").length, WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS - 1);
+  const failure = db.events.find((event) => event.eventName === "web_session.disconnect_alert.failed_retryable");
   assert.ok(failure);
   assert.equal(JSON.stringify(failure).includes("token=secret"), false);
   assert.equal(JSON.stringify(failure).includes("token=[REDACTED]"), true);
   setWebSessionDisconnectAlertSenderForTests(null);
+  setWebSessionDisconnectAlertRetryDelayForTests(null);
+});
+
+test("web session alert retries greeting timeout and records one successful delivery", async () => {
+  const db = createPrismaMock();
+  const retryDelays: number[] = [];
+  const sent: Array<{ to: string[] }> = [];
+  let attempts = 0;
+  setWebSessionDisconnectAlertSenderForTests(async (message) => {
+    attempts += 1;
+    if (attempts === 1) {
+      throw new Error("Greeting never received");
+    }
+    sent.push(message);
+  });
+  setWebSessionDisconnectAlertRetryDelayForTests(async (delayMs) => {
+    retryDelays.push(delayMs);
+  });
+
+  const result = await notifyWebSessionDisconnectAlert({
+    prisma: db.prisma as never,
+    clientId: "client-a",
+    clientKey: "tenant-a",
+    tenantName: "Tenant A",
+    channelAccountId: "558491955328",
+    observedState: "QR_REQUIRED",
+    disconnectInfo: { statusCode: 401, reasonCode: "loggedOut", classification: "qr_required" },
+    reconnectStatus: "nao disponivel",
+  });
+
+  assert.equal(result.sent, true);
+  assert.equal(result.attempts, 2);
+  assert.equal(attempts, 2);
+  assert.equal(sent.length, 1);
+  assert.deepEqual(retryDelays, [1000]);
+  assert.equal(db.events.filter((event) => event.eventName === "web_session.disconnect_alert.attempt").length, 2);
+  assert.equal(db.events.filter((event) => event.eventName === "web_session.disconnect_alert.retry_scheduled").length, 1);
+  assert.equal(db.events.filter((event) => event.eventName === "web_session.disconnect_alert.sent").length, 1);
+  setWebSessionDisconnectAlertSenderForTests(null);
+  setWebSessionDisconnectAlertRetryDelayForTests(null);
+});
+
+test("web session retryable alert failure does not dedupe a later successful retry", async () => {
+  const db = createPrismaMock();
+  setWebSessionDisconnectAlertRetryDelayForTests(async () => undefined);
+  setWebSessionDisconnectAlertSenderForTests(async () => {
+    throw new Error("Greeting never received");
+  });
+
+  const failed = await notifyWebSessionDisconnectAlert({
+    prisma: db.prisma as never,
+    clientId: "client-a",
+    clientKey: "tenant-a",
+    tenantName: "Tenant A",
+    channelAccountId: "558491955328",
+    observedState: "QR_REQUIRED",
+    disconnectInfo: { statusCode: 401, reasonCode: "loggedOut", classification: "qr_required" },
+    reconnectStatus: "nao disponivel",
+  });
+  assert.equal(failed.sent, false);
+  assert.equal(failed.reason, "email_failed_retryable");
+
+  const sent: unknown[] = [];
+  setWebSessionDisconnectAlertSenderForTests(async (message) => {
+    sent.push(message);
+  });
+  const retried = await notifyWebSessionDisconnectAlert({
+    prisma: db.prisma as never,
+    clientId: "client-a",
+    clientKey: "tenant-a",
+    tenantName: "Tenant A",
+    channelAccountId: "558491955328",
+    observedState: "QR_REQUIRED",
+    disconnectInfo: { statusCode: 401, reasonCode: "loggedOut", classification: "qr_required" },
+    reconnectStatus: "nao disponivel",
+  });
+  const duplicate = await notifyWebSessionDisconnectAlert({
+    prisma: db.prisma as never,
+    clientId: "client-a",
+    clientKey: "tenant-a",
+    tenantName: "Tenant A",
+    channelAccountId: "558491955328",
+    observedState: "QR_REQUIRED",
+    disconnectInfo: { statusCode: 401, reasonCode: "loggedOut", classification: "qr_required" },
+    reconnectStatus: "nao disponivel",
+  });
+
+  assert.equal(retried.sent, true);
+  assert.equal(duplicate.sent, false);
+  assert.equal(duplicate.reason, "deduped");
+  assert.equal(sent.length, 1);
+  setWebSessionDisconnectAlertSenderForTests(null);
+  setWebSessionDisconnectAlertRetryDelayForTests(null);
+});
+
+test("web session permanent alert failure is not retried and dedupes", async () => {
+  const db = createPrismaMock();
+  let attempts = 0;
+  setWebSessionDisconnectAlertSenderForTests(async () => {
+    attempts += 1;
+    throw new Error("Invalid login 535");
+  });
+  setWebSessionDisconnectAlertRetryDelayForTests(async () => {
+    throw new Error("permanent_failure_must_not_wait");
+  });
+
+  const first = await notifyWebSessionDisconnectAlert({
+    prisma: db.prisma as never,
+    clientId: "client-a",
+    clientKey: "tenant-a",
+    tenantName: "Tenant A",
+    channelAccountId: "558491955328",
+    observedState: "QR_REQUIRED",
+    disconnectInfo: { statusCode: 401, reasonCode: "loggedOut", classification: "qr_required" },
+    reconnectStatus: "nao disponivel",
+  });
+  const duplicate = await notifyWebSessionDisconnectAlert({
+    prisma: db.prisma as never,
+    clientId: "client-a",
+    clientKey: "tenant-a",
+    tenantName: "Tenant A",
+    channelAccountId: "558491955328",
+    observedState: "QR_REQUIRED",
+    disconnectInfo: { statusCode: 401, reasonCode: "loggedOut", classification: "qr_required" },
+    reconnectStatus: "nao disponivel",
+  });
+
+  assert.equal(first.sent, false);
+  assert.equal(first.reason, "email_failed_terminal");
+  assert.equal(duplicate.sent, false);
+  assert.equal(duplicate.reason, "deduped");
+  assert.equal(attempts, 1);
+  assert.equal(db.events.filter((event) => event.eventName === "web_session.disconnect_alert.failed_terminal").length, 1);
+  assert.equal(db.events.filter((event) => event.eventName === "web_session.disconnect_alert.retry_scheduled").length, 0);
+  setWebSessionDisconnectAlertSenderForTests(null);
+  setWebSessionDisconnectAlertRetryDelayForTests(null);
 });
 
 test("web session disconnect alert email is sanitized", () => {

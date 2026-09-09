@@ -6,10 +6,20 @@ import { logger } from "../logger/logger.js";
 import type { WebSessionDisconnectInfo } from "./webSessionLifecycle.js";
 
 export const WEB_SESSION_RECOVERABLE_DISCONNECT_ALERT_GRACE_MS = 3 * 60 * 1000;
+export const WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS = 3;
+const WEB_SESSION_DISCONNECT_ALERT_RETRY_DELAYS_MS = [1_000, 5_000];
 
-const ALERT_ATTEMPT_EVENTS = [
+const ALERT_INCIDENT_EVENTS = [
   "web_session.disconnect_alert.sent",
   "web_session.disconnect_alert.failed",
+  "web_session.disconnect_alert.failed_retryable",
+  "web_session.disconnect_alert.failed_terminal",
+  "web_session.disconnect_alert.skipped",
+];
+
+const ALERT_DEDUPE_EVENTS = [
+  "web_session.disconnect_alert.sent",
+  "web_session.disconnect_alert.failed_terminal",
   "web_session.disconnect_alert.skipped",
 ];
 
@@ -21,9 +31,14 @@ type WebSessionDisconnectAlertSender = (message: {
 }) => Promise<void>;
 
 let senderOverride: WebSessionDisconnectAlertSender | null = null;
+let retryDelayOverride: ((delayMs: number) => Promise<void>) | null = null;
 
 export function setWebSessionDisconnectAlertSenderForTests(sender: WebSessionDisconnectAlertSender | null) {
   senderOverride = sender;
+}
+
+export function setWebSessionDisconnectAlertRetryDelayForTests(delay: ((delayMs: number) => Promise<void>) | null) {
+  retryDelayOverride = delay;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -43,6 +58,10 @@ function isSmtpConfigured() {
   return Boolean(env.SMTP_HOST.trim() && env.SMTP_FROM.trim());
 }
 
+export function resolveWebSessionDisconnectAlertSmtpSecure(port: number) {
+  return port === 465 || port === 2465;
+}
+
 function maskChannelAccountId(value: string) {
   const digits = value.replace(/\D/g, "");
   return digits.length >= 4 ? `****${digits.slice(-4)}` : "****";
@@ -59,6 +78,40 @@ function sanitizeOperationalError(error: unknown) {
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
     .replace(/(token|secret|password|pass|api[_-]?key)=([^&\s]+)/gi, "$1=[REDACTED]")
     .slice(0, 160);
+}
+
+function isRetryableAlertDeliveryError(error: unknown) {
+  const message = sanitizeOperationalError(error).toLowerCase();
+  if (
+    message.includes("smtp_not_configured") ||
+    message.includes("invalid recipient") ||
+    message.includes("recipient rejected") ||
+    message.includes("authentication") ||
+    message.includes("invalid login") ||
+    message.includes("535") ||
+    message.includes("550") ||
+    message.includes("551") ||
+    message.includes("553") ||
+    message.includes("554")
+  ) {
+    return false;
+  }
+  return (
+    message.includes("greeting never received") ||
+    message.includes("timeout") ||
+    message.includes("timedout") ||
+    message.includes("etimedout") ||
+    message.includes("econnreset") ||
+    message.includes("econnrefused") ||
+    message.includes("eai_again") ||
+    message.includes("esocket") ||
+    message.includes("network")
+  );
+}
+
+function waitBeforeAlertRetry(delayMs: number) {
+  if (retryDelayOverride) return retryDelayOverride(delayMs);
+  return new Promise<void>((resolve) => setTimeout(resolve, delayMs));
 }
 
 function buildFingerprint(params: { clientId: string; channelAccountId: string }) {
@@ -145,7 +198,7 @@ async function defaultSender(message: { to: string[]; subject: string; text: str
   const transporter = nodemailer.createTransport({
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
-    secure: env.SMTP_PORT === 465,
+    secure: resolveWebSessionDisconnectAlertSmtpSecure(env.SMTP_PORT),
     auth:
       env.SMTP_USER.trim() || env.SMTP_PASS.trim()
         ? { user: env.SMTP_USER, pass: env.SMTP_PASS }
@@ -189,7 +242,7 @@ export async function closeWebSessionDisconnectAlertIncident(params: {
     prisma: params.prisma,
     clientId: params.clientId,
     fingerprint,
-    eventNames: ALERT_ATTEMPT_EVENTS,
+    eventNames: ALERT_INCIDENT_EVENTS,
   });
   if (!latestAttempt) return { closed: false as const, reason: "no_open_incident" as const };
   const latestClose = await latestAlertEvent({
@@ -240,7 +293,7 @@ export async function notifyWebSessionDisconnectAlert(params: {
     prisma: params.prisma,
     clientId: params.clientId,
     fingerprint,
-    eventNames: ALERT_ATTEMPT_EVENTS,
+    eventNames: ALERT_DEDUPE_EVENTS,
   });
   if (latestAttempt && (!latestClose || latestAttempt.createdAt > latestClose.createdAt)) {
     return { sent: false as const, reason: "deduped" as const };
@@ -284,36 +337,101 @@ export async function notifyWebSessionDisconnectAlert(params: {
     disconnectInfo: params.disconnectInfo,
     reconnectStatus: params.reconnectStatus,
   });
-  try {
-    await (senderOverride ?? defaultSender)({ to: recipients, ...message });
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS; attempt += 1) {
     await recordAlertEvent({
       prisma: params.prisma,
       clientId: params.clientId,
-      eventName: "web_session.disconnect_alert.sent",
-      requestId: `web-session-alert:${params.channelAccountId}:sent:${Date.now()}`,
-      payloadJson: basePayload,
+      eventName: "web_session.disconnect_alert.attempt",
+      requestId: `web-session-alert:${params.channelAccountId}:attempt:${attempt}:${Date.now()}`,
+      payloadJson: { ...basePayload, attempt, maxAttempts: WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS },
     });
-    return { sent: true as const, recipients: recipients.length };
-  } catch (error) {
-    const reason = sanitizeOperationalError(error);
-    logger.warn({
-      event: "web_session.disconnect_alert.email_failed",
-      clientId: params.clientId,
-      reason,
-    });
-    await recordAlertEvent({
-      prisma: params.prisma,
-      clientId: params.clientId,
-      eventName: "web_session.disconnect_alert.failed",
-      requestId: `web-session-alert:${params.channelAccountId}:failed:${Date.now()}`,
-      payloadJson: { ...basePayload, reason },
-    }).catch((eventError) => {
-      logger.warn({
-        event: "web_session.disconnect_alert.event_failed",
+    try {
+      await (senderOverride ?? defaultSender)({ to: recipients, ...message });
+      await recordAlertEvent({
+        prisma: params.prisma,
         clientId: params.clientId,
-        reason: eventError instanceof Error ? eventError.message.slice(0, 160) : "unknown_error",
+        eventName: "web_session.disconnect_alert.sent",
+        requestId: `web-session-alert:${params.channelAccountId}:sent:${Date.now()}`,
+        payloadJson: { ...basePayload, attempt, maxAttempts: WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS },
       });
-    });
-    return { sent: false as const, reason: "email_failed" as const };
+      return { sent: true as const, recipients: recipients.length, attempts: attempt };
+    } catch (error) {
+      lastError = error;
+      const reason = sanitizeOperationalError(error);
+      const retryable = isRetryableAlertDeliveryError(error);
+      const hasRetry = retryable && attempt < WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS;
+      logger.warn({
+        event: retryable
+          ? "web_session.disconnect_alert.email_failed_retryable"
+          : "web_session.disconnect_alert.email_failed_terminal",
+        clientId: params.clientId,
+        reason,
+        attempt,
+        maxAttempts: WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS,
+      });
+      if (!retryable) {
+        await recordAlertEvent({
+          prisma: params.prisma,
+          clientId: params.clientId,
+          eventName: "web_session.disconnect_alert.failed_terminal",
+          requestId: `web-session-alert:${params.channelAccountId}:failed-terminal:${Date.now()}`,
+          payloadJson: { ...basePayload, reason, attempt, maxAttempts: WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS },
+        }).catch((eventError) => {
+          logger.warn({
+            event: "web_session.disconnect_alert.event_failed",
+            clientId: params.clientId,
+            reason: eventError instanceof Error ? eventError.message.slice(0, 160) : "unknown_error",
+          });
+        });
+        return { sent: false as const, reason: "email_failed_terminal" as const };
+      }
+      if (hasRetry) {
+        const retryDelayMs = WEB_SESSION_DISCONNECT_ALERT_RETRY_DELAYS_MS[attempt - 1] ?? 5_000;
+        await recordAlertEvent({
+          prisma: params.prisma,
+          clientId: params.clientId,
+          eventName: "web_session.disconnect_alert.retry_scheduled",
+          requestId: `web-session-alert:${params.channelAccountId}:retry:${attempt + 1}:${Date.now()}`,
+          payloadJson: {
+            ...basePayload,
+            reason,
+            attempt,
+            nextAttempt: attempt + 1,
+            maxAttempts: WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS,
+            retryDelayMs,
+          },
+        });
+        await waitBeforeAlertRetry(retryDelayMs);
+      }
+    }
   }
+
+  const reason = sanitizeOperationalError(lastError);
+  logger.warn({
+    event: "web_session.disconnect_alert.email_failed",
+    clientId: params.clientId,
+    reason,
+    attempt: WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS,
+    maxAttempts: WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS,
+  });
+  await recordAlertEvent({
+    prisma: params.prisma,
+    clientId: params.clientId,
+    eventName: "web_session.disconnect_alert.failed_retryable",
+    requestId: `web-session-alert:${params.channelAccountId}:failed-retryable:${Date.now()}`,
+    payloadJson: {
+      ...basePayload,
+      reason,
+      attempt: WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS,
+      maxAttempts: WEB_SESSION_DISCONNECT_ALERT_MAX_ATTEMPTS,
+    },
+  }).catch((eventError) => {
+    logger.warn({
+      event: "web_session.disconnect_alert.event_failed",
+      clientId: params.clientId,
+      reason: eventError instanceof Error ? eventError.message.slice(0, 160) : "unknown_error",
+    });
+  });
+  return { sent: false as const, reason: "email_failed_retryable" as const };
 }
