@@ -148,9 +148,9 @@ Fila ativa repriorizada:
 2. CRA-PR department hours (P1): guiar configuracao do cliente e validar flow
    aware of department hours. No schedule continua significando
    `NO_SCHEDULE`/aberto e nao e falha tecnica.
-3. Guided Builder productization (P1): concluir o editor guiado para usuarios de
-   negocio sobre o runtime existente, mantendo JSON avancado e sem mudar a
-   semantica dos flows.
+3. Guided Builder productization (P1): concluir smoke visual humano e Demo
+   validation do editor guiado reconciliado para usuarios de negocio sobre o
+   runtime existente, mantendo JSON avancado e sem mudar a semantica dos flows.
 4. Reporting context enhancements (P2): adicionar contexto de AUTO vs MANUAL,
    politica de atribuicao, `presenceMode` e carga/capacidade atual onde agregar
    verdade operacional sem reabrir bugs ja fechados.
@@ -202,20 +202,40 @@ Dividas tecnicas abertas:
 - alteracoes externas de `.env`/segredos continuam como procedimento
   operacional separado; a matriz de deploy cobre impacto derivado de diff Git.
 
-### Guided Builder — estado local isolado
+### Guided Builder — reconciliacao do patch local
 
-Em 2026-09-10 o worktree principal continha patch local nao commitado e
-quarentenado de Guided Builder:
+Em 2026-09-10 o patch local antigo/quarentenado de Guided Builder foi portado
+limpamente para worktree isolado baseado no HEAD canonico `fec3a489`, sem tocar
+o worktree principal e sem misturar com o hardening de producao:
 
 - `src/components/app/ChatbotFlowBuilder.tsx`;
 - `src/components/app/ChatbotFlowBuilder.test.ts`;
 - `src/app/app/chatbot/page.tsx`;
 - `src/app/admin/tenants/[tenantId]/chatbot/page.tsx`.
 
-Resumo: MVP de wizard guiado/actionable sobre o editor de flow existente,
-incluindo objetivos de fluxo, proxima tarefa guiada e testes novos. Ainda nao
-foi incluido nos commits recentes de SECULT/performance e deve continuar
-separado ate review, build e validacao visual proprios.
+Estado reconciliado:
+
+- STRATEGY: clean isolated worktree from current canonical HEAD + explicit port
+  of only Guided Builder files.
+- SOURCE OF TRUTH: same `ChatbotFlow.definition`; Guided and Advanced modes
+  mutate/read the same draft JSON through `onDefinitionTextChange`.
+- SHADOW MODEL: no wizard/planning schema persisted in the flow definition.
+- SUPPORTED OBJECTIVES: direct human handoff, menu, consent, capture, text and
+  custom/advanced.
+- NEXT TASK: detects missing start, missing menu option, missing option
+  destination, missing handoff destination, invalid queue/department pairing,
+  consent destination, capture field/next, broken references and orphan nodes.
+- TRANSFORMATIONS: deterministic node creation for menu/text/capture/consent/
+  handoff; existing orphan content is preserved for review instead of silently
+  deleted.
+- EXISTING FLOWS: Syer-style direct handoff and CRA-style complex consent/menu
+  flows load without objective reset and preserve advanced metadata.
+- VALIDATION: `ChatbotFlowBuilder.test.ts` 22/22 PASS; frontend build PASS;
+  `git diff --check` PASS.
+
+Status: RECONCILED / READY FOR HUMAN VISUAL SMOKE. Ainda nao deployado nesta
+etapa. Proxima decisao: smoke visual humano em Demo antes de promover para
+commit/deploy de producao.
 
 ### Contact Timeline / Histórico do contato
 

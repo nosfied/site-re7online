@@ -310,6 +310,30 @@ evidencia explicita.
 
 ## Chatbot, consentimento e inatividade
 
+### Guided Builder
+
+Em 2026-09-10 o patch local de Guided Builder foi reconciliado sobre o HEAD
+canonico `fec3a489` em worktree isolado. O objetivo do recurso e oferecer um
+wizard operacional para usuarios de negocio sobre a mesma definicao real de
+fluxo usada pelo modo avancado.
+
+Contrato validado em codigo:
+
+- Guided e Advanced compartilham `ChatbotFlow.definition` como unica fonte de
+  verdade.
+- O modo guiado nao cria modelo paralelo, schema novo ou campos persistidos de
+  wizard.
+- Objetivos suportados nesta reconciliacao: handoff humano direto, menu,
+  consentimento, captura, mensagem de texto e modo personalizado/avancado.
+- O resolvedor de proxima acao aponta lacunas estruturais sem reescrever flows
+  existentes ao abrir o editor.
+- Syer-style direct handoff e CRA-style complex consent/menu flow sao
+  interpretados sem reset obrigatorio e com metadados avancados preservados.
+
+Validacao tecnica: `ChatbotFlowBuilder.test.ts` 22/22 PASS, frontend build PASS
+e `git diff --check` PASS. Status: READY FOR HUMAN VISUAL SMOKE; sem deploy
+nesta etapa.
+
 O flow SECULT/Demo homologado usa:
 
 ```json

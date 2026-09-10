@@ -1078,6 +1078,7 @@ export default function AppChatbotPage() {
               disabled={flowReadOnly || creating}
               isActive={newIsActive}
               entryPoint={newEntryPoint}
+              allowObjectiveReset
               departments={builderResources.departments}
               queues={builderResources.queues}
               advancedEditor={
@@ -1295,6 +1296,7 @@ export default function AppChatbotPage() {
                       disabled={flowReadOnly}
                       isActive={draft.isActive}
                       entryPoint={draft.entryPoint}
+                      allowObjectiveReset={false}
                       departments={builderResources.departments}
                       queues={builderResources.queues}
                       advancedEditor={

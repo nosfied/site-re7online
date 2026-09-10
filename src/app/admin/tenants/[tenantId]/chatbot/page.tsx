@@ -1660,6 +1660,7 @@ export default function AdminTenantChatbotPage() {
               disabled={creating || !clientKey}
               isActive={newIsActive}
               entryPoint={newEntryPoint}
+              allowObjectiveReset
               departments={builderResources.departments}
               queues={builderResources.queues}
               advancedEditor={
@@ -1805,6 +1806,7 @@ export default function AdminTenantChatbotPage() {
                         disabled={false}
                         isActive={draft.isActive}
                         entryPoint={draft.entryPoint}
+                        allowObjectiveReset={false}
                         departments={builderResources.departments}
                         queues={builderResources.queues}
                         advancedEditor={

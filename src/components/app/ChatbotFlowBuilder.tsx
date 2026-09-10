@@ -31,6 +31,7 @@ type Props = {
   disabled?: boolean;
   isActive?: boolean;
   entryPoint?: boolean;
+  allowObjectiveReset?: boolean;
   departments: ChatbotFlowBuilderDepartment[];
   queues: ChatbotFlowBuilderQueue[];
   advancedEditor: ReactNode;
@@ -331,6 +332,58 @@ type GuidedStep = {
   targetId: string;
 };
 
+type GuidedObjective = "handoff" | "menu" | "consent" | "capture" | "text" | "custom";
+
+type GuidedTask =
+  | { kind: "objective"; title: string; summary: string }
+  | { kind: "start_content"; nodeId: string; title: string; summary: string }
+  | { kind: "menu_option"; nodeId: string; title: string; summary: string }
+  | { kind: "menu_option_destination"; nodeId: string; optionIndex: number; title: string; summary: string }
+  | { kind: "handoff_destination"; nodeId: string; title: string; summary: string }
+  | { kind: "consent_destination"; nodeId: string; title: string; summary: string }
+  | { kind: "capture_field"; nodeId: string; title: string; summary: string }
+  | { kind: "capture_next"; nodeId: string; title: string; summary: string }
+  | { kind: "broken_reference"; nodeId: string; title: string; summary: string }
+  | { kind: "orphan"; nodeId: string; title: string; summary: string }
+  | { kind: "review"; title: string; summary: string };
+
+const OBJECTIVE_OPTIONS: Array<{ value: GuidedObjective; label: string; summary: string }> = [
+  {
+    value: "handoff",
+    label: "Atendimento humano direto",
+    summary: "A primeira mensagem encaminha o cidadão para um setor.",
+  },
+  {
+    value: "menu",
+    label: "Menu de opções",
+    summary: "O cidadão escolhe entre caminhos de atendimento.",
+  },
+  {
+    value: "consent",
+    label: "Consentimento antes de continuar",
+    summary: "O fluxo começa confirmando aceite e segue para o próximo passo.",
+  },
+  {
+    value: "capture",
+    label: "Perguntar uma informação",
+    summary: "O fluxo coleta uma resposta antes de continuar.",
+  },
+  {
+    value: "text",
+    label: "Enviar uma mensagem",
+    summary: "O fluxo mostra uma mensagem simples.",
+  },
+  {
+    value: "custom",
+    label: "Personalizado / avançado",
+    summary: "Mantém o fluxo como está e abre a edição avançada.",
+  },
+];
+
+function makeNodeId(existingNodes: Record<string, Record<string, unknown>>, type: string) {
+  return buildNodeId(existingNodes, type);
+}
+
 const GUIDED_STATUS_LABELS: Record<GuidedStepStatus, string> = {
   complete: "Completo",
   incomplete: "Incompleto",
@@ -416,6 +469,7 @@ function getQuestionEntries(definition: FlowDefinition) {
 }
 
 function hasAdvancedFields(definition: FlowDefinition) {
+  const simpleTopLevelFields = new Set(["start", "nodes", "globalCommands", "inactivityPolicy"]);
   const simpleFields = new Set([
     "type",
     "text",
@@ -438,6 +492,7 @@ function hasAdvancedFields(definition: FlowDefinition) {
     "handoffSummary",
     "closedText",
   ]);
+  if (Object.keys(definition).some((key) => !simpleTopLevelFields.has(key))) return true;
   return Object.values(definition.nodes).some((node) => Object.keys(node).some((key) => !simpleFields.has(key)));
 }
 
@@ -574,6 +629,287 @@ function buildGuidedSteps(params: {
   ] as GuidedStep[];
 }
 
+export function createGuidedObjectiveDefinition(definition: FlowDefinition, objective: GuidedObjective): FlowDefinition {
+  if (objective === "custom") return definition;
+  if (objective === "handoff") {
+    const handoffId = "handoff_1";
+    return {
+      ...definition,
+      start: handoffId,
+      nodes: {
+        [handoffId]: {
+          type: "handoff",
+          text: "Vou encaminhar para atendimento humano.",
+        },
+      },
+    };
+  }
+  if (objective === "menu") {
+    const menuId = "menu_1";
+    return {
+      ...definition,
+      start: menuId,
+      nodes: {
+        [menuId]: {
+          type: "menu",
+          text: "Escolha uma opção:",
+          options: [],
+        },
+      },
+    };
+  }
+  if (objective === "consent") {
+    const consentId = "consent_1";
+    const handoffId = "handoff_2";
+    return {
+      ...definition,
+      start: consentId,
+      nodes: {
+        [consentId]: {
+          type: "consent",
+          purpose: "atendimento",
+          textVersion: "draft",
+          message: "Para prosseguir, confirme que leu e aceita o atendimento por este canal.",
+          acceptOption: "1",
+          onAccepted: handoffId,
+        },
+        [handoffId]: {
+          type: "handoff",
+          text: "Vou encaminhar para atendimento humano.",
+        },
+      },
+    };
+  }
+  if (objective === "capture") {
+    const captureId = "capture_1";
+    const handoffId = "handoff_2";
+    return {
+      ...definition,
+      start: captureId,
+      nodes: {
+        [captureId]: {
+          type: "capture",
+          text: "Informe sua resposta:",
+          field: "resposta",
+          validation: "non_empty",
+          next: handoffId,
+        },
+        [handoffId]: {
+          type: "handoff",
+          text: "Vou encaminhar para atendimento humano.",
+        },
+      },
+    };
+  }
+  const textId = "text_1";
+  return {
+    ...definition,
+    start: textId,
+    nodes: {
+      [textId]: {
+        type: "text",
+        text: "Mensagem do fluxo.",
+      },
+    },
+  };
+}
+
+function getReachableNodeIds(definition: FlowDefinition) {
+  const reachable = new Set<string>();
+  const visit = (nodeId: string) => {
+    const node = definition.nodes[nodeId];
+    if (!node || reachable.has(nodeId)) return;
+    reachable.add(nodeId);
+    const type = stringValue(node.type);
+    if (type === "menu") {
+      getOptions(node).forEach((option) => visit(stringValue(option.next)));
+      return;
+    }
+    if (type === "consent") {
+      visit(stringValue(node.onAccepted));
+      visit(stringValue(node.onDeclined));
+      return;
+    }
+    visit(stringValue(node.next));
+  };
+  visit(definition.start);
+  return reachable;
+}
+
+function firstBrokenReference(definition: FlowDefinition) {
+  for (const [nodeId, node] of Object.entries(definition.nodes)) {
+    const type = stringValue(node.type);
+    if (type === "menu") {
+      const broken = getOptions(node).find((option) => stringValue(option.next) && !definition.nodes[stringValue(option.next)]);
+      if (broken) return nodeId;
+    }
+    const next = type === "consent" ? stringValue(node.onAccepted) || stringValue(node.onDeclined) : stringValue(node.next);
+    if (next && !definition.nodes[next]) return nodeId;
+  }
+  return null;
+}
+
+export function getGuidedNextTask(definition: FlowDefinition, queues: ChatbotFlowBuilderQueue[]): GuidedTask {
+  const startNode = definition.nodes[definition.start];
+  if (!startNode) {
+    return {
+      kind: "objective",
+      title: "Escolha o objetivo inicial do fluxo",
+      summary: "A etapa inicial ainda não aponta para um passo válido.",
+    };
+  }
+
+  const startType = stringValue(startNode.type);
+  const needsStartContent =
+    ((startType === "menu" || startType === "text" || startType === "capture") && !stringValue(startNode.text).trim()) ||
+    (startType === "consent" && !stringValue(startNode.message).trim());
+  if (needsStartContent) {
+    return {
+      kind: "start_content",
+      nodeId: definition.start,
+      title: "Escreva a primeira mensagem",
+      summary: "Esta é a primeira resposta automática enviada ao cidadão.",
+    };
+  }
+
+  for (const [nodeId, node] of Object.entries(definition.nodes)) {
+    if (node.type !== "menu") continue;
+    const options = getOptions(node);
+    if (options.length === 0) {
+      return {
+        kind: "menu_option",
+        nodeId,
+        title: "Adicione a primeira opção do menu",
+        summary: "Cada opção precisa de um texto e de um destino.",
+      };
+    }
+    const missingDestinationIndex = options.findIndex((option) => !stringValue(option.next).trim());
+    if (missingDestinationIndex >= 0) {
+      return {
+        kind: "menu_option_destination",
+        nodeId,
+        optionIndex: missingDestinationIndex,
+        title: "Escolha o destino da opção",
+        summary: stringValue(options[missingDestinationIndex]?.label) || `Opção ${missingDestinationIndex + 1}`,
+      };
+    }
+  }
+
+  for (const [nodeId, node] of Object.entries(definition.nodes)) {
+    if (node.type === "handoff" && !stringValue(node.departmentId).trim()) {
+      return {
+        kind: "handoff_destination",
+        nodeId,
+        title: "Escolha o setor de atendimento",
+        summary: "O encaminhamento humano precisa de um setor.",
+      };
+    }
+    if (node.type === "handoff") {
+      const queue = queues.find((item) => item.id === node.queueId);
+      if (queue && node.departmentId && queue.departmentId !== node.departmentId) {
+        return {
+          kind: "handoff_destination",
+          nodeId,
+          title: "Revise a fila deste atendimento",
+          summary: "A fila precisa pertencer ao setor escolhido.",
+        };
+      }
+    }
+  }
+
+  for (const [nodeId, node] of Object.entries(definition.nodes)) {
+    if (node.type === "consent" && (!stringValue(node.onAccepted).trim() || !definition.nodes[stringValue(node.onAccepted)])) {
+      return {
+        kind: "consent_destination",
+        nodeId,
+        title: "Escolha o caminho após o consentimento",
+        summary: "Quando o cidadão aceitar, o fluxo precisa continuar para uma etapa válida.",
+      };
+    }
+    if (node.type === "capture" && !stringValue(node.field).trim()) {
+      return {
+        kind: "capture_field",
+        nodeId,
+        title: "Defina o campo salvo",
+        summary: "A resposta coletada precisa de um nome interno de campo.",
+      };
+    }
+    if (node.type === "capture" && (!stringValue(node.next).trim() || !definition.nodes[stringValue(node.next)])) {
+      return {
+        kind: "capture_next",
+        nodeId,
+        title: "Escolha o próximo passo após a resposta",
+        summary: "Depois de coletar a informação, o fluxo precisa seguir para outra etapa.",
+      };
+    }
+  }
+
+  const brokenReference = firstBrokenReference(definition);
+  if (brokenReference) {
+    return {
+      kind: "broken_reference",
+      nodeId: brokenReference,
+      title: "Corrija uma referência quebrada",
+      summary: "Há um destino apontando para uma etapa inexistente.",
+    };
+  }
+
+  const reachable = getReachableNodeIds(definition);
+  const orphan = Object.keys(definition.nodes).find((nodeId) => !reachable.has(nodeId));
+  if (orphan) {
+    return {
+      kind: "orphan",
+      nodeId: orphan,
+      title: "Revise uma etapa fora do caminho principal",
+      summary: "A etapa foi preservada, mas nenhum caminho chega nela atualmente.",
+    };
+  }
+
+  return {
+    kind: "review",
+    title: "Fluxo pronto para revisão",
+    summary: "Revise a prévia e o checklist antes de salvar ou ativar.",
+  };
+}
+
+function setMenuOption(definition: FlowDefinition, nodeId: string, optionIndex: number, patch: Record<string, unknown>) {
+  const node = definition.nodes[nodeId] ?? {};
+  const options = getOptions(node).map((option, index) => (index === optionIndex ? { ...option, ...patch } : option));
+  return setNodeField(definition, nodeId, "options", options);
+}
+
+function appendMenuOption(definition: FlowDefinition, nodeId: string, label: string) {
+  const node = definition.nodes[nodeId] ?? {};
+  const options = [...getOptions(node), { label, next: "" }];
+  return setNodeField(definition, nodeId, "options", options);
+}
+
+function attachNewDestination(
+  definition: FlowDefinition,
+  sourceNodeId: string,
+  optionIndex: number,
+  type: Exclude<GuidedObjective, "custom" | "menu">
+) {
+  const nextNodes = { ...definition.nodes };
+  const nodeId = makeNodeId(nextNodes, type);
+  if (type === "handoff") {
+    nextNodes[nodeId] = { type: "handoff", text: "Vou encaminhar para atendimento humano." };
+  } else if (type === "capture") {
+    nextNodes[nodeId] = { type: "capture", text: "Informe sua resposta:", field: "resposta", validation: "non_empty" };
+  } else if (type === "consent") {
+    nextNodes[nodeId] = {
+      type: "consent",
+      purpose: "atendimento",
+      textVersion: "draft",
+      message: "Para prosseguir, confirme que leu e aceita o atendimento por este canal.",
+      acceptOption: "1",
+    };
+  } else {
+    nextNodes[nodeId] = { type: "text", text: "Mensagem do fluxo." };
+  }
+  return setMenuOption({ ...definition, nodes: nextNodes }, sourceNodeId, optionIndex, { next: nodeId });
+}
+
 function guidedStatusClass(status: GuidedStepStatus) {
   if (status === "complete") return "border-emerald-300/25 bg-emerald-500/10 text-emerald-100";
   if (status === "error") return "border-red-300/30 bg-red-500/10 text-red-100";
@@ -658,12 +994,15 @@ export function ChatbotFlowBuilder({
   disabled,
   isActive,
   entryPoint,
+  allowObjectiveReset,
   departments,
   queues,
   advancedEditor,
 }: Props) {
   const [mode, setMode] = useState<"guided" | "advanced">("guided");
   const [activeStep, setActiveStep] = useState<GuidedStepKey>("objective");
+  const [newOptionLabel, setNewOptionLabel] = useState("");
+  const [objectiveInitialized, setObjectiveInitialized] = useState(false);
   const parsed = useMemo(() => parseDefinition(definitionText), [definitionText]);
   const issues = useMemo(
     () => (parsed.ok ? buildIssues(parsed.definition, queues) : [parsed.message]),
@@ -702,6 +1041,17 @@ export function ChatbotFlowBuilder({
   const journeyLines = buildJourneyLines(definition, departments, queues);
   const checklist = buildChecklist(definition, issues);
   const hasBlockingChecklistIssue = checklist.some((item) => item.status === "ERROR");
+  const guidedTask = allowObjectiveReset && !objectiveInitialized
+    ? {
+        kind: "objective" as const,
+        title: "Escolha o objetivo inicial do fluxo",
+        summary: "Esta escolha monta o primeiro caminho do rascunho atual.",
+      }
+    : getGuidedNextTask(definition, queues);
+  const guidedTaskNode = "nodeId" in guidedTask ? definition.nodes[guidedTask.nodeId] : null;
+  const selectedDepartmentQueues = guidedTaskNode
+    ? queues.filter((queue) => !guidedTaskNode.departmentId || queue.departmentId === guidedTaskNode.departmentId)
+    : queues;
 
   return (
     <div className="chatbot-flow-builder grid gap-4">
@@ -771,6 +1121,216 @@ export function ChatbotFlowBuilder({
 
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
               <div className="grid gap-3">
+                <section className="rounded-lg border border-re7-sky/30 bg-re7-sky/10 p-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-re7-sky/80">Próxima ação</p>
+                    <h4 className="mt-1 text-base font-semibold text-white">{guidedTask.title}</h4>
+                    <p className="mt-1 text-sm text-white/65">{guidedTask.summary}</p>
+                  </div>
+
+                  {guidedTask.kind === "objective" ? (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {OBJECTIVE_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          disabled={disabled || (!allowObjectiveReset && option.value !== "custom")}
+                          onClick={() => {
+                            if (option.value === "custom") {
+                              setObjectiveInitialized(true);
+                              setMode("advanced");
+                              return;
+                            }
+                            setObjectiveInitialized(true);
+                            commit(createGuidedObjectiveDefinition(definition, option.value));
+                          }}
+                          className="rounded-md border border-white/15 bg-black/15 px-3 py-2 text-left text-sm text-white/80 transition hover:border-re7-sky/60 hover:bg-re7-sky/15 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <span className="block font-semibold text-white">{option.label}</span>
+                          <span className="mt-1 block text-xs text-white/55">{option.summary}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {guidedTask.kind === "start_content" && guidedTaskNode ? (
+                    <label className="mt-3 grid gap-1 text-sm text-white/70">
+                      Mensagem inicial
+                      <textarea
+                        value={stringValue(guidedTaskNode.type === "consent" ? guidedTaskNode.message : guidedTaskNode.text)}
+                        disabled={disabled}
+                        onChange={(event) =>
+                          commit(setNodeField(
+                            definition,
+                            guidedTask.nodeId,
+                            guidedTaskNode.type === "consent" ? "message" : "text",
+                            event.target.value
+                          ))
+                        }
+                        className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                      />
+                    </label>
+                  ) : null}
+
+                  {guidedTask.kind === "menu_option" ? (
+                    <div className="mt-3 grid gap-2">
+                      <label className="grid gap-1 text-sm text-white/70">
+                        Texto da opção
+                        <input
+                          value={newOptionLabel}
+                          disabled={disabled}
+                          onChange={(event) => setNewOptionLabel(event.target.value)}
+                          className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                          placeholder="Ex.: 1 - Falar com atendimento"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        disabled={disabled || !newOptionLabel.trim()}
+                        onClick={() => {
+                          commit(appendMenuOption(definition, guidedTask.nodeId, newOptionLabel.trim()));
+                          setNewOptionLabel("");
+                        }}
+                        className="w-fit rounded-md border border-re7-sky/50 bg-re7-sky/15 px-3 py-2 text-sm font-semibold text-white hover:bg-re7-sky/25 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Adicionar opção
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {guidedTask.kind === "menu_option_destination" ? (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {[
+                        { label: "Atendimento humano", type: "handoff" as const },
+                        { label: "Perguntar informação", type: "capture" as const },
+                        { label: "Enviar mensagem", type: "text" as const },
+                        { label: "Consentimento", type: "consent" as const },
+                      ].map((action) => (
+                        <button
+                          key={action.type}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => commit(attachNewDestination(definition, guidedTask.nodeId, guidedTask.optionIndex, action.type))}
+                          className="rounded-md border border-white/15 bg-black/15 px-3 py-2 text-left text-sm font-semibold text-white/80 hover:border-re7-sky/60 hover:bg-re7-sky/15 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                      <label className="grid gap-1 text-sm text-white/70 sm:col-span-2">
+                        Usar etapa existente
+                        <select
+                          value=""
+                          disabled={disabled}
+                          onChange={(event) => {
+                            if (event.target.value) {
+                              commit(setMenuOption(definition, guidedTask.nodeId, guidedTask.optionIndex, { next: event.target.value }));
+                            }
+                          }}
+                          className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                        >
+                          <option value="">Escolha uma etapa</option>
+                          {nodeIds.map((targetId) => <option key={targetId} value={targetId}>{targetId}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                  ) : null}
+
+                  {guidedTask.kind === "handoff_destination" && guidedTaskNode ? (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <label className="grid gap-1 text-sm text-white/70">
+                        Setor
+                        <select
+                          value={stringValue(guidedTaskNode.departmentId)}
+                          disabled={disabled}
+                          onChange={(event) => {
+                            let next = setNodeField(definition, guidedTask.nodeId, "departmentId", event.target.value);
+                            const currentQueue = queues.find((queue) => queue.id === guidedTaskNode.queueId);
+                            if (currentQueue && currentQueue.departmentId !== event.target.value) {
+                              next = setNodeField(next, guidedTask.nodeId, "queueId", "");
+                            }
+                            commit(next);
+                          }}
+                          className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                        >
+                          <option value="">Escolha um setor</option>
+                          {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-sm text-white/70">
+                        Fila
+                        <select
+                          value={stringValue(guidedTaskNode.queueId)}
+                          disabled={disabled}
+                          onChange={(event) => commit(setNodeField(definition, guidedTask.nodeId, "queueId", event.target.value))}
+                          className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                        >
+                          <option value="">Fila padrão do setor</option>
+                          {selectedDepartmentQueues.map((queue) => <option key={queue.id} value={queue.id}>{queue.name}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                  ) : null}
+
+                  {guidedTask.kind === "consent_destination" && guidedTaskNode ? (
+                    <label className="mt-3 grid gap-1 text-sm text-white/70">
+                      Ao aceitar
+                      <select
+                        value={stringValue(guidedTaskNode.onAccepted)}
+                        disabled={disabled}
+                        onChange={(event) => commit(setNodeField(definition, guidedTask.nodeId, "onAccepted", event.target.value))}
+                        className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                      >
+                        <option value="">Escolha uma etapa</option>
+                        {nodeIds.filter((targetId) => targetId !== guidedTask.nodeId).map((targetId) => (
+                          <option key={targetId} value={targetId}>{targetId}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+
+                  {guidedTask.kind === "capture_field" && guidedTaskNode ? (
+                    <label className="mt-3 grid gap-1 text-sm text-white/70">
+                      Campo que será salvo
+                      <input
+                        value={stringValue(guidedTaskNode.field)}
+                        disabled={disabled}
+                        onChange={(event) => commit(setNodeField(definition, guidedTask.nodeId, "field", event.target.value))}
+                        className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                        placeholder="Ex.: protocolo, email, assunto"
+                      />
+                    </label>
+                  ) : null}
+
+                  {guidedTask.kind === "capture_next" && guidedTaskNode ? (
+                    <label className="mt-3 grid gap-1 text-sm text-white/70">
+                      Próximo passo
+                      <select
+                        value={stringValue(guidedTaskNode.next)}
+                        disabled={disabled}
+                        onChange={(event) => commit(setNodeField(definition, guidedTask.nodeId, "next", event.target.value))}
+                        className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                      >
+                        <option value="">Escolha uma etapa</option>
+                        {nodeIds.filter((targetId) => targetId !== guidedTask.nodeId).map((targetId) => (
+                          <option key={targetId} value={targetId}>{targetId}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+
+                  {guidedTask.kind === "broken_reference" || guidedTask.kind === "orphan" ? (
+                    <div className="mt-3 rounded-md border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                      Etapa: {guidedTask.nodeId}. A etapa foi preservada; ajuste o destino no modo avançado se este caminho ainda for necessário.
+                    </div>
+                  ) : null}
+
+                  {guidedTask.kind === "review" ? (
+                    <div className="mt-3 rounded-md border border-emerald-300/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+                      A estrutura principal está coerente. O salvamento continua validado pelo servidor.
+                    </div>
+                  ) : null}
+                </section>
+
                 <section
                   id="guided-step-objective"
                   tabIndex={-1}
@@ -962,6 +1522,12 @@ export function ChatbotFlowBuilder({
             </div>
           </section>
 
+          <details className="rounded-xl border border-white/10 bg-black/10">
+            <summary className="cursor-pointer px-3 py-3 text-sm font-semibold text-white hover:bg-white/5">
+              Ajustes avançados do fluxo
+              <span className="ml-2 text-xs font-normal text-white/50">IDs, comandos, inatividade, nós e referências preservadas</span>
+            </summary>
+            <div className="grid gap-3 border-t border-white/10 p-3">
           <section className="chatbot-builder-summary grid gap-3 rounded-xl border border-white/10 bg-black/10 p-3 sm:grid-cols-4">
             <div>
               <p className="text-xs uppercase text-white/45">Etapa inicial</p>
@@ -1517,6 +2083,8 @@ export function ChatbotFlowBuilder({
               );
             })}
           </div>
+            </div>
+          </details>
         </>
       )}
     </div>
