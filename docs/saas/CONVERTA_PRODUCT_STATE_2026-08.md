@@ -348,8 +348,9 @@ mesmo JSON, edicao Advanced -> Guided, edicao Guided -> Advanced, save local e
 reload persistido. Temas claro/escuro, desktop/tablet/mobile e foco por teclado
 passaram sem overflow horizontal.
 
-Status: REAL VALIDATED em smoke autenticado local. Sem mutation de producao,
-sem tenant real alterado e sem deploy nesta etapa.
+Status: REAL VALIDATED em smoke autenticado local e publicado pelo rollout
+frontend-only encerrado em `9b5bdb34`. Sem mutation de flow em producao e sem
+tenant real alterado pela validacao.
 
 O flow SECULT/Demo homologado usa:
 

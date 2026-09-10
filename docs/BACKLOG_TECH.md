@@ -262,8 +262,9 @@ Smoke local de 2026-09-10:
 - desktop, tablet, mobile, dark/light theme and keyboard focus smoke passed
   without horizontal overflow.
 
-Status: REAL VALIDATED in local authenticated route smoke. No production deploy
-or tenant mutation was performed by this validation.
+Status: REAL VALIDATED in local authenticated route smoke and deployed by the
+frontend-only production rollout ending at `9b5bdb34`. No production tenant flow
+mutation was performed by this validation.
 
 ### Contact Timeline / Histórico do contato
 
