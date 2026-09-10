@@ -330,9 +330,8 @@ Contrato validado em codigo:
 - Syer-style direct handoff e CRA-style complex consent/menu flow sao
   interpretados sem reset obrigatorio e com metadados avancados preservados.
 
-Validacao tecnica: frontend build PASS e `git diff --check` PASS. O runner
-focado de componente nao estava disponivel no worktree isolado sem rede, mas a
-validacao anterior do patch registrou `ChatbotFlowBuilder.test.ts` 22/22 PASS.
+Validacao tecnica: `ChatbotFlowBuilder.test.ts` 22/22 PASS, frontend build PASS
+e `git diff --check` PASS.
 
 Smoke local de 2026-09-10: desktop, tablet e mobile foram capturados com um
 harness temporario nao versionado renderizando o `ChatbotFlowBuilder` real. O
