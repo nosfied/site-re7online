@@ -729,6 +729,88 @@ fixtures that compare old and new preview output for newest-management-only,
 visible-behind-control, `historyVisibleAfter`, media, protocol/CSAT and HYBRID
 duplicate scenarios.
 
+### `/app/conversations` bounded outbound preview implementation - 2026-09-10
+
+Status:
+
+```text
+IMPLEMENTED LOCALLY
+COMMIT: NO
+DEPLOY: NO
+PRODUCTION MUTATION: NO
+SEMANTIC ORACLE: PASS
+FULL FOCUSED GATE: PASS WITH EXPLICIT STORAGE_MODE=hybrid
+```
+
+Selected conservative scope:
+
+- only the outbound preview lookup was changed from broad Prisma
+  `OutboundMessage.findMany()` materialization to a tenant-scoped parameterized
+  SQL lateral lookup;
+- inbound lookup remains unchanged because the same inbound candidate set is
+  still used by unread counting, not only by the last-message preview;
+- lead lookup, runtime state, channel state, read state, filters, RBAC,
+  ordering and response shape remain unchanged;
+- app-side `management_only` filtering remains as a second guard even though
+  the bounded outbound query also excludes rows with
+  `rawPayload->>'inboxVisibility' = 'management_only'`;
+- `historyVisibleAfter` is applied per conversation identity inside the bounded
+  outbound query and remains guarded in application mapping;
+- outbound status, template fallback and metadata extraction keep `rawPayload`
+  selected.
+
+Expected row effect:
+
+| Area | Previous shape | Local bounded shape |
+| --- | --- | --- |
+| Inbound candidates | unchanged global `take=messageFetchLimit` | unchanged |
+| Outbound candidates | global `take=messageFetchLimit` across all identities | at most one latest human-visible outbound row per selected identity |
+| Query count | lead + inbound + outbound | lead + inbound + outbound |
+| Schema/index change | none | none |
+
+For the latest SECULT production probe shape with `limit=25`, the old outbound
+path returned up to `502` rows after matching about `5.2k` historical outbound
+rows. The local bounded outbound path is expected to return at most one
+outbound row per winner, i.e. at most `251` rows for the same winner set, while
+preserving tenant scope and preview metadata. This is a partial materialization
+reduction because inbound remains unchanged until unread semantics are
+decoupled from preview lookup.
+
+Validation state:
+
+- local Postgres restored with an isolated temporary database on
+  `127.0.0.1:5432`;
+- 58 official migrations applied to the local test database;
+- focused semantic DB route test exists for latest inbound/outbound,
+  management-only suppression, multiple hidden rows, `historyVisibleAfter`,
+  media, location, template fallback, outbound status, service cycle metadata,
+  HYBRID canonical identity, no visible message, same-timestamp tie and closed
+  conversation access;
+- that DB-backed semantic oracle passed on the restored local database;
+- the first full focused run in default local `STORAGE_MODE=json` stayed
+  125/126. The only failing test was
+  `meta inbound clears active chatbot runtime when persisted flow is inactive`,
+  which waits for `ConversationRuntimeState` in Postgres although the default
+  local storage mode writes the primary runtime state to JSON;
+- clean-base comparison on production HEAD reproduced the same result: default
+  `json` fails, while `STORAGE_MODE=hybrid` passes. Therefore the bounded
+  preview patch is not causal for that failure;
+- full focused gate with `STORAGE_MODE=hybrid` and serial test execution passed
+  126/126 on a clean local database;
+- full focused gate with `STORAGE_MODE=postgres` is not currently equivalent
+  for this historical route suite without fixture cleanup, because some tests
+  still create JSON-shaped runtime states that are invalid/missing when read
+  strictly from Postgres.
+
+Next rule:
+
+```text
+Use an explicit storage mode for delivery gates. For this bounded preview
+patch, the semantic oracle and the focused gate pass with STORAGE_MODE=hybrid
+and serial DB-backed route execution; do not attribute the default-json runtime
+cleanup failure to the preview query.
+```
+
 Modelo de escala atual estimado:
 
 ```text

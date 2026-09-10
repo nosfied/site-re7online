@@ -139,6 +139,16 @@ Pendencias proximas:
    ultima mensagem humana visivel e so depois avaliar lateral/union SQL
    bounded. `DISTINCT ON`/`ROW_NUMBER()` direto nao esta aprovado enquanto
    `management_only` e metadados de preview dependerem de `rawPayload`.
+   Em 2026-09-10 foi iniciado patch local conservador limitando somente o
+   preview outbound via SQL lateral parametrizado, mantendo inbound inalterado
+   porque ainda sustenta `unreadCount`. O Postgres local foi restaurado em
+   banco temporario isolado, as 58 migrations oficiais foram aplicadas e o
+   oraculo DB-backed de equivalencia semantica passou. A falha unica inicial do
+   gate focado completo foi reproduzida em base limpa de producao no modo local
+   default `json`, e nao e causada pelo bounded preview. Com
+   `STORAGE_MODE=hybrid` e execucao serial, o gate focado completo passou
+   126/126 em banco limpo. O modo estrito `postgres` ainda requer fixtures
+   historicas compativeis antes de ser usado como gate completo dessa suite.
 9. manter `runtime_state_lookup` em WATCH, nao como root cause atual. A mesma
    auditoria mostrou leitura batched de `ConversationRuntimeState`, retorno de
    uma linha por conversa vencedora e `runtime_state_fallback=0` em producao;
@@ -202,9 +212,9 @@ Pendências recomendadas:
 
 Status:
 
-- produção em `STORAGE_MODE=hybrid`
-- leitura operacional em `CONV_STATE_READ_SOURCE=postgres`
-- JSON permanece como fallback/compatibilidade
+- producao atual em `STORAGE_MODE=postgres`
+- leitura operacional estrita a Postgres para runtime state
+- JSON permanece apenas como compatibilidade historica/local quando configurado
 
 Riscos conhecidos:
 

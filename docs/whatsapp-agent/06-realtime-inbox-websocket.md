@@ -408,6 +408,22 @@ lateral/union bounded que selecione poucos candidatos por identidade e mantenha
 validacao em aplicacao para `rawPayload`, ate existir um read model explicito
 para visibilidade.
 
+Implementacao local iniciada em 2026-09-10:
+
+- bounded outbound preview via SQL lateral parametrizado;
+- inbound preview permanece inalterado por ainda sustentar `unreadCount`;
+- query count do stage nao muda, mas linhas outbound retornadas ficam limitadas
+  a uma por identidade vencedora;
+- sem alteracao de WebSocket, polling, realtime invalidation, Service Worker,
+  runtime state ou channel state;
+- Postgres local restaurado em banco temporario isolado e teste DB-backed de
+  equivalencia semantica aprovado;
+- a falha 125/126 do gate default local foi reproduzida em base limpa e
+  classificada como diferenca de `STORAGE_MODE=json` para teste que consulta
+  `ConversationRuntimeState` no Postgres, nao como regressao do bounded preview;
+- com `STORAGE_MODE=hybrid` e execucao serial, o gate focado completo passou
+  126/126 em banco local limpo.
+
 Gap exposto por Phase 2: mensagens `message.created` geradas no worker Web
 Session nao chegavam ao WebSocket do backend e eram mascaradas pelo polling
 agressivo anterior. O fix `12eb83db` reutilizou a ponte worker->backend

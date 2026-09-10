@@ -607,6 +607,87 @@ Contrato que o proximo patch deve preservar:
 - escopo tenant/RBAC/departamento existente;
 - ausencia de fallback individual de runtime em producao.
 
+## Atualizacao Local - Bounded Outbound Preview
+
+Data: 2026-09-10
+
+Status:
+
+```text
+CODE IMPLEMENTED LOCALLY
+COMMIT: NO
+DEPLOY: NO
+PRODUCTION MUTATION: NO
+SEMANTIC ORACLE: PASS
+FULL FOCUSED GATE: PASS WITH EXPLICIT STORAGE_MODE=hybrid
+```
+
+Foi implementado localmente um patch conservador que limita somente a leitura de
+preview outbound. A leitura inbound permanece igual porque hoje tambem alimenta
+`unreadCount`; reduzir inbound no mesmo patch mudaria a superficie funcional da
+lista.
+
+Contrato preservado pelo desenho local:
+
+- tenant scope por `clientId`;
+- agrupamento por `waId`/`waIdCanonical`;
+- exclusao de outbound `management_only`;
+- corte por `historyVisibleAfter`;
+- metadata de status/template via `rawPayload`;
+- merge final inbound/outbound em aplicacao;
+- tie-break existente que favorece inbound quando `createdAt` e igual;
+- RBAC, filtros, ordenacao da lista, runtime state e channel state sem mudanca.
+
+Forma escolhida:
+
+- `OutboundMessage` usa SQL parametrizado com `jsonb_to_recordset` para a lista
+  de identidades vencedoras e `JOIN LATERAL` para buscar a ultima mensagem
+  outbound humana visivel por identidade;
+- query count permanece igual no stage `last_message_lookup`;
+- materializacao outbound fica limitada a uma linha por identidade vencedora;
+- sem schema, migration, indice, cache global ou read model novo.
+
+Efeito esperado com base na probe SECULT `limit=25`:
+
+```text
+old outbound returned rows: up to 502
+new outbound returned rows: <= 251
+inbound returned rows: unchanged at up to 502
+historical inbound/outbound matched rows: unchanged until index/read-model work
+```
+
+Validacao local:
+
+- a maquina local foi restaurada com um Postgres temporario isolado em
+  `127.0.0.1:5432`;
+- as 58 migrations oficiais foram aplicadas em banco local novo;
+- o oraculo DB-backed de equivalencia semantica do bounded outbound preview
+  passou, cobrindo latest inbound/outbound, `management_only`,
+  `historyVisibleAfter`, media, location, template, metadata de protocolo/ciclo,
+  identidade HYBRID, ausencia de mensagem, tie-break e acesso ADMIN a conversa
+  fechada;
+- a falha unica do gate amplo foi classificada como nao causada pelo bounded
+  preview: o mesmo teste `meta inbound clears active chatbot runtime when
+  persisted flow is inactive` falha em base limpa de producao quando o storage
+  usa o default local `json`, porque o teste espera observar a limpeza em
+  `ConversationRuntimeState` no Postgres;
+- com `STORAGE_MODE=hybrid`, o mesmo teste passa repetidamente e a bateria
+  focada completa passa 126/126 em banco local limpo quando executada
+  serialmente;
+- com `STORAGE_MODE=postgres`, a bateria historica de rotas nao e atualmente um
+  gate adequado sem ajuste de fixtures, porque diversos casos criam estado JSON
+  parcial e depois leem estritamente de Postgres. Isso aparece como
+  `state.postgres.read_missing`/`postgres_conversation_state_invalid`, fora do
+  caminho do bounded preview.
+
+Regra de seguranca:
+
+```text
+The final delivery gate for this bounded preview patch uses explicit
+STORAGE_MODE=hybrid and serial test execution for the DB-backed route suite.
+Storage-mode-sensitive tests must not rely on implicit default json mode.
+```
+
 ## Design Semantico Do Preview De Ultima Mensagem - 2026-09-10
 
 Contrato atual do preview:
