@@ -71,6 +71,14 @@ Estado fechado/validado:
   retry/reconnect/error loop evidence. Current residual hotspot remains
   `/app/conversations` list reads: 21 req/min produced 246
   `inbox.list.query_count`/min, approximately 11.7 queries/request.
+- `/app/conversations` query-shape audit: WATCH. The route is already mostly
+  batched and does not show current runtime-state N+1 in production
+  (`runtime_state_fallback=0`), but every list refresh still rebuilds the full
+  Inbox read model through fixed per-request lookups: defaults, base
+  conversations, leads, inbound preview, outbound preview, runtime state batch,
+  optional assignee names, department/queue lookups, read state, tenant features
+  and Web Session channel state batch. No safe optimization was implemented
+  without a comparable before/after benchmark.
 - Browser Push / PWA notifications: CLOSED / REAL VALIDATED;
 - true foreground Web Push detection: CLOSED / REAL VALIDATED in `670f392d`;
 - hidden desktop local sound: CLOSED / REAL VALIDATED in `c50fb73c`;
@@ -107,6 +115,10 @@ Pendencias proximas:
 8. auditar query shape/cache de `/app/conversations` antes de qualquer novo
    patch de performance; Hybrid, Queue, Reports e DB nao foram classificados
    como causa raiz do residual atual.
+9. desenhar experimento de performance para reduzir custo fixo de
+   `/app/conversations`, priorizando request-local reuse, cache tenant-scoped
+   curto de dados invariantes e consolidacao de lookups de features/defaults
+   somente se a equivalencia de resposta for provada.
 
 Dividas tecnicas abertas:
 

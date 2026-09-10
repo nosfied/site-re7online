@@ -356,6 +356,14 @@ em ~60-69% durante a amostra, com memoria estavel e DB pressure NORMAL. A
 classificacao continua sendo custo residual de listagem/polling da Inbox, nao
 falha da ponte realtime ou retry hibrido.
 
+Auditoria de query shape no mesmo dia confirmou que a listagem ja usa batching
+para leads, inbound/outbound preview, runtime state, assignee, departments,
+queues e channel state. O custo residual e majoritariamente overhead fixo por
+refresh, nao N+1 dominante. Os candidatos seguros devem preservar a verdade
+corrente da Inbox e atacar um grupo por vez: defaults/operational lookups,
+features/profile, channel state ou preview de mensagens. Nenhum patch foi
+aplicado nessa auditoria.
+
 Gap exposto por Phase 2: mensagens `message.created` geradas no worker Web
 Session nao chegavam ao WebSocket do backend e eram mascaradas pelo polling
 agressivo anterior. O fix `12eb83db` reutilizou a ponte worker->backend

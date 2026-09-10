@@ -300,6 +300,131 @@ Interpretacao:
 - antes de otimizar, a proxima frente deve medir query shape e cache seguro em
   `/app/conversations` com janelas comparaveis de expediente.
 
+### `/app/conversations` query-shape audit - 2026-09-10
+
+Rota:
+
+```text
+GET /app/conversations
+apps/whatsapp-agent/src/http/routes.ts
+buildConversationListPayload()
+```
+
+Call graph observado:
+
+```text
+requireClientAuth()
+getScopedClientById()
+loadAppDepartmentAccess()
+resolveInboxVisibilityPolicy()
+buildConversationListPayload()
+  loadOptionalDefaultDepartmentAndQueue()
+  conversation.findMany()
+  optional search conversation.findMany()
+  lead.findMany()
+  inboundMessage.findMany()
+  outboundMessage.findMany()
+  loadInboxConversationStatesFromDb()
+  optional loadInboxParticipationKeysForUser()
+  optional loadActiveChatbotConsentNodeIds()
+  optional user.findMany()
+  loadConversationOperationalLookups()
+  getInboxReadStateForConversations()
+  getTenants()
+  client.findUnique(features/profile)
+  buildInboxWebSessionChannelStateBatch()
+  in-memory unread/filter/sort/assembly
+jsonWithInboxReadMetrics()
+```
+
+Baseline real:
+
+```text
+production HEAD: 52a2d0b8c1ae2c6b53ca66775d25390bef2d1166
+delta window: 2026-09-10T15:13:03Z to 2026-09-10T15:14:03Z
+/app/conversations: 21 req/min
+inbox.list.query_count: 246/min
+approx queries/request: 11.7
+runtime_state_fallback: 0/min
+multichannel.dual_read: 0/min
+backend CPU during nearby samples: ~60-69%
+memory: ~230-278 MB RSS
+DB pressure: NORMAL
+```
+
+Breakdown reconciliando os ~11-12 queries/request:
+
+| Query group | Purpose | Frequency | Cacheability note |
+| --- | --- | --- | --- |
+| defaults | default department and queue | fixed, up to 2 reads | tenant invariant, candidate for short tenant-scoped cache |
+| base_query | candidate conversations | fixed 1 read | current-state, must remain exact |
+| search_query | identity search supplement | only with search | current-state, filter-specific |
+| last_message_lookup | leads + inbound preview + outbound preview | fixed 3 reads | partially current-state; preview correctness matters |
+| runtime_state_batch | current runtime state for candidates | fixed 1 read | current-state, already batched |
+| runtime_state_fallback | legacy/runtime fallback per miss | per row when batch misses | observed 0/min in residual window |
+| assigned_user_lookup | assignee labels | fixed 0/1 read | user labels are cacheable with RBAC-safe tenant scope |
+| operational_lookups | departments + queues | fixed up to 2 reads | tenant invariant, candidate for short tenant-scoped cache |
+| read_state | user read state for candidates | fixed 1 read | user/conversation current-state |
+| tenant_features | tenant feature/profile lookup | fixed 1 DB read plus config load | tenant invariant, candidate for short tenant-scoped cache/reuse |
+| channel_state_batch | Web Session channel status/switch warning | fixed/batched, query count depends on sources | current operational state, cache only with care |
+| counters_unread | in-memory count from fetched inbound/read state | no DB read | CPU only |
+
+N+1 classification:
+
+```text
+N+1:
+NO dominant current evidence
+```
+
+Evidence: `runtime_state_fallback=0/min` in the residual production window, and
+the code paths for leads, inbound preview, outbound preview, runtime state,
+assignee, departments, queues and channel state are batched. A per-row fallback
+still exists for runtime/channel state when a batch cannot answer, but it was
+not active in the measured window. Limit-specific production probes
+`limit=1/10/25/50` were not executed to avoid creating artificial customer
+traffic in the read-only audit.
+
+Cache audit:
+
+- frontend timeline/media caches exist;
+- channel account runtime cache exists with 60s TTL for channel account
+  resolution/secret paths;
+- `/app/conversations` list response itself has no backend response cache;
+- tenant config loaded by `getTenants()` has process cache, but DB-backed
+  `client.findUnique(features/profile)` still runs per list request;
+- current-state fields such as runtime, read state, last message, channel state
+  and visibility must not be globally cached without invalidation proof.
+
+Realtime invalidation:
+
+- Phase 2 uses WebSocket as primary invalidation and 30s list polling fallback;
+- selected timeline fallback is 60s;
+- one realtime event can still call `refreshConversationList()` from multiple
+  client-side paths, but broad duplicate fan-out was not proven as the current
+  residual root cause in this audit.
+
+Optimization candidates:
+
+| Candidate | Queries saved/request | Evidence | Correctness risk | Size |
+| --- | --- | --- | --- | --- |
+| request-local/tenant-scoped reuse for defaults + operational lookups | up to 4 | fixed per-request reads | low/medium, tenant-scoped with invalidation or short TTL | small/medium |
+| tenant feature/profile short cache or reuse from already loaded client | 1 | fixed per-request DB read | medium, feature toggles must reflect admin changes quickly | small |
+| channel state batch optimization | variable | highest cumulative SECULT operation in metrics | medium/high, operational status must remain exact | medium |
+| last message preview consolidation | up to 2 | fixed 3 reads for lead/inbound/outbound | medium, must preserve inbound/outbound merge semantics | medium |
+| reduce hidden/inactive tab requests | lowers request rate rather than queries/request | prior CPU correlation | medium UX/realtime risk | separate frontend phase |
+
+Patch gate:
+
+```text
+CODE CHANGE:
+NO
+```
+
+No single candidate was both proven materially responsible enough and safe
+enough to implement in this audit without a controlled before/after benchmark.
+The next implementation, if approved, should target one fixed-cost lookup group
+at a time and preserve exact Inbox current-state semantics.
+
 Modelo de escala atual estimado:
 
 ```text
