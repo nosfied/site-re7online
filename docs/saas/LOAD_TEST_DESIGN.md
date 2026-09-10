@@ -734,15 +734,18 @@ duplicate scenarios.
 Status:
 
 ```text
-IMPLEMENTED LOCALLY
-COMMIT: NO
-DEPLOY: NO
+DEPLOYED
+COMMIT: 94882d765b476e12a46eabd39c2bd21bb99bef13
+DEPLOY: PASS
 PRODUCTION MUTATION: NO
 SEMANTIC ORACLE: PASS
 FULL FOCUSED GATE: PASS WITH EXPLICIT STORAGE_MODE=hybrid
+BACKEND BUILD: PASS
+WORKER BUILD: PASS
+MIGRATIONS: 58 / UP TO DATE
 ```
 
-Selected conservative scope:
+Selected delivered conservative scope:
 
 - only the outbound preview lookup was changed from broad Prisma
   `OutboundMessage.findMany()` materialization to a tenant-scoped parameterized
@@ -776,7 +779,7 @@ preserving tenant scope and preview metadata. This is a partial materialization
 reduction because inbound remains unchanged until unread semantics are
 decoupled from preview lookup.
 
-Validation state:
+Validation and rollout state:
 
 - local Postgres restored with an isolated temporary database on
   `127.0.0.1:5432`;
@@ -801,6 +804,11 @@ Validation state:
   for this historical route suite without fixture cleanup, because some tests
   still create JSON-shaped runtime states that are invalid/missing when read
   strictly from Postgres.
+- production rollout used fast-forward only after a fresh PostgreSQL backup;
+  deploy impact matrix required backend and Web Session worker build/reload and
+  no frontend build/reload;
+- post-deploy structural validation: PM2 online, health PASS, 58 migrations up
+  to date, `.data/` preserved.
 
 Next rule:
 

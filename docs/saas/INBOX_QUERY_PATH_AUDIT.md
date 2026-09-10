@@ -607,23 +607,26 @@ Contrato que o proximo patch deve preservar:
 - escopo tenant/RBAC/departamento existente;
 - ausencia de fallback individual de runtime em producao.
 
-## Atualizacao Local - Bounded Outbound Preview
+## Atualizacao Entregue - Bounded Outbound Preview
 
 Data: 2026-09-10
 
 Status:
 
 ```text
-CODE IMPLEMENTED LOCALLY
-COMMIT: NO
-DEPLOY: NO
+CODE DEPLOYED
+COMMIT: 94882d765b476e12a46eabd39c2bd21bb99bef13
+DEPLOY: PASS
 PRODUCTION MUTATION: NO
 SEMANTIC ORACLE: PASS
 FULL FOCUSED GATE: PASS WITH EXPLICIT STORAGE_MODE=hybrid
+BACKEND BUILD: PASS
+WORKER BUILD: PASS
+MIGRATIONS: 58 / UP TO DATE
 ```
 
-Foi implementado localmente um patch conservador que limita somente a leitura de
-preview outbound. A leitura inbound permanece igual porque hoje tambem alimenta
+Foi entregue um patch conservador que limita somente a leitura de preview
+outbound. A leitura inbound permanece igual porque hoje tambem alimenta
 `unreadCount`; reduzir inbound no mesmo patch mudaria a superficie funcional da
 lista.
 
@@ -638,7 +641,7 @@ Contrato preservado pelo desenho local:
 - tie-break existente que favorece inbound quando `createdAt` e igual;
 - RBAC, filtros, ordenacao da lista, runtime state e channel state sem mudanca.
 
-Forma escolhida:
+Forma entregue:
 
 - `OutboundMessage` usa SQL parametrizado com `jsonb_to_recordset` para a lista
   de identidades vencedoras e `JOIN LATERAL` para buscar a ultima mensagem
@@ -656,7 +659,7 @@ inbound returned rows: unchanged at up to 502
 historical inbound/outbound matched rows: unchanged until index/read-model work
 ```
 
-Validacao local:
+Validacao:
 
 - a maquina local foi restaurada com um Postgres temporario isolado em
   `127.0.0.1:5432`;
@@ -679,6 +682,11 @@ Validacao local:
   parcial e depois leem estritamente de Postgres. Isso aparece como
   `state.postgres.read_missing`/`postgres_conversation_state_invalid`, fora do
   caminho do bounded preview.
+- deploy de producao foi fast-forward only, com backup PostgreSQL fresco antes
+  do pull; apenas `re7-whatsapp-agent` e `re7-whatsapp-web-worker` foram
+  recarregados; `re7-admin-front` permaneceu intocado.
+- validacao operacional inicial pos-deploy: PM2 online, health PASS, schema com
+  58 migrations up to date e `.data/` do Web Session preservado.
 
 Regra de seguranca:
 

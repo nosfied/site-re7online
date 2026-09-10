@@ -93,6 +93,13 @@ Estado fechado/validado:
   interval avg ~189ms and cumulative p95 ~692ms, down from the previous
   ~445-615ms avg / ~782-1411ms p95 observed baselines. No global cache, stale
   channel-state cache, schema change or migration was added.
+- `/app/conversations` bounded outbound preview lookup: DEPLOYED in
+  `94882d76`. The patch bounds only the outbound last-message preview through
+  tenant-scoped parameterized SQL lateral lookup, preserving inbound lookup for
+  `unreadCount`, `management_only` suppression, `historyVisibleAfter`,
+  rawPayload-derived preview metadata, RBAC, filters and ordering. Delivery gate
+  passed with explicit `STORAGE_MODE=hybrid` and serial DB-backed route tests;
+  no schema, migration, frontend change or cache was introduced.
 - Browser Push / PWA notifications: CLOSED / REAL VALIDATED;
 - true foreground Web Push detection: CLOSED / REAL VALIDATED in `670f392d`;
 - hidden desktop local sound: CLOSED / REAL VALIDATED in `c50fb73c`;
@@ -139,16 +146,18 @@ Pendencias proximas:
    ultima mensagem humana visivel e so depois avaliar lateral/union SQL
    bounded. `DISTINCT ON`/`ROW_NUMBER()` direto nao esta aprovado enquanto
    `management_only` e metadados de preview dependerem de `rawPayload`.
-   Em 2026-09-10 foi iniciado patch local conservador limitando somente o
-   preview outbound via SQL lateral parametrizado, mantendo inbound inalterado
-   porque ainda sustenta `unreadCount`. O Postgres local foi restaurado em
-   banco temporario isolado, as 58 migrations oficiais foram aplicadas e o
-   oraculo DB-backed de equivalencia semantica passou. A falha unica inicial do
-   gate focado completo foi reproduzida em base limpa de producao no modo local
+   Em 2026-09-10 foi entregue patch conservador limitando somente o preview
+   outbound via SQL lateral parametrizado, mantendo inbound inalterado porque
+   ainda sustenta `unreadCount`. O Postgres local foi restaurado em banco
+   temporario isolado, as 58 migrations oficiais foram aplicadas e o oraculo
+   DB-backed de equivalencia semantica passou. A falha unica inicial do gate
+   focado completo foi reproduzida em base limpa de producao no modo local
    default `json`, e nao e causada pelo bounded preview. Com
    `STORAGE_MODE=hybrid` e execucao serial, o gate focado completo passou
-   126/126 em banco limpo. O modo estrito `postgres` ainda requer fixtures
-   historicas compativeis antes de ser usado como gate completo dessa suite.
+   126/126 em banco limpo. O deploy foi fast-forward only em `94882d76`, com
+   build/reload apenas de backend e Web Session worker. O modo estrito
+   `postgres` ainda requer fixtures historicas compativeis antes de ser usado
+   como gate completo dessa suite.
 9. manter `runtime_state_lookup` em WATCH, nao como root cause atual. A mesma
    auditoria mostrou leitura batched de `ConversationRuntimeState`, retorno de
    uma linha por conversa vencedora e `runtime_state_fallback=0` em producao;
