@@ -79,6 +79,64 @@ SECULT COMPLETED SERVICE REPORTING:
 CLOSED / PRODUCTION VALIDATED
 ```
 
+## Distribuicao automatica AVAILABLE - 2026-09-10
+
+SECULT-PE passou a operar com `queueAssignmentPolicy.presenceMode=AVAILABLE`
+apos validacao controlada previa em Demo. O modo atual preserva `round_robin`,
+`scope=tenant`, `maxActivePerAgent=2`, `includeSupervisors=true` e
+`notifyAssignedOnly=false`.
+
+Auditoria organica read-only de producao, desde `2026-09-09 11:38:31 -03`,
+observou:
+
+- 30 atribuicoes automaticas;
+- 11 agentes distintos selecionados;
+- Maria Helena recebeu 1 atribuicao automatica depois de estar disponivel e
+  abaixo da capacidade;
+- nenhum evento `queue.assignment.no_eligible_agent`;
+- zero exclusoes por heartbeat stale isolado;
+- pool elegivel variando entre 5 e 11 candidatos.
+
+Distribuicao observada:
+
+```text
+Allana: 7/30
+Anna: 6/30
+Gabriela: 3/30
+Jessica: 3/30
+Maria Clara: 3/30
+Cecilia: 2/30
+Joao: 2/30
+Maria Helena: 1/30
+Maria Julia: 1/30
+Maristella: 1/30
+Mirella: 1/30
+```
+
+Classificacao: `presenceMode=AVAILABLE` esta parcialmente validado por trafego
+real. A concentracao historica em Allana melhorou em termos de diversidade do
+pool, mas permanece em observacao; nao ha evidencia material de bug residual no
+algoritmo ou no cursor de round-robin.
+
+## Backend CPU watch - 2026-09-10
+
+Janela curta apos deploy de hardening hibrido:
+
+```text
+14:49:13Z 68.5%
+14:49:43Z 68.4%
+14:50:13Z 67.7%
+14:50:43Z 67.8%
+14:51:13Z 67.2%
+```
+
+Memoria permaneceu entre aproximadamente 253 MB e 273 MB. Health continuou
+PASS, PM2 sem restart novo, e nao houve evidencias de loop de reconnect, retry
+ou `failed_retryable`. Na mesma janela, a SECULT concentrou a atividade
+observada, com 26 pares `claimed/completed` em 10 minutos.
+
+Classificacao: CPU em WATCH por carga sustentada moderada, sem bug comprovado.
+
 ## Web Session unsupported-message incident - 2026-09-04
 
 Chamados organicos da SECULT-PE indicaram bolhas `Mensagem nao suportada` em

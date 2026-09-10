@@ -243,17 +243,30 @@ Policies disponiveis:
 
 A entrada canonica de fila cobre handoff do chatbot, transferencia de setor, devolucao para fila e handoff por inatividade quando ha destino valido e o setor esta aberto. A atribuicao automatica preserva atomicidade com lock por tenant + department; capacidade, atribuicao e ponteiro de round-robin permanecem no escopo protegido.
 
-Quando `requireOnline=true`, o candidato precisa atender aos criterios:
+O modo de presenca da fila separa intencao explicita do agente e heartbeat:
+
+- `FRESH`: exige `available=true` e heartbeat recente dentro do TTL;
+- `AVAILABLE`: exige `available=true`, mas heartbeat stale isolado nao remove o
+  candidato;
+- `IGNORE`: nao usa disponibilidade/heartbeat como criterio de elegibilidade.
+
+Quando a politica exige presenca (`FRESH` ou `AVAILABLE`), o candidato precisa
+atender aos criterios:
 
 - tenant correto;
 - usuario ativo;
 - role elegivel;
 - membership ativo no department;
 - abaixo da capacidade configurada;
-- `available=true`;
-- heartbeat recente dentro do TTL.
+- `available=true`, exceto em `IGNORE`.
 
-O heartbeat de disponibilidade roda a cada 10 segundos e o TTL efetivo e 30 segundos. `available=true` representa intencao do agente receber novos auto-assignments; disponibilidade efetiva exige `available=true` mais heartbeat recente. Logout, queda de rede ou aba sem heartbeat removem o agente do pool apos o TTL. Se nao houver candidato, a conversa permanece `WAITING` e compartilhada.
+O heartbeat de disponibilidade roda a cada 10 segundos e o TTL efetivo e 30
+segundos. `available=true` representa intencao do agente receber novos
+auto-assignments. Em `FRESH`, disponibilidade efetiva exige `available=true`
+mais heartbeat recente. Em `AVAILABLE`, a intencao explicita continua elegivel
+mesmo se a aba ficou sem heartbeat recente; `available=false` remove o agente
+do pool. Se nao houver candidato, a conversa permanece `WAITING` e
+compartilhada.
 
 Disponibilidade nao remove atribuicoes existentes e nao bloqueia transferencia manual explicita autorizada. Transferencia manual continua sendo decisao humana autoritativa conforme governanca operacional.
 
@@ -267,6 +280,12 @@ autoatribuicao. Mesmo quando o escopo esta como "Organizacao inteira", a
 distribuicao continua respeitando o setor da conversa quando ja existe
 direcionamento previo. O ajuste requerido foi de clareza UX e foi deployado em
 `c91671e9`.
+
+Validacao organica SECULT em 2026-09-10, apos aplicar `presenceMode=AVAILABLE`
+em 2026-09-09 11:38:31 -03, observou 30 auto-assignments, 11 agentes distintos,
+Maria Helena participando com 1 auto-assignment, `no_eligible=0` e zero exclusoes
+por heartbeat stale isolado. A distribuicao permanece em acompanhamento para
+volume maior; nao ha bug de algoritmo comprovado.
 
 ## Presenca da equipe
 

@@ -10,7 +10,7 @@ Itens abaixo respondem a demandas levantadas pela SECULT-PE, mas nao devem ser p
 
 | Prioridade | Item | Descricao | Risco se implementar sem desenho |
 | --- | --- | --- | --- |
-| P1 | Balanced assignment | Foundation implementada para policy opcional por tenant/departamento com modos manual, round-robin e menor carga ativa. A configuracao multitenant existe em `/app/settings/queue`, com leitura para supervisao e alteracao administrativa. Falta runbook de ativacao por tenant e acompanhamento operacional de carga. | Sobrecarga indevida, disputa de claim, quebra de fila/departamento. |
+| P1 | Balanced assignment | Foundation implementada para policy opcional por tenant/departamento com modos manual, round-robin e menor carga ativa. A configuracao multitenant existe em `/app/settings/queue`, com leitura para supervisao e alteracao administrativa. SECULT opera com `round_robin`, `scope=tenant`, `presenceMode=AVAILABLE`, `maxActivePerAgent=2`; validacao organica de 2026-09-10 e parcial positiva, com acompanhamento ainda aberto. | Sobrecarga indevida, disputa de claim, quebra de fila/departamento. |
 | P1 | Agent presence/session audit | Presenca operacional atual foi exposta no `Painel` para ADMIN/SUPERVISOR, reaproveitando disponibilidade + heartbeat da distribuicao automatica. Historico de login/logout, expiracao, sessao substituida e atividade recente continua pendente como frente separada. | Confusao com controle oficial de ponto e risco trabalhista/compliance. |
 | P2 | Contact social/display name polish | Refinar UX para nome de atendimento/nome social, mantendo historico minimizado e sem expor nome anterior indevido. | Reintroducao de dado sensivel ou conflito com anonimização. |
 | P2 | Report filters active/inactive agents | Padronizar relatorios para ocultar inativos por default e permitir historico quando autorizado. | Relatorio inconsistente ou exclusao indevida de evidencias historicas. |
@@ -33,6 +33,20 @@ Itens abaixo respondem a demandas levantadas pela SECULT-PE, mas nao devem ser p
 - Evitar atribuicao quando houver ambiguidade.
 - Ter testes de concorrencia ou idempotencia minima.
 - Pendencias: runbook de ativacao, telemetria de carga por agente, filtros de acompanhamento por responsavel e decisao sobre notificacao de atribuido.
+
+Validacao organica SECULT em 2026-09-10:
+
+- janela analisada: desde `2026-09-09 11:38:31 -03`, quando
+  `presenceMode=AVAILABLE` foi aplicado;
+- auto-assignments: 30;
+- agentes distintos selecionados: 11;
+- Maria Helena recebeu 1 auto-assignment apos voltar a ficar abaixo de 2/2;
+- `no_eligible`: 0;
+- exclusao apenas por heartbeat stale: 0;
+- tamanho do pool elegivel observado nos eventos: 5 a 11;
+- Allana recebeu 7/30, Anna 6/30, demais agentes distribuiram o restante;
+- classificacao: AVAILABLE parcialmente validado por trafego real; concentracao
+  residual em Allana permanece em WATCH, sem bug de algoritmo comprovado.
 
 ### Agent presence/session audit
 

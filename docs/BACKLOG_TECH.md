@@ -57,7 +57,17 @@ Estado fechado/validado:
 - SECULT Web Session non-content control event suppression: DEPLOYED / TESTED in
   `c308198a`; organic validation pending;
 - SECULT auto-assignment incident 2026-08-31: AUDITED / BUG NOT CONFIRMED; UX clarification deployed in `c91671e9`;
+- SECULT `presenceMode=AVAILABLE`: PARTIAL REAL VALIDATED on 2026-09-10; after
+  activation on 2026-09-09 11:38:31 -03, 30 organic auto-assignments selected
+  11 distinct agents, Maria Helena received one automatic assignment after
+  becoming available below capacity, `no_eligible=0`, and stale heartbeat alone
+  produced zero exclusions. Distribution remains WATCH, not a proven algorithm
+  defect.
 - SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / POS-PHASE 2 LOAD VALIDATION PARTIAL;
+- Backend CPU watch after hybrid claim recovery deploy: WATCH. Short 2026-09-10
+  sample held near 67-69% CPU with health PASS, memory stable around 253-273 MB,
+  SECULT real traffic active, 26 hybrid claim/completed pairs in 10 minutes, and
+  no retry/reconnect/error loop evidence.
 - Browser Push / PWA notifications: CLOSED / REAL VALIDATED;
 - true foreground Web Push detection: CLOSED / REAL VALIDATED in `670f392d`;
 - hidden desktop local sound: CLOSED / REAL VALIDATED in `c50fb73c`;
@@ -87,7 +97,9 @@ Pendencias proximas:
 5. acompanhar a validacao organica SECULT para confirmar que novos eventos
    `protocolMessage`, `reactionMessage`, `messageContextInfo` e grouping-only
    `albumMessage` nao aparecem como `Mensagem nao suportada`;
-6. desenhar waiting-on-customer 1h como regra funcional separada.
+6. continuar observando distribuicao organica SECULT em `presenceMode=AVAILABLE`
+   antes de qualquer ajuste no ponteiro de round-robin;
+7. desenhar waiting-on-customer 1h como regra funcional separada.
 
 Dividas tecnicas abertas:
 
