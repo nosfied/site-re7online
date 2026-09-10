@@ -1,10 +1,15 @@
 import crypto from "node:crypto";
-import nodemailer from "nodemailer";
 import type { IncomingMessage } from "node:http";
 import { Prisma } from "@prisma/client";
 import { env } from "../config/env.js";
 import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
+import {
+  buildCanonicalResendPayload,
+  canonicalMailDeliveryError,
+  isCanonicalMailConfigured,
+  sendCanonicalMail,
+} from "../mail/canonicalMail.js";
 import { hashPassword, verifyClientAuthTokenDetailed } from "./clientAuth.js";
 import { normalizeUserRole, type ClientAuthContext } from "./clientAuthMiddleware.js";
 import {
@@ -801,7 +806,7 @@ export async function revokeAllUserSessionsAndPush(params: {
 }
 
 export function isSmtpConfigured() {
-  return Boolean(env.SMTP_HOST.trim() && env.SMTP_FROM.trim());
+  return isCanonicalMailConfigured();
 }
 
 function escapeHtml(value: string) {
@@ -895,42 +900,7 @@ export function buildResendPasswordResetPayload(params: {
   text: string;
   html: string;
 }) {
-  return {
-    from: params.from,
-    to: [params.to],
-    subject: params.subject,
-    text: params.text,
-    html: params.html,
-  };
-}
-
-function shouldUseResendApiFallback() {
-  return env.SMTP_HOST.trim().toLowerCase() === "smtp.resend.com";
-}
-
-async function sendPasswordResetViaResendApi(params: {
-  to: string;
-  message: ReturnType<typeof buildPasswordResetEmail>;
-}) {
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.SMTP_PASS}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(
-      buildResendPasswordResetPayload({
-        from: env.SMTP_FROM,
-        to: params.to,
-        subject: params.message.subject,
-        text: params.message.text,
-        html: params.message.html,
-      })
-    ),
-  });
-  if (!response.ok) {
-    throw new Error(`resend_api_failed:${response.status}`);
-  }
+  return buildCanonicalResendPayload(params);
 }
 
 export async function sendPasswordResetEmail(params: {
@@ -943,29 +913,15 @@ export async function sendPasswordResetEmail(params: {
     name: params.name,
     resetUrl: params.resetUrl,
   });
-  if (shouldUseResendApiFallback()) {
-    await sendPasswordResetViaResendApi({
+  const result = await sendCanonicalMail({
+    message: {
       to: params.to,
-      message,
-    });
-    return { ok: true as const };
-  }
-  const transporter = nodemailer.createTransport({
-    host: env.SMTP_HOST,
-    port: env.SMTP_PORT,
-    secure: env.SMTP_PORT === 465,
-    auth:
-      env.SMTP_USER.trim() || env.SMTP_PASS.trim()
-        ? { user: env.SMTP_USER, pass: env.SMTP_PASS }
-        : undefined,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    },
   });
-  await transporter.sendMail({
-    from: env.SMTP_FROM,
-    to: params.to,
-    subject: message.subject,
-    text: message.text,
-    html: message.html,
-  });
+  if (result.status !== "DELIVERED") throw canonicalMailDeliveryError(result);
   return { ok: true as const };
 }
 

@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import nodemailer from "nodemailer";
+import {
+  canonicalMailDeliveryError,
+  isCanonicalMailConfigured,
+  sanitizeMailDeliveryError,
+  sendCanonicalMail,
+} from "../mail/canonicalMail.js";
 import {
   evaluateBackupHealth,
   parseBackupManifestJsonl,
@@ -56,12 +61,6 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
-function toNumber(value: string | undefined, fallback: number) {
-  if (!value) return fallback;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
 function splitRecipients(value: string | undefined) {
   return (value || "")
     .split(/[;,]/)
@@ -79,14 +78,11 @@ export function resolvePostgresBackupAlertRecipients(env: EnvLike = process.env)
 }
 
 export function isPostgresBackupSmtpConfigured(env: EnvLike = process.env) {
-  return Boolean((env.SMTP_HOST || "").trim() && (env.SMTP_FROM || "").trim());
+  return isCanonicalMailConfigured(env);
 }
 
 export function sanitizePostgresBackupAlertText(value: unknown) {
-  const message = value instanceof Error ? value.message : String(value || "unknown_error");
-  return message
-    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
-    .replace(/(token|secret|password|pass|api[_-]?key)=([^&\s]+)/gi, "$1=[REDACTED]")
+  return sanitizeMailDeliveryError(value)
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, REDACTED)
     .replace(/\+?\d[\d\s().-]{8,}\d/g, REDACTED)
     .slice(0, 240);
@@ -244,24 +240,8 @@ export function buildPostgresBackupAlertEmail(params: {
 }
 
 async function defaultSender(message: PostgresBackupAlertMessage) {
-  if (!isPostgresBackupSmtpConfigured()) throw new Error("smtp_not_configured");
-  const port = toNumber(process.env.SMTP_PORT, 587);
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port,
-    secure: port === 465,
-    auth:
-      (process.env.SMTP_USER || "").trim() || (process.env.SMTP_PASS || "").trim()
-        ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-        : undefined,
-  });
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM,
-    to: message.to,
-    subject: message.subject,
-    text: message.text,
-    html: message.html,
-  });
+  const result = await sendCanonicalMail({ message });
+  if (result.status !== "DELIVERED") throw canonicalMailDeliveryError(result);
 }
 
 export async function checkPostgresBackupHealthAndAlert(params: {

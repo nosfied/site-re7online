@@ -1,8 +1,13 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import nodemailer from "nodemailer";
-import { env } from "../config/env.js";
 import { resolveWebSessionAlertEmails } from "../config/tenantOperationalConfig.js";
 import { logger } from "../logger/logger.js";
+import {
+  canonicalMailDeliveryError,
+  isCanonicalMailConfigured,
+  resolveCanonicalMailSmtpSecure,
+  sanitizeMailDeliveryError,
+  sendCanonicalMail,
+} from "../mail/canonicalMail.js";
 import type { WebSessionDisconnectInfo } from "./webSessionLifecycle.js";
 
 export const WEB_SESSION_RECOVERABLE_DISCONNECT_ALERT_GRACE_MS = 3 * 60 * 1000;
@@ -55,11 +60,11 @@ function escapeHtml(value: string) {
 }
 
 function isSmtpConfigured() {
-  return Boolean(env.SMTP_HOST.trim() && env.SMTP_FROM.trim());
+  return isCanonicalMailConfigured();
 }
 
 export function resolveWebSessionDisconnectAlertSmtpSecure(port: number) {
-  return port === 465 || port === 2465;
+  return resolveCanonicalMailSmtpSecure(port);
 }
 
 function maskChannelAccountId(value: string) {
@@ -73,11 +78,7 @@ function sanitizeReason(value: unknown) {
 }
 
 function sanitizeOperationalError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error || "unknown_error");
-  return message
-    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
-    .replace(/(token|secret|password|pass|api[_-]?key)=([^&\s]+)/gi, "$1=[REDACTED]")
-    .slice(0, 160);
+  return sanitizeMailDeliveryError(error).slice(0, 160);
 }
 
 function isRetryableAlertDeliveryError(error: unknown) {
@@ -194,23 +195,8 @@ export function buildWebSessionDisconnectAlertEmail(params: {
 }
 
 async function defaultSender(message: { to: string[]; subject: string; text: string; html: string }) {
-  if (!isSmtpConfigured()) throw new Error("smtp_not_configured");
-  const transporter = nodemailer.createTransport({
-    host: env.SMTP_HOST,
-    port: env.SMTP_PORT,
-    secure: resolveWebSessionDisconnectAlertSmtpSecure(env.SMTP_PORT),
-    auth:
-      env.SMTP_USER.trim() || env.SMTP_PASS.trim()
-        ? { user: env.SMTP_USER, pass: env.SMTP_PASS }
-        : undefined,
-  });
-  await transporter.sendMail({
-    from: env.SMTP_FROM,
-    to: message.to,
-    subject: message.subject,
-    text: message.text,
-    html: message.html,
-  });
+  const result = await sendCanonicalMail({ message });
+  if (result.status !== "DELIVERED") throw canonicalMailDeliveryError(result);
 }
 
 async function recordAlertEvent(params: {

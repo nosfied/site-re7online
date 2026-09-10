@@ -1,5 +1,9 @@
-import nodemailer from "nodemailer";
-import { env } from "../config/env.js";
+import {
+  canonicalMailDeliveryError,
+  isCanonicalMailConfigured,
+  sanitizeMailDeliveryError,
+  sendCanonicalMail,
+} from "../mail/canonicalMail.js";
 
 export type TemplateReviewNotificationMessage = {
   to: string;
@@ -38,37 +42,17 @@ export function resolveTemplateReviewNotifyEmail() {
 }
 
 export function sanitizeTemplateReviewNotificationError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error || "");
-  return message
-    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
-    .replace(/(token|secret|password|pass|api[_-]?key)=([^&\s]+)/gi, "$1=[REDACTED]")
-    .slice(0, 240);
+  return sanitizeMailDeliveryError(error);
 }
 
 function isSmtpConfigured() {
-  return Boolean(env.SMTP_HOST.trim() && env.SMTP_FROM.trim());
+  return isCanonicalMailConfigured();
 }
 
 async function defaultSender(message: TemplateReviewNotificationMessage) {
-  if (!isSmtpConfigured()) {
-    throw new Error("smtp_not_configured");
-  }
-  const transporter = nodemailer.createTransport({
-    host: env.SMTP_HOST,
-    port: env.SMTP_PORT,
-    secure: env.SMTP_PORT === 465,
-    auth:
-      env.SMTP_USER.trim() || env.SMTP_PASS.trim()
-        ? { user: env.SMTP_USER, pass: env.SMTP_PASS }
-        : undefined,
-  });
-  await transporter.sendMail({
-    from: env.SMTP_FROM,
-    to: message.to,
-    subject: message.subject,
-    text: message.text,
-    html: message.html,
-  });
+  if (!isSmtpConfigured()) throw new Error("smtp_not_configured");
+  const result = await sendCanonicalMail({ message });
+  if (result.status !== "DELIVERED") throw canonicalMailDeliveryError(result);
 }
 
 export async function sendTemplateReviewNotification(params: {

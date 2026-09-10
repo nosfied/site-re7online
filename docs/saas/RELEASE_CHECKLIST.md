@@ -235,7 +235,12 @@ npm run backup:postgres:check
 - Em producao com PostgreSQL em Docker, o script usa por padrao o container `wa-agent-postgres`.
 - Em ambiente local sem Docker, usar `DATABASE_URL` com `POSTGRES_BACKUP_MODE=local`.
 - Dumps e manifestos nao devem ser commitados.
-- Alertas de backup usam SMTP ja configurado (`SMTP_HOST` e `SMTP_FROM`) e destinatarios operacionais em `POSTGRES_BACKUP_ALERT_EMAILS`, `OPERATIONAL_ALERT_EMAILS`, `TEMPLATE_REVIEW_NOTIFY_EMAIL` ou `TEMPLATE_REVIEW_FALLBACK_EMAIL`, sem fallback hardcoded. O alerta e emitido para falha de execucao, falha de verificacao e backup ausente/antigo acima de 26h, com dedupe local de 24h.
+- Alertas de backup usam a camada canonica de mail transacional, com
+  `SMTP_HOST`/`SMTP_FROM` e destinatarios operacionais em
+  `POSTGRES_BACKUP_ALERT_EMAILS`, `OPERATIONAL_ALERT_EMAILS`,
+  `TEMPLATE_REVIEW_NOTIFY_EMAIL` ou `TEMPLATE_REVIEW_FALLBACK_EMAIL`, sem
+  fallback hardcoded. O alerta e emitido para falha de execucao, falha de
+  verificacao e backup ausente/antigo acima de 26h, com dedupe local de 24h.
 - A 83E implementa suporte offsite opcional/configuravel; em contratos com exigencia formal, configurar destino externo e anexar o resultado de `backup:evidence status` ao dossie operacional.
 
 Restore drill evidence:

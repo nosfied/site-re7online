@@ -126,6 +126,11 @@ Estado fechado/validado:
 - Web Session operational disconnect alert delivery: FIXED / DEPLOYED in
   `b31fd976`; SMTP port `2465` now uses TLS, retryable transport failures have
   bounded retry, and delivered alerts still dedupe by incident fingerprint;
+- Canonical mail transport cleanup: CLOSED / IMPLEMENTED. Password reset,
+  first-access invitations, Web Session disconnect alerts, template-review
+  alerts and PostgreSQL backup alerts now share one canonical mail provider and
+  config resolver. Business callers still own recipients, content, dedupe and
+  retry policy.
 - CRA Demo V1: READY FOR CUSTOMER VALIDATION.
 - CRA-PR real HYBRID operational validation: CLOSED / PASS;
 - CRA-PR approved flow -> consent -> menu -> handoff: CLOSED / PASS;
@@ -137,21 +142,21 @@ Estado fechado/validado:
 
 Fila ativa repriorizada:
 
-1. Canonical mail transport cleanup (P1): consolidar Resend HTTPS API,
-   Nodemailer SMTP de Web Session alerts, template-review e backup mailers em
-   uma abstracao/config canonica, sem quebrar classes de email hoje funcionais.
-2. Waiting-for-customer 60m (P1): desenhar e implementar apenas para estado
+1. Waiting-for-customer 60m (P1): desenhar e implementar apenas para estado
    explicito em que a automacao aguarda resposta do cidadao; nunca usar
    inatividade generica de conversa HUMAN.
-3. CRA-PR department hours (P1): guiar configuracao do cliente e validar flow
+2. CRA-PR department hours (P1): guiar configuracao do cliente e validar flow
    aware of department hours. No schedule continua significando
    `NO_SCHEDULE`/aberto e nao e falha tecnica.
-4. Guided Builder productization (P1): concluir o editor guiado para usuarios de
+3. Guided Builder productization (P1): concluir o editor guiado para usuarios de
    negocio sobre o runtime existente, mantendo JSON avancado e sem mudar a
    semantica dos flows.
-5. Reporting context enhancements (P2): adicionar contexto de AUTO vs MANUAL,
+4. Reporting context enhancements (P2): adicionar contexto de AUTO vs MANUAL,
    politica de atribuicao, `presenceMode` e carga/capacidade atual onde agregar
    verdade operacional sem reabrir bugs ja fechados.
+5. Meta Cloud unlink/removal cleanup semantics (P2): consolidar remocao segura
+   de configuracao Meta sem apagar historico operacional ou criar fallback
+   silencioso.
 
 WATCH only:
 

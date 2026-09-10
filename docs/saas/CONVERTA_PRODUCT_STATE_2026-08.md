@@ -340,6 +340,38 @@ Alertas de disconnect usam exclusivamente `TenantOperationalConfig.config.webSes
 
 Detalhes tecnicos do transporte estao em `docs/whatsapp/web-session.md`.
 
+## Mail transacional e alertas por e-mail
+
+O envio transacional usa camada canonica em
+`apps/whatsapp-agent/src/mail/canonicalMail.ts`.
+
+A camada canonica e dona de:
+
+- selecao de provider;
+- leitura de `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` e `SMTP_FROM`;
+- TLS/secure, incluindo portas 465 e 2465;
+- timeouts de transporte SMTP;
+- envio por Resend HTTPS API quando `SMTP_HOST=smtp.resend.com`;
+- resultado normalizado `DELIVERED`, `RETRYABLE_TRANSPORT_FAILURE` ou
+  `PERMANENT_FAILURE`;
+- sanitizacao de erro sem token, senha, API key ou Authorization.
+
+Os callers de negocio continuam donos de destinatarios, assunto, corpo,
+tenant/contexto, dedupe e retry:
+
+- password reset;
+- convite/first access, que reaproveita password reset;
+- Web Session disconnect alert;
+- template-review alert;
+- PostgreSQL backup alert.
+
+Historico preservado: password reset e convites funcionavam porque usavam o
+fallback Resend HTTPS API quando o host era `smtp.resend.com`. O alerta de Web
+Session falhou historicamente porque interpretava SMTP de forma independente e
+tentou `smtp.resend.com:2465` sem TLS, resultando em `Greeting never received`.
+Esse drift foi eliminado sem alterar templates, tokens, destinatarios ou
+politicas de retry/dedupe dos casos de negocio.
+
 ## Build e worker
 
 O processo de deploy deve seguir `docs/whatsapp-agent/ops/DEPLOY_VPS_PM2.md`.

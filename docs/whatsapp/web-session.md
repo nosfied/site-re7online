@@ -340,6 +340,27 @@ Local audit at 88C/88C.2 found:
 This isolation is technical only. It does not resolve the legal review required for production
 use of the Web Session runtime or its dependency tree.
 
+## Disconnect alert mail delivery
+
+Web Session disconnect alerts use the canonical transactional mail delivery
+layer at `apps/whatsapp-agent/src/mail/canonicalMail.ts`.
+
+Business policy stays in `webSessionDisconnectAlerts`:
+
+- recipients are tenant-scoped from
+  `TenantOperationalConfig.config.webSessionAlertEmails`;
+- ADMIN/SUPERVISOR/AGENT users are not implicit alert recipients;
+- terminal incidents alert immediately;
+- recoverable incidents keep the 3-minute grace;
+- retryable transport failures retain bounded retry;
+- permanent auth/recipient failures are not retried;
+- a successful alert is deduped by incident fingerprint.
+
+The canonical mail layer owns provider/config/TLS/timeouts. This preserves the
+historical fix for Resend SMTP port `2465`, which must use TLS, and prevents Web
+Session alerts from reinterpreting SMTP settings separately from other
+transactional email classes.
+
 ## 88D connection management
 
 88D adds the first controlled administrative surface for a laboratory WEB_SESSION account.
