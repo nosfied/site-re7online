@@ -389,6 +389,18 @@ REAL VALIDATED / IMPROVED, com proximos hotspots provaveis em
 `last_message_lookup` e `runtime_state_lookup`. A medicao nao alterou
 polling/realtime e nao executou mutation.
 
+Auditoria read-only adicional no mesmo HEAD `1aae26b5` separou os dois
+hotspots residuais. `last_message_lookup` passou a ser o read-stage dominante
+por media de intervalo (~275ms) e mostrou materializacao historica/overfetch:
+para `limit=25`, 251 conversas vencedoras correspondiam a ~4.6k inbound e
+~5.2k outbound historicos, com retorno limitado a 502 linhas de cada lado para
+resolver previews. `runtime_state_lookup` permaneceu batched, com uma linha por
+conversa vencedora e `runtime_state_fallback=0`; portanto deve ficar em WATCH,
+nao como root cause atual. O proximo patch de performance deve mirar a leitura
+de ultima mensagem humana visivel, mas somente depois de preservar exatamente
+supressao de eventos management-only, `historyVisibleAfter` e merge
+inbound/outbound.
+
 Gap exposto por Phase 2: mensagens `message.created` geradas no worker Web
 Session nao chegavam ao WebSocket do backend e eram mascaradas pelo polling
 agressivo anterior. O fix `12eb83db` reutilizou a ponte worker->backend

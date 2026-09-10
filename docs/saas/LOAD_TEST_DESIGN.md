@@ -524,9 +524,9 @@ Timing notes:
 - SECULT cumulative `channel_state_batch`: avg ~250ms, p95 ~692ms;
 - metrics currently expose cumulative p95, not per-window p95, so p95 must be
   compared cautiously after restarts or unequal windows;
-- row materialization volume was not directly instrumented in the runtime
-  metrics; code path now returns only latest rows per identity by construction,
-  and no intrusive instrumentation was added.
+- row materialization volume is now known for the remaining preview/runtime
+  stages through read-only production probes recorded below. No intrusive
+  instrumentation was added.
 
 Normalized before/after comparison:
 
@@ -557,6 +557,92 @@ IMPROVED / WATCH
 
 CURRENT DOMINANT HOTSPOT:
 last_message_lookup / runtime_state_lookup mixed, with channel_state_batch no longer dominant by average
+```
+
+Follow-up audit of `last_message_lookup` and `runtime_state_lookup`:
+
+```text
+audit timestamp: 2026-09-10
+production HEAD audited: 1aae26b55907adb37b2472d31fbd58a42dace1f8
+code path: apps/whatsapp-agent/src/http/routes.ts buildConversationListPayload()
+code change: NO
+production mutation: NO
+```
+
+Measured stage timing from the comparable window:
+
+| Stage | Interval avg | Cumulative avg | Cumulative p95 | Max observed | Classification |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `last_message_lookup` | ~275 ms | ~295 ms | ~629 ms | ~967 ms | current dominant remaining read stage by average |
+| `runtime_state_lookup` | ~128 ms | ~140 ms | ~528 ms | ~1198 ms | batched/current-state, not dominant by average |
+| `channel_state_batch` | ~189 ms | ~250 ms | ~692 ms | ~1490 ms | improved, no longer dominant by average |
+
+Read-only SECULT row-volume probes:
+
+| UI limit | Candidate fetch limit | Message fetch limit | Winners | Inbound matched | Outbound matched | Inbound returned | Outbound returned | Runtime returned |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 11 | 22 | 11 | 225 | 277 | 22 | 22 | 11 |
+| 10 | 101 | 202 | 101 | 1927 | 2313 | 202 | 202 | 101 |
+| 25 | 251 | 502 | 251 | 4552 | 5191 | 502 | 502 | 251 |
+| 50 | 501 | 1002 | 255 | 4607 | 5253 | 1002 | 1002 | 255 |
+
+`last_message_lookup` shape:
+
+- one tenant-scoped `Lead.findMany()` over the visible identity set;
+- one tenant-scoped `InboundMessage.findMany()` over `waIdCanonical`/`waId`,
+  ordered by `createdAt desc`, globally capped by `messageFetchLimit`;
+- one tenant-scoped `OutboundMessage.findMany()` with the same identity shape,
+  ordered by `createdAt desc`, globally capped by `messageFetchLimit`;
+- after fetch, code removes management-only timeline messages and applies
+  `historyVisibleAfter` before choosing the newest inbound/outbound preview.
+
+`runtime_state_lookup` shape:
+
+- one tenant-scoped `ConversationRuntimeState.findMany()` over
+  `waId`/`waIdCanonical`;
+- result is mapped by canonical identity and reused for all selected
+  conversations;
+- measured production fallback remained `0`, so the old per-row runtime
+  fallback is not the current residual root.
+
+Root-cause classification:
+
+```text
+LAST MESSAGE:
+HOTSPOT / OVERFETCH / HISTORICAL MATERIALIZATION
+
+RUNTIME STATE:
+WATCH / CURRENT-STATE BATCHED READ / NO ACTIVE FALLBACK
+
+DOMINANT ROOT CAUSE:
+last_message_lookup historical materialization and global preview cap
+```
+
+No runtime optimization was selected in this pass. A naive SQL latest-row
+rewrite would be risky because preview correctness currently depends on
+application-level suppression of management-only messages, inbound/outbound
+merge semantics, `historyVisibleAfter`, and metadata extracted from
+`rawPayload`. The next patch should first prove an equivalent latest
+human-visible message contract, preferably with tests around control events,
+history cutoffs and inbound/outbound ties.
+
+Recommended next optimization candidate:
+
+```text
+TARGET:
+last_message_lookup
+
+STRATEGY:
+design an exact latest-human-visible preview read model or bounded latest-row
+query that preserves management-only suppression, historyVisibleAfter and
+inbound/outbound merge semantics
+
+EXPECTED BENEFIT:
+reduce thousands of matched historical rows per list refresh in tenants with
+many active identities
+
+STATUS:
+DESIGN REQUIRED BEFORE CODE
 ```
 
 Modelo de escala atual estimado:

@@ -126,12 +126,20 @@ Pendencias proximas:
 6. continuar observando distribuicao organica SECULT em `presenceMode=AVAILABLE`
    antes de qualquer ajuste no ponteiro de round-robin;
 7. desenhar waiting-on-customer 1h como regra funcional separada;
-8. manter novas otimizacoes de `/app/conversations` separadas e graduais:
-   defaults/operational lookups, channel state e preview de mensagens devem ser
-   tratados somente com equivalencia de resposta provada.
-9. medir em outra janela de expediente se `last_message_lookup` e
-   `runtime_state_lookup` permanecem os proximos hotspots dominantes antes de
-   qualquer novo patch.
+8. manter novas otimizacoes de `/app/conversations` separadas e graduais.
+   Auditoria de 2026-09-10 no HEAD `1aae26b5` confirmou que
+   `last_message_lookup` e o principal read-stage residual por media de
+   intervalo (~275ms) e que o problema e materializacao historica/overfetch:
+   com `limit=25`, 251 conversas vencedoras corresponderam a ~4.6k inbound e
+   ~5.2k outbound historicos, embora o payload use somente o preview humano
+   mais recente por identidade. Nao aplicar patch especulativo: a consulta
+   precisa preservar supressao de eventos management-only, `historyVisibleAfter`
+   e merge inbound/outbound.
+9. manter `runtime_state_lookup` em WATCH, nao como root cause atual. A mesma
+   auditoria mostrou leitura batched de `ConversationRuntimeState`, retorno de
+   uma linha por conversa vencedora e `runtime_state_fallback=0` em producao;
+   reduzir esse select pode ser avaliado depois, mas nao deve preceder o
+   desenho seguro do preview de ultima mensagem.
 
 Dividas tecnicas abertas:
 

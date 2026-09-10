@@ -554,6 +554,59 @@ Leitura:
 - `inbox-read vu20` ficou abaixo da meta de `1.2s` com ampla margem;
 - nao ha justificativa tecnica para continuar otimizando Inbox antes da fase de empacotamento/licitacao, salvo novo achado de carga.
 
+## Atualizacao 2026-09-10 - Last Message E Runtime Residuals
+
+Auditoria read-only posterior, em producao no HEAD
+`1aae26b55907adb37b2472d31fbd58a42dace1f8`, registrou novo achado de carga
+apos a melhoria de `channel_state_batch`.
+
+Janela comparavel:
+
+```text
+GET /app/conversations: 88 requests em ~5m10s, ~17 req/min
+SECULT list builds: 78
+queries/request: ~10.7
+runtime_state_fallback: 0
+multichannel.dual_read: 0
+backend CPU avg: ~14.0%, peak isolado 69.0%
+DB pressure: NORMAL
+```
+
+Timings residuais:
+
+| Stage | Avg intervalo | Avg cumulativo | p95 cumulativo | Leitura |
+| --- | ---: | ---: | ---: | --- |
+| `last_message_lookup` | ~275 ms | ~295 ms | ~629 ms | hotspot residual dominante por media |
+| `runtime_state_lookup` | ~128 ms | ~140 ms | ~528 ms | batched, sem fallback mensuravel |
+| `channel_state_batch` | ~189 ms | ~250 ms | ~692 ms | melhorado, watch |
+
+Probes estruturais read-only para SECULT:
+
+| Limit | Winners | Inbound historico matched | Outbound historico matched | Inbound retornado | Outbound retornado | Runtime retornado |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 11 | 225 | 277 | 22 | 22 | 11 |
+| 10 | 101 | 1927 | 2313 | 202 | 202 | 101 |
+| 25 | 251 | 4552 | 5191 | 502 | 502 | 251 |
+| 50 | 255 | 4607 | 5253 | 1002 | 1002 | 255 |
+
+Conclusao atual:
+
+- `runtime_state_lookup` continua correto como leitura batched de estado atual e
+  nao e o root cause atual;
+- `last_message_lookup` e o candidato principal de otimizacao, por overfetch e
+  materializacao historica de inbound/outbound para resolver preview;
+- nenhum patch foi aplicado nesta auditoria porque uma reescrita ingenua para
+  "ultima linha por identidade" pode quebrar semantica existente.
+
+Contrato que o proximo patch deve preservar:
+
+- supressao de mensagens `management_only`;
+- corte por `historyVisibleAfter`;
+- merge cronologico entre inbound e outbound;
+- metadados usados no preview a partir de `rawPayload`;
+- escopo tenant/RBAC/departamento existente;
+- ausencia de fallback individual de runtime em producao.
+
 ## Confirmacao De Nao Alteracao Funcional
 
 A 78O.1/78O.2/78O.3 nao:
