@@ -2279,13 +2279,13 @@ async function ensureWebSessionContactIdentity(params: {
           externalUserHashCandidates: confirmedHashCandidates,
         });
   const reusableContact = existingContact ?? relatedIdentity?.contact ?? null;
-  const reusableLead = existingLead ?? relatedIdentity?.lead ?? null;
+  const preliminaryLead = existingLead ?? relatedIdentity?.lead ?? null;
   const safeContactName =
     providerObservedName && !reusableContact?.name && !isAnonymizedMarker(reusableContact?.name)
       ? providerObservedName
       : undefined;
   const safeLeadName =
-    providerObservedName && !reusableLead?.name && !isAnonymizedMarker(reusableLead?.name)
+    providerObservedName && !preliminaryLead?.name && !isAnonymizedMarker(preliminaryLead?.name)
       ? providerObservedName
       : undefined;
   const contact = reusableContact
@@ -2362,6 +2362,17 @@ async function ensureWebSessionContactIdentity(params: {
     },
     select: { id: true },
   });
+  const identityLead = await params.prisma.lead.findFirst({
+    where: {
+      tenantId: params.message.clientId,
+      channel: "whatsapp",
+      provider: "web_session",
+      channelAccountId: params.message.channelAccountId,
+      externalUserHash: externalUserHash(params.message.senderCanonical),
+    },
+    select: { id: true, name: true, contactChannelIdentityId: true },
+  });
+  const reusableLead = identityLead ?? preliminaryLead;
   const lead = reusableLead
     ? await params.prisma.lead.update({
         where: { id: reusableLead.id },

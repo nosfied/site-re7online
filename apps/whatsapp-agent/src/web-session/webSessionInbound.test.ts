@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import test from "node:test";
 import { MessageType, Prisma } from "@prisma/client";
 import { setPrismaForTesting } from "../db.js";
@@ -126,6 +127,27 @@ function rawPayloadOf(row: Record<string, unknown> | undefined) {
 function fakePrisma() {
   const withoutUndefined = (value: Record<string, unknown>) =>
     Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
+  const assertLeadMultichannelIdentityAvailable = (data: Record<string, unknown>, currentId?: unknown) => {
+    const channel = data.channel;
+    const provider = data.provider;
+    const channelAccountId = data.channelAccountId;
+    const externalUserHash = data.externalUserHash;
+    if (!channel || !provider || !channelAccountId || !externalUserHash) return;
+    const conflicting = state.leads.find((lead) =>
+      lead.id !== currentId &&
+      lead.tenantId === data.tenantId &&
+      lead.channel === channel &&
+      lead.provider === provider &&
+      lead.channelAccountId === channelAccountId &&
+      lead.externalUserHash === externalUserHash
+    );
+    if (conflicting) {
+      throw new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "test",
+      });
+    }
+  };
   const prisma = {
     conversation: {
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
@@ -485,6 +507,10 @@ function fakePrisma() {
           if (where.tenantId && lead.tenantId !== where.tenantId) return false;
           if (where.waId && lead.waId !== where.waId) return false;
           if (where.id && lead.id !== where.id) return false;
+          if (where.channel && lead.channel !== where.channel) return false;
+          if (where.provider && lead.provider !== where.provider) return false;
+          if (where.channelAccountId && lead.channelAccountId !== where.channelAccountId) return false;
+          if (where.externalUserHash && lead.externalUserHash !== where.externalUserHash) return false;
           return true;
         }) ?? null,
       findMany: async ({ where }: { where?: Record<string, unknown> } = {}) =>
@@ -527,7 +553,11 @@ function fakePrisma() {
           if (where.id && lead.id !== where.id) return false;
           return true;
         });
-        if (index >= 0) state.leads[index] = { ...state.leads[index], ...data };
+        if (index >= 0) {
+          const next = { ...state.leads[index], ...data };
+          assertLeadMultichannelIdentityAvailable(next, state.leads[index]?.id);
+          state.leads[index] = next;
+        }
         const row = state.leads[index] ?? null;
         return row ? { id: row.id } : null;
       },
@@ -610,6 +640,10 @@ function fakePrisma() {
     $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
         conversation: prisma.conversation,
+        contact: prisma.contact,
+        lead: prisma.lead,
+        contactConsent: prisma.contactConsent,
+        event: prisma.event,
         conversationMetrics: {
           findUnique: async () => null,
           create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -1637,6 +1671,143 @@ test("web session inbound reuses a manual contact when provider identity matches
   assert.equal(state.leads[0]?.provider, "web_session");
   assert.equal(state.leads[0]?.contactChannelIdentityId, "identity_2");
   assert.equal(state.identities[1]?.contactId, "contact_manual");
+});
+
+test("web session inbound reuses existing provider lead when hybrid identity already has an owner", async () => {
+  const canonicalWaId = "15550006787";
+  const legacyWaId = "155599006787";
+  const identityHash = crypto.createHash("sha256").update(canonicalWaId).digest("hex");
+  resetState({
+    conversation: {
+      id: "conversation_hybrid",
+      clientId: "client_1",
+      waId: canonicalWaId,
+      waIdCanonical: canonicalWaId,
+      provider: "meta",
+      channel: "whatsapp",
+      channelAccountId: "meta-phone",
+      externalUserHash: identityHash,
+      windowIsOpen: true,
+      lastInboundAt: new Date("2026-09-10T12:10:52.000Z"),
+    },
+    runtimeStates: [
+      runtimeFixture({
+        id: "runtime_hybrid",
+        waId: canonicalWaId,
+        waIdCanonical: canonicalWaId,
+        provider: "meta",
+        channel: "whatsapp",
+        channelAccountId: "meta-phone",
+        externalUserHash: identityHash,
+        externalUserRef: null,
+        legacyWaId: canonicalWaId,
+        mode: "BOT",
+        status: "WAITING",
+        handoffStatus: "NONE",
+        chatbotActive: true,
+        chatbotNodeId: "menu",
+        answers: {},
+      }),
+    ],
+    contacts: [
+      {
+        id: "contact_hybrid",
+        clientId: "client_1",
+        waId: legacyWaId,
+        externalUserRef: canonicalWaId,
+        legacyWaId: canonicalWaId,
+        externalUserHash: identityHash,
+        name: "Contato",
+        lifecycle: "ACTIVE",
+        channel: "whatsapp",
+        provider: "web_session",
+        channelAccountId: "web-session-default",
+      },
+    ],
+    identities: [
+      {
+        id: "identity_web",
+        clientId: "client_1",
+        contactId: "contact_hybrid",
+        channel: "whatsapp",
+        provider: "web_session",
+        channelAccountId: "web-session-default",
+        externalUserHash: identityHash,
+        externalUserRef: canonicalWaId,
+        legacyWaId: canonicalWaId,
+      },
+    ],
+    leads: [
+      {
+        id: "lead_web_legacy",
+        tenantId: "client_1",
+        waId: legacyWaId,
+        waIdCanonical: canonicalWaId,
+        phone: canonicalWaId,
+        channel: "whatsapp",
+        provider: "web_session",
+        channelAccountId: "web-session-default",
+        externalUserHash: identityHash,
+        externalUserRef: canonicalWaId,
+        legacyWaId: canonicalWaId,
+        contactChannelIdentityId: "identity_web",
+        status: "NEW",
+      },
+      {
+        id: "lead_meta_current",
+        tenantId: "client_1",
+        waId: canonicalWaId,
+        waIdCanonical: canonicalWaId,
+        phone: canonicalWaId,
+        channel: "whatsapp",
+        provider: "meta",
+        channelAccountId: "meta-phone",
+        externalUserHash: identityHash,
+        legacyWaId: canonicalWaId,
+        contactChannelIdentityId: null,
+        status: "NEW",
+      },
+    ],
+    chatbotFlow: {
+      id: "flow_hybrid",
+      definition: {
+        start: "menu",
+        nodes: {
+          menu: {
+            type: "menu",
+            text: "Menu Principal",
+            options: [{ label: "Registro", next: "registro" }],
+          },
+          registro: { type: "text", text: "Registro" },
+        },
+      },
+    },
+  });
+  withConnectedWebSession();
+
+  const result = await withFakeWorker(() =>
+    ingestBaileysWebSessionMessage({
+      clientId: "client_1",
+      tenantKey: "tenant_1",
+      channelAccountDbId: "account_1",
+      channelAccountId: "web-session-default",
+      message: {
+        key: { id: "MSG_HYBRID_WEB_WINNER", remoteJid: `${canonicalWaId}@s.whatsapp.net`, fromMe: false },
+        pushName: "Contato",
+        messageTimestamp: Date.parse("2026-09-10T12:12:14.000Z") / 1000,
+        message: { conversation: "1" },
+      },
+    })
+  );
+
+  assert.equal(result.action, "persisted");
+  assert.equal(state.leads.length, 2);
+  assert.equal(state.leads.find((lead) => lead.id === "lead_web_legacy")?.provider, "web_session");
+  assert.equal(state.leads.find((lead) => lead.id === "lead_meta_current")?.provider, "meta");
+  assert.equal(state.events.some((event) => event.eventName === "whatsapp.web.inbound.failed"), false);
+  assert.ok(state.outboundMessages.length >= 1);
+  assert.match(String(state.outboundMessages[0]?.bodyText), /Registro/);
+  assert.equal(state.outboundMessages[0]?.provider, "web_session");
 });
 
 test("web session inbound does not merge modern and legacy variants without confirmed identity evidence", async () => {
