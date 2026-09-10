@@ -607,6 +607,61 @@ Contrato que o proximo patch deve preservar:
 - escopo tenant/RBAC/departamento existente;
 - ausencia de fallback individual de runtime em producao.
 
+## Design Semantico Do Preview De Ultima Mensagem - 2026-09-10
+
+Contrato atual do preview:
+
+| Propriedade | Regra atual |
+| --- | --- |
+| Direcao | escolhe a mensagem mais recente entre inbound e outbound |
+| Ordenacao temporal | `createdAt`; timestamp de provider nao participa |
+| Ordenacao da lista | `Conversation.updatedAt desc`, identidade canonica como tie-breaker |
+| Eventos ocultos | exclui `rawPayload.inboxVisibility = "management_only"` |
+| Corte de historico | aplica `historyVisibleAfter` por conversa vencedora |
+| Midia/unsupported | depende de `type`, `bodyText`, `templateName` e `rawPayload` |
+| Status de outbound | deriva de `rawPayload.metaStatus` ou `rawPayload.webSessionStatus` com fallback para `status` |
+| Protocolo/ciclo | deriva de `rawPayload.serviceCycle` |
+| HYBRID | depende de dedupe/canonicalizacao ja persistidos; preview agrupa por identidade canonica |
+
+Origem do cap global:
+
+```text
+conversationFetchLimit = min(limit * 10 + 1, 1000)
+messageFetchLimit = min(conversationFetchLimit * 2, 2000)
+limit=25 => 251 candidates => 502 inbound + 502 outbound
+```
+
+Esse cap pode nao garantir preview perfeito por identidade em cenarios extremos:
+muitas mensagens novas de outras identidades, ou muitas linhas
+`management_only` mais novas que a ultima mensagem humana visivel de uma
+identidade, podem consumir o cap global antes da linha correta.
+
+Candidatos avaliados:
+
+| Candidato | Seguranca semantica | Reducao de linhas | Necessita indice/schema | Decisao |
+| --- | --- | ---: | --- | --- |
+| `DISTINCT ON` por identidade | baixa se nao filtrar `management_only` exatamente | alta | nao inicialmente, mas predicate JSON pode limitar | nao aplicar sozinho |
+| `ROW_NUMBER()` por identidade | baixa/media pelo mesmo motivo | alta | nao inicialmente | nao aplicar sozinho |
+| lateral join por identidade com oversampling | media/alta se app-side confirmar visibilidade | alta e controlada | nao inicialmente | candidato preferido de implementacao |
+| query por identidade em loop | correta, mas recria fan-out | alta | nao | rejeitado para hot path |
+| union inbound/outbound + rank | melhor modelo conceitual | alta | possivel melhoria futura | design longo |
+| query atual com pre-filtro leve | segura, menor ganho | baixa/media | nao | fallback se lateral for complexo |
+
+Patch gate para a proxima etapa:
+
+- testes de equivalencia entre preview antigo e novo;
+- casos com newest `management_only`;
+- visible row behind control row;
+- `historyVisibleAfter`;
+- inbound/outbound no mesmo instante;
+- media/location/template/status;
+- protocolo/CSAT;
+- HYBRID Meta/Web duplicate;
+- conversa sem mensagem visivel.
+
+Sem esses testes, a otimizacao deve permanecer em DESIGN READY, nao em
+implementacao.
+
 ## Confirmacao De Nao Alteracao Funcional
 
 A 78O.1/78O.2/78O.3 nao:

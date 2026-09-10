@@ -401,6 +401,13 @@ de ultima mensagem humana visivel, mas somente depois de preservar exatamente
 supressao de eventos management-only, `historyVisibleAfter` e merge
 inbound/outbound.
 
+Design gate registrado: nao usar `DISTINCT ON` ou `ROW_NUMBER()` direto como
+patch curto sem provar a equivalencia do predicado "ultima mensagem humana
+visivel". A alternativa preferencial para a proxima etapa e testar um desenho
+lateral/union bounded que selecione poucos candidatos por identidade e mantenha
+validacao em aplicacao para `rawPayload`, ate existir um read model explicito
+para visibilidade.
+
 Gap exposto por Phase 2: mensagens `message.created` geradas no worker Web
 Session nao chegavam ao WebSocket do backend e eram mascaradas pelo polling
 agressivo anterior. O fix `12eb83db` reutilizou a ponte worker->backend

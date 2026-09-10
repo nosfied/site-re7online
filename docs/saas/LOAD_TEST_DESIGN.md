@@ -645,6 +645,90 @@ STATUS:
 DESIGN REQUIRED BEFORE CODE
 ```
 
+### `/app/conversations` last-message semantic query design - 2026-09-10
+
+Status:
+
+```text
+AUDIT + DESIGN ONLY
+CODE CHANGE: NO
+PRODUCTION MUTATION: NO
+```
+
+Current preview contract:
+
+- the Inbox preview chooses the newest human-visible message between inbound
+  and outbound by `createdAt`;
+- provider timestamps are not used for list preview ordering;
+- the conversation list itself remains ordered by `Conversation.updatedAt`
+  descending, with canonical identity as tie-breaker;
+- messages with `rawPayload.inboxVisibility = "management_only"` are excluded
+  from preview and timeline;
+- `historyVisibleAfter` is conversation-scoped from the selected conversation
+  winner and is applied after fetch, before selecting the latest preview;
+- `rawPayload` is required to preserve location preview, delivery status,
+  service cycle protocol/cycle metadata and management-only suppression;
+- media/unsupported placeholders remain controlled by `type`, `bodyText`,
+  `templateName` and `rawPayload`;
+- protocol/CSAT/system notices are visible only when persisted as
+  human-timeline messages, not when marked `management_only`;
+- HYBRID provider duplicates are handled upstream by canonical message
+  persistence/dedupe; the preview groups rows by `waIdCanonical`/canonical
+  identity and must not create a second winner per provider.
+
+Current DB/app pipeline:
+
+| Step | Location | Notes |
+| --- | --- | --- |
+| lead lookup | DB | tenant-scoped `Lead.findMany()` over CRM identity variants |
+| inbound candidate lookup | DB | tenant-scoped identity OR, `createdAt desc`, global `take=messageFetchLimit` |
+| outbound candidate lookup | DB | tenant-scoped identity OR, `createdAt desc`, global `take=messageFetchLimit` |
+| management-only suppression | app | `rawPayload.inboxVisibility === "management_only"` |
+| history cutoff | app | per conversation winner via `historyVisibleAfter` |
+| latest inbound/outbound maps | app | first visible row per canonical identity after descending fetch |
+| final preview | app | newer of inbound/outbound by `createdAt` |
+
+Why `502 + 502` appears for `limit=25`:
+
+```text
+conversationFetchLimit = min(limit * 10 + 1, 1000)
+messageFetchLimit = min(conversationFetchLimit * 2, 2000)
+limit=25 -> conversationFetchLimit=251 -> messageFetchLimit=502
+```
+
+This global cap is a safety bound, not a per-identity guarantee. It can miss the
+true latest visible message for identities whose visible row sits behind many
+newer rows from other identities, or behind newer `management_only` rows that
+are filtered only after fetch.
+
+Query design candidates:
+
+| Candidate | Semantic safety | Rows materialized | Query count | Index need | Complexity | Expected latency | Raw payload compatibility |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `DISTINCT ON` latest row per identity | ISSUE unless visibility predicate is SQL-equivalent | lowest | 2 message queries or union | existing index helps, expression may need more | medium | best if safe | keeps rawPayload but may choose hidden row |
+| `ROW_NUMBER()` partitioned by identity | ISSUE unless visibility predicate is SQL-equivalent | low | 2 message queries or union | existing index helps | medium/high | strong | keeps rawPayload but same visibility risk |
+| lateral join per conversation/identity | PASS only if each lateral fetch oversamples and app-filters | bounded per identity | 2 queries or one raw SQL union | existing `(clientId, waIdCanonical, createdAt)` helps | high | good for moderate pages | compatible if rawPayload selected |
+| bounded per-identity query | PASS with oversampling, but query fan-out risk | bounded | high unless raw SQL lateral | no new index initially | high | uncertain | compatible |
+| union inbound/outbound then rank latest visible | best conceptual fit if visibility can be encoded | low | one raw SQL | may need generated visibility/index later | high | best long-term | compatible if selected fields preserved |
+| current query with tighter pre-filtering | partial | medium/high | unchanged | no | low | modest | compatible |
+
+Design decision:
+
+```text
+CHOSEN FOR NEXT IMPLEMENTATION DESIGN:
+lateral/union bounded latest-human-visible candidate with app-side equivalence tests
+
+IMPLEMENT NOW:
+NO
+```
+
+Reason: the optimization is justified by row volume, but the safe predicate for
+"visible preview message" is not fully DB-native today because visibility and
+metadata are encoded in `rawPayload`. The next implementation must first add
+fixtures that compare old and new preview output for newest-management-only,
+visible-behind-control, `historyVisibleAfter`, media, protocol/CSAT and HYBRID
+duplicate scenarios.
+
 Modelo de escala atual estimado:
 
 ```text

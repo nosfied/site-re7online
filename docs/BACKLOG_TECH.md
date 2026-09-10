@@ -135,6 +135,10 @@ Pendencias proximas:
    mais recente por identidade. Nao aplicar patch especulativo: a consulta
    precisa preservar supressao de eventos management-only, `historyVisibleAfter`
    e merge inbound/outbound.
+   Design recomendado: preparar primeiro testes de equivalencia do preview de
+   ultima mensagem humana visivel e so depois avaliar lateral/union SQL
+   bounded. `DISTINCT ON`/`ROW_NUMBER()` direto nao esta aprovado enquanto
+   `management_only` e metadados de preview dependerem de `rawPayload`.
 9. manter `runtime_state_lookup` em WATCH, nao como root cause atual. A mesma
    auditoria mostrou leitura batched de `ConversationRuntimeState`, retorno de
    uma linha por conversa vencedora e `runtime_state_fallback=0` em producao;
