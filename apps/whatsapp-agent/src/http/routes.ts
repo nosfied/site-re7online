@@ -33353,88 +33353,6 @@ function conversationListItemIsVisibleInInbox(item: {
   return false;
 }
 
-type ConversationListMessageWinner = {
-  waId: string;
-  waIdCanonical: string;
-  historyVisibleAfter: Date | null;
-};
-
-type InboxOutboundPreviewRow = {
-  waId: string;
-  waIdCanonical: string | null;
-  messageId: string | null;
-  type: MessageType;
-  status: MessageStatus;
-  bodyText: string | null;
-  templateName: string | null;
-  rawPayload: Prisma.JsonValue | null;
-  createdAt: Date;
-};
-
-async function loadBoundedOutboundPreviewRows(
-  prisma: ReturnType<typeof getPrisma>,
-  params: {
-    clientId: string;
-    winners: ConversationListMessageWinner[];
-  }
-) {
-  if (params.winners.length === 0) return [];
-  const identityJson = JSON.stringify(
-    params.winners.map((item) => ({
-      waId: item.waId,
-      waIdCanonical: item.waIdCanonical,
-      historyVisibleAfter: item.historyVisibleAfter?.toISOString() ?? null,
-    }))
-  );
-  return prisma.$queryRaw<InboxOutboundPreviewRow[]>`
-    WITH identities AS (
-      SELECT *
-      FROM jsonb_to_recordset(${identityJson}::jsonb) AS identity(
-        "waId" text,
-        "waIdCanonical" text,
-        "historyVisibleAfter" timestamptz
-      )
-    )
-    SELECT
-      message."waId",
-      message."waIdCanonical",
-      message."messageId",
-      message."type",
-      message."status",
-      message."bodyText",
-      message."templateName",
-      message."rawPayload",
-      message."createdAt"
-    FROM identities identity
-    JOIN LATERAL (
-      SELECT
-        outbound."waId",
-        outbound."waIdCanonical",
-        outbound."messageId",
-        outbound."type",
-        outbound."status",
-        outbound."bodyText",
-        outbound."templateName",
-        outbound."rawPayload",
-        outbound."createdAt"
-      FROM "OutboundMessage" outbound
-      WHERE outbound."clientId" = ${params.clientId}::uuid
-        AND (
-          outbound."waIdCanonical" IN (identity."waIdCanonical", identity."waId")
-          OR outbound."waId" IN (identity."waId", identity."waIdCanonical")
-        )
-        AND (
-          identity."historyVisibleAfter" IS NULL
-          OR outbound."createdAt" > identity."historyVisibleAfter"
-        )
-        AND COALESCE(outbound."rawPayload"->>'inboxVisibility', '') <> 'management_only'
-      ORDER BY outbound."createdAt" DESC
-      LIMIT 1
-    ) message ON TRUE
-    ORDER BY message."createdAt" DESC
-  `;
-}
-
 async function loadActiveChatbotConsentNodeIds(
   prisma: ReturnType<typeof getPrisma>,
   clientId: string
@@ -33833,9 +33751,24 @@ async function buildConversationListPayload(
         createdAt: true,
       },
     }),
-    loadBoundedOutboundPreviewRows(prisma, {
-      clientId: params.clientId,
-      winners,
+    prisma.outboundMessage.findMany({
+      where: {
+        clientId: params.clientId,
+        OR: [{ waIdCanonical: { in: canonicalWaIds } }, { waId: { in: waIds } }],
+      },
+      orderBy: { createdAt: "desc" },
+      take: messageFetchLimit,
+      select: {
+        waId: true,
+        waIdCanonical: true,
+        messageId: true,
+        type: true,
+        status: true,
+        bodyText: true,
+        templateName: true,
+        rawPayload: true,
+        createdAt: true,
+      },
     }),
   ]);
   recordInboxListTiming(params.clientId, "last_message_lookup", lastMessageLookupStartedAt);

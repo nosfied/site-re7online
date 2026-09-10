@@ -819,6 +819,42 @@ and serial DB-backed route execution; do not attribute the default-json runtime
 cleanup failure to the preview query.
 ```
 
+Production performance result:
+
+```text
+RESULT: REAL REGRESSION
+RUNTIME DECISION: REVERT 94882d QUERY SHAPE
+SEMANTIC VALIDATION: PASS
+PLAN FINDING: JOIN LATERAL + Function Scan + per-identity Seq Scan
+```
+
+The post-deploy comparable window on 2026-09-10 ran from 19:49:48Z to
+19:54:52Z and captured 42 HTTP `/app/conversations` requests in 5.07 minutes.
+Window deltas showed:
+
+| Metric | Window value |
+| --- | --- |
+| `/app/conversations` HTTP requests | 42 |
+| request rate | ~8.3 req/min |
+| `last_message_lookup` window avg | ~5,895ms |
+| `/app/conversations` route window avg | ~5,826ms |
+| `last_message_lookup` cumulative avg after window | ~8,510ms |
+| `last_message_lookup` cumulative p95 after window | ~14,856ms |
+| `last_message_lookup` cumulative max after window | ~19,408ms |
+| backend CPU samples | ~4.7-22.6% |
+| DB locks/waits | no blocking lock evidence |
+
+`EXPLAIN` without `ANALYZE` showed the lateral bounded query is not supported by
+the current index set for SECULT. With 251 winner identities, about 5.2k
+outbound candidates and 1.2k `management_only` outbound rows, the new plan used
+`Nested Loop -> Function Scan -> Limit -> Sort -> Seq Scan` and estimated total
+cost around 150k. The previous broad outbound query estimated around 1.6k.
+
+Conclusion: bounding returned rows did not reduce database work in the current
+schema. The runtime query shape should be rolled back. The next optimization
+must either avoid per-identity lateral scans or introduce an index/read-model
+with production-plan evidence before rollout.
+
 Modelo de escala atual estimado:
 
 ```text

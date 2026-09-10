@@ -93,13 +93,15 @@ Estado fechado/validado:
   interval avg ~189ms and cumulative p95 ~692ms, down from the previous
   ~445-615ms avg / ~782-1411ms p95 observed baselines. No global cache, stale
   channel-state cache, schema change or migration was added.
-- `/app/conversations` bounded outbound preview lookup: DEPLOYED in
-  `94882d76`. The patch bounds only the outbound last-message preview through
-  tenant-scoped parameterized SQL lateral lookup, preserving inbound lookup for
-  `unreadCount`, `management_only` suppression, `historyVisibleAfter`,
-  rawPayload-derived preview metadata, RBAC, filters and ordering. Delivery gate
-  passed with explicit `STORAGE_MODE=hybrid` and serial DB-backed route tests;
-  no schema, migration, frontend change or cache was introduced.
+- `/app/conversations` bounded outbound preview lookup experiment: REVERT
+  REQUIRED. The `94882d76` patch was semantically correct, but production
+  evidence on 2026-09-10 showed a PostgreSQL plan regression for SECULT:
+  `JOIN LATERAL` executed a per-identity plan with sequential scans and estimated
+  cost around 150k versus around 1.6k for the previous broad outbound lookup.
+  Comparable 5-minute window showed `last_message_lookup` around 5.9s average
+  and `/app/conversations` around 5.8s average, while the pre-change comparable
+  baseline was about 275ms for `last_message_lookup`. Roll back the runtime
+  query shape; keep the semantic oracle and plan evidence for the next design.
 - Browser Push / PWA notifications: CLOSED / REAL VALIDATED;
 - true foreground Web Push detection: CLOSED / REAL VALIDATED in `670f392d`;
 - hidden desktop local sound: CLOSED / REAL VALIDATED in `c50fb73c`;
@@ -155,9 +157,14 @@ Pendencias proximas:
    default `json`, e nao e causada pelo bounded preview. Com
    `STORAGE_MODE=hybrid` e execucao serial, o gate focado completo passou
    126/126 em banco limpo. O deploy foi fast-forward only em `94882d76`, com
-   build/reload apenas de backend e Web Session worker. O modo estrito
-   `postgres` ainda requer fixtures historicas compativeis antes de ser usado
-   como gate completo dessa suite.
+   build/reload apenas de backend e Web Session worker. A auditoria pos-deploy
+   provou regressao de plano em producao: a query lateral nao usou indice em
+   SECULT, executou plano estimado como nested loop + sequential scan por
+   identidade e elevou `last_message_lookup` para segundos. O runtime deve voltar
+   ao formato anterior; a proxima otimizacao precisa evitar busca lateral
+   per-identity sem indice efetivo, ou trazer indice/read-model comprovado. O
+   modo estrito `postgres` ainda requer fixtures historicas compativeis antes de
+   ser usado como gate completo dessa suite.
 9. manter `runtime_state_lookup` em WATCH, nao como root cause atual. A mesma
    auditoria mostrou leitura batched de `ConversationRuntimeState`, retorno de
    uma linha por conversa vencedora e `runtime_state_fallback=0` em producao;

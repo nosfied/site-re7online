@@ -696,6 +696,36 @@ STORAGE_MODE=hybrid and serial test execution for the DB-backed route suite.
 Storage-mode-sensitive tests must not rely on implicit default json mode.
 ```
 
+Resultado pos-deploy:
+
+```text
+PERFORMANCE RESULT: REAL REGRESSION
+RUNTIME DECISION: REVERT 94882d QUERY SHAPE
+SEMANTIC RESULT: PASS
+ROOT CAUSE: PostgreSQL plan regression from JOIN LATERAL/cardinality
+```
+
+A medicao comparavel de 2026-09-10, entre 19:49:48Z e 19:54:52Z, capturou
+42 requests HTTP para `/app/conversations` em 5,07 minutos. O delta de metricas
+mostrou `last_message_lookup` com media de janela em torno de 5.895ms e
+`/app/conversations` com media em torno de 5.826ms. Isso nao e comparavel com o
+objetivo de melhora e fica muito acima do baseline pre-change de
+`last_message_lookup` em torno de 275ms.
+
+O `EXPLAIN` sem `ANALYZE` em producao mostrou que, para SECULT com 251
+identidades vencedoras e cerca de 5.201 outbound candidatos, o plano anterior
+tinha custo estimado em torno de 1.632, usando `Limit -> Sort -> Seq Scan`,
+enquanto a query bounded lateral apresentou custo estimado em torno de 150.454
+com `Nested Loop`, `Function Scan`, `Limit`, `Sort` e `Seq Scan` dentro da parte
+lateral. Nenhum indice foi usado no plano lateral de SECULT. A reducao de linhas
+retornadas, portanto, aumentou o trabalho estimado do banco.
+
+Nao houve evidencia de lock/contencao explicando a regressao: `pg_stat_activity`
+mostrou sessoes majoritariamente idle/client read e locks concedidos. Houve
+timeouts de pool Prisma logo apos o deploy, compatíveis com queries lentas
+ocupando conexoes, mas a janela posterior mostrou CPU mais baixa. A classificacao
+correta e regressao real de plano/cardinalidade, nao bug semantico.
+
 ## Design Semantico Do Preview De Ultima Mensagem - 2026-09-10
 
 Contrato atual do preview:
