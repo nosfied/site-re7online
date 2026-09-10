@@ -148,9 +148,10 @@ Fila ativa repriorizada:
 2. CRA-PR department hours (P1): guiar configuracao do cliente e validar flow
    aware of department hours. No schedule continua significando
    `NO_SCHEDULE`/aberto e nao e falha tecnica.
-3. Guided Builder productization (P1): concluir smoke autenticado nas rotas
-   reais `/app/chatbot` e `/admin/tenants/:tenantId/chatbot`, mantendo JSON
-   avancado e sem mudar a semantica dos flows.
+3. Guided Builder productization (P1): preparar promocao controlada apos smoke
+   autenticado PASS nas rotas reais `/app/chatbot` e
+   `/admin/tenants/:tenantId/chatbot`, mantendo JSON avancado e sem mudar a
+   semantica dos flows.
 4. Reporting context enhancements (P2): adicionar contexto de AUTO vs MANUAL,
    politica de atribuicao, `presenceMode` e carga/capacidade atual onde agregar
    verdade operacional sem reabrir bugs ja fechados.
@@ -244,13 +245,25 @@ Smoke local de 2026-09-10:
   Advanced mode as the escape hatch for complex structures;
 - responsive layout did not show horizontal overflow or clipped controls in the
   captured viewports;
-- route-level smoke remained incomplete locally: `/app/chatbot` stopped at the
-  local loading/auth/API boundary and `/admin/tenants/:tenantId/chatbot` stopped
-  at the admin login gate.
+- authenticated route smoke was completed in an isolated local worktree with an
+  ephemeral Postgres database, 58 migrations applied, supported `demo:seed`, a
+  real `/auth/login` app session and the local admin token;
+- `/app/chatbot` loaded inside the real App shell with tenant context, existing
+  flow list, create-flow entry and no alert/loading gate;
+- `/admin/tenants/demo-prefeitura/chatbot` loaded inside the real Admin shell
+  with tenant context, save controls and no login gate;
+- existing flow expand/edit exercised Guided and Advanced modes against the same
+  draft JSON;
+- Advanced -> Guided reflected a JSON text edit immediately in the guided
+  summary, fields and preview;
+- Guided -> Advanced reflected a guided destination change in the advanced JSON;
+- explicit save persisted to the local ephemeral database and survived route
+  reload;
+- desktop, tablet, mobile, dark/light theme and keyboard focus smoke passed
+  without horizontal overflow.
 
-Status: BLOCKED BY ROUTE SMOKE GAP, not by a confirmed UX defect. No push or
-deploy was performed after this smoke because the exact authenticated app/admin
-surfaces still need to be exercised before promotion.
+Status: REAL VALIDATED in local authenticated route smoke. No production deploy
+or tenant mutation was performed by this validation.
 
 ### Contact Timeline / Histórico do contato
 

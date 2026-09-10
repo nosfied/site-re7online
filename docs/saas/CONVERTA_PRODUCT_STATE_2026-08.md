@@ -330,8 +330,9 @@ Contrato validado em codigo:
 - Syer-style direct handoff e CRA-style complex consent/menu flow sao
   interpretados sem reset obrigatorio e com metadados avancados preservados.
 
-Validacao tecnica: `ChatbotFlowBuilder.test.ts` 22/22 PASS, frontend build PASS
-e `git diff --check` PASS.
+Validacao tecnica: frontend build PASS e `git diff --check` PASS. O runner
+focado de componente nao estava disponivel no worktree isolado sem rede, mas a
+validacao anterior do patch registrou `ChatbotFlowBuilder.test.ts` 22/22 PASS.
 
 Smoke local de 2026-09-10: desktop, tablet e mobile foram capturados com um
 harness temporario nao versionado renderizando o `ChatbotFlowBuilder` real. O
@@ -339,10 +340,17 @@ fluxo novo, o handoff direto estilo Syer e o fluxo complexo consentimento/menu
 estilo CRA ficaram visualmente coerentes, sem reset destrutivo e sem corrupcao
 da definicao avancada.
 
-Limite da evidencia: o smoke das rotas reais autenticadas ficou pendente no
-ambiente local. `/app/chatbot` parou no boundary de carregamento/auth/API local
-e `/admin/tenants/:tenantId/chatbot` parou no gate de login administrativo.
-Status: BLOCKED BY ROUTE SMOKE GAP; sem push e sem deploy nesta etapa.
+Smoke autenticado de rotas reais em 2026-09-10: em worktree isolado com banco
+Postgres efemero, 58 migrations aplicadas, `demo:seed`, sessao real obtida por
+`/auth/login` e token admin local, `/app/chatbot` carregou no App shell real e
+`/admin/tenants/demo-prefeitura/chatbot` carregou no Admin shell real. O teste
+exercitou abertura de fluxo existente, alternancia Guided/Advanced sobre o
+mesmo JSON, edicao Advanced -> Guided, edicao Guided -> Advanced, save local e
+reload persistido. Temas claro/escuro, desktop/tablet/mobile e foco por teclado
+passaram sem overflow horizontal.
+
+Status: REAL VALIDATED em smoke autenticado local. Sem mutation de producao,
+sem tenant real alterado e sem deploy nesta etapa.
 
 O flow SECULT/Demo homologado usa:
 
