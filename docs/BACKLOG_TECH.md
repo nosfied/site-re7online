@@ -71,14 +71,13 @@ Estado fechado/validado:
   retry/reconnect/error loop evidence. Current residual hotspot remains
   `/app/conversations` list reads: 21 req/min produced 246
   `inbox.list.query_count`/min, approximately 11.7 queries/request.
-- `/app/conversations` query-shape audit: WATCH. The route is already mostly
-  batched and does not show current runtime-state N+1 in production
-  (`runtime_state_fallback=0`), but every list refresh still rebuilds the full
-  Inbox read model through fixed per-request lookups: defaults, base
-  conversations, leads, inbound preview, outbound preview, runtime state batch,
-  optional assignee names, department/queue lookups, read state, tenant features
-  and Web Session channel state batch. No safe optimization was implemented
-  without a comparable before/after benchmark.
+- `/app/conversations` fixed-cost lookup optimization: IMPLEMENTED / POST-DEPLOY
+  MEASUREMENT PENDING. The route is already mostly batched and did not show
+  current runtime-state N+1 in production (`runtime_state_fallback=0`). A small
+  backend patch now reuses the `Client.features/profile` already loaded by
+  request auth, removing one duplicate `client.findUnique(features/profile)` DB
+  read per app Inbox list request. No global cache, current-state cache or
+  response cache was introduced.
 - Browser Push / PWA notifications: CLOSED / REAL VALIDATED;
 - true foreground Web Push detection: CLOSED / REAL VALIDATED in `670f392d`;
 - hidden desktop local sound: CLOSED / REAL VALIDATED in `c50fb73c`;
@@ -112,13 +111,11 @@ Pendencias proximas:
 6. continuar observando distribuicao organica SECULT em `presenceMode=AVAILABLE`
    antes de qualquer ajuste no ponteiro de round-robin;
 7. desenhar waiting-on-customer 1h como regra funcional separada;
-8. auditar query shape/cache de `/app/conversations` antes de qualquer novo
-   patch de performance; Hybrid, Queue, Reports e DB nao foram classificados
-   como causa raiz do residual atual.
-9. desenhar experimento de performance para reduzir custo fixo de
-   `/app/conversations`, priorizando request-local reuse, cache tenant-scoped
-   curto de dados invariantes e consolidacao de lookups de features/defaults
-   somente se a equivalencia de resposta for provada.
+8. medir pos-deploy o custo de `/app/conversations` em janela comparavel de uso
+   real SECULT, esperando reducao aproximada de uma query fixa por request;
+9. manter novas otimizacoes de `/app/conversations` separadas e graduais:
+   defaults/operational lookups, channel state e preview de mensagens devem ser
+   tratados somente com equivalencia de resposta provada.
 
 Dividas tecnicas abertas:
 

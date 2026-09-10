@@ -359,10 +359,13 @@ falha da ponte realtime ou retry hibrido.
 Auditoria de query shape no mesmo dia confirmou que a listagem ja usa batching
 para leads, inbound/outbound preview, runtime state, assignee, departments,
 queues e channel state. O custo residual e majoritariamente overhead fixo por
-refresh, nao N+1 dominante. Os candidatos seguros devem preservar a verdade
-corrente da Inbox e atacar um grupo por vez: defaults/operational lookups,
-features/profile, channel state ou preview de mensagens. Nenhum patch foi
-aplicado nessa auditoria.
+refresh, nao N+1 dominante. O primeiro patch seguro aplicado removeu apenas a
+leitura duplicada de `Client.features/profile` no caminho `/app/conversations`,
+reutilizando os dados ja carregados por `getScopedClientById()` na mesma
+request. Isso reduz aproximadamente uma query fixa por refresh sem cache global
+e sem alterar runtime, read state, channel state, previews, RBAC ou tenant
+isolation. O impacto real em CPU permanece pendente de janela comparavel
+pos-deploy.
 
 Gap exposto por Phase 2: mensagens `message.created` geradas no worker Web
 Session nao chegavam ao WebSocket do backend e eram mascaradas pelo polling

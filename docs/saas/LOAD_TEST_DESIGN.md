@@ -331,7 +331,7 @@ buildConversationListPayload()
   loadConversationOperationalLookups()
   getInboxReadStateForConversations()
   getTenants()
-  client.findUnique(features/profile)
+  client.findUnique(features/profile) unless request-local client data is present
   buildInboxWebSessionChannelStateBatch()
   in-memory unread/filter/sort/assembly
 jsonWithInboxReadMetrics()
@@ -384,14 +384,19 @@ not active in the measured window. Limit-specific production probes
 `limit=1/10/25/50` were not executed to avoid creating artificial customer
 traffic in the read-only audit.
 
-Cache audit:
+Cache/reuse audit:
 
 - frontend timeline/media caches exist;
 - channel account runtime cache exists with 60s TTL for channel account
   resolution/secret paths;
 - `/app/conversations` list response itself has no backend response cache;
-- tenant config loaded by `getTenants()` has process cache, but DB-backed
-  `client.findUnique(features/profile)` still runs per list request;
+- tenant config loaded by `getTenants()` has process cache;
+- the app route already resolves the scoped client for auth and now passes its
+  `features/profile` into `buildConversationListPayload()`, so the builder no
+  longer performs a duplicate `client.findUnique(features/profile)` for
+  `/app/conversations`;
+- admin callers that do not pass the request-local client context keep the
+  existing DB fallback;
 - current-state fields such as runtime, read state, last message, channel state
   and visibility must not be globally cached without invalidation proof.
 
@@ -413,17 +418,24 @@ Optimization candidates:
 | last message preview consolidation | up to 2 | fixed 3 reads for lead/inbound/outbound | medium, must preserve inbound/outbound merge semantics | medium |
 | reduce hidden/inactive tab requests | lowers request rate rather than queries/request | prior CPU correlation | medium UX/realtime risk | separate frontend phase |
 
-Patch gate:
+Patch implemented:
 
 ```text
-CODE CHANGE:
-NO
+change: fixed-cost lookup optimization for /app/conversations
+strategy: request-local reuse of already authenticated Client features/profile
+expected saved DB reads: 1 fixed query per /app/conversations request
+estimated queries/request before: ~11.7
+estimated queries/request after: ~10.7 for the same app route shape
+global cache: NO
+current-state semantics: UNCHANGED
 ```
 
-No single candidate was both proven materially responsible enough and safe
-enough to implement in this audit without a controlled before/after benchmark.
-The next implementation, if approved, should target one fixed-cost lookup group
-at a time and preserve exact Inbox current-state semantics.
+The selected optimization is deliberately small: it removes only a duplicate
+lookup of data already loaded by `getScopedClientById()` in the same request.
+It does not cache the full Inbox response, runtime state, read state, channel
+state or message previews. CPU impact still requires comparable post-deploy
+measurement under real SECULT Inbox load. The residual dominant timing remains
+`channel_state_batch` and the fixed-cost list assembly path.
 
 Modelo de escala atual estimado:
 

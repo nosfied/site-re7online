@@ -4527,6 +4527,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           search: searchFilter,
         },
         includeAssignedUserName: true,
+        clientFeatures: client.features,
         profile: getClientProfile(client),
       });
       recordInboxListTiming(client.id, "total", buildPayloadStartedAt);
@@ -33521,6 +33522,7 @@ async function buildConversationListPayload(
     cursor: ConversationListCursor | null;
     filters: ConversationListFilters;
     includeAssignedUserName: boolean;
+    clientFeatures?: Prisma.JsonValue | null;
     profile?: string | null;
   }
 ) {
@@ -33941,13 +33943,23 @@ async function buildConversationListPayload(
   const tenantFeaturesStartedAt = channelLatencyNow();
   const tenants = await getTenants();
   const tenant = tenants[params.clientKey];
-  const client = await prisma.client.findUnique({
-    where: { id: params.clientId },
-    select: { features: true, profile: true },
-  });
-  const clientFeatures = getFeatures(client);
+  const hasResolvedClientFeatures =
+    params.clientFeatures !== undefined && params.profile !== undefined;
+  const clientFeatures =
+    hasResolvedClientFeatures
+      ? getFeatures({ features: params.clientFeatures, profile: params.profile })
+      : getFeatures(
+          await prisma.client.findUnique({
+            where: { id: params.clientId },
+            select: { features: true, profile: true },
+          })
+        );
   recordInboxListTiming(params.clientId, "tenant_features", tenantFeaturesStartedAt);
-  recordInboxListCount(params.clientId, "tenant_features", 1);
+  recordInboxListCount(
+    params.clientId,
+    "tenant_features",
+    hasResolvedClientFeatures ? 0 : 1
+  );
 
   const channelStateBatchStartedAt = channelLatencyNow();
   const channelStateBatch = await buildInboxWebSessionChannelStateBatch({
