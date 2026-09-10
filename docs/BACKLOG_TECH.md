@@ -43,7 +43,7 @@ Estado fechado/validado:
 - HYBRID template outbound: CLOSED / REAL VALIDATED;
 - Meta-to-Web echo safety: CLOSED / REAL VALIDATED;
 - HYBRID inbound dedupe after Meta template reply: CLOSED / REAL VALIDATED;
-- HYBRID claim-before-downstream recovery: HARDENED / PENDING PRODUCTION VALIDATION;
+- HYBRID claim-before-downstream recovery: HARDENED / REAL VALIDATED;
 - post-reply freeform routing in HYBRID/AUTO: CLOSED / REAL VALIDATED;
 - Meta usage accounting for template vs Web Session freeform: CLOSED / REAL VALIDATED;
 - flow/runtime coherence: CLOSED / REAL VALIDATED;

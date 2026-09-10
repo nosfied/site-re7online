@@ -181,7 +181,7 @@ The literal freeform body used in the real validation is not a product requireme
 
 ### Hybrid Claim Recovery Semantics
 
-Status: HARDENED / PENDING PRODUCTION VALIDATION.
+Status: HARDENED / REAL VALIDATED.
 
 Hybrid inbound exactly-once uses a tenant/sender/stanza logical claim before provider-specific
 downstream processing. The claim means "this logical WhatsApp message has an elected provider",
@@ -199,6 +199,17 @@ Resilience rule:
 This preserves Hybrid exactly-once while closing the claim-before-downstream failure window
 where a transient storage/runtime failure could otherwise leave a logical inbound permanently
 claimed but not fully processed.
+
+Production validation on 2026-09-10, using `demo-converta` as the controlled
+Hybrid mirror, confirmed the normal lifecycle for a real inbound from `****9614`:
+
+- Web Session won the logical claim;
+- the same logical fingerprint received a completed marker;
+- the later Meta delivery was suppressed as the losing provider;
+- canonical inbound count remained one;
+- canonical outbound count remained one;
+- passive bot/customer response used Web Session;
+- no cross-provider fallback, P2002, duplicate Lead or identity corruption was observed.
 
 ## Contact Start Via Web Session
 

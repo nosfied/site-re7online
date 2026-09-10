@@ -566,3 +566,15 @@ The Web Session path awaits its bot/handoff outbound operations before marking t
 message complete. The Meta path marks completion when the canonical handler reaches its normal
 terminal path; Meta passive outbound callbacks may still complete asynchronously after that
 marker.
+
+Production validation later on 2026-09-10 exercised the Web Session winner path in
+`demo-converta` with the controlled `****9614` contact. The observed sequence was:
+
+- `whatsapp.hybrid.inbound.logical_message.claimed`;
+- `whatsapp.hybrid.inbound.logical_message.completed` for the same logical hash;
+- `whatsapp.hybrid.inbound.cross_provider_deduped` when Meta delivered the same logical message;
+- `whatsapp.meta.inbound.duplicate` with `reason=hybrid_logical_message_exists`;
+- one canonical inbound and one canonical Web Session outbound.
+
+The follow-up new-service choice advanced the runtime back into the active chatbot flow and
+sent the menu over Web Session, without duplicate processing.
