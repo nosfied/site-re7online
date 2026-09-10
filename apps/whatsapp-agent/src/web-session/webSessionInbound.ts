@@ -60,7 +60,11 @@ import {
 } from "../config/tenantOperationalConfig.js";
 import { getDepartmentAvailability } from "../departments/businessHours.js";
 import { createWebSessionTextOutboundMessage, normalizeBotMenuOptionMarkdown } from "./webSessionOutboundService.js";
-import { claimHybridInboundLogicalMessage } from "../channels/hybridInboundDedupe.js";
+import {
+  claimHybridInboundLogicalMessage,
+  markHybridInboundLogicalMessageCompleted,
+  markHybridInboundLogicalMessageFailedRetryable,
+} from "../channels/hybridInboundDedupe.js";
 
 type WebSessionMessageCreatedRealtimePublisher = (
   event: Extract<InboxRealtimeEvent, { type: "message.created" }>
@@ -2519,6 +2523,55 @@ export async function ingestWebSessionInboundMessage(params: {
   const prisma = params.prisma ?? getPrisma();
   const messageId = buildLocalMessageId(params.message);
   const requestId = `web-session-inbound:${params.message.channelAccountDbId}:${params.message.externalMessageId}`;
+  let logicalClaimForProcessing: Awaited<ReturnType<typeof claimHybridInboundLogicalMessage>> | null = null;
+  let logicalProcessingFailed = false;
+  const markLogicalProcessingCompleted = async () => {
+    if (!logicalClaimForProcessing?.claimed || !logicalClaimForProcessing.key) return;
+    try {
+      await markHybridInboundLogicalMessageCompleted({
+        prisma,
+        clientId: params.message.clientId,
+        senderWaIdCanonical: params.message.senderCanonical,
+        provider: "web_session",
+        providerMessageId: params.message.externalMessageId,
+        requestId,
+      });
+    } catch (error) {
+      logger.warn({
+        event: "whatsapp.hybrid.inbound.logical_message.completed_marker_failed",
+        clientId: params.message.clientId,
+        provider: "web_session",
+        requestId,
+        errorName: error instanceof Error ? error.name : "unknown_error",
+        errorCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
+      });
+    }
+  };
+  const markLogicalProcessingFailedRetryable = async (reason: string) => {
+    if (!logicalClaimForProcessing?.claimed || !logicalClaimForProcessing.key) return;
+    logicalProcessingFailed = true;
+    try {
+      await markHybridInboundLogicalMessageFailedRetryable({
+        prisma,
+        clientId: params.message.clientId,
+        senderWaIdCanonical: params.message.senderCanonical,
+        provider: "web_session",
+        providerMessageId: params.message.externalMessageId,
+        requestId,
+        reason,
+      });
+    } catch (error) {
+      logger.warn({
+        event: "whatsapp.hybrid.inbound.logical_message.failed_retryable_marker_failed",
+        clientId: params.message.clientId,
+        provider: "web_session",
+        requestId,
+        reason,
+        errorName: error instanceof Error ? error.name : "unknown_error",
+        errorCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
+      });
+    }
+  };
   await safeRecordInboundEvent({
     prisma,
     message: params.message,
@@ -2552,6 +2605,7 @@ export async function ingestWebSessionInboundMessage(params: {
       providerMessageId: params.message.externalMessageId,
       requestId,
     });
+    logicalClaimForProcessing = logicalClaim;
     if (!logicalClaim.claimed) {
       await deleteWebSessionStoredMedia(params.message.media);
       await safeRecordInboundEvent({
@@ -2586,6 +2640,16 @@ export async function ingestWebSessionInboundMessage(params: {
         select: { id: true },
       });
       if (existing) {
+        if (logicalClaim.reason === "retry_same_winner") {
+          await safeRecordInboundEvent({
+            prisma,
+            message: params.message,
+            clientId: params.message.clientId,
+            eventName: "whatsapp.web.inbound.retry",
+            requestId: `${requestId}:retry-same-winner`,
+            reason: "message_id_exists_retrying_downstream",
+          });
+        } else {
         await safeRecordInboundEvent({
           prisma,
           message: params.message,
@@ -2595,16 +2659,19 @@ export async function ingestWebSessionInboundMessage(params: {
           reason: "message_id_exists",
         });
         return { ok: true, action: "duplicate", waId: params.message.sender, messageId };
+        }
+      } else {
+        await markLogicalProcessingFailedRetryable("blocked_by_guard");
+        await safeRecordInboundEvent({
+          prisma,
+          message: params.message,
+          clientId: params.message.clientId,
+          eventName: "whatsapp.web.inbound.ignored",
+          requestId: `${requestId}:blocked`,
+          reason: "blocked_by_guard",
+        });
+        return { ok: true, action: "ignored", reason: "blocked_by_guard" };
       }
-      await safeRecordInboundEvent({
-        prisma,
-        message: params.message,
-        clientId: params.message.clientId,
-        eventName: "whatsapp.web.inbound.ignored",
-        requestId: `${requestId}:blocked`,
-        reason: "blocked_by_guard",
-      });
-      return { ok: true, action: "ignored", reason: "blocked_by_guard" };
     }
 
     const reopenClosedWindow = await shouldReopenClosedConversationWindow({
@@ -3406,6 +3473,13 @@ export async function ingestWebSessionInboundMessage(params: {
     });
     return { ok: true, action: "persisted", waId: params.message.sender, messageId, conversationId: conversation?.id ?? null };
   } catch (error) {
+    await markLogicalProcessingFailedRetryable(
+      error instanceof Prisma.PrismaClientKnownRequestError
+        ? error.code
+        : error instanceof Error
+          ? error.name
+          : "unknown_error"
+    );
     await deleteWebSessionStoredMedia(params.message.media);
     await safeRecordInboundEvent({
       prisma,
@@ -3424,6 +3498,10 @@ export async function ingestWebSessionInboundMessage(params: {
       errorCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
     });
     return { ok: false, action: "failed", reason: "persist_error" };
+  } finally {
+    if (!logicalProcessingFailed) {
+      await markLogicalProcessingCompleted();
+    }
   }
 }
 

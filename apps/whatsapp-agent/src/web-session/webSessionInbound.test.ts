@@ -11,6 +11,12 @@ import {
 } from "../contacts/contactOperationalExclusion.js";
 import { buildCrmWhatsappExternalUserHash } from "../crm/crmWhatsappIdentity.js";
 import {
+  buildHybridInboundLogicalKey,
+  HYBRID_INBOUND_CLAIM_EVENT,
+  HYBRID_INBOUND_COMPLETED_EVENT,
+  HYBRID_INBOUND_FAILED_RETRYABLE_EVENT,
+} from "../channels/hybridInboundDedupe.js";
+import {
   buildWebSessionHandoffNotificationPlan,
   closeWebSessionHumanService,
   extractPhoneFromBaileysJid,
@@ -256,9 +262,28 @@ function fakePrisma() {
     },
     event: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
+        const duplicate = state.events.find(
+          (event) =>
+            event.clientId === data.clientId &&
+            event.eventName === data.eventName &&
+            event.requestId === data.requestId
+        );
+        if (duplicate) {
+          throw new Prisma.PrismaClientKnownRequestError("duplicate", {
+            code: "P2002",
+            clientVersion: "test",
+          });
+        }
         state.events.push({ createdAt: new Date(), ...data });
         return { id: `event_${state.events.length}` };
       },
+      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
+        state.events.find((event) => {
+          if (where.clientId && event.clientId !== where.clientId) return false;
+          if (where.eventName && event.eventName !== where.eventName) return false;
+          if (where.requestId && event.requestId !== where.requestId) return false;
+          return true;
+        }) ?? null,
       findMany: async ({ where }: { where?: Record<string, unknown> } = {}) =>
         state.events.filter((event) => {
           if (where?.clientId && event.clientId !== where.clientId) return false;
@@ -795,6 +820,63 @@ test("ingestBaileysWebSessionMessage persists tenant-scoped text inbound once", 
   assert.equal(duplicate.action, "duplicate");
   assert.equal(state.inboundMessages.length, 1);
   assert.equal(state.events.some((event) => event.eventName === "whatsapp.web.inbound.duplicate"), true);
+});
+
+test("ingestBaileysWebSessionMessage retries same-provider downstream after a failed logical claim", async () => {
+  const providerMessageId = "MSG_RETRY_AFTER_PARTIAL_FAILURE";
+  const canonicalWaId = "5584999997784";
+  const logicalKey = buildHybridInboundLogicalKey({
+    clientId: "client_1",
+    senderWaIdCanonical: canonicalWaId,
+    provider: "web_session",
+    providerMessageId,
+  });
+  assert.ok(logicalKey);
+
+  resetState({
+    inboundMessages: [{
+      id: "inbound_existing",
+      clientId: "client_1",
+      messageId: `web:account_1:${providerMessageId}`,
+      externalMessageId: providerMessageId,
+      waId: canonicalWaId,
+      waIdCanonical: canonicalWaId,
+      type: MessageType.TEXT,
+      bodyText: "primeira tentativa",
+      allowlistHit: true,
+    }],
+    events: [
+      {
+        clientId: "client_1",
+        eventName: HYBRID_INBOUND_CLAIM_EVENT,
+        requestId: logicalKey.requestId,
+        messageId: logicalKey.hash,
+        payloadJson: {
+          logicalInboundKeyHash: logicalKey.hash,
+          winningProvider: "web_session",
+        },
+      },
+      {
+        clientId: "client_1",
+        eventName: HYBRID_INBOUND_FAILED_RETRYABLE_EVENT,
+        requestId: `${logicalKey.requestId}:failed_retryable`,
+        messageId: logicalKey.hash,
+        payloadJson: {
+          logicalInboundKeyHash: logicalKey.hash,
+          winningProvider: "web_session",
+          reason: "P2002",
+        },
+      },
+    ],
+  });
+
+  const result = await ingestText("segunda tentativa", providerMessageId);
+
+  assert.equal(result.action, "persisted");
+  assert.equal(state.inboundMessages.length, 1);
+  assert.equal(state.events.some((event) => event.eventName === "whatsapp.web.inbound.retry"), true);
+  assert.equal(state.events.some((event) => event.eventName === HYBRID_INBOUND_COMPLETED_EVENT), true);
+  assert.equal(state.events.filter((event) => event.eventName === "whatsapp.web.inbound.duplicate").length, 0);
 });
 
 test("ingestBaileysWebSessionMessage publishes message realtime only for canonical insert", async () => {

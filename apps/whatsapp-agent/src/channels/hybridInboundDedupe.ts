@@ -3,6 +3,8 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 
 export const HYBRID_INBOUND_CLAIM_EVENT = "whatsapp.hybrid.inbound.logical_message.claimed";
 export const HYBRID_INBOUND_DEDUPED_EVENT = "whatsapp.hybrid.inbound.cross_provider_deduped";
+export const HYBRID_INBOUND_COMPLETED_EVENT = "whatsapp.hybrid.inbound.logical_message.completed";
+export const HYBRID_INBOUND_FAILED_RETRYABLE_EVENT = "whatsapp.hybrid.inbound.logical_message.failed_retryable";
 
 export type WhatsappInboundProvider = "meta" | "web_session";
 
@@ -16,6 +18,12 @@ type LogicalInboundKeyInput = {
 type ClaimInput = LogicalInboundKeyInput & {
   prisma: PrismaClient;
   requestId?: string | null;
+};
+
+type LogicalInboundProcessingInput = LogicalInboundKeyInput & {
+  prisma: PrismaClient;
+  requestId?: string | null;
+  reason?: string | null;
 };
 
 function sha256(value: string) {
@@ -122,6 +130,27 @@ export async function claimHybridInboundLogicalMessage(input: ClaimInput) {
             ? payload.winningProvider
             : null
           : null;
+      const [completed, retryableFailure] = await Promise.all([
+        input.prisma.event.findFirst({
+          where: {
+            clientId: input.clientId,
+            eventName: HYBRID_INBOUND_COMPLETED_EVENT,
+            requestId: `${key.requestId}:completed`,
+          },
+          select: { id: true },
+        }),
+        input.prisma.event.findFirst({
+          where: {
+            clientId: input.clientId,
+            eventName: HYBRID_INBOUND_FAILED_RETRYABLE_EVENT,
+            requestId: `${key.requestId}:failed_retryable`,
+          },
+          select: { id: true },
+        }),
+      ]);
+      if (!completed && retryableFailure && winningProvider === input.provider) {
+        return { claimed: true as const, key, reason: "retry_same_winner" as const };
+      }
       await recordHybridInboundDuplicateSuppressed({
         prisma: input.prisma,
         clientId: input.clientId,
@@ -133,6 +162,65 @@ export async function claimHybridInboundLogicalMessage(input: ClaimInput) {
         requestId: input.requestId ?? null,
       });
       return { claimed: false as const, key, reason: "duplicate_logical_message" as const, winningProvider };
+    }
+    throw error;
+  }
+}
+
+export async function markHybridInboundLogicalMessageCompleted(input: LogicalInboundProcessingInput) {
+  const key = buildHybridInboundLogicalKey(input);
+  if (!key) return { marked: false as const, key: null, reason: "logical_key_unavailable" as const };
+
+  try {
+    await input.prisma.event.create({
+      data: {
+        clientId: input.clientId,
+        eventName: HYBRID_INBOUND_COMPLETED_EVENT,
+        requestId: `${key.requestId}:completed`,
+        messageId: key.hash,
+        payloadJson: {
+          logicalInboundKeyHash: key.hash,
+          senderHash: key.senderHash,
+          stanzaIdHash: key.stanzaIdHash,
+          winningProvider: input.provider,
+          sourceRequestId: input.requestId ?? null,
+        },
+      },
+    });
+    return { marked: true as const, key, reason: "completed" as const };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return { marked: false as const, key, reason: "already_completed" as const };
+    }
+    throw error;
+  }
+}
+
+export async function markHybridInboundLogicalMessageFailedRetryable(input: LogicalInboundProcessingInput) {
+  const key = buildHybridInboundLogicalKey(input);
+  if (!key) return { marked: false as const, key: null, reason: "logical_key_unavailable" as const };
+
+  try {
+    await input.prisma.event.create({
+      data: {
+        clientId: input.clientId,
+        eventName: HYBRID_INBOUND_FAILED_RETRYABLE_EVENT,
+        requestId: `${key.requestId}:failed_retryable`,
+        messageId: key.hash,
+        payloadJson: {
+          logicalInboundKeyHash: key.hash,
+          senderHash: key.senderHash,
+          stanzaIdHash: key.stanzaIdHash,
+          winningProvider: input.provider,
+          sourceRequestId: input.requestId ?? null,
+          reason: input.reason ?? null,
+        },
+      },
+    });
+    return { marked: true as const, key, reason: "failed_retryable" as const };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return { marked: false as const, key, reason: "already_failed_retryable" as const };
     }
     throw error;
   }

@@ -179,6 +179,27 @@ Observed controls:
 
 The literal freeform body used in the real validation is not a product requirement. The requirement closed by this validation is provider selection: post-reply freeform in `HYBRID` / `AUTO` used Web Session.
 
+### Hybrid Claim Recovery Semantics
+
+Status: HARDENED / PENDING PRODUCTION VALIDATION.
+
+Hybrid inbound exactly-once uses a tenant/sender/stanza logical claim before provider-specific
+downstream processing. The claim means "this logical WhatsApp message has an elected provider",
+not "all downstream effects are complete".
+
+Resilience rule:
+
+- successful canonical processing records a durable logical-message completed marker;
+- downstream failure after a claim records a retryable failure marker;
+- only the same winning provider may retry when retryable failure exists and no completed
+  marker exists;
+- the losing provider remains suppressed and is never promoted as implicit fallback;
+- once completed exists, same-provider replay and cross-provider duplicate are suppressed.
+
+This preserves Hybrid exactly-once while closing the claim-before-downstream failure window
+where a transient storage/runtime failure could otherwise leave a logical inbound permanently
+claimed but not fully processed.
+
 ## Contact Start Via Web Session
 
 An operational Web Session does not automatically allow `Contact -> Iniciar conversa` from CRM/Contacts.

@@ -120,7 +120,11 @@ import {
   ConversationIntent,
   ConversationState,
 } from "../conversation/conversation.types.js";
-import { claimHybridInboundLogicalMessage } from "../channels/hybridInboundDedupe.js";
+import {
+  claimHybridInboundLogicalMessage,
+  markHybridInboundLogicalMessageCompleted,
+  markHybridInboundLogicalMessageFailedRetryable,
+} from "../channels/hybridInboundDedupe.js";
 import { resolveTenant, TenantResolutionError } from "../tenancy/tenantResolver.js";
 import { resolveEffectiveWhatsappOutboundTransport } from "../crm/crmConversationStart.js";
 import { ensureLeadForConversation, upsertLeadFromCapture } from "../crm/lead.service.js";
@@ -3206,6 +3210,57 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           tenantClientKey,
           normalizedFrom
         );
+        let logicalClaimForProcessing: Awaited<ReturnType<typeof claimHybridInboundLogicalMessage>> | null = null;
+        let logicalProcessingFailed = false;
+        const markLogicalProcessingCompleted = async () => {
+          if (!tenantClientId || !logicalClaimForProcessing?.claimed || !logicalClaimForProcessing.key) return;
+          try {
+            await markHybridInboundLogicalMessageCompleted({
+              prisma,
+              clientId: tenantClientId,
+              senderWaIdCanonical: canonicalWaId,
+              provider: "meta",
+              providerMessageId: message.messageId,
+              requestId: meta?.requestId ?? `meta-inbound:${message.messageId}`,
+            });
+          } catch (error) {
+            logger.warn({
+              event: "whatsapp.hybrid.inbound.logical_message.completed_marker_failed",
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
+              provider: "meta",
+              requestId: meta?.requestId,
+              errorName: error instanceof Error ? error.name : "unknown_error",
+              errorCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
+            });
+          }
+        };
+        const markLogicalProcessingFailedRetryable = async (reason: string) => {
+          if (!tenantClientId || !logicalClaimForProcessing?.claimed || !logicalClaimForProcessing.key) return;
+          logicalProcessingFailed = true;
+          try {
+            await markHybridInboundLogicalMessageFailedRetryable({
+              prisma,
+              clientId: tenantClientId,
+              senderWaIdCanonical: canonicalWaId,
+              provider: "meta",
+              providerMessageId: message.messageId,
+              requestId: meta?.requestId ?? `meta-inbound:${message.messageId}`,
+              reason,
+            });
+          } catch (error) {
+            logger.warn({
+              event: "whatsapp.hybrid.inbound.logical_message.failed_retryable_marker_failed",
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
+              provider: "meta",
+              requestId: meta?.requestId,
+              reason,
+              errorName: error instanceof Error ? error.name : "unknown_error",
+              errorCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
+            });
+          }
+        };
         try {
       const existing = await storage.findByMessageId(message.messageId);
       if (existing?.status === "replied") {
@@ -3283,6 +3338,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         providerMessageId: message.messageId,
         requestId: meta?.requestId ?? `meta-inbound:${message.messageId}`,
       });
+      logicalClaimForProcessing = logicalClaim;
       if (!logicalClaim.claimed) {
         logger.info({
           event: "whatsapp.meta.inbound.duplicate",
@@ -8159,7 +8215,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           requestId: meta?.requestId,
         });
       });
+        } catch (error) {
+          await markLogicalProcessingFailedRetryable(
+            error instanceof Prisma.PrismaClientKnownRequestError
+              ? error.code
+              : error instanceof Error
+                ? error.name
+                : "unknown_error"
+          );
+          throw error;
         } finally {
+          if (!logicalProcessingFailed) {
+            await markLogicalProcessingCompleted();
+          }
           releaseConversationMutex();
         }
       }

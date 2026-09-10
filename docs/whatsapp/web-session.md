@@ -546,3 +546,23 @@ Deployment result:
 - frontend change: NO;
 - schema/migration: NO;
 - status: DEPLOYED / TESTED / ORGANIC VALIDATION PENDING.
+
+### Hybrid claim-before-downstream recovery - 2026-09-10
+
+Web Session and Meta Cloud share the same hybrid logical inbound claim keyed by tenant,
+canonical sender and WhatsApp stanza identity. The 2026-09-10 hardening keeps that claim
+as the provider election point and adds explicit downstream lifecycle evidence:
+
+- `whatsapp.hybrid.inbound.logical_message.completed` marks successful canonical processing;
+- `whatsapp.hybrid.inbound.logical_message.failed_retryable` marks a downstream failure after
+  a provider already won the logical claim;
+- retry is allowed only for the same winning provider while failure exists and completion is
+  absent;
+- cross-provider duplicates remain suppressed and cannot become implicit fallback;
+- Web Session replay can continue downstream when the inbound row already exists from the
+  failed prior attempt.
+
+The Web Session path awaits its bot/handoff outbound operations before marking the logical
+message complete. The Meta path marks completion when the canonical handler reaches its normal
+terminal path; Meta passive outbound callbacks may still complete asynchronously after that
+marker.
