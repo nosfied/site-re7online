@@ -378,6 +378,17 @@ request e limita o historico a ultima linha por identidade via SQL parametrizado
 Nao ha cache global, cache de estado de canal, mudanca de polling ou alteracao
 de realtime.
 
+Validacao comparavel pos-deploy no HEAD `1aae26b5` em 2026-09-10, durante
+janela real de ~5m10s com 88 requests para `/app/conversations`, registrou
+~17 req/min, ~10.7 queries/request, `runtime_state_fallback=0` e
+`multichannel.dual_read=0`. A CPU media do backend ficou em ~14.0% com um pico
+isolado de 69%, worker ~0.3%, memoria estavel e health PASS. O
+`channel_state_batch` SECULT caiu para media de intervalo ~189ms; o p95
+cumulativo desde o restart ficou ~692ms. A otimizacao esta classificada como
+REAL VALIDATED / IMPROVED, com proximos hotspots provaveis em
+`last_message_lookup` e `runtime_state_lookup`. A medicao nao alterou
+polling/realtime e nao executou mutation.
+
 Gap exposto por Phase 2: mensagens `message.created` geradas no worker Web
 Session nao chegavam ao WebSocket do backend e eram mascaradas pelo polling
 agressivo anterior. O fix `12eb83db` reutilizou a ponte worker->backend

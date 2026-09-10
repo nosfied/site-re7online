@@ -265,6 +265,7 @@ Comparacao START/MID/END:
 | END | active sessions possible, effective Inbox online 0 | 0 effective | idle / not material | NOT_OBSERVED | NOT_OBSERVED | ~8.2% | NORMAL |
 | END 03/09 | 0 seen / 6 sessions | 0 | 0 observed | 0 observed | not observed | ~11.6% | NORMAL |
 | RESIDUAL 10/09 | SECULT real traffic active | not fully measured | 21 | 246 | ~11.7 | ~60-69% | NORMAL |
+| POST-1aae26b5 10/09 | SECULT real Inbox polling active | not fully measured | ~17 | ~938 | ~10.7 | ~14.0% | NORMAL |
 
 ```text
 INBOX / BACKEND PERFORMANCE:
@@ -495,6 +496,68 @@ This is a payload/materialization optimization, not a cache and not a provider
 state shortcut. It keeps current channel-account status and lifecycle reads
 authoritative for every request. CPU and route latency impact must be measured
 after deploy under comparable real Inbox load.
+
+Post-deploy comparable validation:
+
+```text
+timestamp: 2026-09-10T16:29:13Z to 2026-09-10T16:34:23Z
+production HEAD: 1aae26b55907adb37b2472d31fbd58a42dace1f8
+duration: ~5m10s
+GET /app/conversations: 88 requests, ~17 req/min
+SECULT GET /app/conversations: 78 list builds
+inbox.list.query_count: 938 in window, ~181/min
+approx queries/request: ~10.7
+runtime_state_fallback: 0
+multichannel.dual_read: 0
+SECULT inbound activity: 1 inbound, 1 outbound, 0 assignments
+backend CPU samples: avg ~14.0%, median ~13.6%, p95 ~30.5%, peak 69.0%
+worker CPU samples: avg ~0.3%, p95 ~0.5%, peak 1.3%
+memory: backend ~138-162 MB RSS, worker ~54-55 MB RSS
+DB pressure: NORMAL
+```
+
+Timing notes:
+
+- interval average for `GET /app/conversations`: ~963ms;
+- cumulative p95 since the post-deploy restart: ~3074ms;
+- SECULT interval average for `channel_state_batch`: ~189ms;
+- SECULT cumulative `channel_state_batch`: avg ~250ms, p95 ~692ms;
+- metrics currently expose cumulative p95, not per-window p95, so p95 must be
+  compared cautiously after restarts or unequal windows;
+- row materialization volume was not directly instrumented in the runtime
+  metrics; code path now returns only latest rows per identity by construction,
+  and no intrusive instrumentation was added.
+
+Normalized before/after comparison:
+
+| Metric | PRE-48c206fa | POST-48c206fa | POST-1aae26b5 comparable |
+| --- | --- | --- | --- |
+| `/app/conversations` req/min | ~21 | ~21 in short non-equivalent sample | ~17 |
+| queries/request | ~11.7 | ~10.7 | ~10.7 |
+| `/app/conversations` avg | ~3339ms cumulative | ~1775ms non-equivalent/cumulative | ~963ms interval / ~1085ms cumulative |
+| `/app/conversations` p95 | ~4178ms cumulative | ~4132ms non-equivalent/cumulative | ~3074ms cumulative |
+| `channel_state_batch` avg | ~445-615ms observed baselines | ~445ms before channel patch | ~189ms interval / ~250ms cumulative |
+| `channel_state_batch` p95 | ~782-1411ms observed baselines | ~782ms before channel patch | ~692ms cumulative |
+| backend CPU | ~60-69% | improved but variable short sample | ~14% avg, peak 69% isolated |
+
+Classification after the comparable window:
+
+```text
+48c206fa:
+REAL VALIDATED
+
+1aae26b5:
+REAL VALIDATED
+
+OVERALL INBOX PERFORMANCE:
+IMPROVED
+
+CPU WATCH:
+IMPROVED / WATCH
+
+CURRENT DOMINANT HOTSPOT:
+last_message_lookup / runtime_state_lookup mixed, with channel_state_batch no longer dominant by average
+```
 
 Modelo de escala atual estimado:
 

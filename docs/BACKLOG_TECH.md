@@ -63,29 +63,36 @@ Estado fechado/validado:
   becoming available below capacity, `no_eligible=0`, and stale heartbeat alone
   produced zero exclusions. Distribution remains WATCH, not a proven algorithm
   defect.
-- SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / RESIDUAL CPU WATCH;
-- Backend CPU residual load watch after hybrid claim recovery deploy: WATCH.
+- SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / CPU IMPROVED /
+  WATCH;
+- Backend CPU residual load watch after hybrid claim recovery deploy: IMPROVED /
+  WATCH.
   Samples on 2026-09-10 held near 67-69% and later near 60-61% CPU with health
   PASS, memory stable around 230-278 MB, DB pressure NORMAL, SECULT real traffic
   active, `runtime_state_fallback=0`, `multichannel.dual_read=0`, and no
   retry/reconnect/error loop evidence. Current residual hotspot remains
   `/app/conversations` list reads: 21 req/min produced 246
   `inbox.list.query_count`/min, approximately 11.7 queries/request.
-- `/app/conversations` fixed-cost lookup optimization: IMPLEMENTED / POST-DEPLOY
-  MEASUREMENT PENDING. The route is already mostly batched and did not show
+- `/app/conversations` fixed-cost lookup optimization: REAL VALIDATED. The
+  route is already mostly batched and did not show
   current runtime-state N+1 in production (`runtime_state_fallback=0`). A small
   backend patch now reuses the `Client.features/profile` already loaded by
   request auth, removing one duplicate `client.findUnique(features/profile)` DB
-  read per app Inbox list request. No global cache, current-state cache or
-  response cache was introduced.
-- `/app/conversations` channel state batch hotspot: IMPLEMENTED / POST-DEPLOY
-  MEASUREMENT PENDING. Production audit on 2026-09-10 showed no external
+  read per app Inbox list request. Comparable 2026-09-10 measurement after
+  `1aae26b5` showed ~10.7 queries/request under real SECULT Inbox polling, with
+  `tenant_features` effectively zero-cost in the app list path. No global cache,
+  current-state cache or response cache was introduced.
+- `/app/conversations` channel state batch hotspot: REAL VALIDATED / IMPROVED.
+  Production audit on 2026-09-10 showed no external
   provider call and no per-row query fan-out in `channel_state_batch`, but
   SECULT's 251 Web Session identities caused the switch-warning lookup to
   materialize about 10.3k historical outbound rows per refresh. The selected
   patch keeps the same tenant-scoped provider truth and query count, but fetches
-  only the latest outbound row per identity with bounded SQL result sets. No
-  global cache, stale channel-state cache, schema change or migration was added.
+  only the latest outbound row per identity with bounded SQL result sets.
+  Comparable post-deploy measurement showed SECULT `channel_state_batch`
+  interval avg ~189ms and cumulative p95 ~692ms, down from the previous
+  ~445-615ms avg / ~782-1411ms p95 observed baselines. No global cache, stale
+  channel-state cache, schema change or migration was added.
 - Browser Push / PWA notifications: CLOSED / REAL VALIDATED;
 - true foreground Web Push detection: CLOSED / REAL VALIDATED in `670f392d`;
 - hidden desktop local sound: CLOSED / REAL VALIDATED in `c50fb73c`;
@@ -119,14 +126,12 @@ Pendencias proximas:
 6. continuar observando distribuicao organica SECULT em `presenceMode=AVAILABLE`
    antes de qualquer ajuste no ponteiro de round-robin;
 7. desenhar waiting-on-customer 1h como regra funcional separada;
-8. medir pos-deploy o custo de `/app/conversations` em janela comparavel de uso
-   real SECULT, esperando reducao aproximada de uma query fixa por request;
-9. manter novas otimizacoes de `/app/conversations` separadas e graduais:
+8. manter novas otimizacoes de `/app/conversations` separadas e graduais:
    defaults/operational lookups, channel state e preview de mensagens devem ser
    tratados somente com equivalencia de resposta provada.
-10. medir pos-deploy o `channel_state_batch` apos a reducao de materializacao de
-    outbound historico, comparando linhas retornadas, stage timing, CPU, delivery
-    e ausencia de warnings falsos.
+9. medir em outra janela de expediente se `last_message_lookup` e
+   `runtime_state_lookup` permanecem os proximos hotspots dominantes antes de
+   qualquer novo patch.
 
 Dividas tecnicas abertas:
 
