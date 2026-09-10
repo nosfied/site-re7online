@@ -78,6 +78,14 @@ Estado fechado/validado:
   request auth, removing one duplicate `client.findUnique(features/profile)` DB
   read per app Inbox list request. No global cache, current-state cache or
   response cache was introduced.
+- `/app/conversations` channel state batch hotspot: IMPLEMENTED / POST-DEPLOY
+  MEASUREMENT PENDING. Production audit on 2026-09-10 showed no external
+  provider call and no per-row query fan-out in `channel_state_batch`, but
+  SECULT's 251 Web Session identities caused the switch-warning lookup to
+  materialize about 10.3k historical outbound rows per refresh. The selected
+  patch keeps the same tenant-scoped provider truth and query count, but fetches
+  only the latest outbound row per identity with bounded SQL result sets. No
+  global cache, stale channel-state cache, schema change or migration was added.
 - Browser Push / PWA notifications: CLOSED / REAL VALIDATED;
 - true foreground Web Push detection: CLOSED / REAL VALIDATED in `670f392d`;
 - hidden desktop local sound: CLOSED / REAL VALIDATED in `c50fb73c`;
@@ -116,6 +124,9 @@ Pendencias proximas:
 9. manter novas otimizacoes de `/app/conversations` separadas e graduais:
    defaults/operational lookups, channel state e preview de mensagens devem ser
    tratados somente com equivalencia de resposta provada.
+10. medir pos-deploy o `channel_state_batch` apos a reducao de materializacao de
+    outbound historico, comparando linhas retornadas, stage timing, CPU, delivery
+    e ausencia de warnings falsos.
 
 Dividas tecnicas abertas:
 

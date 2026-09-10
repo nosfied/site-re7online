@@ -437,6 +437,65 @@ state or message previews. CPU impact still requires comparable post-deploy
 measurement under real SECULT Inbox load. The residual dominant timing remains
 `channel_state_batch` and the fixed-cost list assembly path.
 
+### `/app/conversations` channel state batch hotspot - 2026-09-10
+
+Current production recheck after the fixed-cost client context patch:
+
+```text
+production HEAD: 48c206fa768e952a4bbd7883fbb48d221eab2bb3
+route timing: GET /app/conversations avg ~1775ms, p95 ~4132ms
+channel_state_batch timing: avg ~615ms, p95 ~1411ms
+channel_state_batch query count: 3 per eligible Web Session list request
+runtime_state_fallback: 0
+multichannel.dual_read: 0
+provider/external API calls in channel_state_batch: NO
+```
+
+Root cause classification:
+
+```text
+dominant N+1 query fan-out: NO
+external provider call: NO
+global cache miss: NO
+large historical row materialization: YES
+```
+
+SECULT production shape at audit time:
+
+```text
+web_session_sources: 251
+identity_candidates: 251
+channel_accounts: 1
+outbound rows by waId: ~5178
+outbound rows by waIdCanonical: ~5162
+total historical outbound rows materialized per refresh: ~10340
+```
+
+Rejected candidate:
+
+```text
+single SQL/window query with join: rejected
+reason: EXPLAIN ANALYZE was materially slower (~541ms) than current DB execution
+```
+
+Selected optimization:
+
+```text
+change: reduce Web Session switch-warning lookup payload
+strategy: two parameterized DISTINCT ON reads, latest outbound per identity
+queries/request: unchanged for this stage
+expected returned rows in SECULT shape: ~10340 -> ~502
+global cache: NO
+provider truth: preserved
+tenant isolation: preserved
+switch-warning semantics: preserved
+```
+
+This is a payload/materialization optimization, not a cache and not a provider
+state shortcut. It keeps current channel-account status and lifecycle reads
+authoritative for every request. CPU and route latency impact must be measured
+after deploy under comparable real Inbox load.
+
 Modelo de escala atual estimado:
 
 ```text

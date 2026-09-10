@@ -12,6 +12,22 @@ function createPrismaStub(params: {
   const calls = {
     channelAccountFindMany: 0,
     outboundMessageFindMany: 0,
+    outboundMessageLatestByIdentity: 0,
+  };
+  const pickLatestByIdentity = (field: "waId" | "waIdCanonical") => {
+    calls.outboundMessageLatestByIdentity += 1;
+    const latestByIdentity = new Map<string, Record<string, unknown>>();
+    for (const row of params.outbound ?? []) {
+      const identity = String(row[field] ?? "");
+      if (!identity) continue;
+      const current = latestByIdentity.get(identity);
+      const createdAt = (row.createdAt as Date).getTime();
+      const currentCreatedAt = current ? (current.createdAt as Date).getTime() : -1;
+      if (!current || createdAt > currentCreatedAt) {
+        latestByIdentity.set(identity, row);
+      }
+    }
+    return Array.from(latestByIdentity.values());
   };
   return {
     calls,
@@ -35,6 +51,11 @@ function createPrismaStub(params: {
             return false;
           });
         },
+      },
+      async $queryRaw(strings: TemplateStringsArray) {
+        return String(strings[0] ?? "").includes('DISTINCT ON ("waIdCanonical")')
+          ? pickLatestByIdentity("waIdCanonical")
+          : pickLatestByIdentity("waId");
       },
     },
   };
@@ -84,7 +105,8 @@ test("batches Web Session readiness and switch warnings with fixed query count",
 
   assert.equal(batch.queryCount, 3);
   assert.equal(calls.channelAccountFindMany, 1);
-  assert.equal(calls.outboundMessageFindMany, 2);
+  assert.equal(calls.outboundMessageFindMany, 0);
+  assert.equal(calls.outboundMessageLatestByIdentity, 2);
   assert.equal(batch.getOutboundEnabled(sources[0]!), true);
   assert.equal(batch.getSwitchWarning(sources[0]!), null);
 });

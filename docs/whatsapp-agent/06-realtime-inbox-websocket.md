@@ -367,6 +367,17 @@ e sem alterar runtime, read state, channel state, previews, RBAC ou tenant
 isolation. O impacto real em CPU permanece pendente de janela comparavel
 pos-deploy.
 
+Auditoria subsequente no HEAD `48c206fa` isolou `channel_state_batch` como o
+maior stage restante da rota, com media ~615ms e p95 ~1411ms na amostra
+operacional. O stage nao fazia chamada externa nem N+1 de consultas, mas
+materializava historico de outbound Web Session para calcular aviso de troca de
+identidade: na forma SECULT observada, 251 identidades geravam cerca de 10.3k
+linhas retornadas por refresh. A otimizacao escolhida mantem as tres consultas
+tenant-scoped do stage, preserva a verdade de `ChannelAccount`/lifecycle por
+request e limita o historico a ultima linha por identidade via SQL parametrizado.
+Nao ha cache global, cache de estado de canal, mudanca de polling ou alteracao
+de realtime.
+
 Gap exposto por Phase 2: mensagens `message.created` geradas no worker Web
 Session nao chegavam ao WebSocket do backend e eram mascaradas pelo polling
 agressivo anterior. O fix `12eb83db` reutilizou a ponte worker->backend

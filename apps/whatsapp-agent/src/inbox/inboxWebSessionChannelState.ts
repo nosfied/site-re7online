@@ -1,4 +1,4 @@
-import { MessageStatus, type PrismaClient } from "@prisma/client";
+import { MessageStatus, Prisma, type PrismaClient } from "@prisma/client";
 import { getFeatures } from "../features/clientFeatures.js";
 import { readWebSessionLifecycle } from "../web-session/webSessionLifecycle.js";
 import type { WebSessionChannelSwitchWarning } from "../web-session/webSessionOutboundService.js";
@@ -123,7 +123,7 @@ function rememberLatestOutbound(
 }
 
 export async function buildInboxWebSessionChannelStateBatch(params: {
-  prisma: Pick<PrismaClient, "channelAccount" | "outboundMessage">;
+  prisma: Pick<PrismaClient, "channelAccount" | "$queryRaw">;
   clientId: string;
   clientKey: string;
   sources: InboxWebSessionChannelSource[];
@@ -188,40 +188,36 @@ export async function buildInboxWebSessionChannelStateBatch(params: {
   const latestByIdentity = new Map<string, OutboundIdentityRow>();
   if (identityCandidates.length > 0) {
     const [byWaId, byWaIdCanonical] = await Promise.all([
-      params.prisma.outboundMessage.findMany({
-        where: {
-          clientId: params.clientId,
-          channel: "whatsapp",
-          provider: "web_session",
-          status: MessageStatus.SENT,
-          channelAccountId: { not: null },
-          waId: { in: identityCandidates },
-        },
-        orderBy: { createdAt: "desc" },
-        select: {
-          waId: true,
-          waIdCanonical: true,
-          channelAccountId: true,
-          createdAt: true,
-        },
-      }),
-      params.prisma.outboundMessage.findMany({
-        where: {
-          clientId: params.clientId,
-          channel: "whatsapp",
-          provider: "web_session",
-          status: MessageStatus.SENT,
-          channelAccountId: { not: null },
-          waIdCanonical: { in: identityCandidates },
-        },
-        orderBy: { createdAt: "desc" },
-        select: {
-          waId: true,
-          waIdCanonical: true,
-          channelAccountId: true,
-          createdAt: true,
-        },
-      }),
+      params.prisma.$queryRaw<OutboundIdentityRow[]>`
+        SELECT DISTINCT ON ("waId")
+          "waId",
+          "waIdCanonical",
+          "channelAccountId",
+          "createdAt"
+        FROM "OutboundMessage"
+        WHERE "clientId" = ${params.clientId}::uuid
+          AND channel = 'whatsapp'
+          AND provider = 'web_session'
+          AND status = ${MessageStatus.SENT}::"MessageStatus"
+          AND "channelAccountId" IS NOT NULL
+          AND "waId" IN (${Prisma.join(identityCandidates)})
+        ORDER BY "waId", "createdAt" DESC, id DESC
+      `,
+      params.prisma.$queryRaw<OutboundIdentityRow[]>`
+        SELECT DISTINCT ON ("waIdCanonical")
+          "waId",
+          "waIdCanonical",
+          "channelAccountId",
+          "createdAt"
+        FROM "OutboundMessage"
+        WHERE "clientId" = ${params.clientId}::uuid
+          AND channel = 'whatsapp'
+          AND provider = 'web_session'
+          AND status = ${MessageStatus.SENT}::"MessageStatus"
+          AND "channelAccountId" IS NOT NULL
+          AND "waIdCanonical" IN (${Prisma.join(identityCandidates)})
+        ORDER BY "waIdCanonical", "createdAt" DESC, id DESC
+      `,
     ]);
     queryCount += 2;
     for (const row of [...byWaId, ...byWaIdCanonical] as OutboundIdentityRow[]) {
