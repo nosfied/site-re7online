@@ -456,7 +456,9 @@ Leitura:
 
 - o batching de `ConversationRuntimeState` reduziu significativamente o p95 externo;
 - ainda ha caminho individual de fallback em volume alto;
-- a proxima otimizacao deve investigar por que parte das conversas nao entra no batch, antes de mexer em overfetch, payload ou indices;
+- historicamente, a proxima otimizacao sugerida era investigar por que parte
+  das conversas nao entra no batch; apos os hardenings e revert de 2026-09-10,
+  esse ponto fica em WATCH e nao em execucao ativa;
 - `assembly`, `filtering_sorting` e `serialization_payload` nao sao os gargalos dominantes nesta medicao.
 
 Risco preservado:
@@ -705,6 +707,20 @@ SEMANTIC RESULT: PASS
 ROOT CAUSE: PostgreSQL plan regression from JOIN LATERAL/cardinality
 ```
 
+Revert aplicado:
+
+```text
+4bc8befdffbf03fe9e1a2b13be6f77564ac0f1e2
+perf(inbox): revert bounded outbound preview lookup
+```
+
+Estado atual: `48c206fa` e `1aae26b5` permanecem REAL VALIDATED; o desenho
+lateral de `94882d76` foi REVERTED por regressao real de performance em
+producao. A frente de performance da Inbox esta congelada em WATCH. O
+`last_message_lookup` e KNOWN RESIDUAL HOTSPOT, mas nao ha patch ativo aprovado;
+nova medicao deve ocorrer somente em janela SECULT representativa ou diante de
+novo incidente.
+
 A medicao comparavel de 2026-09-10, entre 19:49:48Z e 19:54:52Z, capturou
 42 requests HTTP para `/app/conversations` em 5,07 minutos. O delta de metricas
 mostrou `last_message_lookup` com media de janela em torno de 5.895ms e
@@ -761,7 +777,7 @@ Candidatos avaliados:
 | --- | --- | ---: | --- | --- |
 | `DISTINCT ON` por identidade | baixa se nao filtrar `management_only` exatamente | alta | nao inicialmente, mas predicate JSON pode limitar | nao aplicar sozinho |
 | `ROW_NUMBER()` por identidade | baixa/media pelo mesmo motivo | alta | nao inicialmente | nao aplicar sozinho |
-| lateral join por identidade com oversampling | media/alta se app-side confirmar visibilidade | alta e controlada | nao inicialmente | candidato preferido de implementacao |
+| lateral join por identidade com oversampling | media/alta se app-side confirmar visibilidade | alta e controlada | nao inicialmente | rejeitado na forma testada por regressao real de plano |
 | query por identidade em loop | correta, mas recria fan-out | alta | nao | rejeitado para hot path |
 | union inbound/outbound + rank | melhor modelo conceitual | alta | possivel melhoria futura | design longo |
 | query atual com pre-filtro leve | segura, menor ganho | baixa/media | nao | fallback se lateral for complexo |

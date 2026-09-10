@@ -113,10 +113,10 @@ Maristella: 1/30
 Mirella: 1/30
 ```
 
-Classificacao: `presenceMode=AVAILABLE` esta parcialmente validado por trafego
-real. A concentracao historica em Allana melhorou em termos de diversidade do
-pool, mas permanece em observacao; nao ha evidencia material de bug residual no
-algoritmo ou no cursor de round-robin.
+Classificacao: `presenceMode=AVAILABLE` esta REAL VALIDATED por trafego real
+para elegibilidade funcional. A concentracao historica em Allana melhorou em
+termos de diversidade do pool, mas fairness e cursor de round-robin permanecem
+em WATCH; nao ha evidencia material de bug residual no algoritmo.
 
 ## Backend CPU watch - 2026-09-10
 
@@ -224,4 +224,5 @@ Resultado:
 - Realizar treinamento inicial.
 - Rodar smoke operacional sem envio em massa.
 - Entregar relatorio de prontidao pos-implantacao.
-- Medir CPU/Inbox durante expediente em janelas START, MID e END para confirmar ou rejeitar a hipotese de correlacao entre uso ativo da Inbox e CPU do backend.
+- Medir CPU/Inbox somente em futura janela representativa ou novo incidente;
+  a frente de performance da Inbox esta em WATCH, nao na fila ativa imediata.

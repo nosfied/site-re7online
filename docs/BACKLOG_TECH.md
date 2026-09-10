@@ -28,7 +28,12 @@ O onboarding interno foi implementado, porém ainda não validado com novo tenan
 
 ## PRIORIDADE ATUAL
 
-Eficiência operacional interna + uso real do produto.
+Roadmap funcional/produto apos hardening de producao de 08-10/09.
+
+Itens em `WATCH` nao bloqueiam a fila de execucao e nao devem virar frente ativa
+sem novo incidente comprovado. Performance residual de Inbox deve ser medida em
+janelas representativas futuras, mas nao e a prioridade corrente de
+desenvolvimento.
 
 ---
 
@@ -44,11 +49,16 @@ Estado fechado/validado:
 - Meta-to-Web echo safety: CLOSED / REAL VALIDATED;
 - HYBRID inbound dedupe after Meta template reply: CLOSED / REAL VALIDATED;
 - HYBRID claim-before-downstream recovery: HARDENED / REAL VALIDATED;
+- HYBRID full fresh-flow E2E: CLOSED / REAL VALIDATED;
+- exactly-once coexistence path exercised: CLOSED / REAL VALIDATED;
 - post-reply freeform routing in HYBRID/AUTO: CLOSED / REAL VALIDATED;
+- multichannel Lead identity reconciliation / P2002: CLOSED / REAL VALIDATED;
 - Meta usage accounting for template vs Web Session freeform: CLOSED / REAL VALIDATED;
 - flow/runtime coherence: CLOSED / REAL VALIDATED;
 - closed HUMAN reentry: CLOSED / REAL VALIDATED;
 - SECULT CompletedServiceSnapshot: CLOSED / REAL ORGANIC VALIDATED;
+- SECULT current-state report truth: CLOSED / REAL VALIDATED;
+- Maria capacity diagnosis: CLOSED / CORRECT PRODUCT BEHAVIOR;
 - SECULT completed-service reporting: CLOSED / PRODUCTION VALIDATED;
 - Inbox Timeline Phase 1: CLOSED / PRODUCTION VALIDATED;
 - Inbox Phase 2 WebSocket-driven invalidation: CLOSED / PRODUCTION VALIDATED;
@@ -57,12 +67,12 @@ Estado fechado/validado:
 - SECULT Web Session non-content control event suppression: DEPLOYED / TESTED in
   `c308198a`; organic validation pending;
 - SECULT auto-assignment incident 2026-08-31: AUDITED / BUG NOT CONFIRMED; UX clarification deployed in `c91671e9`;
-- SECULT `presenceMode=AVAILABLE`: PARTIAL REAL VALIDATED on 2026-09-10; after
+- SECULT `presenceMode=AVAILABLE`: REAL VALIDATED on 2026-09-10; after
   activation on 2026-09-09 11:38:31 -03, 30 organic auto-assignments selected
   11 distinct agents, Maria Helena received one automatic assignment after
   becoming available below capacity, `no_eligible=0`, and stale heartbeat alone
-  produced zero exclusions. Distribution remains WATCH, not a proven algorithm
-  defect.
+  produced zero exclusions. Fairness and round-robin cursor remain WATCH, not
+  proven algorithm defects.
 - SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / CPU IMPROVED /
   WATCH;
 - Backend CPU residual load watch after hybrid claim recovery deploy: IMPROVED /
@@ -93,15 +103,15 @@ Estado fechado/validado:
   interval avg ~189ms and cumulative p95 ~692ms, down from the previous
   ~445-615ms avg / ~782-1411ms p95 observed baselines. No global cache, stale
   channel-state cache, schema change or migration was added.
-- `/app/conversations` bounded outbound preview lookup experiment: REVERT
-  REQUIRED. The `94882d76` patch was semantically correct, but production
+- `/app/conversations` bounded outbound preview lookup experiment: REVERTED /
+  REAL PERFORMANCE REGRESSION. The `94882d76` patch was semantically correct, but production
   evidence on 2026-09-10 showed a PostgreSQL plan regression for SECULT:
   `JOIN LATERAL` executed a per-identity plan with sequential scans and estimated
   cost around 150k versus around 1.6k for the previous broad outbound lookup.
   Comparable 5-minute window showed `last_message_lookup` around 5.9s average
   and `/app/conversations` around 5.8s average, while the pre-change comparable
-  baseline was about 275ms for `last_message_lookup`. Roll back the runtime
-  query shape; keep the semantic oracle and plan evidence for the next design.
+  baseline was about 275ms for `last_message_lookup`. Runtime was rolled back by
+  `4bc8befd`; keep the semantic oracle and plan evidence for a future design.
 - Browser Push / PWA notifications: CLOSED / REAL VALIDATED;
 - true foreground Web Push detection: CLOSED / REAL VALIDATED in `670f392d`;
 - hidden desktop local sound: CLOSED / REAL VALIDATED in `c50fb73c`;
@@ -109,6 +119,9 @@ Estado fechado/validado:
 - deploy impact matrix hardening: CLOSED / SCRIPT + DEPLOY INTEGRATION + RUNBOOK;
 - closed-conversation access hardening: CLOSED / PRODUCTION VALIDATED in
   `93cd0e06`;
+- CLOSED claim invariant: CLOSED / PRODUCTION VALIDATED;
+- Inbox close action observability: IMPLEMENTED / VALIDATED FOR ROOT-CAUSE
+  FORENSICS;
 - Inbox close terminal lifecycle: FIXED / DEPLOYED in `f62f1288`;
 - Web Session operational disconnect alert delivery: FIXED / DEPLOYED in
   `b31fd976`; SMTP port `2465` now uses TLS, retryable transport failures have
@@ -122,54 +135,38 @@ Estado fechado/validado:
 - CRA-PR Browser Push background: CLOSED / REAL VALIDATED;
 - CRA-PR ready for training 2026-09-09: YES.
 
-Pendencias proximas:
+Fila ativa repriorizada:
 
-1. executar nova bateria CPU/Inbox durante expediente com START, MID, EXTRA e
-   END apos as medicoes residuais de 2026-09-10;
-2. validar escala 10/30/50 sessoes antes de declarar capacidade CRA 30 agentes;
-3. validar ativacao/primeiro login dos usuarios CRA-PR, especialmente 3 admins de TI;
-4. guiar configuracao de horarios dos departamentos CRA-PR;
-5. acompanhar a validacao organica SECULT para confirmar que novos eventos
-   `protocolMessage`, `reactionMessage`, `messageContextInfo` e grouping-only
-   `albumMessage` nao aparecem como `Mensagem nao suportada`;
-6. continuar observando distribuicao organica SECULT em `presenceMode=AVAILABLE`
-   antes de qualquer ajuste no ponteiro de round-robin;
-7. desenhar waiting-on-customer 1h como regra funcional separada;
-8. manter novas otimizacoes de `/app/conversations` separadas e graduais.
-   Auditoria de 2026-09-10 no HEAD `1aae26b5` confirmou que
-   `last_message_lookup` e o principal read-stage residual por media de
-   intervalo (~275ms) e que o problema e materializacao historica/overfetch:
-   com `limit=25`, 251 conversas vencedoras corresponderam a ~4.6k inbound e
-   ~5.2k outbound historicos, embora o payload use somente o preview humano
-   mais recente por identidade. Nao aplicar patch especulativo: a consulta
-   precisa preservar supressao de eventos management-only, `historyVisibleAfter`
-   e merge inbound/outbound.
-   Design recomendado: preparar primeiro testes de equivalencia do preview de
-   ultima mensagem humana visivel e so depois avaliar lateral/union SQL
-   bounded. `DISTINCT ON`/`ROW_NUMBER()` direto nao esta aprovado enquanto
-   `management_only` e metadados de preview dependerem de `rawPayload`.
-   Em 2026-09-10 foi entregue patch conservador limitando somente o preview
-   outbound via SQL lateral parametrizado, mantendo inbound inalterado porque
-   ainda sustenta `unreadCount`. O Postgres local foi restaurado em banco
-   temporario isolado, as 58 migrations oficiais foram aplicadas e o oraculo
-   DB-backed de equivalencia semantica passou. A falha unica inicial do gate
-   focado completo foi reproduzida em base limpa de producao no modo local
-   default `json`, e nao e causada pelo bounded preview. Com
-   `STORAGE_MODE=hybrid` e execucao serial, o gate focado completo passou
-   126/126 em banco limpo. O deploy foi fast-forward only em `94882d76`, com
-   build/reload apenas de backend e Web Session worker. A auditoria pos-deploy
-   provou regressao de plano em producao: a query lateral nao usou indice em
-   SECULT, executou plano estimado como nested loop + sequential scan por
-   identidade e elevou `last_message_lookup` para segundos. O runtime deve voltar
-   ao formato anterior; a proxima otimizacao precisa evitar busca lateral
-   per-identity sem indice efetivo, ou trazer indice/read-model comprovado. O
-   modo estrito `postgres` ainda requer fixtures historicas compativeis antes de
-   ser usado como gate completo dessa suite.
-9. manter `runtime_state_lookup` em WATCH, nao como root cause atual. A mesma
-   auditoria mostrou leitura batched de `ConversationRuntimeState`, retorno de
-   uma linha por conversa vencedora e `runtime_state_fallback=0` em producao;
-   reduzir esse select pode ser avaliado depois, mas nao deve preceder o
-   desenho seguro do preview de ultima mensagem.
+1. Canonical mail transport cleanup (P1): consolidar Resend HTTPS API,
+   Nodemailer SMTP de Web Session alerts, template-review e backup mailers em
+   uma abstracao/config canonica, sem quebrar classes de email hoje funcionais.
+2. Waiting-for-customer 60m (P1): desenhar e implementar apenas para estado
+   explicito em que a automacao aguarda resposta do cidadao; nunca usar
+   inatividade generica de conversa HUMAN.
+3. CRA-PR department hours (P1): guiar configuracao do cliente e validar flow
+   aware of department hours. No schedule continua significando
+   `NO_SCHEDULE`/aberto e nao e falha tecnica.
+4. Guided Builder productization (P1): concluir o editor guiado para usuarios de
+   negocio sobre o runtime existente, mantendo JSON avancado e sem mudar a
+   semantica dos flows.
+5. Reporting context enhancements (P2): adicionar contexto de AUTO vs MANUAL,
+   politica de atribuicao, `presenceMode` e carga/capacidade atual onde agregar
+   verdade operacional sem reabrir bugs ja fechados.
+
+WATCH only:
+
+- Inbox performance residual: IMPROVED / WATCH. `48c206fa` e `1aae26b5` estao
+  REAL VALIDATED; `94882d76` foi REVERTED por regressao real de plano e
+  `4bc8befd` esta DEPLOYED. Proxima acao e apenas medicao em futura janela
+  SECULT representativa, nao novo patch.
+- CPU residual: WATCH. Nao ha evidencia atual de dual-read, runtime fallback,
+  reconnect loop, retry hibrido ou pressao de DB.
+- `last_message_lookup`: KNOWN RESIDUAL HOTSPOT / NO ACTIVE PATCH. Nao retornar
+  ao desenho lateral per-identity sem indice/plano comprovado.
+- SECULT fairness/round-robin cursor: WATCH. `presenceMode=AVAILABLE` ja tem
+  comportamento funcional validado.
+- SECULT Web Session non-content suppression: ORGANIC VALIDATION PENDING para
+  confirmar ausencia de novas bolhas `Mensagem nao suportada`.
 
 Dividas tecnicas abertas:
 
@@ -187,9 +184,9 @@ Dividas tecnicas abertas:
   `close.succeeded` or `close.failed`, before post-close UI reconciliation can
   clear selection or remove the row. Backend close semantics, CSAT, protocol
   closure and snapshots remain unchanged.
-- Demo Web Session QR_REQUIRED remains OPEN as a channel recovery task; alert
-  delivery hardening does not reconnect or close the underlying disconnect
-  incident.
+- Demo Web Session recovery: CLOSED / REAL VALIDATED after controlled reconnect.
+  Inbound, outbound, close, CSAT and post-send stability passed without
+  401/conflict recurrence.
 - baselines CRA versionados nesta consolidacao como evidencia de validacao, nao como dump operacional:
   - `docs/bids/2026/cra-pr/CRA_PR_DEMO_FLOW_V1_CUSTOMER_VALIDATION_BASELINE.md`;
   - `docs/bids/2026/cra-pr/cra-pr-demo-flow-v1-customer-validation.definition.json`.
@@ -199,6 +196,21 @@ Dividas tecnicas abertas:
 - billing measurement items ainda abertos: ciclo receptivo logico, template Utility fora de 24h entregue, ledger Meta apos 2026-10-01 e relatorio contratual mensal.
 - alteracoes externas de `.env`/segredos continuam como procedimento
   operacional separado; a matriz de deploy cobre impacto derivado de diff Git.
+
+### Guided Builder — estado local isolado
+
+Em 2026-09-10 o worktree principal continha patch local nao commitado e
+quarentenado de Guided Builder:
+
+- `src/components/app/ChatbotFlowBuilder.tsx`;
+- `src/components/app/ChatbotFlowBuilder.test.ts`;
+- `src/app/app/chatbot/page.tsx`;
+- `src/app/admin/tenants/[tenantId]/chatbot/page.tsx`.
+
+Resumo: MVP de wizard guiado/actionable sobre o editor de flow existente,
+incluindo objetivos de fluxo, proxima tarefa guiada e testes novos. Ainda nao
+foi incluido nos commits recentes de SECULT/performance e deve continuar
+separado ate review, build e validacao visual proprios.
 
 ### Contact Timeline / Histórico do contato
 

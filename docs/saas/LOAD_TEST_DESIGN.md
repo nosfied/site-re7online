@@ -82,6 +82,14 @@ CPU observada:
 Importante: a causa raiz de CPU ainda nao esta comprovada. E necessario medir
 durante expediente antes de declarar conclusao.
 
+Atualizacao 2026-09-10 pos-revert: `48c206fa` e `1aae26b5` permanecem REAL
+VALIDATED como reducoes seguras do custo da Inbox. O patch `94882d76` de bounded
+outbound preview foi REVERTED por regressao real de plano e `4bc8befd` esta
+DEPLOYED. Performance residual da Inbox e CPU ficam em WATCH, nao como frente
+ativa. `last_message_lookup` e KNOWN RESIDUAL HOTSPOT / NO ACTIVE PATCH. Nova
+medicao deve ocorrer somente em janela SECULT representativa ou novo incidente,
+sem retomar otimizacao especulativa.
+
 Atualizacao 2026-09-10: apos `d163c5ef`, `b93ad07e` e `12eb83db`, a causa
 antiga nao reapareceu como dual-read, runtime fallback ou bridge realtime
 quebrada. Em producao no HEAD `52a2d0b8`, uma janela residual mostrou CPU do
@@ -298,8 +306,9 @@ Interpretacao:
 - nao ha evidencia de bug novo em Hybrid, Queue, Reports ou DB;
 - Inbox list continua sendo o hotspot residual por volume e custo por poll;
 - heartbeat aparece em volume, mas com menor custo agregado que Inbox list;
-- antes de otimizar, a proxima frente deve medir query shape e cache seguro em
-  `/app/conversations` com janelas comparaveis de expediente.
+- antes de qualquer nova otimizacao, a proxima frente deve medir somente em
+  janela representativa ou incidente novo. O resultado pos-revert de 2026-09-10
+  congelou performance residual em WATCH.
 
 ### `/app/conversations` query-shape audit - 2026-09-10
 
@@ -715,28 +724,32 @@ Query design candidates:
 Design decision:
 
 ```text
-CHOSEN FOR NEXT IMPLEMENTATION DESIGN:
-lateral/union bounded latest-human-visible candidate with app-side equivalence tests
+LAST EVALUATED DESIGN:
+lateral bounded latest-human-visible candidate with app-side equivalence tests
 
 IMPLEMENT NOW:
 NO
+
+CURRENT DECISION:
+WATCH / NO ACTIVE PATCH
 ```
 
 Reason: the optimization is justified by row volume, but the safe predicate for
 "visible preview message" is not fully DB-native today because visibility and
-metadata are encoded in `rawPayload`. The next implementation must first add
-fixtures that compare old and new preview output for newest-management-only,
-visible-behind-control, `historyVisibleAfter`, media, protocol/CSAT and HYBRID
-duplicate scenarios.
+metadata are encoded in `rawPayload`. The lateral form tested in production was
+semantically valid but produced a worse PostgreSQL plan for SECULT and was
+reverted. Future work must start from plan/index evidence, not from the reverted
+query shape.
 
 ### `/app/conversations` bounded outbound preview implementation - 2026-09-10
 
 Status:
 
 ```text
-DEPLOYED
+REVERTED AFTER REAL PERFORMANCE REGRESSION
 COMMIT: 94882d765b476e12a46eabd39c2bd21bb99bef13
-DEPLOY: PASS
+REVERT COMMIT: 4bc8befdffbf03fe9e1a2b13be6f77564ac0f1e2
+DEPLOY: PASS THEN REVERT DEPLOYED
 PRODUCTION MUTATION: NO
 SEMANTIC ORACLE: PASS
 FULL FOCUSED GATE: PASS WITH EXPLICIT STORAGE_MODE=hybrid
@@ -855,6 +868,10 @@ schema. The runtime query shape should be rolled back. The next optimization
 must either avoid per-identity lateral scans or introduce an index/read-model
 with production-plan evidence before rollout.
 
+Current status: rollback is deployed. `last_message_lookup` remains a known
+residual hotspot, but the performance thread is WATCH only and must not displace
+the product backlog without new representative evidence.
+
 Modelo de escala atual estimado:
 
 ```text
@@ -878,15 +895,13 @@ CRA 30-AGENT SCALE READINESS:
 PARTIAL
 ```
 
-Proxima bateria de observacao real:
+Proxima bateria de observacao real, se houver novo incidente ou janela
+representativa aprovada:
 
 ```text
 NEXT LOAD OBSERVATION:
-Tuesday, 2026-09-08
+not scheduled
 ```
-
-Motivo: primeiro dia util apos o feriado de 7 de setembro, com maior chance de
-demanda acumulada de atendimento.
 
 Plano:
 

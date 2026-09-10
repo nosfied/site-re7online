@@ -284,8 +284,9 @@ direcionamento previo. O ajuste requerido foi de clareza UX e foi deployado em
 Validacao organica SECULT em 2026-09-10, apos aplicar `presenceMode=AVAILABLE`
 em 2026-09-09 11:38:31 -03, observou 30 auto-assignments, 11 agentes distintos,
 Maria Helena participando com 1 auto-assignment, `no_eligible=0` e zero exclusoes
-por heartbeat stale isolado. A distribuicao permanece em acompanhamento para
-volume maior; nao ha bug de algoritmo comprovado.
+por heartbeat stale isolado. A elegibilidade funcional esta REAL VALIDATED. A
+distribuicao/fairness permanece em WATCH para volume maior; nao ha bug de
+algoritmo comprovado.
 
 ## Presenca da equipe
 

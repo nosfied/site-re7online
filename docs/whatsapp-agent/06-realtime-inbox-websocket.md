@@ -330,8 +330,8 @@ Plano:
 - Phase 1, consistency hardening: DONE / PRODUCTION VALIDATED;
 - Phase 2, WebSocket primary plus targeted list/timeline invalidation: DONE /
   PRODUCTION VALIDATED;
-- Phase 3, pause hidden-tab polling and broader route query optimization: OPEN;
-- Phase 4, scale/load validation with 10/30/50 sessions: OPEN.
+- Phase 3, pause hidden-tab polling and broader route query optimization: WATCH;
+- Phase 4, scale/load validation with 10/30/50 sessions: FUTURE / NOT ACTIVE.
 
 Evidencia que motivou Phase 2:
 
@@ -396,17 +396,17 @@ para `limit=25`, 251 conversas vencedoras correspondiam a ~4.6k inbound e
 ~5.2k outbound historicos, com retorno limitado a 502 linhas de cada lado para
 resolver previews. `runtime_state_lookup` permaneceu batched, com uma linha por
 conversa vencedora e `runtime_state_fallback=0`; portanto deve ficar em WATCH,
-nao como root cause atual. O proximo patch de performance deve mirar a leitura
-de ultima mensagem humana visivel, mas somente depois de preservar exatamente
-supressao de eventos management-only, `historyVisibleAfter` e merge
-inbound/outbound.
+nao como root cause atual. A leitura de ultima mensagem humana visivel e
+KNOWN RESIDUAL HOTSPOT, mas nao ha patch ativo apos a regressao/revert do
+desenho lateral.
 
 Design gate registrado: nao usar `DISTINCT ON` ou `ROW_NUMBER()` direto como
 patch curto sem provar a equivalencia do predicado "ultima mensagem humana
-visivel". A alternativa preferencial para a proxima etapa e testar um desenho
-lateral/union bounded que selecione poucos candidatos por identidade e mantenha
-validacao em aplicacao para `rawPayload`, ate existir um read model explicito
-para visibilidade.
+visivel". A alternativa lateral/union bounded foi testada em producao na forma
+`94882d76` e revertida em `4bc8befd` por regressao real de plano PostgreSQL em
+SECULT. Portanto `last_message_lookup` permanece KNOWN RESIDUAL HOTSPOT, mas
+sem patch ativo aprovado; qualquer nova tentativa precisa provar plano/indice em
+janela representativa antes de deploy.
 
 Implementacao local iniciada em 2026-09-10:
 
@@ -423,6 +423,11 @@ Implementacao local iniciada em 2026-09-10:
   `ConversationRuntimeState` no Postgres, nao como regressao do bounded preview;
 - com `STORAGE_MODE=hybrid` e execucao serial, o gate focado completo passou
   126/126 em banco local limpo.
+
+Resultado final dessa tentativa: rollback de runtime aplicado em producao por
+`4bc8befdffbf03fe9e1a2b13be6f77564ac0f1e2`. A trilha de performance sai da
+fila ativa e volta para WATCH, preservando as evidencias de semantica e plano
+para uma futura revisao.
 
 Gap exposto por Phase 2: mensagens `message.created` geradas no worker Web
 Session nao chegavam ao WebSocket do backend e eram mascaradas pelo polling
