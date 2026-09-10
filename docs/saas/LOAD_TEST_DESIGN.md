@@ -82,6 +82,18 @@ CPU observada:
 Importante: a causa raiz de CPU ainda nao esta comprovada. E necessario medir
 durante expediente antes de declarar conclusao.
 
+Atualizacao 2026-09-10: apos `d163c5ef`, `b93ad07e` e `12eb83db`, a causa
+antiga nao reapareceu como dual-read, runtime fallback ou bridge realtime
+quebrada. Em producao no HEAD `52a2d0b8`, uma janela residual mostrou CPU do
+backend inicialmente em 67-69% e depois em 60-61%, memoria estavel em
+aproximadamente 230-278 MB, health PASS e DB pressure NORMAL. No delta de 60s,
+`GET /app/conversations` fez 21 req/min e gerou 246
+`inbox.list.query_count`/min, aproximadamente 11.7 queries/request, com
+`runtime_state_fallback=0` e `multichannel.dual_read=0`. Classificacao:
+residual load e provavelmente custo da listagem da Inbox sob uso real; sem
+evidencia de loop, reconnect storm, Hybrid retry, Queue ou Reports como causa
+raiz.
+
 ### SECULT Inbox / CPU correlation - START/MID/END windows
 
 Primeiro ponto de medicao em producao:
@@ -252,11 +264,41 @@ Comparacao START/MID/END:
 | EXTRA 14:17 | 6 seen / 11 sessions | NOT_OBSERVED | ~103 | 1232 | ~12 | ~87.5% | NORMAL |
 | END | active sessions possible, effective Inbox online 0 | 0 effective | idle / not material | NOT_OBSERVED | NOT_OBSERVED | ~8.2% | NORMAL |
 | END 03/09 | 0 seen / 6 sessions | 0 | 0 observed | 0 observed | not observed | ~11.6% | NORMAL |
+| RESIDUAL 10/09 | SECULT real traffic active | not fully measured | 21 | 246 | ~11.7 | ~60-69% | NORMAL |
 
 ```text
 INBOX / BACKEND PERFORMANCE:
-CLOSED FOR PHASE 2 DECISION / POS-PHASE 2 LOAD VALIDATION PARTIAL
+CLOSED FOR PHASE 2 DECISION / RESIDUAL LIST-READ COST WATCH
 ```
+
+Residual 2026-09-10:
+
+- production HEAD: `52a2d0b8c1ae2c6b53ca66775d25390bef2d1166`;
+- CPU samples: 68.5, 68.4, 67.7, 67.8, 67.2, 61.4, 61.0, 60.7, 60.4, 60.4%;
+- peak: 68.5%;
+- average across collected samples: ~64.9%;
+- memory: approximately 230-278 MB RSS;
+- DB pressure: NORMAL, with mostly idle Postgres sessions and no wait queue
+  signal;
+- top current route by delta: `GET /app/conversations`, 21 req/min;
+- Inbox list query delta: 246/min;
+- approximate queries/request: ~11.7;
+- runtime fallback: 0/min;
+- dual-read: 0/min;
+- top cumulative route: `GET /app/conversations`, 2797 successful requests
+  since reload, avg ~3339 ms, p95 ~4178 ms;
+- top cumulative Inbox operation cost for SECULT:
+  `channel_state_batch`, `last_message_lookup`, `auth_rbac`,
+  `runtime_state_lookup`, `tenant_features`.
+
+Interpretacao:
+
+- nao e o mesmo problema do dual-read multichannel de 2026-09-01;
+- nao ha evidencia de bug novo em Hybrid, Queue, Reports ou DB;
+- Inbox list continua sendo o hotspot residual por volume e custo por poll;
+- heartbeat aparece em volume, mas com menor custo agregado que Inbox list;
+- antes de otimizar, a proxima frente deve medir query shape e cache seguro em
+  `/app/conversations` com janelas comparaveis de expediente.
 
 Modelo de escala atual estimado:
 

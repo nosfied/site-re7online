@@ -63,11 +63,14 @@ Estado fechado/validado:
   becoming available below capacity, `no_eligible=0`, and stale heartbeat alone
   produced zero exclusions. Distribution remains WATCH, not a proven algorithm
   defect.
-- SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / POS-PHASE 2 LOAD VALIDATION PARTIAL;
-- Backend CPU watch after hybrid claim recovery deploy: WATCH. Short 2026-09-10
-  sample held near 67-69% CPU with health PASS, memory stable around 253-273 MB,
-  SECULT real traffic active, 26 hybrid claim/completed pairs in 10 minutes, and
-  no retry/reconnect/error loop evidence.
+- SECULT Inbox/CPU correlation: CLOSED FOR PHASE 2 DECISION / RESIDUAL CPU WATCH;
+- Backend CPU residual load watch after hybrid claim recovery deploy: WATCH.
+  Samples on 2026-09-10 held near 67-69% and later near 60-61% CPU with health
+  PASS, memory stable around 230-278 MB, DB pressure NORMAL, SECULT real traffic
+  active, `runtime_state_fallback=0`, `multichannel.dual_read=0`, and no
+  retry/reconnect/error loop evidence. Current residual hotspot remains
+  `/app/conversations` list reads: 21 req/min produced 246
+  `inbox.list.query_count`/min, approximately 11.7 queries/request.
 - Browser Push / PWA notifications: CLOSED / REAL VALIDATED;
 - true foreground Web Push detection: CLOSED / REAL VALIDATED in `670f392d`;
 - hidden desktop local sound: CLOSED / REAL VALIDATED in `c50fb73c`;
@@ -90,7 +93,8 @@ Estado fechado/validado:
 
 Pendencias proximas:
 
-1. executar bateria CPU/Inbox em 2026-09-08 com START, MID, EXTRA e END;
+1. executar nova bateria CPU/Inbox durante expediente com START, MID, EXTRA e
+   END apos as medicoes residuais de 2026-09-10;
 2. validar escala 10/30/50 sessoes antes de declarar capacidade CRA 30 agentes;
 3. validar ativacao/primeiro login dos usuarios CRA-PR, especialmente 3 admins de TI;
 4. guiar configuracao de horarios dos departamentos CRA-PR;
@@ -99,7 +103,10 @@ Pendencias proximas:
    `albumMessage` nao aparecem como `Mensagem nao suportada`;
 6. continuar observando distribuicao organica SECULT em `presenceMode=AVAILABLE`
    antes de qualquer ajuste no ponteiro de round-robin;
-7. desenhar waiting-on-customer 1h como regra funcional separada.
+7. desenhar waiting-on-customer 1h como regra funcional separada;
+8. auditar query shape/cache de `/app/conversations` antes de qualquer novo
+   patch de performance; Hybrid, Queue, Reports e DB nao foram classificados
+   como causa raiz do residual atual.
 
 Dividas tecnicas abertas:
 

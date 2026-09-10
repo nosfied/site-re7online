@@ -348,6 +348,14 @@ Conclusao: polling de `/app/conversations` e contribuidor operacional
 fortemente suspeito para CPU em expediente. A decisao de Phase 2 esta fechada,
 mas capacidade final ainda exige validacao de carga/uso real pos-deploy.
 
+Recheck residual em 2026-09-10 no HEAD `52a2d0b8`: a carga nao voltou pelo
+dual-read nem por fallback de runtime. Em 60s, `/app/conversations` registrou
+21 req/min, 246 `inbox.list.query_count`/min, ~11.7 queries/request,
+`runtime_state_fallback=0` e `multichannel.dual_read=0`. CPU do backend ficou
+em ~60-69% durante a amostra, com memoria estavel e DB pressure NORMAL. A
+classificacao continua sendo custo residual de listagem/polling da Inbox, nao
+falha da ponte realtime ou retry hibrido.
+
 Gap exposto por Phase 2: mensagens `message.created` geradas no worker Web
 Session nao chegavam ao WebSocket do backend e eram mascaradas pelo polling
 agressivo anterior. O fix `12eb83db` reutilizou a ponte worker->backend

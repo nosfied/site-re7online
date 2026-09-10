@@ -135,7 +135,30 @@ PASS, PM2 sem restart novo, e nao houve evidencias de loop de reconnect, retry
 ou `failed_retryable`. Na mesma janela, a SECULT concentrou a atividade
 observada, com 26 pares `claimed/completed` em 10 minutos.
 
-Classificacao: CPU em WATCH por carga sustentada moderada, sem bug comprovado.
+Recheck residual na mesma data:
+
+```text
+15:08:22Z 61.4%
+15:08:52Z 61.0%
+15:09:22Z 60.7%
+15:09:52Z 60.4%
+15:10:22Z 60.4%
+```
+
+Delta interno de 60s:
+
+- `/app/conversations`: 21 req/min;
+- `inbox.list.query_count`: 246/min;
+- queries/request aproximado: 11.7;
+- `runtime_state_fallback`: 0/min;
+- `multichannel.dual_read`: 0/min;
+- DB pressure: NORMAL;
+- memoria RSS: aproximadamente 230-278 MB entre snapshots observados.
+
+Classificacao: CPU em WATCH por carga sustentada moderada. O residual atual
+aponta para custo da listagem da Inbox em uso real; nao ha evidencia de retorno
+do dual-read, fallback de runtime, retry hibrido, loop de reconnect ou pressao
+de DB.
 
 ## Web Session unsupported-message incident - 2026-09-04
 
