@@ -148,9 +148,9 @@ Fila ativa repriorizada:
 2. CRA-PR department hours (P1): guiar configuracao do cliente e validar flow
    aware of department hours. No schedule continua significando
    `NO_SCHEDULE`/aberto e nao e falha tecnica.
-3. Guided Builder productization (P1): concluir smoke visual humano e Demo
-   validation do editor guiado reconciliado para usuarios de negocio sobre o
-   runtime existente, mantendo JSON avancado e sem mudar a semantica dos flows.
+3. Guided Builder productization (P1): concluir smoke autenticado nas rotas
+   reais `/app/chatbot` e `/admin/tenants/:tenantId/chatbot`, mantendo JSON
+   avancado e sem mudar a semantica dos flows.
 4. Reporting context enhancements (P2): adicionar contexto de AUTO vs MANUAL,
    politica de atribuicao, `presenceMode` e carga/capacidade atual onde agregar
    verdade operacional sem reabrir bugs ja fechados.
@@ -233,9 +233,24 @@ Estado reconciliado:
 - VALIDATION: `ChatbotFlowBuilder.test.ts` 22/22 PASS; frontend build PASS;
   `git diff --check` PASS.
 
-Status: RECONCILED / READY FOR HUMAN VISUAL SMOKE. Ainda nao deployado nesta
-etapa. Proxima decisao: smoke visual humano em Demo antes de promover para
-commit/deploy de producao.
+Smoke local de 2026-09-10:
+
+- temporary non-versioned harness rendered the real `ChatbotFlowBuilder`
+  component in desktop, tablet and mobile;
+- new flow entry experience, supported objective cards, next-task panel,
+  journey preview and checklist rendered coherently;
+- Syer-style direct handoff fixture loaded without reset/destructive rewrite;
+- CRA-style consent/menu/handoff fixture loaded without corruption and kept
+  Advanced mode as the escape hatch for complex structures;
+- responsive layout did not show horizontal overflow or clipped controls in the
+  captured viewports;
+- route-level smoke remained incomplete locally: `/app/chatbot` stopped at the
+  local loading/auth/API boundary and `/admin/tenants/:tenantId/chatbot` stopped
+  at the admin login gate.
+
+Status: BLOCKED BY ROUTE SMOKE GAP, not by a confirmed UX defect. No push or
+deploy was performed after this smoke because the exact authenticated app/admin
+surfaces still need to be exercised before promotion.
 
 ### Contact Timeline / Histórico do contato
 
