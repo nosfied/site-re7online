@@ -90,6 +90,12 @@ Estado fechado/validado:
 - CRA-PR CSAT score/responded and optional comment in same response: CLOSED / PASS;
 - CRA-PR Browser Push background: CLOSED / REAL VALIDATED;
 - CRA-PR ready for training 2026-09-09: YES.
+- Demo HYBRID full fresh-flow validation after `5f07d7ad`: CLOSED / REAL
+  VALIDATED. The same controlled cycle `CVT-F8E9904B8352` advanced from
+  `registro_pf_menu` through back navigation, handoff, Inbox claim, human
+  freeform, close and CSAT. All passive/reactive outbound messages used
+  `WEB_SESSION`; passive Meta outbound count was `0`; Hybrid logical dedupe
+  remained exactly-once; the earlier P2002 did not recur.
 
 Pendencias proximas:
 
@@ -127,13 +133,19 @@ Dividas tecnicas abertas:
 - `****6194`: OPEN / TARGETED CYCLE-AWARE AUDIT. Ha snapshot antigo com CSAT
   respondido e atividade/runtime atual; nao classificar como residuo de
   capacidade sem analise por ciclo.
-- Demo Web Session: OPEN / PREEXISTING. Estado `disconnected` / `QR_REQUIRED`
-  foi observado antes da correcao de reports `f84258d7` e deve permanecer em
-  frente separada.
+- Demo Web Session reconnect/revalidation: CLOSED / REAL VALIDATED on
+  2026-09-10. The prior `disconnected` / `QR_REQUIRED` state was recovered by
+  normal QR pairing; inbound, human outbound, close notice and CSAT remained
+  stable with no new `401`, conflict, `QR_REQUIRED` or `auth_clear`.
 - Demo operational alert email: OPEN / ROOT CAUSE NOT YET PROVEN. A queda da
   conexao Demo nao gerou email observado; auditar destinatarios tenant-scoped,
   configuracao CRA-only vs suporte interno global, e se a transicao qualificava
   para alerta.
+- claim-before-downstream hardening: OPEN / ARCHITECTURAL HARDENING. The
+  `5f07d7ad` fix closed the proven provider Lead identity collision, but a
+  winning Hybrid provider can still claim a logical inbound before all
+  downstream processing finishes. Generic replay/recovery guarantees remain a
+  separate design item.
 
 ### Contact Timeline / Histórico do contato
 

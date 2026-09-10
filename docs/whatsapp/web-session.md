@@ -546,3 +546,35 @@ Deployment result:
 - frontend change: NO;
 - schema/migration: NO;
 - status: DEPLOYED / TESTED / ORGANIC VALIDATION PENDING.
+
+### Hybrid provider identity and fresh-flow validation - 2026-09-10
+
+During Demo HYBRID validation, Web Session post-claim processing originally hit
+a provider identity collision when a Meta-created Lead and a Web Session Lead
+already represented the same public contact identity. The fix deployed in
+`5f07d7ad` preserves provider-specific Lead identity instead of mutating a Meta
+Lead into a Web Session identity already owned by another Lead.
+
+Post-deploy validation used the existing controlled Demo cycle
+`CVT-F8E9904B8352` for masked contact `****6787` and completed:
+
+- `registro_pf_menu` back navigation and return;
+- handoff to Registro;
+- Inbox claim;
+- human freeform outbound;
+- normal close;
+- close notice;
+- CSAT score, optional comment and thank-you.
+
+Observed result:
+
+- all passive/reactive outbounds used `WEB_SESSION`;
+- passive Meta outbound count for the cycle was `0`;
+- Web Session won Hybrid logical claims and Meta duplicates were suppressed via
+  `hybrid_logical_message_exists`;
+- one current-cycle `CompletedServiceSnapshot` was created;
+- survey status became `responded` with comment present;
+- no post-fix `P2002` / `Lead_multichannel_identity_uniq` recurrence was
+  observed;
+- Demo Web Session remained connected after close and CSAT, with no new `401`,
+  conflict, `QR_REQUIRED` or `auth_clear`.

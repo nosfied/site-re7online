@@ -81,6 +81,29 @@ Resultado operacional:
 - health: PASS;
 - SECULT remained CONNECTED.
 
+Extended Demo HYBRID validation after `5f07d7ad`:
+
+- controlled contact: `****6787`;
+- controlled protocol: `CVT-F8E9904B8352`;
+- resumed from current runtime node `registro_pf_menu`;
+- `9` back navigation returned to `registro_menu`: PASS;
+- `1` returned to `registro_pf_menu`: PASS;
+- `7` reached handoff to `Registro` / `Registro`: PASS;
+- Inbox projection: exactly one conversation;
+- claim by valid Demo user: PASS;
+- human freeform outbound: `WEB_SESSION`, `SENT`, delivered;
+- close telemetry: `close.attempt`, `close.requested`, `close.succeeded` with
+  the same action id;
+- close lifecycle: runtime `CLOSED`, handoff `NONE`, assignee cleared;
+- `CompletedServiceSnapshot`: exactly one snapshot for the current cycle;
+- close notice and CSAT survey: `WEB_SESSION`, delivered;
+- CSAT response: score `5`, status `responded`, optional comment present;
+- passive Meta outbound messages for the cycle: `0`;
+- Hybrid inbound dedupe for CSAT replies: Web Session won, Meta duplicates
+  suppressed via `hybrid_logical_message_exists`;
+- post-fix P2002 recurrence: NO;
+- secondary tenants CRA, SECULT and Syer remained connected.
+
 Status:
 
 ```text
@@ -95,6 +118,9 @@ CLOSED / REAL VALIDATED
 
 CLOSED HUMAN REENTRY:
 CLOSED / REAL VALIDATED
+
+HYBRID FULL FRESH-FLOW:
+CLOSED / REAL VALIDATED END-TO-END
 ```
 
 ### CRA real tenant rollout state - 2026-09-04

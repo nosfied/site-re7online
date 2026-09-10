@@ -179,6 +179,45 @@ Observed controls:
 
 The literal freeform body used in the real validation is not a product requirement. The requirement closed by this validation is provider selection: post-reply freeform in `HYBRID` / `AUTO` used Web Session.
 
+### Real-World Hybrid Fresh-Flow Validation
+
+Status: CLOSED / REAL VALIDATED END-TO-END.
+
+Validation baseline:
+
+- production HEAD: `5f07d7ad5c688029a5a44ff1cf4ab6ad8238364a`;
+- controlled tenant: `demo-converta`;
+- controlled protocol: `CVT-F8E9904B8352`;
+- contact identity: masked `****6787`;
+- mode: `HYBRID`;
+- Web Session: connected and outbound-ready.
+
+The validated real sequence was:
+
+1. Existing flow runtime resumed at `registro_pf_menu`.
+2. Back navigation returned to `registro_menu`.
+3. The flow returned to `registro_pf_menu`.
+4. Handoff moved the conversation to `HUMAN` / `WAITING`, department `Registro`,
+   queue `Registro`.
+5. Inbox claim moved the conversation to `HUMAN` / `IN_PROGRESS`.
+6. Human freeform outbound used Web Session.
+7. Normal Inbox close created one completed-service snapshot and cleared the
+   assignee/handoff state.
+8. Close notice, CSAT survey, CSAT comment offer, comment prompt and thank-you
+   used Web Session.
+
+Provider result:
+
+```text
+passive/reactive bot messages -> WEB_SESSION
+human freeform inside HYBRID/AUTO -> WEB_SESSION
+passive Meta outbound count -> 0
+Hybrid inbound duplicates -> suppressed after logical claim
+```
+
+This validation proves the exercised passive/reply lifecycle. It does not change
+the active/template policy: templates and campaigns remain Meta Cloud.
+
 ## Contact Start Via Web Session
 
 An operational Web Session does not automatically allow `Contact -> Iniciar conversa` from CRM/Contacts.
