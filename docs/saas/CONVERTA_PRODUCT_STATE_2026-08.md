@@ -388,7 +388,11 @@ tenant real ou na API. O fix mantem a mesma definicao `ChatbotFlow.definition`,
 cria defaults frescos para cada sessao do wizard e remonta o builder de novo
 fluxo apos `create` bem-sucedido em `/app` e `/admin`. Fixture Syer-like local
 validou primeira, segunda e terceira criacoes sequenciais com JSON valido.
-Status: FIXED / LOCAL VALIDATED / DEPLOY PENDING / REAL SYER RETEST PENDING.
+Validacao real em 2026-09-11 na producao `96220ea4`: a UI admin do tenant
+`syer-rodrigues` criou dois fluxos guiados de teste inativos em sequencia, sem
+`JSON invalido`; a abertura de um terceiro novo fluxo iniciou limpa e sem
+salvar. O fluxo ativo real preservou o mesmo hash de definition. Status: REAL
+VALIDATED / CLOSED.
 
 O flow SECULT/Demo homologado usa:
 

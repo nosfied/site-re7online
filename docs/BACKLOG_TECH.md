@@ -346,7 +346,13 @@ Conclusao:
 - VALIDACAO LOCAL: fixture Syer-like comprovou primeira, segunda e terceira
   criacoes sequenciais com JSON serializavel/parseavel e destinos validos.
 
-Status: FIXED / LOCAL VALIDATED / DEPLOY PENDING / REAL SYER RETEST PENDING.
+Validacao real: em 2026-09-11, na producao `96220ea4`, a UI admin do tenant
+`syer-rodrigues` criou dois fluxos guiados de teste inativos em sequencia, sem
+`JSON invalido` e sem estado stale. A abertura de um terceiro novo fluxo
+iniciou limpa, sem salvar. O fluxo ativo real manteve o mesmo hash de
+definition.
+
+Status: REAL VALIDATED / CLOSED.
 
 ### Contact Timeline / Histórico do contato
 
