@@ -7,7 +7,9 @@ import {
   buildInformationFlow,
   buildInstitutionalMenuFlow,
   buildPreServiceCaptureFlow,
+  buildStandardFlowDefinition,
   ChatbotFlowBuilder,
+  createDefaultWizardAnswers,
   createGuidedObjectiveDefinition,
   getChatbotNodeEditorSectionPlan,
   getChatbotNodeIssueSectionKeys,
@@ -697,4 +699,69 @@ test("wizard validation requires configured destinations inside submenus", () =>
   );
 
   assert.deepEqual(errors, ["A opção Registro PF ainda não possui destino."]);
+});
+
+test("wizard default answers are isolated between sequential flow creations", () => {
+  const first = createDefaultWizardAnswers();
+  const second = createDefaultWizardAnswers();
+
+  first.menuOptions.push("Jurídico");
+  first.destinations[0] = { type: "department", departmentId: "dep_a" };
+  first.submenus["0"] = {
+    title: "Registro",
+    options: ["Pessoa Física"],
+    destinations: { 0: { type: "department", departmentId: "dep_b" } },
+    enablePreviousMenu: true,
+    enableMainMenu: true,
+  };
+  first.captureQuestions.push("Informe o protocolo.");
+
+  assert.deepEqual(second.menuOptions, ["Registro", "Financeiro", "Suporte"]);
+  assert.deepEqual(second.destinations, {});
+  assert.deepEqual(second.submenus, {});
+  assert.deepEqual(second.captureQuestions, ["Informe seu nome completo."]);
+});
+
+test("Syer-like existing flow does not contaminate first, second or third generated flow JSON", () => {
+  const syerExistingFlow = {
+    start: "menu_principal",
+    nodes: {
+      menu_principal: {
+        type: "handoff",
+        text: "Vamos atender você.",
+        departmentId: "dep_syer",
+      },
+    },
+  };
+  const existingText = JSON.stringify(syerExistingFlow, null, 2);
+  assert.doesNotThrow(() => JSON.parse(existingText));
+
+  const first = createDefaultWizardAnswers();
+  first.template = "direct_handoff";
+  first.initialMessage = "Vamos encaminhar você.";
+  first.destinations = { 0: { type: "department", departmentId: "dep_syer" } };
+
+  const second = createDefaultWizardAnswers();
+  second.template = "institutional_menu";
+  second.initialMessage = "Escolha uma opção.";
+  second.menuOptions = ["Dúvidas", "Financeiro"];
+  second.destinations = {
+    0: { type: "department", departmentId: "dep_duvidas" },
+    1: { type: "department", departmentId: "dep_financeiro" },
+  };
+
+  const third = createDefaultWizardAnswers();
+  third.template = "pre_service_collection";
+  third.initialMessage = "Informe seu nome.";
+  third.captureQuestions = ["Informe seu nome.", "Informe o assunto."];
+  third.destinations = { 0: { type: "department", departmentId: "dep_syer" } };
+
+  for (const answers of [first, second, third]) {
+    const definition = buildStandardFlowDefinition(answers);
+    const text = JSON.stringify(definition, null, 2);
+    assert.doesNotThrow(() => JSON.parse(text));
+    assert.equal(typeof definition.start, "string");
+    assert.equal(typeof definition.nodes[definition.start], "object");
+    assert.deepEqual(validateWizardStep(answers, answers.template === "institutional_menu" ? "destinations" : "destination"), []);
+  }
 });

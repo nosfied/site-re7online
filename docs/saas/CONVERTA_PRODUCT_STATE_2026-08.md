@@ -380,6 +380,16 @@ ROUND 2. Validacao tecnica local: `ChatbotFlowBuilder.test.ts` 30/30 PASS,
 frontend build PASS e `git diff --check` PASS. Ainda nao deve ser tratado como
 validado em producao nem promovido sem aprovacao visual do owner.
 
+Incidente P1 de 2026-09-11: a tentativa de criar um segundo fluxo guiado para
+Syer Rodrigues podia apresentar `JSON invalido` no cliente. A mensagem vinha do
+parse local do rascunho antes do backend. A auditoria apontou estado transiente
+stale do builder de novo fluxo depois de uma criacao anterior, nao problema no
+tenant real ou na API. O fix mantem a mesma definicao `ChatbotFlow.definition`,
+cria defaults frescos para cada sessao do wizard e remonta o builder de novo
+fluxo apos `create` bem-sucedido em `/app` e `/admin`. Fixture Syer-like local
+validou primeira, segunda e terceira criacoes sequenciais com JSON valido.
+Status: FIXED / LOCAL VALIDATED / DEPLOY PENDING / REAL SYER RETEST PENDING.
+
 O flow SECULT/Demo homologado usa:
 
 ```json

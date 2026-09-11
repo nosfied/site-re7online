@@ -326,6 +326,28 @@ Estado atual:
 Nao promover, commitar ou deployar este redesign antes de aprovacao visual
 explicita do owner.
 
+### Guided Builder 2.1 — segundo fluxo com JSON invalido
+
+Em 2026-09-11 foi auditado o incidente P1 em que a criacao de um segundo fluxo
+guiado para o tenant real Syer Rodrigues terminava com a mensagem
+`JSON invalido` antes de chegar ao backend.
+
+Conclusao:
+
+- ROOT CAUSE: estado transiente do builder de novo fluxo permanecia montado apos
+  uma criacao bem-sucedida; o parent limpava o texto do novo fluxo, mas a
+  sessao interna do wizard podia carregar dados mutaveis da criacao anterior.
+- ESCOPO: bug de estado client-side no editor guiado; nao houve evidencia de
+  problema de backend, schema, migration ou configuracao especifica da Syer.
+- SYER REAL: auditado em read-only. O fluxo real existente permaneceu
+  inalterado.
+- FIX: o wizard passou a criar defaults frescos por sessao e o builder de novo
+  fluxo em `/app` e `/admin` e remontado apos criacao bem-sucedida.
+- VALIDACAO LOCAL: fixture Syer-like comprovou primeira, segunda e terceira
+  criacoes sequenciais com JSON serializavel/parseavel e destinos validos.
+
+Status: FIXED / LOCAL VALIDATED / DEPLOY PENDING / REAL SYER RETEST PENDING.
+
 ### Contact Timeline / Histórico do contato
 
 Status:

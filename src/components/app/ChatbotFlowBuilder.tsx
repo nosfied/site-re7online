@@ -483,6 +483,16 @@ const DEFAULT_WIZARD_ANSWERS: StandardFlowWizardAnswers = {
   followupMessage: "Obrigado pelo contato.",
 };
 
+export function createDefaultWizardAnswers(): StandardFlowWizardAnswers {
+  return {
+    ...DEFAULT_WIZARD_ANSWERS,
+    menuOptions: [...DEFAULT_WIZARD_ANSWERS.menuOptions],
+    destinations: { ...DEFAULT_WIZARD_ANSWERS.destinations },
+    submenus: { ...DEFAULT_WIZARD_ANSWERS.submenus },
+    captureQuestions: [...DEFAULT_WIZARD_ANSWERS.captureQuestions],
+  };
+}
+
 function sanitizeLabel(value: string, fallback: string) {
   const normalized = value.trim().replace(/\s+/g, " ");
   return normalized || fallback;
@@ -1462,7 +1472,7 @@ export function ChatbotFlowBuilder({
   const [activeStep, setActiveStep] = useState<GuidedStepKey>("objective");
   const [newOptionLabel, setNewOptionLabel] = useState("");
   const [objectiveInitialized, setObjectiveInitialized] = useState(false);
-  const [wizardAnswers, setWizardAnswers] = useState<StandardFlowWizardAnswers>(DEFAULT_WIZARD_ANSWERS);
+  const [wizardAnswers, setWizardAnswers] = useState<StandardFlowWizardAnswers>(() => createDefaultWizardAnswers());
   const [wizardStepIndex, setWizardStepIndex] = useState(0);
   const [wizardErrors, setWizardErrors] = useState<string[]>([]);
   const [wizardMenuKey, setWizardMenuKey] = useState("");
@@ -1478,7 +1488,7 @@ export function ChatbotFlowBuilder({
   const commit = (definition: FlowDefinition) => onDefinitionTextChange(formatDefinition(definition));
 
   const resetWizardSession = () => {
-    setWizardAnswers(DEFAULT_WIZARD_ANSWERS);
+    setWizardAnswers(createDefaultWizardAnswers());
     setWizardStepIndex(0);
     setWizardErrors([]);
     setWizardMenuKey("");
@@ -2135,7 +2145,7 @@ export function ChatbotFlowBuilder({
       setMode("advanced");
       return;
     }
-    setWizardAnswers({ ...DEFAULT_WIZARD_ANSWERS, template });
+    setWizardAnswers({ ...createDefaultWizardAnswers(), template });
     setWizardStepIndex(0);
     setWizardErrors([]);
     setWizardMenuKey("");

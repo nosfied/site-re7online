@@ -459,6 +459,7 @@ export default function AppChatbotPage() {
   const [newSearch, setNewSearch] = useState("");
   const [newIsActive, setNewIsActive] = useState(false);
   const [newEntryPoint, setNewEntryPoint] = useState(true);
+  const [newFlowBuilderVersion, setNewFlowBuilderVersion] = useState(0);
   const [drafts, setDrafts] = useState<
     Record<
       string,
@@ -703,6 +704,7 @@ export default function AppChatbotPage() {
       setNewSearch("");
       setNewIsActive(false);
       setNewEntryPoint(true);
+      setNewFlowBuilderVersion((current) => current + 1);
       setSuccess("Flow criado com sucesso.");
     } catch (err) {
       const typed = err as AppApiError;
@@ -1078,6 +1080,7 @@ export default function AppChatbotPage() {
               disabled={flowReadOnly || creating}
             />
             <ChatbotFlowBuilder
+              key={`new-flow-builder-${newFlowBuilderVersion}`}
               definitionText={newDefinition}
               onDefinitionTextChange={setNewDefinition}
               disabled={flowReadOnly || creating}

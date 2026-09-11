@@ -391,6 +391,7 @@ export default function AdminTenantChatbotPage() {
   const [newSearch, setNewSearch] = useState("");
   const [newIsActive, setNewIsActive] = useState(false);
   const [newEntryPoint, setNewEntryPoint] = useState(true);
+  const [newFlowBuilderVersion, setNewFlowBuilderVersion] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, FlowDraft>>({});
   const [draftSearches, setDraftSearches] = useState<Record<string, string>>({});
   const [intentCatalogText, setIntentCatalogText] = useState("[]");
@@ -715,6 +716,7 @@ export default function AdminTenantChatbotPage() {
       setNewSearch("");
       setNewIsActive(false);
       setNewEntryPoint(true);
+      setNewFlowBuilderVersion((current) => current + 1);
       setSuccess("Flow criado com sucesso.");
     } catch (err) {
       setError(normalizeAdminChatbotError(err as { message?: string; errorCode?: string }, "Falha ao criar flow."));
@@ -1660,6 +1662,7 @@ export default function AdminTenantChatbotPage() {
               placeholder="Fluxo principal"
             />
             <ChatbotFlowBuilder
+              key={`admin-new-flow-builder-${newFlowBuilderVersion}`}
               definitionText={newDefinition}
               onDefinitionTextChange={setNewDefinition}
               disabled={creating || !clientKey}
