@@ -378,6 +378,50 @@ Conclusao:
 Status: FIXED / DEPLOY TARGET. Validacao pos-deploy deve confirmar que o fluxo
 principal ativo da Syer permanece preservado.
 
+### Guided Builder 2.2 — baseline recovery apos selecao local divergente
+
+Em 2026-09-11 o resultado local inicial do Guided Builder 2.2 foi invalidado
+para validacao de produto. O HEAD de producao estava atual; o problema foi a
+selecao local de worktree/bundle/servidor, contaminada por uma linha antiga e
+divergente do Guided Builder ja aprovado e publicado. O owner abriu o ambiente
+local e viu uma UI anterior, sem os refinamentos aprovados de producao, provando
+que aquele ambiente nao era baseline confiavel.
+
+Impacto:
+
+- PRODUCAO: nao afetada; nao houve commit, push ou deploy do resultado
+  invalido.
+- RESULTADO 2.2 ANTERIOR: INVALID FOR HUMAN PRODUCT VALIDATION.
+- CAUSA OPERACIONAL: desenvolvimento/servidor local misturou worktrees e portas;
+  `3010`/backend antigo apontavam para `/tmp/re7-guided-wizard`, enquanto uma
+  tentativa posterior servia outro bundle em porta diferente.
+- REGRA DE PROCESSO: qualquer trabalho de UX deve reproduzir localmente o
+  baseline de producao aprovado antes de aplicar novos deltas.
+
+Reconstrucao correta:
+
+- BASE: worktree limpa `/tmp/re7-guided-22-current` criada a partir do HEAD
+  canonico de producao `bf5f1d76`.
+- BASELINE LOCAL: backend local isolado e frontend em `3022`, `demo:seed` e
+  login real `admin@demo-prefeitura.local`; `/app/chatbot` respondeu no bundle
+  da base aprovada. Para evitar CORS em desenvolvimento, o frontend deve usar
+  `/agent-api` relativo via rewrite local.
+- PORT 2.2: aplicado cirurgicamente sobre a base atual, sem copiar arquivos
+  inteiros da linha divergente.
+- DELTAS PORTADOS: cancelar/excluir opcao do wizard, excluir submenu simples ja
+  criado, cancelar submenu em criacao, confirmacao destrutiva antes de remover
+  caminhos com filhos, protecao de estruturas compartilhadas/avancadas pelo
+  modo avancado, limpeza de submenu aninhado ao trocar destino, botao inferior
+  "Voltar ao nivel anterior", tons por nivel de menu, texto unificado
+  "Encaminhar para atendimento humano", fluxo Setor -> Fila condicional,
+  explicacoes para "Mostrar outra mensagem" e "Fazer uma pergunta", e suporte a
+  texto livre/emoji digitado pelo usuario no wizard, preview e JSON gerado.
+- VALIDACAO TECNICA: `ChatbotFlowBuilder.test.ts` 37/37 PASS; frontend build
+  PASS; `git diff --check` PASS.
+- STATUS: GUIDED BUILDER 2.2 / OWNER LOCAL APPROVED / DELIVERY TARGET. Apos
+  deploy, classificar como DEPLOYED / PRODUCT OWNER REAL VALIDATION ate o owner
+  concluir os testes em producao.
+
 ### Contact Timeline / Histórico do contato
 
 Status:

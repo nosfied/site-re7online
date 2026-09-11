@@ -8,13 +8,17 @@ import {
   buildInstitutionalMenuFlow,
   buildPreServiceCaptureFlow,
   buildStandardFlowDefinition,
+  cancelWizardSubmenuCreation,
   ChatbotFlowBuilder,
   createDefaultWizardAnswers,
   createGuidedObjectiveDefinition,
   getChatbotNodeEditorSectionPlan,
   getChatbotNodeIssueSectionKeys,
   getGuidedNextTask,
+  getWizardDestinationTypeOptions,
+  removeWizardMenuOption,
   validateWizardStep,
+  wizardMenuLevelTone,
 } from "./ChatbotFlowBuilder";
 
 test("menu nodes expose primary sections and keep secondary sections collapsed by default", () => {
@@ -699,6 +703,113 @@ test("wizard validation requires configured destinations inside submenus", () =>
   );
 
   assert.deepEqual(errors, ["A opção Registro PF ainda não possui destino."]);
+});
+
+test("wizard submenu cancellation removes nested draft state without touching other answers", () => {
+  const answers = createDefaultWizardAnswers();
+  answers.template = "institutional_menu";
+  answers.menuOptions = ["Registro", "Financeiro"];
+  answers.destinations = { 0: { type: "submenu", submenuKey: "0" }, 1: { type: "department", departmentId: "dep_financeiro" } };
+  answers.submenus = {
+    "0": {
+      title: "Registro",
+      options: ["Pessoa Física"],
+      destinations: { 0: { type: "submenu", submenuKey: "0.0" } },
+      enablePreviousMenu: true,
+      enableMainMenu: true,
+    },
+    "0.0": {
+      title: "Pessoa Física",
+      options: ["Novo registro"],
+      destinations: { 0: { type: "department", departmentId: "dep_registro" } },
+      enablePreviousMenu: true,
+      enableMainMenu: true,
+    },
+  };
+
+  const next = cancelWizardSubmenuCreation(answers, "0");
+
+  assert.deepEqual(next.destinations, { 1: { type: "department", departmentId: "dep_financeiro" } });
+  assert.deepEqual(next.submenus, {});
+  assert.deepEqual(next.menuOptions, ["Registro", "Financeiro"]);
+});
+
+test("wizard option removal deletes a created submenu tree and preserves siblings", () => {
+  const answers = createDefaultWizardAnswers();
+  answers.template = "institutional_menu";
+  answers.menuOptions = ["Registro", "Financeiro", "Suporte"];
+  answers.destinations = {
+    0: { type: "submenu", submenuKey: "0" },
+    1: { type: "department", departmentId: "dep_financeiro" },
+    2: { type: "message", message: "Fale com suporte." },
+  };
+  answers.submenus = {
+    "0": {
+      title: "Registro",
+      options: ["Pessoa Física"],
+      destinations: { 0: { type: "submenu", submenuKey: "0.0" } },
+      enablePreviousMenu: true,
+      enableMainMenu: true,
+    },
+    "0.0": {
+      title: "Pessoa Física",
+      options: ["Novo registro"],
+      destinations: { 0: { type: "department", departmentId: "dep_registro" } },
+      enablePreviousMenu: true,
+      enableMainMenu: true,
+    },
+  };
+
+  const next = removeWizardMenuOption(answers, "", 0);
+
+  assert.deepEqual(next.menuOptions, ["Financeiro", "Suporte"]);
+  assert.deepEqual(next.destinations, {
+    0: { type: "department", departmentId: "dep_financeiro" },
+    1: { type: "message", message: "Fale com suporte." },
+  });
+  assert.deepEqual(next.submenus, {});
+});
+
+test("wizard hierarchy tones are based on menu nesting level", () => {
+  assert.match(wizardMenuLevelTone(""), /sky/);
+  assert.match(wizardMenuLevelTone("0"), /indigo/);
+  assert.match(wizardMenuLevelTone("0.1"), /violet/);
+  assert.match(wizardMenuLevelTone("0.1.2"), /emerald/);
+  assert.equal(wizardMenuLevelTone("0.1.2.3"), wizardMenuLevelTone("0.1.2"));
+});
+
+test("wizard destination options keep human routing unified with conditional queue field", () => {
+  const labels = getWizardDestinationTypeOptions("").map((option) => option.label);
+  const values = getWizardDestinationTypeOptions("").map((option) => option.value);
+
+  assert.ok(labels.includes("Encaminhar para atendimento humano"));
+  assert.equal(labels.includes("Encaminhar para uma fila"), false);
+  assert.equal(values.includes("queue"), false);
+  assert.equal(getWizardDestinationTypeOptions("0").some((option) => option.value === "previous_menu"), true);
+});
+
+test("wizard generated definition preserves custom user text and emoji", () => {
+  const answers = createDefaultWizardAnswers();
+  answers.template = "institutional_menu";
+  answers.initialMessage = "1️⃣ Menu inicial 🔗";
+  answers.consentEnabled = true;
+  answers.consentMessage = "2️⃣ Confirme para continuar 📌";
+  answers.consentAcceptOption = "✅";
+  answers.consentDeclineMessage = "0️⃣ Atendimento encerrado.";
+  answers.menuOptions = ["9️⃣ Registro 🔄", "0️⃣ Sair ✅"];
+  answers.destinations = {
+    0: { type: "question", question: "📌 Qual protocolo?" },
+    1: { type: "message", message: "🔗 Consulte o portal." },
+  };
+  answers.invalidOptionText = "Opção inválida 1️⃣ 2️⃣ 9️⃣ 0️⃣";
+  answers.handoffMessageMode = "custom";
+  answers.handoffMessage = "🔄 Encaminhando.";
+
+  const definitionText = JSON.stringify(buildStandardFlowDefinition(answers));
+
+  for (const token of ["1️⃣", "2️⃣", "9️⃣", "0️⃣", "🔗", "📌", "🔄", "✅"]) {
+    assert.match(definitionText, new RegExp(token));
+  }
 });
 
 test("wizard default answers are isolated between sequential flow creations", () => {

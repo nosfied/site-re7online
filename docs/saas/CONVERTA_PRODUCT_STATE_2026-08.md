@@ -404,6 +404,33 @@ UI passa a usar default compartilhado `false` tanto na abertura quanto no reset
 apos criacao. Nao ha hardcode de tenant, schema, migration ou mudanca de
 runtime.
 
+Incidente de processo em 2026-09-11: o primeiro resultado local do Guided
+Builder 2.2 foi invalidado. O HEAD de producao estava atual; o problema foi a
+selecao local de worktree/bundle/servidor, contaminada por uma linha antiga e
+divergente do Guided Builder aprovado em producao. O owner viu UI antiga no
+ambiente local, logo aquele resultado deixou de ser evidencia valida para
+produto. Nao houve impacto em producao porque nada foi commitado, enviado ou
+deployado a partir dessa baseline incorreta.
+
+Regra adotada: trabalho de UX deve primeiro reproduzir localmente a versao de
+producao aprovada antes de receber novos deltas. A reconstrucao correta foi
+feita em `/tmp/re7-guided-22-current`, a partir do HEAD canonico
+`bf5f1d76`, com backend local isolado, frontend em `3022`, `demo:seed` e
+login real. Para evitar CORS em desenvolvimento, o frontend deve usar
+`/agent-api` relativo via rewrite local. O 2.2 foi reaplicado de forma
+cirurgica sobre essa base, adicionando
+cancelamento/exclusao de opcoes do wizard, cancelamento de submenu em criacao,
+confirmacao destrutiva, limpeza de submenus aninhados ao trocar destino, botao
+inferior "Voltar ao nivel anterior", tons por nivel, copy unificada de
+encaminhamento humano, fluxo Setor -> Fila condicional e explicacoes para
+mensagem versus pergunta. A complementacao 2.2 tambem cobre exclusao de submenu
+simples ja criado, preservacao de estruturas compartilhadas/avancadas no modo
+avancado e texto livre com emoji digitado pelo usuario no wizard, preview e JSON
+gerado. Validacao tecnica: `ChatbotFlowBuilder.test.ts` 37/37 PASS, frontend
+build PASS e `git diff --check` PASS. Status:
+GUIDED BUILDER 2.2 / OWNER LOCAL APPROVED / DELIVERY TARGET. Apos deploy,
+permanece em PRODUCT OWNER REAL VALIDATION ate os testes reais em producao.
+
 O flow SECULT/Demo homologado usa:
 
 ```json
