@@ -428,8 +428,10 @@ simples ja criado, preservacao de estruturas compartilhadas/avancadas no modo
 avancado e texto livre com emoji digitado pelo usuario no wizard, preview e JSON
 gerado. Validacao tecnica: `ChatbotFlowBuilder.test.ts` 37/37 PASS, frontend
 build PASS e `git diff --check` PASS. Status:
-GUIDED BUILDER 2.2 / OWNER LOCAL APPROVED / DELIVERY TARGET. Apos deploy,
-permanece em PRODUCT OWNER REAL VALIDATION ate os testes reais em producao.
+GUIDED BUILDER 2.2 / DEPLOYED / PRODUCT OWNER REAL VALIDATION. A entrega
+frontend-only foi publicada em producao no commit `db34d83c`, sem backend,
+worker, schema ou migration. Permanece em PRODUCT OWNER REAL VALIDATION ate os
+testes reais em producao.
 
 O flow SECULT/Demo homologado usa:
 

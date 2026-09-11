@@ -418,9 +418,10 @@ Reconstrucao correta:
   texto livre/emoji digitado pelo usuario no wizard, preview e JSON gerado.
 - VALIDACAO TECNICA: `ChatbotFlowBuilder.test.ts` 37/37 PASS; frontend build
   PASS; `git diff --check` PASS.
-- STATUS: GUIDED BUILDER 2.2 / OWNER LOCAL APPROVED / DELIVERY TARGET. Apos
-  deploy, classificar como DEPLOYED / PRODUCT OWNER REAL VALIDATION ate o owner
-  concluir os testes em producao.
+- STATUS: GUIDED BUILDER 2.2 / DEPLOYED / PRODUCT OWNER REAL VALIDATION. A
+  entrega frontend-only foi publicada em producao no commit `db34d83c`, sem
+  alteracao de backend, worker, schema ou migration. O proximo marco e o owner
+  concluir os testes reais em producao.
 
 ### Contact Timeline / Histórico do contato
 
