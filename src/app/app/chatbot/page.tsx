@@ -698,6 +698,11 @@ export default function AppChatbotPage() {
         definition: parsedDefinition.definition,
       });
       await loadFlows(session);
+      setNewName("Fluxo principal");
+      setNewDefinition(DEFAULT_DEFINITION_TEXT);
+      setNewSearch("");
+      setNewIsActive(false);
+      setNewEntryPoint(true);
       setSuccess("Flow criado com sucesso.");
     } catch (err) {
       const typed = err as AppApiError;

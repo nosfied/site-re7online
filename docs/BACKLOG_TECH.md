@@ -148,9 +148,9 @@ Fila ativa repriorizada:
 2. CRA-PR department hours (P1): guiar configuracao do cliente e validar flow
    aware of department hours. No schedule continua significando
    `NO_SCHEDULE`/aberto e nao e falha tecnica.
-3. Guided Builder productization (P1): preparar promocao controlada apos smoke
-   autenticado PASS nas rotas reais `/app/chatbot` e
-   `/admin/tenants/:tenantId/chatbot`, mantendo JSON avancado e sem mudar a
+3. Guided Builder 2.1 business-first (P1): concluir aceite humano local do
+   criador por modelo -> perguntas curtas -> submenus/navegacao -> preview ->
+   aplicacao explicita ao rascunho, mantendo JSON avancado e sem mudar a
    semantica dos flows.
 4. Reporting context enhancements (P2): adicionar contexto de AUTO vs MANUAL,
    politica de atribuicao, `presenceMode` e carga/capacidade atual onde agregar
@@ -265,6 +265,66 @@ Smoke local de 2026-09-10:
 Status: REAL VALIDATED in local authenticated route smoke and deployed by the
 frontend-only production rollout ending at `9b5bdb34`. No production tenant flow
 mutation was performed by this validation.
+
+### Guided Builder 2.1 — business-first flow creator
+
+Em 2026-09-11 o redesign local do Guided Builder foi reorientado para o modelo
+aprovado pelo owner: em vez de mostrar um painel tecnico com passos detectados,
+o editor novo comeca perguntando qual fluxo de negocio sera criado, faz poucas
+perguntas por vez, gera uma definicao real de `ChatbotFlow.definition`, mostra
+preview/checklist e aplica o resultado ao rascunho somente por acao explicita.
+
+Estado atual:
+
+- STATUS: GUIDED BUILDER 2.1 / LOCAL IMPLEMENTED / HUMAN VALIDATION ROUND 2.
+- WORKTREE: isolado em `/tmp/re7-guided-wizard`, baseado no HEAD canonico
+  `06256cc2`.
+- SCOPE: frontend/editor somente.
+- SOURCE OF TRUTH: preservado em `ChatbotFlow.definition`.
+- SEMANTICA: sem alteracao de runtime, parsing, transitions, handoff, save
+  payload, schema ou migration.
+- UX: novo fluxo abre em modelos de negocio: atendimento institucional com
+  menu, encaminhamento direto, coleta antes do atendimento, mensagem
+  informativa ou modo avancado.
+- WIZARD: cada modelo usa perguntas curtas sobre mensagem inicial,
+  consentimento, opcoes, destinos, validacao de entrada, horario futuro,
+  mensagem de handoff e preview.
+- SUBMENUS: o modelo institucional agora representa um subconjunto CRA-like com
+  menus aninhados gerados como nodes reais `type=menu`, sem node type novo.
+- NAVIGATION: submenus podem expor `9 - Voltar ao Menu Anterior` e
+  `0 - Voltar ao Menu Principal`, seguindo a convencao ja observada nos fluxos
+  CRA. O menu principal nao recebe retorno redundante.
+- HOURS: o wizard explica que o autoatendimento pode continuar funcionando e
+  que horario humano pertence ao cadastro de departamentos; sem horario salvo,
+  a regra de dominio atual permanece `NO_SCHEDULE`/aberto.
+- APPLY DRAFT: "Aplicar ao rascunho" atualiza apenas o JSON local e mostra
+  feedback explicito de sucesso, erro ou "nenhuma alteracao"; salvar continua
+  sendo acao separada da pagina.
+- EXISTING FLOW EDIT: fluxos existentes exibem landing separada com Revisar
+  jornada, Editar etapas simples e Abrir modo avancado. A edicao simples mostra
+  hierarquia de menus/submenus, permitindo abrir opcoes como Registro sem
+  expor a arvore inteira ou misturar com criacao.
+- MODE STATE: Assistente guiado e Modo avancado agora comunicam estado exclusivo
+  e finalidade; "Abrir modo avancado" deixou de parecer selecionado dentro da
+  landing de fluxo existente.
+- RESET: apos criacao bem-sucedida de novo fluxo em `/app` ou `/admin`, o
+  rascunho transiente volta ao estado inicial.
+- OUTPUT: os geradores criam nodes reais (`menu`, `text`, `capture`,
+  `consent`, `handoff`) sem persistir metadata de wizard ou shadow model.
+- EXISTING FLOWS: abrir fluxo existente mostra resumo seguro e acoes explicitas
+  de revisar jornada, editar informacoes simples ou abrir modo avancado; nao
+  executa reset, reclassificacao destrutiva ou mutation automatica.
+- MARKET PATTERN: alinhado ao padrao observado em builders atuais de mercado:
+  selecao de template/use case, perguntas progressivas, preview antes de
+  publicar, fallback para editor visual/avancado e protecao contra alterar
+  automacoes existentes sem confirmacao.
+- VALIDACAO TECNICA LOCAL: `ChatbotFlowBuilder.test.ts` 30/30 PASS; frontend
+  build PASS; `git diff --check` PASS.
+- PENDENTE: aceite humano visual/funcional no ambiente local antes de qualquer
+  commit, push ou deploy.
+
+Nao promover, commitar ou deployar este redesign antes de aprovacao visual
+explicita do owner.
 
 ### Contact Timeline / Histórico do contato
 

@@ -710,6 +710,11 @@ export default function AdminTenantChatbotPage() {
         definition: parsedDefinition.definition,
       });
       await loadData(clientKey);
+      setNewName("Fluxo principal");
+      setNewDefinition(DEFAULT_DEFINITION_TEXT);
+      setNewSearch("");
+      setNewIsActive(false);
+      setNewEntryPoint(true);
       setSuccess("Flow criado com sucesso.");
     } catch (err) {
       setError(normalizeAdminChatbotError(err as { message?: string; errorCode?: string }, "Falha ao criar flow."));

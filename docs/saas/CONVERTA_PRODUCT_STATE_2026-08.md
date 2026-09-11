@@ -352,6 +352,34 @@ Status: REAL VALIDATED em smoke autenticado local e publicado pelo rollout
 frontend-only encerrado em `9b5bdb34`. Sem mutation de flow em producao e sem
 tenant real alterado pela validacao.
 
+Atualizacao local de 2026-09-11: o redesign evoluiu para Guided Builder 2.1
+business-first. A criacao de novo fluxo agora parte de modelos de negocio
+(`atendimento institucional com menu`, `encaminhamento direto`, `coleta antes
+do atendimento`, `mensagem informativa` ou `avancado`), faz perguntas curtas,
+permite submenus em estrutura CRA-like, gera uma definicao real de
+`ChatbotFlow.definition`, apresenta preview/checklist e aplica ao rascunho
+apenas por acao explicita. Submenus sao gerados como nodes reais `type=menu`,
+com navegacao opcional `9 - Voltar ao Menu Anterior` e
+`0 - Voltar ao Menu Principal`, sem criar tipo novo de runtime.
+
+O passo de horario foi restringido ao contrato atualmente suportado: horario
+humano pertence ao cadastro de departamentos; sem horario salvo, a regra de
+dominio atual continua `NO_SCHEDULE`/aberto. "Aplicar ao rascunho" deixa claro
+que nao salva no backend e agora mostra feedback de sucesso, erro ou ausencia
+de alteracao. Fluxos existentes nao sao reconstruidos ao abrir: o modo guiado
+mostra landing separada com Revisar jornada, Editar etapas simples e Abrir modo
+avancado. A edicao simples lista menus/submenus hierarquicamente e permite abrir
+opcoes como Registro sem expor JSON. O estado visual de Assistente guiado versus
+Modo avancado e exclusivo, e o rascunho de novo fluxo e limpo apos criacao
+bem-sucedida em `/app` e `/admin`.
+
+O patch preserva `ChatbotFlow.definition` como unica fonte de verdade, nao cria
+shadow model, nao altera runtime, schema, migration, save payload ou semantica
+de flows. Status: GUIDED BUILDER 2.1 / LOCAL IMPLEMENTED / HUMAN VALIDATION
+ROUND 2. Validacao tecnica local: `ChatbotFlowBuilder.test.ts` 30/30 PASS,
+frontend build PASS e `git diff --check` PASS. Ainda nao deve ser tratado como
+validado em producao nem promovido sem aprovacao visual do owner.
+
 O flow SECULT/Demo homologado usa:
 
 ```json

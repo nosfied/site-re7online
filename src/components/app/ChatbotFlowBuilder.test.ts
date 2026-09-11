@@ -3,11 +3,16 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  buildDirectHandoffFlow,
+  buildInformationFlow,
+  buildInstitutionalMenuFlow,
+  buildPreServiceCaptureFlow,
   ChatbotFlowBuilder,
   createGuidedObjectiveDefinition,
   getChatbotNodeEditorSectionPlan,
   getChatbotNodeIssueSectionKeys,
   getGuidedNextTask,
+  validateWizardStep,
 } from "./ChatbotFlowBuilder";
 
 test("menu nodes expose primary sections and keep secondary sections collapsed by default", () => {
@@ -67,7 +72,7 @@ test("unknown node types preserve the existing text-node editing path", () => {
   ]);
 });
 
-test("builder renders collapsed sections with aria state and preserves hidden values", () => {
+test("existing flow overview keeps editable data behind explicit actions", () => {
   const definition = JSON.stringify({
     start: "capture_email",
     nodes: {
@@ -90,12 +95,15 @@ test("builder renders collapsed sections with aria state and preserves hidden va
     })
   );
 
-  assert.match(html, /aria-expanded="false"/);
-  assert.match(html, /Coleta e validação/);
-  assert.match(html, /email/);
+  assert.match(html, /Fluxo existente/);
+  assert.match(html, /Este fluxo já possui uma estrutura/);
+  assert.match(html, /Editar etapas simples/);
+  assert.match(html, /Modo avançado/);
+  assert.match(html, /Coletar uma informação/);
+  assert.doesNotMatch(html, /Passo 1/);
 });
 
-test("guided builder renders business stepper and activation review from the same draft", () => {
+test("existing flow guided mode renders a safe summary instead of forcing a template", () => {
   const definition = JSON.stringify({
     start: "menu",
     nodes: {
@@ -124,14 +132,15 @@ test("guided builder renders business stepper and activation review from the sam
     })
   );
 
-  assert.match(html, /Passo 1/);
-  assert.match(html, /Passo 9/);
-  assert.match(html, /Próxima ação/);
-  assert.match(html, /O que este fluxo deve fazer/);
-  assert.match(html, /Como este fluxo funcionará/);
-  assert.match(html, /Poderá escolher entre 1 opção/);
-  assert.match(html, /Registro · Fila Geral/);
-  assert.match(html, /Pode receber novas conversas/);
+  assert.match(html, /Fluxo existente/);
+  assert.match(html, /Etapas/);
+  assert.match(html, /Menus/);
+  assert.match(html, /Encaminhamentos/);
+  assert.match(html, /Apresentar um menu de opções/);
+  assert.match(html, /Revisar jornada/);
+  assert.match(html, /Editar etapas simples/);
+  assert.match(html, /Modo avançado/);
+  assert.doesNotMatch(html, /O que você quer criar/);
 });
 
 test("guided objective creates a direct human flow in the same definition model", () => {
@@ -145,7 +154,7 @@ test("guided objective creates a direct human flow in the same definition model"
   assert.equal(Object.prototype.hasOwnProperty.call(definition, "wizardStep"), false);
 });
 
-test("new flow wizard asks for the objective before continuing with the default draft", () => {
+test("new flow wizard starts with business templates before asking technical fields", () => {
   const definition = JSON.stringify({
     start: "menu_principal",
     nodes: {
@@ -164,9 +173,16 @@ test("new flow wizard asks for the objective before continuing with the default 
     })
   );
 
-  assert.match(html, /Escolha o objetivo inicial do fluxo/);
-  assert.match(html, /Atendimento humano direto/);
-  assert.match(html, /Menu de opções/);
+  assert.match(html, /Criador guiado/);
+  assert.match(html, /O que você quer criar/);
+  assert.match(html, /Atendimento institucional com menu/);
+  assert.match(html, /Encaminhamento direto/);
+  assert.match(html, /Coleta antes do atendimento/);
+  assert.match(html, /Mensagem informativa/);
+  assert.match(html, /Fluxo em branco \/ avançado/);
+  assert.match(html, /Usar este modelo/);
+  assert.match(html, /Abrir editor avançado/);
+  assert.doesNotMatch(html, /Escolha o objetivo inicial do fluxo/);
 });
 
 test("guided objective creates a menu flow and asks for menu options next", () => {
@@ -259,7 +275,7 @@ test("guided next task preserves changed destinations as orphaned nodes instead 
   assert.equal("nodeId" in task ? task.nodeId : "", "handoff_old");
 });
 
-test("guided and advanced modes render from the same draft without conversion fields", () => {
+test("existing flow guided overview does not inject conversion metadata", () => {
   const definition = JSON.stringify({
     start: "handoff",
     nodes: {
@@ -276,7 +292,8 @@ test("guided and advanced modes render from the same draft without conversion fi
     })
   );
 
-  assert.match(html, /Ajustes avançados do fluxo/);
+  assert.match(html, /Fluxo existente/);
+  assert.match(html, /Modo avançado/);
   assert.doesNotMatch(html, /wizardStep/);
   assert.doesNotMatch(html, /templateType/);
 });
@@ -297,8 +314,10 @@ test("existing Syer-style direct handoff is interpreted without requiring object
     })
   );
 
+  assert.match(html, /Fluxo existente/);
   assert.match(html, /Encaminhar direto para atendimento humano/);
-  assert.match(html, /Atendimento · Fila padrão/);
+  assert.match(html, /Encaminhamentos/);
+  assert.doesNotMatch(html, /O que você quer criar/);
 });
 
 test("existing CRA-style complex flow is interpreted with advanced metadata preserved", () => {
@@ -328,9 +347,11 @@ test("existing CRA-style complex flow is interpreted with advanced metadata pres
     })
   );
 
-  assert.match(html, /Solicitar consentimento antes de continuar/);
-  assert.match(html, /Registro/);
-  assert.match(html, /Este fluxo possui configurações avançadas preservadas/);
+  assert.match(html, /Fluxo existente/);
+  assert.match(html, /Etapas/);
+  assert.match(html, /Menus/);
+  assert.match(html, /Encaminhamentos/);
+  assert.match(html, /Avançada/);
 });
 
 test("guided builder explains consent, capture and handoff paths without requiring raw ids", () => {
@@ -368,10 +389,9 @@ test("guided builder explains consent, capture and handoff paths without requiri
     })
   );
 
+  assert.match(html, /Fluxo existente/);
   assert.match(html, /Solicitar consentimento antes de continuar/);
-  assert.match(html, /Confirme o consentimento/);
-  assert.match(html, /Informe seu e-mail/);
-  assert.match(html, /HUMANO → Dúvidas Gerais · Fila padrão/);
+  assert.match(html, /Encaminhamentos/);
 });
 
 test("guided builder surfaces checklist errors and preserved advanced settings", () => {
@@ -396,8 +416,285 @@ test("guided builder surfaces checklist errors and preserved advanced settings",
     })
   );
 
-  assert.match(html, /Este fluxo possui configurações avançadas preservadas/);
-  assert.match(html, /Referências válidas/);
-  assert.match(html, /ERROR/);
-  assert.match(html, /Revise antes de ativar ou salvar como entrada principal/);
+  assert.match(html, /Fluxo existente/);
+  assert.match(html, /Avançada/);
+  assert.match(html, /Modo avançado/);
+});
+
+test("standard institutional menu generator creates one real menu path per business option", () => {
+  const definition = buildInstitutionalMenuFlow({
+    template: "institutional_menu",
+    initialMessage: "Escolha uma área.",
+    consentEnabled: true,
+    consentMessage: "Aceite o atendimento.",
+    consentAcceptOption: "1",
+    consentDeclineMessage: "Encerrado.",
+    menuOptions: ["Registro", "Fiscalização"],
+    destinations: {
+      0: { type: "department", departmentId: "dep_registro", queueId: "queue_registro" },
+      1: { type: "message", message: "Procure a fiscalização." },
+    },
+    submenus: {},
+    invalidOptionText: "Opção inválida.",
+    businessHoursEnabled: "later",
+    handoffMessageMode: "standard",
+    handoffMessage: "Vou transferir.",
+    captureQuestions: ["Informe o protocolo."],
+    informationNext: "end",
+    followupMessage: "Obrigado.",
+  });
+
+  assert.equal(definition.start, "consentimento");
+  assert.equal(definition.nodes.consentimento.type, "consent");
+  assert.equal(definition.nodes.consentimento.onAccepted, "menu_principal");
+  assert.equal(definition.nodes.menu_principal.type, "menu");
+  assert.equal(definition.nodes.menu_principal.text, "Escolha uma área.");
+  assert.equal(definition.nodes.menu_principal.fallbackText, "Opção inválida.");
+  assert.deepEqual(definition.nodes.menu_principal.options, [
+    { label: "1 - Registro", next: "atendimento_registro" },
+    { label: "2 - Fiscalização", next: "mensagem_fiscalizacao" },
+  ]);
+  assert.equal(definition.nodes.atendimento_registro.type, "handoff");
+  assert.equal(definition.nodes.atendimento_registro.departmentId, "dep_registro");
+  assert.equal(definition.nodes.atendimento_registro.queueId, "queue_registro");
+  assert.equal(definition.nodes.mensagem_fiscalizacao.text, "Procure a fiscalização.");
+});
+
+test("standard institutional menu generator creates nested submenus with navigation options", () => {
+  const definition = buildInstitutionalMenuFlow({
+    template: "institutional_menu",
+    initialMessage: "Menu principal",
+    consentEnabled: false,
+    consentMessage: "",
+    consentAcceptOption: "1",
+    consentDeclineMessage: "",
+    menuOptions: ["Registro", "Financeiro", "Suporte"],
+    destinations: {
+      0: { type: "submenu", submenuKey: "0" },
+      1: { type: "department", departmentId: "dep_financeiro" },
+      2: { type: "department", departmentId: "dep_suporte" },
+    },
+    submenus: {
+      "0": {
+        title: "Registro",
+        options: ["Registro PF", "Registro PJ"],
+        destinations: {
+          0: { type: "submenu", submenuKey: "0.0" },
+          1: { type: "department", departmentId: "dep_registro" },
+        },
+        enablePreviousMenu: true,
+        enableMainMenu: true,
+      },
+      "0.0": {
+        title: "Registro PF",
+        options: ["Novo Registro", "Cancelamento"],
+        destinations: {
+          0: { type: "department", departmentId: "dep_registro" },
+          1: { type: "message", message: "Oriente o cancelamento." },
+        },
+        enablePreviousMenu: true,
+        enableMainMenu: true,
+      },
+    },
+    invalidOptionText: "Opção inválida.",
+    businessHoursEnabled: "later",
+    handoffMessageMode: "standard",
+    handoffMessage: "",
+    captureQuestions: [],
+    informationNext: "end",
+    followupMessage: "",
+  });
+
+  assert.equal(definition.nodes.menu_principal.type, "menu");
+  assert.deepEqual(definition.nodes.menu_principal.options, [
+    { label: "1 - Registro", next: "submenu_registro" },
+    { label: "2 - Financeiro", next: "atendimento_financeiro" },
+    { label: "3 - Suporte", next: "atendimento_suporte" },
+  ]);
+  assert.equal(definition.nodes.submenu_registro.type, "menu");
+  assert.deepEqual(definition.nodes.submenu_registro.options, [
+    { label: "1 - Registro PF", next: "submenu_registro_pf" },
+    { label: "2 - Registro PJ", next: "atendimento_registro_pj" },
+    { label: "9 - Voltar ao Menu Anterior", next: "menu_principal" },
+    { label: "0 - Voltar ao Menu Principal", next: "menu_principal" },
+  ]);
+  assert.deepEqual(definition.nodes.submenu_registro_pf.options, [
+    { label: "1 - Novo Registro", next: "atendimento_novo_registro" },
+    { label: "2 - Cancelamento", next: "mensagem_cancelamento" },
+    { label: "9 - Voltar ao Menu Anterior", next: "submenu_registro" },
+    { label: "0 - Voltar ao Menu Principal", next: "menu_principal" },
+  ]);
+});
+
+test("direct handoff generator keeps one configured human destination", () => {
+  const definition = buildDirectHandoffFlow({
+    template: "direct_handoff",
+    initialMessage: "Vamos encaminhar você.",
+    consentEnabled: false,
+    consentMessage: "",
+    consentAcceptOption: "1",
+    consentDeclineMessage: "",
+    menuOptions: [],
+    destinations: { 0: { type: "queue", departmentId: "dep", queueId: "queue" } },
+    submenus: {},
+    invalidOptionText: "",
+    businessHoursEnabled: "later",
+    handoffMessageMode: "custom",
+    handoffMessage: "Transferindo.",
+    captureQuestions: [],
+    informationNext: "end",
+    followupMessage: "",
+  });
+
+  assert.equal(definition.start, "atendimento_humano");
+  assert.equal(definition.nodes.atendimento_humano.type, "handoff");
+  assert.equal(definition.nodes.atendimento_humano.text, "Vamos encaminhar você.");
+  assert.equal(definition.nodes.atendimento_humano.departmentId, "dep");
+  assert.equal(definition.nodes.atendimento_humano.queueId, "queue");
+});
+
+test("pre-service capture generator chains questions before human routing", () => {
+  const definition = buildPreServiceCaptureFlow({
+    template: "pre_service_collection",
+    initialMessage: "Informe seu nome.",
+    consentEnabled: false,
+    consentMessage: "",
+    consentAcceptOption: "1",
+    consentDeclineMessage: "",
+    menuOptions: [],
+    destinations: { 0: { type: "department", departmentId: "dep" } },
+    submenus: {},
+    invalidOptionText: "",
+    businessHoursEnabled: "later",
+    handoffMessageMode: "none",
+    handoffMessage: "",
+    captureQuestions: ["Informe seu nome.", "Informe seu protocolo."],
+    informationNext: "end",
+    followupMessage: "",
+  });
+
+  assert.equal(definition.start, "pergunta_1");
+  assert.equal(definition.nodes.pergunta_1.type, "capture");
+  assert.equal(definition.nodes.pergunta_1.next, "pergunta_2");
+  assert.equal(definition.nodes.pergunta_2.next, "atendimento_humano");
+  assert.equal(definition.nodes.atendimento_humano.type, "handoff");
+  assert.equal(definition.nodes.atendimento_humano.sendFeedback, false);
+  assert.equal(definition.nodes.atendimento_humano.departmentId, "dep");
+});
+
+test("information generator can continue to another message without menu semantics", () => {
+  const definition = buildInformationFlow({
+    template: "information",
+    initialMessage: "Documentos necessários.",
+    consentEnabled: false,
+    consentMessage: "",
+    consentAcceptOption: "1",
+    consentDeclineMessage: "",
+    menuOptions: [],
+    destinations: {},
+    submenus: {},
+    invalidOptionText: "",
+    businessHoursEnabled: "later",
+    handoffMessageMode: "standard",
+    handoffMessage: "",
+    captureQuestions: [],
+    informationNext: "message",
+    followupMessage: "Volte quando precisar.",
+  });
+
+  assert.equal(definition.start, "mensagem_inicial");
+  assert.equal(definition.nodes.mensagem_inicial.type, "text");
+  assert.equal(definition.nodes.mensagem_inicial.next, "mensagem_complementar");
+  assert.equal(definition.nodes.mensagem_complementar.type, "text");
+  assert.equal(definition.nodes.mensagem_complementar.text, "Volte quando precisar.");
+});
+
+test("wizard validation checks only the current business step", () => {
+  const base = {
+    template: "institutional_menu",
+    initialMessage: "Olá.",
+    consentEnabled: false,
+    consentMessage: "",
+    consentAcceptOption: "1",
+    consentDeclineMessage: "",
+    menuOptions: ["Registro"],
+    destinations: {},
+    submenus: {},
+    invalidOptionText: "Opção inválida.",
+    businessHoursEnabled: "later",
+    handoffMessageMode: "standard",
+    handoffMessage: "",
+    captureQuestions: ["Informe seu protocolo."],
+    informationNext: "end",
+    followupMessage: "",
+  };
+
+  assert.deepEqual(validateWizardStep({ ...base, initialMessage: "" }, "initial"), [
+    "Escreva a mensagem inicial que o cidadão verá.",
+  ]);
+  assert.deepEqual(validateWizardStep({ ...base, initialMessage: "" }, "options"), []);
+  assert.deepEqual(validateWizardStep(base, "destinations"), [
+    "A opção Registro ainda não possui destino.",
+  ]);
+  assert.deepEqual(validateWizardStep({ ...base, destinations: { 0: { type: "department", departmentId: "dep" } } }, "destinations"), []);
+});
+
+test("wizard validation rejects duplicate menu option labels in business language", () => {
+  const errors = validateWizardStep(
+    {
+      template: "institutional_menu",
+      initialMessage: "Olá.",
+      consentEnabled: false,
+      consentMessage: "",
+      consentAcceptOption: "1",
+      consentDeclineMessage: "",
+      menuOptions: ["Registro", " registro "],
+      destinations: {},
+      submenus: {},
+      invalidOptionText: "Opção inválida.",
+      businessHoursEnabled: "later",
+      handoffMessageMode: "standard",
+      handoffMessage: "",
+      captureQuestions: ["Informe seu protocolo."],
+      informationNext: "end",
+      followupMessage: "",
+    },
+    "options"
+  );
+
+  assert.deepEqual(errors, ["As opções do menu precisam ter nomes diferentes."]);
+});
+
+test("wizard validation requires configured destinations inside submenus", () => {
+  const errors = validateWizardStep(
+    {
+      template: "institutional_menu",
+      initialMessage: "Olá.",
+      consentEnabled: false,
+      consentMessage: "",
+      consentAcceptOption: "1",
+      consentDeclineMessage: "",
+      menuOptions: ["Registro"],
+      destinations: { 0: { type: "submenu", submenuKey: "0" } },
+      submenus: {
+        "0": {
+          title: "Registro",
+          options: ["Registro PF"],
+          destinations: {},
+          enablePreviousMenu: true,
+          enableMainMenu: true,
+        },
+      },
+      invalidOptionText: "Opção inválida.",
+      businessHoursEnabled: "later",
+      handoffMessageMode: "standard",
+      handoffMessage: "",
+      captureQuestions: [],
+      informationNext: "end",
+      followupMessage: "",
+    },
+    "destinations"
+  );
+
+  assert.deepEqual(errors, ["A opção Registro PF ainda não possui destino."]);
 });
