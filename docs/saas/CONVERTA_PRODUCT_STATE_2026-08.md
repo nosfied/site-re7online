@@ -375,10 +375,9 @@ bem-sucedida em `/app` e `/admin`.
 
 O patch preserva `ChatbotFlow.definition` como unica fonte de verdade, nao cria
 shadow model, nao altera runtime, schema, migration, save payload ou semantica
-de flows. Status: GUIDED BUILDER 2.1 / LOCAL IMPLEMENTED / HUMAN VALIDATION
-ROUND 2. Validacao tecnica local: `ChatbotFlowBuilder.test.ts` 30/30 PASS,
-frontend build PASS e `git diff --check` PASS. Ainda nao deve ser tratado como
-validado em producao nem promovido sem aprovacao visual do owner.
+de flows. Status: GUIDED BUILDER 2.1 / DEPLOYED / PRODUCTION READ-ONLY
+VALIDATED. Validacao tecnica local: `ChatbotFlowBuilder.test.ts` 32/32 PASS,
+frontend build PASS e `git diff --check` PASS.
 
 Incidente P1 de 2026-09-11: a tentativa de criar um segundo fluxo guiado para
 Syer Rodrigues podia apresentar `JSON invalido` no cliente. A mensagem vinha do
@@ -393,6 +392,17 @@ Validacao real em 2026-09-11 na producao `96220ea4`: a UI admin do tenant
 `JSON invalido`; a abertura de um terceiro novo fluxo iniciou limpa e sem
 salvar. O fluxo ativo real preservou o mesmo hash de definition. Status: REAL
 VALIDATED / CLOSED.
+
+Incidente P1 de 2026-09-11: a criacao de um novo fluxo podia enviar
+`entryPoint=true` por default a partir dos formularios de `/app/chatbot` e
+`/admin/tenants/:tenantId/chatbot`, fazendo o backend executar corretamente uma
+troca explicita de entrada principal que nao havia sido pretendida pelo
+operador. O contrato do produto agora e: novo fluxo nasce sem ser entrada
+principal; promover um fluxo para entrada principal exige acao explicita. O
+backend preserva a semantica de `entryPoint=true` como troca intencional, e a
+UI passa a usar default compartilhado `false` tanto na abertura quanto no reset
+apos criacao. Nao ha hardcode de tenant, schema, migration ou mudanca de
+runtime.
 
 O flow SECULT/Demo homologado usa:
 

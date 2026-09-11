@@ -27,6 +27,7 @@ import {
 } from "@/lib/appClientApi";
 import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 import { getAppChatbotAiMissingLabels } from "@/lib/appChatbotAiStatus";
+import { DEFAULT_NEW_CHATBOT_FLOW_ENTRY_POINT } from "@/lib/chatbotFlowCreationDefaults";
 import {
   getExistingFlowDefaultExpanded,
   getFlowNodeCountFromDefinitionText,
@@ -458,7 +459,7 @@ export default function AppChatbotPage() {
   const [newDefinition, setNewDefinition] = useState(DEFAULT_DEFINITION_TEXT);
   const [newSearch, setNewSearch] = useState("");
   const [newIsActive, setNewIsActive] = useState(false);
-  const [newEntryPoint, setNewEntryPoint] = useState(true);
+  const [newEntryPoint, setNewEntryPoint] = useState(DEFAULT_NEW_CHATBOT_FLOW_ENTRY_POINT);
   const [newFlowBuilderVersion, setNewFlowBuilderVersion] = useState(0);
   const [drafts, setDrafts] = useState<
     Record<
@@ -703,7 +704,7 @@ export default function AppChatbotPage() {
       setNewDefinition(DEFAULT_DEFINITION_TEXT);
       setNewSearch("");
       setNewIsActive(false);
-      setNewEntryPoint(true);
+      setNewEntryPoint(DEFAULT_NEW_CHATBOT_FLOW_ENTRY_POINT);
       setNewFlowBuilderVersion((current) => current + 1);
       setSuccess("Flow criado com sucesso.");
     } catch (err) {

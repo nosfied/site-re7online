@@ -931,6 +931,92 @@ test("app chatbot flow builder uses session tenant and rejects cross-tenant rout
   assert.equal(getErrorCode(crossTenant.body), "invalid_chatbot_reference");
 });
 
+test("app chatbot flow create does not replace existing entrypoint unless explicit", async () => {
+  const flowA = await request<{ ok: true; flow: { id: string; entryPoint: boolean } }>(
+    "POST",
+    "/app/chatbot/flows",
+    businessAdmin,
+    {
+      name: "Entry point A",
+      isActive: true,
+      entryPoint: true,
+      definition: {
+        start: "start",
+        nodes: {
+          start: { type: "text", text: "Flow A" },
+        },
+      },
+    }
+  );
+  assert.equal(flowA.status, 200, JSON.stringify(flowA.body));
+  assert.equal(flowA.body.flow.entryPoint, true);
+
+  const flowB = await request<{ ok: true; flow: { id: string; entryPoint: boolean } }>(
+    "POST",
+    "/app/chatbot/flows",
+    businessAdmin,
+    {
+      name: "Entry point B default",
+      isActive: false,
+      definition: {
+        start: "start",
+        nodes: {
+          start: { type: "text", text: "Flow B" },
+        },
+      },
+    }
+  );
+  assert.equal(flowB.status, 200, JSON.stringify(flowB.body));
+  assert.equal(flowB.body.flow.entryPoint, false);
+
+  const flowC = await request<{ ok: true; flow: { id: string; entryPoint: boolean } }>(
+    "POST",
+    "/app/chatbot/flows",
+    businessAdmin,
+    {
+      name: "Entry point C explicit false",
+      isActive: false,
+      entryPoint: false,
+      definition: {
+        start: "start",
+        nodes: {
+          start: { type: "text", text: "Flow C" },
+        },
+      },
+    }
+  );
+  assert.equal(flowC.status, 200, JSON.stringify(flowC.body));
+  assert.equal(flowC.body.flow.entryPoint, false);
+
+  let persistedA = await prisma.chatbotFlow.findUniqueOrThrow({
+    where: { id: flowA.body.flow.id },
+    select: { entryPoint: true },
+  });
+  assert.equal(persistedA.entryPoint, true);
+
+  const explicitSwitch = await request<{ ok: true; flow: { id: string; entryPoint: boolean } }>(
+    "PUT",
+    `/app/chatbot/flows/${encodeURIComponent(flowB.body.flow.id)}`,
+    businessAdmin,
+    {
+      entryPoint: true,
+    }
+  );
+  assert.equal(explicitSwitch.status, 200, JSON.stringify(explicitSwitch.body));
+  assert.equal(explicitSwitch.body.flow.entryPoint, true);
+
+  persistedA = await prisma.chatbotFlow.findUniqueOrThrow({
+    where: { id: flowA.body.flow.id },
+    select: { entryPoint: true },
+  });
+  const persistedB = await prisma.chatbotFlow.findUniqueOrThrow({
+    where: { id: flowB.body.flow.id },
+    select: { entryPoint: true },
+  });
+  assert.equal(persistedA.entryPoint, false);
+  assert.equal(persistedB.entryPoint, true);
+});
+
 test("government profile default is blocked from campaigns routes", async () => {
   const routes = [
     { method: "GET", route: "/app/campaigns" },

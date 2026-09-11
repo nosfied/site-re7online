@@ -139,6 +139,12 @@ Estado fechado/validado:
 - CRA-PR CSAT score/responded and optional comment in same response: CLOSED / PASS;
 - CRA-PR Browser Push background: CLOSED / REAL VALIDATED;
 - CRA-PR ready for training 2026-09-09: YES.
+- Guided Builder 2.1 business-first: DEPLOYED / LOCAL + PRODUCTION READ-ONLY
+  VALIDATED;
+- Guided Builder second-flow stale JSON incident: CLOSED / REAL VALIDATED;
+- Guided Builder new-flow entrypoint safety: FIXED. Creating a new chatbot
+  flow must not replace the tenant entrypoint unless the operator explicitly
+  marks it as the main entry flow.
 
 Fila ativa repriorizada:
 
@@ -148,14 +154,10 @@ Fila ativa repriorizada:
 2. CRA-PR department hours (P1): guiar configuracao do cliente e validar flow
    aware of department hours. No schedule continua significando
    `NO_SCHEDULE`/aberto e nao e falha tecnica.
-3. Guided Builder 2.1 business-first (P1): concluir aceite humano local do
-   criador por modelo -> perguntas curtas -> submenus/navegacao -> preview ->
-   aplicacao explicita ao rascunho, mantendo JSON avancado e sem mudar a
-   semantica dos flows.
-4. Reporting context enhancements (P2): adicionar contexto de AUTO vs MANUAL,
+3. Reporting context enhancements (P2): adicionar contexto de AUTO vs MANUAL,
    politica de atribuicao, `presenceMode` e carga/capacidade atual onde agregar
    verdade operacional sem reabrir bugs ja fechados.
-5. Meta Cloud unlink/removal cleanup semantics (P2): consolidar remocao segura
+4. Meta Cloud unlink/removal cleanup semantics (P2): consolidar remocao segura
    de configuracao Meta sem apagar historico operacional ou criar fallback
    silencioso.
 
@@ -318,13 +320,11 @@ Estado atual:
   selecao de template/use case, perguntas progressivas, preview antes de
   publicar, fallback para editor visual/avancado e protecao contra alterar
   automacoes existentes sem confirmacao.
-- VALIDACAO TECNICA LOCAL: `ChatbotFlowBuilder.test.ts` 30/30 PASS; frontend
+- VALIDACAO TECNICA LOCAL: `ChatbotFlowBuilder.test.ts` 32/32 PASS; frontend
   build PASS; `git diff --check` PASS.
-- PENDENTE: aceite humano visual/funcional no ambiente local antes de qualquer
-  commit, push ou deploy.
-
-Nao promover, commitar ou deployar este redesign antes de aprovacao visual
-explicita do owner.
+- STATUS: DEPLOYED / PRODUCTION READ-ONLY VALIDATED. Criacoes reais de teste
+  no tenant Syer foram usadas apenas para validar a sequencia de criacao; o
+  fluxo ativo real foi preservado.
 
 ### Guided Builder 2.1 — segundo fluxo com JSON invalido
 
@@ -353,6 +353,30 @@ iniciou limpa, sem salvar. O fluxo ativo real manteve o mesmo hash de
 definition.
 
 Status: REAL VALIDATED / CLOSED.
+
+### Guided Builder 2.1 — seguranca de entrada principal em novos fluxos
+
+Em 2026-09-11 foi auditado um incidente P1 durante a validacao real da Syer:
+um fluxo novo podia herdar `entryPoint=true` no formulario de criacao e
+substituir temporariamente o fluxo principal do tenant.
+
+Conclusao:
+
+- ROOT CAUSE: default client-side inseguro nos formularios de novo fluxo de
+  `/app/chatbot` e `/admin/tenants/:tenantId/chatbot`. O backend estava
+  correto ao tratar `entryPoint=true` como acao explicita de troca.
+- ESCOPO: bug generico de UX/seguranca de criacao; sem tenant hardcode, sem
+  schema, sem migration e sem alteracao de runtime.
+- FIX: novo fluxo passa a iniciar com `entryPoint=false` por default
+  compartilhado; apos `create` bem-sucedido, o rascunho tambem reseta para
+  `false`.
+- CONTRATO: criar fluxo novo nunca troca a entrada principal silenciosamente.
+  A troca continua permitida somente por acao explicita do operador/admin.
+- VALIDACAO: teste backend cobre create sem `entryPoint`, create com
+  `entryPoint=false` e troca explicita posterior por `PUT entryPoint=true`.
+
+Status: FIXED / DEPLOY TARGET. Validacao pos-deploy deve confirmar que o fluxo
+principal ativo da Syer permanece preservado.
 
 ### Contact Timeline / Histórico do contato
 

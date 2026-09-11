@@ -1,0 +1,1 @@
+export const DEFAULT_NEW_CHATBOT_FLOW_ENTRY_POINT = false;

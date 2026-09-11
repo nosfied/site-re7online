@@ -9,6 +9,7 @@ import {
   ChatbotFlowBuilderDepartment,
   ChatbotFlowBuilderQueue,
 } from "@/components/app/ChatbotFlowBuilder";
+import { DEFAULT_NEW_CHATBOT_FLOW_ENTRY_POINT } from "@/lib/chatbotFlowCreationDefaults";
 import {
   AdminAutomationSettings,
   AdminChatbotFlowItem,
@@ -390,7 +391,7 @@ export default function AdminTenantChatbotPage() {
   const [newDefinition, setNewDefinition] = useState(DEFAULT_DEFINITION_TEXT);
   const [newSearch, setNewSearch] = useState("");
   const [newIsActive, setNewIsActive] = useState(false);
-  const [newEntryPoint, setNewEntryPoint] = useState(true);
+  const [newEntryPoint, setNewEntryPoint] = useState(DEFAULT_NEW_CHATBOT_FLOW_ENTRY_POINT);
   const [newFlowBuilderVersion, setNewFlowBuilderVersion] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, FlowDraft>>({});
   const [draftSearches, setDraftSearches] = useState<Record<string, string>>({});
@@ -715,7 +716,7 @@ export default function AdminTenantChatbotPage() {
       setNewDefinition(DEFAULT_DEFINITION_TEXT);
       setNewSearch("");
       setNewIsActive(false);
-      setNewEntryPoint(true);
+      setNewEntryPoint(DEFAULT_NEW_CHATBOT_FLOW_ENTRY_POINT);
       setNewFlowBuilderVersion((current) => current + 1);
       setSuccess("Flow criado com sucesso.");
     } catch (err) {
