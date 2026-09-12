@@ -100,6 +100,15 @@ submenu/nested row or editable record, returning focus to the parent/current
 editor context instead of opening the next sibling. Delivery remains frontend
 only: no `ChatbotFlow.definition` change, tenant hardcode, schema or migration.
 
+Human handoff destination contract, 2026-09-12: operational human handoff must
+resolve to a concrete queue before it becomes visible/assignable in the human
+Inbox. `departmentId` without `queueId` is treated as an incomplete destination
+unless runtime can resolve exactly one existing queue for the department. Guided
+Builder must not serialize an ambiguous "default queue" as `queueId=null`; it
+auto-selects the single queue for a selected department, requires an explicit
+queue when there is more than one, and reports an actionable error when the
+department has no queue.
+
 ## Main Runtime Dependencies
 
 - Postgres/Prisma for operational data and many tenant-owned entities.

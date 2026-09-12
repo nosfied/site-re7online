@@ -573,6 +573,29 @@ test("direct handoff generator keeps one configured human destination", () => {
   assert.equal(definition.nodes.atendimento_humano.queueId, "queue");
 });
 
+test("guided destination validation requires concrete queue for human handoff", () => {
+  const answers = {
+    ...createDefaultWizardAnswers(),
+    template: "direct_handoff" as const,
+    destinations: { 0: { type: "department" as const, departmentId: "dep_syer" } },
+  };
+
+  assert.deepEqual(
+    validateWizardStep(answers, "destination", [{ id: "queue_geral", name: "Fila Geral", departmentId: "dep_syer" }]),
+    ["Escolha a fila que receberá este atendimento."]
+  );
+  assert.deepEqual(
+    validateWizardStep({ ...answers, destinations: { 0: { ...answers.destinations[0], queueId: "queue_geral" } } }, "destination", [
+      { id: "queue_geral", name: "Fila Geral", departmentId: "dep_syer" },
+    ]),
+    []
+  );
+  assert.deepEqual(
+    validateWizardStep(answers, "destination", []),
+    ["Cadastre uma fila para este setor antes de encaminhar para humano."]
+  );
+});
+
 test("pre-service capture generator chains questions before human routing", () => {
   const definition = buildPreServiceCaptureFlow({
     template: "pre_service_collection",
@@ -658,7 +681,14 @@ test("wizard validation checks only the current business step", () => {
   assert.deepEqual(validateWizardStep(base, "options"), [
     "A opção Registro ainda não possui destino.",
   ]);
-  assert.deepEqual(validateWizardStep({ ...base, destinations: { 0: { type: "department", departmentId: "dep" } } }, "options"), []);
+  assert.deepEqual(
+    validateWizardStep(
+      { ...base, destinations: { 0: { type: "department", departmentId: "dep", queueId: "queue" } } },
+      "options",
+      [{ id: "queue", name: "Fila Geral", departmentId: "dep" }]
+    ),
+    []
+  );
 });
 
 test("wizard validation rejects duplicate menu option labels in business language", () => {
@@ -962,22 +992,28 @@ test("Syer-like existing flow does not contaminate first, second or third genera
   const first = createDefaultWizardAnswers();
   first.template = "direct_handoff";
   first.initialMessage = "Vamos encaminhar você.";
-  first.destinations = { 0: { type: "department", departmentId: "dep_syer" } };
+  first.destinations = { 0: { type: "department", departmentId: "dep_syer", queueId: "queue_syer" } };
 
   const second = createDefaultWizardAnswers();
   second.template = "institutional_menu";
   second.initialMessage = "Escolha uma opção.";
   second.menuOptions = ["Dúvidas", "Financeiro"];
   second.destinations = {
-    0: { type: "department", departmentId: "dep_duvidas" },
-    1: { type: "department", departmentId: "dep_financeiro" },
+    0: { type: "department", departmentId: "dep_duvidas", queueId: "queue_duvidas" },
+    1: { type: "department", departmentId: "dep_financeiro", queueId: "queue_financeiro" },
   };
 
   const third = createDefaultWizardAnswers();
   third.template = "pre_service_collection";
   third.initialMessage = "Informe seu nome.";
   third.captureQuestions = ["Informe seu nome.", "Informe o assunto."];
-  third.destinations = { 0: { type: "department", departmentId: "dep_syer" } };
+  third.destinations = { 0: { type: "department", departmentId: "dep_syer", queueId: "queue_syer" } };
+
+  const queues = [
+    { id: "queue_syer", name: "Fila Geral", departmentId: "dep_syer" },
+    { id: "queue_duvidas", name: "Fila Dúvidas", departmentId: "dep_duvidas" },
+    { id: "queue_financeiro", name: "Fila Financeiro", departmentId: "dep_financeiro" },
+  ];
 
   for (const answers of [first, second, third]) {
     const definition = buildStandardFlowDefinition(answers);
@@ -985,6 +1021,6 @@ test("Syer-like existing flow does not contaminate first, second or third genera
     assert.doesNotThrow(() => JSON.parse(text));
     assert.equal(typeof definition.start, "string");
     assert.equal(typeof definition.nodes[definition.start], "object");
-    assert.deepEqual(validateWizardStep(answers, answers.template === "institutional_menu" ? "destinations" : "destination"), []);
+    assert.deepEqual(validateWizardStep(answers, answers.template === "institutional_menu" ? "destinations" : "destination", queues), []);
   }
 });

@@ -43,6 +43,16 @@ test("human inbox projection requires a real human operational state", () => {
       mode: "HUMAN",
       handoffStatus: "active",
       departmentId: "department-1",
+      queueId: null,
+    }),
+    false
+  );
+  assert.equal(
+    shouldProjectConversationToHumanInbox({
+      status: "WAITING",
+      mode: "HUMAN",
+      handoffStatus: "active",
+      departmentId: "department-1",
       queueId: "queue-1",
     }),
     true

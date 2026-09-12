@@ -575,6 +575,11 @@ Commits relevantes do baseline homologado:
 ## Limites conhecidos
 
 - Ledger Meta ainda e estimativo e nao conciliacao financeira definitiva.
+- Handoff humano deve resolver fila concreta. Incidente Syer `****9614`
+  comprovou que `departmentId` com `queueId=null` ativa handoff no runtime, mas
+  nao projeta na Inbox humana por violar o invariant setor+fila. A correcao
+  local resolve a unica fila existente no runtime e faz o Guided Builder exigir
+  fila concreta, bloqueando setores sem fila ou ambiguidade de multiplas filas.
 - Bloqueio automatico por limite de consumo existe como helper, mas nao esta conectado aos fluxos reais.
 - Relatorio administrativo amplo de anonimizados permanece P2.
 - Alguns identificadores tecnicos ainda existem por exigencia de modelo atual, com minimizacao operacional.

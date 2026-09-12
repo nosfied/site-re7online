@@ -653,6 +653,37 @@ ANTES de:
 - Sprint 28 -> observabilidade Meta
 - Sprint 29 -> área do cliente
 
+## Incidente P1 — handoff humano com setor sem fila concreta
+
+Em 2026-09-12 foi auditado em producao o tenant `syer-rodrigues`, contato
+`****9614`: o inbound chegou, o bot respondeu, o handoff foi ativado e o runtime
+ficou `mode=HUMAN`, `handoffStatus=ACTIVE`, `status=WAITING`,
+`departmentId=Campanha 2026`, `queueId=null`, sem responsavel e sem fechamento.
+A conversa nao projetou para a Inbox humana porque o invariant operacional da
+Inbox exige destino humano completo: setor + fila.
+
+Conclusao de dominio: `queueId=null` nao e um destino operacional humano valido
+para atendimento aguardando atribuicao. O caminho correto e resolver uma fila
+concreta antes de criar/projetar atendimento humano; nao afrouxar a visibilidade
+da Inbox para aceitar aguardando sem fila.
+
+Auditoria read-only em producao: 10 fluxos ativos; 7 handoffs ativos com
+`departmentId` e sem `queueId`, distribuidos em 2 tenants
+(`syer-rodrigues`: 6; `lab-websession`: 1). Os setores afetados tinham
+exatamente uma fila existente (`Fila Geral`), permitindo resolucao deterministica
+sem hardcode de tenant.
+
+Fix local: `departmentAwareHandoff` resolve automaticamente a unica fila
+existente do setor quando o fluxo legado/guiado traz apenas `departmentId`; se o
+setor nao tem fila ou tem multiplas filas sem escolha explicita, bloqueia o
+handoff em vez de criar `WAITING` invisivel. O Guided Builder passa a exigir fila
+concreta, auto-selecionando a unica fila do setor e exibindo erro acionavel
+quando nao ha fila cadastrada.
+
+Contrato preservado: Inbox, SLA, relatórios, posicao de fila, claim,
+transferencia, notificacoes e atribuicao automatica continuam operando sobre
+destino humano completo (`departmentId` + `queueId`).
+
 ---
 
 # BACKLOG LATENTE (RETOMAR QUANDO NECESSÁRIO)

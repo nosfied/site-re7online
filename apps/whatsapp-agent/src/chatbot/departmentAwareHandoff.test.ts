@@ -20,11 +20,26 @@ function makePendingHandoff(overrides?: Partial<ChatbotPendingHandoff>): Chatbot
 function makePrismaFake(params: {
   department?: { id: string; name: string } | null;
   queue?: { id: string; name: string; departmentId: string } | null;
+  queues?: Array<{ id: string; name: string; departmentId: string }>;
   businessHours?: Array<{ weekday: number; startMinute: number; endMinute: number }>;
 }) {
   return {
     queue: {
-      findFirst: async () => params.queue ?? null,
+      findFirst: async ({ where }: { where?: { id?: string; departmentId?: string } } = {}) => {
+        if (params.queue) return params.queue;
+        return (params.queues ?? []).find((queue) => {
+          if (where?.id && queue.id !== where.id) return false;
+          if (where?.departmentId && queue.departmentId !== where.departmentId) return false;
+          return true;
+        }) ?? null;
+      },
+      findMany: async ({ where, take }: { where?: { departmentId?: string }; take?: number } = {}) => {
+        const rows = (params.queues ?? (params.queue ? [params.queue] : [])).filter((queue) => {
+          if (where?.departmentId && queue.departmentId !== where.departmentId) return false;
+          return true;
+        });
+        return typeof take === "number" ? rows.slice(0, take) : rows;
+      },
     },
     department: {
       findFirst: async () => params.department ?? null,
@@ -72,6 +87,44 @@ test("resolveDepartmentAwareHandoff preserves legacy handoff when department has
   assert.equal(decision.kind, "open");
   assert.equal(decision.availabilityStatus, "NO_SCHEDULE");
   assert.equal(decision.shouldAssign, true);
+});
+
+test("resolveDepartmentAwareHandoff resolves department-only handoff to the single queue in the department", async () => {
+  const decision = await resolveDepartmentAwareHandoff(makePrismaFake({
+    department: { id: "department_1", name: "Campanha 2026" },
+    queues: [{ id: "queue_1", name: "Fila Geral", departmentId: "department_1" }],
+    businessHours: [],
+  }) as never, {
+    clientId: "client_1",
+    pendingHandoff: makePendingHandoff({ queueId: null }),
+    at: new Date("2026-08-10T16:00:00.000-03:00"),
+  });
+
+  assert.equal(decision.kind, "open");
+  assert.equal(decision.availabilityStatus, "NO_SCHEDULE");
+  assert.equal(decision.departmentId, "department_1");
+  assert.equal(decision.queueId, "queue_1");
+  assert.equal(decision.shouldAssign, true);
+});
+
+test("resolveDepartmentAwareHandoff blocks department-only handoff when queue is ambiguous", async () => {
+  const decision = await resolveDepartmentAwareHandoff(makePrismaFake({
+    department: { id: "department_1", name: "Campanha 2026" },
+    queues: [
+      { id: "queue_1", name: "Fila Geral", departmentId: "department_1" },
+      { id: "queue_2", name: "Fila Prioritaria", departmentId: "department_1" },
+    ],
+    businessHours: [],
+  }) as never, {
+    clientId: "client_1",
+    pendingHandoff: makePendingHandoff({ queueId: null }),
+  });
+
+  assert.equal(decision.kind, "blocked");
+  assert.equal(decision.shouldAssign, false);
+  if (decision.kind === "blocked") {
+    assert.equal(decision.reason, "queue_required");
+  }
 });
 
 test("resolveDepartmentAwareHandoff blocks cross-tenant or inactive department safely", async () => {

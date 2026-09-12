@@ -100,6 +100,15 @@ function parseExplicitNumber(label: string) {
   return match ? match[1] : null;
 }
 
+function queuesForDepartment(queues: ChatbotFlowBuilderQueue[], departmentId?: string | null) {
+  return queues.filter((queue) => !departmentId || queue.departmentId === departmentId);
+}
+
+function resolveSingleQueueIdForDepartment(queues: ChatbotFlowBuilderQueue[], departmentId?: string | null) {
+  const availableQueues = queuesForDepartment(queues, departmentId);
+  return availableQueues.length === 1 ? availableQueues[0]?.id ?? "" : "";
+}
+
 function buildIssues(definition: FlowDefinition, queues: ChatbotFlowBuilderQueue[]) {
   const issues: string[] = [];
   const nodeIds = Object.keys(definition.nodes);
@@ -158,8 +167,19 @@ function buildIssues(definition: FlowDefinition, queues: ChatbotFlowBuilderQueue
     if (type === "capture" && !stringValue(node.field).trim()) {
       issues.push(`A etapa "${nodeId}" precisa do campo que será salvo.`);
     }
-    if (type === "handoff" && !stringValue(node.departmentId).trim()) {
-      issues.push(`A etapa "${nodeId}" encaminha para humano sem setor definido.`);
+    if (type === "handoff") {
+      const departmentId = stringValue(node.departmentId).trim();
+      const queueId = stringValue(node.queueId).trim();
+      if (!departmentId) {
+        issues.push(`A etapa "${nodeId}" encaminha para humano sem setor definido.`);
+      } else if (!queueId) {
+        const availableQueues = queuesForDepartment(queues, departmentId);
+        if (availableQueues.length === 0) {
+          issues.push(`A etapa "${nodeId}" encaminha para um setor sem fila cadastrada.`);
+        } else if (availableQueues.length > 1) {
+          issues.push(`A etapa "${nodeId}" precisa de uma fila específica para este setor.`);
+        }
+      }
     }
     const queue = queues.find((item) => item.id === node.queueId);
     if (queue && node.departmentId && queue.departmentId !== node.departmentId) {
@@ -926,7 +946,11 @@ export function buildStandardFlowDefinition(answers: StandardFlowWizardAnswers):
   return buildInstitutionalMenuFlow(answers);
 }
 
-export function validateWizardStep(answers: StandardFlowWizardAnswers, step: string) {
+export function validateWizardStep(
+  answers: StandardFlowWizardAnswers,
+  step: string,
+  queues: ChatbotFlowBuilderQueue[] = []
+) {
   const errors: string[] = [];
   if (step === "initial" && !answers.initialMessage.trim()) {
     errors.push("Escreva a mensagem inicial que o cidadão verá.");
@@ -950,6 +974,14 @@ export function validateWizardStep(answers: StandardFlowWizardAnswers, step: str
         if ((destination?.type === "department" || destination?.type === "queue") && !destination.departmentId) {
           errors.push(`Escolha o setor que receberá ${label}.`);
         }
+        if ((destination?.type === "department" || destination?.type === "queue") && destination.departmentId) {
+          const availableQueues = queuesForDepartment(queues, destination.departmentId);
+          if (availableQueues.length === 0) {
+            errors.push(`Cadastre uma fila para o setor de ${label} antes de encaminhar para humano.`);
+          } else if (!destination.queueId) {
+            errors.push(`Escolha a fila que receberá ${label}.`);
+          }
+        }
         if (destination?.type === "submenu") {
           const submenuKey = destination.submenuKey || submenuKeyForOption(menuKey, index);
           const submenu = getMenuDraftForKey(answers, submenuKey);
@@ -964,6 +996,14 @@ export function validateWizardStep(answers: StandardFlowWizardAnswers, step: str
   if (step === "destination") {
     const destination = answers.destinations[0];
     if (!destination?.departmentId) errors.push("Escolha o setor que receberá este atendimento.");
+    if (destination?.departmentId) {
+      const availableQueues = queuesForDepartment(queues, destination.departmentId);
+      if (availableQueues.length === 0) {
+        errors.push("Cadastre uma fila para este setor antes de encaminhar para humano.");
+      } else if (!destination.queueId) {
+        errors.push("Escolha a fila que receberá este atendimento.");
+      }
+    }
   }
   if (step === "capture") {
     if (answers.captureQuestions.filter((question) => question.trim()).length === 0) {
@@ -2297,7 +2337,7 @@ export function ChatbotFlowBuilder({
     : currentWizardStep === "review" ? "Revisar antes de aplicar"
     : "Modelo";
   const goToNextWizardStep = () => {
-    const errors = validateWizardStep(wizardAnswers, currentWizardStep);
+    const errors = validateWizardStep(wizardAnswers, currentWizardStep, queues);
     if (errors.length > 0) {
       setWizardErrors(errors);
       showBuilderToast(errors.join("\n") || "Revise as pendências desta etapa.", "warning");
@@ -2352,7 +2392,7 @@ export function ChatbotFlowBuilder({
     setExpandedWizardOptionKey(null);
     focusWizardSection();
   };
-  const departmentQueues = (departmentId?: string) => queues.filter((queue) => !departmentId || queue.departmentId === departmentId);
+  const departmentQueues = (departmentId?: string) => queuesForDepartment(queues, departmentId);
   const discardWizardOption = (menuKey: string, optionIndex: number) => {
     if (
       wizardOptionRequiresDestructiveConfirmation(wizardAnswers, menuKey, optionIndex) &&
@@ -2400,9 +2440,12 @@ export function ChatbotFlowBuilder({
             onChange={(event) => {
               const departmentId = event.target.value;
               const queue = queues.find((item) => item.id === destination?.queueId);
+              const nextQueueId = queue && queue.departmentId === departmentId
+                ? destination?.queueId
+                : resolveSingleQueueIdForDepartment(queues, departmentId);
               updateWizardDestination(index, {
                 departmentId,
-                queueId: queue && queue.departmentId !== departmentId ? "" : destination?.queueId,
+                queueId: nextQueueId,
               }, menuKey);
             }}
             className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
@@ -2424,18 +2467,29 @@ export function ChatbotFlowBuilder({
         </label>
         {destination?.departmentId ? (
           <label className="grid gap-1 text-sm text-white/70">
-            Fila (opcional)
+            Fila
             <select
               value={destination?.queueId ?? ""}
-              disabled={disabled}
+              disabled={disabled || availableQueues.length <= 1}
               onChange={(event) => updateWizardDestination(index, { queueId: event.target.value }, menuKey)}
               className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
             >
-              <option className="bg-white text-slate-950" value="">Fila padrão do setor</option>
+              <option className="bg-white text-slate-950" value="">
+                {availableQueues.length === 0 ? "Nenhuma fila cadastrada" : "Escolha a fila"}
+              </option>
               {availableQueues.map((queue) => (
                 <option className="bg-white text-slate-950" key={queue.id} value={queue.id}>{queue.name}</option>
               ))}
             </select>
+            {availableQueues.length === 1 ? (
+              <span className="rounded-md border border-emerald-300/20 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-100">
+                Fila única selecionada automaticamente.
+              </span>
+            ) : availableQueues.length === 0 ? (
+              <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
+                Cadastre uma fila para este setor antes de usar atendimento humano.
+              </span>
+            ) : null}
           </label>
         ) : (
           <div className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-sm text-white/55">
@@ -3153,7 +3207,7 @@ export function ChatbotFlowBuilder({
       {wizardAnswers.template ? <div className="h-2 overflow-hidden rounded-full bg-black/20"><div className="h-full rounded-full bg-re7-sky transition-all" style={{ width: `${Math.round(((wizardStepIndex + 1) / wizardStepKeys.length) * 100)}%` }} /></div> : null}
       {wizardApplyFeedback ? <div className={`rounded-lg border p-3 text-sm ${wizardApplyFeedback.tone === "success" ? "border-emerald-300/25 bg-emerald-500/10 text-emerald-100" : wizardApplyFeedback.tone === "warning" ? "border-amber-300/25 bg-amber-500/10 text-amber-100" : "border-red-300/30 bg-red-500/10 text-red-100"}`}>{wizardApplyFeedback.message}</div> : null}
       {renderWizardStepFields()}
-      {wizardAnswers.template ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/10 px-3 py-3"><button type="button" disabled={wizardStepIndex <= 0} onClick={() => { setWizardErrors([]); setWizardApplyFeedback(null); setWizardStepIndex((current) => Math.max(current - 1, 0)); }} className="rounded-md border border-slate-300/30 bg-slate-500/10 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-500/20 disabled:cursor-not-allowed disabled:opacity-45">Voltar</button><button type="button" disabled={disabled} onClick={cancelWizard} className="rounded-md border border-red-300/35 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50">Cancelar wizard</button>{currentWizardStep === "review" ? <button type="button" disabled={disabled || generatedIssues.some((issue) => issue.includes("precisa") || issue.includes("sem setor"))} onClick={applyGeneratedDraft} className="rounded-md border border-emerald-300/40 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50">Aplicar ao rascunho</button> : <button type="button" disabled={disabled} onClick={goToNextWizardStep} className="rounded-md border border-re7-sky/60 bg-re7-sky/25 px-3 py-2 text-sm font-semibold text-sky-50 hover:bg-re7-sky/35 disabled:cursor-not-allowed disabled:opacity-45">Continuar</button>}</div> : null}
+      {wizardAnswers.template ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/10 px-3 py-3"><button type="button" disabled={wizardStepIndex <= 0} onClick={() => { setWizardErrors([]); setWizardApplyFeedback(null); setWizardStepIndex((current) => Math.max(current - 1, 0)); }} className="rounded-md border border-slate-300/30 bg-slate-500/10 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-500/20 disabled:cursor-not-allowed disabled:opacity-45">Voltar</button><button type="button" disabled={disabled} onClick={cancelWizard} className="rounded-md border border-red-300/35 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50">Cancelar wizard</button>{currentWizardStep === "review" ? <button type="button" disabled={disabled || generatedIssues.some((issue) => issue.includes("precisa") || issue.includes("sem setor") || issue.includes("sem fila"))} onClick={applyGeneratedDraft} className="rounded-md border border-emerald-300/40 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50">Aplicar ao rascunho</button> : <button type="button" disabled={disabled} onClick={goToNextWizardStep} className="rounded-md border border-re7-sky/60 bg-re7-sky/25 px-3 py-2 text-sm font-semibold text-sky-50 hover:bg-re7-sky/35 disabled:cursor-not-allowed disabled:opacity-45">Continuar</button>}</div> : null}
     </section>
   );
 

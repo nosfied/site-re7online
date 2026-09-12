@@ -26,7 +26,7 @@ export type DepartmentAwareHandoffDecision =
     }
   | {
       kind: "blocked";
-      reason: "department_not_found" | "queue_not_found";
+      reason: "department_not_found" | "queue_not_found" | "queue_required" | "no_queue_for_department";
       departmentId: string | null;
       queueId: string | null;
       shouldAssign: false;
@@ -63,7 +63,7 @@ export async function resolveDepartmentAwareHandoff(
       shouldAssign: true,
     };
   }
-  const queue = requestedQueueId
+  let queue = requestedQueueId
     ? await prisma.queue.findFirst({
         where: { clientId: params.clientId, id: requestedQueueId },
         select: { id: true, name: true, departmentId: true },
@@ -105,6 +105,26 @@ export async function resolveDepartmentAwareHandoff(
       queueName: queue?.name ?? null,
       shouldAssign: true,
     };
+  }
+
+  if (!queue) {
+    const departmentQueues = await prisma.queue.findMany({
+      where: { clientId: params.clientId, departmentId: department.id },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { id: true, name: true, departmentId: true },
+      take: 2,
+    });
+    if (departmentQueues.length === 1) {
+      queue = departmentQueues[0];
+    } else {
+      return {
+        kind: "blocked",
+        reason: departmentQueues.length === 0 ? "no_queue_for_department" : "queue_required",
+        departmentId: department.id,
+        queueId: null,
+        shouldAssign: false,
+      };
+    }
   }
 
   const availability = await getDepartmentAvailability(prisma as PrismaClient, {
