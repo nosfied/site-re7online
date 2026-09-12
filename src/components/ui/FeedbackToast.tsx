@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 type FeedbackToastProps = {
   message: string | null;
-  variant?: "success" | "error" | "warning";
+  variant?: "success" | "error" | "warning" | "info";
   closeLabel?: string;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
@@ -60,6 +60,8 @@ export function FeedbackToast({
       ? "border-red-800 bg-red-600 text-white"
       : variant === "warning"
         ? "border-amber-800 bg-amber-500 text-slate-950"
+      : variant === "info"
+        ? "border-sky-800 bg-sky-600 text-white"
       : "border-emerald-800 bg-emerald-600 text-white";
   const closeToast = onClose ?? onClick;
   const clickProps = closeToast

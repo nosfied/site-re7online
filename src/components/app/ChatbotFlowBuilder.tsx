@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 
 export type ChatbotFlowBuilderDepartment = {
   id: string;
@@ -34,6 +35,7 @@ type Props = {
   allowObjectiveReset?: boolean;
   departments: ChatbotFlowBuilderDepartment[];
   queues: ChatbotFlowBuilderQueue[];
+  resourcesLoading?: boolean;
   advancedEditor: ReactNode;
 };
 
@@ -355,6 +357,11 @@ type WizardMenuDraft = {
   enableMainMenu: boolean;
 };
 
+type BuilderToast = {
+  message: string;
+  variant: "success" | "error" | "warning" | "info";
+};
+
 type StandardFlowWizardAnswers = {
   template: StandardFlowTemplate | null;
   initialMessage: string;
@@ -515,10 +522,36 @@ function submenuKeyForOption(parentKey: string, optionIndex: number) {
   return parentKey ? `${parentKey}.${optionIndex}` : `${optionIndex}`;
 }
 
+function safeDomId(value: string) {
+  return value.replace(/[^a-z0-9_-]+/gi, "-") || "root";
+}
+
+function wizardOptionKey(menuKey: string, optionIndex: number) {
+  return `${menuKey || "root"}:${optionIndex}`;
+}
+
 function parentMenuKey(menuKey: string) {
   const parts = menuKey.split(".");
   parts.pop();
   return parts.join(".");
+}
+
+function parentOptionIndex(menuKey: string) {
+  const value = Number(menuKey.split(".").at(-1));
+  return Number.isInteger(value) ? value : null;
+}
+
+export function getWizardExpansionKeyAfterOptionDelete(menuKey: string): string | null {
+  if (!menuKey) return null;
+  const optionIndex = parentOptionIndex(menuKey);
+  return optionIndex === null ? null : wizardOptionKey(parentMenuKey(menuKey), optionIndex);
+}
+
+export function getWizardFocusTargetAfterOptionDelete(menuKey: string): { kind: "section" } | { kind: "option"; menuKey: string; optionIndex: number } {
+  if (!menuKey) return { kind: "section" };
+  const optionIndex = parentOptionIndex(menuKey);
+  if (optionIndex === null) return { kind: "section" };
+  return { kind: "option", menuKey: parentMenuKey(menuKey), optionIndex };
 }
 
 function getMenuDraftForKey(answers: StandardFlowWizardAnswers, menuKey: string): WizardMenuDraft {
@@ -533,17 +566,18 @@ function getMenuDraftForKey(answers: StandardFlowWizardAnswers, menuKey: string)
   }
   return answers.submenus[menuKey] ?? {
     title: "Novo submenu",
-    options: ["Nova opção"],
+    options: ["Opção 1"],
     destinations: {},
     enablePreviousMenu: true,
     enableMainMenu: true,
   };
 }
 
-function createDefaultSubmenuDraft(optionLabel: string): WizardMenuDraft {
+export function createDefaultSubmenuDraft(optionLabel: string): WizardMenuDraft {
+  const parentLabel = sanitizeLabel(optionLabel, "opção");
   return {
-    title: sanitizeLabel(optionLabel, "Novo submenu"),
-    options: ["Nova opção"],
+    title: `Submenu ${parentLabel}`,
+    options: ["Opção 1"],
     destinations: {},
     enablePreviousMenu: true,
     enableMainMenu: true,
@@ -558,6 +592,24 @@ function removeSubmenuTree(submenus: Record<string, WizardMenuDraft>, rootKey: s
     }
   }
   return next;
+}
+
+export function wizardSubmenuHasConfiguredChildren(answers: StandardFlowWizardAnswers, submenuKey: string): boolean {
+  const submenu = answers.submenus[submenuKey];
+  if (!submenu) return false;
+  if (Object.keys(submenu.destinations).length > 0) return true;
+  return Object.keys(answers.submenus).some((key) => key.startsWith(`${submenuKey}.`));
+}
+
+export function wizardOptionRequiresDestructiveConfirmation(
+  answers: StandardFlowWizardAnswers,
+  menuKey: string,
+  optionIndex: number
+): boolean {
+  const menu = getMenuDraftForKey(answers, menuKey);
+  const destination = menu.destinations[optionIndex];
+  if (destination?.type !== "submenu") return false;
+  return wizardSubmenuHasConfiguredChildren(answers, destination.submenuKey || submenuKeyForOption(menuKey, optionIndex));
 }
 
 export function removeWizardMenuOption(answers: StandardFlowWizardAnswers, menuKey: string, optionIndex: number): StandardFlowWizardAnswers {
@@ -888,7 +940,7 @@ export function validateWizardStep(answers: StandardFlowWizardAnswers, step: str
     const normalized = filled.map((option) => option.trim().toLowerCase());
     if (new Set(normalized).size !== normalized.length) errors.push("As opções do menu precisam ter nomes diferentes.");
   }
-  if (step === "destinations") {
+  if (step === "options" || step === "destinations") {
     const visit = (menuKey: string) => {
       const menu = getMenuDraftForKey(answers, menuKey);
       menu.options.forEach((option, index) => {
@@ -1205,6 +1257,14 @@ function buildGuidedSteps(params: {
     { key: "checklist", number: 8, title: "Checklist", summary: hasErrors ? `${issues.length} pendência(s)` : "Sem pendências críticas.", status: hasErrors ? "error" : "complete", targetId: "guided-step-checklist" },
     { key: "activation", number: 9, title: "Ativação", summary: active && entryPoint ? "Pode receber novas conversas." : "Revise ativo e entrada principal.", status: hasErrors ? "warning" : active && entryPoint ? "complete" : "incomplete", targetId: "guided-step-activation" },
   ] as GuidedStep[];
+}
+
+export function getStandardFlowWizardStepKeys(answers: StandardFlowWizardAnswers) {
+  if (answers.template === "institutional_menu") return ["consent", "initial", "options", "invalid", "hours", "handoff", "review"];
+  if (answers.template === "direct_handoff") return ["initial", "destination", "handoff", "review"];
+  if (answers.template === "pre_service_collection") return ["initial", "capture", "destination", "handoff", "review"];
+  if (answers.template === "information") return ["initial", "info_next", "review"];
+  return ["models"];
 }
 
 export function createGuidedObjectiveDefinition(definition: FlowDefinition, objective: GuidedObjective): FlowDefinition {
@@ -1575,6 +1635,7 @@ export function ChatbotFlowBuilder({
   allowObjectiveReset,
   departments,
   queues,
+  resourcesLoading,
   advancedEditor,
 }: Props) {
   const [mode, setMode] = useState<"guided" | "advanced">("guided");
@@ -1586,8 +1647,12 @@ export function ChatbotFlowBuilder({
   const [wizardErrors, setWizardErrors] = useState<string[]>([]);
   const [wizardMenuKey, setWizardMenuKey] = useState("");
   const [wizardApplyFeedback, setWizardApplyFeedback] = useState<{ tone: "success" | "warning" | "error"; message: string } | null>(null);
+  const [builderToast, setBuilderToast] = useState<BuilderToast | null>(null);
+  const [expandedWizardOptionKey, setExpandedWizardOptionKey] = useState<string | null>(null);
+  const [expandedExistingOptionKey, setExpandedExistingOptionKey] = useState<string | null>(null);
   const [existingFlowView, setExistingFlowView] = useState<"overview" | "journey" | "simple">("overview");
   const [editingMenuNodeId, setEditingMenuNodeId] = useState<string | null>(null);
+  const wizardSectionRef = useRef<HTMLElement | null>(null);
   const parsed = useMemo(() => parseDefinition(definitionText), [definitionText]);
   const issues = useMemo(
     () => (parsed.ok ? buildIssues(parsed.definition, queues) : [parsed.message]),
@@ -1595,6 +1660,27 @@ export function ChatbotFlowBuilder({
   );
 
   const commit = (definition: FlowDefinition) => onDefinitionTextChange(formatDefinition(definition));
+  const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(builderToast), () => setBuilderToast(null), 4200);
+
+  const showBuilderToast = (message: string, variant: BuilderToast["variant"] = "info") => {
+    setBuilderToast({ message, variant });
+  };
+
+  const focusElement = (element: HTMLElement | null, block: ScrollLogicalPosition = "start") => {
+    if (!element || typeof window === "undefined") return;
+    window.requestAnimationFrame(() => {
+      const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      element.scrollIntoView({ block, behavior: reduceMotion ? "auto" : "smooth" });
+      if (!element.hasAttribute("tabindex")) element.setAttribute("tabindex", "-1");
+      element.focus({ preventScroll: true });
+    });
+  };
+
+  const focusWizardSection = () => focusElement(wizardSectionRef.current);
+  const focusWizardOption = (menuKey: string, optionIndex: number) => {
+    if (typeof document === "undefined") return;
+    focusElement(document.getElementById(`wizard-option-${safeDomId(wizardOptionKey(menuKey, optionIndex))}`), "nearest");
+  };
 
   const resetWizardSession = () => {
     setWizardAnswers(createDefaultWizardAnswers());
@@ -1602,6 +1688,8 @@ export function ChatbotFlowBuilder({
     setWizardErrors([]);
     setWizardMenuKey("");
     setWizardApplyFeedback(null);
+    setExpandedWizardOptionKey(null);
+    focusWizardSection();
   };
 
   if (!parsed.ok) {
@@ -2185,13 +2273,7 @@ export function ChatbotFlowBuilder({
           }),
     }));
   };
-  const wizardStepKeys = (() => {
-    if (wizardAnswers.template === "institutional_menu") return ["initial", "consent", "options", "destinations", "invalid", "hours", "handoff", "review"];
-    if (wizardAnswers.template === "direct_handoff") return ["initial", "destination", "handoff", "review"];
-    if (wizardAnswers.template === "pre_service_collection") return ["initial", "capture", "destination", "handoff", "review"];
-    if (wizardAnswers.template === "information") return ["initial", "info_next", "review"];
-    return ["models"];
-  })();
+  const wizardStepKeys = getStandardFlowWizardStepKeys(wizardAnswers);
   const currentWizardStep = wizardStepKeys[Math.min(wizardStepIndex, wizardStepKeys.length - 1)] ?? "models";
   const generatedDefinition = wizardAnswers.template && wizardAnswers.template !== "advanced"
     ? buildStandardFlowDefinition(wizardAnswers)
@@ -2204,7 +2286,7 @@ export function ChatbotFlowBuilder({
   const wizardStepTitle =
     currentWizardStep === "initial" ? "Mensagem inicial"
     : currentWizardStep === "consent" ? "Consentimento"
-    : currentWizardStep === "options" ? "Opções do menu"
+    : currentWizardStep === "options" ? "Menu principal"
     : currentWizardStep === "destinations" ? "Destino de cada opção"
     : currentWizardStep === "destination" ? "Destino do atendimento"
     : currentWizardStep === "capture" ? "Perguntas antes do atendimento"
@@ -2218,24 +2300,30 @@ export function ChatbotFlowBuilder({
     const errors = validateWizardStep(wizardAnswers, currentWizardStep);
     if (errors.length > 0) {
       setWizardErrors(errors);
+      showBuilderToast(errors.join("\n") || "Revise as pendências desta etapa.", "warning");
       return;
     }
     setWizardErrors([]);
+    setBuilderToast(null);
     setWizardStepIndex((current) => Math.min(current + 1, wizardStepKeys.length - 1));
+    focusWizardSection();
   };
   const applyGeneratedDraft = () => {
     if (!generatedDefinition) {
       setWizardApplyFeedback({ tone: "error", message: "Não foi possível gerar o fluxo com as respostas atuais." });
+      showBuilderToast("Não foi possível gerar o fluxo com as respostas atuais.", "error");
       return;
     }
     const blockingIssue = generatedIssues.find((issue) => issue.includes("precisa") || issue.includes("sem setor"));
     if (blockingIssue) {
       setWizardApplyFeedback({ tone: "error", message: blockingIssue });
+      showBuilderToast(blockingIssue, "error");
       return;
     }
     const nextText = formatDefinition(generatedDefinition);
     if (nextText === definitionText) {
       setWizardApplyFeedback({ tone: "warning", message: "Nenhuma alteração foi necessária." });
+      showBuilderToast("Nenhuma alteração foi necessária.", "warning");
       return;
     }
     onDefinitionTextChange(nextText);
@@ -2243,6 +2331,8 @@ export function ChatbotFlowBuilder({
       tone: "success",
       message: "Fluxo aplicado ao rascunho. Ele ainda não foi salvo. Revise ou salve quando estiver pronto.",
     });
+    showBuilderToast("Fluxo aplicado ao rascunho. Ele ainda não foi salvo.", "success");
+    focusWizardSection();
   };
   const cancelWizard = () => {
     const confirmed = window.confirm("Cancelar a criação guiada? O rascunho desta criação será descartado.");
@@ -2259,67 +2349,587 @@ export function ChatbotFlowBuilder({
     setWizardErrors([]);
     setWizardMenuKey("");
     setWizardApplyFeedback(null);
+    setExpandedWizardOptionKey(null);
+    focusWizardSection();
   };
   const departmentQueues = (departmentId?: string) => queues.filter((queue) => !departmentId || queue.departmentId === departmentId);
-  const discardWizardOption = (menuKey: string, optionIndex: number, hasConfiguredDestination: boolean) => {
-    const message = hasConfiguredDestination
-      ? "Excluir esta opção e o destino configurado para ela?"
-      : "Cancelar esta opção ainda não configurada?";
-    if (!window.confirm(message)) return;
+  const discardWizardOption = (menuKey: string, optionIndex: number) => {
+    if (
+      wizardOptionRequiresDestructiveConfirmation(wizardAnswers, menuKey, optionIndex) &&
+      !window.confirm("Excluir esta opção também removerá o submenu configurado nela. Deseja continuar?")
+    ) {
+      return;
+    }
     setWizardErrors([]);
     setWizardApplyFeedback(null);
     setWizardAnswers((current) => removeWizardMenuOption(current, menuKey, optionIndex));
+    setExpandedWizardOptionKey(getWizardExpansionKeyAfterOptionDelete(menuKey));
+    const focusTarget = getWizardFocusTargetAfterOptionDelete(menuKey);
+    if (focusTarget.kind === "option") {
+      window.requestAnimationFrame(() => focusWizardOption(focusTarget.menuKey, focusTarget.optionIndex));
+      return;
+    }
+    focusWizardSection();
   };
   const discardCurrentSubmenu = () => {
     if (!wizardMenuKey) return;
-    if (!window.confirm("Cancelar a criação deste submenu e voltar ao nível anterior?")) return;
+    if (
+      wizardSubmenuHasConfiguredChildren(wizardAnswers, wizardMenuKey) &&
+      !window.confirm("Cancelar este submenu removerá as opções e destinos já configurados nele. Deseja continuar?")
+    ) {
+      return;
+    }
     const parentKey = parentMenuKey(wizardMenuKey);
     setWizardErrors([]);
     setWizardApplyFeedback(null);
     setWizardAnswers((current) => cancelWizardSubmenuCreation(current, wizardMenuKey));
     setWizardMenuKey(parentKey);
+    const optionIndex = parentOptionIndex(wizardMenuKey);
+    setExpandedWizardOptionKey(optionIndex === null ? null : wizardOptionKey(parentKey, optionIndex));
+    if (optionIndex !== null) focusWizardOption(parentKey, optionIndex);
   };
-  const renderDepartmentQueueFields = (index: number, destination: WizardDestination | undefined) => (
-    <div className="grid gap-2 sm:grid-cols-2">
-      <label className="grid gap-1 text-sm text-white/70">
-        Setor responsável
-        <select
-          value={destination?.departmentId ?? ""}
-          disabled={disabled}
-          onChange={(event) => {
-            const departmentId = event.target.value;
-            const queue = queues.find((item) => item.id === destination?.queueId);
-            updateWizardDestination(index, {
-              departmentId,
-              queueId: queue && queue.departmentId !== departmentId ? "" : destination?.queueId,
-            });
-          }}
-          className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-        >
-          <option value="">Escolha o setor</option>
-          {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
-        </select>
-      </label>
-      {destination?.departmentId ? (
+  const renderDepartmentQueueFields = (index: number, destination: WizardDestination | undefined, menuKey = wizardMenuKey) => {
+    const availableQueues = departmentQueues(destination?.departmentId);
+    return (
+      <div className="grid gap-2 sm:grid-cols-2">
         <label className="grid gap-1 text-sm text-white/70">
-          Fila (opcional)
+          Setor responsável
           <select
-            value={destination?.queueId ?? ""}
+            value={destination?.departmentId ?? ""}
             disabled={disabled}
-            onChange={(event) => updateWizardDestination(index, { queueId: event.target.value })}
+            onChange={(event) => {
+              const departmentId = event.target.value;
+              const queue = queues.find((item) => item.id === destination?.queueId);
+              updateWizardDestination(index, {
+                departmentId,
+                queueId: queue && queue.departmentId !== departmentId ? "" : destination?.queueId,
+              }, menuKey);
+            }}
             className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
           >
-            <option value="">Fila padrão do setor</option>
-            {departmentQueues(destination?.departmentId).map((queue) => <option key={queue.id} value={queue.id}>{queue.name}</option>)}
+            <option className="bg-white text-slate-950" value="">Escolha o setor</option>
+            {departments.map((department) => (
+              <option className="bg-white text-slate-950" key={department.id} value={department.id}>{department.name}</option>
+            ))}
           </select>
+          {resourcesLoading ? (
+            <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/60">
+              Carregando setores ativos...
+            </span>
+          ) : departments.length === 0 ? (
+            <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
+              Nenhum setor ativo foi carregado para este fluxo.
+            </span>
+          ) : null}
         </label>
-      ) : (
-        <div className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-sm text-white/55">
-          Escolha o setor para liberar a fila específica, se houver.
+        {destination?.departmentId ? (
+          <label className="grid gap-1 text-sm text-white/70">
+            Fila (opcional)
+            <select
+              value={destination?.queueId ?? ""}
+              disabled={disabled}
+              onChange={(event) => updateWizardDestination(index, { queueId: event.target.value }, menuKey)}
+              className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+            >
+              <option className="bg-white text-slate-950" value="">Fila padrão do setor</option>
+              {availableQueues.map((queue) => (
+                <option className="bg-white text-slate-950" key={queue.id} value={queue.id}>{queue.name}</option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <div className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-sm text-white/55">
+            Escolha o setor para liberar a fila específica, se houver.
+          </div>
+        )}
+      </div>
+    );
+  };
+  const renderWizardExpandableRow = ({
+    rowKey,
+    eyebrow,
+    value,
+    placeholder,
+    target,
+    onValueChange,
+    onRemove,
+    canRemove = true,
+    children,
+  }: {
+    rowKey: string;
+    eyebrow: string;
+    value: string;
+    placeholder: string;
+    target: string;
+    onValueChange?: (value: string) => void;
+    onRemove?: () => void;
+    canRemove?: boolean;
+    children?: ReactNode;
+  }) => {
+    const isExpanded = expandedWizardOptionKey === rowKey;
+    return (
+      <section
+        id={`wizard-option-${safeDomId(rowKey)}`}
+        onClick={() => {
+          if (disabled || isExpanded) return;
+          setExpandedWizardOptionKey(rowKey);
+        }}
+        className={`grid gap-3 rounded-lg border p-3 transition ${
+          isExpanded
+            ? "border-re7-sky/40 bg-re7-sky/15 ring-1 ring-re7-sky/30"
+            : "cursor-pointer border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
+        }`}
+      >
+        <div
+          className="flex w-full flex-wrap items-start justify-between gap-3 rounded-md px-1 py-1"
+          onClick={(event) => {
+            const targetElement = event.target as HTMLElement;
+            if (targetElement.closest("input,button,select,textarea")) return;
+            setExpandedWizardOptionKey(isExpanded ? null : rowKey);
+          }}
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase text-white/45">{eyebrow}</p>
+            {onValueChange ? (
+              <input
+                value={value}
+                disabled={disabled}
+                onChange={(event) => onValueChange(event.target.value)}
+                onFocus={() => {
+                  if (!isExpanded) setExpandedWizardOptionKey(rowKey);
+                }}
+                className="mt-1 w-full rounded-md border border-transparent bg-transparent px-0 py-1 text-sm font-semibold text-white outline-none transition placeholder:text-white/35 hover:border-white/10 hover:bg-white/[0.03] focus:border-re7-sky/60 focus:bg-re7-navy/70 focus:px-2"
+                placeholder={placeholder}
+              />
+            ) : (
+              <p className="mt-1 py-1 text-sm font-semibold text-white">{value || placeholder}</p>
+            )}
+            <p className="mt-1 text-xs text-white/60">Destino: {target}</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {isExpanded && onRemove ? (
+              <button
+                type="button"
+                disabled={disabled || !canRemove}
+                aria-label="Excluir linha"
+                title="Excluir linha"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRemove();
+                }}
+                className="grid h-8 w-8 place-items-center rounded-full border border-red-300/30 text-base font-semibold leading-none text-red-100 transition hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-300/50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ×
+              </button>
+            ) : null}
+            <button
+              type="button"
+              disabled={disabled}
+              aria-expanded={isExpanded}
+              aria-label={isExpanded ? "Recolher linha" : "Expandir linha"}
+              title={isExpanded ? "Recolher linha" : "Expandir linha"}
+              onClick={(event) => {
+                event.stopPropagation();
+                setExpandedWizardOptionKey(isExpanded ? null : rowKey);
+              }}
+              className={`grid h-8 w-8 place-items-center rounded-full border text-base font-semibold leading-none transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 disabled:cursor-not-allowed disabled:opacity-60 ${isExpanded ? "rotate-90 border-re7-sky/50 bg-re7-sky/20 text-sky-50" : "border-white/15 text-white/70"}`}
+            >
+              ›
+            </button>
+          </div>
         </div>
-      )}
+        {isExpanded ? (
+          <div className="grid gap-3 border-t border-white/10 pt-3" onClick={(event) => event.stopPropagation()}>
+            {children}
+          </div>
+        ) : null}
+      </section>
+    );
+  };
+  const renderWizardDestinationEditor = () => {
+    const destination = wizardAnswers.destinations[0] ?? { type: "department" as const };
+    const target = destination.departmentId
+      ? "Atendimento humano configurado"
+      : "Atendimento humano";
+    return renderWizardExpandableRow({
+      rowKey: "single-destination",
+      eyebrow: "Destino",
+      value: "Encaminhar para atendimento humano",
+      placeholder: "Encaminhar para atendimento humano",
+      target,
+      children: renderDepartmentQueueFields(0, destination),
+    });
+  };
+  const renderWizardCaptureQuestionsEditor = () => (
+    <div className="grid gap-3">
+      {wizardAnswers.captureQuestions.map((question, index) => {
+        const rowKey = `capture:${index}`;
+        return renderWizardExpandableRow({
+          rowKey,
+          eyebrow: `Pergunta ${index + 1}`,
+          value: question,
+          placeholder: `Pergunta ${index + 1}`,
+          target: "Resposta obrigatória",
+          onValueChange: (value) => updateWizardAnswers({
+            captureQuestions: wizardAnswers.captureQuestions.map((item, itemIndex) => itemIndex === index ? value : item),
+          }),
+          onRemove: () => {
+            const nextQuestions = wizardAnswers.captureQuestions.filter((_, itemIndex) => itemIndex !== index);
+            updateWizardAnswers({ captureQuestions: nextQuestions });
+            setExpandedWizardOptionKey(null);
+            focusWizardSection();
+          },
+          canRemove: wizardAnswers.captureQuestions.length > 1,
+          children: (
+            <label className="grid gap-1 text-sm text-white/70">
+              Pergunta
+              <textarea
+                value={question}
+                disabled={disabled}
+                onChange={(event) => updateWizardAnswers({
+                  captureQuestions: wizardAnswers.captureQuestions.map((item, itemIndex) => itemIndex === index ? event.target.value : item),
+                })}
+                className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+              />
+            </label>
+          ),
+        });
+      })}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          const nextIndex = wizardAnswers.captureQuestions.length;
+          updateWizardAnswers({ captureQuestions: [...wizardAnswers.captureQuestions, `Pergunta ${nextIndex + 1}`] });
+          setExpandedWizardOptionKey(`capture:${nextIndex}`);
+        }}
+        className="w-fit rounded-md border border-white/15 px-3 py-2 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        + Adicionar pergunta
+      </button>
     </div>
   );
+  const renderInformationNextEditor = () => {
+    const options: Array<{ value: StandardFlowWizardAnswers["informationNext"]; label: string; target: string }> = [
+      { value: "end", label: "Encerrar atendimento", target: "Encerrar atendimento" },
+      { value: "message", label: "Mostrar outra mensagem", target: "Mensagem informativa" },
+      { value: "menu", label: "Abrir menu", target: "Menu principal" },
+      { value: "human", label: "Encaminhar para atendimento humano", target: "Atendimento humano" },
+      { value: "question", label: "Fazer uma pergunta", target: "Resposta obrigatória" },
+    ];
+    return (
+      <div className="grid gap-3">
+        {options.map((option) => {
+          const rowKey = `info-next:${option.value}`;
+          const isSelected = wizardAnswers.informationNext === option.value;
+          return renderWizardExpandableRow({
+            rowKey,
+            eyebrow: isSelected ? "Selecionado" : "Opção",
+            value: option.label,
+            placeholder: option.label,
+            target: option.target,
+            children: (
+              <div className="grid gap-3">
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => {
+                    updateWizardAnswers({ informationNext: option.value });
+                    setExpandedWizardOptionKey(rowKey);
+                  }}
+                  className={`w-fit rounded-md border px-3 py-2 text-sm font-semibold ${isSelected ? "border-emerald-300/40 bg-emerald-500/15 text-emerald-100" : "border-re7-sky/60 bg-re7-sky/20 text-sky-50 hover:bg-re7-sky/30"}`}
+                >
+                  {isSelected ? "Selecionado" : "Selecionar"}
+                </button>
+                {option.value === "message" ? (
+                  <label className="grid gap-1 text-sm text-white/70">
+                    Mensagem
+                    <textarea
+                      value={wizardAnswers.followupMessage}
+                      disabled={disabled}
+                      onChange={(event) => updateWizardAnswers({ followupMessage: event.target.value })}
+                      className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                    />
+                  </label>
+                ) : null}
+                {option.value === "human" ? renderDepartmentQueueFields(0, wizardAnswers.destinations[0] ?? { type: "department" }) : null}
+                {option.value === "question" ? (
+                  <label className="grid gap-1 text-sm text-white/70">
+                    Pergunta
+                    <textarea
+                      value={wizardAnswers.captureQuestions[0] ?? ""}
+                      disabled={disabled}
+                      onChange={(event) => updateWizardAnswers({ captureQuestions: [event.target.value, ...wizardAnswers.captureQuestions.slice(1)] })}
+                      className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                    />
+                  </label>
+                ) : null}
+                {option.value === "menu" ? renderWizardMenuEditor() : null}
+              </div>
+            ),
+          });
+        })}
+      </div>
+    );
+  };
+  const renderWizardMenuEditor = (menuKey = "", level = 0): ReactNode => {
+    const currentMenu = getMenuDraftForKey(wizardAnswers, menuKey);
+    const levelLabel = menuKey ? `Submenu nível ${level}` : "Menu principal";
+    const isOptionExpanded = (optionMenuKey: string, optionIndex: number) => {
+      if (!expandedWizardOptionKey) return false;
+      const rowKey = wizardOptionKey(optionMenuKey, optionIndex);
+      if (expandedWizardOptionKey === rowKey) return true;
+      const childMenuKey = submenuKeyForOption(optionMenuKey, optionIndex);
+      return expandedWizardOptionKey.startsWith(`${childMenuKey}:`) || expandedWizardOptionKey.startsWith(`${childMenuKey}.`);
+    };
+    return (
+      <div className={`grid gap-3 ${level > 0 ? "ml-2 border-l border-white/15 pl-4" : ""}`}>
+        {menuKey ? (
+          <div className="grid gap-3 rounded-lg border border-white/10 bg-black/10 p-3">
+            <label className="grid gap-1 text-sm text-white/70">
+              Nome deste submenu
+              <input
+                value={currentMenu.title}
+                disabled={disabled}
+                onChange={(event) => updateWizardMenu(menuKey, { title: event.target.value })}
+                className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+              />
+            </label>
+          </div>
+        ) : null}
+        {currentMenu.options.map((option, index) => {
+          const destination = currentMenu.destinations[index] ?? { type: "department" as const };
+          const submenuKey = destination.submenuKey || submenuKeyForOption(menuKey, index);
+          const hasConfiguredDestination = Boolean(currentMenu.destinations[index]);
+          const canRemoveOption = Boolean(menuKey) || currentMenu.options.length > 1;
+          const rowKey = wizardOptionKey(menuKey, index);
+          const isExpanded = isOptionExpanded(menuKey, index);
+          const isExactExpanded = expandedWizardOptionKey === rowKey;
+          const optionTarget =
+            destination.type === "submenu" ? `Submenu · ${getMenuDraftForKey(wizardAnswers, submenuKey).title}`
+            : destination.type === "department" || destination.type === "queue" ? "Atendimento humano"
+            : destination.type === "message" ? "Mensagem informativa"
+            : destination.type === "question" ? "Pergunta com resposta"
+            : destination.type === "end" ? "Encerrar atendimento"
+            : destination.type === "main_menu" ? "Menu principal"
+            : destination.type === "previous_menu" ? "Nível anterior"
+            : "Destino pendente";
+          return (
+            <section
+              key={index}
+              id={`wizard-option-${safeDomId(rowKey)}`}
+              onClick={() => {
+                if (disabled || isExpanded) return;
+                setExpandedWizardOptionKey(rowKey);
+              }}
+              className={`grid gap-3 rounded-lg border p-3 transition ${
+                isExpanded
+                  ? `${wizardMenuLevelTone(menuKey)} ring-1 ring-re7-sky/30`
+                  : "cursor-pointer border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
+              }`}
+            >
+              <div
+                className="flex w-full flex-wrap items-start justify-between gap-3 rounded-md px-1 py-1"
+                onClick={(event) => {
+                  const target = event.target as HTMLElement;
+                  if (target.closest("input,button,select,textarea")) return;
+                  setExpandedWizardOptionKey(isExpanded ? getWizardExpansionKeyAfterOptionDelete(menuKey) : rowKey);
+                  if (!isExpanded) focusWizardOption(menuKey, index);
+                }}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold uppercase text-white/45">
+                    {levelLabel} · Opção {index + 1}
+                  </p>
+                  <input
+                    aria-label={`Texto da opção ${index + 1}`}
+                    value={option}
+                    disabled={disabled}
+                    onChange={(event) => updateWizardMenu(menuKey, { options: currentMenu.options.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })}
+                    onFocus={() => {
+                      if (!isExpanded) setExpandedWizardOptionKey(rowKey);
+                    }}
+                    className="mt-1 w-full rounded-md border border-transparent bg-transparent px-0 py-1 text-sm font-semibold text-white outline-none transition placeholder:text-white/35 hover:border-white/10 hover:bg-white/[0.03] focus:border-re7-sky/60 focus:bg-re7-navy/70 focus:px-2"
+                    placeholder={`Opção ${index + 1}`}
+                  />
+                  <p className="mt-1 text-xs text-white/60">Destino: {optionTarget}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {isExpanded ? (
+                    <button
+                      type="button"
+                      disabled={disabled || !canRemoveOption}
+                      aria-label={hasConfiguredDestination ? "Excluir esta opção" : "Cancelar esta opção"}
+                      title={hasConfiguredDestination ? "Excluir esta opção" : "Cancelar esta opção"}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        discardWizardOption(menuKey, index);
+                      }}
+                      className="grid h-8 w-8 place-items-center rounded-full border border-red-300/30 text-base font-semibold leading-none text-red-100 transition hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-300/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    aria-expanded={isExpanded}
+                    aria-label={isExpanded ? "Recolher opção" : "Expandir opção"}
+                    title={isExpanded ? "Recolher opção" : "Expandir opção"}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setExpandedWizardOptionKey(isExpanded ? getWizardExpansionKeyAfterOptionDelete(menuKey) : rowKey);
+                      if (!isExpanded) focusWizardOption(menuKey, index);
+                    }}
+                    className={`grid h-8 w-8 place-items-center rounded-full border text-base font-semibold leading-none transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 disabled:cursor-not-allowed disabled:opacity-60 ${isExpanded ? "rotate-90 border-re7-sky/50 bg-re7-sky/20 text-sky-50" : "border-white/15 text-white/70"}`}
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+              {isExpanded ? (
+                <div className="grid gap-3 border-t border-white/10 pt-3" onClick={(event) => event.stopPropagation()}>
+                  <label className="grid gap-1 text-sm text-white/70">
+                    Para onde deve ir esta opção?
+                    <select
+                      value={destination.type}
+                      disabled={disabled}
+                      onChange={(event) => {
+                        const type = event.target.value as WizardDestinationType;
+                        if (
+                          type !== "submenu" &&
+                          wizardOptionRequiresDestructiveConfirmation(wizardAnswers, menuKey, index) &&
+                          !window.confirm("Alterar este destino removerá o submenu configurado nesta opção. Deseja continuar?")
+                        ) {
+                          event.target.value = destination.type;
+                          return;
+                        }
+                        setWizardAnswers((current) => {
+                          const cleared = clearWizardDestination(current, menuKey, index);
+                          const currentDestination = type === "submenu" ? { type, submenuKey } : { type };
+                          const nextSubmenus = type === "submenu"
+                            ? {
+                                ...cleared.submenus,
+                                [submenuKey]: cleared.submenus[submenuKey] ?? createDefaultSubmenuDraft(option),
+                              }
+                            : cleared.submenus;
+                          if (!menuKey) {
+                            return {
+                              ...cleared,
+                              submenus: nextSubmenus,
+                              destinations: {
+                                ...cleared.destinations,
+                                [index]: currentDestination,
+                              },
+                            };
+                          }
+                          const updatedMenu = getMenuDraftForKey({ ...cleared, submenus: nextSubmenus }, menuKey);
+                          return {
+                            ...cleared,
+                            submenus: {
+                              ...nextSubmenus,
+                              [menuKey]: {
+                                ...updatedMenu,
+                                destinations: {
+                                  ...updatedMenu.destinations,
+                                  [index]: currentDestination,
+                                },
+                              },
+                            },
+                          };
+                        });
+                      }}
+                      className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                    >
+                      {getWizardDestinationTypeOptions(menuKey).map((option) => (
+                        <option className="bg-white text-slate-950" key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {destination.type === "message" ? (
+                    <p className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/60">
+                      Mostra uma mensagem e continua sem esperar uma resposta.
+                    </p>
+                  ) : null}
+                  {destination.type === "question" ? (
+                    <p className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/60">
+                      Faz uma pergunta, aguarda a resposta e salva a informação antes de seguir.
+                    </p>
+                  ) : null}
+                  {destination.type === "department" || destination.type === "queue" ? renderDepartmentQueueFields(index, destination, menuKey) : null}
+                  {destination.type === "submenu" ? (
+                    <div className="grid gap-3 rounded-lg border border-white/10 bg-black/10 p-3" onClick={(event) => event.stopPropagation()}>
+                      <p className="text-xs font-semibold uppercase text-white/45">Submenu desta opção</p>
+                      {renderWizardMenuEditor(submenuKey, level + 1)}
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => {
+                            if (
+                              wizardOptionRequiresDestructiveConfirmation(wizardAnswers, menuKey, index) &&
+                              !window.confirm("Cancelar este submenu removerá as opções e destinos já configurados nele. Deseja continuar?")
+                            ) {
+                              return;
+                            }
+                            setWizardAnswers((current) => clearWizardDestination(current, menuKey, index));
+                            setExpandedWizardOptionKey(rowKey);
+                            focusWizardOption(menuKey, index);
+                          }}
+                          className="rounded-md border border-white/15 px-3 py-2 text-xs font-semibold text-white/75 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Cancelar criação deste submenu
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {destination.type === "message" || destination.type === "end" ? (
+                    <label className="grid gap-1 text-sm text-white/70">
+                      Mensagem
+                      <textarea value={destination.message ?? ""} disabled={disabled} onChange={(event) => updateWizardDestination(index, { message: event.target.value }, menuKey)} className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white" />
+                    </label>
+                  ) : null}
+                  {destination.type === "question" ? (
+                    <label className="grid gap-1 text-sm text-white/70">
+                      Pergunta
+                      <textarea value={destination.question ?? ""} disabled={disabled} onChange={(event) => updateWizardDestination(index, { question: event.target.value }, menuKey)} className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white" />
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+          );
+        })}
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            const nextIndex = currentMenu.options.length;
+            updateWizardMenu(menuKey, { options: [...currentMenu.options, `Opção ${nextIndex + 1}`] });
+            const nextKey = wizardOptionKey(menuKey, nextIndex);
+            setExpandedWizardOptionKey(nextKey);
+            window.requestAnimationFrame(() => focusWizardOption(menuKey, nextIndex));
+          }}
+          className="w-fit rounded-md border border-white/15 px-3 py-2 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          + Adicionar opção neste nível
+        </button>
+        {menuKey ? (
+          <div className="rounded-lg border border-white/10 bg-black/10 p-3 text-sm text-white/70">
+            <p className="font-semibold text-white">Navegação deste submenu</p>
+            <label className="mt-2 flex items-center gap-2">
+              <input type="checkbox" checked={currentMenu.enablePreviousMenu} disabled={disabled} onChange={(event) => updateWizardMenu(menuKey, { enablePreviousMenu: event.target.checked })} />
+              9 - Voltar ao Menu Anterior
+            </label>
+            <label className="mt-2 flex items-center gap-2">
+              <input type="checkbox" checked={currentMenu.enableMainMenu} disabled={disabled} onChange={(event) => updateWizardMenu(menuKey, { enableMainMenu: event.target.checked })} />
+              0 - Voltar ao Menu Principal
+            </label>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
   const renderWizardStepFields = () => {
     if (!wizardAnswers.template) {
       return (
@@ -2358,7 +2968,7 @@ export function ChatbotFlowBuilder({
     if (currentWizardStep === "consent") {
       return (
         <div className="grid gap-3">
-          <p className="text-sm text-white/70">Você precisa solicitar consentimento antes de continuar?</p>
+          <p className="text-sm text-white/70">Este atendimento precisa solicitar consentimento antes de continuar?</p>
           <div className="flex flex-wrap gap-2">
             {[{ value: false, label: "Não" }, { value: true, label: "Sim" }].map((option) => (
               <button key={String(option.value)} type="button" disabled={disabled} onClick={() => updateWizardAnswers({ consentEnabled: option.value })} className={`rounded-md border px-3 py-2 text-sm ${wizardAnswers.consentEnabled === option.value ? "border-re7-sky bg-re7-sky/20 text-white" : "border-white/15 text-white/70"}`}>
@@ -2376,256 +2986,14 @@ export function ChatbotFlowBuilder({
         </div>
       );
     }
-    if (currentWizardStep === "options") {
-      return (
-        <div className="grid gap-3">
-          <p className="text-sm text-white/70">Quais opções o cidadão poderá escolher?</p>
-          {wizardAnswers.menuOptions.map((option, index) => (
-            <div key={index} className="grid gap-2 rounded-lg border border-white/10 bg-black/10 p-3 sm:grid-cols-[auto_1fr_auto]">
-              <span className="pt-2 text-sm font-semibold text-white/70">{index + 1}</span>
-              <input value={option} disabled={disabled} onChange={(event) => updateWizardAnswers({ menuOptions: wizardAnswers.menuOptions.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white" />
-              <button type="button" disabled={disabled || wizardAnswers.menuOptions.length <= 1} onClick={() => updateWizardAnswers({ menuOptions: wizardAnswers.menuOptions.filter((_, itemIndex) => itemIndex !== index) })} className="rounded-md border border-red-300/30 px-3 py-2 text-xs text-red-100 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50">Excluir</button>
-            </div>
-          ))}
-          <button type="button" disabled={disabled} onClick={() => updateWizardAnswers({ menuOptions: [...wizardAnswers.menuOptions, `Opção ${wizardAnswers.menuOptions.length + 1}`] })} className="w-fit rounded-md border border-white/15 px-3 py-2 text-sm text-white/80 hover:bg-white/10">+ Adicionar opção</button>
-        </div>
-      );
-    }
-    if (currentWizardStep === "destinations") {
-      const currentMenu = getMenuDraftForKey(wizardAnswers, wizardMenuKey);
-      const breadcrumb = wizardMenuKey
-        ? ["Menu principal", ...wizardMenuKey.split(".").map((_, index, parts) => {
-            const key = parts.slice(0, index + 1).join(".");
-            return getMenuDraftForKey(wizardAnswers, key).title;
-          })]
-        : ["Menu principal"];
-      return (
-        <div className="grid gap-3">
-          <div className="rounded-lg border border-sky-300/25 bg-sky-500/10 p-3">
-            <p className="text-xs font-semibold uppercase text-sky-100/80">Nível atual</p>
-            <p className="mt-1 text-sm text-white">{breadcrumb.map((item) => sanitizeLabel(item, "Menu")).join(" > ")}</p>
-            {wizardMenuKey ? (
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => setWizardMenuKey(parentMenuKey(wizardMenuKey))}
-                className="mt-3 rounded-md border border-white/15 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Voltar ao nível anterior
-              </button>
-            ) : null}
-          </div>
-          {wizardMenuKey ? (
-            <label className="grid gap-1 text-sm text-white/70">
-              Nome deste submenu
-              <input
-                value={currentMenu.title}
-                disabled={disabled}
-                onChange={(event) => updateWizardMenu(wizardMenuKey, { title: event.target.value })}
-                className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-              />
-            </label>
-          ) : null}
-          {currentMenu.options.map((option, index) => {
-            const destination = currentMenu.destinations[index] ?? { type: "department" as const };
-            const submenuKey = destination.submenuKey || submenuKeyForOption(wizardMenuKey, index);
-            const hasConfiguredDestination = Boolean(currentMenu.destinations[index]);
-            const canRemoveOption = currentMenu.options.length > 1;
-            return (
-              <section
-                key={index}
-                className={`grid gap-3 rounded-lg border p-3 ${
-                  wizardMenuLevelTone(wizardMenuKey)
-                }`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-semibold uppercase text-white/45">
-                      {wizardMenuKey ? `Submenu nível ${wizardMenuKey.split(".").length}` : "Menu principal"}
-                    </p>
-                    <h5 className="mt-1 text-sm font-semibold text-white">{sanitizeLabel(option, `Opção ${index + 1}`)}</h5>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={disabled || !canRemoveOption}
-                    onClick={() => discardWizardOption(wizardMenuKey, index, hasConfiguredDestination)}
-                    className="rounded-md border border-red-300/30 px-3 py-2 text-xs font-semibold text-red-100 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {hasConfiguredDestination ? "Excluir esta opção" : "Cancelar esta opção"}
-                  </button>
-                </div>
-                <label className="grid gap-1 text-sm text-white/70">
-                  Texto da opção
-                  <input
-                    value={option}
-                    disabled={disabled}
-                    onChange={(event) => updateWizardMenu(wizardMenuKey, { options: currentMenu.options.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })}
-                    className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-                  />
-                </label>
-                <label className="grid gap-1 text-sm text-white/70">
-                  Para onde deve ir esta opção?
-                  <select
-                    value={destination.type}
-                    disabled={disabled}
-                    onChange={(event) => {
-                      const type = event.target.value as WizardDestinationType;
-                      setWizardAnswers((current) => {
-                        const cleared = clearWizardDestination(current, wizardMenuKey, index);
-                        const currentDestination = type === "submenu" ? { type, submenuKey } : { type };
-                        return {
-                          ...cleared,
-                          ...(wizardMenuKey
-                            ? {
-                                submenus: {
-                                  ...cleared.submenus,
-                                  [wizardMenuKey]: {
-                                    ...getMenuDraftForKey(cleared, wizardMenuKey),
-                                    destinations: {
-                                      ...getMenuDraftForKey(cleared, wizardMenuKey).destinations,
-                                      [index]: currentDestination,
-                                    },
-                                  },
-                                },
-                              }
-                            : {
-                                destinations: {
-                                  ...cleared.destinations,
-                                  [index]: currentDestination,
-                                },
-                              }),
-                        };
-                      });
-                    }}
-                    className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-                  >
-                    {getWizardDestinationTypeOptions(wizardMenuKey).map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-                {destination.type === "message" ? (
-                  <p className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/60">
-                    Mostra uma orientação e continua sem esperar uma resposta do cidadão.
-                  </p>
-                ) : null}
-                {destination.type === "question" ? (
-                  <p className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/60">
-                    Envia uma pergunta, aguarda a resposta e salva a informação antes de seguir.
-                  </p>
-                ) : null}
-                {destination.type === "department" || destination.type === "queue" ? renderDepartmentQueueFields(index, destination) : null}
-                {destination.type === "submenu" ? (
-                  <div className="grid gap-3 rounded-lg border border-indigo-300/25 bg-indigo-500/10 p-3">
-                    <label className="grid gap-1 text-sm text-white/70">
-                      Nome do submenu
-                      <input
-                        value={getMenuDraftForKey(wizardAnswers, submenuKey).title}
-                        disabled={disabled}
-                        onChange={(event) => {
-                          updateWizardDestination(index, { submenuKey });
-                          updateWizardMenu(submenuKey, { title: event.target.value });
-                        }}
-                        className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => {
-                        setWizardAnswers((current) => ({
-                          ...current,
-                          submenus: {
-                            ...current.submenus,
-                            [submenuKey]: current.submenus[submenuKey] ?? createDefaultSubmenuDraft(option),
-                          },
-                        }));
-                        updateWizardDestination(index, { type: "submenu", submenuKey });
-                        setWizardMenuKey(submenuKey);
-                      }}
-                      className="w-fit rounded-md border border-indigo-200/40 bg-indigo-500/15 px-3 py-2 text-sm font-semibold text-indigo-50 hover:bg-indigo-500/25 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Editar opções deste submenu
-                    </button>
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => {
-                        if (!window.confirm("Cancelar este submenu e manter a opção sem destino?")) return;
-                        setWizardAnswers((current) => clearWizardDestination(current, wizardMenuKey, index));
-                      }}
-                      className="w-fit rounded-md border border-white/15 px-3 py-2 text-xs font-semibold text-white/75 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Cancelar criação deste submenu
-                    </button>
-                  </div>
-                ) : null}
-                {destination.type === "message" || destination.type === "end" ? <label className="grid gap-1 text-sm text-white/70">Mensagem<textarea value={destination.message ?? ""} disabled={disabled} onChange={(event) => updateWizardDestination(index, { message: event.target.value })} className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white" /></label> : null}
-                {destination.type === "question" ? <label className="grid gap-1 text-sm text-white/70">Pergunta<textarea value={destination.question ?? ""} disabled={disabled} onChange={(event) => updateWizardDestination(index, { question: event.target.value })} className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white" /></label> : null}
-              </section>
-            );
-          })}
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => updateWizardMenu(wizardMenuKey, { options: [...currentMenu.options, `Opção ${currentMenu.options.length + 1}`] })}
-            className="w-fit rounded-md border border-white/15 px-3 py-2 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            + Adicionar opção neste nível
-          </button>
-          {wizardMenuKey ? (
-            <div className="rounded-lg border border-white/10 bg-black/10 p-3 text-sm text-white/70">
-              <p className="font-semibold text-white">Navegação deste submenu</p>
-              <label className="mt-2 flex items-center gap-2">
-                <input type="checkbox" checked={currentMenu.enablePreviousMenu} disabled={disabled} onChange={(event) => updateWizardMenu(wizardMenuKey, { enablePreviousMenu: event.target.checked })} />
-                9 - Voltar ao Menu Anterior
-              </label>
-              <label className="mt-2 flex items-center gap-2">
-                <input type="checkbox" checked={currentMenu.enableMainMenu} disabled={disabled} onChange={(event) => updateWizardMenu(wizardMenuKey, { enableMainMenu: event.target.checked })} />
-                0 - Voltar ao Menu Principal
-              </label>
-            </div>
-          ) : null}
-          {wizardMenuKey ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/10 p-3">
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => setWizardMenuKey(parentMenuKey(wizardMenuKey))}
-                className="rounded-md border border-white/15 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Voltar ao nível anterior
-              </button>
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={discardCurrentSubmenu}
-                className="rounded-md border border-red-300/30 px-3 py-2 text-xs font-semibold text-red-100 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancelar este submenu
-              </button>
-            </div>
-          ) : null}
-        </div>
-      );
+    if (currentWizardStep === "options" || currentWizardStep === "destinations") {
+      return renderWizardMenuEditor();
     }
     if (currentWizardStep === "destination") {
-      return <div className="grid gap-3"><p className="text-sm text-white/70">Escolha para onde este atendimento será enviado.</p>{renderDepartmentQueueFields(0, wizardAnswers.destinations[0] ?? { type: "department" })}</div>;
+      return renderWizardDestinationEditor();
     }
     if (currentWizardStep === "capture") {
-      return (
-        <div className="grid gap-3">
-          <p className="text-sm text-white/70">O que você precisa perguntar antes de encaminhar?</p>
-          {wizardAnswers.captureQuestions.map((question, index) => (
-            <div key={index} className="grid gap-2 rounded-lg border border-white/10 bg-black/10 p-3 sm:grid-cols-[auto_1fr_auto]">
-              <span className="pt-2 text-sm font-semibold text-white/70">{index + 1}</span>
-              <input value={question} disabled={disabled} onChange={(event) => updateWizardAnswers({ captureQuestions: wizardAnswers.captureQuestions.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white" />
-              <button type="button" disabled={disabled || wizardAnswers.captureQuestions.length <= 1} onClick={() => updateWizardAnswers({ captureQuestions: wizardAnswers.captureQuestions.filter((_, itemIndex) => itemIndex !== index) })} className="rounded-md border border-red-300/30 px-3 py-2 text-xs text-red-100 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50">Excluir</button>
-            </div>
-          ))}
-          <button type="button" disabled={disabled} onClick={() => updateWizardAnswers({ captureQuestions: [...wizardAnswers.captureQuestions, ""] })} className="w-fit rounded-md border border-white/15 px-3 py-2 text-sm text-white/80 hover:bg-white/10">+ Adicionar pergunta</button>
-        </div>
-      );
+      return renderWizardCaptureQuestionsEditor();
     }
     if (currentWizardStep === "invalid") {
       return <label className="grid gap-2 text-sm text-white/70">O que responder se o cidadão enviar uma opção inválida?<textarea value={wizardAnswers.invalidOptionText} disabled={disabled} onChange={(event) => updateWizardAnswers({ invalidOptionText: event.target.value })} className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white" /></label>;
@@ -2647,22 +3015,12 @@ export function ChatbotFlowBuilder({
       );
     }
     if (currentWizardStep === "info_next") {
-      return (
-        <label className="grid gap-2 text-sm text-white/70">O que acontece depois da mensagem?
-          <select value={wizardAnswers.informationNext} disabled={disabled} onChange={(event) => updateWizardAnswers({ informationNext: event.target.value as StandardFlowWizardAnswers["informationNext"] })} className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white">
-            <option value="end">Encerrar</option>
-            <option value="message">Mostrar outra mensagem</option>
-            <option value="menu">Abrir menu</option>
-            <option value="human">Encaminhar para atendimento humano</option>
-            <option value="question">Fazer uma pergunta</option>
-          </select>
-        </label>
-      );
+      return renderInformationNextEditor();
     }
     return (
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-lg border border-white/10 bg-black/10 p-3"><h4 className="text-sm font-semibold text-white">Como o cidadão verá</h4><div className="mt-3 grid gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-sm text-white/75">{generatedExpectedLines.map((line, index) => <p key={`${line}-${index}`}>{line}</p>)}</div></section>
-        <section className="rounded-lg border border-white/10 bg-black/10 p-3"><h4 className="text-sm font-semibold text-white">Caminho de atendimento</h4><div className="mt-3 grid gap-1 text-sm text-white/75">{generatedJourneyLines.map((line, index) => <p key={`${line}-${index}`}>{line}</p>)}</div><div className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] p-3"><p className="text-xs font-semibold uppercase text-white/45">Pendências</p>{generatedIssues.length > 0 ? <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-100">{generatedIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul> : <p className="mt-2 text-sm text-emerald-100">Nenhuma pendência crítica detectada.</p>}</div></section>
+        <section className="rounded-lg border border-white/10 bg-black/10 p-3"><h4 className="text-sm font-semibold text-white">Caminho de atendimento</h4><div className="mt-3 grid gap-1 text-sm text-white/75">{generatedJourneyLines.map((line, index) => <p key={`${line}-${index}`}>{line}</p>)}</div></section>
       </div>
     );
   };
@@ -2709,17 +3067,46 @@ export function ChatbotFlowBuilder({
               <div className="grid gap-2">
                 {getOptions(selectedMenuEntry.node).map((option, index) => {
                   const target = definition.nodes[stringValue(option.next)];
+                  const rowKey = `${selectedMenuEntry.id}:${index}`;
+                  const isExpanded = expandedExistingOptionKey === rowKey;
+                  const targetSummary = target?.type === "menu" ? `Submenu · ${truncateText(stringValue(target.text) || stringValue(option.next), 64)}` : target?.type === "handoff" ? `Atendimento humano · ${describeRoutedHandoff(target, option, departments, queues)}` : target ? nodeTypeLabel(stringValue(target.type)) : "Destino ainda não configurado.";
                   return (
-                    <div key={`${selectedMenuEntry.id}-${index}`} className="grid gap-2 rounded-md border border-white/10 bg-black/10 p-3">
-                      <label className="grid gap-1 text-sm text-white/70">
-                        Opção {index + 1}
-                        <input value={stringValue(option.label)} disabled={disabled} onChange={(event) => commit(setMenuOption(definition, selectedMenuEntry.id, index, { label: event.target.value }))} className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white" />
-                      </label>
-                      <p className="text-xs text-white/55">Destino: {target?.type === "menu" ? `Submenu · ${truncateText(stringValue(target.text) || stringValue(option.next), 64)}` : target?.type === "handoff" ? `Atendimento humano · ${describeRoutedHandoff(target, option, departments, queues)}` : target ? nodeTypeLabel(stringValue(target.type)) : "Destino ainda não configurado."}</p>
-                      {target?.type === "menu" ? (
-                        <button type="button" onClick={() => setEditingMenuNodeId(stringValue(option.next))} className="w-fit rounded-md border border-sky-300/35 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-50 hover:bg-sky-500/20">Abrir submenu</button>
+                    <section key={`${selectedMenuEntry.id}-${index}`} className="grid gap-2 rounded-md border border-white/10 bg-black/10 p-3">
+                      <button
+                        type="button"
+                        aria-expanded={isExpanded}
+                        onClick={() => setExpandedExistingOptionKey(isExpanded ? null : rowKey)}
+                        className="flex w-full flex-wrap items-start justify-between gap-3 rounded-md px-1 py-1 text-left transition hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-re7-sky/70"
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-xs font-semibold uppercase text-white/45">Opção {index + 1}</span>
+                          <span className="mt-1 block text-sm font-semibold text-white">{sanitizeLabel(stringValue(option.label), `Opção ${index + 1}`)}</span>
+                          <span className="mt-1 block text-xs text-white/55">Destino: {targetSummary}</span>
+                        </span>
+                        <span className="shrink-0 rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-white/70">{isExpanded ? "Recolher" : "Editar"}</span>
+                      </button>
+                      {isExpanded ? (
+                        <div className="grid gap-2 border-t border-white/10 pt-3">
+                          <label className="grid gap-1 text-sm text-white/70">
+                            Texto da opção
+                            <input value={stringValue(option.label)} disabled={disabled} onChange={(event) => commit(setMenuOption(definition, selectedMenuEntry.id, index, { label: event.target.value }))} className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white" />
+                          </label>
+                          <p className="text-xs text-white/55">Destino: {targetSummary}</p>
+                          {target?.type === "menu" ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMenuNodeId(stringValue(option.next));
+                                setExpandedExistingOptionKey(null);
+                              }}
+                              className="w-fit rounded-md border border-sky-300/35 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-50 hover:bg-sky-500/20"
+                            >
+                              Abrir submenu
+                            </button>
+                          ) : null}
+                        </div>
                       ) : null}
-                    </div>
+                    </section>
                   );
                 })}
               </div>
@@ -2761,18 +3148,23 @@ export function ChatbotFlowBuilder({
     </section>
   );
   const renderCreationWizard = () => (
-    <section className="chatbot-guided-shell grid gap-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+    <section ref={wizardSectionRef} className="chatbot-guided-shell grid gap-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
       <div><span className="text-xs font-semibold uppercase text-re7-sky/80">Criador guiado</span><h3 className="mt-1 text-lg font-semibold text-white">{wizardAnswers.template ? wizardStepTitle : "O que você quer criar?"}</h3><p className="mt-1 text-sm text-white/65">{wizardAnswers.template ? `Etapa ${wizardStepIndex + 1} de ${wizardStepKeys.length}. Responda apenas esta parte para avançar.` : "Escolha um modelo de atendimento. Depois faremos poucas perguntas e geraremos um fluxo real para revisão."}</p></div>
       {wizardAnswers.template ? <div className="h-2 overflow-hidden rounded-full bg-black/20"><div className="h-full rounded-full bg-re7-sky transition-all" style={{ width: `${Math.round(((wizardStepIndex + 1) / wizardStepKeys.length) * 100)}%` }} /></div> : null}
-      {wizardErrors.length > 0 ? <div className="rounded-lg border border-amber-300/25 bg-amber-500/10 p-3 text-sm text-amber-100">{wizardErrors.map((error) => <p key={error}>{error}</p>)}</div> : null}
       {wizardApplyFeedback ? <div className={`rounded-lg border p-3 text-sm ${wizardApplyFeedback.tone === "success" ? "border-emerald-300/25 bg-emerald-500/10 text-emerald-100" : wizardApplyFeedback.tone === "warning" ? "border-amber-300/25 bg-amber-500/10 text-amber-100" : "border-red-300/30 bg-red-500/10 text-red-100"}`}>{wizardApplyFeedback.message}</div> : null}
       {renderWizardStepFields()}
-      {wizardAnswers.template ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/10 px-3 py-3"><button type="button" disabled={wizardStepIndex <= 0} onClick={() => { setWizardErrors([]); setWizardApplyFeedback(null); setWizardStepIndex((current) => Math.max(current - 1, 0)); }} className="rounded-md border border-white/15 px-3 py-2 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45">Voltar</button><button type="button" disabled={disabled} onClick={cancelWizard} className="rounded-md border border-white/15 px-3 py-2 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50">Cancelar wizard</button>{currentWizardStep === "review" ? <button type="button" disabled={disabled || generatedIssues.some((issue) => issue.includes("precisa") || issue.includes("sem setor"))} onClick={applyGeneratedDraft} className="rounded-md border border-emerald-300/40 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50">Aplicar ao rascunho</button> : <button type="button" disabled={disabled} onClick={goToNextWizardStep} className="rounded-md border border-re7-sky/60 bg-re7-sky/20 px-3 py-2 text-sm font-semibold text-white hover:bg-re7-sky/30 disabled:cursor-not-allowed disabled:opacity-45">Continuar</button>}</div> : null}
+      {wizardAnswers.template ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/10 px-3 py-3"><button type="button" disabled={wizardStepIndex <= 0} onClick={() => { setWizardErrors([]); setWizardApplyFeedback(null); setWizardStepIndex((current) => Math.max(current - 1, 0)); }} className="rounded-md border border-slate-300/30 bg-slate-500/10 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-500/20 disabled:cursor-not-allowed disabled:opacity-45">Voltar</button><button type="button" disabled={disabled} onClick={cancelWizard} className="rounded-md border border-red-300/35 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50">Cancelar wizard</button>{currentWizardStep === "review" ? <button type="button" disabled={disabled || generatedIssues.some((issue) => issue.includes("precisa") || issue.includes("sem setor"))} onClick={applyGeneratedDraft} className="rounded-md border border-emerald-300/40 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50">Aplicar ao rascunho</button> : <button type="button" disabled={disabled} onClick={goToNextWizardStep} className="rounded-md border border-re7-sky/60 bg-re7-sky/25 px-3 py-2 text-sm font-semibold text-sky-50 hover:bg-re7-sky/35 disabled:cursor-not-allowed disabled:opacity-45">Continuar</button>}</div> : null}
     </section>
   );
 
   return (
     <div className="chatbot-flow-builder grid gap-4">
+      <FeedbackToast
+        message={builderToast?.message ?? null}
+        variant={builderToast?.variant}
+        onClose={() => setBuilderToast(null)}
+        {...toastHandlers}
+      />
       <div className="chatbot-mode-tabs flex flex-wrap gap-2">
         <button
           type="button"

@@ -433,6 +433,33 @@ frontend-only foi publicada em producao no commit `db34d83c`, sem backend,
 worker, schema ou migration. Permanece em PRODUCT OWNER REAL VALIDATION ate os
 testes reais em producao.
 
+Guided Builder 2.3 entrou em refinamento local em 2026-09-11 a partir do
+feedback real do owner. O foco e simplificar a criacao de fluxo e tornar a
+edicao de menus mais controlada: o wizard nao pergunta mais "Ativo" ou
+"Entrada principal" na criacao; o modelo institucional com menu comeca por
+consentimento; opcoes e destinos sao editados ja na primeira tela do menu
+principal; os submenus usam o mesmo padrao de linhas expansivas com uma opcao
+aberta por vez; os niveis recebem bordas/tons e marcadores hierarquicos; os
+resultados de acao usam toast global; e a UI restaura foco/scroll ao voltar,
+cancelar ou remover itens. Status: GUIDED BUILDER 2.3 / DEPLOYED / OWNER
+APPROVED LOCAL / PRODUCTION REAL VALIDATION. A aprovacao local final do owner
+foi aplicada sobre worktree limpa baseada no HEAD canonico atual antes de
+commit/push/deploy; a validacao real em producao permanece aberta ate exercicio
+humano em tenant real apos deploy.
+Sem mudanca de ChatbotFlow.definition, backend, worker, schema ou migration.
+
+Recuperacao/integridade 2026-09-12: a worktree temporaria em `/tmp` foi removida
+apos reboot da maquina local, e a primeira reaplicacao pos-reboot exibiu uma
+versao antiga. A recuperacao correta foi reconstruida a partir dos patches da
+sessao Codex, sem mutar producao, sem commit, sem push e sem deploy. A checagem
+de integridade comparou a versao local recuperada contra o HEAD canonico de
+producao/origin antes da entrega final aprovada.
+O ajuste final aprovado pelo owner remove a abertura automatica do proximo item
+apos exclusao de opcao, submenu/linha aninhada ou registro editavel; apos a
+remocao, os irmaos permanecem colapsados e o foco retorna ao contexto pai ou a
+secao atual. A entrega final e frontend-only, sem tenant hardcode, migration,
+schema ou reload de backend/worker.
+
 O flow SECULT/Demo homologado usa:
 
 ```json

@@ -10,15 +10,21 @@ import {
   buildStandardFlowDefinition,
   cancelWizardSubmenuCreation,
   ChatbotFlowBuilder,
+  createDefaultSubmenuDraft,
   createDefaultWizardAnswers,
   createGuidedObjectiveDefinition,
   getChatbotNodeEditorSectionPlan,
   getChatbotNodeIssueSectionKeys,
+  getStandardFlowWizardStepKeys,
   getGuidedNextTask,
+  getWizardExpansionKeyAfterOptionDelete,
+  getWizardFocusTargetAfterOptionDelete,
   getWizardDestinationTypeOptions,
   removeWizardMenuOption,
   validateWizardStep,
+  wizardOptionRequiresDestructiveConfirmation,
   wizardMenuLevelTone,
+  wizardSubmenuHasConfiguredChildren,
 } from "./ChatbotFlowBuilder";
 
 test("menu nodes expose primary sections and keep secondary sections collapsed by default", () => {
@@ -189,6 +195,14 @@ test("new flow wizard starts with business templates before asking technical fie
   assert.match(html, /Usar este modelo/);
   assert.match(html, /Abrir editor avançado/);
   assert.doesNotMatch(html, /Escolha o objetivo inicial do fluxo/);
+  assert.doesNotMatch(html, /Entrada principal/);
+  assert.doesNotMatch(html, />Ativo</);
+});
+
+test("institutional menu wizard starts with consent before main menu content", () => {
+  const answers = { ...createDefaultWizardAnswers(), template: "institutional_menu" as const };
+
+  assert.deepEqual(getStandardFlowWizardStepKeys(answers).slice(0, 3), ["consent", "initial", "options"]);
 });
 
 test("guided objective creates a menu flow and asks for menu options next", () => {
@@ -638,11 +652,13 @@ test("wizard validation checks only the current business step", () => {
   assert.deepEqual(validateWizardStep({ ...base, initialMessage: "" }, "initial"), [
     "Escreva a mensagem inicial que o cidadão verá.",
   ]);
-  assert.deepEqual(validateWizardStep({ ...base, initialMessage: "" }, "options"), []);
-  assert.deepEqual(validateWizardStep(base, "destinations"), [
+  assert.deepEqual(validateWizardStep({ ...base, initialMessage: "" }, "options"), [
     "A opção Registro ainda não possui destino.",
   ]);
-  assert.deepEqual(validateWizardStep({ ...base, destinations: { 0: { type: "department", departmentId: "dep" } } }, "destinations"), []);
+  assert.deepEqual(validateWizardStep(base, "options"), [
+    "A opção Registro ainda não possui destino.",
+  ]);
+  assert.deepEqual(validateWizardStep({ ...base, destinations: { 0: { type: "department", departmentId: "dep" } } }, "options"), []);
 });
 
 test("wizard validation rejects duplicate menu option labels in business language", () => {
@@ -668,7 +684,11 @@ test("wizard validation rejects duplicate menu option labels in business languag
     "options"
   );
 
-  assert.deepEqual(errors, ["As opções do menu precisam ter nomes diferentes."]);
+  assert.deepEqual(errors, [
+    "As opções do menu precisam ter nomes diferentes.",
+    "A opção Registro ainda não possui destino.",
+    "A opção registro ainda não possui destino.",
+  ]);
 });
 
 test("wizard validation requires configured destinations inside submenus", () => {
@@ -770,6 +790,91 @@ test("wizard option removal deletes a created submenu tree and preserves sibling
   assert.deepEqual(next.submenus, {});
 });
 
+test("wizard delete keeps next sibling collapsed and returns focus to parent context", () => {
+  const answers = createDefaultWizardAnswers();
+  answers.template = "institutional_menu";
+  answers.menuOptions = ["Registro", "Financeiro", "Suporte"];
+  answers.destinations = {
+    0: { type: "message", message: "Registro." },
+    1: { type: "message", message: "Financeiro." },
+    2: { type: "message", message: "Suporte." },
+  };
+
+  const next = removeWizardMenuOption(answers, "", 0);
+
+  assert.deepEqual(next.menuOptions, ["Financeiro", "Suporte"]);
+  assert.equal(getWizardExpansionKeyAfterOptionDelete(""), null);
+  assert.deepEqual(getWizardFocusTargetAfterOptionDelete(""), { kind: "section" });
+  assert.notEqual(getWizardExpansionKeyAfterOptionDelete(""), "root:0");
+});
+
+test("wizard nested delete returns to parent option without auto-opening sibling", () => {
+  const answers = createDefaultWizardAnswers();
+  answers.template = "institutional_menu";
+  answers.menuOptions = ["Registro"];
+  answers.destinations = { 0: { type: "submenu", submenuKey: "0" } };
+  answers.submenus = {
+    "0": {
+      title: "Registro",
+      options: ["Pessoa Física", "Pessoa Jurídica"],
+      destinations: {
+        0: { type: "message", message: "PF." },
+        1: { type: "message", message: "PJ." },
+      },
+      enablePreviousMenu: true,
+      enableMainMenu: true,
+    },
+  };
+
+  const next = removeWizardMenuOption(answers, "0", 0);
+
+  assert.deepEqual(next.submenus["0"].options, ["Pessoa Jurídica"]);
+  assert.equal(getWizardExpansionKeyAfterOptionDelete("0"), "root:0");
+  assert.deepEqual(getWizardFocusTargetAfterOptionDelete("0"), { kind: "option", menuKey: "", optionIndex: 0 });
+  assert.notEqual(getWizardExpansionKeyAfterOptionDelete("0"), "0:0");
+});
+
+test("wizard destructive confirmation is required only for configured submenu children", () => {
+  const answers = createDefaultWizardAnswers();
+  answers.template = "institutional_menu";
+  answers.menuOptions = ["Registro"];
+  answers.destinations = { 0: { type: "submenu", submenuKey: "0" } };
+  answers.submenus = {
+    "0": createDefaultSubmenuDraft("Registro"),
+  };
+
+  assert.equal(wizardSubmenuHasConfiguredChildren(answers, "0"), false);
+  assert.equal(wizardOptionRequiresDestructiveConfirmation(answers, "", 0), false);
+
+  answers.submenus["0"] = {
+    ...answers.submenus["0"],
+    destinations: { 0: { type: "department", departmentId: "dep_registro" } },
+  };
+
+  assert.equal(wizardSubmenuHasConfiguredChildren(answers, "0"), true);
+  assert.equal(wizardOptionRequiresDestructiveConfirmation(answers, "", 0), true);
+});
+
+test("wizard destructive confirmation detects configured nested submenu descendants", () => {
+  const answers = createDefaultWizardAnswers();
+  answers.template = "institutional_menu";
+  answers.menuOptions = ["Registro"];
+  answers.destinations = { 0: { type: "submenu", submenuKey: "0" } };
+  answers.submenus = {
+    "0": createDefaultSubmenuDraft("Registro"),
+    "0.0": {
+      title: "Pessoa Física",
+      options: ["Novo registro"],
+      destinations: {},
+      enablePreviousMenu: true,
+      enableMainMenu: true,
+    },
+  };
+
+  assert.equal(wizardSubmenuHasConfiguredChildren(answers, "0"), true);
+  assert.equal(wizardOptionRequiresDestructiveConfirmation(answers, "", 0), true);
+});
+
 test("wizard hierarchy tones are based on menu nesting level", () => {
   assert.match(wizardMenuLevelTone(""), /sky/);
   assert.match(wizardMenuLevelTone("0"), /indigo/);
@@ -786,6 +891,13 @@ test("wizard destination options keep human routing unified with conditional que
   assert.equal(labels.includes("Encaminhar para uma fila"), false);
   assert.equal(values.includes("queue"), false);
   assert.equal(getWizardDestinationTypeOptions("0").some((option) => option.value === "previous_menu"), true);
+});
+
+test("wizard default submenu labels use the parent option name and sequential option label", () => {
+  const submenu = createDefaultSubmenuDraft("Registro");
+
+  assert.equal(submenu.title, "Submenu Registro");
+  assert.deepEqual(submenu.options, ["Opção 1"]);
 });
 
 test("wizard generated definition preserves custom user text and emoji", () => {

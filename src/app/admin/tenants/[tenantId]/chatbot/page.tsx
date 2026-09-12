@@ -1662,17 +1662,23 @@ export default function AdminTenantChatbotPage() {
               onChange={(event) => setNewName(event.target.value)}
               placeholder="Fluxo principal"
             />
-            <ChatbotFlowBuilder
-              key={`admin-new-flow-builder-${newFlowBuilderVersion}`}
-              definitionText={newDefinition}
-              onDefinitionTextChange={setNewDefinition}
-              disabled={creating || !clientKey}
-              isActive={newIsActive}
-              entryPoint={newEntryPoint}
-              allowObjectiveReset
-              departments={builderResources.departments}
-              queues={builderResources.queues}
-              advancedEditor={
+            {loading ? (
+              <p className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/65">
+                Carregando setores e filas...
+              </p>
+            ) : (
+              <ChatbotFlowBuilder
+                key={`admin-new-flow-builder-${newFlowBuilderVersion}`}
+                definitionText={newDefinition}
+                onDefinitionTextChange={setNewDefinition}
+                disabled={creating || !clientKey}
+                isActive={newIsActive}
+                entryPoint={newEntryPoint}
+                allowObjectiveReset
+                departments={builderResources.departments}
+                queues={builderResources.queues}
+                resourcesLoading={loading}
+                advancedEditor={
                 <>
                   <textarea
                     id="admin-new-flow-definition"
@@ -1707,33 +1713,14 @@ export default function AdminTenantChatbotPage() {
                     <span className="text-xs text-white/50">{countOccurrences(newDefinition, newSearch)} ocorrencia(s)</span>
                   </div>
                 </>
-              }
-            />
+                }
+              />
+            )}
             {newJsonError ? (
               <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
                 JSON invalido: {newJsonError}
               </p>
-            ) : (
-              <p className="text-xs text-emerald-200/80">JSON valido. Ao salvar, o conteudo sera reindentado.</p>
-            )}
-            <div className="flex flex-wrap items-center gap-4 text-sm text-white/80">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={newIsActive}
-                  onChange={(event) => setNewIsActive(event.target.checked)}
-                />
-                Ativo
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={newEntryPoint}
-                  onChange={(event) => setNewEntryPoint(event.target.checked)}
-                />
-                Entrada principal
-              </label>
-            </div>
+            ) : null}
             <div>
               <button
                 type="button"
@@ -1801,24 +1788,30 @@ export default function AdminTenantChatbotPage() {
                           }))
                         }
                       />
-                      <ChatbotFlowBuilder
-                        definitionText={draft.definitionText}
-                        onDefinitionTextChange={(value) =>
-                          setDrafts((current) => ({
-                            ...current,
-                            [flow.id]: {
-                              ...draft,
-                              definitionText: value,
-                            },
-                          }))
-                        }
-                        disabled={false}
-                        isActive={draft.isActive}
-                        entryPoint={draft.entryPoint}
-                        allowObjectiveReset={false}
-                        departments={builderResources.departments}
-                        queues={builderResources.queues}
-                        advancedEditor={
+                      {loading ? (
+                        <p className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/65">
+                          Carregando setores e filas...
+                        </p>
+                      ) : (
+                        <ChatbotFlowBuilder
+                          definitionText={draft.definitionText}
+                          onDefinitionTextChange={(value) =>
+                            setDrafts((current) => ({
+                              ...current,
+                              [flow.id]: {
+                                ...draft,
+                                definitionText: value,
+                              },
+                            }))
+                          }
+                          disabled={false}
+                          isActive={draft.isActive}
+                          entryPoint={draft.entryPoint}
+                          allowObjectiveReset={false}
+                          departments={builderResources.departments}
+                          queues={builderResources.queues}
+                          resourcesLoading={loading}
+                          advancedEditor={
                           <>
                             <textarea
                               id={`admin-flow-definition-${flow.id}`}
@@ -1877,8 +1870,9 @@ export default function AdminTenantChatbotPage() {
                               </span>
                             </div>
                           </>
-                        }
-                      />
+                          }
+                        />
+                      )}
                       {draftJsonErrors[flow.id] ? (
                         <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
                           JSON invalido: {draftJsonErrors[flow.id]}

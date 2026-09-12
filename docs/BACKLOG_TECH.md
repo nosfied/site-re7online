@@ -423,6 +423,58 @@ Reconstrucao correta:
   alteracao de backend, worker, schema ou migration. O proximo marco e o owner
   concluir os testes reais em producao.
 
+### Guided Builder 2.3 — refinamento de criacao e edicao por opcoes
+
+Em 2026-09-11 o owner aprovou a base 2.2 e registrou feedback de uso real para
+reduzir atrito do criador guiado antes de nova publicacao.
+
+Escopo 2.3 aprovado:
+
+- remover as decisoes "Ativo" e "Entrada principal" do cadastro de novo fluxo;
+  novos fluxos continuam com `entryPoint=false` e ativacao como acao operacional
+  separada;
+- no modelo "Atendimento institucional com menu", iniciar pelo consentimento e
+  depois seguir para mensagem/opcoes do menu principal;
+- substituir copy especifica por texto neutro: "Quais opcoes estarao
+  disponiveis no menu?";
+- editar opcoes e destinos ja na primeira tela do menu principal, em linhas
+  expansivas, uma opcao aberta por vez, com submenu, exclusao e pendencias
+  dentro do proprio bloco;
+- aplicar o mesmo padrao recursivo para submenus e preservar tons/bordas por
+  nivel hierarquico;
+- padronizar resultados de acao em toast global visivel independentemente do
+  scroll, mantendo validacao de campo inline;
+- restaurar foco/scroll para a secao ativa apos voltar nivel, cancelar submenu,
+  remover opcao ou aplicar rascunho.
+
+Status:
+
+- GUIDED BUILDER 2.3 / DEPLOYED / OWNER APPROVED LOCAL / PRODUCTION REAL VALIDATION.
+- Sem schema, migration, backend, worker ou semantica runtime.
+- Owner aprovou a UX final local; validacao real em producao permanece aberta
+  ate exercicio humano em tenant real apos deploy.
+
+Nota de recuperacao 2026-09-12:
+
+- A worktree temporaria usada durante a validacao local foi perdida apos reboot
+  da maquina; isso confirmou que `/tmp` nao e suficiente como preservacao de
+  trabalho do owner.
+- A primeira reaplicacao pos-reboot recuperou uma versao antiga e foi descartada
+  como referencia funcional.
+- Producao nao foi mutada, nao houve commit, push ou deploy da 2.3 durante a
+  recuperacao.
+- A versao local atual foi reconstruida a partir dos patches da sessao Codex e
+  confrontada contra o HEAD canonico de producao/origin antes da continuidade.
+- A aprovacao local final do owner foi aplicada sobre worktree limpa baseada no
+  HEAD canonico atual antes de commit/push/deploy; qualquer revisao futura deve
+  manter backup de diff fora de `/tmp`.
+- Ajuste final do owner: ao excluir opcao, submenu/linha aninhada ou registro
+  editavel, a UI nao deve abrir automaticamente o proximo irmao. O item e
+  removido, irmaos permanecem colapsados, e o foco volta ao contexto pai ou a
+  secao atual.
+- Entrega final 2.3 e frontend-only: sem mudanca de `ChatbotFlow.definition`,
+  sem tenant hardcode, sem migration e sem reload de backend/worker.
+
 ### Contact Timeline / Histórico do contato
 
 Status:

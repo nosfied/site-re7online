@@ -1065,8 +1065,6 @@ export default function AppChatbotPage() {
           hasIssue={Boolean(newJsonError)}
           badges={
             <>
-              <FlowBadge label={newIsActive ? "Ativo" : "Inativo"} tone={newIsActive ? "success" : "warning"} />
-              {newEntryPoint ? <FlowBadge label="Entrada principal" /> : null}
               <FlowBadge label={`${getFlowNodeCountFromDefinitionText(newDefinition) ?? "-"} nó(s)`} />
               {newJsonError ? <FlowBadge label="JSON inválido" tone="warning" /> : <FlowBadge label="JSON válido" tone="success" />}
             </>
@@ -1080,17 +1078,23 @@ export default function AppChatbotPage() {
               placeholder="Fluxo principal"
               disabled={flowReadOnly || creating}
             />
-            <ChatbotFlowBuilder
-              key={`new-flow-builder-${newFlowBuilderVersion}`}
-              definitionText={newDefinition}
-              onDefinitionTextChange={setNewDefinition}
-              disabled={flowReadOnly || creating}
-              isActive={newIsActive}
-              entryPoint={newEntryPoint}
-              allowObjectiveReset
-              departments={builderResources.departments}
-              queues={builderResources.queues}
-              advancedEditor={
+            {loading ? (
+              <p className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/65">
+                Carregando setores e filas...
+              </p>
+            ) : (
+              <ChatbotFlowBuilder
+                key={`new-flow-builder-${newFlowBuilderVersion}`}
+                definitionText={newDefinition}
+                onDefinitionTextChange={setNewDefinition}
+                disabled={flowReadOnly || creating}
+                isActive={newIsActive}
+                entryPoint={newEntryPoint}
+                allowObjectiveReset
+                departments={builderResources.departments}
+                queues={builderResources.queues}
+                resourcesLoading={loading}
+                advancedEditor={
                 <>
                   <JsonEditorWithSearch
                     id="new-flow-definition"
@@ -1127,35 +1131,14 @@ export default function AppChatbotPage() {
                   </div>
                   <JsonSearchPreview text={newDefinition} query={newSearch} />
                 </>
-              }
-            />
+                }
+              />
+            )}
             {newJsonError ? (
               <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
                 JSON inválido: {newJsonError}
               </p>
-            ) : (
-              <p className="text-xs text-emerald-200/80">JSON válido. Ao salvar, o conteúdo será reindentado automaticamente.</p>
-            )}
-            <div className="flex flex-wrap items-center gap-4 text-sm text-white/80">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={newIsActive}
-                  onChange={(event) => setNewIsActive(event.target.checked)}
-                  disabled={flowReadOnly || creating}
-                />
-                Ativo
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={newEntryPoint}
-                  onChange={(event) => setNewEntryPoint(event.target.checked)}
-                  disabled={flowReadOnly || creating}
-                />
-                Entrada principal
-              </label>
-            </div>
+            ) : null}
             <div>
               <button
                 type="button"
@@ -1274,9 +1257,7 @@ export default function AppChatbotPage() {
                       <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
                         JSON inválido: {draftJsonErrors[flow.id]}
                       </p>
-                    ) : (
-                      <p className="text-xs text-emerald-200/80">JSON válido. Ao salvar, o conteúdo será reindentado automaticamente.</p>
-                    )}
+                    ) : null}
                     <input
                       className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
                       value={draft.name}
@@ -1291,24 +1272,30 @@ export default function AppChatbotPage() {
                       }
                       disabled={flowReadOnly}
                     />
-                    <ChatbotFlowBuilder
-                      definitionText={draft.definitionText}
-                      onDefinitionTextChange={(value) =>
-                        setDrafts((current) => ({
-                          ...current,
-                          [flow.id]: {
-                            ...draft,
-                            definitionText: value,
-                          },
-                        }))
-                      }
-                      disabled={flowReadOnly}
-                      isActive={draft.isActive}
-                      entryPoint={draft.entryPoint}
-                      allowObjectiveReset={false}
-                      departments={builderResources.departments}
-                      queues={builderResources.queues}
-                      advancedEditor={
+                    {loading ? (
+                      <p className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/65">
+                        Carregando setores e filas...
+                      </p>
+                    ) : (
+                      <ChatbotFlowBuilder
+                        definitionText={draft.definitionText}
+                        onDefinitionTextChange={(value) =>
+                          setDrafts((current) => ({
+                            ...current,
+                            [flow.id]: {
+                              ...draft,
+                              definitionText: value,
+                            },
+                          }))
+                        }
+                        disabled={flowReadOnly}
+                        isActive={draft.isActive}
+                        entryPoint={draft.entryPoint}
+                        allowObjectiveReset={false}
+                        departments={builderResources.departments}
+                        queues={builderResources.queues}
+                        resourcesLoading={loading}
+                        advancedEditor={
                         <>
                           <JsonEditorWithSearch
                             id={`flow-definition-${flow.id}`}
@@ -1373,8 +1360,9 @@ export default function AppChatbotPage() {
                           </div>
                           <JsonSearchPreview text={draft.definitionText} query={draftSearches[flow.id] ?? ""} />
                         </>
-                      }
-                    />
+                        }
+                      />
+                    )}
                   </div>
                 </FlowAccordionCard>
               );

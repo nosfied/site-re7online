@@ -71,7 +71,7 @@ Default government profile favors oversight and reporting:
 | WhatsApp runtime | Operational | webhook/runtime | `whatsapp/webhook.controller.ts`, `WaPhoneNumber`, `TenantMetaConfig` | Meta Cloud API, tenant config, DB |
 | Messenger/Facebook | Operational human messaging | `/app/inbox` | `metaWebhookPassive.ts`, `messengerInboundPersistence.ts`, channel accounts | `channelAccounts`, Page token |
 | Instagram | Operational inbound/outbound manual, human-only | `/app/inbox`, `/app/settings/channels/instagram` | `instagramInboundPersistence.ts`, `instagramBusinessLogin.service.ts`, channel accounts | Instagram Business Login token, aliases, app review |
-| Chatbot flows | Operational with tenant locks; Guided Builder 2.2 deployed / product owner real validation | `/app/chatbot` | `ChatbotFlow`, `chatbot/chatbotFlow.ts`, `TenantOperationalConfig` | `Client.features.chatbot`; follow-up, handoff notification, media handoff policy, plan limits, automation disable flags and scoped assistant config are DB-first with `tenants.json` fallback |
+| Chatbot flows | Operational with tenant locks; Guided Builder 2.3 deployed / owner-approved local / production real validation | `/app/chatbot` | `ChatbotFlow`, `chatbot/chatbotFlow.ts`, `TenantOperationalConfig` | `Client.features.chatbot`; follow-up, handoff notification, media handoff policy, plan limits, automation disable flags and scoped assistant config are DB-first with `tenants.json` fallback |
 | AI supervised fallback | Partial/tenant-configured | runtime/admin | `controlledAssistant.ts`, `TenantOperationalConfig.config.aiAssistantConfig`, `TenantOperationalConfig.config.aiIntentQualification` | OpenAI config; prompt/topic/profile, intent catalog and qualification schema are DB-first with `tenants.json` fallback |
 | Campaigns | Operational | `/app/campaigns` | `Campaign`, `campaignRunner.ts` | templates, contacts/leads, feature flag |
 | Templates | Operational | `/app/templates`, admin routes | `Template`, `TemplateRequest`, `meta/template.service.ts` | WABA token, feature flag |
@@ -88,6 +88,17 @@ Default government profile favors oversight and reporting:
 | Push/PWA notifications | Operational with platform limits | app shell/inbox | `PushSubscription`, `webPushService.ts`, service worker | browser permission/support |
 | Demo/POC data | Internal/demo | scripts | `seed-demo.mjs`, `seed-re7-demo-screenshots.mjs` | local/demo only |
 | Internal admin console | Operational | `/admin` | admin routes, tenant/channel/onboarding pages | `X-Admin-Token`, `tenants.json`, DB |
+
+Chatbot Guided Builder 2.3 recovery note, 2026-09-12: the final approved
+delivery was rebuilt on a clean worktree from the canonical production/origin
+HEAD. A reboot had removed the temporary `/tmp` worktree, an initial post-reboot
+reapplication showed an old version, and the active local state was reconstructed
+from Codex session patches without production mutation during recovery. `/tmp`
+worktrees are not sufficient preservation for owner-validation work. The final
+owner micro-adjustment keeps sibling rows collapsed after deleting a menu option,
+submenu/nested row or editable record, returning focus to the parent/current
+editor context instead of opening the next sibling. Delivery remains frontend
+only: no `ChatbotFlow.definition` change, tenant hardcode, schema or migration.
 
 ## Main Runtime Dependencies
 
