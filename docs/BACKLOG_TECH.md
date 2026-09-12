@@ -684,6 +684,17 @@ Contrato preservado: Inbox, SLA, relatórios, posicao de fila, claim,
 transferencia, notificacoes e atribuicao automatica continuam operando sobre
 destino humano completo (`departmentId` + `queueId`).
 
+Fechamento operacional em 2026-09-12: apos backup fresco em
+`/tmp/syer-9614-pre-repair-20260912-130840.dump`, o atendimento ja existente
+`****9614` foi reparado com uma unica mutacao de campo em
+`ConversationRuntimeState.queueId`, de `null` para a fila existente
+`cmtoekafy00014s4lg41vs5i0` (`Fila Geral`). Nenhuma mensagem, historico,
+protocolo, ciclo, fechamento ou atribuicao foi alterado. A prova pos-reparo
+mostrou `mode=HUMAN`, `handoffStatus=ACTIVE`, `status=WAITING`, setor
+`Campanha 2026`, fila `Fila Geral`, sem responsavel, conversa aberta,
+projecao canonica na Inbox humana exatamente uma vez e posicao de fila `1`.
+Incidente fechado.
+
 ---
 
 # BACKLOG LATENTE (RETOMAR QUANDO NECESSÁRIO)

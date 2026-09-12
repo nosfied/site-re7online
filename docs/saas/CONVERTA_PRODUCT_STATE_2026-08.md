@@ -580,6 +580,11 @@ Commits relevantes do baseline homologado:
   nao projeta na Inbox humana por violar o invariant setor+fila. A correcao
   local resolve a unica fila existente no runtime e faz o Guided Builder exigir
   fila concreta, bloqueando setores sem fila ou ambiguidade de multiplas filas.
+  Em 2026-09-12, o atendimento pre-fix `****9614` foi fechado como incidente:
+  backup fresco, precondicoes conferidas, mutacao unica de
+  `ConversationRuntimeState.queueId` para `Fila Geral`, sem alterar mensagens,
+  historico, protocolo, ciclo, responsavel ou fechamento. A Inbox passou a
+  projetar o atendimento exatamente uma vez pela regra canonica.
 - Bloqueio automatico por limite de consumo existe como helper, mas nao esta conectado aos fluxos reais.
 - Relatorio administrativo amplo de anonimizados permanece P2.
 - Alguns identificadores tecnicos ainda existem por exigencia de modelo atual, com minimizacao operacional.

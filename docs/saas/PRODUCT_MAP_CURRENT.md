@@ -109,6 +109,15 @@ auto-selects the single queue for a selected department, requires an explicit
 queue when there is more than one, and reports an actionable error when the
 department has no queue.
 
+Syer `****9614` operational repair, 2026-09-12: the generic fix was deployed in
+`597d7030`, then the already-existing pre-fix runtime row
+`9b1c9518-5632-47ac-9520-f1685e500f1f` was repaired after backup by changing
+only `ConversationRuntimeState.queueId` from `null` to the existing Syer queue
+`cmtoekafy00014s4lg41vs5i0` (`Fila Geral`). No message, history, protocol,
+cycle, assignment, close state or outbound record was changed. Canonical rule:
+a human handoff entering `WAITING` must have a concrete `queueId`; `queueId=null`
+is not a valid representation of a default queue.
+
 ## Main Runtime Dependencies
 
 - Postgres/Prisma for operational data and many tenant-owned entities.
