@@ -104,10 +104,14 @@ Human handoff destination contract, 2026-09-12: operational human handoff must
 resolve to a concrete queue before it becomes visible/assignable in the human
 Inbox. `departmentId` without `queueId` is treated as an incomplete destination
 unless runtime can resolve exactly one existing queue for the department. Guided
-Builder must not serialize an ambiguous "default queue" as `queueId=null`; it
-auto-selects the single queue for a selected department, requires an explicit
-queue when there is more than one, and reports an actionable error when the
-department has no queue.
+Builder must not serialize an ambiguous "default queue" as `queueId=null`.
+Normal Guided UX asks only for the business concept, `Setor`: one queue is
+resolved internally without queue label/selector/copy, zero queues block with
+"Este setor ainda nao esta preparado para receber atendimentos.", and 2+ queues
+show a conditional "Fila" selector as an operational exception. After the user
+selects "Encaminhar para atendimento humano", the editor must render the `Setor`
+field directly and must not add a separate instructional card telling the user
+to choose the sector.
 
 Syer `****9614` operational repair, 2026-09-12: the generic fix was deployed in
 `597d7030`, then the already-existing pre-fix runtime row
@@ -117,6 +121,16 @@ only `ConversationRuntimeState.queueId` from `null` to the existing Syer queue
 cycle, assignment, close state or outbound record was changed. Canonical rule:
 a human handoff entering `WAITING` must have a concrete `queueId`; `queueId=null`
 is not a valid representation of a default queue.
+
+Guided Builder 2.4 local UX contract: model selection and wizard Continue/Back
+must not move page scroll; editable row expansion scrolls to the row header; and
+delete/cancel/back-to-parent actions recover focus to the parent/current context
+without auto-opening siblings. "Fazer uma pergunta" means question -> capture
+answer -> continue to an explicit next business action, with at most 3
+consecutive questions. Runtime conditional branching by captured answer is not
+available in the current flow engine; keep it as a product gap until predicates
+are implemented and tested. New Guided human handoff generation must never rely
+on `queueId=null` as a default queue.
 
 ## Main Runtime Dependencies
 

@@ -585,6 +585,28 @@ Commits relevantes do baseline homologado:
   `ConversationRuntimeState.queueId` para `Fila Geral`, sem alterar mensagens,
   historico, protocolo, ciclo, responsavel ou fechamento. A Inbox passou a
   projetar o atendimento exatamente uma vez pela regra canonica.
+- Guided Builder 2.4 local reforca essa regra no UX: o usuario escolhe o setor
+  como conceito de negocio; a fila operacional fica oculta quando o setor possui
+  exatamente uma fila e e resolvida internamente para `queueId` concreto. Setor
+  sem fila bloqueia com "Este setor ainda nao esta preparado para receber
+  atendimentos."; somente setor com 2+ filas mostra seletor "Fila" como excecao
+  operacional. Auditoria local encontrou 24 setores sem fila, 56 com uma fila e
+  5 com multiplas filas; os 5 casos foram `default` interno/Re7 Demo e fixtures
+  automatizadas `campaigns-feature-*`, sem uso ativo em flow/runtime que dependa
+  de multiplas filas no mesmo setor. Fluxos existentes com `queueId=null`
+  recebem aviso sem mutacao automatica.
+- Perguntas guiadas exigem pergunta, tipo de resposta e proximo comportamento
+  definido apos a resposta capturada. O limite local e 3 perguntas consecutivas.
+  Branching condicional por valor capturado permanece PRODUCT GAP: o runtime
+  atual suporta captura sequencial, mas nao predicados por resposta.
+- Micro-ajuste final de owner validation: apos escolher "Encaminhar para
+  atendimento humano", o Guided Builder nao mostra mais o bloco redundante
+  "Escolha o setor que recebera o atendimento."; o campo `Setor` aparece
+  diretamente. Status: OWNER APPROVED LOCAL, liberado para entrega
+  frontend-only sobre o HEAD canonico, com validacao de producao apos deploy.
+  Backlog da entrega: GUIDED BUILDER 2.4 = DEPLOYED / OWNER APPROVED LOCAL /
+  PRODUCTION VALIDATION; HANDOFF QUEUE CONTRACT = CLOSED / REAL VALIDATED;
+  QUESTION CONDITIONAL BRANCHING = PRODUCT GAP / OPEN; SYER ****9614 = CLOSED.
 - Bloqueio automatico por limite de consumo existe como helper, mas nao esta conectado aos fluxos reais.
 - Relatorio administrativo amplo de anonimizados permanece P2.
 - Alguns identificadores tecnicos ainda existem por exigencia de modelo atual, com minimizacao operacional.

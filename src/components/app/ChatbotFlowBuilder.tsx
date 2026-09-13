@@ -109,6 +109,35 @@ function resolveSingleQueueIdForDepartment(queues: ChatbotFlowBuilderQueue[], de
   return availableQueues.length === 1 ? availableQueues[0]?.id ?? "" : "";
 }
 
+export function getGuidedQueueUxState(queues: ChatbotFlowBuilderQueue[], departmentId?: string | null) {
+  if (!departmentId) return "department_only" as const;
+  const availableQueues = queuesForDepartment(queues, departmentId);
+  if (availableQueues.length === 0) return "blocked" as const;
+  if (availableQueues.length === 1) return "hidden_single_queue" as const;
+  return "conditional_selector" as const;
+}
+
+const QUESTION_RESPONSE_TYPE_OPTIONS = [
+  { value: "text", label: "Texto", validation: "non_empty" },
+  { value: "number", label: "Número", validation: "number" },
+  { value: "email", label: "E-mail", validation: "email" },
+  { value: "phone", label: "Telefone", validation: "phone" },
+] as const;
+
+const MAX_CONSECUTIVE_QUESTIONS = 3;
+
+type WizardQuestionResponseType = (typeof QUESTION_RESPONSE_TYPE_OPTIONS)[number]["value"];
+
+function captureValidationForResponseType(type?: WizardQuestionResponseType) {
+  return QUESTION_RESPONSE_TYPE_OPTIONS.find((option) => option.value === type)?.validation ?? "non_empty";
+}
+
+export function getWizardScrollContract(event: "model_select" | "continue" | "back" | "expand_row" | "return_parent" | "new_flow_reset") {
+  if (event === "expand_row") return "scroll_to_row_header";
+  if (event === "return_parent" || event === "new_flow_reset") return "focus_context_prevent_scroll";
+  return "preserve_scroll";
+}
+
 function buildIssues(definition: FlowDefinition, queues: ChatbotFlowBuilderQueue[]) {
   const issues: string[] = [];
   const nodeIds = Object.keys(definition.nodes);
@@ -366,6 +395,8 @@ type WizardDestination = {
   queueId?: string;
   message?: string;
   question?: string;
+  responseType?: WizardQuestionResponseType;
+  next?: WizardDestination;
   submenuKey?: string;
 };
 
@@ -731,6 +762,29 @@ export function getWizardDestinationTypeOptions(menuKey: string): Array<{ value:
   ];
 }
 
+export function getWizardQuestionNextTypeOptions(menuKey: string, depth = 1): Array<{ value: WizardDestinationType; label: string }> {
+  const options: Array<{ value: WizardDestinationType; label: string }> = [
+    { value: "message", label: "Mostrar uma mensagem" },
+    ...(depth < MAX_CONSECUTIVE_QUESTIONS ? [{ value: "question" as const, label: "Fazer outra pergunta" }] : []),
+    { value: "submenu", label: "Abrir um menu/submenu" },
+    { value: "department", label: "Encaminhar para atendimento humano" },
+    { value: "end", label: "Encerrar atendimento" },
+    { value: "main_menu", label: "Voltar ao menu principal" },
+    ...(menuKey ? [{ value: "previous_menu" as const, label: "Voltar ao menu anterior" }] : []),
+  ];
+  return options;
+}
+
+export function getWizardQuestionChainDepth(destination: WizardDestination | undefined) {
+  let depth = 0;
+  let current = destination;
+  while (current?.type === "question") {
+    depth += 1;
+    current = current.next;
+  }
+  return depth;
+}
+
 function buildHandoffText(answers: StandardFlowWizardAnswers) {
   if (answers.handoffMessageMode === "none") return "";
   if (answers.handoffMessageMode === "custom") return answers.handoffMessage.trim();
@@ -762,7 +816,18 @@ function withOptionalConsent(definition: FlowDefinition, answers: StandardFlowWi
   };
 }
 
-function buildDestinationNode(index: number, optionLabel: string, destination: WizardDestination, answers: StandardFlowWizardAnswers) {
+function resolvedQueueIdForDestination(destination: WizardDestination, queues: ChatbotFlowBuilderQueue[] = []) {
+  if (destination.queueId) return destination.queueId;
+  return resolveSingleQueueIdForDepartment(queues, destination.departmentId);
+}
+
+function buildDestinationNode(
+  index: number,
+  optionLabel: string,
+  destination: WizardDestination,
+  answers: StandardFlowWizardAnswers,
+  queues: ChatbotFlowBuilderQueue[] = []
+) {
   const suffix = nodeSuffix(optionLabel, `opcao_${index + 1}`);
   if (destination.type === "message") {
     return {
@@ -771,14 +836,29 @@ function buildDestinationNode(index: number, optionLabel: string, destination: W
     };
   }
   if (destination.type === "question") {
+    const nextDestination = destination.next;
+    const extraNodes: FlowDefinition["nodes"] = {};
+    let nextNodeId = "";
+    if (nextDestination) {
+      if (nextDestination.type === "main_menu" || nextDestination.type === "submenu") {
+        nextNodeId = "menu_principal";
+      } else if (nextDestination.type !== "previous_menu") {
+        const builtNext = buildDestinationNode(index, `${optionLabel} depois`, nextDestination, answers, queues);
+        nextNodeId = builtNext.nodeId || "menu_principal";
+        if (builtNext.node && builtNext.nodeId !== "menu_principal") extraNodes[builtNext.nodeId] = builtNext.node;
+        Object.assign(extraNodes, builtNext.extraNodes ?? {});
+      }
+    }
     return {
       nodeId: `pergunta_${suffix}`,
       node: {
         type: "capture",
         text: destination.question?.trim() || `Informe os dados para ${sanitizeLabel(optionLabel, "este atendimento")}.`,
         field: `resposta_${suffix}`,
-        validation: "non_empty",
+        validation: captureValidationForResponseType(destination.responseType),
+        ...(nextNodeId ? { next: nextNodeId } : {}),
       },
+      extraNodes,
     };
   }
   if (destination.type === "end") {
@@ -805,12 +885,12 @@ function buildDestinationNode(index: number, optionLabel: string, destination: W
       type: "handoff",
       ...(buildHandoffText(answers) ? { text: buildHandoffText(answers) } : { sendFeedback: false }),
       ...(destination.departmentId ? { departmentId: destination.departmentId } : {}),
-      ...(destination.queueId ? { queueId: destination.queueId } : {}),
+      ...(resolvedQueueIdForDestination(destination, queues) ? { queueId: resolvedQueueIdForDestination(destination, queues) } : {}),
     },
   };
 }
 
-export function buildInstitutionalMenuFlow(answers: StandardFlowWizardAnswers): FlowDefinition {
+export function buildInstitutionalMenuFlow(answers: StandardFlowWizardAnswers, queues: ChatbotFlowBuilderQueue[] = []): FlowDefinition {
   const nodes: FlowDefinition["nodes"] = {};
   const nodeIdsByMenuKey = new Map<string, string>([["", "menu_principal"]]);
 
@@ -843,8 +923,9 @@ export function buildInstitutionalMenuFlow(answers: StandardFlowWizardAnswers): 
       if (destination.type === "previous_menu" && parentKeyForNavigation !== null) {
         return { label: numberedOptionLabel(index, label), next: resolveMenuNodeId(parentKeyForNavigation, getMenuDraftForKey(answers, parentKeyForNavigation)) };
       }
-      const built = buildDestinationNode(index, label, destination, answers);
+      const built = buildDestinationNode(index, label, destination, answers, queues);
       if (built.node && built.nodeId !== "menu_principal") nodes[built.nodeId] = built.node;
+      Object.assign(nodes, built.extraNodes ?? {});
       return { label: numberedOptionLabel(index, label), next: built.nodeId || "menu_principal" };
     });
     if (menuKey && draft.enablePreviousMenu && parentKeyForNavigation !== null) {
@@ -865,8 +946,9 @@ export function buildInstitutionalMenuFlow(answers: StandardFlowWizardAnswers): 
   return withOptionalConsent({ start: "menu_principal", nodes }, answers, "menu_principal");
 }
 
-export function buildDirectHandoffFlow(answers: StandardFlowWizardAnswers): FlowDefinition {
+export function buildDirectHandoffFlow(answers: StandardFlowWizardAnswers, queues: ChatbotFlowBuilderQueue[] = []): FlowDefinition {
   const destination = answers.destinations[0] ?? { type: "department" as const };
+  const queueId = resolvedQueueIdForDestination(destination, queues);
   return {
     start: "atendimento_humano",
     nodes: {
@@ -874,15 +956,16 @@ export function buildDirectHandoffFlow(answers: StandardFlowWizardAnswers): Flow
         type: "handoff",
         ...(buildHandoffText(answers) ? { text: answers.initialMessage.trim() || buildHandoffText(answers) } : { sendFeedback: false }),
         ...(destination.departmentId ? { departmentId: destination.departmentId } : {}),
-        ...(destination.queueId ? { queueId: destination.queueId } : {}),
+        ...(queueId ? { queueId } : {}),
       },
     },
   };
 }
 
-export function buildPreServiceCaptureFlow(answers: StandardFlowWizardAnswers): FlowDefinition {
+export function buildPreServiceCaptureFlow(answers: StandardFlowWizardAnswers, queues: ChatbotFlowBuilderQueue[] = []): FlowDefinition {
   const questions = answers.captureQuestions.filter((question) => question.trim());
   const destination = answers.destinations[0] ?? { type: "department" as const };
+  const queueId = resolvedQueueIdForDestination(destination, queues);
   const nodes: FlowDefinition["nodes"] = {};
   const handoffId = "atendimento_humano";
   questions.forEach((question, index) => {
@@ -899,12 +982,12 @@ export function buildPreServiceCaptureFlow(answers: StandardFlowWizardAnswers): 
     type: "handoff",
     ...(buildHandoffText(answers) ? { text: buildHandoffText(answers) } : { sendFeedback: false }),
     ...(destination.departmentId ? { departmentId: destination.departmentId } : {}),
-    ...(destination.queueId ? { queueId: destination.queueId } : {}),
+    ...(queueId ? { queueId } : {}),
   };
   return { start: questions.length > 0 ? "pergunta_1" : handoffId, nodes };
 }
 
-export function buildInformationFlow(answers: StandardFlowWizardAnswers): FlowDefinition {
+export function buildInformationFlow(answers: StandardFlowWizardAnswers, queues: ChatbotFlowBuilderQueue[] = []): FlowDefinition {
   const nodes: FlowDefinition["nodes"] = {
     mensagem_inicial: {
       type: "text",
@@ -916,12 +999,13 @@ export function buildInformationFlow(answers: StandardFlowWizardAnswers): FlowDe
     nodes.mensagem_complementar = { type: "text", text: answers.followupMessage.trim() || DEFAULT_WIZARD_ANSWERS.followupMessage };
   } else if (answers.informationNext === "human") {
     const destination = answers.destinations[0] ?? { type: "department" as const };
+    const queueId = resolvedQueueIdForDestination(destination, queues);
     nodes.mensagem_inicial.next = "atendimento_humano";
     nodes.atendimento_humano = {
       type: "handoff",
       ...(buildHandoffText(answers) ? { text: buildHandoffText(answers) } : { sendFeedback: false }),
       ...(destination.departmentId ? { departmentId: destination.departmentId } : {}),
-      ...(destination.queueId ? { queueId: destination.queueId } : {}),
+      ...(queueId ? { queueId } : {}),
     };
   } else if (answers.informationNext === "question") {
     nodes.mensagem_inicial.next = "pergunta_1";
@@ -932,18 +1016,18 @@ export function buildInformationFlow(answers: StandardFlowWizardAnswers): FlowDe
       validation: "non_empty",
     };
   } else if (answers.informationNext === "menu") {
-    const menuFlow = buildInstitutionalMenuFlow({ ...answers, consentEnabled: false });
+    const menuFlow = buildInstitutionalMenuFlow({ ...answers, consentEnabled: false }, queues);
     nodes.mensagem_inicial.next = menuFlow.start;
     Object.assign(nodes, menuFlow.nodes);
   }
   return { start: "mensagem_inicial", nodes };
 }
 
-export function buildStandardFlowDefinition(answers: StandardFlowWizardAnswers): FlowDefinition {
-  if (answers.template === "direct_handoff") return buildDirectHandoffFlow(answers);
-  if (answers.template === "pre_service_collection") return buildPreServiceCaptureFlow(answers);
-  if (answers.template === "information") return buildInformationFlow(answers);
-  return buildInstitutionalMenuFlow(answers);
+export function buildStandardFlowDefinition(answers: StandardFlowWizardAnswers, queues: ChatbotFlowBuilderQueue[] = []): FlowDefinition {
+  if (answers.template === "direct_handoff") return buildDirectHandoffFlow(answers, queues);
+  if (answers.template === "pre_service_collection") return buildPreServiceCaptureFlow(answers, queues);
+  if (answers.template === "information") return buildInformationFlow(answers, queues);
+  return buildInstitutionalMenuFlow(answers, queues);
 }
 
 export function validateWizardStep(
@@ -952,6 +1036,34 @@ export function validateWizardStep(
   queues: ChatbotFlowBuilderQueue[] = []
 ) {
   const errors: string[] = [];
+  const validateDestination = (destination: WizardDestination | undefined, label: string, questionDepth = 0) => {
+    if (!destination) {
+      errors.push(`A opção ${label} ainda não possui destino.`);
+      return;
+    }
+    if ((destination.type === "department" || destination.type === "queue") && !destination.departmentId) {
+      errors.push(`Escolha o setor que receberá ${label}.`);
+    }
+    if ((destination.type === "department" || destination.type === "queue") && destination.departmentId) {
+      const availableQueues = queuesForDepartment(queues, destination.departmentId);
+      if (availableQueues.length === 0) {
+        errors.push("Este setor ainda não está preparado para receber atendimentos.");
+      } else if (availableQueues.length > 1 && !destination.queueId) {
+        errors.push(`Escolha a fila que receberá ${label}.`);
+      }
+    }
+    if (destination.type === "question") {
+      if (!destination.question?.trim()) errors.push(`Informe a pergunta de ${label}.`);
+      if (!destination.responseType) errors.push(`Escolha o tipo de resposta de ${label}.`);
+      if (!destination.next) {
+        errors.push("Ainda falta definir o que deve acontecer depois desta resposta.");
+      } else if (destination.next.type === "question" && questionDepth + 1 >= MAX_CONSECUTIVE_QUESTIONS) {
+        errors.push("O assistente permite no máximo 3 perguntas seguidas antes de outro próximo passo.");
+      } else {
+        validateDestination(destination.next, `a resposta de ${label}`, destination.next.type === "question" ? questionDepth + 1 : 0);
+      }
+    }
+  };
   if (step === "initial" && !answers.initialMessage.trim()) {
     errors.push("Escreva a mensagem inicial que o cidadão verá.");
   }
@@ -970,18 +1082,7 @@ export function validateWizardStep(
       menu.options.forEach((option, index) => {
         const destination = menu.destinations[index];
         const label = sanitizeLabel(option, `Opção ${index + 1}`);
-        if (!destination) errors.push(`A opção ${label} ainda não possui destino.`);
-        if ((destination?.type === "department" || destination?.type === "queue") && !destination.departmentId) {
-          errors.push(`Escolha o setor que receberá ${label}.`);
-        }
-        if ((destination?.type === "department" || destination?.type === "queue") && destination.departmentId) {
-          const availableQueues = queuesForDepartment(queues, destination.departmentId);
-          if (availableQueues.length === 0) {
-            errors.push(`Cadastre uma fila para o setor de ${label} antes de encaminhar para humano.`);
-          } else if (!destination.queueId) {
-            errors.push(`Escolha a fila que receberá ${label}.`);
-          }
-        }
+        validateDestination(destination, label);
         if (destination?.type === "submenu") {
           const submenuKey = destination.submenuKey || submenuKeyForOption(menuKey, index);
           const submenu = getMenuDraftForKey(answers, submenuKey);
@@ -995,15 +1096,7 @@ export function validateWizardStep(
   }
   if (step === "destination") {
     const destination = answers.destinations[0];
-    if (!destination?.departmentId) errors.push("Escolha o setor que receberá este atendimento.");
-    if (destination?.departmentId) {
-      const availableQueues = queuesForDepartment(queues, destination.departmentId);
-      if (availableQueues.length === 0) {
-        errors.push("Cadastre uma fila para este setor antes de encaminhar para humano.");
-      } else if (!destination.queueId) {
-        errors.push("Escolha a fila que receberá este atendimento.");
-      }
-    }
+    validateDestination(destination, "este atendimento");
   }
   if (step === "capture") {
     if (answers.captureQuestions.filter((question) => question.trim()).length === 0) {
@@ -1715,11 +1808,22 @@ export function ChatbotFlowBuilder({
       element.focus({ preventScroll: true });
     });
   };
+  const focusElementWithoutScroll = (element: HTMLElement | null) => {
+    if (!element || typeof window === "undefined") return;
+    window.requestAnimationFrame(() => {
+      if (!element.hasAttribute("tabindex")) element.setAttribute("tabindex", "-1");
+      element.focus({ preventScroll: true });
+    });
+  };
 
-  const focusWizardSection = () => focusElement(wizardSectionRef.current);
+  const focusWizardSection = () => focusElementWithoutScroll(wizardSectionRef.current);
   const focusWizardOption = (menuKey: string, optionIndex: number) => {
     if (typeof document === "undefined") return;
     focusElement(document.getElementById(`wizard-option-${safeDomId(wizardOptionKey(menuKey, optionIndex))}`), "nearest");
+  };
+  const focusWizardRow = (rowKey: string) => {
+    if (typeof document === "undefined") return;
+    focusElement(document.getElementById(`wizard-option-${safeDomId(rowKey)}`), "nearest");
   };
 
   const resetWizardSession = () => {
@@ -1746,6 +1850,9 @@ export function ChatbotFlowBuilder({
   const definition = parsed.definition;
   const nodeIds = Object.keys(definition.nodes);
   const handoffCount = Object.values(definition.nodes).filter((node) => node.type === "handoff").length;
+  const hasLegacyNullQueueHandoff = Object.values(definition.nodes).some(
+    (node) => node.type === "handoff" && Boolean(stringValue(node.departmentId)) && !stringValue(node.queueId)
+  );
   const menuCount = Object.values(definition.nodes).filter((node) => node.type === "menu").length;
   const departmentIds = new Set(
     Object.values(definition.nodes)
@@ -1803,7 +1910,7 @@ export function ChatbotFlowBuilder({
       </div>
 
       {guidedTask.kind === "objective" ? (
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <div className={`mt-3 grid gap-2 ${selectedDepartmentQueues.length > 1 ? "sm:grid-cols-2" : ""}`}>
           {OBJECTIVE_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -1917,9 +2024,15 @@ export function ChatbotFlowBuilder({
               value={stringValue(guidedTaskNode.departmentId)}
               disabled={disabled}
               onChange={(event) => {
-                let next = setNodeField(definition, guidedTask.nodeId, "departmentId", event.target.value);
+                const departmentId = event.target.value;
+                let next = setNodeField(definition, guidedTask.nodeId, "departmentId", departmentId);
                 const currentQueue = queues.find((queue) => queue.id === guidedTaskNode.queueId);
-                if (currentQueue && currentQueue.departmentId !== event.target.value) {
+                const nextQueueId = currentQueue && currentQueue.departmentId === departmentId
+                  ? stringValue(guidedTaskNode.queueId)
+                  : resolveSingleQueueIdForDepartment(queues, departmentId);
+                if (nextQueueId) {
+                  next = setNodeField(next, guidedTask.nodeId, "queueId", nextQueueId);
+                } else if (currentQueue && currentQueue.departmentId !== departmentId) {
                   next = setNodeField(next, guidedTask.nodeId, "queueId", "");
                 }
                 commit(next);
@@ -1930,18 +2043,32 @@ export function ChatbotFlowBuilder({
               {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
             </select>
           </label>
+          {selectedDepartmentQueues.length > 1 ? (
           <label className="grid gap-1 text-sm text-white/70">
             Fila
+            <span className="text-xs text-white/55">
+              Este setor possui mais de uma fila de atendimento. Escolha para qual delas o atendimento deve ser encaminhado.
+            </span>
             <select
               value={stringValue(guidedTaskNode.queueId)}
               disabled={disabled}
               onChange={(event) => commit(setNodeField(definition, guidedTask.nodeId, "queueId", event.target.value))}
               className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
             >
-              <option value="">Fila padrão do setor</option>
+              <option value="">{selectedDepartmentQueues.length === 0 ? "Nenhuma fila cadastrada" : "Escolha a fila"}</option>
               {selectedDepartmentQueues.map((queue) => <option key={queue.id} value={queue.id}>{queue.name}</option>)}
             </select>
+            {guidedTaskNode.departmentId && !guidedTaskNode.queueId ? (
+              <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
+                Este encaminhamento ainda não possui uma fila definida.
+              </span>
+            ) : null}
           </label>
+          ) : guidedTaskNode.departmentId && selectedDepartmentQueues.length === 0 ? (
+            <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
+              Este setor ainda não está preparado para receber atendimentos.
+            </span>
+          ) : null}
         </div>
       ) : null}
 
@@ -2313,10 +2440,36 @@ export function ChatbotFlowBuilder({
           }),
     }));
   };
+  const updateWizardQuestionNext = (index: number, patch: Partial<WizardDestination>, menuKey = wizardMenuKey) => {
+    setWizardErrors([]);
+    setWizardApplyFeedback(null);
+    setWizardAnswers((current) => {
+      const menu = getMenuDraftForKey(current, menuKey);
+      const destination = menu.destinations[index] ?? { type: "question" as const };
+      const next = { ...(destination.next ?? { type: "message" as const }), ...patch };
+      const updatedDestination = { ...destination, type: "question" as const, next };
+      if (!menuKey) {
+        return {
+          ...current,
+          destinations: { ...current.destinations, [index]: updatedDestination },
+        };
+      }
+      return {
+        ...current,
+        submenus: {
+          ...current.submenus,
+          [menuKey]: {
+            ...menu,
+            destinations: { ...menu.destinations, [index]: updatedDestination },
+          },
+        },
+      };
+    });
+  };
   const wizardStepKeys = getStandardFlowWizardStepKeys(wizardAnswers);
   const currentWizardStep = wizardStepKeys[Math.min(wizardStepIndex, wizardStepKeys.length - 1)] ?? "models";
   const generatedDefinition = wizardAnswers.template && wizardAnswers.template !== "advanced"
-    ? buildStandardFlowDefinition(wizardAnswers)
+    ? buildStandardFlowDefinition(wizardAnswers, queues)
     : definition;
   const generatedIssues = wizardAnswers.template && wizardAnswers.template !== "advanced"
     ? buildIssues(generatedDefinition, queues)
@@ -2354,7 +2507,7 @@ export function ChatbotFlowBuilder({
       showBuilderToast("Não foi possível gerar o fluxo com as respostas atuais.", "error");
       return;
     }
-    const blockingIssue = generatedIssues.find((issue) => issue.includes("precisa") || issue.includes("sem setor"));
+    const blockingIssue = generatedIssues.find((issue) => issue.includes("precisa") || issue.includes("sem setor") || issue.includes("sem fila"));
     if (blockingIssue) {
       setWizardApplyFeedback({ tone: "error", message: blockingIssue });
       showBuilderToast(blockingIssue, "error");
@@ -2430,8 +2583,9 @@ export function ChatbotFlowBuilder({
   };
   const renderDepartmentQueueFields = (index: number, destination: WizardDestination | undefined, menuKey = wizardMenuKey) => {
     const availableQueues = departmentQueues(destination?.departmentId);
+    const showQueueSelector = availableQueues.length > 1;
     return (
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className={`grid gap-2 ${showQueueSelector ? "sm:grid-cols-2" : ""}`}>
         <label className="grid gap-1 text-sm text-white/70">
           Setor responsável
           <select
@@ -2465,12 +2619,15 @@ export function ChatbotFlowBuilder({
             </span>
           ) : null}
         </label>
-        {destination?.departmentId ? (
+        {destination?.departmentId && showQueueSelector ? (
           <label className="grid gap-1 text-sm text-white/70">
             Fila
+            <span className="text-xs text-white/55">
+              Este setor possui mais de uma fila de atendimento. Escolha para qual delas o atendimento deve ser encaminhado.
+            </span>
             <select
               value={destination?.queueId ?? ""}
-              disabled={disabled || availableQueues.length <= 1}
+              disabled={disabled}
               onChange={(event) => updateWizardDestination(index, { queueId: event.target.value }, menuKey)}
               className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
             >
@@ -2481,24 +2638,146 @@ export function ChatbotFlowBuilder({
                 <option className="bg-white text-slate-950" key={queue.id} value={queue.id}>{queue.name}</option>
               ))}
             </select>
-            {availableQueues.length === 1 ? (
-              <span className="rounded-md border border-emerald-300/20 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-100">
-                Fila única selecionada automaticamente.
-              </span>
-            ) : availableQueues.length === 0 ? (
-              <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
-                Cadastre uma fila para este setor antes de usar atendimento humano.
-              </span>
-            ) : null}
           </label>
-        ) : (
-          <div className="rounded-md border border-white/10 bg-black/10 px-3 py-2 text-sm text-white/55">
-            Escolha o setor para liberar a fila específica, se houver.
-          </div>
-        )}
+        ) : destination?.departmentId && availableQueues.length === 0 ? (
+          <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
+            Este setor ainda não está preparado para receber atendimentos.
+          </span>
+        ) : null}
       </div>
     );
   };
+  const renderInlineHandoffFields = (
+    destination: WizardDestination,
+    updateDestination: (patch: Partial<WizardDestination>) => void
+  ) => {
+    const availableQueues = departmentQueues(destination.departmentId);
+    const showQueueSelector = availableQueues.length > 1;
+    return (
+      <div className={`grid gap-2 ${showQueueSelector ? "sm:grid-cols-2" : ""}`}>
+        <label className="grid gap-1 text-sm text-white/70">
+          Setor responsável
+          <select
+            value={destination.departmentId ?? ""}
+            disabled={disabled}
+            onChange={(event) => {
+              const departmentId = event.target.value;
+              const queue = queues.find((item) => item.id === destination.queueId);
+              updateDestination({
+                departmentId,
+                queueId: queue && queue.departmentId === departmentId
+                  ? destination.queueId
+                  : resolveSingleQueueIdForDepartment(queues, departmentId),
+              });
+            }}
+            className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+          >
+            <option className="bg-white text-slate-950" value="">Escolha o setor</option>
+            {departments.map((department) => (
+              <option className="bg-white text-slate-950" key={department.id} value={department.id}>{department.name}</option>
+            ))}
+          </select>
+        </label>
+        {destination.departmentId && showQueueSelector ? (
+          <label className="grid gap-1 text-sm text-white/70">
+            Fila
+            <span className="text-xs text-white/55">
+              Este setor possui mais de uma fila de atendimento. Escolha para qual delas o atendimento deve ser encaminhado.
+            </span>
+            <select
+              value={destination.queueId ?? ""}
+              disabled={disabled}
+              onChange={(event) => updateDestination({ queueId: event.target.value })}
+              className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+            >
+              <option className="bg-white text-slate-950" value="">Escolha a fila</option>
+              {availableQueues.map((queue) => (
+                <option className="bg-white text-slate-950" key={queue.id} value={queue.id}>{queue.name}</option>
+              ))}
+            </select>
+          </label>
+        ) : destination.departmentId && availableQueues.length === 0 ? (
+          <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
+            Este setor ainda não está preparado para receber atendimentos.
+          </span>
+        ) : null}
+      </div>
+    );
+  };
+  const renderQuestionDestinationFields = (
+    destination: WizardDestination,
+    updateDestination: (patch: Partial<WizardDestination>) => void,
+    menuKey: string,
+    depth = 1
+  ): ReactNode => (
+    <div className="grid gap-3 rounded-lg border border-white/10 bg-black/10 p-3">
+      <label className="grid gap-1 text-sm text-white/70">
+        {depth === 1 ? "Qual pergunta será feita?" : `Pergunta ${depth}`}
+        <textarea
+          value={destination.question ?? ""}
+          disabled={disabled}
+          onChange={(event) => updateDestination({ question: event.target.value })}
+          className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+        />
+      </label>
+      <label className="grid gap-1 text-sm text-white/70">
+        Que tipo de resposta será recebida?
+        <select
+          value={destination.responseType ?? ""}
+          disabled={disabled}
+          onChange={(event) => updateDestination({ responseType: event.target.value as WizardQuestionResponseType })}
+          className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+        >
+          <option className="bg-white text-slate-950" value="">Escolha o tipo</option>
+          {QUESTION_RESPONSE_TYPE_OPTIONS.map((option) => (
+            <option className="bg-white text-slate-950" key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </label>
+      <label className="grid gap-1 text-sm text-white/70">
+        O que deve acontecer depois que a resposta for recebida?
+        <select
+          value={destination.next?.type ?? ""}
+          disabled={disabled}
+          onChange={(event) => {
+            const type = event.target.value as WizardDestinationType | "";
+            updateDestination({ next: type ? { type } : undefined });
+          }}
+          className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+        >
+          <option className="bg-white text-slate-950" value="">Escolha o próximo passo</option>
+          {getWizardQuestionNextTypeOptions(menuKey, depth).map((option) => (
+            <option className="bg-white text-slate-950" key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        {!destination.next ? (
+          <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
+            Ainda falta definir o que deve acontecer depois desta resposta.
+          </span>
+        ) : null}
+      </label>
+      {destination.next?.type === "message" || destination.next?.type === "end" ? (
+        <label className="grid gap-1 text-sm text-white/70">
+          Mensagem depois da resposta
+          <textarea
+            value={destination.next.message ?? ""}
+            disabled={disabled}
+            onChange={(event) => updateDestination({ next: { ...destination.next, type: destination.next?.type ?? "message", message: event.target.value } })}
+            className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+          />
+        </label>
+      ) : null}
+      {destination.next?.type === "question" ? renderQuestionDestinationFields(
+        destination.next,
+        (patch) => updateDestination({ next: { ...destination.next, ...patch, type: "question" } }),
+        menuKey,
+        depth + 1
+      ) : null}
+      {destination.next?.type === "department" || destination.next?.type === "queue"
+        ? renderInlineHandoffFields(destination.next, (patch) => updateDestination({ next: { ...destination.next, ...patch, type: destination.next?.type ?? "department" } }))
+        : null}
+    </div>
+  );
   const renderWizardExpandableRow = ({
     rowKey,
     eyebrow,
@@ -2527,6 +2806,7 @@ export function ChatbotFlowBuilder({
         onClick={() => {
           if (disabled || isExpanded) return;
           setExpandedWizardOptionKey(rowKey);
+          focusWizardRow(rowKey);
         }}
         className={`grid gap-3 rounded-lg border p-3 transition ${
           isExpanded
@@ -2540,6 +2820,7 @@ export function ChatbotFlowBuilder({
             const targetElement = event.target as HTMLElement;
             if (targetElement.closest("input,button,select,textarea")) return;
             setExpandedWizardOptionKey(isExpanded ? null : rowKey);
+            if (!isExpanded) focusWizardRow(rowKey);
           }}
         >
           <div className="min-w-0 flex-1">
@@ -2585,6 +2866,7 @@ export function ChatbotFlowBuilder({
               onClick={(event) => {
                 event.stopPropagation();
                 setExpandedWizardOptionKey(isExpanded ? null : rowKey);
+                if (!isExpanded) focusWizardRow(rowKey);
               }}
               className={`grid h-8 w-8 place-items-center rounded-full border text-base font-semibold leading-none transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 disabled:cursor-not-allowed disabled:opacity-60 ${isExpanded ? "rotate-90 border-re7-sky/50 bg-re7-sky/20 text-sky-50" : "border-white/15 text-white/70"}`}
             >
@@ -2943,12 +3225,9 @@ export function ChatbotFlowBuilder({
                       <textarea value={destination.message ?? ""} disabled={disabled} onChange={(event) => updateWizardDestination(index, { message: event.target.value }, menuKey)} className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white" />
                     </label>
                   ) : null}
-                  {destination.type === "question" ? (
-                    <label className="grid gap-1 text-sm text-white/70">
-                      Pergunta
-                      <textarea value={destination.question ?? ""} disabled={disabled} onChange={(event) => updateWizardDestination(index, { question: event.target.value }, menuKey)} className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white" />
-                    </label>
-                  ) : null}
+                  {destination.type === "question"
+                    ? renderQuestionDestinationFields(destination, (patch) => updateWizardDestination(index, patch, menuKey), menuKey)
+                    : null}
                 </div>
               ) : null}
             </section>
@@ -3175,7 +3454,64 @@ export function ChatbotFlowBuilder({
           <h4 className="text-sm font-semibold text-white">Destinos humanos</h4>
           {handoffEntries.map((entry) => {
             const nodeQueues = queues.filter((queue) => !entry.node.departmentId || queue.departmentId === entry.node.departmentId);
-            return <section key={entry.nodeId} className="grid gap-3 rounded-lg border border-white/10 bg-black/10 p-3"><h5 className="text-sm font-semibold text-white">{entry.source}</h5><label className="grid gap-1 text-sm text-white/70">Mensagem antes da transferência<textarea value={stringValue(entry.node.text)} disabled={disabled} onChange={(event) => commit(setNodeField(definition, entry.nodeId, "text", event.target.value))} className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white" /></label><div className="grid gap-2 sm:grid-cols-2"><label className="grid gap-1 text-sm text-white/70">Departamento<select value={stringValue(entry.node.departmentId)} disabled={disabled} onChange={(event) => { let next = setNodeField(definition, entry.nodeId, "departmentId", event.target.value); const currentQueue = queues.find((queue) => queue.id === entry.node.queueId); if (currentQueue && currentQueue.departmentId !== event.target.value) next = setNodeField(next, entry.nodeId, "queueId", ""); commit(next); }} className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"><option value="">Escolha o setor</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label><label className="grid gap-1 text-sm text-white/70">Fila<select value={stringValue(entry.node.queueId)} disabled={disabled} onChange={(event) => commit(setNodeField(definition, entry.nodeId, "queueId", event.target.value))} className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"><option value="">Fila padrão do setor</option>{nodeQueues.map((queue) => <option key={queue.id} value={queue.id}>{queue.name}</option>)}</select></label></div></section>;
+            return (
+              <section key={entry.nodeId} className="grid gap-3 rounded-lg border border-white/10 bg-black/10 p-3">
+                <h5 className="text-sm font-semibold text-white">{entry.source}</h5>
+                <label className="grid gap-1 text-sm text-white/70">
+                  Mensagem antes da transferência
+                  <textarea value={stringValue(entry.node.text)} disabled={disabled} onChange={(event) => commit(setNodeField(definition, entry.nodeId, "text", event.target.value))} className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white" />
+                </label>
+                <div className={`grid gap-2 ${nodeQueues.length > 1 ? "sm:grid-cols-2" : ""}`}>
+                  <label className="grid gap-1 text-sm text-white/70">
+                    Departamento
+                    <select
+                      value={stringValue(entry.node.departmentId)}
+                      disabled={disabled}
+                      onChange={(event) => {
+                        const departmentId = event.target.value;
+                        let next = setNodeField(definition, entry.nodeId, "departmentId", departmentId);
+                        const currentQueue = queues.find((queue) => queue.id === entry.node.queueId);
+                        const nextQueueId = currentQueue && currentQueue.departmentId === departmentId
+                          ? stringValue(entry.node.queueId)
+                          : resolveSingleQueueIdForDepartment(queues, departmentId);
+                        next = setNodeField(next, entry.nodeId, "queueId", nextQueueId);
+                        commit(next);
+                      }}
+                      className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                    >
+                      <option value="">Escolha o setor</option>
+                      {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+                    </select>
+                  </label>
+                  {nodeQueues.length > 1 ? (
+                  <label className="grid gap-1 text-sm text-white/70">
+                    Fila
+                    <span className="text-xs text-white/55">
+                      Este setor possui mais de uma fila de atendimento. Escolha para qual delas o atendimento deve ser encaminhado.
+                    </span>
+                    <select
+                      value={stringValue(entry.node.queueId)}
+                      disabled={disabled}
+                      onChange={(event) => commit(setNodeField(definition, entry.nodeId, "queueId", event.target.value))}
+                      className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
+                    >
+                      <option value="">{nodeQueues.length === 0 ? "Nenhuma fila cadastrada" : "Escolha a fila"}</option>
+                      {nodeQueues.map((queue) => <option key={queue.id} value={queue.id}>{queue.name}</option>)}
+                    </select>
+                    {entry.node.departmentId && !entry.node.queueId ? (
+                      <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
+                        Este encaminhamento ainda não possui uma fila definida.
+                      </span>
+                    ) : null}
+                  </label>
+                  ) : entry.node.departmentId && nodeQueues.length === 0 ? (
+                    <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
+                      Este setor ainda não está preparado para receber atendimentos.
+                    </span>
+                  ) : null}
+                </div>
+              </section>
+            );
           })}
         </section>
       </div>
@@ -3191,6 +3527,11 @@ export function ChatbotFlowBuilder({
         <div className="rounded-lg border border-white/10 bg-black/10 p-3"><p className="text-xs uppercase text-white/45">Encaminhamentos</p><p className="mt-1 text-lg font-semibold text-white">{handoffCount}</p></div>
         <div className="rounded-lg border border-white/10 bg-black/10 p-3"><p className="text-xs uppercase text-white/45">Estrutura</p><p className="mt-1 text-sm font-semibold text-white">{hasAdvancedFields(definition) ? "Avançada" : getClosestPattern(definition)}</p></div>
       </div>
+      {hasLegacyNullQueueHandoff || issues.some((issue) => issue.includes("sem fila") || issue.includes("fila específica")) ? (
+        <div className="rounded-lg border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+          Este encaminhamento ainda não possui uma fila definida.
+        </div>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={() => setExistingFlowView("journey")} className={`rounded-md border px-3 py-2 text-sm ${existingFlowView === "journey" ? "border-sky-200/50 bg-sky-500/20 text-white" : "border-white/15 text-white/80 hover:bg-white/10"}`}>Revisar jornada</button>
         <button type="button" onClick={() => { setExistingFlowView("simple"); setEditingMenuNodeId(primaryMenu?.id ?? menuEntries[0]?.id ?? null); }} className={`rounded-md border px-3 py-2 text-sm ${existingFlowView === "simple" ? "border-emerald-200/50 bg-emerald-500/20 text-white" : "border-white/15 text-white/80 hover:bg-white/10"}`}>Editar etapas simples</button>
@@ -3207,7 +3548,7 @@ export function ChatbotFlowBuilder({
       {wizardAnswers.template ? <div className="h-2 overflow-hidden rounded-full bg-black/20"><div className="h-full rounded-full bg-re7-sky transition-all" style={{ width: `${Math.round(((wizardStepIndex + 1) / wizardStepKeys.length) * 100)}%` }} /></div> : null}
       {wizardApplyFeedback ? <div className={`rounded-lg border p-3 text-sm ${wizardApplyFeedback.tone === "success" ? "border-emerald-300/25 bg-emerald-500/10 text-emerald-100" : wizardApplyFeedback.tone === "warning" ? "border-amber-300/25 bg-amber-500/10 text-amber-100" : "border-red-300/30 bg-red-500/10 text-red-100"}`}>{wizardApplyFeedback.message}</div> : null}
       {renderWizardStepFields()}
-      {wizardAnswers.template ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/10 px-3 py-3"><button type="button" disabled={wizardStepIndex <= 0} onClick={() => { setWizardErrors([]); setWizardApplyFeedback(null); setWizardStepIndex((current) => Math.max(current - 1, 0)); }} className="rounded-md border border-slate-300/30 bg-slate-500/10 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-500/20 disabled:cursor-not-allowed disabled:opacity-45">Voltar</button><button type="button" disabled={disabled} onClick={cancelWizard} className="rounded-md border border-red-300/35 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50">Cancelar wizard</button>{currentWizardStep === "review" ? <button type="button" disabled={disabled || generatedIssues.some((issue) => issue.includes("precisa") || issue.includes("sem setor") || issue.includes("sem fila"))} onClick={applyGeneratedDraft} className="rounded-md border border-emerald-300/40 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50">Aplicar ao rascunho</button> : <button type="button" disabled={disabled} onClick={goToNextWizardStep} className="rounded-md border border-re7-sky/60 bg-re7-sky/25 px-3 py-2 text-sm font-semibold text-sky-50 hover:bg-re7-sky/35 disabled:cursor-not-allowed disabled:opacity-45">Continuar</button>}</div> : null}
+      {wizardAnswers.template ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/10 px-3 py-3"><button type="button" disabled={wizardStepIndex <= 0} onClick={() => { setWizardErrors([]); setWizardApplyFeedback(null); setWizardStepIndex((current) => Math.max(current - 1, 0)); focusWizardSection(); }} className="rounded-md border border-slate-300/30 bg-slate-500/10 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-500/20 disabled:cursor-not-allowed disabled:opacity-45">Voltar</button><button type="button" disabled={disabled} onClick={cancelWizard} className="rounded-md border border-red-300/35 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50">Cancelar wizard</button>{currentWizardStep === "review" ? <button type="button" disabled={disabled || generatedIssues.some((issue) => issue.includes("precisa") || issue.includes("sem setor") || issue.includes("sem fila"))} onClick={applyGeneratedDraft} className="rounded-md border border-emerald-300/40 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50">Aplicar ao rascunho</button> : <button type="button" disabled={disabled} onClick={goToNextWizardStep} className="rounded-md border border-re7-sky/60 bg-re7-sky/25 px-3 py-2 text-sm font-semibold text-sky-50 hover:bg-re7-sky/35 disabled:cursor-not-allowed disabled:opacity-45">Continuar</button>}</div> : null}
     </section>
   );
 

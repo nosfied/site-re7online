@@ -695,6 +695,50 @@ mostrou `mode=HUMAN`, `handoffStatus=ACTIVE`, `status=WAITING`, setor
 projecao canonica na Inbox humana exatamente uma vez e posicao de fila `1`.
 Incidente fechado.
 
+Guided Builder 2.4 local: consolidar UX sem alterar runtime ou schema. Navegacao
+do wizard (selecionar modelo, Continuar, Voltar) preserva a posicao atual de
+scroll e usa foco com `preventScroll`; expansao de linha editavel ancora o
+cabecalho da propria linha; exclusao/cancelamento/retorno recupera o contexto
+pai sem abrir o proximo irmao. Cancelar submenu em criacao remove apenas o
+estado transiente, mantem o pai expandido e devolve foco ao cabecalho do pai.
+Destino "Fazer uma pergunta" exige pergunta, tipo de resposta e proximo
+comportamento definido; permite no maximo 3 perguntas consecutivas antes de
+outro destino. Auditoria de runtime classificou branching por resposta
+capturada como PRODUCT GAP: o runtime atual tem captura sequencial por
+`capture.next`, mas nao possui predicados por valor capturado, igualdade,
+sim/nao ou fallback branch para resposta livre.
+
+Handoff humano no Guided segue o contrato canonico: `WAITING` humano precisa de
+`departmentId` + `queueId` concreto. Auditoria local de cardinalidade encontrou
+24 setores ativos sem fila, 56 com uma fila e 5 com duas ou mais filas. Os 5
+casos multi-fila foram classificados como `default` = INTERNAL DEFAULT/Re7 Demo
+e `campaigns-feature-*` = AUTOMATED TEST ARTIFACT por metadados reais
+(`phoneNumbers=0`, `channelAccounts=0`, fixture em
+`campaignsFeatureRoutes.test.ts`); nenhum fluxo ativo ou runtime usa multiplas
+filas dentro do mesmo setor. UX final: fila unica e resolvida internamente sem
+label/seletor/texto de fila; setor sem fila bloqueia com "Este setor ainda nao
+esta preparado para receber atendimentos."; somente setor com 2+ filas exibe
+seletor "Fila" como excecao. Fluxos existentes com `departmentId` e
+`queueId=null` exibem aviso e nao sao reescritos automaticamente ao abrir.
+
+Backlog 2.4: GUIDED BUILDER 2.4 = APPROVED FOR FRONTEND-ONLY DELIVERY /
+PRODUCTION VALIDATION; HANDOFF QUEUE UX = SIMPLIFIED / CONDITIONAL EXCEPTION;
+QUESTION CONDITIONAL BRANCHING = PRODUCT GAP.
+
+Micro-ajuste final de UX 2.4: o owner apontou redundancia no bloco visual
+"Escolha o setor que recebera o atendimento." apos selecionar "Encaminhar para
+atendimento humano". O bloco/cartao instrucional foi removido; o editor agora
+mostra diretamente `Setor`/selector, mantendo fila unica interna, bloqueio de
+setor sem fila, seletor excepcional para 2+ filas, preview e JSON gerado sem
+alteracao. Status: GUIDED BUILDER 2.4 = LOCAL / FINAL OWNER VALIDATION.
+
+Entrega aprovada do Guided Builder 2.4: aplicar somente o delta validado no
+worktree recuperado sobre o HEAD canonico, sem migracao, sem hardcode de tenant,
+sem reload de backend/worker e preservando `ChatbotFlow.definition`. Status de
+backlog para esta entrega: GUIDED BUILDER 2.4 = DEPLOYED / OWNER APPROVED LOCAL
+/ PRODUCTION VALIDATION; HANDOFF QUEUE CONTRACT = CLOSED / REAL VALIDATED;
+QUESTION CONDITIONAL BRANCHING = PRODUCT GAP / OPEN; SYER ****9614 = CLOSED.
+
 ---
 
 # BACKLOG LATENTE (RETOMAR QUANDO NECESSÁRIO)

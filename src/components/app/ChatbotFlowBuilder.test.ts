@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -15,11 +16,15 @@ import {
   createGuidedObjectiveDefinition,
   getChatbotNodeEditorSectionPlan,
   getChatbotNodeIssueSectionKeys,
+  getGuidedQueueUxState,
   getStandardFlowWizardStepKeys,
   getGuidedNextTask,
   getWizardExpansionKeyAfterOptionDelete,
   getWizardFocusTargetAfterOptionDelete,
   getWizardDestinationTypeOptions,
+  getWizardQuestionChainDepth,
+  getWizardQuestionNextTypeOptions,
+  getWizardScrollContract,
   removeWizardMenuOption,
   validateWizardStep,
   wizardOptionRequiresDestructiveConfirmation,
@@ -573,7 +578,7 @@ test("direct handoff generator keeps one configured human destination", () => {
   assert.equal(definition.nodes.atendimento_humano.queueId, "queue");
 });
 
-test("guided destination validation requires concrete queue for human handoff", () => {
+test("guided destination validation resolves one queue and requires queue only for multi queue handoff", () => {
   const answers = {
     ...createDefaultWizardAnswers(),
     template: "direct_handoff" as const,
@@ -582,6 +587,13 @@ test("guided destination validation requires concrete queue for human handoff", 
 
   assert.deepEqual(
     validateWizardStep(answers, "destination", [{ id: "queue_geral", name: "Fila Geral", departmentId: "dep_syer" }]),
+    []
+  );
+  assert.deepEqual(
+    validateWizardStep(answers, "destination", [
+      { id: "queue_geral", name: "Fila Geral", departmentId: "dep_syer" },
+      { id: "queue_atendimento", name: "Fila Atendimento", departmentId: "dep_syer" },
+    ]),
     ["Escolha a fila que receberá este atendimento."]
   );
   assert.deepEqual(
@@ -592,7 +604,7 @@ test("guided destination validation requires concrete queue for human handoff", 
   );
   assert.deepEqual(
     validateWizardStep(answers, "destination", []),
-    ["Cadastre uma fila para este setor antes de encaminhar para humano."]
+    ["Este setor ainda não está preparado para receber atendimentos."]
   );
 });
 
@@ -921,6 +933,193 @@ test("wizard destination options keep human routing unified with conditional que
   assert.equal(labels.includes("Encaminhar para uma fila"), false);
   assert.equal(values.includes("queue"), false);
   assert.equal(getWizardDestinationTypeOptions("0").some((option) => option.value === "previous_menu"), true);
+});
+
+test("wizard scroll contracts distinguish navigation expansion and parent recovery", () => {
+  assert.equal(getWizardScrollContract("model_select"), "preserve_scroll");
+  assert.equal(getWizardScrollContract("continue"), "preserve_scroll");
+  assert.equal(getWizardScrollContract("back"), "preserve_scroll");
+  assert.equal(getWizardScrollContract("expand_row"), "scroll_to_row_header");
+  assert.equal(getWizardScrollContract("return_parent"), "focus_context_prevent_scroll");
+  assert.equal(getWizardScrollContract("new_flow_reset"), "focus_context_prevent_scroll");
+});
+
+test("question destination requires a defined next behavior", () => {
+  const answers = createDefaultWizardAnswers();
+  answers.template = "institutional_menu";
+  answers.destinations = {
+    0: { type: "question", question: "Qual é o seu CPF?", responseType: "text" },
+  };
+
+  assert.ok(validateWizardStep(answers, "destinations", []).includes("Ainda falta definir o que deve acontecer depois desta resposta."));
+});
+
+test("question destination can continue to message question menu human and end", () => {
+  const base = createDefaultWizardAnswers();
+  base.template = "institutional_menu";
+  base.menuOptions = ["CPF"];
+
+  const cases = [
+    { type: "message" as const, expectedType: "text" },
+    { type: "question" as const, question: "Qual é o protocolo?", responseType: "text" as const, next: { type: "end" as const }, expectedType: "capture" },
+    { type: "main_menu" as const, expectedNext: "menu_principal" },
+    { type: "department" as const, departmentId: "dep", queueId: "queue", expectedType: "handoff" },
+    { type: "end" as const, expectedType: "text" },
+  ];
+
+  for (const next of cases) {
+    const answers = {
+      ...base,
+      destinations: {
+        0: {
+          type: "question" as const,
+          question: "Qual é o seu CPF?",
+          responseType: "text" as const,
+          next,
+        },
+      },
+    };
+    const definition = buildInstitutionalMenuFlow(answers);
+    const question = definition.nodes.pergunta_cpf;
+    assert.equal(question.type, "capture");
+    assert.ok(question.next);
+    if ("expectedNext" in next) assert.equal(question.next, next.expectedNext);
+    if ("expectedType" in next && next.expectedType) assert.equal(definition.nodes[String(question.next)]?.type, next.expectedType);
+  }
+});
+
+test("question chain allows Q1 to Q2 to Q3 and blocks Q4", () => {
+  const answers = createDefaultWizardAnswers();
+  answers.template = "institutional_menu";
+  answers.menuOptions = ["Dados"];
+  answers.destinations = {
+    0: {
+      type: "question",
+      question: "Pergunta 1",
+      responseType: "text",
+      next: {
+        type: "question",
+        question: "Pergunta 2",
+        responseType: "text",
+        next: {
+          type: "question",
+          question: "Pergunta 3",
+          responseType: "text",
+          next: { type: "end" },
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(validateWizardStep(answers, "destinations", []), []);
+  assert.equal(getWizardQuestionChainDepth(answers.destinations[0]), 3);
+  assert.equal(getWizardQuestionNextTypeOptions("", 3).some((option) => option.value === "question"), false);
+
+  answers.destinations[0].next!.next!.next = {
+    type: "question",
+    question: "Pergunta 4",
+    responseType: "text",
+    next: { type: "end" },
+  };
+
+  assert.ok(
+    validateWizardStep(answers, "destinations", []).includes("O assistente permite no máximo 3 perguntas seguidas antes de outro próximo passo.")
+  );
+});
+
+test("question chain builds three sequential capture nodes before the next action", () => {
+  const answers = createDefaultWizardAnswers();
+  answers.template = "institutional_menu";
+  answers.menuOptions = ["Dados"];
+  answers.destinations = {
+    0: {
+      type: "question",
+      question: "Pergunta 1",
+      responseType: "text",
+      next: {
+        type: "question",
+        question: "Pergunta 2",
+        responseType: "email",
+        next: {
+          type: "question",
+          question: "Pergunta 3",
+          responseType: "phone",
+          next: { type: "message", message: "Obrigado." },
+        },
+      },
+    },
+  };
+
+  const definition = buildInstitutionalMenuFlow(answers);
+  assert.equal(definition.nodes.pergunta_dados.type, "capture");
+  assert.equal(definition.nodes.pergunta_dados.next, "pergunta_dados_depois");
+  assert.equal(definition.nodes.pergunta_dados_depois.type, "capture");
+  assert.equal(definition.nodes.pergunta_dados_depois.next, "pergunta_dados_depois_depois");
+  assert.equal(definition.nodes.pergunta_dados_depois_depois.type, "capture");
+  assert.equal(definition.nodes.mensagem_dados_depois_depois_depois?.type, "text");
+});
+
+test("human handoff queue contract hides one queue blocks zero and requires selector only for multi queue", () => {
+  const answers = createDefaultWizardAnswers();
+  answers.template = "direct_handoff";
+  answers.destinations = { 0: { type: "department", departmentId: "dep" } };
+
+  assert.ok(validateWizardStep(answers, "destination", []).includes("Este setor ainda não está preparado para receber atendimentos."));
+  assert.deepEqual(validateWizardStep(answers, "destination", [{ id: "queue_a", name: "Fila A", departmentId: "dep" }]), []);
+  assert.equal(buildDirectHandoffFlow(answers, [{ id: "queue_a", name: "Fila A", departmentId: "dep" }]).nodes.atendimento_humano.queueId, "queue_a");
+  assert.ok(validateWizardStep(answers, "destination", [
+    { id: "queue_a", name: "Fila A", departmentId: "dep" },
+    { id: "queue_b", name: "Fila B", departmentId: "dep" },
+  ]).includes("Escolha a fila que receberá este atendimento."));
+
+  const fixed = { ...answers, destinations: { 0: { type: "department" as const, departmentId: "dep", queueId: "queue_a" } } };
+  assert.deepEqual(validateWizardStep(fixed, "destination", [
+    { id: "queue_a", name: "Fila A", departmentId: "dep" },
+    { id: "queue_b", name: "Fila B", departmentId: "dep" },
+  ]), []);
+  assert.equal(buildDirectHandoffFlow(fixed).nodes.atendimento_humano.queueId, "queue_a");
+});
+
+test("guided queue UX state hides single queue and exposes selector only for multi queue", () => {
+  assert.equal(getGuidedQueueUxState([], "dep"), "blocked");
+  assert.equal(getGuidedQueueUxState([{ id: "queue", name: "Fila Geral", departmentId: "dep" }], "dep"), "hidden_single_queue");
+  assert.equal(getGuidedQueueUxState([
+    { id: "queue_a", name: "Fila A", departmentId: "dep" },
+    { id: "queue_b", name: "Fila B", departmentId: "dep" },
+  ], "dep"), "conditional_selector");
+});
+
+test("guided handoff editor does not render redundant sector instruction block", () => {
+  const source = readFileSync(new URL("./ChatbotFlowBuilder.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /Escolha o setor que receberá o atendimento/);
+});
+
+test("legacy existing null-queue handoff opens with warning and without auto mutation", () => {
+  const definition = JSON.stringify({
+    start: "handoff",
+    nodes: {
+      handoff: {
+        type: "handoff",
+        text: "Encaminhando.",
+        departmentId: "dep",
+      },
+    },
+  });
+  let changed = false;
+  const html = renderToStaticMarkup(
+    React.createElement(ChatbotFlowBuilder, {
+      definitionText: definition,
+      onDefinitionTextChange: () => {
+        changed = true;
+      },
+      departments: [{ id: "dep", name: "Registro" }],
+      queues: [{ id: "queue", name: "Fila Geral", departmentId: "dep" }],
+      advancedEditor: React.createElement("textarea"),
+    })
+  );
+
+  assert.equal(changed, false);
+  assert.match(html, /Este encaminhamento ainda não possui uma fila definida/);
 });
 
 test("wizard default submenu labels use the parent option name and sequential option label", () => {

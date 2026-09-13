@@ -116,6 +116,21 @@ Smoke mínimo após mudança de fila ou visibilidade:
 - SUPERVISOR e ADMIN preservam a visão esperada;
 - saúde do canal está operacional antes do teste real.
 
+## Criador guiado de fluxos
+
+No Guided Builder 2.4 local, o encaminhamento humano deve ser explicado como
+escolha de setor. A fila e um mecanismo operacional interno: quando o setor tem
+uma unica fila ativa, a plataforma resolve essa fila sem mostrar campo de fila
+ao usuario. Quando o setor nao tem fila, o criador bloqueia a geracao com
+"Este setor ainda não está preparado para receber atendimentos.". Somente setores
+com mais de uma fila mostram o seletor `Fila`, como caso excepcional.
+
+Perguntas guiadas devem ter pergunta, tipo de resposta e proximo passo. O
+criador permite ate 3 perguntas consecutivas; depois disso o proximo passo deve
+ser mensagem, menu/submenu, atendimento humano, encerramento ou retorno ao menu.
+Condicionais por resposta capturada ainda nao fazem parte do runtime publicado e
+nao devem ser ensinadas como funcionalidade disponivel.
+
 ## Suporte da plataforma
 
 ADMIN e SUPERVISOR podem abrir e acompanhar suporte da plataforma em `Suporte`. O fluxo cria ou retoma uma `Conversation` no tenant de suporte configurado pela plataforma, com protocolo normal do Converta. Não existe módulo paralelo de ticket ou case.
