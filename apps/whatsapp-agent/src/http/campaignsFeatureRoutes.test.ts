@@ -5393,6 +5393,72 @@ test("admin tenant detail keeps unknown tenant 404 semantics", async () => {
   assert.equal(getErrorCode(response.body), "tenant_not_found");
 });
 
+test("admin chatbot settings resolves db-only tenant without legacy tenant config", async () => {
+  const dbOnlyClientKey = `${prefix}-db-only-chatbot-settings`;
+  const client = await prisma.client.create({
+    data: {
+      clientKey: dbOnlyClientKey,
+      name: "DB Only Chatbot Settings Tenant",
+      profile: "government",
+      features: { chatbot: true },
+    },
+    select: { id: true },
+  });
+  await prisma.tenantOperationalConfig.create({
+    data: {
+      clientId: client.id,
+      config: {
+        automationFlags: {
+          disableChatbot: false,
+          disableAiFallback: true,
+          disableIntentClassifier: true,
+          disableLegacyFlows: true,
+          disableChatbotFlowEditing: false,
+        },
+        followUp: {
+          enabled: true,
+          delayMinutes: 15,
+          maxCount: 2,
+          useTemplate: false,
+          templateName: "",
+          templateLang: "pt_BR",
+        },
+      },
+    },
+  });
+
+  const response = await requestSuperadmin<{
+    ok: true;
+    tenantId: string;
+    settings: {
+      disableAiFallback: boolean;
+      followUpEnabled: boolean;
+      followUpDelayMinutes: number;
+      aiAssistantEnabled: boolean;
+    };
+    configSource: {
+      automationFlags: string;
+      followUp: string;
+      aiAssistantConfig: string;
+    };
+  }>("GET", `/admin/chatbot/settings?clientKey=${encodeURIComponent(dbOnlyClientKey)}`);
+
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  assert.equal(response.body.tenantId, dbOnlyClientKey);
+  assert.equal(response.body.settings.disableAiFallback, true);
+  assert.equal(response.body.settings.followUpEnabled, true);
+  assert.equal(response.body.settings.followUpDelayMinutes, 15);
+  assert.equal(response.body.settings.aiAssistantEnabled, false);
+  assert.equal(response.body.configSource.automationFlags, "db");
+  assert.equal(response.body.configSource.followUp, "db");
+  assert.equal(response.body.configSource.aiAssistantConfig, "json_fallback");
+
+  const tenantsFile = JSON.parse(
+    await fs.readFile(path.join(tempRoot, ".data", "tenants.json"), "utf-8")
+  ) as Record<string, unknown>;
+  assert.equal(Object.prototype.hasOwnProperty.call(tenantsFile, dbOnlyClientKey), false);
+});
+
 test("admin onboarding manual bind supports db-only clients", async () => {
   const dbOnlyClientKey = `${prefix}-db-only-onboarding`;
   const client = await prisma.client.create({

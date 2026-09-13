@@ -73,6 +73,11 @@ Em `assignee_only_after_assignment`, a regra para AGENT e:
 - atribuicao direta ao proprio agente fora de membership: visivel conforme governanca operacional.
 - `CLOSED`: oculto para AGENT, inclusive com participacao propria.
 
+Auditoria de 2026-09-13 confirmou que esta politica e somente de
+projecao/visibilidade de Inbox. Ela nao cria conversa, nao muda handoff,
+fila/capacidade, atribuicao automatica nem RBAC canonico; ambos os modos
+continuam validos.
+
 SUPERVISOR visualiza por escopo de departments dos memberships ativos. ADMIN visualiza tenant-wide. A participacao historica em conversa fechada usa evidencias estruturadas como `ConversationAssignment` e historico de assignment/runtime, sem inferencia por texto.
 
 Desde `93cd0e06`, conversas `CLOSED` tambem nao podem ser assumidas por nenhum
@@ -617,6 +622,18 @@ Commits relevantes do baseline homologado:
   capturada, melhorias de contexto em relatorios, semantica de unlink/remocao
   Meta Cloud e hardening de suporte interno auditado. Performance de Inbox/CPU
   permanece WATCH, nao frente ativa.
+- CRA admin chatbot settings, 2026-09-13: incidente operacional identificado
+  como dependencia indevida de `.data/tenants.json` em
+  `/admin/chatbot/settings`. CRA esta no banco como `Client` DB-backed; a rota
+  deve resolver settings por `TenantOperationalConfig`/defaults com tenant
+  efetivo em memoria, sem criar entrada artificial em `tenants.json`, preservando
+  suporte legado. A UI admin nao deve bloquear flows/recursos nem manter badge
+  "Carregando" depois de falha parcial.
+- Guided Builder review UX backlog, 2026-09-13: a etapa final de revisao ainda
+  pode resumir apenas o caminho humano destacado em fluxos com varias opcoes.
+  O item aberto e exibir resumo completo por opcao/submenu/caminho no review,
+  sem mudar runtime ou formato de `ChatbotFlow.definition` antes de novo
+  contrato de UX.
 - Suporte interno multitenant ja existe com grant temporario, sessao de suporte,
   auditoria e banner de modo suporte; evolucoes futuras devem focar menor
   privilegio/evidencia operacional. Usuarios x departamentos M2M tambem ja

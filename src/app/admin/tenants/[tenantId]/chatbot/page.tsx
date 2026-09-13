@@ -361,6 +361,15 @@ function normalizeAdminChatbotError(error: { message?: string; errorCode?: strin
   return error.message || fallback;
 }
 
+function getRequestErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return fallback;
+}
+
 export default function AdminTenantChatbotPage() {
   const params = useParams<{ tenantId: string }>();
   const searchParams = useSearchParams();
@@ -487,18 +496,36 @@ export default function AdminTenantChatbotPage() {
 
   const loadData = useCallback(
     async (activeClientKey: string) => {
-      const [flowResponse, settingsResponse, resourcesResponse] = await Promise.all([
+      const [flowResponse, settingsResponse, resourcesResponse] = await Promise.allSettled([
         fetchAdminChatbotFlows(connection, activeClientKey),
         fetchAdminChatbotSettings(connection, activeClientKey),
         fetchAdminChatbotResources(connection, activeClientKey),
       ]);
-      hydrateFlows(flowResponse.items);
-      setSettings(settingsResponse.settings);
-      setBuilderResources({
-        departments: resourcesResponse.departments,
-        queues: resourcesResponse.queues,
-      });
-      setIntentCatalogText(formatIntentCatalogText(settingsResponse.settings.aiAssistantIntentCatalog));
+      const failures: string[] = [];
+      if (flowResponse.status === "fulfilled") {
+        hydrateFlows(flowResponse.value.items);
+      } else {
+        failures.push(getRequestErrorMessage(flowResponse.reason, "Falha ao carregar flows."));
+      }
+      if (settingsResponse.status === "fulfilled") {
+        setSettings(settingsResponse.value.settings);
+        setIntentCatalogText(formatIntentCatalogText(settingsResponse.value.settings.aiAssistantIntentCatalog));
+      } else {
+        setSettings(null);
+        setIntentCatalogText("[]");
+        failures.push(getRequestErrorMessage(settingsResponse.reason, "Falha ao carregar automacao."));
+      }
+      if (resourcesResponse.status === "fulfilled") {
+        setBuilderResources({
+          departments: resourcesResponse.value.departments,
+          queues: resourcesResponse.value.queues,
+        });
+      } else {
+        failures.push(getRequestErrorMessage(resourcesResponse.reason, "Falha ao carregar setores e filas."));
+      }
+      if (failures.length > 0) {
+        throw new Error(failures[0]);
+      }
     },
     [connection, hydrateFlows]
   );
@@ -833,8 +860,8 @@ export default function AdminTenantChatbotPage() {
               </p>
             </div>
             <FlowBadge
-              label={settings ? "Rascunho local até salvar" : "Carregando"}
-              tone={settings ? "warning" : "default"}
+              label={settings ? "Rascunho local até salvar" : loading ? "Carregando" : "Automacao nao carregada"}
+              tone={settings || !loading ? "warning" : "default"}
             />
           </div>
 

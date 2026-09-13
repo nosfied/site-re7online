@@ -22,6 +22,7 @@ import {
   normalizeTenantMediaHandoffPolicy,
   saveTenants,
   type AiAssistantIntentCatalogItem,
+  type TenantConfig,
 } from "../config/tenantConfig.js";
 import {
   CannedReplyValidationError,
@@ -18015,17 +18016,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       try {
         const clientKey = await getScopedClientKey();
         if (!clientKey) return;
-        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          include: {
+            metaConfig: true,
+            phoneNumbers: {
+              orderBy: { createdAt: "asc" },
+              take: 1,
+            },
+          },
+        });
         if (!client) {
           json(res, 404, httpError("client_not_found", "Client not found"));
           return;
         }
         const tenants = await getTenants();
-        const tenant = tenants[clientKey];
-        if (!tenant) {
-          json(res, 404, httpError("tenant_not_found", "Tenant not found"));
-          return;
-        }
+        const tenant = tenants[clientKey] ?? buildDbBackedTenantFallback(client);
         const resolvedFollowUp = await resolveFollowUpSettings({
           prisma,
           clientId: client.id,
@@ -18133,7 +18139,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       try {
         const clientKey = await getScopedClientKey();
         if (!clientKey) return;
-        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          include: {
+            metaConfig: true,
+            phoneNumbers: {
+              orderBy: { createdAt: "asc" },
+              take: 1,
+            },
+          },
+        });
         if (!client) {
           json(res, 404, httpError("client_not_found", "Client not found"));
           return;
@@ -18416,9 +18431,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
         const tenants = await getTenants();
-        const tenant = tenants[clientKey];
-        if (!tenant) {
-          json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        const legacyTenant = tenants[clientKey] ?? null;
+        const tenant = legacyTenant ?? buildDbBackedTenantFallback(client);
+        const legacyAiAssistantPatchChanged =
+          (Object.prototype.hasOwnProperty.call(aiAssistantPatch, "aiAssistantEnabled") &&
+            (tenant.aiAssistantEnabled === true) !== aiAssistantPatch.aiAssistantEnabled) ||
+          (Object.prototype.hasOwnProperty.call(aiAssistantPatch, "aiAssistantFallbackToHandoff") &&
+            (tenant.aiAssistantFallbackToHandoff === true) !== aiAssistantPatch.aiAssistantFallbackToHandoff);
+        if (!legacyTenant && legacyAiAssistantPatchChanged) {
+          json(
+            res,
+            409,
+            httpError(
+              "legacy_tenant_config_missing",
+              "Legacy tenant settings are not available for this DB-backed tenant."
+            )
+          );
           return;
         }
         const currentAiAssistantConfig = (await resolveAiAssistantConfigSettings({
@@ -18479,9 +18507,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           );
           return;
         }
-        const jsonPatch = {
-          ...aiAssistantPatch,
-        };
+        const jsonPatch = legacyTenant
+          ? {
+              ...aiAssistantPatch,
+            }
+          : {};
         const saved = Object.keys(jsonPatch).length > 0
           ? await saveTenantPatch(clientKey, jsonPatch)
           : {
@@ -21831,20 +21861,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           },
         },
       });
-      const tenant = tenants[tenantId] ?? (client
-        ? {
-            id: client.clientKey,
-            name: client.name,
-            metaPhoneNumberId:
-              normalizeOptionalString(client.metaConfig?.phoneNumberId) ??
-              normalizeOptionalString(client.phoneNumbers[0]?.phoneNumberId) ??
-              "",
-            allowlist: [],
-            handoffAttendantWaid: "",
-            defaultLanguage: "pt_BR",
-            channelAccounts: [],
-          }
-        : null);
+      const tenant = tenants[tenantId] ?? (client ? buildDbBackedTenantFallback(client) : null);
       if (!tenant) {
         json(res, 404, { error: "tenant_not_found" });
         return;
@@ -27399,6 +27416,26 @@ function getSavedTenantChannelAccounts(tenant: Record<string, unknown>) {
   return Array.isArray(tenant.channelAccounts)
     ? (tenant.channelAccounts as TenantChannelAccount[])
     : undefined;
+}
+
+function buildDbBackedTenantFallback(client: {
+  clientKey: string;
+  name: string;
+  metaConfig?: { phoneNumberId?: string | null } | null;
+  phoneNumbers?: Array<{ phoneNumberId?: string | null }>;
+}): TenantConfig {
+  return {
+    id: client.clientKey,
+    name: client.name,
+    metaPhoneNumberId:
+      normalizeOptionalString(client.metaConfig?.phoneNumberId) ??
+      normalizeOptionalString(client.phoneNumbers?.[0]?.phoneNumberId) ??
+      "",
+    allowlist: [],
+    handoffAttendantWaid: "",
+    defaultLanguage: "pt_BR",
+    channelAccounts: [],
+  };
 }
 
 async function saveTenantPatch(tenantId: string, body: Record<string, unknown>): Promise<SavedTenantPatch> {

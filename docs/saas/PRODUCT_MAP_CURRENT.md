@@ -89,6 +89,14 @@ Default government profile favors oversight and reporting:
 | Demo/POC data | Internal/demo | scripts | `seed-demo.mjs`, `seed-re7-demo-screenshots.mjs` | local/demo only |
 | Internal admin console | Operational | `/admin` | admin routes, tenant/channel/onboarding pages | `X-Admin-Token`, `tenants.json`, DB |
 
+Admin chatbot settings note, 2026-09-13: `/admin/chatbot/settings` must support
+DB-backed clients that do not have a legacy `.data/tenants.json` entry. Settings
+resolve through `TenantOperationalConfig` and safe runtime defaults using an
+in-memory tenant fallback from `Client`; legacy tenants still use
+`tenants.json`. The admin page should keep flows/resources visible after a
+partial settings error and must not show a persistent "Carregando" badge once
+loading is finished.
+
 Chatbot Guided Builder 2.3 recovery note, 2026-09-12: the final approved
 delivery was rebuilt on a clean worktree from the canonical production/origin
 HEAD. A reboot had removed the temporary `/tmp` worktree, an initial post-reboot
@@ -146,9 +154,15 @@ Current backlog classification:
   60m explicit automation lifecycle; CRA department/flow-aware hours
   configuration and validation.
 - P2: question conditional branching by captured answer; reporting context
-  enhancements; Meta Cloud unlink/removal semantics; support access hardening.
+  enhancements; Guided Builder complete final-review summary; Meta Cloud
+  unlink/removal semantics; support access hardening.
 - WATCH: Inbox performance, CPU, `last_message_lookup`, SECULT fairness and
   round-robin cursor, representative scale/load validation.
+
+Inbox visibility policy audit, 2026-09-13: `shared` and
+`assignee_only_after_assignment` are visibility/projection modes for Inbox list,
+detail and timeline access. They do not redefine assignment, queue capacity,
+handoff creation or tenant RBAC.
 
 Already implemented and not active model gaps: internal multitenant support
 access has temporary audited grants and support sessions; user-to-department M2M

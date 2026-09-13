@@ -80,6 +80,19 @@ Fechado / validado:
   `UserDepartmentMembership`, UI de usuarios com multiplos setores e uso no
   RBAC/assignment. Gap restante e refinamento de relatorios/filtros, nao modelo
   relacional basico.
+- CRA admin chatbot settings: FIXED / FF DEPLOYED. Em 2026-09-13 a
+  auditoria do toast inicial em
+  `/admin/tenants/cra-pr/chatbot?clientKey=cra-pr` mostrou que CRA existe como
+  `Client` DB-backed, mas `/admin/chatbot/settings` retornava
+  `tenant_not_found` por exigir entrada legada em `.data/tenants.json`. A rota
+  passa a montar tenant efetivo em memoria a partir do `Client` e dos resolvers
+  DB-first, preservando fallback legado e sem criar entrada artificial em
+  `tenants.json`. A UI admin hidrata flows/recursos mesmo se uma chamada
+  parcial falhar e nao deixa badge de "Carregando" apos fim do loading.
+- Inbox visibility policy audit: NO RUNTIME CHANGE. A politica
+  `shared`/`assignee_only_after_assignment` permanece apenas como regra de
+  projecao/visibilidade para lista/detalhe/timeline; nao altera criacao de
+  conversa, handoff, fila, capacidade, atribuicao automatica ou RBAC canonico.
 
 ACTIVE P0:
 
@@ -113,11 +126,16 @@ ACTIVE P2:
    vs MANUAL, policy, `presenceMode`, carga/capacidade atual e filtros
    ativo/inativo onde fizer sentido, sem reabrir bugs de verdade de relatorio ja
    fechados.
-3. Meta Cloud unlink/removal cleanup semantics: PRODUCT/OPS GAP / OPEN.
+3. Guided Builder final review summary: UX BACKLOG / OPEN. A etapa "Revisar
+   antes de aplicar" hoje mostra resumo parcial orientado ao caminho humano mais
+   relevante quando existe handoff. O backlog e evoluir para resumo completo por
+   opcao/submenu/caminho, sem alterar runtime ou `ChatbotFlow.definition` ate
+   haver contrato de UX aprovado.
+4. Meta Cloud unlink/removal cleanup semantics: PRODUCT/OPS GAP / OPEN.
    Consolidar semantica de disconnect/unlink, limpeza de token, associacoes
    phone/WABA, estado de coexistencia, remocao de canal por tenant e fallback
    seguro.
-4. Internal support access hardening: P2 / WATCH-HARDENING. Mecanismo existe;
+5. Internal support access hardening: P2 / WATCH-HARDENING. Mecanismo existe;
    manter evolucao em auditoria, expiracao, evidencias e menor privilegio.
 
 P3:

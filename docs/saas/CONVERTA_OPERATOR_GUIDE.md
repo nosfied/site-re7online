@@ -131,6 +131,11 @@ ser mensagem, menu/submenu, atendimento humano, encerramento ou retorno ao menu.
 Condicionais por resposta capturada ainda nao fazem parte do runtime publicado e
 nao devem ser ensinadas como funcionalidade disponivel.
 
+A etapa final "Revisar antes de aplicar" pode resumir o caminho humano mais
+relevante quando houver handoff. O resumo completo por opcao, submenu e caminho
+esta classificado como backlog de UX do Guided Builder, sem mudanca de runtime
+ou de `ChatbotFlow.definition`.
+
 ## Suporte da plataforma
 
 ADMIN e SUPERVISOR podem abrir e acompanhar suporte da plataforma em `Suporte`. O fluxo cria ou retoma uma `Conversation` no tenant de suporte configurado pela plataforma, com protocolo normal do Converta. Não existe módulo paralelo de ticket ou case.
