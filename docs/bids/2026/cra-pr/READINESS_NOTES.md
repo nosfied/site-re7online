@@ -173,6 +173,35 @@ CRA-PR DEPARTMENT HOURS:
 P1 / PENDING CUSTOMER CONFIGURATION + FLOW-AWARE VALIDATION
 ```
 
+### CRA admin chatbot settings - 2026-09-13
+
+Incidente fechado em producao no commit
+`69bedc38396b8f837a236b0af4a5446397919403`.
+
+O tenant `cra-pr` e DB-backed em `Client` e nao possui entrada legada em
+`.data/tenants.json`. `/admin/chatbot/settings` agora resolve esse caso por
+`Client` + `TenantOperationalConfig` + defaults seguros em memoria, preservando
+fallback legado para tenants que ainda dependem de `tenants.json` e sem criar
+entrada artificial para CRA.
+
+Smoke de producao:
+
+- `/admin/chatbot/settings?clientKey=cra-pr`: 200;
+- resources: 6 departamentos / 6 filas;
+- flows: 1;
+- health: ok/db ok;
+- `.data/tenants.json`: ausente.
+
+Status:
+
+```text
+CRA ADMIN CHATBOT SETTINGS:
+CLOSED / REAL VALIDATED
+
+ADMIN CHATBOT LOADING/BADGE:
+CLOSED / REAL VALIDATED
+```
+
 Administradores CRA podem configurar horarios dos departamentos em:
 
 ```text

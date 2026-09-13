@@ -134,7 +134,10 @@ nao devem ser ensinadas como funcionalidade disponivel.
 A etapa final "Revisar antes de aplicar" pode resumir o caminho humano mais
 relevante quando houver handoff. O resumo completo por opcao, submenu e caminho
 esta classificado como backlog de UX do Guided Builder, sem mudanca de runtime
-ou de `ChatbotFlow.definition`.
+ou de `ChatbotFlow.definition`. O comportamento futuro desejado e mostrar todas
+as opcoes principais, caminhos de submenu, mensagens, perguntas e destinos de
+atendimento humano em uma jornada legivel, preservando estruturas avancadas sem
+prometer interpretacao completa.
 
 ## Suporte da plataforma
 

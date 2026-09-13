@@ -193,7 +193,8 @@ Resultado:
 - schema/migration/frontend: unchanged;
 - backend + worker builds: PASS;
 - historical `UNKNOWN`: unchanged;
-- status: DEPLOYED / TESTED / ORGANIC VALIDATION PENDING.
+- status: DEPLOYED / TESTED / WATCH. Validacao organica permanece observacao
+  passiva e nao e frente ativa sem nova evidencia representativa.
 
 ## Pontos de atencao
 

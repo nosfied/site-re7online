@@ -29,6 +29,9 @@ Antes de executar, classificar a mudanca conforme `docs/saas/CHANGE_POLICY.md`:
 - Confirmar que nao existem secrets, dumps, `.data`, tokens ou temporarios no diff.
 - Rodar `git diff --check`.
 - Conferir se a mudanca exige update documental.
+- Para rotas admin de tenant/settings, confirmar que clientes DB-backed em
+  `Client` nao dependem de entrada legada em `.data/tenants.json`; JSON deve ser
+  fallback de compatibilidade, nao requisito para tenant moderno.
 - Se tocar capacidade, swap, PM2, banco, HA, build ou carga, atualizar `docs/saas/OPERATIONAL_BASELINE.md`.
 - Se tocar automacao/IA, rodar `npm run evaluation:replay` em `apps/whatsapp-agent`.
 - Se tocar canais, rodar testes focados de canais/webhooks quando aplicavel.

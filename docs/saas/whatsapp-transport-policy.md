@@ -60,6 +60,12 @@ Mode transitions are explicit administrative decisions. A tenant may move betwee
 
 CRA-PR may start in `HYBRID` to accelerate rollout with customer authorization and later move to `CLOUD_ONLY`. SECULT-PE must remain compatible with future `WEB_ONLY`, `HYBRID` or `CLOUD_ONLY` operation. These are operating examples, not code rules.
 
+CRA-PR is also the current validated example of a DB-backed tenant that must not
+require a legacy `.data/tenants.json` entry for admin tenant operations. This is
+a configuration-source rule, not a transport-routing rule: transport mode still
+comes from durable DB/tenant capability and explicit routing policy, while
+`tenants.json` remains compatibility fallback only.
+
 ## Routing Intents
 
 Canonical routing decisions should be made by intent rather than scattered provider checks. Current product intents include:

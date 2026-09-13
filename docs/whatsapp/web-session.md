@@ -566,7 +566,8 @@ Deployment result:
 - worker source/dist aligned: PASS;
 - frontend change: NO;
 - schema/migration: NO;
-- status: DEPLOYED / TESTED / ORGANIC VALIDATION PENDING.
+- status: DEPLOYED / TESTED / WATCH. Organic validation remains passive; do not
+  reopen this as an active front without new representative evidence.
 
 ### Hybrid claim-before-downstream recovery - 2026-09-10
 
@@ -599,3 +600,7 @@ Production validation later on 2026-09-10 exercised the Web Session winner path 
 
 The follow-up new-service choice advanced the runtime back into the active chatbot flow and
 sent the menu over Web Session, without duplicate processing.
+
+Status after the 2026-09-13 documentation sync: Hybrid routing, identity,
+claim-before-downstream recovery and exactly-once coexistence remain
+CLOSED / REAL VALIDATED. They are not active backlog fronts.

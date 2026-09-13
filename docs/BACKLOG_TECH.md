@@ -38,8 +38,9 @@ desenvolvimento.
 ### Auditoria canonica de backlog — 2026-09-13
 
 Fonte de verdade auditada: branch canonico `flow-executor-quote-hardening`,
-origin/production HEAD `ca34e123c72de2e96f0dcff27b4e17f29e5b630b`, producao
-online, health `ok/db ok`, PM2 online e Prisma migrations up to date.
+origin/production HEAD `69bedc38396b8f837a236b0af4a5446397919403`, producao
+online, health `ok/db ok`, PM2 online, Prisma migrations up to date e CRA
+`/admin/chatbot/settings` validado em runtime DB-backed.
 
 Fechado / validado:
 
@@ -80,19 +81,27 @@ Fechado / validado:
   `UserDepartmentMembership`, UI de usuarios com multiplos setores e uso no
   RBAC/assignment. Gap restante e refinamento de relatorios/filtros, nao modelo
   relacional basico.
-- CRA admin chatbot settings: FIXED / FF DEPLOYED. Em 2026-09-13 a
+- CRA admin chatbot settings: CLOSED / REAL VALIDATED em
+  `69bedc38396b8f837a236b0af4a5446397919403`. Em 2026-09-13 a
   auditoria do toast inicial em
   `/admin/tenants/cra-pr/chatbot?clientKey=cra-pr` mostrou que CRA existe como
   `Client` DB-backed, mas `/admin/chatbot/settings` retornava
   `tenant_not_found` por exigir entrada legada em `.data/tenants.json`. A rota
   passa a montar tenant efetivo em memoria a partir do `Client` e dos resolvers
   DB-first, preservando fallback legado e sem criar entrada artificial em
-  `tenants.json`. A UI admin hidrata flows/recursos mesmo se uma chamada
-  parcial falhar e nao deixa badge de "Carregando" apos fim do loading.
-- Inbox visibility policy audit: NO RUNTIME CHANGE. A politica
+  `tenants.json`. Smoke de producao: settings 200, resources 6 departamentos /
+  6 filas, flows 1, health ok/db ok, `.data/tenants.json` ausente.
+- Admin chatbot loading/badge: CLOSED / REAL VALIDATED em `69bedc38`. A UI
+  admin hidrata flows/recursos mesmo se settings falhar parcialmente, o estado
+  de loading nao depende mais de `settings != null`, o bug de badge permanente
+  "Carregando" foi fechado e erro verdadeiro e exibido quando settings nao
+  estiver disponivel.
+- Inbox visibility policy audit: CLOSED / AUDITED / NO CODE CHANGE. A politica
   `shared`/`assignee_only_after_assignment` permanece apenas como regra de
   projecao/visibilidade para lista/detalhe/timeline; nao altera criacao de
-  conversa, handoff, fila, capacidade, atribuicao automatica ou RBAC canonico.
+  conversa, handoff, fila, capacidade, presenca, claim, transferencia, envio,
+  fechamento, atribuicao automatica ou RBAC canonico. A restricao de acesso de
+  AGENT a conversas `CLOSED` permanece mais forte e preservada.
 
 ACTIVE P0:
 
@@ -308,8 +317,9 @@ WATCH only:
   ao desenho lateral per-identity sem indice/plano comprovado.
 - SECULT fairness/round-robin cursor: WATCH. `presenceMode=AVAILABLE` ja tem
   comportamento funcional validado.
-- SECULT Web Session non-content suppression: ORGANIC VALIDATION PENDING para
-  confirmar ausencia de novas bolhas `Mensagem nao suportada`.
+- SECULT Web Session non-content suppression: DEPLOYED / TESTED / WATCH.
+  Validacao organica permanece observacao passiva; nao reabrir frente ativa sem
+  nova evidencia representativa de bolhas `Mensagem nao suportada`.
 
 Dividas tecnicas abertas:
 

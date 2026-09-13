@@ -87,7 +87,7 @@ Default government profile favors oversight and reporting:
 | LGPD/privacy | Operational | `/app/settings/privacy` | `RetentionConfig`, privacy retention service | retention job |
 | Push/PWA notifications | Operational with platform limits | app shell/inbox | `PushSubscription`, `webPushService.ts`, service worker | browser permission/support |
 | Demo/POC data | Internal/demo | scripts | `seed-demo.mjs`, `seed-re7-demo-screenshots.mjs` | local/demo only |
-| Internal admin console | Operational | `/admin` | admin routes, tenant/channel/onboarding pages | `X-Admin-Token`, `tenants.json`, DB |
+| Internal admin console | Operational | `/admin` | admin routes, tenant/channel/onboarding pages | `X-Admin-Token`, DB-backed `Client`, `TenantOperationalConfig`, legacy `tenants.json` fallback |
 
 Admin chatbot settings note, 2026-09-13: `/admin/chatbot/settings` must support
 DB-backed clients that do not have a legacy `.data/tenants.json` entry. Settings
@@ -96,6 +96,13 @@ in-memory tenant fallback from `Client`; legacy tenants still use
 `tenants.json`. The admin page should keep flows/resources visible after a
 partial settings error and must not show a persistent "Carregando" badge once
 loading is finished.
+
+Production validation in
+`69bedc38396b8f837a236b0af4a5446397919403`: CRA settings returns 200, CRA
+resources returns 6 departments and 6 queues, CRA flow count is 1, health is
+ok/db ok, and no artificial `cra-pr` entry was created in `.data/tenants.json`.
+Status: CRA SETTINGS = CLOSED / REAL VALIDATED; ADMIN LOADING/BADGE =
+CLOSED / REAL VALIDATED.
 
 Chatbot Guided Builder 2.3 recovery note, 2026-09-12: the final approved
 delivery was rebuilt on a clean worktree from the canonical production/origin
@@ -157,12 +164,15 @@ Current backlog classification:
   enhancements; Guided Builder complete final-review summary; Meta Cloud
   unlink/removal semantics; support access hardening.
 - WATCH: Inbox performance, CPU, `last_message_lookup`, SECULT fairness and
-  round-robin cursor, representative scale/load validation.
+  round-robin cursor, SECULT non-content suppression organic validation and
+  representative scale/load validation.
 
 Inbox visibility policy audit, 2026-09-13: `shared` and
 `assignee_only_after_assignment` are visibility/projection modes for Inbox list,
 detail and timeline access. They do not redefine assignment, queue capacity,
-handoff creation or tenant RBAC.
+presence, handoff creation, claim, transfer, send, close or tenant RBAC. The
+AGENT `CLOSED` restriction remains stronger than the visibility policy and is
+preserved.
 
 Already implemented and not active model gaps: internal multitenant support
 access has temporary audited grants and support sessions; user-to-department M2M
@@ -172,7 +182,9 @@ exists through `UserDepartmentMembership`, UI and assignment/RBAC usage.
 
 - Postgres/Prisma for operational data and many tenant-owned entities.
 - `TenantOperationalConfig` for migrated operational config: CRM status catalog, manual handoff template pointer, follow-up settings, handoff lead notification settings, media handoff policy, plan/quota limits, automation disable flags and scoped AI assistant config.
-- `.data/tenants.json` for tenant technical configuration not yet migrated.
+- `.data/tenants.json` only for tenant technical configuration not yet migrated
+  and compatibility fallback; modern DB-backed tenants must not require a JSON
+  entry for admin tenant operations.
 - Meta Cloud API for WhatsApp, Messenger and Instagram.
 - WebSocket bridge for realtime inbox.
 - Web Push/VAPID for native notifications.
@@ -183,4 +195,4 @@ exists through `UserDepartmentMembership`, UI and assignment/RBAC usage.
 - Operational: yes.
 - Sellable for business tenants: yes, especially WhatsApp-first omnichannel operations.
 - Government-ready: partial, with profile/feature defaults and reporting foundations.
-- Scalable: operationally improving, but configuration governance is still limited by `tenants.json`.
+- Scalable: operationally improving; remaining configuration governance should continue moving DB-first while keeping `tenants.json` as compatibility fallback only.

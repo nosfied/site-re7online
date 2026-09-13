@@ -75,8 +75,9 @@ Em `assignee_only_after_assignment`, a regra para AGENT e:
 
 Auditoria de 2026-09-13 confirmou que esta politica e somente de
 projecao/visibilidade de Inbox. Ela nao cria conversa, nao muda handoff,
-fila/capacidade, atribuicao automatica nem RBAC canonico; ambos os modos
-continuam validos.
+fila/capacidade, presenca, claim, transferencia, envio, fechamento, atribuicao
+automatica nem RBAC canonico; ambos os modos continuam validos. A restricao de
+AGENT para conversa `CLOSED` permanece mais forte e preservada.
 
 SUPERVISOR visualiza por escopo de departments dos memberships ativos. ADMIN visualiza tenant-wide. A participacao historica em conversa fechada usa evidencias estruturadas como `ConversationAssignment` e historico de assignment/runtime, sem inferencia por texto.
 
@@ -625,15 +626,20 @@ Commits relevantes do baseline homologado:
 - CRA admin chatbot settings, 2026-09-13: incidente operacional identificado
   como dependencia indevida de `.data/tenants.json` em
   `/admin/chatbot/settings`. CRA esta no banco como `Client` DB-backed; a rota
-  deve resolver settings por `TenantOperationalConfig`/defaults com tenant
-  efetivo em memoria, sem criar entrada artificial em `tenants.json`, preservando
-  suporte legado. A UI admin nao deve bloquear flows/recursos nem manter badge
-  "Carregando" depois de falha parcial.
+  resolve settings por `TenantOperationalConfig`/defaults com tenant efetivo em
+  memoria, sem criar entrada artificial em `tenants.json`, preservando suporte
+  legado. Validacao em producao no commit
+  `69bedc38396b8f837a236b0af4a5446397919403`: settings 200, resources 6
+  departamentos / 6 filas, flows 1, health ok/db ok e `tenants.json` ausente.
+  A UI admin hidrata flows/recursos mesmo se settings falhar parcialmente e nao
+  mantem badge "Carregando" depois do fim do loading. Status: CLOSED / REAL
+  VALIDATED.
 - Guided Builder review UX backlog, 2026-09-13: a etapa final de revisao ainda
   pode resumir apenas o caminho humano destacado em fluxos com varias opcoes.
-  O item aberto e exibir resumo completo por opcao/submenu/caminho no review,
-  sem mudar runtime ou formato de `ChatbotFlow.definition` antes de novo
-  contrato de UX.
+  O item aberto e exibir todas as opcoes principais, caminhos de submenu e
+  destinos de mensagem/pergunta/handoff em uma jornada legivel, preservando
+  estruturas avancadas sem fingir interpretacao completa. Sem mudar runtime ou
+  formato de `ChatbotFlow.definition` antes de novo contrato de UX.
 - Suporte interno multitenant ja existe com grant temporario, sessao de suporte,
   auditoria e banner de modo suporte; evolucoes futuras devem focar menor
   privilegio/evidencia operacional. Usuarios x departamentos M2M tambem ja

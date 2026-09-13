@@ -75,7 +75,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | `docs/ADR-004-separacao-admin-app.md` | atual | Decisao admin/app |
 | `docs/ARCHITECTURE_MULTI_MODE.md` | parcialmente atual | Arquitetura multi-mode; revisar com product map atual |
 | `docs/ARCHITECTURE_POSTGRES_RUNTIME_STATE.md` | parcialmente atual | Historico da migracao de runtime state |
-| `docs/BACKLOG_TECH.md` | parcialmente atual | Backlog historico; revisar antes de usar como roadmap |
+| `docs/BACKLOG_TECH.md` | atual | Backlog canonico sincronizado; preserva historico fechado e separa P1/P2/WATCH |
 | `docs/DEMO_SCRIPT.md` | parcialmente atual | Script de demo; pode divergir do produto atual |
 
 ## Serie whatsapp-agent

@@ -11,11 +11,21 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - `apps/whatsapp-agent/src/config/tenantConfig.ts` remains the canonical loader/writer for `tenants.json`.
 - `TenantOperationalConfig` is the DB-first holder for low-risk tenant operational settings migrated in phases.
 
+Canonical rule after production commit
+`69bedc38396b8f837a236b0af4a5446397919403`: modern tenants present in
+`Client` must not require a legacy `.data/tenants.json` entry for admin tenant
+operations. Admin routes should resolve DB-backed tenant identity from `Client`,
+read migrated settings from `TenantOperationalConfig`, apply safe runtime
+defaults where necessary, and use `tenants.json` only as compatibility fallback
+for fields not migrated yet. This was real-validated for CRA-PR with
+`/admin/chatbot/settings` returning 200, resources 6 departments / 6 queues,
+flow count 1, and no artificial `cra-pr` JSON entry created.
+
 ## Mandatory Matrix
 
 | Configuração | Fonte Atual | Fonte de Verdade | Equivalente DB | Plano Futuro |
 | --- | --- | --- | --- | --- |
-| Tenant key/name/status | DB + `tenants.json` | DB for app auth/runtime identity; JSON still used by config loader | `Client.clientKey`, `Client.name`, `Client.status` | Move remaining reads to DB-first and keep JSON fallback during transition |
+| Tenant key/name/status | DB + `tenants.json` fallback | DB for app auth/runtime identity and modern admin operations; JSON only compatibility fallback | `Client.clientKey`, `Client.name`, `Client.status` | Move remaining reads to DB-first and keep JSON fallback during transition |
 | Business/government profile | DB | DB | `Client.profile` | Keep DB-first |
 | App feature flags | DB | DB | `Client.features` | Keep DB-first; consider shared defaults package |
 | WhatsApp phone mapping | DB + JSON fallback | DB for webhook resolution; JSON still used by bootstrap/fallback | `WaPhoneNumber.phoneNumberId`, `TenantMetaConfig.phoneNumberId` | Make `WaPhoneNumber` mandatory for all tenants |
@@ -209,6 +219,9 @@ Read path:
 Write/backfill path:
 
 - `/admin/chatbot/settings` writes these automation flags to `TenantOperationalConfig`.
+- `/admin/chatbot/settings` reads settings for DB-backed clients even when no
+  legacy `tenants.json` entry exists; it must not create artificial JSON entries
+  for DB-backed tenants.
 - `/app/chatbot/settings` exposes the effective DB-first values but does not allow customer-facing edits to the main automation locks.
 - WhatsApp webhook runtime resolves these flags DB-first before deciding chatbot, legacy flow, intent classifier and AI fallback behavior.
 - `npm run tenant-config:backfill -- --dry-run --json`

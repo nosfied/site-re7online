@@ -7,6 +7,7 @@
 - `/admin/tenants/[tenantId]/inbox`
 - `/admin/tenants/[tenantId]/campaigns`
 - `/admin/tenants/[tenantId]/channels`
+- `/admin/tenants/[tenantId]/chatbot`
 
 ## Conexao
 
@@ -44,6 +45,26 @@ Desde a Sprint 61, `planName`, `messagesLimit` e `quota*` sao DB-first em
 `TenantOperationalConfig.config.planLimits`, com fallback para `tenants.json`.
 O console interno continua recebendo e enviando os mesmos campos no contrato
 HTTP para preservar a UI existente.
+
+## Chatbot Settings DB-backed
+
+Desde `69bedc38396b8f837a236b0af4a5446397919403`,
+`/admin/chatbot/settings` suporta tenants modernos existentes em `Client` mesmo
+sem entrada legada em `.data/tenants.json`. A rota usa `Client` para identidade,
+`TenantOperationalConfig`/defaults para settings migrados e preserva
+`tenants.json` apenas como fallback de compatibilidade.
+
+Validacao CRA-PR em producao:
+
+- settings: `200`;
+- resources: 6 departamentos / 6 filas;
+- flows: 1;
+- `.data/tenants.json`: ausente, sem entrada artificial `cra-pr`.
+
+A pagina `/admin/tenants/:tenantId/chatbot` deve hidratar flows e resources
+mesmo quando settings falhar parcialmente. A badge de automacao nao deve
+permanecer como "Carregando" apos o fim do loading; quando settings estiver
+indisponivel, a UI deve mostrar estado de erro verdadeiro.
 
 `quota.used` em `/admin/tenants/summary`:
 

@@ -725,6 +725,14 @@ Audit refresh 2026-09-13: classificacao mantida como INBOX PERFORMANCE =
 IMPROVED / WATCH; CPU = WATCH; ACTIVE PERFORMANCE DEVELOPMENT = NO. Nao
 repriorizar performance acima de gaps P1/P2 sem novo incidente representativo.
 
+Inbox visibility policy audit 2026-09-13: `shared` e
+`assignee_only_after_assignment` seguem validos e controlam somente
+projecao/visibilidade de lista, detalhe e timeline do Inbox. Nao alteram
+autoassign, elegibilidade de fila, capacidade, presenca, handoff, claim,
+transferencia, envio, fechamento ou RBAC canonico. A restricao de AGENT para
+conversas `CLOSED` permanece mais forte que a politica e foi preservada. Status:
+CLOSED / AUDITED / NO CODE CHANGE.
+
 A medicao comparavel de 2026-09-10, entre 19:49:48Z e 19:54:52Z, capturou
 42 requests HTTP para `/app/conversations` em 5,07 minutos. O delta de metricas
 mostrou `last_message_lookup` com media de janela em torno de 5.895ms e
