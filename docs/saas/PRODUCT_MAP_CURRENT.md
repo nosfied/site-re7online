@@ -71,7 +71,7 @@ Default government profile favors oversight and reporting:
 | WhatsApp runtime | Operational | webhook/runtime | `whatsapp/webhook.controller.ts`, `WaPhoneNumber`, `TenantMetaConfig` | Meta Cloud API, tenant config, DB |
 | Messenger/Facebook | Operational human messaging | `/app/inbox` | `metaWebhookPassive.ts`, `messengerInboundPersistence.ts`, channel accounts | `channelAccounts`, Page token |
 | Instagram | Operational inbound/outbound manual, human-only | `/app/inbox`, `/app/settings/channels/instagram` | `instagramInboundPersistence.ts`, `instagramBusinessLogin.service.ts`, channel accounts | Instagram Business Login token, aliases, app review |
-| Chatbot flows | Operational with tenant locks; Guided Builder 2.3 deployed / owner-approved local / production real validation | `/app/chatbot` | `ChatbotFlow`, `chatbot/chatbotFlow.ts`, `TenantOperationalConfig` | `Client.features.chatbot`; follow-up, handoff notification, media handoff policy, plan limits, automation disable flags and scoped assistant config are DB-first with `tenants.json` fallback |
+| Chatbot flows | Operational with tenant locks; Guided Builder 2.4 closed / deployed / owner-approved local / production non-destructive validated | `/app/chatbot` | `ChatbotFlow`, `chatbot/chatbotFlow.ts`, `TenantOperationalConfig` | `Client.features.chatbot`; follow-up, handoff notification, media handoff policy, plan limits, automation disable flags and scoped assistant config are DB-first with `tenants.json` fallback |
 | AI supervised fallback | Partial/tenant-configured | runtime/admin | `controlledAssistant.ts`, `TenantOperationalConfig.config.aiAssistantConfig`, `TenantOperationalConfig.config.aiIntentQualification` | OpenAI config; prompt/topic/profile, intent catalog and qualification schema are DB-first with `tenants.json` fallback |
 | Campaigns | Operational | `/app/campaigns` | `Campaign`, `campaignRunner.ts` | templates, contacts/leads, feature flag |
 | Templates | Operational | `/app/templates`, admin routes | `Template`, `TemplateRequest`, `meta/template.service.ts` | WABA token, feature flag |
@@ -131,6 +131,28 @@ consecutive questions. Runtime conditional branching by captured answer is not
 available in the current flow engine; keep it as a product gap until predicates
 are implemented and tested. New Guided human handoff generation must never rely
 on `queueId=null` as a default queue.
+
+Guided Builder 2.4 delivery state, 2026-09-13: deployed frontend-only in
+`ca34e123c72de2e96f0dcff27b4e17f29e5b630b`, owner-approved locally and
+production non-destructive validated. The delivery passed 54/54 focused tests,
+frontend build and `git diff --check`; production health/routes passed; backend
+and worker were not reloaded; no schema/migration/runtime contract changed; and
+Demo/CRA/SECULT/Syer flow definition hashes stayed unchanged during smoke.
+
+Current backlog classification:
+
+- P0: none.
+- P1: Syer Dashboard transient error / refresh-loop audit; WAITING_FOR_CUSTOMER
+  60m explicit automation lifecycle; CRA department/flow-aware hours
+  configuration and validation.
+- P2: question conditional branching by captured answer; reporting context
+  enhancements; Meta Cloud unlink/removal semantics; support access hardening.
+- WATCH: Inbox performance, CPU, `last_message_lookup`, SECULT fairness and
+  round-robin cursor, representative scale/load validation.
+
+Already implemented and not active model gaps: internal multitenant support
+access has temporary audited grants and support sessions; user-to-department M2M
+exists through `UserDepartmentMembership`, UI and assignment/RBAC usage.
 
 ## Main Runtime Dependencies
 

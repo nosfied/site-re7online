@@ -118,6 +118,11 @@ para elegibilidade funcional. A concentracao historica em Allana melhorou em
 termos de diversidade do pool, mas fairness e cursor de round-robin permanecem
 em WATCH; nao ha evidencia material de bug residual no algoritmo.
 
+Classificacao de backlog atual: SECULT AVAILABLE nao e frente ativa. Fairness,
+cursor round-robin, CPU/Inbox e supressao organica de eventos Web Session sem
+conteudo permanecem em WATCH e so devem voltar para execucao se houver nova
+evidencia representativa.
+
 ## Backend CPU watch - 2026-09-10
 
 Janela curta apos deploy de hardening hibrido:

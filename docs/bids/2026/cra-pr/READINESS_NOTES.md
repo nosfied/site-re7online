@@ -170,7 +170,7 @@ CRA-PR READY FOR TRAINING 2026-09-09:
 YES
 
 CRA-PR DEPARTMENT HOURS:
-PENDING CUSTOMER CONFIGURATION
+P1 / PENDING CUSTOMER CONFIGURATION + FLOW-AWARE VALIDATION
 ```
 
 Administradores CRA podem configurar horarios dos departamentos em:
@@ -224,6 +224,9 @@ O custo Meta deve ser tratado como risco operacional/comercial controlado, nao c
   usuarios, especialmente 3 admins TI, e guiar configuracao de horarios. A
   ausencia de horario configurado permanece como pendencia operacional do
   cliente, nao falha tecnica.
+- Horarios CRA permanecem P1 porque a capability tecnica existe, mas a
+  configuracao do cliente e a validacao do comportamento fora de expediente no
+  fluxo ainda precisam ser concluidas.
 - Pendencias contratuais/produto separadas: ciclo receptivo logico para
   mensuracao, template Utility fora de 24h entregue, ledger Meta apos
   2026-10-01, relatorio mensal contratual e alinhamento formal para

@@ -721,6 +721,10 @@ producao. A frente de performance da Inbox esta congelada em WATCH. O
 nova medicao deve ocorrer somente em janela SECULT representativa ou diante de
 novo incidente.
 
+Audit refresh 2026-09-13: classificacao mantida como INBOX PERFORMANCE =
+IMPROVED / WATCH; CPU = WATCH; ACTIVE PERFORMANCE DEVELOPMENT = NO. Nao
+repriorizar performance acima de gaps P1/P2 sem novo incidente representativo.
+
 A medicao comparavel de 2026-09-10, entre 19:49:48Z e 19:54:52Z, capturou
 42 requests HTTP para `/app/conversations` em 5,07 minutos. O delta de metricas
 mostrou `last_message_lookup` com media de janela em torno de 5.895ms e

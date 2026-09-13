@@ -192,9 +192,14 @@ node --import tsx src/http/simae25UsersAcceptance.test.ts
 PostgreSQL backup:
 
 - Releases com migration ou mudanca estrutural devem confirmar que existe backup PostgreSQL recente, valido e com checksum.
+- Em producao, backups pre-mutacao devem usar o diretorio persistente canonico
+  `/opt/re7online/backups/converta-persistent/postgres`. Nao usar `/tmp` como
+  unica copia operacional de pre-deploy/pre-reparo.
 - A rotina padrao e:
 
 ```bash
+POSTGRES_BACKUP_DIR=/opt/re7online/backups/converta-persistent/postgres \
+POSTGRES_BACKUP_MANIFEST=/opt/re7online/backups/converta-persistent/postgres/manifest.jsonl \
 npm run backup:postgres
 ```
 
@@ -214,21 +219,23 @@ npm run backup:postgres
   - dump menor que `POSTGRES_BACKUP_MIN_BYTES`;
   - dump invalido em `pg_restore --list`;
   - dump com menos objetos que `POSTGRES_BACKUP_MIN_OBJECTS`.
-- O cron recomendado, apos pre-release, deve usar o wrapper com alerta para preservar o exit code do backup e notificar falhas:
+- O cron recomendado, apos pre-release, deve usar o wrapper com alerta para preservar o exit code do backup e notificar falhas. Em producao, apontar explicitamente para o diretorio persistente canonico:
 
 ```bash
-20 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && npm run backup:postgres:alerted >> /opt/re7online/site-re7online/apps/whatsapp-agent/backups/postgres/postgres-backup-cron.log 2>&1
-0 4 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && npm run backup:postgres:check >> /opt/re7online/site-re7online/apps/whatsapp-agent/backups/postgres/postgres-backup-alert.log 2>&1
+20 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && POSTGRES_BACKUP_DIR=/opt/re7online/backups/converta-persistent/postgres POSTGRES_BACKUP_MANIFEST=/opt/re7online/backups/converta-persistent/postgres/manifest.jsonl npm run backup:postgres:alerted >> /opt/re7online/backups/converta-persistent/postgres/postgres-backup-cron.log 2>&1
+0 4 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && POSTGRES_BACKUP_MANIFEST=/opt/re7online/backups/converta-persistent/postgres/manifest.jsonl npm run backup:postgres:check >> /opt/re7online/backups/converta-persistent/postgres/postgres-backup-alert.log 2>&1
 ```
 
 - O smoke operacional deve validar:
 
 ```bash
+POSTGRES_BACKUP_DIR=/opt/re7online/backups/converta-persistent/postgres \
+POSTGRES_BACKUP_MANIFEST=/opt/re7online/backups/converta-persistent/postgres/manifest.jsonl \
 npm run backup:postgres
-tail -n 1 backups/postgres/manifest.jsonl
-(cd backups/postgres && sha256sum -c *.dump.sha256)
-pg_restore --list backups/postgres/<arquivo>.dump
-npm run backup:evidence -- status --manifest backups/postgres/manifest.jsonl --require-offsite
+tail -n 1 /opt/re7online/backups/converta-persistent/postgres/manifest.jsonl
+(cd /opt/re7online/backups/converta-persistent/postgres && sha256sum -c *.dump.sha256)
+pg_restore --list /opt/re7online/backups/converta-persistent/postgres/<arquivo>.dump
+npm run backup:evidence -- status --manifest /opt/re7online/backups/converta-persistent/postgres/manifest.jsonl --require-offsite
 npm run backup:postgres:check
 ```
 

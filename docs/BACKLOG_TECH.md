@@ -35,6 +35,134 @@ sem novo incidente comprovado. Performance residual de Inbox deve ser medida em
 janelas representativas futuras, mas nao e a prioridade corrente de
 desenvolvimento.
 
+### Auditoria canonica de backlog — 2026-09-13
+
+Fonte de verdade auditada: branch canonico `flow-executor-quote-hardening`,
+origin/production HEAD `ca34e123c72de2e96f0dcff27b4e17f29e5b630b`, producao
+online, health `ok/db ok`, PM2 online e Prisma migrations up to date.
+
+Fechado / validado:
+
+- Guided Builder 2.4: CLOSED / DEPLOYED / OWNER APPROVED LOCAL / PRODUCTION
+  NON-DESTRUCTIVE VALIDATED. Entrega frontend-only em `ca34e123`, 54/54 testes
+  PASS, build PASS, sem schema/migration, sem reload de backend/worker, hashes
+  de `ChatbotFlow.definition` inalterados no smoke de producao e rotas
+  `/app/chatbot` e `/admin/tenants/:tenantId/chatbot` saudaveis.
+- Syer `****9614`: CLOSED. A correcao generica de handoff foi publicada em
+  `597d7030`; o atendimento pre-fix foi reparado uma unica vez apos backup,
+  preservando mensagens, protocolo, ciclo, fechamento e responsavel.
+- Human handoff / queue contract: CLOSED / REAL VALIDATED. `WAITING` humano
+  exige `departmentId` + `queueId` concreto. `queueId=null` nao representa fila
+  padrao. O Guided Builder expõe `Setor`; fila unica e resolvida internamente,
+  zero fila bloqueia e 2+ filas mostram seletor condicional.
+- Canonical mail transport: CLOSED / DEPLOYED / REAL VALIDATED em `fec3a489`.
+  Password reset, first access/invitation, Web Session disconnect alerts,
+  template review e PostgreSQL backup alerts usam a camada canonica de mail.
+  Fallback Resend API e SMTP `2465` centralizado permanecem preservados.
+- Hybrid transport / identity / recovery: CLOSED / REAL VALIDATED para routing
+  Web Session passivo, fresh-flow E2E, Meta duplicate dedupe, Lead/P2002,
+  claim-before-downstream recovery e exactly-once coexistence.
+- SECULT `presenceMode=AVAILABLE`: REAL VALIDATED por trafego organico. Nao e
+  frente ativa; fairness e cursor round-robin permanecem somente WATCH.
+- SECULT report truth/current-state, Maria 2/2 capacity diagnosis, Maria apos
+  AVAILABLE, stale-heartbeat exclusion, AGENT closed access, CLOSED claim
+  invariant, close observability, close terminal lifecycle e presence panel
+  wording: CLOSED / VALIDATED ou CLOSED / DEPLOYED conforme historico abaixo.
+- Inbox performance: IMPROVED / WATCH. `48c206fa` e `1aae26b5` estao REAL
+  VALIDATED; `94882d76` foi REVERTED por regressao real; `4bc8befd` esta
+  DEPLOYED. `last_message_lookup` permanece KNOWN RESIDUAL HOTSPOT / NO ACTIVE
+  PATCH.
+- Internal multitenant support access: IMPLEMENTED / P2 WATCH-HARDENING. O
+  produto ja possui grant temporario, sessao de suporte, auditoria e banner de
+  modo suporte; melhorias futuras devem focar evidencia operacional e least
+  privilege, nao recriar o mecanismo.
+- Users x Departments M2M: IMPLEMENTED. Existe
+  `UserDepartmentMembership`, UI de usuarios com multiplos setores e uso no
+  RBAC/assignment. Gap restante e refinamento de relatorios/filtros, nao modelo
+  relacional basico.
+
+ACTIVE P0:
+
+- NONE.
+
+ACTIVE P1:
+
+1. Syer Dashboard transient error / refresh loop: BUG NOT PROVEN / AUDIT
+   REQUIRED. Owner observou `/app/dashboard` lento, toast vermelho breve e
+   recuperacao posterior em tenant com pouco dado. Nao classificar como CPU
+   regression sem evidencia. Auditar chamadas da tela, endpoint falho, retry,
+   polling/realtime cadence, duplicidade de fetch, relacao com
+   `/app/conversations` e CPU.
+2. WAITING_FOR_CUSTOMER 60m: PRODUCT GAP / OPEN. O contrato desejado e encerrar
+   automaticamente apenas o estado explicito em que automacao/sistema aguarda o
+   cidadao por 60 minutos. Conversas HUMAN podem permanecer abertas/atribuidas
+   indefinidamente; nao implementar como inatividade generica.
+3. CRA-PR department/flow-aware hours: P1 / CONFIGURATION + VALIDATION OPEN.
+   Capability de horarios de departamento existe (`businessHours`,
+   `NO_SCHEDULE`, UI em `/app/settings/departments`), mas a configuracao CRA
+   segue pendente do cliente e precisa validacao de comportamento fora de
+   expediente no fluxo. Sem horario salvo significa `NO_SCHEDULE`/aberto.
+
+ACTIVE P2:
+
+1. Question conditional branching: PRODUCT GAP / OPEN. Runtime atual suporta
+   captura sequencial (`capture.next`) e o Guided limita ate 3 perguntas
+   consecutivas; nao ha predicados por valor capturado, sim/nao ou fallback por
+   resposta livre. Nao e bug do Guided Builder.
+2. Reporting context enhancements: ENHANCEMENT / OPEN. Adicionar contexto AUTO
+   vs MANUAL, policy, `presenceMode`, carga/capacidade atual e filtros
+   ativo/inativo onde fizer sentido, sem reabrir bugs de verdade de relatorio ja
+   fechados.
+3. Meta Cloud unlink/removal cleanup semantics: PRODUCT/OPS GAP / OPEN.
+   Consolidar semantica de disconnect/unlink, limpeza de token, associacoes
+   phone/WABA, estado de coexistencia, remocao de canal por tenant e fallback
+   seguro.
+4. Internal support access hardening: P2 / WATCH-HARDENING. Mecanismo existe;
+   manter evolucao em auditoria, expiracao, evidencias e menor privilegio.
+
+P3:
+
+- polish de nome social/display name;
+- acao rapida de retificacao;
+- melhorias menores de UX/filtros que nao bloqueiam contrato.
+
+WATCH only:
+
+- Inbox performance residual e CPU;
+- `last_message_lookup` residual;
+- SECULT fairness e round-robin cursor;
+- SECULT Web Session non-content suppression organic validation;
+- scale/load validation em janelas representativas;
+- billing/ledger Meta como conciliacao futura.
+
+Proximas cinco frentes:
+
+1. P1 Syer Dashboard audit. Why now: observacao real do owner em tenant leve.
+   Valor: elimina risco de erro visivel no painel. Dependencia: logs/API/browser
+   trace. Demo validavel: sim. Code esperado: talvez, somente apos prova.
+   Config esperado: nao. Risco: baixo se auditoria read-only primeiro. Done:
+   endpoint/cadencia/erro identificados e classificado como bug ou descartado.
+2. P1 WAITING_FOR_CUSTOMER 60m. Why now: contrato de lifecycle claro e
+   customer-facing. Valor: fecha atendimentos automatizados abandonados sem
+   afetar HUMAN. Dependencia: definir estado explicito e eventos. Demo
+   validavel: sim. Code esperado: sim. Config esperado: possivel por tenant.
+   Risco: medio por lifecycle. Done: 60m testado apenas nesse estado.
+3. P1 CRA hours flow-aware validation. Why now: cliente real com configuracao
+   pendente. Valor: evita handoff humano fora do expediente sem bloquear
+   autoatendimento. Dependencia: cliente configurar horarios. Demo validavel:
+   sim. Code esperado: talvez. Config esperado: sim. Risco: baixo/medio. Done:
+   horario CRA salvo e fluxo validado dentro/fora do expediente.
+4. P2 Question conditional branching. Why now: lacuna descoberta durante 2.4 e
+   valor direto para fluxos institucionais. Valor: respostas sim/nao e caminhos
+   por resposta. Dependencia: desenho de runtime/predicados. Demo validavel:
+   sim. Code esperado: sim. Config esperado: nao. Risco: medio/alto. Done:
+   predicates testados sem quebrar fluxos existentes.
+5. P2 Reporting context enhancements. Why now: transforma validacoes de fila em
+   evidencia operacional sem mexer no core de atribuicao. Valor: auditoria para
+   supervisao/contratos. Dependencia: definir campos e filtros. Demo validavel:
+   sim. Code esperado: sim. Config esperado: nao. Risco: medio. Done:
+   relatorios mostram contexto sem distorcer historico.
+
 ---
 
 ## RISCOS E PENDÊNCIAS ATUAIS — 2026-05-03
@@ -146,20 +274,9 @@ Estado fechado/validado:
   flow must not replace the tenant entrypoint unless the operator explicitly
   marks it as the main entry flow.
 
-Fila ativa repriorizada:
-
-1. Waiting-for-customer 60m (P1): desenhar e implementar apenas para estado
-   explicito em que a automacao aguarda resposta do cidadao; nunca usar
-   inatividade generica de conversa HUMAN.
-2. CRA-PR department hours (P1): guiar configuracao do cliente e validar flow
-   aware of department hours. No schedule continua significando
-   `NO_SCHEDULE`/aberto e nao e falha tecnica.
-3. Reporting context enhancements (P2): adicionar contexto de AUTO vs MANUAL,
-   politica de atribuicao, `presenceMode` e carga/capacidade atual onde agregar
-   verdade operacional sem reabrir bugs ja fechados.
-4. Meta Cloud unlink/removal cleanup semantics (P2): consolidar remocao segura
-   de configuracao Meta sem apagar historico operacional ou criar fallback
-   silencioso.
+Fila ativa historica substituida pela "Auditoria canonica de backlog —
+2026-09-13" acima. Nao usar listas antigas como fila corrente quando houver
+conflito.
 
 WATCH only:
 
@@ -684,8 +801,7 @@ Contrato preservado: Inbox, SLA, relatórios, posicao de fila, claim,
 transferencia, notificacoes e atribuicao automatica continuam operando sobre
 destino humano completo (`departmentId` + `queueId`).
 
-Fechamento operacional em 2026-09-12: apos backup fresco em
-`/tmp/syer-9614-pre-repair-20260912-130840.dump`, o atendimento ja existente
+Fechamento operacional em 2026-09-12: apos backup fresco de pre-reparo, o atendimento ja existente
 `****9614` foi reparado com uma unica mutacao de campo em
 `ConversationRuntimeState.queueId`, de `null` para a fila existente
 `cmtoekafy00014s4lg41vs5i0` (`Fila Geral`). Nenhuma mensagem, historico,
@@ -730,14 +846,16 @@ Micro-ajuste final de UX 2.4: o owner apontou redundancia no bloco visual
 atendimento humano". O bloco/cartao instrucional foi removido; o editor agora
 mostra diretamente `Setor`/selector, mantendo fila unica interna, bloqueio de
 setor sem fila, seletor excepcional para 2+ filas, preview e JSON gerado sem
-alteracao. Status: GUIDED BUILDER 2.4 = LOCAL / FINAL OWNER VALIDATION.
+alteracao. Status historico local antes da entrega: GUIDED BUILDER 2.4 =
+OWNER APPROVED LOCAL.
 
-Entrega aprovada do Guided Builder 2.4: aplicar somente o delta validado no
-worktree recuperado sobre o HEAD canonico, sem migracao, sem hardcode de tenant,
-sem reload de backend/worker e preservando `ChatbotFlow.definition`. Status de
-backlog para esta entrega: GUIDED BUILDER 2.4 = DEPLOYED / OWNER APPROVED LOCAL
-/ PRODUCTION VALIDATION; HANDOFF QUEUE CONTRACT = CLOSED / REAL VALIDATED;
-QUESTION CONDITIONAL BRANCHING = PRODUCT GAP / OPEN; SYER ****9614 = CLOSED.
+Entrega aprovada do Guided Builder 2.4: delta validado aplicado sobre o HEAD
+canonico e publicado em `ca34e123c72de2e96f0dcff27b4e17f29e5b630b`, sem
+migracao, sem hardcode de tenant, sem reload de backend/worker e preservando
+`ChatbotFlow.definition`. Status: GUIDED BUILDER 2.4 = CLOSED / DEPLOYED /
+OWNER APPROVED LOCAL / PRODUCTION NON-DESTRUCTIVE VALIDATED; HANDOFF QUEUE
+CONTRACT = CLOSED / REAL VALIDATED; QUESTION CONDITIONAL BRANCHING = PRODUCT
+GAP / OPEN; SYER ****9614 = CLOSED.
 
 ---
 

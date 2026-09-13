@@ -124,6 +124,12 @@ For `HYBRID` tenants:
 
 Status: CLOSED / REAL VALIDATED.
 
+Current audit note, 2026-09-13: this contract remains closed at production HEAD
+`ca34e123c72de2e96f0dcff27b4e17f29e5b630b`. No active backlog item should
+reopen passive HYBRID routing, fresh-flow E2E, Meta duplicate dedupe,
+Lead/P2002 reconciliation, claim-before-downstream recovery or exactly-once
+coexistence without new production evidence.
+
 Validation baseline:
 
 - production HEAD: `08598293c1cc15360b5cfe02a21a779c8a040dec`;

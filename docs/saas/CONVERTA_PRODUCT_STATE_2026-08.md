@@ -602,11 +602,25 @@ Commits relevantes do baseline homologado:
 - Micro-ajuste final de owner validation: apos escolher "Encaminhar para
   atendimento humano", o Guided Builder nao mostra mais o bloco redundante
   "Escolha o setor que recebera o atendimento."; o campo `Setor` aparece
-  diretamente. Status: OWNER APPROVED LOCAL, liberado para entrega
-  frontend-only sobre o HEAD canonico, com validacao de producao apos deploy.
-  Backlog da entrega: GUIDED BUILDER 2.4 = DEPLOYED / OWNER APPROVED LOCAL /
-  PRODUCTION VALIDATION; HANDOFF QUEUE CONTRACT = CLOSED / REAL VALIDATED;
-  QUESTION CONDITIONAL BRANCHING = PRODUCT GAP / OPEN; SYER ****9614 = CLOSED.
+  diretamente. Status final apos entrega: CLOSED / DEPLOYED / OWNER APPROVED
+  LOCAL / PRODUCTION NON-DESTRUCTIVE VALIDATED em
+  `ca34e123c72de2e96f0dcff27b4e17f29e5b630b`. A entrega foi frontend-only,
+  com 54/54 testes PASS, build PASS, sem schema/migration, sem reload de
+  backend/worker, rotas saudaveis e hashes de `ChatbotFlow.definition`
+  preservados no smoke de producao. Backlog da entrega: HANDOFF QUEUE CONTRACT
+  = CLOSED / REAL VALIDATED; QUESTION CONDITIONAL BRANCHING = PRODUCT GAP /
+  OPEN; SYER ****9614 = CLOSED.
+- Current execution backlog, 2026-09-13: P0 = none. P1 ativo = auditoria do
+  erro/transient refresh loop no Dashboard da Syer, WAITING_FOR_CUSTOMER 60m
+  como estado explicito de automacao, e configuracao/validacao CRA de horarios
+  de departamento/fluxo. P2 ativo = branching condicional por resposta
+  capturada, melhorias de contexto em relatorios, semantica de unlink/remocao
+  Meta Cloud e hardening de suporte interno auditado. Performance de Inbox/CPU
+  permanece WATCH, nao frente ativa.
+- Suporte interno multitenant ja existe com grant temporario, sessao de suporte,
+  auditoria e banner de modo suporte; evolucoes futuras devem focar menor
+  privilegio/evidencia operacional. Usuarios x departamentos M2M tambem ja
+  existe via `UserDepartmentMembership`, UI de usuarios e uso no RBAC/assignment.
 - Bloqueio automatico por limite de consumo existe como helper, mas nao esta conectado aos fluxos reais.
 - Relatorio administrativo amplo de anonimizados permanece P2.
 - Alguns identificadores tecnicos ainda existem por exigencia de modelo atual, com minimizacao operacional.
@@ -615,8 +629,12 @@ Commits relevantes do baseline homologado:
 
 ## Proximos passos recomendados
 
-- Criar pacote de screenshots sanitizados para licitacoes.
-- Criar runbook de ativacao de politica de consumo por tenant.
-- Evoluir relatorio administrativo restrito para auditoria LGPD.
+- Auditar Dashboard Syer com trace de API/browser antes de classificar como bug.
+- Desenhar e implementar WAITING_FOR_CUSTOMER 60m sem afetar conversas HUMAN.
+- Guiar configuracao CRA de horarios de departamento e validar fluxo fora de
+  expediente.
+- Especificar branching condicional por resposta capturada como novo recurso de
+  runtime, nao como correcao do Guided Builder.
+- Criar pacote de screenshots sanitizados para licitacoes quando houver roteiro.
 - Planejar conciliacao financeira Meta quando houver fonte oficial automatizada.
 - Consolidar matriz de evidencias por edital antes de cada proposta.
