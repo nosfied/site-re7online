@@ -160,11 +160,11 @@ Current backlog classification:
 - P1: WAITING_FOR_CUSTOMER 60m explicit automation lifecycle; CRA
   department/flow-aware hours configuration and validation; Demo Meta Cloud
   restriction external remediation (`phone.status=BANNED`, WABA `REJECTED`)
-  with Demo Web Session `QR_REQUIRED` preserved without mutation.
+  with Demo Web Session `QR_REQUIRED` preserved without mutation; user
+  deactivation with active conversations as a product lifecycle requirement.
 - P2: question conditional branching by captured answer; reporting context
   enhancements; Guided Builder complete final-review summary; Meta Cloud
-  unlink/removal semantics; support access hardening; deactivate user with
-  active human conversations remains PRODUCT LIFECYCLE GAP / OPEN.
+  unlink/removal semantics; support access hardening.
 - WATCH: Syer Dashboard transient error UX/observability, Inbox performance,
   CPU, `last_message_lookup`, SECULT fairness and round-robin cursor, SECULT
   non-content suppression organic validation and representative scale/load
@@ -185,13 +185,15 @@ Users Management 2.0 delivery state, 2026-09-14: deployed in
 non-destructive validated. `/app/users` is the canonical tenant-side users
 management surface; inactive users remain visible in `Todos`/`Inativos`, active
 seat count uses the backend enforcement source, and `/app/users` plus
-`/app/settings/users` returned production HTML after deployment. Deactivate user
-with active human conversations remains a separate product lifecycle gap.
+`/app/settings/users` returned production HTML after deployment. The delivered
+UX includes expandable rows, circular expand/collapse, fixed right action
+column, tonal header/body hierarchy, filled Save action and persisted-state-only
+filters/counters.
 
 Departments Management UX 2.0 state, 2026-09-14: DEPLOYED / OWNER APPROVED /
 PRODUCTION NON-DESTRUCTIVE VALIDATED.
-`/app/settings/departments` is being aligned to the same expandable-row
-presentation used by Users Management 2.0 and Guided Builder. The UX contract is
+`/app/settings/departments` uses the same expandable-row presentation used by
+Users Management 2.0 and Guided Builder. The UX contract is
 compact persisted summaries, shared circular expand/collapse control, one row
 open at a time, expanded edit body with separate tone, and unsaved draft reset
 on collapse/row switch/filter changes. The shared Users/Departments row header
@@ -201,6 +203,24 @@ rules, RBAC, schema or migration changed. Delivery commit
 `5c051f83df6bc99aa998985ba93301e601e502df`; smoke confirmed health,
 `/app/users`, `/app/settings/departments`, production right-anchor structure and
 representative tenant status without mutating department data.
+
+Shared expandable admin pattern, 2026-09-14: Guided Builder, Users and
+Departments use the approved administrative row pattern where applicable:
+compact closed row, expandable detail body, circular expand/collapse control,
+fixed right-side action column, wrapping left content, header visually distinct
+from body, one row open at a time where appropriate, collapse/row switch/filter
+changes discard unsaved local draft, and only persisted state drives global
+filters/counters. This pattern is not automatically mandated for unrelated
+screens without product justification.
+
+User deactivation lifecycle rule, 2026-09-14: a user must not be deactivated
+while active operational conversations are still assigned to that user and not
+terminal/closed. Those conversations must first be reassigned/transferred to an
+eligible attendant or closed through the existing lifecycle. Deactivation itself
+must not silently close, transfer, unassign, change queue or mutate conversation
+lifecycle state; attempted deactivation should be blocked with an actionable
+message. Future implementation must audit exact statuses and ownership fields
+before coding. Backlog status: P1 / PRODUCT LIFECYCLE REQUIREMENT / OPEN.
 
 Inbox visibility policy audit, 2026-09-13: `shared` and
 `assignee_only_after_assignment` are visibility/projection modes for Inbox list,

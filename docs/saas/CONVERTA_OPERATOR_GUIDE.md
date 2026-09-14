@@ -116,6 +116,19 @@ Smoke mínimo após mudança de fila ou visibilidade:
 - SUPERVISOR e ADMIN preservam a visão esperada;
 - saúde do canal está operacional antes do teste real.
 
+## Gestão de usuários
+
+Em `/app/users`, ADMIN gerencia usuarios ativos e inativos com filtros
+`Todos/Ativos/Inativos`; usuarios inativos continuam visiveis
+administrativamente e podem ser reativados no mesmo registro quando RBAC permite.
+
+Regra canonica de lifecycle para implementacao futura: nao desativar usuario com
+atendimentos operacionalmente ativos atribuidos e ainda nao encerrados. Antes da
+inativacao, esses atendimentos devem ser transferidos/reatribuidos a outro
+atendente elegivel ou fechados pelo ciclo normal. A inativacao nao deve fechar,
+transferir, remover atribuicao, trocar fila ou alterar lifecycle de conversa
+silenciosamente; deve bloquear a tentativa com orientacao acionavel.
+
 ## Criador guiado de fluxos
 
 No Guided Builder 2.4 local, o encaminhamento humano deve ser explicado como

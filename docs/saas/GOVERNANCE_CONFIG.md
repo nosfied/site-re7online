@@ -48,6 +48,7 @@ flow count 1, and no artificial `cra-pr` JSON entry created.
 | Templates | DB-first for manual handoff pointer with JSON fallback | `TenantOperationalConfig.config.templates.manualHandoff` for pointer; DB for catalog | `Template`, `TemplateRequest`, `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | Departments/queues | DB | DB | `Department`, `Queue` | Keep DB-first |
 | Users/RBAC/sessions | DB | DB | `User`, `AppAuthSession`, `PasswordResetToken` | Keep DB-first |
+| User deactivation lifecycle | DB operational state | DB | `User`, assignment/conversation lifecycle models after future audit | Block deactivation while active assigned conversations exist; never silently close, transfer, unassign, change queue or mutate conversation lifecycle |
 | Push subscriptions | DB | DB | `PushSubscription` | Keep DB-first |
 | Retention/LGPD | DB | DB | `RetentionConfig` | Keep DB-first |
 | SLA/metrics | DB | DB | `SLAConfig`, `ConversationMetrics` | Keep DB-first |
@@ -90,6 +91,9 @@ flow count 1, and no artificial `cra-pr` JSON entry created.
 - WhatsApp phone resolution via `WaPhoneNumber`
 - WhatsApp onboarding credentials via `TenantMetaConfig`
 - Users/auth/sessions/reset
+- User deactivation lifecycle must be checked against DB operational
+  conversations/assignments before mutating `User.isActive`; exact statuses and
+  ownership fields require implementation audit.
 - Push subscriptions
 - Departments/queues
 - Campaigns

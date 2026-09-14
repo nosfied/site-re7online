@@ -572,15 +572,15 @@ permite. O contador "usuarios ativos" usa a mesma semantica de enforcement:
 `TenantOperationalConfig.config.runtimeLimits.maxActiveAppUsers`, fallback
 `tenants.json.maxActiveAppUsers`, fallback final 5. Ajustes finais de owner:
 regiao de filtros visualmente separada, botao explicito expandir/recolher,
-hierarquia tonal entre header e corpo expandido, botao Salvar preenchido, e
-contrato de draft nao salvo: recolher, trocar linha ou alterar filtro descarta
-alteracoes locais. Projecoes de lista, filtros e assentos derivam somente do
-estado persistido; `userDrafts` nao pode contaminar `Todos/Ativos/Inativos` nem
-contador antes de Save. Status: owner-approved, deployed em
+coluna direita fixa para a acao expansiva, hierarquia tonal entre header e corpo
+expandido, botao Salvar preenchido, e contrato de draft nao salvo: recolher,
+trocar linha ou alterar filtro descarta alteracoes locais. Projecoes de lista,
+filtros e assentos derivam somente do estado persistido; `userDrafts` nao pode
+contaminar `Todos/Ativos/Inativos` nem contador antes de Save. Status:
+owner-approved, deployed em
 `5ad40c10eda77076bc2a069e432663ac2271f0a8` e production non-destructive
 validated; health, `/app/users`, `/app/settings/users`, backend start e dados
-read-only de usuarios por tenant passaram no smoke. O gap "deactivate user with
-active human conversations" permanece aberto como ciclo de produto separado.
+read-only de usuarios por tenant passaram no smoke.
 
 Departments Management UX 2.0 deployed, 2026-09-14: `/app/settings/departments`
 mantem o contrato operacional atual de setores, horarios e excecoes, mas passa
@@ -599,6 +599,25 @@ deployed em `5c051f83df6bc99aa998985ba93301e601e502df` e production
 non-destructive validated; health, `/app/users`, `/app/settings/departments`,
 estrutura right-anchor no codigo em producao e tenants representativos ACTIVE
 passaram no smoke sem mutacao.
+
+Padrao compartilhado de linhas administrativas expansivas, 2026-09-14: Guided
+Builder, Users e Departments usam o padrao aprovado quando a tela pede edicao em
+linha: linha fechada compacta, corpo de detalhe expansivo, controle circular de
+expandir/recolher, coluna direita fixa para a acao, conteudo esquerdo podendo
+quebrar linha sem deslocar o controle, header visualmente distinto do corpo, uma
+linha aberta por vez quando aplicavel, recolher/trocar/filtro descartando draft
+local nao salvo, e filtros/contadores globais derivados apenas do estado
+persistido. O padrao nao deve ser imposto a telas sem justificativa de produto.
+
+Regra canonica de desativacao de usuario, 2026-09-14: um usuario nao pode ser
+desativado enquanto houver conversas operacionalmente ativas atribuidas a ele e
+ainda nao terminais/fechadas. Antes de aceitar a desativacao, os atendimentos
+ativos atribuidos devem ser transferidos/reatribuidos a outro atendente elegivel
+ou encerrados corretamente pelo ciclo existente. A propria desativacao nao pode
+fechar, transferir, remover atribuicao, trocar fila ou alterar estado de conversa
+silenciosamente; deve bloquear a tentativa com mensagem acionavel. A futura
+implementacao deve auditar os statuses e campos de ownership reais antes de
+codar. Backlog: P1 / PRODUCT LIFECYCLE REQUIREMENT / OPEN.
 
 ## Marcos recentes confirmados
 

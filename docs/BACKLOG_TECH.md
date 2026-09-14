@@ -109,22 +109,16 @@ ACTIVE P0:
 
 ACTIVE P1:
 
-1. Syer Dashboard transient error / refresh loop: BUG NOT PROVEN / AUDIT
-   REQUIRED. Owner observou `/app/dashboard` lento, toast vermelho breve e
-   recuperacao posterior em tenant com pouco dado. Nao classificar como CPU
-   regression sem evidencia. Auditar chamadas da tela, endpoint falho, retry,
-   polling/realtime cadence, duplicidade de fetch, relacao com
-   `/app/conversations` e CPU.
-2. WAITING_FOR_CUSTOMER 60m: PRODUCT GAP / OPEN. O contrato desejado e encerrar
+1. WAITING_FOR_CUSTOMER 60m: PRODUCT GAP / OPEN. O contrato desejado e encerrar
    automaticamente apenas o estado explicito em que automacao/sistema aguarda o
    cidadao por 60 minutos. Conversas HUMAN podem permanecer abertas/atribuidas
    indefinidamente; nao implementar como inatividade generica.
-3. CRA-PR department/flow-aware hours: P1 / CONFIGURATION + VALIDATION OPEN.
+2. CRA-PR department/flow-aware hours: P1 / CONFIGURATION + VALIDATION OPEN.
    Capability de horarios de departamento existe (`businessHours`,
    `NO_SCHEDULE`, UI em `/app/settings/departments`), mas a configuracao CRA
    segue pendente do cliente e precisa validacao de comportamento fora de
    expediente no fluxo. Sem horario salvo significa `NO_SCHEDULE`/aberto.
-4. Demo Meta Cloud restriction: P1 / EXTERNAL META REMEDIATION + CHANNEL
+3. Demo Meta Cloud restriction: P1 / EXTERNAL META REMEDIATION + CHANNEL
    CONTINUITY OPEN. Auditoria somente leitura de 2026-09-14 confirmou o phone
    number Meta do `demo-converta` com `status=BANNED` e WABA com
    `account_review_status=REJECTED`; o business aparece `not_verified` e 3
@@ -133,7 +127,24 @@ ACTIVE P1:
    recente da aplicacao nao e causa comprovada. A Web Session do Demo esta
    `QR_REQUIRED` desde 2026-09-13 22:40:23Z e nao deve ser reconectada,
    desconectada ou limpa sem autorizacao explicita do owner.
-5. Users Management 2.0: CLOSED / DEPLOYED / OWNER APPROVED / PRODUCTION
+4. User deactivation with active conversations: PRODUCT LIFECYCLE REQUIREMENT /
+   OPEN. Um usuario nao pode ser desativado enquanto houver conversas
+   operacionalmente ativas, atribuidas a ele e ainda nao terminais/fechadas. Antes
+   da desativacao, todos os atendimentos ativos atribuidos devem ser transferidos
+   para outro atendente elegivel ou encerrados corretamente pelo ciclo existente.
+   A desativacao nao pode fechar, transferir, remover atribuicao, trocar fila ou
+   alterar estado de conversa silenciosamente. A tentativa deve ser bloqueada com
+   mensagem acionavel, por exemplo: "Este usuário possui atendimentos ativos
+   atribuídos. Transfira ou encerre os atendimentos antes de inativá-lo." A
+   implementacao futura precisa auditar statuses e campos de ownership reais
+   antes de codar; criterios: backend rejeita com atribuicoes ativas, frontend
+   mostra bloqueio verdadeiro e contagem, desativacao passa apos transferir/fechar,
+   comportamento tenant-agnostic, RBAC preservado, testes ativo vs zero ativo e
+   documentacao atualizada.
+
+RECENTLY CLOSED:
+
+- Users Management 2.0: CLOSED / DEPLOYED / OWNER APPROVED / PRODUCTION
    NON-DESTRUCTIVE VALIDATED. Inactive user disappearing
    root cause: `GET /app/users` filtrava `User.isActive=true` no backend,
    enquanto a UI ja possuia filtro de status e serializer preservava
@@ -151,7 +162,7 @@ ACTIVE P1:
    `5ad40c10eda77076bc2a069e432663ac2271f0a8`; smoke pos-deploy confirmou
    health, rotas `/app/users` e `/app/settings/users`, backend online e dados
    reais com usuarios inativos por tenant sem mutacao.
-6. Departments Management UX 2.0: CLOSED / DEPLOYED / OWNER APPROVED /
+- Departments Management UX 2.0: CLOSED / DEPLOYED / OWNER APPROVED /
    PRODUCTION NON-DESTRUCTIVE VALIDATED.
    Aplicacao local em `/app/settings/departments` reaproveita o padrao visual
    aprovado em Users Management 2.0 e Guided Builder: linhas recolhiveis, botao
@@ -191,10 +202,6 @@ ACTIVE P2:
    seguro.
 5. Internal support access hardening: P2 / WATCH-HARDENING. Mecanismo existe;
    manter evolucao em auditoria, expiracao, evidencias e menor privilegio.
-6. Deactivate user with active human conversations: PRODUCT LIFECYCLE GAP /
-   OPEN. Definir contrato de produto para atendimentos HUMAN ja atribuidos ou
-   em andamento quando o usuario responsavel e desativado; nao foi implementado
-   no Users Management 2.0.
 
 P3:
 
@@ -209,25 +216,31 @@ WATCH only:
 - SECULT fairness e round-robin cursor;
 - SECULT Web Session non-content suppression organic validation;
 - scale/load validation em janelas representativas;
+- Syer Dashboard transient error / refresh loop: BUG NOT PROVEN / WATCH. Owner
+  observou `/app/dashboard` lento, toast vermelho breve e recuperacao posterior
+  em tenant com pouco dado; auditoria anterior nao provou endpoint falho, refresh
+  loop, relacao com `/app/conversations` ou regressao de CPU. So promover a frente
+  com reproducao ou evidencia nova.
 - billing/ledger Meta como conciliacao futura.
 
 Proximas cinco frentes:
 
-1. P1 Syer Dashboard audit. Why now: observacao real do owner em tenant leve.
-   Valor: elimina risco de erro visivel no painel. Dependencia: logs/API/browser
-   trace. Demo validavel: sim. Code esperado: talvez, somente apos prova.
-   Config esperado: nao. Risco: baixo se auditoria read-only primeiro. Done:
-   endpoint/cadencia/erro identificados e classificado como bug ou descartado.
-2. P1 WAITING_FOR_CUSTOMER 60m. Why now: contrato de lifecycle claro e
+1. P1 WAITING_FOR_CUSTOMER 60m. Why now: contrato de lifecycle claro e
    customer-facing. Valor: fecha atendimentos automatizados abandonados sem
    afetar HUMAN. Dependencia: definir estado explicito e eventos. Demo
    validavel: sim. Code esperado: sim. Config esperado: possivel por tenant.
    Risco: medio por lifecycle. Done: 60m testado apenas nesse estado.
-3. P1 CRA hours flow-aware validation. Why now: cliente real com configuracao
+2. P1 CRA hours flow-aware validation. Why now: cliente real com configuracao
    pendente. Valor: evita handoff humano fora do expediente sem bloquear
    autoatendimento. Dependencia: cliente configurar horarios. Demo validavel:
    sim. Code esperado: talvez. Config esperado: sim. Risco: baixo/medio. Done:
    horario CRA salvo e fluxo validado dentro/fora do expediente.
+3. P1 User deactivation with active conversations. Why now: administracao de
+   usuario pode impactar atendimento humano em curso. Valor: evita atendimento
+   ativo sem responsavel valido e sem mutacao silenciosa de ciclo. Dependencia:
+   auditar statuses/campos de atribuicao reais. Demo validavel: sim. Code
+   esperado: sim. Config esperado: nao. Risco: medio por lifecycle/RBAC. Done:
+   backend bloqueia, UI explica, e desativacao so passa apos transferir/fechar.
 4. P2 Question conditional branching. Why now: lacuna descoberta durante 2.4 e
    valor direto para fluxos institucionais. Valor: respostas sim/nao e caminhos
    por resposta. Dependencia: desenho de runtime/predicados. Demo validavel:

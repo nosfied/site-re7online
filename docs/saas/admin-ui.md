@@ -73,8 +73,8 @@ Estado deployed / owner-approved / production non-destructive validated:
 `Todos/Ativos/Inativos`, uma linha expansiva por vez e contador de assentos
 ativos vindo da mesma fonte do enforcement backend/admin. A regiao de filtros
 tem agrupamento visual proprio; cada linha tem header resumido com botao
-explicito expandir/recolher e corpo expandido em tom separado para edicao. O
-botao Salvar usa estilo primario preenchido.
+explicito expandir/recolher em coluna direita fixa e corpo expandido em tom
+separado para edicao. O botao Salvar usa estilo primario preenchido.
 
 Contrato de edicao: expandir uma linha inicializa `userDrafts` a partir do
 estado persistido em `users`; recolher, trocar para outra linha ou alterar
@@ -82,6 +82,13 @@ filtros descarta todos os campos nao salvos. Filtros, visibilidade de linha,
 contador e disponibilidade de assentos derivam somente de estado persistido, nao
 de draft local. Apenas Save atualiza a lista canonica e entao altera filtros e
 contadores.
+
+Regra de lifecycle ainda aberta para implementacao: um usuario nao deve ser
+desativado enquanto possuir atendimentos operacionalmente ativos atribuidos e nao
+terminais/fechados. A tela futura deve bloquear a tentativa, mostrar a contagem
+de atendimentos ativos atribuidos e orientar transferencia ou encerramento antes
+da inativacao. A desativacao nao pode fechar, transferir, remover atribuicao,
+trocar fila ou alterar lifecycle de conversa silenciosamente.
 
 ## Departments Management UX 2.0
 
@@ -100,6 +107,17 @@ descarta alteracoes nao salvas e fecha editores internos de horario/excecao.
 Filtros, badges e resumo do header derivam somente do estado persistido. Esta
 frente nao altera filas, roteamento, autoassign, capacidade, presenca, Inbox
 visibility, RBAC, horarios de runtime, schema ou migracao.
+
+## Padrao compartilhado de linhas expansivas
+
+Guided Builder, Users e Departments usam o padrao administrativo aprovado quando
+a tela exige edicao em linha: linha fechada compacta, corpo de detalhe expansivo,
+controle circular de expandir/recolher, coluna direita fixa para a acao, conteudo
+esquerdo podendo quebrar linha sem derrubar o controle, header distinto do corpo,
+uma linha aberta por vez onde aplicavel, recolher/trocar/filtro descartando draft
+local nao salvo, e filtros/contadores globais baseados apenas em estado
+persistido. Esse padrao nao deve ser aplicado automaticamente a telas sem
+justificativa de produto.
 
 `quota.used` em `/admin/tenants/summary`:
 
