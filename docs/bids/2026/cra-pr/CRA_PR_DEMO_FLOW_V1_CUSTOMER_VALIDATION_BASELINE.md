@@ -60,7 +60,8 @@ Legacy content intentionally discarded:
 - Global `#` back command, to avoid hidden navigation/state drift.
 - Manual menu option blocks, because the engine renders structured options.
 - Cobrança option 4 to Eventos, known legacy bug.
-- Generic inactivity workaround; waiting-on-customer 1h remains a product gap.
+- Generic HUMAN inactivity workaround; superseded by the abandoned automation/BOT
+  lifecycle front.
 
 ## Acceptance Manifest
 
@@ -94,9 +95,11 @@ Current PASS state:
 
 ## Known Gap
 
-WAITING-ON-CUSTOMER 1H: NOT IMPLEMENTED.
+ABANDONED AUTOMATION / BOT FLOW LIFECYCLE: AUDIT REQUIRED / PRODUCT HARDENING.
 
-Reason: the current generic product behavior does not safely distinguish responsibility on the citizen from generic inactivity. V1 does not emulate this with a generic inactivity workaround.
+Reason: V1 does not emulate generic HUMAN inactivity. The active product gap is
+hardening abandoned citizen-initiated automation with existing flow inactivity
+infrastructure.
 
 ## Scope Confirmation
 

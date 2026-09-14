@@ -109,16 +109,20 @@ ACTIVE P0:
 
 ACTIVE P1:
 
-1. WAITING_FOR_CUSTOMER 60m: PRODUCT GAP / AUDITED / OPEN. Auditoria read-only
-   de 2026-09-14 mapeou os estados e a infraestrutura existente em
-   `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`. `WAITING`
-   significa fila humana e nao pode ser reutilizado. `WAITING_USER` existe, mas
-   esta sobrecarregado por automacao BOT e precisa metadados/transicoes
-   explicitas antes de representar "aguardando cidadao". O contrato desejado e
-   encerramento automatico apenas apos acao explicita do atendente marcando
-   aguardando cidadao; resposta do cidadao cancela/retoma; conversas HUMAN sem
-   esse estado permanecem abertas indefinidamente. Reusar scanner/claim
-   DB-backed, `TenantOperationalConfig` e pipeline canonico de fechamento/ciclo.
+1. Abandoned automation / BOT flow lifecycle: AUDIT REQUIRED / PRODUCT LIFECYCLE
+   HARDENING. Correcao de 2026-09-14: a interpretacao anterior
+   `WAITING_FOR_CUSTOMER 60m` como auto-close de atendimento humano foi
+   SUPERSEDED / NOT PRODUCT REQUIREMENT. Conversas HUMAN continuam sob controle
+   humano e podem permanecer abertas indefinidamente ate fechamento explicito. A
+   frente correta e abandono de automacao iniciada pelo cidadao: menu/pergunta/
+   captura fica aguardando resposta, cidadao para de responder, runtime BOT fica
+   incompleto. Auditoria em
+   `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md` aponta infra
+   existente para reuso: `chatbotRuntime.lastInteractionAt`,
+   `resetAfterMinutes` no executor, `timeoutMinutes/action=HANDOFF` no
+   `chatbotInactivityProcessor`, claim DB-backed e escopo multitenant. Gap
+   restante: contrato de limpeza/expiracao UX para abandono BOT sem criar
+   scheduler novo e sem auto-close HUMAN.
 2. CRA-PR department/flow-aware hours: P1 / CONFIGURATION + VALIDATION OPEN.
    Capability de horarios de departamento existe (`businessHours`,
    `NO_SCHEDULE`, UI em `/app/settings/departments`), mas a configuracao CRA
@@ -231,11 +235,14 @@ WATCH only:
 
 Proximas cinco frentes:
 
-1. P1 WAITING_FOR_CUSTOMER 60m. Why now: contrato de lifecycle claro e
-   customer-facing. Valor: fecha atendimentos automatizados abandonados sem
-   afetar HUMAN. Dependencia: definir estado explicito e eventos. Demo
-   validavel: sim. Code esperado: sim. Config esperado: possivel por tenant.
-   Risco: medio por lifecycle. Done: 60m testado apenas nesse estado.
+1. P1 Abandoned automation / BOT flow lifecycle. Why now: cidadao pode iniciar
+   menu/pergunta/captura e abandonar antes de concluir. Valor: endurece reset,
+   expiracao e UX de automacao incompleta sem afetar HUMAN. Dependencia:
+   validar comportamento atual de `resetAfterMinutes` e
+   `timeoutMinutes/action=HANDOFF` em E2E local. Demo validavel: sim. Code
+   esperado: talvez, reaproveitando executor/processador existente. Config
+   esperado: flow-level primeiro. Risco: medio por lifecycle. Done: abandono de
+   menu/captura/submenu, inbound tardio, restart e tenant isolation testados.
 2. P1 CRA hours flow-aware validation. Why now: cliente real com configuracao
    pendente. Valor: evita handoff humano fora do expediente sem bloquear
    autoatendimento. Dependencia: cliente configurar horarios. Demo validavel:

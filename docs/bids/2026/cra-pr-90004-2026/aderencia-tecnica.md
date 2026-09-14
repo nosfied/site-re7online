@@ -78,7 +78,7 @@ Legenda:
 | 60 | Configuracao fluxos, usuarios, setores, filas e permissoes | atende | UIs/APIs existentes. |
 | 61 | Horario de atendimento | atende parcialmente | Deve ser configurado/documentado para CRA-PR. |
 | 62 | Nao atribuir fora do expediente | atende parcialmente | Exige regra operacional/configuracao. |
-| 63 | Encerramento automatico sem resposta | atende parcialmente | Status/close existem; auto-close precisa evidencia. |
+| 63 | Encerramento automatico sem resposta | atende parcialmente | Handoff/reset de automacao possuem infra parcial; nao ha requisito atual de auto-close HUMAN generico. |
 | 64 | Mensagens feriados/sazonais | atende com configuracao | Configuravel via fluxos/mensagens. |
 | 65 | API/webhook/integracoes futuras | atende parcialmente | Public API/webhooks existem; escopo de escrita e integracao deve ser delimitado. |
 | 66 | Integracao ERP/e-mail | depende de terceiro | Possivel via API/webhook, nao pronta para sistema especifico. |

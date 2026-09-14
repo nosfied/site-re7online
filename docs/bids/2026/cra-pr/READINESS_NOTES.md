@@ -248,7 +248,10 @@ O custo Meta deve ser tratado como risco operacional/comercial controlado, nao c
 - A modelagem dedicada de opt-out pode ser evolucao futura se o contrato avancar.
 - Evidencias visuais devem ser capturadas em ambiente sanitizado.
 - Regras de retencao e privacidade devem constar no onboarding operacional.
-- Regra waiting-on-customer 1h permanece aberta: encerrar apos 1h somente quando o sistema/atendente estiver aguardando resposta do cidadao, nao como simples `lastActivityAt + 1h`.
+- Correcao de 2026-09-14: a regra waiting-on-customer 1h como auto-close de
+  atendimento humano foi superada e nao e requisito atual. A frente correta e
+  abandono de automacao/BOT iniciada pelo cidadao; nao aplicar workaround de
+  inatividade generica em HUMAN.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI, e guiar configuracao de horarios. A
   ausencia de horario configurado permanece como pendencia operacional do

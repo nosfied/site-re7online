@@ -16,7 +16,7 @@
       "Global # back command discarded to avoid hidden navigation/state drift",
       "Manual menu option blocks discarded because engine renders structured options",
       "Cobrança option 4 to Eventos discarded as known legacy bug",
-      "Generic inactivity workaround discarded; waiting-on-customer 1h remains product gap"
+      "Generic HUMAN inactivity workaround discarded; abandoned automation/BOT lifecycle remains product hardening gap"
     ],
     "legacyReconciledAt": "2026-09-01T01:18:00.433Z",
     "preset": "cra-pr-demo-validation",
@@ -74,7 +74,7 @@
       ]
     },
     "sourceWorkbook": "Usuários Converta DEA (1).xlsx (latest local copy; requested (2) not found)",
-    "unresolvedInactivityClose": "Product cannot safely express close only when agent/system is waiting for caller; no CRA inactivity close configured in demo flow",
+    "unresolvedInactivityClose": "Superseded: no HUMAN waiting auto-close requirement. Active gap is abandoned automation/BOT lifecycle hardening; no generic CRA inactivity close configured in demo flow",
     "unresolvedRouting": [],
     "updatedFromLatestCraMaterialsAt": "2026-09-01T01:03:25.096Z"
   },

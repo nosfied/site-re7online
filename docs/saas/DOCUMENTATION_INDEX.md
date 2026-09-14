@@ -20,8 +20,8 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | `docs/saas/MARKET_PROFILE_ARCHITECTURE.md` | atual | Arquitetura oficial de Core Platform, Market Profiles, Feature Packs, Tenant Configuration e capabilities |
 | `docs/saas/BUSINESS_CAPABILITY_DESIGN.md` | atual | Contrato das capabilities do mercado privado e plano para substituir o ultimo filtro business por capability |
 | `docs/saas/FEATURE_FLAGS_MATRIX.md` | atual | Matriz oficial de features por profile |
-| `docs/saas/GOVERNANCE_CONFIG.md` | atual | Governanca de configuracao DB vs `tenants.json`, incluindo regra de lifecycle para desativacao de usuario e timeout aguardando cliente |
-| `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md` | auditado | Auditoria read-only de estados, automacoes, fechamento e reuso antes de implementar WAITING_FOR_CUSTOMER 60m |
+| `docs/saas/GOVERNANCE_CONFIG.md` | atual | Governanca de configuracao DB vs `tenants.json`, incluindo regra de lifecycle para desativacao de usuario e abandono de automacao BOT |
+| `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md` | auditado | Auditoria read-only de abandono de automacao/BOT, estados, timeout, reset, handoff e reuso antes de implementar hardening |
 | `docs/saas/CHANNELS_GOVERNANCE.md` | atual | Governanca WhatsApp/Messenger/Instagram |
 | `docs/saas/WHATSAPP_USERNAME_BSUID_BACKLOG.md` | backlog | Impacto de WhatsApp usernames/BSUID e plano futuro de compatibilidade |
 | `docs/saas/CONFIG_MIGRATION_PLAN.md` | atual | Plano incremental de migracao de configuracao |

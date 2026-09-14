@@ -487,16 +487,17 @@ A precedencia funcional e:
 - sem destino valido: nao criar estado `WAITING`/`HUMAN`/`ACTIVE` invalido; permanece BOT e registra handoff skipped.
 
 Auditoria read-only de 2026-09-14 sobre lifecycle de inatividade:
-`WAITING_FOR_CUSTOMER` 60m permanece PRODUCT GAP / AUDITED / OPEN, documentado em
-`docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`. O estado
-`WAITING` atual significa fila humana aguardando atribuicao e nao pode ser
-reaproveitado para "aguardando cidadao". `WAITING_USER` ja existe nas telas e
-relatorios, mas tambem e usado por automacao BOT/webchat antes do handoff; por
-isso so pode ser reaproveitado apos metadados e transicoes explicitas de
-operador, cancelamento por resposta do cidadao e claim atomico do timeout. A
-implementacao futura deve reaproveitar os padroes existentes de scanner
-DB-backed, `TenantOperationalConfig` e fechamento/ciclo canonico; conversas HUMAN
-sem marcacao explicita de espera pelo cidadao nao devem expirar por inatividade.
+a interpretacao anterior de `WAITING_FOR_CUSTOMER 60m` como auto-close de
+atendimento humano foi SUPERSEDED / NOT PRODUCT REQUIREMENT. Conversas HUMAN
+continuam sob controle humano e nao devem expirar por inatividade generica. A
+frente correta e abandono de automacao iniciada pelo cidadao, documentada em
+`docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`. Em contexto
+BOT, `WAITING_USER` significa automacao aguardando input do usuario; o runtime
+persistido possui `chatbotRuntime.lastInteractionAt`, reset inline por
+`resetAfterMinutes` no proximo inbound e handoff de inatividade por
+`timeoutMinutes/action=HANDOFF` no `chatbotInactivityProcessor`. Gap restante:
+contrato de limpeza/expiracao e UX para fluxos BOT incompletos, sem criar
+scheduler paralelo e sem auto-close HUMAN.
 
 ## Web Session
 
@@ -685,7 +686,7 @@ Commits relevantes do baseline homologado:
   = CLOSED / REAL VALIDATED; QUESTION CONDITIONAL BRANCHING = PRODUCT GAP /
   OPEN; SYER ****9614 = CLOSED.
 - Current execution backlog, 2026-09-14: P0 = none. P1 ativo =
-  WAITING_FOR_CUSTOMER 60m como lifecycle explicito auditado e ainda aberto,
+  abandoned automation / BOT flow lifecycle como hardening auditado e ainda aberto,
   configuracao/validacao CRA de horarios de departamento/fluxo, Demo Meta Cloud
   restriction externa e desativacao de usuario com atendimentos ativos. P2 ativo
   = branching condicional por resposta
@@ -722,7 +723,8 @@ Commits relevantes do baseline homologado:
 ## Proximos passos recomendados
 
 - Auditar Dashboard Syer com trace de API/browser antes de classificar como bug.
-- Desenhar e implementar WAITING_FOR_CUSTOMER 60m sem afetar conversas HUMAN.
+- Validar e endurecer abandoned automation / BOT flow lifecycle sem auto-close
+  HUMAN.
 - Guiar configuracao CRA de horarios de departamento e validar fluxo fora de
   expediente.
 - Especificar branching condicional por resposta capturada como novo recurso de

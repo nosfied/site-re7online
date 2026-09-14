@@ -1,125 +1,197 @@
-# Inactivity / Automation Lifecycle Audit - 2026-09-14
+# Abandoned Automation / Bot Flow Lifecycle Audit - 2026-09-14
 
-Status: READ-ONLY AUDIT / NO PRODUCT CHANGE / NO DEPLOY.
+Status: READ-ONLY AUDIT / PRODUCT LIFECYCLE HARDENING / NO PRODUCT CHANGE / NO DEPLOY.
 
-This audit maps existing lifecycle, scheduler, close and reporting infrastructure
-before any implementation of a 60-minute `WAITING_FOR_CUSTOMER` timeout. The
-future rule must not be a generic human-conversation inactivity close.
+Correction: the earlier `WAITING_FOR_CUSTOMER 60m` interpretation as a human
+waiting auto-close is superseded. Human conversations may remain open
+indefinitely unless explicitly closed through the current lifecycle. The active
+product front is abandoned customer-initiated automation/BOT flow lifecycle.
 
-## Required Product Contract
+## Correct Product Front
 
-- An attendant must explicitly mark the service as waiting for the citizen.
-- Only that explicit waiting-for-citizen state starts the timeout.
-- A citizen/customer reply must cancel or resume the service before timeout close.
-- Human conversations without that explicit state may remain open indefinitely.
-- Timeout close must reuse the canonical close/service-cycle pipeline and must
-  preserve protocol, completed-service snapshot, satisfaction behavior, audit and
-  realtime updates.
+Problem to harden:
 
-## Current State Matrix
+- Citizen starts a chatbot/flow.
+- Flow reaches a menu, consent prompt or capture/pending input.
+- Citizen stops responding.
+- Runtime can remain active/incomplete until a later inbound or until a flow
+  policy performs handoff.
 
-| State | Current meaning | Current owner/assignment semantics | Queue/capacity behavior | Can be reused directly? |
-| --- | --- | --- | --- | --- |
-| `WAITING` | Human queue waiting for assignment/handoff. | Usually unassigned or pending assignment. | Drives queue position and automatic assignment; counts in active assignment capacity when assigned. | No. It means waiting in service queue, not waiting for citizen. |
-| `IN_PROGRESS` | Human service in progress. | Assigned human owner. | Counts in active assignment capacity and presence summaries. | No. This is active service, not paused for citizen. |
-| `WAITING_USER` | Existing UI/reporting label for "Aguardando cliente", but also used by BOT/webchat automation before human handoff. | Can be assigned or unassigned depending producer. | Reported separately; not counted by current active-assignment capacity; only projects to human inbox reliably when assigned. | Partial only. Needs explicit metadata and transition rules before it can represent the requested lifecycle. |
-| `CLOSED` | Terminal closed service/conversation state. | Assignment/handoff cleared by close pipeline. | Removed from active queue; contributes to closed metrics/snapshots. | Yes as target state, only via canonical close pipeline. |
+This is not a generic HUMAN inactivity close and must not close human services
+that an attendant is manually holding.
 
-## Existing Automation Infrastructure
+## Current Bot State Matrix
 
-Existing infrastructure should be reused instead of adding a duplicate scheduler:
+| State | Meaning in BOT/flow context | Stored in | Entry | Exit | Timeout/cleanup | Restart-safe |
+| --- | --- | --- | --- | --- | --- | --- |
+| `mode=BOT` | Automation owns the conversation. | `ConversationRuntimeState.mode` | Entry flow selected, webchat/support starts in automation, or active runtime remains BOT. | Handoff, close path, invalid flow clear, terminal text, disabled automation. | No generic cleanup by itself. | Yes, because persisted in DB. |
+| `chatbotActive=true` | Flow is waiting at a node for customer input or continuing automation. | `ConversationRuntimeState.chatbotActive` | `executeChatbotFlow` starts or keeps a node. | Terminal node, handoff, invalid definition, explicit clear. | `resetAfterMinutes` is applied only on later inbound; processor may do HANDOFF if `timeoutMinutes/action=HANDOFF`. | Yes, persisted. |
+| `status=WAITING_USER` | In automation, means "automation/BOT is waiting for user input"; it is also shown in UI as "Aguardando cliente". | `ConversationRuntimeState.status` | Webchat/support start in automation; runtime state projections from active chatbot. | Handoff promotes to `WAITING`/HUMAN or flow finishes/clears. | Not a close trigger by itself. | Yes, persisted. |
+| `handoffStatus=NONE` | No human handoff active. | `ConversationRuntimeState.handoffStatus` | BOT flow runtime. | Handoff request/activation. | Required by inactivity handoff processor scan. | Yes. |
+| `flow=chatbot:<id>` | Which `ChatbotFlow` owns the runtime. | `ConversationRuntimeState.flow` | Flow start or continuation. | `clearChatbotRuntime`, handoff, terminal clear. | Used by scanner and executor. | Yes. |
+| `chatbotNodeId` | Current pending node/menu/capture/consent. | `ConversationRuntimeState.chatbotNodeId` | Flow execution. | Node transition, reset to start, terminal clear, handoff. | Stale node restarts to start if definition changed/missing on later inbound. | Yes. |
+| `answers.chatbotRuntime.lastInteractionAt` | Last BOT interaction timestamp used for inactivity. | `ConversationRuntimeState.answers` JSON | Each handled `executeChatbotFlow` result. | Updated on every handled inbound/result. | Drives `resetAfterMinutes` and `timeoutMinutes`. | Yes. |
+| `answers.flowContext` / `answers.flowTags` | Captured answers/context/tags. | `ConversationRuntimeState.answers` JSON | Capture nodes and menu metadata. | Preserved across current inactivity reset; cleared by some closed reentry paths. | No generic stale cleanup. | Yes. |
 
-- `chatbotInactivityProcessor` runs from the backend process unless disabled by
-  `CHATBOT_INACTIVITY_PROCESSOR_DISABLED`. It scans DB runtime state on an
-  interval, uses tenant/flow policy, applies consent precedence, claims with
-  guarded `updateMany`, and performs handoff. It is BOT-only and must not be
-  repurposed as generic human close without a new explicit eligibility layer.
-- `campaignRunner` uses persisted scheduled campaign rows plus atomic claim from
-  `scheduled` to `sending`. It is useful as a scheduler/claim pattern.
-- `followupService` scans eligible BOT/chatbot states, resolves DB-first
-  `TenantOperationalConfig.config.followUp`, and deduplicates sends. It is
-  useful for config/idempotency patterns, not for closing human services.
-- Scheduling reminders and retention jobs are domain-specific DB scanners. They
-  confirm the platform already favors persisted due-work over transient UI timers.
+## Flow Persistence
 
-## Existing Close Pipeline
+An in-progress automation is persisted in `ConversationRuntimeState`:
 
-The close path already has canonical responsibilities that a timeout must not
-duplicate:
+- `flow`: active chatbot id as `chatbot:<id>`.
+- `chatbotNodeId`: current menu/capture/consent node.
+- `chatbotActive`: whether the flow still owns the interaction.
+- `answers.chatbotRuntime`: `lastInteractionAt`, `flowStructureHash`,
+  `flowStartNodeId`, accepted consent data, invalid reply counters and
+  inactivity handoff marker.
+- `answers.flowContext` and `answers.flowTags`: captured business context.
+- `lastInboundAt` / `lastOutboundAt`: channel-level activity timestamps.
+- `mode`, `handoffStatus`, `assignedUserId`, `departmentId`, `queueId`,
+  `status`, `closedAt`: operational projection.
 
-- App status updates accept `WAITING`, `IN_PROGRESS`, `WAITING_USER` and `CLOSED`
-  via `/app/conversation/:waId/status`.
-- Web Session human close delegates to `closeWebSessionHumanService`, which
-  closes the service cycle, records completed-service snapshot/events, applies
-  close notice policy and triggers satisfaction survey behavior.
-- Non-Web Session app close currently performs similar service-cycle close logic
-  inside the route. A future automatic close should extract/reuse a shared close
-  service or call the canonical channel-specific service instead of duplicating
-  route-local logic.
-- `closeCurrentServiceCycle`, `recordServiceCycleEvent` and
-  `CompletedServiceSnapshot` already provide the durable completed-service
-  record used by reports.
+The platform can tell that a BOT automation is idle when `chatbotActive=true`,
+`mode=BOT`, `handoffStatus=NONE`, `assignedUserId=null`, `closedAt=null`,
+`flow` starts with `chatbot:` and `answers.chatbotRuntime.lastInteractionAt` is
+older than the configured flow policy.
 
-## Race And Idempotency Requirements
+## Existing Inactivity Behavior
 
-The future implementation needs a claim that protects customer reply vs timeout:
+There are two distinct mechanisms:
 
-- Store an explicit waiting marker such as `waitingForCustomer.startedAt`,
-  `timeoutAt`, `actorUserId`, `reason` and current owner context.
-- Timeout worker must only claim rows still in the explicit waiting state, not
-  closed, still assigned/owned as expected, and with no inbound after
-  `startedAt`.
-- Customer inbound must atomically clear the waiting marker and resume the
-  previous human state before the worker can close it.
-- Timeout close must be idempotent by request/event key and service-cycle
-  snapshot compatibility, following existing event and close patterns.
-- The existing `restoreCloseConfirmationState` path does not restore
-  `WAITING_USER`; this is a known compatibility check before implementation.
+1. **Inline reset on later inbound**
+   - Implemented in `executeChatbotFlow`.
+   - Config source: `ChatbotFlow.definition.inactivityPolicy.resetAfterMinutes`.
+   - If the customer returns after the threshold and the runtime is still BOT,
+     unassigned and no handoff, the executor restarts from `definition.start`.
+   - It records/logs `flow.inactivity_reset.applied`.
+   - It preserves existing `flowContext`; this is useful for audit/context but
+     may be undesirable for some fresh-restart UX.
+   - It does not run in the background and does not send a timeout message at the
+     moment the threshold is crossed.
 
-## Configuration Recommendation
+2. **Background inactivity handoff processor**
+   - Implemented in `chatbotInactivityProcessor`.
+   - Started by backend bootstrap unless
+     `CHATBOT_INACTIVITY_PROCESSOR_DISABLED=true`.
+   - Cadence: default 60 seconds, override by
+     `CHATBOT_INACTIVITY_PROCESSOR_INTERVAL_MS`.
+   - Scan target: `ConversationRuntimeState` rows with `chatbotActive=true`,
+     `mode=BOT`, `flow` starting `chatbot:`, `handoffStatus=NONE`,
+     `assignedUserId=null`, `closedAt=null`.
+   - Timestamp: `answers.chatbotRuntime.lastInteractionAt`.
+   - Config source: `ChatbotFlow.definition.inactivityPolicy.timeoutMinutes`
+     with `action=HANDOFF`.
+   - Action: if due, consent is accepted and a concrete department+queue exists,
+     claim the row and promote to HUMAN queue (`status=WAITING`,
+     `handoffStatus=ACTIVE`, `chatbotActive=false`), optionally auto-assign,
+     send handoff/protocol/queue position/off-hours messages.
+   - It does not close, clear or reset abandoned BOT runtime unless the action is
+     a valid handoff.
 
-Use `TenantOperationalConfig` as the DB-first home for the future policy, with a
-safe runtime default of 60 minutes only after product approval. A tenant-level
-policy is the minimum viable scope. Department-level override is a separate
-product decision because it affects SLA, workload, reporting and operator copy.
+Although the type accepts `action=RESET_TO_ROOT` and `action=CLOSE`, the audited
+background processor currently acts only on `HANDOFF`; reset is handled inline on
+later inbound.
 
-Do not add tenant hardcode to `tenants.json`. Do not use frontend timers as the
-source of truth.
+## Practical Abandonment Scenarios
 
-Schema decision is not closed by this audit. A JSON marker in
-`ConversationRuntimeState.answers` could prove the MVP, but an indexed persisted
-`timeoutAt`/`waitingForCustomerAt` field is likely safer for production-scale
-scans. Decide during implementation design, with migration only if justified.
+| Scenario | Current behavior |
+| --- | --- |
+| Menu abandonment | If only `resetAfterMinutes` exists, nothing is sent or cleaned at 1h/24h/several days. On later inbound after threshold, the flow restarts from the start node. Inside threshold, the old menu/submenu handles the message. If `timeoutMinutes/action=HANDOFF` exists and consent/destination are valid, the background processor can hand off to human queue after the threshold. |
+| Question/capture abandonment | Pending capture remains as `chatbotNodeId`; captured `flowContext` remains in `answers`. Later inbound inside threshold is treated as the answer to the old question. Later inbound after `resetAfterMinutes` restarts from the start node, but existing `flowContext` is preserved by current code. |
+| Submenu abandonment | Same as menu. Existing focused test proves submenu resets to root after configured inactivity on later inbound and stays in submenu inside the window. |
+| Automation to handoff before completion | Handoff clears active chatbot node and moves to HUMAN/WAITING when destination is valid. Incomplete `flowContext` may remain as context/tags for the handoff. |
+| Backend/deploy restart | Persisted runtime survives. Background handoff scanning resumes on backend start. Inline reset still applies on the next inbound. |
+| Webchat transport session expiry | Webchat has a 24h `WebchatSession.expiresAt`; expiration returns `webchat_session_expired`. That is a webchat transport/session rule, not a generic chatbot flow lifecycle for WhatsApp/Web Session. |
 
-## Operator UX And Reporting Decisions Still Open
+## Cleanup Semantics
 
-- Whether to reuse `WAITING_USER` after separating BOT automation semantics, or
-  introduce a more explicit enum/state name.
-- Whether a waiting-for-citizen conversation still counts against attendant
-  active capacity.
-- Whether SLA clocks pause, continue or move to a separate waiting metric.
-- Exact action label, confirmation, undo/resume behavior and timeout warning copy.
-- Whether timeout close sends the normal close notice and satisfaction survey for
-  every channel.
-- How dashboards, Inbox filters, Operations board and reports should classify the
-  state.
+Current code preserves historical/contextual data more than it cleans live
+runtime:
+
+- Live runtime fields: `flow`, `chatbotNodeId`, `chatbotActive`,
+  `chatbotRuntime.lastInteractionAt`, invalid reply counters and current mode.
+- Historical/context fields: `flowContext`, `flowTags`, service cycle and
+  protocol runtime should not be deleted blindly.
+- Current inline inactivity reset resets the active node to root but preserves
+  `flowContext`.
+- Current background inactivity handoff preserves context and creates/uses
+  service-cycle protocol for handoff messaging.
+- No current background job silently closes abandoned BOT cycles or creates
+  `CompletedServiceSnapshot` for BOT abandonment alone.
+
+## User-Facing Behavior
+
+- No automatic "session expired" message is sent for chatbot flow abandonment
+  when only `resetAfterMinutes` applies.
+- On later inbound after reset threshold, the citizen sees the start node/menu.
+- With `timeoutMinutes/action=HANDOFF`, the citizen may receive handoff,
+  protocol and queue-position/off-hours messages if the policy/destination allow
+  it.
+- Webchat session expiration is user-facing as `webchat_session_expired`, but it
+  is scoped to the webchat session token.
+
+## Existing Coverage
+
+Already covered:
+
+- Submenu reset after `resetAfterMinutes` on later inbound.
+- Submenu remains active inside the inactivity window.
+- Inactivity handoff claim rejects stale answers/new inbound.
+- Only one concurrent inactivity processor winner.
+- Handoff claim refuses missing department/queue.
+- Due persisted row can be processed after restart.
+- Consent pending blocks inactivity handoff and records/dedupes skip event.
+
+Missing or partial:
+
+- Explicit menu/capture abandonment after days with no later inbound.
+- Whether `flowContext` should be cleared on stale reset.
+- `RESET_TO_ROOT` as background action.
+- `CLOSE` as background action.
+- User-facing timeout copy for abandoned automation.
+- Provider-independent test matrix for WhatsApp Web Session, webchat and support.
+- End-to-end local validation of current abandoned automation behavior.
 
 ## Reuse Matrix
 
-| Need | Existing infrastructure | Reuse decision |
-| --- | --- | --- |
-| Persistent scanner | `chatbotInactivityProcessor`, campaign runner, reminders | Reuse pattern; do not create UI timer or ad hoc loop. |
-| Explicit status | `WAITING_USER` enum exists | Partial; requires semantic cleanup/metadata. |
-| Human close | `closeWebSessionHumanService`, service-cycle helpers | Reuse/extract; do not duplicate close side effects. |
-| Protocol/snapshot | `ensureActiveServiceCycle`, `closeCurrentServiceCycle`, `CompletedServiceSnapshot` | Reuse. |
-| Satisfaction after close | Web Session close service | Reuse where applicable; define non-Web Session parity. |
-| Config | `TenantOperationalConfig` DB-first pattern | Reuse. |
-| Race guard | `updateMany` claims, event request IDs, snapshot compatibility | Reuse and extend for reply-vs-timeout. |
+| Capability | Exists | Reuse as-is | Extend | Gap |
+| --- | --- | --- | --- | --- |
+| Flow waiting state | Yes | Partial | Yes | Clarify BOT `WAITING_USER` vs human label. |
+| Last activity timestamp | Yes | Yes | Maybe | Uses JSON `lastInteractionAt`; enough for current scan. |
+| Timeout config | Yes, flow-level | Partial | Yes | `resetAfterMinutes` and `timeoutMinutes/action=HANDOFF`; no generic abandoned cleanup policy. |
+| Persistent scanner | Yes | Yes | Yes | Current scanner only handles HANDOFF. |
+| Atomic claim | Yes | Yes | Yes | Guarded by expected answers/current state. |
+| Runtime cleanup | Partial | No | Yes | Reset preserves `flowContext`; no background cleanup-only action. |
+| Later inbound reset | Yes | Yes | Yes | Needs product decision about context clearing/copy. |
+| New cycle creation | Partial | No | Maybe | Human/Web Session closed reentry creates cycles; BOT abandonment does not. |
+| Audit event | Partial | Yes | Yes | Reset logs event; skip events persisted for some cases. |
+| History preservation | Yes | Yes | Yes | Avoid deleting `flowContext` unless product-approved. |
+| Restart resilience | Yes/partial | Yes | Yes | Persisted scanner resumes; inline reset waits for inbound. |
+| Tenant scoping | Yes | Yes | Yes | Scans by `clientId` and flow by same tenant. |
+| Provider independence | Partial | No | Yes | Core executor is shared; some outbound actions are Web Session specific. |
+| Tests | Partial | Yes | Yes | Add E2E/coverage for actual abandonment scenarios. |
 
-## Audit Conclusion
+## Product Classification
 
-`WAITING` cannot be reused. `WAITING_USER` exists but is overloaded and incomplete
-for the requested rule. The correct next implementation should add an explicit
-operator-driven waiting-for-citizen transition, persisted timeout metadata,
-customer-reply cancellation/resume, and a DB-backed worker that reuses the
-canonical close/service-cycle path.
+D. INFRA EXISTS / LIFECYCLE GAP REMAINS.
+
+The platform already has persisted BOT runtime, last-interaction timestamp,
+flow-level inactivity config, inline reset on later inbound and a restart-safe
+background handoff processor. It does not yet have a complete product contract
+for abandoned automation cleanup/expiry across menus, captures, context clearing
+and user-facing timeout UX.
+
+## Minimal Next Step
+
+Validate the current behavior with a local authenticated E2E using one flow with
+`resetAfterMinutes` and one with `timeoutMinutes/action=HANDOFF`, then add
+focused tests for:
+
+- menu abandonment with no later inbound,
+- capture abandonment and stale context handling,
+- later inbound after threshold,
+- processor duplicate run,
+- tenant isolation,
+- provider-specific persistence for Web Session/webchat/support.
+
+Only after that, extend the existing executor/processor. Do not add a new
+scheduler and do not introduce HUMAN waiting auto-close.

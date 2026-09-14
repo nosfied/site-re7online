@@ -325,13 +325,18 @@ Quando o fechamento nao possui atendente ou setor, a contagem aparece em `Sem at
 
 O historico comeca no primeiro fechamento registrado nesse formato. Quando nao houver snapshots para a organizacao, a tela mostra que o indicador ainda nao possui historico disponivel em vez de sugerir que periodos antigos tiveram zero atendimentos.
 
-## Aguardando cliente e inatividade
+## Automacao abandonada e inatividade
 
-O estado visual `Aguardando cliente` existe em telas operacionais, mas ainda nao
-e uma regra automatica de encerramento por 60 minutos. A regra futura planejada
-deve depender de uma acao explicita do atendente marcando o atendimento como
-aguardando resposta do cidadao; uma resposta do cidadao deve cancelar/retomar o
-atendimento. Conversas humanas comuns nao expiram por inatividade generica.
+O estado visual `Aguardando cliente` pode aparecer para automacao/BOT aguardando
+input do usuario, mas isso nao significa encerramento automatico de atendimento
+humano. A interpretacao anterior de auto-close humano por 60 minutos foi
+superada; conversas HUMAN continuam sob controle do atendente e nao expiram por
+inatividade generica.
+
+O hardening aberto e para automacao iniciada pelo cidadao: menus, perguntas ou
+capturas que ficam incompletos quando a pessoa para de responder. O fluxo atual
+pode reiniciar no proximo inbound quando houver `resetAfterMinutes`, ou fazer
+handoff automatico quando o flow tiver `timeoutMinutes` com `action=HANDOFF`.
 
 A auditoria tecnica canonica esta em
 `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`.
