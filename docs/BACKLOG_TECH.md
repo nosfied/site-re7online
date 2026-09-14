@@ -96,6 +96,16 @@ Fechado / validado:
   de loading nao depende mais de `settings != null`, o bug de badge permanente
   "Carregando" foi fechado e erro verdadeiro e exibido quando settings nao
   estiver disponivel.
+- Abandoned automation / BOT flow lifecycle: LOCAL E2E VALIDATED / PRODUCT
+  DECISION OPEN. Em 2026-09-14, o comportamento existente foi validado em DB
+  local seguro, sem runtime change, sem producao e sem deploy. `resetAfterMinutes`
+  reinicia menu/submenu/captura no proximo inbound e nao move para HUMAN nem
+  CLOSED; `timeoutMinutes/action=HANDOFF` promove uma vez para HUMAN/WAITING
+  com department/queue concretos, protocolo e mensagem de posicao quando o
+  destino e valido; nova varredura nao duplica handoff. Caveats abertos:
+  limpeza de `flowContext` em reset stale, copy/UX de timeout e paridade
+  provider-independent do processor. Auto-close generico de atendimento HUMAN
+  continua fora do requisito.
 - Inbox visibility policy audit: CLOSED / AUDITED / NO CODE CHANGE. A politica
   `shared`/`assignee_only_after_assignment` permanece apenas como regra de
   projecao/visibilidade para lista/detalhe/timeline; nao altera criacao de
@@ -109,20 +119,23 @@ ACTIVE P0:
 
 ACTIVE P1:
 
-1. Abandoned automation / BOT flow lifecycle: AUDIT REQUIRED / PRODUCT LIFECYCLE
-   HARDENING. Correcao de 2026-09-14: a interpretacao anterior
+1. Abandoned automation / BOT flow lifecycle: LOCAL E2E VALIDATED / PRODUCT
+   DECISION OPEN. Correcao de 2026-09-14: a interpretacao anterior
    `WAITING_FOR_CUSTOMER 60m` como auto-close de atendimento humano foi
    SUPERSEDED / NOT PRODUCT REQUIREMENT. Conversas HUMAN continuam sob controle
    humano e podem permanecer abertas indefinidamente ate fechamento explicito. A
    frente correta e abandono de automacao iniciada pelo cidadao: menu/pergunta/
    captura fica aguardando resposta, cidadao para de responder, runtime BOT fica
-   incompleto. Auditoria em
+   incompleto. Auditoria e E2E local em
    `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md` aponta infra
    existente para reuso: `chatbotRuntime.lastInteractionAt`,
    `resetAfterMinutes` no executor, `timeoutMinutes/action=HANDOFF` no
-   `chatbotInactivityProcessor`, claim DB-backed e escopo multitenant. Gap
-   restante: contrato de limpeza/expiracao UX para abandono BOT sem criar
-   scheduler novo e sem auto-close HUMAN.
+   `chatbotInactivityProcessor`, claim DB-backed e escopo multitenant. O E2E
+   confirmou reset no proximo inbound sem HUMAN/CLOSED, handoff unico com
+   department/queue concretos, protocolo e posicao na fila, e ausencia de
+   duplicidade em nova varredura. Gap restante: limpeza de `flowContext`, copy/
+   UX de timeout e paridade provider-independent, sem criar scheduler novo e
+   sem auto-close HUMAN.
 2. CRA-PR department/flow-aware hours: P1 / CONFIGURATION + VALIDATION OPEN.
    Capability de horarios de departamento existe (`businessHours`,
    `NO_SCHEDULE`, UI em `/app/settings/departments`), mas a configuracao CRA

@@ -337,6 +337,10 @@ O hardening aberto e para automacao iniciada pelo cidadao: menus, perguntas ou
 capturas que ficam incompletos quando a pessoa para de responder. O fluxo atual
 pode reiniciar no proximo inbound quando houver `resetAfterMinutes`, ou fazer
 handoff automatico quando o flow tiver `timeoutMinutes` com `action=HANDOFF`.
+E2E local de 2026-09-14 confirmou que esse comportamento existente nao fecha
+atendimento HUMAN, nao duplica handoff em nova varredura e preserva historico;
+a decisao pendente e apenas produto/UX para limpeza de contexto e mensagem de
+timeout em automacoes abandonadas.
 
 A auditoria tecnica canonica esta em
 `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`.

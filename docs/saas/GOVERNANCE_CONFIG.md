@@ -49,7 +49,7 @@ flow count 1, and no artificial `cra-pr` JSON entry created.
 | Departments/queues | DB | DB | `Department`, `Queue` | Keep DB-first |
 | Users/RBAC/sessions | DB | DB | `User`, `AppAuthSession`, `PasswordResetToken` | Keep DB-first |
 | User deactivation lifecycle | DB operational state | DB | `User`, assignment/conversation lifecycle models after future audit | Block deactivation while active assigned conversations exist; never silently close, transfer, unassign, change queue or mutate conversation lifecycle |
-| Abandoned BOT automation lifecycle | Partially implemented by flow definition and runtime state | `ChatbotFlow.definition.inactivityPolicy` for current flow-level behavior | `ConversationRuntimeState.answers.chatbotRuntime`, `flow`, `chatbotNodeId`, `chatbotActive` | Reuse existing executor/processor; do not implement generic HUMAN inactivity close |
+| Abandoned BOT automation lifecycle | Local E2E validated, product policy still open | `ChatbotFlow.definition.inactivityPolicy` for current flow-level behavior | `ConversationRuntimeState.answers.chatbotRuntime`, `flow`, `chatbotNodeId`, `chatbotActive` | Reuse existing executor/processor; do not implement generic HUMAN inactivity close; open decisions are stale context cleanup, timeout UX and provider parity |
 | Push subscriptions | DB | DB | `PushSubscription` | Keep DB-first |
 | Retention/LGPD | DB | DB | `RetentionConfig` | Keep DB-first |
 | SLA/metrics | DB | DB | `SLAConfig`, `ConversationMetrics` | Keep DB-first |

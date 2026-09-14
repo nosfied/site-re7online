@@ -1,6 +1,6 @@
 # Abandoned Automation / Bot Flow Lifecycle Audit - 2026-09-14
 
-Status: READ-ONLY AUDIT / PRODUCT LIFECYCLE HARDENING / NO PRODUCT CHANGE / NO DEPLOY.
+Status: LOCAL E2E VALIDATED / PRODUCT LIFECYCLE HARDENING / NO RUNTIME CHANGE / NO DEPLOY.
 
 Correction: the earlier `WAITING_FOR_CUSTOMER 60m` interpretation as a human
 waiting auto-close is superseded. Human conversations may remain open
@@ -129,6 +129,54 @@ runtime:
 - Webchat session expiration is user-facing as `webchat_session_expired`, but it
   is scoped to the webchat session token.
 
+## Local E2E Validation - 2026-09-14
+
+Validated locally against safe local PostgreSQL
+`postgresql://deifson-oliveira@127.0.0.1:5432/whatsapp_agent`, using temporary
+tenant keys prefixed with `abandoned-e2e-` and deleting all seeded rows at the
+end of the run. Production DB was not used.
+
+Results:
+
+- Menu/submenu abandonment with `resetAfterMinutes`: PASS. Before the returning
+  inbound, runtime stayed `BOT` / `WAITING_USER`. After the stale inbound, the
+  executor reset `chatbotNodeId` from submenu to root, kept `chatbotActive=true`,
+  emitted `flow.inactivity_reset.applied`, and did not move to HUMAN or CLOSED.
+- Capture abandonment with `resetAfterMinutes`: PASS with product caveat. The
+  stale inbound did not answer the old pending capture; the flow restarted at
+  the first capture prompt. Existing `flowContext` was preserved internally until
+  overwritten by the next valid answer, so the behavior is safe but confusing
+  and remains a product decision.
+- Handoff by `timeoutMinutes/action=HANDOFF`: PASS. The background processor
+  claimed one due runtime once, promoted it to `HUMAN` / `WAITING`, set
+  `handoffStatus=ACTIVE`, resolved concrete department and queue, created an
+  operational protocol and queued handoff, protocol and queue-position outbound
+  messages. A second processor run processed zero items and did not duplicate
+  messages or events.
+- Restart resilience: PASS/PARTIAL. The behavior was validated by reusing only
+  persisted DB state through a fresh function invocation, equivalent to losing
+  in-memory state. A full process kill/restart smoke was not required because no
+  runtime code changed.
+- Inbox projection: PASS by invariant. Final handoff state had
+  `mode=HUMAN`, `status=WAITING`, `handoffStatus=ACTIVE`, concrete
+  `departmentId` and concrete `queueId`, which matches the human Inbox
+  projection contract.
+- Provider coverage: PARTIAL. Inline reset is in the shared flow executor.
+  Background handoff currently creates Web Session outbound messages and service
+  cycle metadata through the existing Web Session path; provider-independent
+  parity for Meta/webchat/support remains a hardening item if required.
+
+Focused regression added:
+
+- `executeChatbotFlow resets stale capture before consuming new inbound and
+  preserves context until overwritten`.
+
+Focused tests run:
+
+- `node --import tsx --test src/chatbot/chatbotFlow.test.ts`: 59/59 PASS.
+- `node --import tsx --test src/chatbot/chatbotInactivityProcessor.test.ts`:
+  11/11 PASS.
+
 ## Existing Coverage
 
 Already covered:
@@ -149,7 +197,7 @@ Missing or partial:
 - `CLOSE` as background action.
 - User-facing timeout copy for abandoned automation.
 - Provider-independent test matrix for WhatsApp Web Session, webchat and support.
-- End-to-end local validation of current abandoned automation behavior.
+- Provider-independent E2E matrix for background handoff outbound behavior.
 
 ## Reuse Matrix
 
@@ -172,13 +220,14 @@ Missing or partial:
 
 ## Product Classification
 
-D. INFRA EXISTS / LIFECYCLE GAP REMAINS.
+D. INFRA EXISTS / LOCAL E2E VALIDATED / PRODUCT LIFECYCLE GAP REMAINS.
 
 The platform already has persisted BOT runtime, last-interaction timestamp,
 flow-level inactivity config, inline reset on later inbound and a restart-safe
-background handoff processor. It does not yet have a complete product contract
-for abandoned automation cleanup/expiry across menus, captures, context clearing
-and user-facing timeout UX.
+background handoff processor. Local E2E proved the current reset and handoff
+paths work without HUMAN auto-close. It does not yet have a complete product
+contract for abandoned automation cleanup/expiry across menus, captures, context
+clearing, provider parity and user-facing timeout UX.
 
 ## Minimal Next Step
 

@@ -157,8 +157,11 @@ Demo/CRA/SECULT/Syer flow definition hashes stayed unchanged during smoke.
 Current backlog classification:
 
 - P0: none.
-- P1: abandoned automation / BOT flow lifecycle audited/read-only on 2026-09-14
-  in `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`; CRA
+- P1: abandoned automation / BOT flow lifecycle local E2E validated on
+  2026-09-14 in
+  `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`; product
+  decisions remain open for stale `flowContext` cleanup, timeout UX and
+  provider parity; CRA
   department/flow-aware hours configuration and validation; Demo Meta Cloud
   restriction external remediation (`phone.status=BANNED`, WABA `REJECTED`)
   with Demo Web Session `QR_REQUIRED` preserved without mutation; user
@@ -174,10 +177,12 @@ Current backlog classification:
 Abandoned automation audit, 2026-09-14: the earlier `WAITING_FOR_CUSTOMER 60m`
 human auto-close interpretation is superseded and is not a current product
 requirement. `WAITING_USER` in BOT context means automation waiting for user
-input. Current infrastructure has persisted `chatbotRuntime.lastInteractionAt`,
+input. Local E2E validated persisted `chatbotRuntime.lastInteractionAt`,
 flow-level `resetAfterMinutes`, background `timeoutMinutes/action=HANDOFF`, DB
-claim and restart resilience. Remaining gap: product-harden cleanup/expiry UX
-for incomplete BOT flows without closing HUMAN conversations automatically.
+claim, duplicate prevention and restart resilience without production mutation.
+Remaining gap: product-harden cleanup/expiry UX for incomplete BOT flows,
+stale `flowContext` policy and provider parity without closing HUMAN
+conversations automatically.
 
 Syer Dashboard audit, 2026-09-13: read-only production audit on
 `69bedc38396b8f837a236b0af4a5446397919403` found no confirmed refresh loop or

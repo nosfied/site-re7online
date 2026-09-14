@@ -486,7 +486,7 @@ A precedencia funcional e:
 - consentimento aceito com setor fechado e `QUEUE_FOR_NEXT_OPEN`: `WAITING` compartilhado com department/queue validos, sem autoassign enquanto fechado.
 - sem destino valido: nao criar estado `WAITING`/`HUMAN`/`ACTIVE` invalido; permanece BOT e registra handoff skipped.
 
-Auditoria read-only de 2026-09-14 sobre lifecycle de inatividade:
+Auditoria/E2E local de 2026-09-14 sobre lifecycle de inatividade:
 a interpretacao anterior de `WAITING_FOR_CUSTOMER 60m` como auto-close de
 atendimento humano foi SUPERSEDED / NOT PRODUCT REQUIREMENT. Conversas HUMAN
 continuam sob controle humano e nao devem expirar por inatividade generica. A
@@ -495,9 +495,12 @@ frente correta e abandono de automacao iniciada pelo cidadao, documentada em
 BOT, `WAITING_USER` significa automacao aguardando input do usuario; o runtime
 persistido possui `chatbotRuntime.lastInteractionAt`, reset inline por
 `resetAfterMinutes` no proximo inbound e handoff de inatividade por
-`timeoutMinutes/action=HANDOFF` no `chatbotInactivityProcessor`. Gap restante:
-contrato de limpeza/expiracao e UX para fluxos BOT incompletos, sem criar
-scheduler paralelo e sem auto-close HUMAN.
+`timeoutMinutes/action=HANDOFF` no `chatbotInactivityProcessor`. O E2E local
+confirmou reset de menu/submenu/captura sem HUMAN/CLOSED, handoff unico para
+HUMAN/WAITING com department/queue concretos, protocolo e posicao na fila, e
+sem duplicidade na segunda varredura. Gap restante: politica de limpeza de
+`flowContext` em reset stale, copy/UX de timeout e paridade provider-independent
+do processor, sem criar scheduler paralelo e sem auto-close HUMAN.
 
 ## Web Session
 
@@ -686,7 +689,7 @@ Commits relevantes do baseline homologado:
   = CLOSED / REAL VALIDATED; QUESTION CONDITIONAL BRANCHING = PRODUCT GAP /
   OPEN; SYER ****9614 = CLOSED.
 - Current execution backlog, 2026-09-14: P0 = none. P1 ativo =
-  abandoned automation / BOT flow lifecycle como hardening auditado e ainda aberto,
+  abandoned automation / BOT flow lifecycle com E2E local validado e decisoes de produto ainda abertas,
   configuracao/validacao CRA de horarios de departamento/fluxo, Demo Meta Cloud
   restriction externa e desativacao de usuario com atendimentos ativos. P2 ativo
   = branching condicional por resposta
@@ -723,8 +726,9 @@ Commits relevantes do baseline homologado:
 ## Proximos passos recomendados
 
 - Auditar Dashboard Syer com trace de API/browser antes de classificar como bug.
-- Validar e endurecer abandoned automation / BOT flow lifecycle sem auto-close
-  HUMAN.
+- Endurecer abandoned automation / BOT flow lifecycle sem auto-close HUMAN,
+  agora partindo do E2E local validado e das decisoes abertas sobre
+  `flowContext`, copy/UX de timeout e paridade de providers.
 - Guiar configuracao CRA de horarios de departamento e validar fluxo fora de
   expediente.
 - Especificar branching condicional por resposta capturada como novo recurso de

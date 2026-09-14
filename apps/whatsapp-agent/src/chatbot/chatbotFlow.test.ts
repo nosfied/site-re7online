@@ -1536,6 +1536,81 @@ test("executeChatbotFlow keeps submenu inside inactivity window", () => {
   assert.equal(Boolean(result.events?.some((event) => event.event === "flow.inactivity_reset.applied")), false);
 });
 
+test("executeChatbotFlow resets stale capture before consuming new inbound and preserves context until overwritten", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "name",
+    inactivityPolicy: { resetAfterMinutes: 1 },
+    nodes: {
+      name: {
+        type: "capture",
+        text: "Informe seu nome",
+        field: "name",
+        next: "protocol",
+      },
+      protocol: {
+        type: "capture",
+        text: "Informe o protocolo",
+        field: "protocol",
+        next: "menu",
+      },
+      menu: {
+        type: "menu",
+        text: "Menu principal",
+        options: [{ label: "1 - Encerrar", next: "done" }],
+      },
+      done: { type: "text", text: "Fim" },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const prompt = executeChatbotFlow({
+    flowId: "capture_timeout",
+    definition: validated.definition,
+    state: makeState(),
+    inboundText: "inicio",
+    nowIso: "2026-08-12T10:00:00.000Z",
+  });
+  const pendingProtocol = executeChatbotFlow({
+    flowId: "capture_timeout",
+    definition: validated.definition,
+    state: prompt.state,
+    inboundText: "Joao",
+    nowIso: "2026-08-12T10:00:30.000Z",
+  });
+
+  assert.equal(pendingProtocol.state.chatbotNodeId, "protocol");
+  assert.equal(pendingProtocol.state.answers?.flowContext?.name, "Joao");
+  assert.match(pendingProtocol.replyText ?? "", /Informe o protocolo/);
+
+  const staleInbound = executeChatbotFlow({
+    flowId: "capture_timeout",
+    definition: validated.definition,
+    state: pendingProtocol.state,
+    inboundText: "oi de novo",
+    nowIso: "2026-08-12T10:22:00.000Z",
+  });
+
+  assert.equal(staleInbound.state.chatbotNodeId, "name");
+  assert.equal(staleInbound.state.answers?.flowContext?.name, "Joao");
+  assert.equal(staleInbound.state.answers?.flowContext?.protocol, undefined);
+  assert.match(staleInbound.replyText ?? "", /Informe seu nome/);
+  assert.equal(staleInbound.events?.[0]?.event, "flow.inactivity_reset.applied");
+
+  const restartedAnswer = executeChatbotFlow({
+    flowId: "capture_timeout",
+    definition: validated.definition,
+    state: staleInbound.state,
+    inboundText: "Maria",
+    nowIso: "2026-08-12T10:22:30.000Z",
+  });
+
+  assert.equal(restartedAnswer.state.chatbotNodeId, "protocol");
+  assert.equal(restartedAnswer.state.answers?.flowContext?.name, "Maria");
+  assert.equal(restartedAnswer.state.answers?.flowContext?.protocol, undefined);
+  assert.match(restartedAnswer.replyText ?? "", /Informe o protocolo/);
+});
+
 test("validateChatbotFlowDefinition rejects duplicate explicit menu option numbers", () => {
   const result = validateChatbotFlowDefinition({
     start: "menu",
