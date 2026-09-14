@@ -320,7 +320,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "Relatórios", government: "Indicadores" },
   },
   {
-    href: "/app/settings/users",
+    href: "/app/users",
     icon: "👤",
     group: "administration",
     minRole: "SUPERVISOR",

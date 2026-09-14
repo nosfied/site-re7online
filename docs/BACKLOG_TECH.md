@@ -124,6 +124,30 @@ ACTIVE P1:
    `NO_SCHEDULE`, UI em `/app/settings/departments`), mas a configuracao CRA
    segue pendente do cliente e precisa validacao de comportamento fora de
    expediente no fluxo. Sem horario salvo significa `NO_SCHEDULE`/aberto.
+4. Demo Meta Cloud restriction: P1 / EXTERNAL META REMEDIATION + CHANNEL
+   CONTINUITY OPEN. Auditoria somente leitura de 2026-09-14 confirmou o phone
+   number Meta do `demo-converta` com `status=BANNED` e WABA com
+   `account_review_status=REJECTED`; o business aparece `not_verified` e 3
+   templates retornaram rejeicao `SCAM`. O banco nao mostrou outbound Meta,
+   campanha, template ativo ou passive Meta sends nos ultimos 72h, entao volume
+   recente da aplicacao nao e causa comprovada. A Web Session do Demo esta
+   `QR_REQUIRED` desde 2026-09-13 22:40:23Z e nao deve ser reconectada,
+   desconectada ou limpa sem autorizacao explicita do owner.
+5. Users Management 2.0: LOCAL FINAL OWNER REVIEW. Inactive user disappearing
+   root cause: `GET /app/users` filtrava `User.isActive=true` no backend,
+   enquanto a UI ja possuia filtro de status e serializer preservava
+   `isActive=false`. Ajuste local inclui inativos no modo Todos, filtros
+   `Todos/Ativos/Inativos`, linhas expansivas em `/app/users`, contador
+   `activeUsers/maxActiveAppUsers` usando o mesmo resolver/enforcement do
+   backend e micro-ajustes finais de owner: filtro com regiao visual distinta,
+   botao explicito expandir/recolher, hierarquia tonal header/body e botao
+   Salvar preenchido. Contrato de draft: expandir inicializa do estado
+   persistido; recolher, trocar linha ou alterar filtros descarta alteracoes
+   nao salvas; filtros, contador e disponibilidade de assentos derivam somente
+   de `users` persistido, nunca de `userDrafts`. Test gate local: frontend
+   focado PASS, backend focado PASS, builds PASS, schema unchanged, migration
+   none. BUG so pode ser marcado CLOSED apos validacao visual do owner e
+   validacao em producao.
 
 ACTIVE P2:
 
@@ -146,6 +170,10 @@ ACTIVE P2:
    seguro.
 5. Internal support access hardening: P2 / WATCH-HARDENING. Mecanismo existe;
    manter evolucao em auditoria, expiracao, evidencias e menor privilegio.
+6. Deactivate user with active human conversations: PRODUCT LIFECYCLE GAP /
+   OPEN. Definir contrato de produto para atendimentos HUMAN ja atribuidos ou
+   em andamento quando o usuario responsavel e desativado; nao foi implementado
+   no Users Management 2.0.
 
 P3:
 

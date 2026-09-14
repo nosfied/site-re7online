@@ -8094,10 +8094,23 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
-      const users = await prisma.user.findMany({
+      const rawStatus = parsedUrl.searchParams.get("status");
+      const status = rawStatus === "active" || rawStatus === "inactive" || rawStatus === "all" ? rawStatus : "all";
+      const activeUsers = await prisma.user.count({
         where: {
           clientId: client.id,
           isActive: true,
+        },
+      });
+      const maxActiveAppUsers = await resolveTenantMaxActiveAppUsers({
+        prisma,
+        clientId: client.id,
+        clientKey: client.clientKey,
+      });
+      const users = await prisma.user.findMany({
+        where: {
+          clientId: client.id,
+          ...(status === "active" ? { isActive: true } : status === "inactive" ? { isActive: false } : {}),
           ...(clientAuth.role === "SUPERVISOR"
             ? {
                 role: { in: ["AGENT", "SUPERVISOR"] },
@@ -8131,6 +8144,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       json(res, 200, {
         ok: true,
         count: users.length,
+        activeUsers,
+        maxActiveAppUsers,
         items,
       });
     } catch (error) {

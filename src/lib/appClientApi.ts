@@ -3241,13 +3241,17 @@ export async function updateAppConversationStatus(
 }
 
 export async function fetchAppUsers(
-  session: AppSession
+  session: AppSession,
+  status: "active" | "inactive" | "all" = "all"
 ): Promise<{
   ok: true;
   count: number;
+  activeUsers?: number;
+  maxActiveAppUsers?: number;
   items: AdminUserItem[];
 }> {
-  return requestAppJson(session, "/app/users");
+  const suffix = status === "all" ? "" : `?status=${encodeURIComponent(status)}`;
+  return requestAppJson(session, `/app/users${suffix}`);
 }
 
 export async function createAppUser(

@@ -6,6 +6,7 @@ import {
   fetchAppCompletedServiceReport,
   fetchAppSatisfactionPolicy,
   fetchAppSatisfactionReport,
+  fetchAppUsers,
   exportAppCompletedServiceReportCsv,
   formatAppWhatsappIdentityDisplay,
   heartbeatAppAgentAvailability,
@@ -175,6 +176,48 @@ test("agent availability client calls session-scoped endpoints", async () => {
   ]);
   assert.equal(calls[1].body, JSON.stringify({ available: true }));
   assert.equal(calls[2].body, JSON.stringify({}));
+});
+
+test("fetchAppUsers supports persisted status filters", async () => {
+  const calls: string[] = [];
+  const originalFetch = globalThis.fetch;
+  Object.assign(globalThis, {
+    fetch: async (url: string | URL) => {
+      calls.push(String(url));
+      return {
+        ok: true,
+        json: async () => ({ ok: true, count: 0, activeUsers: 0, maxActiveAppUsers: 5, items: [] }),
+      } as Response;
+    },
+  });
+
+  const session: AppSession = {
+    baseUrl: "https://app.example.test",
+    token: "token",
+    user: {
+      id: "admin-a",
+      name: "Admin A",
+      email: "admin@example.test",
+      clientId: "tenant-a",
+      role: "ADMIN",
+    },
+    features: {},
+    profile: "business",
+  };
+
+  try {
+    await fetchAppUsers(session);
+    await fetchAppUsers(session, "all");
+    await fetchAppUsers(session, "active");
+    await fetchAppUsers(session, "inactive");
+  } finally {
+    Object.assign(globalThis, { fetch: originalFetch });
+  }
+
+  assert.deepEqual(
+    calls.map((url) => `${new URL(url).pathname}${new URL(url).search}`),
+    ["/app/users", "/app/users", "/app/users?status=active", "/app/users?status=inactive"]
+  );
 });
 
 test("inbox action telemetry uses the existing app inbox event endpoint", async () => {

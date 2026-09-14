@@ -23,6 +23,15 @@ import {
 import { formatUserDisplayName } from "@/lib/userDisplayName";
 
 const USER_ROLE_OPTIONS = ["AGENT", "SUPERVISOR", "ADMIN"] as const;
+type UserStatusFilter = "" | "active" | "inactive";
+type UserDraft = {
+  name: string;
+  email: string;
+  role: string;
+  departmentIds: string[];
+  primaryDepartmentId: string;
+  isActive: boolean;
+};
 
 const EMPTY_USER_FORM = {
   name: "",
@@ -72,6 +81,18 @@ function getUserDepartmentIds(item: AdminUserItem) {
 
 function getPrimaryDepartmentId(item: AdminUserItem, departmentIds = getUserDepartmentIds(item)) {
   return item.primaryDepartmentId ?? item.departmentId ?? departmentIds[0] ?? "";
+}
+
+function buildUserDraft(item: AdminUserItem): UserDraft {
+  const departmentIds = getUserDepartmentIds(item);
+  return {
+    name: item.name,
+    email: item.email,
+    role: String(item.role || "AGENT").toUpperCase(),
+    departmentIds,
+    primaryDepartmentId: getPrimaryDepartmentId(item, departmentIds),
+    isActive: item.isActive ?? true,
+  };
 }
 
 function toggleDepartmentId(current: string[], departmentId: string) {
@@ -153,20 +174,13 @@ export default function AppSettingsUsersPage() {
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [userSearch, setUserSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [userDrafts, setUserDrafts] = useState<
-    Record<
-      string,
-      {
-        name: string;
-        email: string;
-        role: string;
-        departmentIds: string[];
-        primaryDepartmentId: string;
-        isActive: boolean;
-      }
-    >
-  >({});
+  const [statusFilter, setStatusFilter] = useState<UserStatusFilter>("");
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [activeUserCapacity, setActiveUserCapacity] = useState<{
+    activeUsers: number | null;
+    maxActiveAppUsers: number | null;
+  }>({ activeUsers: null, maxActiveAppUsers: null });
+  const [userDrafts, setUserDrafts] = useState<Record<string, UserDraft>>({});
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -175,30 +189,21 @@ export default function AppSettingsUsersPage() {
 
   const hydrateUsers = useCallback((items: AdminUserItem[]) => {
     setUsers(items);
-    setUserDrafts(
-      Object.fromEntries(
-        items.map((item) => [
-          item.id,
-          {
-            name: item.name,
-            email: item.email,
-            role: String(item.role || "AGENT").toUpperCase(),
-            departmentIds: getUserDepartmentIds(item),
-            primaryDepartmentId: getPrimaryDepartmentId(item),
-            isActive: item.isActive ?? true,
-          },
-        ])
-      )
-    );
+    setUserDrafts(Object.fromEntries(items.map((item) => [item.id, buildUserDraft(item)])));
   }, []);
 
   const loadPageData = useCallback(
     async (activeSession: AppSession) => {
       const [usersResponse, departmentsResponse] = await Promise.all([
-        fetchAppUsers(activeSession),
+        fetchAppUsers(activeSession, "all"),
         fetchAppDepartments(activeSession),
       ]);
       hydrateUsers(usersResponse.items);
+      setActiveUserCapacity({
+        activeUsers: typeof usersResponse.activeUsers === "number" ? usersResponse.activeUsers : null,
+        maxActiveAppUsers:
+          typeof usersResponse.maxActiveAppUsers === "number" ? usersResponse.maxActiveAppUsers : null,
+      });
       setDepartments(departmentsResponse.items);
     },
     [hydrateUsers]
@@ -270,19 +275,18 @@ export default function AppSettingsUsersPage() {
   const filteredUsers = useMemo(() => {
     const search = userSearch.trim().toLowerCase();
     return users.filter((item) => {
-      const draft = userDrafts[item.id];
-      const role = String(draft?.role ?? item.role ?? "").toUpperCase();
-      const isActive = draft?.isActive ?? item.isActive ?? true;
-      const departmentIds = draft?.departmentIds ?? getUserDepartmentIds(item);
+      const role = String(item.role ?? "").toUpperCase();
+      const isActive = item.isActive ?? true;
+      const departmentIds = getUserDepartmentIds(item);
       const departmentLabel = departmentIds
         .map((departmentId) => departmentNameById[departmentId] || departmentId)
         .join(" ");
       const searchable = [
-        draft?.name ?? item.name,
-        draft?.email ?? item.email,
+        item.name,
+        item.email,
         role,
         departmentLabel,
-        draft?.primaryDepartmentId ? departmentNameById[draft.primaryDepartmentId] || draft.primaryDepartmentId : "",
+        getPrimaryDepartmentId(item, departmentIds),
       ]
         .join(" ")
         .toLowerCase();
@@ -294,7 +298,44 @@ export default function AppSettingsUsersPage() {
         (statusFilter === "inactive" && !isActive);
       return matchesSearch && matchesRole && matchesStatus;
     });
-  }, [departmentNameById, roleFilter, statusFilter, userDrafts, userSearch, users]);
+  }, [departmentNameById, roleFilter, statusFilter, userSearch, users]);
+
+  const resetDraftForUser = useCallback((userId: string) => {
+    const persisted = users.find((item) => item.id === userId);
+    if (!persisted) return;
+    setUserDrafts((current) => ({ ...current, [userId]: buildUserDraft(persisted) }));
+  }, [users]);
+
+  const collapseExpandedUser = useCallback(() => {
+    if (!expandedUserId) return;
+    resetDraftForUser(expandedUserId);
+    setExpandedUserId(null);
+  }, [expandedUserId, resetDraftForUser]);
+
+  const openUserRow = useCallback((item: AdminUserItem) => {
+    setExpandedUserId((current) => {
+      setUserDrafts((drafts) => {
+        const nextDrafts = { ...drafts, [item.id]: buildUserDraft(item) };
+        if (current && current !== item.id) {
+          const previous = users.find((user) => user.id === current);
+          if (previous) nextDrafts[current] = buildUserDraft(previous);
+        }
+        return nextDrafts;
+      });
+      if (current === item.id) return null;
+      window.requestAnimationFrame(() => {
+        document.getElementById(`user-row-${item.id}`)?.scrollIntoView({ block: "nearest" });
+      });
+      return item.id;
+    });
+  }, [users]);
+
+  useEffect(() => {
+    if (expandedUserId && !filteredUsers.some((item) => item.id === expandedUserId)) {
+      resetDraftForUser(expandedUserId);
+      setExpandedUserId(null);
+    }
+  }, [expandedUserId, filteredUsers, resetDraftForUser]);
 
   const handleCreateUser = async () => {
     if (!session) return;
@@ -394,6 +435,15 @@ export default function AppSettingsUsersPage() {
         isActive: draft.isActive,
       });
       setUsers((current) => current.map((user) => (user.id === item.id ? response.user : user)));
+      setActiveUserCapacity((current) => {
+        const wasActive = item.isActive ?? true;
+        const nextActive = response.user.isActive ?? true;
+        if (current.activeUsers === null || wasActive === nextActive) return current;
+        return {
+          ...current,
+          activeUsers: Math.max(0, current.activeUsers + (nextActive ? 1 : -1)),
+        };
+      });
       setUserDrafts((current) => ({
         ...current,
         [item.id]: {
@@ -613,15 +663,28 @@ export default function AppSettingsUsersPage() {
               Edite os dados na linha do usuario e clique em Salvar.
             </p>
           </div>
-          <InfoBadge label={`${filteredUsers.length}/${users.length} usuarios`} />
+          <div className="flex flex-wrap gap-1.5">
+            <InfoBadge label={`${filteredUsers.length}/${users.length} usuarios`} />
+            <InfoBadge
+              label={
+                activeUserCapacity.activeUsers !== null && activeUserCapacity.maxActiveAppUsers !== null
+                  ? `${activeUserCapacity.activeUsers}/${activeUserCapacity.maxActiveAppUsers} usuários ativos`
+                  : "usuarios ativos"
+              }
+              tone="success"
+            />
+          </div>
         </div>
 
-        <div className="users-settings-filter-panel mb-3 grid min-w-0 gap-3 rounded-lg border border-white/10 bg-black/10 p-3 sm:grid-cols-[minmax(220px,1fr)_180px_180px_auto]">
+        <div className="users-settings-filter-panel mb-3 grid min-w-0 gap-3 rounded-lg border border-white/15 bg-re7-navy/55 p-3 shadow-inner shadow-black/10 ring-1 ring-white/5 sm:grid-cols-[minmax(220px,1fr)_180px_180px_auto]">
           <label className="grid gap-1 text-sm text-white/75">
             <span>Buscar</span>
             <input
               value={userSearch}
-              onChange={(event) => setUserSearch(event.target.value)}
+              onChange={(event) => {
+                collapseExpandedUser();
+                setUserSearch(event.target.value);
+              }}
               placeholder="Nome, email ou setor"
               className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
             />
@@ -630,7 +693,10 @@ export default function AppSettingsUsersPage() {
             <span>Perfil</span>
             <select
               value={roleFilter}
-              onChange={(event) => setRoleFilter(event.target.value)}
+              onChange={(event) => {
+                collapseExpandedUser();
+                setRoleFilter(event.target.value);
+              }}
               className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
             >
               <option value="">Todos</option>
@@ -645,7 +711,10 @@ export default function AppSettingsUsersPage() {
             <span>Status</span>
             <select
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
+              onChange={(event) => {
+                collapseExpandedUser();
+                setStatusFilter(event.target.value as UserStatusFilter);
+              }}
               className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
             >
               <option value="">Todos</option>
@@ -657,6 +726,7 @@ export default function AppSettingsUsersPage() {
             <button
               type="button"
               onClick={() => {
+                collapseExpandedUser();
                 setUserSearch("");
                 setRoleFilter("");
                 setStatusFilter("");
@@ -688,45 +758,81 @@ export default function AppSettingsUsersPage() {
               if (!draft) return null;
               const canEditThisUser = canEditUserForActor(session.user.role, item.role);
               const departmentLabel =
-                draft.departmentIds.length > 0
-                  ? draft.departmentIds
+                getUserDepartmentIds(item).length > 0
+                  ? getUserDepartmentIds(item)
                       .map((departmentId) => departmentNameById[departmentId] || departmentId)
                       .join(", ")
                   : "-";
-              const primaryDepartmentLabel = draft.primaryDepartmentId
-                ? departmentNameById[draft.primaryDepartmentId] || draft.primaryDepartmentId
+              const persistedPrimaryDepartmentId = getPrimaryDepartmentId(item);
+              const primaryDepartmentLabel = persistedPrimaryDepartmentId
+                ? departmentNameById[persistedPrimaryDepartmentId] || persistedPrimaryDepartmentId
                 : "-";
+              const isExpanded = expandedUserId === item.id;
               return (
                 <article
                   key={item.id}
+                  id={`user-row-${item.id}`}
                   className={`theme-list-row ${
                     index % 2 === 0 ? "theme-list-row-even" : "theme-list-row-odd"
-                  } users-settings-user-card rounded-xl border p-3 ${
+                  } users-settings-user-card overflow-hidden rounded-xl border ${
                     index % 2 === 0
                       ? "border-white/10 bg-re7-navy/45"
                       : "border-white/15 bg-white/[0.075]"
                   }`}
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <InfoBadge label={`Perfil: ${draft.role}`} />
-                      <InfoBadge label={`Setor: ${departmentLabel}`} />
-                      <InfoBadge
-                        label={`Principal: ${primaryDepartmentLabel}`}
-                        tone={draft.primaryDepartmentId ? "success" : "warning"}
-                      />
-                      <InfoBadge
-                        label={draft.isActive ? "Ativo" : "Inativo"}
-                        tone={draft.isActive ? "success" : "warning"}
-                      />
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
+                    aria-controls={`user-panel-${item.id}`}
+                    onClick={() => openUserRow(item)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openUserRow(item);
+                      }
+                    }}
+                    className="users-settings-user-header flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-white/[0.075] px-3 py-3 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-semibold text-white/90">{formatUserDisplayName(item.name, item.email)}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <InfoBadge label={`Perfil: ${item.role}`} />
+                        <InfoBadge label={`Setor: ${departmentLabel}`} />
+                        <InfoBadge
+                          label={`Principal: ${primaryDepartmentLabel}`}
+                          tone={persistedPrimaryDepartmentId ? "success" : "warning"}
+                        />
+                        <InfoBadge
+                          label={(item.isActive ?? true) ? "Ativo" : "Inativo"}
+                          tone={(item.isActive ?? true) ? "success" : "warning"}
+                        />
+                      </div>
                     </div>
-                    <div className="text-right text-xs text-white/55">
-                      <div className="font-semibold text-white/80">{formatUserDisplayName(draft.name, draft.email)}</div>
-                      <div>Criado em {formatDateTime(item.createdAt)}</div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <div className="hidden text-right text-xs text-white/55 sm:block">
+                        <div>Criado em {formatDateTime(item.createdAt)}</div>
+                      </div>
+                      <button
+                        type="button"
+                        aria-expanded={isExpanded}
+                        aria-controls={`user-panel-${item.id}`}
+                        aria-label={isExpanded ? "Recolher linha" : "Expandir linha"}
+                        title={isExpanded ? "Recolher linha" : "Expandir linha"}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openUserRow(item);
+                        }}
+                        className={`grid h-8 w-8 place-items-center rounded-full border text-base font-semibold leading-none transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 disabled:cursor-not-allowed disabled:opacity-60 ${isExpanded ? "rotate-90 border-re7-sky/50 bg-re7-sky/20 text-sky-50" : "border-white/15 text-white/70"}`}
+                      >
+                        ›
+                      </button>
                     </div>
                   </div>
 
-                  <div className="users-settings-user-body mt-3 space-y-3 border-t border-white/10 pt-3">
+                  {isExpanded ? (
+                    <>
+                  <div id={`user-panel-${item.id}`} className="users-settings-user-body space-y-3 bg-black/10 px-3 py-3">
                     <div className="grid max-w-4xl min-w-0 gap-3 lg:grid-cols-[minmax(260px,0.9fr)_minmax(320px,1.1fr)]">
                       <label className="flex min-w-0 flex-col text-sm text-white/75">
                         <input
@@ -878,7 +984,7 @@ export default function AppSettingsUsersPage() {
                     </div>
                   </div>
 
-                  <div className="users-settings-card-actions mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="users-settings-card-actions flex flex-wrap items-center justify-between gap-2 bg-black/10 px-3 pb-3">
                     <p className="text-xs text-white/55">
                       Reset de senha ainda indisponivel no /app.
                     </p>
@@ -886,12 +992,14 @@ export default function AppSettingsUsersPage() {
                       type="button"
                       onClick={() => handleUpdateUser(item)}
                       disabled={savingUserId === item.id || !canEditThisUser}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-white/20 px-2.5 py-1.5 text-xs text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+                      className="inline-flex items-center gap-1.5 rounded-md bg-re7-orange px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-black/10 hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-re7-sky disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-white/45 disabled:shadow-none sm:text-sm"
                     >
                       <ActionIcon>✓</ActionIcon>
                       {savingUserId === item.id ? "Salvando..." : "Salvar"}
                     </button>
                   </div>
+                    </>
+                  ) : null}
                 </article>
               );
             })}

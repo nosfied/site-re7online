@@ -157,15 +157,29 @@ Demo/CRA/SECULT/Syer flow definition hashes stayed unchanged during smoke.
 Current backlog classification:
 
 - P0: none.
-- P1: Syer Dashboard transient error / refresh-loop audit; WAITING_FOR_CUSTOMER
-  60m explicit automation lifecycle; CRA department/flow-aware hours
-  configuration and validation.
+- P1: WAITING_FOR_CUSTOMER 60m explicit automation lifecycle; CRA
+  department/flow-aware hours configuration and validation; Demo Meta Cloud
+  restriction external remediation (`phone.status=BANNED`, WABA `REJECTED`)
+  with Demo Web Session `QR_REQUIRED` preserved without mutation; Users
+  Management 2.0 inactive visibility bug in LOCAL FINAL OWNER REVIEW.
 - P2: question conditional branching by captured answer; reporting context
   enhancements; Guided Builder complete final-review summary; Meta Cloud
-  unlink/removal semantics; support access hardening.
-- WATCH: Inbox performance, CPU, `last_message_lookup`, SECULT fairness and
-  round-robin cursor, SECULT non-content suppression organic validation and
-  representative scale/load validation.
+  unlink/removal semantics; support access hardening; deactivate user with
+  active human conversations remains PRODUCT LIFECYCLE GAP / OPEN.
+- WATCH: Syer Dashboard transient error UX/observability, Inbox performance,
+  CPU, `last_message_lookup`, SECULT fairness and round-robin cursor, SECULT
+  non-content suppression organic validation and representative scale/load
+  validation.
+
+Syer Dashboard audit, 2026-09-13: read-only production audit on
+`69bedc38396b8f837a236b0af4a5446397919403` found no confirmed refresh loop or
+dashboard backend error. `/app/dashboard` fetches users, departments and
+`/app/dashboard/overview`; it does not fetch `/app/conversations`. Overview
+refresh cadence is 15s plus realtime debounce of 500ms for message/handoff/status
+events. Syer data volume is low (1 runtime state, 1 non-deleted conversation,
+10 metrics, 10 leads, 2 users, 1 department), so tenant cardinality and Inbox
+query cost are not supported as root cause. Status: BUG NOT PROVEN / WATCH; no
+code patch without a reproducible endpoint failure.
 
 Inbox visibility policy audit, 2026-09-13: `shared` and
 `assignee_only_after_assignment` are visibility/projection modes for Inbox list,
