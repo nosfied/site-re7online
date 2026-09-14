@@ -151,6 +151,20 @@ ACTIVE P1:
    `5ad40c10eda77076bc2a069e432663ac2271f0a8`; smoke pos-deploy confirmou
    health, rotas `/app/users` e `/app/settings/users`, backend online e dados
    reais com usuarios inativos por tenant sem mutacao.
+6. Departments Management UX 2.0: OWNER APPROVED / DELIVERY PENDING.
+   Aplicacao local em `/app/settings/departments` reaproveita o padrao visual
+   aprovado em Users Management 2.0 e Guided Builder: linhas recolhiveis, botao
+   circular explicito expandir/recolher, um setor aberto por vez, header com
+   resumo persistido e corpo expandido em tom subordinado para edicao. Contrato
+   de draft: expandir inicializa a partir de `departments` persistido; recolher,
+   trocar linha ou alterar filtros descarta alteracoes nao salvas; resumo/filtro
+   nao deriva de draft local. Sem alteracao de rota, fila, horario, RBAC,
+   autoassign, capacidade, presenca, Inbox visibility, schema ou migracao.
+   Refinamento aprovado tambem fixa a coluna direita dos controles expansivos
+   em Users Management 2.0 e Departments Management UX 2.0 com
+   `grid-cols-[minmax(0,1fr)_auto]`, impedindo que conteudo quebrado empurre o
+   botao circular para uma segunda linha. Status: local build/test PASS e owner
+   PASS; aguardando entrega controlada em producao.
 
 ACTIVE P2:
 

@@ -60,6 +60,12 @@ type HoursEditorDraft = {
   intervals: Array<{ startMinute: number; endMinute: number }>;
 };
 
+type DepartmentDraft = {
+  name: string;
+  isActive: boolean;
+  businessHours: BusinessHourDraft[];
+};
+
 function minutesToTime(value: number) {
   const hour = Math.floor(value / 60);
   const minute = value % 60;
@@ -151,6 +157,18 @@ function buildBusinessHourGroups(hours: BusinessHourDraft[]) {
     }
   }
   return [...groups.values()].sort((a, b) => a.weekdays[0] - b.weekdays[0]);
+}
+
+function buildDepartmentDraft(item: AdminDepartmentItem): DepartmentDraft {
+  return {
+    name: item.name,
+    isActive: item.isActive,
+    businessHours: (item.businessHours ?? []).map((hour) => ({
+      weekday: hour.weekday,
+      startMinute: hour.startMinute,
+      endMinute: hour.endMinute,
+    })),
+  };
 }
 
 function validateEditorIntervals(intervals: Array<{ startMinute: number; endMinute: number }>) {
@@ -258,9 +276,8 @@ export default function AppSettingsDepartmentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [timezone, setTimezone] = useState("America/Fortaleza");
-  const [drafts, setDrafts] = useState<
-    Record<string, { name: string; isActive: boolean; businessHours: BusinessHourDraft[] }>
-  >({});
+  const [drafts, setDrafts] = useState<Record<string, DepartmentDraft>>({});
+  const [expandedDepartmentId, setExpandedDepartmentId] = useState<string | null>(null);
   const [hoursEditor, setHoursEditor] = useState<HoursEditorDraft | null>(null);
   const [exceptionEditor, setExceptionEditor] = useState<BusinessHourExceptionDraft | null>(null);
   const [savingExceptions, setSavingExceptions] = useState(false);
@@ -274,22 +291,7 @@ export default function AppSettingsDepartmentsPage() {
 
   const hydrateDepartments = useCallback((items: AdminDepartmentItem[]) => {
     setDepartments(items);
-    setDrafts(
-      Object.fromEntries(
-        items.map((item) => [
-          item.id,
-          {
-            name: item.name,
-            isActive: item.isActive,
-            businessHours: (item.businessHours ?? []).map((hour) => ({
-              weekday: hour.weekday,
-              startMinute: hour.startMinute,
-              endMinute: hour.endMinute,
-            })),
-          },
-        ])
-      )
-    );
+    setDrafts(Object.fromEntries(items.map((item) => [item.id, buildDepartmentDraft(item)])));
   }, []);
 
   const loadDepartments = useCallback(
@@ -391,11 +393,8 @@ export default function AppSettingsDepartmentsPage() {
   const filteredDepartments = useMemo(() => {
     const search = departmentSearch.trim().toLowerCase();
     return sortedDepartments.filter((item) => {
-      const draft = drafts[item.id];
-      const isActive = draft?.isActive ?? item.isActive;
-      const searchable = [draft?.name ?? item.name, item.name, item.slug, item.id]
-        .join(" ")
-        .toLowerCase();
+      const isActive = item.isActive;
+      const searchable = [item.name, item.slug, item.id].join(" ").toLowerCase();
       const matchesSearch = !search || searchable.includes(search);
       const matchesStatus =
         !departmentStatusFilter ||
@@ -403,7 +402,58 @@ export default function AppSettingsDepartmentsPage() {
         (departmentStatusFilter === "inactive" && !isActive);
       return matchesSearch && matchesStatus;
     });
-  }, [departmentSearch, departmentStatusFilter, drafts, sortedDepartments]);
+  }, [departmentSearch, departmentStatusFilter, sortedDepartments]);
+
+  const resetDraftForDepartment = useCallback((departmentId: string) => {
+    const persisted = departments.find((item) => item.id === departmentId);
+    if (!persisted) return;
+    setDrafts((current) => ({ ...current, [departmentId]: buildDepartmentDraft(persisted) }));
+  }, [departments]);
+
+  const collapseExpandedDepartment = useCallback(() => {
+    if (!expandedDepartmentId) return;
+    resetDraftForDepartment(expandedDepartmentId);
+    setExpandedDepartmentId(null);
+    setHoursEditor((current) => current?.departmentId === expandedDepartmentId ? null : current);
+    setExceptionEditor((current) =>
+      current?.departmentIds[0] === expandedDepartmentId ? null : current
+    );
+  }, [expandedDepartmentId, resetDraftForDepartment]);
+
+  const openDepartmentRow = useCallback((item: AdminDepartmentItem) => {
+    setExpandedDepartmentId((current) => {
+      setDrafts((drafts) => {
+        const nextDrafts = { ...drafts, [item.id]: buildDepartmentDraft(item) };
+        if (current && current !== item.id) {
+          const previous = departments.find((department) => department.id === current);
+          if (previous) nextDrafts[current] = buildDepartmentDraft(previous);
+        }
+        return nextDrafts;
+      });
+      if (current === item.id) {
+        setHoursEditor((editor) => editor?.departmentId === item.id ? null : editor);
+        setExceptionEditor((editor) => editor?.departmentIds[0] === item.id ? null : editor);
+        return null;
+      }
+      setHoursEditor((editor) => editor?.departmentId === current ? null : editor);
+      setExceptionEditor((editor) => editor?.departmentIds[0] === current ? null : editor);
+      window.requestAnimationFrame(() => {
+        document.getElementById(`department-card-${item.id}`)?.scrollIntoView({ block: "nearest" });
+      });
+      return item.id;
+    });
+  }, [departments]);
+
+  useEffect(() => {
+    if (expandedDepartmentId && !filteredDepartments.some((item) => item.id === expandedDepartmentId)) {
+      resetDraftForDepartment(expandedDepartmentId);
+      setExpandedDepartmentId(null);
+      setHoursEditor((current) => current?.departmentId === expandedDepartmentId ? null : current);
+      setExceptionEditor((current) =>
+        current?.departmentIds[0] === expandedDepartmentId ? null : current
+      );
+    }
+  }, [expandedDepartmentId, filteredDepartments, resetDraftForDepartment]);
 
   const handleCreate = async () => {
     if (!session) return;
@@ -946,7 +996,10 @@ export default function AppSettingsDepartmentsPage() {
             <span>Buscar</span>
             <input
               value={departmentSearch}
-              onChange={(event) => setDepartmentSearch(event.target.value)}
+              onChange={(event) => {
+                collapseExpandedDepartment();
+                setDepartmentSearch(event.target.value);
+              }}
               placeholder="Nome ou slug"
               className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
             />
@@ -955,7 +1008,10 @@ export default function AppSettingsDepartmentsPage() {
             <span>Status</span>
             <select
               value={departmentStatusFilter}
-              onChange={(event) => setDepartmentStatusFilter(event.target.value)}
+              onChange={(event) => {
+                collapseExpandedDepartment();
+                setDepartmentStatusFilter(event.target.value);
+              }}
               className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
             >
               <option value="">Todos</option>
@@ -967,6 +1023,7 @@ export default function AppSettingsDepartmentsPage() {
             <button
               type="button"
               onClick={() => {
+                collapseExpandedDepartment();
                 setDepartmentSearch("");
                 setDepartmentStatusFilter("");
               }}
@@ -987,23 +1044,27 @@ export default function AppSettingsDepartmentsPage() {
             Nenhum setor encontrado com os filtros atuais.
           </p>
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-3">
             {filteredDepartments.map((item, index) => {
               const draft = drafts[item.id];
               if (!draft) return null;
-              const isDraftActive = draft.isActive;
-              const cardToneClass = isDraftActive
+              const isPersistedActive = item.isActive;
+              const isExpanded = expandedDepartmentId === item.id;
+              const persistedBusinessHours = (item.businessHours ?? []).map((hour) => ({
+                weekday: hour.weekday,
+                startMinute: hour.startMinute,
+                endMinute: hour.endMinute,
+              }));
+              const activeBusinessHours = isExpanded ? draft.businessHours : persistedBusinessHours;
+              const cardToneClass = isPersistedActive
                 ? index % 2 === 0
-                  ? "department-card-active-a border-re7-sky/45 bg-re7-sky/[0.13] shadow-re7-sky/10"
-                  : "department-card-active-b border-re7-sky/35 bg-re7-sky/[0.09] shadow-re7-sky/10"
-                : "department-card-inactive border-white/15 bg-white/[0.035] shadow-black/10 opacity-85";
-              const cardHeaderToneClass = isDraftActive
-                ? "department-card-header-active border-re7-sky/25 bg-re7-sky/[0.16]"
-                : "department-card-header-inactive border-white/10 bg-white/[0.035]";
-              const sectionToneClass = isDraftActive
+                  ? "department-card-active-a border-re7-sky/30 bg-re7-navy/45 shadow-re7-sky/10"
+                  : "department-card-active-b border-white/15 bg-white/[0.075] shadow-black/10"
+                : "department-card-inactive border-white/15 bg-white/[0.035] shadow-black/10 opacity-90";
+              const sectionToneClass = draft.isActive
                 ? "department-card-section-active border-re7-sky/20 bg-re7-navy/55"
                 : "department-card-section-inactive border-white/10 bg-re7-navy/35";
-              const footerToneClass = isDraftActive
+              const footerToneClass = draft.isActive
                 ? "department-card-footer-active border-re7-sky/20 bg-re7-navy/60"
                 : "department-card-footer-inactive border-white/10 bg-re7-navy/40";
               return (
@@ -1012,38 +1073,65 @@ export default function AppSettingsDepartmentsPage() {
                   key={item.id}
                   className={`theme-list-row ${
                     index % 2 === 0 ? "theme-list-row-even" : "theme-list-row-odd"
-                  } scroll-mt-24 overflow-hidden rounded-xl border shadow-lg transition-colors ${cardToneClass}`}
+                  } scroll-mt-24 overflow-hidden rounded-xl border transition-colors ${cardToneClass}`}
                 >
-                  <div className={`border-b px-3 py-3 md:px-4 ${cardHeaderToneClass}`}>
-                    <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
+                    aria-controls={`department-panel-${item.id}`}
+                    onClick={() => openDepartmentRow(item)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openDepartmentRow(item);
+                      }
+                    }}
+                    className="departments-settings-department-header grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-white/10 bg-white/[0.075] px-3 py-3 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 md:px-4"
+                  >
                       <div className="min-w-0 space-y-1.5">
                         <h3 className="text-base font-semibold text-white">{item.name}</h3>
                         <div className="flex flex-wrap items-center gap-1.5">
                           <DepartmentBadge label={item.slug || "-"} />
                           <DepartmentBadge
-                            label={isDraftActive ? "Ativo" : "Inativo"}
-                            tone={isDraftActive ? "success" : "warning"}
+                            label={isPersistedActive ? "Ativo" : "Inativo"}
+                            tone={isPersistedActive ? "success" : "warning"}
+                          />
+                          <DepartmentBadge
+                            label={persistedBusinessHours.length === 0 ? "Sem horário" : `${persistedBusinessHours.length} períodos`}
+                            tone={persistedBusinessHours.length === 0 ? "default" : "success"}
+                          />
+                          <DepartmentBadge
+                            label={(item.businessHourExceptions ?? []).length === 0
+                              ? "Sem exceções"
+                              : `${item.businessHourExceptions?.length ?? 0} exceções`}
                           />
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        <span className="text-xs text-white/55">Criado em {formatDateTime(item.createdAt)}</span>
-                        {!readOnly ? (
-                          <button
-                            type="button"
-                            onClick={() => handleUpdate(item)}
-                            disabled={savingId === item.id || togglingId === item.id}
-                            className="inline-flex items-center gap-1.5 rounded-md bg-re7-orange px-4 py-2 text-xs font-semibold text-white shadow-md shadow-re7-orange/25 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-re7-orange disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
-                          >
-                            <ActionIcon>✓</ActionIcon>
-                            {savingId === item.id ? "Salvando..." : "Salvar"}
-                          </button>
-                        ) : null}
+                      <div className="expand-row-action-slot flex min-w-max shrink-0 items-center justify-end gap-3 justify-self-end whitespace-nowrap">
+                        <span className="hidden text-right text-xs text-white/55 sm:block">
+                          Criado em {formatDateTime(item.createdAt)}
+                        </span>
+                        <button
+                          type="button"
+                          aria-expanded={isExpanded}
+                          aria-controls={`department-panel-${item.id}`}
+                          aria-label={isExpanded ? "Recolher linha" : "Expandir linha"}
+                          title={isExpanded ? "Recolher linha" : "Expandir linha"}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openDepartmentRow(item);
+                          }}
+                          className={`grid h-8 w-8 place-items-center rounded-full border text-base font-semibold leading-none transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 disabled:cursor-not-allowed disabled:opacity-60 ${isExpanded ? "rotate-90 border-re7-sky/50 bg-re7-sky/20 text-sky-50" : "border-white/15 text-white/70"}`}
+                        >
+                          ›
+                        </button>
                       </div>
-                    </div>
                   </div>
 
-                  <div className="grid min-w-0 grid-cols-1 gap-2 border-b border-white/10 px-3 py-3 md:grid-cols-[minmax(0,1fr)_minmax(0,170px)] md:px-4">
+                  {isExpanded ? (
+                    <div id={`department-panel-${item.id}`} className="departments-settings-department-body bg-black/10 px-3 py-3 md:px-4">
+                  <div className="grid min-w-0 grid-cols-1 gap-2 border-b border-white/10 pb-3 md:grid-cols-[minmax(0,1fr)_minmax(0,170px)]">
                     <label className="flex flex-col gap-1.5 text-xs text-white/75">
                       <span>Nome</span>
                       <input
@@ -1065,53 +1153,53 @@ export default function AppSettingsDepartmentsPage() {
                     <label className="flex flex-col gap-1.5 text-xs text-white/75">
                       <span>Status</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-white/65">{isDraftActive ? "Ativo" : "Inativo"}</span>
+                        <span className="text-xs text-white/65">{draft.isActive ? "Ativo" : "Inativo"}</span>
                         <button
                           type="button"
                           onClick={() => {
                             if (readOnly || togglingId === item.id || savingId === item.id) return;
-                            void handleUpdate(item, !isDraftActive);
+                            void handleUpdate(item, !draft.isActive);
                           }}
                           disabled={readOnly || togglingId === item.id || savingId === item.id}
-                          aria-label={isDraftActive ? "Desativar setor" : "Ativar setor"}
+                          aria-label={draft.isActive ? "Desativar setor" : "Ativar setor"}
                           className={`relative inline-flex h-6 w-12 items-center rounded-full border transition ${
-                            isDraftActive
+                            draft.isActive
                               ? "border-emerald-400/40 bg-emerald-500/20"
                               : "border-white/20 bg-white/10"
                           } ${readOnly || togglingId === item.id || savingId === item.id ? "cursor-not-allowed opacity-50" : ""}`}
                         >
                           <span
                             className={`inline-flex h-4 w-4 transform items-center justify-center rounded-full bg-white text-[8px] font-bold text-re7-navy transition ${
-                              isDraftActive ? "translate-x-7" : "translate-x-1"
+                              draft.isActive ? "translate-x-7" : "translate-x-1"
                             }`}
                           >
-                            {isDraftActive ? "ON" : "OFF"}
+                            {draft.isActive ? "ON" : "OFF"}
                           </span>
                         </button>
                       </div>
                     </label>
                   </div>
 
-                  <div className={`mx-3 mt-3 rounded-lg border p-3 md:mx-4 ${sectionToneClass}`}>
+                  <div className={`mt-3 rounded-lg border p-3 ${sectionToneClass}`}>
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h4 className="text-sm font-semibold text-white">Horário de funcionamento</h4>
                         <p className="text-xs text-white/55">Fuso horário: {timezone}</p>
                       </div>
-                      {draft.businessHours.length === 0 ? (
+                      {activeBusinessHours.length === 0 ? (
                         <DepartmentBadge label="Sem horário configurado" />
                       ) : (
-                        <DepartmentBadge label={`${draft.businessHours.length} períodos`} tone="success" />
+                        <DepartmentBadge label={`${activeBusinessHours.length} períodos`} tone="success" />
                       )}
                     </div>
                     <div className="space-y-2">
-                      {draft.businessHours.length === 0 ? (
+                      {activeBusinessHours.length === 0 ? (
                         <div className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/60">
                           Sem horário configurado. Quando houver períodos salvos, dias sem período aparecem como fechados.
                         </div>
                       ) : (
                         <div className="overflow-hidden rounded-lg border border-white/10">
-                          {buildBusinessHourGroups(draft.businessHours).map((group) => (
+                          {buildBusinessHourGroups(activeBusinessHours).map((group) => (
                             <div
                               key={`${group.weekdays.join("-")}-${getIntervalSignature(group.intervals)}`}
                               className="grid grid-cols-1 items-center gap-2 border-b border-white/10 px-3 py-2 last:border-b-0 sm:grid-cols-[110px_minmax(0,1fr)_auto]"
@@ -1283,7 +1371,7 @@ export default function AppSettingsDepartmentsPage() {
                     </div>
                   </div>
 
-                  <div className={`mx-3 mt-3 rounded-lg border p-3 md:mx-4 ${sectionToneClass}`}>
+                  <div className={`mt-3 rounded-lg border p-3 ${sectionToneClass}`}>
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h4 className="text-sm font-semibold text-white">Exceções, feriados e expedientes especiais</h4>
@@ -1355,12 +1443,24 @@ export default function AppSettingsDepartmentsPage() {
 	                    {renderExceptionEditor(item.id)}
 	                  </div>
 
-	                  <div className={`mt-3 flex flex-wrap items-center justify-between gap-2 border-t px-3 py-3 md:px-4 ${footerToneClass}`}>
+                  <div className={`mt-3 flex flex-wrap items-center justify-between gap-2 border-t px-3 py-3 ${footerToneClass}`}>
                     <p className="text-xs text-white/55">Slug atual: {item.slug || "-"}</p>
-                    {readOnly ? (
+                    {!readOnly ? (
+                      <button
+                        type="button"
+                        onClick={() => handleUpdate(item)}
+                        disabled={savingId === item.id || togglingId === item.id}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-re7-orange px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-black/10 hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-re7-sky disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-white/45 disabled:shadow-none sm:text-sm"
+                      >
+                        <ActionIcon>✓</ActionIcon>
+                        {savingId === item.id ? "Salvando..." : "Salvar"}
+                      </button>
+                    ) : (
                       <p className="text-xs text-white/55">Somente leitura.</p>
-                    ) : null}
+                    )}
                   </div>
+                    </div>
+                  ) : null}
                 </article>
               );
             })}

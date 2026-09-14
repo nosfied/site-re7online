@@ -83,6 +83,23 @@ contador e disponibilidade de assentos derivam somente de estado persistido, nao
 de draft local. Apenas Save atualiza a lista canonica e entao altera filtros e
 contadores.
 
+## Departments Management UX 2.0
+
+Estado owner-approved / delivery pending: `/app/settings/departments` usa a
+mesma linguagem de linhas expansivas aprovada em Users Management 2.0 e Guided
+Builder. Cada setor possui header compacto com resumo persistido e botao
+circular explicito expandir/recolher; o corpo expandido usa tom separado e
+mantem os controles existentes de nome, status, horario regular, excecoes e
+Salvar. O header expansivo compartilhado com Users usa coluna direita fixa para
+o controle, permitindo quebra do resumo sem deslocar o botao para baixo.
+
+Contrato de edicao: expandir uma linha inicializa `drafts` a partir do estado
+persistido em `departments`; recolher, abrir outro setor ou alterar filtros
+descarta alteracoes nao salvas e fecha editores internos de horario/excecao.
+Filtros, badges e resumo do header derivam somente do estado persistido. Esta
+frente nao altera filas, roteamento, autoassign, capacidade, presenca, Inbox
+visibility, RBAC, horarios de runtime, schema ou migracao.
+
 `quota.used` em `/admin/tenants/summary`:
 
 - `range` afeta os counts e `lastMessageAt`, mas `quota` sempre representa o mes UTC corrente.

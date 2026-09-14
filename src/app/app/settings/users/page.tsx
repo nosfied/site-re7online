@@ -792,7 +792,7 @@ export default function AppSettingsUsersPage() {
                         openUserRow(item);
                       }
                     }}
-                    className="users-settings-user-header flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-white/[0.075] px-3 py-3 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70"
+                    className="users-settings-user-header grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-white/10 bg-white/[0.075] px-3 py-3 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70"
                   >
                     <div className="min-w-0">
                       <div className="font-semibold text-white/90">{formatUserDisplayName(item.name, item.email)}</div>
@@ -809,7 +809,7 @@ export default function AppSettingsUsersPage() {
                         />
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-3">
+                    <div className="expand-row-action-slot flex min-w-max shrink-0 items-center justify-end gap-3 justify-self-end whitespace-nowrap">
                       <div className="hidden text-right text-xs text-white/55 sm:block">
                         <div>Criado em {formatDateTime(item.createdAt)}</div>
                       </div>

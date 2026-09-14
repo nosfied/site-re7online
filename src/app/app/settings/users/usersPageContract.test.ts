@@ -25,6 +25,14 @@ test("users management exposes an explicit accessible expand button", () => {
   assert.ok(pageSource.includes("›"));
 });
 
+test("users management anchors the expand button in a fixed right-side header slot", () => {
+  assert.ok(pageSource.includes("users-settings-user-header grid"));
+  assert.ok(pageSource.includes("grid-cols-[minmax(0,1fr)_auto]"));
+  assert.ok(pageSource.includes("expand-row-action-slot"));
+  assert.ok(pageSource.includes("min-w-max shrink-0"));
+  assert.ok(pageSource.includes("justify-self-end whitespace-nowrap"));
+});
+
 test("users management uses a filled save action", () => {
   assert.ok(pageSource.includes("bg-re7-orange px-3 py-1.5"));
   assert.ok(pageSource.includes("disabled:bg-white/15"));
