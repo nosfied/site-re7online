@@ -625,15 +625,25 @@ linha aberta por vez quando aplicavel, recolher/trocar/filtro descartando draft
 local nao salvo, e filtros/contadores globais derivados apenas do estado
 persistido. O padrao nao deve ser imposto a telas sem justificativa de produto.
 
-Regra canonica de desativacao de usuario, 2026-09-14: um usuario nao pode ser
-desativado enquanto houver conversas operacionalmente ativas atribuidas a ele e
-ainda nao terminais/fechadas. Antes de aceitar a desativacao, os atendimentos
-ativos atribuidos devem ser transferidos/reatribuidos a outro atendente elegivel
-ou encerrados corretamente pelo ciclo existente. A propria desativacao nao pode
-fechar, transferir, remover atribuicao, trocar fila ou alterar estado de conversa
-silenciosamente; deve bloquear a tentativa com mensagem acionavel. A futura
-implementacao deve auditar os statuses e campos de ownership reais antes de
-codar. Backlog: P1 / PRODUCT LIFECYCLE REQUIREMENT / OPEN.
+Regra canonica de desativacao de usuario, 2026-09-14: IMPLEMENTED LOCAL /
+OWNER APPROVED / PRODUCTION DELIVERY PENDING. Um usuario nao pode ser desativado enquanto houver
+conversas HUMAN operacionalmente ativas atribuidas a ele. Predicado aplicado:
+mesmo tenant, `ConversationRuntimeState.assignedUserId` igual ao usuario,
+`closedAt=null`, `status IN (WAITING, IN_PROGRESS)` e `mode` nulo ou diferente
+de `BOT`. `WAITING` sem atribuicao, `CLOSED`, outro tenant e BOT nao bloqueiam.
+Antes de aceitar a desativacao, os atendimentos ativos atribuidos devem ser
+transferidos/reatribuidos a outro atendente elegivel ou encerrados corretamente
+pelo ciclo existente. A propria desativacao nao fecha, transfere, remove
+atribuicao, troca fila ou altera estado de conversa silenciosamente; bloqueia
+com `user_has_active_conversations` e mensagem acionavel. Backend guard aplicado
+em `/app/users/:id` e `/admin/users/:id`; UI tenant-side mostra a mensagem
+especifica e preserva filtros/contador/usuario ativo quando a tentativa e
+rejeitada. Backend e autoritativo e a validacao frontend e apenas feedback de
+UX. Validacao local owner-approved: backend focado 1/1 PASS, frontend 7/7 PASS,
+builds PASS; suite completa `campaignsFeatureRoutes` 109/110 PASS com timeout
+pre-existente nao relacionado em `meta inbound clears active chatbot runtime
+when persisted flow is inactive`, mantido como WATCH separado. Sem
+schema/migration; sem deploy.
 
 ## Marcos recentes confirmados
 
@@ -691,11 +701,13 @@ Commits relevantes do baseline homologado:
 - Current execution backlog, 2026-09-14: P0 = none. P1 ativo =
   abandoned automation / BOT flow lifecycle com E2E local validado e decisoes de produto ainda abertas,
   configuracao/validacao CRA de horarios de departamento/fluxo, Demo Meta Cloud
-  restriction externa e desativacao de usuario com atendimentos ativos. P2 ativo
-  = branching condicional por resposta
+  restriction externa e entrega em producao da guarda de desativacao de usuario
+  com atendimentos ativos. P2 ativo = branching condicional por resposta
   capturada, melhorias de contexto em relatorios, semantica de unlink/remocao
-  Meta Cloud e hardening de suporte interno auditado. Performance de Inbox/CPU
-  permanece WATCH, nao frente ativa.
+  Meta Cloud, hardening de suporte interno auditado, cross-provider inactivity
+  handoff hardening, Guided Builder lifecycle-policy exposure e resumo completo
+  da revisao final guiada. Performance de Inbox/CPU permanece WATCH, nao frente
+  ativa.
 - CRA admin chatbot settings, 2026-09-13: incidente operacional identificado
   como dependencia indevida de `.data/tenants.json` em
   `/admin/chatbot/settings`. CRA esta no banco como `Client` DB-backed; a rota

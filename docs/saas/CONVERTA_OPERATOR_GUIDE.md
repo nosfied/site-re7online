@@ -122,12 +122,12 @@ Em `/app/users`, ADMIN gerencia usuarios ativos e inativos com filtros
 `Todos/Ativos/Inativos`; usuarios inativos continuam visiveis
 administrativamente e podem ser reativados no mesmo registro quando RBAC permite.
 
-Regra canonica de lifecycle para implementacao futura: nao desativar usuario com
-atendimentos operacionalmente ativos atribuidos e ainda nao encerrados. Antes da
-inativacao, esses atendimentos devem ser transferidos/reatribuidos a outro
-atendente elegivel ou fechados pelo ciclo normal. A inativacao nao deve fechar,
-transferir, remover atribuicao, trocar fila ou alterar lifecycle de conversa
-silenciosamente; deve bloquear a tentativa com orientacao acionavel.
+Regra canonica de lifecycle: nao desativar usuario com atendimentos HUMAN
+operacionalmente ativos atribuidos e ainda nao encerrados. Antes da inativacao,
+esses atendimentos devem ser transferidos/reatribuidos a outro atendente elegivel
+ou fechados pelo ciclo normal. A inativacao nao fecha, transfere, remove
+atribuicao, troca fila ou altera lifecycle de conversa silenciosamente; deve
+bloquear a tentativa com orientacao acionavel.
 
 ## Criador guiado de fluxos
 
@@ -344,6 +344,21 @@ timeout em automacoes abandonadas.
 
 A auditoria tecnica canonica esta em
 `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`.
+
+## Desativacao de usuarios com atendimentos ativos
+
+Quando um operador tenta inativar um usuario que ainda possui atendimentos HUMAN
+ativos atribuidos, a operacao deve ser rejeitada. O usuario permanece ativo, o
+contador de assentos ativos nao muda e a UI informa:
+
+`Nao e possivel inativar este usuario enquanto houver atendimentos ativos atribuidos. Transfira ou encerre os atendimentos antes de continuar.`
+
+Para concluir a inativacao, primeiro transfira/reatribua os atendimentos pelo
+fluxo canonico de conversa ou encerre os atendimentos pelo ciclo normal de
+fechamento. Depois que nao houver conversas ativas atribuidas, a desativacao
+pode prosseguir conforme RBAC e regra de ultimo admin ativo. A desativacao em si
+nao transfere, encerra, remove atribuicao, troca fila nem altera lifecycle de
+conversa silenciosamente.
 
 ## O que não fazer
 

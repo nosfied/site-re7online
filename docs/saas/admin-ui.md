@@ -83,12 +83,17 @@ contador e disponibilidade de assentos derivam somente de estado persistido, nao
 de draft local. Apenas Save atualiza a lista canonica e entao altera filtros e
 contadores.
 
-Regra de lifecycle ainda aberta para implementacao: um usuario nao deve ser
-desativado enquanto possuir atendimentos operacionalmente ativos atribuidos e nao
-terminais/fechados. A tela futura deve bloquear a tentativa, mostrar a contagem
-de atendimentos ativos atribuidos e orientar transferencia ou encerramento antes
-da inativacao. A desativacao nao pode fechar, transferir, remover atribuicao,
-trocar fila ou alterar lifecycle de conversa silenciosamente.
+Desativacao de usuario, 2026-09-14: tentativa de inativar usuario com
+atendimentos HUMAN ativos atribuidos deve ser bloqueada por backend com
+`user_has_active_conversations`. A UI mostra mensagem acionavel para transferir
+ou encerrar os atendimentos antes de continuar, sem marcar o usuario como
+inativo localmente, sem alterar filtros e sem reduzir contador de assentos. O
+predicado backend usa `ConversationRuntimeState` do mesmo tenant,
+`assignedUserId`, `closedAt=null`, `status IN (WAITING, IN_PROGRESS)` e exclui
+`mode=BOT`. Status: implemented local / owner approved / production delivery
+pending. A regra de seguranca e backend-authoritative; o frontend apenas
+apresenta feedback. A desativacao nunca transfere, encerra, remove atribuicao,
+troca fila ou altera lifecycle de conversa silenciosamente.
 
 ## Departments Management UX 2.0
 

@@ -150,20 +150,24 @@ ACTIVE P1:
    recente da aplicacao nao e causa comprovada. A Web Session do Demo esta
    `QR_REQUIRED` desde 2026-09-13 22:40:23Z e nao deve ser reconectada,
    desconectada ou limpa sem autorizacao explicita do owner.
-4. User deactivation with active conversations: PRODUCT LIFECYCLE REQUIREMENT /
-   OPEN. Um usuario nao pode ser desativado enquanto houver conversas
-   operacionalmente ativas, atribuidas a ele e ainda nao terminais/fechadas. Antes
-   da desativacao, todos os atendimentos ativos atribuidos devem ser transferidos
-   para outro atendente elegivel ou encerrados corretamente pelo ciclo existente.
-   A desativacao nao pode fechar, transferir, remover atribuicao, trocar fila ou
-   alterar estado de conversa silenciosamente. A tentativa deve ser bloqueada com
-   mensagem acionavel, por exemplo: "Este usuário possui atendimentos ativos
-   atribuídos. Transfira ou encerre os atendimentos antes de inativá-lo." A
-   implementacao futura precisa auditar statuses e campos de ownership reais
-   antes de codar; criterios: backend rejeita com atribuicoes ativas, frontend
-   mostra bloqueio verdadeiro e contagem, desativacao passa apos transferir/fechar,
-   comportamento tenant-agnostic, RBAC preservado, testes ativo vs zero ativo e
-   documentacao atualizada.
+4. User deactivation active-conversation guard: IMPLEMENTED LOCAL / OWNER
+   APPROVED / PRODUCTION DELIVERY PENDING. Um usuario nao pode ser desativado enquanto houver
+   conversas HUMAN operacionalmente ativas atribuidas a ele. Predicado canonico
+   local: `ConversationRuntimeState.clientId` do tenant, `assignedUserId` do
+   usuario, `closedAt=null`, `status IN (WAITING, IN_PROGRESS)` e `mode` ausente
+   ou diferente de `BOT`. `WAITING` sem atribuicao, `CLOSED`, outro tenant e BOT
+   nao bloqueiam. A desativacao nao fecha, transfere, remove atribuicao, troca
+   fila ou altera lifecycle de conversa silenciosamente; retorna
+   `user_has_active_conversations` com mensagem acionavel para transferir ou
+   encerrar os atendimentos antes de continuar. Backend guard aplicado em
+   `/app/users/:id` e `/admin/users/:id`; UI tenant-side mostra a mensagem
+   especifica e mantem estado persistido ativo em rejeicao. Backend e
+   autoritativo; feedback frontend e apenas UX. Validacao local owner-approved:
+   regressao backend focada 1/1 PASS, contrato frontend 7/7 PASS, builds PASS.
+   Suite completa `campaignsFeatureRoutes` ficou 109/110 PASS com timeout
+   pre-existente e nao relacionado em `meta inbound clears active chatbot
+   runtime when persisted flow is inactive`, classificado como WATCH separado.
+   No schema/migration; no deploy; producao ainda pendente.
 
 RECENTLY CLOSED:
 
@@ -261,12 +265,13 @@ Proximas cinco frentes:
    autoatendimento. Dependencia: cliente configurar horarios. Demo validavel:
    sim. Code esperado: talvez. Config esperado: sim. Risco: baixo/medio. Done:
    horario CRA salvo e fluxo validado dentro/fora do expediente.
-3. P1 User deactivation with active conversations. Why now: administracao de
+3. P1 User deactivation active-conversation guard production delivery. Why now: administracao de
    usuario pode impactar atendimento humano em curso. Valor: evita atendimento
    ativo sem responsavel valido e sem mutacao silenciosa de ciclo. Dependencia:
-   auditar statuses/campos de atribuicao reais. Demo validavel: sim. Code
-   esperado: sim. Config esperado: nao. Risco: medio por lifecycle/RBAC. Done:
-   backend bloqueia, UI explica, e desativacao so passa apos transferir/fechar.
+   owner approval local ja obtido; falta entrega em producao. Demo validavel:
+   sim. Code esperado: implementado localmente. Config esperado: nao. Risco:
+   medio por lifecycle/RBAC. Done: backend bloqueia pelo predicado canonico, UI
+   explica, e desativacao so passa apos transferir/fechar.
 4. P2 Question conditional branching. Why now: lacuna descoberta durante 2.4 e
    valor direto para fluxos institucionais. Valor: respostas sim/nao e caminhos
    por resposta. Dependencia: desenho de runtime/predicados. Demo validavel:

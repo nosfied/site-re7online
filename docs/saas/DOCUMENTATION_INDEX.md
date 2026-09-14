@@ -6,7 +6,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 
 | Documento | Status | Uso |
 | --- | --- | --- |
-| `docs/saas/CONVERTA_PRODUCT_STATE_2026-08.md` | atual | Fotografia documental do produto, canais, Inbox, Support Hub, CRM, campanhas, templates, relatorios de acesso/sessao, LGPD, uso Meta, limites, padrao administrativo expansivo e regra de desativacao de usuario |
+| `docs/saas/CONVERTA_PRODUCT_STATE_2026-08.md` | atual | Fotografia documental do produto, canais, Inbox, Support Hub, CRM, campanhas, templates, relatorios de acesso/sessao, LGPD, uso Meta, limites, padrao administrativo expansivo e regra de desativacao de usuario owner-approved local |
 | `docs/saas/CONVERTA_OPERATOR_GUIDE.md` | atual | Guia de uso operacional para Inbox, Support Hub, usuarios, Treinamentos, templates, mensagens prontas, campanhas, relatorio Acessos/Sessoes, opt-out, anonimizacao e custos Meta |
 | `docs/saas/DEMO_TENANT_READINESS.md` | atual | Readiness do tenant generico `demo-converta`, auditoria de configuracoes e checker somente leitura |
 | `docs/saas/DEMO_TENANT_PROVISIONING_CHECKLIST.md` | atual | Checklist manual de provisionamento seguro do tenant de demonstracao |
@@ -29,7 +29,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | `docs/saas/RELEASE_CHECKLIST.md` | atual | Checklist de deploy/release |
 | `docs/saas/CHANGE_POLICY.md` | atual | Politica de tipos de mudanca |
 | `docs/saas/FEATURE_LIFECYCLE.md` | atual | Ciclo de vida das features |
-| `docs/saas/admin-ui.md` | atual | Console interno/admin UI, Users/Departments 2.0 e padrao compartilhado de linhas expansivas |
+| `docs/saas/admin-ui.md` | atual | Console interno/admin UI, Users/Departments 2.0, guarda de desativacao de usuario e padrao compartilhado de linhas expansivas |
 | `docs/saas/PRIVATE_TENANT_ONBOARDING_PLAYBOOK.md` | atual | Playbook operacional para ativar tenants privados e canais pelo console interno |
 | `docs/saas/RE7ONLINE_TENANT_OPERATIONS.md` | atual | Runbook do tenant `re7online` como vitrine privada, Webchat e atendimento inicial |
 | `docs/saas/automation-ai-tenant-playbook.md` | parcialmente atual | Playbook de automacao/IA por tenant; revisar sempre que mudar evaluation ou tenant AI config |
