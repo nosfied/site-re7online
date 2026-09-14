@@ -39,6 +39,11 @@ test("users management uses a filled save action", () => {
   assert.ok(pageSource.includes('{savingUserId === item.id ? "Salvando..." : "Salvar"}'));
 });
 
+test("users management explains active conversation deactivation blocks", () => {
+  assert.ok(pageSource.includes('error.errorCode === "user_has_active_conversations"'));
+  assert.ok(pageSource.includes("Transfira ou encerre os atendimentos antes de continuar."));
+});
+
 test("users management resets drafts on collapse, row switch and filter changes", () => {
   assert.ok(pageSource.includes("function buildUserDraft(item: AdminUserItem): UserDraft"));
   assert.ok(pageSource.includes("resetDraftForUser(expandedUserId)"));

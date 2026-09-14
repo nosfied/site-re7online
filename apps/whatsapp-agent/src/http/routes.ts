@@ -9028,6 +9028,23 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
       }
+      if (existingUser.isActive && requestedIsActive === false) {
+        const activeConversationCount = await countActiveAssignedHumanConversationsForUser(prisma, {
+          clientId: client.id,
+          userId: existingUser.id,
+        });
+        if (activeConversationCount > 0) {
+          json(
+            res,
+            409,
+            httpError(
+              "user_has_active_conversations",
+              "Nao e possivel inativar este usuario enquanto houver atendimentos ativos atribuidos. Transfira ou encerre os atendimentos antes de continuar."
+            )
+          );
+          return;
+        }
+      }
       const { departmentIds, primaryDepartmentId, ...userData } = parsed.data;
       const user = await prisma.user.update({
         where: { id: existingUser.id },
@@ -16868,6 +16885,25 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               httpError(
                 "user_limit_exceeded",
                 `Limite de usuarios ativos atingido (${activeLimit.maxActiveAppUsers}).`
+              )
+            );
+            return;
+          }
+        }
+        const requestedIsActive =
+          typeof parsed.data.isActive === "boolean" ? parsed.data.isActive : existingUser.isActive;
+        if (existingUser.isActive && requestedIsActive === false) {
+          const activeConversationCount = await countActiveAssignedHumanConversationsForUser(prisma, {
+            clientId: client.id,
+            userId: existingUser.id,
+          });
+          if (activeConversationCount > 0) {
+            json(
+              res,
+              409,
+              httpError(
+                "user_has_active_conversations",
+                "Nao e possivel inativar este usuario enquanto houver atendimentos ativos atribuidos. Transfira ou encerre os atendimentos antes de continuar."
               )
             );
             return;
@@ -30115,6 +30151,24 @@ async function assertTenantActiveUserLimitAvailable(
     });
   }
   return { ok, activeUsers, maxActiveAppUsers };
+}
+
+async function countActiveAssignedHumanConversationsForUser(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    userId: string;
+  }
+) {
+  return prisma.conversationRuntimeState.count({
+    where: {
+      clientId: params.clientId,
+      assignedUserId: params.userId,
+      closedAt: null,
+      status: { in: [ConversationOperationalStatus.WAITING, ConversationOperationalStatus.IN_PROGRESS] },
+      OR: [{ mode: null }, { mode: { not: "BOT" } }],
+    },
+  });
 }
 
 async function resolveCampaignTemplateInput(

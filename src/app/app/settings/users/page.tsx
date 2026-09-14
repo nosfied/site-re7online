@@ -133,6 +133,9 @@ function normalizeAppErrorMessage(error: AppApiError, fallback: string) {
   if (error.errorCode === "user_limit_exceeded") {
     return "Limite de usuários ativos contratado para esta organização foi atingido.";
   }
+  if (error.errorCode === "user_has_active_conversations") {
+    return "Não é possível inativar este usuário enquanto houver atendimentos ativos atribuídos. Transfira ou encerre os atendimentos antes de continuar.";
+  }
   if (error.errorCode === "user_already_exists" || error.status === 409) {
     return "Já existe um usuário com esse email.";
   }

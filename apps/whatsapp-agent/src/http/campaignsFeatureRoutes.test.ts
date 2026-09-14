@@ -12,7 +12,15 @@ import { readWebSessionPrePairingOutboundState } from "../web-session/webSession
 import { markWebSessionRuntimeState } from "../web-session/webSessionConnectionRuntime.js";
 import { createPublicApiKey } from "../publicApi/publicApiKeyService.js";
 import { getPrisma } from "../db.js";
-import { MessageStatus, MessageType, Prisma, TrainingContentStatus, TrainingContentType } from "@prisma/client";
+import {
+  ConversationOperationalStatus,
+  HandoffStatus,
+  MessageStatus,
+  MessageType,
+  Prisma,
+  TrainingContentStatus,
+  TrainingContentType,
+} from "@prisma/client";
 import type { ConversationState } from "../conversation/conversation.types.js";
 import { getDepartmentAvailability, getNextDepartmentOpenAt } from "../departments/businessHours.js";
 
@@ -4992,6 +5000,198 @@ test("app user management enforces target role RBAC and audits role/status chang
   });
   assert.equal(lastAdminDeactivation.status, 409);
   assert.equal(getErrorCode(lastAdminDeactivation.body), "last_admin_required");
+});
+
+test("app user deactivation blocks active assigned human conversations only", async () => {
+  const tenantKey = `${prefix}-users-active-conversations`;
+  const client = await prisma.client.create({
+    data: {
+      clientKey: tenantKey,
+      name: "Users Active Conversations Tenant",
+      status: "ACTIVE",
+      profile: "business",
+    },
+    select: { id: true },
+  });
+  await prisma.tenantOperationalConfig.create({
+    data: {
+      clientId: client.id,
+      config: {
+        runtimeLimits: { maxActiveAppUsers: 20 },
+      },
+    },
+  });
+  const department = await prisma.department.create({
+    data: { clientId: client.id, name: "Atendimento", slug: "atendimento" },
+    select: { id: true },
+  });
+  const queue = await prisma.queue.create({
+    data: { clientId: client.id, departmentId: department.id, name: "Fila Geral" },
+    select: { id: true },
+  });
+  const admin = await createUser({ clientId: client.id, role: "ADMIN", suffix: "users-active-conversations-admin" });
+  const agent = await createUser({ clientId: client.id, role: "AGENT", suffix: "users-active-conversations-agent" });
+  const recipient = await createUser({ clientId: client.id, role: "AGENT", suffix: "users-active-conversations-recipient" });
+  await assignUserDepartments({ clientId: client.id, userId: agent.id, departmentIds: [department.id], primaryDepartmentId: department.id });
+  await assignUserDepartments({ clientId: client.id, userId: recipient.id, departmentIds: [department.id], primaryDepartmentId: department.id });
+
+  const otherClient = await prisma.client.create({
+    data: {
+      clientKey: `${prefix}-users-active-conversations-other`,
+      name: "Other Users Active Conversations Tenant",
+      status: "ACTIVE",
+      profile: "business",
+    },
+    select: { id: true },
+  });
+
+  const makeState = async (suffix: string, overrides: Partial<{
+    clientId: string;
+    assignedUserId: string | null;
+    mode: string | null;
+    handoffStatus: HandoffStatus;
+    status: ConversationOperationalStatus;
+    closedAt: Date | null;
+  }> = {}) =>
+    prisma.conversationRuntimeState.create({
+      data: {
+        clientId: overrides.clientId ?? client.id,
+        waId: `${prefix}-active-conv-${suffix}`,
+        mode: overrides.mode === undefined ? "HUMAN" : overrides.mode,
+        handoffStatus: overrides.handoffStatus ?? HandoffStatus.ACTIVE,
+        handoffActivatedAt: new Date("2026-09-14T10:00:00.000Z"),
+        assignedUserId: overrides.assignedUserId === undefined ? agent.id : overrides.assignedUserId,
+        assignedTo:
+          overrides.assignedUserId === null
+            ? null
+            : `user:${overrides.assignedUserId === undefined ? agent.id : overrides.assignedUserId}`,
+        assignedAt: overrides.assignedUserId === null ? null : new Date("2026-09-14T10:00:00.000Z"),
+        departmentId: department.id,
+        queueId: queue.id,
+        status: overrides.status ?? ConversationOperationalStatus.IN_PROGRESS,
+        closedAt: overrides.closedAt ?? null,
+      },
+      select: { id: true },
+    });
+
+  const activeOne = await makeState("active-1");
+  const activeTwo = await makeState("active-2", { status: ConversationOperationalStatus.WAITING });
+  await makeState("closed", {
+    status: ConversationOperationalStatus.CLOSED,
+    closedAt: new Date("2026-09-14T10:30:00.000Z"),
+  });
+  await makeState("unassigned-waiting", {
+    assignedUserId: null,
+    status: ConversationOperationalStatus.WAITING,
+  });
+  await makeState("bot", {
+    mode: "BOT",
+    handoffStatus: HandoffStatus.NONE,
+    status: ConversationOperationalStatus.WAITING,
+  });
+  await makeState("other-tenant", {
+    clientId: otherClient.id,
+  });
+
+  const beforeList = await request<{
+    activeUsers: number;
+    items: Array<{ id: string; isActive: boolean }>;
+  }>("GET", "/app/users", admin);
+  assert.equal(beforeList.status, 200);
+  const activeUsersBefore = beforeList.body.activeUsers;
+  assert.equal(beforeList.body.items.find((item) => item.id === agent.id)?.isActive, true);
+
+  const blocked = await request<ErrorPayload>("PUT", `/app/users/${agent.id}`, admin, {
+    name: agent.name,
+    email: agent.email,
+    role: "AGENT",
+    departmentIds: [department.id],
+    primaryDepartmentId: department.id,
+    isActive: false,
+  });
+  assert.equal(blocked.status, 409);
+  assert.equal(getErrorCode(blocked.body), "user_has_active_conversations");
+  assert.match(JSON.stringify(blocked.body), /Transfira ou encerre/);
+
+  const stillActive = await prisma.user.findUnique({
+    where: { id: agent.id },
+    select: { isActive: true, id: true, departmentMemberships: { select: { departmentId: true, isActive: true } } },
+  });
+  assert.equal(stillActive?.isActive, true);
+  assert.equal(stillActive?.id, agent.id);
+  assert.ok(stillActive?.departmentMemberships.some((membership) => membership.departmentId === department.id && membership.isActive));
+  assert.equal(
+    await prisma.user.count({ where: { clientId: client.id, isActive: true } }),
+    activeUsersBefore
+  );
+
+  const activeRowsAfterReject = await prisma.conversationRuntimeState.findMany({
+    where: { id: { in: [activeOne.id, activeTwo.id] } },
+    select: { assignedUserId: true, status: true, closedAt: true },
+    orderBy: { waId: "asc" },
+  });
+  assert.deepEqual(
+    activeRowsAfterReject.map((row) => ({
+      assignedUserId: row.assignedUserId,
+      status: row.status,
+      closed: Boolean(row.closedAt),
+    })),
+    [
+      { assignedUserId: agent.id, status: ConversationOperationalStatus.IN_PROGRESS, closed: false },
+      { assignedUserId: agent.id, status: ConversationOperationalStatus.WAITING, closed: false },
+    ]
+  );
+
+  await prisma.conversationRuntimeState.update({
+    where: { id: activeOne.id },
+    data: {
+      status: ConversationOperationalStatus.CLOSED,
+      closedAt: new Date("2026-09-14T11:00:00.000Z"),
+      assignedUserId: null,
+      assignedTo: null,
+      assignedAt: null,
+    },
+  });
+  await prisma.conversationRuntimeState.update({
+    where: { id: activeTwo.id },
+    data: {
+      assignedUserId: recipient.id,
+      assignedTo: `user:${recipient.id}`,
+      assignedAt: new Date("2026-09-14T11:05:00.000Z"),
+      status: ConversationOperationalStatus.IN_PROGRESS,
+    },
+  });
+
+  const deactivated = await request<{
+    user: { id: string; isActive: boolean; memberships: Array<{ departmentId: string; isActive: boolean }> };
+  }>("PUT", `/app/users/${agent.id}`, admin, {
+    name: agent.name,
+    email: agent.email,
+    role: "AGENT",
+    departmentIds: [department.id],
+    primaryDepartmentId: department.id,
+    isActive: false,
+  });
+  assert.equal(deactivated.status, 200);
+  assert.equal(deactivated.body.user.id, agent.id);
+  assert.equal(deactivated.body.user.isActive, false);
+  assert.ok(deactivated.body.user.memberships.some((membership) => membership.departmentId === department.id && membership.isActive));
+  assert.equal(
+    await prisma.user.count({ where: { clientId: client.id, isActive: true } }),
+    activeUsersBefore - 1
+  );
+
+  const reactivated = await request<{ user: { id: string; isActive: boolean } }>("PUT", `/app/users/${agent.id}`, admin, {
+    name: agent.name,
+    email: agent.email,
+    role: "AGENT",
+    departmentIds: [department.id],
+    primaryDepartmentId: department.id,
+    isActive: true,
+  });
+  assert.equal(reactivated.status, 200);
+  assert.equal(reactivated.body.user.id, agent.id);
+  assert.equal(reactivated.body.user.isActive, true);
 });
 
 test("app API keys and webhooks are admin only", async () => {
