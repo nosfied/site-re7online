@@ -563,7 +563,7 @@ Configuracoes delegadas ao ADMIN do tenant podem ser ajustadas via UX quando exp
 
 Configuracoes internas de plataforma, como `TenantOperationalConfig.config.webSessionAlertEmails`, pertencem ao console interno RE7ONLINE e nao devem ser tratadas como configuracao operacional do app cliente sem decisao futura de produto.
 
-Users Management 2.0 local, 2026-09-14: `/app/users` e a superficie tenant-side
+Users Management 2.0 deployed, 2026-09-14: `/app/users` e a superficie tenant-side
 canonica para gestao de usuarios. Usuarios inativos permanecem visiveis em
 administracao, aparecem em `Todos` e `Inativos`, desaparecem de `Ativos`, nao
 contam como assento ativo e podem ser reativados no mesmo registro quando RBAC
@@ -576,7 +576,11 @@ hierarquia tonal entre header e corpo expandido, botao Salvar preenchido, e
 contrato de draft nao salvo: recolher, trocar linha ou alterar filtro descarta
 alteracoes locais. Projecoes de lista, filtros e assentos derivam somente do
 estado persistido; `userDrafts` nao pode contaminar `Todos/Ativos/Inativos` nem
-contador antes de Save. Status: local final owner review; sem deploy.
+contador antes de Save. Status: owner-approved, deployed em
+`5ad40c10eda77076bc2a069e432663ac2271f0a8` e production non-destructive
+validated; health, `/app/users`, `/app/settings/users`, backend start e dados
+read-only de usuarios por tenant passaram no smoke. O gap "deactivate user with
+active human conversations" permanece aberto como ciclo de produto separado.
 
 ## Marcos recentes confirmados
 

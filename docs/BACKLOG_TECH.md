@@ -133,7 +133,8 @@ ACTIVE P1:
    recente da aplicacao nao e causa comprovada. A Web Session do Demo esta
    `QR_REQUIRED` desde 2026-09-13 22:40:23Z e nao deve ser reconectada,
    desconectada ou limpa sem autorizacao explicita do owner.
-5. Users Management 2.0: LOCAL FINAL OWNER REVIEW. Inactive user disappearing
+5. Users Management 2.0: CLOSED / DEPLOYED / OWNER APPROVED / PRODUCTION
+   NON-DESTRUCTIVE VALIDATED. Inactive user disappearing
    root cause: `GET /app/users` filtrava `User.isActive=true` no backend,
    enquanto a UI ja possuia filtro de status e serializer preservava
    `isActive=false`. Ajuste local inclui inativos no modo Todos, filtros
@@ -146,8 +147,10 @@ ACTIVE P1:
    nao salvas; filtros, contador e disponibilidade de assentos derivam somente
    de `users` persistido, nunca de `userDrafts`. Test gate local: frontend
    focado PASS, backend focado PASS, builds PASS, schema unchanged, migration
-   none. BUG so pode ser marcado CLOSED apos validacao visual do owner e
-   validacao em producao.
+   none. Entrega em producao aplicada em 2026-09-14 no commit
+   `5ad40c10eda77076bc2a069e432663ac2271f0a8`; smoke pos-deploy confirmou
+   health, rotas `/app/users` e `/app/settings/users`, backend online e dados
+   reais com usuarios inativos por tenant sem mutacao.
 
 ACTIVE P2:
 

@@ -68,12 +68,13 @@ indisponivel, a UI deve mostrar estado de erro verdadeiro.
 
 ## Users Management 2.0
 
-Estado local final owner review: `/app/users` lista usuarios ativos e inativos
-administrativamente, com filtros `Todos/Ativos/Inativos`, uma linha expansiva
-por vez e contador de assentos ativos vindo da mesma fonte do enforcement
-backend/admin. A regiao de filtros tem agrupamento visual proprio; cada linha
-tem header resumido com botao explicito expandir/recolher e corpo expandido em
-tom separado para edicao. O botao Salvar usa estilo primario preenchido.
+Estado deployed / owner-approved / production non-destructive validated:
+`/app/users` lista usuarios ativos e inativos administrativamente, com filtros
+`Todos/Ativos/Inativos`, uma linha expansiva por vez e contador de assentos
+ativos vindo da mesma fonte do enforcement backend/admin. A regiao de filtros
+tem agrupamento visual proprio; cada linha tem header resumido com botao
+explicito expandir/recolher e corpo expandido em tom separado para edicao. O
+botao Salvar usa estilo primario preenchido.
 
 Contrato de edicao: expandir uma linha inicializa `userDrafts` a partir do
 estado persistido em `users`; recolher, trocar para outra linha ou alterar

@@ -160,8 +160,7 @@ Current backlog classification:
 - P1: WAITING_FOR_CUSTOMER 60m explicit automation lifecycle; CRA
   department/flow-aware hours configuration and validation; Demo Meta Cloud
   restriction external remediation (`phone.status=BANNED`, WABA `REJECTED`)
-  with Demo Web Session `QR_REQUIRED` preserved without mutation; Users
-  Management 2.0 inactive visibility bug in LOCAL FINAL OWNER REVIEW.
+  with Demo Web Session `QR_REQUIRED` preserved without mutation.
 - P2: question conditional branching by captured answer; reporting context
   enhancements; Guided Builder complete final-review summary; Meta Cloud
   unlink/removal semantics; support access hardening; deactivate user with
@@ -180,6 +179,14 @@ events. Syer data volume is low (1 runtime state, 1 non-deleted conversation,
 10 metrics, 10 leads, 2 users, 1 department), so tenant cardinality and Inbox
 query cost are not supported as root cause. Status: BUG NOT PROVEN / WATCH; no
 code patch without a reproducible endpoint failure.
+
+Users Management 2.0 delivery state, 2026-09-14: deployed in
+`5ad40c10eda77076bc2a069e432663ac2271f0a8`, owner-approved and production
+non-destructive validated. `/app/users` is the canonical tenant-side users
+management surface; inactive users remain visible in `Todos`/`Inativos`, active
+seat count uses the backend enforcement source, and `/app/users` plus
+`/app/settings/users` returned production HTML after deployment. Deactivate user
+with active human conversations remains a separate product lifecycle gap.
 
 Inbox visibility policy audit, 2026-09-13: `shared` and
 `assignee_only_after_assignment` are visibility/projection modes for Inbox list,
