@@ -48,7 +48,7 @@ flow count 1, and no artificial `cra-pr` JSON entry created.
 | Templates | DB-first for manual handoff pointer with JSON fallback | `TenantOperationalConfig.config.templates.manualHandoff` for pointer; DB for catalog | `Template`, `TemplateRequest`, `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | Departments/queues | DB | DB | `Department`, `Queue` | Keep DB-first |
 | Users/RBAC/sessions | DB | DB | `User`, `AppAuthSession`, `PasswordResetToken` | Keep DB-first |
-| User deactivation lifecycle | Implemented local / owner approved / production delivery pending | DB | `User`, `ConversationRuntimeState`, assignment/conversation lifecycle models | Block deactivation while active assigned HUMAN conversations exist; never silently close, transfer, unassign, change queue or mutate conversation lifecycle |
+| User deactivation lifecycle | Closed / deployed / owner approved / production non-destructive validated | DB | `User`, `ConversationRuntimeState`, assignment/conversation lifecycle models | Block deactivation while active assigned HUMAN conversations exist; never silently close, transfer, unassign, change queue or mutate conversation lifecycle |
 | Abandoned BOT automation lifecycle | Local E2E validated, product policy still open | `ChatbotFlow.definition.inactivityPolicy` for current flow-level behavior | `ConversationRuntimeState.answers.chatbotRuntime`, `flow`, `chatbotNodeId`, `chatbotActive` | Reuse existing executor/processor; do not implement generic HUMAN inactivity close; open decisions are stale context cleanup, timeout UX and provider parity |
 | Push subscriptions | DB | DB | `PushSubscription` | Keep DB-first |
 | Retention/LGPD | DB | DB | `RetentionConfig` | Keep DB-first |

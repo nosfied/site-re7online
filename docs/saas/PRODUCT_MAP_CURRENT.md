@@ -165,8 +165,8 @@ Current backlog classification:
   department/flow-aware hours configuration and validation; Demo Meta Cloud
   restriction external remediation (`phone.status=BANNED`, WABA `REJECTED`)
   with Demo Web Session `QR_REQUIRED` preserved without mutation; user
-  deactivation active-conversation guard implemented local / owner approved /
-  production delivery pending.
+  deactivation active-conversation guard closed / deployed / owner approved /
+  production non-destructive validated.
 - P2: question conditional branching by captured answer; reporting context
   enhancements; Guided Builder complete final-review summary; Meta Cloud
   unlink/removal semantics; support access hardening.
@@ -228,8 +228,8 @@ changes discard unsaved local draft, and only persisted state drives global
 filters/counters. This pattern is not automatically mandated for unrelated
 screens without product justification.
 
-User deactivation lifecycle rule, 2026-09-14: IMPLEMENTED LOCAL / OWNER
-APPROVED / PRODUCTION DELIVERY PENDING. A user must not be deactivated while active HUMAN
+User deactivation lifecycle rule, 2026-09-14: CLOSED / DEPLOYED / OWNER
+APPROVED / PRODUCTION NON-DESTRUCTIVE VALIDATED. A user must not be deactivated while active HUMAN
 operational conversations are still assigned to that user. The local predicate
 is same tenant, `ConversationRuntimeState.assignedUserId` equal to the user,
 `closedAt=null`, `status IN (WAITING, IN_PROGRESS)` and `mode` null or not
@@ -243,7 +243,11 @@ UX only. Local owner-approved validation: backend focused 1/1 PASS, frontend
 7/7 PASS, builds PASS; full `campaignsFeatureRoutes` 109/110 PASS with the
 unrelated pre-existing timeout `meta inbound clears active chatbot runtime when
 persisted flow is inactive` tracked separately as WATCH. No schema/migration and
-no deploy yet.
+production delivery in `c40c44dc205b2324a9197322334141c5e7f079f0`; persistent
+PostgreSQL backup `20260914-175614.dump`; reload scope was `re7-whatsapp-agent`
+and `re7-admin-front`; web worker preserved; health, `/app/users`,
+`/app/settings/users`, unauthenticated API behavior and representative tenant
+read-only checks passed.
 
 Inbox visibility policy audit, 2026-09-13: `shared` and
 `assignee_only_after_assignment` are visibility/projection modes for Inbox list,

@@ -625,8 +625,8 @@ linha aberta por vez quando aplicavel, recolher/trocar/filtro descartando draft
 local nao salvo, e filtros/contadores globais derivados apenas do estado
 persistido. O padrao nao deve ser imposto a telas sem justificativa de produto.
 
-Regra canonica de desativacao de usuario, 2026-09-14: IMPLEMENTED LOCAL /
-OWNER APPROVED / PRODUCTION DELIVERY PENDING. Um usuario nao pode ser desativado enquanto houver
+Regra canonica de desativacao de usuario, 2026-09-14: CLOSED / DEPLOYED /
+OWNER APPROVED / PRODUCTION NON-DESTRUCTIVE VALIDATED. Um usuario nao pode ser desativado enquanto houver
 conversas HUMAN operacionalmente ativas atribuidas a ele. Predicado aplicado:
 mesmo tenant, `ConversationRuntimeState.assignedUserId` igual ao usuario,
 `closedAt=null`, `status IN (WAITING, IN_PROGRESS)` e `mode` nulo ou diferente
@@ -643,7 +643,12 @@ UX. Validacao local owner-approved: backend focado 1/1 PASS, frontend 7/7 PASS,
 builds PASS; suite completa `campaignsFeatureRoutes` 109/110 PASS com timeout
 pre-existente nao relacionado em `meta inbound clears active chatbot runtime
 when persisted flow is inactive`, mantido como WATCH separado. Sem
-schema/migration; sem deploy.
+schema/migration. Entrega em producao FF-only em
+`c40c44dc205b2324a9197322334141c5e7f079f0`, com backup PostgreSQL persistente
+`20260914-175614.dump`, reload apenas de `re7-whatsapp-agent` e
+`re7-admin-front`, worker preservado, health ok/db ok, `/app/users` 200,
+`/app/settings/users` 200, API sem auth 401 e tenants representativos ACTIVE em
+consulta somente leitura.
 
 ## Marcos recentes confirmados
 
@@ -701,8 +706,7 @@ Commits relevantes do baseline homologado:
 - Current execution backlog, 2026-09-14: P0 = none. P1 ativo =
   abandoned automation / BOT flow lifecycle com E2E local validado e decisoes de produto ainda abertas,
   configuracao/validacao CRA de horarios de departamento/fluxo, Demo Meta Cloud
-  restriction externa e entrega em producao da guarda de desativacao de usuario
-  com atendimentos ativos. P2 ativo = branching condicional por resposta
+  restriction externa. P2 ativo = branching condicional por resposta
   capturada, melhorias de contexto em relatorios, semantica de unlink/remocao
   Meta Cloud, hardening de suporte interno auditado, cross-provider inactivity
   handoff hardening, Guided Builder lifecycle-policy exposure e resumo completo

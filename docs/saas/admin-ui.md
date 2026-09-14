@@ -90,8 +90,8 @@ ou encerrar os atendimentos antes de continuar, sem marcar o usuario como
 inativo localmente, sem alterar filtros e sem reduzir contador de assentos. O
 predicado backend usa `ConversationRuntimeState` do mesmo tenant,
 `assignedUserId`, `closedAt=null`, `status IN (WAITING, IN_PROGRESS)` e exclui
-`mode=BOT`. Status: implemented local / owner approved / production delivery
-pending. A regra de seguranca e backend-authoritative; o frontend apenas
+`mode=BOT`. Status: closed / deployed / owner approved / production
+non-destructive validated. A regra de seguranca e backend-authoritative; o frontend apenas
 apresenta feedback. A desativacao nunca transfere, encerra, remove atribuicao,
 troca fila ou altera lifecycle de conversa silenciosamente.
 

@@ -150,27 +150,33 @@ ACTIVE P1:
    recente da aplicacao nao e causa comprovada. A Web Session do Demo esta
    `QR_REQUIRED` desde 2026-09-13 22:40:23Z e nao deve ser reconectada,
    desconectada ou limpa sem autorizacao explicita do owner.
-4. User deactivation active-conversation guard: IMPLEMENTED LOCAL / OWNER
-   APPROVED / PRODUCTION DELIVERY PENDING. Um usuario nao pode ser desativado enquanto houver
-   conversas HUMAN operacionalmente ativas atribuidas a ele. Predicado canonico
-   local: `ConversationRuntimeState.clientId` do tenant, `assignedUserId` do
-   usuario, `closedAt=null`, `status IN (WAITING, IN_PROGRESS)` e `mode` ausente
-   ou diferente de `BOT`. `WAITING` sem atribuicao, `CLOSED`, outro tenant e BOT
-   nao bloqueiam. A desativacao nao fecha, transfere, remove atribuicao, troca
-   fila ou altera lifecycle de conversa silenciosamente; retorna
-   `user_has_active_conversations` com mensagem acionavel para transferir ou
-   encerrar os atendimentos antes de continuar. Backend guard aplicado em
-   `/app/users/:id` e `/admin/users/:id`; UI tenant-side mostra a mensagem
-   especifica e mantem estado persistido ativo em rejeicao. Backend e
-   autoritativo; feedback frontend e apenas UX. Validacao local owner-approved:
-   regressao backend focada 1/1 PASS, contrato frontend 7/7 PASS, builds PASS.
-   Suite completa `campaignsFeatureRoutes` ficou 109/110 PASS com timeout
-   pre-existente e nao relacionado em `meta inbound clears active chatbot
-   runtime when persisted flow is inactive`, classificado como WATCH separado.
-   No schema/migration; no deploy; producao ainda pendente.
 
 RECENTLY CLOSED:
 
+- User deactivation active-conversation guard: CLOSED / DEPLOYED / OWNER
+   APPROVED / PRODUCTION NON-DESTRUCTIVE VALIDATED. Entrega em producao em
+   `c40c44dc205b2324a9197322334141c5e7f079f0`, apos backup PostgreSQL
+   persistente
+   `/opt/re7online/site-re7online/apps/whatsapp-agent/backups/postgres/20260914-175614.dump`
+   (`19734685` bytes, 578 objetos, sha256
+   `07de59fb2a7d30e05170a57ac50e713627d6655ffcd351716d9c92e2c8a97592`).
+   Predicado canonico: mesmo tenant, `ConversationRuntimeState.assignedUserId`
+   do usuario, `closedAt=null`, `status IN (WAITING, IN_PROGRESS)` e `mode`
+   ausente ou diferente de `BOT`. `WAITING` sem atribuicao, `CLOSED`, outro
+   tenant e BOT nao bloqueiam. A desativacao nao fecha, transfere, remove
+   atribuicao, troca fila ou altera lifecycle de conversa silenciosamente;
+   retorna `user_has_active_conversations` com mensagem acionavel. Backend guard
+   aplicado em `/app/users/:id` e `/admin/users/:id`; UI tenant-side mostra a
+   mensagem especifica e mantem estado persistido ativo em rejeicao. Validacao
+   local: regressao backend focada 1/1 PASS, contrato frontend 7/7 PASS, builds
+   backend/frontend PASS, `git diff --check` PASS, schema unchanged, migration
+   none. Suite completa `campaignsFeatureRoutes` ficou 109/110 PASS com timeout
+   pre-existente e nao relacionado, mantido em WATCH. Deploy FF-only recarregou
+   apenas `re7-whatsapp-agent` e `re7-admin-front`; `re7-whatsapp-web-worker`
+   preservado. Smoke producao: health ok/db ok, `/app/users` 200,
+   `/app/settings/users` 200, API `/app/users` sem auth 401, guard presente no
+   codigo em producao e tenants `demo-converta`, `cra-pr`, `secult-pe` e
+   `syer-rodrigues` ACTIVE em consulta somente leitura.
 - Users Management 2.0: CLOSED / DEPLOYED / OWNER APPROVED / PRODUCTION
    NON-DESTRUCTIVE VALIDATED. Inactive user disappearing
    root cause: `GET /app/users` filtrava `User.isActive=true` no backend,
@@ -265,19 +271,12 @@ Proximas cinco frentes:
    autoatendimento. Dependencia: cliente configurar horarios. Demo validavel:
    sim. Code esperado: talvez. Config esperado: sim. Risco: baixo/medio. Done:
    horario CRA salvo e fluxo validado dentro/fora do expediente.
-3. P1 User deactivation active-conversation guard production delivery. Why now: administracao de
-   usuario pode impactar atendimento humano em curso. Valor: evita atendimento
-   ativo sem responsavel valido e sem mutacao silenciosa de ciclo. Dependencia:
-   owner approval local ja obtido; falta entrega em producao. Demo validavel:
-   sim. Code esperado: implementado localmente. Config esperado: nao. Risco:
-   medio por lifecycle/RBAC. Done: backend bloqueia pelo predicado canonico, UI
-   explica, e desativacao so passa apos transferir/fechar.
-4. P2 Question conditional branching. Why now: lacuna descoberta durante 2.4 e
+3. P2 Question conditional branching. Why now: lacuna descoberta durante 2.4 e
    valor direto para fluxos institucionais. Valor: respostas sim/nao e caminhos
    por resposta. Dependencia: desenho de runtime/predicados. Demo validavel:
    sim. Code esperado: sim. Config esperado: nao. Risco: medio/alto. Done:
    predicates testados sem quebrar fluxos existentes.
-5. P2 Reporting context enhancements. Why now: transforma validacoes de fila em
+4. P2 Reporting context enhancements. Why now: transforma validacoes de fila em
    evidencia operacional sem mexer no core de atribuicao. Valor: auditoria para
    supervisao/contratos. Dependencia: definir campos e filtros. Demo validavel:
    sim. Code esperado: sim. Config esperado: nao. Risco: medio. Done:
