@@ -49,6 +49,7 @@ flow count 1, and no artificial `cra-pr` JSON entry created.
 | Departments/queues | DB | DB | `Department`, `Queue` | Keep DB-first |
 | Users/RBAC/sessions | DB | DB | `User`, `AppAuthSession`, `PasswordResetToken` | Keep DB-first |
 | User deactivation lifecycle | DB operational state | DB | `User`, assignment/conversation lifecycle models after future audit | Block deactivation while active assigned conversations exist; never silently close, transfer, unassign, change queue or mutate conversation lifecycle |
+| Waiting-for-customer timeout | Not implemented; audited open gap | Future DB-first operational config | likely `TenantOperationalConfig.config.waitingForCustomerTimeout` plus explicit runtime metadata | Must be explicit attendant action, not generic human inactivity; reuse canonical close/service-cycle pipeline |
 | Push subscriptions | DB | DB | `PushSubscription` | Keep DB-first |
 | Retention/LGPD | DB | DB | `RetentionConfig` | Keep DB-first |
 | SLA/metrics | DB | DB | `SLAConfig`, `ConversationMetrics` | Keep DB-first |

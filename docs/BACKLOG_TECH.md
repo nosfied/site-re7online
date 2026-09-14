@@ -109,10 +109,16 @@ ACTIVE P0:
 
 ACTIVE P1:
 
-1. WAITING_FOR_CUSTOMER 60m: PRODUCT GAP / OPEN. O contrato desejado e encerrar
-   automaticamente apenas o estado explicito em que automacao/sistema aguarda o
-   cidadao por 60 minutos. Conversas HUMAN podem permanecer abertas/atribuidas
-   indefinidamente; nao implementar como inatividade generica.
+1. WAITING_FOR_CUSTOMER 60m: PRODUCT GAP / AUDITED / OPEN. Auditoria read-only
+   de 2026-09-14 mapeou os estados e a infraestrutura existente em
+   `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`. `WAITING`
+   significa fila humana e nao pode ser reutilizado. `WAITING_USER` existe, mas
+   esta sobrecarregado por automacao BOT e precisa metadados/transicoes
+   explicitas antes de representar "aguardando cidadao". O contrato desejado e
+   encerramento automatico apenas apos acao explicita do atendente marcando
+   aguardando cidadao; resposta do cidadao cancela/retoma; conversas HUMAN sem
+   esse estado permanecem abertas indefinidamente. Reusar scanner/claim
+   DB-backed, `TenantOperationalConfig` e pipeline canonico de fechamento/ciclo.
 2. CRA-PR department/flow-aware hours: P1 / CONFIGURATION + VALIDATION OPEN.
    Capability de horarios de departamento existe (`businessHours`,
    `NO_SCHEDULE`, UI em `/app/settings/departments`), mas a configuracao CRA

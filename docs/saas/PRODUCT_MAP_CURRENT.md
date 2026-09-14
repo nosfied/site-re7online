@@ -157,7 +157,9 @@ Demo/CRA/SECULT/Syer flow definition hashes stayed unchanged during smoke.
 Current backlog classification:
 
 - P0: none.
-- P1: WAITING_FOR_CUSTOMER 60m explicit automation lifecycle; CRA
+- P1: WAITING_FOR_CUSTOMER 60m explicit automation lifecycle audited/read-only
+  on 2026-09-14 in
+  `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`; CRA
   department/flow-aware hours configuration and validation; Demo Meta Cloud
   restriction external remediation (`phone.status=BANNED`, WABA `REJECTED`)
   with Demo Web Session `QR_REQUIRED` preserved without mutation; user
@@ -169,6 +171,13 @@ Current backlog classification:
   CPU, `last_message_lookup`, SECULT fairness and round-robin cursor, SECULT
   non-content suppression organic validation and representative scale/load
   validation.
+
+WAITING_FOR_CUSTOMER audit, 2026-09-14: current `WAITING` is queue waiting and
+cannot be used for citizen inactivity. Existing `WAITING_USER` is only a partial
+fit because it is also produced by BOT/webchat automation and lacks explicit
+waiting metadata, reply cancellation and timeout claim semantics. Future work
+must reuse DB-backed scanner/claim patterns, `TenantOperationalConfig` and the
+canonical close/service-cycle pipeline; no generic human-inactivity close.
 
 Syer Dashboard audit, 2026-09-13: read-only production audit on
 `69bedc38396b8f837a236b0af4a5446397919403` found no confirmed refresh loop or

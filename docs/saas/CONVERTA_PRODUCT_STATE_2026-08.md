@@ -486,6 +486,18 @@ A precedencia funcional e:
 - consentimento aceito com setor fechado e `QUEUE_FOR_NEXT_OPEN`: `WAITING` compartilhado com department/queue validos, sem autoassign enquanto fechado.
 - sem destino valido: nao criar estado `WAITING`/`HUMAN`/`ACTIVE` invalido; permanece BOT e registra handoff skipped.
 
+Auditoria read-only de 2026-09-14 sobre lifecycle de inatividade:
+`WAITING_FOR_CUSTOMER` 60m permanece PRODUCT GAP / AUDITED / OPEN, documentado em
+`docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`. O estado
+`WAITING` atual significa fila humana aguardando atribuicao e nao pode ser
+reaproveitado para "aguardando cidadao". `WAITING_USER` ja existe nas telas e
+relatorios, mas tambem e usado por automacao BOT/webchat antes do handoff; por
+isso so pode ser reaproveitado apos metadados e transicoes explicitas de
+operador, cancelamento por resposta do cidadao e claim atomico do timeout. A
+implementacao futura deve reaproveitar os padroes existentes de scanner
+DB-backed, `TenantOperationalConfig` e fechamento/ciclo canonico; conversas HUMAN
+sem marcacao explicita de espera pelo cidadao nao devem expirar por inatividade.
+
 ## Web Session
 
 WEB_SESSION opera com worker hospedado, auth state persistente e lifecycle tenant-scoped de `ChannelAccount`. O fluxo operacional contempla `QR_REQUIRED`, pairing, reconnect, persistencia de auth, incidentes terminais e recuperaveis, e observabilidade de disconnect com campos brutos sanitizados.
@@ -672,10 +684,11 @@ Commits relevantes do baseline homologado:
   preservados no smoke de producao. Backlog da entrega: HANDOFF QUEUE CONTRACT
   = CLOSED / REAL VALIDATED; QUESTION CONDITIONAL BRANCHING = PRODUCT GAP /
   OPEN; SYER ****9614 = CLOSED.
-- Current execution backlog, 2026-09-13: P0 = none. P1 ativo = auditoria do
-  erro/transient refresh loop no Dashboard da Syer, WAITING_FOR_CUSTOMER 60m
-  como estado explicito de automacao, e configuracao/validacao CRA de horarios
-  de departamento/fluxo. P2 ativo = branching condicional por resposta
+- Current execution backlog, 2026-09-14: P0 = none. P1 ativo =
+  WAITING_FOR_CUSTOMER 60m como lifecycle explicito auditado e ainda aberto,
+  configuracao/validacao CRA de horarios de departamento/fluxo, Demo Meta Cloud
+  restriction externa e desativacao de usuario com atendimentos ativos. P2 ativo
+  = branching condicional por resposta
   capturada, melhorias de contexto em relatorios, semantica de unlink/remocao
   Meta Cloud e hardening de suporte interno auditado. Performance de Inbox/CPU
   permanece WATCH, nao frente ativa.

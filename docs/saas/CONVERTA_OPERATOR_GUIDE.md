@@ -325,6 +325,17 @@ Quando o fechamento nao possui atendente ou setor, a contagem aparece em `Sem at
 
 O historico comeca no primeiro fechamento registrado nesse formato. Quando nao houver snapshots para a organizacao, a tela mostra que o indicador ainda nao possui historico disponivel em vez de sugerir que periodos antigos tiveram zero atendimentos.
 
+## Aguardando cliente e inatividade
+
+O estado visual `Aguardando cliente` existe em telas operacionais, mas ainda nao
+e uma regra automatica de encerramento por 60 minutos. A regra futura planejada
+deve depender de uma acao explicita do atendente marcando o atendimento como
+aguardando resposta do cidadao; uma resposta do cidadao deve cancelar/retomar o
+atendimento. Conversas humanas comuns nao expiram por inatividade generica.
+
+A auditoria tecnica canonica esta em
+`docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`.
+
 ## O que não fazer
 
 - Não enviar campanhas sem revisar audiência.
