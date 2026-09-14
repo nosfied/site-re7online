@@ -582,7 +582,7 @@ validated; health, `/app/users`, `/app/settings/users`, backend start e dados
 read-only de usuarios por tenant passaram no smoke. O gap "deactivate user with
 active human conversations" permanece aberto como ciclo de produto separado.
 
-Departments Management UX 2.0 owner-approved, 2026-09-14: `/app/settings/departments`
+Departments Management UX 2.0 deployed, 2026-09-14: `/app/settings/departments`
 mantem o contrato operacional atual de setores, horarios e excecoes, mas passa
 a apresentar cada setor como linha recolhivel alinhada ao padrao aprovado em
 Users Management 2.0 e Guided Builder. O estado fechado mostra somente resumo
@@ -594,8 +594,11 @@ editores internos de horario/excecao. O refinamento compartilhado com Users
 Management 2.0 fixa a acao expansiva em coluna direita
 `minmax(0,1fr)_auto`, permitindo quebra do resumo sem deslocar o botao circular
 para baixo. Nao altera semantica de filas, roteamento, autoassign, capacidade,
-presenca, Inbox visibility, RBAC, schema ou migracao. Status: owner PASS;
-entrega em producao pendente.
+presenca, Inbox visibility, RBAC, schema ou migracao. Status: owner-approved,
+deployed em `5c051f83df6bc99aa998985ba93301e601e502df` e production
+non-destructive validated; health, `/app/users`, `/app/settings/departments`,
+estrutura right-anchor no codigo em producao e tenants representativos ACTIVE
+passaram no smoke sem mutacao.
 
 ## Marcos recentes confirmados
 

@@ -188,8 +188,8 @@ seat count uses the backend enforcement source, and `/app/users` plus
 `/app/settings/users` returned production HTML after deployment. Deactivate user
 with active human conversations remains a separate product lifecycle gap.
 
-Departments Management UX 2.0 state, 2026-09-14: OWNER APPROVED / DELIVERY
-PENDING.
+Departments Management UX 2.0 state, 2026-09-14: DEPLOYED / OWNER APPROVED /
+PRODUCTION NON-DESTRUCTIVE VALIDATED.
 `/app/settings/departments` is being aligned to the same expandable-row
 presentation used by Users Management 2.0 and Guided Builder. The UX contract is
 compact persisted summaries, shared circular expand/collapse control, one row
@@ -197,7 +197,10 @@ open at a time, expanded edit body with separate tone, and unsaved draft reset
 on collapse/row switch/filter changes. The shared Users/Departments row header
 uses a fixed right action column so wrapped summaries never push the circular
 expand control below the header. No department/queue routing semantics, hours
-rules, RBAC, schema or migration changed.
+rules, RBAC, schema or migration changed. Delivery commit
+`5c051f83df6bc99aa998985ba93301e601e502df`; smoke confirmed health,
+`/app/users`, `/app/settings/departments`, production right-anchor structure and
+representative tenant status without mutating department data.
 
 Inbox visibility policy audit, 2026-09-13: `shared` and
 `assignee_only_after_assignment` are visibility/projection modes for Inbox list,

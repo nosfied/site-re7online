@@ -85,7 +85,8 @@ contadores.
 
 ## Departments Management UX 2.0
 
-Estado owner-approved / delivery pending: `/app/settings/departments` usa a
+Estado deployed / owner-approved / production non-destructive validated:
+`/app/settings/departments` usa a
 mesma linguagem de linhas expansivas aprovada em Users Management 2.0 e Guided
 Builder. Cada setor possui header compacto com resumo persistido e botao
 circular explicito expandir/recolher; o corpo expandido usa tom separado e
