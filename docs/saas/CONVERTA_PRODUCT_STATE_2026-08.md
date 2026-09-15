@@ -181,6 +181,15 @@ configured, one Utility template is approved, campaigns are zero and campaign
 billing/opt-out evidence is zero. No CRA data was used and no real outbound was
 sent. Canonical plan:
 `docs/bids/2026/cra-pr/DEMO_CONTRACT_VALIDATION_PLAN.md`.
+Phase B owner gate is prepared without real Meta outbound: approved Demo
+Utility template `data_exame` (`pt_BR`, one `{{1}}` date variable) is suitable
+for Demo/RE7 test data only, local pre-send checks pass 13/13, and a controlled
+2-message gate has a reference contractual preview of R$ 0,64. The old HUMAN
+waiting-on-customer 1h auto-close interpretation is SUPERSEDED / NOT REQUIRED;
+human conversations may remain open under attendant control. The real lifecycle
+front is BOT/FLOW abandonment, already validated for `resetAfterMinutes`, stale
+pending question reset and Web Session inactivity handoff, with only residual
+cross-provider and Guided lifecycle-policy hardening in P2.
 
 ## Modelos Meta
 
@@ -757,7 +766,7 @@ Commits relevantes do baseline homologado:
   `docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md`: 52 requisitos mapeados,
   14 CLOSED / REAL VALIDATED, 1 CLOSED / CUSTOMER VALIDATED, 15 IMPLEMENTED /
   NEEDS CRA VALIDATION, 5 CONFIG PENDING, 1 CUSTOMER ACTION PENDING, 4 EXTERNAL
-  META DEPENDENCY, 2 PRODUCT GAP, 9 DOCUMENTATION/EVIDENCE GAP e 1 NOT REQUIRED.
+  META DEPENDENCY, 1 PRODUCT GAP, 9 DOCUMENTATION/EVIDENCE GAP e 2 NOT REQUIRED.
   A matriz confirma que active flow visibility e business hours nao devem ser
   reabertos; lacunas principais sao canais IG/FB/Webchat, Utility
   templates/campaigns em aceite contratual aberto, opt-out,

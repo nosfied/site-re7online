@@ -218,3 +218,32 @@ Phase B must stop for owner approval before using an existing Demo template or
 submitting any new Demo template. Phase C real outbound may use only 2 to 5
 explicitly authorized Demo/RE7 recipients. No CRA recipient, token, template,
 WABA asset or business data may be used.
+
+## Demo Phase B Owner Gate - 2026-09-15
+
+No real send was executed.
+
+Existing approved Demo Utility template:
+
+```text
+name: data_exame
+language: pt_BR
+status: approved
+body: Paciente, seu exame foi marcado para {{1}}. Compareça com pelo menos 1 hora de antecedência.
+variable: {{1}} Data, example 21/03/2026
+```
+
+Suitability: suitable for Demo/RE7 controlled homologation with test data only.
+It must not be treated as CRA customer copy.
+
+Pre-send local gate:
+
+- import/dedupe/variables/opt-out/lifecycle/billing tests: 13/13 PASS;
+- scheduling: implemented, needs Demo evidence;
+- pause: implemented for running campaigns, needs Demo evidence;
+- cancel: implemented for draft/scheduled/sending/paused, needs Demo evidence;
+- expected reference cost for first 2-message controlled send:
+  `2 x R$ 0,32 = R$ 0,64`.
+
+Owner approval is still required for exact recipients, send window, 24h proof,
+message count and real Meta outbound.

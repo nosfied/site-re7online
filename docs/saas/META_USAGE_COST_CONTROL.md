@@ -175,6 +175,13 @@ mensagem ativa Utility, 24h, delivery/read idempotente e relatorio, desde que o
 owner aprove template, destinatarios, contagem, janela e custo esperado antes
 de qualquer envio real. Isso nao prova fatura CRA.
 
+Demo Phase B owner gate, 2026-09-15: para o primeiro envio controlado proposto
+com 2 mensagens, usar a premissa comercial central documentada para CRA
+(`R$ 3.200,00`/mes para `10.000` mensagens ativas) como referencia contratual
+de planejamento: `R$ 0,32` por mensagem ativa billable; `2 x R$ 0,32 =
+R$ 0,64`. Este valor nao e fatura CRA nem custo Meta retail. O envio real segue
+bloqueado ate aprovacao explicita do owner.
+
 ## Limites e proximos passos
 
 - Nao ha conciliacao financeira definitiva automatizada.

@@ -43,9 +43,9 @@ CONFIG PENDING: 0
 CUSTOMER ACTION PENDING: 0
 CONTRACT REQUIRED / CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING: 4
 EXTERNAL META DEPENDENCY: 4
-PRODUCT GAP: 2
+PRODUCT GAP: 1
 DOCUMENTATION/EVIDENCE GAP: 9
-NOT REQUIRED BY CONTRACT: 1
+NOT REQUIRED BY CONTRACT: 2
 ```
 
 Pendencias criticas para prontidao contratual:
@@ -414,7 +414,7 @@ Resultado da Fase A:
 - 8 capacidades de ambiente/Demo foram validadas por leitura nesta rodada;
 - 12 exigem evidencia especifica CRA;
 - 4 canais seguem customer-deferred;
-- 2 permanecem como product gaps/decisao de dominio;
+- 1 permanece como product gap/decisao de dominio;
 - nenhum dado CRA foi usado no Demo;
 - nenhuma submissao Meta e nenhum envio real foram executados.
 
@@ -437,10 +437,32 @@ Resultado da Fase A:
 - A modelagem dedicada de opt-out pode ser evolucao futura se o contrato avancar.
 - Evidencias visuais devem ser capturadas em ambiente sanitizado.
 - Regras de retencao e privacidade devem constar no onboarding operacional.
-- Correcao de 2026-09-14: a regra waiting-on-customer 1h como auto-close de
-  atendimento humano foi superada e nao e requisito atual. A frente correta e
-  abandono de automacao/BOT iniciada pelo cidadao; nao aplicar workaround de
-  inatividade generica em HUMAN.
+- Correcao reafirmada em 2026-09-15: a regra waiting-on-customer 1h como
+  auto-close de atendimento humano foi superada e nao e requisito atual. HUMAN
+  pode permanecer aberto indefinidamente sob controle do atendente. A frente
+  correta e BOT/FLOW lifecycle: `resetAfterMinutes`, stale pending question reset e
+  inactivity handoff ja validados; cross-provider hardening e exposicao de
+  lifecycle policy no Guided seguem P2.
+
+## Demo Phase B owner gate - 2026-09-15
+
+Sem envio real.
+
+- Template Demo aprovado: `data_exame`, Utility, `pt_BR`, variavel `{{1}}`
+  Data, Meta id mascarado.
+- Suitability: adequado para homologacao Demo com dados de teste; nao e copia
+  CRA nem deve ser usado como copy CRA.
+- Testes locais de precheck: 13/13 PASS para import CSV, dedupe,
+  missing-variable safe failure, opt-out antes de outbound, lifecycle e billing
+  idempotente.
+- Scheduling: implementado, precisa validacao Demo controlada.
+- Pause: implementado para `sending -> paused`, precisa validacao Demo
+  controlada; `scheduled -> paused` nao e transicao valida, usar cancelamento
+  antes do inicio.
+- Cancel: implementado para draft/scheduled/sending/paused, precisa evidencia
+  Demo controlada.
+- Custo de gate: premissa central R$ 3.200,00/mes para 10.000 mensagens ativas,
+  referencia R$ 0,32 por mensagem; 2 mensagens = R$ 0,64 de teto referencial.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.

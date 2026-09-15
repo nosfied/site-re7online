@@ -168,10 +168,16 @@ WATCH / EXTERNAL OPERATIONS:
    de horario. Plano canonico criado em
    `docs/bids/2026/cra-pr/DEMO_CONTRACT_VALIDATION_PLAN.md`: 36/52 requisitos
    demo-validatable, 19 ja product-validated, 8 capacidades validadas nesta
-   leitura, 12 CRA-specific only, 4 customer-deferred, 2 product gaps. Nenhuma
+   leitura, 12 CRA-specific only, 4 customer-deferred, 1 product gap. Nenhuma
    submissao Meta, envio real ou dado CRA usado no Demo.
-   Produto gap declarado na matriz: waiting-on-customer 1h so deve virar
-   implementacao se confirmado como obrigacao contratual.
+   Phase B owner gate, 2026-09-15: template Demo aprovado `data_exame`
+   (Utility/pt_BR, 1 variavel Data) e adequado apenas para homologacao Demo com
+   dados de teste; testes locais de precheck 13/13 PASS; custo de referencia
+   para 2 mensagens = R$ 0,64. Sem envio real. Correcao de backlog: HUMAN
+   waiting-on-customer 1h e SUPERSEDED / NOT REQUIRED; atendimento humano pode
+   permanecer aberto sob controle do atendente. O front correto e BOT/FLOW
+   lifecycle, ja validado para resetAfterMinutes, stale pending question reset e
+   inactivity handoff, com residual cross-provider e Guided lifecycle UX em P2.
 
 RECENTLY CLOSED:
 

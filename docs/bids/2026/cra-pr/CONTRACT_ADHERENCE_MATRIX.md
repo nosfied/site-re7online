@@ -108,9 +108,9 @@ Read-only production snapshot collected on 2026-09-15.
 | CUSTOMER ACTION PENDING | 0 |
 | CONTRACT REQUIRED / CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING | 4 |
 | EXTERNAL META DEPENDENCY | 4 |
-| PRODUCT GAP | 2 |
+| PRODUCT GAP | 1 |
 | DOCUMENTATION/EVIDENCE GAP | 9 |
-| NOT REQUIRED BY CONTRACT | 1 |
+| NOT REQUIRED BY CONTRACT | 2 |
 
 ## Requirement Matrix
 
@@ -147,7 +147,7 @@ Read-only production snapshot collected on 2026-09-15.
 | CRA-CAMP-002 | aderencia #36/#37 | Recipient import CSV/XLSX/API | Product has campaign/import-related capability documented | Not evidenced for CRA | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | CRA import workflow not proven | Run dry-run/import test with sanitized list | RE7 | E4 |
 | CRA-CAMP-003 | aderencia #38/#39 | Segmentation and deduplication | Product supports recipient records and dedupe semantics | Not evidenced for CRA | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | No CRA list/dedupe evidence | Validate duplicated sample recipient handling | RE7 | E4 |
 | CRA-CAMP-004 | aderencia #40/#41 | Variables and supported attachments/media/links | Templates/media supported subject to Meta policy | No CRA template/list mapping | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | No CRA variable/media template proof | Validate one utility template with variables | RE7 + Meta | E4/E5 |
-| CRA-CAMP-005 | aderencia #42/#43/#44 | Scheduling, test send, cancel/pause | Scheduling/cancel/test are partially documented | No CRA campaign evidence | E1 | PRODUCT GAP | C1 | P1 | Explicit pause semantics not contract-evidenced; scheduled campaign proof absent | Audit campaign controls and implement only if proven missing | RE7 | E2/E4 |
+| CRA-CAMP-005 | aderencia #42/#43/#44 | Scheduling, test send, cancel/pause | Scheduling, cancel, pause, resume and test-send semantics exist; local lifecycle tests PASS | No CRA campaign evidence | E2 | IMPLEMENTED / NEEDS DEMO VALIDATION | C1 | P1 evidence | Contract evidence pending, not proven product gap | Validate exact lifecycle semantics on Demo controlled campaign before real send | RE7 | E4 |
 | CRA-CAMP-006 | aderencia #45 | Delivery/error status and history | OutboundMessage/status handling exists | No CRA campaign messages | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | Needs CRA campaign sample | Validate accepted/delivered/failed status with template test | RE7 | E4 |
 | CRA-OPT-001 | resposta esclarecimento item 10 | Opt-out with audit and campaign block | Operational event/blocking support documented | No CRA opt-out sample | E1/E2 | DOCUMENTATION/EVIDENCE GAP | C0 | P1 evidence | Contractual opt-out evidence missing | Execute redacted opt-out/campaign-block smoke | RE7 | E4/E6 |
 | CRA-REP-001 | resposta esclarecimento item 11 | Export CSV/XLSX or equivalent; PDF report format | CSV reports exist; PDF where applicable; XLSX via equivalent/conversion | CRA reports enabled | E1/E3 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | CRA export samples missing | Generate redacted CSV/PDF/equivalent evidence | RE7 | E4/E6 |
@@ -167,7 +167,7 @@ Read-only production snapshot collected on 2026-09-15.
 | CRA-VOL-002 | comercial/readiness | 10,000 active utility messages/month | Campaign engine exists | No CRA templates/campaigns | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C0 | P1 evidence | Volume and cost controls not CRA-validated | Validate controlled campaign and monthly limit monitoring | RE7 | E4/E6 |
 | CRA-META-002 | resposta esclarecimento item 8 | Meta assets operated by contractor and transferable to CRA | Operationally possible; depends Meta/business ownership | CRA Meta assets configured | E3 | EXTERNAL META DEPENDENCY | C1 | docs/legal | Transfer evidence/terms not attached | Formalize ownership/transfer clause and Meta evidence | RE7 + CRA + Meta | E6 |
 | CRA-NO-MKT-001 | resposta esclarecimento item 12 | No marketing messages in scope | Product can avoid marketing | CRA no campaigns/templates | E3 | NOT REQUIRED BY CONTRACT | C3 | none | No marketing implementation needed for CRA readiness | Keep utility-only scope | RE7 | none |
-| CRA-INACT-001 | CRA flow baseline known gap | Waiting-on-customer 1h close behavior | Generic inactivity cannot safely infer customer responsibility | Not implemented as CRA rule | E0/E1 | PRODUCT GAP | C1 if source insists | P2/P1 after source confirmation | Known flow gap; exact contractual force must be confirmed | Confirm requirement source and design lifecycle-safe rule if mandatory | CRA + RE7 | E2/E4 |
+| CRA-INACT-001 | Superseded interpretation | HUMAN waiting-on-customer 1h auto-close | Human conversations may remain open indefinitely under attendant control; no automatic 60-minute close is required | Not applicable | E2/E4 for BOT/flow lifecycle audit | NOT REQUIRED BY CONTRACT / SUPERSEDED | C3 | none | Old HUMAN 1h interpretation was stale; abandoned BOT/FLOW lifecycle already audited | Keep BOT/FLOW residuals as P2 hardening only | RE7 | none |
 
 ## Critical Contract Gaps
 
@@ -207,8 +207,12 @@ C0/C1 items that block declaring contractual readiness without qualification:
 - Business hours: CONFIGURED / OPERATIONALLY VALIDATED, 6 departments Mon-Fri
   09:00-17:00.
 - Flow visibility: CLOSED / CUSTOMER VALIDATED.
-- Remaining flow gap: waiting-on-customer 1h only if the source is confirmed as
-  mandatory; do not emulate with unsafe generic inactivity.
+- Superseded flow interpretation: HUMAN waiting-on-customer 1h auto-close is
+  not a product requirement. Human conversations may remain open indefinitely
+  under attendant control. The actual abandoned automation front is BOT/FLOW
+  lifecycle: resetAfterMinutes, stale pending question reset and Web Session
+  inactivity handoff have been validated; residual cross-provider hardening and
+  Guided lifecycle-policy exposure remain P2.
 
 ## Current Execution Order
 
@@ -242,7 +246,8 @@ cost, campaign name and number of messages.
 - CRA Utility readiness audit: CLOSED; contract acceptance remains OPEN pending
   customer-approved copy, Meta approval, controlled recipient approval and
   evidence capture. No real send executed.
-- CRA Demo contract validation: PHASE A COMPLETE / NO EXTERNAL SEND. Demo is a
+- CRA Demo contract validation: PHASE B OWNER GATE PREPARED / NO REAL SEND.
+  Demo is a
   multitenant product mirror for generic capability evidence only; it does not
   close CRA customer acceptance, CRA billing acceptance, CRA template approval
   or customer-deferred channels.

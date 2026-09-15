@@ -212,6 +212,13 @@ Current backlog classification:
   SEND. Demo can validate generic product mechanics but does not close CRA
   customer acceptance, CRA template approval, CRA billing evidence or deferred
   IG/FB/Webchat channels.
+- CRA-PR Demo Phase B owner gate, 2026-09-15: PREPARED / NO EXTERNAL SEND.
+  Approved Demo Utility template `data_exame` (`pt_BR`, one date variable) is
+  suitable for Demo/RE7 test data only, not as CRA copy. Local pre-send checks
+  pass 13/13 for import, dedupe, variables, opt-out exclusion, lifecycle and
+  billing idempotency. Planned controlled owner gate is 2 messages with
+  reference contractual preview of R$ 0,64, still blocked until explicit owner
+  approval and 24h-window check immediately before sending.
 - CRA active flow tenant visibility, 2026-09-15: CLOSED / DEPLOYED / CUSTOMER
   VALIDATED. Runtime flow works
   per owner report, but CRA tenant admins did not see the active flow in

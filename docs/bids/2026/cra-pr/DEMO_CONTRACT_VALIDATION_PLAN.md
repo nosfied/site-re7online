@@ -55,7 +55,7 @@ ALREADY PRODUCT-VALIDATED: 19
 VALIDATED IN THIS RUN: 8 read-only/environment capabilities
 CRA-SPECIFIC ONLY: 12
 CUSTOMER-DEFERRED: 4
-PRODUCT GAPS: 2
+PRODUCT GAPS: 1
 REAL META OUTBOUND: NOT EXECUTED
 CRA DATA USED IN DEMO: NO
 ```
@@ -99,7 +99,7 @@ acceptance evidence, delivered billing proof or CRA customer validation.
 | CRA-CAMP-002 | yes | import/CSV generic | Demo dry-run/import after gate | CRA list separate | import summary |
 | CRA-CAMP-003 | yes | dedupe generic | Demo A repeated/B opt-out/C valid | CRA list separate | counts before/after |
 | CRA-CAMP-004 | yes | variables generic | Demo safe variables | CRA template variables | preview/render evidence |
-| CRA-CAMP-005 | partial | schedule/test/cancel exist; pause semantics need exact evidence | Demo lifecycle test | CRA campaign acceptance | lifecycle matrix |
+| CRA-CAMP-005 | yes | schedule/test/cancel/pause/resume exist and local lifecycle tests pass | Demo lifecycle test before send | CRA campaign acceptance | lifecycle matrix |
 | CRA-CAMP-006 | yes | status history generic | Demo controlled send/webhook | CRA sample still needed | Meta status evidence |
 | CRA-OPT-001 | yes | opt-out registry and campaign block generic | Demo opt-out E2E | CRA opt-out sample | pre-send block event |
 | CRA-REP-001 | yes | exports generic | Demo report/export | CRA data sample | CSV/PDF/equivalent files |
@@ -119,7 +119,7 @@ acceptance evidence, delivered billing proof or CRA customer validation.
 | CRA-VOL-002 | yes | active campaign mechanics generic | Demo controlled campaign and cost preview | yes | monthly limit report |
 | CRA-META-002 | no | legal/asset transfer external | none in Demo | yes | ownership/transfer proof |
 | CRA-NO-MKT-001 | yes | Utility-only policy generic | category allowlist and rejected Marketing history | CRA wording still required | policy evidence |
-| CRA-INACT-001 | no | product/domain gap pending source confirmation | none | yes if source confirms | lifecycle-safe design |
+| CRA-INACT-001 | not required | HUMAN waiting-on-customer 1h auto-close is superseded and not a product requirement | none | no | keep BOT/FLOW P2 hardening notes |
 
 ## Phase A Findings
 
@@ -133,6 +133,183 @@ acceptance evidence, delivered billing proof or CRA customer validation.
 - Demo has no campaign evidence yet. Campaign send, delivery webhook, billing
   event, opt-out E2E and exports remain open for later gated phases.
 - No CRA data or assets were used.
+
+## Phase B Owner Gate Preparation
+
+Status: PREPARED / NO REAL SEND.
+
+### Backlog Correction
+
+The old HUMAN `WAITING_FOR_CUSTOMER 60m` / waiting-on-customer 1h
+interpretation is **SUPERSEDED / NOT A PRODUCT REQUIREMENT**. Human
+conversations may remain open indefinitely under attendant control. No automatic
+60-minute human close is required for CRA.
+
+The actual abandoned-automation front is BOT/FLOW lifecycle:
+
+- `resetAfterMinutes` validated;
+- stale pending question reset validated;
+- inactivity handoff through Web Session path validated;
+- residual cross-provider hardening remains P2;
+- Guided lifecycle-policy exposure remains P2.
+
+Corrected Phase B product gap count: 1. The remaining product gap is question
+conditional branching by captured answer, not HUMAN 1h auto-close.
+
+### Existing Demo Utility Template
+
+Current approved Demo Utility template:
+
+```text
+name: data_exame
+category: UTILITY
+submittedCategory: UTILITY
+language: pt_BR
+status: approved
+body: Paciente, seu exame foi marcado para {{1}}. Compareça com pelo menos 1 hora de antecedência.
+variables: {{1}} = Data, example 21/03/2026
+metaTemplateId: masked in production evidence
+```
+
+Suitability: **SUITABLE WITH DEMO TEST DATA ONLY**.
+
+Reason: the template is approved, Utility, neutral enough for Demo/RE7
+homologation and has one variable for variable-resolution evidence. It does not
+impersonate CRA, but its health/exam wording should not be represented as CRA
+customer copy. For a CRA-facing acceptance send, a CRA-approved Utility copy is
+still required.
+
+### Campaign Requirement Gate
+
+| REQ ID | Requirement | Mandatory? | Demo Validation Method |
+| --- | --- | --- | --- |
+| CRA-CAMP-002 | recipient import CSV/XLSX/API | yes, CSV/XLSX or equivalent where allowed | CSV import/preview on Demo campaign draft; XLSX only if required beyond equivalent |
+| CRA-CAMP-003 | segmentation/deduplication | yes | controlled list A, A duplicate, B opted out, C valid |
+| CRA-CAMP-004 | variables/personalization/media/links | variables yes when template has placeholders; media only if the active template requires it | `data_exame` variable `{{1}}` with recipient-specific safe dates; missing variable must block |
+| CRA-CAMP-005 | schedule/test/cancel/pause | yes for lifecycle controls, exact semantics must be evidenced | schedule future draft, test-send only if approved, cancel before send, pause/resume only where state allows |
+| CRA-CAMP-006 | status/delivery history | yes | future controlled Meta send + webhook status capture |
+| CRA-OPT-001 | opt-out block before campaign send | yes | include an opted-out Demo recipient and prove exclusion before Meta send |
+| CRA-REP-001 | export CSV/XLSX/equivalent/PDF | yes; official clarification allows CSV/XLSX or equivalent open/widely used; PDF can be formatted report | export generated campaign/report evidence after send |
+| CRA-REP-002 | monthly consumption report | yes | Meta usage/active-message report after controlled delivered Utility |
+| CRA-BILL-001 | delivered Utility outside 24h only; read no duplicate | yes | controlled outside-24h recipient, delivered/read webhook and billing event idempotency |
+| CRA-VOL-002 | 10,000 active Utility/month readiness | yes, capability/monitoring evidence | no volume send; validate controls and monthly report mechanics |
+
+### Lifecycle Semantics
+
+Scheduling: **IMPLEMENTED / NEEDS DEMO VALIDATION**.
+
+- Draft can transition to `scheduled` with a future UTC instant.
+- Past/invalid dates are rejected.
+- The scheduler processes `scheduledAt <= now`, claims by status, changes to
+  `sending`, clears `scheduledAt` and starts the campaign run.
+- Scheduled campaigns can transition back to draft or to cancelled by lifecycle
+  rules; direct edit semantics still need UI-level evidence.
+- Restart safety is DB-backed through `Campaign.status=scheduled` and
+  `scheduledAt`.
+
+Pause: **IMPLEMENTED / NEEDS DEMO VALIDATION**.
+
+- `sending -> paused` is allowed.
+- Runner checks campaign status before each recipient and stops when it sees
+  `paused`.
+- `paused -> sending` resumes and starts a new campaign run from persisted seed.
+- `scheduled -> paused` is not a valid transition; scheduled cancellation is the
+  safe pre-start control.
+- `completed/blocked/failed/cancelled` are terminal for pause/resume.
+
+Cancel: **IMPLEMENTED / NEEDS DEMO VALIDATION**.
+
+- `draft`, `scheduled`, `sending` and `paused` can transition to `cancelled`.
+- Runner stops when it sees `cancelled`.
+- Cancel clears `scheduledAt` in campaign service.
+
+### Local Phase B Precheck Evidence
+
+Safe local DB target: `postgresql://re7test:****@127.0.0.1:5432/re7_cra_contract_test2`.
+
+Focused tests run on 2026-09-15:
+
+```text
+campaignRecipientImport.test.ts
+campaignLifecycle.test.ts
+activeMessageBilling.test.ts
+metaUsagePreview.test.ts
+
+13/13 PASS
+```
+
+Coverage:
+
+- CSV import preview and persist without sending;
+- normalization, invalid numbers and duplicate handling;
+- opt-out exclusion before outbound;
+- required variable mapping and missing-variable safe failure;
+- lifecycle transitions and future scheduledAt normalization;
+- delivered Utility outside 24h creates one active billing event;
+- duplicate delivered/read replay does not double-bill;
+- failed/inside-window/non-Utility/test-send are not billable;
+- cost preview for one or multiple Utility recipients.
+
+### Recipient Set
+
+Prepared, not persisted and not sent:
+
+- recipient count: 2 for the first controlled send;
+- recipient type: owner-authorized Demo/RE7 test numbers only;
+- CRA citizen/customer data: prohibited;
+- variable values: Demo-safe future dates, one per recipient;
+- 24h window: must be proven outside window from actual last inbound before
+  send; do not manipulate timestamps.
+
+### Contract Cost Preview
+
+Commercial premise source:
+`docs/bids/2026/cra-pr-90004-2026/proposta-comercial-premissas.md`.
+
+Reference package:
+
+- R$ 3.200,00/month central recommendation;
+- 10,000 active messages/month estimated;
+- derived planning unit: R$ 0,32 per billable active Utility message.
+
+Owner-gate example for 2 messages:
+
+```text
+2 x R$ 0,32 = R$ 0,64 maximum contractual reference amount
+```
+
+This is a planning preview, not a CRA invoice and not a Meta retail fee.
+
+### Phase B Owner Gate Package
+
+```text
+DEMO TEMPLATE:
+data_exame
+
+CONTENT SUMMARY:
+Paciente, seu exame foi marcado para {{1}}. Compareça com pelo menos 1 hora de antecedência.
+
+RECIPIENT COUNT:
+2 pending owner-authorized Demo/RE7 numbers
+
+MESSAGE COUNT:
+2
+
+SEND WINDOW:
+pending owner approval; choose a monitored business-hours window
+
+24H STATUS:
+pending proof immediately before send; selected recipients must be outside 24h
+
+EXPECTED CONTRACT COST:
+R$ 0,64 reference maximum for 2 billable active Utility messages
+
+OPT-OUT:
+precheck locally PASS; Demo production opt-out exclusion evidence pending
+
+REAL META OUTBOUND:
+NOT EXECUTED
+```
 
 ## Owner Gate For Phase B
 
