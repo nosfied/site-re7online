@@ -138,7 +138,10 @@ ACTIVE P1:
    `campaign.message.provider_accepted`, bloqueio de retry com
    `campaign.message.reconciliation_required`, e registro
    `webhook.status.orphaned` para status sem OutboundMessage sem criar billing
-   sintetico. Testes locais PASS: `campaignRunner.test.ts` 5/5,
+   sintetico. Auditoria read-only de risco confirmou que nao e Demo-only:
+   `cra-pr`, `demo-converta`, `secult-pe` e `syer-rodrigues` nao possuem
+   `defaultDepartmentId/defaultQueueId` nem default geral ativo; `re7online`
+   possui default geral ativo. Testes locais PASS: `campaignRunner.test.ts` 5/5,
    `campaignsFeatureRoutes.test.ts` 113/113, backend build PASS. Ainda nao
    houve deploy nem novo envio real; A nao deve ser reenviado e B requer novo
    owner gate.

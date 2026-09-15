@@ -186,9 +186,12 @@ Current backlog classification:
   required operational default bootstrap after the external Meta mutation.
   Local generic fix adds pre-send default validation, idempotent submit/accepted
   events, retry hard-stop with reconciliation-required evidence, and orphan
-  webhook status evidence without synthetic billing. No deploy or new real send
-  has occurred; `****9614` must not be resent and `****6787` needs a fresh
-  owner gate.
+  webhook status evidence without synthetic billing. Read-only risk audit shows
+  the latent class is not Demo-only: `cra-pr`, `demo-converta`, `secult-pe` and
+  `syer-rodrigues` lack configured operational defaults and active general
+  defaults, while `re7online` has one active general default. No deploy or new
+  real send has occurred; `****9614` must not be resent and `****6787` needs a
+  fresh owner gate.
 - Watch/external operations: abandoned automation / BOT flow lifecycle local E2E validated on
   2026-09-14 in
   `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`; product
