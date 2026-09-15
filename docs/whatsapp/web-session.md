@@ -443,6 +443,27 @@ Reset is explicit and destructive for the WEB_SESSION credential only:
 
 It does not delete the `ChannelAccount` and does not alter Meta/WABA configuration.
 
+### Demo channel continuity audit - 2026-09-15
+
+Read-only production audit for `demo-converta` confirmed that Meta Cloud and Web
+Session incidents must remain classified separately.
+
+- Web Session current state: `CONNECTED` for `****5328`.
+- Last connected: 2026-09-15T07:10:17.127Z.
+- Historical QR_REQUIRED: 2026-09-13T22:40:23Z, event
+  `whatsapp.web_session.disconnected`, classification `qr_required`,
+  `action=auth_clear`.
+- Re-pairing evidence: QR requested on 2026-09-14T16:31Z; connected on
+  2026-09-14T16:32:15Z; disconnect alert closed after connection.
+- Auth material: `ChannelAccountSecret.secretKind=baileysAuthState.v1` is
+  configured; `.data/` was preserved and was not cleared by the audit.
+- Worker: PM2 process online from `/opt/re7online/site-re7online/apps/whatsapp-web-worker`;
+  no logout/reset/session clear was executed during this audit.
+- Ownership conflict: not proven by current evidence. Recent worker logs show
+  credential/key updates and device add/remove notifications, but no explicit
+  `logout`, `connectionReplaced` or ownership conflict proof in the audited
+  window.
+
 ## SECULT impact
 
 SECULT must remain unaffected in 88B, 88C and 88D unless separately authorized:

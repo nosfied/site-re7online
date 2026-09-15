@@ -720,9 +720,15 @@ Commits relevantes do baseline homologado:
   preservados no smoke de producao. Backlog da entrega: HANDOFF QUEUE CONTRACT
   = CLOSED / REAL VALIDATED; QUESTION CONDITIONAL BRANCHING = PRODUCT GAP /
   OPEN; SYER ****9614 = CLOSED.
-- Current execution backlog, 2026-09-14: P0 = none. P1 ativo =
-  abandoned automation / BOT flow lifecycle com E2E local validado e decisoes de produto ainda abertas,
-  Demo Meta Cloud restriction externa. CRA/SECULT business-hours audit fechado
+- Current execution backlog, 2026-09-15: P0 = none. P1 ativo = none.
+  Watch/external ops: abandoned automation / BOT flow lifecycle com E2E local
+  validado e decisoes de produto ainda abertas; Demo channel continuity
+  separado por transporte. O incidente Meta externo de 2026-09-14 permanece
+  preservado como historico, mas a evidencia atual de producao para
+  `demo-converta` e `meta:readiness` `WARN` sem `FAIL`/`WAITING_EXTERNAL`;
+  Web Session `****5328` esta `CONNECTED` apos reemparelhamento em
+  2026-09-14 16:31Z, com QR_REQUIRED historico em 2026-09-13 22:40:23Z por
+  `auth_clear`. CRA/SECULT business-hours audit fechado
   como docs-only: mecanismo runtime por departamento ja existe; SECULT preserva
   `OPEN`/`CLOSED` com `QUEUE_FOR_NEXT_OPEN`; em 2026-09-15 CRA foi configurado
   operacionalmente sem patch de runtime: timezone `America/Sao_Paulo`, 6/6

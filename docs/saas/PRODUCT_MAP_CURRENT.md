@@ -157,15 +157,18 @@ Demo/CRA/SECULT/Syer flow definition hashes stayed unchanged during smoke.
 Current backlog classification:
 
 - P0: none.
-- P1: abandoned automation / BOT flow lifecycle local E2E validated on
+- P1: none.
+- Watch/external operations: abandoned automation / BOT flow lifecycle local E2E validated on
   2026-09-14 in
   `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`; product
   decisions remain open for stale `flowContext` cleanup, timeout UX and
-  provider parity; Demo Meta Cloud
-  restriction external remediation (`phone.status=BANNED`, WABA `REJECTED`)
-  with Demo Web Session `QR_REQUIRED` preserved without mutation; user
-  deactivation active-conversation guard closed / deployed / owner approved /
-  production non-destructive validated.
+  provider parity; Demo channel continuity separated by transport. The
+  2026-09-14 Meta external incident (`phone.status=BANNED`, WABA `REJECTED`) is
+  historical evidence, while the 2026-09-15 production readiness check is `WARN`
+  without `FAIL`/`WAITING_EXTERNAL`; Demo Web Session moved from historical
+  `QR_REQUIRED` at 2026-09-13 22:40:23Z to current `CONNECTED` after
+  re-pairing. User deactivation active-conversation guard is closed / deployed /
+  owner approved / production non-destructive validated.
 - CRA/SECULT business-hours audit, 2026-09-14: CLOSED / DOCS-ONLY. The runtime
   department-hours mechanism is already present and production `secult-pe`
   preserves its approved `OPEN`/`CLOSED + QUEUE_FOR_NEXT_OPEN` contract. Current

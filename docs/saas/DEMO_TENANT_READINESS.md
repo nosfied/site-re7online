@@ -151,9 +151,19 @@ Estado operacional conhecido apos provisionamento e testes controlados:
 - token presente, sem exposicao do valor;
 - `WaPhoneNumber` presente;
 - WABA presente;
-- `ChannelAccount` WhatsApp ausente, sem ser requisito do modelo atual;
-- `businessId`/`businessPortfolioId` ausentes, tratados como `WARN`;
+- `ChannelAccount` WhatsApp Web Session presente para `****5328`;
+- `baileysAuthState.v1` aprovado configurado;
+- Web Session conectado em producao em 2026-09-15T07:10:17.127Z;
+- `businessPortfolioId` ausente, tratado como `WARN`;
 - templates ainda dependem de sincronizacao/aprovacao conforme estado Meta.
+
+Auditoria de continuidade de canal de 2026-09-15: o incidente Meta externo de
+2026-09-14 (`BANNED`/`REJECTED`/`SCAM`) permanece registrado como historico, mas
+o readiness Meta atual do tenant retornou `WARN` sem `FAIL`/`WAITING_EXTERNAL`.
+A Web Session era um incidente separado: entrou em `QR_REQUIRED` em
+2026-09-13T22:40:23Z por `auth_clear`, teve QR solicitado em 2026-09-14T16:31Z
+e voltou a `CONNECTED` em 2026-09-14T16:32:15Z. Nao limpar, desconectar, resetar
+ou reexecutar onboarding sem diagnostico e autorizacao explicita.
 
 `demo-converta` e tenant permanente de demonstracao do produto. Ele nao e tenant
 oficial SECULT-PE.

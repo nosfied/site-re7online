@@ -76,11 +76,17 @@ npm run meta:readiness -- --tenant demo-converta
 
 Interpretacao:
 
-- `ChannelAccount` WhatsApp ausente nao bloqueia o modelo atual.
+- `ChannelAccount` WhatsApp ausente nao bloqueia o modelo atual quando o tenant
+  nao usa Web Session; no `demo-converta` atual existe Web Session configurado e
+  conectado para `****5328`.
 - `businessId`/`businessPortfolioId` ausentes sao ponto de atencao, nao falha
   estrutural isolada.
 - `PARTIAL` exige diagnostico antes de acao; nao repetir onboarding por impulso.
 - qualquer mudanca de numero/WABA precisa de autorizacao explicita.
+- incidentes Meta e Web Session devem ser classificados separadamente; a
+  auditoria de 2026-09-15 registrou Meta readiness `WARN` sem
+  `FAIL`/`WAITING_EXTERNAL` e Web Session atual `CONNECTED`, com historico
+  `QR_REQUIRED` em 2026-09-13T22:40:23Z por `auth_clear`.
 
 ## Gate 6 - Templates
 

@@ -119,15 +119,23 @@ ACTIVE P0:
 
 ACTIVE P1:
 
-1. Demo Meta Cloud restriction: P1 / EXTERNAL META REMEDIATION + CHANNEL
-   CONTINUITY OPEN. Auditoria somente leitura de 2026-09-14 confirmou o phone
-   number Meta do `demo-converta` com `status=BANNED` e WABA com
-   `account_review_status=REJECTED`; o business aparece `not_verified` e 3
-   templates retornaram rejeicao `SCAM`. O banco nao mostrou outbound Meta,
-   campanha, template ativo ou passive Meta sends nos ultimos 72h, entao volume
-   recente da aplicacao nao e causa comprovada. A Web Session do Demo esta
-   `QR_REQUIRED` desde 2026-09-13 22:40:23Z e nao deve ser reconectada,
-   desconectada ou limpa sem autorizacao explicita do owner.
+- NONE.
+
+WATCH / EXTERNAL OPERATIONS:
+
+1. Demo channel continuity: WATCH / SEPARATE META AND WEB SESSION TRACKS.
+   Auditoria somente leitura de 2026-09-15 preserva o historico do incidente
+   externo Meta de 2026-09-14 (`status=BANNED`, WABA `REJECTED`, business
+   `not_verified`, templates `SCAM`) sem tratar isso como causa de Web Session.
+   A evidencia atual em producao mudou: `npm run meta:readiness -- --tenant
+   demo-converta` retornou `WARN` sem `FAIL`/`WAITING_EXTERNAL`, com
+   `TenantMetaConfig` presente, token presente, WABA/phone mapeados e validacao
+   externa de subscription ainda requerida. A Web Session do Demo, que entrou em
+   `QR_REQUIRED` em 2026-09-13 22:40:23Z com `action=auth_clear`, foi
+   reemparelhada em 2026-09-14 16:31Z e esta `CONNECTED` em producao para
+   `****5328`; material `baileysAuthState.v1` aprovado esta configurado. Nao
+   limpar, desconectar, resetar, trocar numero/WABA ou reexecutar onboarding sem
+   diagnostico e autorizacao explicita do owner.
 
 RECENTLY CLOSED:
 

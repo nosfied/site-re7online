@@ -136,6 +136,15 @@ reopen passive HYBRID routing, fresh-flow E2E, Meta duplicate dedupe,
 Lead/P2002 reconciliation, claim-before-downstream recovery or exactly-once
 coexistence without new production evidence.
 
+Demo continuity update, 2026-09-15: transport health must remain independent.
+The prior Demo Meta Cloud restriction evidence from 2026-09-14 is preserved as
+external-provider history, but current `meta:readiness` for `demo-converta`
+returns `WARN` without `FAIL`/`WAITING_EXTERNAL`. Demo Web Session had a separate
+historical `QR_REQUIRED` event at 2026-09-13T22:40:23Z with
+`action=auth_clear`; after re-pairing on 2026-09-14 it is currently
+`CONNECTED` for `****5328`. No runtime should infer Meta recovery/failure from
+Web Session state or infer Web Session health from Meta state.
+
 Validation baseline:
 
 - production HEAD: `08598293c1cc15360b5cfe02a21a779c8a040dec`;
