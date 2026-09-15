@@ -174,16 +174,21 @@ Current backlog classification:
   `QUEUE_FOR_NEXT_OPEN`; resolver and flow-aware validation passed for all six
   departments / two representative handoff destinations. This is closed as
   existing product capability plus config, not product runtime P1.
-- CRA active flow tenant visibility, 2026-09-15: P1 / BUG CONFIRMED / ROOT
-  CAUSE PROVEN. Runtime flow works per owner report, but CRA tenant admins do
-  not see the active flow in `/app/chatbot`. Production DB/runtime/admin API and
-  real Eduardo app trace proved the active flow exists, belongs to CRA, has
-  `features.chatbot=true`, and `/agent-api/app/chatbot/flows` returns 200 for
-  the CRA ADMIN session. First missing layer is app frontend hydration:
-  `/agent-api/app/chatbot/settings` returns 404 because app settings still
-  depends on legacy `.data/tenants.json`; `Promise.all()` then prevents
-  `hydrateFlows()` from rendering the returned flow. Existing active flow must
-  not be recreated or definition-mutated.
+- CRA active flow tenant visibility, 2026-09-15: P1 / DEPLOYED / PROD
+  SERVER-SIDE VALIDATED / CUSTOMER UI CONFIRMATION PENDING. Runtime flow works
+  per owner report, but CRA tenant admins did not see the active flow in
+  `/app/chatbot`. Production DB/runtime/admin API and real Eduardo app trace
+  proved the active flow exists, belongs to CRA, has `features.chatbot=true`,
+  and `/agent-api/app/chatbot/flows` returns 200 for the CRA ADMIN session. First
+  missing layer was app frontend hydration: `/agent-api/app/chatbot/settings`
+  returned 404 because app settings still depended on legacy `.data/tenants.json`;
+  `Promise.all()` then prevented `hydrateFlows()` from rendering the returned
+  flow. Runtime commit `363ce3ab` makes app settings DB-backed for modern
+  `Client` tenants and hydrates flows/settings/resources independently.
+  Production smoke after backup `pre-cra-flow-visibility-20260915-133330.dump`
+  confirmed CRA settings/flows HTTP 200 and preserved the active definition hash
+  `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`.
+  Existing active flow must not be recreated or definition-mutated.
 - P2: question conditional branching by captured answer; reporting context
   enhancements; Guided Builder complete final-review summary; Meta Cloud
   unlink/removal semantics; support access hardening.

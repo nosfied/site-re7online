@@ -203,7 +203,7 @@ CLOSED / REAL VALIDATED
 Owner report: the active CRA production chatbot flow executes correctly, but
 tenant admins do not see it in `/app/chatbot`.
 
-Audit status: `P1 / BUG CONFIRMED / ROOT CAUSE PROVEN`.
+Audit status: `P1 / DEPLOYED / PROD SERVER-SIDE VALIDATED / CUSTOMER UI CONFIRMATION PENDING`.
 
 Local code audit shows tenant `/app/chatbot/flows` and internal
 `/admin/chatbot/flows?clientKey=cra-pr` both list `ChatbotFlow` by `clientId`;
@@ -213,10 +213,19 @@ CRA entrypoint flow `cmtkhhxtq002p4spns3fp0yux`, owned by CRA, with
 `features.chatbot=true`, and returned by admin API. Real CRA ADMIN Eduardo then
 reproduced the UI absence; nginx shows `/agent-api/app/chatbot/flows` returned
 200 for the app session while `/agent-api/app/chatbot/settings` returned 404.
-Because the app page loads flows/settings/resources through one `Promise.all()`,
-the settings 404 prevents `hydrateFlows()` and the flow never reaches UI state.
-No flow recreation, ownership change, definition mutation, entrypoint change,
-status change or deploy is allowed.
+Because the app page loaded flows/settings/resources through one `Promise.all()`,
+the settings 404 prevented `hydrateFlows()` and the flow never reached UI state.
+Runtime commit `363ce3ab` reuses the admin DB-backed settings fallback for
+tenant app settings and hydrates flows/settings/resources independently.
+Production delivery on 2026-09-15 used persistent backup
+`pre-cra-flow-visibility-20260915-133330.dump`, reloaded only
+`re7-admin-front` and `re7-whatsapp-agent`, preserved
+`re7-whatsapp-web-worker`, and confirmed CRA settings/flows server-side with the
+same active definition hash
+`d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`. No flow
+recreation, ownership change, definition mutation, entrypoint change or status
+change occurred. Customer UI confirmation remains pending without a safe
+authorized CRA app session.
 
 ADMIN CHATBOT LOADING/BADGE:
 CLOSED / REAL VALIDATED

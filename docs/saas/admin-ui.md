@@ -95,6 +95,18 @@ possui essa entrada. Como `src/app/app/chatbot/page.tsx` usa um unico
 `Promise.all()` para flows/settings/resources, o 404 de settings impede
 `hydrateFlows()` e o flow retornado pela API nao chega ao estado da UI.
 
+Status em 2026-09-15: `DEPLOYED / PROD SERVER-SIDE VALIDATED / CUSTOMER UI
+CONFIRMATION PENDING`. O commit runtime `363ce3ab` reusa o mesmo padrao
+DB-backed validado na rota admin para `GET/PUT /app/chatbot/settings` e carrega
+flows/settings/resources de forma parcial em `/app/chatbot`; erro de settings
+passa a aparecer como estado de settings, sem derrubar a lista de flows ou
+recursos ja retornados. Deploy de producao ocorreu depois do backup persistente
+`pre-cra-flow-visibility-20260915-133330.dump`; smoke server-side confirmou
+settings/flows do CRA e preservou o flow ativo inalterado: id
+`cmtkhhxtq002p4spns3fp0yux`, hash
+`d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`. A
+confirmacao visual tenant app segue pendente sem uso de sessao CRA segura.
+
 ## Users Management 2.0
 
 Estado deployed / owner-approved / production non-destructive validated:

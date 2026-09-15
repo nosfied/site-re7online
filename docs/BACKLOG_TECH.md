@@ -145,9 +145,10 @@ ACTIVE P1:
    recente da aplicacao nao e causa comprovada. A Web Session do Demo esta
    `QR_REQUIRED` desde 2026-09-13 22:40:23Z e nao deve ser reconectada,
    desconectada ou limpa sem autorizacao explicita do owner.
-3. CRA active flow tenant visibility: P1 / BUG CONFIRMED / ROOT CAUSE PROVEN /
-   PATCH REQUIRED. Real CRA ADMIN Eduardo reproduced that the active flow is
-   absent from tenant-side `Fluxos cadastrados`. Production evidence on
+3. CRA active flow tenant visibility: P1 / DEPLOYED / PROD SERVER-SIDE
+   VALIDATED / CUSTOMER UI CONFIRMATION PENDING.
+   Real CRA ADMIN Eduardo reproduced that the active flow is absent from
+   tenant-side `Fluxos cadastrados`. Production evidence on
    2026-09-15 proved CRA `features.chatbot=true`, Eduardo is active ADMIN on the
    CRA clientId, exactly one CRA flow `cmtkhhxtq002p4spns3fp0yux` exists,
    active/entryPoint, definition hash
@@ -156,13 +157,18 @@ ACTIVE P1:
    `/agent-api/app/chatbot/flows` request all return the same layer correctly.
    First missing layer: tenant app frontend hydration. `loadFlows()` uses
    `Promise.all()` for flows/settings/resources, and Eduardo's
-   `/agent-api/app/chatbot/settings` returns 404 because the app settings route
-   still requires a legacy `.data/tenants.json` entry; production
-   `.data/tenants.json` has no `cra-pr`. The 404 prevents `hydrateFlows()` from
-   running, so the returned flow never reaches UI state. No flow recreation,
-   flow mutation, code patch, DB mutation or deploy in this audit. Detailed
-   record:
-   `docs/saas/CRA_ACTIVE_FLOW_VISIBILITY_AUDIT_2026-09-15.md`.
+   `/agent-api/app/chatbot/settings` returned 404 because the app settings route
+   still required a legacy `.data/tenants.json` entry; production
+   `.data/tenants.json` has no `cra-pr`. Local fix reuses the already-validated
+   admin DB-backed settings fallback for app settings and decouples tenant app
+   hydration so flows/resources can render even when settings fails. Runtime
+   commit `363ce3ab` was deployed on 2026-09-15 after persistent PostgreSQL
+   backup `pre-cra-flow-visibility-20260915-133330.dump`; production smoke
+   returned CRA settings/flows successfully and preserved the CRA flow definition
+   hash exactly. No flow recreation, flow mutation, DB mutation, schema change or
+   worker reload was performed. Customer UI confirmation remains pending because
+   no safe authorized CRA app session was used for visual validation. Detailed
+   record: `docs/saas/CRA_ACTIVE_FLOW_VISIBILITY_AUDIT_2026-09-15.md`.
 
 RECENTLY CLOSED:
 

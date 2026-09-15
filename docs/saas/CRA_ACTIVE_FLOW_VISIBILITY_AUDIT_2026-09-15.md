@@ -1,6 +1,6 @@
 # CRA Active Flow Tenant Visibility Audit - 2026-09-15
 
-Status: `P1 / BUG CONFIRMED / ROOT CAUSE PROVEN`.
+Status: `P1 / DEPLOYED / PROD SERVER-SIDE VALIDATED / CUSTOMER UI CONFIRMATION PENDING`.
 
 ## Scope
 
@@ -142,18 +142,33 @@ Underlying trigger:
 Therefore the active flow is present in DB, runtime, admin API and app flows API,
 but is lost in the app UI because settings 404 aborts the shared load.
 
-## Safe Fix Direction
+## Local Fix - 2026-09-15
 
-No patch was applied in this audit.
+Patch local applied after the audit, without production mutation or deploy:
 
-Smallest safe fix proposal:
+- `GET /app/chatbot/settings` and `PUT /app/chatbot/settings` now reuse the
+  same DB-backed tenant fallback pattern already validated for admin settings;
+- `/app/chatbot` now loads flows, settings and resources independently, so a
+  settings failure is surfaced as a settings-specific state and does not prevent
+  returned flows/resources from hydrating;
+- the CRA flow was not recreated, cloned, disabled, re-enabled or edited;
+- no `ChatbotFlow.definition`, `entryPoint`, `isActive`, `clientId`, department,
+  queue or business-hours data was changed.
 
-- make `/app/chatbot/settings` DB-backed for `Client` tenants without requiring
-  a legacy `.data/tenants.json` entry, matching the already validated admin
-  settings behavior;
-- decouple app flow hydration from non-critical settings failure so
-  `flowResponse.items` still renders when flows/resources succeed and settings
-  is unavailable;
+Validation recorded locally:
+
+- focused backend tests for DB-only app settings and legacy fallback: PASS;
+- frontend loader regression for all-success, settings failure, flow-list
+  failure and resource failure: PASS;
+- backend build: PASS;
+- frontend build: PASS;
+- `git diff --check`: PASS;
+- full `campaignsFeatureRoutes.test.ts` in the local cloned-schema database:
+  111/112 PASS, with unrelated pre-existing timeout in
+  `meta inbound clears active chatbot runtime when persisted flow is inactive`.
+
+Safety contract remains:
+
 - do not recreate the flow;
 - do not mutate `ChatbotFlow.definition`;
 - do not change `entryPoint`, `isActive`, `clientId` or runtime behavior.
@@ -169,8 +184,53 @@ Focused regression tests for the patch phase:
 - admin route remains preserved;
 - settings 404/fallback failure must not prevent flow list hydration.
 
+## Production Delivery - 2026-09-15
+
+Runtime commit deployed: `363ce3abdfca624232b118eacdec736ec05cb486`.
+
+Pre-deploy guardrails:
+
+- production branch: `flow-executor-quote-hardening`;
+- previous production HEAD: `56c4a392d1eb017ad8fcafffbad5fbd442e7152f`;
+- persistent PostgreSQL backup:
+  `/opt/re7online/backups/converta-persistent/postgres/pre-cra-flow-visibility-20260915-133330.dump`;
+- backup SHA256:
+  `203ceaa0c8f0d7be71bbe8f93701a2ee61b0e34e6cd8e04830265b81ae9277e7`;
+- backup catalog entries: 593;
+- backup size: 19M;
+- CRA flow pre-deploy hash:
+  `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`.
+
+Deployment:
+
+- production repository fast-forwarded only;
+- backend build: PASS;
+- frontend build: PASS;
+- reloaded `re7-admin-front`;
+- reloaded `re7-whatsapp-agent`;
+- did not reload `re7-whatsapp-web-worker`; worker PID remained `2504405`;
+- no Prisma `db push`, no migration, no schema change and no production data
+  mutation.
+
+Post-deploy server-side smoke:
+
+- frontend root: HTTP 200;
+- agent root: HTTP 200;
+- `GET /admin/chatbot/flows?clientKey=cra-pr`: HTTP 200, count 1, active 1,
+  entryPoint 1, flow id `cmtkhhxtq002p4spns3fp0yux`;
+- `GET /admin/chatbot/settings?clientKey=cra-pr`: HTTP 200, DB-backed config
+  source for modern settings;
+- representative tenants `cra-pr`, `secult-pe`, `demo-converta` and
+  `syer-rodrigues`: settings and flows returned successfully via read-only admin
+  API;
+- CRA flow post-deploy hash:
+  `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`.
+
+Customer UI confirmation remains pending because no safe authorized CRA app
+session was used or fabricated for visual validation.
+
 ## Backlog
 
-`CRA ACTIVE FLOW TENANT VISIBILITY`: `P1 / BUG CONFIRMED / ROOT CAUSE PROVEN / PATCH REQUIRED`.
+`CRA ACTIVE FLOW TENANT VISIBILITY`: `P1 / DEPLOYED / PROD SERVER-SIDE VALIDATED / CUSTOMER UI CONFIRMATION PENDING`.
 
 `CRA HOURS`: remains `CLOSED / CONFIGURED / OPERATIONALLY VALIDATED`.

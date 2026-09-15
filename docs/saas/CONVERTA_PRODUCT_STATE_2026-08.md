@@ -748,9 +748,18 @@ Commits relevantes do baseline homologado:
   `/agent-api/app/chatbot/flows` request returned 200 while
   `/agent-api/app/chatbot/settings` returned 404. Root cause: app page
   `Promise.all()` aborts flow hydration when settings 404s, and the app
-  settings route still requires legacy `.data/tenants.json` for CRA even though
-  CRA is DB-backed. Status: P1 / BUG CONFIRMED / ROOT CAUSE PROVEN / PATCH
-  REQUIRED. Do not recreate or mutate the CRA flow.
+  settings route still required legacy `.data/tenants.json` for CRA even though
+  CRA is DB-backed. Runtime commit `363ce3ab` reuses the admin DB-backed
+  settings fallback for the tenant app settings route and makes `/app/chatbot`
+  hydrate flows/settings/resources independently, so a settings failure is shown
+  as settings-specific state instead of hiding the returned flow list. Status:
+  P1 / DEPLOYED / PROD SERVER-SIDE VALIDATED / CUSTOMER UI CONFIRMATION PENDING.
+  Production delivery on 2026-09-15 used persistent PostgreSQL backup
+  `pre-cra-flow-visibility-20260915-133330.dump`, reloaded only
+  `re7-admin-front` and `re7-whatsapp-agent`, preserved
+  `re7-whatsapp-web-worker`, and preserved the CRA flow definition hash
+  `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`.
+  Do not recreate or mutate the CRA flow.
 - Suporte interno multitenant ja existe com grant temporario, sessao de suporte,
   auditoria e banner de modo suporte; evolucoes futuras devem focar menor
   privilegio/evidencia operacional. Usuarios x departamentos M2M tambem ja
