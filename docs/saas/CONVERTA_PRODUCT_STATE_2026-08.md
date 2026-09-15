@@ -163,6 +163,16 @@ O centro de campanhas suporta:
 
 Criar rascunho nao envia mensagem. Envio real exige acao explicita do operador.
 
+CRA-PR update, 2026-09-15: the current contractual execution front is a
+controlled Utility-template campaign. Production has `campaigns=true` and
+`templates=true` for `cra-pr`, but no CRA templates, template requests,
+campaigns, campaign billing events or opt-out campaign events were present in
+the read-only snapshot. No real Meta outbound is authorized without explicit
+owner approval covering template, recipients, send window, expected cost,
+campaign name and number of messages. Instagram Direct, Facebook Messenger and
+Website/Webchat remain contract-required but customer-deferred with delivery
+window pending for this phase.
+
 ## Modelos Meta
 
 O centro de modelos permite:

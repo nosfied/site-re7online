@@ -38,8 +38,9 @@ TOTAL REQUIREMENTS: 52
 CLOSED / REAL VALIDATED: 14
 CLOSED / CUSTOMER VALIDATED: 1
 IMPLEMENTED / NEEDS CRA VALIDATION: 15
-CONFIG PENDING: 5
-CUSTOMER ACTION PENDING: 1
+CONFIG PENDING: 2
+CUSTOMER ACTION PENDING: 0
+CONTRACT REQUIRED / CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING: 4
 EXTERNAL META DEPENDENCY: 4
 PRODUCT GAP: 2
 DOCUMENTATION/EVIDENCE GAP: 9
@@ -48,12 +49,13 @@ NOT REQUIRED BY CONTRACT: 1
 
 Pendencias criticas para prontidao contratual:
 
-1. Ativar/validar Instagram, Facebook e Webchat CRA.
-2. Configurar template Utility CRA e validar campanha controlada.
-3. Evidenciar opt-out auditavel e bloqueio em campanha.
-4. Gerar pacote de relatorios/exportacoes/billing com dados CRA redigidos.
-5. Fechar pacote documental: SLA/suporte, treinamento, LGPD/seguranca,
+1. Configurar template Utility CRA e validar campanha controlada.
+2. Evidenciar opt-out auditavel e bloqueio em campanha.
+3. Gerar pacote de relatorios/exportacoes/billing com dados CRA redigidos.
+4. Fechar pacote documental: SLA/suporte, treinamento, LGPD/seguranca,
    backup/restore e comprovacao Meta oficial.
+5. Instagram, Facebook Messenger e Webchat/site seguem contratados, mas estao
+   CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING e nao bloqueiam a frente atual.
 
 Nao reabrir:
 
@@ -320,15 +322,62 @@ O volume ativo mensal exige controle de categoria, aprovacao e acompanhamento de
 
 O custo Meta deve ser tratado como risco operacional/comercial controlado, nao como valor definitivo. A politica de preco depende de categoria, pais, entrega e regra vigente do provedor.
 
+## Utility campaign readiness - 2026-09-15
+
+A frente atual aprovada e preparar a primeira campanha real controlada com
+template Utility, sem envio amplo e sem envio Meta real antes de aprovacao
+explicita do owner.
+
+Snapshot somente leitura de producao em 2026-09-15:
+
+- `cra-pr` ACTIVE, profile `government`;
+- `campaigns=true` e `templates=true`;
+- Meta/WhatsApp configurado com token presente, phone `****7308`, WABA
+  `****4194` e business `****8327`;
+- templates CRA: 0;
+- pedidos de template CRA: 0;
+- campanhas CRA: 0;
+- eventos CRA de uso Meta campanha/billing/opt-out: 0.
+
+Contrato operacional:
+
+- primeiro passo: criar/submeter/aprovar um template Utility CRA;
+- segundo passo: validar importacao/lista pequena, dedupe, variaveis e opt-out;
+- terceiro passo: criar rascunho e somente depois obter aprovacao para envio
+  real controlado;
+- nenhum envio real pode ocorrer sem aprovacao cobrindo template, destinatarios,
+  janela, custo esperado, nome da campanha e quantidade de mensagens.
+
+Checklist canonico:
+
+```text
+docs/bids/2026/cra-pr/UTILITY_CAMPAIGN_ACCEPTANCE_CHECKLIST.md
+```
+
+Status:
+
+```text
+CRA-PR UTILITY CAMPAIGN:
+LOCAL / CONTROLLED CAMPAIGN READINESS
+
+REAL SEND:
+NOT EXECUTED
+
+OWNER APPROVAL FOR REAL SEND:
+REQUIRED
+```
+
 ## Gates recomendados antes de assinatura
 
-1. Confirmar modelos Utility necessarios.
-2. Confirmar se todos os modelos estao aprovados e ativos localmente.
-3. Definir limite operacional mensal e alerta por tenant.
-4. Validar relatorio mensal com amostra controlada.
-5. Formalizar treinamento e matriz de usuarios.
-6. Validar fluxo de opt-out e exportacao de campanhas.
-7. Preparar roteiro de smoke sem envio em massa.
+1. Confirmar conteudo do primeiro modelo Utility CRA.
+2. Submeter/obter aprovacao Meta do modelo Utility.
+3. Definir lista pequena, quantidade de mensagens e janela de envio.
+4. Validar importacao, variaveis, dedupe e opt-out antes de envio.
+5. Obter aprovacao explicita do owner para template, destinatarios, janela,
+   custo esperado, nome da campanha e quantidade.
+6. Validar relatorio mensal com amostra controlada.
+7. Formalizar treinamento e matriz de usuarios.
+8. Preparar roteiro de smoke sem envio em massa.
 
 ## Limites e proximos passos
 

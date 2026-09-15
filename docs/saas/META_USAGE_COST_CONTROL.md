@@ -138,6 +138,23 @@ Em propostas como SECULT-PE e CRA-PR, o controle deve ser descrito como:
 
 Quando o edital exigir volume ativo alto, registrar risco de categoria, entrega, pais e politica vigente.
 
+### CRA-PR controlled Utility campaign
+
+Status em 2026-09-15: readiness documental/configuracional, sem envio real.
+
+O snapshot somente leitura de producao confirmou `cra-pr` com Meta/WhatsApp
+configurado e features `campaigns`/`templates` habilitadas, mas com 0 templates,
+0 pedidos de template, 0 campanhas, 0 eventos CRA de billing ativo e 0 eventos
+CRA de opt-out de campanha.
+
+Para aceite contratual, o primeiro envio real deve ser pequeno e controlado,
+com template Utility aprovado e aprovacao explicita do owner cobrindo template,
+destinatarios, janela de envio, custo esperado, nome da campanha e quantidade
+de mensagens. O billing contratual deve usar delivered/read de template Utility
+fora da janela de 24h como evidencia conservadora, sem cobrar accepted/sent sem
+entrega, failed/rejected/cancelled, read replay ou mensagens de servico dentro
+da janela.
+
 ## Limites e proximos passos
 
 - Nao ha conciliacao financeira definitiva automatizada.

@@ -89,6 +89,15 @@ Default government profile favors oversight and reporting:
 | Demo/POC data | Internal/demo | scripts | `seed-demo.mjs`, `seed-re7-demo-screenshots.mjs` | local/demo only |
 | Internal admin console | Operational | `/admin` | admin routes, tenant/channel/onboarding pages | `X-Admin-Token`, DB-backed `Client`, `TenantOperationalConfig`, legacy `tenants.json` fallback |
 
+CRA-PR controlled campaign readiness, 2026-09-15: the product capability for
+campaign drafts/import, lifecycle controls, opt-out blocking, delivery status,
+Meta usage ledger and active-message billing is present in the codebase, but
+CRA has no configured template, template request or campaign in production yet.
+The current contract front is Utility/campaign readiness, then opt-out, then
+reports/exports/billing, then acceptance pack. Instagram Direct, Facebook
+Messenger and Website/Webchat remain contract-required but customer-deferred
+with delivery window pending and are not blockers for this phase.
+
 Admin chatbot settings note, 2026-09-13: `/admin/chatbot/settings` must support
 DB-backed clients that do not have a legacy `.data/tenants.json` entry. Settings
 resolve through `TenantOperationalConfig` and safe runtime defaults using an

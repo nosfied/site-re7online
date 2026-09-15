@@ -5,6 +5,11 @@ Status: canonical contractual readiness audit for Converta / CRA-PR.
 Scope: Contract no. 20/2026/CRA-PR / PE 90004/2026 evidence available in the
 repository plus read-only production snapshot collected on 2026-09-15.
 
+Current execution front, updated on 2026-09-15: prepare a controlled real
+Utility-template campaign. Instagram Direct, Facebook Messenger and
+Website/Webchat remain contract-required, but are customer-deferred with
+delivery window pending and are not active blockers for this phase.
+
 This document separates four things that must not be conflated:
 
 - contractual obligation;
@@ -60,6 +65,10 @@ Read-only production snapshot collected on 2026-09-15.
 - Webchat: no CRA webchat site/settings configured.
 - Templates: none configured for CRA.
 - Campaigns: none configured for CRA.
+- Template requests: none configured for CRA.
+- Meta usage/billing/opt-out campaign evidence: no CRA campaign usage events,
+  no `billing.active_message.delivered` events and no opt-out campaign events
+  in the 2026-09-15 read-only snapshot.
 - Production evidence: 4 WhatsApp conversations; 5 completed service snapshots;
   latest snapshot 2026-09-14; latest CSAT responded 2026-09-14.
 
@@ -83,8 +92,9 @@ Read-only production snapshot collected on 2026-09-15.
 | CLOSED / REAL VALIDATED | 14 |
 | CLOSED / CUSTOMER VALIDATED | 1 |
 | IMPLEMENTED / NEEDS CRA VALIDATION | 15 |
-| CONFIG PENDING | 5 |
-| CUSTOMER ACTION PENDING | 1 |
+| CONFIG PENDING | 2 |
+| CUSTOMER ACTION PENDING | 0 |
+| CONTRACT REQUIRED / CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING | 4 |
 | EXTERNAL META DEPENDENCY | 4 |
 | PRODUCT GAP | 2 |
 | DOCUMENTATION/EVIDENCE GAP | 9 |
@@ -99,10 +109,10 @@ Read-only production snapshot collected on 2026-09-15.
 | CRA-META-001 | resposta esclarecimento item 7 | Prove Meta official technical condition | Product supports official API operation | CRA has WABA/phone/business configured | E4 | EXTERNAL META DEPENDENCY | C1 | docs | Contractual proof package not signed/attached | Collect signed declaration, PJ verified/portfolio/access evidence | RE7 + Meta | E6 |
 | CRA-CHAN-001 | README objeto; aderencia #4 | Centralized multichannel Inbox | Inbox supports channel origin and unified timeline | CRA only WhatsApp proven | E4 for WhatsApp, E1 for other channels | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 if source demands go-live | IG/FB/webchat not CRA-validated | Activate/validate each required channel | RE7 + CRA | E4/E5 per channel |
 | CRA-WA-002 | aderencia #5 | WhatsApp receive/reply/history | Implemented | Configured | E4 | CLOSED / REAL VALIDATED | C0 | closed | None for WhatsApp | Keep smoke evidence | RE7 | E6 |
-| CRA-IG-001 | resposta esclarecimento item 9 | Instagram Direct human-only in Inbox | Product capability documented | Not configured for CRA in snapshot | E1 | CONFIG PENDING | C1 | P1 config | CRA IG account connection absent | Connect CRA Instagram, test inbound/reply/history | RE7 + CRA + Meta | E4/E5 |
-| CRA-FB-001 | resposta esclarecimento item 9 | Facebook Messenger human-only in Inbox | Product capability documented | Not configured for CRA in snapshot | E1 | CONFIG PENDING | C1 | P1 config | CRA FB page/channel absent | Connect CRA Facebook, test inbound/reply/history | RE7 + CRA + Meta | E4/E5 |
-| CRA-WEB-001 | README objeto; plano implantacao | Site institutional / webchat widget | Product has webchat models/widget | No CRA webchat site/settings | E1 | CONFIG PENDING | C1 | P1 config | Tenant webchat disabled/unconfigured | Configure site, allowed domains and widget | RE7 | E4 |
-| CRA-WEB-002 | plano implantacao premise | Customer site must embed widget/script | Product can provide embed | Customer site action not evidenced | E0 | CUSTOMER ACTION PENDING | C1 | ops | CRA site deployment permission/action missing | Provide embed package and obtain customer deployment window | CRA | E5 |
+| CRA-IG-001 | resposta esclarecimento item 9 | Instagram Direct human-only in Inbox | Product capability documented | Not configured for CRA in snapshot | E1 | CONTRACT REQUIRED / CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING | C1 | deferred | CRA IG account connection absent by current customer sequencing | Reopen when customer confirms delivery window/assets | RE7 + CRA + Meta | E4/E5 |
+| CRA-FB-001 | resposta esclarecimento item 9 | Facebook Messenger human-only in Inbox | Product capability documented | Not configured for CRA in snapshot | E1 | CONTRACT REQUIRED / CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING | C1 | deferred | CRA FB page/channel absent by current customer sequencing | Reopen when customer confirms delivery window/assets | RE7 + CRA + Meta | E4/E5 |
+| CRA-WEB-001 | README objeto; plano implantacao | Site institutional / webchat widget | Product has webchat models/widget | No CRA webchat site/settings | E1 | CONTRACT REQUIRED / CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING | C1 | deferred | Tenant webchat disabled/unconfigured by current customer sequencing | Reopen when customer confirms site/embed delivery window | RE7 | E4 |
+| CRA-WEB-002 | plano implantacao premise | Customer site must embed widget/script | Product can provide embed | Customer site action not evidenced | E0 | CONTRACT REQUIRED / CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING | C1 | deferred | CRA site deployment permission/action deferred | Provide embed package after customer delivery window | CRA | E5 |
 | CRA-CHAN-002 | aderencia #9 | Identify channel of origin | Conversation channel/provider supported | WhatsApp evidence only | E4 WhatsApp | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P2 | Need multi-channel proof after IG/FB/webchat | Include channel filters in channel smoke | RE7 | E4 |
 | CRA-HIST-001 | aderencia #10/#67 | Full history during term | Timeline and persistence implemented | WhatsApp conversations present | E4 | CLOSED / REAL VALIDATED | C1 | closed | Contract export evidence separate | Include timeline screenshot/export in acceptance pack | RE7 | E6 |
 | CRA-HUM-001 | aderencia #11/#21 | Departments, queues and handoff sectors | Department/Queue/Handoff implemented | 6 departments, 6 queues | E4 | CLOSED / REAL VALIDATED | C0 | closed | None for configured departments | Preserve config snapshot | RE7 | E6 |
@@ -151,25 +161,25 @@ Read-only production snapshot collected on 2026-09-15.
 
 C0/C1 items that block declaring contractual readiness without qualification:
 
-1. Required non-WhatsApp channels are not CRA-configured/validated:
-   Instagram, Facebook Messenger and site/webchat.
-2. Active utility messaging is not CRA-ready: no CRA templates, no campaign
+1. Active utility messaging is not CRA-ready: no CRA templates, no campaign
    sample, no billing evidence for delivered utility template outside 24h.
-3. Opt-out evidence is missing for CRA acceptance, even though the product has
+2. Opt-out evidence is missing for CRA acceptance, even though the product has
    an operational path.
-4. Reporting/export acceptance package is missing: CRA samples for CSV/PDF and
+3. Reporting/export acceptance package is missing: CRA samples for CSV/PDF and
    XLSX-equivalent workflow, plus monthly consumption/billing reconciliation.
-5. Contract evidence package is incomplete for support/SLA, training attendance,
+4. Contract evidence package is incomplete for support/SLA, training attendance,
    backup/restore policy, LGPD/security declarations and Meta official proof.
+5. Instagram, Facebook Messenger and site/webchat remain contract-required but
+   are customer-deferred for the current execution phase.
 
 ## Channel Summary
 
 | Channel | Required | Product Support | CRA Configured | Connected | Production Validated | Customer Validated | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | WhatsApp | yes | yes | yes | yes | yes | operationally yes | CLOSED / REAL VALIDATED |
-| Instagram Direct | yes, human-only | documented | no | no | no | no | CONFIG PENDING |
-| Facebook Messenger | yes, human-only | documented | no | no | no | no | CONFIG PENDING |
-| Site/Webchat | yes | yes | no | no | no | no | CONFIG PENDING + CUSTOMER ACTION PENDING |
+| Instagram Direct | yes, human-only | documented | no | no | no | no | CONTRACT REQUIRED / CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING |
+| Facebook Messenger | yes, human-only | documented | no | no | no | no | CONTRACT REQUIRED / CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING |
+| Site/Webchat | yes | yes | no | no | no | no | CONTRACT REQUIRED / CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING |
 
 ## Chatbot / Flow Summary
 
@@ -187,15 +197,28 @@ C0/C1 items that block declaring contractual readiness without qualification:
 - Remaining flow gap: waiting-on-customer 1h only if the source is confirmed as
   mandatory; do not emulate with unsafe generic inactivity.
 
-## Next 5 Contractual Actions
+## Current Execution Order
+
+1. Utility template and controlled campaign readiness.
+2. Opt-out evidence.
+3. Reports, exports and billing evidence.
+4. Acceptance pack.
+5. Deferred channels only after customer delivery window is confirmed:
+   Instagram Direct, Facebook Messenger and Website/Webchat.
+
+No broad campaign or real Meta outbound is authorized by this document. A real
+send requires explicit owner approval covering template, recipients, send
+window, expected cost, campaign name and number of messages.
+
+## Next Contractual Actions
 
 | # | REQ ID | Action | Why Now | Blocker | Code? | Config? | Customer Action? | Meta Action? | Done Criteria |
 | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | CRA-IG-001 / CRA-FB-001 / CRA-WEB-001 | Activate and validate Instagram, Facebook and webchat | Required channels are the biggest tenant-readiness gap | Customer assets/site access | no, unless bug found | yes | yes | yes for Meta channels | E4/E5 evidence per channel |
-| 2 | CRA-TPL-001 / CRA-CAMP-001 / CRA-BILL-001 | Configure one utility template and run controlled campaign/billing smoke | Active utility messaging is core commercial obligation | Meta approval and CRA content | no, unless missing control proven | yes | content approval | yes | Delivered utility template evidence and billing report |
-| 3 | CRA-OPT-001 | Produce opt-out and campaign-block evidence | Official clarification accepts operational opt-out if auditable | Test contact/list | no, unless block path fails | yes/test data | approve test | no | Opt-out event, block before campaign, exportable evidence |
-| 4 | CRA-REP-001 / CRA-REP-002 | Generate CRA report/export package | Acceptance needs evidence, not only code capability | Representative sample data | no | no | review | no | CSV/PDF/equivalent exports with filters and billing report |
-| 5 | CRA-SLA-001 / CRA-TRAIN-001 / CRA-LGPD-002 | Close documentary acceptance pack | Contractual readiness requires signed/evidenced operations | Dates/attendees/signatures | no | no | yes | possible Meta docs | SLA, support, training, LGPD/security, backup and Meta proof attached |
+| 1 | CRA-TPL-001 / CRA-CAMP-001 / CRA-BILL-001 | Configure one Utility template and run controlled campaign/billing smoke | Current owner-approved execution front | Meta approval and CRA content | no, unless missing control proven | yes | content approval | yes | Delivered Utility template evidence and billing report |
+| 2 | CRA-OPT-001 | Produce opt-out and campaign-block evidence | Official clarification accepts operational opt-out if auditable | Test contact/list | no, unless block path fails | yes/test data | approve test | no | Opt-out event, block before campaign, exportable evidence |
+| 3 | CRA-REP-001 / CRA-REP-002 | Generate CRA report/export package | Acceptance needs evidence, not only code capability | Representative sample data | no | no | review | no | CSV/PDF/equivalent exports with filters and billing report |
+| 4 | CRA-SLA-001 / CRA-TRAIN-001 / CRA-LGPD-002 | Close documentary acceptance pack | Contractual readiness requires signed/evidenced operations | Dates/attendees/signatures | no | no | yes | possible Meta docs | SLA, support, training, LGPD/security, backup and Meta proof attached |
+| 5 | CRA-IG-001 / CRA-FB-001 / CRA-WEB-001 | Activate and validate Instagram, Facebook and webchat | Contract-required but customer-deferred | Customer delivery window/assets/site access | no, unless bug found | yes | yes | yes for Meta channels | E4/E5 evidence per channel |
 
 ## Backlog Reconciliation
 

@@ -142,12 +142,20 @@ WATCH / EXTERNAL OPERATIONS:
    do Contrato/TR contra produto, configuracao CRA e evidencia de producao.
    Nao reabrir CRA active flow visibility nem CRA business hours: ambos estao
    fechados, respectivamente CUSTOMER VALIDATED e CONFIGURED / OPERATIONALLY
-   VALIDATED. Lacunas criticas atuais sao ativacao/validacao de
-   Instagram/Facebook/Webchat, templates/campanhas Utility, opt-out, pacote de
-   relatorios/billing e evidencias documentais de SLA, treinamento, LGPD,
-   backup/restore e Meta. Produto gap declarado na matriz: pausa/agendamento de
-   campanhas ainda precisa auditoria de controle e waiting-on-customer 1h so
-   deve virar implementacao se confirmado como obrigacao contratual.
+   VALIDATED. Atualizacao de 2026-09-15: a frente ativa e preparar campanha
+   Utility controlada; Instagram Direct, Facebook Messenger e Website/Webchat
+   seguem contratados, mas estao CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING e
+   nao bloqueiam esta fase. Snapshot somente leitura CRA: Meta/WhatsApp
+   configurado, `campaigns=true`, `templates=true`, 0 templates, 0 pedidos de
+   template, 0 campanhas, 0 eventos de billing/opt-out de campanha. Checklist
+   canonico criado em
+   `docs/bids/2026/cra-pr/UTILITY_CAMPAIGN_ACCEPTANCE_CHECKLIST.md`.
+   Proibido envio Meta real sem aprovacao explicita do owner cobrindo template,
+   destinatarios, janela, custo esperado, nome da campanha e quantidade de
+   mensagens. Ordem atual: Utility/campaign, opt-out, relatorios/exportacoes/
+   billing, acceptance pack; canais adiados so reabrem com janela do cliente.
+   Produto gap declarado na matriz: waiting-on-customer 1h so deve virar
+   implementacao se confirmado como obrigacao contratual.
 
 RECENTLY CLOSED:
 
