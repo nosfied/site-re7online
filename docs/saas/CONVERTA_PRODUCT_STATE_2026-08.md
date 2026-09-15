@@ -230,6 +230,13 @@ from Meta, a tenant override, or a final CRA proposal found in the repo. A's
 ledger remains correct as delivered Utility eligibility/count, but final CRA BRL
 unit is NOT PROVEN. Recipient B send is PAUSED FOR BILLING UNIT RECONCILIATION;
 opt-out E2E and report/export/billing evidence remain separate open gates.
+Meta pricing source-of-truth audit, 2026-09-15: provider Meta cost must be
+resolved from current official Meta pricing by market/category/effective date
+and never from internal estimates or contract price. Official public source
+confirms per-delivered-message pricing and rate-card mechanics, but structured
+Brazil rate data was not ingested in the audit environment; provider cost stays
+`PRICING UNKNOWN` until official rate-card/API/WhatsApp Manager/invoice evidence
+is imported. See `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md`.
 
 ## Modelos Meta
 

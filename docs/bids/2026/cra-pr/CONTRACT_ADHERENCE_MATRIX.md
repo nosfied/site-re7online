@@ -36,6 +36,15 @@ unit. This closes the generic product bug and A local reconciliation, but does
 not close CRA campaign acceptance, recipient B send, opt-out E2E,
 report/export/billing evidence or BRL unit-price acceptance.
 
+Meta pricing source-of-truth update, 2026-09-15: current official public Meta
+pricing confirms per-delivered-message pricing by recipient market/category and
+official rate-card mechanics. The audit did not ingest structured official
+Brazil rates, so provider cost remains `PRICING UNKNOWN` until official
+rate-card/API/WhatsApp Manager/invoice evidence is imported. Secondary
+cross-checks report Brazil Utility BRL 0,0350 and Marketing BRL 0,3217 effective
+2026-07-01, but these are non-canonical for Converta billing. Recipient B send
+remains paused.
+
 This document separates four things that must not be conflated:
 
 - contractual obligation;
@@ -168,7 +177,7 @@ Read-only production snapshot collected on 2026-09-15.
 | CRA-OPT-001 | resposta esclarecimento item 10 | Opt-out with audit and campaign block | Operational event/blocking support documented | No CRA opt-out sample | E1/E2 | DOCUMENTATION/EVIDENCE GAP | C0 | P1 evidence | Contractual opt-out evidence missing | Execute redacted opt-out/campaign-block smoke | RE7 | E4/E6 |
 | CRA-REP-001 | resposta esclarecimento item 11 | Export CSV/XLSX or equivalent; PDF report format | CSV reports exist; PDF where applicable; XLSX via equivalent/conversion | CRA reports enabled | E1/E3 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | CRA export samples missing | Generate redacted CSV/PDF/equivalent evidence | RE7 | E4/E6 |
 | CRA-REP-002 | aderencia #50 | Monthly consumption report | Meta usage report/CSV documented | No CRA campaign usage | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | Needs CRA utility-delivered sample | Validate monthly report with controlled campaign | RE7 | E4 |
-| CRA-BILL-001 | resposta esclarecimento items 1-6 | Bill only delivered utility templates outside 24h; read status no extra; Meta cost included in proposal; excedents same unit price with approval | Semantics documented; Demo A has one reconciled `billing.active_message.delivered` eligibility/count event | No CRA billing sample; BRL unit price not proven because `R$ 0,32` is central planning reference, no tenant override/final proposal source found | E1/E4 | BILLING UNIT RECONCILIATION OPEN | C0 | P1 evidence | Contract billing unit and CRA report total not evidenced | Reconcile final CRA unit before B send; then produce billing proof from controlled delivered Utility template | RE7 | E6 |
+| CRA-BILL-001 | resposta esclarecimento items 1-6 | Bill only delivered utility templates outside 24h; read status no extra; Meta cost included in proposal; excedents same unit price with approval | Semantics documented; Demo A has one reconciled `billing.active_message.delivered` eligibility/count event; Meta official pricing model audited | No CRA billing sample; BRL unit price not proven; official structured Brazil Meta rate not ingested; `R$ 0,32` is central planning reference, no tenant override/final proposal source found | E1/E4 | BILLING UNIT RECONCILIATION OPEN / META PRICING SOURCE P1 | C0 | P1 evidence | Contract billing unit, official provider rate snapshot and CRA report total not evidenced | Ingest official Meta rate source and reconcile final CRA unit before B send; then produce billing proof from controlled delivered Utility template | RE7 | E6 |
 | CRA-SLA-001 | aderencia #52; suporte SLA | Availability target 99.5% and operation except maintenance | Health/monitoring exists; SLA plan exists | Not acceptance-evidenced | E1 | DOCUMENTATION/EVIDENCE GAP | C1 | docs/ops | Availability evidence and maintenance log missing | Prepare SLA evidence/runbook appendix | RE7 | E6 |
 | CRA-SUP-001 | suporte SLA | Remote support, severity and response targets | Support process planned | Not customer-evidenced | E1 | DOCUMENTATION/EVIDENCE GAP | C1 | docs/ops | Support channel/ticket evidence missing | Define channels and ticket register for CRA | RE7 + CRA | E6 |
 | CRA-BKP-001 | proposta tecnica arquitetura | Backup/restore routine | Runbooks exist | CRA-specific restore evidence absent | E1 | DOCUMENTATION/EVIDENCE GAP | C2 | docs/ops | Backup cadence/retention proof not packaged | Attach backup/restore policy evidence | RE7 | E6 |

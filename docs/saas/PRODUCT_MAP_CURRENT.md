@@ -202,6 +202,12 @@ Current backlog classification:
   internal central planning unit, not a proven final CRA contract unit in the
   current evidence pack. Opt-out E2E and campaign reports/export/billing
   evidence remain open until separately exercised.
+- Meta pricing source of truth / FinOps hardening is P1 while B is blocked.
+  Official public Meta pricing confirms per-delivered-message, market/category
+  pricing and official rate-card mechanics; exact structured Brazil rates were
+  not ingested, so provider cost remains `PRICING UNKNOWN` until official source
+  evidence is captured. Contract price, FX and Meta provider cost must be
+  resolved separately.
 - Watch/external operations: abandoned automation / BOT flow lifecycle local E2E validated on
   2026-09-14 in
   `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`; product

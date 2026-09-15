@@ -228,6 +228,14 @@ and paused until billing-unit reconciliation closes.
 
 ## Limites e proximos passos
 
+- Source of truth update, 2026-09-15: Meta cost must come from official current
+  WhatsApp Business Platform pricing by market/category/effective date. Canonical
+  design and current audit are in `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md`.
+  Until an official rate card/API/WhatsApp Manager/invoice source is ingested,
+  provider cost status is `PRICING UNKNOWN`; internal values such as
+  `meta-br-planning-2026-08`, USD 0.008 or R$ 0,32 must not be labeled official
+  Meta cost. Contract/client price remains a separate resolver from provider
+  cost and FX.
 - Nao ha conciliacao financeira definitiva automatizada.
 - O bloqueio por limite ainda nao esta ativado nos fluxos reais.
 - Rate card e local e deve ser revisado quando a politica Meta mudar.

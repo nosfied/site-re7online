@@ -16,6 +16,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | `docs/saas/SECULT_PE_BACKLOG.md` | backlog | Backlog SECULT-PE: balanceamento de fila, auditoria de sessao, nome social, relatorios, reconnect e retificacao |
 | `docs/saas/lgpd-anonymization-policy.md` | atual | Politica operacional LGPD: soft delete, anonimizacao, opt-out, bloqueio de reidratacao e limites |
 | `docs/saas/META_USAGE_COST_CONTROL.md` | atual | Controle estimativo de uso Meta: ledger, resumo, preview, relatorio mensal, limites e alertas |
+| `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md` | P1 FinOps | Fonte canonica proposta para precos Meta oficiais, separacao provider cost/FX/preco contratual, staleness e bloqueio de B ate import oficial |
 | `docs/saas/PRODUCT_MAP_CURRENT.md` | atual | Fotografia atual do produto e modulos |
 | `docs/saas/MARKET_PROFILE_ARCHITECTURE.md` | atual | Arquitetura oficial de Core Platform, Market Profiles, Feature Packs, Tenant Configuration e capabilities |
 | `docs/saas/BUSINESS_CAPABILITY_DESIGN.md` | atual | Contrato das capabilities do mercado privado e plano para substituir o ultimo filtro business por capability |

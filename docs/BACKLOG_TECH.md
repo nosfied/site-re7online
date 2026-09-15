@@ -119,7 +119,23 @@ ACTIVE P0:
 
 ACTIVE P1:
 
-1. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
+1. Meta pricing source of truth / FinOps hardening: OPEN / P1 WHILE RECIPIENT B
+   SEND IS BLOCKED. Auditoria de 2026-09-15 confirmou que custo Meta, FX e
+   preco contratual Converta devem ser resolvidos separadamente. Fonte oficial
+   primaria: WhatsApp Business Platform Pricing e Meta for Developers pricing;
+   modelo oficial atual e cobranca por mensagem entregue, variando por mercado
+   do destinatario e categoria, com tiers de volume para utility/authentication
+   e isencoes de janela/free entry point. O audit nao conseguiu ingerir tabela
+   estruturada oficial no ambiente; valores Brasil exatos permanecem
+   `PRICING UNKNOWN` ate import oficial/rate card/WhatsApp Manager/invoice.
+   Cross-checks secundarios indicam BRL Utility 0,0350 e Marketing 0,3217 a
+   partir de 2026-07-01, mas nao sao fonte canonica. Produto atual ainda tem
+   `meta-br-planning-2026-08`/USD 0.008 como estimativa interna; nao usar como
+   verdade de preco oficial. Doc canonico:
+   `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md`. RECIPIENT B = PAUSED /
+   PRICING RECONCILIATION; nenhuma mutacao de ledger e nenhum envio real.
+
+2. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente
    2 mensagens Utility `data_exame` via META_CLOUD no `demo-converta` parou com
    bug operacional. Prechecks passaram, a primeira chamada Meta para `****9614`

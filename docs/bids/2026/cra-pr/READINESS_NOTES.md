@@ -495,6 +495,12 @@ Sem envio real.
   valor R$ 0,32 e classificado como referencia central de planejamento ainda nao
   provada como unidade final CRA. B SEND = PAUSED FOR BILLING UNIT
   RECONCILIATION.
+- Meta pricing source-of-truth audit, 2026-09-15: fonte oficial publica da Meta
+  confirma cobranca por mensagem entregue, por mercado do destinatario e
+  categoria, com rate cards oficiais e tiers para utility/authentication. O
+  audit nao ingeriu tabela estruturada oficial Brasil; valores exatos de Meta
+  ficam `PRICING UNKNOWN` ate import de rate card/API/WhatsApp Manager/invoice.
+  Cross-checks secundarios nao sao canonicos. B continua NOT ATTEMPTED.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.

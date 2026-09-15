@@ -281,6 +281,11 @@ Owner approval is still required for exact recipients, send window, 24h proof,
 message count, billing unit and real Meta outbound. Recipient B remains paused
 until billing-unit reconciliation closes.
 
+Meta pricing source-of-truth audit, 2026-09-15: do not use `meta-br-planning`,
+USD 0.008, R$ 0,32 or any planning spreadsheet as official Meta tariff. B send
+requires official current Meta rate evidence for Brazil/Utility/effective date,
+plus separate CRA contract unit semantics or explicit Demo-only separation.
+
 ## Demo Phase C Controlled Utility Gate - 2026-09-15
 
 No real send executed.
