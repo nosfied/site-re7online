@@ -136,6 +136,18 @@ WATCH / EXTERNAL OPERATIONS:
    `****5328`; material `baileysAuthState.v1` aprovado esta configurado. Nao
    limpar, desconectar, resetar, trocar numero/WABA ou reexecutar onboarding sem
    diagnostico e autorizacao explicita do owner.
+2. CRA-PR contractual readiness: CANONICAL MATRIX CREATED / CONTRACT GAPS
+   TRACKED OUTSIDE RUNTIME P1 UNLESS CODE GAP IS PROVEN. A matriz canonica
+   `docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md` mapeia 52 requisitos
+   do Contrato/TR contra produto, configuracao CRA e evidencia de producao.
+   Nao reabrir CRA active flow visibility nem CRA business hours: ambos estao
+   fechados, respectivamente CUSTOMER VALIDATED e CONFIGURED / OPERATIONALLY
+   VALIDATED. Lacunas criticas atuais sao ativacao/validacao de
+   Instagram/Facebook/Webchat, templates/campanhas Utility, opt-out, pacote de
+   relatorios/billing e evidencias documentais de SLA, treinamento, LGPD,
+   backup/restore e Meta. Produto gap declarado na matriz: pausa/agendamento de
+   campanhas ainda precisa auditoria de controle e waiting-on-customer 1h so
+   deve virar implementacao se confirmado como obrigacao contratual.
 
 RECENTLY CLOSED:
 

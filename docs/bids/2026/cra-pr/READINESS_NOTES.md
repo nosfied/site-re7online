@@ -1,6 +1,64 @@
 # CRA-PR Readiness Notes
 
-Status: notas de prontidao para avaliacao contratual. Usar junto ao edital, termo de referencia e decisoes ja registradas.
+Status: notas de prontidao para avaliacao contratual. Usar junto ao edital,
+termo de referencia, matriz contratual canonica e decisoes ja registradas.
+
+Documento canonico de aderencia requisito-a-requisito:
+
+```text
+docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md
+```
+
+## Auditoria Contratual Consolidada - 2026-09-15
+
+Auditoria somente leitura de producao confirmou:
+
+- tenant `cra-pr` ACTIVE, profile `government`;
+- limite contratual configurado: `maxActiveAppUsers=30`;
+- usuarios: 18 ativos, 0 inativos; 3 ADMIN, 5 SUPERVISOR, 10 AGENT;
+- departamentos/filas: 6 departamentos ativos e 6 filas;
+- horarios: 6/6 departamentos com Mon-Fri 09:00-17:00,
+  `America/Sao_Paulo`; fins de semana fechados por ausencia de janela;
+- active flow: `cmtkhhxtq002p4spns3fp0yux`, active=true, entryPoint=true,
+  31 nos, start `consent`, hash
+  `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`;
+- Flow visibility: CLOSED / CUSTOMER VALIDATED;
+- Meta Cloud: operational=true, phoneStatus=CONNECTED, objectAccess=true;
+- Web Session: `****5595`, CONNECTED, auth material configured;
+- Webchat CRA: nao configurado;
+- Instagram/Facebook CRA: contratados, mas ainda sem configuracao/validacao CRA
+  registrada;
+- Templates/campaigns CRA: nenhum template/campanha configurado no snapshot;
+- CSAT e close: evidencias de snapshots e pesquisas respondidas em producao.
+
+Scorecard contratual da matriz:
+
+```text
+TOTAL REQUIREMENTS: 52
+CLOSED / REAL VALIDATED: 14
+CLOSED / CUSTOMER VALIDATED: 1
+IMPLEMENTED / NEEDS CRA VALIDATION: 15
+CONFIG PENDING: 5
+CUSTOMER ACTION PENDING: 1
+EXTERNAL META DEPENDENCY: 4
+PRODUCT GAP: 2
+DOCUMENTATION/EVIDENCE GAP: 9
+NOT REQUIRED BY CONTRACT: 1
+```
+
+Pendencias criticas para prontidao contratual:
+
+1. Ativar/validar Instagram, Facebook e Webchat CRA.
+2. Configurar template Utility CRA e validar campanha controlada.
+3. Evidenciar opt-out auditavel e bloqueio em campanha.
+4. Gerar pacote de relatorios/exportacoes/billing com dados CRA redigidos.
+5. Fechar pacote documental: SLA/suporte, treinamento, LGPD/seguranca,
+   backup/restore e comprovacao Meta oficial.
+
+Nao reabrir:
+
+- CRA active flow visibility: CLOSED / CUSTOMER VALIDATED.
+- CRA business hours: CONFIGURED / OPERATIONALLY VALIDATED.
 
 ## Enquadramento
 
@@ -140,7 +198,7 @@ Configuracao operacional:
   retried successfully;
 - active accounts: do not assume activation count without current login
   evidence;
-- department hours: CONFIGURED / PRODUCTION VALIDATED / NOT RUNTIME P1;
+- department hours: CONFIGURED / OPERATIONALLY VALIDATED;
 - configured schedule: `America/Sao_Paulo`, Monday-Friday 09:00-17:00,
   weekends closed, no exceptions;
 - training: Wednesday 2026-09-09.
@@ -170,7 +228,7 @@ CRA-PR READY FOR TRAINING 2026-09-09:
 YES
 
 CRA-PR DEPARTMENT HOURS:
-P1 / PENDING CUSTOMER CONFIGURATION + FLOW-AWARE VALIDATION
+CONFIGURED / OPERATIONALLY VALIDATED
 ```
 
 ### CRA admin chatbot settings - 2026-09-13
@@ -197,6 +255,7 @@ Status:
 ```text
 CRA ADMIN CHATBOT SETTINGS:
 CLOSED / REAL VALIDATED
+```
 
 ### CRA active flow visibility - 2026-09-15
 
@@ -231,7 +290,6 @@ PRODUCTION PASS, CUSTOMER CRA ADMIN PASS.
 
 ADMIN CHATBOT LOADING/BADGE:
 CLOSED / REAL VALIDATED
-```
 
 Administradores CRA podem configurar horarios dos departamentos em:
 

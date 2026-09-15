@@ -46,6 +46,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | `docs/bids/CONVERTA_PUBLIC_BID_EVIDENCE_MATRIX.md` | atual | Matriz reutilizavel de evidencias para editais publicos, propostas, PoCs e diligencias |
 | `docs/bids/2026/secult-pe/READINESS_NOTES.md` | atual | Notas de prontidao SECULT-PE com gates, riscos e proximos passos |
 | `docs/bids/2026/cra-pr/READINESS_NOTES.md` | atual | Notas de prontidao CRA-PR com volume ativo/receptivo, Utility-only, riscos Meta e proximos passos |
+| `docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md` | atual | Matriz canonica requisito-a-requisito do Contrato/TR CRA-PR, separando produto, configuracao CRA, evidencia, lacunas contratuais e proximas acoes |
 | `docs/saas/BID_COMPLIANCE_MATRIX.md` | atual | Matriz mestre de aderencia por requisito, reutilizavel em editais, propostas e PoC |
 | `docs/saas/LICITABLE_VERSION_1_0_CHECKLIST.md` | atual | Checklist executivo para declarar a Versao Licitavel 1.0 |
 | `docs/saas/DOCUMENTATION_INVENTORY.md` | atual | Inventario consolidado dos documentos SaaS e lacunas documentais |

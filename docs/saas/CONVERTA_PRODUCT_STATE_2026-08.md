@@ -734,7 +734,15 @@ Commits relevantes do baseline homologado:
   operacionalmente sem patch de runtime: timezone `America/Sao_Paulo`, 6/6
   departamentos Mon-Fri 09:00-17:00, fins de semana fechados,
   `QUEUE_FOR_NEXT_OPEN` preservado, resolver e fluxo validado dentro/fora de
-  expediente. P2 ativo = branching condicional por resposta
+  expediente. Em 2026-09-15 foi criada a matriz contratual canonica CRA-PR em
+  `docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md`: 52 requisitos mapeados,
+  14 CLOSED / REAL VALIDATED, 1 CLOSED / CUSTOMER VALIDATED, 15 IMPLEMENTED /
+  NEEDS CRA VALIDATION, 5 CONFIG PENDING, 1 CUSTOMER ACTION PENDING, 4 EXTERNAL
+  META DEPENDENCY, 2 PRODUCT GAP, 9 DOCUMENTATION/EVIDENCE GAP e 1 NOT REQUIRED.
+  A matriz confirma que active flow visibility e business hours nao devem ser
+  reabertos; lacunas principais sao canais IG/FB/Webchat, Utility
+  templates/campaigns, opt-out, reporting/billing e pacote documental de aceite.
+  P2 ativo = branching condicional por resposta
   capturada, melhorias de contexto em relatorios, semantica de unlink/remocao
   Meta Cloud, hardening de suporte interno auditado, cross-provider inactivity
   handoff hardening, Guided Builder lifecycle-policy exposure e resumo completo

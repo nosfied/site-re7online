@@ -176,7 +176,17 @@ Current backlog classification:
   `America/Sao_Paulo`, Mon-Fri 09:00-17:00, weekends closed, and preserved
   `QUEUE_FOR_NEXT_OPEN`; resolver and flow-aware validation passed for all six
   departments / two representative handoff destinations. This is closed as
-  existing product capability plus config, not product runtime P1.
+  CONFIGURED / OPERATIONALLY VALIDATED using existing product capability plus
+  config, not product runtime P1.
+- CRA-PR contract/TR adherence, 2026-09-15: canonical matrix added at
+  `docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md`. It tracks 52
+  contractual requirements separately from the technical backlog. Current
+  contract blockers are tenant/channel/configuration/evidence heavy:
+  Instagram/Facebook/Webchat activation, CRA Utility template/campaign smoke,
+  opt-out proof, report/export/billing package, and acceptance evidence for
+  SLA/support/training/LGPD/backup/Meta. Active flow visibility remains CLOSED /
+  CUSTOMER VALIDATED and CRA business hours remain CONFIGURED / OPERATIONALLY
+  VALIDATED.
 - CRA active flow tenant visibility, 2026-09-15: CLOSED / DEPLOYED / CUSTOMER
   VALIDATED. Runtime flow works
   per owner report, but CRA tenant admins did not see the active flow in
