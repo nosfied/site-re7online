@@ -189,6 +189,15 @@ Current backlog classification:
   confirmed CRA settings/flows HTTP 200 and preserved the active definition hash
   `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`.
   Existing active flow must not be recreated or definition-mutated.
+- Chatbot Flow active vs entrypoint semantics, 2026-09-15: CLOSED / READ-ONLY
+  AUDIT / P2 UX CLARIFICATION + P2 DOMAIN HARDENING. `entryPoint` e o seletor
+  padrao de novas conversas (`clientId + isActive=true + entryPoint=true`);
+  `isActive` e o gate para execucao por id explicito e continuidade de runtime.
+  Active non-entrypoint e capacidade real no Support Hub via
+  `supportChannel.chatbotFlowId`, mas nao ha seletor secundario geral para
+  campanha, departamento, intent, link, QR/referral, Webchat embed ou
+  flow-to-flow. Producao nao tem duplicate entrypoints nem inactive entrypoints;
+  recomendar clarificacao de UX e hardening de invariantes sem abrir P1.
 - P2: question conditional branching by captured answer; reporting context
   enhancements; Guided Builder complete final-review summary; Meta Cloud
   unlink/removal semantics; support access hardening.

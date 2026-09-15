@@ -133,6 +133,18 @@ Contrato atual:
 - mudanca apenas de copy nao forca restart;
 - flow inativo ou indisponivel nao continua executando.
 
+Semantica `isActive` vs `entryPoint`, auditada em 2026-09-15:
+
+- `entryPoint=true` e o seletor padrao para novas conversas, sempre combinado
+  com `isActive=true`;
+- `isActive=true` e o gate de execucao para um flow ja referenciado por
+  `flow=chatbot:<id>` ou por rota explicita, como Support Hub
+  `supportChannel.chatbotFlowId`;
+- active non-entrypoint pode executar por id explicito, mas nao e escolhido como
+  fallback quando nao existe entrypoint ativo;
+- se o flow salvo em runtime se tornar inativo, Meta/Web Session/Webchat e
+  processor de inatividade deixam de continuar aquele flow.
+
 Closed HUMAN reentry:
 
 - ciclo `CLOSED` domina residuos antigos de atribuicao/handoff humano;

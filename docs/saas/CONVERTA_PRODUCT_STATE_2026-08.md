@@ -116,6 +116,14 @@ A identidade do solicitante no tenant de suporte e sintetica e deterministica, b
 
 O atendimento da equipe da plataforma ocorre no Inbox normal do tenant de suporte, com chatbot, handoff, fila, protocolo e eventos ja existentes. O canal `support` pode usar um flow dedicado via `TenantOperationalConfig.config.supportChannel.chatbotFlowId`; sem flow dedicado valido, a conversa cai no modo humano e nao usa automaticamente o `entryPoint` geral do tenant.
 
+Auditoria read-only de 2026-09-15 confirmou que esse flow dedicado de suporte e
+o principal uso atual de active non-entrypoint: o resolver exige `isActive=true`
+por id explicito e nao exige `entryPoint=true`. O `entryPoint` segue sendo o
+seletor padrao de novas conversas do tenant. Portanto o produto atual e
+`MODEL D - PARTIAL/FUTURE CAPABILITY`: a separacao `isActive`/`entryPoint` e
+real, mas limitada a execucao explicita e continuidade de runtime; UX e
+invariantes de dominio ficam em backlog P2.
+
 O Support Hub aceita texto e imagem inbound do solicitante, limitado a uma imagem PNG, JPEG/JPG ou WebP por envio, com legenda opcional. As imagens ficam fora do Git e fora do banco, em storage interno configurado por `SUPPORT_ATTACHMENT_ROOT`; a mensagem continua vinculada a `InboundMessage` e a timeline permanece baseada em `Conversation`. O frontend recebe apenas uma referencia opaca e o arquivo e servido por endpoint autenticado com cache privado. O envio de imagem do suporte para o cliente ainda nao faz parte do MVP; o operador responde por texto no Inbox.
 
 ## Training Center
@@ -409,6 +417,15 @@ backend preserva a semantica de `entryPoint=true` como troca intencional, e a
 UI passa a usar default compartilhado `false` tanto na abertura quanto no reset
 apos criacao. Nao ha hardcode de tenant, schema, migration ou mudanca de
 runtime.
+
+Auditoria `CHATBOT FLOW ACTIVE vs ENTRYPOINT SEMANTICS` de 2026-09-15: `Ativo`
+significa elegivel a execucao por id explicito ou continuidade de runtime;
+`Entrada principal` significa flow padrao para novas conversas. Active
+non-entrypoint e executavel hoje via Support Hub (`supportChannel.chatbotFlowId`)
+e runtime existente `flow=chatbot:<id>`, mas nao ha seletor geral por campanha,
+departamento, intent, link, QR/referral, Webchat embed ou flow-to-flow. Resultado:
+P2 UX CLARIFICATION + P2 DOMAIN HARDENING; sem P1 porque producao nao mostrou
+entrypoint duplicado nem inactive entrypoint.
 
 Incidente de processo em 2026-09-11: o primeiro resultado local do Guided
 Builder 2.2 foi invalidado. O HEAD de producao estava atual; o problema foi a

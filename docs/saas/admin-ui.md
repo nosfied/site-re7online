@@ -136,6 +136,19 @@ non-destructive validated. A regra de seguranca e backend-authoritative; o front
 apresenta feedback. A desativacao nunca transfere, encerra, remove atribuicao,
 troca fila ou altera lifecycle de conversa silenciosamente.
 
+## Chatbot Flow Active vs Entrypoint
+
+Auditoria read-only de 2026-09-15 classificou a UX atual de `Ativo` +
+`Entrada principal` como tecnicamente coerente, mas incompleta para operadores
+tenant. `Entrada principal` e o flow padrao para novas conversas do tenant.
+`Ativo` e o gate de execucao por id explicito e continuidade de runtime; hoje o
+caso real comprovado e o Support Hub usando
+`TenantOperationalConfig.config.supportChannel.chatbotFlowId`, sem exigir
+`entryPoint=true`. Normal tenant UI deve explicar melhor essa diferenca ou
+esconder/derivar `Ativo` em Guided quando nao houver rota explicita visivel. DB
+ainda nao enforce um entrypoint por tenant nem `entryPoint=>isActive`; isso fica
+em P2 domain hardening, sem mudanca aplicada nesta auditoria.
+
 ## Departments Management UX 2.0
 
 Estado deployed / owner-approved / production non-destructive validated:

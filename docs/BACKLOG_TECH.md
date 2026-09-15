@@ -254,6 +254,22 @@ ACTIVE P2:
    seguro.
 5. Internal support access hardening: P2 / WATCH-HARDENING. Mecanismo existe;
    manter evolucao em auditoria, expiracao, evidencias e menor privilegio.
+6. Chatbot Flow `isActive` vs `entryPoint` semantics: P2 UX CLARIFICATION +
+   P2 DOMAIN HARDENING. Auditoria read-only de 2026-09-15 concluiu que
+   `entryPoint` e o seletor padrao de novas conversas (`clientId +
+   isActive=true + entryPoint=true`), enquanto `isActive` e o gate de execucao
+   por id explicito e continuidade de runtime. Active non-entrypoint nao e
+   redundante: o Support Hub pode executar
+   `TenantOperationalConfig.config.supportChannel.chatbotFlowId` exigindo
+   `isActive=true` e sem exigir `entryPoint=true`; producao usa isso no tenant
+   `re7online` com o flow `Converta Platform Support`. Nao ha evidencia de
+   campanhas, links, departamentos, intents, QR/referral, Webchat embed ou
+   flow-to-flow chamarem flows secundarios hoje. Producao nao tem duplicate
+   entrypoints nem inactive entrypoints. Gaps reais: UX normal nao explica bem
+   quando active non-entrypoint executa; invariantes `entryPoint=>isActive`, um
+   entrypoint por tenant e corrida de troca de principal sao application-only ou
+   ausentes no DB. Registro:
+   `docs/saas/CHATBOT_FLOW_ACTIVE_ENTRYPOINT_SEMANTICS_AUDIT_2026-09-15.md`.
 
 P3:
 

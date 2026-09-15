@@ -22,6 +22,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | `docs/saas/FEATURE_FLAGS_MATRIX.md` | atual | Matriz oficial de features por profile |
 | `docs/saas/GOVERNANCE_CONFIG.md` | atual | Governanca de configuracao DB vs `tenants.json`, incluindo regra de lifecycle para desativacao de usuario e abandono de automacao BOT |
 | `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md` | E2E local validado | Auditoria e validacao local de abandono de automacao/BOT, estados, timeout, reset, handoff, idempotencia e reuso antes de implementar hardening |
+| `docs/saas/CHATBOT_FLOW_ACTIVE_ENTRYPOINT_SEMANTICS_AUDIT_2026-09-15.md` | atual | Auditoria read-only da semantica `isActive` vs `entryPoint`, execucao por entrypoint, execucao explicita por Support Hub, matriz de estados e backlog P2 de UX/domain hardening |
 | `docs/saas/CHANNELS_GOVERNANCE.md` | atual | Governanca WhatsApp/Messenger/Instagram |
 | `docs/saas/WHATSAPP_USERNAME_BSUID_BACKLOG.md` | backlog | Impacto de WhatsApp usernames/BSUID e plano futuro de compatibilidade |
 | `docs/saas/CONFIG_MIGRATION_PLAN.md` | atual | Plano incremental de migracao de configuracao |
