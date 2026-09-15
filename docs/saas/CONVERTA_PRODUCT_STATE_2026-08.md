@@ -734,6 +734,14 @@ Commits relevantes do baseline homologado:
   destinos de mensagem/pergunta/handoff em uma jornada legivel, preservando
   estruturas avancadas sem fingir interpretacao completa. Sem mudar runtime ou
   formato de `ChatbotFlow.definition` antes de novo contrato de UX.
+- CRA active flow tenant visibility audit, 2026-09-15: owner report says the
+  active CRA production flow executes correctly but is not visible in
+  `/app/chatbot` for tenant admins. Code audit found no Guided/Advanced,
+  active, entrypoint, owner or source filter in the tenant app list; both admin
+  and app list by `clientId`, while `/app` additionally enforces app feature
+  `chatbot` and ADMIN/SUPERVISOR access. Production API/DB evidence is still
+  required because SSH to the production host timed out during the audit. Status:
+  AUDIT BLOCKED / ROOT CAUSE NOT PROVEN. Do not recreate or mutate the CRA flow.
 - Suporte interno multitenant ja existe com grant temporario, sessao de suporte,
   auditoria e banner de modo suporte; evolucoes futuras devem focar menor
   privilegio/evidencia operacional. Usuarios x departamentos M2M tambem ja

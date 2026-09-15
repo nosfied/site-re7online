@@ -66,6 +66,24 @@ mesmo quando settings falhar parcialmente. A badge de automacao nao deve
 permanecer como "Carregando" apos o fim do loading; quando settings estiver
 indisponivel, a UI deve mostrar estado de erro verdadeiro.
 
+## CRA active flow tenant visibility
+
+Auditoria iniciada em 2026-09-15 por relato do owner: o flow ativo de producao
+do CRA executa corretamente, mas nao aparece para admins do tenant em
+`/app/chatbot`.
+
+Contrato de seguranca: nao recriar, clonar, desativar, reativar, trocar
+`entryPoint`, alterar ownership ou mudar `ChatbotFlow.definition` do flow ativo
+antes de provar a causa exata.
+
+Achado de codigo atual: `GET /app/chatbot/flows` e
+`GET /admin/chatbot/flows?clientKey=cra-pr` listam flows pelo mesmo predicado de
+tenant `clientId`; a rota app adiciona gates de feature `chatbot` e papel
+ADMIN/SUPERVISOR. Portanto, se o usuario CRA ADMIN estiver autenticado com o
+`clientId` correto e feature `chatbot` habilitada, o flow deveria ser retornado.
+Evidencia de producao/API ainda precisa ser coletada; a tentativa de SSH em
+2026-09-15 falhou por timeout/rede.
+
 ## Users Management 2.0
 
 Estado deployed / owner-approved / production non-destructive validated:

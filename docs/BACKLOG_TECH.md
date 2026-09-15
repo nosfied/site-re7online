@@ -145,6 +145,18 @@ ACTIVE P1:
    recente da aplicacao nao e causa comprovada. A Web Session do Demo esta
    `QR_REQUIRED` desde 2026-09-13 22:40:23Z e nao deve ser reconectada,
    desconectada ou limpa sem autorizacao explicita do owner.
+3. CRA active flow tenant visibility: AUDIT BLOCKED / PRODUCTION EVIDENCE
+   REQUIRED. Owner reports the active CRA production flow executes correctly but
+   is not visible to CRA tenant ADMINs in `/app/chatbot`. Code audit on
+   `837e609c` shows `/app/chatbot/flows` and `/admin/chatbot/flows` both list
+   `ChatbotFlow` by tenant `clientId` only; `/app` additionally enforces
+   app feature `chatbot` and role ADMIN/SUPERVISOR. `ChatbotFlow` has no
+   archived/deleted/source/type/owner/profile/draft visibility fields. Runtime
+   selects `clientId + isActive + entryPoint` for entrypoint execution. Root
+   cause is not proven because production SSH/API evidence failed on 2026-09-15
+   with network timeout/unreachable. No flow recreation, flow mutation, code
+   patch, DB mutation or deploy. Detailed record:
+   `docs/saas/CRA_ACTIVE_FLOW_VISIBILITY_AUDIT_2026-09-15.md`.
 
 RECENTLY CLOSED:
 

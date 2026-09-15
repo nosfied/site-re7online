@@ -174,6 +174,12 @@ Current backlog classification:
   `QUEUE_FOR_NEXT_OPEN`; resolver and flow-aware validation passed for all six
   departments / two representative handoff destinations. This is closed as
   existing product capability plus config, not product runtime P1.
+- CRA active flow tenant visibility, 2026-09-15: AUDIT BLOCKED / ROOT CAUSE NOT
+  PROVEN. Runtime flow works per owner report, but CRA tenant admins do not see
+  the active flow in `/app/chatbot`. Code path shows `/app` and admin flow lists
+  both query by tenant `clientId`; `/app` adds feature/RBAC gates. Production
+  DB/API evidence still required after network timeout. Existing active flow
+  must not be recreated or definition-mutated.
 - P2: question conditional branching by captured answer; reporting context
   enhancements; Guided Builder complete final-review summary; Meta Cloud
   unlink/removal semantics; support access hardening.

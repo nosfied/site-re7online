@@ -198,6 +198,20 @@ Status:
 CRA ADMIN CHATBOT SETTINGS:
 CLOSED / REAL VALIDATED
 
+### CRA active flow visibility - 2026-09-15
+
+Owner report: the active CRA production chatbot flow executes correctly, but
+tenant admins do not see it in `/app/chatbot`.
+
+Audit status: `AUDIT BLOCKED / ROOT CAUSE NOT PROVEN`.
+
+Local code audit shows tenant `/app/chatbot/flows` and internal
+`/admin/chatbot/flows?clientKey=cra-pr` both list `ChatbotFlow` by `clientId`;
+the tenant app additionally enforces feature `chatbot` and ADMIN/SUPERVISOR
+role. No flow recreation, ownership change, definition mutation, entrypoint
+change, status change or deploy is allowed before production API/DB evidence
+proves the exact exclusion path.
+
 ADMIN CHATBOT LOADING/BADGE:
 CLOSED / REAL VALIDATED
 ```
