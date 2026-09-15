@@ -140,9 +140,9 @@ Configuracao operacional:
   retried successfully;
 - active accounts: do not assume activation count without current login
   evidence;
-- department hours: PENDING CUSTOMER CONFIGURATION / NOT RUNTIME P1;
-- no schedule currently means `NO_SCHEDULE` / open according to the current
-  domain rule; this is not a technical failure;
+- department hours: CONFIGURED / PRODUCTION VALIDATED / NOT RUNTIME P1;
+- configured schedule: `America/Sao_Paulo`, Monday-Friday 09:00-17:00,
+  weekends closed, no exceptions;
 - training: Wednesday 2026-09-09.
 - Instagram/Facebook/Web: contracted but not activated initially.
 
@@ -253,13 +253,14 @@ O custo Meta deve ser tratado como risco operacional/comercial controlado, nao c
   abandono de automacao/BOT iniciada pelo cidadao; nao aplicar workaround de
   inatividade generica em HUMAN.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
-  usuarios, especialmente 3 admins TI, e guiar configuracao de horarios. A
-  ausencia de horario configurado permanece como pendencia operacional do
-  cliente, nao falha tecnica.
+  usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
+  configurados e validados em producao em 2026-09-15.
 - Horarios CRA nao permanecem P1 de runtime apos auditoria canonical de
   2026-09-14. A capability tecnica existe e foi comparada com SECULT sem
-  mudanca de codigo; a pendencia e configurar horarios nos departamentos CRA e
-  validar comportamento fora de expediente.
+  mudanca de codigo; em 2026-09-15 a configuracao operacional foi aplicada:
+  `America/Sao_Paulo`, Mon-Fri 09:00-17:00, fim de semana fechado,
+  `QUEUE_FOR_NEXT_OPEN` preservado e resolver validado dentro/fora do
+  expediente.
 - Pendencias contratuais/produto separadas: ciclo receptivo logico para
   mensuracao, template Utility fora de 24h entregue, ledger Meta apos
   2026-10-01, relatorio mensal contratual e alinhamento formal para

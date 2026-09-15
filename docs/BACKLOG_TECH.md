@@ -439,12 +439,27 @@ Dividas tecnicas abertas:
   `NO_SCHEDULE` both inside and outside the copied 09:00-17:00 text. This is a
   configuration/operational validation item, not a runtime P1. Detailed record:
   `docs/saas/CRA_SECULT_BUSINESS_HOURS_AUDIT_2026-09-14.md`.
+- CRA business hours operational configuration, 2026-09-15: CLOSED /
+  PRODUCTION CONFIG VALIDATED. Backup
+  `/opt/re7online/backups/converta-persistent/postgres/pre-cra-business-hours-20260915-001956.dump`
+  captured before mutation (`19737083` bytes, SHA-256
+  `1a0fa2daff91f5c290b7308782d10e274142be7a9a4833bea5b5a9315a6568ae`,
+  578 objects). `cra-pr` timezone set to `America/Sao_Paulo`; all 6 active
+  departments configured Mon-Fri 09:00-17:00 with weekends closed and zero
+  exceptions; each preserves one concrete `Fila Geral` queue.
+  `closedHandoffPolicy.action=QUEUE_FOR_NEXT_OPEN` preserved. Resolver
+  validation passed for all departments at Monday 10:00/16:59 `OPEN`,
+  Monday 17:00/17:01/20:00 `CLOSED`, and Saturday 10:00 `CLOSED`.
+  Flow-aware validation passed on Cobrança and Fiscalização. SECULT timezone,
+  08:00-17:00 schedules, policy and resolver status were read-only verified
+  unchanged. No code, schema, migration, PM2 reload or deploy.
 - baselines CRA versionados nesta consolidacao como evidencia de validacao, nao como dump operacional:
   - `docs/bids/2026/cra-pr/CRA_PR_DEMO_FLOW_V1_CUSTOMER_VALIDATION_BASELINE.md`;
   - `docs/bids/2026/cra-pr/cra-pr-demo-flow-v1-customer-validation.definition.json`.
-- CRA department hours remain PENDING CUSTOMER CONFIGURATION. Under the current
-  domain rule, no schedule means `NO_SCHEDULE` / open and must not be classified
-  as a technical failure;
+- CRA department hours: CLOSED / PRODUCTION CONFIG VALIDATED. Under the current
+  domain rule, any future department without schedule would still resolve
+  `NO_SCHEDULE` / open, but the six active CRA departments now have
+  `America/Sao_Paulo` Mon-Fri 09:00-17:00 configured and validated;
 - billing measurement items ainda abertos: ciclo receptivo logico, template Utility fora de 24h entregue, ledger Meta apos 2026-10-01 e relatorio contratual mensal.
 - alteracoes externas de `.env`/segredos continuam como procedimento
   operacional separado; a matriz de deploy cobre impacto derivado de diff Git.

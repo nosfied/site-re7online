@@ -169,9 +169,11 @@ Current backlog classification:
 - CRA/SECULT business-hours audit, 2026-09-14: CLOSED / DOCS-ONLY. The runtime
   department-hours mechanism is already present and production `secult-pe`
   preserves its approved `OPEN`/`CLOSED + QUEUE_FOR_NEXT_OPEN` contract. Current
-  `cra-pr` departments have no saved hours and therefore resolve `NO_SCHEDULE`
-  / open; remaining CRA work is config and operational validation, not product
-  runtime P1.
+  `cra-pr` departments were operationally configured on 2026-09-15 with
+  `America/Sao_Paulo`, Mon-Fri 09:00-17:00, weekends closed, and preserved
+  `QUEUE_FOR_NEXT_OPEN`; resolver and flow-aware validation passed for all six
+  departments / two representative handoff destinations. This is closed as
+  existing product capability plus config, not product runtime P1.
 - P2: question conditional branching by captured answer; reporting context
   enhancements; Guided Builder complete final-review summary; Meta Cloud
   unlink/removal semantics; support access hardening.

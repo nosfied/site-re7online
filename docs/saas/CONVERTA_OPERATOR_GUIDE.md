@@ -104,6 +104,33 @@ Checklist recomendado:
 
 SUPERVISOR pode consultar a configuração de filas quando autorizado, mas a escrita administrativa é de ADMIN. AGENT não acessa a configuração administrativa.
 
+## Horários de atendimento humano
+
+Horários de atendimento humano são configuração operacional de departamentos.
+Eles não alteram o autoatendimento: menus, submenus e respostas informativas do
+chatbot continuam disponíveis fora do expediente, salvo regra específica do
+fluxo.
+
+Contrato operacional validado:
+
+- `secult-pe`: `America/Recife`, segunda a sexta 08:00-17:00, preservado;
+- `cra-pr`: `America/Sao_Paulo`, segunda a sexta 09:00-17:00, fins de semana
+  fechados, validado em produção em 2026-09-15;
+- quando um departamento está fechado e o fluxo usa `QUEUE_FOR_NEXT_OPEN`, o
+  atendimento humano pode entrar em fila `WAITING` para o próximo expediente,
+  com setor/fila concretos, protocolo e posição na fila, sem autoatribuição
+  enquanto fechado;
+- quando um departamento não possui agenda salva, o domínio atual trata como
+  `NO_SCHEDULE` / aberto para compatibilidade.
+
+Checklist antes de mudar horários em produção:
+
+1. Criar backup persistente do PostgreSQL.
+2. Confirmar tenant, timezone, departamentos, filas e exceções existentes.
+3. Aplicar somente configuração, sem schema, migration ou deploy.
+4. Validar `getDepartmentAvailability` dentro e fora do expediente.
+5. Validar que tenants não relacionados permanecem inalterados.
+
 Smoke mínimo após mudança de fila ou visibilidade:
 
 - conversa em espera compartilhada aparece para agentes elegíveis;

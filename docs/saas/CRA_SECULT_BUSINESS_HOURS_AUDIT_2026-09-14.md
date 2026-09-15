@@ -1,10 +1,10 @@
 # CRA/SECULT Business Hours Audit - 2026-09-14
 
-Status: canonical audit complete, docs-only.
+Status: canonical audit complete; CRA operational configuration applied and validated.
 
 ## Scope
 
-Audit performed on canonical HEAD `56c4a392d1eb017ad8fcafffbad5fbd442e7152f`, matching production HEAD. No runtime code, schema, tenant configuration, production data mutation, deploy or service reload was performed.
+Initial audit performed on canonical HEAD `56c4a392d1eb017ad8fcafffbad5fbd442e7152f`, matching production HEAD. The follow-up operational configuration changed production tenant data only for `cra-pr`; no runtime code, schema, migration, deploy or service reload was performed.
 
 ## Current Architecture
 
@@ -29,7 +29,7 @@ This is a hard compatibility contract and was not changed.
 
 ## CRA Production Contract
 
-Production tenant `cra-pr` currently has no timezone override and falls back to `America/Fortaleza`. Its six active departments each have one queue named `Fila Geral` and no department business hours configured.
+Before 2026-09-15, production tenant `cra-pr` had no timezone override and fell back to `America/Fortaleza`. Its six active departments each had one queue named `Fila Geral` and no department business hours configured.
 
 Resolver probe using production code:
 
@@ -37,6 +37,48 @@ Resolver probe using production code:
 - Monday 2026-09-14 20:00 BRT: all CRA audited departments returned `NO_SCHEDULE`.
 
 Under the current domain rule, `NO_SCHEDULE` means open/legacy-compatible handoff behavior. Therefore CRA's current production state does not enforce the 09:00-17:00 copy in `closedHandoffPolicy.offHoursMessage`; that message only becomes relevant when the selected department resolves as `CLOSED`.
+
+## CRA Operational Configuration - 2026-09-15
+
+Status: `CLOSED / EXISTING PRODUCT CAPABILITY / OPERATIONALLY VALIDATED`.
+
+Persistent backup before mutation:
+
+- path: `/opt/re7online/backups/converta-persistent/postgres/pre-cra-business-hours-20260915-001956.dump`
+- size: `19737083`
+- SHA-256: `1a0fa2daff91f5c290b7308782d10e274142be7a9a4833bea5b5a9315a6568ae`
+- object count: `578`
+
+Configuration applied to `cra-pr` only:
+
+- timezone: `America/Sao_Paulo`;
+- active departments configured: 6/6;
+- each active department preserved its single concrete `Fila Geral` queue;
+- regular hours: Monday-Friday 09:00-17:00;
+- Saturday/Sunday: closed by absence of weekend intervals;
+- exceptions: none;
+- `closedHandoffPolicy` preserved unchanged with `action=QUEUE_FOR_NEXT_OPEN`.
+
+Resolver validation with production code:
+
+- Monday 10:00 local: `OPEN` for all six departments;
+- Monday 16:59 local: `OPEN` for all six departments;
+- Monday 17:00 local: `CLOSED` for all six departments;
+- Monday 17:01 local: `CLOSED` for all six departments;
+- Monday 20:00 local: `CLOSED` for all six departments;
+- Saturday 10:00 local: `CLOSED` for all six departments.
+
+Boundary semantics are `startMinute <= local minute < endMinute`; therefore 17:00 is outside the 09:00-17:00 interval.
+
+Flow-aware validation used two independent CRA departments (`Cobrança` and `Fiscalização`) without mutating a customer conversation:
+
+- inside hours: `resolveDepartmentAwareHandoff` returned `kind=open`, `availabilityStatus=OPEN`, concrete department and queue, `shouldAssign=true`;
+- outside hours: `resolveDepartmentAwareHandoff` returned `kind=closed`, `availabilityStatus=CLOSED`, concrete department and queue, `shouldAssign=false`;
+- Web Session policy handling remains `QUEUE_FOR_NEXT_OPEN`, so the closed-hours handoff path queues the conversation as `HUMAN/WAITING` with concrete department/queue, protocol and queue position, while skipping autoassign while the department is closed.
+
+Self-service continuity is unchanged: menu navigation and informational chatbot responses remain available; only human handoff availability follows the department schedule.
+
+No PM2 reload was required because the resolver reads department hours from the database at runtime.
 
 ## Provider Notes
 
@@ -55,9 +97,4 @@ Guided Builder correctly communicates the current contract: it does not create a
 
 The historical "CRA flow-aware hours" item is not a product/runtime P1 anymore. The runtime mechanism already exists and SECULT uses the same core mechanism without tenant-specific code.
 
-Remaining CRA work is configuration/operational validation:
-
-- configure CRA department hours in `/app/settings/departments`;
-- validate representative inside-hours and outside-hours flow paths;
-- keep no-schedule behavior as `NO_SCHEDULE` / open unless the customer explicitly configures hours.
-
+CRA configuration/operational validation is now closed. Future changes to CRA hours should use the same configuration-only path: backup first, change department schedule, validate resolver inside/outside hours, and preserve SECULT compatibility.
