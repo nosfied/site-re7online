@@ -203,14 +203,17 @@ CLOSED / REAL VALIDATED
 Owner report: the active CRA production chatbot flow executes correctly, but
 tenant admins do not see it in `/app/chatbot`.
 
-Audit status: `AUDIT BLOCKED / ROOT CAUSE NOT PROVEN`.
+Audit status: `PRODUCTION EVIDENCE PARTIAL / ROOT CAUSE NOT PROVEN`.
 
 Local code audit shows tenant `/app/chatbot/flows` and internal
 `/admin/chatbot/flows?clientKey=cra-pr` both list `ChatbotFlow` by `clientId`;
 the tenant app additionally enforces feature `chatbot` and ADMIN/SUPERVISOR
-role. No flow recreation, ownership change, definition mutation, entrypoint
-change, status change or deploy is allowed before production API/DB evidence
-proves the exact exclusion path.
+role. Production DB/runtime/admin API evidence on 2026-09-15 proved one active
+CRA entrypoint flow `cmtkhhxtq002p4spns3fp0yux`, owned by CRA, with
+`features.chatbot=true`, and returned by admin API. App API/UI proof remains
+pending because no CRA app session was active without login/session mutation.
+No flow recreation, ownership change, definition mutation, entrypoint change,
+status change or deploy is allowed before the exact exclusion path is proven.
 
 ADMIN CHATBOT LOADING/BADGE:
 CLOSED / REAL VALIDATED

@@ -1,6 +1,6 @@
 # CRA Active Flow Tenant Visibility Audit - 2026-09-15
 
-Status: `AUDIT IN PROGRESS / ROOT CAUSE NOT PROVEN`.
+Status: `PRODUCTION EVIDENCE PARTIAL / ROOT CAUSE NOT PROVEN`.
 
 ## Scope
 
@@ -55,28 +55,66 @@ Based on code alone, if a CRA ADMIN successfully reaches `GET /app/chatbot/flows
 
 ## Open Evidence Required
 
-Production/API evidence is still required before classifying root cause:
+Production/API evidence collected on 2026-09-15:
 
-- current production DB read for all CRA `ChatbotFlow` rows, definition hash and ownership;
-- current CRA `Client.features`, profile and app feature resolution;
-- current CRA ADMIN/SUPERVISOR/AGENT users and roles;
+- production HEAD: `56c4a392d1eb017ad8fcafffbad5fbd442e7152f`;
+- PM2 online:
+  - `re7-admin-front` PID `3094790`, cwd `/opt/re7online/site-re7online`;
+  - `re7-whatsapp-agent` PID `3094768`, cwd `/opt/re7online/site-re7online/apps/whatsapp-agent`;
+  - `re7-whatsapp-web-worker` PID `2504405`, cwd `/opt/re7online/site-re7online/apps/whatsapp-web-worker`;
+- health: `3001 /` HTTP 200, `3001 /admin/health` HTTP 200, `3000 /` HTTP 200;
+- migrations: 58 migrations, database schema up to date;
+- CRA client:
+  - id `a91ec8de-e80b-4cc6-9ef2-49dbd1b64bfa`;
+  - key `cra-pr`;
+  - status `ACTIVE`;
+  - profile `government`;
+  - `features.chatbot=true`;
+- CRA ADMIN/SUPERVISOR users: 8 active users, all with effective
+  `clientId=a91ec8de-e80b-4cc6-9ef2-49dbd1b64bfa`;
+- CRA `ChatbotFlow` rows: exactly 1 row;
+- active flow:
+  - id `cmtkhhxtq002p4spns3fp0yux`;
+  - name `CRA-PR - Atendimento Institucional`;
+  - clientId `a91ec8de-e80b-4cc6-9ef2-49dbd1b64bfa`;
+  - `isActive=true`;
+  - `entryPoint=true`;
+  - createdAt/updatedAt `2026-09-02T19:23:31.838Z`;
+  - definition hash `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`;
+  - start `consent`;
+  - node count `31`;
+- runtime entrypoint query resolves the same flow id and definition hash;
+- admin API `GET /admin/chatbot/flows?clientKey=cra-pr` returned HTTP 200,
+  count 1, with the same flow id and definition hash.
+
+Remaining evidence required before classifying root cause:
+
 - authenticated read-only `GET /app/chatbot/flows` as CRA ADMIN;
-- comparison with `GET /admin/chatbot/flows?clientKey=cra-pr`;
-- runtime resolver read proving exact active row selected in production at the audit time;
-- resource reference audit against current CRA department/queue IDs.
+- tenant app frontend render proof after a safe CRA ADMIN session exists.
 
-The 2026-09-15 attempt to collect this evidence was blocked by network errors to the production host (`ssh root@64.225.18.191` timed out / network unreachable). No production mutation was performed.
+No CRA ADMIN/SUPERVISOR `AppAuthSession` was active and unrevoked at
+`2026-09-15T12:05:22.866Z`. Calling `/app/chatbot/flows` without an existing
+session would require login/session creation, and app session validation can
+update `lastSeenAt`. That was intentionally not performed during this
+read-only/no-mutation audit.
 
 ## Current Classification
 
-Classification: `I. NOT PROVEN`.
+Classification: `H. NOT PROVEN`.
 
-Most likely areas to validate first when production access is available:
+Proven not root cause:
+
+- flow ownership mismatch at DB level: the active flow belongs to the CRA client;
+- chatbot feature disabled: CRA has `features.chatbot=true`;
+- admin API exclusion: admin API returns the active flow;
+- runtime entrypoint mismatch: runtime query resolves the same active flow.
+
+Most likely areas to validate first when an authorized CRA app session is
+available:
 
 1. CRA app session effective `clientId` differs from the CRA flow `clientId`.
-2. CRA `Client.features.chatbot` or profile/capability projection disables the app route/API.
-3. Authenticated app API returns the flow but frontend state/error path hides it.
-4. User role/session is not actually `ADMIN`/`SUPERVISOR` in the CRA tenant.
+2. Authenticated app API returns the flow but frontend state/error path hides it.
+3. User role/session is not actually `ADMIN`/`SUPERVISOR` in the CRA tenant.
 
 These are hypotheses, not proven causes.
 
@@ -93,7 +131,6 @@ Expected safe correction after proof:
 
 ## Backlog
 
-`CRA ACTIVE FLOW TENANT VISIBILITY`: `AUDIT BLOCKED / PRODUCTION EVIDENCE REQUIRED`.
+`CRA ACTIVE FLOW TENANT VISIBILITY`: `PRODUCTION EVIDENCE PARTIAL / APP SESSION PROOF REQUIRED`.
 
 `CRA HOURS`: remains `CLOSED / CONFIGURED / OPERATIONALLY VALIDATED`.
-

@@ -81,8 +81,13 @@ Achado de codigo atual: `GET /app/chatbot/flows` e
 tenant `clientId`; a rota app adiciona gates de feature `chatbot` e papel
 ADMIN/SUPERVISOR. Portanto, se o usuario CRA ADMIN estiver autenticado com o
 `clientId` correto e feature `chatbot` habilitada, o flow deveria ser retornado.
-Evidencia de producao/API ainda precisa ser coletada; a tentativa de SSH em
-2026-09-15 falhou por timeout/rede.
+Evidencia de producao em 2026-09-15 provou CRA `features.chatbot=true`, 8
+usuarios CRA ADMIN/SUPERVISOR ativos, um unico flow CRA ativo/entrypoint
+`cmtkhhxtq002p4spns3fp0yux`, resolucao runtime e API admin alinhadas ao mesmo
+hash de definicao
+`d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`. A prova da
+API/UI `/app` ainda depende de uma sessao CRA app autorizada; nao havia sessao
+ativa para reutilizar sem login/mutacao de sessao.
 
 ## Users Management 2.0
 
