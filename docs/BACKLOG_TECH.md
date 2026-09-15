@@ -96,8 +96,8 @@ Fechado / validado:
   de loading nao depende mais de `settings != null`, o bug de badge permanente
   "Carregando" foi fechado e erro verdadeiro e exibido quando settings nao
   estiver disponivel.
-- Abandoned automation / BOT flow lifecycle: LOCAL E2E VALIDATED / PRODUCT
-  DECISION OPEN. Em 2026-09-14, o comportamento existente foi validado em DB
+- Abandoned automation / BOT flow lifecycle: LOCAL E2E VALIDATED / P2 RESIDUAL
+  HARDENING. Em 2026-09-14, o comportamento existente foi validado em DB
   local seguro, sem runtime change, sem producao e sem deploy. `resetAfterMinutes`
   reinicia menu/submenu/captura no proximo inbound e nao move para HUMAN nem
   CLOSED; `timeoutMinutes/action=HANDOFF` promove uma vez para HUMAN/WAITING
@@ -119,24 +119,7 @@ ACTIVE P0:
 
 ACTIVE P1:
 
-1. Abandoned automation / BOT flow lifecycle: LOCAL E2E VALIDATED / PRODUCT
-   DECISION OPEN. Correcao de 2026-09-14: a interpretacao anterior
-   `WAITING_FOR_CUSTOMER 60m` como auto-close de atendimento humano foi
-   SUPERSEDED / NOT PRODUCT REQUIREMENT. Conversas HUMAN continuam sob controle
-   humano e podem permanecer abertas indefinidamente ate fechamento explicito. A
-   frente correta e abandono de automacao iniciada pelo cidadao: menu/pergunta/
-   captura fica aguardando resposta, cidadao para de responder, runtime BOT fica
-   incompleto. Auditoria e E2E local em
-   `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md` aponta infra
-   existente para reuso: `chatbotRuntime.lastInteractionAt`,
-   `resetAfterMinutes` no executor, `timeoutMinutes/action=HANDOFF` no
-   `chatbotInactivityProcessor`, claim DB-backed e escopo multitenant. O E2E
-   confirmou reset no proximo inbound sem HUMAN/CLOSED, handoff unico com
-   department/queue concretos, protocolo e posicao na fila, e ausencia de
-   duplicidade em nova varredura. Gap restante: limpeza de `flowContext`, copy/
-   UX de timeout e paridade provider-independent, sem criar scheduler novo e
-   sem auto-close HUMAN.
-2. Demo Meta Cloud restriction: P1 / EXTERNAL META REMEDIATION + CHANNEL
+1. Demo Meta Cloud restriction: P1 / EXTERNAL META REMEDIATION + CHANNEL
    CONTINUITY OPEN. Auditoria somente leitura de 2026-09-14 confirmou o phone
    number Meta do `demo-converta` com `status=BANNED` e WABA com
    `account_review_status=REJECTED`; o business aparece `not_verified` e 3
@@ -145,33 +128,27 @@ ACTIVE P1:
    recente da aplicacao nao e causa comprovada. A Web Session do Demo esta
    `QR_REQUIRED` desde 2026-09-13 22:40:23Z e nao deve ser reconectada,
    desconectada ou limpa sem autorizacao explicita do owner.
-3. CRA active flow tenant visibility: P1 / DEPLOYED / PROD SERVER-SIDE
-   VALIDATED / CUSTOMER UI CONFIRMATION PENDING.
-   Real CRA ADMIN Eduardo reproduced that the active flow is absent from
-   tenant-side `Fluxos cadastrados`. Production evidence on
-   2026-09-15 proved CRA `features.chatbot=true`, Eduardo is active ADMIN on the
-   CRA clientId, exactly one CRA flow `cmtkhhxtq002p4spns3fp0yux` exists,
-   active/entryPoint, definition hash
-   `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`;
-   runtime entrypoint query, admin API and Eduardo's
-   `/agent-api/app/chatbot/flows` request all return the same layer correctly.
-   First missing layer: tenant app frontend hydration. `loadFlows()` uses
-   `Promise.all()` for flows/settings/resources, and Eduardo's
-   `/agent-api/app/chatbot/settings` returned 404 because the app settings route
-   still required a legacy `.data/tenants.json` entry; production
-   `.data/tenants.json` has no `cra-pr`. Local fix reuses the already-validated
-   admin DB-backed settings fallback for app settings and decouples tenant app
-   hydration so flows/resources can render even when settings fails. Runtime
-   commit `363ce3ab` was deployed on 2026-09-15 after persistent PostgreSQL
-   backup `pre-cra-flow-visibility-20260915-133330.dump`; production smoke
-   returned CRA settings/flows successfully and preserved the CRA flow definition
-   hash exactly. No flow recreation, flow mutation, DB mutation, schema change or
-   worker reload was performed. Customer UI confirmation remains pending because
-   no safe authorized CRA app session was used for visual validation. Detailed
-   record: `docs/saas/CRA_ACTIVE_FLOW_VISIBILITY_AUDIT_2026-09-15.md`.
 
 RECENTLY CLOSED:
 
+- CRA active flow tenant visibility: CLOSED / DEPLOYED / CUSTOMER VALIDATED.
+   Real CRA ADMIN Eduardo reproduced the original absence and later confirmed
+   after the production fix that the active CRA flow is visible in tenant-side
+   `/app/chatbot` and can be opened from `Fluxos cadastrados`. Root cause
+   history preserved: the flow always existed correctly in DB/runtime/admin API,
+   `/agent-api/app/chatbot/flows` returned it, but
+   `/agent-api/app/chatbot/settings` returned 404 because app settings still
+   depended on legacy `.data/tenants.json` for a DB-backed `Client`; coupled
+   `Promise.all()` hydration then prevented the successful flows response from
+   reaching UI state. Runtime commit `363ce3ab` made `/app/chatbot/settings`
+   DB-backed and split flows/settings/resources hydration. Flow
+   `cmtkhhxtq002p4spns3fp0yux` / `CRA-PR - Atendimento Institucional` was not
+   recreated, cloned, regenerated, reactivated or rewritten; production
+   definition hash stayed
+   `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`.
+   Validation levels: LOCAL OWNER PASS, SERVER-SIDE PRODUCTION PASS, CUSTOMER
+   CRA ADMIN PASS. Detailed record:
+   `docs/saas/CRA_ACTIVE_FLOW_VISIBILITY_AUDIT_2026-09-15.md`.
 - User deactivation active-conversation guard: CLOSED / DEPLOYED / OWNER
    APPROVED / PRODUCTION NON-DESTRUCTIVE VALIDATED. Entrega em producao em
    `c40c44dc205b2324a9197322334141c5e7f079f0`, apos backup PostgreSQL
@@ -270,6 +247,13 @@ ACTIVE P2:
    entrypoint por tenant e corrida de troca de principal sao application-only ou
    ausentes no DB. Registro:
    `docs/saas/CHATBOT_FLOW_ACTIVE_ENTRYPOINT_SEMANTICS_AUDIT_2026-09-15.md`.
+7. Abandoned automation / BOT flow lifecycle: P2 RESIDUAL HARDENING. O
+   comportamento existente ja foi validado: `resetAfterMinutes` reinicia
+   menu/submenu/captura no proximo inbound sem HUMAN/CLOSED, e
+   `timeoutMinutes/action=HANDOFF` promove uma vez para HUMAN/WAITING com
+   department/queue concretos, protocolo e posicao na fila quando o destino e
+   valido. Residuais: limpeza/copy de `flowContext`, UX de timeout e paridade
+   cross-provider do hardening, sem auto-close HUMAN.
 
 P3:
 
@@ -293,7 +277,7 @@ WATCH only:
 
 Proximas cinco frentes:
 
-1. P1 Abandoned automation / BOT flow lifecycle. Why now: cidadao pode iniciar
+1. P2 Abandoned automation / BOT flow lifecycle hardening. Why now: cidadao pode iniciar
    menu/pergunta/captura e abandonar antes de concluir. Valor: endurece reset,
    expiracao e UX de automacao incompleta sem afetar HUMAN. Dependencia:
    validar comportamento atual de `resetAfterMinutes` e

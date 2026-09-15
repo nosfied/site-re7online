@@ -770,13 +770,16 @@ Commits relevantes do baseline homologado:
   settings fallback for the tenant app settings route and makes `/app/chatbot`
   hydrate flows/settings/resources independently, so a settings failure is shown
   as settings-specific state instead of hiding the returned flow list. Status:
-  P1 / DEPLOYED / PROD SERVER-SIDE VALIDATED / CUSTOMER UI CONFIRMATION PENDING.
+  CLOSED / DEPLOYED / CUSTOMER VALIDATED.
   Production delivery on 2026-09-15 used persistent PostgreSQL backup
   `pre-cra-flow-visibility-20260915-133330.dump`, reloaded only
   `re7-admin-front` and `re7-whatsapp-agent`, preserved
   `re7-whatsapp-web-worker`, and preserved the CRA flow definition hash
   `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`.
-  Do not recreate or mutate the CRA flow.
+  Customer CRA ADMIN Eduardo confirmed after the production fix that the active
+  flow is visible in tenant `/app/chatbot` and can be opened from `Fluxos
+  cadastrados`. Validation levels: LOCAL OWNER PASS, SERVER-SIDE PRODUCTION
+  PASS, CUSTOMER CRA ADMIN PASS. Do not recreate or mutate the CRA flow.
 - Suporte interno multitenant ja existe com grant temporario, sessao de suporte,
   auditoria e banner de modo suporte; evolucoes futuras devem focar menor
   privilegio/evidencia operacional. Usuarios x departamentos M2M tambem ja

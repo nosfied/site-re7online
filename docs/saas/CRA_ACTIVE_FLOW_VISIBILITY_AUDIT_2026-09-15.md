@@ -1,6 +1,6 @@
 # CRA Active Flow Tenant Visibility Audit - 2026-09-15
 
-Status: `P1 / DEPLOYED / PROD SERVER-SIDE VALIDATED / CUSTOMER UI CONFIRMATION PENDING`.
+Status: `CLOSED / DEPLOYED / CUSTOMER VALIDATED`.
 
 ## Scope
 
@@ -226,11 +226,34 @@ Post-deploy server-side smoke:
 - CRA flow post-deploy hash:
   `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`.
 
-Customer UI confirmation remains pending because no safe authorized CRA app
-session was used or fabricated for visual validation.
+## Customer Validation Close - 2026-09-15
+
+Latest customer evidence:
+
+- tenant: `cra-pr`;
+- user: Eduardo, CRA ADMIN;
+- customer validation: PASS;
+- the active CRA flow is now visible in the tenant `/app` environment;
+- Eduardo can access/open the flow from `Fluxos cadastrados`.
+
+Therefore the exact original customer-facing property is real validated.
+
+Validation levels:
+
+- LOCAL OWNER: PASS;
+- SERVER-SIDE PRODUCTION: PASS;
+- CUSTOMER CRA ADMIN: PASS.
+
+Flow preservation:
+
+- flow id: `cmtkhhxtq002p4spns3fp0yux`;
+- name: `CRA-PR - Atendimento Institucional`;
+- the flow was not recreated, cloned, regenerated, reactivated or rewritten;
+- production definition hash remained preserved across deployment:
+  `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`.
 
 ## Backlog
 
-`CRA ACTIVE FLOW TENANT VISIBILITY`: `P1 / DEPLOYED / PROD SERVER-SIDE VALIDATED / CUSTOMER UI CONFIRMATION PENDING`.
+`CRA ACTIVE FLOW TENANT VISIBILITY`: `CLOSED / DEPLOYED / CUSTOMER VALIDATED`.
 
 `CRA HOURS`: remains `CLOSED / CONFIGURED / OPERATIONALLY VALIDATED`.

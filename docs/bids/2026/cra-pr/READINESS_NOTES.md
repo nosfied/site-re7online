@@ -203,7 +203,7 @@ CLOSED / REAL VALIDATED
 Owner report: the active CRA production chatbot flow executes correctly, but
 tenant admins do not see it in `/app/chatbot`.
 
-Audit status: `P1 / DEPLOYED / PROD SERVER-SIDE VALIDATED / CUSTOMER UI CONFIRMATION PENDING`.
+Audit status: `CLOSED / DEPLOYED / CUSTOMER VALIDATED`.
 
 Local code audit shows tenant `/app/chatbot/flows` and internal
 `/admin/chatbot/flows?clientKey=cra-pr` both list `ChatbotFlow` by `clientId`;
@@ -224,8 +224,10 @@ Production delivery on 2026-09-15 used persistent backup
 same active definition hash
 `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`. No flow
 recreation, ownership change, definition mutation, entrypoint change or status
-change occurred. Customer UI confirmation remains pending without a safe
-authorized CRA app session.
+change occurred. Eduardo, CRA ADMIN, confirmed after the production fix that the
+active flow is visible in tenant `/app/chatbot` and can be opened from
+`Fluxos cadastrados`. Validation levels: LOCAL OWNER PASS, SERVER-SIDE
+PRODUCTION PASS, CUSTOMER CRA ADMIN PASS.
 
 ADMIN CHATBOT LOADING/BADGE:
 CLOSED / REAL VALIDATED

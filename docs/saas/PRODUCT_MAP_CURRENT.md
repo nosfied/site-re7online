@@ -174,8 +174,8 @@ Current backlog classification:
   `QUEUE_FOR_NEXT_OPEN`; resolver and flow-aware validation passed for all six
   departments / two representative handoff destinations. This is closed as
   existing product capability plus config, not product runtime P1.
-- CRA active flow tenant visibility, 2026-09-15: P1 / DEPLOYED / PROD
-  SERVER-SIDE VALIDATED / CUSTOMER UI CONFIRMATION PENDING. Runtime flow works
+- CRA active flow tenant visibility, 2026-09-15: CLOSED / DEPLOYED / CUSTOMER
+  VALIDATED. Runtime flow works
   per owner report, but CRA tenant admins did not see the active flow in
   `/app/chatbot`. Production DB/runtime/admin API and real Eduardo app trace
   proved the active flow exists, belongs to CRA, has `features.chatbot=true`,
@@ -188,7 +188,9 @@ Current backlog classification:
   Production smoke after backup `pre-cra-flow-visibility-20260915-133330.dump`
   confirmed CRA settings/flows HTTP 200 and preserved the active definition hash
   `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`.
-  Existing active flow must not be recreated or definition-mutated.
+  Customer CRA ADMIN Eduardo confirmed after the production fix that the active
+  flow is visible in tenant `/app/chatbot` and can be opened from `Fluxos
+  cadastrados`. Existing active flow must not be recreated or definition-mutated.
 - Chatbot Flow active vs entrypoint semantics, 2026-09-15: CLOSED / READ-ONLY
   AUDIT / P2 UX CLARIFICATION + P2 DOMAIN HARDENING. `entryPoint` e o seletor
   padrao de novas conversas (`clientId + isActive=true + entryPoint=true`);
