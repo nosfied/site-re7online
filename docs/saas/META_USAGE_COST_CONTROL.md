@@ -140,20 +140,33 @@ Quando o edital exigir volume ativo alto, registrar risco de categoria, entrega,
 
 ### CRA-PR controlled Utility campaign
 
-Status em 2026-09-15: readiness documental/configuracional, sem envio real.
+Status em 2026-09-15: readiness audit fechado; aceite contratual aberto, sem
+envio real.
 
 O snapshot somente leitura de producao confirmou `cra-pr` com Meta/WhatsApp
 configurado e features `campaigns`/`templates` habilitadas, mas com 0 templates,
 0 pedidos de template, 0 campanhas, 0 eventos CRA de billing ativo e 0 eventos
-CRA de opt-out de campanha.
+CRA de opt-out de campanha. Nenhuma copia Utility CRA aprovada foi encontrada
+no repositorio/snapshot.
 
 Para aceite contratual, o primeiro envio real deve ser pequeno e controlado,
-com template Utility aprovado e aprovacao explicita do owner cobrindo template,
-destinatarios, janela de envio, custo esperado, nome da campanha e quantidade
-de mensagens. O billing contratual deve usar delivered/read de template Utility
-fora da janela de 24h como evidencia conservadora, sem cobrar accepted/sent sem
-entrega, failed/rejected/cancelled, read replay ou mensagens de servico dentro
-da janela.
+com copia CRA aprovada, template Utility aprovado pela Meta e aprovacao
+explicita do owner cobrindo template, destinatarios, janela de envio, custo
+esperado, nome da campanha e quantidade de mensagens. O billing contratual deve
+usar delivered/read de template Utility fora da janela de 24h como evidencia
+conservadora, sem cobrar accepted/sent sem entrega, failed/rejected/cancelled,
+read replay ou mensagens de servico dentro da janela.
+
+Pre-checagens obrigatorias antes do envio controlado:
+
+- opt-out ativo deve ser verificado no preview/import da campanha;
+- destinatario usado para evidencia de billing deve ter `lastInboundAt` nulo ou
+  anterior a 24h no momento do envio;
+- preview de custo deve registrar categoria, elegiveis, bloqueados, janela 24h
+  e premissas do rate card local, sem inventar taxa Meta oficial;
+- relatorio final deve capturar campaign id, template, destinatario mascarado,
+  Meta message id, status accepted/delivered/read/failed, decisao billable e
+  referencia do evento `billing.active_message.delivered` quando aplicavel.
 
 ## Limites e proximos passos
 

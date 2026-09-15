@@ -163,15 +163,16 @@ O centro de campanhas suporta:
 
 Criar rascunho nao envia mensagem. Envio real exige acao explicita do operador.
 
-CRA-PR update, 2026-09-15: the current contractual execution front is a
-controlled Utility-template campaign. Production has `campaigns=true` and
+CRA-PR update, 2026-09-15: Utility/campaign readiness audit is closed and
+contract acceptance is open. Production has `campaigns=true` and
 `templates=true` for `cra-pr`, but no CRA templates, template requests,
 campaigns, campaign billing events or opt-out campaign events were present in
-the read-only snapshot. No real Meta outbound is authorized without explicit
-owner approval covering template, recipients, send window, expected cost,
-campaign name and number of messages. Instagram Direct, Facebook Messenger and
-Website/Webchat remain contract-required but customer-deferred with delivery
-window pending for this phase.
+the read-only snapshot, and no approved CRA Utility copy was found. No Meta
+template submission or real Meta outbound is authorized without approved
+customer copy and explicit owner approval covering template, recipients, send
+window, expected cost, campaign name and number of messages. Instagram Direct,
+Facebook Messenger and Website/Webchat remain contract-required but
+customer-deferred with delivery window pending for this phase.
 
 ## Modelos Meta
 
@@ -751,7 +752,8 @@ Commits relevantes do baseline homologado:
   META DEPENDENCY, 2 PRODUCT GAP, 9 DOCUMENTATION/EVIDENCE GAP e 1 NOT REQUIRED.
   A matriz confirma que active flow visibility e business hours nao devem ser
   reabertos; lacunas principais sao canais IG/FB/Webchat, Utility
-  templates/campaigns, opt-out, reporting/billing e pacote documental de aceite.
+  templates/campaigns em aceite contratual aberto, opt-out,
+  reporting/billing e pacote documental de aceite.
   P2 ativo = branching condicional por resposta
   capturada, melhorias de contexto em relatorios, semantica de unlink/remocao
   Meta Cloud, hardening de suporte interno auditado, cross-provider inactivity

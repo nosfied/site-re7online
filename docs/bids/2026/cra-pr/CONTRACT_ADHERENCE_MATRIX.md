@@ -5,8 +5,10 @@ Status: canonical contractual readiness audit for Converta / CRA-PR.
 Scope: Contract no. 20/2026/CRA-PR / PE 90004/2026 evidence available in the
 repository plus read-only production snapshot collected on 2026-09-15.
 
-Current execution front, updated on 2026-09-15: prepare a controlled real
-Utility-template campaign. Instagram Direct, Facebook Messenger and
+Current execution front, updated on 2026-09-15: Utility/campaign readiness audit
+is closed and the contract acceptance phase is open. The next blocker is
+customer-approved CRA Utility copy plus explicit owner approval before any Meta
+submission or real send. Instagram Direct, Facebook Messenger and
 Website/Webchat remain contract-required, but are customer-deferred with
 delivery window pending and are not active blockers for this phase.
 
@@ -66,6 +68,7 @@ Read-only production snapshot collected on 2026-09-15.
 - Templates: none configured for CRA.
 - Campaigns: none configured for CRA.
 - Template requests: none configured for CRA.
+- Approved CRA Utility copy found in repository/snapshot: no.
 - Meta usage/billing/opt-out campaign evidence: no CRA campaign usage events,
   no `billing.active_message.delivered` events and no opt-out campaign events
   in the 2026-09-15 read-only snapshot.
@@ -92,7 +95,8 @@ Read-only production snapshot collected on 2026-09-15.
 | CLOSED / REAL VALIDATED | 14 |
 | CLOSED / CUSTOMER VALIDATED | 1 |
 | IMPLEMENTED / NEEDS CRA VALIDATION | 15 |
-| CONFIG PENDING | 2 |
+| CONTRACT ACCEPTANCE OPEN | 2 |
+| CONFIG PENDING | 0 |
 | CUSTOMER ACTION PENDING | 0 |
 | CONTRACT REQUIRED / CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING | 4 |
 | EXTERNAL META DEPENDENCY | 4 |
@@ -127,10 +131,10 @@ Read-only production snapshot collected on 2026-09-15.
 | CRA-HUM-004 | aderencia #20/#22 | Claim/assign/transfer/reply/close | Inbox supports core operations | CRA production close/snapshots exist | E4 | CLOSED / REAL VALIDATED | C0 | closed | Transfer-specific CRA proof not isolated | Include transfer in next CRA smoke if required | RE7 | E4/E5 |
 | CRA-PROT-001 | aderencia #24/#25/#26/#27/#28 | Protocol and continuation with anti-enumeration | Protocol/continuation implemented | Protocol snapshots exist | E4 | CLOSED / REAL VALIDATED | C1 | closed | Contractual evidence pack missing | Include protocol example with redaction | RE7 | E6 |
 | CRA-AUD-001 | aderencia #30/#57 | Logs, events and audit trail | Events/logging/redaction implemented | CRA has events/snapshots | E3/E4 | IMPLEMENTED / NEEDS CRA VALIDATION | C2 | P2 | Formal audit trail export not packaged | Add redacted audit evidence to acceptance pack | RE7 | E6 |
-| CRA-CAMP-001 | README objeto; aderencia #31 | Batch active WhatsApp dispatch | Campaign module exists | No CRA campaigns | E1 | CONFIG PENDING | C0 | P1 config | No CRA campaign configured/tested | Configure approved template and test campaign | RE7 + CRA | E4/E5 |
-| CRA-TPL-001 | aderencia #32 | Official templates/HSM | Template model and Meta send exist | No CRA templates | E1 | CONFIG PENDING | C0 | P1 config | No CRA templates present | Create/submit/approve initial utility templates | RE7 + CRA + Meta | E4/E5 |
-| CRA-TPL-002 | aderencia #33 | Support creation/submission/follow-up | Product/process support exists | Not evidenced for CRA | E1 | EXTERNAL META DEPENDENCY | C1 | docs/ops | Meta approval process not executed for CRA | Run template submission tracker | RE7 + Meta | E4/E6 |
-| CRA-TPL-003 | resposta esclarecimento item 1/12 | Utility-only, no marketing | Product policy supports category controls | CRA has no templates | E1 | EXTERNAL META DEPENDENCY | C0 | P1 config | Utility classification depends Meta approval | Submit only utility content; record category evidence | RE7 + Meta | E4/E6 |
+| CRA-CAMP-001 | README objeto; aderencia #31 | Batch active WhatsApp dispatch | Campaign module exists; focused local campaign import/runner tests PASS | No CRA campaigns | E2 | CONTRACT ACCEPTANCE OPEN | C0 | P1 evidence | No CRA campaign configured/tested | Configure approved template and run controlled campaign only after owner approval | RE7 + CRA | E4/E5/E6 |
+| CRA-TPL-001 | aderencia #32 | Official templates/HSM | Template request/admin/Meta submission pipeline audited | No CRA templates; approved copy not found | E1/E2 | CONTRACT ACCEPTANCE OPEN | C0 | P1 config | No CRA template/copy approved | Create request only after customer-approved Utility copy | RE7 + CRA + Meta | E4/E5/E6 |
+| CRA-TPL-002 | aderencia #33 | Support creation/submission/follow-up | Product/process support exists; admin-only Meta submission path audited | Not evidenced for CRA | E1/E2 | EXTERNAL META DEPENDENCY | C1 | docs/ops | Meta approval process not executed for CRA | Run template submission tracker after copy approval | RE7 + Meta | E4/E6 |
+| CRA-TPL-003 | resposta esclarecimento item 1/12 | Utility-only, no marketing | Product policy supports category controls; send paths re-check policy | CRA has no templates | E1/E2 | EXTERNAL META DEPENDENCY | C0 | P1 config | Utility classification depends Meta approval | Submit only approved Utility content; record category evidence | RE7 + Meta | E4/E6 |
 | CRA-WA-003 | aderencia #35; declaracao Meta | No WhatsApp Web/API unofficial as main mechanism | Official Cloud API supported; Web Session is coexistence/ops below domain | Meta Cloud configured; Web Session connected separately | E4 | CLOSED / REAL VALIDATED | C0 | closed | Acceptance wording must explain coexistence | Include official API declaration and transport policy | RE7 | E6 |
 | CRA-CAMP-002 | aderencia #36/#37 | Recipient import CSV/XLSX/API | Product has campaign/import-related capability documented | Not evidenced for CRA | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | CRA import workflow not proven | Run dry-run/import test with sanitized list | RE7 | E4 |
 | CRA-CAMP-003 | aderencia #38/#39 | Segmentation and deduplication | Product supports recipient records and dedupe semantics | Not evidenced for CRA | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | No CRA list/dedupe evidence | Validate duplicated sample recipient handling | RE7 | E4 |
@@ -161,8 +165,9 @@ Read-only production snapshot collected on 2026-09-15.
 
 C0/C1 items that block declaring contractual readiness without qualification:
 
-1. Active utility messaging is not CRA-ready: no CRA templates, no campaign
-   sample, no billing evidence for delivered utility template outside 24h.
+1. Active utility messaging is in contract acceptance, not closed: no approved
+   CRA copy, no Meta-approved CRA template, no controlled campaign sample and
+   no billing evidence for delivered utility template outside 24h.
 2. Opt-out evidence is missing for CRA acceptance, even though the product has
    an operational path.
 3. Reporting/export acceptance package is missing: CRA samples for CSV/PDF and
@@ -199,22 +204,23 @@ C0/C1 items that block declaring contractual readiness without qualification:
 
 ## Current Execution Order
 
-1. Utility template and controlled campaign readiness.
+1. Utility template and controlled campaign acceptance.
 2. Opt-out evidence.
 3. Reports, exports and billing evidence.
 4. Acceptance pack.
 5. Deferred channels only after customer delivery window is confirmed:
    Instagram Direct, Facebook Messenger and Website/Webchat.
 
-No broad campaign or real Meta outbound is authorized by this document. A real
-send requires explicit owner approval covering template, recipients, send
-window, expected cost, campaign name and number of messages.
+No broad campaign, Meta template submission or real Meta outbound is authorized
+by this document without approved customer copy and explicit owner approval. A
+real send requires approval covering template, recipients, send window, expected
+cost, campaign name and number of messages.
 
 ## Next Contractual Actions
 
 | # | REQ ID | Action | Why Now | Blocker | Code? | Config? | Customer Action? | Meta Action? | Done Criteria |
 | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | CRA-TPL-001 / CRA-CAMP-001 / CRA-BILL-001 | Configure one Utility template and run controlled campaign/billing smoke | Current owner-approved execution front | Meta approval and CRA content | no, unless missing control proven | yes | content approval | yes | Delivered Utility template evidence and billing report |
+| 1 | CRA-TPL-001 / CRA-CAMP-001 / CRA-BILL-001 | Configure one Utility template and run controlled campaign/billing smoke | Current owner-approved execution front | Customer-approved CRA copy, Meta approval and explicit send approval | no, unless missing control proven | yes | content/recipient/window/cost approval | yes | Delivered Utility template evidence and billing report |
 | 2 | CRA-OPT-001 | Produce opt-out and campaign-block evidence | Official clarification accepts operational opt-out if auditable | Test contact/list | no, unless block path fails | yes/test data | approve test | no | Opt-out event, block before campaign, exportable evidence |
 | 3 | CRA-REP-001 / CRA-REP-002 | Generate CRA report/export package | Acceptance needs evidence, not only code capability | Representative sample data | no | no | review | no | CSV/PDF/equivalent exports with filters and billing report |
 | 4 | CRA-SLA-001 / CRA-TRAIN-001 / CRA-LGPD-002 | Close documentary acceptance pack | Contractual readiness requires signed/evidenced operations | Dates/attendees/signatures | no | no | yes | possible Meta docs | SLA, support, training, LGPD/security, backup and Meta proof attached |
@@ -225,6 +231,9 @@ window, expected cost, campaign name and number of messages.
 - CRA active flow visibility: CLOSED / CUSTOMER VALIDATED. Do not reopen.
 - CRA business hours: CONFIGURED / OPERATIONALLY VALIDATED. Do not reopen.
 - CRA WhatsApp/handoff/Inbox/close/CSAT validation: CLOSED / REAL VALIDATED.
+- CRA Utility readiness audit: CLOSED; contract acceptance remains OPEN pending
+  customer-approved copy, Meta approval, controlled recipient approval and
+  evidence capture. No real send executed.
 - Residual CRA contract readiness must now be tracked through this matrix.
 - The remaining highest-risk gaps are contractual/configuration/evidence gaps,
   not a reason to reopen already closed flow or business-hours fronts.

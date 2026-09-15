@@ -38,7 +38,8 @@ TOTAL REQUIREMENTS: 52
 CLOSED / REAL VALIDATED: 14
 CLOSED / CUSTOMER VALIDATED: 1
 IMPLEMENTED / NEEDS CRA VALIDATION: 15
-CONFIG PENDING: 2
+CONTRACT ACCEPTANCE OPEN: 2
+CONFIG PENDING: 0
 CUSTOMER ACTION PENDING: 0
 CONTRACT REQUIRED / CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING: 4
 EXTERNAL META DEPENDENCY: 4
@@ -49,7 +50,7 @@ NOT REQUIRED BY CONTRACT: 1
 
 Pendencias criticas para prontidao contratual:
 
-1. Configurar template Utility CRA e validar campanha controlada.
+1. Obter copia Utility CRA aprovada e validar campanha controlada.
 2. Evidenciar opt-out auditavel e bloqueio em campanha.
 3. Gerar pacote de relatorios/exportacoes/billing com dados CRA redigidos.
 4. Fechar pacote documental: SLA/suporte, treinamento, LGPD/seguranca,
@@ -325,8 +326,8 @@ O custo Meta deve ser tratado como risco operacional/comercial controlado, nao c
 ## Utility campaign readiness - 2026-09-15
 
 A frente atual aprovada e preparar a primeira campanha real controlada com
-template Utility, sem envio amplo e sem envio Meta real antes de aprovacao
-explicita do owner.
+template Utility, sem submissao Meta e sem envio Meta real antes de copia CRA
+aprovada e aprovacao explicita do owner.
 
 Snapshot somente leitura de producao em 2026-09-15:
 
@@ -336,14 +337,16 @@ Snapshot somente leitura de producao em 2026-09-15:
   `****4194` e business `****8327`;
 - templates CRA: 0;
 - pedidos de template CRA: 0;
+- copia Utility CRA aprovada encontrada no repositorio/snapshot: nao;
 - campanhas CRA: 0;
 - eventos CRA de uso Meta campanha/billing/opt-out: 0.
 
 Contrato operacional:
 
-- primeiro passo: criar/submeter/aprovar um template Utility CRA;
-- segundo passo: validar importacao/lista pequena, dedupe, variaveis e opt-out;
-- terceiro passo: criar rascunho e somente depois obter aprovacao para envio
+- primeiro passo: obter texto/copia Utility final aprovado por CRA/owner;
+- segundo passo: criar/submeter/aprovar um template Utility CRA;
+- terceiro passo: validar importacao/lista pequena, dedupe, variaveis e opt-out;
+- quarto passo: criar rascunho e somente depois obter aprovacao para envio
   real controlado;
 - nenhum envio real pode ocorrer sem aprovacao cobrindo template, destinatarios,
   janela, custo esperado, nome da campanha e quantidade de mensagens.
@@ -358,14 +361,30 @@ Status:
 
 ```text
 CRA-PR UTILITY CAMPAIGN:
-LOCAL / CONTROLLED CAMPAIGN READINESS
+LOCAL / CONTRACT ACCEPTANCE OPEN
+
+UTILITY READINESS AUDIT:
+CLOSED
 
 REAL SEND:
 NOT EXECUTED
 
 OWNER APPROVAL FOR REAL SEND:
 REQUIRED
+
+CRA APPROVED COPY:
+NOT FOUND / CUSTOMER INPUT REQUIRED
 ```
+
+Gate local de 2026-09-15:
+
+- banco local seguro: `re7_cra_contract_test2` em `127.0.0.1:5432`, usuario
+  `re7test`, sem uso de producao;
+- migrations Prisma oficiais aplicadas: 58/58;
+- regressao DB-backed focada de campanha/import/runner: 5/5 PASS;
+- billing/preview/lifecycle unitario: 5/5 PASS;
+- suite ampla `campaignsFeatureRoutes.test.ts`: 111/112 PASS, com timeout no
+  teste de runtime de chatbot inativo, fora da frente Utility/campaign.
 
 ## Gates recomendados antes de assinatura
 

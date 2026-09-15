@@ -90,13 +90,17 @@ Default government profile favors oversight and reporting:
 | Internal admin console | Operational | `/admin` | admin routes, tenant/channel/onboarding pages | `X-Admin-Token`, DB-backed `Client`, `TenantOperationalConfig`, legacy `tenants.json` fallback |
 
 CRA-PR controlled campaign readiness, 2026-09-15: the product capability for
-campaign drafts/import, lifecycle controls, opt-out blocking, delivery status,
-Meta usage ledger and active-message billing is present in the codebase, but
-CRA has no configured template, template request or campaign in production yet.
-The current contract front is Utility/campaign readiness, then opt-out, then
-reports/exports/billing, then acceptance pack. Instagram Direct, Facebook
-Messenger and Website/Webchat remain contract-required but customer-deferred
-with delivery window pending and are not blockers for this phase.
+template request/review/submission, campaign drafts/import, lifecycle controls,
+opt-out blocking, delivery status, Meta usage ledger and active-message billing
+is present in the codebase. The readiness audit is closed, but contract
+acceptance is open because CRA has no configured template, template request or
+campaign in production yet, and no approved CRA Utility copy was found. The
+current contract front is Utility/campaign acceptance, then opt-out, then
+reports/exports/billing, then acceptance pack. No Meta template submission or
+real send is authorized without approved customer copy and explicit owner
+approval. Instagram Direct, Facebook Messenger and Website/Webchat remain
+contract-required but customer-deferred with delivery window pending and are not
+blockers for this phase.
 
 Admin chatbot settings note, 2026-09-13: `/admin/chatbot/settings` must support
 DB-backed clients that do not have a legacy `.data/tenants.json` entry. Settings
@@ -191,11 +195,11 @@ Current backlog classification:
   `docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md`. It tracks 52
   contractual requirements separately from the technical backlog. Current
   contract blockers are tenant/channel/configuration/evidence heavy:
-  Instagram/Facebook/Webchat activation, CRA Utility template/campaign smoke,
-  opt-out proof, report/export/billing package, and acceptance evidence for
-  SLA/support/training/LGPD/backup/Meta. Active flow visibility remains CLOSED /
-  CUSTOMER VALIDATED and CRA business hours remain CONFIGURED / OPERATIONALLY
-  VALIDATED.
+  Instagram/Facebook/Webchat activation, CRA Utility template/campaign
+  acceptance, opt-out proof, report/export/billing package, and acceptance
+  evidence for SLA/support/training/LGPD/backup/Meta. Active flow visibility
+  remains CLOSED / CUSTOMER VALIDATED and CRA business hours remain CONFIGURED /
+  OPERATIONALLY VALIDATED.
 - CRA active flow tenant visibility, 2026-09-15: CLOSED / DEPLOYED / CUSTOMER
   VALIDATED. Runtime flow works
   per owner report, but CRA tenant admins did not see the active flow in

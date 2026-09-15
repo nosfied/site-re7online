@@ -7,9 +7,10 @@ do edital, TR, proposta e esclarecimentos. O status operacional atual de
 aderencia CRA-PR fica na matriz canonica
 `docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md` e no checklist
 `docs/bids/2026/cra-pr/UTILITY_CAMPAIGN_ACCEPTANCE_CHECKLIST.md`. A frente
-atual e campanha Utility controlada; Instagram Direct, Facebook Messenger e
-Website/Webchat seguem contratados, mas customer-deferred / delivery window
-pending.
+atual e aceite contratual da campanha Utility controlada: readiness audit
+fechado, copia CRA aprovada ainda pendente, sem submissao Meta e sem envio real.
+Instagram Direct, Facebook Messenger e Website/Webchat seguem contratados, mas
+customer-deferred / delivery window pending.
 
 ## Resumo Do Edital
 

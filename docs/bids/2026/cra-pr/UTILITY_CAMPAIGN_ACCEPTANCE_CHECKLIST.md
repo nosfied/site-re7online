@@ -1,7 +1,9 @@
 # CRA-PR Utility Campaign Acceptance Checklist
 
-Status: LOCAL / CONTROLLED CAMPAIGN READINESS. This document does not authorize
-real outbound traffic.
+Status: LOCAL / CONTRACT ACCEPTANCE OPEN. The readiness audit is closed, but
+contract acceptance still depends on approved CRA copy, Meta approval,
+controlled recipient approval and evidence capture. This document does not
+authorize real outbound traffic.
 
 Last updated: 2026-09-15.
 
@@ -62,6 +64,88 @@ campaign must remain unsent.
 | Billing | Delivered/read Utility campaign outside 24h creates one billable event; read replay does not bill again | TESTED LOCALLY |
 | Reports/export | CSV/monthly evidence available; PDF/equivalent acceptance pack still required | PRODUCT SUPPORTED / NEEDS CRA SAMPLE |
 
+## Template Pipeline Map
+
+Audited on 2026-09-15 against the current canonical checkout.
+
+1. Tenant user creates a template request in `/app/templates`; backend route
+   `/app/templates/request` validates content, language, variables, category
+   policy and duplicate/open request conflicts.
+2. Internal/admin review happens through `/admin/templates/requests`, with edit,
+   approve, reject/cancel and audit events.
+3. Meta submission is admin-only through
+   `/admin/templates/requests/:id/submit`; it resolves tenant Meta credentials,
+   validates local template format and stores safe provider diagnostics only.
+4. Status follow-up uses template sync routes and provider status normalization.
+5. Approved, locally enabled Utility templates become eligible for campaign
+   draft/import and send paths.
+6. Campaign CSV preview/import validates phone normalization, duplicates,
+   existing campaign seed, missing variables, provisional/excluded contacts and
+   active opt-out before a draft can be sent.
+7. Send/test-send/schedule/resume paths re-check template availability, category
+   policy, recipient eligibility and usage controls before Meta outbound.
+8. Evidence surfaces are active-message billing report/CSV, Meta usage
+   summary/report/CSV, campaign export and event ledger records.
+
+## CRA Template Configuration Plan
+
+No approved CRA customer copy was found in the repository or production snapshot.
+Do not invent final copy. Prepare a fillable Utility template request only after
+CRA/owner supplies:
+
+- template purpose and official wording;
+- template name slug and language, expected `pt_BR`;
+- variables and example values for each placeholder;
+- intended recipient group and exact controlled count;
+- confirmation that the message is Utility/institutional, not Marketing;
+- approval of the expected send window and cost exposure.
+
+The first controlled template should remain department/institutional and avoid
+promotional wording. Any media/link attachment must be reviewed against Meta
+policy before submission.
+
+## Controlled Recipient Plan
+
+Use only 2 to 5 owner-authorized recipients:
+
+- RE7 internal test numbers explicitly approved for this CRA acceptance smoke;
+  or
+- CRA internal numbers explicitly approved by CRA/owner for the test.
+
+The list must be stored only as operational test input, masked in reports, and
+must not be expanded into a broad campaign. The selected recipient should have
+no open 24h service window when the billing smoke is intended to prove active
+Utility billing; verify `lastInboundAt` is null or older than 24h before the real
+send.
+
+## Pre-Send Gates
+
+- Approved CRA copy: pending.
+- Meta template approval: pending.
+- Recipient list approval: pending.
+- Opt-out precheck: required through preview/import and active opt-out registry.
+- 24h window precheck: required per recipient before real send; avoid using a
+  recent inbound/open service window for billing evidence.
+- Cost preview: required with template category, eligible count, blocked count,
+  window classification and current local rate-card assumptions. Do not invent
+  Meta fees; local preview is operational evidence, not Meta invoice.
+- Owner approval: required for template, recipients, window, campaign name,
+  expected cost exposure and exact number of messages.
+
+## Evidence Capture Plan
+
+Capture and redact:
+
+- campaign id and template id/name/category/language;
+- masked recipient list and eligibility/blocked summary;
+- opt-out block event, when applicable;
+- send timestamp, provider message id and Meta status history;
+- accepted/sent/delivered/read/failed/rejected counts;
+- 24h window classification used for billing;
+- active-message billing event reference, if delivered/read outside 24h;
+- monthly active-message report/CSV and Meta usage report/CSV;
+- final acceptance note tying evidence to the contract item.
+
 ## Required Evidence Sequence
 
 1. Create or request the CRA Utility template.
@@ -87,7 +171,10 @@ confirms assets, site access and delivery window.
 
 ```text
 CRA-PR UTILITY CAMPAIGN:
-LOCAL / CONTROLLED CAMPAIGN READINESS
+LOCAL / CONTRACT ACCEPTANCE OPEN
+
+UTILITY READINESS AUDIT:
+CLOSED
 
 REAL SEND:
 NOT EXECUTED
@@ -98,6 +185,24 @@ REQUIRED
 TEMPLATE:
 PENDING
 
+CRA APPROVED COPY:
+NOT FOUND / CUSTOMER INPUT REQUIRED
+
 RECIPIENT COUNT:
 0 APPROVED FOR REAL SEND
 ```
+
+## Local Test Gate - 2026-09-15
+
+Safe local database target used for DB-backed validation:
+`postgresql://re7test:****@127.0.0.1:5432/re7_cra_contract_test2`.
+Production database was not used.
+
+- Prisma migrations: 58/58 applied to the local test database.
+- Focused DB-backed campaign tests:
+  `campaignRecipientImport.test.ts` and `campaignRunner.test.ts` passed 5/5.
+- Billing/preview/lifecycle unit tests passed 5/5.
+- Broader `campaignsFeatureRoutes.test.ts` passed 111/112; the remaining
+  timeout is `meta inbound clears active chatbot runtime when persisted flow is
+  inactive`, unrelated to the Utility template/campaign acceptance path and not
+  a reason to send a real campaign.

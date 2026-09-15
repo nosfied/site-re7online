@@ -136,24 +136,31 @@ WATCH / EXTERNAL OPERATIONS:
    `****5328`; material `baileysAuthState.v1` aprovado esta configurado. Nao
    limpar, desconectar, resetar, trocar numero/WABA ou reexecutar onboarding sem
    diagnostico e autorizacao explicita do owner.
-2. CRA-PR contractual readiness: CANONICAL MATRIX CREATED / CONTRACT GAPS
-   TRACKED OUTSIDE RUNTIME P1 UNLESS CODE GAP IS PROVEN. A matriz canonica
+2. CRA-PR contractual readiness: UTILITY READINESS AUDIT CLOSED / CONTRACT
+   ACCEPTANCE OPEN / CONTRACT GAPS TRACKED OUTSIDE RUNTIME P1 UNLESS CODE GAP
+   IS PROVEN. A matriz canonica
    `docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md` mapeia 52 requisitos
    do Contrato/TR contra produto, configuracao CRA e evidencia de producao.
    Nao reabrir CRA active flow visibility nem CRA business hours: ambos estao
    fechados, respectivamente CUSTOMER VALIDATED e CONFIGURED / OPERATIONALLY
-   VALIDATED. Atualizacao de 2026-09-15: a frente ativa e preparar campanha
-   Utility controlada; Instagram Direct, Facebook Messenger e Website/Webchat
-   seguem contratados, mas estao CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING e
-   nao bloqueiam esta fase. Snapshot somente leitura CRA: Meta/WhatsApp
-   configurado, `campaigns=true`, `templates=true`, 0 templates, 0 pedidos de
-   template, 0 campanhas, 0 eventos de billing/opt-out de campanha. Checklist
-   canonico criado em
+   VALIDATED. Atualizacao de 2026-09-15: a frente ativa e aceite contratual da
+   campanha Utility controlada; a copia CRA aprovada ainda nao foi encontrada,
+   portanto nao ha autorizacao para submissao Meta nem envio real. Instagram
+   Direct, Facebook Messenger e Website/Webchat seguem contratados, mas estao
+   CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING e nao bloqueiam esta fase.
+   Snapshot somente leitura CRA: Meta/WhatsApp configurado, `campaigns=true`,
+   `templates=true`, 0 templates, 0 pedidos de template, 0 campanhas, 0 eventos
+   de billing/opt-out de campanha. Checklist canonico atualizado em
    `docs/bids/2026/cra-pr/UTILITY_CAMPAIGN_ACCEPTANCE_CHECKLIST.md`.
-   Proibido envio Meta real sem aprovacao explicita do owner cobrindo template,
-   destinatarios, janela, custo esperado, nome da campanha e quantidade de
-   mensagens. Ordem atual: Utility/campaign, opt-out, relatorios/exportacoes/
-   billing, acceptance pack; canais adiados so reabrem com janela do cliente.
+   Proibido submeter template Meta ou envio Meta real sem copia CRA aprovada e
+   aprovacao explicita do owner cobrindo template, destinatarios, janela, custo
+   esperado, nome da campanha e quantidade de mensagens. Gate local de DB em
+   `re7_cra_contract_test2`: migrations 58/58, campanha/import/runner 5/5 PASS,
+   billing/preview/lifecycle 5/5 PASS; suite ampla `campaignsFeatureRoutes`
+   111/112 PASS com timeout em runtime de chatbot inativo, fora da frente
+   Utility/campaign. Ordem atual: Utility/campaign acceptance, opt-out,
+   relatorios/exportacoes/billing, acceptance pack; canais adiados so reabrem
+   com janela do cliente.
    Produto gap declarado na matriz: waiting-on-customer 1h so deve virar
    implementacao se confirmado como obrigacao contratual.
 
