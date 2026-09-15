@@ -206,6 +206,12 @@ Current backlog classification:
   but the immediate preflight stopped before Meta because `demo-converta` has
   `Atendimento Geral` inactive and no active default operational
   `Atendimento Geral` + `Fila Geral` pair. Meta calls for B in that attempt: 0.
+  Demo operational-default follow-up on 2026-09-15 is CONFIG PENDING / OWNER
+  GATE: canonical runtime resolves an active `Atendimento Geral` plus
+  `Fila Geral`; Demo already has department `cmsiwk1o100014sdzl5cqd2ki` and
+  queue `cmsiyb2k200n94sdpu5khkee0`, but the department is inactive. Proposed
+  repair is reactivation of that existing department only, with no code change,
+  no Meta send and no campaign retry before approval.
   Opt-out E2E and campaign reports/export/billing evidence remain open until
   separately exercised.
 - Meta pricing source of truth / FinOps hardening is P2 generic product backlog.

@@ -276,3 +276,22 @@ Result:
 - CRA data used: no;
 - required next step: separate owner-approved config-only repair of Demo
   operational default, then a new controlled B-only campaign if still desired.
+
+## Demo Operational Default Owner Gate - 2026-09-15
+
+Read-only production audit determined the correct Demo operational default
+should reuse existing tenant data:
+
+- canonical source: `ensureDefaultOperationalDepartmentAndQueue`, which resolves
+  active `Atendimento Geral` / `atendimento-geral` plus `Fila Geral`;
+- existing department: `cmsiwk1o100014sdzl5cqd2ki` (`Atendimento Geral`,
+  `atendimento-geral`);
+- existing queue: `cmsiyb2k200n94sdpu5khkee0` (`Fila Geral`), same tenant and
+  under that department;
+- current blocker: department is inactive;
+- proposed config mutation: reactivate that existing department only;
+- not recommended: picking a SECULT/CRA thematic department as operational
+  default or creating duplicate `Atendimento Geral` / `Fila Geral`;
+- status: CONFIG PENDING / OWNER GATE;
+- B: NOT ATTEMPTED;
+- Meta send: NO.

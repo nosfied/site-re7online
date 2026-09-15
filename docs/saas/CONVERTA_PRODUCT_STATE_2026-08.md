@@ -235,7 +235,13 @@ tier 0-250,000, rate R$ 0,0350/message. Recipient B remains NOT ATTEMPTED:
 owner authorized B-only on 2026-09-15, but immediate preflight stopped before
 Meta because `demo-converta` lacks an active default operational
 `Atendimento Geral` + `Fila Geral` pair; the existing `Atendimento Geral` is
-inactive. Expected Meta provider cost remains R$ 0,0350 if later delivered; no
+inactive. Follow-up read-only Demo operational-default audit on 2026-09-15
+prepared but did not execute the config-only owner gate: reuse the existing
+department `cmsiwk1o100014sdzl5cqd2ki` (`Atendimento Geral`,
+`atendimento-geral`) and existing queue `cmsiyb2k200n94sdpu5khkee0`
+(`Fila Geral`) by reactivating the department after explicit approval. No Meta
+send, campaign retry or CRA config/data mutation is part of that gate. Expected
+Meta provider cost remains R$ 0,0350 if later delivered; no
 CRA invoice amount is claimed. Generic Meta pricing source-of-truth
 implementation moved to P2 FinOps hardening. Opt-out E2E and
 report/export/billing evidence remain separate open gates. See

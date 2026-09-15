@@ -293,6 +293,14 @@ risk, but ISSUE for operational default. `demo-converta` has `Atendimento Geral`
 inactive and no active default operational `Atendimento Geral` + `Fila Geral`
 pair. No Meta call was made for B.
 
+Demo operational default proposal, 2026-09-15: CONFIG PENDING / OWNER GATE. The
+valid existing candidate is `Atendimento Geral`
+(`cmsiwk1o100014sdzl5cqd2ki`) + `Fila Geral`
+(`cmsiyb2k200n94sdpu5khkee0`); queue exists under the same Demo tenant, but the
+department is inactive. Proposed fix is config-only reactivation of that existing
+department, with owner approval required before mutation. B remains NOT
+ATTEMPTED.
+
 ## Demo Phase C Controlled Utility Gate - 2026-09-15
 
 No real send executed.

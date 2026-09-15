@@ -305,6 +305,17 @@ terminal `failed` and cannot be resumed (`failed -> sending` is invalid). Next
 safe path is a separate owner-approved config-only repair of Demo operational
 default, then a new controlled B-only campaign. Meta calls for B: 0.
 
+Demo operational default owner gate, 2026-09-15: read-only production audit
+confirmed the canonical runtime mechanism is structural, not a
+`TenantOperationalConfig.config.defaultDepartmentId/defaultQueueId` pointer:
+`ensureDefaultOperationalDepartmentAndQueue` resolves an active department named
+`Atendimento Geral` / slug `atendimento-geral` and its `Fila Geral`. Existing
+Demo candidate `cmsiwk1o100014sdzl5cqd2ki` (`Atendimento Geral`) has existing
+queue `cmsiyb2k200n94sdpu5khkee0` (`Fila Geral`) and an active member, but the
+department is inactive. Proposed mutation, not executed: reactivate that
+existing department only. No Meta send, no campaign retry and no CRA data/config
+impact.
+
 ### Phase B Owner Gate Package
 
 ```text

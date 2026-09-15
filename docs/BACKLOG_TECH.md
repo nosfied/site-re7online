@@ -172,6 +172,17 @@ ACTIVE P1:
    campanha original nao pode ser retomada; caminho correto seria nova campanha
    controlada B-only depois de reparo config-only do default operacional Demo.
    Meta calls para B nesta tentativa: 0. Auditoria de
+   default operacional Demo em 2026-09-15 concluiu CONFIG PENDING / OWNER GATE:
+   o mecanismo canonico existente nao usa `defaultDepartmentId/defaultQueueId`;
+   ele resolve por `Atendimento Geral` ativo + `Fila Geral` em
+   `ensureDefaultOperationalDepartmentAndQueue`. O Demo ja possui o departamento
+   `cmsiwk1o100014sdzl5cqd2ki` (`Atendimento Geral`,
+   `atendimento-geral`) com a fila `cmsiyb2k200n94sdpu5khkee0`
+   (`Fila Geral`) e membro ativo, mas o departamento esta inativo. Proposta
+   preparada e nao executada: reativar esse departamento existente; nao criar
+   setor/fila novo, nao escolher setor tematico SECULT/CRA e nao enviar Meta.
+   Owner approval obrigatorio antes da mutacao DB config-only.
+   Auditoria de
    unidade de billing em 2026-09-15 confirmou que `R$ 0,32` veio da premissa
    interna central `R$ 3.200,00 / 10.000 mensagens ativas`, nao de Meta, nao de
    override de tenant e nao de proposta final CRA encontrada. O ledger de A esta
