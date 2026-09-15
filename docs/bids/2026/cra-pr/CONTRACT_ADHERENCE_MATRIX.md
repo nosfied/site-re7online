@@ -275,9 +275,13 @@ cost, campaign name and number of messages.
   ISSUE FOUND / STOP. Campaign `d9874c03-10e8-4061-a92e-6caa7b3001c3` accepted
   one Meta Utility template for `****9614`, then failed with
   `default_operational_department_missing` before OutboundMessage, ledger and
-  report persistence; `****6787` was not sent. This does not elevate campaign,
-  delivery, billing or reporting rows to closed evidence. Separate repair gate
-  required before retry.
+  report persistence; `****6787` was not sent. Recipient A reconciliation audit
+  on 2026-09-15 found a safe constrained repair path pending owner approval:
+  reconstruct only A's local outbound from exact Meta evidence, replay delivered
+  billing idempotently, set aggregate `sentCount=1`, and keep campaign
+  `status=failed`. This was not applied and does not elevate billing/reporting
+  rows to closed evidence. Separate owner gate required before any repair or
+  remaining send.
 - Residual CRA contract readiness must now be tracked through this matrix.
 - The remaining highest-risk gaps are contractual/configuration/evidence gaps,
   not a reason to reopen already closed flow or business-hours fronts.

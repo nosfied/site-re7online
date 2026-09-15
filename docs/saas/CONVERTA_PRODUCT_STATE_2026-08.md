@@ -217,8 +217,13 @@ and record orphan status events without billing. The generic repair was deployed
 on 2026-09-15 with an FF-only production update to `b8c8f616`, reloading only
 `re7-whatsapp-agent`; health/db, migrations status and non-destructive bundle
 smoke passed. No new real send occurred; `****9614` is a hard no-resend and
-`****6787` requires a fresh owner gate. Recipient A reconciliation, recipient B
-send, opt-out E2E and report/export/billing evidence remain separate open gates.
+`****6787` requires a fresh owner gate. Recipient A reconciliation audit on
+2026-09-15 found enough evidence for a constrained owner-approved repair only:
+reconstruct exactly one local outbound for A, create at most one idempotent
+delivered Utility billing event from the recovered Meta webhook, set
+`sentCount=1`, and preserve campaign `status=failed`; this was not applied.
+Recipient B send, opt-out E2E and report/export/billing evidence remain
+separate open gates.
 
 ## Modelos Meta
 

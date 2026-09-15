@@ -240,6 +240,10 @@ must not be retried automatically.
   4/4 PASS, backend build PASS, production non-destructive smoke PASS.
 - Production delivery: deployed on 2026-09-15 at `b8c8f616` by FF-only update,
   no migration, no db push, reload only `re7-whatsapp-agent`.
+- Recipient A reconciliation audit: SAFE CONSTRAINED REPAIR POSSIBLE / OWNER
+  APPROVAL REQUIRED. Evidence supports only reconstructing A's local outbound,
+  replaying delivered Utility billing idempotently, setting `sentCount=1`, and
+  keeping campaign `status=failed`; no repair has been applied.
 
 Acceptance remains open until a new explicit owner send gate authorizes any
 remaining real outbound and valid campaign persistence/report/billing evidence

@@ -482,8 +482,12 @@ Sem envio real.
   `default_operational_department_missing` antes de persistir OutboundMessage,
   ledger e relatorio; `****6787` nao foi enviado. Campanha Demo
   `d9874c03-10e8-4061-a92e-6caa7b3001c3` ficou `failed`. Evidencia real:
-  accepted=1, delivered/read=0 observado, billable=0, total R$ 0,00. Retry
-  bloqueado ate gate separado de reparo.
+  accepted=1, delivered webhook recuperado=1, read=0 observado, ledger local
+  billable=0, total local R$ 0,00. Auditoria de Recipient A em 2026-09-15
+  documentou reparo restrito possivel somente com aprovacao do owner: criar um
+  OutboundMessage local para A com o Meta id recuperado, aplicar billing
+  delivered idempotente, ajustar `sentCount=1` e preservar `status=failed`.
+  Nada foi aplicado; retry bloqueado ate gate separado de reparo.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.

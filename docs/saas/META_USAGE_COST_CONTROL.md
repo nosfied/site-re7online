@@ -199,6 +199,14 @@ evento entregue sintetico nem billing retroativo sem reconciliacao aprovada.
 `****6787` nao foi enviado. O custo esperado R$ 0,64 nao foi atingido porque o
 run falhou antes de duas mensagens entregues/persistidas pelo pipeline local.
 
+Recipient A reconciliation audit, 2026-09-15: read-only production evidence is
+sufficient to propose a constrained repair for `****9614` only, pending explicit
+owner approval. The delivered webhook is billable Utility/PMP, the send occurred
+outside 24h, no active opt-out was found, and no existing local outbound or
+`billing.active_message.delivered` duplicate exists. If approved, billing must be
+created only through the existing idempotent active-message delivery rule. Until
+then, no retroactive billing event has been written.
+
 ## Limites e proximos passos
 
 - Nao ha conciliacao financeira definitiva automatizada.

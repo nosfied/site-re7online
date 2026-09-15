@@ -58,6 +58,9 @@ Phase C send result summary:
 - local OutboundMessage/ledger/report evidence: missing;
 - local billable ledger evidence: 0;
 - total contractual evidence: R$ 0,00;
-- generic repair: local fix tested, not deployed, no retry and no further real
-  outbound;
+- generic repair: tested and deployed on 2026-09-15 by FF-only backend update,
+  no retry and no further real outbound;
+- Recipient A reconciliation audit: safe constrained repair proposal documented,
+  owner approval required, no production mutation applied;
 - evidence: `PHASE_C_CONTROLLED_UTILITY_RESULT_2026-09-15.md`.
+- reconciliation audit: `RECIPIENT_A_RECONCILIATION_AUDIT_2026-09-15.md`.

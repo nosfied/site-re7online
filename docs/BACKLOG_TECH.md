@@ -152,10 +152,16 @@ ACTIVE P1:
    web worker preservados, health/db PASS. Smoke nao destrutivo no bundle
    implantado confirmou preflight antes de send, marker accepted,
    reconciliation guard e orphan status path. Nao houve novo envio real; A nao
-   deve ser reenviado e B requer novo owner gate. RECIPIENT A RECONCILIATION
-   permanece OPEN / OWNER DECISION REQUIRED; RECIPIENT B SEND permanece PENDING
-   NEW OWNER GATE; OPT-OUT E2E e REPORTS/EXPORT/BILLING permanecem pendentes
-   ate nova evidencia valida de campanha.
+   deve ser reenviado e B requer novo owner gate. Auditoria manual de Recipient
+   A em 2026-09-15 concluiu SAFE CONSTRAINED RECONCILIATION POSSIBLE / OWNER
+   APPROVAL REQUIRED: ha evidencia de aceite, entrega, janela fechada, opt-out
+   ausente e ausencia de OutboundMessage/billing duplicados; a proposta e
+   reconstruir somente A, gerar billing canonico idempotente pelo delivered
+   recuperado e ajustar `sentCount=1` preservando `status=failed`. Nada foi
+   mutado em producao. RECIPIENT A RECONCILIATION permanece OPEN / OWNER
+   DECISION REQUIRED; RECIPIENT B SEND permanece PENDING NEW OWNER GATE;
+   OPT-OUT E2E e REPORTS/EXPORT/BILLING permanecem pendentes ate nova evidencia
+   valida de campanha.
 
 WATCH / EXTERNAL OPERATIONS:
 
@@ -230,9 +236,10 @@ WATCH / EXTERNAL OPERATIONS:
    template `data_exame` para `****9614`, mas o runner falhou imediatamente com
    `default_operational_department_missing` antes de persistir OutboundMessage,
    ledger e report; `****6787` nao foi enviado. Resultado real: accepted=1,
-   delivered/read=0 observado, billable=0, total contratual evidenciado R$ 0,00.
-   Testes locais de billing/idempotencia/lifecycle 10/10 PASS, mas sao evidencia
-   de teste. Proibido retry sem owner repair gate.
+   delivered webhook recuperado=1, read=0 observado, ledger local billable=0,
+   total local evidenciado R$ 0,00. Testes locais de
+   billing/idempotencia/lifecycle 10/10 PASS, mas sao evidencia de teste.
+   Proibido retry sem owner repair gate.
 
 RECENTLY CLOSED:
 

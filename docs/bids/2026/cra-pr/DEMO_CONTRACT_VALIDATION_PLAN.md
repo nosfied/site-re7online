@@ -436,6 +436,11 @@ Evidence file:
 Next required gate: a fresh explicit owner send gate before any controlled Meta
 send. `****9614` must not be resent; `****6787` remains unattempted. Manual
 reconciliation for A remains an owner decision, not an automatic deploy action.
+Read-only audit on 2026-09-15 produced an exact constrained repair proposal for
+A only: create one local outbound from the recovered Meta id/webhooks, replay
+delivered Utility billing through existing idempotent logic, update
+`sentCount=1`, and preserve campaign `status=failed`. No production
+reconciliation was applied.
 
 ### Guided Builder - Bot Inactivity Policy UX Backlog
 

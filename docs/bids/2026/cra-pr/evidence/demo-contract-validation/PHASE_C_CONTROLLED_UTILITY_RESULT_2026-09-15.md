@@ -175,3 +175,24 @@ was reloaded; frontend and `re7-whatsapp-web-worker` were preserved.
 - CRA data used: no
 - Isolation: Demo tenant only
 - Real send scope expansion: no
+
+## Recipient A Reconciliation Audit
+
+Read-only audit on 2026-09-15 confirmed enough evidence for a constrained
+owner-approved repair for `****9614` only:
+
+- exact Meta message id recovered;
+- Meta `sent` and `delivered` webhooks recovered;
+- owner-confirmed receipt preserved;
+- last inbound was `2026-09-10T14:37:04Z`, so the send was outside 24h;
+- no active opt-out was found;
+- no local OutboundMessage or delivered billing event exists for this Meta id.
+
+Proposed repair is not applied. If explicitly approved, repair must reconstruct
+one local outbound, replay delivered Utility billing through existing idempotent
+logic, set campaign `sentCount=1`, preserve campaign `status=failed`, and add a
+manual reconciliation audit event. Do not resend `****9614`, do not send
+`****6787`, do not create read history, and do not mark the campaign completed.
+
+Detailed audit:
+`RECIPIENT_A_RECONCILIATION_AUDIT_2026-09-15.md`.
