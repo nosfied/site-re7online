@@ -385,6 +385,47 @@ immediately before any future send.
 Evidence file:
 `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_C_CONTROLLED_UTILITY_GATE_2026-09-15.md`.
 
+## Phase C Controlled Utility Send Result - 2026-09-15
+
+Status: OWNER AUTHORIZED / PARTIAL REAL META ACCEPTANCE / PRODUCT ISSUE FOUND /
+STOP.
+
+Campaign id: `d9874c03-10e8-4061-a92e-6caa7b3001c3`.
+
+The owner explicitly authorized exactly 2 `data_exame` Utility messages through
+META_CLOUD to the two prepared Demo/RE7 recipients. Immediate pre-send recheck
+passed: Demo active, Meta configured, template approved, both recipients outside
+24h, no active opt-out, final unique recipients 2.
+
+Actual execution:
+
+- first recipient `****9614`: Meta Cloud accepted the template request;
+- runner then failed with `default_operational_department_missing`;
+- no OutboundMessage row was persisted for the accepted Meta send;
+- no billing ledger row was created;
+- second recipient `****6787` was not sent;
+- campaign status became `failed`, `sentCount=0`, `blockedCount=0`.
+
+Billing/report result:
+
+- delivered/read observed: 0;
+- billable real evidence: 0;
+- contractual total evidenced: R$ 0,00;
+- report/export validation: ISSUE, because the campaign has no persisted
+  OutboundMessage/ledger rows.
+
+Blocking finding: Demo has departments/queues, but no
+`defaultDepartmentId/defaultQueueId` in `TenantOperationalConfig`. The campaign
+runner did not block this before external Meta mutation and failed during
+conversation bootstrap after the first Meta acceptance. No retry, config repair
+or code fix was executed in this phase.
+
+Evidence file:
+`docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_C_CONTROLLED_UTILITY_RESULT_2026-09-15.md`.
+
+Next required gate: owner-approved repair for campaign send preflight/persistence
+ordering before retrying any controlled Meta send.
+
 ### Guided Builder - Bot Inactivity Policy UX Backlog
 
 New backlog item opened: **P2 / UX + PRODUCT CLARIFICATION / OPEN**.

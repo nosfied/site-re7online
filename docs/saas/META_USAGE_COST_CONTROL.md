@@ -188,6 +188,13 @@ de 24h, sem opt-out ativo encontrado, e o envio de 2 mensagens manteria a mesma
 referencia de R$ 0,64. REAL SEND = NO ate aprovacao explicita do envio exato e
 nova checagem 24h/opt-out imediatamente antes do disparo.
 
+Demo Phase C controlled send, 2026-09-15: o envio real autorizado parou com
+evidencia parcial. A Meta aceitou 1 template Utility `data_exame` para
+`****9614`, mas nao houve delivery/read observado, OutboundMessage persistido
+nem ledger de billing; `****6787` nao foi enviado. Pela regra contratual, o
+total evidenciado neste run e R$ 0,00. O custo esperado R$ 0,64 nao foi
+atingido porque o run falhou antes de duas mensagens entregues.
+
 ## Limites e proximos passos
 
 - Nao ha conciliacao financeira definitiva automatizada.

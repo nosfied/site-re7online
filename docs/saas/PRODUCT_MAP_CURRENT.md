@@ -225,6 +225,12 @@ Current backlog classification:
   outside 24h, no active opt-out found, final unique recipients 2 and reference
   cost R$ 0,64. This does not close CRA-specific acceptance and does not execute
   Meta outbound.
+- CRA-PR Demo Phase C controlled Utility send, 2026-09-15: PARTIAL REAL META
+  ACCEPTANCE / PRODUCT ISSUE FOUND / STOP. Meta accepted one `data_exame`
+  template for `****9614`, then the runner failed with
+  `default_operational_department_missing` before OutboundMessage/ledger/report
+  persistence; `****6787` was not sent. Retry requires a separate owner-approved
+  repair gate.
 - CRA active flow tenant visibility, 2026-09-15: CLOSED / DEPLOYED / CUSTOMER
   VALIDATED. Runtime flow works
   per owner report, but CRA tenant admins did not see the active flow in

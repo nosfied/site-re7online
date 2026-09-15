@@ -268,3 +268,24 @@ No real send executed.
 Before any real send, re-run 24h and opt-out checks and capture owner approval
 for template, recipients, message count, window, campaign name and expected
 cost.
+
+## Demo Phase C Controlled Utility Send Result - 2026-09-15
+
+Real send was attempted under explicit owner authorization, but did not complete
+the 2-message scope.
+
+- Campaign: `d9874c03-10e8-4061-a92e-6caa7b3001c3`.
+- Requested: 2.
+- Attempted against Meta: 1.
+- Accepted by Meta: 1, recipient `****9614`.
+- Not attempted: 1, recipient `****6787`.
+- Runner failure: `default_operational_department_missing`.
+- Campaign DB status: `failed`, `sentCount=0`, `blockedCount=0`.
+- Persisted OutboundMessage rows for campaign: 0.
+- Billing ledger rows for campaign: 0.
+- Delivered/read observed: 0.
+- Contractual billable evidence: 0, R$ 0,00.
+- Report/export evidence: ISSUE, blocked by missing persisted outbound/ledger.
+
+Stop condition: no retry, no replacement recipient and no configuration/code
+repair in this phase. Separate owner gate is required.

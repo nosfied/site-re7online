@@ -119,7 +119,20 @@ ACTIVE P0:
 
 ACTIVE P1:
 
-- NONE.
+1. Demo controlled Utility campaign send persistence/preflight gap: OPEN /
+   OWNER REPAIR GATE REQUIRED. Em 2026-09-15, Phase C autorizada para exatamente
+   2 mensagens Utility `data_exame` via META_CLOUD no `demo-converta` parou com
+   bug operacional. Prechecks passaram, a primeira chamada Meta para `****9614`
+   foi aceita, mas o runner falhou em seguida com
+   `default_operational_department_missing` antes de persistir OutboundMessage,
+   ledger e report; `****6787` nao foi enviado. Campanha
+   `d9874c03-10e8-4061-a92e-6caa7b3001c3` ficou `failed`, `sentCount=0`,
+   `blockedCount=0`. Causa configuracional/runtime observada: Demo tem
+   departamentos/filas, mas `TenantOperationalConfig` nao possui
+   `defaultDepartmentId/defaultQueueId`; a ausencia nao foi bloqueada antes da
+   mutacao externa Meta. Nao corrigir nem reenviar sem gate separado. Frente
+   provavel: preflight de defaults antes de Meta send e/ou ordem atomica de
+   persistencia para accepted Meta message.
 
 WATCH / EXTERNAL OPERATIONS:
 
@@ -188,6 +201,15 @@ WATCH / EXTERNAL OPERATIONS:
    historico duplicado de provider. Preview: 2 mensagens META_CLOUD, custo
    referencial R$ 0,64. REAL SEND = NO; parar no owner real-send hard gate ate
    aprovacao explicita deste envio exato apos preview final.
+   Phase C controlled send, 2026-09-15: OWNER AUTHORIZED / PARTIAL REAL META
+   ACCEPTANCE / PRODUCT ISSUE FOUND / STOP. Campanha
+   `d9874c03-10e8-4061-a92e-6caa7b3001c3` criada no Demo. Meta Cloud aceitou 1
+   template `data_exame` para `****9614`, mas o runner falhou imediatamente com
+   `default_operational_department_missing` antes de persistir OutboundMessage,
+   ledger e report; `****6787` nao foi enviado. Resultado real: accepted=1,
+   delivered/read=0 observado, billable=0, total contratual evidenciado R$ 0,00.
+   Testes locais de billing/idempotencia/lifecycle 10/10 PASS, mas sao evidencia
+   de teste. Proibido retry sem owner repair gate.
 
 RECENTLY CLOSED:
 

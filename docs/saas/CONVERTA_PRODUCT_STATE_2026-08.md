@@ -202,6 +202,13 @@ CLARIFICATION / OPEN: future Guided UI must explain `resetAfterMinutes` and
 `inactivityPolicy.timeoutMinutes/action=HANDOFF` as independent business
 choices, after auditing real production values/defaults. This remains separate
 from HUMAN auto-close, which is not required.
+Phase C controlled Utility send, 2026-09-15: owner authorized exactly 2 Demo
+Utility messages, but execution produced PRODUCT ISSUE FOUND / STOP. Meta
+accepted 1 `data_exame` template for `****9614`; the campaign runner then
+failed with `default_operational_department_missing` before persisting
+OutboundMessage, billing ledger or report rows, and `****6787` was not sent.
+Real evidence: accepted=1, delivered/read=0 observed, billable=0, total R$
+0,00. Separate repair gate required before retry.
 
 ## Modelos Meta
 

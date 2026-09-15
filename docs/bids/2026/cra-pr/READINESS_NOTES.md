@@ -469,6 +469,13 @@ Sem envio real.
   historico duplicado de provider mas dedupe reduz a um alvo final; final unique
   targets = 2; custo referencial R$ 0,64. REAL SEND = NO ate aprovacao
   explicita deste envio exato apos preview final.
+- Phase C send autorizado em 2026-09-15: execucao real parou com ISSUE. Meta
+  aceitou 1 Utility `data_exame` para `****9614`, mas o runner falhou com
+  `default_operational_department_missing` antes de persistir OutboundMessage,
+  ledger e relatorio; `****6787` nao foi enviado. Campanha Demo
+  `d9874c03-10e8-4061-a92e-6caa7b3001c3` ficou `failed`. Evidencia real:
+  accepted=1, delivered/read=0 observado, billable=0, total R$ 0,00. Retry
+  bloqueado ate gate separado de reparo.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.

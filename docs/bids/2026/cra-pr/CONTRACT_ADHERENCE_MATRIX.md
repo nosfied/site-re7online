@@ -258,6 +258,13 @@ cost, campaign name and number of messages.
   both recipients outside 24h and no active opt-out found. Final unique targets:
   2. Expected reference cost: R$ 0,64. Evidence remains gate-level until real
   outbound is explicitly approved and executed.
+- CRA Demo Phase C controlled send: PARTIAL REAL META ACCEPTANCE / PRODUCT
+  ISSUE FOUND / STOP. Campaign `d9874c03-10e8-4061-a92e-6caa7b3001c3` accepted
+  one Meta Utility template for `****9614`, then failed with
+  `default_operational_department_missing` before OutboundMessage, ledger and
+  report persistence; `****6787` was not sent. This does not elevate campaign,
+  delivery, billing or reporting rows to closed evidence. Separate repair gate
+  required before retry.
 - Residual CRA contract readiness must now be tracked through this matrix.
 - The remaining highest-risk gaps are contractual/configuration/evidence gaps,
   not a reason to reopen already closed flow or business-hours fronts.
