@@ -27,6 +27,7 @@ import {
 } from "@/lib/appClientApi";
 import { getAppErrorUxMessage } from "@/lib/appUxLabels";
 import { getAppChatbotAiMissingLabels } from "@/lib/appChatbotAiStatus";
+import { loadAppChatbotData } from "@/lib/appChatbotDataLoader";
 import { DEFAULT_NEW_CHATBOT_FLOW_ENTRY_POINT } from "@/lib/chatbotFlowCreationDefaults";
 import {
   getExistingFlowDefaultExpanded,
@@ -449,6 +450,8 @@ export default function AppChatbotPage() {
   const [savingNotificationSettings, setSavingNotificationSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [settingsLoadError, setSettingsLoadError] = useState<string | null>(null);
+  const [resourcesLoadError, setResourcesLoadError] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppAutomationSettings | null>(null);
   const [builderResources, setBuilderResources] = useState<{
     departments: ChatbotFlowBuilderDepartment[];
@@ -569,17 +572,51 @@ export default function AppChatbotPage() {
 
   const loadFlows = useCallback(
     async (activeSession: AppSession) => {
-      const [flowResponse, settingsResponse, resourcesResponse] = await Promise.all([
-        fetchAppChatbotFlows(activeSession),
-        fetchAppChatbotSettings(activeSession),
-        fetchAppChatbotResources(activeSession),
-      ]);
-      hydrateFlows(flowResponse.items);
-      setSettings(settingsResponse.settings);
-      setBuilderResources({
-        departments: resourcesResponse.departments,
-        queues: resourcesResponse.queues,
+      const result = await loadAppChatbotData(activeSession, {
+        fetchFlows: fetchAppChatbotFlows,
+        fetchSettings: fetchAppChatbotSettings,
+        fetchResources: fetchAppChatbotResources,
       });
+
+      if (result.flows) {
+        hydrateFlows(result.flows);
+      }
+      if (result.settings) {
+        setSettings(result.settings);
+        setSettingsLoadError(null);
+      } else if (result.errors.settings) {
+        const typed = result.errors.settings as AppApiError;
+        setSettings(null);
+        setSettingsLoadError(
+          getAppErrorUxMessage({
+            status: typed.status,
+            errorCode: typed.errorCode,
+            message: typed.message,
+            fallback: "Configuração de automação não carregada.",
+          })
+        );
+      }
+      if (result.resources) {
+        setBuilderResources({
+          departments: result.resources.departments,
+          queues: result.resources.queues,
+        });
+        setResourcesLoadError(null);
+      } else if (result.errors.resources) {
+        const typed = result.errors.resources as AppApiError;
+        setBuilderResources({ departments: [], queues: [] });
+        setResourcesLoadError(
+          getAppErrorUxMessage({
+            status: typed.status,
+            errorCode: typed.errorCode,
+            message: typed.message,
+            fallback: "Recursos de setores e filas não carregados.",
+          })
+        );
+      }
+      if (result.errors.flows) {
+        throw result.errors.flows;
+      }
     },
     [hydrateFlows]
   );
@@ -858,6 +895,12 @@ export default function AppChatbotPage() {
           </span>
         </div>
 
+        {settingsLoadError ? (
+          <div className="mb-4 rounded-md border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+            {settingsLoadError}
+          </div>
+        ) : null}
+
         {settings ? (
           <div className="grid min-w-0 gap-3 md:grid-cols-2">
             {[
@@ -1038,8 +1081,13 @@ export default function AppChatbotPage() {
             </div>
           </div>
         ) : (
-            <p className="text-sm text-white/70">Carregando configurações...</p>
+            <p className="text-sm text-white/70">Configuração de automação não carregada.</p>
         )}
+        {resourcesLoadError ? (
+          <div className="mt-4 rounded-md border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+            {resourcesLoadError}
+          </div>
+        ) : null}
       </section>
 
       <section className="chatbot-section rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">

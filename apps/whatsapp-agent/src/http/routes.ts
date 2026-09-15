@@ -9727,11 +9727,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
       }))) return;
       const tenants = await getTenants();
-      const tenant = tenants[client.clientKey];
-      if (!tenant) {
-        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
-        return;
-      }
+      const tenant = tenants[client.clientKey] ?? buildDbBackedTenantFallback(client);
       const resolvedAiAssistantConfig = await resolveAiAssistantConfigSettings({
         prisma,
         clientId: client.id,
@@ -10631,11 +10627,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       const tenants = await getTenants();
-      const tenant = tenants[client.clientKey];
-      if (!tenant) {
-        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
-        return;
-      }
+      const tenant = tenants[client.clientKey] ?? buildDbBackedTenantFallback(client);
       const saved = await saveHandoffLeadNotificationSettings({
         prisma,
         clientId: client.id,
@@ -29683,6 +29675,7 @@ function buildCampaignConsumptionCsv(campaign: {
 type ScopedClientRecord = {
   id: string;
   clientKey: string;
+  name: string;
   status: "ACTIVE" | "INACTIVE";
   features: Prisma.JsonValue | null;
   profile: string | null;
@@ -29694,7 +29687,7 @@ async function getScopedClientById(
 ): Promise<ScopedClientRecord | null> {
   return prisma.client.findUnique({
     where: { id: clientId },
-    select: { id: true, clientKey: true, status: true, features: true, profile: true },
+    select: { id: true, clientKey: true, name: true, status: true, features: true, profile: true },
   });
 }
 

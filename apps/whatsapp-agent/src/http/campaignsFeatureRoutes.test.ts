@@ -5659,6 +5659,114 @@ test("admin chatbot settings resolves db-only tenant without legacy tenant confi
   assert.equal(Object.prototype.hasOwnProperty.call(tenantsFile, dbOnlyClientKey), false);
 });
 
+test("app chatbot settings resolves db-only tenant and preserves flow visibility", async () => {
+  const dbOnlyClientKey = `${prefix}-db-only-app-chatbot-settings`;
+  const client = await prisma.client.create({
+    data: {
+      clientKey: dbOnlyClientKey,
+      name: "DB Only App Chatbot Tenant",
+      profile: "government",
+      features: { chatbot: true },
+    },
+    select: { id: true },
+  });
+  await prisma.tenantOperationalConfig.create({
+    data: {
+      clientId: client.id,
+      config: {
+        automationFlags: {
+          disableChatbot: false,
+          disableAiFallback: true,
+          disableIntentClassifier: true,
+          disableLegacyFlows: true,
+          disableChatbotFlowEditing: false,
+        },
+        handoffLeadNotification: {
+          enabled: true,
+          recipients: [{ id: "ops", label: "Ops", waId: "554199999999", isActive: true }],
+        },
+      },
+    },
+  });
+  const admin = await createUser({ clientId: client.id, role: "ADMIN", suffix: "db-only-app-admin" });
+  const supervisor = await createUser({ clientId: client.id, role: "SUPERVISOR", suffix: "db-only-app-supervisor" });
+  const agent = await createUser({ clientId: client.id, role: "AGENT", suffix: "db-only-app-agent" });
+  const flow = await prisma.chatbotFlow.create({
+    data: {
+      clientId: client.id,
+      name: "CRA-like active flow",
+      isActive: true,
+      entryPoint: true,
+      definition: { start: "consent", nodes: { consent: { type: "text", text: "ok" } } },
+    },
+    select: { id: true },
+  });
+
+  const settingsResponse = await request<{
+    ok: true;
+    tenantId: string;
+    settings: {
+      disableAiFallback: boolean;
+      handoffLeadNotificationEnabled: boolean;
+      handoffLeadNotificationRecipients: Array<{ waId: string }>;
+    };
+    configSource: {
+      automationFlags: string;
+      handoffLeadNotification: string;
+      aiAssistantConfig: string;
+    };
+  }>("GET", "/app/chatbot/settings", admin);
+
+  assert.equal(settingsResponse.status, 200, JSON.stringify(settingsResponse.body));
+  assert.equal(settingsResponse.body.tenantId, dbOnlyClientKey);
+  assert.equal(settingsResponse.body.settings.disableAiFallback, true);
+  assert.equal(settingsResponse.body.settings.handoffLeadNotificationEnabled, true);
+  assert.equal(settingsResponse.body.settings.handoffLeadNotificationRecipients[0]?.waId, "554199999999");
+  assert.equal(settingsResponse.body.configSource.automationFlags, "db");
+  assert.equal(settingsResponse.body.configSource.handoffLeadNotification, "db");
+  assert.equal(settingsResponse.body.configSource.aiAssistantConfig, "json_fallback");
+
+  const adminFlows = await request<{ ok: true; count: number; items: Array<{ id: string; name: string }> }>(
+    "GET",
+    "/app/chatbot/flows",
+    admin
+  );
+  assert.equal(adminFlows.status, 200, JSON.stringify(adminFlows.body));
+  assert.equal(adminFlows.body.count, 1);
+  assert.equal(adminFlows.body.items[0]?.id, flow.id);
+
+  const supervisorFlows = await request<{ ok: true; count: number; items: Array<{ id: string }> }>(
+    "GET",
+    "/app/chatbot/flows",
+    supervisor
+  );
+  assert.equal(supervisorFlows.status, 200, JSON.stringify(supervisorFlows.body));
+  assert.equal(supervisorFlows.body.items[0]?.id, flow.id);
+
+  const agentSettings = await request<ErrorPayload>("GET", "/app/chatbot/settings", agent);
+  assert.equal(agentSettings.status, 403);
+  assert.equal(getErrorCode(agentSettings.body), "forbidden");
+
+  const tenantsFile = JSON.parse(
+    await fs.readFile(path.join(tempRoot, ".data", "tenants.json"), "utf-8")
+  ) as Record<string, unknown>;
+  assert.equal(Object.prototype.hasOwnProperty.call(tenantsFile, dbOnlyClientKey), false);
+});
+
+test("app chatbot settings preserves legacy tenants.json fallback", async () => {
+  const response = await request<{
+    ok: true;
+    tenantId: string;
+    settings: { disableChatbot: boolean };
+    configSource: { automationFlags: string };
+  }>("GET", "/app/chatbot/settings", businessAdmin);
+
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  assert.equal(response.body.tenantId, `${prefix}-business`);
+  assert.equal(response.body.settings.disableChatbot, false);
+  assert.equal(response.body.configSource.automationFlags, "json_fallback");
+});
+
 test("admin onboarding manual bind supports db-only clients", async () => {
   const dbOnlyClientKey = `${prefix}-db-only-onboarding`;
   const client = await prisma.client.create({
