@@ -55,12 +55,12 @@ Phase C send result summary:
 - Meta technical webhook recovered: `sent` and `delivered`, no `read`;
 - not attempted: 1 for `****6787`;
 - runner failure: `default_operational_department_missing`;
-- local OutboundMessage/ledger/report evidence: missing;
-- local billable ledger evidence: 0;
-- total contractual evidence: R$ 0,00;
+- local OutboundMessage/ledger evidence for Recipient A: reconciled;
+- local billable delivered ledger evidence: 1 for Recipient A;
+- total reconciled contractual evidence: R$ 0,32 for Recipient A only;
 - generic repair: tested and deployed on 2026-09-15 by FF-only backend update,
   no retry and no further real outbound;
-- Recipient A reconciliation audit: safe constrained repair proposal documented,
-  owner approval required, no production mutation applied;
+- Recipient A reconciliation audit: owner-approved constrained repair applied;
+  A reconciled and never resent;
 - evidence: `PHASE_C_CONTROLLED_UTILITY_RESULT_2026-09-15.md`.
 - reconciliation audit: `RECIPIENT_A_RECONCILIATION_AUDIT_2026-09-15.md`.

@@ -195,9 +195,11 @@ Current backlog classification:
   `re7-whatsapp-agent`; health/db and non-destructive bundle smoke passed. No
   new real send occurred; `****9614` must not be resent and `****6787` needs a
   fresh owner gate. Recipient A reconciliation audit found a safe constrained
-  repair path pending explicit owner approval only; no reconciliation was
-  applied. B send, opt-out E2E and campaign reports/export/billing evidence
-  remain open until separately exercised.
+  repair path; after owner approval and backup, production reconciliation was
+  applied for A only, with one local outbound, one delivered Utility billing
+  event, `sentCount=1`, preserved `status=failed`, and no resend. B send,
+  opt-out E2E and campaign reports/export/billing evidence remain open until
+  separately exercised.
 - Watch/external operations: abandoned automation / BOT flow lifecycle local E2E validated on
   2026-09-14 in
   `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`; product

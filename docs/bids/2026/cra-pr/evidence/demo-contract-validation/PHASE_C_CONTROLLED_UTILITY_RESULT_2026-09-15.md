@@ -168,9 +168,10 @@ was reloaded; frontend and `re7-whatsapp-web-worker` were preserved.
 - Delivered webhook recovered: 1
 - Read: 0 observed
 - Failed webhook: 0 observed
-- Pending local reconciliation: 1 Meta-accepted message without OutboundMessage
-- Billable: 0
-- Non-billable in local ledger: 2 for current evidence classification
+- Recipient A local reconciliation: 1 reconciled / never resent
+- Billable delivered ledger: 1
+- Non-billable in local ledger: 1 remaining unattempted recipient for current
+  evidence classification
 - Duplicate billing: no evidence of duplication; production ledger not exercised
 - CRA data used: no
 - Isolation: Demo tenant only
@@ -188,11 +189,13 @@ owner-approved repair for `****9614` only:
 - no active opt-out was found;
 - no local OutboundMessage or delivered billing event exists for this Meta id.
 
-Proposed repair is not applied. If explicitly approved, repair must reconstruct
-one local outbound, replay delivered Utility billing through existing idempotent
-logic, set campaign `sentCount=1`, preserve campaign `status=failed`, and add a
-manual reconciliation audit event. Do not resend `****9614`, do not send
-`****6787`, do not create read history, and do not mark the campaign completed.
+Owner approved the constrained repair, and production reconciliation was applied
+after backup. The repair reconstructed one local outbound
+`1375f639-b3df-425a-987e-545d2ffcddd1`, replayed delivered Utility billing
+through existing idempotent logic, set campaign `sentCount=1`, preserved
+campaign `status=failed`, and added one manual reconciliation audit event.
+`****9614` was not resent, `****6787` was not sent, no read history was created,
+and the campaign was not marked completed.
 
 Detailed audit:
 `RECIPIENT_A_RECONCILIATION_AUDIT_2026-09-15.md`.

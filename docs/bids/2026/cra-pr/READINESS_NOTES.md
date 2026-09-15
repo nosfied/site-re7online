@@ -484,10 +484,11 @@ Sem envio real.
   `d9874c03-10e8-4061-a92e-6caa7b3001c3` ficou `failed`. Evidencia real:
   accepted=1, delivered webhook recuperado=1, read=0 observado, ledger local
   billable=0, total local R$ 0,00. Auditoria de Recipient A em 2026-09-15
-  documentou reparo restrito possivel somente com aprovacao do owner: criar um
-  OutboundMessage local para A com o Meta id recuperado, aplicar billing
-  delivered idempotente, ajustar `sentCount=1` e preservar `status=failed`.
-  Nada foi aplicado; retry bloqueado ate gate separado de reparo.
+  documentou reparo restrito possivel e o owner aprovou a reconciliacao em
+  producao: foi criado um OutboundMessage local para A com o Meta id recuperado,
+  aplicado billing delivered idempotente, ajustado `sentCount=1` e preservado
+  `status=failed`. A nao foi reenviado; B segue nao tentado; retry bloqueado
+  ate gate separado.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.

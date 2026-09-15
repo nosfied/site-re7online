@@ -1,6 +1,6 @@
 # Recipient A Manual Reconciliation Audit - 2026-09-15
 
-Status: AUDIT COMPLETE / EXACT REPAIR PROPOSED / OWNER APPROVAL REQUIRED.
+Status: RECONCILED / NEVER RESENT / RECIPIENT B NOT ATTEMPTED.
 
 Scope:
 
@@ -10,8 +10,9 @@ Scope:
 - Recipient A: `****9614`
 - Recipient B: `****6787`
 
-This audit is read-only. No production data was mutated, no resend was executed
-for Recipient A, and no send was executed for Recipient B.
+This audit started read-only. The owner later explicitly approved the constrained
+Recipient A production reconciliation. No resend was executed for Recipient A,
+and no send was executed for Recipient B.
 
 ## Evidence
 
@@ -48,7 +49,7 @@ Provider evidence for Recipient A:
 - No `read` webhook was found.
 - Owner confirmed real receipt by `****9614`.
 
-Local persistence gap:
+Local persistence gap before repair:
 
 - `OutboundMessage` rows for the campaign or Meta message id: 0.
 - `billing.active_message.delivered` rows for the campaign or Meta message id: 0.
@@ -67,12 +68,12 @@ Billing/window evidence:
 - The recovered Meta delivered webhook declares `pricing.billable=true`,
   `category=utility`, `pricing_model=PMP`.
 
-## Classification
+## Pre-Repair Classification
 
-Recipient A is safe for a constrained manual reconciliation only after explicit
-owner approval.
+Recipient A was classified as safe for a constrained manual reconciliation only
+after explicit owner approval.
 
-Safe to reconstruct after approval:
+Safe reconstruction scope approved by the owner:
 
 - one `OutboundMessage` for Recipient A using the exact recovered Meta message
   id, campaign id, template, tenant, recipient and send timestamp;
@@ -96,8 +97,8 @@ Not safe:
 
 ## Proposed Exact Repair
 
-If the owner approves, execute one controlled production reconciliation script
-inside a transaction, after a fresh backup and read-back preflight:
+The approved repair was one controlled production reconciliation script inside
+a transaction, after a fresh backup and read-back preflight:
 
 1. Verify the campaign is still
    `d9874c03-10e8-4061-a92e-6caa7b3001c3`, tenant `demo-converta`,
@@ -135,8 +136,38 @@ Stop conditions:
 - any ambiguity in tenant, recipient, campaign, template or webhook evidence;
 - any attempt to send Meta outbound traffic.
 
-## Current Gate
+## Applied Repair
 
-Manual reconciliation is not applied.
+Applied on 2026-09-15 after fresh persistent PostgreSQL backup.
 
-Owner must explicitly approve the repair before any production mutation.
+Backup:
+
+- path:
+  `/opt/re7online/backups/recipient-a-reconciliation-20260915/pre-recipient-a-reconciliation-20260915T213115Z.dump`
+- size: `20M`
+- objects: `593`
+- SHA256:
+  `d0957043bcf2a137bbe700c7517606ac0d716ec85da24b89d2bd68d897d43122`
+
+Production result:
+
+- OutboundMessage id: `1375f639-b3df-425a-987e-545d2ffcddd1`
+- Outbound message id:
+  `campaign.d9874c03-10e8-4061-a92e-6caa7b3001c3.1`
+- request id: `476858d4-57bf-4074-9325-84bd7daa724b`
+- status: `SENT`; delivered evidence is stored as Meta status/billing evidence.
+- Meta status: `delivered`
+- delivered at: `2026-09-15T19:38:42Z`
+- read: no
+- billing event: exactly one `billing.active_message.delivered`
+- campaign status: `failed`
+- campaign sentCount: `1`
+- campaign blockedCount: `0`
+- manual reconciliation audit event: exactly one
+- idempotency re-run: `NOOP_ALREADY_RECONCILED`
+- Recipient B: not attempted
+- multitenant isolation: no matching repair event outside `demo-converta`
+
+This closes only Recipient A local reconciliation. It does not close the
+campaign as completed, does not authorize Recipient B, and does not replace
+remaining report/export/customer acceptance evidence.

@@ -153,13 +153,18 @@ ACTIVE P1:
    implantado confirmou preflight antes de send, marker accepted,
    reconciliation guard e orphan status path. Nao houve novo envio real; A nao
    deve ser reenviado e B requer novo owner gate. Auditoria manual de Recipient
-   A em 2026-09-15 concluiu SAFE CONSTRAINED RECONCILIATION POSSIBLE / OWNER
-   APPROVAL REQUIRED: ha evidencia de aceite, entrega, janela fechada, opt-out
-   ausente e ausencia de OutboundMessage/billing duplicados; a proposta e
-   reconstruir somente A, gerar billing canonico idempotente pelo delivered
-   recuperado e ajustar `sentCount=1` preservando `status=failed`. Nada foi
-   mutado em producao. RECIPIENT A RECONCILIATION permanece OPEN / OWNER
-   DECISION REQUIRED; RECIPIENT B SEND permanece PENDING NEW OWNER GATE;
+   A em 2026-09-15 concluiu SAFE CONSTRAINED RECONCILIATION POSSIBLE e o owner
+   aprovou a reparacao restrita. Backup persistente criado em
+   `/opt/re7online/backups/recipient-a-reconciliation-20260915/pre-recipient-a-reconciliation-20260915T213115Z.dump`
+   (`20M`, 593 objetos, SHA256
+   `d0957043bcf2a137bbe700c7517606ac0d716ec85da24b89d2bd68d897d43122`).
+   Reparacao aplicada somente em `demo-converta`: 1 OutboundMessage criado para
+   `****9614` (`1375f639-b3df-425a-987e-545d2ffcddd1`), Meta id recuperado
+   anexado, delivered real aplicado por billing canonico idempotente
+   (`billing.active_message.delivered`), `sentCount=1`, `status=failed`
+   preservado e audit event unico registrado. A nao foi reenviado; B nao foi
+   enviado. RECIPIENT A RECONCILIATION = RECONCILED / NEVER RESENT; RECIPIENT B
+   SEND permanece PENDING NEW OWNER GATE;
    OPT-OUT E2E e REPORTS/EXPORT/BILLING permanecem pendentes ate nova evidencia
    valida de campanha.
 

@@ -276,12 +276,13 @@ cost, campaign name and number of messages.
   one Meta Utility template for `****9614`, then failed with
   `default_operational_department_missing` before OutboundMessage, ledger and
   report persistence; `****6787` was not sent. Recipient A reconciliation audit
-  on 2026-09-15 found a safe constrained repair path pending owner approval:
-  reconstruct only A's local outbound from exact Meta evidence, replay delivered
-  billing idempotently, set aggregate `sentCount=1`, and keep campaign
-  `status=failed`. This was not applied and does not elevate billing/reporting
-  rows to closed evidence. Separate owner gate required before any repair or
-  remaining send.
+  on 2026-09-15 found a safe constrained repair path and the owner approved the
+  data repair. Production repair created exactly one local outbound for A from
+  exact Meta evidence, replayed delivered Utility billing idempotently, set
+  aggregate `sentCount=1`, kept campaign `status=failed`, and recorded a manual
+  audit event. A was never resent and B remains unattempted. This closes only
+  Recipient A local reconciliation; campaign reporting/export acceptance and any
+  remaining send still require separate owner gates.
 - Residual CRA contract readiness must now be tracked through this matrix.
 - The remaining highest-risk gaps are contractual/configuration/evidence gaps,
   not a reason to reopen already closed flow or business-hours fronts.
