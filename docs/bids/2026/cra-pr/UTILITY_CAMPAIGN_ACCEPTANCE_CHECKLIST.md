@@ -247,3 +247,24 @@ Pre-send local gate:
 
 Owner approval is still required for exact recipients, send window, 24h proof,
 message count and real Meta outbound.
+
+## Demo Phase C Controlled Utility Gate - 2026-09-15
+
+No real send executed.
+
+- Authorized recipient finals: `9614` and `6787`.
+- Full numbers are not recorded in this checklist.
+- Template read-back: `data_exame`, Utility, `pt_BR`, `approved`, one `{{1}}`
+  Data variable.
+- Final unique recipients: 2 after normalization/dedupe.
+- 24h precheck: both outside 24h based on last inbound from 2026-09-10.
+- Opt-out precheck: PASS, no active opt-out event found for the two masked
+  targets.
+- Transport: `META_CLOUD`.
+- Expected reference cost: R$ 0,64.
+- Owner real-send approval: PENDING for this exact send preview.
+- Real Meta outbound: NOT EXECUTED.
+
+Before any real send, re-run 24h and opt-out checks and capture owner approval
+for template, recipients, message count, window, campaign name and expected
+cost.

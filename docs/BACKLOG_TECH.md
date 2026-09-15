@@ -178,6 +178,16 @@ WATCH / EXTERNAL OPERATIONS:
    permanecer aberto sob controle do atendente. O front correto e BOT/FLOW
    lifecycle, ja validado para resetAfterMinutes, stale pending question reset e
    inactivity handoff, com residual cross-provider e Guided lifecycle UX em P2.
+   Phase C controlled gate, 2026-09-15: owner autorizou os dois numeros
+   Demo/RE7 conhecidos por finais `9614` e `6787`. Preflight read-only PASS:
+   producao health/db ok, Demo ACTIVE/business, `campaigns=true`,
+   `templates=true`, Meta config presente, Web Session conectada, template
+   `data_exame` ainda `approved`, migrations 58 up to date. Ambos os
+   destinatarios estao fora de 24h por ultimo inbound em 2026-09-10, sem
+   opt-out ativo encontrado, dedupe reduz `6787` a um alvo final apesar de
+   historico duplicado de provider. Preview: 2 mensagens META_CLOUD, custo
+   referencial R$ 0,64. REAL SEND = NO; parar no owner real-send hard gate ate
+   aprovacao explicita deste envio exato apos preview final.
 
 RECENTLY CLOSED:
 
@@ -304,6 +314,15 @@ ACTIVE P2:
    department/queue concretos, protocolo e posicao na fila quando o destino e
    valido. Residuais: limpeza/copy de `flowContext`, UX de timeout e paridade
    cross-provider do hardening, sem auto-close HUMAN.
+8. Guided Builder - BOT inactivity policy UX: P2 / UX + PRODUCT CLARIFICATION /
+   OPEN. Futuro Guided deve explicar em linguagem de negocio duas politicas
+   independentes: por quanto tempo a pessoa pode voltar e continuar de onde
+   parou (`resetAfterMinutes`) e se abandono de automacao deve gerar handoff
+   humano automatico (`inactivityPolicy.timeoutMinutes` + `action=HANDOFF`).
+   Antes de implementar, auditar valores/defaults reais em producao e exigir
+   que owner veja valores atuais, entenda consequencias, escolha duracao
+   conscientemente e veja resumo no review. Nao criar nem reabrir
+   `WAITING_FOR_CUSTOMER 60m`; HUMAN auto-close permanece NOT REQUIRED.
 
 P3:
 
@@ -327,7 +346,14 @@ WATCH only:
 
 Proximas cinco frentes:
 
-1. P2 Abandoned automation / BOT flow lifecycle hardening. Why now: cidadao pode iniciar
+1. P2 Guided Builder - BOT inactivity policy UX. Why now: o runtime ja suporta
+   `resetAfterMinutes` e handoff automatico por `inactivityPolicy`, mas a
+   configuracao guiada precisa expor isso em linguagem operacional clara e
+   separar reset de retorno vs handoff por abandono. Dependencia: auditar
+   valores/defaults reais antes de propor UI. Code esperado: sim, futuro.
+   Risco: medio por semantica de lifecycle. Done: owner ve valores atuais,
+   escolhe duracao conscientemente e review resume o comportamento.
+2. P2 Abandoned automation / BOT flow lifecycle hardening. Why now: cidadao pode iniciar
    menu/pergunta/captura e abandonar antes de concluir. Valor: endurece reset,
    expiracao e UX de automacao incompleta sem afetar HUMAN. Dependencia:
    validar comportamento atual de `resetAfterMinutes` e
@@ -335,7 +361,7 @@ Proximas cinco frentes:
    esperado: talvez, reaproveitando executor/processador existente. Config
    esperado: flow-level primeiro. Risco: medio por lifecycle. Done: abandono de
    menu/captura/submenu, inbound tardio, restart e tenant isolation testados.
-2. CRA hours configuration and operational validation. Why now: cliente real
+3. CRA hours configuration and operational validation. Why now: cliente real
    ainda sem horarios salvos nos departamentos. Valor: ativa o comportamento
    fora de expediente ja existente sem bloquear autoatendimento. Dependencia:
    cliente configurar horarios. Demo validavel: sim. Code esperado: nao.

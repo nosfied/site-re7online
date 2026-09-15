@@ -219,6 +219,12 @@ Current backlog classification:
   billing idempotency. Planned controlled owner gate is 2 messages with
   reference contractual preview of R$ 0,64, still blocked until explicit owner
   approval and 24h-window check immediately before sending.
+- CRA-PR Demo Phase C controlled Utility gate, 2026-09-15: PREPARED / OWNER
+  REAL-SEND APPROVAL PENDING / NO EXTERNAL SEND. Owner authorized known Demo/RE7
+  finals `9614` and `6787`; read-back confirms `data_exame` approved, both
+  outside 24h, no active opt-out found, final unique recipients 2 and reference
+  cost R$ 0,64. This does not close CRA-specific acceptance and does not execute
+  Meta outbound.
 - CRA active flow tenant visibility, 2026-09-15: CLOSED / DEPLOYED / CUSTOMER
   VALIDATED. Runtime flow works
   per owner report, but CRA tenant admins did not see the active flow in
@@ -245,9 +251,10 @@ Current backlog classification:
   campanha, departamento, intent, link, QR/referral, Webchat embed ou
   flow-to-flow. Producao nao tem duplicate entrypoints nem inactive entrypoints;
   recomendar clarificacao de UX e hardening de invariantes sem abrir P1.
-- P2: question conditional branching by captured answer; reporting context
-  enhancements; Guided Builder complete final-review summary; Meta Cloud
-  unlink/removal semantics; support access hardening.
+- P2: question conditional branching by captured answer; Guided Builder BOT
+  inactivity policy UX; reporting context enhancements; Guided Builder complete
+  final-review summary; Meta Cloud unlink/removal semantics; support access
+  hardening.
 - WATCH: Syer Dashboard transient error UX/observability, Inbox performance,
   CPU, `last_message_lookup`, SECULT fairness and round-robin cursor, SECULT
   non-content suppression organic validation and representative scale/load

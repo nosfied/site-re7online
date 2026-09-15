@@ -325,6 +325,83 @@ Do not execute real Meta outbound until the owner explicitly approves:
   accepted/delivered/read/failed status, 24h classification, billing event,
   opt-out block, report/export files.
 
+## Phase C Controlled Utility Gate - 2026-09-15
+
+Status: PREPARED / OWNER REAL-SEND APPROVAL PENDING / NO REAL SEND.
+
+The owner authorized the two known Demo/RE7 test recipients by final digits
+`9614` and `6787`. This authorizes recipient selection for the gate; it is not
+recorded as approval for Meta outbound until the exact final send preview is
+approved.
+
+Current production read-back:
+
+- canonical/origin docs head before this update: `759edcd20b0b4ed1e3187204a6bc76b1d874c74f`;
+- production runtime head: `ce55574469aa7a5e07bf3c01015f520a5a8fb9cb`;
+- health: ok/db ok;
+- migrations: 58 found, database schema up to date;
+- Demo: ACTIVE/business, `campaigns=true`, `templates=true`;
+- Demo Meta config: present;
+- Demo Web Session: connected;
+- campaigns before gate: 0;
+- template `data_exame`: still `approved`, Utility, `pt_BR`, body and variable
+  unchanged.
+
+Recipient pre-send result:
+
+- `****9614`: authorized, one canonical target, last inbound 2026-09-10 14:37Z,
+  outside 24h, no active opt-out found.
+- `****6787`: authorized, historical duplicate lead rows across provider
+  history, deduped to one final normalized target, last inbound 2026-09-10
+  13:39Z, outside 24h, no active opt-out found.
+- final unique targets: 2.
+
+Campaign preview:
+
+```text
+CAMPAIGN NAME:
+Demo CRA Phase C - Utility data_exame - 2026-09-15
+
+TEMPLATE:
+data_exame
+
+MESSAGE COUNT:
+2
+
+TRANSPORT:
+META_CLOUD
+
+EXPECTED CONTRACTUAL COST:
+R$ 0,64 reference total
+
+REAL META OUTBOUND:
+NOT EXECUTED
+```
+
+Stop reason: explicit owner approval for this exact send after the final preview
+is still required by the real-send hard gate. Recheck 24h window and opt-out
+immediately before any future send.
+
+Evidence file:
+`docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_C_CONTROLLED_UTILITY_GATE_2026-09-15.md`.
+
+### Guided Builder - Bot Inactivity Policy UX Backlog
+
+New backlog item opened: **P2 / UX + PRODUCT CLARIFICATION / OPEN**.
+
+Future Guided Builder must explain two independent bot inactivity policies in
+business language:
+
+- return reset: "Por quanto tempo a pessoa pode voltar e continuar de onde
+  parou?", mapped internally to `resetAfterMinutes`;
+- automatic human handoff: "Se a pessoa abandonar a automacao, deseja
+  encaminha-la automaticamente para atendimento humano apos algum tempo?",
+  mapped internally to `inactivityPolicy.timeoutMinutes` + `action=HANDOFF`.
+
+This is not HUMAN auto-close, not `WAITING_FOR_CUSTOMER 60m` and not automatic
+closure of human service. Those interpretations remain SUPERSEDED / NOT A
+PRODUCT REQUIREMENT.
+
 ## Evidence Package
 
 Path:

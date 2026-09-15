@@ -251,6 +251,13 @@ cost, campaign name and number of messages.
   multitenant product mirror for generic capability evidence only; it does not
   close CRA customer acceptance, CRA billing acceptance, CRA template approval
   or customer-deferred channels.
+- CRA Demo Phase C controlled Utility gate: PREPARED / OWNER REAL-SEND APPROVAL
+  PENDING / NO REAL SEND. Owner authorized known Demo/RE7 recipient finals
+  `9614` and `6787`; read-back confirms Demo ACTIVE, template `data_exame`
+  approved, Meta config present, Web Session connected, migrations up to date,
+  both recipients outside 24h and no active opt-out found. Final unique targets:
+  2. Expected reference cost: R$ 0,64. Evidence remains gate-level until real
+  outbound is explicitly approved and executed.
 - Residual CRA contract readiness must now be tracked through this matrix.
 - The remaining highest-risk gaps are contractual/configuration/evidence gaps,
   not a reason to reopen already closed flow or business-hours fronts.

@@ -182,6 +182,12 @@ de planejamento: `R$ 0,32` por mensagem ativa billable; `2 x R$ 0,32 =
 R$ 0,64`. Este valor nao e fatura CRA nem custo Meta retail. O envio real segue
 bloqueado ate aprovacao explicita do owner.
 
+Demo Phase C controlled gate, 2026-09-15: os destinatarios Demo/RE7 finais
+`9614` e `6787` foram autorizados para a previsualizacao; ambos estavam fora
+de 24h, sem opt-out ativo encontrado, e o envio de 2 mensagens manteria a mesma
+referencia de R$ 0,64. REAL SEND = NO ate aprovacao explicita do envio exato e
+nova checagem 24h/opt-out imediatamente antes do disparo.
+
 ## Limites e proximos passos
 
 - Nao ha conciliacao financeira definitiva automatizada.

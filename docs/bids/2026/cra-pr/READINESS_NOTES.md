@@ -463,6 +463,12 @@ Sem envio real.
   Demo controlada.
 - Custo de gate: premissa central R$ 3.200,00/mes para 10.000 mensagens ativas,
   referencia R$ 0,32 por mensagem; 2 mensagens = R$ 0,64 de teto referencial.
+- Phase C gate em 2026-09-15: owner autorizou os destinatarios Demo/RE7 por
+  finais `9614` e `6787`; preflight PASS; template `data_exame` segue
+  approved; ambos fora de 24h; nenhum opt-out ativo encontrado; `6787` possui
+  historico duplicado de provider mas dedupe reduz a um alvo final; final unique
+  targets = 2; custo referencial R$ 0,64. REAL SEND = NO ate aprovacao
+  explicita deste envio exato apos preview final.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.

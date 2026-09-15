@@ -190,6 +190,18 @@ human conversations may remain open under attendant control. The real lifecycle
 front is BOT/FLOW abandonment, already validated for `resetAfterMinutes`, stale
 pending question reset and Web Session inactivity handoff, with only residual
 cross-provider and Guided lifecycle-policy hardening in P2.
+Phase C controlled Utility gate is prepared without real Meta outbound: owner
+authorized the known Demo/RE7 recipient finals `9614` and `6787`; production
+read-back confirms Demo ACTIVE/business, campaigns/templates enabled, Meta
+config present, Web Session connected, `data_exame` still approved, migrations
+up to date, both recipients outside 24h, no active opt-out found, final unique
+targets 2 and expected reference cost R$ 0,64. Real send remains blocked until
+explicit approval of this exact final preview.
+Guided Builder - BOT inactivity policy UX is now tracked as P2 / UX + PRODUCT
+CLARIFICATION / OPEN: future Guided UI must explain `resetAfterMinutes` and
+`inactivityPolicy.timeoutMinutes/action=HANDOFF` as independent business
+choices, after auditing real production values/defaults. This remains separate
+from HUMAN auto-close, which is not required.
 
 ## Modelos Meta
 

@@ -2,6 +2,7 @@
 
 Status: PHASE A INDEX ONLY / NO EXTERNAL SEND.
 Phase B owner gate prepared on 2026-09-15; still no external send.
+Phase C controlled Utility gate prepared on 2026-09-15; still no external send.
 
 This directory is reserved for sanitized evidence from Demo-based validation of
 CRA-PR contract capabilities.
@@ -31,3 +32,14 @@ Phase B gate summary:
   messages;
 - real Meta outbound: not executed;
 - owner approval remains required before Phase C.
+
+Phase C gate summary:
+
+- template: `data_exame`, Utility, `pt_BR`, approved;
+- authorized recipient finals: `9614` and `6787`;
+- final unique recipients: 2;
+- 24h precheck: both outside 24h;
+- opt-out precheck: pass;
+- expected reference cost: R$ 0,64;
+- real outbound: not executed;
+- evidence: `PHASE_C_CONTROLLED_UTILITY_GATE_2026-09-15.md`.
