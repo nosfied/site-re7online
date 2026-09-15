@@ -207,8 +207,15 @@ Utility messages, but execution produced PRODUCT ISSUE FOUND / STOP. Meta
 accepted 1 `data_exame` template for `****9614`; the campaign runner then
 failed with `default_operational_department_missing` before persisting
 OutboundMessage, billing ledger or report rows, and `****6787` was not sent.
-Real evidence: accepted=1, delivered/read=0 observed, billable=0, total R$
-0,00. Separate repair gate required before retry.
+Owner confirmed real receipt for `****9614`; Meta message id plus `sent` and
+`delivered` webhook events were later recovered, but they remained orphaned
+because no local OutboundMessage existed to correlate. Billing/report evidence
+must not be synthesized from this gap. Local generic repair is tested: validate
+operational defaults before Meta, persist submit/accepted idempotency events,
+stop retry with reconciliation evidence when acceptance exists without outbound,
+and record orphan status events without billing. No deploy or new real send has
+occurred; `****9614` is a hard no-resend and `****6787` requires a fresh owner
+gate.
 
 ## Modelos Meta
 

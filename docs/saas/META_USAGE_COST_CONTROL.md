@@ -190,10 +190,14 @@ nova checagem 24h/opt-out imediatamente antes do disparo.
 
 Demo Phase C controlled send, 2026-09-15: o envio real autorizado parou com
 evidencia parcial. A Meta aceitou 1 template Utility `data_exame` para
-`****9614`, mas nao houve delivery/read observado, OutboundMessage persistido
-nem ledger de billing; `****6787` nao foi enviado. Pela regra contratual, o
-total evidenciado neste run e R$ 0,00. O custo esperado R$ 0,64 nao foi
-atingido porque o run falhou antes de duas mensagens entregues.
+`****9614`, o owner confirmou recebimento real, e depois foram recuperados
+webhooks Meta `sent` e `delivered` para o Meta message id do envio. Mesmo assim,
+nao houve OutboundMessage persistido nem ledger de billing porque o runner
+falhou com `default_operational_department_missing` antes da persistencia local;
+os webhooks chegaram como status sem OutboundMessage correlacionavel. Nao criar
+evento entregue sintetico nem billing retroativo sem reconciliacao aprovada.
+`****6787` nao foi enviado. O custo esperado R$ 0,64 nao foi atingido porque o
+run falhou antes de duas mensagens entregues/persistidas pelo pipeline local.
 
 ## Limites e proximos passos
 

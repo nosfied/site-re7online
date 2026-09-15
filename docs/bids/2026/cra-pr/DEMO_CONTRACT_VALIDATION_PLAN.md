@@ -388,7 +388,7 @@ Evidence file:
 ## Phase C Controlled Utility Send Result - 2026-09-15
 
 Status: OWNER AUTHORIZED / PARTIAL REAL META ACCEPTANCE / PRODUCT ISSUE FOUND /
-STOP.
+LOCAL FIX TESTED / STOP.
 
 Campaign id: `d9874c03-10e8-4061-a92e-6caa7b3001c3`.
 
@@ -399,7 +399,7 @@ passed: Demo active, Meta configured, template approved, both recipients outside
 
 Actual execution:
 
-- first recipient `****9614`: Meta Cloud accepted the template request;
+- first recipient `****9614`: Meta Cloud accepted the template request and owner later confirmed real receipt;
 - runner then failed with `default_operational_department_missing`;
 - no OutboundMessage row was persisted for the accepted Meta send;
 - no billing ledger row was created;
@@ -408,8 +408,9 @@ Actual execution:
 
 Billing/report result:
 
-- delivered/read observed: 0;
-- billable real evidence: 0;
+- Meta technical status recovered after forensic audit: `sent` and `delivered`;
+- read observed: 0;
+- billable local ledger evidence: 0;
 - contractual total evidenced: R$ 0,00;
 - report/export validation: ISSUE, because the campaign has no persisted
   OutboundMessage/ledger rows.
@@ -417,14 +418,21 @@ Billing/report result:
 Blocking finding: Demo has departments/queues, but no
 `defaultDepartmentId/defaultQueueId` in `TenantOperationalConfig`. The campaign
 runner did not block this before external Meta mutation and failed during
-conversation bootstrap after the first Meta acceptance. No retry, config repair
-or code fix was executed in this phase.
+conversation bootstrap after the first Meta acceptance. Forensic audit proved a
+generic ordering/idempotency bug: operational default bootstrap happened after
+Meta send, and webhooks for the accepted message became orphan status evidence
+because no local OutboundMessage existed. A local generic fix was implemented
+and tested without tenant hardcode: operational default preflight before Meta
+send, idempotent submit/provider-accepted events, reconciliation-required
+retry stop, and `webhook.status.orphaned` evidence without synthetic billing.
+No deploy and no new real send were executed.
 
 Evidence file:
 `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_C_CONTROLLED_UTILITY_RESULT_2026-09-15.md`.
 
-Next required gate: owner-approved repair for campaign send preflight/persistence
-ordering before retrying any controlled Meta send.
+Next required gate: deploy/review of the generic repair plus a fresh explicit
+owner send gate before any controlled Meta send. `****9614` must not be resent;
+`****6787` remains unattempted.
 
 ### Guided Builder - Bot Inactivity Policy UX Backlog
 

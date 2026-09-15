@@ -178,7 +178,17 @@ Demo/CRA/SECULT/Syer flow definition hashes stayed unchanged during smoke.
 Current backlog classification:
 
 - P0: none.
-- P1: none.
+- P1: Campaign post-Meta persistence / operational default remains BUG
+  CONFIRMED / LOCAL GENERIC FIX TESTED / DEPLOY GATE OPEN. Demo Phase C
+  `data_exame` accepted one Meta send for `****9614`; owner confirmed real
+  receipt and Meta `sent`/`delivered` webhook events were later found, but the
+  local OutboundMessage/ledger/report rows were missing because the runner
+  required operational default bootstrap after the external Meta mutation.
+  Local generic fix adds pre-send default validation, idempotent submit/accepted
+  events, retry hard-stop with reconciliation-required evidence, and orphan
+  webhook status evidence without synthetic billing. No deploy or new real send
+  has occurred; `****9614` must not be resent and `****6787` needs a fresh
+  owner gate.
 - Watch/external operations: abandoned automation / BOT flow lifecycle local E2E validated on
   2026-09-14 in
   `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`; product
@@ -226,11 +236,12 @@ Current backlog classification:
   cost R$ 0,64. This does not close CRA-specific acceptance and does not execute
   Meta outbound.
 - CRA-PR Demo Phase C controlled Utility send, 2026-09-15: PARTIAL REAL META
-  ACCEPTANCE / PRODUCT ISSUE FOUND / STOP. Meta accepted one `data_exame`
-  template for `****9614`, then the runner failed with
+  ACCEPTANCE / PRODUCT ISSUE FOUND / LOCAL FIX TESTED / STOP. Meta accepted one
+  `data_exame` template for `****9614`, owner confirmed real receipt, and Meta
+  `sent`/`delivered` webhooks were recovered, but the runner failed with
   `default_operational_department_missing` before OutboundMessage/ledger/report
-  persistence; `****6787` was not sent. Retry requires a separate owner-approved
-  repair gate.
+  persistence, so local product evidence stayed missing; `****6787` was not
+  sent. Retry requires deploy plus a separate owner-approved send gate.
 - CRA active flow tenant visibility, 2026-09-15: CLOSED / DEPLOYED / CUSTOMER
   VALIDATED. Runtime flow works
   per owner report, but CRA tenant admins did not see the active flow in

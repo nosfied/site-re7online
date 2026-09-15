@@ -219,6 +219,28 @@ submitting any new Demo template. Phase C real outbound may use only 2 to 5
 explicitly authorized Demo/RE7 recipients. No CRA recipient, token, template,
 WABA asset or business data may be used.
 
+## Demo Phase C Incident / Repair Gate - 2026-09-15
+
+Controlled Demo send `d9874c03-10e8-4061-a92e-6caa7b3001c3` remains failed and
+must not be retried automatically.
+
+- Recipient `****9614`: Meta accepted the `data_exame` Utility template, owner
+  confirmed real receipt, and forensic audit recovered the Meta message id plus
+  `sent` and `delivered` webhook events. Local OutboundMessage/ledger/report
+  rows are still missing and must not be invented.
+- Recipient `****6787`: not attempted and not safe to send without a fresh
+  owner gate.
+- Root cause: campaign runner validated mandatory operational default
+  department/queue only after external Meta mutation.
+- Local generic repair: pre-send operational default validation, deterministic
+  submit/provider-accepted idempotency events, reconciliation-required retry
+  stop, and orphan webhook status evidence without synthetic billing.
+- Validation: `campaignRunner.test.ts` 5/5 PASS,
+  `campaignsFeatureRoutes.test.ts` 113/113 PASS, backend build PASS.
+
+Acceptance remains open until the generic repair is deployed/validated and a new
+explicit owner send gate authorizes any remaining real outbound.
+
 ## Demo Phase B Owner Gate - 2026-09-15
 
 No real send was executed.

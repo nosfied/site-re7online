@@ -20,6 +20,16 @@ external Meta/legal proof, customer actions and deferred channels remain
 separate. No CRA data was used, no Meta submission was executed and no real
 outbound send occurred.
 
+Demo Phase C post-Meta persistence update, 2026-09-15: one authorized Demo
+Utility send to `****9614` was accepted by Meta and owner-confirmed received;
+Meta `sent`/`delivered` webhook evidence was recovered, but no local
+OutboundMessage/ledger/report row existed because operational default bootstrap
+failed after the external send. Recipient `****6787` was not attempted. This
+does not close CRA campaign acceptance or billing evidence. Generic local repair
+is tested but not deployed: pre-send operational default validation,
+idempotent submit/accepted events, retry stop with reconciliation-required
+evidence, and orphan status recording without synthetic billing.
+
 This document separates four things that must not be conflated:
 
 - contractual obligation;

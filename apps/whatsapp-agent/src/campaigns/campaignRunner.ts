@@ -19,6 +19,7 @@ import {
   summarizeCampaignRecipientResolution,
 } from "./campaignRecipientConversationBridge.js";
 import { ensureCampaignOutboundConversation } from "./campaignOutboundConversation.js";
+import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import {
   filterOptedOutCampaignRecipients,
   recordCampaignOptOutBlocks,
@@ -33,6 +34,10 @@ import {
 const CAMPAIGN_THROTTLE_MS = 1000;
 const CAMPAIGN_SCHEDULE_TICK_MS = 60_000;
 const CAMPAIGN_EXCLUSION_LOOKUP_BATCH_SIZE = 50;
+const campaignSubmitStartedRequestId = (campaignId: string, position: number) =>
+  `campaign-message-submit-started:${campaignId}:${position}`;
+const campaignProviderAcceptedRequestId = (campaignId: string, position: number) =>
+  `campaign-message-provider-accepted:${campaignId}:${position}`;
 const runningCampaigns = new Map<string, Promise<void>>();
 let scheduleTimer: NodeJS.Timeout | null = null;
 
@@ -321,6 +326,39 @@ async function runCampaignInBackground(
     totalRecipients: waIds.length,
   });
 
+  if (waIds.length > 0) {
+    try {
+      await ensureDefaultOperationalDepartmentAndQueue(prisma, params.clientId);
+    } catch (error) {
+      await prisma.campaign.updateMany({
+        where: { id: params.campaignId, clientId: params.clientId, status: "sending" },
+        data: { status: "failed" },
+      });
+      await persistEvent({
+        clientId: params.clientId,
+        messageId: params.campaignId,
+        requestId: `campaign-preflight-operational-default:${params.campaignId}`,
+        eventName: "campaign.preflight.failed",
+        payloadJson: {
+          campaignId: params.campaignId,
+          campaignRunId,
+          reason: "default_operational_department_missing",
+          message: error instanceof Error ? error.message : "unknown_error",
+        },
+      });
+      logger.error({
+        event: "campaign.preflight.failed",
+        campaignId: params.campaignId,
+        campaignRunId,
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        reason: "default_operational_department_missing",
+        message: error instanceof Error ? error.message : "unknown_error",
+      });
+      return;
+    }
+  }
+
   await logger.withContext(
     {
       campaignId: params.campaignId,
@@ -447,6 +485,49 @@ async function runCampaignInBackground(
           if (existingOutbound) {
             continue;
           }
+          const previousProviderAcceptance = await prisma.event.findFirst({
+            where: {
+              clientId: params.clientId,
+              messageId,
+              eventName: "campaign.message.provider_accepted",
+            },
+            select: { id: true },
+          });
+          if (previousProviderAcceptance) {
+            await persistEvent({
+              clientId: params.clientId,
+              conversationId: resolvedRecipient.conversationId ?? null,
+              waId,
+              waIdCanonical,
+              messageId,
+              requestId: `campaign-message-provider-reconciliation-required:${params.campaignId}:${index + 1}`,
+              eventName: "campaign.message.reconciliation_required",
+              payloadJson: {
+                campaignId: params.campaignId,
+                campaignRunId,
+                templateName: params.templateName,
+                reason: "provider_accepted_without_local_outbound",
+                waIdLast4: waId.slice(-4),
+                waIdLength: waId.length,
+              },
+            });
+            await prisma.campaign.updateMany({
+              where: { id: params.campaignId, status: "sending" },
+              data: {
+                status: "failed",
+                sentCount,
+                blockedCount,
+              },
+            });
+            logger.error({
+              event: "campaign.message.reconciliation_required",
+              campaignId: params.campaignId,
+              campaignRunId,
+              messageId,
+              reason: "provider_accepted_without_local_outbound",
+            });
+            return;
+          }
           const recipientOperationallyExcluded = [inputWaId, waId, waIdCanonical].some((identity) =>
             operationallyExcluded.has(identity)
           );
@@ -487,6 +568,65 @@ async function runCampaignInBackground(
           }
           const components =
             params.componentsByWaId?.[inputWaId] ?? params.componentsByWaId?.[waId] ?? params.components;
+          const previousSubmitStarted = await prisma.event.findFirst({
+            where: {
+              clientId: params.clientId,
+              eventName: "campaign.message.submit_started",
+              requestId: campaignSubmitStartedRequestId(params.campaignId, index + 1),
+            },
+            select: { id: true },
+          });
+          if (previousSubmitStarted) {
+            await persistEvent({
+              clientId: params.clientId,
+              conversationId: resolvedRecipient.conversationId ?? null,
+              waId,
+              waIdCanonical,
+              messageId,
+              requestId: `campaign-message-submit-reconciliation-required:${params.campaignId}:${index + 1}`,
+              eventName: "campaign.message.reconciliation_required",
+              payloadJson: {
+                campaignId: params.campaignId,
+                campaignRunId,
+                templateName: params.templateName,
+                reason: "submit_started_without_local_outbound",
+                waIdLast4: waId.slice(-4),
+                waIdLength: waId.length,
+              },
+            });
+            await prisma.campaign.updateMany({
+              where: { id: params.campaignId, status: "sending" },
+              data: {
+                status: "failed",
+                sentCount,
+                blockedCount,
+              },
+            });
+            logger.error({
+              event: "campaign.message.reconciliation_required",
+              campaignId: params.campaignId,
+              campaignRunId,
+              messageId,
+              reason: "submit_started_without_local_outbound",
+            });
+            return;
+          }
+          await persistEvent({
+            clientId: params.clientId,
+            conversationId: resolvedRecipient.conversationId ?? null,
+            waId,
+            waIdCanonical,
+            messageId,
+            requestId: campaignSubmitStartedRequestId(params.campaignId, index + 1),
+            eventName: "campaign.message.submit_started",
+            payloadJson: {
+              campaignId: params.campaignId,
+              campaignRunId,
+              templateName: params.templateName,
+              waIdLast4: waId.slice(-4),
+              waIdLength: waId.length,
+            },
+          });
           const result = await sendTemplate({
             toE164: waId,
             waId,
@@ -526,6 +666,26 @@ async function runCampaignInBackground(
 
           const status = result.ok ? MessageStatus.SENT : MessageStatus.FAILED;
           const deliveredAt = new Date();
+          if (result.ok) {
+            await persistEvent({
+              clientId: params.clientId,
+              conversationId: resolvedRecipient.conversationId ?? null,
+              waId,
+              waIdCanonical,
+              messageId,
+              requestId: campaignProviderAcceptedRequestId(params.campaignId, index + 1),
+              eventName: "campaign.message.provider_accepted",
+              payloadJson: {
+                campaignId: params.campaignId,
+                campaignRunId,
+                templateName: params.templateName,
+                metaMessageId: result.metaMessageId ?? null,
+                waIdLast4: waId.slice(-4),
+                waIdLength: waId.length,
+                acceptedAt: deliveredAt.toISOString(),
+              },
+            });
+          }
           const conversationOutcome = result.ok
             ? await ensureCampaignOutboundConversation(prisma, {
                 clientId: params.clientId,

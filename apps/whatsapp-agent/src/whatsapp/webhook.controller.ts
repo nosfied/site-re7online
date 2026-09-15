@@ -2955,7 +2955,27 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             createdAt: true,
           },
         });
-        if (!outbound) continue;
+        if (!outbound) {
+          await persistEvent({
+            clientId: tenantClientId,
+            messageId: item.id,
+            requestId: `webhook-status-orphaned:${tenantClientId}:${item.id}:${normalizedStatus}`,
+            eventName: "webhook.status.orphaned",
+            payloadJson: {
+              metaMessageId: item.id,
+              status: item.status,
+              normalizedStatus,
+              timestamp: item.timestamp,
+              conversation: item.conversation,
+              pricing: item.pricing,
+              statusDetail: item.status_detail,
+              errorData: item.error_data,
+              errors: item.errors,
+              reason: "outbound_message_not_found",
+            } as Prisma.InputJsonValue,
+          });
+          continue;
+        }
 
         const currentRaw =
           outbound.rawPayload && typeof outbound.rawPayload === "object" && !Array.isArray(outbound.rawPayload)

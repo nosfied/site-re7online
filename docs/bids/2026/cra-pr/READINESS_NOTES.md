@@ -63,6 +63,14 @@ Nao reabrir:
 - CRA active flow visibility: CLOSED / CUSTOMER VALIDATED.
 - CRA business hours: CONFIGURED / OPERATIONALLY VALIDATED.
 
+Nota Demo Phase C, 2026-09-15: a campanha controlada em `demo-converta`
+`d9874c03-10e8-4061-a92e-6caa7b3001c3` encontrou bug generico de
+preflight/persistencia apos Meta. `****9614` foi aceito pela Meta e confirmado
+recebido pelo owner; webhooks `sent`/`delivered` foram recuperados, mas sem
+OutboundMessage/ledger/report local. `****6787` nao foi tentado. A correcao
+generica local foi testada, mas nao implantada; nao ha novo envio autorizado
+sem novo gate.
+
 ## Enquadramento
 
 O Converta deve ser apresentado como SaaS de atendimento omnichannel com foco em WhatsApp Oficial/Meta, Inbox humano, CRM operacional, campanhas controladas, modelos Utility, opt-out, LGPD e relatorios.

@@ -48,8 +48,8 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | `docs/bids/2026/cra-pr/READINESS_NOTES.md` | atual | Notas de prontidao CRA-PR com volume ativo/receptivo, Utility-only, riscos Meta e proximos passos |
 | `docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md` | atual | Matriz canonica requisito-a-requisito do Contrato/TR CRA-PR, separando produto, configuracao CRA, evidencia, lacunas contratuais e proximas acoes |
 | `docs/bids/2026/cra-pr/UTILITY_CAMPAIGN_ACCEPTANCE_CHECKLIST.md` | atual | Checklist da primeira campanha Utility CRA-PR controlada, com gates de template, destinatarios, custo, opt-out, billing e proibicao de envio real sem aprovacao explicita |
-| `docs/bids/2026/cra-pr/DEMO_CONTRACT_VALIDATION_PLAN.md` | atual | Plano Phase A-C para validar requisitos CRA genericamente no tenant Demo como mirror multitenant, com Phase C parcial e bloqueio de reparo separado |
-| `docs/bids/2026/cra-pr/evidence/demo-contract-validation/README.md` | atual | Indice do pacote de evidencias sanitizadas para validacao contratual Demo; Phase C registrou 1 aceite Meta parcial e falha antes de ledger/report |
+| `docs/bids/2026/cra-pr/DEMO_CONTRACT_VALIDATION_PLAN.md` | atual | Plano Phase A-C para validar requisitos CRA genericamente no tenant Demo como mirror multitenant, com Phase C parcial, owner receipt/webhook evidence e fix local testado sem deploy |
+| `docs/bids/2026/cra-pr/evidence/demo-contract-validation/README.md` | atual | Indice do pacote de evidencias sanitizadas para validacao contratual Demo; Phase C registrou 1 aceite Meta/owner receipt e falha antes de ledger/report local |
 | `docs/bids/2026/cra-pr-90004-2026/*` | historico/base contratual | Pacote licitatorio CRA-PR 90004/2026; usar como fonte do contrato/TR/esclarecimentos e consultar a matriz canonica para status operacional atual |
 | `docs/saas/BID_COMPLIANCE_MATRIX.md` | atual | Matriz mestre de aderencia por requisito, reutilizavel em editais, propostas e PoC |
 | `docs/saas/LICITABLE_VERSION_1_0_CHECKLIST.md` | atual | Checklist executivo para declarar a Versao Licitavel 1.0 |

@@ -50,10 +50,11 @@ Observed runtime sequence:
 1. Campaign created as `sending`.
 2. Runner resolved both recipients.
 3. First Meta template request to `****9614` was accepted by Meta Cloud.
-4. Runner failed immediately after Meta acceptance with:
+4. Owner later confirmed real receipt by `****9614`.
+5. Runner failed immediately after Meta acceptance with:
    `default_operational_department_missing`.
-5. Campaign was marked `failed`.
-6. Second recipient `****6787` was not sent.
+6. Campaign was marked `failed`.
+7. Second recipient `****6787` was not sent.
 
 Production DB read-back:
 
@@ -70,18 +71,26 @@ Runtime event file read-back:
 - one outbound template event for `data_exame`
 - recipient: `****9614`
 - status: `sent`
-- Meta message id: present, masked
+- Meta message id: recovered and preserved in forensic notes, masked here as
+  `******************************************************QjBBNkYA`
 - campaign run id present
-- no delivered/read status observed in the monitored window
+- DB webhook event evidence later recovered: Meta status `sent` and
+  `delivered` for the same Meta message id; `read` was not found.
+- Because no OutboundMessage row existed, those webhook statuses had no local
+  outbound record to correlate to in product reporting/billing.
 
 ## Billing Classification
 
-- `****9614`: Meta accepted/sent but not delivered in observed evidence; not billable by the contractual rule.
+- `****9614`: Meta accepted; owner confirmed receipt; Meta `delivered` webhook
+  was later recovered. Local OutboundMessage and billing ledger are missing, so
+  product billing/report evidence must not be invented.
 - `****6787`: not submitted; not billable.
 
 Total contractual evidence from this run: R$ 0,00.
 
-Expected R$ 0,64 was not reached because both messages were not delivered, and the controlled campaign failed before the second send.
+Expected R$ 0,64 was not reached because both messages did not complete through
+the local persisted billing/reporting pipeline, and the controlled campaign
+failed before the second send.
 
 ## Report / Export
 
@@ -122,7 +131,28 @@ The failure occurred after the first Meta acceptance and before campaign outboun
 - the accepted Meta message was not persisted as an OutboundMessage;
 - no campaign ledger/report evidence was generated for the accepted send.
 
-No code or configuration fix was applied in this phase. A separate owner-approved repair gate is required before any retry.
+A separate forensic/repair gate later implemented a local generic fix without
+tenant hardcode and without real outbound:
+
+- preflight `ensureDefaultOperationalDepartmentAndQueue` before Meta send;
+- deterministic `campaign.message.submit_started` event before external call;
+- deterministic `campaign.message.provider_accepted` event immediately after
+  Meta acceptance;
+- retry hard-stop with `campaign.message.reconciliation_required` when an
+  accepted provider event exists without OutboundMessage;
+- `webhook.status.orphaned` event when Meta status cannot find an
+  OutboundMessage, with no synthetic billing.
+
+Focused validation after repair:
+
+```text
+campaignRunner.test.ts: 5/5 PASS
+campaignsFeatureRoutes.test.ts: 113/113 PASS
+backend build: PASS
+```
+
+No deploy, no retry, no resend to `****9614`, and no send to `****6787` were
+executed during the repair gate.
 
 ## Result Summary
 
@@ -131,12 +161,13 @@ No code or configuration fix was applied in this phase. A separate owner-approve
 - Accepted by Meta: 1
 - Submit failed: 0
 - Not attempted due to runner failure: 1
-- Delivered: 0 observed
+- Owner-confirmed receipt: 1
+- Delivered webhook recovered: 1
 - Read: 0 observed
 - Failed webhook: 0 observed
-- Pending/unknown: 1 Meta-accepted message
+- Pending local reconciliation: 1 Meta-accepted message without OutboundMessage
 - Billable: 0
-- Non-billable: 2 for current evidence classification
+- Non-billable in local ledger: 2 for current evidence classification
 - Duplicate billing: no evidence of duplication; production ledger not exercised
 - CRA data used: no
 - Isolation: Demo tenant only

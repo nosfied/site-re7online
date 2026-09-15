@@ -7320,6 +7320,94 @@ test("meta status webhook creates one active message billing event on delivered 
   );
 });
 
+test("meta status webhook records orphan status evidence without billing when outbound is missing", async () => {
+  const waId = "5584999905678";
+  const metaMessageId = `${prefix}.wamid.webhook.orphan.1`;
+  const phoneNumberId = `${prefix}.orphan-webhook-phone`;
+  await prisma.waPhoneNumber.create({
+    data: {
+      clientId: businessClientId,
+      phoneNumberId,
+      display: "+55 84 0000-0001",
+    },
+  });
+  await prisma.channelAccount.create({
+    data: {
+      clientId: businessClientId,
+      channel: "whatsapp",
+      provider: "meta_cloud",
+      channelAccountId: phoneNumberId,
+      enabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: true,
+      status: "connected",
+      tokenStatus: "ok",
+    },
+  });
+
+  const delivered = await fetch(`${baseUrl}/webhook`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          id: `${prefix}.waba`,
+          changes: [
+            {
+              field: "messages",
+              value: {
+                metadata: {
+                  phone_number_id: phoneNumberId,
+                  display_phone_number: "558400000001",
+                },
+                statuses: [
+                  {
+                    id: metaMessageId,
+                    recipient_id: waId,
+                    status: "delivered",
+                    timestamp: String(Math.floor(new Date("2026-09-03T10:05:00.000Z").getTime() / 1000)),
+                    pricing: {
+                      category: "utility",
+                      billable: true,
+                      pricing_model: "CBP",
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }),
+  });
+  assert.equal(delivered.status, 200);
+  assert.equal(
+    await waitForEventually(async () => {
+      const count = await prisma.event.count({
+        where: {
+          clientId: businessClientId,
+          eventName: "webhook.status.orphaned",
+          messageId: metaMessageId,
+        },
+      });
+      return count === 1;
+    }),
+    true
+  );
+  assert.equal(
+    await prisma.event.count({
+      where: {
+        clientId: businessClientId,
+        eventName: "billing.active_message.delivered",
+        requestId: `billing:active_message:delivered:${businessClientId}:whatsapp:meta_cloud:${metaMessageId}`,
+      },
+    }),
+    0
+  );
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId: businessClientId, metaMessageId } }), 0);
+});
+
 test("session audit report is tenant scoped, role protected and sanitized", async () => {
   const from = new Date("2030-01-10T00:00:00.000Z");
   const to = new Date("2030-01-11T00:00:00.000Z");
