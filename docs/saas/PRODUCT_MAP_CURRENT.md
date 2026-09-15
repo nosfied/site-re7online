@@ -102,6 +102,14 @@ approval. Instagram Direct, Facebook Messenger and Website/Webchat remain
 contract-required but customer-deferred with delivery window pending and are not
 blockers for this phase.
 
+CRA-PR Demo mirror, 2026-09-15: `demo-converta` is the reusable multitenant
+product acceptance baseline for generic CRA requirements. Phase A created the
+plan at `docs/bids/2026/cra-pr/DEMO_CONTRACT_VALIDATION_PLAN.md` and confirmed
+by read-only production snapshot that Demo has Meta Cloud configured, one
+approved Utility template, campaign/template/report features enabled, no
+campaigns and no campaign billing/opt-out events. Later phases require owner
+gate before any Meta outbound.
+
 Admin chatbot settings note, 2026-09-13: `/admin/chatbot/settings` must support
 DB-backed clients that do not have a legacy `.data/tenants.json` entry. Settings
 resolve through `TenantOperationalConfig` and safe runtime defaults using an
@@ -200,6 +208,10 @@ Current backlog classification:
   evidence for SLA/support/training/LGPD/backup/Meta. Active flow visibility
   remains CLOSED / CUSTOMER VALIDATED and CRA business hours remain CONFIGURED /
   OPERATIONALLY VALIDATED.
+- CRA-PR Demo contract validation, 2026-09-15: PHASE A COMPLETE / NO EXTERNAL
+  SEND. Demo can validate generic product mechanics but does not close CRA
+  customer acceptance, CRA template approval, CRA billing evidence or deferred
+  IG/FB/Webchat channels.
 - CRA active flow tenant visibility, 2026-09-15: CLOSED / DEPLOYED / CUSTOMER
   VALIDATED. Runtime flow works
   per owner report, but CRA tenant admins did not see the active flow in

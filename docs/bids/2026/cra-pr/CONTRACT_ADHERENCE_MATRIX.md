@@ -12,6 +12,14 @@ submission or real send. Instagram Direct, Facebook Messenger and
 Website/Webchat remain contract-required, but are customer-deferred with
 delivery window pending and are not active blockers for this phase.
 
+Demo multitenant mirror update, 2026-09-15: Phase A validation plan is recorded
+in `docs/bids/2026/cra-pr/DEMO_CONTRACT_VALIDATION_PLAN.md`. `demo-converta`
+is a behavioral/homologation tenant only, not a CRA clone. It can validate 36
+of 52 requirements as generic product mechanics, while CRA-specific evidence,
+external Meta/legal proof, customer actions and deferred channels remain
+separate. No CRA data was used, no Meta submission was executed and no real
+outbound send occurred.
+
 This document separates four things that must not be conflated:
 
 - contractual obligation;
@@ -234,6 +242,10 @@ cost, campaign name and number of messages.
 - CRA Utility readiness audit: CLOSED; contract acceptance remains OPEN pending
   customer-approved copy, Meta approval, controlled recipient approval and
   evidence capture. No real send executed.
+- CRA Demo contract validation: PHASE A COMPLETE / NO EXTERNAL SEND. Demo is a
+  multitenant product mirror for generic capability evidence only; it does not
+  close CRA customer acceptance, CRA billing acceptance, CRA template approval
+  or customer-deferred channels.
 - Residual CRA contract readiness must now be tracked through this matrix.
 - The remaining highest-risk gaps are contractual/configuration/evidence gaps,
   not a reason to reopen already closed flow or business-hours fronts.

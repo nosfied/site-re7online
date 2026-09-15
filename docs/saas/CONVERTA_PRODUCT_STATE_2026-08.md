@@ -174,6 +174,14 @@ window, expected cost, campaign name and number of messages. Instagram Direct,
 Facebook Messenger and Website/Webchat remain contract-required but
 customer-deferred with delivery window pending for this phase.
 
+Demo contract validation update, 2026-09-15: `demo-converta` is the multitenant
+behavioral mirror for generic CRA capability validation, not a CRA clone. Phase
+A is docs/evidence planning only: Demo is ACTIVE/business, Meta Cloud is
+configured, one Utility template is approved, campaigns are zero and campaign
+billing/opt-out evidence is zero. No CRA data was used and no real outbound was
+sent. Canonical plan:
+`docs/bids/2026/cra-pr/DEMO_CONTRACT_VALIDATION_PLAN.md`.
+
 ## Modelos Meta
 
 O centro de modelos permite:

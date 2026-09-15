@@ -168,6 +168,13 @@ Pre-checagens obrigatorias antes do envio controlado:
   Meta message id, status accepted/delivered/read/failed, decisao billable e
   referencia do evento `billing.active_message.delivered` quando aplicavel.
 
+Demo mirror Phase A, 2026-09-15: `demo-converta` tem Meta Cloud configurada e 1
+template Utility aprovado, mas 0 campanhas e 0 eventos de billing/opt-out de
+campanha no snapshot. Ele pode ser usado para provar a mecanica generica de
+mensagem ativa Utility, 24h, delivery/read idempotente e relatorio, desde que o
+owner aprove template, destinatarios, contagem, janela e custo esperado antes
+de qualquer envio real. Isso nao prova fatura CRA.
+
 ## Limites e proximos passos
 
 - Nao ha conciliacao financeira definitiva automatizada.

@@ -206,3 +206,15 @@ Production database was not used.
   timeout is `meta inbound clears active chatbot runtime when persisted flow is
   inactive`, unrelated to the Utility template/campaign acceptance path and not
   a reason to send a real campaign.
+
+## Demo Phase A Mirror - 2026-09-15
+
+`demo-converta` has one approved Utility template and Meta Cloud configured, so
+it is eligible for the next owner-gated homologation phase without copying CRA
+assets. It has zero campaigns and zero campaign billing/opt-out evidence at the
+Phase A snapshot.
+
+Phase B must stop for owner approval before using an existing Demo template or
+submitting any new Demo template. Phase C real outbound may use only 2 to 5
+explicitly authorized Demo/RE7 recipients. No CRA recipient, token, template,
+WABA asset or business data may be used.

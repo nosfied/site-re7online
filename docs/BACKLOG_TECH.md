@@ -161,6 +161,15 @@ WATCH / EXTERNAL OPERATIONS:
    Utility/campaign. Ordem atual: Utility/campaign acceptance, opt-out,
    relatorios/exportacoes/billing, acceptance pack; canais adiados so reabrem
    com janela do cliente.
+   Demo contract validation Phase A, 2026-09-15: `demo-converta` foi auditado
+   como mirror multitenant, nao clone CRA. Snapshot read-only: ACTIVE/business,
+   Meta Cloud configurada, 1 Utility aprovado, 0 campanhas, 0 eventos de
+   billing/opt-out de campanha, 15 departamentos, 19 filas, 4 fluxos e 50 linhas
+   de horario. Plano canonico criado em
+   `docs/bids/2026/cra-pr/DEMO_CONTRACT_VALIDATION_PLAN.md`: 36/52 requisitos
+   demo-validatable, 19 ja product-validated, 8 capacidades validadas nesta
+   leitura, 12 CRA-specific only, 4 customer-deferred, 2 product gaps. Nenhuma
+   submissao Meta, envio real ou dado CRA usado no Demo.
    Produto gap declarado na matriz: waiting-on-customer 1h so deve virar
    implementacao se confirmado como obrigacao contratual.
 

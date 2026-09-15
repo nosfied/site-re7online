@@ -386,6 +386,38 @@ Gate local de 2026-09-15:
 - suite ampla `campaignsFeatureRoutes.test.ts`: 111/112 PASS, com timeout no
   teste de runtime de chatbot inativo, fora da frente Utility/campaign.
 
+## Demo contract validation mirror - 2026-09-15
+
+`demo-converta` foi classificado como tenant de homologacao comportamental
+multitenant, nao como copia CRA. A Fase A ficou documentada em:
+
+```text
+docs/bids/2026/cra-pr/DEMO_CONTRACT_VALIDATION_PLAN.md
+```
+
+Snapshot Demo somente leitura:
+
+- ACTIVE, profile `business`;
+- campanhas, templates, CRM, Inbox, chatbot, reports, training, dashboard e
+  satisfaction habilitados;
+- Meta Cloud configurada com token presente;
+- 1 template Utility aprovado;
+- 0 campanhas;
+- 0 eventos de billing/opt-out de campanha;
+- 15 departamentos, 19 filas, 4 fluxos e 50 linhas de horario.
+
+Resultado da Fase A:
+
+- 36/52 requisitos podem ser validados no Demo como mecanica generica de
+  produto;
+- 19 ja possuem validacao de produto aproveitavel;
+- 8 capacidades de ambiente/Demo foram validadas por leitura nesta rodada;
+- 12 exigem evidencia especifica CRA;
+- 4 canais seguem customer-deferred;
+- 2 permanecem como product gaps/decisao de dominio;
+- nenhum dado CRA foi usado no Demo;
+- nenhuma submissao Meta e nenhum envio real foram executados.
+
 ## Gates recomendados antes de assinatura
 
 1. Confirmar conteudo do primeiro modelo Utility CRA.
