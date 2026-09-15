@@ -278,13 +278,14 @@ Pre-send local gate:
   CRA contract unit.
 
 Owner approval is still required for exact recipients, send window, 24h proof,
-message count, billing unit and real Meta outbound. Recipient B remains paused
-until billing-unit reconciliation closes.
+message count and real Meta outbound. Recipient B remains NOT ATTEMPTED until
+owner approves the exact provider-cost gate.
 
-Meta pricing source-of-truth audit, 2026-09-15: do not use `meta-br-planning`,
-USD 0.008, R$ 0,32 or any planning spreadsheet as official Meta tariff. B send
-requires official current Meta rate evidence for Brazil/Utility/effective date,
-plus separate CRA contract unit semantics or explicit Demo-only separation.
+Meta pricing narrow gate, 2026-09-15: do not use `meta-br-planning`, USD 0.008,
+R$ 0,32 or any planning spreadsheet as official Meta tariff. Official WhatsApp
+Business Platform Pricing / Meta Developers evidence proves Brazil Utility BRL
+R$ 0,0350/message, effective 2026-07-01, tier 0-250,000. CRA contract unit
+semantics remain separate and NOT PROVEN.
 
 ## Demo Phase C Controlled Utility Gate - 2026-09-15
 

@@ -493,14 +493,13 @@ Sem envio real.
   `status=failed`. A nao foi reenviado; B segue nao tentado. O ledger de A esta
   correto como elegibilidade/contagem delivered Utility fora de 24h, mas o
   valor R$ 0,32 e classificado como referencia central de planejamento ainda nao
-  provada como unidade final CRA. B SEND = PAUSED FOR BILLING UNIT
-  RECONCILIATION.
-- Meta pricing source-of-truth audit, 2026-09-15: fonte oficial publica da Meta
-  confirma cobranca por mensagem entregue, por mercado do destinatario e
-  categoria, com rate cards oficiais e tiers para utility/authentication. O
-  audit nao ingeriu tabela estruturada oficial Brasil; valores exatos de Meta
-  ficam `PRICING UNKNOWN` ate import de rate card/API/WhatsApp Manager/invoice.
-  Cross-checks secundarios nao sao canonicos. B continua NOT ATTEMPTED.
+  provada como unidade final CRA.
+- Meta pricing narrow gate, 2026-09-15: fonte oficial WhatsApp Business
+  Platform Pricing / Meta Developers prova Brazil Utility BRL R$ 0,0350 por
+  mensagem entregue, efetivo em 2026-07-01, tier 0-250.000. B continua NOT
+  ATTEMPTED e so deve avancar apos owner aprovar esse custo provedor exato.
+  Unidade contratual CRA permanece separada e NOT PROVEN; FinOps generico fica
+  P2.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.

@@ -119,23 +119,7 @@ ACTIVE P0:
 
 ACTIVE P1:
 
-1. Meta pricing source of truth / FinOps hardening: OPEN / P1 WHILE RECIPIENT B
-   SEND IS BLOCKED. Auditoria de 2026-09-15 confirmou que custo Meta, FX e
-   preco contratual Converta devem ser resolvidos separadamente. Fonte oficial
-   primaria: WhatsApp Business Platform Pricing e Meta for Developers pricing;
-   modelo oficial atual e cobranca por mensagem entregue, variando por mercado
-   do destinatario e categoria, com tiers de volume para utility/authentication
-   e isencoes de janela/free entry point. O audit nao conseguiu ingerir tabela
-   estruturada oficial no ambiente; valores Brasil exatos permanecem
-   `PRICING UNKNOWN` ate import oficial/rate card/WhatsApp Manager/invoice.
-   Cross-checks secundarios indicam BRL Utility 0,0350 e Marketing 0,3217 a
-   partir de 2026-07-01, mas nao sao fonte canonica. Produto atual ainda tem
-   `meta-br-planning-2026-08`/USD 0.008 como estimativa interna; nao usar como
-   verdade de preco oficial. Doc canonico:
-   `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md`. RECIPIENT B = PAUSED /
-   PRICING RECONCILIATION; nenhuma mutacao de ledger e nenhum envio real.
-
-2. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
+1. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente
    2 mensagens Utility `data_exame` via META_CLOUD no `demo-converta` parou com
    bug operacional. Prechecks passaram, a primeira chamada Meta para `****9614`
@@ -180,12 +164,14 @@ ACTIVE P1:
    (`billing.active_message.delivered`), `sentCount=1`, `status=failed`
    preservado e audit event unico registrado. A nao foi reenviado; B nao foi
    enviado. RECIPIENT A RECONCILIATION = RECONCILED / NEVER RESENT; RECIPIENT B
-   SEND = PAUSED FOR BILLING UNIT RECONCILIATION / NOT ATTEMPTED. Auditoria de
+   SEND = NOT ATTEMPTED / READY FOR OWNER SEND GATE. Auditoria de
    unidade de billing em 2026-09-15 confirmou que `R$ 0,32` veio da premissa
    interna central `R$ 3.200,00 / 10.000 mensagens ativas`, nao de Meta, nao de
    override de tenant e nao de proposta final CRA encontrada. O ledger de A esta
-   correto como elegibilidade/contagem delivered Utility fora de 24h, mas a
-   unidade BRL final CRA permanece NOT PROVEN;
+   correto como elegibilidade/contagem delivered Utility fora de 24h. A prova
+   oficial estreita de custo Meta para B foi obtida em 2026-09-15: Brazil
+   Utility, BRL, efetivo em 2026-07-01, tier 0-250.000, R$ 0,0350/mensagem
+   entregue. A unidade BRL final CRA permanece NOT PROVEN;
    OPT-OUT E2E e REPORTS/EXPORT/BILLING permanecem pendentes ate nova evidencia
    valida de campanha.
 
@@ -370,9 +356,20 @@ ACTIVE P2:
    Consolidar semantica de disconnect/unlink, limpeza de token, associacoes
    phone/WABA, estado de coexistencia, remocao de canal por tenant e fallback
    seguro.
-5. Internal support access hardening: P2 / WATCH-HARDENING. Mecanismo existe;
+5. Meta pricing source of truth / FinOps hardening: P2 / GENERIC PRODUCT
+   BACKLOG. Futuro escopo: rate cards Meta versionados, resolver por
+   pais/categoria, datas de vigencia, ingestao de fonte oficial, snapshots
+   historicos de custo provedor, politica FX, separacao custo Meta vs preco
+   cliente e deteccao de staleness. Nao e frente bloqueadora ampla da aderencia
+   CRA agora. Para a campanha Demo controlada, a prova estreita ja obtida e:
+   Brazil Utility, BRL, efetivo em 2026-07-01, tier 0-250.000, rate oficial
+   R$ 0,0350 por mensagem entregue via endpoint oficial WhatsApp Business
+   Platform Pricing. Recipient B permanece NOT ATTEMPTED e vai para owner send
+   gate antes de qualquer envio real. Doc canonico:
+   `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md`.
+6. Internal support access hardening: P2 / WATCH-HARDENING. Mecanismo existe;
    manter evolucao em auditoria, expiracao, evidencias e menor privilegio.
-6. Chatbot Flow `isActive` vs `entryPoint` semantics: P2 UX CLARIFICATION +
+7. Chatbot Flow `isActive` vs `entryPoint` semantics: P2 UX CLARIFICATION +
    P2 DOMAIN HARDENING. Auditoria read-only de 2026-09-15 concluiu que
    `entryPoint` e o seletor padrao de novas conversas (`clientId +
    isActive=true + entryPoint=true`), enquanto `isActive` e o gate de execucao
@@ -388,14 +385,14 @@ ACTIVE P2:
    entrypoint por tenant e corrida de troca de principal sao application-only ou
    ausentes no DB. Registro:
    `docs/saas/CHATBOT_FLOW_ACTIVE_ENTRYPOINT_SEMANTICS_AUDIT_2026-09-15.md`.
-7. Abandoned automation / BOT flow lifecycle: P2 RESIDUAL HARDENING. O
+8. Abandoned automation / BOT flow lifecycle: P2 RESIDUAL HARDENING. O
    comportamento existente ja foi validado: `resetAfterMinutes` reinicia
    menu/submenu/captura no proximo inbound sem HUMAN/CLOSED, e
    `timeoutMinutes/action=HANDOFF` promove uma vez para HUMAN/WAITING com
    department/queue concretos, protocolo e posicao na fila quando o destino e
    valido. Residuais: limpeza/copy de `flowContext`, UX de timeout e paridade
    cross-provider do hardening, sem auto-close HUMAN.
-8. Guided Builder - BOT inactivity policy UX: P2 / UX + PRODUCT CLARIFICATION /
+9. Guided Builder - BOT inactivity policy UX: P2 / UX + PRODUCT CLARIFICATION /
    OPEN. Futuro Guided deve explicar em linguagem de negocio duas politicas
    independentes: por quanto tempo a pessoa pode voltar e continuar de onde
    parou (`resetAfterMinutes`) e se abandono de automacao deve gerar handoff

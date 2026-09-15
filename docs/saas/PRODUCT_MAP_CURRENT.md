@@ -198,16 +198,16 @@ Current backlog classification:
   repair path; after owner approval and backup, production reconciliation was
   applied for A only, with one local outbound, one delivered Utility billing
   event, `sentCount=1`, preserved `status=failed`, and no resend. B send,
-  is now PAUSED FOR BILLING UNIT RECONCILIATION because `R$ 0,32` is an
-  internal central planning unit, not a proven final CRA contract unit in the
-  current evidence pack. Opt-out E2E and campaign reports/export/billing
-  evidence remain open until separately exercised.
-- Meta pricing source of truth / FinOps hardening is P1 while B is blocked.
-  Official public Meta pricing confirms per-delivered-message, market/category
-  pricing and official rate-card mechanics; exact structured Brazil rates were
-  not ingested, so provider cost remains `PRICING UNKNOWN` until official source
-  evidence is captured. Contract price, FX and Meta provider cost must be
-  resolved separately.
+  is now gated for explicit owner approval. Official Meta provider cost for one
+  remaining Brazil Utility message was proven from WhatsApp Business Platform
+  Pricing / Meta Developers on 2026-09-15: BRL 0.0350/message, effective
+  2026-07-01, tier 0-250,000. `R$ 0,32` remains an internal planning unit, not a
+  proven final CRA contract unit. Opt-out E2E and campaign
+  reports/export/billing evidence remain open until separately exercised.
+- Meta pricing source of truth / FinOps hardening is P2 generic product backlog.
+  The broad future work is rate-card ingestion, resolver, snapshots, FX and
+  staleness detection. It must not consume the current CRA adherence front
+  beyond the narrow official-rate proof already obtained for Recipient B gate.
 - Watch/external operations: abandoned automation / BOT flow lifecycle local E2E validated on
   2026-09-14 in
   `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`; product

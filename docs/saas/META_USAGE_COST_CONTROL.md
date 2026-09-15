@@ -223,19 +223,21 @@ not from a tenant override. Production read-only config showed no
 `activeMessageBilling`, `billing` or `metaUsagePolicy` unit-price override for
 `demo-converta`, `cra-pr`, `secult-pe` or `syer-rodrigues`. Therefore A's ledger
 is correct as delivered Utility eligibility/count, but the BRL unit for CRA
-remains NOT PROVEN as final contractual unit. Recipient B remains NOT ATTEMPTED
-and paused until billing-unit reconciliation closes.
+remains NOT PROVEN as final contractual unit. Official Meta Brazil Utility cost
+for the remaining tiny Demo test was proven from the WhatsApp Business Platform
+Pricing endpoint on 2026-09-15: BRL 0.0350/message, effective 2026-07-01, tier
+0-250,000 monthly Brazil Utility messages. Recipient B remains NOT ATTEMPTED
+until the owner approves this exact provider-cost gate.
 
 ## Limites e proximos passos
 
 - Source of truth update, 2026-09-15: Meta cost must come from official current
-  WhatsApp Business Platform pricing by market/category/effective date. Canonical
-  design and current audit are in `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md`.
-  Until an official rate card/API/WhatsApp Manager/invoice source is ingested,
-  provider cost status is `PRICING UNKNOWN`; internal values such as
-  `meta-br-planning-2026-08`, USD 0.008 or R$ 0,32 must not be labeled official
-  Meta cost. Contract/client price remains a separate resolver from provider
-  cost and FX.
+  WhatsApp Business Platform pricing by market/category/effective date. The
+  narrow Brazil Utility rate required for Recipient B owner gate is proven:
+  BRL 0.0350/message. Broader source-of-truth automation remains P2 FinOps
+  hardening. Internal values such as `meta-br-planning-2026-08`, USD 0.008 or
+  R$ 0,32 must not be labeled official Meta cost. Contract/client price remains
+  a separate resolver from provider cost and FX.
 - Nao ha conciliacao financeira definitiva automatizada.
 - O bloqueio por limite ainda nao esta ativado nos fluxos reais.
 - Rate card e local e deve ser revisado quando a politica Meta mudar.

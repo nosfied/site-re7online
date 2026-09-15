@@ -286,13 +286,14 @@ contract unit remains NOT PROVEN in the current evidence pack. Recipient B real
 send is PAUSED FOR BILLING UNIT RECONCILIATION. This is a planning preview, not
 a CRA invoice and not a Meta retail fee.
 
-Meta pricing source-of-truth audit, 2026-09-15: official public Meta pricing
-confirms the current model is per delivered message by recipient market/category,
-with rate cards and volume tiers. Exact structured Brazil rates were not
-officially ingested in the audit environment; secondary cross-checks are not
-canonical for billing. Recipient B remains blocked until official provider rate
-evidence and CRA contract unit semantics are proven or explicitly separated from
-Demo capability validation.
+Meta pricing narrow gate, 2026-09-15: official WhatsApp Business Platform
+Pricing / Meta Developers evidence proves the provider cost needed for the
+controlled Demo Utility B gate: Brazil, Utility, BRL, effective 2026-07-01, tier
+0-250,000, R$ 0,0350/message. CRA final contractual active-message unit remains
+NOT PROVEN and separate; `R$ 0,32` remains planning only. Recipient B is NOT
+ATTEMPTED and may only proceed after owner sees and approves the exact
+R$ 0,0350 expected Meta provider cost. Generic Meta pricing source-of-truth
+implementation is P2 FinOps hardening, not the current CRA execution front.
 
 ### Phase B Owner Gate Package
 

@@ -1,6 +1,6 @@
 # Meta Pricing Source Of Truth
 
-Status: FINOPS HARDENING / P1 WHILE REAL CAMPAIGN COST IS BLOCKED.
+Status: FINOPS HARDENING / P2 GENERIC PRODUCT BACKLOG.
 
 Last audit: 2026-09-15.
 
@@ -24,16 +24,20 @@ Official source status:
   pricing, four categories, volume tiers for utility/authentication, free entry
   points and free service/utility responses while applicable.
 - The page links to official rate cards and volume tiers by currency.
-- The exact structured rate-card table was not retrieved through the audit
-  environment because the developer docs endpoint returned rate limiting and
-  the public page rendered rate rows interactively.
+- The official Meta for Developers pricing page states current rate cards and
+  volume tiers are effective July 1, 2026.
+- The official WhatsApp Business pricing page exposes the interactive pricing
+  endpoint `https://whatsappbusiness.com/wp-json/wab/v1/pricing`; querying it on
+  2026-09-15 for `market=BR`, `currency=BRL`, `category=Utility` returned
+  `quote=0.035` and the Brazil Utility tier list below.
 
 Therefore:
 
 - Official pricing model: PROVEN.
-- Exact current structured Brazil rates from official source: NOT INGESTED.
-- Exact rates below remain pending official rate-card import before production
-  billing mutation or Recipient B send.
+- Narrow Brazil Utility Meta provider rate for the controlled Demo validation:
+  PROVEN for owner send gate.
+- Generic Meta pricing resolver/rate-card ingestion remains P2 FinOps hardening.
+- Recipient B still requires explicit owner approval before any real send.
 
 ## Current Pricing Model
 
@@ -61,22 +65,49 @@ metadata before implementation.
 
 ## Brazil Rate Card Status
 
-Official structured rate data was not ingested in this audit.
+Official narrow rate proof for the CRA Demo controlled Utility validation:
 
-Non-canonical cross-checks, citing Meta's official BRL rate card effective
-2026-07-01, report:
+- retrievedAt: 2026-09-15T20:30:57-03:00;
+- official URL: `https://whatsappbusiness.com/products/platform-pricing/`;
+- official endpoint:
+  `https://whatsappbusiness.com/wp-json/wab/v1/pricing?market=BR&currency=BRL&category=Utility`;
+- developer docs reference:
+  `https://developers.facebook.com/docs/whatsapp/pricing`;
+- effective date from Meta Developers: 2026-07-01, based on WhatsApp Business
+  account timezone;
+- market: Brazil (`BR`);
+- category: Utility;
+- currency: BRL;
+- list rate: 0.0350 BRL/message;
+- applicable tiny-test volume tier: 0 to 250,000 monthly Brazil Utility
+  messages;
+- effective rate for one remaining Recipient B message: 0.0350 BRL;
+- expected Meta provider cost for exactly one B delivery outside the customer
+  service window: R$ 0,0350.
 
-| Category | Brazil tier/list rate | Currency | Source status |
-| --- | ---: | --- | --- |
-| Marketing | 0.3217 | BRL/message | Secondary, claims Meta BRL CSV |
-| Utility | 0.0350 | BRL/message | Secondary, claims Meta BRL CSV |
-| Authentication | 0.0350 | BRL/message | Secondary, claims Meta BRL CSV |
-| Service | 0.0000 before 2026-10-01 public-rule context; future changes reported externally | BRL/message | Official public page confirms no charge now; exact future rate not ingested |
+Official endpoint response:
 
-These values are useful for investigation, but they are not yet Converta's
-canonical rate table. Canonical production use requires official source capture:
-downloaded official rate card, WhatsApp Manager/Billing export, Graph/analytics
-endpoint response, or invoice/usage data with source metadata.
+```json
+{
+  "quote": "0.035",
+  "tier_list": [
+    { "min_volume": 0, "max_volume": 250000, "quote": "0.035" },
+    { "min_volume": 250001, "max_volume": 2000000, "quote": "0.0333" },
+    { "min_volume": 2000001, "max_volume": 17000000, "quote": "0.0315" },
+    { "min_volume": 17000001, "max_volume": 35000000, "quote": "0.0298" },
+    { "min_volume": 35000001, "max_volume": 70000000, "quote": "0.028" },
+    {
+      "min_volume": 70000001,
+      "max_volume": 2305843009213693951,
+      "quote": "0.0263"
+    }
+  ]
+}
+```
+
+This narrow proof is sufficient for the owner cost gate for Recipient B. It does
+not implement a generic canonical production rate table. Broader country/category
+resolver, historical snapshots, FX policy and staleness detection remain P2.
 
 ## Canonical Rate Version
 
@@ -265,14 +296,17 @@ approved in this audit.
 Recipient A:
 
 - eligibility/count: correct (`delivered` Utility outside 24h);
-- provider cost: not exactly reconstructable from official source in this audit;
+- provider cost: if A was delivered after the 2026-07-01 effective date, the same
+  official Brazil Utility BRL tier gives R$ 0,0350 provider cost for that one
+  delivered message; do not rewrite contractual billing amount;
 - contract amount: not proven;
 - mutation: none in this audit.
 
 Recipient B:
 
 - status: NOT ATTEMPTED;
-- gate: PAUSED / PRICING RECONCILIATION;
-- do not send until current official Meta Utility rate is proven and CRA
-  contract price semantics are proven or clearly separated from Demo capability
-  validation.
+- gate: READY FOR OWNER SEND GATE, not sent;
+- expected provider cost for one remaining delivered Utility message outside the
+  customer service window: R$ 0,0350;
+- CRA contract price remains separate and NOT PROVEN;
+- do not send until the owner explicitly approves this exact cost.
