@@ -140,7 +140,7 @@ Configuracao operacional:
   retried successfully;
 - active accounts: do not assume activation count without current login
   evidence;
-- department hours: PENDING CUSTOMER CONFIGURATION;
+- department hours: PENDING CUSTOMER CONFIGURATION / NOT RUNTIME P1;
 - no schedule currently means `NO_SCHEDULE` / open according to the current
   domain rule; this is not a technical failure;
 - training: Wednesday 2026-09-09.
@@ -256,9 +256,10 @@ O custo Meta deve ser tratado como risco operacional/comercial controlado, nao c
   usuarios, especialmente 3 admins TI, e guiar configuracao de horarios. A
   ausencia de horario configurado permanece como pendencia operacional do
   cliente, nao falha tecnica.
-- Horarios CRA permanecem P1 porque a capability tecnica existe, mas a
-  configuracao do cliente e a validacao do comportamento fora de expediente no
-  fluxo ainda precisam ser concluidas.
+- Horarios CRA nao permanecem P1 de runtime apos auditoria canonical de
+  2026-09-14. A capability tecnica existe e foi comparada com SECULT sem
+  mudanca de codigo; a pendencia e configurar horarios nos departamentos CRA e
+  validar comportamento fora de expediente.
 - Pendencias contratuais/produto separadas: ciclo receptivo logico para
   mensuracao, template Utility fora de 24h entregue, ledger Meta apos
   2026-10-01, relatorio mensal contratual e alinhamento formal para

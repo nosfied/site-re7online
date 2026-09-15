@@ -161,12 +161,17 @@ Current backlog classification:
   2026-09-14 in
   `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`; product
   decisions remain open for stale `flowContext` cleanup, timeout UX and
-  provider parity; CRA
-  department/flow-aware hours configuration and validation; Demo Meta Cloud
+  provider parity; Demo Meta Cloud
   restriction external remediation (`phone.status=BANNED`, WABA `REJECTED`)
   with Demo Web Session `QR_REQUIRED` preserved without mutation; user
   deactivation active-conversation guard closed / deployed / owner approved /
   production non-destructive validated.
+- CRA/SECULT business-hours audit, 2026-09-14: CLOSED / DOCS-ONLY. The runtime
+  department-hours mechanism is already present and production `secult-pe`
+  preserves its approved `OPEN`/`CLOSED + QUEUE_FOR_NEXT_OPEN` contract. Current
+  `cra-pr` departments have no saved hours and therefore resolve `NO_SCHEDULE`
+  / open; remaining CRA work is config and operational validation, not product
+  runtime P1.
 - P2: question conditional branching by captured answer; reporting context
   enhancements; Guided Builder complete final-review summary; Meta Cloud
   unlink/removal semantics; support access hardening.

@@ -136,12 +136,7 @@ ACTIVE P1:
    duplicidade em nova varredura. Gap restante: limpeza de `flowContext`, copy/
    UX de timeout e paridade provider-independent, sem criar scheduler novo e
    sem auto-close HUMAN.
-2. CRA-PR department/flow-aware hours: P1 / CONFIGURATION + VALIDATION OPEN.
-   Capability de horarios de departamento existe (`businessHours`,
-   `NO_SCHEDULE`, UI em `/app/settings/departments`), mas a configuracao CRA
-   segue pendente do cliente e precisa validacao de comportamento fora de
-   expediente no fluxo. Sem horario salvo significa `NO_SCHEDULE`/aberto.
-3. Demo Meta Cloud restriction: P1 / EXTERNAL META REMEDIATION + CHANNEL
+2. Demo Meta Cloud restriction: P1 / EXTERNAL META REMEDIATION + CHANNEL
    CONTINUITY OPEN. Auditoria somente leitura de 2026-09-14 confirmou o phone
    number Meta do `demo-converta` com `status=BANNED` e WABA com
    `account_review_status=REJECTED`; o business aparece `not_verified` e 3
@@ -266,11 +261,12 @@ Proximas cinco frentes:
    esperado: talvez, reaproveitando executor/processador existente. Config
    esperado: flow-level primeiro. Risco: medio por lifecycle. Done: abandono de
    menu/captura/submenu, inbound tardio, restart e tenant isolation testados.
-2. P1 CRA hours flow-aware validation. Why now: cliente real com configuracao
-   pendente. Valor: evita handoff humano fora do expediente sem bloquear
-   autoatendimento. Dependencia: cliente configurar horarios. Demo validavel:
-   sim. Code esperado: talvez. Config esperado: sim. Risco: baixo/medio. Done:
-   horario CRA salvo e fluxo validado dentro/fora do expediente.
+2. CRA hours configuration and operational validation. Why now: cliente real
+   ainda sem horarios salvos nos departamentos. Valor: ativa o comportamento
+   fora de expediente ja existente sem bloquear autoatendimento. Dependencia:
+   cliente configurar horarios. Demo validavel: sim. Code esperado: nao.
+   Config esperado: sim. Risco: baixo. Done: horario CRA salvo e fluxo validado
+   dentro/fora do expediente.
 3. P2 Question conditional branching. Why now: lacuna descoberta durante 2.4 e
    valor direto para fluxos institucionais. Valor: respostas sim/nao e caminhos
    por resposta. Dependencia: desenho de runtime/predicados. Demo validavel:
@@ -432,6 +428,17 @@ Dividas tecnicas abertas:
 - Demo Web Session recovery: CLOSED / REAL VALIDATED after controlled reconnect.
   Inbound, outbound, close, CSAT and post-send stability passed without
   401/conflict recurrence.
+- CRA/SECULT business hours audit, 2026-09-14: CLOSED / DOCS-ONLY. Canonical
+  HEAD and production HEAD match `56c4a392d1eb017ad8fcafffbad5fbd442e7152f`.
+  The core runtime already resolves `DepartmentBusinessHour` /
+  `DepartmentBusinessHourException` by department with tenant timezone fallback.
+  SECULT keeps the approved contract: departments have Mon-Fri 08:00-17:00
+  `America/Recife` hours, resolve `OPEN` at 12:00 BRT and `CLOSED` at 20:00
+  BRT, and `QUEUE_FOR_NEXT_OPEN` queues closed handoff without autoassign. CRA
+  has no department hours configured, so every audited department resolves
+  `NO_SCHEDULE` both inside and outside the copied 09:00-17:00 text. This is a
+  configuration/operational validation item, not a runtime P1. Detailed record:
+  `docs/saas/CRA_SECULT_BUSINESS_HOURS_AUDIT_2026-09-14.md`.
 - baselines CRA versionados nesta consolidacao como evidencia de validacao, nao como dump operacional:
   - `docs/bids/2026/cra-pr/CRA_PR_DEMO_FLOW_V1_CUSTOMER_VALIDATION_BASELINE.md`;
   - `docs/bids/2026/cra-pr/cra-pr-demo-flow-v1-customer-validation.definition.json`.

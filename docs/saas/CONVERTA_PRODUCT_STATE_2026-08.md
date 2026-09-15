@@ -705,8 +705,11 @@ Commits relevantes do baseline homologado:
   OPEN; SYER ****9614 = CLOSED.
 - Current execution backlog, 2026-09-14: P0 = none. P1 ativo =
   abandoned automation / BOT flow lifecycle com E2E local validado e decisoes de produto ainda abertas,
-  configuracao/validacao CRA de horarios de departamento/fluxo, Demo Meta Cloud
-  restriction externa. P2 ativo = branching condicional por resposta
+  Demo Meta Cloud restriction externa. CRA/SECULT business-hours audit fechado
+  como docs-only: mecanismo runtime por departamento ja existe; SECULT preserva
+  `OPEN`/`CLOSED` com `QUEUE_FOR_NEXT_OPEN`; CRA ainda precisa configuracao
+  operacional de horarios nos departamentos antes de validar fora de expediente,
+  sem patch de runtime. P2 ativo = branching condicional por resposta
   capturada, melhorias de contexto em relatorios, semantica de unlink/remocao
   Meta Cloud, hardening de suporte interno auditado, cross-provider inactivity
   handoff hardening, Guided Builder lifecycle-policy exposure e resumo completo
@@ -745,8 +748,8 @@ Commits relevantes do baseline homologado:
 - Endurecer abandoned automation / BOT flow lifecycle sem auto-close HUMAN,
   agora partindo do E2E local validado e das decisoes abertas sobre
   `flowContext`, copy/UX de timeout e paridade de providers.
-- Guiar configuracao CRA de horarios de departamento e validar fluxo fora de
-  expediente.
+- Guiar configuracao operacional CRA de horarios de departamento e validar
+  fluxo fora de expediente, sem tratar como P1 de runtime.
 - Especificar branching condicional por resposta capturada como novo recurso de
   runtime, nao como correcao do Guided Builder.
 - Criar pacote de screenshots sanitizados para licitacoes quando houver roteiro.
