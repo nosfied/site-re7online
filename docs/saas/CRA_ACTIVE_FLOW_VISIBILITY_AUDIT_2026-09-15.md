@@ -1,6 +1,6 @@
 # CRA Active Flow Tenant Visibility Audit - 2026-09-15
 
-Status: `PRODUCTION EVIDENCE PARTIAL / ROOT CAUSE NOT PROVEN`.
+Status: `P1 / BUG CONFIRMED / ROOT CAUSE PROVEN`.
 
 ## Scope
 
@@ -53,7 +53,7 @@ Runtime flow resolution:
 
 Based on code alone, if a CRA ADMIN successfully reaches `GET /app/chatbot/flows` with effective `clientId` equal to the CRA `Client.id`, the existing active flow should be returned regardless of Guided/Advanced compatibility.
 
-## Open Evidence Required
+## Production Evidence
 
 Production/API evidence collected on 2026-09-15:
 
@@ -87,20 +87,31 @@ Production/API evidence collected on 2026-09-15:
 - admin API `GET /admin/chatbot/flows?clientKey=cra-pr` returned HTTP 200,
   count 1, with the same flow id and definition hash.
 
-Remaining evidence required before classifying root cause:
+Additional real CRA ADMIN trace collected after customer validation:
 
-- authenticated read-only `GET /app/chatbot/flows` as CRA ADMIN;
-- tenant app frontend render proof after a safe CRA ADMIN session exists.
+- Eduardo Emilio Gunha Ceza reproduced the issue as a real CRA ADMIN: the active
+  flow did not appear in tenant-side `Fluxos cadastrados`;
+- user id `cmtkhhxpg000t4spnht121555`;
+- masked email `ed***@cra-pr.org.br`;
+- role `ADMIN`;
+- `isActive=true`;
+- user `clientId=a91ec8de-e80b-4cc6-9ef2-49dbd1b64bfa`;
+- client key `cra-pr`;
+- session `cmu2n3...49cv` was active/unrevoked, with session clientId equal to
+  CRA clientId;
+- nginx access log at `2026-09-15T12:20:10Z` shows Eduardo's `/app/chatbot`
+  page load fired:
+  - `GET /agent-api/app/chatbot/flows` -> HTTP 200, response size 18369;
+  - `GET /agent-api/app/chatbot/settings` -> HTTP 404, response size 66;
+  - `GET /agent-api/app/chatbot/resources` -> HTTP 200;
+  - `GET /agent-api/app/tenant` -> HTTP 200.
 
-No CRA ADMIN/SUPERVISOR `AppAuthSession` was active and unrevoked at
-`2026-09-15T12:05:22.866Z`. Calling `/app/chatbot/flows` without an existing
-session would require login/session creation, and app session validation can
-update `lastSeenAt`. That was intentionally not performed during this
-read-only/no-mutation audit.
+The same pattern also appeared in an earlier Eduardo session at
+`2026-09-15T12:17:56Z`.
 
 ## Current Classification
 
-Classification: `H. NOT PROVEN`.
+Classification: `I. MULTIPLE CAUSES`.
 
 Proven not root cause:
 
@@ -109,28 +120,57 @@ Proven not root cause:
 - admin API exclusion: admin API returns the active flow;
 - runtime entrypoint mismatch: runtime query resolves the same active flow.
 
-Most likely areas to validate first when an authorized CRA app session is
-available:
+Root cause boundary:
 
-1. CRA app session effective `clientId` differs from the CRA flow `clientId`.
-2. Authenticated app API returns the flow but frontend state/error path hides it.
-3. User role/session is not actually `ADMIN`/`SUPERVISOR` in the CRA tenant.
+- `GET /agent-api/app/chatbot/flows` fires and returns HTTP 200 for Eduardo;
+- the tenant app UI still shows no active flow;
+- the first missing layer is frontend hydration/state;
+- in `src/app/app/chatbot/page.tsx`, `loadFlows()` uses one `Promise.all()` for
+  flows, settings and resources;
+- `hydrateFlows(flowResponse.items)` runs only after all three requests succeed;
+- in Eduardo's real request, `/app/chatbot/settings` returns 404, so the
+  `Promise.all()` rejects and `hydrateFlows()` is never called.
 
-These are hypotheses, not proven causes.
+Underlying trigger:
+
+- production `.data/tenants.json` exists but has no `cra-pr` entry;
+- production route `GET /app/chatbot/settings` still reads `getTenants()` and
+  returns `tenant_not_found` when `tenants[client.clientKey]` is absent;
+- this is the tenant-app equivalent of the already closed internal-admin
+  settings DB-backed bug.
+
+Therefore the active flow is present in DB, runtime, admin API and app flows API,
+but is lost in the app UI because settings 404 aborts the shared load.
 
 ## Safe Fix Direction
 
-No patch is authorized from the current evidence.
+No patch was applied in this audit.
 
-Expected safe correction after proof:
+Smallest safe fix proposal:
 
-- make the same existing CRA `ChatbotFlow` visible to authorized CRA users;
+- make `/app/chatbot/settings` DB-backed for `Client` tenants without requiring
+  a legacy `.data/tenants.json` entry, matching the already validated admin
+  settings behavior;
+- decouple app flow hydration from non-critical settings failure so
+  `flowResponse.items` still renders when flows/resources succeed and settings
+  is unavailable;
 - do not recreate the flow;
 - do not mutate `ChatbotFlow.definition`;
-- do not change `entryPoint`, `isActive`, `clientId` or runtime behavior unless a metadata ownership defect is proven and explicitly approved.
+- do not change `entryPoint`, `isActive`, `clientId` or runtime behavior.
+
+Focused regression tests for the patch phase:
+
+- CRA-like DB-backed tenant with no `tenants.json` entry;
+- ADMIN sees active flow in `/app/chatbot`;
+- SUPERVISOR sees active flow according to current RBAC;
+- AGENT remains blocked;
+- active/entryPoint/Advanced definition is visible and not filtered out;
+- tenant isolation preserves other tenants;
+- admin route remains preserved;
+- settings 404/fallback failure must not prevent flow list hydration.
 
 ## Backlog
 
-`CRA ACTIVE FLOW TENANT VISIBILITY`: `PRODUCTION EVIDENCE PARTIAL / APP SESSION PROOF REQUIRED`.
+`CRA ACTIVE FLOW TENANT VISIBILITY`: `P1 / BUG CONFIRMED / ROOT CAUSE PROVEN / PATCH REQUIRED`.
 
 `CRA HOURS`: remains `CLOSED / CONFIGURED / OPERATIONALLY VALIDATED`.

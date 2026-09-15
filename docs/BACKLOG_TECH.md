@@ -145,20 +145,23 @@ ACTIVE P1:
    recente da aplicacao nao e causa comprovada. A Web Session do Demo esta
    `QR_REQUIRED` desde 2026-09-13 22:40:23Z e nao deve ser reconectada,
    desconectada ou limpa sem autorizacao explicita do owner.
-3. CRA active flow tenant visibility: PRODUCTION EVIDENCE PARTIAL / APP SESSION
-   PROOF REQUIRED. Owner reports the active CRA production flow executes
-   correctly but is not visible to CRA tenant ADMINs in `/app/chatbot`. Code
-   audit on `837e609c` shows `/app/chatbot/flows` and `/admin/chatbot/flows`
-   both list `ChatbotFlow` by tenant `clientId` only; `/app` additionally
-   enforces app feature `chatbot` and role ADMIN/SUPERVISOR. Production evidence
-   on 2026-09-15 proved CRA `features.chatbot=true`, 8 active CRA
-   ADMIN/SUPERVISOR users, exactly one CRA flow
-   `cmtkhhxtq002p4spns3fp0yux`, active/entryPoint, definition hash
+3. CRA active flow tenant visibility: P1 / BUG CONFIRMED / ROOT CAUSE PROVEN /
+   PATCH REQUIRED. Real CRA ADMIN Eduardo reproduced that the active flow is
+   absent from tenant-side `Fluxos cadastrados`. Production evidence on
+   2026-09-15 proved CRA `features.chatbot=true`, Eduardo is active ADMIN on the
+   CRA clientId, exactly one CRA flow `cmtkhhxtq002p4spns3fp0yux` exists,
+   active/entryPoint, definition hash
    `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`;
-   runtime entrypoint query and admin API return the same row. Root cause
-   remains not proven because there was no active CRA app session to call
-   `/app/chatbot/flows` without login/session mutation. No flow recreation, flow
-   mutation, code patch, DB mutation or deploy. Detailed record:
+   runtime entrypoint query, admin API and Eduardo's
+   `/agent-api/app/chatbot/flows` request all return the same layer correctly.
+   First missing layer: tenant app frontend hydration. `loadFlows()` uses
+   `Promise.all()` for flows/settings/resources, and Eduardo's
+   `/agent-api/app/chatbot/settings` returns 404 because the app settings route
+   still requires a legacy `.data/tenants.json` entry; production
+   `.data/tenants.json` has no `cra-pr`. The 404 prevents `hydrateFlows()` from
+   running, so the returned flow never reaches UI state. No flow recreation,
+   flow mutation, code patch, DB mutation or deploy in this audit. Detailed
+   record:
    `docs/saas/CRA_ACTIVE_FLOW_VISIBILITY_AUDIT_2026-09-15.md`.
 
 RECENTLY CLOSED:

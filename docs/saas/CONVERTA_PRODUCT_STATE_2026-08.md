@@ -743,10 +743,14 @@ Commits relevantes do baseline homologado:
   `features.chatbot=true`, 8 active CRA ADMIN/SUPERVISOR users, one active
   entrypoint flow `cmtkhhxtq002p4spns3fp0yux`, runtime entrypoint resolution and
   admin API all aligned to definition hash
-  `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`. There
-  was no active CRA app session to call `/app/chatbot/flows` without
-  login/session mutation. Status: PRODUCTION EVIDENCE PARTIAL / ROOT CAUSE NOT
-  PROVEN. Do not recreate or mutate the CRA flow.
+  `d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`. Real CRA
+  ADMIN Eduardo reproduced the UI absence; nginx shows Eduardo's
+  `/agent-api/app/chatbot/flows` request returned 200 while
+  `/agent-api/app/chatbot/settings` returned 404. Root cause: app page
+  `Promise.all()` aborts flow hydration when settings 404s, and the app
+  settings route still requires legacy `.data/tenants.json` for CRA even though
+  CRA is DB-backed. Status: P1 / BUG CONFIRMED / ROOT CAUSE PROVEN / PATCH
+  REQUIRED. Do not recreate or mutate the CRA flow.
 - Suporte interno multitenant ja existe com grant temporario, sessao de suporte,
   auditoria e banner de modo suporte; evolucoes futuras devem focar menor
   privilegio/evidencia operacional. Usuarios x departamentos M2M tambem ja

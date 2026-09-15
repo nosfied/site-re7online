@@ -85,9 +85,15 @@ Evidencia de producao em 2026-09-15 provou CRA `features.chatbot=true`, 8
 usuarios CRA ADMIN/SUPERVISOR ativos, um unico flow CRA ativo/entrypoint
 `cmtkhhxtq002p4spns3fp0yux`, resolucao runtime e API admin alinhadas ao mesmo
 hash de definicao
-`d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`. A prova da
-API/UI `/app` ainda depende de uma sessao CRA app autorizada; nao havia sessao
-ativa para reutilizar sem login/mutacao de sessao.
+`d7026abdbcfd00e05cb6b9121bfad1f63fab7a9506e2b88e8f8d5b701ad7bac4`.
+
+Root cause provada por trace real do CRA ADMIN Eduardo: a UI tenant nao exibe o
+flow, mas `/agent-api/app/chatbot/flows` retorna 200 durante o carregamento. No
+mesmo carregamento, `/agent-api/app/chatbot/settings` retorna 404 porque a rota
+app ainda exige entrada legada em `.data/tenants.json`; CRA e DB-backed e nao
+possui essa entrada. Como `src/app/app/chatbot/page.tsx` usa um unico
+`Promise.all()` para flows/settings/resources, o 404 de settings impede
+`hydrateFlows()` e o flow retornado pela API nao chega ao estado da UI.
 
 ## Users Management 2.0
 
