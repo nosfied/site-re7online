@@ -290,10 +290,20 @@ Meta pricing narrow gate, 2026-09-15: official WhatsApp Business Platform
 Pricing / Meta Developers evidence proves the provider cost needed for the
 controlled Demo Utility B gate: Brazil, Utility, BRL, effective 2026-07-01, tier
 0-250,000, R$ 0,0350/message. CRA final contractual active-message unit remains
-NOT PROVEN and separate; `R$ 0,32` remains planning only. Recipient B is NOT
-ATTEMPTED and may only proceed after owner sees and approves the exact
-R$ 0,0350 expected Meta provider cost. Generic Meta pricing source-of-truth
-implementation is P2 FinOps hardening, not the current CRA execution front.
+NOT PROVEN and separate; `R$ 0,32` remains planning only. Owner approved the
+exact R$ 0,0350 provider-cost gate, but Recipient B is still NOT ATTEMPTED
+because the later operational-default preflight stopped before Meta. Generic
+Meta pricing source-of-truth implementation is P2 FinOps hardening, not the
+current CRA execution front.
+
+Recipient B owner-authorized send gate, 2026-09-15: owner approved B-only, one
+Meta message max, but execution stopped before Meta. Preflight found
+`demo-converta` has no active default operational `Atendimento Geral` +
+`Fila Geral` pair; the existing `Atendimento Geral` is inactive and its
+`Fila Geral` is therefore not a valid active default. The original campaign is
+terminal `failed` and cannot be resumed (`failed -> sending` is invalid). Next
+safe path is a separate owner-approved config-only repair of Demo operational
+default, then a new controlled B-only campaign. Meta calls for B: 0.
 
 ### Phase B Owner Gate Package
 

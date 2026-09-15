@@ -231,9 +231,12 @@ ledger remains correct as delivered Utility eligibility/count, but final CRA BRL
 contract unit is NOT PROVEN. Meta official narrow rate proof for the controlled
 Demo Utility validation was completed on 2026-09-15 from WhatsApp Business
 Platform Pricing / Meta Developers: Brazil, Utility, BRL, effective 2026-07-01,
-tier 0-250,000, rate R$ 0,0350/message. Recipient B remains NOT ATTEMPTED and
-is ready only for owner send gate with expected Meta provider cost R$ 0,0350;
-no CRA invoice amount is claimed. Generic Meta pricing source-of-truth
+tier 0-250,000, rate R$ 0,0350/message. Recipient B remains NOT ATTEMPTED:
+owner authorized B-only on 2026-09-15, but immediate preflight stopped before
+Meta because `demo-converta` lacks an active default operational
+`Atendimento Geral` + `Fila Geral` pair; the existing `Atendimento Geral` is
+inactive. Expected Meta provider cost remains R$ 0,0350 if later delivered; no
+CRA invoice amount is claimed. Generic Meta pricing source-of-truth
 implementation moved to P2 FinOps hardening. Opt-out E2E and
 report/export/billing evidence remain separate open gates. See
 `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md`.

@@ -63,5 +63,9 @@ Phase C send result summary:
   no retry and no further real outbound;
 - Recipient A reconciliation audit: owner-approved constrained repair applied;
   A reconciled and never resent;
+- Recipient B owner-authorized gate: attempted on 2026-09-15, stopped before
+  Meta because Demo operational default was invalid (`Atendimento Geral`
+  inactive, no active default `Atendimento Geral` + `Fila Geral` pair);
+  B remains not attempted externally;
 - evidence: `PHASE_C_CONTROLLED_UTILITY_RESULT_2026-09-15.md`.
 - reconciliation audit: `RECIPIENT_A_RECONCILIATION_AUDIT_2026-09-15.md`.

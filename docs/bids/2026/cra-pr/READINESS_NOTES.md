@@ -497,9 +497,10 @@ Sem envio real.
 - Meta pricing narrow gate, 2026-09-15: fonte oficial WhatsApp Business
   Platform Pricing / Meta Developers prova Brazil Utility BRL R$ 0,0350 por
   mensagem entregue, efetivo em 2026-07-01, tier 0-250.000. B continua NOT
-  ATTEMPTED e so deve avancar apos owner aprovar esse custo provedor exato.
-  Unidade contratual CRA permanece separada e NOT PROVEN; FinOps generico fica
-  P2.
+  ATTEMPTED. Owner aprovou B-only em 2026-09-15, mas o preflight parou antes da
+  Meta porque o Demo nao possui default operacional ativo `Atendimento Geral` +
+  `Fila Geral`; o `Atendimento Geral` existente esta inativo. Unidade
+  contratual CRA permanece separada e NOT PROVEN; FinOps generico fica P2.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.

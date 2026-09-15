@@ -226,8 +226,10 @@ is correct as delivered Utility eligibility/count, but the BRL unit for CRA
 remains NOT PROVEN as final contractual unit. Official Meta Brazil Utility cost
 for the remaining tiny Demo test was proven from the WhatsApp Business Platform
 Pricing endpoint on 2026-09-15: BRL 0.0350/message, effective 2026-07-01, tier
-0-250,000 monthly Brazil Utility messages. Recipient B remains NOT ATTEMPTED
-until the owner approves this exact provider-cost gate.
+0-250,000 monthly Brazil Utility messages. Recipient B remains NOT ATTEMPTED:
+owner approved the provider-cost gate, but the immediate send preflight stopped
+before Meta because Demo lacks an active default operational department/queue
+pair.
 
 ## Limites e proximos passos
 

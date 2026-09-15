@@ -164,7 +164,14 @@ ACTIVE P1:
    (`billing.active_message.delivered`), `sentCount=1`, `status=failed`
    preservado e audit event unico registrado. A nao foi reenviado; B nao foi
    enviado. RECIPIENT A RECONCILIATION = RECONCILED / NEVER RESENT; RECIPIENT B
-   SEND = NOT ATTEMPTED / READY FOR OWNER SEND GATE. Auditoria de
+   SEND = NOT ATTEMPTED / BLOCKED PRE-META BY DEMO OPERATIONAL DEFAULT.
+   Owner autorizou B-only em 2026-09-15, mas o preflight imediato bloqueou antes
+   da Meta: `demo-converta` possui `Atendimento Geral` inativo e `Fila Geral`
+   ligada ao departamento inativo; nao existe par active default
+   `Atendimento Geral` + `Fila Geral`. Como `failed -> sending` e proibido, a
+   campanha original nao pode ser retomada; caminho correto seria nova campanha
+   controlada B-only depois de reparo config-only do default operacional Demo.
+   Meta calls para B nesta tentativa: 0. Auditoria de
    unidade de billing em 2026-09-15 confirmou que `R$ 0,32` veio da premissa
    interna central `R$ 3.200,00 / 10.000 mensagens ativas`, nao de Meta, nao de
    override de tenant e nao de proposta final CRA encontrada. O ledger de A esta

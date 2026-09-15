@@ -233,3 +233,46 @@ Classification:
   PROVEN.
 - B expected contract cost: NOT PROVEN / PAUSED.
 - Two-message expected total: NOT PROVEN / PAUSED.
+
+## Recipient B Owner-Authorized Gate - 2026-09-15
+
+Owner authorized exactly one B-only Meta Utility send to `****6787` after the
+official Meta provider rate was proven as Brazil Utility BRL R$ 0,0350/message.
+
+Execution stopped before Meta.
+
+Preflight evidence:
+
+- template `data_exame`: approved, Utility, `pt_BR`;
+- variable `{{1}}`: approved harmless Demo value `21/03/2026`;
+- B authorization: original campaign recipient resolution contained final
+  `6787`, input length 13, winning resolved conversation length 12, final
+  `6787`;
+- B prior campaign outbound: none;
+- B any `data_exame` outbound: none;
+- last qualifying inbound for B: `2026-09-10T13:39:37.507Z`;
+- preflight timestamp: `2026-09-15T23:47:04.544Z`;
+- elapsed: approximately 130.12 hours;
+- 24h: outside;
+- opt-out events: none;
+- contact operational exclusion: active contact, `operationallyExcludedAt=null`;
+- A safety: one campaign outbound and one delivered billing ledger remain
+  preserved for `****9614`; no resend attempted.
+
+Blocker:
+
+- `demo-converta` has `Atendimento Geral` with slug `atendimento-geral`, but it
+  is inactive;
+- `Fila Geral` exists under that inactive department;
+- no active default operational `Atendimento Geral` + `Fila Geral` pair exists;
+- original campaign is terminal `failed`, and `failed -> sending` is not a
+  valid campaign transition.
+
+Result:
+
+- Meta calls for B: 0;
+- local B OutboundMessage: none;
+- B billing event: none;
+- CRA data used: no;
+- required next step: separate owner-approved config-only repair of Demo
+  operational default, then a new controlled B-only campaign if still desired.

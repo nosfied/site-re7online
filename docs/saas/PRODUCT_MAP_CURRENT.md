@@ -202,8 +202,12 @@ Current backlog classification:
   remaining Brazil Utility message was proven from WhatsApp Business Platform
   Pricing / Meta Developers on 2026-09-15: BRL 0.0350/message, effective
   2026-07-01, tier 0-250,000. `R$ 0,32` remains an internal planning unit, not a
-  proven final CRA contract unit. Opt-out E2E and campaign
-  reports/export/billing evidence remain open until separately exercised.
+  proven final CRA contract unit. Owner authorized B-only send on 2026-09-15,
+  but the immediate preflight stopped before Meta because `demo-converta` has
+  `Atendimento Geral` inactive and no active default operational
+  `Atendimento Geral` + `Fila Geral` pair. Meta calls for B in that attempt: 0.
+  Opt-out E2E and campaign reports/export/billing evidence remain open until
+  separately exercised.
 - Meta pricing source of truth / FinOps hardening is P2 generic product backlog.
   The broad future work is rate-card ingestion, resolver, snapshots, FX and
   staleness detection. It must not consume the current CRA adherence front
