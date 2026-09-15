@@ -19,7 +19,8 @@ Owner authorization was explicit for exactly:
 - transport: `META_CLOUD`
 - message count: 2
 - recipients: the two previously prepared Demo/RE7 test recipients ending `9614` and `6787`
-- reference contractual cost: R$ 0,64
+- reference cost presented at the time: R$ 0,64, later reclassified as central
+  planning reference pending billing-unit reconciliation
 
 No CRA data was used.
 
@@ -86,11 +87,12 @@ Runtime event file read-back:
   product billing/report evidence must not be invented.
 - `****6787`: not submitted; not billable.
 
-Total contractual evidence from this run: R$ 0,00.
+Total local ledger evidence from the original failed run: R$ 0,00.
 
-Expected R$ 0,64 was not reached because both messages did not complete through
-the local persisted billing/reporting pipeline, and the controlled campaign
-failed before the second send.
+The previous expected R$ 0,64 was not reached and must not be treated as final
+CRA contractual evidence: billing-unit audit later traced R$ 0,32/message to the
+internal central planning premise `R$ 3.200,00 / 10.000 mensagens ativas`, not
+to Meta, tenant config or a final CRA proposal found in the repo.
 
 ## Report / Export
 
@@ -199,3 +201,35 @@ and the campaign was not marked completed.
 
 Detailed audit:
 `RECIPIENT_A_RECONCILIATION_AUDIT_2026-09-15.md`.
+
+## Billing Unit Reconciliation - 2026-09-15
+
+Real send remains stopped for Recipient B.
+
+Findings:
+
+- `R$ 0,32` source: internal commercial planning premise in
+  `docs/bids/2026/cra-pr-90004-2026/proposta-comercial-premissas.md`, central
+  recommendation `R$ 3.200,00/month / 10.000 active messages/month`.
+- This value is not Meta cost, not stored in `billing.active_message.delivered`,
+  not a tenant override, and not a final submitted CRA commercial proposal found
+  in the repo.
+- Commercial premise range from the same source:
+  - minimum prudent: `R$ 37.800,00/year / 120.000 = R$ 0,315`;
+  - central recommendation: `R$ 38.400,00/year / 120.000 = R$ 0,32`;
+  - high recommendation: `R$ 39.600,00/year / 120.000 = R$ 0,33`;
+  - edital maximum: `R$ 40.693,00/year / 120.000 = approximately R$ 0,339108`.
+- Meta planning estimate recorded for A:
+  `estimatedMetaUnitCostUsd=0.008`, `estimatedMetaCostUsd=0.008`,
+  `rateCardVersion=meta-br-planning-2026-08`. Provider invoice amount is not
+  available in local evidence.
+- Tenant config read-only matrix: `demo-converta`, `cra-pr`, `secult-pe` and
+  `syer-rodrigues` have no active BRL Utility unit override in
+  `activeMessageBilling`, `billing` or `metaUsagePolicy`.
+
+Classification:
+
+- A ledger: correct as delivered Utility eligibility/count; BRL final unit NOT
+  PROVEN.
+- B expected contract cost: NOT PROVEN / PAUSED.
+- Two-message expected total: NOT PROVEN / PAUSED.

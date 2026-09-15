@@ -179,14 +179,17 @@ Demo Phase B owner gate, 2026-09-15: para o primeiro envio controlado proposto
 com 2 mensagens, usar a premissa comercial central documentada para CRA
 (`R$ 3.200,00`/mes para `10.000` mensagens ativas) como referencia contratual
 de planejamento: `R$ 0,32` por mensagem ativa billable; `2 x R$ 0,32 =
-R$ 0,64`. Este valor nao e fatura CRA nem custo Meta retail. O envio real segue
-bloqueado ate aprovacao explicita do owner.
+R$ 0,64`. Em auditoria posterior, este valor foi reclassificado como referencia
+central de planejamento, nao como unidade contratual final CRA provada, nao como
+config de tenant e nao como custo Meta retail. O envio real segue bloqueado ate
+aprovacao explicita do owner e reconciliacao da unidade de billing.
 
 Demo Phase C controlled gate, 2026-09-15: os destinatarios Demo/RE7 finais
 `9614` e `6787` foram autorizados para a previsualizacao; ambos estavam fora
 de 24h, sem opt-out ativo encontrado, e o envio de 2 mensagens manteria a mesma
-referencia de R$ 0,64. REAL SEND = NO ate aprovacao explicita do envio exato e
-nova checagem 24h/opt-out imediatamente antes do disparo.
+referencia central anterior de R$ 0,64. REAL SEND = NO ate aprovacao explicita
+do envio exato, nova checagem 24h/opt-out e reconciliacao da unidade de billing
+imediatamente antes do disparo.
 
 Demo Phase C controlled send, 2026-09-15: o envio real autorizado parou com
 evidencia parcial. A Meta aceitou 1 template Utility `data_exame` para
@@ -196,8 +199,10 @@ nao houve OutboundMessage persistido nem ledger de billing porque o runner
 falhou com `default_operational_department_missing` antes da persistencia local;
 os webhooks chegaram como status sem OutboundMessage correlacionavel. Nao criar
 evento entregue sintetico nem billing retroativo sem reconciliacao aprovada.
-`****6787` nao foi enviado. O custo esperado R$ 0,64 nao foi atingido porque o
-run falhou antes de duas mensagens entregues/persistidas pelo pipeline local.
+`****6787` nao foi enviado. O custo BRL final nao foi fechado porque o run
+falhou antes de duas mensagens entregues/persistidas pelo pipeline local e a
+unidade R$ 0,32 foi depois reclassificada como premissa central nao provada como
+unidade final CRA.
 
 Recipient A reconciliation, 2026-09-15: read-only production evidence was
 sufficient for a constrained repair for `****9614` only, and the owner approved
@@ -205,8 +210,21 @@ the production repair. The delivered webhook is billable Utility/PMP, the send
 occurred outside 24h, no active opt-out was found, and no existing local
 outbound or `billing.active_message.delivered` duplicate existed. Billing was
 created through the existing idempotent active-message delivery rule, producing
-exactly one `billing.active_message.delivered` event for Recipient A. Contractual
-reference amount: R$ 0,32 for this one reconciled active Utility delivery.
+exactly one `billing.active_message.delivered` event for Recipient A.
+
+Billing unit reconciliation, 2026-09-15: the `billing.active_message.delivered`
+event is a canonical eligibility/count event and does not persist a BRL amount.
+The local Meta usage payload for A records planning Meta estimate
+`estimatedMetaUnitCostUsd=0.008`, `estimatedMetaCostUsd=0.008`,
+`rateCardVersion=meta-br-planning-2026-08`; this is not a provider invoice.
+The `R$ 0,32` value previously used in docs comes from the internal central
+commercial premise `R$ 3.200,00 / 10.000 mensagens ativas`, not from Meta and
+not from a tenant override. Production read-only config showed no
+`activeMessageBilling`, `billing` or `metaUsagePolicy` unit-price override for
+`demo-converta`, `cra-pr`, `secult-pe` or `syer-rodrigues`. Therefore A's ledger
+is correct as delivered Utility eligibility/count, but the BRL unit for CRA
+remains NOT PROVEN as final contractual unit. Recipient B remains NOT ATTEMPTED
+and paused until billing-unit reconciliation closes.
 
 ## Limites e proximos passos
 

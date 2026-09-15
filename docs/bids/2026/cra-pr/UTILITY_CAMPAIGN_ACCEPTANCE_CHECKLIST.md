@@ -273,10 +273,13 @@ Pre-send local gate:
 - pause: implemented for running campaigns, needs Demo evidence;
 - cancel: implemented for draft/scheduled/sending/paused, needs Demo evidence;
 - expected reference cost for first 2-message controlled send:
-  `2 x R$ 0,32 = R$ 0,64`.
+  PAUSED. Previous `2 x R$ 0,32 = R$ 0,64` is only a central planning
+  reference from `R$ 3.200,00 / 10.000 mensagens ativas`, not a proven final
+  CRA contract unit.
 
 Owner approval is still required for exact recipients, send window, 24h proof,
-message count and real Meta outbound.
+message count, billing unit and real Meta outbound. Recipient B remains paused
+until billing-unit reconciliation closes.
 
 ## Demo Phase C Controlled Utility Gate - 2026-09-15
 
@@ -291,8 +294,9 @@ No real send executed.
 - Opt-out precheck: PASS, no active opt-out event found for the two masked
   targets.
 - Transport: `META_CLOUD`.
-- Expected reference cost: R$ 0,64.
-- Owner real-send approval: PENDING for this exact send preview.
+- Expected reference cost: PAUSED FOR BILLING UNIT RECONCILIATION.
+- Owner real-send approval: PENDING for this exact send preview and billing
+  unit.
 - Real Meta outbound: NOT EXECUTED.
 
 Before any real send, re-run 24h and opt-out checks and capture owner approval

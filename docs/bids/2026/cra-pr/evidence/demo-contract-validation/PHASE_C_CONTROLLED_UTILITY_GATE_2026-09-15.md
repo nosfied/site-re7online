@@ -78,7 +78,8 @@ Result: PASS for this pre-send gate. Recheck immediately before any real send.
 - Message count: 2
 - Variables: Demo-safe dates only, one resolved value per recipient
 - Transport: `META_CLOUD`
-- Expected contractual reference cost: `2 x R$ 0,32 = R$ 0,64`
+- Expected cost reference at the time: `2 x R$ 0,32 = R$ 0,64`; later
+  reclassified as central planning reference pending billing-unit reconciliation
 
 ## Send Gate
 
@@ -92,7 +93,7 @@ Required before sending:
 - owner approves the exact template;
 - owner approves the two masked recipients;
 - owner approves message count 2;
-- owner approves expected cost R$ 0,64;
+- owner approves expected cost after billing-unit reconciliation;
 - operator rechecks 24h window and opt-out immediately before send.
 
 ## Lifecycle Evidence Classification

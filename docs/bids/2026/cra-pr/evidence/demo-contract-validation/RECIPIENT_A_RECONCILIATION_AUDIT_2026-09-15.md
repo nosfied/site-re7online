@@ -171,3 +171,18 @@ Production result:
 This closes only Recipient A local reconciliation. It does not close the
 campaign as completed, does not authorize Recipient B, and does not replace
 remaining report/export/customer acceptance evidence.
+
+## Billing Unit Follow-Up
+
+Later on 2026-09-15, the owner questioned whether `R$ 0,32/message` was the
+correct CRA Utility unit. Read-only audit classified:
+
+- `billing.active_message.delivered`: correct canonical eligibility/count event
+  for A; it does not persist a BRL amount.
+- `R$ 0,32`: internal central planning reference from
+  `R$ 3.200,00/month / 10.000 mensagens ativas`, not Meta cost and not a tenant
+  override.
+- Meta estimate for A: local planning estimate USD `0.008`, not provider
+  invoice evidence.
+- Final CRA BRL contract unit: NOT PROVEN in the current repository evidence.
+- Recipient B: remains NOT ATTEMPTED and paused for billing-unit reconciliation.

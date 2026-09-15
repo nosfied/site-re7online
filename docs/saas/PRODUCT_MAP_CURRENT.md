@@ -198,8 +198,10 @@ Current backlog classification:
   repair path; after owner approval and backup, production reconciliation was
   applied for A only, with one local outbound, one delivered Utility billing
   event, `sentCount=1`, preserved `status=failed`, and no resend. B send,
-  opt-out E2E and campaign reports/export/billing evidence remain open until
-  separately exercised.
+  is now PAUSED FOR BILLING UNIT RECONCILIATION because `R$ 0,32` is an
+  internal central planning unit, not a proven final CRA contract unit in the
+  current evidence pack. Opt-out E2E and campaign reports/export/billing
+  evidence remain open until separately exercised.
 - Watch/external operations: abandoned automation / BOT flow lifecycle local E2E validated on
   2026-09-14 in
   `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`; product
@@ -237,15 +239,16 @@ Current backlog classification:
   Approved Demo Utility template `data_exame` (`pt_BR`, one date variable) is
   suitable for Demo/RE7 test data only, not as CRA copy. Local pre-send checks
   pass 13/13 for import, dedupe, variables, opt-out exclusion, lifecycle and
-  billing idempotency. Planned controlled owner gate is 2 messages with
-  reference contractual preview of R$ 0,64, still blocked until explicit owner
-  approval and 24h-window check immediately before sending.
+  billing idempotency. Planned controlled owner gate is 2 messages; prior
+  R$ 0,64 preview is paused as central planning reference until billing-unit
+  reconciliation closes, with explicit owner approval and 24h-window check still
+  required before sending.
 - CRA-PR Demo Phase C controlled Utility gate, 2026-09-15: PREPARED / OWNER
   REAL-SEND APPROVAL PENDING / NO EXTERNAL SEND. Owner authorized known Demo/RE7
   finals `9614` and `6787`; read-back confirms `data_exame` approved, both
-  outside 24h, no active opt-out found, final unique recipients 2 and reference
-  cost R$ 0,64. This does not close CRA-specific acceptance and does not execute
-  Meta outbound.
+  outside 24h, no active opt-out found and final unique recipients 2. BRL cost
+  is paused for billing-unit reconciliation. This does not close CRA-specific
+  acceptance and does not execute Meta outbound.
 - CRA-PR Demo Phase C controlled Utility send, 2026-09-15: PARTIAL REAL META
   ACCEPTANCE / PRODUCT ISSUE FOUND / GENERIC FIX DEPLOYED / STOP. Meta accepted one
   `data_exame` template for `****9614`, owner confirmed real receipt, and Meta

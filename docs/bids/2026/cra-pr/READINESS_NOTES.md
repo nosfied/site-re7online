@@ -469,14 +469,17 @@ Sem envio real.
   antes do inicio.
 - Cancel: implementado para draft/scheduled/sending/paused, precisa evidencia
   Demo controlada.
-- Custo de gate: premissa central R$ 3.200,00/mes para 10.000 mensagens ativas,
-  referencia R$ 0,32 por mensagem; 2 mensagens = R$ 0,64 de teto referencial.
+- Custo de gate: PAUSED FOR BILLING UNIT RECONCILIATION. A referencia anterior
+  R$ 0,32 por mensagem veio da premissa central interna R$ 3.200,00/mes para
+  10.000 mensagens ativas; nao e preco Meta e nao foi provada como unidade
+  contratual final CRA no pacote atual.
 - Phase C gate em 2026-09-15: owner autorizou os destinatarios Demo/RE7 por
   finais `9614` e `6787`; preflight PASS; template `data_exame` segue
   approved; ambos fora de 24h; nenhum opt-out ativo encontrado; `6787` possui
   historico duplicado de provider mas dedupe reduz a um alvo final; final unique
-  targets = 2; custo referencial R$ 0,64. REAL SEND = NO ate aprovacao
-  explicita deste envio exato apos preview final.
+  targets = 2; custo referencial anterior R$ 0,64 agora fica suspenso ate
+  reconciliacao da unidade de billing. REAL SEND = NO ate aprovacao explicita
+  deste envio exato apos preview final e unidade de billing validada.
 - Phase C send autorizado em 2026-09-15: execucao real parou com ISSUE. Meta
   aceitou 1 Utility `data_exame` para `****9614`, mas o runner falhou com
   `default_operational_department_missing` antes de persistir OutboundMessage,
@@ -487,8 +490,11 @@ Sem envio real.
   documentou reparo restrito possivel e o owner aprovou a reconciliacao em
   producao: foi criado um OutboundMessage local para A com o Meta id recuperado,
   aplicado billing delivered idempotente, ajustado `sentCount=1` e preservado
-  `status=failed`. A nao foi reenviado; B segue nao tentado; retry bloqueado
-  ate gate separado.
+  `status=failed`. A nao foi reenviado; B segue nao tentado. O ledger de A esta
+  correto como elegibilidade/contagem delivered Utility fora de 24h, mas o
+  valor R$ 0,32 e classificado como referencia central de planejamento ainda nao
+  provada como unidade final CRA. B SEND = PAUSED FOR BILLING UNIT
+  RECONCILIATION.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.

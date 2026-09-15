@@ -270,15 +270,21 @@ Reference package:
 
 - R$ 3.200,00/month central recommendation;
 - 10,000 active messages/month estimated;
-- derived planning unit: R$ 0,32 per billable active Utility message.
+- derived central planning unit: R$ 0,32 per billable active Utility message.
 
 Owner-gate example for 2 messages:
 
 ```text
-2 x R$ 0,32 = R$ 0,64 maximum contractual reference amount
+2 x R$ 0,32 = R$ 0,64 central planning reference amount
 ```
 
-This is a planning preview, not a CRA invoice and not a Meta retail fee.
+Billing unit reconciliation update, 2026-09-15: `R$ 0,32` comes from the
+internal central commercial premise `R$ 3.200,00 / 10.000 mensagens ativas`,
+not from Meta, not from a persisted tenant billing override, and not from a
+final submitted CRA commercial proposal found in this repository. The exact CRA
+contract unit remains NOT PROVEN in the current evidence pack. Recipient B real
+send is PAUSED FOR BILLING UNIT RECONCILIATION. This is a planning preview, not
+a CRA invoice and not a Meta retail fee.
 
 ### Phase B Owner Gate Package
 
@@ -302,7 +308,8 @@ pending owner approval; choose a monitored business-hours window
 pending proof immediately before send; selected recipients must be outside 24h
 
 EXPECTED CONTRACT COST:
-R$ 0,64 reference maximum for 2 billable active Utility messages
+PAUSED FOR BILLING UNIT RECONCILIATION. Prior R$ 0,64 is only central planning
+reference, not final CRA unit evidence.
 
 OPT-OUT:
 precheck locally PASS; Demo production opt-out exclusion evidence pending
@@ -372,7 +379,7 @@ TRANSPORT:
 META_CLOUD
 
 EXPECTED CONTRACTUAL COST:
-R$ 0,64 reference total
+PAUSED FOR BILLING UNIT RECONCILIATION
 
 REAL META OUTBOUND:
 NOT EXECUTED

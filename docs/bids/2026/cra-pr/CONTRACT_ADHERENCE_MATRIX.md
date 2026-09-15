@@ -29,9 +29,12 @@ does not close CRA campaign acceptance or billing evidence. Generic local repair
 is deployed and non-destructive validated: pre-send operational default
 validation, idempotent submit/accepted events, retry stop with
 reconciliation-required evidence, and orphan status recording without synthetic
-billing. This closes the generic product bug, but does not close CRA campaign
-acceptance, recipient A reconciliation, recipient B send, opt-out E2E or
-report/export/billing evidence.
+billing. Recipient A was later reconciled locally after owner approval, without
+resend; however, billing-unit audit showed `R$ 0,32` is an internal central
+planning reference (`R$ 3.200,00 / 10.000`) and not a proven final CRA contract
+unit. This closes the generic product bug and A local reconciliation, but does
+not close CRA campaign acceptance, recipient B send, opt-out E2E,
+report/export/billing evidence or BRL unit-price acceptance.
 
 This document separates four things that must not be conflated:
 
@@ -165,7 +168,7 @@ Read-only production snapshot collected on 2026-09-15.
 | CRA-OPT-001 | resposta esclarecimento item 10 | Opt-out with audit and campaign block | Operational event/blocking support documented | No CRA opt-out sample | E1/E2 | DOCUMENTATION/EVIDENCE GAP | C0 | P1 evidence | Contractual opt-out evidence missing | Execute redacted opt-out/campaign-block smoke | RE7 | E4/E6 |
 | CRA-REP-001 | resposta esclarecimento item 11 | Export CSV/XLSX or equivalent; PDF report format | CSV reports exist; PDF where applicable; XLSX via equivalent/conversion | CRA reports enabled | E1/E3 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | CRA export samples missing | Generate redacted CSV/PDF/equivalent evidence | RE7 | E4/E6 |
 | CRA-REP-002 | aderencia #50 | Monthly consumption report | Meta usage report/CSV documented | No CRA campaign usage | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | Needs CRA utility-delivered sample | Validate monthly report with controlled campaign | RE7 | E4 |
-| CRA-BILL-001 | resposta esclarecimento items 1-6 | Bill only delivered utility templates outside 24h; read status no extra | Semantics documented in product docs | No CRA billing sample | E1 | DOCUMENTATION/EVIDENCE GAP | C0 | P1 evidence | Contract billing reconciliation not evidenced | Produce billing proof from controlled delivered utility template | RE7 | E6 |
+| CRA-BILL-001 | resposta esclarecimento items 1-6 | Bill only delivered utility templates outside 24h; read status no extra; Meta cost included in proposal; excedents same unit price with approval | Semantics documented; Demo A has one reconciled `billing.active_message.delivered` eligibility/count event | No CRA billing sample; BRL unit price not proven because `R$ 0,32` is central planning reference, no tenant override/final proposal source found | E1/E4 | BILLING UNIT RECONCILIATION OPEN | C0 | P1 evidence | Contract billing unit and CRA report total not evidenced | Reconcile final CRA unit before B send; then produce billing proof from controlled delivered Utility template | RE7 | E6 |
 | CRA-SLA-001 | aderencia #52; suporte SLA | Availability target 99.5% and operation except maintenance | Health/monitoring exists; SLA plan exists | Not acceptance-evidenced | E1 | DOCUMENTATION/EVIDENCE GAP | C1 | docs/ops | Availability evidence and maintenance log missing | Prepare SLA evidence/runbook appendix | RE7 | E6 |
 | CRA-SUP-001 | suporte SLA | Remote support, severity and response targets | Support process planned | Not customer-evidenced | E1 | DOCUMENTATION/EVIDENCE GAP | C1 | docs/ops | Support channel/ticket evidence missing | Define channels and ticket register for CRA | RE7 + CRA | E6 |
 | CRA-BKP-001 | proposta tecnica arquitetura | Backup/restore routine | Runbooks exist | CRA-specific restore evidence absent | E1 | DOCUMENTATION/EVIDENCE GAP | C2 | docs/ops | Backup cadence/retention proof not packaged | Attach backup/restore policy evidence | RE7 | E6 |
@@ -269,8 +272,10 @@ cost, campaign name and number of messages.
   `9614` and `6787`; read-back confirms Demo ACTIVE, template `data_exame`
   approved, Meta config present, Web Session connected, migrations up to date,
   both recipients outside 24h and no active opt-out found. Final unique targets:
-  2. Expected reference cost: R$ 0,64. Evidence remains gate-level until real
-  outbound is explicitly approved and executed.
+  2. Expected reference cost is now PAUSED FOR BILLING UNIT RECONCILIATION; the
+  previous R$ 0,64 was a central planning reference, not a proven final CRA
+  contract unit. Evidence remains gate-level until real outbound, billing unit
+  and execution window are explicitly approved.
 - CRA Demo Phase C controlled send: PARTIAL REAL META ACCEPTANCE / PRODUCT
   ISSUE FOUND / STOP. Campaign `d9874c03-10e8-4061-a92e-6caa7b3001c3` accepted
   one Meta Utility template for `****9614`, then failed with
@@ -282,7 +287,10 @@ cost, campaign name and number of messages.
   aggregate `sentCount=1`, kept campaign `status=failed`, and recorded a manual
   audit event. A was never resent and B remains unattempted. This closes only
   Recipient A local reconciliation; campaign reporting/export acceptance and any
-  remaining send still require separate owner gates.
+  remaining send still require separate owner gates. B SEND = PAUSED FOR
+  BILLING UNIT RECONCILIATION. A ledger is correct as delivered Utility
+  eligibility/count, but the BRL amount must not be treated as final CRA
+  contractual unit until the commercial source is reconciled.
 - Residual CRA contract readiness must now be tracked through this matrix.
 - The remaining highest-risk gaps are contractual/configuration/evidence gaps,
   not a reason to reopen already closed flow or business-hours fronts.

@@ -184,7 +184,8 @@ sent. Canonical plan:
 Phase B owner gate is prepared without real Meta outbound: approved Demo
 Utility template `data_exame` (`pt_BR`, one `{{1}}` date variable) is suitable
 for Demo/RE7 test data only, local pre-send checks pass 13/13, and a controlled
-2-message gate has a reference contractual preview of R$ 0,64. The old HUMAN
+2-message gate previously used R$ 0,64 as central planning reference, now paused
+until billing-unit reconciliation. The old HUMAN
 waiting-on-customer 1h auto-close interpretation is SUPERSEDED / NOT REQUIRED;
 human conversations may remain open under attendant control. The real lifecycle
 front is BOT/FLOW abandonment, already validated for `resetAfterMinutes`, stale
@@ -195,8 +196,9 @@ authorized the known Demo/RE7 recipient finals `9614` and `6787`; production
 read-back confirms Demo ACTIVE/business, campaigns/templates enabled, Meta
 config present, Web Session connected, `data_exame` still approved, migrations
 up to date, both recipients outside 24h, no active opt-out found, final unique
-targets 2 and expected reference cost R$ 0,64. Real send remains blocked until
-explicit approval of this exact final preview.
+targets 2 and BRL cost paused for billing-unit reconciliation. Real send remains
+blocked until explicit approval of this exact final preview and validated
+billing unit.
 Guided Builder - BOT inactivity policy UX is now tracked as P2 / UX + PRODUCT
 CLARIFICATION / OPEN: future Guided UI must explain `resetAfterMinutes` and
 `inactivityPolicy.timeoutMinutes/action=HANDOFF` as independent business
@@ -222,8 +224,12 @@ smoke passed. No new real send occurred; `****9614` is a hard no-resend and
 approval and backup, production reconciliation created exactly one local
 outbound for A, created one idempotent delivered Utility billing event from the
 recovered Meta webhook, set `sentCount=1`, and preserved campaign
-`status=failed`. A was never resent. Recipient B send, opt-out E2E and
-report/export/billing evidence remain separate open gates.
+`status=failed`. A was never resent. Billing-unit audit confirmed `R$ 0,32`
+comes from the internal central planning premise `R$ 3.200,00 / 10.000`, not
+from Meta, a tenant override, or a final CRA proposal found in the repo. A's
+ledger remains correct as delivered Utility eligibility/count, but final CRA BRL
+unit is NOT PROVEN. Recipient B send is PAUSED FOR BILLING UNIT RECONCILIATION;
+opt-out E2E and report/export/billing evidence remain separate open gates.
 
 ## Modelos Meta
 

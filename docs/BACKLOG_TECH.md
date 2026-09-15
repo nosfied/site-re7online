@@ -164,7 +164,12 @@ ACTIVE P1:
    (`billing.active_message.delivered`), `sentCount=1`, `status=failed`
    preservado e audit event unico registrado. A nao foi reenviado; B nao foi
    enviado. RECIPIENT A RECONCILIATION = RECONCILED / NEVER RESENT; RECIPIENT B
-   SEND permanece PENDING NEW OWNER GATE;
+   SEND = PAUSED FOR BILLING UNIT RECONCILIATION / NOT ATTEMPTED. Auditoria de
+   unidade de billing em 2026-09-15 confirmou que `R$ 0,32` veio da premissa
+   interna central `R$ 3.200,00 / 10.000 mensagens ativas`, nao de Meta, nao de
+   override de tenant e nao de proposta final CRA encontrada. O ledger de A esta
+   correto como elegibilidade/contagem delivered Utility fora de 24h, mas a
+   unidade BRL final CRA permanece NOT PROVEN;
    OPT-OUT E2E e REPORTS/EXPORT/BILLING permanecem pendentes ate nova evidencia
    valida de campanha.
 
@@ -220,7 +225,9 @@ WATCH / EXTERNAL OPERATIONS:
    Phase B owner gate, 2026-09-15: template Demo aprovado `data_exame`
    (Utility/pt_BR, 1 variavel Data) e adequado apenas para homologacao Demo com
    dados de teste; testes locais de precheck 13/13 PASS; custo de referencia
-   para 2 mensagens = R$ 0,64. Sem envio real. Correcao de backlog: HUMAN
+   anterior para 2 mensagens = R$ 0,64, agora reclassificado como referencia
+   central de planejamento pendente de reconciliacao de unidade. Sem envio real.
+   Correcao de backlog: HUMAN
    waiting-on-customer 1h e SUPERSEDED / NOT REQUIRED; atendimento humano pode
    permanecer aberto sob controle do atendente. O front correto e BOT/FLOW
    lifecycle, ja validado para resetAfterMinutes, stale pending question reset e
@@ -232,9 +239,10 @@ WATCH / EXTERNAL OPERATIONS:
    `data_exame` ainda `approved`, migrations 58 up to date. Ambos os
    destinatarios estao fora de 24h por ultimo inbound em 2026-09-10, sem
    opt-out ativo encontrado, dedupe reduz `6787` a um alvo final apesar de
-   historico duplicado de provider. Preview: 2 mensagens META_CLOUD, custo
-   referencial R$ 0,64. REAL SEND = NO; parar no owner real-send hard gate ate
-   aprovacao explicita deste envio exato apos preview final.
+   historico duplicado de provider. Preview: 2 mensagens META_CLOUD; custo BRL
+   pausado para reconciliacao de unidade. REAL SEND = NO; parar no owner
+   real-send hard gate ate aprovacao explicita deste envio exato apos preview
+   final e unidade de billing validada.
    Phase C controlled send, 2026-09-15: OWNER AUTHORIZED / PARTIAL REAL META
    ACCEPTANCE / PRODUCT ISSUE FOUND / STOP. Campanha
    `d9874c03-10e8-4061-a92e-6caa7b3001c3` criada no Demo. Meta Cloud aceitou 1
