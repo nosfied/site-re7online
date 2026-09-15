@@ -388,7 +388,7 @@ Evidence file:
 ## Phase C Controlled Utility Send Result - 2026-09-15
 
 Status: OWNER AUTHORIZED / PARTIAL REAL META ACCEPTANCE / PRODUCT ISSUE FOUND /
-LOCAL FIX TESTED / STOP.
+GENERIC FIX DEPLOYED / STOP.
 
 Campaign id: `d9874c03-10e8-4061-a92e-6caa7b3001c3`.
 
@@ -425,14 +425,17 @@ because no local OutboundMessage existed. A local generic fix was implemented
 and tested without tenant hardcode: operational default preflight before Meta
 send, idempotent submit/provider-accepted events, reconciliation-required
 retry stop, and `webhook.status.orphaned` evidence without synthetic billing.
-No deploy and no new real send were executed.
+The generic repair was deployed to production on 2026-09-15 via FF-only update
+to `b8c8f616`, with persistent PostgreSQL backup, no migration, no db push and
+reload only of `re7-whatsapp-agent`. Health/db and non-destructive bundle smoke
+passed. No retry and no new real send were executed.
 
 Evidence file:
 `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_C_CONTROLLED_UTILITY_RESULT_2026-09-15.md`.
 
-Next required gate: deploy/review of the generic repair plus a fresh explicit
-owner send gate before any controlled Meta send. `****9614` must not be resent;
-`****6787` remains unattempted.
+Next required gate: a fresh explicit owner send gate before any controlled Meta
+send. `****9614` must not be resent; `****6787` remains unattempted. Manual
+reconciliation for A remains an owner decision, not an automatic deploy action.
 
 ### Guided Builder - Bot Inactivity Policy UX Backlog
 

@@ -178,8 +178,9 @@ Demo/CRA/SECULT/Syer flow definition hashes stayed unchanged during smoke.
 Current backlog classification:
 
 - P0: none.
-- P1: Campaign post-Meta persistence / operational default remains BUG
-  CONFIRMED / LOCAL GENERIC FIX TESTED / DEPLOY GATE OPEN. Demo Phase C
+- P1: none.
+- Campaign post-Meta persistence / operational default is CLOSED / DEPLOYED /
+  TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Demo Phase C
   `data_exame` accepted one Meta send for `****9614`; owner confirmed real
   receipt and Meta `sent`/`delivered` webhook events were later found, but the
   local OutboundMessage/ledger/report rows were missing because the runner
@@ -189,9 +190,12 @@ Current backlog classification:
   webhook status evidence without synthetic billing. Read-only risk audit shows
   the latent class is not Demo-only: `cra-pr`, `demo-converta`, `secult-pe` and
   `syer-rodrigues` lack configured operational defaults and active general
-  defaults, while `re7online` has one active general default. No deploy or new
-  real send has occurred; `****9614` must not be resent and `****6787` needs a
-  fresh owner gate.
+  defaults, while `re7online` has one active general default. Production deploy
+  was FF-only on 2026-09-15 at `b8c8f616`, reloading only
+  `re7-whatsapp-agent`; health/db and non-destructive bundle smoke passed. No
+  new real send occurred; `****9614` must not be resent and `****6787` needs a
+  fresh owner gate. A reconciliation, B send, opt-out E2E and campaign
+  reports/export/billing evidence remain open until separately exercised.
 - Watch/external operations: abandoned automation / BOT flow lifecycle local E2E validated on
   2026-09-14 in
   `docs/saas/INACTIVITY_AUTOMATION_LIFECYCLE_AUDIT_2026-09-14.md`; product
@@ -239,12 +243,13 @@ Current backlog classification:
   cost R$ 0,64. This does not close CRA-specific acceptance and does not execute
   Meta outbound.
 - CRA-PR Demo Phase C controlled Utility send, 2026-09-15: PARTIAL REAL META
-  ACCEPTANCE / PRODUCT ISSUE FOUND / LOCAL FIX TESTED / STOP. Meta accepted one
+  ACCEPTANCE / PRODUCT ISSUE FOUND / GENERIC FIX DEPLOYED / STOP. Meta accepted one
   `data_exame` template for `****9614`, owner confirmed real receipt, and Meta
   `sent`/`delivered` webhooks were recovered, but the runner failed with
   `default_operational_department_missing` before OutboundMessage/ledger/report
   persistence, so local product evidence stayed missing; `****6787` was not
-  sent. Retry requires deploy plus a separate owner-approved send gate.
+  sent. The generic preflight/idempotency/orphan-status fix is deployed, but any
+  retry/send still requires a separate owner-approved send gate.
 - CRA active flow tenant visibility, 2026-09-15: CLOSED / DEPLOYED / CUSTOMER
   VALIDATED. Runtime flow works
   per owner report, but CRA tenant admins did not see the active flow in

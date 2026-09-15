@@ -26,9 +26,12 @@ Meta `sent`/`delivered` webhook evidence was recovered, but no local
 OutboundMessage/ledger/report row existed because operational default bootstrap
 failed after the external send. Recipient `****6787` was not attempted. This
 does not close CRA campaign acceptance or billing evidence. Generic local repair
-is tested but not deployed: pre-send operational default validation,
-idempotent submit/accepted events, retry stop with reconciliation-required
-evidence, and orphan status recording without synthetic billing.
+is deployed and non-destructive validated: pre-send operational default
+validation, idempotent submit/accepted events, retry stop with
+reconciliation-required evidence, and orphan status recording without synthetic
+billing. This closes the generic product bug, but does not close CRA campaign
+acceptance, recipient A reconciliation, recipient B send, opt-out E2E or
+report/export/billing evidence.
 
 This document separates four things that must not be conflated:
 

@@ -213,9 +213,12 @@ because no local OutboundMessage existed to correlate. Billing/report evidence
 must not be synthesized from this gap. Local generic repair is tested: validate
 operational defaults before Meta, persist submit/accepted idempotency events,
 stop retry with reconciliation evidence when acceptance exists without outbound,
-and record orphan status events without billing. No deploy or new real send has
-occurred; `****9614` is a hard no-resend and `****6787` requires a fresh owner
-gate.
+and record orphan status events without billing. The generic repair was deployed
+on 2026-09-15 with an FF-only production update to `b8c8f616`, reloading only
+`re7-whatsapp-agent`; health/db, migrations status and non-destructive bundle
+smoke passed. No new real send occurred; `****9614` is a hard no-resend and
+`****6787` requires a fresh owner gate. Recipient A reconciliation, recipient B
+send, opt-out E2E and report/export/billing evidence remain separate open gates.
 
 ## Modelos Meta
 

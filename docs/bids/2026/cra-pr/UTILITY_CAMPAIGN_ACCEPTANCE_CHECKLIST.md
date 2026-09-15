@@ -232,14 +232,18 @@ must not be retried automatically.
   owner gate.
 - Root cause: campaign runner validated mandatory operational default
   department/queue only after external Meta mutation.
-- Local generic repair: pre-send operational default validation, deterministic
+- Generic repair: pre-send operational default validation, deterministic
   submit/provider-accepted idempotency events, reconciliation-required retry
   stop, and orphan webhook status evidence without synthetic billing.
 - Validation: `campaignRunner.test.ts` 5/5 PASS,
-  `campaignsFeatureRoutes.test.ts` 113/113 PASS, backend build PASS.
+  `campaignsFeatureRoutes.test.ts` 113/113 PASS, billing 4/4 PASS, preview
+  4/4 PASS, backend build PASS, production non-destructive smoke PASS.
+- Production delivery: deployed on 2026-09-15 at `b8c8f616` by FF-only update,
+  no migration, no db push, reload only `re7-whatsapp-agent`.
 
-Acceptance remains open until the generic repair is deployed/validated and a new
-explicit owner send gate authorizes any remaining real outbound.
+Acceptance remains open until a new explicit owner send gate authorizes any
+remaining real outbound and valid campaign persistence/report/billing evidence
+is captured.
 
 ## Demo Phase B Owner Gate - 2026-09-15
 

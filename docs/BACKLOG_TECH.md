@@ -119,8 +119,8 @@ ACTIVE P0:
 
 ACTIVE P1:
 
-1. Campaign post-Meta persistence / operational default: P1 / BUG CONFIRMED /
-   LOCAL GENERIC FIX TESTED / DEPLOY GATE OPEN. Em 2026-09-15, Phase C autorizada para exatamente
+1. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
+   TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente
    2 mensagens Utility `data_exame` via META_CLOUD no `demo-converta` parou com
    bug operacional. Prechecks passaram, a primeira chamada Meta para `****9614`
    foi aceita e o owner confirmou recebimento real, mas o runner falhou em seguida com
@@ -142,9 +142,20 @@ ACTIVE P1:
    `cra-pr`, `demo-converta`, `secult-pe` e `syer-rodrigues` nao possuem
    `defaultDepartmentId/defaultQueueId` nem default geral ativo; `re7online`
    possui default geral ativo. Testes locais PASS: `campaignRunner.test.ts` 5/5,
-   `campaignsFeatureRoutes.test.ts` 113/113, backend build PASS. Ainda nao
-   houve deploy nem novo envio real; A nao deve ser reenviado e B requer novo
-   owner gate.
+   `campaignsFeatureRoutes.test.ts` 113/113, billing 4/4, preview 4/4,
+   backend build PASS e `git diff --check` PASS. Deploy FF-only em producao em
+   2026-09-15 no commit `b8c8f616`; backup persistente
+   `/opt/re7online/backups/campaign-post-meta-20260915/pre-campaign-post-meta-20260915-210808.dump`
+   (`20M`, 578 objetos, SHA256
+   `e4e2dc141ff23f5afef9bc4504ef7951d4038ddc39cb623754e51dded455ca27`);
+   reload somente `re7-whatsapp-agent` (`3253772` -> `3319619`), frontend e
+   web worker preservados, health/db PASS. Smoke nao destrutivo no bundle
+   implantado confirmou preflight antes de send, marker accepted,
+   reconciliation guard e orphan status path. Nao houve novo envio real; A nao
+   deve ser reenviado e B requer novo owner gate. RECIPIENT A RECONCILIATION
+   permanece OPEN / OWNER DECISION REQUIRED; RECIPIENT B SEND permanece PENDING
+   NEW OWNER GATE; OPT-OUT E2E e REPORTS/EXPORT/BILLING permanecem pendentes
+   ate nova evidencia valida de campanha.
 
 WATCH / EXTERNAL OPERATIONS:
 

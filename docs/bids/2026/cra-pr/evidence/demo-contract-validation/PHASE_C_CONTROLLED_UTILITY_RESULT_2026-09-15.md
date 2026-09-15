@@ -151,8 +151,11 @@ campaignsFeatureRoutes.test.ts: 113/113 PASS
 backend build: PASS
 ```
 
-No deploy, no retry, no resend to `****9614`, and no send to `****6787` were
-executed during the repair gate.
+The generic repair was deployed on 2026-09-15 by FF-only production update to
+`b8c8f616`, after persistent PostgreSQL backup. Production validation was
+non-destructive: no retry, no resend to `****9614`, no send to `****6787`, no
+synthetic OutboundMessage and no synthetic billing. Only `re7-whatsapp-agent`
+was reloaded; frontend and `re7-whatsapp-web-worker` were preserved.
 
 ## Result Summary
 
