@@ -164,6 +164,10 @@ Reconciliação documental de 2026-09-16:
   duplicados no arquivo nao podem criar contatos duplicados;
 - o operador deve receber relatorio detalhado e baixavel do resultado, com
   totais e detalhes por linha quando aplicavel;
+- Contacts deve receber em frente futura uma visao campanha-contato sem modelo
+  sombra, usando fontes canonicas de campanha/outbound/billing/opt-out. A lista
+  deve mostrar agregado leve e o detalhe deve abrir sob demanda, seguindo o
+  padrao aprovado de linhas expansivas quando fizer sentido;
 - Marketing templates com mídia ficam em P2: categoria MARKETING, headers
   IMAGE/VIDEO, exemplos/handles Meta, preview, variáveis, botões suportados,
   submissão, aprovação/rejeição/motivo, envio aprovado e fonte oficial de preço

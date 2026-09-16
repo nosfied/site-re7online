@@ -336,7 +336,8 @@ Current CRA order:
 3. opt-out E2E;
 4. reports / exports / billing;
 5. CRM import/upsert/report with `Situação no CRM`;
-6. acceptance package.
+6. Contacts campaign relationship view;
+7. acceptance package.
 
 Campaign/CRM import/upsert/report enhancement:
 
@@ -373,6 +374,19 @@ Marketing media templates:
 - if CRA Contract/TR evidence explicitly requires Marketing media template
   support for current acceptance, stop for owner decision and promote the item
   out of P2.
+
+Contacts campaign relationship view:
+
+- status: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP;
+- show campaign count, last campaign, last send timestamp, template,
+  delivery/read/failure state, opt-out, skipped/blocked reason, CRM Situation
+  and campaign/history navigation inside Contacts where applicable;
+- source remains existing campaign/outbound/billing/opt-out/event records;
+- do not create a shadow campaign-history model inside Contact;
+- same-tenant only;
+- avoid N+1 per contact row by using aggregate/list projection and on-demand
+  expanded detail;
+- follow the approved expandable administrative-row pattern where appropriate.
 
 ### Phase B Owner Gate Package
 

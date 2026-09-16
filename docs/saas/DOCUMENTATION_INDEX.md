@@ -18,6 +18,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | `docs/saas/META_USAGE_COST_CONTROL.md` | atual | Controle estimativo de uso Meta: ledger, resumo, preview, relatorio mensal, limites e alertas |
 | `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md` | P2 FinOps | Fonte canonica proposta para precos Meta oficiais, separacao provider cost/FX/preco contratual e staleness; gate estreito Brazil Utility para B ja provado |
 | `docs/saas/CAMPAIGN_IMPORT_REQUIREMENTS.md` | backlog CRA | Contrato futuro de importacao/upsert CRM para campanhas: `Situação no CRM`, nao duplicacao de contatos, preservacao por campos em branco e relatorio detalhado baixavel |
+| `docs/saas/CONTACTS_CAMPAIGN_RELATIONSHIP_VIEW.md` | backlog CRA | Contrato futuro para exibir historico/estado de campanhas em Contacts sem duplicar fonte canonica, com agregados e detalhe sob demanda |
 | `docs/saas/META_TEMPLATE_MEDIA_SUPPORT.md` | P2 produto/Meta | Escopo futuro para templates Marketing com midia IMAGE/VIDEO, lifecycle de media, preview, botoes, aprovacao/rejeicao e preco oficial Marketing |
 | `docs/saas/PRODUCT_MAP_CURRENT.md` | atual | Fotografia atual do produto e modulos |
 | `docs/saas/MARKET_PROFILE_ARCHITECTURE.md` | atual | Arquitetura oficial de Core Platform, Market Profiles, Feature Packs, Tenant Configuration e capabilities |

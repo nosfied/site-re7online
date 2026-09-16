@@ -152,6 +152,15 @@ existente, o comportamento esperado e atualizar o registro canonico, nunca criar
 duplicata; quando nome/status vierem em branco, os valores existentes devem ser
 preservados.
 
+Contacts campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP. A area
+de Contacts/CRM deve expor historico e estado de campanhas por contato a partir
+das fontes canonicas ja persistidas (`Campaign`, `OutboundMessage`, billing,
+opt-out e eventos), sem criar modelo sombra de historico de campanha dentro de
+`Contact`. A lista deve evitar N+1, usando projecao agregada quando possivel, e
+o detalhe deve ser carregado sob demanda/expandido. Campos esperados: contagem
+de campanhas, ultima campanha, ultimo envio, template, delivery/read, motivo de
+falha, opt-out, motivo skipped/blocked, situacao CRM e navegacao para detalhe.
+
 ## Campanhas
 
 O centro de campanhas suporta:

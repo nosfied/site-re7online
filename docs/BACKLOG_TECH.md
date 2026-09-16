@@ -159,7 +159,21 @@ ACTIVE P1:
    semantics, duplicate-row policy, partial-success behavior and report/export
    infrastructure.
 
-3. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
+3. Contacts - campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP.
+   Contacts/CRM must expose campaign-related history and state without
+   duplicating campaign source-of-truth data inside Contact. Per contact, when
+   applicable, show campaign count, last campaign, last send timestamp,
+   template used, delivery/read status, failed reason, opt-out status,
+   skipped/blocked reason, CRM Situation and navigation to campaign/history
+   detail. Canonical source remains existing campaign/outbound/billing/opt-out
+   records; do not create a shadow campaign-history model in Contact.
+   Multitenant scope is same-tenant only. Performance must avoid N+1 per
+   contact row, preferring aggregate/list projection plus on-demand expanded
+   detail. UX should follow the approved expandable administrative-row pattern
+   where appropriate. CRA relevance: campaign/contact traceability and
+   acceptance evidence.
+
+4. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente
    2 mensagens Utility `data_exame` via META_CLOUD no `demo-converta` parou com
    bug operacional. Prechecks passaram, a primeira chamada Meta para `****9614`

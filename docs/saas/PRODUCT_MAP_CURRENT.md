@@ -113,6 +113,14 @@ template media support is P2 product/Meta capability, covering MARKETING
 category plus IMAGE/VIDEO headers and official Marketing pricing; it is
 parallel to the Utility campaign front unless contract evidence promotes it.
 
+Contacts campaign relationship view is OPEN / CRA CAMPAIGN-CRM FOLLOW-UP. It
+should expose campaign count, last campaign/send/template, delivery/read/failure
+state, opt-out/skipped/blocked context, CRM Situation and campaign/history
+navigation inside Contacts without creating a Contact-owned campaign history.
+Canonical source remains existing campaign/outbound/billing/opt-out records;
+the implementation should use same-tenant aggregate/list projection and
+on-demand expanded detail to avoid N+1 per contact row.
+
 CRA-PR Demo mirror, 2026-09-15: `demo-converta` is the reusable multitenant
 product acceptance baseline for generic CRA requirements. Phase A created the
 plan at `docs/bids/2026/cra-pr/DEMO_CONTRACT_VALIDATION_PLAN.md` and confirmed

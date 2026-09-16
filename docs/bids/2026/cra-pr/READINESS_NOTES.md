@@ -56,9 +56,11 @@ Pendencias criticas para prontidao contratual:
 4. Implementar/validar importacao de campanha como upsert CRM seguro, com
    coluna opcional `Situação no CRM`, sem duplicar contatos e com relatorio
    detalhado, somente depois dos gates Utility/opt-out/report.
-5. Fechar pacote documental: SLA/suporte, treinamento, LGPD/seguranca,
+5. Implementar/validar visao campanha-contato dentro de Contacts/CRM, sem
+   modelo sombra, para rastreabilidade e evidencia de aceite.
+6. Fechar pacote documental: SLA/suporte, treinamento, LGPD/seguranca,
    backup/restore e comprovacao Meta oficial.
-6. Instagram, Facebook Messenger e Webchat/site seguem contratados, mas estao
+7. Instagram, Facebook Messenger e Webchat/site seguem contratados, mas estao
    CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING e nao bloqueiam a frente atual.
 
 Nao reabrir:
@@ -78,6 +80,14 @@ Follow-up de 2026-09-16:
   no preview/import e nunca criam status silenciosamente; duplicados no arquivo
   nao podem criar contatos duplicados; relatorio detalhado e baixavel pelo
   operador e obrigatorio.
+- Contacts campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP.
+  Contacts/CRM deve mostrar historico/estado de campanhas por contato quando
+  aplicavel, incluindo contagem, ultima campanha, ultimo envio, template,
+  status entregue/lido/falha, motivo de falha, opt-out, motivo de skip/bloqueio,
+  situacao CRM e navegacao para detalhe. Fonte canonica continua sendo
+  campaign/outbound/billing/opt-out/eventos ja persistidos; nao criar historico
+  sombra dentro de Contact. Consulta deve ser same-tenant e evitar N+1,
+  preferindo agregados na lista e detalhe sob demanda.
 - Meta Marketing template media support: P2 / PRODUCT + META CAPABILITY.
   Inclui categoria MARKETING, headers IMAGE/VIDEO, exemplos/midia Meta,
   upload/handle, preview, variaveis, botoes suportados, submissao, status,
