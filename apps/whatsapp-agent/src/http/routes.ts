@@ -150,6 +150,16 @@ import {
   buildPrivateCampaignSeedFields,
   readPrivateCampaignSeedFields,
 } from "../campaigns/campaignSeedPrivacy.js";
+import {
+  getOutboundReturnDestinationErrorMessage,
+  listOutboundReturnDestinationOptions,
+  parseOutboundReturnDestination,
+  resolveOutboundReturnDestinationInput,
+  resolveUserPrimaryDepartmentReturnDestination,
+  serializeOutboundReturnDestination,
+  type OutboundReturnDestination,
+  type OutboundReturnDestinationInput,
+} from "../routing/outboundReturnDestination.js";
 import { httpError } from "../utils/httpError.js";
 import {
   enrichMetaOnboardingResult,
@@ -11442,20 +11452,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
-      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+      const primaryDestination = await resolveUserPrimaryDepartmentReturnDestination(prisma, {
         clientId: client.id,
         userId: clientAuth.userId,
-        role: clientAuth.role,
       });
-      const defaults = await loadOptionalDefaultDepartmentAndQueue(prisma, client.id);
-      const departmentId = departmentAccess.departmentId ?? defaults.department?.id ?? null;
-      const queueId = departmentId
-        ? (
-            await ensureQueueForDepartment(prisma, {
-              clientId: client.id,
-              departmentId,
-            })
-          ).id
+      if (!primaryDestination.ok) {
+        json(
+          res,
+          primaryDestination.status,
+          httpError(
+            primaryDestination.error,
+            getOutboundReturnDestinationErrorMessage(primaryDestination.error)
+          )
+        );
+        return;
+      }
+      const departmentId = primaryDestination.destination.type === "human_department"
+        ? primaryDestination.destination.departmentId
+        : null;
+      const queueId = primaryDestination.destination.type === "human_department"
+        ? primaryDestination.destination.queueId
         : null;
       const assignedAt = new Date();
       const assignedAtIso = assignedAt.toISOString();
@@ -14938,6 +14954,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }));
         return;
       }
+      const returnDestination = await resolveCampaignReturnDestinationOrHttpError(prisma, {
+        clientId: client.id,
+        input: body.returnDestination as OutboundReturnDestinationInput,
+      });
+      if (!returnDestination.ok) {
+        json(res, returnDestination.status, httpError(returnDestination.error, returnDestination.message));
+        return;
+      }
       const campaign = await createCampaign({
         clientId: client.id,
         templateId: resolvedTemplate.templateId,
@@ -14953,6 +14977,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "csv",
         recipients: parsed.recipients,
+        returnDestination: returnDestination.destination,
       });
       if (!imported.ok) {
         json(res, imported.status, httpError(imported.error, imported.error));
@@ -15368,6 +15393,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, httpError(variableMappings.error, variableMappings.message));
         return;
       }
+      const returnDestination = await resolveCampaignReturnDestinationOrHttpError(prisma, {
+        clientId: client.id,
+        input: body.returnDestination as OutboundReturnDestinationInput,
+      });
+      if (!returnDestination.ok) {
+        json(res, returnDestination.status, httpError(returnDestination.error, returnDestination.message));
+        return;
+      }
       const created = await createScopedCampaignDraft({
         clientId: client.id,
         templateId: resolvedTemplate.templateId,
@@ -15376,6 +15409,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         selectedLeadIds,
         components,
         templateVariableMappings: variableMappings.mappings,
+        returnDestination: returnDestination.destination,
       });
       if (!created.ok) {
         json(
@@ -15401,6 +15435,50 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.campaign.draft.create.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/campaigns/return-destinations") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const options = await listOutboundReturnDestinationOptions(prisma, {
+        clientId: client.id,
+        allowedDepartmentIds: departmentAccess.requiresDepartmentScope
+          ? departmentAccess.departmentIds
+          : null,
+      });
+      json(res, 200, { ok: true, ...options });
+    } catch (error) {
+      logger.error({
+        event: "app.campaign.return_destinations.error",
         message: (error as Error).message,
         requestId,
       });
@@ -15708,6 +15786,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                       ? "Mapeie todas as variaveis do template antes de enviar"
                     : sent.error === "invalid_template_variable_mapping"
                       ? "Mapeamento de variavel invalido"
+                      : sent.error === "return_destination_required"
+                        ? getOutboundReturnDestinationErrorMessage("return_destination_required")
                   : "Campaign not found";
         json(res, status, httpError(sent.error, message));
         return;
@@ -15788,7 +15868,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           scheduled.status,
           httpError(
             scheduled.error,
-            scheduled.error === WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED
+            scheduled.error === "return_destination_required"
+              ? getOutboundReturnDestinationErrorMessage("return_destination_required")
+              : scheduled.error === WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED
               ? WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED_LABEL
               : scheduled.error
           )
@@ -15872,7 +15954,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             resumed.status,
             httpError(
               resumed.error,
-              resumed.error === WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED
+              resumed.error === "return_destination_required"
+                ? getOutboundReturnDestinationErrorMessage("return_destination_required")
+                : resumed.error === WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED
                 ? WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED_LABEL
                 : resumed.error
             )
@@ -16105,6 +16189,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, httpError("no_eligible_recipients", "No eligible recipients for this campaign"));
         return;
       }
+      const returnDestination = await resolveCampaignReturnDestinationOrHttpError(prisma, {
+        clientId: client.id,
+        input: body.returnDestination as OutboundReturnDestinationInput,
+      });
+      if (!returnDestination.ok) {
+        json(res, returnDestination.status, httpError(returnDestination.error, returnDestination.message));
+        return;
+      }
 
       const created = await createScopedCampaign({
         clientId: client.id,
@@ -16117,6 +16209,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           .map((value) => String(value ?? "").trim())
           .filter((value) => value.length > 0),
         components,
+        returnDestination: returnDestination.destination,
       });
 
       json(res, 200, {
@@ -24051,6 +24144,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, resolvedTemplate.status, httpError(resolvedTemplate.error, resolvedTemplate.message));
           return;
         }
+        const returnDestination = await resolveCampaignReturnDestinationOrHttpError(prisma, {
+          clientId: client.id,
+          input: body.returnDestination as OutboundReturnDestinationInput,
+        });
+        if (!returnDestination.ok) {
+          json(res, returnDestination.status, httpError(returnDestination.error, returnDestination.message));
+          return;
+        }
 
         const created = await createScopedCampaign({
           clientId: client.id,
@@ -24063,6 +24164,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             waIds: dedupedWaIds,
           })),
           components,
+          returnDestination: returnDestination.destination,
         });
 
         if (pathname === "/admin/campaigns") {
@@ -28958,6 +29060,7 @@ type CampaignDraftSeed = {
   templateParams: string[];
   componentsByWaId?: Record<string, CampaignTemplateComponents>;
   templateVariableMappings?: CampaignTemplateVariableMapping[];
+  returnDestination?: OutboundReturnDestination | null;
   source?: string | null;
   summary?: CampaignDraftRecipientSummary | null;
 };
@@ -29234,6 +29337,7 @@ function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null
         )
       : undefined;
   const templateVariableMappings = extractCampaignTemplateVariableMappings(typed.templateVariableMappings);
+  const returnDestination = parseOutboundReturnDestination(typed.returnDestination);
   if (!name || !templateName) return null;
   return {
     name,
@@ -29245,6 +29349,7 @@ function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null
     templateParams,
     componentsByWaId,
     templateVariableMappings,
+    returnDestination,
     source: typeof typed.source === "string" ? typed.source : null,
     summary:
       typed.summary && typeof typed.summary === "object" && !Array.isArray(typed.summary)
@@ -29279,6 +29384,24 @@ function getCampaignBlockedReasonLabel(reason: CampaignDraftBlockedReason) {
     default:
       return "Indeterminado";
   }
+}
+
+async function resolveCampaignReturnDestinationOrHttpError(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    input: OutboundReturnDestinationInput;
+  }
+) {
+  const destination = await resolveOutboundReturnDestinationInput(prisma, {
+    clientId: params.clientId,
+    input: params.input,
+  });
+  if (destination.ok) return destination;
+  return {
+    ...destination,
+    message: getOutboundReturnDestinationErrorMessage(destination.error),
+  };
 }
 
 function resolveCampaignVariableMappingValue(
@@ -35163,6 +35286,7 @@ async function createScopedCampaign(params: {
     type: "body";
     parameters: Array<{ type: "text"; text: string }>;
   }> | undefined;
+  returnDestination: OutboundReturnDestination;
 }) {
   let campaign = await createCampaign({
     clientId: params.clientId,
@@ -35192,6 +35316,7 @@ async function createScopedCampaign(params: {
     templateName: params.templateName,
     waIds: params.waIds,
     components: params.components,
+    returnDestination: params.returnDestination,
     source: "manual_campaign_send",
   });
   await persistCampaignDraftSeed({
@@ -35203,6 +35328,7 @@ async function createScopedCampaign(params: {
     waIds: params.seedWaIds ?? params.waIds,
     manualRecipientInput: params.manualRecipientInput,
     components: params.components,
+    returnDestination: params.returnDestination,
   });
   return { campaign, campaignRunId };
 }
@@ -35215,6 +35341,7 @@ async function createScopedCampaignDraft(params: {
   selectedLeadIds: string[];
   components: CampaignTemplateComponents | undefined;
   templateVariableMappings?: CampaignTemplateVariableMapping[];
+  returnDestination: OutboundReturnDestination;
 }) {
   const prisma = getPrisma();
   const recipients = await resolveCampaignDraftRecipientsFromLeadIds(prisma, {
@@ -35242,6 +35369,7 @@ async function createScopedCampaignDraft(params: {
     waIds: recipients.acceptedWaIds,
     components: params.components,
     templateVariableMappings: params.templateVariableMappings ?? [],
+    returnDestination: params.returnDestination,
     source: "crm_audience_preview",
     summary: recipients.summary,
   });
@@ -35277,6 +35405,9 @@ async function sendScopedCampaignDraft(params: {
     templateName: campaign.templateName,
     outboundMessages: [],
   });
+  if (!seed.returnDestination) {
+    return { ok: false as const, status: 400 as const, error: "return_destination_required" as const };
+  }
   const variableMappings = parseCampaignTemplateVariableMappings(
     seed.templateVariableMappings ?? [],
     resolvedTemplate.variableKeys
@@ -35332,6 +35463,7 @@ async function sendScopedCampaignDraft(params: {
           : undefined,
       templateVariableMappings: variableMappings.mappings,
       componentsByWaId,
+      returnDestination: seed.returnDestination,
       source: seed.source ?? "crm_audience_preview",
       summary: recipients.summary,
     });
@@ -35360,6 +35492,7 @@ async function sendScopedCampaignDraft(params: {
         : undefined,
     templateVariableMappings: variableMappings.mappings,
     componentsByWaId,
+    returnDestination: seed.returnDestination,
     source: seed.source ?? "crm_audience_preview",
     summary: recipients.summary,
   });
@@ -35387,6 +35520,7 @@ async function sendScopedCampaignDraft(params: {
         ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
         : undefined,
     componentsByWaId,
+    returnDestination: seed.returnDestination,
   });
   return { ok: true as const, campaign: updated, campaignRunId, recipients };
 }
@@ -35421,6 +35555,9 @@ async function scheduleScopedCampaignDraft(params: {
     templateName: campaign.templateName,
     outboundMessages: [],
   });
+  if (!seed.returnDestination) {
+    return { ok: false as const, status: 400 as const, error: "return_destination_required" as const };
+  }
   const variableMappings = parseCampaignTemplateVariableMappings(
     seed.templateVariableMappings ?? [],
     resolvedTemplate.variableKeys
@@ -35489,6 +35626,7 @@ async function scheduleScopedCampaignDraft(params: {
         : undefined,
     componentsByWaId,
     templateVariableMappings: variableMappings.mappings,
+    returnDestination: seed.returnDestination,
     source: seed.source ?? "crm_audience_preview",
     summary: recipients.summary,
   });
@@ -35560,6 +35698,9 @@ async function resumeScopedCampaign(params: { clientId: string; clientKey: strin
     templateName: campaign.templateName,
     outboundMessages: [],
   });
+  if (!seed.returnDestination) {
+    return { ok: false as const, status: 400 as const, error: "return_destination_required" as const };
+  }
   const updated = await prisma.campaign.update({
     where: { id: campaign.id },
     data: { status: "sending", scheduledAt: null },
@@ -35587,6 +35728,7 @@ async function resumeScopedCampaign(params: { clientId: string; clientKey: strin
         ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
         : undefined,
     componentsByWaId: seed.componentsByWaId,
+    returnDestination: seed.returnDestination,
   });
   return { ok: true as const, campaign: updated, campaignRunId };
 }
@@ -35985,6 +36127,7 @@ async function persistCampaignDraftSeed(params: {
   }>;
   componentsByWaId?: Record<string, CampaignTemplateComponents>;
   templateVariableMappings?: CampaignTemplateVariableMapping[];
+  returnDestination?: OutboundReturnDestination | null;
   source?: string | null;
   summary?: CampaignDraftRecipientSummary | null;
 }) {
@@ -36007,6 +36150,7 @@ async function persistCampaignDraftSeed(params: {
       manualRecipientInputCount: params.manualRecipientInput?.length ?? 0,
       templateParams: extractTemplateParamsFromComponents(params.components ?? null),
       templateVariableMappings: params.templateVariableMappings ?? [],
+      returnDestination: serializeOutboundReturnDestination(params.returnDestination ?? null),
       source: params.source ?? null,
       summary: params.summary ?? null,
     },
@@ -36068,6 +36212,7 @@ async function buildCampaignDraftSeed(
     recipients,
     templateParams,
     templateVariableMappings: [],
+    returnDestination: null,
   };
 }
 

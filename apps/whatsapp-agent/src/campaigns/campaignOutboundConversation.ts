@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
 import { persistEvent } from "../db/persist.js";
+import type { OutboundReturnDestination } from "../routing/outboundReturnDestination.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
 
@@ -198,10 +199,37 @@ export async function ensureCampaignOutboundConversation(
     sentAt: Date;
     source: "campaign" | "manual" | "bot";
     conversationId?: string | null;
+    returnDestination?: OutboundReturnDestination | null;
   }
 ) {
   const waIdCanonical = params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId);
-  const defaults = await ensureDefaultOperationalDepartmentAndQueue(prisma, params.clientId);
+  const defaults = params.returnDestination
+    ? null
+    : await ensureDefaultOperationalDepartmentAndQueue(prisma, params.clientId);
+  const conversationDepartmentId =
+    params.returnDestination?.type === "human_department"
+      ? params.returnDestination.departmentId
+      : defaults?.department.id ?? null;
+  const runtimeDestination =
+    params.returnDestination?.type === "automated_flow"
+      ? {
+          mode: "BOT" as const,
+          status: ConversationOperationalStatus.WAITING_USER,
+          departmentId: null,
+          queueId: null,
+          chatbotActive: true,
+          flow: `chatbot:${params.returnDestination.flowId}`,
+          chatbotNodeId: null,
+        }
+      : {
+          mode: "HUMAN" as const,
+          status: ConversationOperationalStatus.WAITING,
+          departmentId: params.returnDestination?.departmentId ?? defaults?.department.id ?? null,
+          queueId: params.returnDestination?.queueId ?? defaults?.queue.id ?? null,
+          chatbotActive: false,
+          flow: null,
+          chatbotNodeId: null,
+        };
   const existing = params.conversationId
     ? await prisma.conversation.findFirst({
         where: {
@@ -248,6 +276,7 @@ export async function ensureCampaignOutboundConversation(
     await prisma.conversation.updateMany({
       where: { id: existing.id, clientId: params.clientId },
       data: {
+        departmentId: conversationDepartmentId,
         deletedAt: null,
         lastOutboundAt: params.sentAt,
       },
@@ -260,14 +289,17 @@ export async function ensureCampaignOutboundConversation(
       data: {
         lastOutboundAt: params.sentAt,
         lastOutboundMessageId: params.messageId,
-        ...(wasSoftDeleted
-          ? {
-              mode: "HUMAN",
-              status: ConversationOperationalStatus.WAITING,
-              closedAt: null,
-              chatbotActive: false,
-            }
-          : {}),
+        mode: runtimeDestination.mode,
+        status: runtimeDestination.status,
+        departmentId: runtimeDestination.departmentId,
+        queueId: runtimeDestination.queueId,
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        closedAt: null,
+        chatbotActive: runtimeDestination.chatbotActive,
+        flow: runtimeDestination.flow,
+        chatbotNodeId: runtimeDestination.chatbotNodeId,
       },
     });
     if (runtimeUpdate.count === 0) {
@@ -282,11 +314,13 @@ export async function ensureCampaignOutboundConversation(
           firstSeenAt: params.sentAt,
           lastOutboundAt: params.sentAt,
           lastOutboundMessageId: params.messageId,
-          mode: "HUMAN",
-          status: ConversationOperationalStatus.WAITING,
-          departmentId: defaults.department.id,
-          queueId: defaults.queue.id,
-          chatbotActive: false,
+          mode: runtimeDestination.mode,
+          status: runtimeDestination.status,
+          departmentId: runtimeDestination.departmentId,
+          queueId: runtimeDestination.queueId,
+          chatbotActive: runtimeDestination.chatbotActive,
+          flow: runtimeDestination.flow,
+          chatbotNodeId: runtimeDestination.chatbotNodeId,
           answers: {},
         },
       });
@@ -331,7 +365,7 @@ export async function ensureCampaignOutboundConversation(
       channel: "whatsapp",
       provider: "meta",
       phoneNumberId: params.phoneNumberId ?? undefined,
-      departmentId: defaults.department.id,
+      departmentId: conversationDepartmentId,
     },
     create: {
       clientId: params.clientId,
@@ -340,7 +374,7 @@ export async function ensureCampaignOutboundConversation(
       phoneNumberId: params.phoneNumberId ?? undefined,
       channel: "whatsapp",
       provider: "meta",
-      departmentId: defaults.department.id,
+      departmentId: conversationDepartmentId,
       lastOutboundAt: params.sentAt,
       windowIsOpen: false,
       windowExpiresAt: null,
@@ -362,12 +396,14 @@ export async function ensureCampaignOutboundConversation(
       provider: "meta",
       lastOutboundAt: params.sentAt,
       lastOutboundMessageId: params.messageId,
-      mode: "HUMAN",
-      status: ConversationOperationalStatus.WAITING,
-      departmentId: defaults.department.id,
-      queueId: defaults.queue.id,
+      mode: runtimeDestination.mode,
+      status: runtimeDestination.status,
+      departmentId: runtimeDestination.departmentId,
+      queueId: runtimeDestination.queueId,
       closedAt: null,
-      chatbotActive: false,
+      chatbotActive: runtimeDestination.chatbotActive,
+      flow: runtimeDestination.flow,
+      chatbotNodeId: runtimeDestination.chatbotNodeId,
     },
     create: {
       clientId: params.clientId,
@@ -379,11 +415,13 @@ export async function ensureCampaignOutboundConversation(
       firstSeenAt: params.sentAt,
       lastOutboundAt: params.sentAt,
       lastOutboundMessageId: params.messageId,
-      mode: "HUMAN",
-      status: ConversationOperationalStatus.WAITING,
-      departmentId: defaults.department.id,
-      queueId: defaults.queue.id,
-      chatbotActive: false,
+      mode: runtimeDestination.mode,
+      status: runtimeDestination.status,
+      departmentId: runtimeDestination.departmentId,
+      queueId: runtimeDestination.queueId,
+      chatbotActive: runtimeDestination.chatbotActive,
+      flow: runtimeDestination.flow,
+      chatbotNodeId: runtimeDestination.chatbotNodeId,
       answers: {},
     },
   });

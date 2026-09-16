@@ -21,6 +21,11 @@ import {
 import { ensureCampaignOutboundConversation } from "./campaignOutboundConversation.js";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import {
+  parseOutboundReturnDestination,
+  revalidateOutboundReturnDestination,
+  type OutboundReturnDestination,
+} from "../routing/outboundReturnDestination.js";
+import {
   filterOptedOutCampaignRecipients,
   recordCampaignOptOutBlocks,
 } from "./optOutRegistry.js";
@@ -50,6 +55,7 @@ export type StartCampaignRunParams = {
   waIds: string[];
   components?: CampaignTemplateComponents;
   componentsByWaId?: Record<string, CampaignTemplateComponents>;
+  returnDestination?: OutboundReturnDestination | null;
   source?: Extract<MetaUsageSource, "campaign" | "manual_campaign_send">;
 };
 
@@ -58,6 +64,7 @@ type ScheduledCampaignSeed = {
   templateParams: string[];
   components?: CampaignTemplateComponents;
   componentsByWaId?: Record<string, CampaignTemplateComponents>;
+  returnDestination?: OutboundReturnDestination | null;
 };
 
 function sleep(ms: number) {
@@ -119,6 +126,7 @@ function extractScheduledCampaignSeed(value: unknown): ScheduledCampaignSeed | n
     templateParams,
     components: extractComponents(value.components),
     componentsByWaId: extractComponentsByWaId(privateSeed.componentsByWaId),
+    returnDestination: parseOutboundReturnDestination(value.returnDestination),
   };
 }
 
@@ -204,6 +212,7 @@ export async function processDueScheduledCampaigns(params: { now?: Date; limit?:
       waIds: seed.recipients,
       components: seed.components,
       componentsByWaId: seed.componentsByWaId,
+      returnDestination: seed.returnDestination,
     });
   }
   return { checked: dueCampaigns.length, claimed };
@@ -326,7 +335,42 @@ async function runCampaignInBackground(
     totalRecipients: waIds.length,
   });
 
-  if (waIds.length > 0) {
+  let resolvedReturnDestination: OutboundReturnDestination | null = null;
+  if (waIds.length > 0 && params.returnDestination) {
+    const destinationResult = await revalidateOutboundReturnDestination(prisma, {
+      clientId: params.clientId,
+      destination: params.returnDestination,
+    });
+    if (!destinationResult.ok) {
+      await prisma.campaign.updateMany({
+        where: { id: params.campaignId, clientId: params.clientId, status: "sending" },
+        data: { status: "failed" },
+      });
+      await persistEvent({
+        clientId: params.clientId,
+        messageId: params.campaignId,
+        requestId: `campaign-preflight-return-destination:${params.campaignId}`,
+        eventName: "campaign.preflight.failed",
+        payloadJson: {
+          campaignId: params.campaignId,
+          campaignRunId,
+          reason: destinationResult.error,
+        },
+      });
+      logger.error({
+        event: "campaign.preflight.failed",
+        campaignId: params.campaignId,
+        campaignRunId,
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        reason: destinationResult.error,
+      });
+      return;
+    }
+    resolvedReturnDestination = destinationResult.destination;
+  }
+
+  if (waIds.length > 0 && !resolvedReturnDestination) {
     try {
       await ensureDefaultOperationalDepartmentAndQueue(prisma, params.clientId);
     } catch (error) {
@@ -700,6 +744,7 @@ async function runCampaignInBackground(
                 sentAt: deliveredAt,
                 source: "campaign",
                 conversationId: resolvedRecipient.conversationId ?? null,
+                returnDestination: resolvedReturnDestination,
               })
             : null;
           const usagePayload = buildMetaUsageEventPayload({
@@ -739,6 +784,7 @@ async function runCampaignInBackground(
               recipientResolution: resolutionSummary,
               conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
               metaUsage: usagePayload,
+              returnDestination: resolvedReturnDestination,
             },
           });
           await recordMetaUsageLedgerEvent({

@@ -82,6 +82,16 @@ let governmentAdmin: TestUser;
 let overrideAdmin: TestUser;
 let killSwitchAdmin: TestUser;
 let supportAdmin: TestUser;
+let businessReturnDepartmentId = "";
+let businessReturnQueueId = "";
+
+function defaultCampaignReturnDestination() {
+  return {
+    type: "human_department",
+    departmentId: businessReturnDepartmentId,
+    queueId: businessReturnQueueId,
+  };
+}
 
 function getErrorCode(payload: ErrorPayload) {
   return typeof payload.error === "string" ? payload.error : payload.error?.code;
@@ -646,6 +656,24 @@ test.before(async () => {
   overrideClientId = overrideClient.id;
   killSwitchClientId = killSwitchClient.id;
   supportClientId = supportClient.id;
+  const businessReturnDepartment = await prisma.department.create({
+    data: {
+      clientId: businessClientId,
+      name: `${prefix} Campaign Return`,
+      slug: `${prefix}-campaign-return`,
+    },
+    select: { id: true },
+  });
+  const businessReturnQueue = await prisma.queue.create({
+    data: {
+      clientId: businessClientId,
+      departmentId: businessReturnDepartment.id,
+      name: `${prefix} Campaign Return`,
+    },
+    select: { id: true },
+  });
+  businessReturnDepartmentId = businessReturnDepartment.id;
+  businessReturnQueueId = businessReturnQueue.id;
   await writeTenants([
     businessClient.clientKey,
     governmentClient.clientKey,
@@ -1063,6 +1091,7 @@ test("campaign draft routes require authentication", async () => {
     name: "Sem sessao",
     templateId: "template",
     selectedLeadIds: ["lead"],
+    returnDestination: defaultCampaignReturnDestination(),
   });
   assert.equal(draft.status, 401);
   assert.equal(getErrorCode(draft.body), "missing_token");
@@ -4362,43 +4391,23 @@ test("meta inbound clears active chatbot runtime when persisted flow is inactive
   assert.equal(response.status, 200, JSON.stringify(response.body));
 
   await waitFor(async () => {
-    const runtime = await prisma.conversationRuntimeState.findUnique({
-      where: { clientId_waId: { clientId: businessClientId, waId } },
-      select: {
-        chatbotActive: true,
-        chatbotNodeId: true,
-        flow: true,
-        flowStep: true,
-      },
-    });
+    const runtime = await runtimeStorage.getConversation(waId, `${prefix}-business`);
     return Boolean(
       runtime &&
         runtime.chatbotActive === false &&
-        runtime.chatbotNodeId === null &&
-        runtime.flow === null &&
-        runtime.flowStep === null
+        !runtime.chatbotNodeId &&
+        !runtime.flow
     );
   });
 
-  const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({
-    where: { clientId_waId: { clientId: businessClientId, waId } },
-    select: {
-      mode: true,
-      status: true,
-      handoffStatus: true,
-      chatbotActive: true,
-      chatbotNodeId: true,
-      flow: true,
-      flowStep: true,
-    },
-  });
+  const runtime = await runtimeStorage.getConversation(waId, `${prefix}-business`);
+  assert.ok(runtime);
   assert.equal(runtime.mode, "BOT");
   assert.equal(runtime.status, null);
-  assert.equal(runtime.handoffStatus, "NONE");
+  assert.equal(runtime.handoff.status, "none");
   assert.equal(runtime.chatbotActive, false);
-  assert.equal(runtime.chatbotNodeId, null);
-  assert.equal(runtime.flow, null);
-  assert.equal(runtime.flowStep, null);
+  assert.equal(runtime.chatbotNodeId, undefined);
+  assert.equal(runtime.flow, undefined);
   assert.equal(
     await prisma.outboundMessage.count({
       where: { clientId: businessClientId, waId, provider: "meta" },
@@ -12023,6 +12032,7 @@ test("campaign draft uses approved template and stores safe seed without sending
       anonymized.id,
       instagram.id,
     ],
+    returnDestination: defaultCampaignReturnDestination(),
   });
 
   assert.equal(response.status, 200);
@@ -12377,6 +12387,7 @@ test("app CSV import previews and creates draft without sending", async () => {
     templateId: template.id,
     csvText,
     mapping,
+    returnDestination: defaultCampaignReturnDestination(),
   });
   assert.equal(created.status, 200);
   assert.equal(created.body.campaign.status, "draft");
@@ -12428,6 +12439,7 @@ test("campaign draft send revalidates recipients before starting", async () => {
     name: "Rascunho para envio",
     templateId: template.id,
     selectedLeadIds: [lead.id],
+    returnDestination: defaultCampaignReturnDestination(),
   });
   assert.equal(created.status, 200);
   assert.equal(created.body.campaign.status, "draft");
@@ -12525,6 +12537,7 @@ test("campaign lifecycle supports schedule pause resume cancel and formal test-s
     name: "Rascunho lifecycle",
     templateId: template.id,
     selectedLeadIds: [lead.id],
+    returnDestination: defaultCampaignReturnDestination(),
   });
   assert.equal(created.status, 200);
   assert.equal(created.body.campaign.status, "draft");
@@ -12705,6 +12718,7 @@ test("campaign lifecycle supports schedule pause resume cancel and formal test-s
     name: "Rascunho agendado e cancelado",
     templateId: template.id,
     selectedLeadIds: [leadSecond.id],
+    returnDestination: defaultCampaignReturnDestination(),
   });
   assert.equal(cancelledDraft.status, 200, JSON.stringify(cancelledDraft.body));
   const cancelledScheduledAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -12759,6 +12773,7 @@ test("campaign lifecycle supports schedule pause resume cancel and formal test-s
         templateName: template.name,
         recipients: [waId],
         templateParams: [],
+        returnDestination: defaultCampaignReturnDestination(),
       },
     },
   });
@@ -12796,10 +12811,11 @@ test("campaign lifecycle supports schedule pause resume cancel and formal test-s
   ]);
   assert.equal(dueA.claimed + dueB.claimed, 1);
   await waitFor(async () => {
-    const count = await prisma.outboundMessage.count({
-      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${created.body.campaign.id}.` } },
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: created.body.campaign.id },
+      select: { status: true, sentCount: true, scheduledAt: true },
     });
-    return count === 1;
+    return campaign?.status === "completed" && campaign.sentCount === 1 && campaign.scheduledAt === null;
   });
   const finalCampaign = await prisma.campaign.findUniqueOrThrow({
     where: { id: created.body.campaign.id },
@@ -12823,6 +12839,7 @@ test("campaign lifecycle supports schedule pause resume cancel and formal test-s
     name: "Pausar em execucao",
     templateId: template.id,
     selectedLeadIds: [lead.id, leadSecond.id],
+    returnDestination: defaultCampaignReturnDestination(),
   });
   assert.equal(pausableDraft.status, 200, JSON.stringify(pausableDraft.body));
   const pausableSend = await request<{ ok: true; campaign: { status: string } }>(
@@ -12881,6 +12898,7 @@ test("campaign lifecycle supports schedule pause resume cancel and formal test-s
     name: "Cancelar em execucao",
     templateId: template.id,
     selectedLeadIds: [leadSecond.id, leadThird.id],
+    returnDestination: defaultCampaignReturnDestination(),
   });
   assert.equal(cancellableDraft.status, 200, JSON.stringify(cancellableDraft.body));
   const cancellableSend = await request<{ ok: true; campaign: { status: string } }>(
@@ -13064,6 +13082,7 @@ test("campaign draft requires mappings for approved template variables", async (
     name: "Rascunho sem variavel",
     templateId: template.id,
     selectedLeadIds: [lead.id],
+    returnDestination: defaultCampaignReturnDestination(),
   });
 
   assert.equal(response.status, 400);
@@ -13106,6 +13125,7 @@ test("campaign draft explicit send blocks locally disabled template without send
     name: "Rascunho com template inativado",
     templateId: template.id,
     selectedLeadIds: [lead.id],
+    returnDestination: defaultCampaignReturnDestination(),
   });
   assert.equal(created.status, 200);
   assert.equal(created.body.campaign.status, "draft");
@@ -13206,6 +13226,7 @@ test("template category policy blocks campaign send schedule and test-send", asy
     name: "Rascunho com categoria bloqueada",
     templateId: template.id,
     selectedLeadIds: [lead.id],
+    returnDestination: defaultCampaignReturnDestination(),
   });
   assert.equal(created.status, 200, JSON.stringify(created.body));
   assert.equal(created.body.campaign.status, "draft");
@@ -13309,6 +13330,7 @@ test("campaign draft rejects invalid fixed variable mapping", async () => {
     name: "Rascunho fixo vazio",
     templateId: template.id,
     selectedLeadIds: [lead.id],
+    returnDestination: defaultCampaignReturnDestination(),
     templateVariableMappings: [{ position: "1", source: "fixed", value: "" }],
   });
 
@@ -13351,6 +13373,7 @@ test("campaign draft explicit send renders mapped variables per contact", async 
     name: "Rascunho variavel",
     templateId: template.id,
     selectedLeadIds: [lead.id],
+    returnDestination: defaultCampaignReturnDestination(),
     templateVariableMappings: [
       { position: "1", source: "contact.displayName" },
       { position: "2", source: "lead.companyName" },
@@ -13537,6 +13560,7 @@ test("campaign send resolves safe ninth digit variant to existing conversation",
       name: "Envio com variacao segura",
       templateId: template.id,
       recipients: [inputWaId],
+      returnDestination: defaultCampaignReturnDestination(),
     }
   );
   assert.equal(response.status, 200);
@@ -13587,8 +13611,8 @@ test("campaign send resolves safe ninth digit variant to existing conversation",
   assert.equal(runtimeStates.length, 1);
   assert.equal(runtimeStates[0].waId, conversationWaId);
   assert.equal(runtimeStates[0].mode, "HUMAN");
-  assert.equal(runtimeStates[0].status, "IN_PROGRESS");
-  assert.equal(runtimeStates[0].assignedUserId, businessAdmin.id);
+  assert.equal(runtimeStates[0].status, "WAITING");
+  assert.equal(runtimeStates[0].assignedUserId, null);
   assert.ok(runtimeStates[0].lastOutboundMessageId);
 
   const resolutionEvent = await prisma.event.findFirst({
@@ -13667,6 +13691,7 @@ test("campaign send reactivates soft-deleted non-anonymized conversation", async
       name: "Envio reativa conversa excluida",
       templateId: template.id,
       recipients: [waId],
+      returnDestination: defaultCampaignReturnDestination(),
     }
   );
   assert.equal(response.status, 200);
@@ -13773,6 +13798,7 @@ test("campaign send does not reactivate anonymized soft-deleted conversation", a
       name: "Envio nao reativa anonimizada",
       templateId: template.id,
       recipients: [waId],
+      returnDestination: defaultCampaignReturnDestination(),
     }
   );
   assert.equal(response.status, 200);
@@ -13858,6 +13884,7 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
       templateId: template.id,
       recipients: [waId],
       templateParams: ["Cliente Novo"],
+      returnDestination: defaultCampaignReturnDestination(),
     }
   );
   assert.equal(response.status, 200);
@@ -14056,6 +14083,7 @@ test("campaign send failure does not reactivate soft-deleted conversation or CRM
       name: "Envio falha sem reativar conversa",
       templateId: template.id,
       recipients: [waId],
+      returnDestination: defaultCampaignReturnDestination(),
     }
   );
   assert.equal(response.status, 200);
@@ -14154,6 +14182,7 @@ test("campaign recipient bridge does not cross tenants and skips ambiguous match
       name: "Envio sem cruzar tenant",
       templateId: template.id,
       recipients: [otherTenantWaId],
+      returnDestination: defaultCampaignReturnDestination(),
     }
   );
   assert.equal(crossTenant.status, 200);
@@ -14166,6 +14195,7 @@ test("campaign recipient bridge does not cross tenants and skips ambiguous match
       name: "Envio ambiguo",
       templateId: template.id,
       recipients: [ambiguousInput],
+      returnDestination: defaultCampaignReturnDestination(),
     }
   );
   assert.equal(ambiguous.status, 200);
@@ -14266,6 +14296,7 @@ test("campaign draft send blocks mapped recipients without value or fallback", a
     name: "Rascunho variavel bloqueada",
     templateId: template.id,
     selectedLeadIds: [lead.id],
+    returnDestination: defaultCampaignReturnDestination(),
     templateVariableMappings: [
       { position: "1", source: "contact.displayName" },
       { position: "2", source: "lead.city" },
@@ -14441,6 +14472,7 @@ test("event-based opt-out blocks recipient in app campaign and export", async ()
     name: "Campanha com opt-out",
     templateName: "cra_pr_utility",
     recipients: [waId],
+    returnDestination: defaultCampaignReturnDestination(),
   });
 
   assert.equal(created.status, 200);

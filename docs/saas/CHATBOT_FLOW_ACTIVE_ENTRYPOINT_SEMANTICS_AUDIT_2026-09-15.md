@@ -82,15 +82,22 @@ product path:
 - It does not require `entryPoint=true`.
 - When resolved, the Support Hub creates runtime state with
   `flow=chatbot:<id>` and `chatbotActive=true`.
+- Campaign return destination can persist an exact selected active same-tenant
+  `flowId` in `campaign.seed.saved`.
+- Campaign send preflight revalidates `{ id: selectedFlowId, clientId,
+  isActive: true }` and does not require `entryPoint=true`.
+- Campaign outbound runtime is created with `flow=chatbot:<selectedFlowId>` and
+  `chatbotActive=true`.
 - Existing BOT conversations with `flow=chatbot:<id>` also continue through that
   explicit id as long as the flow remains active.
 
 This is documented current capability, not merely future architecture.
 
-No evidence was found that campaigns, templates, URL/QR/referral routing,
-departments, intents, Webchat embeds, Telegram or outbound automations can start
-an arbitrary active non-entrypoint flow today. Campaign/template usage should
-not be confused with chatbot flow execution.
+No evidence was found that templates alone, URL/QR/referral routing,
+departments, intents, Webchat embeds, Telegram or generic outbound automations
+can start an arbitrary active non-entrypoint flow today. Campaign return is a
+specific explicit invocation path and must not be confused with default inbound
+selection.
 
 No flow-to-flow transition schema was found: definitions route between nodes
 inside one `definition`; they do not call another `ChatbotFlow`.
@@ -131,7 +138,7 @@ production flow currently has `isActive=false` and `entryPoint=true`.
 | State | DB allowed | API/UI allowed | Runtime meaning | Product validity |
 | --- | --- | --- | --- | --- |
 | inactive / non-entrypoint | yes | yes | stored draft/disabled flow; not executable | valid |
-| active / non-entrypoint | yes | yes | executable only by explicit id paths, currently Support Hub/runtime continuation | valid but uncommon |
+| active / non-entrypoint | yes | yes | executable by explicit id paths, including Support Hub, campaign return destination and runtime continuation | valid |
 | active / entrypoint | yes | yes | default initial flow for new chatbot cycles | valid |
 | inactive / entrypoint | yes | yes | contradictory; default selector ignores it because it also requires `isActive=true` | should be invalid/hardened |
 
@@ -161,17 +168,17 @@ rule deriving one flag from the other.
 
 ## Product Model
 
-Current model: `MODEL D - PARTIAL/FUTURE CAPABILITY`.
+Current model: `MULTI-ACTIVE RUNTIME WITH ONE DEFAULT ENTRYPOINT`.
 
 Why:
 
 - Multiple active flows are not redundant; an active non-entrypoint flow can be
-  executed by explicit id in Support Hub and by continuation of existing runtime
-  state.
+  executed by explicit id in Support Hub, campaign return destination and by
+  continuation of existing runtime state.
 - The default public/tenant inbound path still uses a single active entrypoint.
-- There is no general product surface for campaigns, departments, links,
-  referrals, intents, channels or flow-to-flow transitions to select a secondary
-  active flow.
+- There is no general product surface for departments, links, referrals,
+  intents, channels or flow-to-flow transitions to select a secondary active
+  flow.
 - DB invariants do not fully protect the semantics.
 
 ## Recommendations

@@ -139,7 +139,7 @@ Semantica `isActive` vs `entryPoint`, auditada em 2026-09-15:
   com `isActive=true`;
 - `isActive=true` e o gate de execucao para um flow ja referenciado por
   `flow=chatbot:<id>` ou por rota explicita, como Support Hub
-  `supportChannel.chatbotFlowId`;
+  `supportChannel.chatbotFlowId` e destino automatizado de retorno de campanha;
 - active non-entrypoint pode executar por id explicito, mas nao e escolhido como
   fallback quando nao existe entrypoint ativo;
 - se o flow salvo em runtime se tornar inativo, Meta/Web Session/Webchat e

@@ -16,6 +16,10 @@ import {
   buildPrivateCampaignSeedFields,
   readPrivateCampaignSeedFields,
 } from "./campaignSeedPrivacy.js";
+import {
+  serializeOutboundReturnDestination,
+  type OutboundReturnDestination,
+} from "../routing/outboundReturnDestination.js";
 
 export const CAMPAIGN_IMPORT_MAX_CSV_BYTES = 2 * 1024 * 1024;
 export const CAMPAIGN_IMPORT_MAX_ROWS = 10_000;
@@ -497,6 +501,7 @@ export async function importCampaignRecipients(
     requestId: string;
     recipients: CampaignImportRecipientInput[];
     source: "csv" | "public_api" | "manual";
+    returnDestination?: OutboundReturnDestination | null;
   }
 ) {
   const campaign = await prisma.campaign.findFirst({
@@ -559,6 +564,7 @@ export async function importCampaignRecipients(
           manualRecipientInputCount: params.recipients.length,
           templateParams: [],
           templateVariableMappings: [],
+          returnDestination: serializeOutboundReturnDestination(params.returnDestination ?? null),
           source: `recipient_import:${params.source}`,
           summary: preview.summary,
         } satisfies Prisma.JsonObject,

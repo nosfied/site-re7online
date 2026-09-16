@@ -7,6 +7,8 @@ import { buildReplayFormFromCampaign, getFriendlyCampaignError } from "@/lib/cam
 import {
   AppCampaignAudiencePreviewResponse,
   AppCampaignImportPreview,
+  AppCampaignReturnDestination,
+  AppCampaignReturnDestinationsResponse,
   AppMetaCostPreview,
   AppSession,
   AppTemplateItem,
@@ -19,6 +21,7 @@ import {
   discardAppCampaignDraft,
   exportAppCampaignConsumptionCsv,
   fetchAppCampaignAudiencePreview,
+  fetchAppCampaignReturnDestinations,
   fetchAppCrmStatuses,
   fetchAppMetaUsagePreview,
   getAppCampaign,
@@ -44,6 +47,10 @@ type CampaignFormState = {
   templateParamsInput: string;
   templateVariableMappings: TemplateVariableMappingFormState[];
   recipientsInput: string;
+  returnDestinationType: "human_department" | "automated_flow";
+  returnDepartmentId: string;
+  returnQueueId: string;
+  returnFlowId: string;
 };
 
 type TemplateVariableSource = "" | "contact.displayName" | "lead.companyName" | "lead.city" | "fixed";
@@ -92,6 +99,10 @@ const EMPTY_FORM: CampaignFormState = {
   templateParamsInput: "",
   templateVariableMappings: [],
   recipientsInput: "",
+  returnDestinationType: "human_department",
+  returnDepartmentId: "",
+  returnQueueId: "",
+  returnFlowId: "",
 };
 
 const EMPTY_AUDIENCE_FILTERS: AudiencePreviewFilters = {
@@ -534,6 +545,7 @@ export default function AppCampaignsPage() {
   const [session, setSession] = useState<AppSession | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
   const [templates, setTemplates] = useState<AppTemplateItem[]>([]);
+  const [returnDestinations, setReturnDestinations] = useState<AppCampaignReturnDestinationsResponse | null>(null);
   const [crmStatuses, setCrmStatuses] = useState<CrmBusinessStatusConfig[]>([]);
   const [crmStatusesWarning, setCrmStatusesWarning] = useState<string | null>(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
@@ -740,6 +752,150 @@ export default function AppCampaignsPage() {
     [form.recipientsInput]
   );
 
+  const selectedReturnDepartment = useMemo(
+    () => returnDestinations?.departments.find((item) => item.id === form.returnDepartmentId) ?? null,
+    [form.returnDepartmentId, returnDestinations]
+  );
+
+  const selectedReturnFlow = useMemo(
+    () => returnDestinations?.flows.find((item) => item.id === form.returnFlowId) ?? null,
+    [form.returnFlowId, returnDestinations]
+  );
+
+  const buildReturnDestinationPayload = useCallback((): { ok: true; value: AppCampaignReturnDestination } | { ok: false; message: string } => {
+    if (form.returnDestinationType === "automated_flow") {
+      if (!form.returnFlowId) return { ok: false, message: "Selecione o fluxo automatizado que receberá as respostas." };
+      return { ok: true, value: { type: "automated_flow", flowId: form.returnFlowId } };
+    }
+    if (!form.returnDepartmentId) return { ok: false, message: "Selecione o setor que receberá as respostas." };
+    if (!selectedReturnDepartment) return { ok: false, message: "Selecione um setor válido para receber as respostas." };
+    if (selectedReturnDepartment.queueMode === "missing") {
+      return { ok: false, message: "O setor selecionado não possui fila configurada." };
+    }
+    if (selectedReturnDepartment.queueMode === "multiple" && !form.returnQueueId) {
+      return { ok: false, message: "Selecione a fila que receberá as respostas." };
+    }
+    const queueId =
+      selectedReturnDepartment.queueMode === "single"
+        ? selectedReturnDepartment.queues[0]?.id
+        : form.returnQueueId;
+    if (!queueId) return { ok: false, message: "Selecione uma fila válida para receber as respostas." };
+    return {
+      ok: true,
+      value: {
+        type: "human_department",
+        departmentId: selectedReturnDepartment.id,
+        queueId,
+      },
+    };
+  }, [form.returnDepartmentId, form.returnDestinationType, form.returnFlowId, form.returnQueueId, selectedReturnDepartment]);
+
+  const returnDestinationEditor = (
+    <div className="grid gap-3 rounded-md border border-white/10 bg-re7-navy/45 p-3 lg:col-span-3">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Destino das respostas</p>
+        <p className="mt-1 text-xs text-white/60">
+          Escolha qual fluxo ou setor será iniciado quando a pessoa responder à campanha.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setForm((prev) => ({ ...prev, returnDestinationType: "human_department" }))}
+          className={`rounded-md border px-3 py-2 text-sm font-semibold ${
+            form.returnDestinationType === "human_department"
+              ? "border-re7-sky bg-re7-sky/20 text-white"
+              : "border-white/15 bg-white/5 text-white/75 hover:bg-white/10"
+          }`}
+        >
+          Atendimento humano
+        </button>
+        <button
+          type="button"
+          onClick={() => setForm((prev) => ({ ...prev, returnDestinationType: "automated_flow" }))}
+          className={`rounded-md border px-3 py-2 text-sm font-semibold ${
+            form.returnDestinationType === "automated_flow"
+              ? "border-re7-sky bg-re7-sky/20 text-white"
+              : "border-white/15 bg-white/5 text-white/75 hover:bg-white/10"
+          }`}
+        >
+          Fluxo automatizado
+        </button>
+      </div>
+      {form.returnDestinationType === "human_department" ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="grid gap-1 text-sm">
+            <span className="text-white/70">Setor</span>
+            <select
+              className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+              value={form.returnDepartmentId}
+              onChange={(event) => {
+                const department = returnDestinations?.departments.find((item) => item.id === event.target.value) ?? null;
+                setForm((prev) => ({
+                  ...prev,
+                  returnDepartmentId: event.target.value,
+                  returnQueueId: department?.queueMode === "single" ? department.queues[0]?.id ?? "" : "",
+                }));
+              }}
+            >
+              <option value="">Selecionar setor</option>
+              {(returnDestinations?.departments ?? []).map((department) => (
+                <option key={department.id} value={department.id}>
+                  {department.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {selectedReturnDepartment?.queueMode === "multiple" ? (
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Fila</span>
+              <select
+                className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+                value={form.returnQueueId}
+                onChange={(event) => setForm((prev) => ({ ...prev, returnQueueId: event.target.value }))}
+              >
+                <option value="">Selecionar fila</option>
+                {selectedReturnDepartment.queues.map((queue) => (
+                  <option key={queue.id} value={queue.id}>
+                    {queue.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {selectedReturnDepartment?.queueMode === "missing" ? (
+            <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100 md:col-span-2">
+              O setor selecionado não possui fila configurada.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <label className="grid gap-1 text-sm">
+          <span className="text-white/70">Fluxo</span>
+          <select
+            className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+            value={form.returnFlowId}
+            onChange={(event) => setForm((prev) => ({ ...prev, returnFlowId: event.target.value }))}
+          >
+            <option value="">Selecionar fluxo</option>
+            {(returnDestinations?.flows ?? []).map((flow) => (
+              <option key={flow.id} value={flow.id}>
+                {flow.entryPoint ? `${flow.name} - Principal` : flow.name}
+              </option>
+            ))}
+          </select>
+          {selectedReturnFlow ? (
+            <span className="text-xs text-white/55">
+              {selectedReturnFlow.entryPoint
+                ? "Principal — também utilizado como entrada padrão para novas conversas."
+                : "Fluxo ativo disponível para esta campanha."}
+            </span>
+          ) : null}
+        </label>
+      )}
+    </div>
+  );
+
   useEffect(() => {
     if (!session || !form.templateId || !audiencePreview) {
       setAudienceCostPreview(null);
@@ -837,6 +993,15 @@ export default function AppCampaignsPage() {
     Promise.all([
       refreshCampaigns(session),
       refreshTemplates(session),
+      fetchAppCampaignReturnDestinations(session).then((response) => {
+        setReturnDestinations(response);
+        setForm((prev) => ({
+          ...prev,
+          returnDepartmentId: prev.returnDepartmentId || response.departments[0]?.id || "",
+          returnQueueId: prev.returnQueueId || response.departments[0]?.queues[0]?.id || "",
+          returnFlowId: prev.returnFlowId || response.flows[0]?.id || "",
+        }));
+      }),
       fetchAppCrmStatuses(session)
         .then((response) => {
           setCrmStatuses(response.settings.crmBusinessStatuses.filter((item) => item.isActive !== false));
@@ -1046,6 +1211,12 @@ export default function AppCampaignsPage() {
       showToast("error", "Envio imediato incompleto", message);
       return;
     }
+    const returnDestination = buildReturnDestinationPayload();
+    if (!returnDestination.ok) {
+      setFormError(`Erro ao criar campanha: ${returnDestination.message}`);
+      showToast("error", "Destino das respostas incompleto", returnDestination.message);
+      return;
+    }
     const confirmed = window.confirm(
       "Esta ação usa o envio imediato manual e pode enviar modelos para os números informados. O fluxo recomendado é criar um rascunho pela audiência CRM. Deseja continuar?"
     );
@@ -1062,6 +1233,7 @@ export default function AppCampaignsPage() {
         templateName,
         recipients,
         ...(templateParams.length > 0 ? { templateParams } : {}),
+        returnDestination: returnDestination.value,
       });
       await refreshCampaigns(session, created.campaign.campaignId);
       if (created.campaign.campaignId) {
@@ -1246,6 +1418,12 @@ export default function AppCampaignsPage() {
       showToast("warning", "Sem audiência elegível", message);
       return;
     }
+    const returnDestination = buildReturnDestinationPayload();
+    if (!returnDestination.ok) {
+      setAudiencePreviewError(returnDestination.message);
+      showToast("error", "Destino das respostas incompleto", returnDestination.message);
+      return;
+    }
 
     setCreatingDraft(true);
     setAudiencePreviewError(null);
@@ -1254,6 +1432,7 @@ export default function AppCampaignsPage() {
         name,
         templateId,
         selectedLeadIds,
+        returnDestination: returnDestination.value,
         ...(templateVariableLabels.length > 0
           ? { templateVariableMappings: buildTemplateVariableMappingsPayload(form.templateVariableMappings) }
           : {}),
@@ -1388,6 +1567,12 @@ export default function AppCampaignsPage() {
       showToast("warning", "Sem CSV elegível", message);
       return;
     }
+    const returnDestination = buildReturnDestinationPayload();
+    if (!returnDestination.ok) {
+      setCsvPreviewError(returnDestination.message);
+      showToast("error", "Destino das respostas incompleto", returnDestination.message);
+      return;
+    }
     const confirmed = window.confirm("Criar rascunho com os destinatários elegíveis do CSV? Nenhuma mensagem será enviada.");
     if (!confirmed) return;
 
@@ -1399,6 +1584,7 @@ export default function AppCampaignsPage() {
         templateId,
         csvText,
         mapping: buildCsvMappingPayload(),
+        returnDestination: returnDestination.value,
       });
       await refreshCampaigns(session, created.campaign.id);
       const detail = await getAppCampaign(session, created.campaign.id);
@@ -1586,14 +1772,19 @@ export default function AppCampaignsPage() {
       if (mapping?.fallback) return mapping.fallback;
       return templateVariables[index] ?? "";
     });
-    setForm({
+    setForm((prev) => ({
+      ...EMPTY_FORM,
+      returnDestinationType: prev.returnDestinationType,
+      returnDepartmentId: prev.returnDepartmentId,
+      returnQueueId: prev.returnQueueId,
+      returnFlowId: prev.returnFlowId,
       templateVariables: syncTemplateVariables(fixedVariableValues, labels.length),
       templateVariableMappings: syncTemplateVariableMappings([], labels),
       ...replayForm,
       templateId: matchedTemplate?.id ?? "",
       templateName: matchedTemplate?.name ?? replayForm.templateName,
       templateParamsInput: syncTemplateVariables(fixedVariableValues, labels.length).join("\n"),
-    });
+    }));
     setFormError(null);
     setAudienceFilters(EMPTY_AUDIENCE_FILTERS);
     setAudiencePreview(null);
@@ -1980,6 +2171,7 @@ export default function AppCampaignsPage() {
                     Este modelo está classificado como Marketing pela Meta. Revise política, consentimento e custos antes de enviar.
                   </div>
                 ) : null}
+                {returnDestinationEditor}
                 <div className="lg:col-span-3">
                   <CostPreviewCard
                     preview={audienceCostPreview}
@@ -2321,6 +2513,7 @@ export default function AppCampaignsPage() {
                 ) : null}
               </div>
             ) : null}
+            <div className="mt-3">{returnDestinationEditor}</div>
             <div className="mt-3 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
@@ -2445,6 +2638,7 @@ export default function AppCampaignsPage() {
                     />
                   </label>
                 )}
+                <div className="lg:col-span-2">{returnDestinationEditor}</div>
                 <label className="grid min-w-0 gap-1 text-sm lg:col-span-2">
                   <span className="text-white/70">Número do contato</span>
                   <textarea

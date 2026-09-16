@@ -1163,6 +1163,28 @@ export type AppTemplateItem = {
   updatedAt: string;
 };
 
+export type AppCampaignReturnDestination =
+  | {
+      type: "human_department";
+      departmentId: string;
+      queueId?: string | null;
+    }
+  | {
+      type: "automated_flow";
+      flowId: string;
+    };
+
+export type AppCampaignReturnDestinationsResponse = {
+  ok: true;
+  departments: Array<{
+    id: string;
+    name: string;
+    queueMode: "missing" | "single" | "multiple";
+    queues: Array<{ id: string; name: string }>;
+  }>;
+  flows: Array<{ id: string; name: string; entryPoint?: boolean }>;
+};
+
 export type AppTemplateCategoryPolicy = {
   allowedCategories: string[] | null;
   unrestricted: boolean;
@@ -4846,6 +4868,12 @@ export async function exportAppCampaignConsumptionCsv(
   return requestAppText(session, `/app/campaigns/${encodeURIComponent(campaignId)}/export`);
 }
 
+export async function fetchAppCampaignReturnDestinations(
+  session: AppSession
+): Promise<AppCampaignReturnDestinationsResponse> {
+  return requestAppJson(session, "/app/campaigns/return-destinations");
+}
+
 export async function createAppCampaign(
   session: AppSession,
   payload: {
@@ -4854,6 +4882,7 @@ export async function createAppCampaign(
     templateName: string;
     recipients: string[];
     templateParams?: string[];
+    returnDestination: AppCampaignReturnDestination;
   }
 ): Promise<{ ok: true; campaign: CampaignItem & { campaignId: string; campaignRunId: string } }> {
   return requestAppJson(session, "/app/campaigns", {
@@ -4869,6 +4898,7 @@ export async function createAppCampaignDraft(
     templateId: string;
     selectedLeadIds: string[];
     templateParams?: string[];
+    returnDestination: AppCampaignReturnDestination;
     templateVariableMappings?: Array<{
       position: string;
       source: "contact.displayName" | "lead.companyName" | "lead.city" | "fixed" | "";
@@ -4919,6 +4949,7 @@ export async function createAppCampaignDraftFromCsv(
       nameColumn?: string | null;
       variableColumns?: Record<string, string | null>;
     };
+    returnDestination: AppCampaignReturnDestination;
   }
 ): Promise<{
   ok: true;
