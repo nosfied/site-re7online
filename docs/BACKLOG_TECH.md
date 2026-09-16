@@ -163,7 +163,22 @@ ACTIVE P1:
    and `.csv`. Next gate: opt-out E2E; CRA real acceptance/report package still
    needs owner/customer acceptance evidence.
 
-3. CRA campaign import - optional CRM situation column: OPEN / NEXT CRA
+3. CRA Demo opt-out E2E owner gate: READY / CURRENT ACTIVE CONTRACT FRONT /
+   NO MUTATION YET. On 2026-09-16 production/code audit confirmed canonical
+   opt-out is event-sourced in `Event` by `contact.opt_out.recorded` and
+   `contact.opt_out.revoked`, scoped by `clientId` + `waIdCanonical`.
+   Campaigns, Inbox template sends and canned replies check active opt-out
+   before provider send; campaign export renders blocked recipients as
+   `opt_out`, non-billing reason `opt_out`. Reversal exists through campaign
+   revoke and CRM contact opt-out delete/revoke. Tests:
+   `campaignsFeatureRoutes.test.ts` + `crmCapabilityRoutes.test.ts` 130/130
+   PASS. Recommended future E2E recipient is B `****6787`; A `****9614` remains
+   avoided because it is the historical reconciliation case. Owner approval is
+   still required before creating opt-out, creating the blocked campaign, or
+   later revoking opt-out. Evidence:
+   `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_D_OPT_OUT_OWNER_GATE_PREPARATION_2026-09-16.md`.
+
+4. CRA campaign import - optional CRM situation column: OPEN / NEXT CRA
    CAMPAIGN IMPORT FRONT. Campaign/contact audience files may optionally contain
    `Situacao no CRM` / `Situação no CRM`. When populated, the value must resolve
    deterministically against CRM situations/statuses already configured for the

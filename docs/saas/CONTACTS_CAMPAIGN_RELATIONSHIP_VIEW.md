@@ -33,6 +33,11 @@ the platform.
 
 Do not create a shadow campaign-history model inside Contact.
 
+Opt-out state must be projected from canonical events
+`contact.opt_out.recorded` / `contact.opt_out.revoked`; campaign blocked/skipped
+history must use existing campaign events such as
+`campaign.recipient.opt_out_blocked`.
+
 The Contacts surface may expose a projection/read model, but campaign source of
 truth remains in the existing campaign/outbound/billing/opt-out records.
 

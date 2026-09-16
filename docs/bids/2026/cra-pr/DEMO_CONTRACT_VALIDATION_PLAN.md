@@ -587,9 +587,8 @@ Campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214` (`Demo contrato CRA -
 data_exame B-only - final 6787 - 2026-09-16`) was created as draft with
 encrypted B-only seed, `returnDestination` = human department/queue above,
 `totalRecipients=1`, `sentCount=0`, `blockedCount=0`, import summary PASS and
-zero OutboundMessage rows. B remains NOT ATTEMPTED until final owner send
-approval. This prepared state was superseded by the owner-approved controlled
-B send below.
+zero OutboundMessage rows. This prepared state was superseded by the
+owner-approved controlled B send below.
 
 Recipient B controlled Utility send, 2026-09-16: COMPLETED / DEMO PRODUCT
 CAPABILITY VALIDATION / NOT CRA REAL CAMPAIGN. Owner authorized exactly one Meta
@@ -611,6 +610,24 @@ ended `completed`, `sentCount=1`, `blockedCount=0`. A external sends in this
 run: 0. Sanitized evidence:
 `evidence/demo-contract-validation/PHASE_C_RECIPIENT_B_CONTROLLED_UTILITY_RESULT_2026-09-16.md`
 and `.csv`. Next gate: opt-out E2E.
+
+Opt-out E2E preparation, 2026-09-16: READY FOR OWNER GATE / NO MUTATION / NO
+REAL META SEND. Production/code audit confirmed canonical opt-out is event-based
+in `Event` using `contact.opt_out.recorded` and `contact.opt_out.revoked`,
+scoped by `clientId` + `waIdCanonical`; campaign block evidence uses
+`campaign.recipient.opt_out_blocked`. Campaign runner filters opt-out before
+return-destination preflight and before any Meta call. Manual active/template
+sends and canned replies are also blocked for active opt-out in the current
+implementation. Campaign export includes `opt_out` and non-billing reason
+`opt_out`; CRM exposes `activeOptOut` and `templateSendBlockedReason=opt_out`.
+`data_exame` remains approved; `atualizacao_protocolo` and
+`lembrete_vencimento_anuidade` are Utility `PENDING` at Meta and are not needed
+for this gate. Recommended future E2E recipient: B `****6787`; A `****9614`
+must be preserved as historical reconciliation evidence. Future owner-approved
+sequence: create canonical opt-out with source `controlled_demo_validation`,
+run one blocked campaign for B, prove Meta calls 0/real messages 0, collect
+export/report evidence, and revoke only if explicitly approved. Evidence:
+`evidence/demo-contract-validation/PHASE_D_OPT_OUT_OWNER_GATE_PREPARATION_2026-09-16.md`.
 
 ### Guided Builder - Bot Inactivity Policy UX Backlog
 

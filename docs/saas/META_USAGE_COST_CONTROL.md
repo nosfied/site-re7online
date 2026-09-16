@@ -263,6 +263,10 @@ configuration and the completed B controlled Utility send on 2026-09-16.
   R$ 0.0350 from the official Meta narrow-rate proof. Internal USD planning
   payloads remain non-authoritative for provider cost; CRA contract price
   remains NOT PROVEN.
+- Opt-out E2E preparation on 2026-09-16 made no provider call and no opt-out
+  mutation. Future owner-approved blocked campaign should have expected Meta
+  calls 0, real messages 0 and billing events 0 because the campaign guard must
+  stop at active opt-out before provider submission.
 - Nao ha conciliacao financeira definitiva automatizada.
 - O bloqueio por limite ainda nao esta ativado nos fluxos reais.
 - Rate card e local e deve ser revisado quando a politica Meta mudar.

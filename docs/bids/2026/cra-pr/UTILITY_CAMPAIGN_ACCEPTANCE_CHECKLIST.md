@@ -48,8 +48,8 @@ campaign must remain unsent.
 
 ## Current CRA Order - 2026-09-16
 
-1. Recipient B controlled Utility validation.
-2. Opt-out E2E.
+1. Recipient B controlled Utility validation - DONE on Demo.
+2. Opt-out E2E - CURRENT OWNER GATE.
 3. Reports / exports / billing.
 4. CRM import/upsert/report with `Situação no CRM`.
 5. Acceptance package.
@@ -78,7 +78,7 @@ them by owner decision.
 | Test send | Formal test-send excluded from contractual active-message billing | TESTED LOCALLY |
 | Schedule/send | Explicit operator action only | PRODUCT SUPPORTED / NEEDS OWNER APPROVAL |
 | Pause/resume/cancel | Supported by campaign lifecycle and app API | TESTED LOCALLY FOR LIFECYCLE |
-| Opt-out | Active opt-out blocks campaign recipient and records event | PRODUCT SUPPORTED / NEEDS CRA EVIDENCE |
+| Opt-out | Active opt-out blocks campaign recipient and records event | OWNER GATE READY / NEEDS CONTROLLED DEMO E2E |
 | Delivery status | Meta webhook updates status/history | PRODUCT SUPPORTED / NEEDS CRA SAMPLE |
 | Billing | Delivered/read Utility campaign outside 24h creates one billable event; read replay does not bill again | TESTED LOCALLY |
 | Reports/export | CSV/monthly evidence available; PDF/equivalent acceptance pack still required | PRODUCT SUPPORTED / NEEDS CRA SAMPLE |
@@ -354,6 +354,18 @@ reconciliation required is absent, return destination persisted, billing event
 count is 1 and duplicate billing is NO. Sanitized CSV evidence was created.
 This validates Demo product capability only; CRA real campaign acceptance and
 CRA contract unit remain separate.
+
+Opt-out E2E preparation, 2026-09-16: READY FOR OWNER GATE / NO MUTATION / NO
+REAL META SEND. Audit confirmed canonical event-sourced opt-out in `Event`,
+campaign guard before Meta, manual active/template guard, canned reply guard,
+CSV/export `opt_out`, tenant isolation and reversal path. `data_exame` remains
+approved; new Utility templates `atualizacao_protocolo` and
+`lembrete_vencimento_anuidade` are `PENDING` at Meta and are not required for
+the opt-out gate. Recommended recipient is B `****6787`; A `****9614` should not
+be mutated because it is the historical reconciliation case. Future expected
+E2E: create canonical opt-out, run one blocked campaign, Meta calls 0, real
+messages 0, capture `campaign.recipient.opt_out_blocked` and export evidence,
+then revoke only if explicitly approved.
 
 Demo operational default proposal, 2026-09-15: SUPERSEDED BY 2026-09-16 OWNER
 DESTINATION CONFIGURATION. The

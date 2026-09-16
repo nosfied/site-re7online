@@ -56,6 +56,18 @@ A operacao pode apoiar processos internos de:
 
 O atendimento formal a titulares deve ser definido em procedimento do controlador/contratante.
 
+## Opt-out Operacional
+
+O opt-out operacional para campanhas e envios ativos e controle auditavel por
+tenant/canal, diferente de anonimizacao. O estado canonico atual e derivado de
+eventos `contact.opt_out.recorded` e `contact.opt_out.revoked`, escopados por
+tenant e identidade WhatsApp canonica. Quando ativo, o bloqueio deve ocorrer
+antes de chamada a provedor externo; campanhas registram bloqueio por
+`campaign.recipient.opt_out_blocked` e podem exportar evidencia `opt_out`.
+
+Esse controle nao remove historico, nao substitui politica de retencao e nao
+deve bloquear canais nao relacionados sem definicao contratual explicita.
+
 ## Segurança E Minimização
 
 Recomendacoes:
@@ -83,4 +95,3 @@ Recomendacoes:
 - Plano de retencao.
 - Matriz de acesso.
 - Plano de resposta a incidente.
-

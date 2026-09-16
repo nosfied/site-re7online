@@ -90,5 +90,9 @@ Phase C send result summary:
   sanitized evidence in:
   `PHASE_C_RECIPIENT_B_CONTROLLED_UTILITY_RESULT_2026-09-16.md` and
   `PHASE_C_RECIPIENT_B_CONTROLLED_UTILITY_RESULT_2026-09-16.csv`.
+- Opt-out E2E preparation: on 2026-09-16 the canonical opt-out model, guard
+  order, manual-send behavior, tenant isolation and safe recipient choice were
+  audited with no mutation and no Meta send. Evidence file:
+  `PHASE_D_OPT_OUT_OWNER_GATE_PREPARATION_2026-09-16.md`.
 - evidence: `PHASE_C_CONTROLLED_UTILITY_RESULT_2026-09-15.md`.
 - reconciliation audit: `RECIPIENT_A_RECONCILIATION_AUDIT_2026-09-15.md`.

@@ -347,6 +347,18 @@ O controle operacional de opt-out usa `Event` como registro auditavel:
 
 O bloqueio impede campanhas, modelos e envios iniciados pela empresa. Ele nao equivale a anonimizacao e nao remove historico.
 
+CRA/Demo opt-out gate, 2026-09-16: CURRENT ACTIVE CONTRACT FRONT / OWNER GATE
+READY / NO MUTATION. Auditoria de codigo e producao confirmou que o estado
+canonico e `Event` por `clientId` + `waIdCanonical`; campanhas bloqueiam antes
+de chamada Meta, Inbox template/manual ativo e respostas prontas tambem bloqueiam
+opt-out ativo, CRM expõe `activeOptOut` e exports de campanha mostram `opt_out`.
+Reversao existe via evento `contact.opt_out.revoked`. Demo read-back: `data_exame`
+approved; `atualizacao_protocolo` e `lembrete_vencimento_anuidade` Utility
+`PENDING` na Meta; B `****6787` recomendado para o E2E controlado; A `****9614`
+deve ser preservado por ser caso historico de reconciliacao. Proximo passo
+requer aprovacao explicita do owner para criar opt-out canonico, rodar uma
+campanha bloqueada com Meta calls 0 e opcionalmente reverter.
+
 ## LGPD e anonimizacao
 
 Anonimizacao nao e hard delete. Ela remove dados pessoais da operacao visivel, minimiza conteudo e impede reidratacao automatica. O CRM oculta registros anonimizados por padrao e campanhas bloqueiam esses contatos com motivo `anonymized_contact`.

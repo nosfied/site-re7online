@@ -524,7 +524,9 @@ Sem envio real.
   documentou reparo restrito possivel e o owner aprovou a reconciliacao em
   producao: foi criado um OutboundMessage local para A com o Meta id recuperado,
   aplicado billing delivered idempotente, ajustado `sentCount=1` e preservado
-  `status=failed`. A nao foi reenviado; B segue nao tentado. O ledger de A esta
+  `status=failed`. A nao foi reenviado; B ainda nao havia sido tentado naquele
+  momento e depois foi enviado apenas pela campanha B-only aprovada em
+  2026-09-16. O ledger de A esta
   correto como elegibilidade/contagem delivered Utility fora de 24h, mas o
   valor R$ 0,32 e classificado como referencia central de planejamento ainda nao
   provada como unidade final CRA.
@@ -574,6 +576,18 @@ Sem envio real.
   sends neste run=0. Evidencia sanitizada criada em
   `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_C_RECIPIENT_B_CONTROLLED_UTILITY_RESULT_2026-09-16.md`
   e `.csv`. Proximo gate: opt-out E2E; preco contratual CRA segue NOT PROVEN.
+- Opt-out E2E preparation, 2026-09-16: READY FOR OWNER GATE / NO MUTATION / NO
+  REAL META SEND. Opt-out canonico atual e event-sourced em `Event`, por
+  `contact.opt_out.recorded`/`contact.opt_out.revoked`, escopado por `clientId`
+  + `waIdCanonical`; bloqueio de campanha usa
+  `campaign.recipient.opt_out_blocked`. Runner bloqueia antes da Meta; envio
+  manual ativo/template e resposta pronta tambem bloqueiam opt-out ativo; export
+  mostra `opt_out`. Testes focados 130/130 PASS. Novos templates Utility
+  `atualizacao_protocolo` e `lembrete_vencimento_anuidade` estao `PENDING` na
+  Meta; `data_exame` permanece approved. Recomendado para o futuro E2E:
+  B `****6787`. A `****9614` deve ser preservado como evidencia historica de
+  reconciliacao. Aprovacao do owner ainda e obrigatoria antes de qualquer
+  mutacao de opt-out, campanha bloqueada ou reversao.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.
