@@ -305,7 +305,8 @@ terminal `failed` and cannot be resumed (`failed -> sending` is invalid). Next
 safe path is a separate owner-approved config-only repair of Demo operational
 default, then a new controlled B-only campaign. Meta calls for B: 0.
 
-Demo operational default owner gate, 2026-09-15: read-only production audit
+Demo operational default owner gate, 2026-09-15: SUPERSEDED BY 2026-09-16 OWNER
+DESTINATION CONFIGURATION. The read-only production audit
 confirmed the canonical runtime mechanism is structural, not a
 `TenantOperationalConfig.config.defaultDepartmentId/defaultQueueId` pointer:
 `ensureDefaultOperationalDepartmentAndQueue` resolves an active department named
@@ -314,7 +315,7 @@ Demo candidate `cmsiwk1o100014sdzl5cqd2ki` (`Atendimento Geral`) has existing
 queue `cmsiyb2k200n94sdpu5khkee0` (`Fila Geral`) and an active member, but the
 department is inactive. Proposed mutation, not executed: reactivate that
 existing department only. No Meta send, no campaign retry and no CRA data/config
-impact.
+impact occurred in that 2026-09-15 gate.
 
 Outbound return destination hardening, deployed 2026-09-16 at
 `452d5826db42cc1b574eeff8fd8e0d038cd3491f`: next controlled Demo
@@ -554,7 +555,8 @@ logic, `sentCount=1`, and campaign `status=failed` was preserved. A was never
 resent; `****6787` remains unattempted and still requires a fresh owner gate.
 
 Recipient B-only explicit human return destination gate, 2026-09-16:
-READ-ONLY PRE-SEND GATE / WAITING OWNER DESTINATION DECISION / NO REAL SEND.
+READ-ONLY PRE-SEND GATE / SUPERSEDED BY FINAL DESTINATION CONFIGURATION /
+NO REAL SEND.
 Production evidence confirmed `demo-converta` active, `data_exame` approved
 Utility `pt_BR`, current body `Paciente, seu exame foi marcado para {{1}}.
 Compareça com pelo menos 1 hora de antecedência.`, one variable `{{1}}`, B
@@ -563,9 +565,27 @@ outside 24h by 5 days 23h, no B `data_exame` outbound, and Meta provider rate
 R$ 0.0350 if delivered. Destination inventory did not produce exactly one safe
 generic human target: active `Setor Teste` has zero queues; inactive
 `Atendimento Geral` has queues; remaining active queued departments are
-thematic. No campaign draft was created and no provider call was made. Owner
-must explicitly choose a department+queue or authorize a config-only Demo repair
-before the B-only send gate can proceed.
+thematic. No campaign draft was created and no provider call was made in that
+read-only pass. This was superseded later on 2026-09-16 when the owner selected
+the existing Demo `Atendimento Geral` + `Fila Geral` destination by explicit IDs.
+
+Recipient B-only final destination configuration, 2026-09-16: FINAL SEND GATE
+PREPARED / NO REAL SEND. Owner confirmed the existing Demo generic destination
+for this campaign: `Atendimento Geral` (`cmsiwk1o100014sdzl5cqd2ki`) +
+`Fila Geral` (`cmsiyb2k200n94sdpu5khkee0`). This is explicit tenant-scoped ID
+routing, not a product dependency on the names. Read-back confirmed department
+active, queue under the same Demo tenant/department, no active flow references,
+no open conversations in that department, 3 memberships and normal business
+hours Mon-Fri 08:00-17:00 with existing exception 2026-09-07. Backup:
+`/opt/re7online/backups/demo-b-destination-gate-20260916/pre-demo-b-destination-gate-20260916T130703Z.dump`,
+20M, 593 objects, SHA256
+`0b4a2d4006ccfa1c9a589a5926f277edae64d8fa5924985045708d5b8102f50d`.
+Campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214` (`Demo contrato CRA -
+data_exame B-only - final 6787 - 2026-09-16`) was created as draft with
+encrypted B-only seed, `returnDestination` = human department/queue above,
+`totalRecipients=1`, `sentCount=0`, `blockedCount=0`, import summary PASS and
+zero OutboundMessage rows. B remains NOT ATTEMPTED until final owner send
+approval.
 
 ### Guided Builder - Bot Inactivity Policy UX Backlog
 

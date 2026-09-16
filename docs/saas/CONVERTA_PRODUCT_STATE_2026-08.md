@@ -293,9 +293,18 @@ campaign creation with NO REAL SEND: B `****6787` still passed template,
 authorization, canonical dedupe, opt-out and outside-24h checks, but Demo did
 not provide a single non-arbitrary human destination with concrete queue. Active
 `Setor Teste` has zero queues, inactive `Atendimento Geral` has queues and
-other active queued departments are thematic. B remains NOT ATTEMPTED until the
-owner selects department+queue explicitly or authorizes a config-only Demo
-destination repair. Opt-out E2E and
+other active queued departments are thematic. That read-only block was
+superseded later on 2026-09-16 by explicit owner selection of the existing Demo
+destination by IDs.
+Recipient B-only final destination configuration later on 2026-09-16 prepared
+the final send gate with NO REAL SEND. Owner selected existing Demo
+`Atendimento Geral` (`cmsiwk1o100014sdzl5cqd2ki`) + `Fila Geral`
+(`cmsiyb2k200n94sdpu5khkee0`) explicitly for this campaign; product routing is
+by persisted tenant-scoped IDs, not by name. Backup was validated, campaign
+`bb1d30e2-3a98-471a-9531-1f5e5d76a214` was created as B-only draft with
+`totalRecipients=1`, `sentCount=0`, `blockedCount=0`, explicit HUMAN return
+destination and zero OutboundMessage rows. Final owner send approval is still
+required. Opt-out E2E and
 report/export/billing evidence remain separate open gates. See
 `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md`.
 

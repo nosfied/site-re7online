@@ -531,12 +531,14 @@ Sem envio real.
 - Meta pricing narrow gate, 2026-09-15: fonte oficial WhatsApp Business
   Platform Pricing / Meta Developers prova Brazil Utility BRL R$ 0,0350 por
   mensagem entregue, efetivo em 2026-07-01, tier 0-250.000. B continua NOT
-  ATTEMPTED. Owner aprovou B-only em 2026-09-15, mas o preflight parou antes da
+  ATTEMPTED. Owner aprovou B-only em 2026-09-15, mas o preflight historico parou antes da
   Meta porque o Demo nao possui default operacional ativo `Atendimento Geral` +
   `Fila Geral`; o `Atendimento Geral` existente esta inativo. Unidade
-  contratual CRA permanece separada e NOT PROVEN; FinOps generico fica P2.
+  contratual CRA permanece separada e NOT PROVEN; FinOps generico fica P2. Esse
+  bloqueio operacional foi superado pelo gate final de destino explicito em
+  2026-09-16, mas sem envio real.
 - Recipient B-only explicit human return gate, 2026-09-16: READ-ONLY PRE-SEND
-  GATE / WAITING OWNER DESTINATION DECISION / NO REAL SEND. Nova validacao
+  GATE / SUPERSEDED BY FINAL DESTINATION CONFIGURATION / NO REAL SEND. Nova validacao
   confirmou `demo-converta` ativo, template `data_exame` Utility `pt_BR`
   approved, B `****6787` autorizado e normalizado para um unico alvo, sem
   opt-out ativo, fora de 24h por 5d23h e sem outbound `data_exame` previo para
@@ -545,8 +547,24 @@ Sem envio real.
   `Setor Teste` esta ativo mas tem zero filas; `Atendimento Geral` tem filas,
   mas esta inativo; os demais candidatos ativos sao setores tematicos. Per
   regra do owner, nao houve escolha por nome, fallback escondido, campanha nova
-  ou chamada Meta. B permanece NOT ATTEMPTED ate o owner escolher
-  departamento+fila concretos ou autorizar reparo config-only do destino Demo.
+  ou chamada Meta nessa passagem read-only. Esse bloqueio foi superado depois em
+  2026-09-16 quando o owner selecionou explicitamente o destino Demo existente
+  por IDs.
+- Recipient B-only destination configured, 2026-09-16: FINAL SEND GATE
+  PREPARED / NO REAL SEND. Owner selecionou explicitamente para esta campanha o
+  destino generico Demo existente `Atendimento Geral`
+  (`cmsiwk1o100014sdzl5cqd2ki`) + `Fila Geral`
+  (`cmsiyb2k200n94sdpu5khkee0`). O roteamento fica persistido por IDs do mesmo
+  tenant; nao ha regra de produto por nome. Read-back confirmou departamento
+  ativo, fila vinculada, sem fluxos ativos referenciando esses IDs, sem
+  conversas abertas no setor, 3 memberships, B `****6787` fora de 24h, sem
+  opt-out e sem outbound `data_exame` anterior. Backup persistente:
+  `/opt/re7online/backups/demo-b-destination-gate-20260916/pre-demo-b-destination-gate-20260916T130703Z.dump`,
+  20M, 593 objetos, SHA256
+  `0b4a2d4006ccfa1c9a589a5926f277edae64d8fa5924985045708d5b8102f50d`.
+  Campanha draft `bb1d30e2-3a98-471a-9531-1f5e5d76a214` criada B-only com
+  destino humano explicito, `sentCount=0` e zero chamada Meta. Aprovacao final
+  do owner ainda obrigatoria antes de envio real.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.

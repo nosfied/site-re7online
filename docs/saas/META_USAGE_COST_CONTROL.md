@@ -252,6 +252,12 @@ pair.
   was created because explicit human return destination selection is still
   waiting for owner decision; therefore there is no new provider charge,
   billing ledger event or amount to reconcile.
+- Recipient B-only final destination configuration on 2026-09-16 created draft
+  campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214` after the owner explicitly
+  selected the Demo human destination by IDs. B remains unsent, so provider
+  charge remains R$ 0,00 until delivery occurs. If the prepared B message is
+  later delivered, the official Meta provider rate for this narrow gate remains
+  BRL 0.0350/message. CRA contract price remains NOT PROVEN and separate.
 - Nao ha conciliacao financeira definitiva automatizada.
 - O bloqueio por limite ainda nao esta ativado nos fluxos reais.
 - Rate card e local e deve ser revisado quando a politica Meta mudar.

@@ -214,7 +214,7 @@ requirement denominator until owner decision or contract evidence promotes them.
 | CRA-OPT-001 | resposta esclarecimento item 10 | Opt-out with audit and campaign block | Operational event/blocking support documented | No CRA opt-out sample | E1/E2 | DOCUMENTATION/EVIDENCE GAP | C0 | P1 evidence | Contractual opt-out evidence missing | Execute redacted opt-out/campaign-block smoke | RE7 | E4/E6 |
 | CRA-REP-001 | resposta esclarecimento item 11 | Export CSV/XLSX or equivalent; PDF report format | CSV reports exist; PDF where applicable; XLSX via equivalent/conversion | CRA reports enabled | E1/E3 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | CRA export samples missing | Generate redacted CSV/PDF/equivalent evidence | RE7 | E4/E6 |
 | CRA-REP-002 | aderencia #50 | Monthly consumption report | Meta usage report/CSV documented | No CRA campaign usage | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | Needs CRA utility-delivered sample | Validate monthly report with controlled campaign | RE7 | E4 |
-| CRA-BILL-001 | resposta esclarecimento items 1-6 | Bill only delivered utility templates outside 24h; read status no extra; Meta cost included in proposal; excedents same unit price with approval | Semantics documented; Demo A has one reconciled `billing.active_message.delivered` eligibility/count event; official Brazil Utility provider rate proven at R$ 0,0350/message for B owner gate | No CRA billing sample; CRA contractual BRL unit not proven; B owner-authorized attempt stopped pre-Meta because Demo operational default was invalid; `R$ 0,32` is central planning reference, no tenant override/final proposal source found. Demo operational-default audit found the intended existing pair `Atendimento Geral` (`cmsiwk1o100014sdzl5cqd2ki`) + `Fila Geral` (`cmsiyb2k200n94sdpu5khkee0`) but the department is inactive | E1/E4 | CONTRACT BILLING EVIDENCE OPEN / B PRE-META BLOCKED / DEMO DEFAULT OWNER GATE | C0 | P1 evidence | CRA contract billing unit and CRA report total not evidenced; Demo active default operational department/queue must be repaired before B send | Owner-gated config-only repair proposal: reactivate the existing Demo `Atendimento Geral`; do not create a new department/queue, do not use SECULT/CRA thematic routing, then produce billing proof from controlled delivered Utility template; keep generic Meta pricing automation in P2 | RE7 | E6 |
+| CRA-BILL-001 | resposta esclarecimento items 1-6 | Bill only delivered utility templates outside 24h; read status no extra; Meta cost included in proposal; excedents same unit price with approval | Semantics documented; Demo A has one reconciled `billing.active_message.delivered` eligibility/count event; official Brazil Utility provider rate proven at R$ 0,0350/message for B owner gate; on 2026-09-16 the owner selected existing Demo destination `Atendimento Geral` (`cmsiwk1o100014sdzl5cqd2ki`) + `Fila Geral` (`cmsiyb2k200n94sdpu5khkee0`) and draft campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214` was created B-only with explicit human return destination and no Meta send | No CRA billing sample; CRA contractual BRL unit not proven; B remains unsent and needs final owner send approval; `R$ 0,32` is central planning reference, no tenant override/final proposal source found | E1/E4 | CONTRACT BILLING EVIDENCE OPEN / B FINAL SEND GATE PREPARED / NO REAL SEND | C0 | P1 evidence | CRA contract billing unit and CRA report total not evidenced; B controlled delivery still needs final owner approval and post-send evidence | Execute only after final owner approval: controlled B-only send from prepared draft, then produce billing proof from delivered Utility template; keep generic Meta pricing automation in P2 FinOps | RE7 | E6 |
 | CRA-SLA-001 | aderencia #52; suporte SLA | Availability target 99.5% and operation except maintenance | Health/monitoring exists; SLA plan exists | Not acceptance-evidenced | E1 | DOCUMENTATION/EVIDENCE GAP | C1 | docs/ops | Availability evidence and maintenance log missing | Prepare SLA evidence/runbook appendix | RE7 | E6 |
 | CRA-SUP-001 | suporte SLA | Remote support, severity and response targets | Support process planned | Not customer-evidenced | E1 | DOCUMENTATION/EVIDENCE GAP | C1 | docs/ops | Support channel/ticket evidence missing | Define channels and ticket register for CRA | RE7 + CRA | E6 |
 | CRA-BKP-001 | proposta tecnica arquitetura | Backup/restore routine | Runbooks exist | CRA-specific restore evidence absent | E1 | DOCUMENTATION/EVIDENCE GAP | C2 | docs/ops | Backup cadence/retention proof not packaged | Attach backup/restore policy evidence | RE7 | E6 |
@@ -276,18 +276,20 @@ C0/C1 items that block declaring contractual readiness without qualification:
   inactivity handoff have been validated; residual cross-provider hardening and
   Guided lifecycle-policy exposure remain P2.
 
-Recipient B-only Utility gate, 2026-09-16: READ-ONLY PRE-SEND GATE completed
-for `demo-converta` with explicit human return destination required. Template,
-recipient normalization, opt-out, 24h window and Meta provider rate passed; no
-real send occurred and B remains NOT ATTEMPTED. Gate is WAITING OWNER
-DESTINATION DECISION because inventory found multiple active human
-department/queue candidates and no single unambiguous generic test destination
-with queue. Selecting by name convention or hidden fallback is prohibited.
+Recipient B-only Utility gate, 2026-09-16: FINAL SEND GATE PREPARED / NO REAL
+SEND. The owner explicitly selected the existing Demo generic operational
+destination `Atendimento Geral` (`cmsiwk1o100014sdzl5cqd2ki`) + `Fila Geral`
+(`cmsiyb2k200n94sdpu5khkee0`) for this campaign. Runtime routing remains by
+persisted tenant-scoped IDs, not by name convention. Template, recipient
+normalization, opt-out, 24h window, destination validation and official Meta
+provider rate passed. Draft campaign
+`bb1d30e2-3a98-471a-9531-1f5e5d76a214` was created B-only with explicit human
+return destination and no Meta send.
 
 ## Current Execution Order
 
-1. Recipient B controlled Utility validation - waiting owner destination
-   decision before final send approval.
+1. Recipient B controlled Utility validation - draft prepared with explicit
+   human return destination; final owner send approval still required.
 2. Opt-out evidence.
 3. Reports, exports and billing evidence.
 4. Campaign/CRM import `Situação no CRM` upsert/report follow-up.

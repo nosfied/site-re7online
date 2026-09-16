@@ -74,5 +74,15 @@ Phase C send result summary:
   because no single safe human return destination could be selected without
   owner input: `Setor Teste` has zero queues, `Atendimento Geral` is inactive
   and other active queued departments are thematic. No real send occurred.
+- Recipient B-only final destination configuration: on 2026-09-16 the owner
+  selected existing Demo `Atendimento Geral`
+  (`cmsiwk1o100014sdzl5cqd2ki`) + `Fila Geral`
+  (`cmsiyb2k200n94sdpu5khkee0`) for this campaign. Backup
+  `pre-demo-b-destination-gate-20260916T130703Z.dump` was validated (20M, 593
+  objects, SHA256
+  `0b4a2d4006ccfa1c9a589a5926f277edae64d8fa5924985045708d5b8102f50d`).
+  Draft campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214` was created with
+  encrypted B-only seed and explicit human return destination. No Meta send
+  occurred.
 - evidence: `PHASE_C_CONTROLLED_UTILITY_RESULT_2026-09-15.md`.
 - reconciliation audit: `RECIPIENT_A_RECONCILIATION_AUDIT_2026-09-15.md`.

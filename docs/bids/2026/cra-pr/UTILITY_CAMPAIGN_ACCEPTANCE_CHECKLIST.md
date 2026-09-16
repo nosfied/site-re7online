@@ -325,20 +325,35 @@ inactive and no active default operational `Atendimento Geral` + `Fila Geral`
 pair. No Meta call was made for B.
 
 Recipient B-only explicit human return gate, 2026-09-16: STOPPED BEFORE CAMPAIGN
-CREATE / WAITING OWNER DESTINATION DECISION / NO REAL SEND. The B-only pre-send
+CREATE / SUPERSEDED BY FINAL DESTINATION CONFIGURATION / NO REAL SEND. The B-only pre-send
 checks remain PASS for template, authorization, canonical dedupe, outside-24h,
 opt-out and A exclusion. Human return destination cannot be persisted yet:
 `Setor Teste` is active but has zero queues; `Atendimento Geral` has queues but
 is inactive; remaining active queued departments are thematic, so selecting one
-would be arbitrary. No campaign draft was created and no provider call was made.
+would be arbitrary. No campaign draft was created and no provider call was made
+in that read-only pass; the later 2026-09-16 final owner gate selected the Demo
+generic destination explicitly by IDs.
 
-Demo operational default proposal, 2026-09-15: CONFIG PENDING / OWNER GATE. The
+Recipient B-only final owner send gate, 2026-09-16: PREPARED / NO REAL SEND.
+Owner explicitly selected the existing Demo generic destination `Atendimento
+Geral` (`cmsiwk1o100014sdzl5cqd2ki`) + `Fila Geral`
+(`cmsiyb2k200n94sdpu5khkee0`) for this campaign. This is persisted by IDs and
+does not reintroduce name-based routing. Campaign
+`bb1d30e2-3a98-471a-9531-1f5e5d76a214` is draft, B-only, template
+`data_exame`, return type HUMAN, totalRecipients=1, sentCount=0,
+blockedCount=0, opt-out PASS, outside 24h PASS, official Meta provider rate
+R$ 0.0350 if delivered, CRA contract price NOT PROVEN. Real send remains NO
+until final owner approval.
+
+Demo operational default proposal, 2026-09-15: SUPERSEDED BY 2026-09-16 OWNER
+DESTINATION CONFIGURATION. The
 valid existing candidate is `Atendimento Geral`
 (`cmsiwk1o100014sdzl5cqd2ki`) + `Fila Geral`
 (`cmsiyb2k200n94sdpu5khkee0`); queue exists under the same Demo tenant, but the
 department is inactive. Proposed fix is config-only reactivation of that existing
-department, with owner approval required before mutation. B remains NOT
-ATTEMPTED.
+department, with owner approval required before mutation. The later owner gate
+selected and validated this existing destination by explicit IDs; B still
+remains NOT ATTEMPTED until final send approval.
 
 ## Demo Phase C Controlled Utility Gate - 2026-09-15
 

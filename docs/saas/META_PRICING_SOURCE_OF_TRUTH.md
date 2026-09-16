@@ -84,6 +84,11 @@ Official narrow rate proof for the CRA Demo controlled Utility validation:
 - effective rate for one remaining Recipient B message: 0.0350 BRL;
 - expected Meta provider cost for exactly one B delivery outside the customer
   service window: R$ 0,0350.
+- B-only final destination gate update on 2026-09-16: campaign
+  `bb1d30e2-3a98-471a-9531-1f5e5d76a214` was prepared but not sent. The official
+  Meta endpoint above remains the only canonical provider-rate authority for the
+  gate. WizeBot, NicoChat or other public pages may be used only as
+  non-canonical cross-checks and must not be cited as pricing authority.
 
 Official endpoint response:
 

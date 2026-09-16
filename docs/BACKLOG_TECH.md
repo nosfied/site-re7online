@@ -139,19 +139,26 @@ ACTIVE P1:
    PASS. No real Meta send and no Recipient B attempt.
 
 2. CRA Demo Utility Recipient B owner gate with explicit human return
-   destination: WAITING OWNER DESTINATION DECISION / NO REAL SEND. Read-only
-   production pre-send gate on 2026-09-16 confirmed `demo-converta` active,
-   template `data_exame` approved Utility `pt_BR`, Recipient B `****6787`
-   authorized, normalized to one canonical recipient, no active opt-out,
-   outside 24h by 5 days 23h, no B `data_exame` outbound, and Meta provider
-   cost reference remains R$ 0.0350 if delivered. Human destination inventory
-   found multiple active same-tenant department/queue candidates and no
-   unambiguous generic test destination with queue: `Setor Teste` is active but
-   has zero queues; `Atendimento Geral` has queues but is inactive; other active
-   queued departments are thematic CRA/SECULT-style operational departments.
-   Per owner rule, no arbitrary name-based routing and no hidden fallback:
-   B-only campaign is not created/sent until owner explicitly selects the
-   department+queue or authorizes a config-only Demo destination repair.
+   destination: FINAL SEND GATE PREPARED / NO REAL SEND. On 2026-09-16 the
+   owner explicitly selected the existing Demo generic operational destination
+   `Atendimento Geral` (`cmsiwk1o100014sdzl5cqd2ki`) + `Fila Geral`
+   (`cmsiyb2k200n94sdpu5khkee0`) for this campaign. This is an explicit
+   tenant-scoped ID selection, not a product dependency on those names. Read-only
+   production checks confirmed `demo-converta` active, department active, queue
+   attached to the same tenant/department, no active flows referencing the IDs,
+   no open conversations in that department, 3 memberships, template
+   `data_exame` approved Utility `pt_BR`, Recipient B `****6787` authorized,
+   normalized to one canonical recipient, no active opt-out, outside 24h by
+   5d23h, no prior B `data_exame` outbound, and official Meta provider rate
+   R$ 0.0350 if delivered. Persistent backup was created at
+   `/opt/re7online/backups/demo-b-destination-gate-20260916/pre-demo-b-destination-gate-20260916T130703Z.dump`
+   (20M, 593 objects, SHA256
+   `0b4a2d4006ccfa1c9a589a5926f277edae64d8fa5924985045708d5b8102f50d`).
+   New draft campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214`
+   (`Demo contrato CRA - data_exame B-only - final 6787 - 2026-09-16`) was
+   created with encrypted B-only seed, explicit human return destination,
+   `totalRecipients=1`, `sentCount=0`, `blockedCount=0`, and no provider call.
+   OWNER FINAL SEND APPROVAL remains required before any real Meta send.
 
 3. CRA campaign import - optional CRM situation column: OPEN / NEXT CRA
    CAMPAIGN IMPORT FRONT. Campaign/contact audience files may optionally contain
@@ -235,7 +242,9 @@ ACTIVE P1:
    (`billing.active_message.delivered`), `sentCount=1`, `status=failed`
    preservado e audit event unico registrado. A nao foi reenviado; B nao foi
    enviado. RECIPIENT A RECONCILIATION = RECONCILED / NEVER RESENT; RECIPIENT B
-   SEND = NOT ATTEMPTED / BLOCKED PRE-META BY DEMO OPERATIONAL DEFAULT.
+   historical 2026-09-15 attempt = NOT ATTEMPTED / BLOCKED PRE-META BY DEMO
+   OPERATIONAL DEFAULT, later superseded by 2026-09-16 explicit destination
+   draft preparation with no real send.
    Owner autorizou B-only em 2026-09-15, mas o preflight imediato bloqueou antes
    da Meta: `demo-converta` possui `Atendimento Geral` inativo e `Fila Geral`
    ligada ao departamento inativo; nao existe par active default
