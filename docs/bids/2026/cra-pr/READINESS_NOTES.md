@@ -575,7 +575,8 @@ Sem envio real.
   `billing.active_message.delivered` count=1; duplicate billing=NO; A external
   sends neste run=0. Evidencia sanitizada criada em
   `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_C_RECIPIENT_B_CONTROLLED_UTILITY_RESULT_2026-09-16.md`
-  e `.csv`. Proximo gate: opt-out E2E; preco contratual CRA segue NOT PROVEN.
+  e `.csv`. Opt-out E2E foi concluido depois no Demo; preco contratual CRA
+  segue NOT PROVEN.
 - Opt-out E2E preparation, 2026-09-16: READY FOR OWNER GATE / NO MUTATION / NO
   REAL META SEND. Opt-out canonico atual e event-sourced em `Event`, por
   `contact.opt_out.recorded`/`contact.opt_out.revoked`, escopado por `clientId`
@@ -588,6 +589,17 @@ Sem envio real.
   B `****6787`. A `****9614` deve ser preservado como evidencia historica de
   reconciliacao. Aprovacao do owner ainda e obrigatoria antes de qualquer
   mutacao de opt-out, campanha bloqueada ou reversao.
+- Opt-out E2E execution, 2026-09-16: COMPLETED / DEMO PRODUCT CAPABILITY
+  VALIDATED / NOT CRA CUSTOMER SAMPLE. Owner autorizou apenas B `****6787`.
+  Evento canonico `contact.opt_out.recorded`
+  `88361d0f-89df-41fc-852b-ce84cbb43cc4`; campanha controlada
+  `d260bdc6-326f-4487-8d15-21c2a98dd741` bloqueou antes da Meta com
+  `campaign.recipient.opt_out_blocked`
+  `80d6ca1d-94f2-4465-81b7-74888c1d0edc`; `sentCount=0`,
+  `blockedCount=1`, Meta calls=0, mensagens reais=0, OutboundMessage=0,
+  billing=0. Reversao canonica `contact.opt_out.revoked`
+  `a5b58132-79fe-49dd-8aff-49fb78bf4566` restaurou B elegivel e preservou
+  historico. A `****9614` ficou intocado. Proximo front: reports/exports/billing.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.

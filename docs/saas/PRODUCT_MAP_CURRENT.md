@@ -238,13 +238,18 @@ Current backlog classification:
   outbound, explicit human return destination persisted, one
   `billing.active_message.delivered`, no A resend and sanitized CSV evidence.
   CRA real campaign acceptance and contract price remain separate. Opt-out E2E
-  remains the current active gate. Opt-out E2E preparation on 2026-09-16 is
-  READY FOR OWNER GATE / NO MUTATION: canonical state is event-sourced in
+  remains the current active gate at that point. Opt-out E2E preparation on
+  2026-09-16 reached READY FOR OWNER GATE / NO MUTATION: canonical state is event-sourced in
   `Event`, scope is `clientId` + `waIdCanonical`, campaign/manual active sends
   block before Meta and export `opt_out`. New Utility templates
   `atualizacao_protocolo` and `lembrete_vencimento_anuidade` are Meta `PENDING`;
   `data_exame` remains approved. Recommended future test recipient is B
   `****6787`; A `****9614` remains preserved as reconciliation evidence.
+  Opt-out E2E execution later on 2026-09-16 is COMPLETED for Demo product
+  capability validation: B was opted out canonically, one campaign blocked before
+  Meta with `blockedCount=1`, Meta calls/real messages/outbound/billing all 0,
+  opt-out was revoked canonically, B became eligible again and A was untouched.
+  Next front is reports/exports/billing.
 - Meta pricing source of truth / FinOps hardening is P2 generic product backlog.
   The broad future work is rate-card ingestion, resolver, snapshots, FX and
   staleness detection. It must not consume the current CRA adherence front

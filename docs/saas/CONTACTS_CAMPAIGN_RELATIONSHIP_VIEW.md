@@ -86,6 +86,6 @@ This is separate from:
 
 - approved outbound return destination delivery;
 - Recipient B controlled Utility validation;
-- opt-out E2E;
+- opt-out E2E, now Demo-validated as product capability on 2026-09-16;
 - reports / exports / billing closure;
 - CRM import/upsert/report with `Situação no CRM`.

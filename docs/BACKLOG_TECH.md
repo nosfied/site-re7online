@@ -160,23 +160,24 @@ ACTIVE P1:
    status `completed`, `sentCount=1`, `blockedCount=0`. A external sends in
    this run: 0. Sanitized evidence:
    `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_C_RECIPIENT_B_CONTROLLED_UTILITY_RESULT_2026-09-16.md`
-   and `.csv`. Next gate: opt-out E2E; CRA real acceptance/report package still
-   needs owner/customer acceptance evidence.
+   and `.csv`. Opt-out E2E was later completed on Demo; CRA real
+   acceptance/report package still needs owner/customer acceptance evidence.
 
-3. CRA Demo opt-out E2E owner gate: READY / CURRENT ACTIVE CONTRACT FRONT /
-   NO MUTATION YET. On 2026-09-16 production/code audit confirmed canonical
-   opt-out is event-sourced in `Event` by `contact.opt_out.recorded` and
-   `contact.opt_out.revoked`, scoped by `clientId` + `waIdCanonical`.
-   Campaigns, Inbox template sends and canned replies check active opt-out
-   before provider send; campaign export renders blocked recipients as
-   `opt_out`, non-billing reason `opt_out`. Reversal exists through campaign
-   revoke and CRM contact opt-out delete/revoke. Tests:
-   `campaignsFeatureRoutes.test.ts` + `crmCapabilityRoutes.test.ts` 130/130
-   PASS. Recommended future E2E recipient is B `****6787`; A `****9614` remains
-   avoided because it is the historical reconciliation case. Owner approval is
-   still required before creating opt-out, creating the blocked campaign, or
-   later revoking opt-out. Evidence:
-   `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_D_OPT_OUT_OWNER_GATE_PREPARATION_2026-09-16.md`.
+3. CRA Demo opt-out E2E: COMPLETED / DEMO PRODUCT CAPABILITY VALIDATED /
+   CRA ACCEPTANCE STILL SEPARATE. On 2026-09-16 the owner explicitly authorized
+   opt-out creation, one controlled blocked campaign and reversal for B
+   `****6787`. Canonical `recordContactOptOut` created
+   `contact.opt_out.recorded` (`88361d0f-89df-41fc-852b-ce84cbb43cc4`);
+   campaign `d260bdc6-326f-4487-8d15-21c2a98dd741` blocked before provider via
+   `campaign.recipient.opt_out_blocked`
+   (`80d6ca1d-94f2-4465-81b7-74888c1d0edc`), `blockedCount=1`,
+   `sentCount=0`, Meta calls 0, real messages 0, OutboundMessage 0 and billing
+   events 0. Canonical `revokeContactOptOut` created
+   `contact.opt_out.revoked` (`a5b58132-79fe-49dd-8aff-49fb78bf4566`); B is
+   eligible again and history is preserved. A `****9614` was untouched
+   (outbounds 125/125, billing 1/1, opt-out events 0/0). Evidence:
+   `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_D_OPT_OUT_E2E_2026-09-16.md`
+   and `.csv`. Next front: reports/exports/billing acceptance package.
 
 4. CRA campaign import - optional CRM situation column: OPEN / NEXT CRA
    CAMPAIGN IMPORT FRONT. Campaign/contact audience files may optionally contain

@@ -68,6 +68,11 @@ antes de chamada a provedor externo; campanhas registram bloqueio por
 Esse controle nao remove historico, nao substitui politica de retencao e nao
 deve bloquear canais nao relacionados sem definicao contratual explicita.
 
+Validacao Demo 2026-09-16: opt-out canonico foi criado para B `****6787`, uma
+campanha controlada foi bloqueada antes da Meta com status `opt_out`, sem envio
+real e sem billing, e a reversao canonica restaurou a elegibilidade mantendo o
+historico auditavel.
+
 ## Segurança E Minimização
 
 Recomendacoes:

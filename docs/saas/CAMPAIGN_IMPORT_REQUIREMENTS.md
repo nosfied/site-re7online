@@ -209,7 +209,7 @@ This is not part of the current approved outbound return destination delivery.
 Current CRA order:
 
 1. recipient B controlled Utility validation - done on Demo;
-2. opt-out E2E - current owner gate;
-3. reports / exports / billing;
+2. opt-out E2E - done on Demo;
+3. reports / exports / billing - next;
 4. CRM import/upsert/report with `Situação no CRM`;
 5. acceptance package.

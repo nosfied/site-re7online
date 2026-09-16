@@ -359,6 +359,17 @@ deve ser preservado por ser caso historico de reconciliacao. Proximo passo
 requer aprovacao explicita do owner para criar opt-out canonico, rodar uma
 campanha bloqueada com Meta calls 0 e opcionalmente reverter.
 
+CRA/Demo opt-out E2E execution, 2026-09-16: COMPLETED / DEMO PRODUCT CAPABILITY
+VALIDATED. Owner autorizou apenas B `****6787`. `recordContactOptOut` criou
+`contact.opt_out.recorded` `88361d0f-89df-41fc-852b-ce84cbb43cc4`; campanha
+`d260bdc6-326f-4487-8d15-21c2a98dd741` bloqueou antes da Meta com
+`campaign.recipient.opt_out_blocked` `80d6ca1d-94f2-4465-81b7-74888c1d0edc`,
+`blockedCount=1`, `sentCount=0`, Meta calls=0, mensagens reais=0, outbound=0 e
+billing=0. `revokeContactOptOut` criou `contact.opt_out.revoked`
+`a5b58132-79fe-49dd-8aff-49fb78bf4566`, restaurando B elegivel e preservando o
+historico. A `****9614` ficou intocado. Proximo front contratual: reports /
+exports / billing acceptance package.
+
 ## LGPD e anonimizacao
 
 Anonimizacao nao e hard delete. Ela remove dados pessoais da operacao visivel, minimiza conteudo e impede reidratacao automatica. O CRM oculta registros anonimizados por padrao e campanhas bloqueiam esses contatos com motivo `anonymized_contact`.

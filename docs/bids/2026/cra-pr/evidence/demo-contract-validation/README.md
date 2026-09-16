@@ -94,5 +94,12 @@ Phase C send result summary:
   order, manual-send behavior, tenant isolation and safe recipient choice were
   audited with no mutation and no Meta send. Evidence file:
   `PHASE_D_OPT_OUT_OWNER_GATE_PREPARATION_2026-09-16.md`.
+- Opt-out E2E execution: on 2026-09-16 the owner authorized canonical opt-out
+  creation for B `****6787`, one controlled campaign, block before Meta and
+  canonical reversal. Result: `campaign.recipient.opt_out_blocked`, Meta calls
+  0, real messages 0, outbound 0, billing 0, opt-out revoked, B eligible again
+  and A untouched. Evidence files:
+  `PHASE_D_OPT_OUT_E2E_2026-09-16.md` and
+  `PHASE_D_OPT_OUT_E2E_2026-09-16.csv`.
 - evidence: `PHASE_C_CONTROLLED_UTILITY_RESULT_2026-09-15.md`.
 - reconciliation audit: `RECIPIENT_A_RECONCILIATION_AUDIT_2026-09-15.md`.

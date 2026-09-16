@@ -267,6 +267,10 @@ configuration and the completed B controlled Utility send on 2026-09-16.
   mutation. Future owner-approved blocked campaign should have expected Meta
   calls 0, real messages 0 and billing events 0 because the campaign guard must
   stop at active opt-out before provider submission.
+- Opt-out E2E execution on 2026-09-16 matched the cost expectation: campaign
+  `d260bdc6-326f-4487-8d15-21c2a98dd741` blocked B before Meta, with Meta calls
+  0, real messages 0, OutboundMessage 0, `billing.active_message.delivered` 0
+  and provider cost R$ 0.00.
 - Nao ha conciliacao financeira definitiva automatizada.
 - O bloqueio por limite ainda nao esta ativado nos fluxos reais.
 - Rate card e local e deve ser revisado quando a politica Meta mudar.

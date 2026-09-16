@@ -1,0 +1,2 @@
+campaign_id,campaign_name,tenant,recipient_masked,template,status,non_billing_reason,blocked_count,sent_count,meta_calls,real_messages,outbound_messages,billing_events,opt_out_recorded_event,opt_out_block_event,opt_out_revoked_event,provider_cost,created_at
+d260bdc6-326f-4487-8d15-21c2a98dd741,CRA Demo opt-out E2E - B blocked - 2026-09-16T14:19:33.003Z,demo-converta,****6787,data_exame,opt_out,opt_out,1,0,0,0,0,0,88361d0f-89df-41fc-852b-ce84cbb43cc4,80d6ca1d-94f2-4465-81b7-74888c1d0edc,a5b58132-79fe-49dd-8aff-49fb78bf4566,R$ 0.00,2026-09-16T14:19:33.276Z

@@ -49,8 +49,8 @@ campaign must remain unsent.
 ## Current CRA Order - 2026-09-16
 
 1. Recipient B controlled Utility validation - DONE on Demo.
-2. Opt-out E2E - CURRENT OWNER GATE.
-3. Reports / exports / billing.
+2. Opt-out E2E - DONE on Demo.
+3. Reports / exports / billing - NEXT.
 4. CRM import/upsert/report with `Situação no CRM`.
 5. Acceptance package.
 
@@ -78,7 +78,7 @@ them by owner decision.
 | Test send | Formal test-send excluded from contractual active-message billing | TESTED LOCALLY |
 | Schedule/send | Explicit operator action only | PRODUCT SUPPORTED / NEEDS OWNER APPROVAL |
 | Pause/resume/cancel | Supported by campaign lifecycle and app API | TESTED LOCALLY FOR LIFECYCLE |
-| Opt-out | Active opt-out blocks campaign recipient and records event | OWNER GATE READY / NEEDS CONTROLLED DEMO E2E |
+| Opt-out | Active opt-out blocks campaign recipient and records event | DEMO VALIDATED / CRA ACCEPTANCE STILL NEEDED |
 | Delivery status | Meta webhook updates status/history | PRODUCT SUPPORTED / NEEDS CRA SAMPLE |
 | Billing | Delivered/read Utility campaign outside 24h creates one billable event; read replay does not bill again | TESTED LOCALLY |
 | Reports/export | CSV/monthly evidence available; PDF/equivalent acceptance pack still required | PRODUCT SUPPORTED / NEEDS CRA SAMPLE |
@@ -366,6 +366,14 @@ be mutated because it is the historical reconciliation case. Future expected
 E2E: create canonical opt-out, run one blocked campaign, Meta calls 0, real
 messages 0, capture `campaign.recipient.opt_out_blocked` and export evidence,
 then revoke only if explicitly approved.
+
+Opt-out E2E execution, 2026-09-16: COMPLETED / DEMO PRODUCT CAPABILITY
+VALIDATED. B `****6787` was opted out through canonical service, campaign
+`d260bdc6-326f-4487-8d15-21c2a98dd741` blocked before Meta with
+`blockedCount=1`, `sentCount=0`, Meta calls=0, real messages=0,
+OutboundMessage=0 and billing=0, then B was restored eligible through canonical
+reversal. A `****9614` was not touched. Evidence files:
+`PHASE_D_OPT_OUT_E2E_2026-09-16.md` and `.csv`.
 
 Demo operational default proposal, 2026-09-15: SUPERSEDED BY 2026-09-16 OWNER
 DESTINATION CONFIGURATION. The

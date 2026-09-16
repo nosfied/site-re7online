@@ -335,11 +335,10 @@ and must not absorb new requirements.
 
 Current CRA order:
 
-1. opt-out E2E;
-2. reports / exports / billing;
-3. CRM import/upsert/report with `Situação no CRM`;
-4. Contacts campaign relationship view;
-5. acceptance package.
+1. reports / exports / billing;
+2. CRM import/upsert/report with `Situação no CRM`;
+3. Contacts campaign relationship view;
+4. acceptance package.
 
 Campaign/CRM import/upsert/report enhancement:
 
@@ -609,7 +608,8 @@ exactly one `billing.active_message.delivered`, duplicate billing NO. Campaign
 ended `completed`, `sentCount=1`, `blockedCount=0`. A external sends in this
 run: 0. Sanitized evidence:
 `evidence/demo-contract-validation/PHASE_C_RECIPIENT_B_CONTROLLED_UTILITY_RESULT_2026-09-16.md`
-and `.csv`. Next gate: opt-out E2E.
+and `.csv`. Opt-out E2E was completed later on Demo; next front after opt-out is
+reports/exports/billing.
 
 Opt-out E2E preparation, 2026-09-16: READY FOR OWNER GATE / NO MUTATION / NO
 REAL META SEND. Production/code audit confirmed canonical opt-out is event-based
@@ -628,6 +628,21 @@ sequence: create canonical opt-out with source `controlled_demo_validation`,
 run one blocked campaign for B, prove Meta calls 0/real messages 0, collect
 export/report evidence, and revoke only if explicitly approved. Evidence:
 `evidence/demo-contract-validation/PHASE_D_OPT_OUT_OWNER_GATE_PREPARATION_2026-09-16.md`.
+
+Opt-out E2E execution, 2026-09-16: COMPLETED / DEMO PRODUCT CAPABILITY
+VALIDATED / NOT CRA CUSTOMER SAMPLE. Owner authorized B `****6787` only.
+Canonical opt-out event `88361d0f-89df-41fc-852b-ce84cbb43cc4`
+(`contact.opt_out.recorded`) made B active opted-out. Controlled campaign
+`d260bdc6-326f-4487-8d15-21c2a98dd741` used `data_exame`, targeted only B and
+blocked before provider with `campaign.recipient.opt_out_blocked`
+`80d6ca1d-94f2-4465-81b7-74888c1d0edc`. Actual campaign state:
+`completed`, `totalRecipients=1`, `sentCount=0`, `blockedCount=1`. Meta calls,
+real messages, OutboundMessage rows and billing events for this campaign are all
+0. Canonical revoke event `a5b58132-79fe-49dd-8aff-49fb78bf4566`
+(`contact.opt_out.revoked`) restored B eligibility and preserved history.
+A `****9614` remained untouched. Evidence:
+`evidence/demo-contract-validation/PHASE_D_OPT_OUT_E2E_2026-09-16.md` and
+`.csv`. Next front: reports/exports/billing acceptance package.
 
 ### Guided Builder - Bot Inactivity Policy UX Backlog
 
