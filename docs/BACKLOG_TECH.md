@@ -177,9 +177,32 @@ ACTIVE P1:
    eligible again and history is preserved. A `****9614` was untouched
    (outbounds 125/125, billing 1/1, opt-out events 0/0). Evidence:
    `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_D_OPT_OUT_E2E_2026-09-16.md`
-   and `.csv`. Next front: reports/exports/billing acceptance package.
+   and `.csv`.
 
-4. CRA campaign import - optional CRM situation column: OPEN / NEXT CRA
+4. CRA reports / exports / billing acceptance audit: COMPLETED FOR DEMO
+   PRODUCT CAPABILITY / CRA ACCEPTANCE STILL SEPARATE. On 2026-09-16 a
+   docs/evidence-only audit reviewed the official clarification and product
+   routes without sending campaigns, changing opt-out or mutating ledger data.
+   Sources confirm export may be CSV/XLSX or equivalent open/widely used format
+   and active-message billing is Utility outside 24h effectively delivered;
+   read does not add billing. Production read-only evidence: A campaign
+   `d9874c03-10e8-4061-a92e-6caa7b3001c3` remains truthful as
+   `failed`/reconciled with one outbound and one
+   `billing.active_message.delivered`; B campaign
+   `bb1d30e2-3a98-471a-9531-1f5e5d76a214` is `completed` with one delivered
+   outbound and one billing event; opt-out campaign
+   `d260bdc6-326f-4487-8d15-21c2a98dd741` has `blockedCount=1`, zero outbound
+   and zero billing. `demo-converta` and `cra-pr` both have `campaigns` and
+   `reports` enabled. CSV/open-equivalent evidence PASS; native XLSX is not
+   claimed; formatted PDF exists in reports but campaign consumption remains
+   CSV/open-equivalent. Provider cost, estimated USD payload and CRA
+   contractual BRL price remain separate; CRA final contract unit remains NOT
+   PROVEN. Evidence:
+   `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_E_REPORTS_EXPORTS_BILLING_2026-09-16.md`
+   and `.csv`. Next front: CRM import/upsert/report with optional
+   `Situacao no CRM`.
+
+5. CRA campaign import - optional CRM situation column: OPEN / NEXT CRA
    CAMPAIGN IMPORT FRONT. Campaign/contact audience files may optionally contain
    `Situacao no CRM` / `Situação no CRM`. When populated, the value must resolve
    deterministically against CRM situations/statuses already configured for the
@@ -202,7 +225,7 @@ ACTIVE P1:
    semantics, duplicate-row policy, partial-success behavior and report/export
    infrastructure.
 
-4. Contacts - campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP.
+6. Contacts - campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP.
    Contacts/CRM must expose campaign-related history and state without
    duplicating campaign source-of-truth data inside Contact. Per contact, when
    applicable, show campaign count, last campaign, last send timestamp,
@@ -216,7 +239,7 @@ ACTIVE P1:
    where appropriate. CRA relevance: campaign/contact traceability and
    acceptance evidence.
 
-5. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
+7. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente
    2 mensagens Utility `data_exame` via META_CLOUD no `demo-converta` parou com
    bug operacional. Prechecks passaram, a primeira chamada Meta para `****9614`

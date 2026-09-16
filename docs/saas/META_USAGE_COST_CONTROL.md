@@ -271,6 +271,13 @@ configuration and the completed B controlled Utility send on 2026-09-16.
   `d260bdc6-326f-4487-8d15-21c2a98dd741` blocked B before Meta, with Meta calls
   0, real messages 0, OutboundMessage 0, `billing.active_message.delivered` 0
   and provider cost R$ 0.00.
+- Reports/exports/billing Phase E on 2026-09-16 was docs/evidence-only. It
+  confirmed Demo product capability for monthly usage/billing evidence without
+  mutating ledger data: A has one delivered billing event, B has one delivered
+  billing event and the opt-out blocked campaign has zero billing. Product
+  payload read-back showed estimated Meta usage `0.008` USD for A/B; the
+  official Brazil Utility provider-rate reference and CRA contractual BRL unit
+  remain separate. CRA final contract unit remains NOT PROVEN.
 - Nao ha conciliacao financeira definitiva automatizada.
 - O bloqueio por limite ainda nao esta ativado nos fluxos reais.
 - Rate card e local e deve ser revisado quando a politica Meta mudar.

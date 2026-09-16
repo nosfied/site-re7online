@@ -642,7 +642,22 @@ real messages, OutboundMessage rows and billing events for this campaign are all
 (`contact.opt_out.revoked`) restored B eligibility and preserved history.
 A `****9614` remained untouched. Evidence:
 `evidence/demo-contract-validation/PHASE_D_OPT_OUT_E2E_2026-09-16.md` and
-`.csv`. Next front: reports/exports/billing acceptance package.
+`.csv`.
+
+Reports/exports/billing Phase E, 2026-09-16: COMPLETED FOR DEMO PRODUCT
+CAPABILITY / CRA ACCEPTANCE STILL SEPARATE. A docs/evidence-only audit reviewed
+contract sources, code routes and production read-only evidence. Contract
+sources allow CSV/XLSX or open-equivalent export and define billable active
+message as Utility outside 24h effectively delivered; read status does not add
+billing. Product support includes campaign CSV export, operational report CSV
+exports, Meta usage CSV, receptive-session CSV and active-message billing
+CSV/report. Demo evidence now covers A failed/reconciled with one delivered
+billing event, B completed/delivered with one billing event, and opt-out blocked
+with zero outbound/billing. Evidence:
+`evidence/demo-contract-validation/PHASE_E_REPORTS_EXPORTS_BILLING_2026-09-16.md`
+and `.csv`. Native XLSX is not claimed. CRA final contract BRL unit and CRA
+customer package remain pending. Next front: CRM import/upsert/report with
+optional `Situacao no CRM`.
 
 ### Guided Builder - Bot Inactivity Policy UX Backlog
 

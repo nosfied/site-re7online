@@ -50,9 +50,11 @@ campaign must remain unsent.
 
 1. Recipient B controlled Utility validation - DONE on Demo.
 2. Opt-out E2E - DONE on Demo.
-3. Reports / exports / billing - NEXT.
-4. CRM import/upsert/report with `Situação no CRM`.
-5. Acceptance package.
+3. Reports / exports / billing - DONE on Demo product evidence; CRA package
+   still pending.
+4. CRM import/upsert/report with `Situação no CRM` - NEXT.
+5. Contacts campaign relationship view.
+6. Acceptance package.
 
 Approved outbound return destination is CLOSED / DEPLOYED / OWNER APPROVED /
 PROD NON-DESTRUCTIVE VALIDATED at
@@ -81,7 +83,7 @@ them by owner decision.
 | Opt-out | Active opt-out blocks campaign recipient and records event | DEMO VALIDATED / CRA ACCEPTANCE STILL NEEDED |
 | Delivery status | Meta webhook updates status/history | PRODUCT SUPPORTED / NEEDS CRA SAMPLE |
 | Billing | Delivered/read Utility campaign outside 24h creates one billable event; read replay does not bill again | TESTED LOCALLY |
-| Reports/export | CSV/monthly evidence available; PDF/equivalent acceptance pack still required | PRODUCT SUPPORTED / NEEDS CRA SAMPLE |
+| Reports/export | CSV/monthly evidence available; PDF/equivalent acceptance pack still required | DEMO VALIDATED / CRA ACCEPTANCE STILL NEEDED |
 
 ## Template Pipeline Map
 
@@ -176,6 +178,14 @@ Capture and redact:
 - active-message billing event reference, if delivered/read outside 24h;
 - monthly active-message report/CSV and Meta usage report/CSV;
 - final acceptance note tying evidence to the contract item.
+
+Phase E reports/exports/billing evidence, 2026-09-16: Demo product capability is
+validated by existing evidence and production read-only checks. A remains a
+truthful failed/reconciled campaign with one billing event; B is a completed
+delivered campaign with one billing event; opt-out is a completed blocked
+campaign with zero outbound/billing. CSV/open-equivalent evidence is documented
+in `PHASE_E_REPORTS_EXPORTS_BILLING_2026-09-16.md` and `.csv`. Native XLSX is
+not claimed and CRA final BRL contract unit remains pending.
 
 ## Required Evidence Sequence
 

@@ -599,7 +599,21 @@ Sem envio real.
   `blockedCount=1`, Meta calls=0, mensagens reais=0, OutboundMessage=0,
   billing=0. Reversao canonica `contact.opt_out.revoked`
   `a5b58132-79fe-49dd-8aff-49fb78bf4566` restaurou B elegivel e preservou
-  historico. A `****9614` ficou intocado. Proximo front: reports/exports/billing.
+  historico. A `****9614` ficou intocado.
+- Reports/exports/billing Phase E, 2026-09-16: COMPLETED FOR DEMO PRODUCT
+  CAPABILITY / CRA ACCEPTANCE STILL SEPARATE. Sem envio real, sem mutacao de
+  opt-out e sem mutacao de ledger. Auditoria confirmou que exportacao pode ser
+  CSV/XLSX ou equivalente aberto e que billing ativo e Utility fora de 24h
+  efetivamente entregue. Rotas reais auditadas: campanha CSV, reports CSV/PDF
+  gerencial, Meta usage CSV, receptive sessions CSV e active-message billing
+  CSV. Read-only em producao: A segue `failed`/reconciled com 1 outbound e 1
+  `billing.active_message.delivered`; B segue `completed`/delivered com 1
+  billing event; opt-out tem `blockedCount=1`, 0 outbound e 0 billing.
+  `demo-converta` e `cra-pr` estao ativos com `campaigns` e `reports`.
+  Evidencia:
+  `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_E_REPORTS_EXPORTS_BILLING_2026-09-16.md`
+  e `.csv`. XLSX nativo nao e prometido; preco contratual CRA em BRL segue NOT
+  PROVEN. Proximo front: CRM import/upsert/report com `Situacao no CRM`.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.

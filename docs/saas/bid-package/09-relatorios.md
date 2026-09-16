@@ -39,6 +39,13 @@ Essa busca unificada ainda nao deve ser apresentada como funcionalidade operacio
 
 O Converta possui recursos de exportacao e geracao de evidencias operacionais, incluindo CSV/PDF conforme modulo e permissao.
 
+Para a frente CRA-PR 2026, a Phase E de reports/exports/billing validou em Demo
+que campanha CSV, relatorios operacionais CSV, relatorio gerencial formatado/PDF,
+Meta usage CSV e active-message billing CSV existem como trilha de evidencia.
+CSV/open-equivalent e o caminho contratual documentado; XLSX nativo nao deve ser
+prometido sem implementacao propria. Preco de contrato, custo Meta e payload
+estimativo devem permanecer separados.
+
 ## Uso Em Contratos Publicos
 
 Relatorios podem apoiar:

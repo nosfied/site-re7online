@@ -190,11 +190,14 @@ provider quando ele nao existe.
 CRA campaign follow-up reconciliation, 2026-09-16: the approved outbound return
 destination delivery is CLOSED / DEPLOYED / OWNER APPROVED / PROD
 NON-DESTRUCTIVE VALIDATED at `452d5826db42cc1b574eeff8fd8e0d038cd3491f` and
-must not absorb new requirements. The current CRA order is: Recipient B
-controlled Utility validation, opt-out E2E, reports/exports/billing,
-campaign/CRM import/upsert/report with `Situação no CRM`, then acceptance
-package. The CRM import front is OPEN / NEXT CRA CAMPAIGN IMPORT FRONT and is
-not only an optional column: it must be tenant-scoped CRM upsert. Existing
+must not absorb new requirements. Recipient B controlled Utility validation,
+opt-out E2E and reports/exports/billing Phase E are completed on Demo product
+evidence; CRA customer acceptance remains separate. The current CRA order is:
+campaign/CRM import/upsert/report with `Situação no CRM`, contacts campaign
+relationship view, final reports/export/billing package with CRA-approved scope
+and unit price, then acceptance package. The CRM import front is OPEN / NEXT CRA
+CAMPAIGN IMPORT FRONT and is not only an optional column: it must be
+tenant-scoped CRM upsert. Existing
 contacts must update instead of duplicating; valid imported name may update the
 record; blank cells preserve current data; valid resolved `Situação no CRM`
 updates the canonical situation reference; repeated identities inside the file
@@ -367,8 +370,19 @@ VALIDATED. Owner autorizou apenas B `****6787`. `recordContactOptOut` criou
 `blockedCount=1`, `sentCount=0`, Meta calls=0, mensagens reais=0, outbound=0 e
 billing=0. `revokeContactOptOut` criou `contact.opt_out.revoked`
 `a5b58132-79fe-49dd-8aff-49fb78bf4566`, restaurando B elegivel e preservando o
-historico. A `****9614` ficou intocado. Proximo front contratual: reports /
-exports / billing acceptance package.
+  historico. A `****9614` ficou intocado.
+
+CRA/Demo reports/exports/billing Phase E, 2026-09-16: COMPLETED FOR DEMO
+PRODUCT CAPABILITY / CRA ACCEPTANCE STILL SEPARATE. No send, opt-out mutation
+or ledger mutation occurred. Product routes audited include campaign CSV export,
+operational reports with CSV and formatted PDF/print path, Meta usage report
+CSV and active-message billing report CSV. Production read-only evidence
+confirmed A `failed`/reconciled with one billing event, B `completed`/delivered
+with one billing event, and opt-out blocked with zero outbound/billing. CRA and
+Demo both have `campaigns`/`reports` enabled. Native XLSX is not claimed; CSV or
+open-equivalent satisfies the clarified contract path. CRA final BRL contract
+unit and CRA customer package remain pending. Next front: CRM import/upsert/
+report with optional `Situacao no CRM`.
 
 ## LGPD e anonimizacao
 

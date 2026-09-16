@@ -94,11 +94,14 @@ template request/review/submission, campaign drafts/import, lifecycle controls,
 opt-out blocking, delivery status, Meta usage ledger and active-message billing
 is present in the codebase. The readiness audit is closed, but contract
 acceptance is open because CRA has no configured template, template request or
-campaign in production yet, and no approved CRA Utility copy was found. The
-current contract front is Utility/campaign acceptance, then opt-out, then
-reports/exports/billing, then acceptance pack. No Meta template submission or
-real send is authorized without approved customer copy and explicit owner
-approval. Instagram Direct, Facebook Messenger and Website/Webchat remain
+campaign in production yet, and no approved CRA Utility copy was found. Demo
+product evidence now covers controlled Utility B, opt-out E2E and
+reports/exports/billing Phase E; the current contract front is CRM
+import/upsert/report with optional `Situacao no CRM`, then contacts campaign
+relationship view, final CRA report/billing package and acceptance pack. No
+Meta template submission or real send is authorized without approved customer
+copy and explicit owner approval. Instagram Direct, Facebook Messenger and
+Website/Webchat remain
 contract-required but customer-deferred with delivery window pending and are not
 blockers for this phase.
 
@@ -249,7 +252,13 @@ Current backlog classification:
   capability validation: B was opted out canonically, one campaign blocked before
   Meta with `blockedCount=1`, Meta calls/real messages/outbound/billing all 0,
   opt-out was revoked canonically, B became eligible again and A was untouched.
-  Next front is reports/exports/billing.
+  Reports/exports/billing Phase E then completed Demo product capability
+  evidence without send, opt-out mutation or ledger mutation: campaign CSV,
+  report CSV/PDF path, Meta usage CSV and active-message billing CSV were
+  audited; A has one reconciled billing event, B has one delivered billing
+  event and opt-out has zero outbound/billing. CRA customer report package and
+  final BRL contract unit remain pending. Next front is CRM import/upsert/report
+  with optional `Situacao no CRM`.
 - Meta pricing source of truth / FinOps hardening is P2 generic product backlog.
   The broad future work is rate-card ingestion, resolver, snapshots, FX and
   staleness detection. It must not consume the current CRA adherence front

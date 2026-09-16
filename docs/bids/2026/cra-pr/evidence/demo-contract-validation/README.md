@@ -101,5 +101,16 @@ Phase C send result summary:
   and A untouched. Evidence files:
   `PHASE_D_OPT_OUT_E2E_2026-09-16.md` and
   `PHASE_D_OPT_OUT_E2E_2026-09-16.csv`.
+- Reports/exports/billing Phase E: on 2026-09-16 a docs/evidence-only audit
+  used existing Demo evidence and production read-only checks. Result: campaign
+  reporting/export/billing product capability PASS on Demo; A remains truthful
+  as failed/reconciled with one delivered billing event, B is completed with one
+  delivered billing event, and opt-out block has zero outbound/billing.
+  `demo-converta` and `cra-pr` both have `campaigns` and `reports` enabled.
+  CSV/open-equivalent evidence is supported; native XLSX is not claimed. CRA
+  customer report package and final contractual BRL billing unit remain pending.
+  Evidence files:
+  `PHASE_E_REPORTS_EXPORTS_BILLING_2026-09-16.md` and
+  `PHASE_E_REPORTS_EXPORTS_BILLING_2026-09-16.csv`.
 - evidence: `PHASE_C_CONTROLLED_UTILITY_RESULT_2026-09-15.md`.
 - reconciliation audit: `RECIPIENT_A_RECONCILIATION_AUDIT_2026-09-15.md`.

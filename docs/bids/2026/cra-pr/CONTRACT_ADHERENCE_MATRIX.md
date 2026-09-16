@@ -213,9 +213,9 @@ requirement denominator until owner decision or contract evidence promotes them.
 | CRA-CAMP-005 | aderencia #42/#43/#44 | Scheduling, test send, cancel/pause | Scheduling, cancel, pause, resume and test-send semantics exist; local lifecycle tests PASS | No CRA campaign evidence | E2 | IMPLEMENTED / NEEDS DEMO VALIDATION | C1 | P1 evidence | Contract evidence pending, not proven product gap | Validate exact lifecycle semantics on Demo controlled campaign before real send | RE7 | E4 |
 | CRA-CAMP-006 | aderencia #45 | Delivery/error status and history | OutboundMessage/status handling exists; Demo B controlled Utility campaign created one local outbound, received Meta accepted/sent/delivered status and stored sanitized evidence | CRA real campaign messages not exercised; read status not observed | E4 Demo / E1 CRA | DEMO VALIDATED / CRA VALIDATION STILL NEEDED | C1 | P1 evidence | CRA customer sample still missing | Include Demo evidence in acceptance package; CRA real campaign only with customer-approved data/gate | RE7 | E4/E6 |
 | CRA-OPT-001 | resposta esclarecimento item 10 | Opt-out with audit and campaign block | Demo E2E completed 2026-09-16: canonical `contact.opt_out.recorded`, blocked campaign before Meta, `campaign.recipient.opt_out_blocked`, `blockedCount=1`, Meta calls 0, real messages 0, outbound 0, billing 0, CSV evidence and canonical `contact.opt_out.revoked`; B restored eligible and A untouched | No CRA customer opt-out sample yet | E4 Demo / E1 CRA | DEMO VALIDATED / CRA VALIDATION STILL NEEDED | C0 | P1 evidence package | CRA customer acceptance still requires contract/customer package; do not overclaim from Demo test | Include Demo evidence in acceptance package; CRA-specific sample only with customer-approved scope | RE7 | E4/E6 |
-| CRA-REP-001 | resposta esclarecimento item 11 | Export CSV/XLSX or equivalent; PDF report format | CSV reports exist; sanitized Demo B CSV evidence created for controlled campaign result | CRA report package not customer-reviewed; native XLSX not claimed | E4 Demo / E1 CRA | DEMO CSV EVIDENCE CREATED / CRA PACKAGE STILL NEEDED | C1 | P1 evidence | CRA acceptance export package still missing | Generate final redacted CRA acceptance pack; keep XLSX as equivalent/conversion unless native support is proven | RE7 | E4/E6 |
-| CRA-REP-002 | aderencia #50 | Monthly consumption report | Meta usage report/CSV documented; Demo B delivered Utility produced usage/billing events | CRA monthly billing report not yet packaged/reviewed | E4 Demo / E1 CRA | DEMO USAGE EVENT VALIDATED / CRA REPORT STILL NEEDED | C1 | P1 evidence | CRA billing/report total not customer-approved | Build final monthly consumption evidence from controlled Demo/CRA-approved scope | RE7 | E4/E6 |
-| CRA-BILL-001 | resposta esclarecimento items 1-6 | Bill only delivered utility templates outside 24h; read status no extra; Meta cost included in proposal; excedents same unit price with approval | Demo A has one reconciled `billing.active_message.delivered` event; Demo B controlled Utility send on 2026-09-16 was accepted, delivered and created exactly one `billing.active_message.delivered`; official Brazil Utility provider rate remains R$ 0,0350/message; duplicate billing NO; read no extra observed because read count is 0 | No CRA billing sample; CRA contractual BRL unit not proven; `R$ 0,32` is central planning reference, no tenant override/final proposal source found | E4 Demo / E1 CRA | DEMO DELIVERED BILLING ELIGIBILITY VALIDATED / CRA CONTRACT PRICE OPEN | C0 | P1 evidence | CRA contract billing unit and CRA report total not evidenced | Use Demo evidence for product capability; resolve CRA contract unit/report package separately; keep generic Meta pricing automation in P2 FinOps | RE7 | E6 |
+| CRA-REP-001 | resposta esclarecimento item 11 | Export CSV/XLSX or equivalent; PDF report format | Phase E audit completed 2026-09-16: campaign CSV export, report CSV exports, usage/billing CSV reports and formatted report/PDF path audited; Demo A/B/opt-out evidence consolidated | CRA report package not customer-reviewed; native XLSX not claimed | E4 Demo / E1 CRA | DEMO REPORT/EXPORT EVIDENCE PACKAGE CREATED / CRA PACKAGE STILL NEEDED | C1 | P1 evidence | CRA acceptance export package still missing | Generate final redacted CRA acceptance pack; keep XLSX as CSV/open-equivalent conversion unless native support is proven | RE7 | E4/E6 |
+| CRA-REP-002 | aderencia #50 | Monthly consumption report | Phase E audit confirmed Meta usage report/CSV and active-message report/CSV; Demo A=1 billable delivered Utility, B=1 billable delivered Utility, opt-out=0 billing | CRA monthly billing report not yet packaged/reviewed | E4 Demo / E1 CRA | DEMO MONTHLY USAGE/BILLING CAPABILITY VALIDATED / CRA REPORT STILL NEEDED | C1 | P1 evidence | CRA billing/report total not customer-approved | Build final monthly consumption evidence from CRA-approved scope and accepted unit price | RE7 | E4/E6 |
+| CRA-BILL-001 | resposta esclarecimento items 1-6 | Bill only delivered utility templates outside 24h; read status no extra; Meta cost included in proposal; excedents same unit price with approval | Phase E read-only production evidence: A remains failed/reconciled with one outbound and one `billing.active_message.delivered`; B completed/delivered with one billing event; opt-out blocked before Meta with zero outbound/billing. Payload estimated Meta usage read-back showed `0.008` USD for A/B; prior narrow provider-rate evidence remains R$ 0,0350/message. Duplicate billing NO. | No CRA billing sample; CRA contractual BRL unit not proven; `R$ 0,32` is central planning reference, no tenant override/final proposal source found | E4 Demo / E1 CRA | DEMO DELIVERED BILLING ELIGIBILITY VALIDATED / CRA CONTRACT PRICE OPEN | C0 | P1 evidence | CRA contract billing unit and CRA report total not evidenced | Use Demo evidence for product capability; resolve CRA contract unit/report package separately; keep generic Meta pricing automation in P2 FinOps | RE7 | E6 |
 | CRA-SLA-001 | aderencia #52; suporte SLA | Availability target 99.5% and operation except maintenance | Health/monitoring exists; SLA plan exists | Not acceptance-evidenced | E1 | DOCUMENTATION/EVIDENCE GAP | C1 | docs/ops | Availability evidence and maintenance log missing | Prepare SLA evidence/runbook appendix | RE7 | E6 |
 | CRA-SUP-001 | suporte SLA | Remote support, severity and response targets | Support process planned | Not customer-evidenced | E1 | DOCUMENTATION/EVIDENCE GAP | C1 | docs/ops | Support channel/ticket evidence missing | Define channels and ticket register for CRA | RE7 + CRA | E6 |
 | CRA-BKP-001 | proposta tecnica arquitetura | Backup/restore routine | Runbooks exist | CRA-specific restore evidence absent | E1 | DOCUMENTATION/EVIDENCE GAP | C2 | docs/ops | Backup cadence/retention proof not packaged | Attach backup/restore policy evidence | RE7 | E6 |
@@ -236,13 +236,15 @@ requirement denominator until owner decision or contract evidence promotes them.
 
 C0/C1 items that block declaring contractual readiness without qualification:
 
-1. Active utility messaging is in contract acceptance, not closed: no approved
-   CRA copy, no Meta-approved CRA template, no controlled campaign sample and
-   no billing evidence for delivered utility template outside 24h.
-2. Opt-out evidence is missing for CRA acceptance, even though the product has
-   an operational path.
-3. Reporting/export acceptance package is missing: CRA samples for CSV/PDF and
-   XLSX-equivalent workflow, plus monthly consumption/billing reconciliation.
+1. Active utility messaging is in CRA contract acceptance, not closed: Demo
+   product evidence exists, but there is no approved CRA copy, no Meta-approved
+   CRA template and no CRA customer sample.
+2. Opt-out evidence is missing for CRA customer acceptance, even though Demo
+   product capability is validated.
+3. CRA customer reporting/export acceptance package is missing: Demo Phase E
+   product evidence exists for CSV/open-equivalent exports, report/PDF path and
+   billing quantity, but CRA samples and final contract billing reconciliation
+   are not customer-reviewed.
 4. Contract evidence package is incomplete for support/SLA, training attendance,
    backup/restore policy, LGPD/security declarations and Meta official proof.
 5. Instagram, Facebook Messenger and site/webchat remain contract-required but
@@ -288,9 +290,9 @@ webhook 1, read 0, failed 0, one local OutboundMessage, one
 
 ## Current Execution Order
 
-1. Final reports/exports/billing acceptance package.
-2. Campaign/CRM import `Situação no CRM` upsert/report follow-up.
-3. Contacts campaign relationship view follow-up.
+1. Campaign/CRM import `Situação no CRM` upsert/report follow-up.
+2. Contacts campaign relationship view follow-up.
+3. Final reports/exports/billing package with CRA-approved scope and unit price.
 4. Acceptance pack.
 5. Deferred channels only after customer delivery window is confirmed:
    Instagram Direct, Facebook Messenger and Website/Webchat.
