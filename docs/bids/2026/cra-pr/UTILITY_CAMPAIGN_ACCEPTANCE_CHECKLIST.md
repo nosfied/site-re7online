@@ -48,12 +48,15 @@ campaign must remain unsent.
 
 ## Current CRA Order - 2026-09-16
 
-1. Deploy approved outbound return destination.
-2. Recipient B controlled Utility validation.
-3. Opt-out E2E.
-4. Reports / exports / billing.
-5. CRM import/upsert/report with `Situação no CRM`.
-6. Acceptance package.
+1. Recipient B controlled Utility validation.
+2. Opt-out E2E.
+3. Reports / exports / billing.
+4. CRM import/upsert/report with `Situação no CRM`.
+5. Acceptance package.
+
+Approved outbound return destination is CLOSED / DEPLOYED / OWNER APPROVED /
+PROD NON-DESTRUCTIVE VALIDATED at
+`452d5826db42cc1b574eeff8fd8e0d038cd3491f`.
 
 The CRM situation import/upsert/report front and Marketing media template
 support must not be mixed into the current approved outbound return destination

@@ -102,8 +102,10 @@ approval. Instagram Direct, Facebook Messenger and Website/Webchat remain
 contract-required but customer-deferred with delivery window pending and are not
 blockers for this phase.
 
-CRA campaign follow-up reconciliation, 2026-09-16: the current approved
-outbound return destination delivery remains unchanged. New requirement
+CRA campaign follow-up reconciliation, 2026-09-16: the approved outbound return
+destination delivery is CLOSED / DEPLOYED / OWNER APPROVED / PROD
+NON-DESTRUCTIVE VALIDATED at `452d5826db42cc1b574eeff8fd8e0d038cd3491f`.
+New requirement
 CRM situation import/upsert/report is OPEN / NEXT CRA CAMPAIGN IMPORT FRONT.
 It includes optional `Situação no CRM`, same-tenant deterministic status
 resolution, existing contact update instead of duplication, blank-cell

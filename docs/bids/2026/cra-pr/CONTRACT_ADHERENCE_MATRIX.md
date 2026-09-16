@@ -46,14 +46,17 @@ ATTEMPTED: explicit owner send approval was granted, but immediate preflight
 stopped before Meta because Demo lacks an active default operational
 department/queue pair.
 
-Outbound return destination hardening, local on 2026-09-15: new campaign
+Outbound return destination hardening, deployed on 2026-09-16 at
+`452d5826db42cc1b574eeff8fd8e0d038cd3491f`: new campaign
 configuration no longer relies on implicit name-based operational defaults as
 the canonical destination. Campaign drafts/imports/sends persist an explicit
 response destination in `campaign.seed.saved`: human department with concrete
 queue, or active principal automated flow. Direct CRM contact initiation uses
 the initiating user's valid primary department and blocks before provider send
-when absent. This is generic multitenant product hardening, not CRA data/config
-mutation, and it does not authorize Recipient B or any real Meta send.
+when absent. Status: CLOSED / DEPLOYED / OWNER APPROVED / PROD
+NON-DESTRUCTIVE VALIDATED. This is generic multitenant product hardening, not
+CRA data/config mutation, and it does not authorize Recipient B or any real
+Meta send.
 
 Campaign follow-up backlog reconciliation, 2026-09-16: keep the approved
 outbound return destination delivery unchanged. Add two separate follow-ups:
@@ -275,13 +278,12 @@ C0/C1 items that block declaring contractual readiness without qualification:
 
 ## Current Execution Order
 
-1. Deploy approved outbound return destination.
-2. Recipient B controlled Utility validation.
-3. Opt-out evidence.
-4. Reports, exports and billing evidence.
-5. Campaign/CRM import `Situação no CRM` upsert/report follow-up.
-6. Contacts campaign relationship view follow-up.
-7. Acceptance pack.
+1. Recipient B controlled Utility validation.
+2. Opt-out evidence.
+3. Reports, exports and billing evidence.
+4. Campaign/CRM import `Situação no CRM` upsert/report follow-up.
+5. Contacts campaign relationship view follow-up.
+6. Acceptance pack.
 8. Deferred channels only after customer delivery window is confirmed:
    Instagram Direct, Facebook Messenger and Website/Webchat.
 

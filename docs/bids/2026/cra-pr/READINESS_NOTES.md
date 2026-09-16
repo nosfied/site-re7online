@@ -67,8 +67,10 @@ Nao reabrir:
 
 - CRA active flow visibility: CLOSED / CUSTOMER VALIDATED.
 - CRA business hours: CONFIGURED / OPERATIONALLY VALIDATED.
-- Outbound return destination aprovado: permanece separado; novas pendencias de
-  importacao CRM e Marketing media nao entram nessa entrega.
+- Outbound return destination aprovado: CLOSED / DEPLOYED / OWNER APPROVED /
+  PROD NON-DESTRUCTIVE VALIDATED em
+  `452d5826db42cc1b574eeff8fd8e0d038cd3491f`; novas pendencias de importacao
+  CRM e Marketing media nao entram nessa entrega.
 
 Follow-up de 2026-09-16:
 

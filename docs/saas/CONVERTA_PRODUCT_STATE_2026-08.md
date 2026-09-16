@@ -188,9 +188,10 @@ CRM usa o setor principal valido do usuario iniciador e bloqueia antes do
 provider quando ele nao existe.
 
 CRA campaign follow-up reconciliation, 2026-09-16: the approved outbound return
-destination delivery remains unchanged and must not absorb new requirements.
-The current CRA order is: deploy approved outbound return destination, Recipient
-B controlled Utility validation, opt-out E2E, reports/exports/billing,
+destination delivery is CLOSED / DEPLOYED / OWNER APPROVED / PROD
+NON-DESTRUCTIVE VALIDATED at `452d5826db42cc1b574eeff8fd8e0d038cd3491f` and
+must not absorb new requirements. The current CRA order is: Recipient B
+controlled Utility validation, opt-out E2E, reports/exports/billing,
 campaign/CRM import/upsert/report with `Situação no CRM`, then acceptance
 package. The CRM import front is OPEN / NEXT CRA CAMPAIGN IMPORT FRONT and is
 not only an optional column: it must be tenant-scoped CRM upsert. Existing

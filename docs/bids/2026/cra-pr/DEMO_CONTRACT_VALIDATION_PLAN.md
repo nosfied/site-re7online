@@ -316,28 +316,29 @@ department is inactive. Proposed mutation, not executed: reactivate that
 existing department only. No Meta send, no campaign retry and no CRA data/config
 impact.
 
-Outbound return destination hardening, local 2026-09-15: next controlled Demo
+Outbound return destination hardening, deployed 2026-09-16 at
+`452d5826db42cc1b574eeff8fd8e0d038cd3491f`: next controlled Demo
 campaign configuration must persist an explicit response destination in
 `campaign.seed.saved`; the historical default operational pair is compatibility
 fallback only. Human destination requires an active department with concrete
 queue; automated destination requires any active same-tenant flow selected by
-exact `flowId`. Recipient B remains NOT ATTEMPTED and no real send is
-authorized by this local code change.
+exact `flowId`. Status: CLOSED / DEPLOYED / OWNER APPROVED / PROD
+NON-DESTRUCTIVE VALIDATED. Recipient B remains NOT ATTEMPTED and no real send
+is authorized by this product delivery.
 
 ## Follow-up Backlog Reconciliation - 2026-09-16
 
-The current approved outbound return destination delivery remains unchanged and
-must not absorb new requirements.
+The approved outbound return destination delivery is already closed/deployed
+and must not absorb new requirements.
 
 Current CRA order:
 
-1. deploy approved outbound return destination;
-2. recipient B controlled Utility validation;
-3. opt-out E2E;
-4. reports / exports / billing;
-5. CRM import/upsert/report with `Situação no CRM`;
-6. Contacts campaign relationship view;
-7. acceptance package.
+1. recipient B controlled Utility validation;
+2. opt-out E2E;
+3. reports / exports / billing;
+4. CRM import/upsert/report with `Situação no CRM`;
+5. Contacts campaign relationship view;
+6. acceptance package.
 
 Campaign/CRM import/upsert/report enhancement:
 

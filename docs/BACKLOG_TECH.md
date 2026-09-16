@@ -120,7 +120,7 @@ ACTIVE P0:
 ACTIVE P1:
 
 1. Canonical outbound return destination for campaigns/direct contact:
-   IMPLEMENTED LOCALLY / VALIDATION PASS / NO DEPLOY. New campaign
+   CLOSED / DEPLOYED / OWNER APPROVED / PROD NON-DESTRUCTIVE VALIDATED. New campaign
    creation/import now requires explicit `returnDestination` in the
    `campaign.seed.saved` contract: `human_department` with concrete
    `departmentId` + `queueId` (single queue resolved internally, zero queue
@@ -133,8 +133,10 @@ ACTIVE P1:
    before provider send when missing. Legacy campaigns without this seed remain
    compatible through the old operational default fallback, but new campaign
    configuration has no implicit name-based destination. Tests/builds: focused
-   `outboundReturnDestination.test.ts` 5/5 PASS, backend build PASS, frontend
-   build PASS. No real Meta send, no B attempt, no deploy.
+   `outboundReturnDestination.test.ts` 8/8 PASS, `campaignsFeatureRoutes.test.ts`
+   113/113 PASS, backend build PASS, frontend build PASS. Production deployed
+   at `452d5826db42cc1b574eeff8fd8e0d038cd3491f` with non-destructive smoke
+   PASS. No real Meta send and no Recipient B attempt.
 
 2. CRA campaign import - optional CRM situation column: OPEN / NEXT CRA
    CAMPAIGN IMPORT FRONT. Campaign/contact audience files may optionally contain
