@@ -46,6 +46,20 @@ No real Meta outbound may be sent until the owner explicitly approves all of:
 If any item is missing, the correct status is `WAITING OWNER APPROVAL` and the
 campaign must remain unsent.
 
+## Current CRA Order - 2026-09-16
+
+1. Deploy approved outbound return destination.
+2. Recipient B controlled Utility validation.
+3. Opt-out E2E.
+4. Reports / exports / billing.
+5. CRM import `Situação no CRM`.
+6. Acceptance package.
+
+The optional CRM situation import column and Marketing media template support
+must not be mixed into the current approved outbound return destination
+delivery. Marketing media templates are P2 unless contract evidence promotes
+them by owner decision.
+
 ## Controlled Campaign Contract
 
 | Area | Required Result | Current Status |
@@ -54,8 +68,10 @@ campaign must remain unsent.
 | Template category | Utility only; no marketing | REQUIRED |
 | Recipient source | Sanitized and approved list | WAITING OWNER/CRA |
 | Import validation | Normalize phones, dedupe, reject invalid/provisional/excluded/opt-out contacts | PRODUCT SUPPORTED / NEEDS CRA RUN |
+| Optional CRM situation column | `Situação no CRM` may resolve to existing same-tenant CRM status only | OPEN / NEXT CRA CAMPAIGN IMPORT FRONT |
 | Variables | Required placeholders mapped per recipient or blocked | PRODUCT SUPPORTED / NEEDS CRA RUN |
 | Draft | Campaign can be created without sending | PRODUCT SUPPORTED / NEEDS CRA RUN |
+| Response destination | New campaign draft/import requires explicit response destination: human department with concrete queue, or active principal automated flow | IMPLEMENTED LOCALLY / NEEDS CRA RUN |
 | Test send | Formal test-send excluded from contractual active-message billing | TESTED LOCALLY |
 | Schedule/send | Explicit operator action only | PRODUCT SUPPORTED / NEEDS OWNER APPROVAL |
 | Pause/resume/cancel | Supported by campaign lifecycle and app API | TESTED LOCALLY FOR LIFECYCLE |
@@ -84,7 +100,13 @@ Audited on 2026-09-15 against the current canonical checkout.
    active opt-out before a draft can be sent.
 7. Send/test-send/schedule/resume paths re-check template availability, category
    policy, recipient eligibility and usage controls before Meta outbound.
-8. Evidence surfaces are active-message billing report/CSV, Meta usage
+8. New campaign configuration persists the response destination explicitly in
+   the campaign seed. Human destination requires concrete department/queue;
+   automated destination requires any active same-tenant flow selected by exact
+   `flowId`. `entryPoint` remains only the default for unqualified/new inbound.
+   Legacy default operational fallback is compatibility only, not the new
+   configuration contract.
+9. Evidence surfaces are active-message billing report/CSV, Meta usage
    summary/report/CSV, campaign export and event ledger records.
 
 ## CRA Template Configuration Plan
@@ -103,6 +125,12 @@ CRA/owner supplies:
 The first controlled template should remain department/institutional and avoid
 promotional wording. Any media/link attachment must be reviewed against Meta
 policy before submission.
+
+Marketing templates with IMAGE/VIDEO headers are not part of this Utility
+acceptance checklist. They require a separate P2 product/Meta audit covering
+Marketing category, media examples/handles, preview, variables, buttons where
+supported, approval/rejection status/reason, send path and official Marketing
+pricing source.
 
 ## Controlled Recipient Plan
 

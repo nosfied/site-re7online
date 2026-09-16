@@ -116,13 +116,12 @@ A identidade do solicitante no tenant de suporte e sintetica e deterministica, b
 
 O atendimento da equipe da plataforma ocorre no Inbox normal do tenant de suporte, com chatbot, handoff, fila, protocolo e eventos ja existentes. O canal `support` pode usar um flow dedicado via `TenantOperationalConfig.config.supportChannel.chatbotFlowId`; sem flow dedicado valido, a conversa cai no modo humano e nao usa automaticamente o `entryPoint` geral do tenant.
 
-Auditoria read-only de 2026-09-15 confirmou que esse flow dedicado de suporte e
-o principal uso atual de active non-entrypoint: o resolver exige `isActive=true`
-por id explicito e nao exige `entryPoint=true`. O `entryPoint` segue sendo o
-seletor padrao de novas conversas do tenant. Portanto o produto atual e
-`MODEL D - PARTIAL/FUTURE CAPABILITY`: a separacao `isActive`/`entryPoint` e
-real, mas limitada a execucao explicita e continuidade de runtime; UX e
-invariantes de dominio ficam em backlog P2.
+Auditoria read-only de 2026-09-15 confirmou que active non-entrypoint flows sao
+alvos validos de execucao explicita: Support Hub e destino automatizado de
+retorno de campanha resolvem por id explicito, exigem `isActive=true` e nao
+exigem `entryPoint=true`. O `entryPoint` segue sendo apenas o seletor padrao de
+novas conversas do tenant. O modelo atualizado e: MULTI-ACTIVE RUNTIME COM UM
+ENTRYPOINT PADRAO. UX e invariantes de dominio adicionais ficam em backlog P2.
 
 O Support Hub aceita texto e imagem inbound do solicitante, limitado a uma imagem PNG, JPEG/JPG ou WebP por envio, com legenda opcional. As imagens ficam fora do Git e fora do banco, em storage interno configurado por `SUPPORT_ATTACHMENT_ROOT`; a mensagem continua vinculada a `InboundMessage` e a timeline permanece baseada em `Conversation`. O frontend recebe apenas uma referencia opaca e o arquivo e servido por endpoint autenticado com cache privado. O envio de imagem do suporte para o cliente ainda nao faz parte do MVP; o operador responde por texto no Inbox.
 
@@ -162,6 +161,30 @@ O centro de campanhas suporta:
 - bootstrap operacional minimo de conversa/CRM para numero inedito somente apos sucesso do envio Meta.
 
 Criar rascunho nao envia mensagem. Envio real exige acao explicita do operador.
+
+Atualizacao local de contrato, 2026-09-15: novas campanhas nao dependem de
+default operacional implicito ou nomeado como destino canonico das respostas. O
+rascunho/importacao/envio grava `returnDestination` no seed da campanha:
+atendimento humano exige setor + fila concretos (fila unica resolvida
+internamente, zero fila bloqueia, multiplas filas exigem selecao) ou fluxo
+automatizado exige `ChatbotFlow` ativo do mesmo tenant. Campanhas antigas sem esse
+seed continuam compativeis pelo fallback legado. Inicio direto de conversa pelo
+CRM usa o setor principal valido do usuario iniciador e bloqueia antes do
+provider quando ele nao existe.
+
+CRA campaign follow-up reconciliation, 2026-09-16: the approved outbound return
+destination delivery remains unchanged and must not absorb new requirements.
+The current CRA order is: deploy approved outbound return destination, Recipient
+B controlled Utility validation, opt-out E2E, reports/exports/billing,
+campaign/CRM import `Situação no CRM`, then acceptance package. The
+`Situação no CRM` import column is OPEN / NEXT CRA CAMPAIGN IMPORT FRONT:
+optional, same-tenant only, deterministic, no silent CRM status creation, no
+unsafe fuzzy matching and truthful preview/import errors for unknown values.
+Marketing template media support is P2 / PRODUCT + META CAPABILITY, covering
+MARKETING category, IMAGE/VIDEO headers, Meta media/example lifecycle, preview,
+variables, supported buttons, approval/rejection status/reason, approved send
+path and official Marketing pricing. It is not part of the current Utility
+controlled campaign unless contract evidence triggers owner promotion.
 
 CRA-PR update, 2026-09-15: Utility/campaign readiness audit is closed and
 contract acceptance is open. Production has `campaigns=true` and

@@ -316,6 +316,54 @@ department is inactive. Proposed mutation, not executed: reactivate that
 existing department only. No Meta send, no campaign retry and no CRA data/config
 impact.
 
+Outbound return destination hardening, local 2026-09-15: next controlled Demo
+campaign configuration must persist an explicit response destination in
+`campaign.seed.saved`; the historical default operational pair is compatibility
+fallback only. Human destination requires an active department with concrete
+queue; automated destination requires any active same-tenant flow selected by
+exact `flowId`. Recipient B remains NOT ATTEMPTED and no real send is
+authorized by this local code change.
+
+## Follow-up Backlog Reconciliation - 2026-09-16
+
+The current approved outbound return destination delivery remains unchanged and
+must not absorb new requirements.
+
+Current CRA order:
+
+1. deploy approved outbound return destination;
+2. recipient B controlled Utility validation;
+3. opt-out E2E;
+4. reports / exports / billing;
+5. CRM import `Situação no CRM`;
+6. acceptance package.
+
+Campaign/CRM import enhancement:
+
+- status: OPEN / NEXT CRA CAMPAIGN IMPORT FRONT;
+- uploaded audience/contact files may optionally contain `Situação no CRM`;
+- when the column is absent, existing import behavior must be preserved;
+- when populated, the value must resolve to an existing same-tenant CRM
+  situation/status and persist the canonical internal id/reference;
+- unknown values must appear as truthful preview/import validation issues;
+- implementation must not use cross-tenant values, unsafe fuzzy matching or
+  silent CRM status creation;
+- audit required before implementation: CRM status model, import schema,
+  segmentation use, status naming/uniqueness and update-vs-create semantics for
+  existing contacts.
+
+Marketing media templates:
+
+- status: P2 / PRODUCT + META CAPABILITY;
+- scope: MARKETING category, IMAGE/VIDEO headers, Meta media/example
+  requirements, upload/handle lifecycle, preview, variables, supported buttons,
+  submission, approval/rejection status and reason, approved-template send path
+  and current official Marketing pricing source;
+- not part of the current Utility controlled campaign;
+- if CRA Contract/TR evidence explicitly requires Marketing media template
+  support for current acceptance, stop for owner decision and promote the item
+  out of P2.
+
 ### Phase B Owner Gate Package
 
 ```text

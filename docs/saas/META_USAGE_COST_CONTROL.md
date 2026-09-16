@@ -32,6 +32,12 @@ Categorias consideradas pelo rate card local:
 - `marketing`;
 - `authentication`.
 
+Marketing pricing/source-of-truth hardening remains separate from the current
+CRA Utility controlled campaign. As of 2026-09-16, Marketing templates with
+IMAGE/VIDEO media are P2 product/Meta capability work and must not be used to
+price, authorize or expand the Utility-only CRA acceptance gate unless explicit
+contract evidence promotes the item by owner decision.
+
 Para `service`, o rate card local trata mensagens antes de `2026-10-01` como nao faturaveis estimadas. A partir dessa data, o valor fica a confirmar ate haver regra operacional revisada.
 
 ## Sprint 87M.1 - Ledger

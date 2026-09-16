@@ -73,7 +73,7 @@ Default government profile favors oversight and reporting:
 | Instagram | Operational inbound/outbound manual, human-only | `/app/inbox`, `/app/settings/channels/instagram` | `instagramInboundPersistence.ts`, `instagramBusinessLogin.service.ts`, channel accounts | Instagram Business Login token, aliases, app review |
 | Chatbot flows | Operational with tenant locks; Guided Builder 2.4 closed / deployed / owner-approved local / production non-destructive validated | `/app/chatbot` | `ChatbotFlow`, `chatbot/chatbotFlow.ts`, `TenantOperationalConfig` | `Client.features.chatbot`; follow-up, handoff notification, media handoff policy, plan limits, automation disable flags and scoped assistant config are DB-first with `tenants.json` fallback |
 | AI supervised fallback | Partial/tenant-configured | runtime/admin | `controlledAssistant.ts`, `TenantOperationalConfig.config.aiAssistantConfig`, `TenantOperationalConfig.config.aiIntentQualification` | OpenAI config; prompt/topic/profile, intent catalog and qualification schema are DB-first with `tenants.json` fallback |
-| Campaigns | Operational | `/app/campaigns` | `Campaign`, `campaignRunner.ts` | templates, contacts/leads, feature flag |
+| Campaigns | Operational; new local contract requires explicit response destination in campaign seed | `/app/campaigns` | `Campaign`, `campaignRunner.ts`, `routing/outboundReturnDestination.ts` | templates, contacts/leads, departments/queues or any active same-tenant flow, feature flag |
 | Templates | Operational | `/app/templates`, admin routes | `Template`, `TemplateRequest`, `meta/template.service.ts` | WABA token, feature flag |
 | CRM/timeline | Operational | `/app/crm`, `/app/inbox` | `Lead`, `LeadNote`, conversation/message models | CRM status catalog is DB-first in `TenantOperationalConfig` with `tenants.json` fallback |
 | Knowledge Base | Structural MVP, controlled rollout | `/app/knowledge-base` | `KnowledgeBaseCollection`, `KnowledgeBaseArticle`, feature `knowledgeBase` | runtime consumption by IA/chatbot is designed but not enabled |
@@ -101,6 +101,16 @@ real send is authorized without approved customer copy and explicit owner
 approval. Instagram Direct, Facebook Messenger and Website/Webchat remain
 contract-required but customer-deferred with delivery window pending and are not
 blockers for this phase.
+
+CRA campaign follow-up reconciliation, 2026-09-16: the current approved
+outbound return destination delivery remains unchanged. New requirement
+`Situação no CRM` in campaign/contact audience imports is OPEN / NEXT CRA
+CAMPAIGN IMPORT FRONT and must resolve only to existing same-tenant CRM
+statuses/situations, with deterministic matching and truthful preview/import
+validation. Marketing template media support is P2 product/Meta capability,
+covering MARKETING category plus IMAGE/VIDEO headers and official Marketing
+pricing; it is parallel to the Utility campaign front unless contract evidence
+promotes it.
 
 CRA-PR Demo mirror, 2026-09-15: `demo-converta` is the reusable multitenant
 product acceptance baseline for generic CRA requirements. Phase A created the

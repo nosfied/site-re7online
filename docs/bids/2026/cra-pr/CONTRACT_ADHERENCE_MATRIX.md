@@ -46,6 +46,22 @@ ATTEMPTED: explicit owner send approval was granted, but immediate preflight
 stopped before Meta because Demo lacks an active default operational
 department/queue pair.
 
+Outbound return destination hardening, local on 2026-09-15: new campaign
+configuration no longer relies on implicit name-based operational defaults as
+the canonical destination. Campaign drafts/imports/sends persist an explicit
+response destination in `campaign.seed.saved`: human department with concrete
+queue, or active principal automated flow. Direct CRM contact initiation uses
+the initiating user's valid primary department and blocks before provider send
+when absent. This is generic multitenant product hardening, not CRA data/config
+mutation, and it does not authorize Recipient B or any real Meta send.
+
+Campaign follow-up backlog reconciliation, 2026-09-16: keep the approved
+outbound return destination delivery unchanged. Add two separate follow-ups:
+optional campaign/CRM import column `Situação no CRM` as the next CRA campaign
+import enhancement, and Marketing template media support as P2 product/Meta
+capability unless explicit contract evidence promotes it. Neither item is part
+of the current Utility controlled campaign or Recipient B gate.
+
 This document separates four things that must not be conflated:
 
 - contractual obligation;
@@ -123,6 +139,11 @@ Read-only production snapshot collected on 2026-09-15.
 
 ## Readiness Scorecard
 
+The scorecard below counts the original 52 CRA Contract/TR requirements. Rows
+added later as follow-up backlog (`CRA-CAMP-002A`, `CRA-MKT-001`) are tracked in
+the matrix but do not change the original requirement denominator until owner
+decision or contract evidence promotes them.
+
 | Status | Count |
 | --- | ---: |
 | TOTAL REQUIREMENTS | 52 |
@@ -171,8 +192,10 @@ Read-only production snapshot collected on 2026-09-15.
 | CRA-TPL-003 | resposta esclarecimento item 1/12 | Utility-only, no marketing | Product policy supports category controls; send paths re-check policy | CRA has no templates | E1/E2 | EXTERNAL META DEPENDENCY | C0 | P1 config | Utility classification depends Meta approval | Submit only approved Utility content; record category evidence | RE7 + Meta | E4/E6 |
 | CRA-WA-003 | aderencia #35; declaracao Meta | No WhatsApp Web/API unofficial as main mechanism | Official Cloud API supported; Web Session is coexistence/ops below domain | Meta Cloud configured; Web Session connected separately | E4 | CLOSED / REAL VALIDATED | C0 | closed | Acceptance wording must explain coexistence | Include official API declaration and transport policy | RE7 | E6 |
 | CRA-CAMP-002 | aderencia #36/#37 | Recipient import CSV/XLSX/API | Product has campaign/import-related capability documented | Not evidenced for CRA | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | CRA import workflow not proven | Run dry-run/import test with sanitized list | RE7 | E4 |
+| CRA-CAMP-002A | follow-up owner requirement 2026-09-16 | Optional import column `Situação no CRM` resolving to existing same-tenant CRM status | Not implemented/audited for campaign import yet | Not evidenced for CRA | E0/E1 | OPEN / NEXT CRA CAMPAIGN IMPORT FRONT | C1 if CRA import acceptance needs CRM segmentation | P1 follow-up after current Utility/report gates | Need audit of CRM status model, import schema, segmentation, naming uniqueness and update-vs-create semantics | Design deterministic same-tenant resolver; preview/import unknown values truthfully; do not create statuses silently | RE7 | E2/E4 |
 | CRA-CAMP-003 | aderencia #38/#39 | Segmentation and deduplication | Product supports recipient records and dedupe semantics | Not evidenced for CRA | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | No CRA list/dedupe evidence | Validate duplicated sample recipient handling | RE7 | E4 |
 | CRA-CAMP-004 | aderencia #40/#41 | Variables and supported attachments/media/links | Templates/media supported subject to Meta policy | No CRA template/list mapping | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | No CRA variable/media template proof | Validate one utility template with variables | RE7 + Meta | E4/E5 |
+| CRA-MKT-001 | follow-up owner requirement 2026-09-16 | Marketing template media support: MARKETING category, IMAGE/VIDEO headers, examples/media handles, buttons where supported, approval/rejection status/reason, send with approved template and current official Marketing pricing source | Not part of current Utility front; requires product/Meta audit | No CRA Marketing requirement evidenced for current acceptance | E0/E1 | P2 PRODUCT + META CAPABILITY / CONTRACT PROMOTION ONLY IF EVIDENCE REQUIRES | C3 unless contract evidence promotes | P2 | Do not mix Marketing media with Utility controlled campaign | Keep P2; if CRA Contract/TR explicitly requires Marketing media for acceptance, stop for owner decision and reclassify | RE7 + Meta | E2/E4 if promoted |
 | CRA-CAMP-005 | aderencia #42/#43/#44 | Scheduling, test send, cancel/pause | Scheduling, cancel, pause, resume and test-send semantics exist; local lifecycle tests PASS | No CRA campaign evidence | E2 | IMPLEMENTED / NEEDS DEMO VALIDATION | C1 | P1 evidence | Contract evidence pending, not proven product gap | Validate exact lifecycle semantics on Demo controlled campaign before real send | RE7 | E4 |
 | CRA-CAMP-006 | aderencia #45 | Delivery/error status and history | OutboundMessage/status handling exists | No CRA campaign messages | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | Needs CRA campaign sample | Validate accepted/delivered/failed status with template test | RE7 | E4 |
 | CRA-OPT-001 | resposta esclarecimento item 10 | Opt-out with audit and campaign block | Operational event/blocking support documented | No CRA opt-out sample | E1/E2 | DOCUMENTATION/EVIDENCE GAP | C0 | P1 evidence | Contractual opt-out evidence missing | Execute redacted opt-out/campaign-block smoke | RE7 | E4/E6 |
@@ -242,12 +265,17 @@ C0/C1 items that block declaring contractual readiness without qualification:
 
 ## Current Execution Order
 
-1. Utility template and controlled campaign acceptance.
-2. Opt-out evidence.
-3. Reports, exports and billing evidence.
-4. Acceptance pack.
-5. Deferred channels only after customer delivery window is confirmed:
+1. Deploy approved outbound return destination.
+2. Recipient B controlled Utility validation.
+3. Opt-out evidence.
+4. Reports, exports and billing evidence.
+5. Campaign/CRM import `Situação no CRM` follow-up.
+6. Acceptance pack.
+7. Deferred channels only after customer delivery window is confirmed:
    Instagram Direct, Facebook Messenger and Website/Webchat.
+
+Marketing media template support remains a parallel P2 unless contract evidence
+promotes it to the CRA contract front.
 
 No broad campaign, Meta template submission or real Meta outbound is authorized
 by this document without approved customer copy and explicit owner approval. A
@@ -261,8 +289,9 @@ cost, campaign name and number of messages.
 | 1 | CRA-TPL-001 / CRA-CAMP-001 / CRA-BILL-001 | Configure one Utility template and run controlled campaign/billing smoke | Current owner-approved execution front | Customer-approved CRA copy, Meta approval and explicit send approval | no, unless missing control proven | yes | content/recipient/window/cost approval | yes | Delivered Utility template evidence and billing report |
 | 2 | CRA-OPT-001 | Produce opt-out and campaign-block evidence | Official clarification accepts operational opt-out if auditable | Test contact/list | no, unless block path fails | yes/test data | approve test | no | Opt-out event, block before campaign, exportable evidence |
 | 3 | CRA-REP-001 / CRA-REP-002 | Generate CRA report/export package | Acceptance needs evidence, not only code capability | Representative sample data | no | no | review | no | CSV/PDF/equivalent exports with filters and billing report |
-| 4 | CRA-SLA-001 / CRA-TRAIN-001 / CRA-LGPD-002 | Close documentary acceptance pack | Contractual readiness requires signed/evidenced operations | Dates/attendees/signatures | no | no | yes | possible Meta docs | SLA, support, training, LGPD/security, backup and Meta proof attached |
-| 5 | CRA-IG-001 / CRA-FB-001 / CRA-WEB-001 | Activate and validate Instagram, Facebook and webchat | Contract-required but customer-deferred | Customer delivery window/assets/site access | no, unless bug found | yes | yes | yes for Meta channels | E4/E5 evidence per channel |
+| 4 | CRA-CAMP-002A | Add optional `Situação no CRM` import support | CRA campaign import enhancement after core Utility/report gates | CRM status model/import audit | yes | no | review column semantics | no | Column absent preserves behavior; column present resolves same-tenant status id or blocks unknown values in preview/import |
+| 5 | CRA-SLA-001 / CRA-TRAIN-001 / CRA-LGPD-002 | Close documentary acceptance pack | Contractual readiness requires signed/evidenced operations | Dates/attendees/signatures | no | no | yes | possible Meta docs | SLA, support, training, LGPD/security, backup and Meta proof attached |
+| 6 | CRA-IG-001 / CRA-FB-001 / CRA-WEB-001 | Activate and validate Instagram, Facebook and webchat | Contract-required but customer-deferred | Customer delivery window/assets/site access | no, unless bug found | yes | yes | yes for Meta channels | E4/E5 evidence per channel |
 
 ## Backlog Reconciliation
 

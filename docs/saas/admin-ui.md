@@ -142,13 +142,29 @@ troca fila ou altera lifecycle de conversa silenciosamente.
 Auditoria read-only de 2026-09-15 classificou a UX atual de `Ativo` +
 `Entrada principal` como tecnicamente coerente, mas incompleta para operadores
 tenant. `Entrada principal` e o flow padrao para novas conversas do tenant.
-`Ativo` e o gate de execucao por id explicito e continuidade de runtime; hoje o
-caso real comprovado e o Support Hub usando
-`TenantOperationalConfig.config.supportChannel.chatbotFlowId`, sem exigir
+`Ativo` e o gate de execucao por id explicito e continuidade de runtime; casos
+reais comprovados incluem Support Hub usando
+`TenantOperationalConfig.config.supportChannel.chatbotFlowId` e destino
+automatizado de retorno de campanha por `flowId`, ambos sem exigir
 `entryPoint=true`. Normal tenant UI deve explicar melhor essa diferenca ou
 esconder/derivar `Ativo` em Guided quando nao houver rota explicita visivel. DB
 ainda nao enforce um entrypoint por tenant nem `entryPoint=>isActive`; isso fica
 em P2 domain hardening, sem mudanca aplicada nesta auditoria.
+
+## CRA Campaign Follow-up Backlog
+
+Reconciliação documental de 2026-09-16:
+
+- o front aprovado de outbound return destination permanece inalterado;
+- a importação de campanha/contatos deve ganhar, em frente futura, coluna
+  opcional `Situação no CRM`, resolvida somente contra situacoes/status CRM do
+  mesmo tenant e sem criar status silenciosamente;
+- Marketing templates com mídia ficam em P2: categoria MARKETING, headers
+  IMAGE/VIDEO, exemplos/handles Meta, preview, variáveis, botões suportados,
+  submissão, aprovação/rejeição/motivo, envio aprovado e fonte oficial de preço
+  Marketing;
+- nenhum desses itens autoriza envio Meta real nem altera a campanha Utility
+  controlada atual.
 
 ## Departments Management UX 2.0
 

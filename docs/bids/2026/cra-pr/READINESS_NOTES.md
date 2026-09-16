@@ -53,15 +53,32 @@ Pendencias criticas para prontidao contratual:
 1. Obter copia Utility CRA aprovada e validar campanha controlada.
 2. Evidenciar opt-out auditavel e bloqueio em campanha.
 3. Gerar pacote de relatorios/exportacoes/billing com dados CRA redigidos.
-4. Fechar pacote documental: SLA/suporte, treinamento, LGPD/seguranca,
+4. Implementar/validar a melhoria de importacao de campanha com coluna opcional
+   `Situação no CRM`, somente depois dos gates Utility/opt-out/report.
+5. Fechar pacote documental: SLA/suporte, treinamento, LGPD/seguranca,
    backup/restore e comprovacao Meta oficial.
-5. Instagram, Facebook Messenger e Webchat/site seguem contratados, mas estao
+6. Instagram, Facebook Messenger e Webchat/site seguem contratados, mas estao
    CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING e nao bloqueiam a frente atual.
 
 Nao reabrir:
 
 - CRA active flow visibility: CLOSED / CUSTOMER VALIDATED.
 - CRA business hours: CONFIGURED / OPERATIONALLY VALIDATED.
+- Outbound return destination aprovado: permanece separado; novas pendencias de
+  importacao CRM e Marketing media nao entram nessa entrega.
+
+Follow-up de 2026-09-16:
+
+- Campaign/CRM import `Situação no CRM`: OPEN / NEXT CRA CAMPAIGN IMPORT
+  FRONT. A coluna sera opcional; quando preenchida deve resolver somente
+  situacoes/status CRM do mesmo tenant, persistir referencia canonica, rejeitar
+  desconhecidos no preview/import e nunca criar status silenciosamente.
+- Meta Marketing template media support: P2 / PRODUCT + META CAPABILITY.
+  Inclui categoria MARKETING, headers IMAGE/VIDEO, exemplos/midia Meta,
+  upload/handle, preview, variaveis, botoes suportados, submissao, status,
+  motivo de rejeicao, envio aprovado e fonte oficial de preco Marketing. Nao faz
+  parte da campanha Utility atual; promover somente se evidencia contratual
+  exigir decisao do owner.
 
 Nota Demo Phase C, 2026-09-15: a campanha controlada em `demo-converta`
 `d9874c03-10e8-4061-a92e-6caa7b3001c3` encontrou bug generico de

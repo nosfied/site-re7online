@@ -119,7 +119,36 @@ ACTIVE P0:
 
 ACTIVE P1:
 
-1. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
+1. Canonical outbound return destination for campaigns/direct contact:
+   IMPLEMENTED LOCALLY / VALIDATION PASS / NO DEPLOY. New campaign
+   creation/import now requires explicit `returnDestination` in the
+   `campaign.seed.saved` contract: `human_department` with concrete
+   `departmentId` + `queueId` (single queue resolved internally, zero queue
+   blocked, multiple queues require selection) or `automated_flow` with any
+   active same-tenant `ChatbotFlow` persisted as `chatbot:<flowId>` at runtime.
+   `entryPoint` is not required for explicit campaign invocation; it remains the
+   default selector for unqualified/new inbound only.
+   Direct CRM contact initiation no longer falls back to generic operational
+   defaults; it uses the initiating user's valid primary department and blocks
+   before provider send when missing. Legacy campaigns without this seed remain
+   compatible through the old operational default fallback, but new campaign
+   configuration has no implicit name-based destination. Tests/builds: focused
+   `outboundReturnDestination.test.ts` 5/5 PASS, backend build PASS, frontend
+   build PASS. No real Meta send, no B attempt, no deploy.
+
+2. CRA campaign import - optional CRM situation column: OPEN / NEXT CRA
+   CAMPAIGN IMPORT FRONT. Campaign/contact audience files may optionally contain
+   `Situacao no CRM` / `Situação no CRM`. When populated, the value must resolve
+   deterministically against CRM situations/statuses already configured for the
+   same tenant, persist the canonical internal id/reference, never use
+   cross-tenant values, never create a CRM status silently and report unknown
+   values truthfully in preview/import validation. Unsafe fuzzy matching is not
+   allowed. Existing import behavior must be preserved when the column is
+   absent. Before implementation, audit the actual CRM status model, current
+   import schema, segmentation usage, status naming/uniqueness and
+   update-vs-create semantics for existing contacts.
+
+3. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente
    2 mensagens Utility `data_exame` via META_CLOUD no `demo-converta` parou com
    bug operacional. Prechecks passaram, a primeira chamada Meta para `****9614`
@@ -192,6 +221,18 @@ ACTIVE P1:
    entregue. A unidade BRL final CRA permanece NOT PROVEN;
    OPT-OUT E2E e REPORTS/EXPORT/BILLING permanecem pendentes ate nova evidencia
    valida de campanha.
+
+P2 / PRODUCT + META CAPABILITY:
+
+1. Meta Marketing template media support: OPEN. Audit and implement
+   professional support for MARKETING templates with IMAGE and VIDEO headers,
+   Meta media/example requirements, upload/handle lifecycle, preview,
+   variables, supported buttons, submission, approval/rejection status,
+   rejection reason, approved-template send path and current official Meta
+   Marketing pricing source. This must not be mixed with the current CRA Utility
+   controlled campaign. If CRA Contract/TR evidence later proves Marketing media
+   templates are required for current acceptance, flag for owner decision and
+   potentially promote it to the CRA contract front.
 
 WATCH / EXTERNAL OPERATIONS:
 
@@ -387,23 +428,24 @@ ACTIVE P2:
    `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md`.
 6. Internal support access hardening: P2 / WATCH-HARDENING. Mecanismo existe;
    manter evolucao em auditoria, expiracao, evidencias e menor privilegio.
-7. Chatbot Flow `isActive` vs `entryPoint` semantics: P2 UX CLARIFICATION +
-   P2 DOMAIN HARDENING. Auditoria read-only de 2026-09-15 concluiu que
-   `entryPoint` e o seletor padrao de novas conversas (`clientId +
-   isActive=true + entryPoint=true`), enquanto `isActive` e o gate de execucao
-   por id explicito e continuidade de runtime. Active non-entrypoint nao e
-   redundante: o Support Hub pode executar
-   `TenantOperationalConfig.config.supportChannel.chatbotFlowId` exigindo
-   `isActive=true` e sem exigir `entryPoint=true`; producao usa isso no tenant
-   `re7online` com o flow `Converta Platform Support`. Nao ha evidencia de
-   campanhas, links, departamentos, intents, QR/referral, Webchat embed ou
-   flow-to-flow chamarem flows secundarios hoje. Producao nao tem duplicate
-   entrypoints nem inactive entrypoints. Gaps reais: UX normal nao explica bem
-   quando active non-entrypoint executa; invariantes `entryPoint=>isActive`, um
-   entrypoint por tenant e corrida de troca de principal sao application-only ou
-   ausentes no DB. Registro:
+7. Chatbot Flow `isActive` vs `entryPoint` semantics: WORKING AS DESIGNED /
+   P2 DOMAIN HARDENING. Auditoria de 2026-09-15 atualizada: `entryPoint` e o
+   seletor padrao de novas conversas (`clientId + isActive=true +
+   entryPoint=true`), enquanto `isActive` e o gate de execucao por id explicito
+   e continuidade de runtime. Active non-entrypoint nao e redundante: Support
+   Hub e destino automatizado de retorno de campanha executam por flow id
+   explicito, exigem `isActive=true` e nao exigem `entryPoint=true`. Modelo
+   atualizado: MULTI-ACTIVE RUNTIME COM UM ENTRYPOINT PADRAO. Gaps P2:
+   clarificar UX normal de Active vs Principal; invariantes
+   `entryPoint=>isActive`, um entrypoint por tenant e corrida de troca de
+   principal sao application-only ou ausentes no DB. Registro:
    `docs/saas/CHATBOT_FLOW_ACTIVE_ENTRYPOINT_SEMANTICS_AUDIT_2026-09-15.md`.
-8. Abandoned automation / BOT flow lifecycle: P2 RESIDUAL HARDENING. O
+8. CAMPAIGN RETURN FLOW DEACTIVATED AFTER SEND: P2 LIFECYCLE DECISION / OPEN.
+   Auditoria local: runtime explicito tenta carregar `{ id, clientId,
+   isActive=true }`; se o flow selecionado da campanha for desativado apos o
+   envio e antes da resposta, o loader atual nao continua esse flow e cai no
+   seletor de entryPoint. Nenhum fallback novo foi implementado neste patch.
+9. Abandoned automation / BOT flow lifecycle: P2 RESIDUAL HARDENING. O
    comportamento existente ja foi validado: `resetAfterMinutes` reinicia
    menu/submenu/captura no proximo inbound sem HUMAN/CLOSED, e
    `timeoutMinutes/action=HANDOFF` promove uma vez para HUMAN/WAITING com
