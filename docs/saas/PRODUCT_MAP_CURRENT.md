@@ -104,13 +104,14 @@ blockers for this phase.
 
 CRA campaign follow-up reconciliation, 2026-09-16: the current approved
 outbound return destination delivery remains unchanged. New requirement
-`Situação no CRM` in campaign/contact audience imports is OPEN / NEXT CRA
-CAMPAIGN IMPORT FRONT and must resolve only to existing same-tenant CRM
-statuses/situations, with deterministic matching and truthful preview/import
-validation. Marketing template media support is P2 product/Meta capability,
-covering MARKETING category plus IMAGE/VIDEO headers and official Marketing
-pricing; it is parallel to the Utility campaign front unless contract evidence
-promotes it.
+CRM situation import/upsert/report is OPEN / NEXT CRA CAMPAIGN IMPORT FRONT.
+It includes optional `Situação no CRM`, same-tenant deterministic status
+resolution, existing contact update instead of duplication, blank-cell
+preservation, no silent status creation, no duplicate contacts from repeated
+input rows and mandatory detailed downloadable import evidence. Marketing
+template media support is P2 product/Meta capability, covering MARKETING
+category plus IMAGE/VIDEO headers and official Marketing pricing; it is
+parallel to the Utility campaign front unless contract evidence promotes it.
 
 CRA-PR Demo mirror, 2026-09-15: `demo-converta` is the reusable multitenant
 product acceptance baseline for generic CRA requirements. Phase A created the

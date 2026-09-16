@@ -146,6 +146,12 @@ O CRM operacional:
 - permite bloquear/liberar envio ativo via eventos de opt-out;
 - nao executa hard delete pela tela operacional.
 
+Contrato futuro de importacao CRA: campanha/contatos com `Situação no CRM`
+devem reutilizar a identidade canonica do CRM. Quando o import encontra contato
+existente, o comportamento esperado e atualizar o registro canonico, nunca criar
+duplicata; quando nome/status vierem em branco, os valores existentes devem ser
+preservados.
+
 ## Campanhas
 
 O centro de campanhas suporta:
@@ -176,10 +182,15 @@ CRA campaign follow-up reconciliation, 2026-09-16: the approved outbound return
 destination delivery remains unchanged and must not absorb new requirements.
 The current CRA order is: deploy approved outbound return destination, Recipient
 B controlled Utility validation, opt-out E2E, reports/exports/billing,
-campaign/CRM import `Situação no CRM`, then acceptance package. The
-`Situação no CRM` import column is OPEN / NEXT CRA CAMPAIGN IMPORT FRONT:
-optional, same-tenant only, deterministic, no silent CRM status creation, no
-unsafe fuzzy matching and truthful preview/import errors for unknown values.
+campaign/CRM import/upsert/report with `Situação no CRM`, then acceptance
+package. The CRM import front is OPEN / NEXT CRA CAMPAIGN IMPORT FRONT and is
+not only an optional column: it must be tenant-scoped CRM upsert. Existing
+contacts must update instead of duplicating; valid imported name may update the
+record; blank cells preserve current data; valid resolved `Situação no CRM`
+updates the canonical situation reference; repeated identities inside the file
+must not create duplicate contacts; unknown/ambiguous situations must be
+reported truthfully in preview/import and never auto-created. A detailed
+downloadable import result report is mandatory for operator evidence.
 Marketing template media support is P2 / PRODUCT + META CAPABILITY, covering
 MARKETING category, IMAGE/VIDEO headers, Meta media/example lifecycle, preview,
 variables, supported buttons, approval/rejection status/reason, approved send

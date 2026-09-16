@@ -156,9 +156,14 @@ em P2 domain hardening, sem mudanca aplicada nesta auditoria.
 Reconciliação documental de 2026-09-16:
 
 - o front aprovado de outbound return destination permanece inalterado;
-- a importação de campanha/contatos deve ganhar, em frente futura, coluna
-  opcional `Situação no CRM`, resolvida somente contra situacoes/status CRM do
-  mesmo tenant e sem criar status silenciosamente;
+- a importação de campanha/contatos deve virar upsert CRM seguro em frente
+  futura, com coluna opcional `Situação no CRM`, resolvida somente contra
+  situacoes/status CRM do mesmo tenant e sem criar status silenciosamente;
+- contato existente deve ser atualizado, nunca duplicado; nome/status validos
+  podem atualizar o registro; celulas em branco preservam dados existentes;
+  duplicados no arquivo nao podem criar contatos duplicados;
+- o operador deve receber relatorio detalhado e baixavel do resultado, com
+  totais e detalhes por linha quando aplicavel;
 - Marketing templates com mídia ficam em P2: categoria MARKETING, headers
   IMAGE/VIDEO, exemplos/handles Meta, preview, variáveis, botões suportados,
   submissão, aprovação/rejeição/motivo, envio aprovado e fonte oficial de preço

@@ -143,10 +143,21 @@ ACTIVE P1:
    same tenant, persist the canonical internal id/reference, never use
    cross-tenant values, never create a CRM status silently and report unknown
    values truthfully in preview/import validation. Unsafe fuzzy matching is not
-   allowed. Existing import behavior must be preserved when the column is
-   absent. Before implementation, audit the actual CRM status model, current
-   import schema, segmentation usage, status naming/uniqueness and
-   update-vs-create semantics for existing contacts.
+   allowed. This front is a safe tenant-scoped CRM upsert, not only a new
+   column: if imported identity matches an existing CRM contact, update the
+   canonical record and do not create another contact. Blank uploaded cells
+   preserve existing name/status values; valid imported name may update the
+   existing contact according to current CRM semantics; valid resolved
+   `Situação no CRM` may update the existing situation reference. Repeated
+   identities inside the file must not create duplicate contacts. After import,
+   a detailed operator report is mandatory with totals, created/updated/
+   unchanged/skipped/errors, duplicate/consolidation evidence and per-row safe
+   result details; downloadable evidence should reuse existing export/report
+   infrastructure. Before implementation, audit the actual CRM status model,
+   canonical identity/normalization/deduplication mechanism, current import
+   schema, segmentation usage, status naming/uniqueness, update-vs-create
+   semantics, duplicate-row policy, partial-success behavior and report/export
+   infrastructure.
 
 3. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente

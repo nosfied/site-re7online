@@ -53,8 +53,9 @@ Pendencias criticas para prontidao contratual:
 1. Obter copia Utility CRA aprovada e validar campanha controlada.
 2. Evidenciar opt-out auditavel e bloqueio em campanha.
 3. Gerar pacote de relatorios/exportacoes/billing com dados CRA redigidos.
-4. Implementar/validar a melhoria de importacao de campanha com coluna opcional
-   `Situação no CRM`, somente depois dos gates Utility/opt-out/report.
+4. Implementar/validar importacao de campanha como upsert CRM seguro, com
+   coluna opcional `Situação no CRM`, sem duplicar contatos e com relatorio
+   detalhado, somente depois dos gates Utility/opt-out/report.
 5. Fechar pacote documental: SLA/suporte, treinamento, LGPD/seguranca,
    backup/restore e comprovacao Meta oficial.
 6. Instagram, Facebook Messenger e Webchat/site seguem contratados, mas estao
@@ -70,9 +71,13 @@ Nao reabrir:
 Follow-up de 2026-09-16:
 
 - Campaign/CRM import `Situação no CRM`: OPEN / NEXT CRA CAMPAIGN IMPORT
-  FRONT. A coluna sera opcional; quando preenchida deve resolver somente
-  situacoes/status CRM do mesmo tenant, persistir referencia canonica, rejeitar
-  desconhecidos no preview/import e nunca criar status silenciosamente.
+  FRONT. A frente e upsert CRM tenant-scoped, nao apenas coluna nova. Contato
+  existente deve ser atualizado, nunca duplicado; nome importado valido pode
+  atualizar contato existente; celulas em branco preservam dados atuais; status
+  CRM importado valido atualiza a referencia canonica; desconhecidos aparecem
+  no preview/import e nunca criam status silenciosamente; duplicados no arquivo
+  nao podem criar contatos duplicados; relatorio detalhado e baixavel pelo
+  operador e obrigatorio.
 - Meta Marketing template media support: P2 / PRODUCT + META CAPABILITY.
   Inclui categoria MARKETING, headers IMAGE/VIDEO, exemplos/midia Meta,
   upload/handle, preview, variaveis, botoes suportados, submissao, status,

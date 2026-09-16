@@ -335,10 +335,10 @@ Current CRA order:
 2. recipient B controlled Utility validation;
 3. opt-out E2E;
 4. reports / exports / billing;
-5. CRM import `Situação no CRM`;
+5. CRM import/upsert/report with `Situação no CRM`;
 6. acceptance package.
 
-Campaign/CRM import enhancement:
+Campaign/CRM import/upsert/report enhancement:
 
 - status: OPEN / NEXT CRA CAMPAIGN IMPORT FRONT;
 - uploaded audience/contact files may optionally contain `Situação no CRM`;
@@ -348,9 +348,19 @@ Campaign/CRM import enhancement:
 - unknown values must appear as truthful preview/import validation issues;
 - implementation must not use cross-tenant values, unsafe fuzzy matching or
   silent CRM status creation;
-- audit required before implementation: CRM status model, import schema,
-  segmentation use, status naming/uniqueness and update-vs-create semantics for
-  existing contacts.
+- if imported identity matches an existing CRM contact, update the canonical
+  record and do not create another contact;
+- valid imported name may update an existing contact according to current CRM
+  semantics; blank name preserves the existing value;
+- valid resolved `Situação no CRM` may update the existing situation reference;
+  blank status preserves the existing value;
+- repeated identities inside the file must not create duplicate contacts;
+- after import, produce detailed downloadable operator evidence with totals and
+  per-row safe result details;
+- audit required before implementation: CRM status model, canonical identity,
+  import schema, segmentation use, status naming/uniqueness, update-vs-create
+  semantics, duplicate-row policy, partial-success behavior and export/report
+  infrastructure.
 
 Marketing media templates:
 

@@ -52,11 +52,11 @@ campaign must remain unsent.
 2. Recipient B controlled Utility validation.
 3. Opt-out E2E.
 4. Reports / exports / billing.
-5. CRM import `Situação no CRM`.
+5. CRM import/upsert/report with `Situação no CRM`.
 6. Acceptance package.
 
-The optional CRM situation import column and Marketing media template support
-must not be mixed into the current approved outbound return destination
+The CRM situation import/upsert/report front and Marketing media template
+support must not be mixed into the current approved outbound return destination
 delivery. Marketing media templates are P2 unless contract evidence promotes
 them by owner decision.
 
@@ -68,7 +68,7 @@ them by owner decision.
 | Template category | Utility only; no marketing | REQUIRED |
 | Recipient source | Sanitized and approved list | WAITING OWNER/CRA |
 | Import validation | Normalize phones, dedupe, reject invalid/provisional/excluded/opt-out contacts | PRODUCT SUPPORTED / NEEDS CRA RUN |
-| Optional CRM situation column | `Situação no CRM` may resolve to existing same-tenant CRM status only | OPEN / NEXT CRA CAMPAIGN IMPORT FRONT |
+| CRM situation import/upsert/report | Optional `Situação no CRM`; existing contact updates instead of duplicate; blank fields preserve data; detailed report required | OPEN / NEXT CRA CAMPAIGN IMPORT FRONT |
 | Variables | Required placeholders mapped per recipient or blocked | PRODUCT SUPPORTED / NEEDS CRA RUN |
 | Draft | Campaign can be created without sending | PRODUCT SUPPORTED / NEEDS CRA RUN |
 | Response destination | New campaign draft/import requires explicit response destination: human department with concrete queue, or active principal automated flow | IMPLEMENTED LOCALLY / NEEDS CRA RUN |
