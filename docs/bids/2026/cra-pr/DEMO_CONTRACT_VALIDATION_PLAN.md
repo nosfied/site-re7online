@@ -324,8 +324,9 @@ campaign configuration must persist an explicit response destination in
 fallback only. Human destination requires an active department with concrete
 queue; automated destination requires any active same-tenant flow selected by
 exact `flowId`. Status: CLOSED / DEPLOYED / OWNER APPROVED / PROD
-NON-DESTRUCTIVE VALIDATED. Recipient B remains NOT ATTEMPTED and no real send
-is authorized by this product delivery.
+NON-DESTRUCTIVE VALIDATED. This product delivery did not itself authorize a real
+send; a separate owner-approved B-only controlled Utility send was executed and
+validated later on 2026-09-16.
 
 ## Follow-up Backlog Reconciliation - 2026-09-16
 
@@ -334,12 +335,11 @@ and must not absorb new requirements.
 
 Current CRA order:
 
-1. recipient B controlled Utility validation;
-2. opt-out E2E;
-3. reports / exports / billing;
-4. CRM import/upsert/report with `Situação no CRM`;
-5. Contacts campaign relationship view;
-6. acceptance package.
+1. opt-out E2E;
+2. reports / exports / billing;
+3. CRM import/upsert/report with `Situação no CRM`;
+4. Contacts campaign relationship view;
+5. acceptance package.
 
 Campaign/CRM import/upsert/report enhancement:
 
@@ -544,15 +544,18 @@ passed. No retry and no new real send were executed.
 Evidence file:
 `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_C_CONTROLLED_UTILITY_RESULT_2026-09-15.md`.
 
-Next required gate: a fresh explicit owner send gate before any controlled Meta
-send. `****9614` must not be resent; `****6787` remains unattempted. Manual
-reconciliation for A remains an owner decision, not an automatic deploy action.
+Historical next required gate at that point: a fresh explicit owner send gate
+before any controlled Meta send. `****9614` must not be resent; `****6787` was
+still unattempted at that moment and was later sent only through the separate
+B-only campaign approved on 2026-09-16. Manual reconciliation for A remains an
+owner decision, not an automatic deploy action.
 Read-only audit on 2026-09-15 produced an exact constrained repair proposal for
 A only. The owner approved the repair, and production reconciliation was applied
 after backup: one local outbound was created from the recovered Meta
 id/webhooks, delivered Utility billing was recorded through existing idempotent
 logic, `sentCount=1`, and campaign `status=failed` was preserved. A was never
-resent; `****6787` remains unattempted and still requires a fresh owner gate.
+resent. At that moment `****6787` still required a fresh owner gate; it was later
+sent only through the separate B-only campaign approved on 2026-09-16.
 
 Recipient B-only explicit human return destination gate, 2026-09-16:
 READ-ONLY PRE-SEND GATE / SUPERSEDED BY FINAL DESTINATION CONFIGURATION /
@@ -585,7 +588,29 @@ data_exame B-only - final 6787 - 2026-09-16`) was created as draft with
 encrypted B-only seed, `returnDestination` = human department/queue above,
 `totalRecipients=1`, `sentCount=0`, `blockedCount=0`, import summary PASS and
 zero OutboundMessage rows. B remains NOT ATTEMPTED until final owner send
-approval.
+approval. This prepared state was superseded by the owner-approved controlled
+B send below.
+
+Recipient B controlled Utility send, 2026-09-16: COMPLETED / DEMO PRODUCT
+CAPABILITY VALIDATION / NOT CRA REAL CAMPAIGN. Owner authorized exactly one Meta
+Utility send to B `****6787`. Pre-send checks passed: campaign draft
+`bb1d30e2-3a98-471a-9531-1f5e5d76a214`, B-only, A excluded, `data_exame`
+approved Utility `pt_BR`, no active opt-out, outside 24h by 143.72h, explicit
+HUMAN return destination `Atendimento Geral` -> `Fila Geral`, and department
+OPEN. Backup:
+`/opt/re7online/backups/demo-b-controlled-send-20260916/pre-demo-b-controlled-send-20260916T132038Z.dump`,
+20M, 593 objects, SHA256
+`e73be155604ae0c7e7fe42b44dc87a1213755030cfa1c0d5d585f33e0319253a`.
+Execution made exactly one Meta call. Meta accepted message
+`wamid.HBgMNTU4NDk0Nzg2Nzg3FQIAERgUQ0UzOTE0Q0UyNUY0QjQ3OUZCQ0EA`; local
+OutboundMessage `076910ef-ce6f-43d6-bfc2-2f30c4b41930` was persisted;
+`submit_started` and `provider_accepted` markers are present; reconciliation
+required is absent. Webhooks: sent=1, delivered=1, read=0, failed=0. Billing:
+exactly one `billing.active_message.delivered`, duplicate billing NO. Campaign
+ended `completed`, `sentCount=1`, `blockedCount=0`. A external sends in this
+run: 0. Sanitized evidence:
+`evidence/demo-contract-validation/PHASE_C_RECIPIENT_B_CONTROLLED_UTILITY_RESULT_2026-09-16.md`
+and `.csv`. Next gate: opt-out E2E.
 
 ### Guided Builder - Bot Inactivity Policy UX Backlog
 

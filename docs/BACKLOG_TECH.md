@@ -138,27 +138,30 @@ ACTIVE P1:
    at `452d5826db42cc1b574eeff8fd8e0d038cd3491f` with non-destructive smoke
    PASS. No real Meta send and no Recipient B attempt.
 
-2. CRA Demo Utility Recipient B owner gate with explicit human return
-   destination: FINAL SEND GATE PREPARED / NO REAL SEND. On 2026-09-16 the
-   owner explicitly selected the existing Demo generic operational destination
-   `Atendimento Geral` (`cmsiwk1o100014sdzl5cqd2ki`) + `Fila Geral`
-   (`cmsiyb2k200n94sdpu5khkee0`) for this campaign. This is an explicit
-   tenant-scoped ID selection, not a product dependency on those names. Read-only
-   production checks confirmed `demo-converta` active, department active, queue
-   attached to the same tenant/department, no active flows referencing the IDs,
-   no open conversations in that department, 3 memberships, template
-   `data_exame` approved Utility `pt_BR`, Recipient B `****6787` authorized,
-   normalized to one canonical recipient, no active opt-out, outside 24h by
-   5d23h, no prior B `data_exame` outbound, and official Meta provider rate
-   R$ 0.0350 if delivered. Persistent backup was created at
-   `/opt/re7online/backups/demo-b-destination-gate-20260916/pre-demo-b-destination-gate-20260916T130703Z.dump`
+2. CRA Demo Utility Recipient B controlled send: COMPLETED / DEMO PRODUCT
+   CAPABILITY VALIDATED / CRA ACCEPTANCE STILL SEPARATE. On 2026-09-16 the
+   owner authorized exactly one Utility send to Recipient B `****6787` through
+   campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214`. Preflight passed:
+   `demo-converta` active, `data_exame` approved Utility `pt_BR`, B-only
+   audience, A excluded, no active opt-out, outside 24h by 143.72h, explicit
+   HUMAN return destination `Atendimento Geral`
+   (`cmsiwk1o100014sdzl5cqd2ki`) -> `Fila Geral`
+   (`cmsiyb2k200n94sdpu5khkee0`), and department OPEN. Backup:
+   `/opt/re7online/backups/demo-b-controlled-send-20260916/pre-demo-b-controlled-send-20260916T132038Z.dump`
    (20M, 593 objects, SHA256
-   `0b4a2d4006ccfa1c9a589a5926f277edae64d8fa5924985045708d5b8102f50d`).
-   New draft campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214`
-   (`Demo contrato CRA - data_exame B-only - final 6787 - 2026-09-16`) was
-   created with encrypted B-only seed, explicit human return destination,
-   `totalRecipients=1`, `sentCount=0`, `blockedCount=0`, and no provider call.
-   OWNER FINAL SEND APPROVAL remains required before any real Meta send.
+   `e73be155604ae0c7e7fe42b44dc87a1213755030cfa1c0d5d585f33e0319253a`).
+   Result: exactly 1 Meta call, accepted with Meta id
+   `wamid.HBgMNTU4NDk0Nzg2Nzg3FQIAERgUQ0UzOTE0Q0UyNUY0QjQ3OUZCQ0EA`,
+   local OutboundMessage `076910ef-ce6f-43d6-bfc2-2f30c4b41930`,
+   `campaign.message.submit_started` PASS, `campaign.message.provider_accepted`
+   PASS, `campaign.message.reconciliation_required` absent, webhook `sent=1`,
+   `delivered=1`, `read=0`, `failed=0`, billing event
+   `billing.active_message.delivered` count=1, duplicate billing NO. Campaign
+   status `completed`, `sentCount=1`, `blockedCount=0`. A external sends in
+   this run: 0. Sanitized evidence:
+   `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_C_RECIPIENT_B_CONTROLLED_UTILITY_RESULT_2026-09-16.md`
+   and `.csv`. Next gate: opt-out E2E; CRA real acceptance/report package still
+   needs owner/customer acceptance evidence.
 
 3. CRA campaign import - optional CRM situation column: OPEN / NEXT CRA
    CAMPAIGN IMPORT FRONT. Campaign/contact audience files may optionally contain
@@ -474,8 +477,8 @@ ACTIVE P2:
    CRA agora. Para a campanha Demo controlada, a prova estreita ja obtida e:
    Brazil Utility, BRL, efetivo em 2026-07-01, tier 0-250.000, rate oficial
    R$ 0,0350 por mensagem entregue via endpoint oficial WhatsApp Business
-   Platform Pricing. Recipient B permanece NOT ATTEMPTED e vai para owner send
-   gate antes de qualquer envio real. Doc canonico:
+   Platform Pricing. Recipient B Demo foi enviado e entregue em 2026-09-16;
+   FinOps generico continua P2. Doc canonico:
    `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md`.
 6. Internal support access hardening: P2 / WATCH-HARDENING. Mecanismo existe;
    manter evolucao em auditoria, expiracao, evidencias e menor privilegio.

@@ -210,11 +210,11 @@ requirement denominator until owner decision or contract evidence promotes them.
 | CRA-CAMP-004 | aderencia #40/#41 | Variables and supported attachments/media/links | Templates/media supported subject to Meta policy | No CRA template/list mapping | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | No CRA variable/media template proof | Validate one utility template with variables | RE7 + Meta | E4/E5 |
 | CRA-MKT-001 | follow-up owner requirement 2026-09-16 | Marketing template media support: MARKETING category, IMAGE/VIDEO headers, examples/media handles, buttons where supported, approval/rejection status/reason, send with approved template and current official Marketing pricing source | Not part of current Utility front; requires product/Meta audit | No CRA Marketing requirement evidenced for current acceptance | E0/E1 | P2 PRODUCT + META CAPABILITY / CONTRACT PROMOTION ONLY IF EVIDENCE REQUIRES | C3 unless contract evidence promotes | P2 | Do not mix Marketing media with Utility controlled campaign | Keep P2; if CRA Contract/TR explicitly requires Marketing media for acceptance, stop for owner decision and reclassify | RE7 + Meta | E2/E4 if promoted |
 | CRA-CAMP-005 | aderencia #42/#43/#44 | Scheduling, test send, cancel/pause | Scheduling, cancel, pause, resume and test-send semantics exist; local lifecycle tests PASS | No CRA campaign evidence | E2 | IMPLEMENTED / NEEDS DEMO VALIDATION | C1 | P1 evidence | Contract evidence pending, not proven product gap | Validate exact lifecycle semantics on Demo controlled campaign before real send | RE7 | E4 |
-| CRA-CAMP-006 | aderencia #45 | Delivery/error status and history | OutboundMessage/status handling exists | No CRA campaign messages | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | Needs CRA campaign sample | Validate accepted/delivered/failed status with template test | RE7 | E4 |
+| CRA-CAMP-006 | aderencia #45 | Delivery/error status and history | OutboundMessage/status handling exists; Demo B controlled Utility campaign created one local outbound, received Meta accepted/sent/delivered status and stored sanitized evidence | CRA real campaign messages not exercised; read status not observed | E4 Demo / E1 CRA | DEMO VALIDATED / CRA VALIDATION STILL NEEDED | C1 | P1 evidence | CRA customer sample still missing | Include Demo evidence in acceptance package; CRA real campaign only with customer-approved data/gate | RE7 | E4/E6 |
 | CRA-OPT-001 | resposta esclarecimento item 10 | Opt-out with audit and campaign block | Operational event/blocking support documented | No CRA opt-out sample | E1/E2 | DOCUMENTATION/EVIDENCE GAP | C0 | P1 evidence | Contractual opt-out evidence missing | Execute redacted opt-out/campaign-block smoke | RE7 | E4/E6 |
-| CRA-REP-001 | resposta esclarecimento item 11 | Export CSV/XLSX or equivalent; PDF report format | CSV reports exist; PDF where applicable; XLSX via equivalent/conversion | CRA reports enabled | E1/E3 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | CRA export samples missing | Generate redacted CSV/PDF/equivalent evidence | RE7 | E4/E6 |
-| CRA-REP-002 | aderencia #50 | Monthly consumption report | Meta usage report/CSV documented | No CRA campaign usage | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | Needs CRA utility-delivered sample | Validate monthly report with controlled campaign | RE7 | E4 |
-| CRA-BILL-001 | resposta esclarecimento items 1-6 | Bill only delivered utility templates outside 24h; read status no extra; Meta cost included in proposal; excedents same unit price with approval | Semantics documented; Demo A has one reconciled `billing.active_message.delivered` eligibility/count event; official Brazil Utility provider rate proven at R$ 0,0350/message for B owner gate; on 2026-09-16 the owner selected existing Demo destination `Atendimento Geral` (`cmsiwk1o100014sdzl5cqd2ki`) + `Fila Geral` (`cmsiyb2k200n94sdpu5khkee0`) and draft campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214` was created B-only with explicit human return destination and no Meta send | No CRA billing sample; CRA contractual BRL unit not proven; B remains unsent and needs final owner send approval; `R$ 0,32` is central planning reference, no tenant override/final proposal source found | E1/E4 | CONTRACT BILLING EVIDENCE OPEN / B FINAL SEND GATE PREPARED / NO REAL SEND | C0 | P1 evidence | CRA contract billing unit and CRA report total not evidenced; B controlled delivery still needs final owner approval and post-send evidence | Execute only after final owner approval: controlled B-only send from prepared draft, then produce billing proof from delivered Utility template; keep generic Meta pricing automation in P2 FinOps | RE7 | E6 |
+| CRA-REP-001 | resposta esclarecimento item 11 | Export CSV/XLSX or equivalent; PDF report format | CSV reports exist; sanitized Demo B CSV evidence created for controlled campaign result | CRA report package not customer-reviewed; native XLSX not claimed | E4 Demo / E1 CRA | DEMO CSV EVIDENCE CREATED / CRA PACKAGE STILL NEEDED | C1 | P1 evidence | CRA acceptance export package still missing | Generate final redacted CRA acceptance pack; keep XLSX as equivalent/conversion unless native support is proven | RE7 | E4/E6 |
+| CRA-REP-002 | aderencia #50 | Monthly consumption report | Meta usage report/CSV documented; Demo B delivered Utility produced usage/billing events | CRA monthly billing report not yet packaged/reviewed | E4 Demo / E1 CRA | DEMO USAGE EVENT VALIDATED / CRA REPORT STILL NEEDED | C1 | P1 evidence | CRA billing/report total not customer-approved | Build final monthly consumption evidence from controlled Demo/CRA-approved scope | RE7 | E4/E6 |
+| CRA-BILL-001 | resposta esclarecimento items 1-6 | Bill only delivered utility templates outside 24h; read status no extra; Meta cost included in proposal; excedents same unit price with approval | Demo A has one reconciled `billing.active_message.delivered` event; Demo B controlled Utility send on 2026-09-16 was accepted, delivered and created exactly one `billing.active_message.delivered`; official Brazil Utility provider rate remains R$ 0,0350/message; duplicate billing NO; read no extra observed because read count is 0 | No CRA billing sample; CRA contractual BRL unit not proven; `R$ 0,32` is central planning reference, no tenant override/final proposal source found | E4 Demo / E1 CRA | DEMO DELIVERED BILLING ELIGIBILITY VALIDATED / CRA CONTRACT PRICE OPEN | C0 | P1 evidence | CRA contract billing unit and CRA report total not evidenced | Use Demo evidence for product capability; resolve CRA contract unit/report package separately; keep generic Meta pricing automation in P2 FinOps | RE7 | E6 |
 | CRA-SLA-001 | aderencia #52; suporte SLA | Availability target 99.5% and operation except maintenance | Health/monitoring exists; SLA plan exists | Not acceptance-evidenced | E1 | DOCUMENTATION/EVIDENCE GAP | C1 | docs/ops | Availability evidence and maintenance log missing | Prepare SLA evidence/runbook appendix | RE7 | E6 |
 | CRA-SUP-001 | suporte SLA | Remote support, severity and response targets | Support process planned | Not customer-evidenced | E1 | DOCUMENTATION/EVIDENCE GAP | C1 | docs/ops | Support channel/ticket evidence missing | Define channels and ticket register for CRA | RE7 + CRA | E6 |
 | CRA-BKP-001 | proposta tecnica arquitetura | Backup/restore routine | Runbooks exist | CRA-specific restore evidence absent | E1 | DOCUMENTATION/EVIDENCE GAP | C2 | docs/ops | Backup cadence/retention proof not packaged | Attach backup/restore policy evidence | RE7 | E6 |
@@ -276,26 +276,23 @@ C0/C1 items that block declaring contractual readiness without qualification:
   inactivity handoff have been validated; residual cross-provider hardening and
   Guided lifecycle-policy exposure remain P2.
 
-Recipient B-only Utility gate, 2026-09-16: FINAL SEND GATE PREPARED / NO REAL
-SEND. The owner explicitly selected the existing Demo generic operational
-destination `Atendimento Geral` (`cmsiwk1o100014sdzl5cqd2ki`) + `Fila Geral`
-(`cmsiyb2k200n94sdpu5khkee0`) for this campaign. Runtime routing remains by
-persisted tenant-scoped IDs, not by name convention. Template, recipient
-normalization, opt-out, 24h window, destination validation and official Meta
-provider rate passed. Draft campaign
-`bb1d30e2-3a98-471a-9531-1f5e5d76a214` was created B-only with explicit human
-return destination and no Meta send.
+Recipient B-only Utility gate, 2026-09-16: COMPLETED AS DEMO PRODUCT CAPABILITY
+VALIDATION. The owner explicitly authorized exactly one Utility send to B
+`****6787`. Campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214` used persisted
+tenant-scoped IDs for `Atendimento Geral` -> `Fila Geral`; no name-based routing
+rule was introduced. Result: one Meta call, accepted, sent webhook 1, delivered
+webhook 1, read 0, failed 0, one local OutboundMessage, one
+`billing.active_message.delivered`, no duplicate billing, no A resend. Evidence:
+`PHASE_C_RECIPIENT_B_CONTROLLED_UTILITY_RESULT_2026-09-16.md` and `.csv`.
 
 ## Current Execution Order
 
-1. Recipient B controlled Utility validation - draft prepared with explicit
-   human return destination; final owner send approval still required.
-2. Opt-out evidence.
-3. Reports, exports and billing evidence.
-4. Campaign/CRM import `Situação no CRM` upsert/report follow-up.
-5. Contacts campaign relationship view follow-up.
-6. Acceptance pack.
-8. Deferred channels only after customer delivery window is confirmed:
+1. Opt-out E2E evidence.
+2. Final reports/exports/billing acceptance package.
+3. Campaign/CRM import `Situação no CRM` upsert/report follow-up.
+4. Contacts campaign relationship view follow-up.
+5. Acceptance pack.
+6. Deferred channels only after customer delivery window is confirmed:
    Instagram Direct, Facebook Messenger and Website/Webchat.
 
 Marketing media template support remains a parallel P2 unless contract evidence
@@ -339,7 +336,8 @@ cost, campaign name and number of messages.
   2. Expected reference cost is now PAUSED FOR BILLING UNIT RECONCILIATION; the
   previous R$ 0,64 was a central planning reference, not a proven final CRA
   contract unit. Evidence remains gate-level until real outbound, billing unit
-  and execution window are explicitly approved.
+  and execution window are explicitly approved. This broad two-recipient gate was
+  superseded for B by the owner-approved one-recipient controlled send below.
 - CRA Demo Phase C controlled send: PARTIAL REAL META ACCEPTANCE / PRODUCT
   ISSUE FOUND / STOP. Campaign `d9874c03-10e8-4061-a92e-6caa7b3001c3` accepted
   one Meta Utility template for `****9614`, then failed with
@@ -349,12 +347,13 @@ cost, campaign name and number of messages.
   data repair. Production repair created exactly one local outbound for A from
   exact Meta evidence, replayed delivered Utility billing idempotently, set
   aggregate `sentCount=1`, kept campaign `status=failed`, and recorded a manual
-  audit event. A was never resent and B remains unattempted. This closes only
-  Recipient A local reconciliation; campaign reporting/export acceptance and any
-  remaining send still require separate owner gates. B SEND = PAUSED FOR
-  BILLING UNIT RECONCILIATION. A ledger is correct as delivered Utility
-  eligibility/count, but the BRL amount must not be treated as final CRA
-  contractual unit until the commercial source is reconciled.
+  audit event. A was never resent. Recipient B was later sent only through the
+  separate B-only campaign approved on 2026-09-16. This closes Recipient A local
+  reconciliation and Demo B product capability evidence; CRA campaign
+  reporting/export acceptance and CRA contract billing unit still require
+  separate gates. A ledger is correct as delivered Utility eligibility/count,
+  but the BRL amount must not be treated as final CRA contractual unit until the
+  commercial source is reconciled.
 - Residual CRA contract readiness must now be tracked through this matrix.
 - The remaining highest-risk gaps are contractual/configuration/evidence gaps,
   not a reason to reopen already closed flow or business-hours fronts.

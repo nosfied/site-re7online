@@ -84,5 +84,11 @@ Phase C send result summary:
   Draft campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214` was created with
   encrypted B-only seed and explicit human return destination. No Meta send
   occurred.
+- Recipient B controlled Utility send: on 2026-09-16 the owner authorized one
+  real Meta Utility send to B `****6787`. The send was accepted, delivered,
+  billed once through `billing.active_message.delivered`, and recorded as
+  sanitized evidence in:
+  `PHASE_C_RECIPIENT_B_CONTROLLED_UTILITY_RESULT_2026-09-16.md` and
+  `PHASE_C_RECIPIENT_B_CONTROLLED_UTILITY_RESULT_2026-09-16.csv`.
 - evidence: `PHASE_C_CONTROLLED_UTILITY_RESULT_2026-09-15.md`.
 - reconciliation audit: `RECIPIENT_A_RECONCILIATION_AUDIT_2026-09-15.md`.

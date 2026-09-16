@@ -275,19 +275,12 @@ ledger remains correct as delivered Utility eligibility/count, but final CRA BRL
 contract unit is NOT PROVEN. Meta official narrow rate proof for the controlled
 Demo Utility validation was completed on 2026-09-15 from WhatsApp Business
 Platform Pricing / Meta Developers: Brazil, Utility, BRL, effective 2026-07-01,
-tier 0-250,000, rate R$ 0,0350/message. Recipient B remains NOT ATTEMPTED:
-owner authorized B-only on 2026-09-15, but immediate preflight stopped before
-Meta because `demo-converta` lacks an active default operational
-`Atendimento Geral` + `Fila Geral` pair; the existing `Atendimento Geral` is
-inactive. Follow-up read-only Demo operational-default audit on 2026-09-15
-prepared but did not execute the config-only owner gate: reuse the existing
-department `cmsiwk1o100014sdzl5cqd2ki` (`Atendimento Geral`,
-`atendimento-geral`) and existing queue `cmsiyb2k200n94sdpu5khkee0`
-(`Fila Geral`) by reactivating the department after explicit approval. No Meta
-send, campaign retry or CRA config/data mutation is part of that gate. Expected
-Meta provider cost remains R$ 0,0350 if later delivered; no
-CRA invoice amount is claimed. Generic Meta pricing source-of-truth
-implementation moved to P2 FinOps hardening.
+tier 0-250,000, rate R$ 0,0350/message. Historical B preflight on 2026-09-15
+stopped before Meta because `demo-converta` did not yet provide an active
+generic human destination. That block was later superseded by owner-approved
+Demo destination configuration and the completed B controlled Utility send on
+2026-09-16. Generic Meta pricing source-of-truth implementation moved to P2
+FinOps hardening.
 Recipient B-only explicit human return gate on 2026-09-16 stopped before
 campaign creation with NO REAL SEND: B `****6787` still passed template,
 authorization, canonical dedupe, opt-out and outside-24h checks, but Demo did
@@ -303,8 +296,15 @@ the final send gate with NO REAL SEND. Owner selected existing Demo
 by persisted tenant-scoped IDs, not by name. Backup was validated, campaign
 `bb1d30e2-3a98-471a-9531-1f5e5d76a214` was created as B-only draft with
 `totalRecipients=1`, `sentCount=0`, `blockedCount=0`, explicit HUMAN return
-destination and zero OutboundMessage rows. Final owner send approval is still
-required. Opt-out E2E and
+destination and zero OutboundMessage rows. Final owner send approval was later
+granted for exactly one B message.
+Recipient B controlled Utility send on 2026-09-16 is COMPLETED as Demo
+product capability validation. Exactly one Meta Utility call was made for B
+`****6787`; Meta accepted it, webhooks show sent=1 and delivered=1, read=0 and
+failed=0, billing created exactly one `billing.active_message.delivered`, and
+campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214` ended `completed` with
+`sentCount=1`. A was not resent. This does not close CRA real campaign
+acceptance or CRA contractual unit price. Opt-out E2E and
 report/export/billing evidence remain separate open gates. See
 `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md`.
 

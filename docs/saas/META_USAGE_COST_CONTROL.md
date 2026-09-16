@@ -232,10 +232,10 @@ is correct as delivered Utility eligibility/count, but the BRL unit for CRA
 remains NOT PROVEN as final contractual unit. Official Meta Brazil Utility cost
 for the remaining tiny Demo test was proven from the WhatsApp Business Platform
 Pricing endpoint on 2026-09-15: BRL 0.0350/message, effective 2026-07-01, tier
-0-250,000 monthly Brazil Utility messages. Recipient B remains NOT ATTEMPTED:
-owner approved the provider-cost gate, but the immediate send preflight stopped
-before Meta because Demo lacks an active default operational department/queue
-pair.
+0-250,000 monthly Brazil Utility messages. The initial Recipient B provider-cost
+gate stopped before Meta because Demo lacked an active generic human
+destination; this was later superseded by owner-approved Demo destination
+configuration and the completed B controlled Utility send on 2026-09-16.
 
 ## Limites e proximos passos
 
@@ -254,10 +254,15 @@ pair.
   billing ledger event or amount to reconcile.
 - Recipient B-only final destination configuration on 2026-09-16 created draft
   campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214` after the owner explicitly
-  selected the Demo human destination by IDs. B remains unsent, so provider
-  charge remains R$ 0,00 until delivery occurs. If the prepared B message is
-  later delivered, the official Meta provider rate for this narrow gate remains
-  BRL 0.0350/message. CRA contract price remains NOT PROVEN and separate.
+  selected the Demo human destination by IDs. This prepared state was superseded
+  by the controlled B send below. CRA contract price remains NOT PROVEN and
+  separate.
+- Recipient B controlled Utility send on 2026-09-16 was delivered and produced
+  exactly one canonical `billing.active_message.delivered` eligibility/count
+  event. Provider cost reference for the delivered Brazil Utility message is
+  R$ 0.0350 from the official Meta narrow-rate proof. Internal USD planning
+  payloads remain non-authoritative for provider cost; CRA contract price
+  remains NOT PROVEN.
 - Nao ha conciliacao financeira definitiva automatizada.
 - O bloqueio por limite ainda nao esta ativado nos fluxos reais.
 - Rate card e local e deve ser revisado quando a politica Meta mudar.

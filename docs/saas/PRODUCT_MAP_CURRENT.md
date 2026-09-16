@@ -233,14 +233,12 @@ Current backlog classification:
   queue `cmsiyb2k200n94sdpu5khkee0`, but the department is inactive. Proposed
   repair is reactivation of that existing department only, with no code change,
   no Meta send and no campaign retry before approval.
-  Recipient B-only explicit human return gate on 2026-09-16 is WAITING OWNER
-  DESTINATION DECISION / NO REAL SEND. Read-only checks passed for template,
-  authorization, dedupe, opt-out and outside-24h, but no single safe Demo human
-  destination could be inferred: `Setor Teste` has zero queues, `Atendimento
-  Geral` is inactive and other active queued departments are thematic. No
-  campaign draft or provider call occurred; B remains NOT ATTEMPTED.
-  Opt-out E2E and campaign reports/export/billing evidence remain open until
-  separately exercised.
+  Recipient B controlled Utility send on 2026-09-16 is COMPLETED for Demo
+  product capability validation: one Meta call, accepted, delivered, one local
+  outbound, explicit human return destination persisted, one
+  `billing.active_message.delivered`, no A resend and sanitized CSV evidence.
+  CRA real campaign acceptance and contract price remain separate. Opt-out E2E
+  remains the next gate.
 - Meta pricing source of truth / FinOps hardening is P2 generic product backlog.
   The broad future work is rate-card ingestion, resolver, snapshots, FX and
   staleness detection. It must not consume the current CRA adherence front

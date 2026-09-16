@@ -530,13 +530,12 @@ Sem envio real.
   provada como unidade final CRA.
 - Meta pricing narrow gate, 2026-09-15: fonte oficial WhatsApp Business
   Platform Pricing / Meta Developers prova Brazil Utility BRL R$ 0,0350 por
-  mensagem entregue, efetivo em 2026-07-01, tier 0-250.000. B continua NOT
-  ATTEMPTED. Owner aprovou B-only em 2026-09-15, mas o preflight historico parou antes da
-  Meta porque o Demo nao possui default operacional ativo `Atendimento Geral` +
-  `Fila Geral`; o `Atendimento Geral` existente esta inativo. Unidade
-  contratual CRA permanece separada e NOT PROVEN; FinOps generico fica P2. Esse
-  bloqueio operacional foi superado pelo gate final de destino explicito em
-  2026-09-16, mas sem envio real.
+  mensagem entregue, efetivo em 2026-07-01, tier 0-250.000. O preflight
+  historico de B em 2026-09-15 parou antes da Meta porque o Demo ainda nao tinha
+  destino humano generico ativo; esse bloqueio foi superado por configuracao de
+  destino explicito aprovada pelo owner e pelo envio controlado B concluido em
+  2026-09-16. Unidade contratual CRA permanece separada e NOT PROVEN; FinOps
+  generico fica P2.
 - Recipient B-only explicit human return gate, 2026-09-16: READ-ONLY PRE-SEND
   GATE / SUPERSEDED BY FINAL DESTINATION CONFIGURATION / NO REAL SEND. Nova validacao
   confirmou `demo-converta` ativo, template `data_exame` Utility `pt_BR`
@@ -563,8 +562,18 @@ Sem envio real.
   20M, 593 objetos, SHA256
   `0b4a2d4006ccfa1c9a589a5926f277edae64d8fa5924985045708d5b8102f50d`.
   Campanha draft `bb1d30e2-3a98-471a-9531-1f5e5d76a214` criada B-only com
-  destino humano explicito, `sentCount=0` e zero chamada Meta. Aprovacao final
-  do owner ainda obrigatoria antes de envio real.
+  destino humano explicito, `sentCount=0` e zero chamada Meta. Esse estado
+  preparado foi superado pelo envio controlado B aprovado pelo owner abaixo.
+- Recipient B controlled Utility send, 2026-09-16: COMPLETED / DEMO PRODUCT
+  CAPABILITY VALIDATION / NOT CRA REAL CAMPAIGN. Owner autorizou exatamente uma
+  chamada Meta para B `****6787`. Resultado: Meta accepted, webhook sent=1,
+  delivered=1, read=0, failed=0; OutboundMessage local
+  `076910ef-ce6f-43d6-bfc2-2f30c4b41930`; campaign
+  `bb1d30e2-3a98-471a-9531-1f5e5d76a214` completed com `sentCount=1`;
+  `billing.active_message.delivered` count=1; duplicate billing=NO; A external
+  sends neste run=0. Evidencia sanitizada criada em
+  `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_C_RECIPIENT_B_CONTROLLED_UTILITY_RESULT_2026-09-16.md`
+  e `.csv`. Proximo gate: opt-out E2E; preco contratual CRA segue NOT PROVEN.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.

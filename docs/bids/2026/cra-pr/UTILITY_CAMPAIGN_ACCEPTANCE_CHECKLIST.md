@@ -342,8 +342,18 @@ does not reintroduce name-based routing. Campaign
 `bb1d30e2-3a98-471a-9531-1f5e5d76a214` is draft, B-only, template
 `data_exame`, return type HUMAN, totalRecipients=1, sentCount=0,
 blockedCount=0, opt-out PASS, outside 24h PASS, official Meta provider rate
-R$ 0.0350 if delivered, CRA contract price NOT PROVEN. Real send remains NO
-until final owner approval.
+R$ 0.0350 if delivered, CRA contract price NOT PROVEN. This prepared state was
+superseded by the owner-approved controlled B send below.
+
+Recipient B controlled Utility send, 2026-09-16: COMPLETED / DEMO PRODUCT
+CAPABILITY VALIDATION. Requested=1, Meta calls=1, accepted=YES, delivered=YES,
+read=NO, failed=NO. Campaign
+`bb1d30e2-3a98-471a-9531-1f5e5d76a214` ended `completed`, `sentCount=1`,
+`blockedCount=0`. Local OutboundMessage exists, provider accepted marker exists,
+reconciliation required is absent, return destination persisted, billing event
+count is 1 and duplicate billing is NO. Sanitized CSV evidence was created.
+This validates Demo product capability only; CRA real campaign acceptance and
+CRA contract unit remain separate.
 
 Demo operational default proposal, 2026-09-15: SUPERSEDED BY 2026-09-16 OWNER
 DESTINATION CONFIGURATION. The
