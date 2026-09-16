@@ -276,9 +276,18 @@ C0/C1 items that block declaring contractual readiness without qualification:
   inactivity handoff have been validated; residual cross-provider hardening and
   Guided lifecycle-policy exposure remain P2.
 
+Recipient B-only Utility gate, 2026-09-16: READ-ONLY PRE-SEND GATE completed
+for `demo-converta` with explicit human return destination required. Template,
+recipient normalization, opt-out, 24h window and Meta provider rate passed; no
+real send occurred and B remains NOT ATTEMPTED. Gate is WAITING OWNER
+DESTINATION DECISION because inventory found multiple active human
+department/queue candidates and no single unambiguous generic test destination
+with queue. Selecting by name convention or hidden fallback is prohibited.
+
 ## Current Execution Order
 
-1. Recipient B controlled Utility validation.
+1. Recipient B controlled Utility validation - waiting owner destination
+   decision before final send approval.
 2. Opt-out evidence.
 3. Reports, exports and billing evidence.
 4. Campaign/CRM import `Situação no CRM` upsert/report follow-up.

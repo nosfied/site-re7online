@@ -553,6 +553,20 @@ id/webhooks, delivered Utility billing was recorded through existing idempotent
 logic, `sentCount=1`, and campaign `status=failed` was preserved. A was never
 resent; `****6787` remains unattempted and still requires a fresh owner gate.
 
+Recipient B-only explicit human return destination gate, 2026-09-16:
+READ-ONLY PRE-SEND GATE / WAITING OWNER DESTINATION DECISION / NO REAL SEND.
+Production evidence confirmed `demo-converta` active, `data_exame` approved
+Utility `pt_BR`, current body `Paciente, seu exame foi marcado para {{1}}.
+Compareça com pelo menos 1 hora de antecedência.`, one variable `{{1}}`, B
+`****6787` authorized and normalized to one canonical target, no active opt-out,
+outside 24h by 5 days 23h, no B `data_exame` outbound, and Meta provider rate
+R$ 0.0350 if delivered. Destination inventory did not produce exactly one safe
+generic human target: active `Setor Teste` has zero queues; inactive
+`Atendimento Geral` has queues; remaining active queued departments are
+thematic. No campaign draft was created and no provider call was made. Owner
+must explicitly choose a department+queue or authorize a config-only Demo repair
+before the B-only send gate can proceed.
+
 ### Guided Builder - Bot Inactivity Policy UX Backlog
 
 New backlog item opened: **P2 / UX + PRODUCT CLARIFICATION / OPEN**.

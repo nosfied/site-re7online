@@ -233,6 +233,12 @@ Current backlog classification:
   queue `cmsiyb2k200n94sdpu5khkee0`, but the department is inactive. Proposed
   repair is reactivation of that existing department only, with no code change,
   no Meta send and no campaign retry before approval.
+  Recipient B-only explicit human return gate on 2026-09-16 is WAITING OWNER
+  DESTINATION DECISION / NO REAL SEND. Read-only checks passed for template,
+  authorization, dedupe, opt-out and outside-24h, but no single safe Demo human
+  destination could be inferred: `Setor Teste` has zero queues, `Atendimento
+  Geral` is inactive and other active queued departments are thematic. No
+  campaign draft or provider call occurred; B remains NOT ATTEMPTED.
   Opt-out E2E and campaign reports/export/billing evidence remain open until
   separately exercised.
 - Meta pricing source of truth / FinOps hardening is P2 generic product backlog.

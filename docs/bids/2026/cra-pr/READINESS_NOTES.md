@@ -535,6 +535,18 @@ Sem envio real.
   Meta porque o Demo nao possui default operacional ativo `Atendimento Geral` +
   `Fila Geral`; o `Atendimento Geral` existente esta inativo. Unidade
   contratual CRA permanece separada e NOT PROVEN; FinOps generico fica P2.
+- Recipient B-only explicit human return gate, 2026-09-16: READ-ONLY PRE-SEND
+  GATE / WAITING OWNER DESTINATION DECISION / NO REAL SEND. Nova validacao
+  confirmou `demo-converta` ativo, template `data_exame` Utility `pt_BR`
+  approved, B `****6787` autorizado e normalizado para um unico alvo, sem
+  opt-out ativo, fora de 24h por 5d23h e sem outbound `data_exame` previo para
+  B. A inventory de destino humano encontrou multiplos departamentos/fila
+  ativos do mesmo tenant e nenhum destino generico inequívoco com fila:
+  `Setor Teste` esta ativo mas tem zero filas; `Atendimento Geral` tem filas,
+  mas esta inativo; os demais candidatos ativos sao setores tematicos. Per
+  regra do owner, nao houve escolha por nome, fallback escondido, campanha nova
+  ou chamada Meta. B permanece NOT ATTEMPTED ate o owner escolher
+  departamento+fila concretos ou autorizar reparo config-only do destino Demo.
 - Pendencias imediatas pre-treinamento: acompanhar primeiro login/ativacao de
   usuarios, especialmente 3 admins TI. Horarios dos departamentos CRA foram
   configurados e validados em producao em 2026-09-15.

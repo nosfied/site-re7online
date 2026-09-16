@@ -246,6 +246,12 @@ pair.
   hardening. Internal values such as `meta-br-planning-2026-08`, USD 0.008 or
   R$ 0,32 must not be labeled official Meta cost. Contract/client price remains
   a separate resolver from provider cost and FX.
+- Recipient B-only pre-send gate on 2026-09-16 preserved the same official
+  provider-cost expectation: if one Brazil Utility message is later delivered,
+  expected Meta provider cost is BRL 0.0350. No B send occurred and no campaign
+  was created because explicit human return destination selection is still
+  waiting for owner decision; therefore there is no new provider charge,
+  billing ledger event or amount to reconcile.
 - Nao ha conciliacao financeira definitiva automatizada.
 - O bloqueio por limite ainda nao esta ativado nos fluxos reais.
 - Rate card e local e deve ser revisado quando a politica Meta mudar.

@@ -287,7 +287,15 @@ department `cmsiwk1o100014sdzl5cqd2ki` (`Atendimento Geral`,
 send, campaign retry or CRA config/data mutation is part of that gate. Expected
 Meta provider cost remains R$ 0,0350 if later delivered; no
 CRA invoice amount is claimed. Generic Meta pricing source-of-truth
-implementation moved to P2 FinOps hardening. Opt-out E2E and
+implementation moved to P2 FinOps hardening.
+Recipient B-only explicit human return gate on 2026-09-16 stopped before
+campaign creation with NO REAL SEND: B `****6787` still passed template,
+authorization, canonical dedupe, opt-out and outside-24h checks, but Demo did
+not provide a single non-arbitrary human destination with concrete queue. Active
+`Setor Teste` has zero queues, inactive `Atendimento Geral` has queues and
+other active queued departments are thematic. B remains NOT ATTEMPTED until the
+owner selects department+queue explicitly or authorizes a config-only Demo
+destination repair. Opt-out E2E and
 report/export/billing evidence remain separate open gates. See
 `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md`.
 

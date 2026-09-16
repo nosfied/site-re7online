@@ -138,7 +138,22 @@ ACTIVE P1:
    at `452d5826db42cc1b574eeff8fd8e0d038cd3491f` with non-destructive smoke
    PASS. No real Meta send and no Recipient B attempt.
 
-2. CRA campaign import - optional CRM situation column: OPEN / NEXT CRA
+2. CRA Demo Utility Recipient B owner gate with explicit human return
+   destination: WAITING OWNER DESTINATION DECISION / NO REAL SEND. Read-only
+   production pre-send gate on 2026-09-16 confirmed `demo-converta` active,
+   template `data_exame` approved Utility `pt_BR`, Recipient B `****6787`
+   authorized, normalized to one canonical recipient, no active opt-out,
+   outside 24h by 5 days 23h, no B `data_exame` outbound, and Meta provider
+   cost reference remains R$ 0.0350 if delivered. Human destination inventory
+   found multiple active same-tenant department/queue candidates and no
+   unambiguous generic test destination with queue: `Setor Teste` is active but
+   has zero queues; `Atendimento Geral` has queues but is inactive; other active
+   queued departments are thematic CRA/SECULT-style operational departments.
+   Per owner rule, no arbitrary name-based routing and no hidden fallback:
+   B-only campaign is not created/sent until owner explicitly selects the
+   department+queue or authorizes a config-only Demo destination repair.
+
+3. CRA campaign import - optional CRM situation column: OPEN / NEXT CRA
    CAMPAIGN IMPORT FRONT. Campaign/contact audience files may optionally contain
    `Situacao no CRM` / `Situação no CRM`. When populated, the value must resolve
    deterministically against CRM situations/statuses already configured for the
@@ -161,7 +176,7 @@ ACTIVE P1:
    semantics, duplicate-row policy, partial-success behavior and report/export
    infrastructure.
 
-3. Contacts - campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP.
+4. Contacts - campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP.
    Contacts/CRM must expose campaign-related history and state without
    duplicating campaign source-of-truth data inside Contact. Per contact, when
    applicable, show campaign count, last campaign, last send timestamp,
@@ -175,7 +190,7 @@ ACTIVE P1:
    where appropriate. CRA relevance: campaign/contact traceability and
    acceptance evidence.
 
-4. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
+5. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente
    2 mensagens Utility `data_exame` via META_CLOUD no `demo-converta` parou com
    bug operacional. Prechecks passaram, a primeira chamada Meta para `****9614`

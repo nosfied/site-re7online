@@ -324,6 +324,14 @@ risk, but ISSUE for operational default. `demo-converta` has `Atendimento Geral`
 inactive and no active default operational `Atendimento Geral` + `Fila Geral`
 pair. No Meta call was made for B.
 
+Recipient B-only explicit human return gate, 2026-09-16: STOPPED BEFORE CAMPAIGN
+CREATE / WAITING OWNER DESTINATION DECISION / NO REAL SEND. The B-only pre-send
+checks remain PASS for template, authorization, canonical dedupe, outside-24h,
+opt-out and A exclusion. Human return destination cannot be persisted yet:
+`Setor Teste` is active but has zero queues; `Atendimento Geral` has queues but
+is inactive; remaining active queued departments are thematic, so selecting one
+would be arbitrary. No campaign draft was created and no provider call was made.
+
 Demo operational default proposal, 2026-09-15: CONFIG PENDING / OWNER GATE. The
 valid existing candidate is `Atendimento Geral`
 (`cmsiwk1o100014sdzl5cqd2ki`) + `Fila Geral`

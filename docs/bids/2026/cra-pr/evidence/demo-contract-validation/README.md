@@ -67,5 +67,12 @@ Phase C send result summary:
   Meta because Demo operational default was invalid (`Atendimento Geral`
   inactive, no active default `Atendimento Geral` + `Fila Geral` pair);
   B remains not attempted externally;
+- Recipient B-only explicit human return gate: read-only pre-send gate on
+  2026-09-16 confirmed B `****6787` still authorized, outside 24h, no active
+  opt-out, one canonical target, no previous B `data_exame` outbound and Meta
+  provider cost R$ 0.0350 if delivered. It stopped before campaign creation
+  because no single safe human return destination could be selected without
+  owner input: `Setor Teste` has zero queues, `Atendimento Geral` is inactive
+  and other active queued departments are thematic. No real send occurred.
 - evidence: `PHASE_C_CONTROLLED_UTILITY_RESULT_2026-09-15.md`.
 - reconciliation audit: `RECIPIENT_A_RECONCILIATION_AUDIT_2026-09-15.md`.
