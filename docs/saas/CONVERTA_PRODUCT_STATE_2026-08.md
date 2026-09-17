@@ -146,11 +146,17 @@ O CRM operacional:
 - permite bloquear/liberar envio ativo via eventos de opt-out;
 - nao executa hard delete pela tela operacional.
 
-Contrato futuro de importacao CRA: campanha/contatos com `Situação no CRM`
-devem reutilizar a identidade canonica do CRM. Quando o import encontra contato
-existente, o comportamento esperado e atualizar o registro canonico, nunca criar
-duplicata; quando nome/status vierem em branco, os valores existentes devem ser
-preservados.
+Importacao CRA implementada localmente para campanhas CSV: campanha/contatos
+com `Situação no CRM` reutilizam a identidade canonica do CRM. Quando o import
+encontra contato existente, atualiza o registro canonico, nunca cria duplicata;
+quando nome/status vierem em branco, os valores existentes sao preservados.
+Situacao valida atualiza `Lead.status`; situacao desconhecida/ambigua bloqueia
+a linha e aparece no relatorio. O lote corretivo de 2026-09-17 unificou a
+resolucao de identidade entre preview/upsert, tornou CRM/status/seed atomicos
+por linha, corrigiu a ordem de vencedor duplicado, exigiu `campaigns` + `crm` e
+protegeu o CSV contra formulas. Status: IMPLEMENTED / TEST VALIDATED /
+PRINCIPLES AUDIT PASS / OWNER REVALIDATION PENDING; owner/CRA sample validation
+permanece pendente.
 
 Contacts campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP. A area
 de Contacts/CRM deve expor historico e estado de campanhas por contato a partir
@@ -195,15 +201,18 @@ opt-out E2E and reports/exports/billing Phase E are completed on Demo product
 evidence; CRA customer acceptance remains separate. The current CRA order is:
 campaign/CRM import/upsert/report with `Situação no CRM`, contacts campaign
 relationship view, final reports/export/billing package with CRA-approved scope
-and unit price, then acceptance package. The CRM import front is OPEN / NEXT CRA
-CAMPAIGN IMPORT FRONT and is not only an optional column: it must be
-tenant-scoped CRM upsert. Existing
-contacts must update instead of duplicating; valid imported name may update the
-record; blank cells preserve current data; valid resolved `Situação no CRM`
-updates the canonical situation reference; repeated identities inside the file
-must not create duplicate contacts; unknown/ambiguous situations must be
-reported truthfully in preview/import and never auto-created. A detailed
-downloadable import result report is mandatory for operator evidence.
+and unit price, then acceptance package. The CRM import front is IMPLEMENTED /
+TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER REVALIDATION PENDING and is not only an optional
+column: it is tenant-scoped CRM upsert. Existing contacts update instead of
+duplicating; valid imported name may update the record; blank cells preserve
+current data; valid resolved `Situação no CRM` updates `Lead.status`; repeated
+identities inside the file do not create duplicate contacts; unknown/ambiguous
+situations are reported truthfully in preview/import and never auto-created. A
+detailed downloadable CSV import result report is exposed for operator evidence.
+History is preserved: owner PARTIAL PASS was followed by a four-P1 principles
+block; the 2026-09-17 corrective batch passed locally. This is still E2 local
+evidence, not E4 customer evidence. Sequential canonical identity resolution is
+retained as P2 performance hardening; internal result labels remain P3 UX.
 Marketing template media support is P2 / PRODUCT + META CAPABILITY, covering
 MARKETING category, IMAGE/VIDEO headers, Meta media/example lifecycle, preview,
 variables, supported buttons, approval/rejection status/reason, approved send

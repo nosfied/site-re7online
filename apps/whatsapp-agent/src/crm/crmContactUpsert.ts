@@ -74,6 +74,7 @@ type ExistingCrmIdentity = {
     id: string;
     name: string | null;
     phone: string | null;
+    status: string;
     contactChannelIdentityId: string | null;
   } | null;
 };
@@ -217,7 +218,7 @@ async function findExistingCrmIdentity(
       },
       orderBy: [{ updatedAt: "desc" }],
       take: 3,
-      select: { id: true, name: true, phone: true, contactChannelIdentityId: true },
+      select: { id: true, name: true, phone: true, status: true, contactChannelIdentityId: true },
     }),
   ]);
   const contactIds = new Set([
@@ -238,6 +239,25 @@ async function findExistingCrmIdentity(
   return {
     contact: identity?.contact ?? contact,
     lead,
+  };
+}
+
+export async function resolveCrmContactIdentity(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  params: { clientId: string; phone: unknown }
+) {
+  const normalized = normalizeCrmContactInput({ phone: params.phone });
+  const existing = await findExistingCrmIdentity(prisma, {
+    clientId: params.clientId,
+    waIdCanonical: normalized.waIdCanonical,
+    externalUserHash: normalized.externalUserHash,
+    identityCandidates: normalized.identityCandidates,
+  });
+  return {
+    waIdCanonical: normalized.waIdCanonical,
+    identityCandidates: normalized.identityCandidates,
+    contact: existing.contact,
+    lead: existing.lead,
   };
 }
 
@@ -311,20 +331,22 @@ async function resolveLeadContactChannelIdentityId(
     : params.existingIdentityId;
 }
 
-export async function upsertCrmContact(
-  prisma: PrismaClient,
-  params: {
-    clientId: string;
-    input: CrmContactUpsertInput;
-    actorUserId: string;
-    requestId: string;
-    source: CrmContactUpsertSource;
-    audit?: boolean;
-  }
+type CrmContactUpsertParams = {
+  clientId: string;
+  input: CrmContactUpsertInput;
+  actorUserId: string;
+  requestId: string;
+  source: CrmContactUpsertSource;
+  audit?: boolean;
+  crmStatusId?: string | null;
+};
+
+export async function upsertCrmContactInTransaction(
+  tx: Prisma.TransactionClient,
+  params: CrmContactUpsertParams
 ) {
   const normalized = normalizeCrmContactInput(params.input);
-  const result = await prisma.$transaction(async (tx) => {
-    const existing = await findExistingCrmIdentity(tx, {
+  const existing = await findExistingCrmIdentity(tx, {
       clientId: params.clientId,
       waIdCanonical: normalized.waIdCanonical,
       externalUserHash: normalized.externalUserHash,
@@ -376,7 +398,12 @@ export async function upsertCrmContact(
         })
       );
     }
-    const contactName = existing.contact?.name ?? normalized.name;
+    const updateExistingName = params.source === "crm_import";
+    const contactName = existing.contact
+      ? updateExistingName
+        ? normalized.name ?? existing.contact.name ?? existing.lead?.name ?? null
+        : existing.contact.name ?? existing.lead?.name ?? normalized.name
+      : normalized.name;
     const contact = existing.contact
       ? await tx.contact.update({
           where: { id: existing.contact.id },
@@ -435,7 +462,11 @@ export async function upsertCrmContact(
       },
       select: { id: true },
     });
-    const leadName = existing.lead?.name ?? contact.name ?? normalized.name;
+    const leadName = existing.lead
+      ? updateExistingName
+        ? normalized.name ?? existing.lead.name ?? contact.name ?? null
+        : existing.lead.name ?? contact.name ?? normalized.name
+      : contact.name ?? normalized.name;
     const leadContactChannelIdentityId = existing.lead
       ? await resolveLeadContactChannelIdentityId(tx, {
           clientId: params.clientId,
@@ -443,6 +474,10 @@ export async function upsertCrmContact(
           operationalIdentityId: identity.id,
         })
       : identity.id;
+    const previousLead = existing.lead
+      ? { id: existing.lead.id, name: existing.lead.name, status: existing.lead.status }
+      : null;
+    const leadStatus = params.crmStatusId ?? existing.lead?.status ?? "NEW";
     const lead = existing.lead
       ? await tx.lead.update({
           where: { id: existing.lead.id },
@@ -457,6 +492,7 @@ export async function upsertCrmContact(
             contactChannelIdentityId: leadContactChannelIdentityId,
             phone: normalized.phone,
             name: leadName,
+            ...(params.crmStatusId ? { status: params.crmStatusId } : {}),
           },
           select: { id: true },
         })
@@ -474,7 +510,7 @@ export async function upsertCrmContact(
             contactChannelIdentityId: identity.id,
             name: contact.name ?? normalized.name,
             phone: normalized.phone,
-            status: "NEW",
+            status: leadStatus,
           },
           select: { id: true },
         });
@@ -494,8 +530,17 @@ export async function upsertCrmContact(
         : null,
       waId: normalized.waId,
       waIdCanonical: normalized.waIdCanonical,
+      previousLead,
+      leadName,
+      leadStatus,
     };
-  });
+}
+
+export async function upsertCrmContact(
+  prisma: PrismaClient,
+  params: CrmContactUpsertParams
+) {
+  const result = await prisma.$transaction((tx) => upsertCrmContactInTransaction(tx, params));
 
   if (params.audit !== false) {
     await persistEvent({

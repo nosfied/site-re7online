@@ -342,7 +342,8 @@ Current CRA order:
 
 Campaign/CRM import/upsert/report enhancement:
 
-- status: OPEN / NEXT CRA CAMPAIGN IMPORT FRONT;
+- status: IMPLEMENTED / TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER
+  REVALIDATION PENDING;
 - uploaded audience/contact files may optionally contain `Situação no CRM`;
 - when the column is absent, existing import behavior must be preserved;
 - when populated, the value must resolve to an existing same-tenant CRM
@@ -359,10 +360,16 @@ Campaign/CRM import/upsert/report enhancement:
 - repeated identities inside the file must not create duplicate contacts;
 - after import, produce detailed downloadable operator evidence with totals and
   per-row safe result details;
-- audit required before implementation: CRM status model, canonical identity,
-  import schema, segmentation use, status naming/uniqueness, update-vs-create
-  semantics, duplicate-row policy, partial-success behavior and export/report
-  infrastructure.
+- audit completed: CRM situation is `Lead.status`; status catalog is
+  same-tenant `TenantOperationalConfig.config.crmBusinessStatuses`; import
+  reuses existing CRM identity/upsert helpers; no schema/migration was required;
+- CRA/customer sample import is still pending approved data and owner review.
+- audit history: owner PARTIAL PASS was followed by a 2026-09-17 principles
+  audit blocked on four P1 findings; the corrective batch passed focused
+  rollback, canonical hash identity, duplicate-order, capability and CSV safety
+  tests. This remains local E2 evidence, not CRA E4 evidence.
+- residual P2: canonical preview matching is sequential per row and remains a
+  later performance-hardening item; do not introduce a parallel matcher.
 
 Marketing media templates:
 

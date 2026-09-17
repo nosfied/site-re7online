@@ -156,14 +156,27 @@ em P2 domain hardening, sem mudanca aplicada nesta auditoria.
 Reconciliação documental de 2026-09-16:
 
 - o front aprovado de outbound return destination permanece inalterado;
-- a importação de campanha/contatos deve virar upsert CRM seguro em frente
-  futura, com coluna opcional `Situação no CRM`, resolvida somente contra
-  situacoes/status CRM do mesmo tenant e sem criar status silenciosamente;
-- contato existente deve ser atualizado, nunca duplicado; nome/status validos
-  podem atualizar o registro; celulas em branco preservam dados existentes;
-  duplicados no arquivo nao podem criar contatos duplicados;
+- a importação de campanha/contatos agora possui implementacao local como
+  upsert CRM seguro, com coluna opcional `Situação no CRM`, resolvida somente
+  contra situacoes/status CRM do mesmo tenant e sem criar status
+  silenciosamente;
+- contato existente e atualizado, nunca duplicado; nome/status validos podem
+  atualizar o registro; celulas em branco preservam dados existentes;
+  duplicados no arquivo nao criam contatos duplicados;
+- a tela de campanhas permite mapear a coluna opcional e baixar relatorio CSV
+  detalhado apos a criacao do rascunho por CSV;
 - o operador deve receber relatorio detalhado e baixavel do resultado, com
   totais e detalhes por linha quando aplicavel;
+- historico de validacao: owner PARTIAL PASS, auditoria de principios de
+  2026-09-17 bloqueada por quatro P1 e lote corretivo local aprovado em testes;
+  status atual IMPLEMENTED / TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER
+  REVALIDATION PENDING;
+- preview e commit usam o mesmo resolvedor canonico de identidade; cada linha
+  confirma CRM, situacao e seed da campanha na mesma transacao;
+- preview/rascunho CSV exigem `campaigns` e `crm`; a API publica exige tambem
+  escopo `contacts`; o CSV de resultado neutraliza formulas de planilha;
+- resolucao canonica sequencial por linha permanece P2 de performance e a
+  traducao de codigos internos de resultado permanece P3 de UX;
 - Contacts deve receber em frente futura uma visao campanha-contato sem modelo
   sombra, usando fontes canonicas de campanha/outbound/billing/opt-out. A lista
   deve mostrar agregado leve e o detalhe deve abrir sob demanda, seguindo o

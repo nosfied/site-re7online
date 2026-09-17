@@ -109,14 +109,24 @@ CRA campaign follow-up reconciliation, 2026-09-16: the approved outbound return
 destination delivery is CLOSED / DEPLOYED / OWNER APPROVED / PROD
 NON-DESTRUCTIVE VALIDATED at `452d5826db42cc1b574eeff8fd8e0d038cd3491f`.
 New requirement
-CRM situation import/upsert/report is OPEN / NEXT CRA CAMPAIGN IMPORT FRONT.
-It includes optional `Situação no CRM`, same-tenant deterministic status
-resolution, existing contact update instead of duplication, blank-cell
-preservation, no silent status creation, no duplicate contacts from repeated
-input rows and mandatory detailed downloadable import evidence. Marketing
+CRM situation import/upsert/report is IMPLEMENTED / TEST VALIDATED / PRINCIPLES
+AUDIT PASS / OWNER REVALIDATION PENDING. It includes optional `Situação no CRM`, same-tenant
+deterministic status resolution against `Lead.status`, existing contact update
+instead of duplication, blank-cell preservation, no silent status creation, no
+duplicate contacts from repeated input rows and detailed downloadable import
+evidence exposed in the campaign CSV import flow. CRA/customer sample import is
+still pending approved data and owner validation. Marketing
 template media support is P2 product/Meta capability, covering MARKETING
 category plus IMAGE/VIDEO headers and official Marketing pricing; it is
 parallel to the Utility campaign front unless contract evidence promotes it.
+
+Audit history: the owner PARTIAL PASS was followed by a 2026-09-17 four-P1
+principles block. The corrective batch now shares one canonical identity
+resolver, commits CRM/status/campaign seed atomically per row, validates rows
+before duplicate claiming, enforces CRM capability and protects result CSV
+cells from formulas. Focused tests pass; evidence remains local E2 and owner
+visual revalidation is pending. Sequential per-row identity resolution remains
+P2 performance hardening; internal result wording remains P3 UX.
 
 Contacts campaign relationship view is OPEN / CRA CAMPAIGN-CRM FOLLOW-UP. It
 should expose campaign count, last campaign/send/template, delivery/read/failure

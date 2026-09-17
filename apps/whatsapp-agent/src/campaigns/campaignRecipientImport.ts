@@ -12,6 +12,7 @@ import { normalizeWaIdDigits } from "../utils/waid.js";
 import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
 import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
 import { buildCrmWhatsappIdentityCandidates } from "../crm/crmWhatsappIdentity.js";
+import type { CrmBusinessStatusConfig } from "../config/tenantConfig.js";
 import {
   buildPrivateCampaignSeedFields,
   readPrivateCampaignSeedFields,
@@ -32,17 +33,21 @@ export type CampaignImportBlockedReason =
   | "active_send_blocked"
   | "excluded_contact"
   | "provisional_contact"
-  | "variable_missing_value";
+  | "identity_conflict"
+  | "variable_missing_value"
+  | "crm_situation_unresolved";
 
 export type CampaignImportMapping = {
   phoneColumn?: string | null;
   nameColumn?: string | null;
+  crmSituationColumn?: string | null;
   variableColumns?: Record<string, string | null | undefined> | null;
 };
 
 export type CampaignImportRecipientInput = {
   phone: string;
   name?: string | null;
+  crmSituation?: string | null;
   variables?: Record<string, unknown> | null;
   rowNumber?: number | null;
 };
@@ -55,7 +60,12 @@ export type CampaignImportSummary = {
   existingDuplicates: number;
   optOutBlocked: number;
   missingRequiredVariables: number;
+  unresolvedCrmSituations: number;
   readyToImport: number;
+  created: number;
+  updated: number;
+  unchanged: number;
+  consolidated: number;
   blockedByReason: Array<{ reason: CampaignImportBlockedReason; label: string; count: number }>;
 };
 
@@ -67,6 +77,16 @@ export type CampaignImportPreview = {
     phoneDisplay: string;
     identifierDisplay: string;
     variables: Record<string, string>;
+    operation: "NOVO" | "ATUALIZAR" | "SEM_ALTERACAO";
+    leadId: string | null;
+    fieldsChanged: Array<"name" | "crmStatus">;
+    crmSituation: {
+      input: string | null;
+      statusId: string | null;
+      label: string | null;
+      previousStatusId: string | null;
+      previousLabel: string | null;
+    };
   }>;
   errors: Array<{
     rowNumber: number | null;
@@ -94,6 +114,42 @@ type CampaignImportPlan = {
   acceptedWaIds: string[];
   componentsByWaId: Record<string, CampaignTemplateComponents>;
   optOutBlocked: CampaignOptOutBlockedRecipient[];
+  reportRows: CampaignImportReportRow[];
+  acceptedRows: CampaignImportAcceptedRow[];
+};
+
+type CampaignImportAcceptedRow = {
+  rowNumber: number | null;
+  waIdCanonical: string;
+  name: string | null;
+  variables: Record<string, string>;
+  crmSituationInput: string | null;
+  crmStatusId: string | null;
+  crmStatusLabel: string | null;
+  existingLead: ExistingLeadSnapshot | null;
+};
+
+type ExistingLeadSnapshot = {
+  id: string;
+  name: string | null;
+  status: string;
+};
+
+type CampaignImportReportRow = {
+  sourceRow: number | null;
+  maskedIdentity: string | null;
+  operation: "CRIADO" | "ATUALIZADO" | "SEM_ALTERACAO" | "ERRO" | "DUPLICADO_CONSOLIDADO" | "IGNORADO";
+  leadId: string | null;
+  contactId: string | null;
+  fieldsChanged: string[];
+  oldCrmSituation: string | null;
+  newCrmSituation: string | null;
+  oldCrmSituationLabel: string | null;
+  newCrmSituationLabel: string | null;
+  nameUpdated: boolean;
+  duplicate: boolean;
+  errorCode: string | null;
+  reason: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -112,8 +168,12 @@ function labelForImportReason(reason: CampaignImportBlockedReason) {
       return "Contato excluído da operação";
     case "invalid_whatsapp_identity":
       return "Telefone invalido";
+    case "identity_conflict":
+      return "Nao foi possivel determinar a identidade com seguranca";
     case "provisional_contact":
       return "Contato pendente de consentimento";
+    case "crm_situation_unresolved":
+      return "Situacao no CRM nao encontrada";
     case "variable_missing_value":
       return "Variavel obrigatoria ausente";
   }
@@ -133,6 +193,11 @@ function maskRecipient(value: string | null | undefined) {
 
 function sanitizeVariableValue(input: unknown) {
   return String(input ?? "").trim().slice(0, 240);
+}
+
+function sanitizeOptionalImportText(input: unknown, maxLength: number) {
+  const normalized = String(input ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);
+  return normalized.length > 0 ? normalized : null;
 }
 
 function normalizeVariableMap(input: unknown) {
@@ -293,6 +358,47 @@ function getMappedColumn(row: Record<string, string>, column: string | null | un
   return row[column] ?? "";
 }
 
+function normalizeCrmSituationLookupKey(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildCrmSituationResolver(statuses: CrmBusinessStatusConfig[] | null | undefined) {
+  const byKey = new Map<string, CrmBusinessStatusConfig[]>();
+  for (const status of statuses ?? []) {
+    if (status.isActive === false) continue;
+    for (const value of [status.id, status.label]) {
+      const key = normalizeCrmSituationLookupKey(value);
+      if (!key) continue;
+      const current = byKey.get(key) ?? [];
+      if (!current.some((item) => item.id === status.id)) current.push(status);
+      byKey.set(key, current);
+    }
+  }
+  return (input: string | null) => {
+    const key = normalizeCrmSituationLookupKey(input);
+    if (!key) return { kind: "blank" as const };
+    const matches = byKey.get(key) ?? [];
+    if (matches.length === 1) return { kind: "matched" as const, status: matches[0] };
+    if (matches.length > 1) return { kind: "ambiguous" as const };
+    return { kind: "unknown" as const };
+  };
+}
+
+function buildStatusLabelById(statuses: CrmBusinessStatusConfig[] | null | undefined) {
+  return new Map(
+    (statuses ?? [])
+      .map((status) => [String(status.id ?? "").trim().toUpperCase(), status.label] as const)
+      .filter(([id]) => Boolean(id))
+  );
+}
+
 export function buildCampaignImportRecipientsFromCsv(params: {
   csvText: string;
   mapping: CampaignImportMapping;
@@ -312,6 +418,7 @@ export function buildCampaignImportRecipientsFromCsv(params: {
       rowNumber: row.rowNumber,
       phone: getMappedColumn(row.values, phoneColumn),
       name: getMappedColumn(row.values, params.mapping.nameColumn),
+      crmSituation: getMappedColumn(row.values, params.mapping.crmSituationColumn),
       variables: Object.fromEntries(
         Object.entries(variableColumns)
           .map(([position, column]) => [position, getMappedColumn(row.values, column)] as const)
@@ -328,6 +435,7 @@ export async function resolveCampaignRecipientImportPlan(
     campaignId?: string | null;
     template: TemplateContext;
     recipients: CampaignImportRecipientInput[];
+    crmStatuses?: CrmBusinessStatusConfig[] | null;
     existingSeed?: ExistingSeed | null;
   }
 ): Promise<CampaignImportPlan> {
@@ -343,11 +451,15 @@ export async function resolveCampaignRecipientImportPlan(
     rowNumber: number | null;
     variables: Record<string, string>;
     name: string | null;
+    crmSituationInput: string | null;
+    crmStatusId: string | null;
+    crmStatusLabel: string | null;
     identityCandidates: string[];
   }> = [];
   const blocked: CampaignImportPreview["errors"] = [];
   const blockedCounts = new Map<CampaignImportBlockedReason, number>();
-  const seen = new Set<string>();
+  const resolveCrmSituation = buildCrmSituationResolver(params.crmStatuses);
+  const statusLabelById = buildStatusLabelById(params.crmStatuses);
 
   for (const input of params.recipients.slice(0, CAMPAIGN_IMPORT_MAX_ROWS)) {
     const rowNumber = input.rowNumber ?? null;
@@ -356,11 +468,12 @@ export async function resolveCampaignRecipientImportPlan(
       addBlocked(blocked, blockedCounts, { rowNumber, reason: "invalid_whatsapp_identity", phone: input.phone });
       continue;
     }
-    if (seen.has(normalized.waIdCanonical)) {
-      addBlocked(blocked, blockedCounts, { rowNumber, reason: "duplicate_recipient", phone: normalized.waIdCanonical });
+    const crmSituationInput = sanitizeOptionalImportText(input.crmSituation, 80);
+    const crmSituation = resolveCrmSituation(crmSituationInput);
+    if (crmSituation.kind === "unknown" || crmSituation.kind === "ambiguous") {
+      addBlocked(blocked, blockedCounts, { rowNumber, reason: "crm_situation_unresolved", phone: normalized.waIdCanonical });
       continue;
     }
-    seen.add(normalized.waIdCanonical);
     const identityCandidates = buildCrmWhatsappIdentityCandidates([input.phone, normalized.waIdCanonical]);
     if (identityCandidates.some((candidate) => existing.has(candidate))) {
       addBlocked(blocked, blockedCounts, { rowNumber, reason: "existing_campaign_recipient", phone: normalized.waIdCanonical });
@@ -377,7 +490,10 @@ export async function resolveCampaignRecipientImportPlan(
       waIdCanonical: normalized.waIdCanonical,
       rowNumber,
       variables,
-      name: input.name?.trim() || null,
+      name: sanitizeOptionalImportText(input.name, 120),
+      crmSituationInput,
+      crmStatusId: crmSituation.kind === "matched" ? crmSituation.status.id : null,
+      crmStatusLabel: crmSituation.kind === "matched" ? crmSituation.status.label : null,
       identityCandidates,
     });
   }
@@ -420,13 +536,72 @@ export async function resolveCampaignRecipientImportPlan(
     waIds: lifecycleReady.map((item) => item.waIdCanonical),
   });
   const optOutBlocked = new Set(optOutFiltered.blocked.map((item) => item.waIdCanonical));
-  const ready = lifecycleReady.filter((item) => {
+  const eligible = lifecycleReady.filter((item) => {
     if (!optOutBlocked.has(item.waIdCanonical)) return true;
     addBlocked(blocked, blockedCounts, { rowNumber: item.rowNumber, reason: "active_send_blocked", phone: item.waIdCanonical });
     return false;
   });
+  const { CrmContactUpsertError, resolveCrmContactIdentity } = await import("../crm/crmContactUpsert.js");
+  const seen = new Set<string>();
+  const acceptedRows: CampaignImportAcceptedRow[] = [];
+  for (const item of eligible) {
+    let identity;
+    try {
+      identity = await resolveCrmContactIdentity(prisma, {
+        clientId: params.clientId,
+        phone: item.waIdCanonical,
+      });
+    } catch (error) {
+      if (error instanceof CrmContactUpsertError && error.code === "identity_conflict") {
+        addBlocked(blocked, blockedCounts, {
+          rowNumber: item.rowNumber,
+          reason: "identity_conflict",
+          phone: item.waIdCanonical,
+        });
+        continue;
+      }
+      throw error;
+    }
+    if (identity.contact?.operationallyExcludedAt) {
+      addBlocked(blocked, blockedCounts, {
+        rowNumber: item.rowNumber,
+        reason: "excluded_contact",
+        phone: item.waIdCanonical,
+      });
+      continue;
+    }
+    if (identity.contact && !isOperationalContactLifecycle(identity.contact.lifecycle)) {
+      addBlocked(blocked, blockedCounts, {
+        rowNumber: item.rowNumber,
+        reason: "provisional_contact",
+        phone: item.waIdCanonical,
+      });
+      continue;
+    }
+    if (seen.has(identity.waIdCanonical)) {
+      addBlocked(blocked, blockedCounts, {
+        rowNumber: item.rowNumber,
+        reason: "duplicate_recipient",
+        phone: item.waIdCanonical,
+      });
+      continue;
+    }
+    seen.add(identity.waIdCanonical);
+    acceptedRows.push({
+      rowNumber: item.rowNumber,
+      waIdCanonical: identity.waIdCanonical,
+      name: item.name,
+      variables: item.variables,
+      crmSituationInput: item.crmSituationInput,
+      crmStatusId: item.crmStatusId,
+      crmStatusLabel: item.crmStatusLabel,
+      existingLead: identity.lead
+        ? { id: identity.lead.id, name: identity.lead.name, status: identity.lead.status }
+        : null,
+    });
+  }
   const componentsByWaId: Record<string, CampaignTemplateComponents> = {};
-  for (const item of ready) {
+  for (const item of acceptedRows) {
     const components = buildTemplateComponentsFromVariables({ requiredKeys, variables: item.variables });
     if (components) componentsByWaId[item.waIdCanonical] = components;
   }
@@ -436,32 +611,90 @@ export async function resolveCampaignRecipientImportPlan(
     label: labelForImportReason(reason),
     count,
   }));
+  let created = 0;
+  let updated = 0;
+  let unchanged = 0;
+  for (const row of acceptedRows) {
+    if (!row.existingLead) {
+      created += 1;
+      continue;
+    }
+    const changes = [
+      row.name !== null && row.name !== row.existingLead.name,
+      row.crmStatusId !== null && row.crmStatusId !== row.existingLead.status,
+    ].some(Boolean);
+    if (changes) updated += 1;
+    else unchanged += 1;
+  }
+  const errorReportRows: CampaignImportReportRow[] = blocked.map((item) => ({
+    sourceRow: item.rowNumber,
+    maskedIdentity: item.phoneDisplay,
+    operation: item.reason === "duplicate_recipient" ? "DUPLICADO_CONSOLIDADO" : "ERRO",
+    leadId: null,
+    contactId: null,
+    fieldsChanged: [],
+    oldCrmSituation: null,
+    newCrmSituation: null,
+    oldCrmSituationLabel: null,
+    newCrmSituationLabel: null,
+    nameUpdated: false,
+    duplicate: item.reason === "duplicate_recipient",
+    errorCode: item.reason,
+    reason: item.label,
+  }));
   return {
     preview: {
       ok: true,
       summary: {
         received: params.recipients.length,
-        valid: ready.length,
-        invalid: blockedCounts.get("invalid_whatsapp_identity") ?? 0,
+        valid: acceptedRows.length,
+        invalid:
+          (blockedCounts.get("invalid_whatsapp_identity") ?? 0) +
+          (blockedCounts.get("identity_conflict") ?? 0),
         duplicates: blockedCounts.get("duplicate_recipient") ?? 0,
         existingDuplicates: blockedCounts.get("existing_campaign_recipient") ?? 0,
         optOutBlocked: blockedCounts.get("active_send_blocked") ?? 0,
         missingRequiredVariables: blockedCounts.get("variable_missing_value") ?? 0,
-        readyToImport: ready.length,
+        unresolvedCrmSituations: blockedCounts.get("crm_situation_unresolved") ?? 0,
+        readyToImport: acceptedRows.length,
+        created,
+        updated,
+        unchanged,
+        consolidated: blockedCounts.get("duplicate_recipient") ?? 0,
         blockedByReason,
       },
-      recipients: ready.slice(0, 200).map((item) => ({
+      recipients: acceptedRows.slice(0, 200).map((item) => ({
         rowNumber: item.rowNumber,
         phoneDisplay: maskRecipient(item.waIdCanonical) ?? "WhatsApp User",
         identifierDisplay: item.name || maskRecipient(item.waIdCanonical) || "WhatsApp User",
         variables: item.variables,
+        operation: !item.existingLead
+          ? "NOVO"
+          : (item.name !== null && item.name !== item.existingLead.name) ||
+              (item.crmStatusId !== null && item.crmStatusId !== item.existingLead.status)
+            ? "ATUALIZAR"
+            : "SEM_ALTERACAO",
+        leadId: item.existingLead?.id ?? null,
+        fieldsChanged: [
+          item.name !== null && item.name !== item.existingLead?.name ? "name" : null,
+          item.crmStatusId !== null && item.crmStatusId !== item.existingLead?.status ? "crmStatus" : null,
+        ].filter((field): field is "name" | "crmStatus" => Boolean(field)),
+        crmSituation: {
+          input: item.crmSituationInput,
+          statusId: item.crmStatusId,
+          label: item.crmStatusLabel,
+          previousStatusId: item.existingLead?.status ?? null,
+          previousLabel: item.existingLead?.status ? statusLabelById.get(item.existingLead.status.toUpperCase()) ?? item.existingLead.status : null,
+        },
       })),
       errors: blocked.slice(0, CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT),
       truncatedErrors: blocked.length > CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT,
     },
-    acceptedWaIds: ready.map((item) => item.waIdCanonical),
+    acceptedWaIds: acceptedRows.map((item) => item.waIdCanonical),
     componentsByWaId,
     optOutBlocked: optOutFiltered.blocked,
+    reportRows: errorReportRows,
+    acceptedRows,
   };
 }
 
@@ -472,6 +705,7 @@ export async function previewCampaignRecipientImport(
     campaignId?: string | null;
     template: TemplateContext;
     recipients: CampaignImportRecipientInput[];
+    crmStatuses?: CrmBusinessStatusConfig[] | null;
     existingSeed?: ExistingSeed | null;
   }
 ): Promise<CampaignImportPreview> {
@@ -501,7 +735,12 @@ export async function importCampaignRecipients(
     requestId: string;
     recipients: CampaignImportRecipientInput[];
     source: "csv" | "public_api" | "manual";
+    crmStatuses?: CrmBusinessStatusConfig[] | null;
     returnDestination?: OutboundReturnDestination | null;
+    testHooks?: {
+      afterCrmMutation?: () => void | Promise<void>;
+      beforeCampaignSeedPersist?: () => void | Promise<void>;
+    };
   }
 ) {
   const campaign = await prisma.campaign.findFirst({
@@ -526,48 +765,165 @@ export async function importCampaignRecipients(
     campaignId: campaign.id,
     template,
     recipients: params.recipients,
+    crmStatuses: params.crmStatuses,
     existingSeed,
   });
   const preview = plan.preview;
   const existingComponents = existingSeed.componentsByWaId ?? {};
-  const nextRecipients = [...existingSeed.recipients];
-  const componentsByWaId: Record<string, CampaignTemplateComponents> = { ...existingComponents, ...plan.componentsByWaId };
+  let nextRecipients = [...existingSeed.recipients];
+  let componentsByWaId: Record<string, CampaignTemplateComponents> = { ...existingComponents };
 
-  for (const waIdCanonical of plan.acceptedWaIds) {
-    if (!nextRecipients.includes(waIdCanonical)) nextRecipients.push(waIdCanonical);
+  const statusLabelById = buildStatusLabelById(params.crmStatuses);
+  const importReportRows: CampaignImportReportRow[] = [...plan.reportRows];
+  let createdCount = 0;
+  let updatedCount = 0;
+  let unchangedCount = 0;
+  let transactionFailureCount = 0;
+  let importedCount = 0;
+  const { upsertCrmContactInTransaction } = await import("../crm/crmContactUpsert.js");
+  for (const row of plan.acceptedRows) {
+    try {
+      const committed = await prisma.$transaction(async (tx) => {
+        const upserted = await upsertCrmContactInTransaction(tx, {
+          clientId: params.clientId,
+          input: { phone: row.waIdCanonical, name: row.name },
+          actorUserId: params.actorId ?? "system",
+          requestId: `${params.requestId}:campaign-import-upsert:${row.rowNumber ?? row.waIdCanonical}`,
+          source: "crm_import",
+          audit: false,
+          crmStatusId: row.crmStatusId,
+        });
+        await params.testHooks?.afterCrmMutation?.();
+        const previous = upserted.previousLead;
+        const fieldsChanged: string[] = [];
+        const nameChanged = !upserted.createdLead && row.name !== null && row.name !== previous?.name;
+        const statusChanged = !upserted.createdLead && row.crmStatusId !== null && row.crmStatusId !== previous?.status;
+        if (nameChanged) fieldsChanged.push("name");
+        if (statusChanged) fieldsChanged.push("crmStatus");
+        const operation: CampaignImportReportRow["operation"] = upserted.createdLead
+          ? "CRIADO"
+          : fieldsChanged.length > 0
+            ? "ATUALIZADO"
+            : "SEM_ALTERACAO";
+        const candidateRecipients = nextRecipients.includes(row.waIdCanonical)
+          ? [...nextRecipients]
+          : [...nextRecipients, row.waIdCanonical];
+        const candidateComponents = { ...componentsByWaId };
+        const rowComponents = plan.componentsByWaId[row.waIdCanonical];
+        if (rowComponents) candidateComponents[row.waIdCanonical] = rowComponents;
+        await params.testHooks?.beforeCampaignSeedPersist?.();
+        await tx.campaign.update({
+          where: { id: campaign.id },
+          data: {
+            totalRecipients: candidateRecipients.length,
+            blockedCount:
+              preview.summary.optOutBlocked +
+              preview.summary.invalid +
+              preview.summary.missingRequiredVariables +
+              preview.summary.unresolvedCrmSituations,
+          },
+        });
+        await tx.event.create({
+          data: {
+            clientId: params.clientId,
+            messageId: campaign.id,
+            requestId: `campaign-seed:${campaign.id}:${crypto.randomUUID()}`,
+            eventName: "campaign.seed.saved",
+            payloadJson: {
+              campaignId: campaign.id,
+              templateId: campaign.templateId,
+              name: campaign.name,
+              templateName: campaign.templateName,
+              ...buildPrivateCampaignSeedFields({
+                clientId: params.clientId,
+                waIds: candidateRecipients,
+                componentsByWaId: candidateComponents,
+              }),
+              manualRecipientInputCount: params.recipients.length,
+              templateParams: [],
+              templateVariableMappings: [],
+              returnDestination: serializeOutboundReturnDestination(params.returnDestination ?? null),
+              source: `recipient_import:${params.source}`,
+              summary: preview.summary,
+            } satisfies Prisma.JsonObject,
+          },
+        });
+        const previousStatus = previous?.status ?? null;
+        const reportRow: CampaignImportReportRow = {
+          sourceRow: row.rowNumber,
+          maskedIdentity: maskRecipient(row.waIdCanonical),
+          operation,
+          leadId: upserted.leadId,
+          contactId: upserted.contactId,
+          fieldsChanged,
+          oldCrmSituation: previousStatus,
+          newCrmSituation: upserted.leadStatus,
+          oldCrmSituationLabel: previousStatus
+            ? statusLabelById.get(previousStatus.toUpperCase()) ?? previousStatus
+            : null,
+          newCrmSituationLabel:
+            row.crmStatusLabel ??
+            statusLabelById.get(upserted.leadStatus.toUpperCase()) ??
+            upserted.leadStatus,
+          nameUpdated: nameChanged,
+          duplicate: false,
+          errorCode: null,
+          reason: null,
+        };
+        return { candidateRecipients, candidateComponents, operation, reportRow };
+      });
+      nextRecipients = committed.candidateRecipients;
+      componentsByWaId = committed.candidateComponents;
+      importReportRows.push(committed.reportRow);
+      importedCount += 1;
+      if (committed.operation === "CRIADO") createdCount += 1;
+      else if (committed.operation === "ATUALIZADO") updatedCount += 1;
+      else unchangedCount += 1;
+    } catch {
+      transactionFailureCount += 1;
+      importReportRows.push({
+        sourceRow: row.rowNumber,
+        maskedIdentity: maskRecipient(row.waIdCanonical),
+        operation: "ERRO",
+        leadId: null,
+        contactId: null,
+        fieldsChanged: [],
+        oldCrmSituation: row.existingLead?.status ?? null,
+        newCrmSituation: row.existingLead?.status ?? null,
+        oldCrmSituationLabel: row.existingLead?.status
+          ? statusLabelById.get(row.existingLead.status.toUpperCase()) ?? row.existingLead.status
+          : null,
+        newCrmSituationLabel: row.existingLead?.status
+          ? statusLabelById.get(row.existingLead.status.toUpperCase()) ?? row.existingLead.status
+          : null,
+        nameUpdated: false,
+        duplicate: false,
+        errorCode: "import_transaction_failed",
+        reason: "Falha ao importar esta linha; nenhuma alteracao foi aplicada.",
+      });
+    }
   }
+  const reportSummary = {
+    total: preview.summary.received,
+    created: createdCount,
+    updated: updatedCount,
+    unchanged: unchangedCount,
+    ignored: preview.summary.existingDuplicates + preview.summary.optOutBlocked,
+    errors: preview.errors.filter((item) => item.reason !== "duplicate_recipient").length + transactionFailureCount,
+    duplicatesConsolidated: preview.summary.duplicates,
+  };
 
   await prisma.$transaction(async (tx) => {
     await tx.campaign.update({
       where: { id: campaign.id },
       data: {
         totalRecipients: nextRecipients.length,
-        blockedCount: preview.summary.optOutBlocked + preview.summary.invalid + preview.summary.missingRequiredVariables,
-      },
-    });
-    await tx.event.create({
-      data: {
-        clientId: params.clientId,
-        messageId: campaign.id,
-        requestId: `campaign-seed:${campaign.id}:${crypto.randomUUID()}`,
-        eventName: "campaign.seed.saved",
-        payloadJson: {
-          campaignId: campaign.id,
-          templateId: campaign.templateId,
-          name: campaign.name,
-          templateName: campaign.templateName,
-          ...buildPrivateCampaignSeedFields({
-            clientId: params.clientId,
-            waIds: nextRecipients,
-            componentsByWaId,
-          }),
-          manualRecipientInputCount: params.recipients.length,
-          templateParams: [],
-          templateVariableMappings: [],
-          returnDestination: serializeOutboundReturnDestination(params.returnDestination ?? null),
-          source: `recipient_import:${params.source}`,
-          summary: preview.summary,
-        } satisfies Prisma.JsonObject,
+        blockedCount:
+          preview.summary.optOutBlocked +
+          preview.summary.invalid +
+          preview.summary.missingRequiredVariables +
+          preview.summary.unresolvedCrmSituations +
+          transactionFailureCount,
       },
     });
     await tx.event.create({
@@ -585,7 +941,9 @@ export async function importCampaignRecipients(
           invalidCount: preview.summary.invalid,
           duplicateCount: preview.summary.duplicates + preview.summary.existingDuplicates,
           optOutBlockedCount: preview.summary.optOutBlocked,
-          importedCount: preview.summary.readyToImport,
+          importedCount,
+          crmUpsert: reportSummary,
+          reportRows: importReportRows.slice(0, 500),
           timestamp: new Date().toISOString(),
         } satisfies Prisma.JsonObject,
       },
@@ -600,5 +958,102 @@ export async function importCampaignRecipients(
     });
   }
   const updated = await prisma.campaign.findFirst({ where: { id: campaign.id, clientId: params.clientId } });
-  return { ok: true as const, campaign: updated, preview, importedCount: preview.summary.readyToImport };
+  return {
+    ok: true as const,
+    campaign: updated,
+    preview: {
+      ...preview,
+      summary: {
+        ...preview.summary,
+        created: createdCount,
+        updated: updatedCount,
+        unchanged: unchangedCount,
+        readyToImport: importedCount,
+      },
+    },
+    importedCount,
+    report: {
+      summary: reportSummary,
+      rows: importReportRows,
+      csv: buildCampaignImportReportCsv({ summary: reportSummary, rows: importReportRows }),
+    },
+  };
+}
+
+function csvCell(value: string | number | boolean | null | undefined) {
+  if (value === null || value === undefined) return "";
+  const raw = String(value);
+  const text = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  if (!/[",\n]/.test(text)) return text;
+  return `"${text.replace(/"/g, "\"\"")}"`;
+}
+
+function buildCampaignImportReportCsv(params: {
+  summary: {
+    total: number;
+    created: number;
+    updated: number;
+    unchanged: number;
+    ignored: number;
+    errors: number;
+    duplicatesConsolidated: number;
+  };
+  rows: CampaignImportReportRow[];
+}) {
+  const header = [
+    "sourceRow",
+    "maskedIdentity",
+    "operation",
+    "leadId",
+    "contactId",
+    "fieldsChanged",
+    "oldCrmSituation",
+    "newCrmSituation",
+    "oldCrmSituationLabel",
+    "newCrmSituationLabel",
+    "nameUpdated",
+    "duplicate",
+    "errorCode",
+    "reason",
+  ];
+  const lines = [header.join(",")];
+  for (const row of params.rows) {
+    lines.push(
+      [
+        row.sourceRow ?? "",
+        row.maskedIdentity,
+        row.operation,
+        row.leadId,
+        row.contactId,
+        row.fieldsChanged.join("|"),
+        row.oldCrmSituation,
+        row.newCrmSituation,
+        row.oldCrmSituationLabel,
+        row.newCrmSituationLabel,
+        row.nameUpdated,
+        row.duplicate,
+        row.errorCode,
+        row.reason,
+      ].map(csvCell).join(",")
+    );
+  }
+  lines.push(
+    [
+      "SUMMARY",
+      "",
+      "",
+      "",
+      "",
+      `total=${params.summary.total}|created=${params.summary.created}|updated=${params.summary.updated}|unchanged=${params.summary.unchanged}|ignored=${params.summary.ignored}|errors=${params.summary.errors}|duplicates=${params.summary.duplicatesConsolidated}`,
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+    ].map(csvCell).join(",")
+  );
+  return `${lines.join("\n")}\n`;
 }

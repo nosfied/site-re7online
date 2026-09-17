@@ -202,8 +202,9 @@ ACTIVE P1:
    and `.csv`. Next front: CRM import/upsert/report with optional
    `Situacao no CRM`.
 
-5. CRA campaign import - optional CRM situation column: OPEN / NEXT CRA
-   CAMPAIGN IMPORT FRONT. Campaign/contact audience files may optionally contain
+5. CRA campaign import - optional CRM situation column: IMPLEMENTED /
+   TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER REVALIDATION PENDING.
+   Campaign/contact audience files may optionally contain
    `Situacao no CRM` / `Situação no CRM`. When populated, the value must resolve
    deterministically against CRM situations/statuses already configured for the
    same tenant, persist the canonical internal id/reference, never use
@@ -219,11 +220,33 @@ ACTIVE P1:
    a detailed operator report is mandatory with totals, created/updated/
    unchanged/skipped/errors, duplicate/consolidation evidence and per-row safe
    result details; downloadable evidence should reuse existing export/report
-   infrastructure. Before implementation, audit the actual CRM status model,
+   infrastructure. Audit completed: CRM status model,
    canonical identity/normalization/deduplication mechanism, current import
    schema, segmentation usage, status naming/uniqueness, update-vs-create
    semantics, duplicate-row policy, partial-success behavior and report/export
-   infrastructure.
+   infrastructure were reviewed. Implemented local result: `Lead.status` is the CRM situation
+   model; campaign CSV import now previews/applies tenant-scoped CRM upsert via
+   existing identity helpers, updates valid nonblank names, preserves blank
+   name/status cells, resolves `Situação no CRM` by same-tenant active status id
+   or label with deterministic normalization, blocks unknown/ambiguous
+   situations at row level, prevents duplicate contact creation for repeated
+   identities, records per-row import evidence and exposes downloadable CSV
+   report in the app campaign import flow. CRA customer import run is still
+   pending owner-approved sample data.
+   Audit history preserved: owner result was PARTIAL PASS; the 2026-09-17
+   principles audit blocked the front on four P1 findings (transaction
+   consistency, duplicate winner order, parallel identity matching and missing
+   CRM capability). The corrective batch now uses the canonical CRM resolver,
+   commits CRM mutation/status/campaign seed per row, validates before claiming
+   duplicate identity, requires `campaigns` plus `crm` (and `contacts` scope in
+   the public API), and neutralizes spreadsheet formulas in the result CSV.
+   Focused rollback, hash-only identity, duplicate-order, authorization and CSV
+   tests pass. Residual P2: canonical preview resolution is sequential per row
+   (100 rows about 231 ms; 1,000 rows about 1.76 s locally) and may need later
+   bulk performance hardening without a parallel identity engine. Residual P3:
+   normalize internal operation/error labels exposed to the operator. Owner
+   visual revalidation and any CRA-approved sample remain pending; do not claim
+   E4 from automated tests.
 
 6. Contacts - campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP.
    Contacts/CRM must expose campaign-related history and state without

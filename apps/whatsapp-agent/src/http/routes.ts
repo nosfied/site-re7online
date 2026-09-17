@@ -1566,9 +1566,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         prisma,
         requestId,
         pathname,
-        requiredScopes: ["write", "campaigns"],
+        requiredScopes: ["write", "campaigns", "contacts"],
       });
       if (!publicAuth) return;
+      const publicClient = await getScopedClientById(prisma, publicAuth.clientId);
+      if (!publicClient) {
+        json(res, 404, { error: { code: "client_not_found", message: "Client not found", requestId } });
+        return;
+      }
+      if (!(await enforceAppCapability(prisma, res, {
+        client: publicClient,
+        userId: publicAuth.apiKeyId,
+        capability: "crm",
+        endpoint: pathname,
+        requestId,
+      }))) return;
       const body = await readJsonBodyWithLimit(req, res, CAMPAIGN_IMPORT_MAX_JSON_BODY_BYTES);
       if (!body) return;
       const recipients = normalizePublicCampaignImportRecipients(body.recipients);
@@ -1587,6 +1599,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         actorId: publicAuth.apiKeyId,
         source: "public_api",
         recipients,
+        crmStatuses: (await resolveCrmBusinessStatuses({
+          prisma,
+          clientId: publicAuth.clientId,
+          tenant: null,
+        })).statuses,
       });
       if (!imported.ok) {
         json(res, imported.status, { error: { code: imported.error, message: imported.error, requestId } });
@@ -1612,6 +1629,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         ok: true,
         campaign: imported.campaign ? serializeCampaign(imported.campaign) : null,
         import: imported.preview,
+        report: imported.report,
       });
       return;
     }
@@ -14818,6 +14836,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         endpoint: pathname,
         requestId,
       }))) return;
+      if (!(await enforceAppCapability(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        capability: "crm",
+        endpoint: pathname,
+        requestId,
+      }))) return;
       const csvText = String(body.csvText ?? "");
       if (Buffer.byteLength(csvText, "utf8") > CAMPAIGN_IMPORT_MAX_CSV_BYTES) {
         json(res, 413, httpError("csv_too_large", "Arquivo CSV grande demais.", {
@@ -14847,10 +14872,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError(categoryPolicyBlock.reason, categoryPolicyBlock.label));
         return;
       }
+      const tenants = await getTenants();
+      const resolvedStatuses = await resolveCrmBusinessStatuses({
+        prisma,
+        clientId: client.id,
+        tenant: tenants[client.clientKey] ?? null,
+      });
       const preview = await previewCampaignRecipientImport(prisma, {
         clientId: client.id,
         template,
         recipients: parsed.recipients,
+        crmStatuses: resolvedStatuses.statuses,
       });
       json(res, 200, {
         ...preview,
@@ -14905,6 +14937,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         endpoint: pathname,
         requestId,
       }))) return;
+      if (!(await enforceAppCapability(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        capability: "crm",
+        endpoint: pathname,
+        requestId,
+      }))) return;
       const resolvedTemplate = await resolveCampaignTemplateInput(prisma, {
         clientId: client.id,
         templateId,
@@ -14943,10 +14982,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError(categoryPolicyBlock.reason, categoryPolicyBlock.label));
         return;
       }
+      const tenants = await getTenants();
+      const resolvedStatuses = await resolveCrmBusinessStatuses({
+        prisma,
+        clientId: client.id,
+        tenant: tenants[client.clientKey] ?? null,
+      });
       const preview = await previewCampaignRecipientImport(prisma, {
         clientId: client.id,
         template,
         recipients: parsed.recipients,
+        crmStatuses: resolvedStatuses.statuses,
       });
       if (preview.summary.readyToImport === 0) {
         json(res, 400, httpError("no_eligible_recipients", "No eligible recipients for this campaign draft", {
@@ -14977,6 +15023,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "csv",
         recipients: parsed.recipients,
+        crmStatuses: resolvedStatuses.statuses,
         returnDestination: returnDestination.destination,
       });
       if (!imported.ok) {
@@ -14989,6 +15036,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         draft: {
           summary: imported.preview.summary,
           recipients: imported.preview.recipients,
+          report: imported.report,
         },
         csv: {
           headers: parsed.headers,
@@ -36389,6 +36437,7 @@ function normalizeCampaignCsvMapping(input: unknown): CampaignImportMapping {
   return {
     phoneColumn: typeof typed.phoneColumn === "string" ? typed.phoneColumn.trim() : null,
     nameColumn: typeof typed.nameColumn === "string" ? typed.nameColumn.trim() : null,
+    crmSituationColumn: typeof typed.crmSituationColumn === "string" ? typed.crmSituationColumn.trim() : null,
     variableColumns,
   };
 }
@@ -36403,6 +36452,12 @@ function normalizePublicCampaignImportRecipients(input: unknown): CampaignImport
     return {
       phone: String(typed.phone ?? typed.waId ?? typed.recipient ?? "").trim(),
       name: typeof typed.name === "string" ? typed.name.trim() : null,
+      crmSituation:
+        typeof typed.crmSituation === "string"
+          ? typed.crmSituation.trim()
+          : typeof typed.crmStatus === "string"
+            ? typed.crmStatus.trim()
+            : null,
       variables:
         typed.variables && typeof typed.variables === "object" && !Array.isArray(typed.variables)
           ? (typed.variables as Record<string, unknown>)

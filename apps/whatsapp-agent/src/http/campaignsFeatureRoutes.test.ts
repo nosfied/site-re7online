@@ -12191,7 +12191,7 @@ test("public campaign API creates draft and imports recipients without sending",
     clientId: businessClientId,
     userId: businessAdmin.id,
     name: "Campaign Public API",
-    scopes: ["read", "write", "campaigns"],
+    scopes: ["read", "write", "campaigns", "contacts"],
     requestId: `${prefix}:campaign-public-key`,
   });
   assert.equal(apiKey.ok, true);
@@ -12213,6 +12213,15 @@ test("public campaign API creates draft and imports recipients without sending",
     requestId: `${prefix}:campaign-public-key-denied`,
   });
   assert.equal(contactsOnlyKey.ok, true);
+  const campaignsOnlyWriteKey = await createPublicApiKey({
+    prisma,
+    clientId: businessClientId,
+    userId: businessAdmin.id,
+    name: "Campaigns Without Contacts Public API",
+    scopes: ["read", "write", "campaigns"],
+    requestId: `${prefix}:campaign-public-key-without-contacts`,
+  });
+  assert.equal(campaignsOnlyWriteKey.ok, true);
 
   const denied = await requestWithBearer<ErrorPayload>(
     "GET",
@@ -12253,6 +12262,17 @@ test("public campaign API creates draft and imports recipients without sending",
   assert.equal(created.body.campaign.status, "draft");
   assert.equal(created.body.campaign.templateId, template.id);
   assert.equal(created.body.campaign.totalRecipients, 0);
+  const leadsBeforeDeniedImport = await prisma.lead.count({ where: { tenantId: businessClientId } });
+  const deniedImport = await requestWithBearer<ErrorPayload>(
+    "POST",
+    `/public-api/v1/campaigns/${created.body.campaign.id}/recipients`,
+    campaignsOnlyWriteKey.secret,
+    { recipients: [{ phone: "5541991299999", name: "Sem escopo de contatos", variables: { "1": "Teste" } }] }
+  );
+  assert.equal(deniedImport.status, 403);
+  assert.equal(getErrorCode(deniedImport.body), "forbidden");
+  assert.equal(await prisma.lead.count({ where: { tenantId: businessClientId } }), leadsBeforeDeniedImport);
+  assert.equal((await prisma.campaign.findUniqueOrThrow({ where: { id: created.body.campaign.id } })).totalRecipients, 0);
   await recordContactOptOut({
     clientId: businessClientId,
     waId: "5541991200003",
@@ -12405,6 +12425,52 @@ test("app CSV import previews and creates draft without sending", async () => {
   });
   assert.equal(outboundAfter, outboundBefore);
   assert.equal(sendEvents, 0);
+});
+
+test("app CSV CRM import requires CRM capability before any mutation", async () => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `app_csv_crm_guard_${prefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso",
+    },
+  });
+  const csvText = "telefone,nome\n5541991399001,Sem permissao";
+  const mapping = { phoneColumn: "telefone", nameColumn: "nome", variableColumns: {} };
+  const campaignsBefore = await prisma.campaign.count({ where: { clientId: businessClientId } });
+  const leadsBefore = await prisma.lead.count({ where: { tenantId: businessClientId } });
+  const contactsBefore = await prisma.contact.count({ where: { clientId: businessClientId } });
+  await prisma.client.update({
+    where: { id: businessClientId },
+    data: { features: { campaigns: true, crm: false } },
+  });
+  try {
+    const preview = await request<ErrorPayload>("POST", "/app/campaigns/csv-preview", businessAdmin, {
+      templateId: template.id,
+      csvText,
+      mapping,
+    });
+    assert.equal(preview.status, 403);
+    assert.equal(getErrorCode(preview.body), "capability_not_enabled");
+
+    const draft = await request<ErrorPayload>("POST", "/app/campaigns/drafts/csv", businessAdmin, {
+      name: "CRM capability denied",
+      templateId: template.id,
+      csvText,
+      mapping,
+      returnDestination: defaultCampaignReturnDestination(),
+    });
+    assert.equal(draft.status, 403);
+    assert.equal(getErrorCode(draft.body), "capability_not_enabled");
+    assert.equal(await prisma.campaign.count({ where: { clientId: businessClientId } }), campaignsBefore);
+    assert.equal(await prisma.lead.count({ where: { tenantId: businessClientId } }), leadsBefore);
+    assert.equal(await prisma.contact.count({ where: { clientId: businessClientId } }), contactsBefore);
+  } finally {
+    await prisma.client.update({ where: { id: businessClientId }, data: { features: {} } });
+  }
 });
 
 test("campaign draft send revalidates recipients before starting", async () => {

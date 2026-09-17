@@ -73,7 +73,7 @@ them by owner decision.
 | Template category | Utility only; no marketing | REQUIRED |
 | Recipient source | Sanitized and approved list | WAITING OWNER/CRA |
 | Import validation | Normalize phones, dedupe, reject invalid/provisional/excluded/opt-out contacts | PRODUCT SUPPORTED / NEEDS CRA RUN |
-| CRM situation import/upsert/report | Optional `Situação no CRM`; existing contact updates instead of duplicate; blank fields preserve data; detailed report required | OPEN / NEXT CRA CAMPAIGN IMPORT FRONT |
+| CRM situation import/upsert/report | Optional `Situação no CRM`; existing contact updates instead of duplicate; blank fields preserve data; detailed formula-safe report CSV exposed after atomic per-row import | IMPLEMENTED / TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER REVALIDATION PENDING |
 | Variables | Required placeholders mapped per recipient or blocked | PRODUCT SUPPORTED / NEEDS CRA RUN |
 | Draft | Campaign can be created without sending | PRODUCT SUPPORTED / NEEDS CRA RUN |
 | Response destination | New campaign draft/import requires explicit response destination: human department with concrete queue, or active principal automated flow | IMPLEMENTED LOCALLY / NEEDS CRA RUN |

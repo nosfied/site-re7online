@@ -818,8 +818,36 @@ export type AppCampaignImportSummary = {
   existingDuplicates: number;
   optOutBlocked: number;
   missingRequiredVariables: number;
+  unresolvedCrmSituations?: number;
+  created?: number;
+  updated?: number;
+  unchanged?: number;
+  consolidated?: number;
   readyToImport: number;
   blockedByReason: Array<{ reason: string; label: string; count: number }>;
+};
+
+export type AppCampaignImportReportRow = {
+  sourceRow: number | null;
+  maskedIdentity: string;
+  operation: string;
+  leadId: string | null;
+  contactId: string | null;
+  fieldsChanged: string[];
+  oldCrmSituation: string | null;
+  newCrmSituation: string | null;
+  oldCrmSituationLabel: string | null;
+  newCrmSituationLabel: string | null;
+  nameUpdated: boolean;
+  duplicate: boolean;
+  errorCode: string | null;
+  reason: string | null;
+};
+
+export type AppCampaignImportReport = {
+  summary: AppCampaignImportSummary;
+  rows: AppCampaignImportReportRow[];
+  csv: string;
 };
 
 export type AppCampaignImportPreview = {
@@ -830,6 +858,16 @@ export type AppCampaignImportPreview = {
     phoneDisplay: string;
     identifierDisplay: string;
     variables: Record<string, string>;
+    operation?: "NOVO" | "ATUALIZAR" | "SEM_ALTERACAO";
+    leadId?: string | null;
+    fieldsChanged?: string[];
+    crmSituation?: {
+      input: string | null;
+      statusId: string | null;
+      label: string | null;
+      previousStatusId: string | null;
+      previousLabel: string | null;
+    };
   }>;
   errors: Array<{
     rowNumber: number | null;
@@ -4928,6 +4966,7 @@ export async function previewAppCampaignCsv(
     mapping: {
       phoneColumn?: string | null;
       nameColumn?: string | null;
+      crmSituationColumn?: string | null;
       variableColumns?: Record<string, string | null>;
     };
   }
@@ -4947,6 +4986,7 @@ export async function createAppCampaignDraftFromCsv(
     mapping: {
       phoneColumn?: string | null;
       nameColumn?: string | null;
+      crmSituationColumn?: string | null;
       variableColumns?: Record<string, string | null>;
     };
     returnDestination: AppCampaignReturnDestination;
@@ -4957,6 +4997,7 @@ export async function createAppCampaignDraftFromCsv(
   draft: {
     summary: AppCampaignImportSummary;
     recipients: AppCampaignImportPreview["recipients"];
+    report?: AppCampaignImportReport;
   };
   csv: {
     headers: string[];

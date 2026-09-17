@@ -1,16 +1,17 @@
 # Campaign Import / CRM Upsert Requirements
 
-Status: CRA CONTRACT ADHERENCE FOLLOW-UP / CAMPAIGN IMPORT ENHANCEMENT.
+Status: IMPLEMENTED / TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER
+REVALIDATION PENDING.
 
-Last updated: 2026-09-16.
+Last updated: 2026-09-17.
 
-This document defines the future contract only. It does not implement code,
-change runtime behavior, authorize real sends or alter the approved outbound
-return destination delivery.
+This document records the implemented local contract for campaign CSV import as
+CRM upsert. It does not authorize real sends, production deployment or CRA
+customer-data import before owner validation.
 
 ## Optional CRM Situation Column
 
-Future campaign/contact audience imports may optionally accept:
+Campaign/contact audience imports may optionally accept:
 
 ```text
 Situação no CRM
@@ -34,10 +35,10 @@ When the column is present and populated:
 - use deterministic matching and avoid unsafe fuzzy matching;
 - preserve import dry-run/preview before persistence.
 
-## CRM Upsert Contract
+## Implemented CRM Upsert Contract
 
 This front is not only a new optional CSV/XLSX column. Campaign/contact import
-must behave as a safe tenant-scoped CRM upsert.
+behaves as a safe tenant-scoped CRM upsert for CSV campaign imports.
 
 If an imported identity matches an existing CRM contact, the import must update
 the existing canonical record and must not create another contact. Reuse the
@@ -45,15 +46,16 @@ current identity, normalization and deduplication mechanism; do not build a
 second contact matching algorithm without first auditing the actual canonical
 model.
 
-Before implementation, determine which identifier is authoritative:
+Implementation audit result:
 
-- normalized phone;
-- Lead identity;
-- Contact identity;
-- channel identity;
-- another canonical model.
-
-Do not assume this before auditing the code and schema.
+- `Lead.status` is the canonical CRM situation reference used by CRM filters;
+- existing identity normalization/reuse lives in
+  `apps/whatsapp-agent/src/crm/crmWhatsappIdentity.ts`;
+- campaign preview and commit reuse the side-effect-free identity resolver from
+  the canonical `upsertCrmContact` service instead of maintaining a second
+  matching/hash engine;
+- same-tenant phone/WhatsApp identity and CRM lead/contact linkage determine
+  whether the import creates, updates or leaves a record unchanged.
 
 ## Field Update Semantics
 
@@ -85,10 +87,11 @@ Mandatory invariant:
 
 - do not create one contact per duplicated row.
 
-Implementation must audit existing import semantics before choosing whether the
-policy is merge, first valid row wins, last valid row wins or conflict requiring
-review. Until that audit is complete, only the no-duplicate invariant is
-canonical.
+Implemented policy: a row claims an identity only after its row-level
+validations pass. The first valid occurrence wins deterministically; invalid
+occurrences before or after it are reported for their actual validation error,
+and later valid repetitions are consolidated as duplicates. They do not create
+additional contacts.
 
 ## Matching Rules
 
@@ -106,8 +109,7 @@ guessed; report them for review/error.
 
 ## Import Preview
 
-Future implementation should preview resolution before final import where the
-current import architecture permits.
+Preview resolves status and intended CRM operation before final import.
 
 Per row, classify as applicable:
 
@@ -125,8 +127,8 @@ workflow.
 
 ## Detailed Post-Import Report
 
-After every completed import, generate and make available a detailed result
-report.
+After every completed campaign CSV import, the app receives a detailed result
+report and exposes a CSV download.
 
 Summary must include:
 
@@ -169,7 +171,7 @@ conventions if the product already persists import jobs/results.
 Audit whether import currently supports partial success before redefining
 behavior.
 
-Future implementation must clearly distinguish:
+Implementation distinguishes:
 
 - whole-file fatal failure;
 - row-level validation failure;
@@ -177,6 +179,16 @@ Future implementation must clearly distinguish:
 - skipped/no-change row.
 
 Never report an import simply as success if some rows failed.
+
+Each validated row commits its canonical CRM upsert, optional `Lead.status`
+change and cumulative campaign seed in one Prisma transaction. A failure before
+seed persistence rolls back that row's CRM changes and is counted/reported as a
+row error. Completion telemetry remains separate from the row commit, but it
+does not define recipient membership.
+
+The app CSV preview and draft endpoints require both `campaigns` and `crm`.
+Public API recipient import requires `write`, `campaigns` and `contacts` scopes
+plus the tenant CRM capability. Denial occurs before CRM/campaign mutation.
 
 ## Multitenant And Idempotency Rules
 
@@ -190,17 +202,41 @@ Mandatory:
 - no cross-tenant CRM situation lookup;
 - no cross-tenant contact matching.
 
-## Required Audit Before Implementation
+## Audit Result
 
-- Actual CRM status model and canonical storage location.
-- Current campaign import schema and preview/persist contracts.
-- Current segmentation use of CRM status in campaign audience filters.
-- Status naming, slugging, active/inactive behavior and uniqueness rules.
-- Current identity/normalization/deduplication mechanism.
-- Existing contact update semantics for name and CRM status.
-- Duplicate-row behavior in current import flows.
-- Partial-success/failure semantics.
-- Existing export/download infrastructure for operator import reports.
+- Actual CRM status model: `Lead.status`.
+- Status catalog source: same-tenant `TenantOperationalConfig.config.crmBusinessStatuses`
+  via DB-first resolver with existing fallback.
+- Current segmentation use: campaign audience filters use CRM status ids/labels
+  from the same tenant.
+- Status matching: active same-tenant id or label, deterministic trim/case/accent
+  normalization, no unsafe fuzzy matching.
+- Identity/deduplication: existing CRM WhatsApp identity normalization and
+  the same canonical identity resolver used by `upsertCrmContact`, including
+  `externalUserHash`-only reuse.
+- Field updates: valid nonblank imported name/status may update; blank cells
+  preserve.
+- Duplicate-row behavior: consolidated/no duplicate contact.
+- Partial-success behavior: valid rows may import while row-level failures are
+  reported.
+- Report/download: detailed CSV is returned in the import response and exposed
+  in `/app/campaigns`; user-controlled cells beginning with `=`, `+`, `-` or
+  `@` are neutralized as spreadsheet data.
+
+## Principles Audit History
+
+- Previous owner result: PARTIAL PASS.
+- Principles audit on 2026-09-17: BLOCKED on four P1 findings: transaction
+  consistency, premature duplicate claiming, parallel preview identity matching
+  and missing CRM capability enforcement.
+- Corrective batch on 2026-09-17: focused tests and principles re-audit PASS;
+  owner visual revalidation remains pending.
+- Residual P2: preview performs sequential canonical identity resolution per
+  validated row. Local synthetic preview measured about 231 ms for 100 rows and
+  1.76 s for 1,000 rows. Future optimization must preserve the single canonical
+  resolver contract.
+- Residual P3: translate remaining internal operation/error codes displayed in
+  operator detail without changing persisted report semantics.
 
 ## CRA Classification
 
@@ -211,5 +247,6 @@ Current CRA order:
 1. recipient B controlled Utility validation - done on Demo;
 2. opt-out E2E - done on Demo;
 3. reports / exports / billing - next;
-4. CRM import/upsert/report with `Situação no CRM`;
-5. acceptance package.
+4. owner validation for CRM import/upsert/report with `Situação no CRM`;
+5. CRA-approved sample import evidence if required;
+6. acceptance package.

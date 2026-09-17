@@ -6,6 +6,7 @@ import AppShell from "@/components/app/AppShell";
 import { buildReplayFormFromCampaign, getFriendlyCampaignError } from "@/lib/campaignDrafts";
 import {
   AppCampaignAudiencePreviewResponse,
+  AppCampaignImportReport,
   AppCampaignImportPreview,
   AppCampaignReturnDestination,
   AppCampaignReturnDestinationsResponse,
@@ -74,6 +75,7 @@ type CampaignStatusFilter =
   | "failed";
 
 type CampaignCenterTab = "create" | "drafts" | "sent" | "blocked" | "all";
+type CampaignCreationPanel = "audience" | "csv" | "manual";
 
 type CampaignToastTone = "success" | "warning" | "error" | "info";
 
@@ -262,6 +264,22 @@ function buildTemplatePreview(content: string, values: string[]) {
   );
 }
 
+function CampaignMessagePreview({ content, detail }: { content: string | null; detail: string }) {
+  return (
+    <div className="rounded-md border border-white/10 bg-re7-navy/50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Como a mensagem chegará</p>
+      {content ? (
+        <div className="mt-2 max-w-2xl rounded-md border border-emerald-300/15 bg-emerald-950/25 px-3 py-2.5 text-sm text-white/85 shadow-sm">
+          <p className="whitespace-pre-wrap">{content}</p>
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-white/55">Selecione um modelo aprovado para visualizar a mensagem.</p>
+      )}
+      <p className="mt-2 text-xs text-white/50">{detail}</p>
+    </div>
+  );
+}
+
 function formatUsd(value: number | null) {
   if (value === null) return "Valor a confirmar";
   return `US$ ${value.toLocaleString("pt-BR", {
@@ -309,6 +327,14 @@ function parseCsvHeadersForUi(input: string) {
   }
   headers.push(current.trim());
   return headers.filter(Boolean);
+}
+
+function normalizeCsvHeaderForUi(value: string) {
+  return value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function CostPreviewCard({ preview, loading, emptyText }: {
@@ -561,18 +587,21 @@ export default function AppCampaignsPage() {
   const [audiencePreviewError, setAudiencePreviewError] = useState<string | null>(null);
   const [csvText, setCsvText] = useState("");
   const [csvFileName, setCsvFileName] = useState("");
+  const [csvInputKey, setCsvInputKey] = useState(0);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvPhoneColumn, setCsvPhoneColumn] = useState("");
   const [csvNameColumn, setCsvNameColumn] = useState("");
+  const [csvCrmSituationColumn, setCsvCrmSituationColumn] = useState("");
   const [csvVariableColumns, setCsvVariableColumns] = useState<Record<string, string>>({});
   const [csvPreview, setCsvPreview] = useState<AppCampaignImportPreview | null>(null);
+  const [csvImportReport, setCsvImportReport] = useState<AppCampaignImportReport | null>(null);
   const [csvPreviewError, setCsvPreviewError] = useState<string | null>(null);
   const [loadingCsvPreview, setLoadingCsvPreview] = useState(false);
   const [creatingCsvDraft, setCreatingCsvDraft] = useState(false);
   const [creatingDraft, setCreatingDraft] = useState(false);
   const [sendingDraft, setSendingDraft] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [manualSendOpen, setManualSendOpen] = useState(false);
+  const [expandedCreationPanel, setExpandedCreationPanel] = useState<CampaignCreationPanel | null>(null);
   const [activeTab, setActiveTab] = useState<CampaignCenterTab>("create");
   const [statusFilter, setStatusFilter] = useState<CampaignStatusFilter>("all");
   const [search, setSearch] = useState("");
@@ -595,6 +624,7 @@ export default function AppCampaignsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [toast, setToast] = useState<CampaignToast | null>(null);
+  const manualSendOpen = expandedCreationPanel === "manual";
 
   const showToast = useCallback((tone: CampaignToastTone, title: string, message: string) => {
     setToast({ tone, title, message });
@@ -699,6 +729,17 @@ export default function AppCampaignsPage() {
     }
   }, [handleUnauthorized, refreshCampaignDetail, refreshCampaigns, selectedCampaignId, session, showToast]);
 
+  const defaultDraftName = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `Campanha CRM - ${formatter.format(new Date())}`;
+  }, []);
+
   const selectedTemplate = useMemo(
     () =>
       templates.find((item) => item.id === form.templateId) ??
@@ -717,14 +758,23 @@ export default function AppCampaignsPage() {
   );
 
   const templatePreview = useMemo(() => {
-    if (!selectedTemplate?.content || templateVariableLabels.length === 0) return null;
+    if (!selectedTemplate?.content) return null;
     return buildTemplatePreviewFromMappings(selectedTemplate.content, form.templateVariableMappings);
-  }, [form.templateVariableMappings, selectedTemplate, templateVariableLabels.length]);
+  }, [form.templateVariableMappings, selectedTemplate]);
 
   const manualTemplatePreview = useMemo(() => {
-    if (!selectedTemplate?.content || templateVariableLabels.length === 0) return null;
+    if (!selectedTemplate?.content) return null;
     return buildTemplatePreview(selectedTemplate.content, form.templateVariables);
-  }, [form.templateVariables, selectedTemplate, templateVariableLabels.length]);
+  }, [form.templateVariables, selectedTemplate]);
+
+  const csvTemplatePreview = useMemo(() => {
+    if (!selectedTemplate?.content) return null;
+    const sampleVariables = csvPreview?.recipients[0]?.variables ?? {};
+    return buildTemplatePreview(
+      selectedTemplate.content,
+      templateVariableLabels.map((position) => sampleVariables[position] ?? `{{${position}}}`)
+    );
+  }, [csvPreview, selectedTemplate, templateVariableLabels]);
 
   const templateVariableMappingError = useMemo(
     () =>
@@ -896,6 +946,177 @@ export default function AppCampaignsPage() {
     </div>
   );
 
+  const draftSetupEditor = (
+    <div className="grid gap-3 rounded-md border border-sky-300/20 bg-sky-950/20 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Configuração comum</p>
+          <h3 className="mt-1 text-sm font-semibold">Modelo e destino</h3>
+          <p className="mt-1 text-xs text-white/60">
+            Esta configuração vale para audiência CRM, importação CSV e envio imediato manual.
+          </p>
+        </div>
+        <span className="rounded-full border border-sky-300/25 bg-sky-900/20 px-3 py-1 text-xs text-sky-100">
+          Compartilhada
+        </span>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(240px,360px)]">
+        <label className="grid gap-1 text-sm">
+          <span className="text-white/70">Nome do rascunho</span>
+          <input
+            className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+            value={form.name}
+            onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+            placeholder={defaultDraftName}
+          />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="text-white/70">Modelo aprovado</span>
+          <select
+            className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+            value={form.templateId}
+            onChange={(event) => {
+              const template = templates.find((item) => item.id === event.target.value) ?? null;
+              const labels = getTemplateVariablePositions(template);
+              setForm((prev) => ({
+                ...prev,
+                templateId: event.target.value,
+                templateName: template?.name ?? "",
+                templateVariables: syncTemplateVariables(prev.templateVariables, labels.length),
+                templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, labels),
+              }));
+              setCsvPreview(null);
+              setCsvImportReport(null);
+            }}
+          >
+            <option value="">Selecione</option>
+            {templates.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name}
+              </option>
+            ))}
+          </select>
+          {selectedTemplate ? (
+            <span className="text-xs text-white/55">
+              Categoria na Meta: {getMetaTemplateCategoryUxLabel(selectedTemplateEffectiveCategory || selectedTemplate.category)}
+            </span>
+          ) : null}
+        </label>
+      </div>
+      {templates.length === 0 ? (
+        <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
+          <p className="font-semibold">Não há modelos ativos disponíveis para campanha.</p>
+          <p className="mt-1 text-amber-100/80">
+            Verifique os modelos aprovados ou reative um modelo em Modelos Meta.
+          </p>
+          <a
+            href="/app/templates?tab=meta-templates"
+            className="mt-2 inline-flex rounded-md border border-amber-200/40 px-3 py-1.5 font-semibold hover:bg-amber-200/10"
+          >
+            Ir para Modelos Meta
+          </a>
+        </div>
+      ) : null}
+      {selectedTemplateEffectiveCategory === "MARKETING" ? (
+        <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
+          Este modelo está classificado como Marketing pela Meta. Revise política, consentimento e custos antes de enviar.
+        </div>
+      ) : null}
+      {returnDestinationEditor}
+    </div>
+  );
+
+  const audienceVariablesEditor = templateVariableLabels.length > 0 ? (
+    <div className="grid gap-3 rounded-md border border-emerald-300/20 bg-emerald-950/15 p-3">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-100/80">Variáveis para audiência CRM</p>
+        <p className="mt-1 text-xs text-white/60">
+          Usadas somente no caminho de filtros do CRM. Para CSV, mapeie as variáveis pelas colunas do arquivo.
+        </p>
+      </div>
+      <div className="grid gap-3">
+        {form.templateVariableMappings.map((mapping, index) => (
+          <div
+            key={mapping.position}
+            className="grid gap-2 rounded-md border border-white/10 bg-re7-navy/50 p-3 lg:grid-cols-[80px_minmax(180px,1fr)_minmax(160px,1fr)_minmax(160px,1fr)]"
+          >
+            <div>
+              <p className="text-xs uppercase text-white/45">Variável</p>
+              <p className="mt-1 font-mono text-sm font-semibold text-white">{`{{${mapping.position}}}`}</p>
+            </div>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Origem</span>
+              <select
+                value={mapping.source}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    templateVariableMappings: prev.templateVariableMappings.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, source: event.target.value as TemplateVariableSource }
+                        : item
+                    ),
+                  }))
+                }
+                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+              >
+                <option value="">Selecione</option>
+                <option value="contact.displayName">Nome do contato</option>
+                <option value="lead.companyName">Empresa</option>
+                <option value="lead.city">Cidade</option>
+                <option value="fixed">Valor fixo/manual</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Fallback</span>
+              <input
+                value={mapping.fallback}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    templateVariableMappings: prev.templateVariableMappings.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, fallback: event.target.value } : item
+                    ),
+                  }))
+                }
+                placeholder="ex: cliente"
+                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Valor fixo</span>
+              <input
+                value={mapping.value}
+                disabled={mapping.source !== "fixed"}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    templateVariableMappings: prev.templateVariableMappings.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, value: event.target.value } : item
+                    ),
+                  }))
+                }
+                placeholder={mapping.source === "fixed" ? "Valor enviado" : getVariableSourceLabel(mapping.source)}
+                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </label>
+          </div>
+        ))}
+      </div>
+      {templateVariableMappingError ? (
+        <p className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
+          {templateVariableMappingError}
+        </p>
+      ) : null}
+    </div>
+  ) : null;
+
+  const audiencePreviewDisabledReason = !form.templateId
+    ? "Selecione um modelo aprovado para gerar a prévia."
+    : templateVariableMappingError;
+
+  const canGenerateAudiencePreview = Boolean(session && form.templateId && !templateVariableMappingError && !loadingAudiencePreview);
+
   useEffect(() => {
     if (!session || !form.templateId || !audiencePreview) {
       setAudienceCostPreview(null);
@@ -968,17 +1189,6 @@ export default function AppCampaignsPage() {
       { total: 0, drafts: 0, sending: 0, sent: 0, blocked: 0, failed: 0 }
     );
   }, [campaigns]);
-
-  const defaultDraftName = useMemo(() => {
-    const formatter = new Intl.DateTimeFormat("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    return `Campanha CRM - ${formatter.format(new Date())}`;
-  }, []);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1385,6 +1595,11 @@ export default function AppCampaignsPage() {
 
   const handleAudiencePreviewSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (audiencePreviewDisabledReason) {
+      setAudiencePreviewError(null);
+      showToast("warning", "Prévia incompleta", audiencePreviewDisabledReason);
+      return;
+    }
     await loadAudiencePreview(1);
   };
 
@@ -1392,7 +1607,26 @@ export default function AppCampaignsPage() {
     setAudienceFilters(EMPTY_AUDIENCE_FILTERS);
     setAudiencePage(1);
     setAudiencePreview(null);
+    setAudienceCostPreview(null);
     setAudiencePreviewError(null);
+    setForm((prev) => ({
+      ...prev,
+      templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, templateVariableLabels),
+    }));
+  };
+
+  const resetCsvImportState = () => {
+    setCsvText("");
+    setCsvFileName("");
+    setCsvHeaders([]);
+    setCsvPhoneColumn("");
+    setCsvNameColumn("");
+    setCsvCrmSituationColumn("");
+    setCsvVariableColumns({});
+    setCsvPreview(null);
+    setCsvImportReport(null);
+    setCsvPreviewError(null);
+    setCsvInputKey((prev) => prev + 1);
   };
 
   const handleCreateDraftFromAudience = async () => {
@@ -1470,12 +1704,7 @@ export default function AppCampaignsPage() {
     setCsvPreview(null);
     setCsvPreviewError(null);
     if (!file) {
-      setCsvText("");
-      setCsvFileName("");
-      setCsvHeaders([]);
-      setCsvPhoneColumn("");
-      setCsvNameColumn("");
-      setCsvVariableColumns({});
+      resetCsvImportState();
       return;
     }
     const text = await file.text();
@@ -1485,16 +1714,35 @@ export default function AppCampaignsPage() {
     setCsvHeaders(headers);
     setCsvPhoneColumn((previous) => (previous && headers.includes(previous) ? previous : headers[0] ?? ""));
     setCsvNameColumn((previous) => (previous && headers.includes(previous) ? previous : ""));
+    setCsvCrmSituationColumn((previous) => {
+      if (previous && headers.includes(previous)) return previous;
+      return headers.find((header) => normalizeCsvHeaderForUi(header) === "situacao no crm") ?? "";
+    });
     setCsvVariableColumns((previous) =>
       Object.fromEntries(templateVariableLabels.map((label) => [label, headers.includes(previous[label]) ? previous[label] : ""]))
     );
+    setCsvImportReport(null);
   };
 
   const buildCsvMappingPayload = () => ({
     phoneColumn: csvPhoneColumn || null,
     nameColumn: csvNameColumn || null,
+    crmSituationColumn: csvCrmSituationColumn || null,
     variableColumns: csvVariableColumns,
   });
+
+  const handleDownloadCsvImportReport = () => {
+    if (!csvImportReport?.csv) return;
+    const blob = new Blob([csvImportReport.csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `campaign-import-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const handleCsvPreview = async () => {
     if (!session) return;
@@ -1519,6 +1767,7 @@ export default function AppCampaignsPage() {
     }
     setLoadingCsvPreview(true);
     setCsvPreviewError(null);
+    setCsvImportReport(null);
     try {
       const preview = await previewAppCampaignCsv(session, {
         templateId,
@@ -1597,8 +1846,10 @@ export default function AppCampaignsPage() {
       setCsvHeaders([]);
       setCsvPhoneColumn("");
       setCsvNameColumn("");
+      setCsvCrmSituationColumn("");
       setCsvVariableColumns({});
       setCsvPreview(null);
+      setCsvImportReport(created.draft.report ?? null);
       setFormError(null);
       setStatusFilter("draft");
       setActiveTab("drafts");
@@ -1791,7 +2042,7 @@ export default function AppCampaignsPage() {
     setAudiencePreviewError(null);
     setAudiencePage(1);
     setActiveTab("create");
-    setManualSendOpen(true);
+    setExpandedCreationPanel("manual");
     if (replayForm.templateName && !matchedTemplate) {
       showToast(
         "warning",
@@ -1863,22 +2114,21 @@ export default function AppCampaignsPage() {
           <div className="max-w-5xl">
             <h2 className="text-base font-semibold">Central de Campanhas</h2>
             <p className="mt-2 text-sm leading-6 text-white/70">
-              Crie campanhas com modelos aprovados pela Meta, usando contatos elegíveis do CRM.
               Antes do envio, a plataforma valida bloqueio de envio ativo, contatos anonimizados,
               WhatsApp válido, duplicidades e variáveis obrigatórias.
             </p>
           </div>
           <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
             {[
-              "Escolha a audiência",
-              "Valide elegíveis",
-              "Escolha o modelo",
+              "Escolha o modelo e defina o destino",
               "Mapeie variáveis",
+              "Importe CSV ou filtre CRM",
+              "Valide elegíveis",
               "Crie rascunho",
               "Revise e envie",
             ].map((label, index) => (
               <div key={label} className="rounded-md border border-white/10 bg-re7-navy/35 p-3">
-                <p className="text-xs font-semibold text-re7-sky">0{index + 1}</p>
+                <p className="text-xs font-semibold text-re7-sky">Etapa {index + 1}</p>
                 <p className="mt-1 text-sm text-white/85">{label}</p>
               </div>
             ))}
@@ -1909,37 +2159,46 @@ export default function AppCampaignsPage() {
               <p className="mt-1 text-xl font-semibold">{campaignStats.total}</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {CAMPAIGN_CENTER_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setStatusFilter(getTabStatusFilter(tab.id));
-                  setCurrentPage(1);
-                }}
-                className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-                  activeTab === tab.id
-                    ? "border-re7-sky bg-re7-sky/20 text-white"
-                    : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
         </div>
       </section>
+
+      <nav
+        aria-label="Visualização de campanhas"
+        className="flex flex-col gap-2 border-y border-white/10 bg-re7-navy/30 px-1 py-3 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide text-white/55">Visualização</p>
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Conteúdo de campanhas">
+          {CAMPAIGN_CENTER_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setStatusFilter(getTabStatusFilter(tab.id));
+                setCurrentPage(1);
+              }}
+              className={`rounded-md border px-3 py-1.5 text-sm font-medium transition ${
+                activeTab === tab.id
+                  ? "border-re7-sky bg-re7-sky/20 text-white"
+                  : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </nav>
 
       <section className={`${activeTab === "create" ? "grid" : "hidden"} rounded-xl border border-white/10 bg-white/5`}>
         <div className="border-b border-white/10 px-3 py-2.5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Bloco 1</p>
-              <h2 className="mt-1 text-sm font-semibold">Audiência CRM</h2>
+              <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Nova campanha</p>
+              <h2 className="mt-1 text-sm font-semibold">Criar rascunho</h2>
               <p className="mt-1 text-xs text-white/60">
-                Escolha filtros, gere a prévia e valide quem está elegível antes de montar a campanha.
+                Configure o modelo uma vez e escolha entre importar CSV ou selecionar uma audiência do CRM.
               </p>
             </div>
             <span className="rounded-full border border-sky-300/30 bg-sky-900/20 px-3 py-1 text-xs text-sky-100">
@@ -1948,10 +2207,59 @@ export default function AppCampaignsPage() {
           </div>
         </div>
         <div className="grid gap-3 p-3">
-          <p className="rounded-md border border-sky-300/25 bg-sky-900/20 p-3 text-sm text-sky-100">
-            Esta prévia não envia mensagens e não cria campanha. Ela apenas valida contatos do CRM para uso futuro em campanhas com modelo aprovado.
-          </p>
-          <form className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_160px_150px_150px_150px_auto]" onSubmit={handleAudiencePreviewSubmit}>
+          {draftSetupEditor}
+          <article className="overflow-hidden rounded-xl border border-emerald-300/20 bg-emerald-950/10">
+            <div
+              role="button"
+              tabIndex={0}
+              aria-expanded={expandedCreationPanel === "audience"}
+              aria-controls="campaign-creation-panel-audience"
+              onClick={() => setExpandedCreationPanel((current) => current === "audience" ? null : "audience")}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setExpandedCreationPanel((current) => current === "audience" ? null : "audience");
+                }
+              }}
+              className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-white/10 bg-white/[0.075] px-3 py-3 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-300/60 md:px-4"
+            >
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-100/80">Audiência CRM</p>
+                <h3 className="mt-1 text-sm font-semibold">Selecionar por filtros</h3>
+                <p className="mt-1 text-xs text-white/60">
+                  Gere uma prévia dos contatos elegíveis do CRM e crie rascunho com essa audiência.
+                </p>
+              </div>
+              <div className="expand-row-action-slot flex min-w-max shrink-0 items-center justify-end gap-3 justify-self-end whitespace-nowrap">
+                <span className="hidden rounded-full border border-emerald-300/25 bg-emerald-900/20 px-3 py-1 text-xs text-emerald-100 sm:inline-flex">
+                  Opcional
+                </span>
+                <button
+                  type="button"
+                  aria-expanded={expandedCreationPanel === "audience"}
+                  aria-controls="campaign-creation-panel-audience"
+                  aria-label={expandedCreationPanel === "audience" ? "Recolher linha" : "Expandir linha"}
+                  title={expandedCreationPanel === "audience" ? "Recolher linha" : "Expandir linha"}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setExpandedCreationPanel((current) => current === "audience" ? null : "audience");
+                  }}
+                  className={`grid h-8 w-8 place-items-center rounded-full border text-base font-semibold leading-none transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-300/60 ${expandedCreationPanel === "audience" ? "rotate-90 border-emerald-300/50 bg-emerald-900/30 text-emerald-50" : "border-white/15 text-white/70"}`}
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+          {expandedCreationPanel === "audience" ? (
+          <div id="campaign-creation-panel-audience" className="bg-black/10 px-3 py-3 md:px-4">
+          {audienceVariablesEditor}
+          <div className={audienceVariablesEditor ? "mt-3" : ""}>
+            <CampaignMessagePreview
+              content={templatePreview}
+              detail="Prévia ilustrativa. Os valores finais serão calculados para cada contato selecionado no CRM."
+            />
+          </div>
+          <form className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_160px_150px_150px_150px_auto]" onSubmit={handleAudiencePreviewSubmit}>
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Busca</span>
               <input
@@ -2027,7 +2335,8 @@ export default function AppCampaignsPage() {
             <div className="flex items-end gap-2">
               <button
                 type="submit"
-                disabled={loadingAudiencePreview}
+                disabled={!canGenerateAudiencePreview}
+                title={audiencePreviewDisabledReason ?? undefined}
                 className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loadingAudiencePreview ? "Gerando..." : "Gerar previa"}
@@ -2035,12 +2344,26 @@ export default function AppCampaignsPage() {
               <button
                 type="button"
                 onClick={handleClearAudienceFilters}
-                className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                disabled={
+                  !audiencePreview &&
+                  !audiencePreviewError &&
+                  audienceFilters.q === EMPTY_AUDIENCE_FILTERS.q &&
+                  audienceFilters.status === EMPTY_AUDIENCE_FILTERS.status &&
+                  audienceFilters.channel === EMPTY_AUDIENCE_FILTERS.channel &&
+                  audienceFilters.optOut === EMPTY_AUDIENCE_FILTERS.optOut &&
+                  audienceFilters.hasConversation === EMPTY_AUDIENCE_FILTERS.hasConversation
+                }
+                className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Limpar
+                Cancelar prévia
               </button>
             </div>
           </form>
+          {!form.templateId && audiencePreviewDisabledReason ? (
+            <p className="mt-2 rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
+              {audiencePreviewDisabledReason}
+            </p>
+          ) : null}
 
           {audiencePreviewError ? (
             <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
@@ -2086,53 +2409,16 @@ export default function AppCampaignsPage() {
                   A analise foi limitada aos primeiros {audiencePreview.summary.analyzed} contatos para proteger desempenho.
                 </p>
               ) : null}
-              <div className="grid gap-3 rounded-md border border-white/10 bg-white/5 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)_auto]">
-                <div className="lg:col-span-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Blocos 2 e 4</p>
-                  <h3 className="mt-1 text-sm font-semibold">Modelo aprovado e rascunho</h3>
-                  <p className="mt-1 text-xs text-white/60">
-                    Escolha um modelo aprovado, revise as regras e crie um rascunho. Criar rascunho não envia mensagens.
-                  </p>
-                </div>
-                <label className="grid gap-1 text-sm">
-                  <span className="text-white/70">Nome do rascunho</span>
-                  <input
-                    className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                    value={form.name}
-                    onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                    placeholder={defaultDraftName}
-                  />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  <span className="text-white/70">Modelo aprovado</span>
-                  <select
-                    className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
-                    value={form.templateId}
-                    onChange={(event) => {
-                      const template = templates.find((item) => item.id === event.target.value) ?? null;
-                      const labels = getTemplateVariablePositions(template);
-                      setForm((prev) => ({
-                        ...prev,
-                        templateId: event.target.value,
-                        templateName: template?.name ?? "",
-                        templateVariables: syncTemplateVariables(prev.templateVariables, labels.length),
-                        templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, labels),
-                      }));
-                    }}
-                  >
-                    <option value="">Selecione</option>
-                    {templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}
-                      </option>
-                    ))}
-                  </select>
-                  {selectedTemplate ? (
-                    <span className="text-xs text-white/55">
-                      Categoria na Meta: {getMetaTemplateCategoryUxLabel(selectedTemplateEffectiveCategory || selectedTemplate.category)}
-                    </span>
-                  ) : null}
-                </label>
+              <div className="grid gap-3 rounded-md border border-white/10 bg-white/5 p-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+                <CostPreviewCard
+                  preview={audienceCostPreview}
+                  loading={costPreviewLoading}
+                  emptyText={
+                    form.templateId
+                      ? "A estimativa será exibida após a prévia de audiência."
+                      : "Selecione um modelo para estimar custo."
+                  }
+                />
                 <div className="flex flex-col justify-end gap-2">
                   <p className="text-xs text-white/60">
                     {audienceEligibleItems.length} elegiveis serao incluidos; {audiencePreview.summary.blocked} bloqueados serao ignorados.
@@ -2149,137 +2435,9 @@ export default function AppCampaignsPage() {
                     onClick={handleCreateDraftFromAudience}
                     className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {creatingDraft ? "Criando..." : "Criar rascunho de campanha"}
+                    {creatingDraft ? "Criando..." : "Criar rascunho com audiência"}
                   </button>
                 </div>
-                {templates.length === 0 ? (
-                  <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100 lg:col-span-3">
-                    <p className="font-semibold">Não há modelos ativos disponíveis para campanha.</p>
-                    <p className="mt-1 text-amber-100/80">
-                      Verifique os modelos aprovados ou reative um modelo em Modelos Meta.
-                    </p>
-                    <a
-                      href="/app/templates?tab=meta-templates"
-                      className="mt-2 inline-flex rounded-md border border-amber-200/40 px-3 py-1.5 font-semibold hover:bg-amber-200/10"
-                    >
-                      Ir para Modelos Meta
-                    </a>
-                  </div>
-                ) : null}
-                {selectedTemplateEffectiveCategory === "MARKETING" ? (
-                  <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100 lg:col-span-3">
-                    Este modelo está classificado como Marketing pela Meta. Revise política, consentimento e custos antes de enviar.
-                  </div>
-                ) : null}
-                {returnDestinationEditor}
-                <div className="lg:col-span-3">
-                  <CostPreviewCard
-                    preview={audienceCostPreview}
-                    loading={costPreviewLoading}
-                    emptyText={
-                      form.templateId
-                        ? "A estimativa será exibida após a prévia de audiência."
-                        : "Selecione um modelo para estimar custo."
-                    }
-                  />
-                </div>
-                {templateVariableLabels.length > 0 ? (
-                  <div className="grid gap-3 rounded-md border border-re7-sky/20 bg-re7-sky/10 p-3 lg:col-span-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Bloco 3</p>
-                      <p className="text-sm font-semibold text-sky-100">Variáveis do modelo</p>
-                      <p className="mt-1 text-xs text-white/60">
-                        Defina como cada variável será preenchida para cada contato antes de criar o rascunho.
-                      </p>
-                    </div>
-                    <div className="grid gap-3">
-                      {form.templateVariableMappings.map((mapping, index) => (
-                        <div
-                          key={mapping.position}
-                          className="grid gap-2 rounded-md border border-white/10 bg-re7-navy/50 p-3 lg:grid-cols-[80px_minmax(180px,1fr)_minmax(160px,1fr)_minmax(160px,1fr)]"
-                        >
-                          <div>
-                            <p className="text-xs uppercase text-white/45">Variável</p>
-                            <p className="mt-1 font-mono text-sm font-semibold text-white">{`{{${mapping.position}}}`}</p>
-                          </div>
-                          <label className="grid gap-1 text-sm">
-                            <span className="text-white/70">Origem do valor</span>
-                            <select
-                              value={mapping.source}
-                              onChange={(event) =>
-                                setForm((prev) => ({
-                                  ...prev,
-                                  templateVariableMappings: prev.templateVariableMappings.map((item, itemIndex) =>
-                                    itemIndex === index
-                                      ? { ...item, source: event.target.value as TemplateVariableSource }
-                                      : item
-                                  ),
-                                }))
-                              }
-                              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                            >
-                              <option value="">Selecione</option>
-                              <option value="contact.displayName">Nome do contato</option>
-                              <option value="lead.companyName">Empresa</option>
-                              <option value="lead.city">Cidade</option>
-                              <option value="fixed">Valor fixo/manual</option>
-                            </select>
-                          </label>
-                          <label className="grid gap-1 text-sm">
-                            <span className="text-white/70">Fallback</span>
-                            <input
-                              value={mapping.fallback}
-                              onChange={(event) =>
-                                setForm((prev) => ({
-                                  ...prev,
-                                  templateVariableMappings: prev.templateVariableMappings.map((item, itemIndex) =>
-                                    itemIndex === index ? { ...item, fallback: event.target.value } : item
-                                  ),
-                                }))
-                              }
-                              placeholder="ex: cliente"
-                              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                            />
-                          </label>
-                          <label className="grid gap-1 text-sm">
-                            <span className="text-white/70">Valor fixo</span>
-                            <input
-                              value={mapping.value}
-                              disabled={mapping.source !== "fixed"}
-                              onChange={(event) =>
-                                setForm((prev) => ({
-                                  ...prev,
-                                  templateVariableMappings: prev.templateVariableMappings.map((item, itemIndex) =>
-                                    itemIndex === index ? { ...item, value: event.target.value } : item
-                                  ),
-                                }))
-                              }
-                              placeholder={mapping.source === "fixed" ? "Valor enviado" : getVariableSourceLabel(mapping.source)}
-                              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50"
-                            />
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                    {templatePreview ? (
-                      <div className="rounded-md border border-white/10 bg-re7-navy/50 p-3 text-sm text-white/80">
-                        <p className="text-xs uppercase tracking-wide text-white/50">Prévia ilustrativa</p>
-                        <p className="mt-2 whitespace-pre-wrap">{templatePreview}</p>
-                        <p className="mt-2 text-xs text-white/50">
-                          Prévia ilustrativa. O valor final será calculado para cada contato no momento do envio.
-                        </p>
-                      </div>
-                    ) : null}
-                    {templateVariableMappingError ? (
-                      <p className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
-                        {templateVariableMappingError}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-                <p className="text-xs text-white/55 lg:col-span-3">
-                  O rascunho não envia mensagens. O envio exige revisão e ação explícita do operador.
-                </p>
               </div>
               <div className="overflow-x-auto rounded-md border border-white/10">
                 <table className="w-full min-w-[860px] text-sm">
@@ -2363,23 +2521,58 @@ export default function AppCampaignsPage() {
               </div>
             </div>
           ) : null}
-          <div className="rounded-md border border-white/10 bg-white/5 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
+          </div>
+          ) : null}
+          </article>
+          <article className="overflow-hidden rounded-xl border border-sky-300/20 bg-sky-950/10">
+            <div
+              role="button"
+              tabIndex={0}
+              aria-expanded={expandedCreationPanel === "csv"}
+              aria-controls="campaign-creation-panel-csv"
+              onClick={() => setExpandedCreationPanel((current) => current === "csv" ? null : "csv")}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setExpandedCreationPanel((current) => current === "csv" ? null : "csv");
+                }
+              }}
+              className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-white/10 bg-white/[0.075] px-3 py-3 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 md:px-4"
+            >
+              <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Importação CSV</p>
                 <h3 className="mt-1 text-sm font-semibold">Criar rascunho por arquivo</h3>
                 <p className="mt-1 text-xs text-white/60">
                   O arquivo é validado antes da criação do rascunho. Nenhuma mensagem é enviada nesta etapa.
                 </p>
               </div>
-              <span className="rounded-full border border-sky-300/30 bg-sky-900/20 px-3 py-1 text-xs text-sky-100">
-                Rascunho
-              </span>
+              <div className="expand-row-action-slot flex min-w-max shrink-0 items-center justify-end gap-3 justify-self-end whitespace-nowrap">
+                <span className="hidden rounded-full border border-sky-300/30 bg-sky-900/20 px-3 py-1 text-xs text-sky-100 sm:inline-flex">
+                  Rascunho
+                </span>
+                <button
+                  type="button"
+                  aria-expanded={expandedCreationPanel === "csv"}
+                  aria-controls="campaign-creation-panel-csv"
+                  aria-label={expandedCreationPanel === "csv" ? "Recolher linha" : "Expandir linha"}
+                  title={expandedCreationPanel === "csv" ? "Recolher linha" : "Expandir linha"}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setExpandedCreationPanel((current) => current === "csv" ? null : "csv");
+                  }}
+                  className={`grid h-8 w-8 place-items-center rounded-full border text-base font-semibold leading-none transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 ${expandedCreationPanel === "csv" ? "rotate-90 border-re7-sky/50 bg-re7-sky/20 text-sky-50" : "border-white/15 text-white/70"}`}
+                >
+                  ›
+                </button>
+              </div>
             </div>
+            {expandedCreationPanel === "csv" ? (
+            <div id="campaign-creation-panel-csv" className="bg-black/10 px-3 py-3 md:px-4">
             <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(180px,260px)_minmax(180px,260px)]">
               <label className="grid gap-1 text-sm">
                 <span className="text-white/70">Arquivo CSV</span>
                 <input
+                  key={csvInputKey}
                   type="file"
                   accept=".csv,text/csv"
                   className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white file:mr-3 file:rounded file:border-0 file:bg-re7-orange file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white"
@@ -2425,6 +2618,26 @@ export default function AppCampaignsPage() {
                   ))}
                 </select>
               </label>
+              <label className="grid gap-1 text-sm lg:col-start-2">
+                <span className="text-white/70">Situação no CRM</span>
+                <select
+                  value={csvCrmSituationColumn}
+                  disabled={csvHeaders.length === 0}
+                  onChange={(event) => {
+                    setCsvCrmSituationColumn(event.target.value);
+                    setCsvPreview(null);
+                    setCsvImportReport(null);
+                  }}
+                  className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white disabled:opacity-50"
+                >
+                  <option value="">Não mapear</option>
+                  {csvHeaders.map((header) => (
+                    <option key={header} value={header}>
+                      {header}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {templateVariableLabels.length > 0 ? (
                 <div className="grid gap-2 lg:col-span-3 md:grid-cols-2 xl:grid-cols-3">
                   {templateVariableLabels.map((label) => (
@@ -2436,6 +2649,7 @@ export default function AppCampaignsPage() {
                         onChange={(event) => {
                           setCsvVariableColumns((prev) => ({ ...prev, [label]: event.target.value }));
                           setCsvPreview(null);
+                          setCsvImportReport(null);
                         }}
                         className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white disabled:opacity-50"
                       >
@@ -2450,6 +2664,16 @@ export default function AppCampaignsPage() {
                   ))}
                 </div>
               ) : null}
+            </div>
+            <div className="mt-3">
+              <CampaignMessagePreview
+                content={csvTemplatePreview}
+                detail={
+                  csvPreview?.recipients[0]
+                    ? "Exemplo preenchido com os dados da primeira linha válida da pré-visualização."
+                    : "As variáveis serão preenchidas pelas colunas mapeadas após a pré-visualização do arquivo."
+                }
+              />
             </div>
             {csvPreviewError ? (
               <p className="mt-3 rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
@@ -2476,8 +2700,29 @@ export default function AppCampaignsPage() {
                   <div className="rounded-md border border-red-400/20 bg-red-900/20 p-3">
                     <p className="text-xs uppercase tracking-wide text-red-100/70">Bloqueados</p>
                     <p className="mt-1 text-lg font-semibold text-red-100">
-                      {csvPreview.summary.invalid + csvPreview.summary.optOutBlocked + csvPreview.summary.missingRequiredVariables}
+                      {csvPreview.summary.invalid +
+                        csvPreview.summary.optOutBlocked +
+                        csvPreview.summary.missingRequiredVariables +
+                        (csvPreview.summary.unresolvedCrmSituations ?? 0)}
                     </p>
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-4">
+                  <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                    <p className="text-xs uppercase tracking-wide text-white/55">Novos contatos</p>
+                    <p className="mt-1 text-lg font-semibold">{csvPreview.summary.created ?? 0}</p>
+                  </div>
+                  <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                    <p className="text-xs uppercase tracking-wide text-white/55">Atualizações</p>
+                    <p className="mt-1 text-lg font-semibold">{csvPreview.summary.updated ?? 0}</p>
+                  </div>
+                  <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                    <p className="text-xs uppercase tracking-wide text-white/55">Sem alteração</p>
+                    <p className="mt-1 text-lg font-semibold">{csvPreview.summary.unchanged ?? 0}</p>
+                  </div>
+                  <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                    <p className="text-xs uppercase tracking-wide text-white/55">Consolidados</p>
+                    <p className="mt-1 text-lg font-semibold">{csvPreview.summary.consolidated ?? 0}</p>
                   </div>
                 </div>
                 {csvPreview.summary.blockedByReason.length > 0 ? (
@@ -2491,12 +2736,14 @@ export default function AppCampaignsPage() {
                 ) : null}
                 {csvPreview.recipients.length > 0 ? (
                   <div className="overflow-x-auto rounded-md border border-white/10">
-                    <table className="w-full min-w-[520px] text-sm">
+                    <table className="w-full min-w-[760px] text-sm">
                       <thead className="bg-white/10 text-left">
                         <tr>
                           <th className="px-3 py-2">Linha</th>
                           <th className="px-3 py-2">Contato</th>
                           <th className="px-3 py-2">Referência</th>
+                          <th className="px-3 py-2">Operação CRM</th>
+                          <th className="px-3 py-2">Situação no CRM</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2505,6 +2752,10 @@ export default function AppCampaignsPage() {
                             <td className="px-3 py-2 text-white/65">{recipient.rowNumber ?? "-"}</td>
                             <td className="px-3 py-2 font-medium">{recipient.identifierDisplay}</td>
                             <td className="px-3 py-2 font-mono text-xs text-white/70">{recipient.phoneDisplay}</td>
+                            <td className="px-3 py-2 text-white/75">{recipient.operation ?? "-"}</td>
+                            <td className="px-3 py-2 text-white/75">
+                              {recipient.crmSituation?.label ?? recipient.crmSituation?.input ?? "-"}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -2513,15 +2764,72 @@ export default function AppCampaignsPage() {
                 ) : null}
               </div>
             ) : null}
-            <div className="mt-3">{returnDestinationEditor}</div>
+            {csvImportReport ? (
+              <div className="mt-3 grid gap-3 rounded-md border border-emerald-400/20 bg-emerald-950/10 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-100/70">Relatório da importação</p>
+                    <p className="mt-1 text-sm text-white/75">
+                      {csvImportReport.summary.created ?? 0} criados, {csvImportReport.summary.updated ?? 0} atualizados,{" "}
+                      {csvImportReport.summary.unchanged ?? 0} sem alteração.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadCsvImportReport}
+                    className="rounded-md border border-emerald-300/30 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-900/30"
+                  >
+                    Baixar relatório CSV
+                  </button>
+                </div>
+                {csvImportReport.rows.length > 0 ? (
+                  <div className="overflow-x-auto rounded-md border border-white/10">
+                    <table className="w-full min-w-[760px] text-sm">
+                      <thead className="bg-white/10 text-left">
+                        <tr>
+                          <th className="px-3 py-2">Linha</th>
+                          <th className="px-3 py-2">Referência</th>
+                          <th className="px-3 py-2">Operação</th>
+                          <th className="px-3 py-2">Campos</th>
+                          <th className="px-3 py-2">Situação</th>
+                          <th className="px-3 py-2">Resultado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {csvImportReport.rows.slice(0, 10).map((row, index) => (
+                          <tr key={`${row.sourceRow ?? "row"}-${row.maskedIdentity}-${index}`} className="border-t border-white/10">
+                            <td className="px-3 py-2 text-white/65">{row.sourceRow ?? "-"}</td>
+                            <td className="px-3 py-2 font-mono text-xs text-white/70">{row.maskedIdentity}</td>
+                            <td className="px-3 py-2 text-white/75">{row.operation}</td>
+                            <td className="px-3 py-2 text-white/75">{row.fieldsChanged.join(", ") || "-"}</td>
+                            <td className="px-3 py-2 text-white/75">
+                              {row.newCrmSituationLabel ?? row.oldCrmSituationLabel ?? "-"}
+                            </td>
+                            <td className="px-3 py-2 text-white/75">{row.reason ?? "OK"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <div className="mt-3 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
-                disabled={loadingCsvPreview || !csvText || !form.templateId}
+                disabled={!csvText && !csvPreview && !csvImportReport && !csvPreviewError}
+                onClick={resetCsvImportState}
+                className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancelar importação
+              </button>
+              <button
+                type="button"
+                disabled={loadingCsvPreview || Boolean(csvPreview) || !csvText || !form.templateId}
                 onClick={() => void handleCsvPreview()}
                 className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {loadingCsvPreview ? "Validando..." : "Pré-visualizar CSV"}
+                {loadingCsvPreview ? "Validando..." : csvPreview ? "Prévia gerada" : "Pré-visualizar CSV"}
               </button>
               <button
                 type="button"
@@ -2533,58 +2841,54 @@ export default function AppCampaignsPage() {
               </button>
             </div>
           </div>
-          <details
-            className="rounded-md border border-amber-300/20 bg-amber-950/10"
-            open={manualSendOpen}
-            onToggle={(event) => setManualSendOpen(event.currentTarget.open)}
-          >
-            <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-amber-100">
-              Envio imediato manual (avançado)
-            </summary>
-            <div className="border-t border-white/10 p-3">
+          ) : null}
+          </article>
+          <article className="overflow-hidden rounded-xl border border-amber-300/20 bg-amber-950/10">
+            <div
+              role="button"
+              tabIndex={0}
+              aria-expanded={manualSendOpen}
+              aria-controls="campaign-creation-panel-manual"
+              onClick={() => setExpandedCreationPanel((current) => current === "manual" ? null : "manual")}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setExpandedCreationPanel((current) => current === "manual" ? null : "manual");
+                }
+              }}
+              className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-white/10 bg-white/[0.075] px-3 py-3 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-amber-300/60 md:px-4"
+            >
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-100/80">Envio manual</p>
+                <h3 className="mt-1 text-sm font-semibold text-amber-100">Envio imediato manual (avançado)</h3>
+                <p className="mt-1 text-xs text-white/60">
+                  Uso técnico para informar destinatários e iniciar o envio imediatamente após confirmação.
+                </p>
+              </div>
+              <div className="expand-row-action-slot flex min-w-max shrink-0 items-center justify-end justify-self-end whitespace-nowrap">
+                <button
+                  type="button"
+                  aria-expanded={manualSendOpen}
+                  aria-controls="campaign-creation-panel-manual"
+                  aria-label={manualSendOpen ? "Recolher linha" : "Expandir linha"}
+                  title={manualSendOpen ? "Recolher linha" : "Expandir linha"}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setExpandedCreationPanel((current) => current === "manual" ? null : "manual");
+                  }}
+                  className={`grid h-8 w-8 place-items-center rounded-full border text-base font-semibold leading-none transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-amber-300/60 ${manualSendOpen ? "rotate-90 border-amber-300/50 bg-amber-900/30 text-amber-50" : "border-white/15 text-white/70"}`}
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+            {manualSendOpen ? (
+            <div id="campaign-creation-panel-manual" className="bg-black/10 px-3 py-3 md:px-4">
               <p className="mb-3 rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
-                Use apenas para operação técnica ou compatibilidade. Esta ação pode enviar imediatamente após confirmação. O fluxo recomendado é criar rascunho a partir da audiência CRM.
+                Use apenas para operação técnica ou compatibilidade. Esta ação pode enviar imediatamente após confirmação.
+                Nome, modelo e destino são reaproveitados da configuração comum acima.
               </p>
               <form className="grid gap-3 lg:grid-cols-2" onSubmit={handleSubmit}>
-                <label className="grid min-w-0 gap-1 text-sm">
-                  <span className="text-white/70">Nome</span>
-                  <input
-                    className="block w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                    value={form.name}
-                    onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                  />
-                </label>
-                <label className="grid min-w-0 gap-1 text-sm">
-                  <span className="text-white/70">Modelo</span>
-                  <select
-                    className="block w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                    value={form.templateId}
-                    disabled={templates.length === 0}
-                    onChange={(event) => {
-                      const nextTemplateId = event.target.value;
-                      const selectedTemplate = templates.find((item) => item.id === nextTemplateId) ?? null;
-                      const labels = getTemplateVariablePositions(selectedTemplate);
-                      setForm((prev) => ({
-                        ...prev,
-                        templateId: nextTemplateId,
-                        templateName: selectedTemplate?.name ?? "",
-                        templateVariables: syncTemplateVariables(prev.templateVariables, labels.length),
-                        templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, labels),
-                      }));
-                    }}
-                  >
-                    <option value="">
-                      {templates.length === 0
-                        ? "Nenhum modelo ativo disponível"
-                        : "Selecione um modelo aprovado e ativo"}
-                    </option>
-                    {templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name} - {getMetaTemplateCategoryUxLabel(template.category)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
                 {templateVariableLabels.length > 0 ? (
                   <div className="grid min-w-0 gap-2.5 lg:col-span-2">
                     <div>
@@ -2619,12 +2923,6 @@ export default function AppCampaignsPage() {
                         </label>
                       ))}
                     </div>
-                    {manualTemplatePreview ? (
-                      <div className="rounded-md border border-white/10 bg-re7-navy/40 p-3 text-sm text-white/80">
-                        <p className="mb-1 text-xs uppercase tracking-wide text-white/50">Preview manual</p>
-                        <p>{manualTemplatePreview}</p>
-                      </div>
-                    ) : null}
                   </div>
                 ) : (
                   <label className="grid min-w-0 gap-1 text-sm lg:col-span-2">
@@ -2638,7 +2936,12 @@ export default function AppCampaignsPage() {
                     />
                   </label>
                 )}
-                <div className="lg:col-span-2">{returnDestinationEditor}</div>
+                <div className="lg:col-span-2">
+                  <CampaignMessagePreview
+                    content={manualTemplatePreview}
+                    detail="Prévia com os valores informados para o envio imediato manual."
+                  />
+                </div>
                 <label className="grid min-w-0 gap-1 text-sm lg:col-span-2">
                   <span className="text-white/70">Número do contato</span>
                   <textarea
@@ -2677,7 +2980,8 @@ export default function AppCampaignsPage() {
                 </div>
               </form>
             </div>
-          </details>
+            ) : null}
+          </article>
         </div>
       </section>
 
@@ -2709,7 +3013,7 @@ export default function AppCampaignsPage() {
                   >
                     {STATUS_FILTER_OPTIONS.map((option) => (
                       <option key={option} value={option}>
-                        {option}
+                        {option === "all" ? "Todas" : getStatusLabel(option)}
                       </option>
                     ))}
                   </select>
