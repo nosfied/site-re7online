@@ -1,6 +1,6 @@
 # Canonical Identity P1 Delivery - 2026-09-17
 
-Status: IMPLEMENTED / TEST VALIDATED / READY FOR CONTROLLED DEPLOY / NOT DEPLOYED.
+Status: DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED.
 
 ## Scope
 
@@ -48,5 +48,26 @@ Operational Queue design is documented separately in
 `OPERATIONAL_QUEUE_DOMAIN_DESIGN_2026-09-17.md`. It is not implemented here.
 
 Production Demo `****6787` was not readjusted, merged, archived or relinked.
-Its repair remains a separate owner-authorized transactional gate after this
-code delivery is deployed and validated.
+Its repair remains a separate owner-authorized transactional gate.
+
+## Production deployment
+
+On 2026-09-17 production advanced by FF-only from `cad9489c` to `ed329ec8`.
+The persistent PostgreSQL backup is
+`/opt/re7online/backups/converta-persistent/postgres/identity-p1-20260917-205632`
+with verified dump SHA-256
+`61a4b7e09bd47576650e263adb5fa91ea7b3bf1d107ca30c5da2ae065917918e`.
+
+The production backend build passed and only `re7-whatsapp-agent` was reloaded.
+The frontend and Web Worker retained their prior PID/restart counters, and Web
+Session `.data` remained present. Backend health and DB returned `ok`, frontend
+returned HTTP 200, changed modules loaded, and unauthenticated CRM, campaign and
+opt-out checks returned the expected 401 rather than 5xx. No post-deploy errors
+or crash loop were observed.
+
+Read-only pre/post snapshots matched exactly for both historical Demo
+`****6787` Contacts and Leads and for all Demo departments/queues. No schema,
+migration, Queue data, Setor Teste, Atendimento Geral mapping or historical
+identity data changed. These checks are non-destructive production evidence;
+duplicate prevention has not yet been exercised by a real post-deploy identity
+event.

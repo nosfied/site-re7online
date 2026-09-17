@@ -642,9 +642,12 @@ Sem envio real.
   2026-10-01, relatorio mensal contratual e alinhamento formal para
   Instagram/Facebook/site contratados mas nao ativados inicialmente.
 
-- Canonical Identity P1, 2026-09-17: implementado e validado em branch limpa,
-  119 testes focados e build backend PASS; pronto para deploy controlado, ainda
-  nao deployado. Sem schema, migration, backfill ou mutacao de `****6787`.
+- Canonical Identity P1, 2026-09-17: DEPLOYED / PRODUCTION NON-DESTRUCTIVE
+  VALIDATED. Producao avancou por FF-only de `cad9489c` para `ed329ec8`; 119
+  testes focados, build backend em producao, reload apenas do agente,
+  health/DB e smokes read-only passaram. Sem schema, migration, backfill ou
+  mutacao de `****6787`; snapshots pre/pos dos dois Contacts e Leads historicos
+  foram identicos. Evento real de identidade pos-deploy ainda nao exercitado.
 - Queue operacional: design aprovado, pendente autorizacao do owner para gate
   de schema. Campaign UX permanece owner PASS, com entrega dependente de Queue
   ainda pendente e fora do commit de identidade.

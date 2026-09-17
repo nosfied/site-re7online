@@ -362,12 +362,16 @@ cost, campaign name and number of messages.
 ## Canonical identity delivery gate - 2026-09-17
 
 The Meta inbound/capture and campaign CRM bootstrap exact-identity bypasses are
-implemented and test validated locally through the existing tenant-scoped
-canonical resolver. The clean code delivery contains no Queue implementation,
-schema, migration, backfill or production data repair and is ready for a
-separately authorized controlled deploy.
+deployed and production non-destructive validated through the existing
+tenant-scoped canonical resolver. Production advanced by FF-only from
+`cad9489c` to `ed329ec8`; backend build, targeted agent reload, health/DB and
+read-only endpoint/module checks passed. The delivery contains no Queue
+implementation, schema, migration, backfill or production data repair. A real
+post-deploy identity event remains pending natural or separately authorized
+evidence.
 
 Operational Queue has an approved design pending owner schema authorization.
 Campaign UX remains owner PASS, but queue-dependent delivery stays pending.
-Demo `****6787` remains unchanged and requires a separate repair gate. This is
-product evidence, not CRA customer acceptance or production validation.
+Demo `****6787` remained byte-for-byte unchanged in pre/post read-only Contact
+and Lead snapshots and requires a separate repair gate. This is product
+evidence, not CRA customer acceptance of duplicate prevention.

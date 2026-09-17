@@ -1020,9 +1020,12 @@ Commits relevantes do baseline homologado:
 
 Meta inbound/capture and campaign CRM bootstrap now reuse the established
 tenant-scoped canonical resolver. A clean delivery passed 119 focused tests,
-backend build, focused lint and diff validation. Status: IMPLEMENTED / TEST
-VALIDATED / READY FOR CONTROLLED DEPLOY / NOT DEPLOYED. Schema and migrations
-are unchanged; no production data or Demo `****6787` record was modified.
+backend build, focused lint and diff validation. Status: DEPLOYED / PRODUCTION
+NON-DESTRUCTIVE VALIDATED at production HEAD `ed329ec8` on 2026-09-17. The
+production backend build, targeted agent reload, health/DB and read-only
+module/route checks passed. Schema and migrations are unchanged; exact pre/post
+snapshots prove no Demo `****6787` Contact/Lead record was modified. A real
+post-deploy identity event remains unexercised.
 
 Operational Queue remains an approved design pending owner schema
 authorization. Campaign UX remains owner PASS, but queue-dependent delivery is

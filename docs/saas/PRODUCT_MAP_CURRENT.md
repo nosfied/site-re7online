@@ -471,12 +471,14 @@ exists through `UserDepartmentMembership`, UI and assignment/RBAC usage.
 - Government-ready: partial, with profile/feature defaults and reporting foundations.
 - Scalable: operationally improving; remaining configuration governance should continue moving DB-first while keeping `tenants.json` as compatibility fallback only.
 
-Canonical Identity P1 (2026-09-17): clean backend-only delivery implemented and
-test validated, ready for controlled deployment but not deployed. Meta
-inbound/capture and campaign bootstrap share the existing canonical CRM
-resolver; 13/12-digit, Meta/Web Session, external-hash and cross-tenant cases
-pass without duplicate Contact/Lead creation. No schema/migration or production
-repair was included.
+Canonical Identity P1 (2026-09-17): DEPLOYED / PRODUCTION NON-DESTRUCTIVE
+VALIDATED at production HEAD `ed329ec8` by FF-only. Meta inbound/capture and
+campaign bootstrap share the existing canonical CRM resolver; 13/12-digit,
+Meta/Web Session, external-hash and cross-tenant tests pass without duplicate
+Contact/Lead creation. Production backend build, targeted agent reload,
+health/DB and read-only route/module smokes passed. No schema/migration or
+production repair was included; a real post-deploy identity event remains
+pending evidence.
 
 Operational Queue design is approved pending owner schema authorization.
 Campaign UX remains owner PASS; queue-dependent delivery and real `****6787`

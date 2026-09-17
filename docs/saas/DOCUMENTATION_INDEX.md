@@ -195,6 +195,7 @@ Para licitacoes, propostas tecnicas, PoCs e diligencias, usar primeiro:
 ## 2026-09-17 identity and Queue decisions
 
 - `CANONICAL_IDENTITY_P1_DELIVERY_2026-09-17.md`: implementation boundary,
-  canonical resolver contract, 119-test validation and deploy-ready status.
+  canonical resolver contract, 119-test validation, controlled deployment and
+  production non-destructive validation.
 - `OPERATIONAL_QUEUE_DOMAIN_DESIGN_2026-09-17.md`: approved design pending owner
   schema authorization; no implementation or runtime heuristic.

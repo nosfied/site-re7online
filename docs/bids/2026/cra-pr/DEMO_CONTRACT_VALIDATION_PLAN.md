@@ -705,11 +705,14 @@ numbers or unnecessary personal data.
 
 ## Canonical identity delivery gate - 2026-09-17
 
-Identity and Queue remain separate fronts. The no-schema identity correction is
-implemented, passed 119 focused tests and is ready for controlled deployment.
-Meta inbound/capture and campaign bootstrap now reuse the canonical CRM
-resolver and preserve one Contact/Lead graph per tenant.
+Identity and Queue remain separate fronts. The no-schema identity correction
+passed 119 focused tests and was deployed by FF-only to production HEAD
+`ed329ec8` on 2026-09-17. Backend build, targeted agent reload, health/DB and
+read-only module/route checks passed. Meta inbound/capture and campaign
+bootstrap now reuse the canonical CRM resolver; a real post-deploy identity
+event remains pending natural or separately authorized evidence.
 
 Queue remains design-only pending owner schema authorization. No name, creation
 order or usage inference is allowed. Campaign UX is owner-approved, but its
-queue-dependent delivery remains pending. Real Demo `****6787` is unchanged.
+queue-dependent delivery remains pending. Real Demo `****6787` pre/post Contact
+and Lead snapshots matched exactly; repair remains a separate gate.

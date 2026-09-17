@@ -1396,13 +1396,18 @@ GAP / OPEN; SYER ****9614 = CLOSED.
 
 ## Canonical Identity P1 delivery - 2026-09-17
 
-- **IDENTITY P1: IMPLEMENTED / TEST VALIDATED / READY FOR DEPLOY.** Meta
+- **IDENTITY P1: DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED.** Production
+  advanced by fast-forward from `cad9489c` to `ed329ec8` on 2026-09-17. Meta
   inbound/capture and campaign CRM bootstrap reuse the existing canonical
-  resolver. The clean delivery passed 119 focused tests and backend build,
-  without schema, migration, backfill or tenant hardcode.
+  resolver. The clean delivery passed 119 focused tests; the production backend
+  build, targeted agent reload, health/DB checks and read-only route/module
+  smokes passed without schema, migration, backfill or tenant hardcode. A real
+  post-deploy identity event has not yet been exercised.
 - **QUEUE DOMAIN: APPROVED DESIGN / PENDING OWNER SCHEMA AUTHORIZATION.** The
   proposed `Department.operationalQueueId` relation is documented but not
   implemented. Runtime name/creation/usage heuristics remain prohibited.
 - **CAMPAIGN UX: OWNER PASS / QUEUE-DEPENDENT DELIVERY PENDING.** No Campaign UX
   runtime file is included in the identity delivery.
-- Demo `****6787`: no production mutation; repair remains a separate gate.
+- Demo `****6787`: pre/post read-only snapshots of both historical Contacts and
+  Leads matched exactly; no production mutation occurred and repair remains a
+  separate gate.

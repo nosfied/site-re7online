@@ -2,6 +2,10 @@
 
 Status: APPROVED DESIGN / PENDING OWNER SCHEMA AUTHORIZATION / NOT IMPLEMENTED / NO MIGRATION / NO DATA MUTATION / NO DEPLOY.
 
+The Canonical Identity P1 production deploy on 2026-09-17 did not alter this
+status. Its target diff contained no Queue schema/runtime implementation, and
+read-only pre/post snapshots of Demo departments and queues matched exactly.
+
 ## Decision
 
 Normal tenant UX selects a `Department`; `Queue` remains an internal routing
