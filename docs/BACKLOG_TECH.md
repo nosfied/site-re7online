@@ -203,8 +203,8 @@ ACTIVE P1:
    `Situacao no CRM`.
 
 5. CRA campaign import - optional CRM situation column: IMPLEMENTED /
-   TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER APPROVED LOCAL /
-   PRODUCTION DEPLOY PENDING.
+   TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER APPROVED LOCAL / DEPLOYED /
+   PRODUCTION NON-DESTRUCTIVE VALIDATED.
    Campaign/contact audience files may optionally contain
    `Situacao no CRM` / `Situação no CRM`. When populated, the value must resolve
    deterministically against CRM situations/statuses already configured for the
@@ -250,9 +250,14 @@ ACTIVE P1:
    behavior, hash-only identity, CRM situation, blank preservation, duplicate
    winner, report/download, CSV safety, history preservation and regressions;
    no real send occurred. Canonical integration was then prepared from
-   `819cd9b5` with the audited corrective delta preserved. Production deployment
-   and CRA/customer acceptance remain pending; local owner evidence does not
-   claim E4. Completion telemetry and the broader lint baseline remain WATCH.
+   `819cd9b5` with the audited corrective delta preserved. Production reached
+   `cad9489c` by FF-only on 2026-09-17 after verified persistent backup; backend
+   and frontend builds/reloads and non-destructive runtime/bundle/DB checks
+   passed. No real production import or send was executed, and CRA/customer
+   acceptance remains pending. The authorized operational untracked directory
+   `apps/whatsapp-web-worker/.data/` remained intact and its process was not
+   reloaded; this is operational state, not a product defect. Completion
+   telemetry and the broader lint baseline remain WATCH.
 
 6. Contacts - campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP.
    Contacts/CRM must expose campaign-related history and state without

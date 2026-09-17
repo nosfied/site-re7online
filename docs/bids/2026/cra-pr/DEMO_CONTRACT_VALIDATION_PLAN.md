@@ -369,8 +369,13 @@ Campaign/CRM import/upsert/report enhancement:
   a 2026-09-17 principles audit blocked on four P1 findings; the corrective
   batch passed focused rollback, canonical hash identity, duplicate-order,
   capability and CSV safety tests; principles re-audit and owner revalidation
-  then passed, and canonical integration was prepared. This is local owner
-  evidence only, not CRA E4 evidence; production deployment remains pending.
+  then passed, canonical integration was prepared, and production reached
+  `cad9489c` by FF-only with backend/frontend build, health, bundle markers,
+  authorization gates and Demo read-only state checks passing. Authenticated
+  production preview was not exercised because no safe current Demo password
+  was available; no credential or role was changed. No real import/send was
+  executed, so this is not CRA E4 import evidence and customer acceptance
+  remains pending.
 - residual P2: canonical preview matching is sequential per row and remains a
   later performance-hardening item; do not introduce a parallel matcher.
 

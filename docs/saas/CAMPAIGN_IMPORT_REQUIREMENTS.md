@@ -1,7 +1,7 @@
 # Campaign Import / CRM Upsert Requirements
 
 Status: IMPLEMENTED / TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER APPROVED
-LOCAL / PRODUCTION DEPLOY PENDING.
+LOCAL / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED.
 
 Last updated: 2026-09-17.
 
@@ -231,8 +231,20 @@ Mandatory:
   and missing CRM capability enforcement.
 - Corrective batch on 2026-09-17: focused tests and principles re-audit PASS;
   owner visual revalidation also PASS. Canonical integration was prepared from
-  `819cd9b5` with the audited delta preserved; production deployment and CRA
-  customer acceptance remain pending.
+  `819cd9b5` with the audited delta preserved. Production reached `cad9489c` by
+  FF-only on 2026-09-17 after verified persistent backup; impacted builds,
+  reloads, health, bundle markers, authorization gates and Demo read-only state
+  checks passed. Authenticated production preview and real import were not
+  executed; CRA customer acceptance remains pending.
+- Production backup evidence: PostgreSQL dump
+  `/opt/re7online/backups/converta-persistent/postgres/20260917-145842.dump`,
+  20,510,523 bytes, 578 objects, SHA-256
+  `034ef77ec053daa9e1f07e4d3ff3288a8d4c4bf2d8c94e05dcd7c2763f5ecc29`;
+  sanitized HEAD/PM2/config metadata is under
+  `/opt/re7online/backups/converta-persistent/deploys/cra-crm-import-20260917-145842`.
+  The authorized untracked operational path
+  `apps/whatsapp-web-worker/.data/` remained untouched, and the Web Worker kept
+  the same PID and restart count.
 - Residual P2: preview performs sequential canonical identity resolution per
   validated row. Local synthetic preview measured about 231 ms for 100 rows and
   1.76 s for 1,000 rows. Future optimization must preserve the single canonical
@@ -250,6 +262,6 @@ Current CRA order:
 2. opt-out E2E - done on Demo;
 3. reports / exports / billing - done on Demo;
 4. CRM import/upsert/report owner validation - passed locally;
-5. controlled production deployment preparation;
-6. CRA-approved sample import evidence if required;
+5. controlled production deployment - done, non-destructive validation only;
+6. CRA-approved sample import evidence if separately authorized;
 7. acceptance package.

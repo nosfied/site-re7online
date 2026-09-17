@@ -169,9 +169,11 @@ Reconciliação documental de 2026-09-16:
   totais e detalhes por linha quando aplicavel;
 - historico de validacao: implementacao inicial, owner PARTIAL PASS, auditoria
   de principios de 2026-09-17 bloqueada por quatro P1, lote corretivo local,
-  reauditoria PASS, revalidacao do owner PASS e integracao canonica preparada;
+  reauditoria PASS, revalidacao do owner PASS, integracao canonica e deploy
+  FF-only em producao no commit `cad9489c` com smoke nao destrutivo PASS;
   status atual IMPLEMENTED / TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER
-  APPROVED LOCAL / PRODUCTION DEPLOY PENDING;
+  APPROVED LOCAL / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED; import real
+  de producao e aceite CRA continuam pendentes;
 - preview e commit usam o mesmo resolvedor canonico de identidade; cada linha
   confirma CRM, situacao e seed da campanha na mesma transacao;
 - preview/rascunho CSV exigem `campaigns` e `crm`; a API publica exige tambem

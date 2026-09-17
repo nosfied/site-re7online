@@ -77,7 +77,8 @@ Nao reabrir:
 Follow-up de 2026-09-16:
 
 - Campaign/CRM import `Situação no CRM`: IMPLEMENTED / TEST VALIDATED /
-  PRINCIPLES AUDIT PASS / OWNER APPROVED LOCAL / PRODUCTION DEPLOY PENDING. A frente e upsert CRM tenant-scoped, nao apenas
+  PRINCIPLES AUDIT PASS / OWNER APPROVED LOCAL / DEPLOYED / PRODUCTION
+  NON-DESTRUCTIVE VALIDATED em `cad9489c`. A frente e upsert CRM tenant-scoped, nao apenas
   coluna nova. Contato existente e atualizado, nunca duplicado; nome importado
   valido pode atualizar contato existente; celulas em branco preservam dados
   atuais; status CRM importado valido atualiza `Lead.status`; desconhecidos ou
@@ -89,8 +90,11 @@ Follow-up de 2026-09-16:
   por quatro P1 em 2026-09-17; lote corretivo local passou com identidade
   canonica unica, commit atomico por linha, ordem deterministica de duplicados,
   capability CRM e CSV protegido contra formulas; reauditoria PASS; revalidacao
-  do owner PASS; integracao canonica preparada. A evidencia continua local, sem
-  aceite CRA; deploy e amostra CRA aprovada continuam pendentes. P2 residual:
+  do owner PASS; integracao canonica preparada; deploy FF-only e smoke
+  nao destrutivo de producao PASS. Nenhum import real ou envio foi executado e
+  o aceite CRA continua pendente. A excecao operacional autorizada
+  `apps/whatsapp-web-worker/.data/` permaneceu intacta e o worker nao foi
+  recarregado. P2 residual:
   resolucao canonica sequencial por linha para posterior hardening de escala.
 - Contacts campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP.
   Contacts/CRM deve mostrar historico/estado de campanhas por contato quando
