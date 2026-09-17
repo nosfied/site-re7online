@@ -2,6 +2,7 @@ import { ConversationOperationalStatus, type PrismaClient } from "@prisma/client
 import crypto from "node:crypto";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
+import { resolveCrmContactIdentity } from "../crm/crmContactUpsert.js";
 import { persistEvent } from "../db/persist.js";
 import type { OutboundReturnDestination } from "../routing/outboundReturnDestination.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
@@ -45,7 +46,7 @@ async function recordCampaignOutboundConversationReactivated(
   });
 }
 
-async function ensureCampaignOutboundCrmBootstrap(
+export async function ensureCampaignOutboundCrmBootstrap(
   prisma: PrismaClient,
   params: {
     clientId: string;
@@ -61,104 +62,104 @@ async function ensureCampaignOutboundCrmBootstrap(
   }
 ) {
   const channelAccountId = params.phoneNumberId ?? "whatsapp";
-  const identityHash = buildWhatsAppExternalUserHash(params.waIdCanonical);
 
-  const contact = await prisma.contact.upsert({
-    where: {
-      clientId_waId: {
-        clientId: params.clientId,
-        waId: params.waId,
-      },
-    },
-    update: {
-      channel: "whatsapp",
-      provider: "meta",
-      channelAccountId,
-      externalUserHash: identityHash,
-    },
-    create: {
+  const { contact, lead } = await prisma.$transaction(async (tx) => {
+    const resolved = await resolveCrmContactIdentity(tx, {
       clientId: params.clientId,
-      waId: params.waId,
-      name: null,
-      channel: "whatsapp",
-      provider: "meta",
-      channelAccountId,
-      externalUserHash: identityHash,
-      lifecycle: CONTACT_LIFECYCLE_ACTIVE,
-    },
-    select: { id: true, name: true },
-  });
-
-  const identity = await prisma.contactChannelIdentity.upsert({
-    where: {
-      clientId_channel_provider_channelAccountId_externalUserHash: {
+      phone: params.waId,
+    });
+    const identityHash = buildWhatsAppExternalUserHash(resolved.waIdCanonical);
+    const canonicalContact = resolved.contact
+      ? await tx.contact.update({
+          where: { id: resolved.contact.id },
+          data: {
+            channel: "whatsapp",
+            provider: "meta",
+            channelAccountId,
+            externalUserHash: identityHash,
+          },
+          select: { id: true, name: true },
+        })
+      : await tx.contact.create({
+          data: {
+            clientId: params.clientId,
+            waId: params.waId,
+            name: null,
+            channel: "whatsapp",
+            provider: "meta",
+            channelAccountId,
+            externalUserHash: identityHash,
+            lifecycle: CONTACT_LIFECYCLE_ACTIVE,
+          },
+          select: { id: true, name: true },
+        });
+    const identity = await tx.contactChannelIdentity.upsert({
+      where: {
+        clientId_channel_provider_channelAccountId_externalUserHash: {
+          clientId: params.clientId,
+          channel: "whatsapp",
+          provider: "meta",
+          channelAccountId,
+          externalUserHash: identityHash,
+        },
+      },
+      update: {
+        contactId: canonicalContact.id,
+        legacyWaId: params.waId,
+        displayName: canonicalContact.name ?? null,
+        lastSeenAt: params.source === "campaign" ? undefined : new Date(),
+      },
+      create: {
         clientId: params.clientId,
+        contactId: canonicalContact.id,
         channel: "whatsapp",
         provider: "meta",
         channelAccountId,
         externalUserHash: identityHash,
+        legacyWaId: params.waId,
+        displayName: canonicalContact.name ?? null,
       },
-    },
-    update: {
-      contactId: contact.id,
-      legacyWaId: params.waId,
-      displayName: contact.name ?? null,
-      lastSeenAt: params.source === "campaign" ? undefined : new Date(),
-    },
-    create: {
-      clientId: params.clientId,
-      contactId: contact.id,
-      channel: "whatsapp",
-      provider: "meta",
-      channelAccountId,
-      externalUserHash: identityHash,
-      legacyWaId: params.waId,
-      displayName: contact.name ?? null,
-    },
-    select: { id: true },
+      select: { id: true },
+    });
+    const existingLead = resolved.lead
+      ? await tx.lead.findUnique({
+          where: { id: resolved.lead.id },
+          select: { id: true, name: true, phone: true, contactChannelIdentityId: true },
+        })
+      : null;
+    const canonicalLead = existingLead
+      ? await tx.lead.update({
+          where: { id: existingLead.id },
+          data: {
+            waIdCanonical: resolved.waIdCanonical,
+            channel: "whatsapp",
+            provider: "meta",
+            channelAccountId,
+            externalUserHash: identityHash,
+            contactChannelIdentityId: existingLead.contactChannelIdentityId ?? identity.id,
+            phone: existingLead.phone ?? params.waId,
+            name: existingLead.name ?? canonicalContact.name ?? null,
+          },
+          select: { id: true },
+        })
+      : await tx.lead.create({
+          data: {
+            tenantId: params.clientId,
+            waId: params.waId,
+            waIdCanonical: resolved.waIdCanonical,
+            channel: "whatsapp",
+            provider: "meta",
+            channelAccountId,
+            externalUserHash: identityHash,
+            contactChannelIdentityId: identity.id,
+            name: canonicalContact.name ?? null,
+            phone: params.waId,
+            status: "NEW",
+          },
+          select: { id: true },
+        });
+    return { contact: canonicalContact, lead: canonicalLead };
   });
-
-  const existingLead = await prisma.lead.findUnique({
-    where: {
-      tenantId_waId: {
-        tenantId: params.clientId,
-        waId: params.waId,
-      },
-    },
-    select: { id: true, name: true, phone: true, contactChannelIdentityId: true },
-  });
-
-  const lead = existingLead
-    ? await prisma.lead.update({
-        where: { id: existingLead.id },
-        data: {
-          waIdCanonical: params.waIdCanonical,
-          channel: "whatsapp",
-          provider: "meta",
-          channelAccountId,
-          externalUserHash: identityHash,
-          contactChannelIdentityId: existingLead.contactChannelIdentityId ?? identity.id,
-          phone: existingLead.phone ?? params.waId,
-          name: existingLead.name ?? contact.name ?? null,
-        },
-        select: { id: true },
-      })
-    : await prisma.lead.create({
-        data: {
-          tenantId: params.clientId,
-          waId: params.waId,
-          waIdCanonical: params.waIdCanonical,
-          channel: "whatsapp",
-          provider: "meta",
-          channelAccountId,
-          externalUserHash: identityHash,
-          contactChannelIdentityId: identity.id,
-          name: contact.name ?? null,
-          phone: params.waId,
-          status: "NEW",
-        },
-        select: { id: true },
-      });
 
   await persistEvent({
     clientId: params.clientId,

@@ -13,6 +13,7 @@ import {
 } from "../campaigns/campaignRecipientImport.js";
 import { normalizeWaIdDigits } from "../utils/waid.js";
 import { persistEvent } from "../db/persist.js";
+import { hashWhatsAppExternalUser } from "../channels/whatsappBackfillDryRun.js";
 import {
   buildCrmWhatsappExternalUserHash,
   buildCrmWhatsappIdentityCandidates,
@@ -171,14 +172,15 @@ async function findExistingCrmIdentity(
   const identityCandidates = Array.from(
     new Set([...(params.identityCandidates ?? []), ...buildCrmWhatsappIdentityCandidates([params.waIdCanonical])])
   );
-  const hashCandidates = identityCandidates.map(buildCrmWhatsappExternalUserHash);
+  const hashCandidates = Array.from(new Set(identityCandidates.flatMap((candidate) => [
+    buildCrmWhatsappExternalUserHash(candidate),
+    hashWhatsAppExternalUser(candidate),
+  ])));
   const [identities, contacts, leads] = await Promise.all([
     prisma.contactChannelIdentity.findMany({
       where: {
         clientId: params.clientId,
         channel: "whatsapp",
-        provider: CRM_CONTACT_MANUAL_PROVIDER,
-        channelAccountId: CRM_CONTACT_MANUAL_CHANNEL_ACCOUNT_ID,
         OR: [
           { externalUserHash: { in: hashCandidates } },
           { externalUserRef: { in: identityCandidates } },
