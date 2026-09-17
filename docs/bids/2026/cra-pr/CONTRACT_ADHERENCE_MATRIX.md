@@ -358,3 +358,16 @@ cost, campaign name and number of messages.
 - Residual CRA contract readiness must now be tracked through this matrix.
 - The remaining highest-risk gaps are contractual/configuration/evidence gaps,
   not a reason to reopen already closed flow or business-hours fronts.
+
+## Canonical identity delivery gate - 2026-09-17
+
+The Meta inbound/capture and campaign CRM bootstrap exact-identity bypasses are
+implemented and test validated locally through the existing tenant-scoped
+canonical resolver. The clean code delivery contains no Queue implementation,
+schema, migration, backfill or production data repair and is ready for a
+separately authorized controlled deploy.
+
+Operational Queue has an approved design pending owner schema authorization.
+Campaign UX remains owner PASS, but queue-dependent delivery stays pending.
+Demo `****6787` remains unchanged and requires a separate repair gate. This is
+product evidence, not CRA customer acceptance or production validation.

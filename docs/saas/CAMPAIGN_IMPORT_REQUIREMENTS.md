@@ -265,3 +265,12 @@ Current CRA order:
 5. controlled production deployment - done, non-destructive validation only;
 6. CRA-approved sample import evidence if separately authorized;
 7. acceptance package.
+
+## Canonical runtime identity closure - 2026-09-17
+
+Meta inbound/capture and campaign bootstrap now reuse
+`resolveCrmContactIdentity`, the same normalized-phone, external-hash and
+`ContactChannelIdentity` resolver used by manual/API/CSV CRM paths. The clean
+delivery is test validated and ready for controlled deploy without schema or
+migration. No Campaign UX, Queue implementation or production `****6787`
+repair is included.

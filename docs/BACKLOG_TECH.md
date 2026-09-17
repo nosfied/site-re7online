@@ -1393,3 +1393,16 @@ GAP / OPEN; SYER ****9614 = CLOSED.
 - manter foco 100% na API oficial da Meta
 - manter arquitetura simples e evolutiva
 - Sprint 42.1: separar superfícies /admin (plataforma) vs /app (cliente), migrando users, departments e reports para /app com requireClientAuth e auditoria por userId real
+
+## Canonical Identity P1 delivery - 2026-09-17
+
+- **IDENTITY P1: IMPLEMENTED / TEST VALIDATED / READY FOR DEPLOY.** Meta
+  inbound/capture and campaign CRM bootstrap reuse the existing canonical
+  resolver. The clean delivery passed 119 focused tests and backend build,
+  without schema, migration, backfill or tenant hardcode.
+- **QUEUE DOMAIN: APPROVED DESIGN / PENDING OWNER SCHEMA AUTHORIZATION.** The
+  proposed `Department.operationalQueueId` relation is documented but not
+  implemented. Runtime name/creation/usage heuristics remain prohibited.
+- **CAMPAIGN UX: OWNER PASS / QUEUE-DEPENDENT DELIVERY PENDING.** No Campaign UX
+  runtime file is included in the identity delivery.
+- Demo `****6787`: no production mutation; repair remains a separate gate.

@@ -1015,3 +1015,15 @@ Commits relevantes do baseline homologado:
 - Criar pacote de screenshots sanitizados para licitacoes quando houver roteiro.
 - Planejar conciliacao financeira Meta quando houver fonte oficial automatizada.
 - Consolidar matriz de evidencias por edital antes de cada proposta.
+
+## Canonical Identity P1 delivery - 2026-09-17
+
+Meta inbound/capture and campaign CRM bootstrap now reuse the established
+tenant-scoped canonical resolver. A clean delivery passed 119 focused tests,
+backend build, focused lint and diff validation. Status: IMPLEMENTED / TEST
+VALIDATED / READY FOR CONTROLLED DEPLOY / NOT DEPLOYED. Schema and migrations
+are unchanged; no production data or Demo `****6787` record was modified.
+
+Operational Queue remains an approved design pending owner schema
+authorization. Campaign UX remains owner PASS, but queue-dependent delivery is
+not included and remains pending.

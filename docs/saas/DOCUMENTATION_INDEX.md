@@ -191,3 +191,10 @@ Para licitacoes, propostas tecnicas, PoCs e diligencias, usar primeiro:
 5. `TECHNICAL_POSITIONING.md`
 6. `LICITABLE_VERSION_ROADMAP.md`
 7. `bid-package/*` como material modular reutilizavel
+
+## 2026-09-17 identity and Queue decisions
+
+- `CANONICAL_IDENTITY_P1_DELIVERY_2026-09-17.md`: implementation boundary,
+  canonical resolver contract, 119-test validation and deploy-ready status.
+- `OPERATIONAL_QUEUE_DOMAIN_DESIGN_2026-09-17.md`: approved design pending owner
+  schema authorization; no implementation or runtime heuristic.

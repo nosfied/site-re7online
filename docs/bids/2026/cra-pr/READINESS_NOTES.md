@@ -641,3 +641,10 @@ Sem envio real.
   mensuracao, template Utility fora de 24h entregue, ledger Meta apos
   2026-10-01, relatorio mensal contratual e alinhamento formal para
   Instagram/Facebook/site contratados mas nao ativados inicialmente.
+
+- Canonical Identity P1, 2026-09-17: implementado e validado em branch limpa,
+  119 testes focados e build backend PASS; pronto para deploy controlado, ainda
+  nao deployado. Sem schema, migration, backfill ou mutacao de `****6787`.
+- Queue operacional: design aprovado, pendente autorizacao do owner para gate
+  de schema. Campaign UX permanece owner PASS, com entrega dependente de Queue
+  ainda pendente e fora do commit de identidade.
