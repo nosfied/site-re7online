@@ -155,8 +155,8 @@ a linha e aparece no relatorio. O lote corretivo de 2026-09-17 unificou a
 resolucao de identidade entre preview/upsert, tornou CRM/status/seed atomicos
 por linha, corrigiu a ordem de vencedor duplicado, exigiu `campaigns` + `crm` e
 protegeu o CSV contra formulas. Status: IMPLEMENTED / TEST VALIDATED /
-PRINCIPLES AUDIT PASS / OWNER REVALIDATION PENDING; owner/CRA sample validation
-permanece pendente.
+PRINCIPLES AUDIT PASS / OWNER APPROVED LOCAL / PRODUCTION DEPLOY PENDING. A
+revalidacao local do owner passou; aceite CRA/customer permanece pendente.
 
 Contacts campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP. A area
 de Contacts/CRM deve expor historico e estado de campanhas por contato a partir
@@ -202,16 +202,18 @@ evidence; CRA customer acceptance remains separate. The current CRA order is:
 campaign/CRM import/upsert/report with `Situação no CRM`, contacts campaign
 relationship view, final reports/export/billing package with CRA-approved scope
 and unit price, then acceptance package. The CRM import front is IMPLEMENTED /
-TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER REVALIDATION PENDING and is not only an optional
+TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER APPROVED LOCAL / PRODUCTION DEPLOY PENDING and is not only an optional
 column: it is tenant-scoped CRM upsert. Existing contacts update instead of
 duplicating; valid imported name may update the record; blank cells preserve
 current data; valid resolved `Situação no CRM` updates `Lead.status`; repeated
 identities inside the file do not create duplicate contacts; unknown/ambiguous
 situations are reported truthfully in preview/import and never auto-created. A
 detailed downloadable CSV import result report is exposed for operator evidence.
-History is preserved: owner PARTIAL PASS was followed by a four-P1 principles
-block; the 2026-09-17 corrective batch passed locally. This is still E2 local
-evidence, not E4 customer evidence. Sequential canonical identity resolution is
+History is preserved: initial implementation and owner PARTIAL PASS were
+followed by a four-P1 principles block; the 2026-09-17 corrective batch and
+principles re-audit passed, owner revalidation passed, and canonical integration
+was prepared. This remains local owner evidence, not E4 customer evidence.
+Sequential canonical identity resolution is
 retained as P2 performance hardening; internal result labels remain P3 UX.
 Marketing template media support is P2 / PRODUCT + META CAPABILITY, covering
 MARKETING category, IMAGE/VIDEO headers, Meta media/example lifecycle, preview,

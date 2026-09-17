@@ -55,8 +55,9 @@ Pendencias criticas para prontidao contratual:
 3. Gerar pacote de relatorios/exportacoes/billing com dados CRA redigidos.
 4. Validar com owner a importacao de campanha como upsert CRM seguro, com
    coluna opcional `Situação no CRM`, sem duplicar contatos e com relatorio
-   detalhado. Implementacao local e testes focados ja passaram; CRA/customer
-   sample import ainda depende de dado aprovado.
+   detalhado. Implementacao local, auditoria de principios, testes focados e
+   revalidacao do owner passaram; deploy de producao e evidencia CRA/customer
+   ainda dependem de gate controlado e dado aprovado.
 5. Implementar/validar visao campanha-contato dentro de Contacts/CRM, sem
    modelo sombra, para rastreabilidade e evidencia de aceite.
 6. Fechar pacote documental: SLA/suporte, treinamento, LGPD/seguranca,
@@ -76,7 +77,7 @@ Nao reabrir:
 Follow-up de 2026-09-16:
 
 - Campaign/CRM import `Situação no CRM`: IMPLEMENTED / TEST VALIDATED /
-  PRINCIPLES AUDIT PASS / OWNER REVALIDATION PENDING. A frente e upsert CRM tenant-scoped, nao apenas
+  PRINCIPLES AUDIT PASS / OWNER APPROVED LOCAL / PRODUCTION DEPLOY PENDING. A frente e upsert CRM tenant-scoped, nao apenas
   coluna nova. Contato existente e atualizado, nunca duplicado; nome importado
   valido pode atualizar contato existente; celulas em branco preservam dados
   atuais; status CRM importado valido atualiza `Lead.status`; desconhecidos ou
@@ -84,11 +85,12 @@ Follow-up de 2026-09-16:
   duplicados no arquivo nao criam contatos duplicados; relatorio detalhado e
   baixavel pelo operador esta exposto na importacao CSV de campanhas. CRA real
   ainda nao foi importado.
-  Historico preservado: owner PARTIAL PASS; auditoria de principios bloqueada
+  Historico preservado: implementacao inicial; owner PARTIAL PASS; auditoria de principios bloqueada
   por quatro P1 em 2026-09-17; lote corretivo local passou com identidade
   canonica unica, commit atomico por linha, ordem deterministica de duplicados,
-  capability CRM e CSV protegido contra formulas. Evidencia segue E2 local;
-  revalidacao visual e amostra CRA aprovada continuam pendentes. P2 residual:
+  capability CRM e CSV protegido contra formulas; reauditoria PASS; revalidacao
+  do owner PASS; integracao canonica preparada. A evidencia continua local, sem
+  aceite CRA; deploy e amostra CRA aprovada continuam pendentes. P2 residual:
   resolucao canonica sequencial por linha para posterior hardening de escala.
 - Contacts campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP.
   Contacts/CRM deve mostrar historico/estado de campanhas por contato quando

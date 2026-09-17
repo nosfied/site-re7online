@@ -363,11 +363,14 @@ Campaign/CRM import/upsert/report enhancement:
 - audit completed: CRM situation is `Lead.status`; status catalog is
   same-tenant `TenantOperationalConfig.config.crmBusinessStatuses`; import
   reuses existing CRM identity/upsert helpers; no schema/migration was required;
-- CRA/customer sample import is still pending approved data and owner review.
-- audit history: owner PARTIAL PASS was followed by a 2026-09-17 principles
-  audit blocked on four P1 findings; the corrective batch passed focused
-  rollback, canonical hash identity, duplicate-order, capability and CSV safety
-  tests. This remains local E2 evidence, not CRA E4 evidence.
+- CRA/customer production evidence is still pending approved data and a
+  separate controlled production gate; local owner revalidation passed.
+- audit history: initial implementation and owner PARTIAL PASS were followed by
+  a 2026-09-17 principles audit blocked on four P1 findings; the corrective
+  batch passed focused rollback, canonical hash identity, duplicate-order,
+  capability and CSV safety tests; principles re-audit and owner revalidation
+  then passed, and canonical integration was prepared. This is local owner
+  evidence only, not CRA E4 evidence; production deployment remains pending.
 - residual P2: canonical preview matching is sequential per row and remains a
   later performance-hardening item; do not introduce a parallel matcher.
 

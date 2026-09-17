@@ -1,13 +1,13 @@
 # Campaign Import / CRM Upsert Requirements
 
-Status: IMPLEMENTED / TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER
-REVALIDATION PENDING.
+Status: IMPLEMENTED / TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER APPROVED
+LOCAL / PRODUCTION DEPLOY PENDING.
 
 Last updated: 2026-09-17.
 
 This document records the implemented local contract for campaign CSV import as
 CRM upsert. It does not authorize real sends, production deployment or CRA
-customer-data import before owner validation.
+customer-data import; each requires its own controlled gate.
 
 ## Optional CRM Situation Column
 
@@ -230,7 +230,9 @@ Mandatory:
   consistency, premature duplicate claiming, parallel preview identity matching
   and missing CRM capability enforcement.
 - Corrective batch on 2026-09-17: focused tests and principles re-audit PASS;
-  owner visual revalidation remains pending.
+  owner visual revalidation also PASS. Canonical integration was prepared from
+  `819cd9b5` with the audited delta preserved; production deployment and CRA
+  customer acceptance remain pending.
 - Residual P2: preview performs sequential canonical identity resolution per
   validated row. Local synthetic preview measured about 231 ms for 100 rows and
   1.76 s for 1,000 rows. Future optimization must preserve the single canonical
@@ -246,7 +248,8 @@ Current CRA order:
 
 1. recipient B controlled Utility validation - done on Demo;
 2. opt-out E2E - done on Demo;
-3. reports / exports / billing - next;
-4. owner validation for CRM import/upsert/report with `Situação no CRM`;
-5. CRA-approved sample import evidence if required;
-6. acceptance package.
+3. reports / exports / billing - done on Demo;
+4. CRM import/upsert/report owner validation - passed locally;
+5. controlled production deployment preparation;
+6. CRA-approved sample import evidence if required;
+7. acceptance package.

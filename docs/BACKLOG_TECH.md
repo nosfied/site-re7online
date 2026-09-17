@@ -203,7 +203,8 @@ ACTIVE P1:
    `Situacao no CRM`.
 
 5. CRA campaign import - optional CRM situation column: IMPLEMENTED /
-   TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER REVALIDATION PENDING.
+   TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER APPROVED LOCAL /
+   PRODUCTION DEPLOY PENDING.
    Campaign/contact audience files may optionally contain
    `Situacao no CRM` / `Situação no CRM`. When populated, the value must resolve
    deterministically against CRM situations/statuses already configured for the
@@ -245,8 +246,13 @@ ACTIVE P1:
    (100 rows about 231 ms; 1,000 rows about 1.76 s locally) and may need later
    bulk performance hardening without a parallel identity engine. Residual P3:
    normalize internal operation/error labels exposed to the operator. Owner
-   visual revalidation and any CRA-approved sample remain pending; do not claim
-   E4 from automated tests.
+   revalidation passed locally on 2026-09-17 for preview, import, no-duplicate
+   behavior, hash-only identity, CRM situation, blank preservation, duplicate
+   winner, report/download, CSV safety, history preservation and regressions;
+   no real send occurred. Canonical integration was then prepared from
+   `819cd9b5` with the audited corrective delta preserved. Production deployment
+   and CRA/customer acceptance remain pending; local owner evidence does not
+   claim E4. Completion telemetry and the broader lint baseline remain WATCH.
 
 6. Contacts - campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP.
    Contacts/CRM must expose campaign-related history and state without

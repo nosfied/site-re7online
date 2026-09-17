@@ -110,12 +110,13 @@ destination delivery is CLOSED / DEPLOYED / OWNER APPROVED / PROD
 NON-DESTRUCTIVE VALIDATED at `452d5826db42cc1b574eeff8fd8e0d038cd3491f`.
 New requirement
 CRM situation import/upsert/report is IMPLEMENTED / TEST VALIDATED / PRINCIPLES
-AUDIT PASS / OWNER REVALIDATION PENDING. It includes optional `Situação no CRM`, same-tenant
+AUDIT PASS / OWNER APPROVED LOCAL / PRODUCTION DEPLOY PENDING. It includes optional `Situação no CRM`, same-tenant
 deterministic status resolution against `Lead.status`, existing contact update
 instead of duplication, blank-cell preservation, no silent status creation, no
 duplicate contacts from repeated input rows and detailed downloadable import
-evidence exposed in the campaign CSV import flow. CRA/customer sample import is
-still pending approved data and owner validation. Marketing
+evidence exposed in the campaign CSV import flow. Local owner revalidation
+passed; production deployment and CRA/customer evidence remain pending.
+Marketing
 template media support is P2 product/Meta capability, covering MARKETING
 category plus IMAGE/VIDEO headers and official Marketing pricing; it is
 parallel to the Utility campaign front unless contract evidence promotes it.
@@ -124,9 +125,10 @@ Audit history: the owner PARTIAL PASS was followed by a 2026-09-17 four-P1
 principles block. The corrective batch now shares one canonical identity
 resolver, commits CRM/status/campaign seed atomically per row, validates rows
 before duplicate claiming, enforces CRM capability and protects result CSV
-cells from formulas. Focused tests pass; evidence remains local E2 and owner
-visual revalidation is pending. Sequential per-row identity resolution remains
-P2 performance hardening; internal result wording remains P3 UX.
+cells from formulas. Focused tests and principles re-audit passed, owner
+revalidation passed, and canonical integration was prepared. Sequential per-row
+identity resolution remains P2 performance hardening; internal result wording
+remains P3 UX. Completion telemetry and the broader lint baseline remain WATCH.
 
 Contacts campaign relationship view is OPEN / CRA CAMPAIGN-CRM FOLLOW-UP. It
 should expose campaign count, last campaign/send/template, delivery/read/failure

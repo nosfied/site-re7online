@@ -167,10 +167,11 @@ Reconciliação documental de 2026-09-16:
   detalhado apos a criacao do rascunho por CSV;
 - o operador deve receber relatorio detalhado e baixavel do resultado, com
   totais e detalhes por linha quando aplicavel;
-- historico de validacao: owner PARTIAL PASS, auditoria de principios de
-  2026-09-17 bloqueada por quatro P1 e lote corretivo local aprovado em testes;
+- historico de validacao: implementacao inicial, owner PARTIAL PASS, auditoria
+  de principios de 2026-09-17 bloqueada por quatro P1, lote corretivo local,
+  reauditoria PASS, revalidacao do owner PASS e integracao canonica preparada;
   status atual IMPLEMENTED / TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER
-  REVALIDATION PENDING;
+  APPROVED LOCAL / PRODUCTION DEPLOY PENDING;
 - preview e commit usam o mesmo resolvedor canonico de identidade; cada linha
   confirma CRM, situacao e seed da campanha na mesma transacao;
 - preview/rascunho CSV exigem `campaigns` e `crm`; a API publica exige tambem
