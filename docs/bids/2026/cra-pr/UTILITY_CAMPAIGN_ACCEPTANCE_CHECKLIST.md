@@ -1,11 +1,13 @@
 # CRA-PR Utility Campaign Acceptance Checklist
 
-Status: LOCAL / CONTRACT ACCEPTANCE OPEN. The readiness audit is closed, but
-contract acceptance still depends on approved CRA copy, Meta approval,
-controlled recipient approval and evidence capture. This document does not
-authorize real outbound traffic.
+Status: ACCEPTANCE PACKAGE READY / CRA CUSTOMER ACCEPTANCE PENDING. The product
+readiness audit, Demo Utility validation, opt-out E2E, report/export/billing
+quantity validation, CRM import/upsert and Contacts x Campaigns traceability
+fronts are closed. Contract acceptance still depends on formal CRA package
+review and any customer-approved CRA real campaign scope. This document does
+not authorize real outbound traffic.
 
-Last updated: 2026-09-15.
+Last updated: 2026-09-18.
 
 ## Purpose
 
@@ -54,8 +56,8 @@ campaign must remain unsent.
    still pending.
 4. CRM import/upsert/report with `Situação no CRM` - production
    non-destructive validated; real CRA import not executed.
-5. Contacts campaign relationship view - CANONICALLY INTEGRATED / TEST VALIDATED
-   / OWNER PASS / PRODUCTION DEPLOY PENDING.
+5. Contacts campaign relationship view - OWNER PASS / DEPLOYED / PRODUCTION
+   NON-DESTRUCTIVE VALIDATED.
 6. Acceptance package.
 
 Approved outbound return destination is CLOSED / DEPLOYED / OWNER APPROVED /
@@ -84,7 +86,7 @@ them by owner decision.
 | Pause/resume/cancel | Supported by campaign lifecycle and app API | TESTED LOCALLY FOR LIFECYCLE |
 | Opt-out | Active opt-out blocks campaign recipient and records event | DEMO VALIDATED / CRA ACCEPTANCE STILL NEEDED |
 | Delivery status | Meta webhook updates status/history | PRODUCT SUPPORTED / NEEDS CRA SAMPLE |
-| Contacts campaign relationship | Contacts/CRM shows campaign count, latest campaign/status and recent same-tenant campaign history from canonical campaign/outbound/event evidence; no Contact shadow history and no financial UX | CANONICALLY INTEGRATED / TEST VALIDATED / OWNER PASS / PRODUCTION DEPLOY PENDING |
+| Contacts campaign relationship | Contacts/CRM shows campaign count, latest campaign/status and recent same-tenant campaign history from canonical campaign/outbound/event evidence; no Contact shadow history and no financial UX | OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED |
 | Billing | Delivered/read Utility campaign outside 24h creates one billable event; read replay does not bill again | TESTED LOCALLY |
 | Reports/export | CSV/monthly evidence available; PDF/equivalent acceptance pack still required | DEMO VALIDATED / CRA ACCEPTANCE STILL NEEDED |
 
@@ -215,7 +217,7 @@ confirms assets, site access and delivery window.
 
 ```text
 CRA-PR UTILITY CAMPAIGN:
-LOCAL / CONTRACT ACCEPTANCE OPEN
+ACCEPTANCE PACKAGE READY / CRA CUSTOMER ACCEPTANCE PENDING
 
 UTILITY READINESS AUDIT:
 CLOSED
@@ -443,7 +445,7 @@ repair in this phase. Separate owner gate is required.
 
 ## Campaign UX / Result Truth Integration - 2026-09-18
 
-Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+Status: OWNER PASS / DEPLOYED / PRODUCTION VALIDATED.
 
 - Standard campaign destination remains Department-only; Queue is internal via
   `Department.operationalQueueId`.
@@ -466,8 +468,8 @@ Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
   gate with no resend.
 - Validation completed: UI contract 9/9 PASS, `campaignsFeatureRoutes.test.ts`
   115/115 PASS, backend/frontend builds PASS, `git diff --check` PASS.
-- No real Meta send, no production deploy, no schema/migration and no
-  `****6787` repair/mutation occurred.
+- No real Meta send, no schema/migration and no `****6787` repair/mutation
+  occurred.
 
 ## Composer lifecycle gate - 2026-09-18
 
@@ -479,7 +481,8 @@ Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
 - Closing the progress/detail modal does not cancel campaign execution.
 - Explicit CSV draft creation may commit canonical CRM upserts; later draft
   discard does not silently roll them back.
-- Local implementation is pending owner review; no Utility send was executed.
+- Production validation is closed; no Utility send was executed for this
+  lifecycle validation.
 
 ## Result Truth canonical 12/13 corrective gate - 2026-09-18
 
@@ -494,5 +497,4 @@ Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
   attempts remain zero and its separate repair gate is unchanged.
 - Validation: campaign backend 118/118, complementary matrices 56/56 and 72/72
   PASS. Schema unchanged, migration none, no real send and no deploy.
-- Status: P1 VALIDATED LOCAL/READ-ONLY / OWNER REVIEW READY; post-deploy
-  production validation remains pending.
+- Status: PRODUCTION VALIDATED.

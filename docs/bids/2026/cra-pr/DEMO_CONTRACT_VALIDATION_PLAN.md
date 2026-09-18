@@ -336,8 +336,10 @@ and must not absorb new requirements.
 Current CRA order:
 
 1. reports / exports / billing;
-2. CRM import/upsert/report with `Situação no CRM`;
-3. Contacts campaign relationship view;
+2. CRM import/upsert/report with `Situação no CRM` - DONE / DEPLOYED /
+   PRODUCTION NON-DESTRUCTIVE VALIDATED;
+3. Contacts campaign relationship view - DONE / DEPLOYED / PRODUCTION
+   NON-DESTRUCTIVE VALIDATED;
 4. acceptance package.
 
 Campaign/CRM import/upsert/report enhancement:
@@ -393,7 +395,7 @@ Marketing media templates:
 
 Contacts campaign relationship view:
 
-- status: CANONICALLY INTEGRATED / TEST VALIDATED / OWNER PASS / CLEAN DELIVERY PREPARED / PRODUCTION DEPLOY PENDING /
+- status: OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED /
   CRA CAMPAIGN-CRM FOLLOW-UP;
 - Contacts list shows compact campaign count, latest campaign/date/template and
   translated recipient status where applicable;
@@ -729,7 +731,7 @@ Demo `****6787` was not mutated or repaired here.
 
 ## Campaign UX / result truth canonical integration - 2026-09-18
 
-Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+Status: OWNER PASS / DEPLOYED / PRODUCTION VALIDATED.
 
 The recovered approved Campaign UX/result-truth delta is now integrated on the
 canonical Operational Queue baseline. This is product readiness for owner visual
@@ -743,8 +745,8 @@ states/reasons.
 
 Validation: UI contract 9/9 PASS, `campaignsFeatureRoutes.test.ts` 115/115
 PASS on `re7_campaign_result_truth_test`, backend/frontend builds PASS and
-`git diff --check` PASS. No production deploy, no real Meta send, no schema or
-migration, and no `****6787` mutation.
+`git diff --check` PASS. Production validation is closed. No real Meta send, no
+schema or migration, and no `****6787` mutation.
 
 Final result-detail correction: read-only evidence for `Campanha teste set.2`
 with template `lembrete_vencimento_anuidade` showed one delivered provider
@@ -764,7 +766,7 @@ identity-path matrix 106/106 PASS. No real send or production mutation.
 
 ## Campaign composer cleanup - 2026-09-18
 
-Status: IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO DEPLOY.
+Status: PRODUCTION VALIDATED.
 
 The Demo/CRA campaign operator must be able to abandon unsaved CRM audience,
 CSV or manual composition and start another campaign with pristine name,
@@ -777,7 +779,7 @@ this lifecycle validation.
 
 ## Campaign Result Truth P1 12/13 gate - 2026-09-18
 
-Status: CORRECTIVE VALIDATED / OWNER REVIEW READY / NO DEPLOY.
+Status: PRODUCTION VALIDATED.
 
 The production validation gate discovered that the prior synthetic test did
 not model a 13-digit campaign seed associated with a historical 12-digit

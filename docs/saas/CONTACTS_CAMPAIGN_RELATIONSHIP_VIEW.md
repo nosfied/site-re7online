@@ -1,19 +1,20 @@
 # Contacts Campaign Relationship View
 
-Status: CANONICALLY INTEGRATED / TEST VALIDATED / OWNER PASS / CLEAN DELIVERY
-PREPARED / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP.
+Status: OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED /
+CRA CAMPAIGN-CRM FOLLOW-UP.
 
 Last updated: 2026-09-18.
 
-This document defines the product contract and current local implementation.
-It does not authorize real sends, production deployment, schema changes or
-campaign/billing history rewrites.
+This document defines the product contract and delivered implementation. It
+does not authorize real sends, schema changes or campaign/billing history
+rewrites.
 
 Clean delivery note, 2026-09-18: a production-base delivery branch was prepared
 from exact production HEAD `04eb01ae2a044b993774dd21b37228b35bea11bc` with only
 the Contacts campaign relationship delta. Repair tooling, identity repair
 deltas, queue-domain deltas, schema changes and migrations are not part of this
-delivery.
+delivery. Owner review, production delivery and non-destructive production
+validation are closed; CRA customer acceptance remains pending.
 
 ## Goal
 

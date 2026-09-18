@@ -1,6 +1,6 @@
 # Campaign Composer Lifecycle
 
-Status: IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO DEPLOY.
+Status: PRODUCTION VALIDATED.
 
 ## Permanent invariant
 

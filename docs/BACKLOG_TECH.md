@@ -154,7 +154,7 @@ ACTIVE P1:
    and HTTP smoke passed. No real Meta send and no `****6787` repair occurred.
 
 2. Campaign UX / result truth canonical integration:
-   INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY. The
+   OWNER PASS / DEPLOYED / PRODUCTION VALIDATED. The
    owner-approved Campaign UX delta was recovered from
    `.codex-recovery/re7-cra-crm-integration-20260917T2015.tar.gz` and
    reapplied on the current canonical Operational Queue baseline
@@ -189,13 +189,10 @@ ACTIVE P1:
    Validation: `campaignsPageContract.test.ts` 9/9 PASS,
    `campaignsFeatureRoutes.test.ts` 115/115 PASS on safe local DB
    `re7_campaign_result_truth_test`, backend build PASS, frontend build PASS,
-   `git diff --check` PASS. Production remains protected at
-   `b413eea04af15cef2cf7667dbc3fa84bca3f49bc`; production health/db/migrations
-   PASS read-only. Owner visual revalidation on this integrated branch is still
-   pending.
+   `git diff --check` PASS. Production validation is closed; no real send or
+   unrelated data mutation occurred.
 
-   P1 canonical 12/13-digit corrective, 2026-09-18: READY FOR OWNER REVIEW /
-   NO DEPLOY. The first synthetic result-truth test did not reproduce the real
+   P1 canonical 12/13-digit corrective, 2026-09-18: PRODUCTION VALIDATED. The first synthetic result-truth test did not reproduce the real
    persisted shape. Production validation at HEAD `6f63133d7c3bb09097a11c0b49eefa7b9f8383c3`
    exposed a 13-digit seed and 12-digit delivered outbound for the same
    `****6787` identity, creating a false missing-history failure. The hard gate
@@ -236,8 +233,8 @@ ACTIVE P1:
    correction remains: no mutable integration test may run with production
    `DATABASE_URL`; use isolated test DBs and non-mutating production dry-runs.
 
-   Campaign composer cleanup: IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO
-   DEPLOY. Unsaved composition is now governed by one dirty-state contract and
+   Campaign composer cleanup: PRODUCTION VALIDATED. Unsaved composition is now
+   governed by one dirty-state contract and
    one idempotent reset. Explicit discard and Campaign-tab navigation clear
    name, template/variables, recipients, CRM/CSV previews, mappings,
    destination and errors; stale async preview responses are invalidated.
@@ -371,8 +368,8 @@ ACTIVE P1:
    reloaded; this is operational state, not a product defect. Completion
    telemetry and the broader lint baseline remain WATCH.
 
-6. Contacts - campaign relationship view: CANONICALLY INTEGRATED / TEST
-   VALIDATED / OWNER PASS / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP. Implemented
+6. Contacts - campaign relationship view: OWNER PASS / DEPLOYED / PRODUCTION
+   NON-DESTRUCTIVE VALIDATED / CRA CAMPAIGN-CRM FOLLOW-UP. Implemented
    in the CRM/Contacts area as a read-only projection from canonical
    `Campaign`, `OutboundMessage` and campaign event evidence. Contact list now
    shows compact campaign count, latest campaign/date/template/status, and the
@@ -386,7 +383,20 @@ ACTIVE P1:
    `crmCapabilityRoutes.test.ts` 19/19 PASS including same-phone/cross-tenant
    isolation, delivered status, opt-out block, identity conflict, detail link
    and no financial strings; backend build PASS; frontend build PASS; diff
-   check PASS. CRA customer acceptance and production deployment remain pending.
+   check PASS. Production delivery and non-destructive validation are closed;
+   CRA customer acceptance remains pending.
+
+7. CRA-PR final acceptance-package readiness: READY / CUSTOMER ACCEPTANCE
+   PENDING. The 52 original CRA requirements are reconciled as 26 CLOSED /
+   REAL VALIDATED, 18 DEPLOYED / CRA ACCEPTANCE PENDING, 4 CUSTOMER-DEFERRED,
+   4 P2 NON-BLOCKING / WATCH and 0 OPEN CONTRACT GAPS. No P0/P1 product/runtime
+   blocker remains for package preparation. Remaining work is formal CRA
+   customer review/sign-off, signed/supporting attachments, customer-approved
+   CRA Utility campaign scope before any real send, and deferred IG/FB/webchat
+   activation when the customer provides assets/window. Vercel deployment
+   hygiene remains WATCH only: ignoreCommand local PASS, platform validation
+   pending while docs-only deployment is queued, Production Branch and historical
+   redeploy origin unknown. This is not a CRA blocker and authorizes no deploy.
 
 7. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente

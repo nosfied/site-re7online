@@ -9,6 +9,48 @@ Documento canonico de aderencia requisito-a-requisito:
 docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md
 ```
 
+## Consolidacao Final Antes do Pacote de Aceite - 2026-09-18
+
+Status atual: ACCEPTANCE PACKAGE READY / CRA CUSTOMER ACCEPTANCE PENDING.
+Nao ha P0/P1 de produto/runtime nem lacuna contratual tecnica aberta para
+preparar o pacote de aceite. Permanecem pendentes apenas aceite formal CRA,
+anexos documentais, escopo/copia/recipientes de eventual campanha CRA real e
+canais diferidos pelo cliente.
+
+Scorecard vigente da matriz de 52 requisitos:
+
+```text
+CLOSED / REAL VALIDATED: 26
+DEPLOYED / CRA ACCEPTANCE PENDING: 18
+CUSTOMER-DEFERRED: 4
+P2 NON-BLOCKING / WATCH: 4
+OPEN CONTRACT GAPS: 0
+TOTAL REQUIREMENTS: 52
+```
+
+Frentes fechadas nesta consolidacao:
+
+- CRA active flow visibility: CLOSED / DEPLOYED / CUSTOMER VALIDATED.
+- CRA business hours: CONFIGURED / OPERATIONALLY VALIDATED.
+- Canonical identity P1: CLOSED / DEPLOYED.
+- Demo `****6787`: REPAIRED / CANONICAL GRAPH RESTORED / HISTORY PRESERVED.
+- Demo `****9614`: REPAIRED / CANONICAL GRAPH RESTORED / HISTORY PRESERVED.
+- Operational Queue domain: CLOSED / DEPLOYED / PRODUCTION RECONCILED.
+- Campaign UX / explicit return destination: OWNER PASS / DEPLOYED.
+- Campaign result truth: PRODUCTION VALIDATED.
+- Campaign composer cleanup: PRODUCTION VALIDATED.
+- CRM import/upsert/`Situacao no CRM`: OWNER PASS / DEPLOYED.
+- Contacts x Campaigns relationship view: OWNER PASS / DEPLOYED /
+  PRODUCTION NON-DESTRUCTIVE VALIDATED.
+- Demo Utility campaign, opt-out e report/export/billing quantity: E4 DEMO
+  VALIDATED.
+
+Vercel hygiene: WATCH, nao bloqueador CRA. O projeto publico `site-re7online`
+tem `ignoreCommand` validado localmente na frente de higiene; a validacao de
+plataforma segue pendente porque o deployment docs-only ficou QUEUED. Production
+Branch e origem de um redeploy historico seguem desconhecidos. Isso nao altera
+o Converta operacional na VPS e nao autoriza deploy.
+
 ## Auditoria Contratual Consolidada - 2026-09-15
 
 Auditoria somente leitura de producao confirmou:
@@ -31,7 +73,8 @@ Auditoria somente leitura de producao confirmou:
 - Templates/campaigns CRA: nenhum template/campanha configurado no snapshot;
 - CSAT e close: evidencias de snapshots e pesquisas respondidas em producao.
 
-Scorecard contratual da matriz:
+Scorecard historico da matriz em 2026-09-15, supersedido pela consolidacao de
+2026-09-18 acima:
 
 ```text
 TOTAL REQUIREMENTS: 52
@@ -48,22 +91,9 @@ DOCUMENTATION/EVIDENCE GAP: 9
 NOT REQUIRED BY CONTRACT: 2
 ```
 
-Pendencias criticas para prontidao contratual:
-
-1. Obter copia Utility CRA aprovada e validar campanha controlada.
-2. Evidenciar opt-out auditavel e bloqueio em campanha.
-3. Gerar pacote de relatorios/exportacoes/billing com dados CRA redigidos.
-4. Validar com owner a importacao de campanha como upsert CRM seguro, com
-   coluna opcional `Situação no CRM`, sem duplicar contatos e com relatorio
-   detalhado. Implementacao local, auditoria de principios, testes focados e
-   revalidacao do owner passaram; deploy de producao e evidencia CRA/customer
-   ainda dependem de gate controlado e dado aprovado.
-5. Implementar/validar visao campanha-contato dentro de Contacts/CRM, sem
-   modelo sombra, para rastreabilidade e evidencia de aceite.
-6. Fechar pacote documental: SLA/suporte, treinamento, LGPD/seguranca,
-   backup/restore e comprovacao Meta oficial.
-7. Instagram, Facebook Messenger e Webchat/site seguem contratados, mas estao
-   CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING e nao bloqueiam a frente atual.
+Pendencias criticas historicas foram reconciliadas. O estado vigente nao tem
+P0/P1 ou lacuna tecnica aberta; restam pacote formal CRA, anexos documentais,
+campanha real somente com aprovacao explicita e canais customer-deferred.
 
 Nao reabrir:
 
@@ -96,8 +126,8 @@ Follow-up de 2026-09-16:
   `apps/whatsapp-web-worker/.data/` permaneceu intacta e o worker nao foi
   recarregado. P2 residual:
   resolucao canonica sequencial por linha para posterior hardening de escala.
-- Contacts campaign relationship view: CANONICALLY INTEGRATED / TEST VALIDATED /
-  OWNER PASS / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP. Contacts/CRM mostra
+- Contacts campaign relationship view: OWNER PASS / DEPLOYED / PRODUCTION
+  NON-DESTRUCTIVE VALIDATED / CRA CAMPAIGN-CRM FOLLOW-UP. Contacts/CRM mostra
   resumo de campanhas por contato na lista e historico recente no detalhe,
   usando `Campaign`, `OutboundMessage` e eventos canonicos ja persistidos.
   Nao cria historico sombra dentro de Contact, nao altera schema/migration,
@@ -105,7 +135,7 @@ Follow-up de 2026-09-16:
   linha com projecao agregada por pagina mais detalhe sob demanda. A UX nao
   mostra preco/custo. Validacao local: `crmCapabilityRoutes.test.ts` 19/19
   PASS, backend build PASS, frontend build PASS, diff check PASS. Owner review,
-  deploy e aceite CRA ainda pendentes.
+  deploy e producao nao destrutiva estao fechados; aceite CRA ainda pendente.
 - Meta Marketing template media support: P2 / PRODUCT + META CAPABILITY.
   Inclui categoria MARKETING, headers IMAGE/VIDEO, exemplos/midia Meta,
   upload/handle, preview, variaveis, botoes suportados, submissao, status,
@@ -139,7 +169,7 @@ e exige autorizacao explicita do owner.
 
 Follow-up de 2026-09-18, ciclo de composicao de campanha:
 
-- IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO DEPLOY;
+- PRODUCTION VALIDATED;
 - composicao nao salva e transitoria e volta limpa apos descarte/troca de aba;
 - previa CRM/CSV nao cria Campaign nem contato;
 - criar rascunho e o commit explicito; importacao CSV confirmada pode persistir
@@ -150,7 +180,7 @@ Follow-up de 2026-09-18, ciclo de composicao de campanha:
 - gate local: contratos do compositor/pagina 18/18 PASS, backend Campaign
   115/115 PASS, importacao/CRM 23/23 PASS, builds e lint focado PASS; smoke
   autenticado confirmou descarte/reentrada limpos, cancelamento CSV sem estado
-  residual e preservacao do rascunho salvo. Revisao visual do owner pendente.
+  residual e preservacao do rascunho salvo. Validacao de producao concluida.
 
 Nota Demo Phase C, 2026-09-15: a campanha controlada em `demo-converta`
 `d9874c03-10e8-4061-a92e-6caa7b3001c3` encontrou bug generico de
@@ -458,13 +488,13 @@ Status:
 
 ```text
 CRA-PR UTILITY CAMPAIGN:
-LOCAL / CONTRACT ACCEPTANCE OPEN
+ACCEPTANCE PACKAGE READY / CRA CUSTOMER ACCEPTANCE PENDING
 
 UTILITY READINESS AUDIT:
 CLOSED
 
 REAL SEND:
-NOT EXECUTED
+NO CRA REAL SEND AUTHORIZED BY THIS DOCUMENT
 
 OWNER APPROVAL FOR REAL SEND:
 REQUIRED
@@ -704,7 +734,7 @@ Sem envio real.
 
 ## Campaign UX / result truth integration - 2026-09-18
 
-Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+Status: OWNER PASS / DEPLOYED / PRODUCTION VALIDATED.
 
 The owner-approved Campaign UX/result-truth delta was recovered and reapplied on
 the canonical Operational Queue baseline. Campaign return destination remains
@@ -719,12 +749,12 @@ states and business-readable reasons.
 Validation completed locally: `campaignsPageContract.test.ts` 6/6 PASS,
 `campaignsFeatureRoutes.test.ts` 114/114 PASS on safe local DB
 `re7_queue_rollout_validate_20260918`, backend build PASS, frontend build PASS
-and `git diff --check` PASS. No production deploy, no real Meta send, no
-schema/migration and no Demo `****6787` repair/mutation occurred.
+and `git diff --check` PASS. No real Meta send, no schema/migration and no
+Demo `****6787` repair/mutation occurred.
 
 ## Campaign Result Truth canonical 12/13 corrective - 2026-09-18
 
-Status: P1 VALIDATED LOCAL AND READ-ONLY / OWNER REVIEW READY / NO DEPLOY.
+Status: PRODUCTION VALIDATED.
 
 The initial synthetic fixture passed but did not reproduce the real production
 shape. Demo seed `****6787` used 13 digits and its delivered historical outbound

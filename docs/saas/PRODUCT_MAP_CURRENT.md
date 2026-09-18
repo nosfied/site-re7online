@@ -132,15 +132,16 @@ deployed FF-only with non-destructive validation. Sequential per-row
 identity resolution remains P2 performance hardening; internal result wording
 remains P3 UX. Completion telemetry and the broader lint baseline remain WATCH.
 
-Contacts campaign relationship view is CANONICALLY INTEGRATED / TEST VALIDATED /
-OWNER PASS / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP. It exposes campaign count,
+Contacts campaign relationship view is OWNER PASS / DEPLOYED / PRODUCTION
+NON-DESTRUCTIVE VALIDATED / CRA CAMPAIGN-CRM FOLLOW-UP. It exposes campaign count,
 last campaign/date/template/status and recent campaign history inside
 Contacts/CRM without creating Contact-owned campaign history. Canonical source
 remains existing campaign/outbound/event evidence, same-tenant only; the list
 uses a bounded aggregate projection for the current page and detail is loaded
 on demand to avoid per-row N+1. Customer UX excludes price/cost/billing values.
 Focused CRM route regression passed 19/19 on safe local DB, with backend and
-frontend builds passing. Production delivery and CRA acceptance are pending.
+frontend builds passing. Owner review, production delivery and non-destructive
+production validation are closed; CRA acceptance is pending.
 
 CRA-PR Demo mirror, 2026-09-15: `demo-converta` is the reusable multitenant
 product acceptance baseline for generic CRA requirements. Phase A created the
@@ -497,11 +498,12 @@ mappings, created/linked 2 owner-approved internal queues and left 8 inactive
 rows null-allowed. Post-verify active unresolved = 0 and cross-tenant/department
 links = 0. The owner decision package is
 `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Campaign UX
-remains owner PASS and real `****6787` repair remains a separate pending gate.
+remains owner PASS and Demo `****6787` repair is closed with canonical graph
+restored and history preserved.
 
-Campaign UX / result truth integration (2026-09-18): integrated locally on the
-current Operational Queue baseline and ready for owner revalidation; not
-deployed. Campaign creation/return destination stays Department-only in the
+Campaign UX / result truth integration (2026-09-18): OWNER PASS / DEPLOYED /
+PRODUCTION VALIDATED on the current Operational Queue baseline. Campaign
+creation/return destination stays Department-only in the
 customer UI and uses internal `Department.operationalQueueId` resolution.
 Customer-facing Campaigns and Inbox template shortcut surfaces remove financial
 price/cost/tariff estimates. Campaign lists/details expose persisted lifecycle
@@ -520,7 +522,7 @@ PASS, `campaignsFeatureRoutes.test.ts` 115/115 PASS, backend build PASS,
 frontend build PASS, diff check PASS. No
 schema/migration, deploy, real send or `****6787` mutation.
 
-Campaign composition lifecycle is implemented locally and pending owner review:
+Campaign composition lifecycle is PRODUCTION VALIDATED:
 unsaved form/CRM-preview/CSV/destination state has one dirty contract and one
 complete discard reset. Re-entry starts pristine. Intentional drafts,
 scheduled/sending/completed campaigns and execution history are outside this
@@ -536,8 +538,8 @@ call, resend, schema, deploy or PM2 reload occurred. The historical campaign
 row still shows `****9614` as blocked by `identity_conflict`; future canonical
 resolution is restored.
 
-Campaign Result Truth canonical 12/13 corrective (2026-09-18): P1 VALIDATED
-LOCAL AND READ-ONLY / OWNER REVIEW READY / NO DEPLOY. Production validation of
+Campaign Result Truth canonical 12/13 corrective (2026-09-18): PRODUCTION
+VALIDATED. Production validation of
 `Campanha teste set.2` disproved the earlier synthetic fixture: the seed held
 the delivered recipient in 13-digit form while its historical outbound held
 the 12-digit form. The projection now reuses the canonical CRM/Identity P1
@@ -545,5 +547,4 @@ candidate semantics and associates evidence without changing historical rows.
 Actual production records replay to exactly two visible outcomes: delivered
 `****6787`, blocked `****9614`, no pending or technical failure, `Entrega
 parcial`. Tests: 118/118 + 56/56 + 72/72 PASS. Schema unchanged; no migration,
-send, repair or deploy. Campaign Composer Cleanup remains deployed with its own
-production validation pending.
+send or repair.

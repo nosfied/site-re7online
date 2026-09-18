@@ -159,8 +159,8 @@ PRINCIPLES AUDIT PASS / OWNER APPROVED LOCAL / DEPLOYED / PRODUCTION
 NON-DESTRUCTIVE VALIDATED em `cad9489c`. A revalidacao local do owner passou;
 import real e aceite CRA/customer permanecem pendentes.
 
-Contacts campaign relationship view: CANONICALLY INTEGRATED / TEST VALIDATED /
-OWNER PASS / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP. A area de Contacts/CRM agora
+Contacts campaign relationship view: OWNER PASS / DEPLOYED / PRODUCTION
+NON-DESTRUCTIVE VALIDATED / CRA CAMPAIGN-CRM FOLLOW-UP. A area de Contacts/CRM agora
 expoe uma projecao read-only de campanha por contato a partir de fontes
 canonicas ja persistidas (`Campaign`, `OutboundMessage` e eventos de campanha),
 sem criar historico sombra dentro de `Contact`, sem schema/migration e sem
@@ -169,8 +169,8 @@ campanhas para a pagina atual e o detalhe carrega historico recente sob demanda,
 same-tenant, sem N+1 por linha. A UX mostra apenas status operacional, sem preco
 ou custo. Validacao local: `crmCapabilityRoutes.test.ts` 19/19 PASS em
 `re7_queue_domain_test_20260917`, backend build PASS, frontend build PASS e
-`git diff --check` PASS. Owner review, producao e aceite CRA permanecem
-pendentes.
+`git diff --check` PASS. Owner review, deploy e validacao nao destrutiva de
+producao estao fechados; aceite CRA permanece pendente.
 
 ## Campanhas
 
@@ -198,15 +198,16 @@ seed continuam compativeis pelo fallback legado. Inicio direto de conversa pelo
 CRM usa o setor principal valido do usuario iniciador e bloqueia antes do
 provider quando ele nao existe.
 
-CRA campaign follow-up reconciliation, 2026-09-16: the approved outbound return
+CRA campaign follow-up reconciliation, 2026-09-18: the approved outbound return
 destination delivery is CLOSED / DEPLOYED / OWNER APPROVED / PROD
 NON-DESTRUCTIVE VALIDATED at `452d5826db42cc1b574eeff8fd8e0d038cd3491f` and
 must not absorb new requirements. Recipient B controlled Utility validation,
 opt-out E2E and reports/exports/billing Phase E are completed on Demo product
-evidence; CRA customer acceptance remains separate. The current CRA order is:
-campaign/CRM import/upsert/report with `Situação no CRM`, contacts campaign
-relationship view owner pass/production gate, final reports/export/billing
-package with CRA-approved scope and unit price, then acceptance package. The CRM import front is IMPLEMENTED /
+evidence; CRM import/upsert and Contacts x Campaigns are deployed and validated
+non-destructively in production; CRA customer acceptance remains separate. The
+current CRA order is: assemble acceptance package, run CRA/customer formal
+review, and only execute any real CRA Utility campaign after explicit approval
+of template/copy/recipients/window/cost. The CRM import front is IMPLEMENTED /
 TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER APPROVED LOCAL / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED and is not only an optional
 column: it is tenant-scoped CRM upsert. Existing contacts update instead of
 duplicating; valid imported name may update the record; blank cells preserve
@@ -935,15 +936,15 @@ Commits relevantes do baseline homologado:
   operacionalmente sem patch de runtime: timezone `America/Sao_Paulo`, 6/6
   departamentos Mon-Fri 09:00-17:00, fins de semana fechados,
   `QUEUE_FOR_NEXT_OPEN` preservado, resolver e fluxo validado dentro/fora de
-  expediente. Em 2026-09-15 foi criada a matriz contratual canonica CRA-PR em
-  `docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md`: 52 requisitos mapeados,
-  14 CLOSED / REAL VALIDATED, 1 CLOSED / CUSTOMER VALIDATED, 15 IMPLEMENTED /
-  NEEDS CRA VALIDATION, 5 CONFIG PENDING, 1 CUSTOMER ACTION PENDING, 4 EXTERNAL
-  META DEPENDENCY, 1 PRODUCT GAP, 9 DOCUMENTATION/EVIDENCE GAP e 2 NOT REQUIRED.
-  A matriz confirma que active flow visibility e business hours nao devem ser
-  reabertos; lacunas principais sao canais IG/FB/Webchat, Utility
-  templates/campaigns em aceite contratual aberto, opt-out,
-  reporting/billing e pacote documental de aceite.
+  expediente. Em 2026-09-18 a matriz contratual canonica CRA-PR foi
+  reconciliada para o pacote de aceite: 52 requisitos, 26 CLOSED / REAL
+  VALIDATED, 18 DEPLOYED / CRA ACCEPTANCE PENDING, 4 CUSTOMER-DEFERRED,
+  4 P2 NON-BLOCKING / WATCH e 0 OPEN CONTRACT GAPS. Active flow visibility,
+  business hours, identidade canonica, Operational Queue, Campaign UX/result
+  truth/composer, CRM import/upsert, Contacts x Campaigns, Demo Utility,
+  opt-out e report/export/billing quantity nao devem ser reabertos. Restam
+  aceite formal CRA, anexos documentais, campanha real somente com aprovacao
+  explicita e canais IG/FB/Webchat diferidos pelo cliente.
   P2 ativo = branching condicional por resposta
   capturada, melhorias de contexto em relatorios, semantica de unlink/remocao
   Meta Cloud, hardening de suporte interno auditado, cross-provider inactivity
@@ -1049,10 +1050,11 @@ resolved, 0 active unresolved, 8 inactive null-allowed, 2 inactive with queue
 and 0 cross-tenant/department links. Backend/frontend builds, targeted PM2
 reload and HTTP smoke passed. The owner decision package is
 `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Campaign UX
-remains owner PASS; `****6787` repair remains separate.
+remains owner PASS; Demo `****6787` repair is closed with canonical graph
+restored and history preserved.
 
-Campaign UX / result truth integration (2026-09-18): INTEGRATED LOCAL / OWNER
-REVALIDATION PENDING / NO DEPLOY. The approved Campaign UX delta has been
+Campaign UX / result truth integration (2026-09-18): OWNER PASS / DEPLOYED /
+PRODUCTION VALIDATED. The approved Campaign UX delta has been
 recovered onto the current Operational Queue baseline. Customer campaign
 destination remains Department-only; Queue is resolved internally from
 `Department.operationalQueueId`. Campaigns and the Inbox template shortcut no
@@ -1074,11 +1076,11 @@ blocked until separately authorized data repair. Canonical counters are total
 2, delivered 1, blocked 1, pending 0 and technical failures 0. Canonical
 integration validation: UI contract 9/9 PASS,
 `campaignsFeatureRoutes.test.ts` 115/115 PASS, backend/frontend builds
-PASS and `git diff --check` PASS. No schema/migration, production deploy, real
-Meta send or `****6787` mutation occurred.
+PASS and `git diff --check` PASS. No schema/migration, real Meta send or
+`****6787` mutation occurred.
 
-Campaign composer lifecycle (2026-09-18): IMPLEMENTED LOCAL / OWNER REVIEW
-PENDING / NO DEPLOY. Composition remains client-transient until explicit draft
+Campaign composer lifecycle (2026-09-18): PRODUCTION VALIDATED. Composition
+remains client-transient until explicit draft
 save or execution. One dirty-state contract and one reset clear all unsaved
 name/template/variables/recipients, CRM and CSV previews, destination and
 errors on discard or Campaign-tab abandonment. Explicit drafts and campaigns
@@ -1098,8 +1100,8 @@ passed with blockers 0 and PROJECTED_ELIGIBLE. Historical campaign
 `****9614` remains `BLOCKED / identity_conflict`; no resend/provider call was
 made.
 
-Campaign Result Truth canonical 12/13 corrective (2026-09-18): P1 VALIDATED
-LOCAL AND READ-ONLY / OWNER REVIEW READY / NO DEPLOY. The original synthetic
+Campaign Result Truth canonical 12/13 corrective (2026-09-18): PRODUCTION
+VALIDATED. The original synthetic
 test passed but omitted the actual 13-digit seed versus 12-digit historical
 outbound shape. Production validation therefore exposed a false duplicate
 `****6787` failure and stopped at the hard gate. The corrective is projection

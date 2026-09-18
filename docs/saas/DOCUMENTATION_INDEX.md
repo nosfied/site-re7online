@@ -6,7 +6,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 
 | Documento | Status | Uso |
 | --- | --- | --- |
-| `docs/saas/CONVERTA_PRODUCT_STATE_2026-08.md` | atual | Fotografia documental do produto, canais, Inbox, Support Hub, CRM, campanhas, Campaign UX/result-truth integrado localmente pendente de owner revalidation, templates, relatorios de acesso/sessao, LGPD, uso Meta, limites, padrao administrativo expansivo e regra de desativacao de usuario deployada e validada nao destrutivamente |
+| `docs/saas/CONVERTA_PRODUCT_STATE_2026-08.md` | atual | Fotografia documental do produto, canais, Inbox, Support Hub, CRM, campanhas, Campaign UX/result-truth/composer validados em producao, templates, relatorios de acesso/sessao, LGPD, uso Meta, limites, padrao administrativo expansivo e regra de desativacao de usuario deployada e validada nao destrutivamente |
 | `docs/saas/CONVERTA_OPERATOR_GUIDE.md` | atual | Guia de uso operacional para Inbox, Support Hub, usuarios, Treinamentos, templates, mensagens prontas, campanhas, relatorio Acessos/Sessoes, opt-out, anonimizacao e custos Meta |
 | `docs/saas/DEMO_TENANT_READINESS.md` | atual | Readiness do tenant generico `demo-converta`, auditoria de configuracoes e checker somente leitura |
 | `docs/saas/DEMO_TENANT_PROVISIONING_CHECKLIST.md` | atual | Checklist manual de provisionamento seguro do tenant de demonstracao |
@@ -18,10 +18,10 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | `docs/saas/META_USAGE_COST_CONTROL.md` | atual | Controle estimativo de uso Meta: ledger, resumo, preview, relatorio mensal, limites e alertas |
 | `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md` | P2 FinOps | Fonte canonica proposta para precos Meta oficiais, separacao provider cost/FX/preco contratual e staleness; gate estreito Brazil Utility para B ja provado |
 | `docs/saas/CAMPAIGN_IMPORT_REQUIREMENTS.md` | deployed / production non-destructive validated / result-truth integrated local / real import pending | Contrato para importacao/upsert CRM em campanhas: identidade canonica unica, `Situação no CRM`, atomicidade por linha, nao duplicacao, autorizacao CRM, relatorio CSV protegido e detalhe de resultado sem historico paralelo |
-| `docs/saas/CAMPAIGN_COMPOSER_LIFECYCLE.md` | implemented local / owner review pending | Regra canonica de composicao transitoria, descarte, rascunho intencional e fronteira de execucao de campanhas |
-| `docs/saas/CAMPAIGN_RESULT_TRUTH_CANONICAL_RECONCILIATION_2026-09-18.md` | P1 validated local/read-only / owner review ready / no deploy | Correcao canonica da projecao 12/13 digitos, replay read-only da campanha real, contrato de fallback, contadores e regressao |
+| `docs/saas/CAMPAIGN_COMPOSER_LIFECYCLE.md` | production validated | Regra canonica de composicao transitoria, descarte, rascunho intencional e fronteira de execucao de campanhas |
+| `docs/saas/CAMPAIGN_RESULT_TRUTH_CANONICAL_RECONCILIATION_2026-09-18.md` | production validated | Correcao canonica da projecao 12/13 digitos, replay read-only da campanha real, contrato de fallback, contadores e regressao |
 | `docs/saas/DEMO_9614_CAMPAIGN_IDENTITY_CLOSURE_2026-09-18.md` | root cause closed / data repair executed | Auditoria forense do bloqueio pre-provider por identidade duplicada historica, execucao transacional owner-authorized, idempotencia e preservacao do resultado bloqueado sem reenvio |
-| `docs/saas/CONTACTS_CAMPAIGN_RELATIONSHIP_VIEW.md` | canonically integrated / test validated / owner pass / production deploy pending | Contrato e implementacao local para exibir historico/estado de campanhas em Contacts sem duplicar fonte canonica, com agregados por pagina, detalhe sob demanda e sem valores financeiros na UX |
+| `docs/saas/CONTACTS_CAMPAIGN_RELATIONSHIP_VIEW.md` | owner pass / deployed / production non-destructive validated | Contrato para exibir historico/estado de campanhas em Contacts sem duplicar fonte canonica, com agregados por pagina, detalhe sob demanda e sem valores financeiros na UX |
 | `docs/saas/META_TEMPLATE_MEDIA_SUPPORT.md` | P2 produto/Meta | Escopo futuro para templates Marketing com midia IMAGE/VIDEO, lifecycle de media, preview, botoes, aprovacao/rejeicao e preco oficial Marketing |
 | `docs/saas/PRODUCT_MAP_CURRENT.md` | atual | Fotografia atual do produto e modulos |
 | `docs/saas/MARKET_PROFILE_ARCHITECTURE.md` | atual | Arquitetura oficial de Core Platform, Market Profiles, Feature Packs, Tenant Configuration e capabilities |
@@ -52,9 +52,9 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | --- | --- | --- |
 | `docs/bids/CONVERTA_PUBLIC_BID_EVIDENCE_MATRIX.md` | atual | Matriz reutilizavel de evidencias para editais publicos, propostas, PoCs e diligencias |
 | `docs/bids/2026/secult-pe/READINESS_NOTES.md` | atual | Notas de prontidao SECULT-PE com gates, riscos e proximos passos |
-| `docs/bids/2026/cra-pr/READINESS_NOTES.md` | atual | Notas de prontidao CRA-PR com volume ativo/receptivo, Utility-only, riscos Meta e proximos passos |
-| `docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md` | atual | Matriz canonica requisito-a-requisito do Contrato/TR CRA-PR, separando produto, configuracao CRA, evidencia, lacunas contratuais e proximas acoes |
-| `docs/bids/2026/cra-pr/UTILITY_CAMPAIGN_ACCEPTANCE_CHECKLIST.md` | atual | Checklist da primeira campanha Utility CRA-PR controlada, com gates de template, destinatarios, custo, opt-out, billing e proibicao de envio real sem aprovacao explicita |
+| `docs/bids/2026/cra-pr/READINESS_NOTES.md` | acceptance package ready / customer acceptance pending | Notas de prontidao CRA-PR com scorecard final de 52 requisitos, frentes fechadas, pendencias formais e canais customer-deferred |
+| `docs/bids/2026/cra-pr/CONTRACT_ADHERENCE_MATRIX.md` | final consolidated / acceptance package ready | Matriz canonica requisito-a-requisito do Contrato/TR CRA-PR, com classificacao final, evidencia, customer-deferred, P2/WATCH e 0 open contract gaps |
+| `docs/bids/2026/cra-pr/UTILITY_CAMPAIGN_ACCEPTANCE_CHECKLIST.md` | acceptance package ready / no real CRA send authorized | Checklist da primeira campanha Utility CRA-PR controlada, com gates de template, destinatarios, custo, opt-out, billing e proibicao de envio real sem aprovacao explicita |
 | `docs/bids/2026/cra-pr/DEMO_CONTRACT_VALIDATION_PLAN.md` | atual | Plano de validacao CRA no tenant Demo como mirror multitenant, com Utility B, opt-out E2E e reports/exports/billing Phase E validados em Demo |
 | `docs/bids/2026/cra-pr/evidence/demo-contract-validation/README.md` | atual | Indice do pacote de evidencias sanitizadas para validacao contratual Demo, incluindo Phase C Utility, Phase D opt-out e Phase E reports/exports/billing |
 | `docs/bids/2026/cra-pr/evidence/demo-contract-validation/PHASE_E_REPORTS_EXPORTS_BILLING_2026-09-16.md` | atual | Evidencia Phase E de reports/exports/billing em Demo: A reconciliado, B entregue, opt-out bloqueado, CSV/open-equivalent e unidade contratual CRA pendente |
@@ -79,7 +79,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | Documento | Status | Uso |
 | --- | --- | --- |
 | `docs/RUNBOOK_WHATSAPP_AGENT.md` | atual | Deploy, migration, retencao e operacao principal |
-| `docs/DEPLOY_TOPOLOGY_RE7.md` | parcialmente atual | Topologia de deploy; validar sempre que PM2/VPS/Vercel mudarem |
+| `docs/DEPLOY_TOPOLOGY_RE7.md` | atual / Vercel hygiene watch | Topologia de deploy; separa Vercel publico e VPS operacional, registra ignoreCommand local PASS e validacao Vercel de plataforma pendente |
 | `docs/DEPLOY_LOG.md` | atual como historico | Registro historico, nao fonte primaria de arquitetura |
 | `docs/onboarding.md` | atual | Onboarding Meta/WhatsApp, readiness, partial bind e recuperacao operacional |
 | `docs/smoke-template-fallback.md` | parcialmente atual | Smoke especifico de template fallback |

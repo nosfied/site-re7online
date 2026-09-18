@@ -1,10 +1,11 @@
 # Demo Contract Validation Evidence
 
-Status: PHASE A INDEX ONLY / NO EXTERNAL SEND.
-Phase B owner gate prepared on 2026-09-15; still no external send.
-Phase C controlled Utility send attempted on 2026-09-15; partial Meta acceptance
-occurred, owner later confirmed receipt for `****9614`, but the campaign failed
-before local persistence/ledger/report evidence.
+Status: E4 DEMO VALIDATED / ACCEPTANCE PACKAGE INPUT READY.
+Phase B owner gate was prepared on 2026-09-15. Phase C initially produced a
+partial Meta acceptance for `****9614`; later controlled gates closed Recipient
+B Utility delivery, opt-out E2E and report/export/billing quantity evidence.
+This directory remains Demo/product evidence only and does not replace CRA
+customer acceptance.
 
 This directory is reserved for sanitized evidence from Demo-based validation of
 CRA-PR contract capabilities.

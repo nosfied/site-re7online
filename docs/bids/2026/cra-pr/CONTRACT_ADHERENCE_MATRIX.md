@@ -1,16 +1,55 @@
 # CRA-PR Contract/TR Adherence Matrix
 
-Status: canonical contractual readiness audit for Converta / CRA-PR.
+Status: FINAL CONSOLIDATED / ACCEPTANCE PACKAGE READY / CRA CUSTOMER
+ACCEPTANCE PENDING.
 
 Scope: Contract no. 20/2026/CRA-PR / PE 90004/2026 evidence available in the
 repository plus read-only production snapshot collected on 2026-09-15.
 
-Current execution front, updated on 2026-09-15: Utility/campaign readiness audit
-is closed and the contract acceptance phase is open. The next blocker is
-customer-approved CRA Utility copy plus explicit owner approval before any Meta
-submission or real send. Instagram Direct, Facebook Messenger and
-Website/Webchat remain contract-required, but are customer-deferred with
-delivery window pending and are not active blockers for this phase.
+Final consolidation, updated on 2026-09-18: the product/runtime blockers opened
+during the CRA readiness cycle are closed or moved to explicit non-blocking
+watch/P2 tracks. The CRA acceptance package can now be assembled from the
+validated evidence below. Formal CRA customer acceptance, signed/supporting
+attachments and any customer-deferred channel activation remain outside this
+technical closure.
+
+Final 52-requirement status:
+
+| Classification | Count |
+| --- | ---: |
+| CLOSED / REAL VALIDATED | 26 |
+| DEPLOYED / CRA ACCEPTANCE PENDING | 18 |
+| CUSTOMER-DEFERRED | 4 |
+| P2 NON-BLOCKING / WATCH | 4 |
+| OPEN CONTRACT GAPS | 0 |
+| TOTAL REQUIREMENTS | 52 |
+
+Closed/deployed fronts included in this consolidation:
+
+- CRA active flow visibility: CLOSED / DEPLOYED / CUSTOMER VALIDATED.
+- CRA business hours: CONFIGURED / OPERATIONALLY VALIDATED.
+- Canonical identity P1: CLOSED / DEPLOYED.
+- Demo `****6787`: REPAIRED / CANONICAL GRAPH RESTORED / HISTORY PRESERVED.
+- Demo `****9614`: REPAIRED / CANONICAL GRAPH RESTORED / HISTORY PRESERVED.
+- Operational Queue domain: CLOSED / DEPLOYED / PRODUCTION RECONCILED.
+- Campaign UX / explicit return destination: OWNER PASS / DEPLOYED.
+- Campaign result truth: PRODUCTION VALIDATED.
+- Campaign composer cleanup: PRODUCTION VALIDATED.
+- CRM import/upsert/`Situacao no CRM`: OWNER PASS / DEPLOYED.
+- Contacts x Campaigns relationship view: OWNER PASS / DEPLOYED /
+  PRODUCTION NON-DESTRUCTIVE VALIDATED.
+- Demo Utility campaign, opt-out and report/export/billing quantity gates:
+  E4 DEMO VALIDATED.
+
+Vercel deployment hygiene is recorded as WATCH, not a CRA contract blocker.
+The public site project is `site-re7online`
+(`prj_Ei43Wm38CyRWK4yaJHsQinQE7Lto`). An `ignoreCommand` exists in the
+Vercel hygiene branch and passed local validation, but platform validation is
+still pending because the docs-only validation deployment remained QUEUED at
+the time of this consolidation. The Vercel Production Branch and the source of
+one historical production redeploy remain unknown and must stay in deployment
+hygiene/watch documentation. No Converta VPS deploy or runtime alias change is
+authorized by this document.
 
 Demo multitenant mirror update, 2026-09-15: Phase A validation plan is recorded
 in `docs/bids/2026/cra-pr/DEMO_CONTRACT_VALIDATION_PLAN.md`. `demo-converta`
@@ -70,12 +109,14 @@ resolution and detailed downloadable import evidence. Neither item is part of
 the current Utility controlled campaign or Recipient B gate.
 
 Contacts campaign relationship view, updated 2026-09-18: the separate CRA
-CAMPAIGN-CRM FOLLOW-UP now has CANONICALLY INTEGRATED / TEST VALIDATED / OWNER PASS / CLEAN DELIVERY PREPARED / PRODUCTION DEPLOY PENDING status.
+CAMPAIGN-CRM FOLLOW-UP now has OWNER PASS / DEPLOYED / PRODUCTION
+NON-DESTRUCTIVE VALIDATED status.
 It exposes campaign history/state inside Contacts without copying campaign
 source-of-truth data into Contact. It supports traceability and acceptance
 evidence, using existing campaign/outbound/event records, same-tenant
 projection, aggregate list data and on-demand detail. Owner review, production
-delivery and CRA customer acceptance remain pending.
+delivery and production non-destructive validation are closed; CRA customer
+acceptance remains pending.
 
 This document separates four things that must not be conflated:
 
@@ -154,25 +195,80 @@ Read-only production snapshot collected on 2026-09-15.
 
 ## Readiness Scorecard
 
-The scorecard below counts the original 52 CRA Contract/TR requirements. Rows
-added later as follow-up backlog (`CRA-CAMP-002A`, `CRA-CAMP-002B`,
-`CRA-MKT-001`) are tracked in the matrix but do not change the original
-requirement denominator until owner decision or contract evidence promotes them.
+The scorecard below counts the original 52 CRA Contract/TR requirements after
+the 2026-09-18 final consolidation. Rows added later as follow-up backlog
+(`CRA-CAMP-002A`, `CRA-CAMP-002B`, `CRA-MKT-001`) remain tracked in the matrix
+without changing the original denominator unless owner decision or contract
+evidence promotes them.
 
 | Status | Count |
 | --- | ---: |
 | TOTAL REQUIREMENTS | 52 |
-| CLOSED / REAL VALIDATED | 14 |
-| CLOSED / CUSTOMER VALIDATED | 1 |
-| IMPLEMENTED / NEEDS CRA VALIDATION | 15 |
-| CONTRACT ACCEPTANCE OPEN | 2 |
-| CONFIG PENDING | 0 |
-| CUSTOMER ACTION PENDING | 0 |
-| CONTRACT REQUIRED / CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING | 4 |
-| EXTERNAL META DEPENDENCY | 4 |
-| PRODUCT GAP | 1 |
-| DOCUMENTATION/EVIDENCE GAP | 9 |
-| NOT REQUIRED BY CONTRACT | 2 |
+| CLOSED / REAL VALIDATED | 26 |
+| DEPLOYED / CRA ACCEPTANCE PENDING | 18 |
+| CUSTOMER-DEFERRED | 4 |
+| P2 NON-BLOCKING / WATCH | 4 |
+| OPEN CONTRACT GAPS | 0 |
+
+## Final Normalized 52-Requirement Classification
+
+This table is the current status of record. The detailed matrix below remains
+for source clauses, chronology and historical evidence.
+
+| REQ ID | Final Classification | Evidence / Reason | Blocking? |
+| --- | --- | --- | --- |
+| CRA-PLAT-001 | CLOSED / REAL VALIDATED | SaaS platform and tenant runtime validated in production snapshot | no |
+| CRA-WA-001 | CLOSED / REAL VALIDATED | Official WhatsApp/Meta Cloud operation configured and validated | no |
+| CRA-META-001 | DEPLOYED / CRA ACCEPTANCE PENDING | Official API operation exists; formal attachment/sign-off pending | no |
+| CRA-CHAN-001 | DEPLOYED / CRA ACCEPTANCE PENDING | Unified Inbox valid for WhatsApp; other channels customer-deferred | no |
+| CRA-WA-002 | CLOSED / REAL VALIDATED | WhatsApp receive/reply/history validated | no |
+| CRA-IG-001 | CUSTOMER-DEFERRED | Instagram Direct delivery window/assets not supplied by customer | no |
+| CRA-FB-001 | CUSTOMER-DEFERRED | Facebook Messenger delivery window/assets not supplied by customer | no |
+| CRA-WEB-001 | CUSTOMER-DEFERRED | CRA webchat/site not configured by current customer sequence | no |
+| CRA-WEB-002 | CUSTOMER-DEFERRED | Customer site embed action deferred | no |
+| CRA-CHAN-002 | DEPLOYED / CRA ACCEPTANCE PENDING | Channel-origin model exists; CRA acceptance evidence pending | no |
+| CRA-HIST-001 | CLOSED / REAL VALIDATED | Conversation/timeline persistence validated | no |
+| CRA-HUM-001 | CLOSED / REAL VALIDATED | Departments, queues and handoff sectors reconciled | no |
+| CRA-HUM-002 | DEPLOYED / CRA ACCEPTANCE PENDING | Status/SLA surfaces exist; CRA package evidence pending | no |
+| CRA-CHAT-001 | CLOSED / REAL VALIDATED | Active CRA flow present, preserved and validated | no |
+| CRA-CHAT-002 | DEPLOYED / CRA ACCEPTANCE PENDING | Menu/options configured; channel rendering acceptance pending | no |
+| CRA-CHAT-003 | P2 NON-BLOCKING / WATCH | Broad keyword catalog is clarification/hardening, not current blocker | no |
+| CRA-CHAT-004 | CLOSED / REAL VALIDATED | Automatic CRA flow responses validated | no |
+| CRA-CHAT-005 | CLOSED / REAL VALIDATED | Deterministic menu flow, no generative dependency | no |
+| CRA-CHAT-006 | CLOSED / REAL VALIDATED | CRA ADMIN customer validated active-flow visibility | no |
+| CRA-HUM-003 | CLOSED / REAL VALIDATED | Human handoff works with explicit queue model | no |
+| CRA-HUM-004 | CLOSED / REAL VALIDATED | Claim/assign/transfer/reply/close core operations validated | no |
+| CRA-PROT-001 | CLOSED / REAL VALIDATED | Protocol and continuation evidence available | no |
+| CRA-AUD-001 | DEPLOYED / CRA ACCEPTANCE PENDING | Audit/event trail exists; redacted package evidence pending | no |
+| CRA-CAMP-001 | DEPLOYED / CRA ACCEPTANCE PENDING | Campaign engine and Demo Utility gate validated; CRA send needs approval | no |
+| CRA-TPL-001 | DEPLOYED / CRA ACCEPTANCE PENDING | Template pipeline exists; CRA copy/template approval pending | no |
+| CRA-TPL-002 | DEPLOYED / CRA ACCEPTANCE PENDING | Submission/follow-up path exists; CRA execution pending | no |
+| CRA-TPL-003 | DEPLOYED / CRA ACCEPTANCE PENDING | Utility-only controls exist; Meta/CRA category proof pending | no |
+| CRA-WA-003 | CLOSED / REAL VALIDATED | Official API policy validated; Web Session coexistence documented | no |
+| CRA-CAMP-002 | CLOSED / REAL VALIDATED | Import/upsert/CRM situation deployed and owner validated | no |
+| CRA-CAMP-003 | CLOSED / REAL VALIDATED | Segmentation/dedupe behavior covered by import and campaign gates | no |
+| CRA-CAMP-004 | CLOSED / REAL VALIDATED | Variables/template mechanics validated in Utility gates | no |
+| CRA-CAMP-005 | CLOSED / REAL VALIDATED | Composer/lifecycle cleanup and draft controls production validated | no |
+| CRA-CAMP-006 | CLOSED / REAL VALIDATED | Delivery/status result truth production validated | no |
+| CRA-OPT-001 | CLOSED / REAL VALIDATED | Demo opt-out E2E validated with zero provider/billing on block | no |
+| CRA-REP-001 | CLOSED / REAL VALIDATED | Report/export evidence package validated on Demo product data | no |
+| CRA-REP-002 | CLOSED / REAL VALIDATED | Monthly usage/billing quantity validated on Demo evidence | no |
+| CRA-BILL-001 | CLOSED / REAL VALIDATED | Delivered Utility billing quantity rules validated; final CRA price is formal package evidence | no |
+| CRA-SLA-001 | DEPLOYED / CRA ACCEPTANCE PENDING | SLA/support material needs formal package attachment | no |
+| CRA-SUP-001 | DEPLOYED / CRA ACCEPTANCE PENDING | Support channels/process need formal package attachment | no |
+| CRA-BKP-001 | DEPLOYED / CRA ACCEPTANCE PENDING | Backup/restore evidence needs formal package attachment | no |
+| CRA-USER-001 | CLOSED / REAL VALIDATED | 30-user limit, roles and active count validated | no |
+| CRA-USER-002 | CLOSED / REAL VALIDATED | Users 2.0 and deactivation guard delivered | no |
+| CRA-LGPD-001 | CLOSED / REAL VALIDATED | Tenant isolation, RBAC, privacy/redaction validated | no |
+| CRA-LGPD-002 | DEPLOYED / CRA ACCEPTANCE PENDING | Retention/export/deletion appendix pending | no |
+| CRA-GOV-001 | P2 NON-BLOCKING / WATCH | Support/admin access evidence and hardening remain governance watch | no |
+| CRA-TRAIN-001 | DEPLOYED / CRA ACCEPTANCE PENDING | Training attendance/materials require formal customer evidence | no |
+| CRA-IMPL-001 | DEPLOYED / CRA ACCEPTANCE PENDING | Implementation checklist/sign-off pending | no |
+| CRA-VOL-001 | P2 NON-BLOCKING / WATCH | Receptive volume/load evidence remains capacity watch | no |
+| CRA-VOL-002 | DEPLOYED / CRA ACCEPTANCE PENDING | Active Utility volume controls validated generically; CRA volume proof pending | no |
+| CRA-META-002 | DEPLOYED / CRA ACCEPTANCE PENDING | Meta ownership/transfer evidence requires formal/legal attachment | no |
+| CRA-NO-MKT-001 | CLOSED / REAL VALIDATED | Marketing excluded from current CRA Utility scope | no |
+| CRA-INACT-001 | P2 NON-BLOCKING / WATCH | Human 1h auto-close interpretation superseded; bot lifecycle hardening remains P2 | no |
 
 ## Requirement Matrix
 
@@ -201,14 +297,14 @@ requirement denominator until owner decision or contract evidence promotes them.
 | CRA-HUM-004 | aderencia #20/#22 | Claim/assign/transfer/reply/close | Inbox supports core operations | CRA production close/snapshots exist | E4 | CLOSED / REAL VALIDATED | C0 | closed | Transfer-specific CRA proof not isolated | Include transfer in next CRA smoke if required | RE7 | E4/E5 |
 | CRA-PROT-001 | aderencia #24/#25/#26/#27/#28 | Protocol and continuation with anti-enumeration | Protocol/continuation implemented | Protocol snapshots exist | E4 | CLOSED / REAL VALIDATED | C1 | closed | Contractual evidence pack missing | Include protocol example with redaction | RE7 | E6 |
 | CRA-AUD-001 | aderencia #30/#57 | Logs, events and audit trail | Events/logging/redaction implemented | CRA has events/snapshots | E3/E4 | IMPLEMENTED / NEEDS CRA VALIDATION | C2 | P2 | Formal audit trail export not packaged | Add redacted audit evidence to acceptance pack | RE7 | E6 |
-| CRA-CAMP-001 | README objeto; aderencia #31 | Batch active WhatsApp dispatch | Campaign module exists; focused local campaign import/runner tests PASS | No CRA campaigns | E2 | CONTRACT ACCEPTANCE OPEN | C0 | P1 evidence | No CRA campaign configured/tested | Configure approved template and run controlled campaign only after owner approval | RE7 + CRA | E4/E5/E6 |
-| CRA-TPL-001 | aderencia #32 | Official templates/HSM | Template request/admin/Meta submission pipeline audited | No CRA templates; approved copy not found | E1/E2 | CONTRACT ACCEPTANCE OPEN | C0 | P1 config | No CRA template/copy approved | Create request only after customer-approved Utility copy | RE7 + CRA + Meta | E4/E5/E6 |
+| CRA-CAMP-001 | README objeto; aderencia #31 | Batch active WhatsApp dispatch | Campaign module exists; focused local campaign import/runner tests PASS; Demo Utility gate validated | No CRA campaigns | E4 Demo / E6 pending | DEPLOYED / CRA ACCEPTANCE PENDING | C0 | acceptance evidence | No CRA customer-approved campaign configured/tested | Configure approved template and run controlled CRA campaign only after explicit approval | RE7 + CRA | E4/E5/E6 |
+| CRA-TPL-001 | aderencia #32 | Official templates/HSM | Template request/admin/Meta submission pipeline audited | No CRA templates; approved copy not found | E2 product / E6 pending | DEPLOYED / CRA ACCEPTANCE PENDING | C0 | acceptance evidence | No CRA customer-approved template/copy | Create request only after customer-approved Utility copy | RE7 + CRA + Meta | E4/E5/E6 |
 | CRA-TPL-002 | aderencia #33 | Support creation/submission/follow-up | Product/process support exists; admin-only Meta submission path audited | Not evidenced for CRA | E1/E2 | EXTERNAL META DEPENDENCY | C1 | docs/ops | Meta approval process not executed for CRA | Run template submission tracker after copy approval | RE7 + Meta | E4/E6 |
 | CRA-TPL-003 | resposta esclarecimento item 1/12 | Utility-only, no marketing | Product policy supports category controls; send paths re-check policy | CRA has no templates | E1/E2 | EXTERNAL META DEPENDENCY | C0 | P1 config | Utility classification depends Meta approval | Submit only approved Utility content; record category evidence | RE7 + Meta | E4/E6 |
 | CRA-WA-003 | aderencia #35; declaracao Meta | No WhatsApp Web/API unofficial as main mechanism | Official Cloud API supported; Web Session is coexistence/ops below domain | Meta Cloud configured; Web Session connected separately | E4 | CLOSED / REAL VALIDATED | C0 | closed | Acceptance wording must explain coexistence | Include official API declaration and transport policy | RE7 | E6 |
 | CRA-CAMP-002 | aderencia #36/#37 | Recipient import CSV/XLSX/API | Product has campaign/import-related capability documented | Not evidenced for CRA | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | CRA import workflow not proven | Run dry-run/import test with sanitized list | RE7 | E4 |
 | CRA-CAMP-002A | follow-up owner requirement 2026-09-16 | Campaign/contact import as safe tenant-scoped CRM upsert with optional `Situação no CRM`, no duplicate contacts and detailed import report | Implemented in campaign CSV import: `Lead.status` model audited; same-tenant deterministic status resolution; canonical CRM identity/upsert reused by preview and commit; valid nonblank name/status update; blank cells preserve; unknown/ambiguous status blocks row; valid row wins only after validation; CRM/status/campaign seed commit atomically per row; `campaigns` + `crm` required; detailed formula-safe report CSV exposed; corrective focused tests and owner revalidation PASS; deployed at `cad9489c` by FF-only with production non-destructive checks PASS | No real production import and no CRA customer-data evidence yet | E3 local owner + production non-destructive; E4 import not claimed | IMPLEMENTED / TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER APPROVED LOCAL / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED | C1 if CRA import acceptance needs CRM segmentation | P1 corrective batch closed; P2 sequential resolver performance remains | Chronology preserved: initial implementation; owner PARTIAL PASS; four-P1 principles block; corrective batch; principles audit PASS; owner revalidation PASS; canonical integration; production deploy | Use only an approved sanitized CRA list for a separately authorized real-import evidence package; do not claim CRA acceptance before that | RE7 | E4/E6 |
-| CRA-CAMP-002B | follow-up owner requirement 2026-09-16 | Contacts campaign relationship view: campaign count, last campaign/send/template, delivery/read/failure/skipped/blocked/opt-out state, CRM Situation and campaign/history navigation | Canonical integration complete: CRM list adds compact campaign summary and contact detail shows recent campaign history via canonical `Campaign`, `OutboundMessage` and campaign events; navigation reuses existing campaign detail route; no Contact shadow history, schema or migration; no financial fields in customer UX; focused regression 19/19 PASS plus backend/frontend builds PASS | Not deployed; no CRA customer evidence yet | E2/E3 local | CANONICALLY INTEGRATED / TEST VALIDATED / OWNER PASS / CLEAN DELIVERY PREPARED / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP | C1 evidence/supporting traceability | P1 local closed; production/CRA acceptance pending | Owner visual review PASS; controlled production delivery still pending | After owner pass, deploy through normal gate and validate Contacts traceability on approved CRA/Demo evidence without real send | RE7 | E4/E6 |
+| CRA-CAMP-002B | follow-up owner requirement 2026-09-16 | Contacts campaign relationship view: campaign count, last campaign/send/template, delivery/read/failure/skipped/blocked/opt-out state, CRM Situation and campaign/history navigation | Canonical integration complete: CRM list adds compact campaign summary and contact detail shows recent campaign history via canonical `Campaign`, `OutboundMessage` and campaign events; navigation reuses existing campaign detail route; no Contact shadow history, schema or migration; no financial fields in customer UX; focused regression 19/19 PASS plus backend/frontend builds PASS; production delivery and non-destructive validation closed | No CRA customer acceptance evidence yet | E4 product / E6 pending | OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED / CRA CAMPAIGN-CRM FOLLOW-UP | C1 evidence/supporting traceability | P1 closed; CRA acceptance pending | CRA customer acceptance still pending | Include Contacts traceability in approved CRA acceptance package without real send | RE7 | E6 |
 | CRA-CAMP-003 | aderencia #38/#39 | Segmentation and deduplication | Product supports recipient records and dedupe semantics | Not evidenced for CRA | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | No CRA list/dedupe evidence | Validate duplicated sample recipient handling | RE7 | E4 |
 | CRA-CAMP-004 | aderencia #40/#41 | Variables and supported attachments/media/links | Templates/media supported subject to Meta policy | No CRA template/list mapping | E1 | IMPLEMENTED / NEEDS CRA VALIDATION | C1 | P1 evidence | No CRA variable/media template proof | Validate one utility template with variables | RE7 + Meta | E4/E5 |
 | CRA-MKT-001 | follow-up owner requirement 2026-09-16 | Marketing template media support: MARKETING category, IMAGE/VIDEO headers, examples/media handles, buttons where supported, approval/rejection status/reason, send with approved template and current official Marketing pricing source | Not part of current Utility front; requires product/Meta audit | No CRA Marketing requirement evidenced for current acceptance | E0/E1 | P2 PRODUCT + META CAPABILITY / CONTRACT PROMOTION ONLY IF EVIDENCE REQUIRES | C3 unless contract evidence promotes | P2 | Do not mix Marketing media with Utility controlled campaign | Keep P2; if CRA Contract/TR explicitly requires Marketing media for acceptance, stop for owner decision and reclassify | RE7 + Meta | E2/E4 if promoted |
@@ -234,23 +330,23 @@ requirement denominator until owner decision or contract evidence promotes them.
 | CRA-NO-MKT-001 | resposta esclarecimento item 12 | No marketing messages in scope | Product can avoid marketing | CRA no campaigns/templates | E3 | NOT REQUIRED BY CONTRACT | C3 | none | No marketing implementation needed for CRA readiness | Keep utility-only scope | RE7 | none |
 | CRA-INACT-001 | Superseded interpretation | HUMAN waiting-on-customer 1h auto-close | Human conversations may remain open indefinitely under attendant control; no automatic 60-minute close is required | Not applicable | E2/E4 for BOT/flow lifecycle audit | NOT REQUIRED BY CONTRACT / SUPERSEDED | C3 | none | Old HUMAN 1h interpretation was stale; abandoned BOT/FLOW lifecycle already audited | Keep BOT/FLOW residuals as P2 hardening only | RE7 | none |
 
-## Critical Contract Gaps
+## Current Contract Blockers
 
-C0/C1 items that block declaring contractual readiness without qualification:
+There are no remaining P0/P1 product/runtime blockers or unresolved mandatory
+generic capabilities blocking preparation of the CRA acceptance package.
 
-1. Active utility messaging is in CRA contract acceptance, not closed: Demo
-   product evidence exists, but there is no approved CRA copy, no Meta-approved
-   CRA template and no CRA customer sample.
-2. Opt-out evidence is missing for CRA customer acceptance, even though Demo
-   product capability is validated.
-3. CRA customer reporting/export acceptance package is missing: Demo Phase E
-   product evidence exists for CSV/open-equivalent exports, report/PDF path and
-   billing quantity, but CRA samples and final contract billing reconciliation
-   are not customer-reviewed.
-4. Contract evidence package is incomplete for support/SLA, training attendance,
-   backup/restore policy, LGPD/security declarations and Meta official proof.
-5. Instagram, Facebook Messenger and site/webchat remain contract-required but
-   are customer-deferred for the current execution phase.
+Items still requiring CRA/customer/formal action are not classified as product
+blockers:
+
+1. Formal CRA customer acceptance/sign-off of the assembled package.
+2. Customer-approved CRA Utility copy/template and recipient scope before any
+   CRA real send.
+3. Signed/supporting evidence attachments for support/SLA, training,
+   backup/restore, LGPD/security and official Meta/API conditions.
+4. Instagram Direct, Facebook Messenger and site/webchat activation remain
+   CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING.
+5. Vercel deployment hygiene remains WATCH and does not affect the operational
+   Converta VPS environment used by CRA.
 
 ## Channel Summary
 
@@ -382,18 +478,19 @@ rollout on 2026-09-18 advanced by FF-only to
 `b166bcac8bf443d34ba7f3821016b6bae8069728`, applied migration
 `20260917213000_add_department_operational_queue`, reconciled 44 explicit
 mappings, created/linked 2 owner-approved internal queues and ended with 0
-active unresolved departments. Demo `****6787` remains a separate repair gate.
-This is product evidence, not CRA customer acceptance of duplicate prevention.
+active unresolved departments. Demo `****6787` was later repaired with canonical
+graph restored and history preserved. This is product evidence, not CRA
+customer acceptance of duplicate prevention.
 
-Campaign UX / result truth integration, 2026-09-18: INTEGRATED LOCAL / OWNER
-REVALIDATION PENDING / NO DEPLOY. The recovered approved delta now sits on the
+Campaign UX / result truth integration, 2026-09-18: OWNER PASS / DEPLOYED /
+PRODUCTION VALIDATED. The recovered approved delta now sits on the
 canonical Operational Queue baseline. Standard campaign UX remains
 Department-only, with Queue internal via `Department.operationalQueueId`;
 customer-facing campaign and Inbox template screens do not expose price/cost
 tariff data; persisted lifecycle tabs include `Enviando`, `Agendadas` and
 `Concluídas`; campaign detail renders recipient-level blocked/skipped/pending
 and opt-out result states from persisted events/data. No CRA customer send,
-no production deploy, no schema/migration and no `****6787` mutation occurred.
+no schema/migration and no `****6787` mutation occurred.
 Final local audit of Demo `Campanha teste set.2` proved that its repeated
 recipient line was a detail projection/fallback issue, not a duplicate send.
 The corrected authenticated detail reconciles one current result per intended
@@ -408,7 +505,7 @@ duplicate factory, but the recipient remains ineligible until a separately
 authorized transactional repair. Canonical expected counters are total 2,
 delivered 1, blocked 1, pending 0 and technical failures 0. Validation: UI
 contract 9/9 PASS, `campaignsFeatureRoutes.test.ts` 115/115 PASS and focused
-identity-path matrix 106/106 PASS. No CRA send, production mutation or deploy.
+identity-path matrix 106/106 PASS. No CRA send or unrelated production mutation.
 
 Ops readiness update, 2026-09-18: the `****9614` repair dry-run tool was
 supplied on a separate versioned ops branch and executed from a separate VPS
@@ -418,8 +515,8 @@ deltas remain 0. Persistent snapshot and PostgreSQL backup were created.
 Repair remains NOT EXECUTED and still requires explicit owner authorization.
 This does not change CRA acceptance evidence or authorize any resend.
 
-Campaign composition lifecycle, 2026-09-18: IMPLEMENTED LOCAL / OWNER REVIEW
-PENDING / NO DEPLOY. Abandoning an unsaved CRM/CSV/manual composition now
+Campaign composition lifecycle, 2026-09-18: PRODUCTION VALIDATED. Abandoning an
+unsaved CRM/CSV/manual composition now
 clears all client-transient campaign data through one dirty/reset contract.
 Preview does not persist server records. Explicit drafts and Campaigns already
 scheduled, sending or completed remain protected, and closing progress does
@@ -436,8 +533,8 @@ unchanged: `****9614` is still blocked by `identity_conflict`, with no provider
 call, no OutboundMessage and no billing row. This strengthens CRA acceptance
 traceability without adding a send or mutating CRA tenant data.
 
-Campaign Result Truth P1 12/13 reconciliation, 2026-09-18: VALIDATED LOCAL AND
-READ-ONLY / OWNER REVIEW READY / NO DEPLOY. The earlier synthetic gate missed
+Campaign Result Truth P1 12/13 reconciliation, 2026-09-18: PRODUCTION
+VALIDATED. The earlier synthetic gate missed
 the real persisted representation and production validation exposed a false
 missing-history failure for `****6787`. The corrected read model reuses the
 canonical Identity P1 candidate set and leaves all history unchanged. Replay
@@ -445,4 +542,4 @@ of the actual Demo campaign records returns exactly 2 outcomes: delivered
 `****6787`, blocked `****9614`, 0 technical failures and `Entrega parcial`.
 This strengthens CRA recipient traceability evidence but is not CRA customer
 acceptance. Backend 118/118, complementary matrices 56/56 and 72/72 PASS;
-schema unchanged, migration none, no send, repair or deploy.
+schema unchanged, migration none, no send or repair.

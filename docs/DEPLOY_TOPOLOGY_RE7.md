@@ -4,6 +4,22 @@ Documento operacional para evitar erro de deploy entre Vercel, VPS e dominios pu
 
 ## Estado atual
 
+### Vercel deployment hygiene watch - 2026-09-18
+
+- projeto publico: `site-re7online`
+  (`prj_Ei43Wm38CyRWK4yaJHsQinQE7Lto`);
+- `re7online.com`, `www.re7online.com` e aliases publicos seguem na Vercel;
+- `converta.re7online.com`, `api.re7online.com` e `admin.re7online.com`
+  seguem na VPS operacional;
+- a frente de higiene adicionou `ignoreCommand` para reduzir builds Vercel
+  irrelevantes e a validacao local passou;
+- validacao de plataforma segue PENDING porque o deployment docs-only de
+  validacao ainda estava QUEUED no momento da auditoria;
+- Production Branch exata segue UNKNOWN;
+- origem de um redeploy historico de producao segue UNKNOWN;
+- classificacao: WATCH / DEPLOYMENT HYGIENE, nao blocker CRA e nao justificativa
+  para deploy do Converta operacional.
+
 ### Dominio publico
 - `re7online.com`
 - publicado na `Vercel`

@@ -254,7 +254,7 @@ Mandatory:
 
 ## Result truth integration - 2026-09-18
 
-Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+Status: OWNER PASS / DEPLOYED / PRODUCTION VALIDATED.
 
 Campaign import/result detail now preserves import-blocked recipients as
 inspectable campaign result truth through existing event/campaign data. The UI
