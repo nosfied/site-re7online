@@ -120,17 +120,15 @@ ACTIVE P0:
 ACTIVE P1:
 
 1. Operational Queue production rollout:
-   IMPLEMENTED LOCAL / OWNER UX PASS / OWNER DECISIONS COMPLETE / FINAL LOCAL
-   CUTOVER PACKAGE PREPARED / PRODUCTION ROLLOUT PENDING / NOT DEPLOYED. The
+   CLOSED / DEPLOYED / PRODUCTION RECONCILED / SMOKE PASS. The
    deployed baseline supports
    creation/import now requires explicit `returnDestination` in the
    `campaign.seed.saved` contract: `human_department` with concrete
    `departmentId` + `queueId`. The local successor UI accepts Department only,
    resolves explicit `Department.operationalQueueId`, blocks unavailable
    mappings and never exposes a multi-queue selector. Strict production cutover
-   now has all 54 departments resolved in the local package, including the five
-   owner decisions recorded on 2026-09-18; production migration/data
-   reconciliation/deploy remain pending a separate controlled rollout gate.
+   resolved all 54 departments on 2026-09-18, including the five owner decisions
+   recorded on 2026-09-18.
    `automated_flow` uses any
    active same-tenant `ChatbotFlow` persisted as `chatbot:<flowId>` at runtime.
    `entryPoint` is not required for explicit campaign invocation; it remains the
@@ -143,10 +141,17 @@ ACTIVE P1:
    `operationalQueue.test.ts` 8/8 PASS, runtime routing 30/30 PASS, identity
    12/12 PASS, `campaignsFeatureRoutes.test.ts` 114/114 PASS,
    `ChatbotFlowBuilder.test.ts` 53/53 PASS, backend build PASS, frontend build
-   PASS. The prior outbound return destination production deployment remains
-   `452d5826db42cc1b574eeff8fd8e0d038cd3491f`; Operational Queue itself has no
-   production migration, data mutation or deploy yet. No real Meta send and no
-   `****6787` repair occurred.
+   PASS. Production advanced by FF-only to
+   `b166bcac8bf443d34ba7f3821016b6bae8069728`; backup
+   `/opt/re7online/backups/operational-queue-rollout-20260918-104054` passed
+   (`20,664,912` bytes, 578 objects, SHA256
+   `a5898b277a82e5d0317314c9decaeb75dede023f76a8d55afc2044c4da230ddf`);
+   migration `20260917213000_add_department_operational_queue` applied; first
+   reconciliation updated 44 explicit mappings and created/linked 2 internal
+   queues; second reconciliation was idempotent. Post-verify: 54 departments, 44
+   active resolved, 0 active unresolved, 8 inactive null, 2 inactive with queue,
+   0 cross-tenant/department links. Backend/frontend builds, targeted PM2 reload
+   and HTTP smoke passed. No real Meta send and no `****6787` repair occurred.
 
 2. CRA Demo Utility Recipient B controlled send: COMPLETED / DEMO PRODUCT
    CAPABILITY VALIDATED / CRA ACCEPTANCE STILL SEPARATE. On 2026-09-16 the
@@ -1415,8 +1420,7 @@ GAP / OPEN; SYER ****9614 = CLOSED.
   build, targeted agent reload, health/DB checks and read-only route/module
   smokes passed without schema, migration, backfill or tenant hardcode. A real
   post-deploy identity event has not yet been exercised.
-- **QUEUE DOMAIN: IMPLEMENTED LOCAL / OWNER UX PASS / OWNER DECISIONS COMPLETE
-  / FINAL LOCAL CUTOVER PACKAGE PREPARED / NOT DEPLOYED.**
+- **QUEUE DOMAIN: CLOSED / DEPLOYED / PRODUCTION RECONCILED / SMOKE PASS.**
   Nullable `Department.operationalQueueId`, composite same-tenant/same-department
   FK, atomic Department lifecycle and explicit routing are implemented in the
   isolated worktree. Local migration/tests/builds pass. Read-only production
@@ -1426,12 +1430,16 @@ GAP / OPEN; SYER ****9614 = CLOSED.
   Department Lunch get owner-approved internal queues; `demo-converta` FUNDARPE,
   `re7online` Comercial and `re7online` Governo e Licitações get exact
   owner-selected existing queues. Runtime name/order/usage inference remains
-  prohibited. Local reconciliation resolves 54/54 departments; production
-  cutover remains pending a separate controlled rollout. Owner decision package:
+  prohibited. Production cutover on 2026-09-18 applied the nullable schema
+  migration and reconciled 54/54 departments by explicit IDs. First production
+  reconciliation: 44 explicit updates, 2 internal queues created/linked; second
+  run: idempotent. Post-verify active unresolved = 0 and cross-tenant/department
+  links = 0. Owner decision package:
   `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`.
-- **CAMPAIGN UX: OWNER PASS / QUEUE-DEPENDENT DELIVERY IMPLEMENTED LOCAL.** The
+- **CAMPAIGN UX: OWNER PASS / QUEUE-DEPENDENT DELIVERY DEPLOYED.** The
   normal UX selects only Setor and persists the exact internal queue. Production
-  delivery remains gated by owner validation and the Queue rollout package.
+  delivery is now backed by `Department.operationalQueueId`; no queue selector is
+  exposed to the customer-facing admin UX.
 - Demo `****6787`: pre/post read-only snapshots of both historical Contacts and
   Leads matched exactly; no production mutation occurred and repair remains a
   separate gate.

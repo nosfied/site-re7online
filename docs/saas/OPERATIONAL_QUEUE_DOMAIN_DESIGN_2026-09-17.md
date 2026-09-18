@@ -1,16 +1,16 @@
 # Operational Queue Domain Design - 2026-09-17
 
-Status: IMPLEMENTED LOCAL / OWNER UX PASS / OWNER DECISIONS COMPLETE / FINAL
-LOCAL CUTOVER PACKAGE PREPARED / NOT DEPLOYED / NO PRODUCTION DATA MUTATION.
+Status: CLOSED / DEPLOYED / PRODUCTION RECONCILED / SMOKE PASS.
 
 Implementation was prepared from canonical HEAD `45726ef9154e8904e87189573b3c2ea7faa258bb`
-in `/tmp/re7-operational-queue`. Production remains at
-`ed329ec8e778902d314ec84c2de3132b4f46b63a`; its database and runtime were only
-read. Migration `20260917213000_add_department_operational_queue` was applied
-only to dedicated local databases. Owner local UX validation passed on
+in `/tmp/re7-operational-queue`. Owner local UX validation passed on
 2026-09-17, which opened the read-only production mapping audit gate. On
-2026-09-18 the owner supplied the five remaining decisions, and the final local
-reconciliation package validated 54/54 departments with no active unresolved
+2026-09-18 the owner supplied the five remaining decisions. Production advanced
+by FF-only from `ed329ec8e778902d314ec84c2de3132b4f46b63a` to
+`b166bcac8bf443d34ba7f3821016b6bae8069728`; backup
+`/opt/re7online/backups/operational-queue-rollout-20260918-104054` passed;
+migration `20260917213000_add_department_operational_queue` applied; and
+production reconciliation resolved 54/54 departments with no active unresolved
 department.
 
 ## Decision
@@ -264,8 +264,23 @@ Local validation on 2026-09-18:
 - frontend guided builder regression: `ChatbotFlowBuilder.test.ts` 53/53 PASS;
 - backend build PASS; frontend build PASS.
 
+Production rollout on 2026-09-18:
+
+- production backup PASS: `/opt/re7online/backups/operational-queue-rollout-20260918-104054`,
+  dump `20,664,912` bytes, 578 objects, SHA256
+  `a5898b277a82e5d0317314c9decaeb75dede023f76a8d55afc2044c4da230ddf`;
+- production migration: `20260917213000_add_department_operational_queue` PASS,
+  no `prisma db push`;
+- production reconciliation first run: 44 explicit mappings updated, 2 internal
+  queues created/linked, active unresolved 0;
+- production reconciliation second run: 44 explicit mappings noop, 2 internal
+  queues noop, active unresolved 0;
+- post-verify: 54 departments, 44 active resolved, 0 active unresolved, 8
+  inactive null, 2 inactive with queue, 0 cross-tenant/department links;
+- production backend build PASS; frontend build PASS; targeted PM2 reload PASS;
+  HTTP smoke PASS.
+
 Campaign UX owner PASS remains valid for progress, background execution,
 `Enviando`, `Agendadas`, recipient-result truth, mobile behavior and absence of
-customer pricing. Queue-dependent delivery is implemented locally but remains
-undeployed pending controlled production rollout. Demo `****6787` was not
+customer pricing. Queue-dependent delivery is deployed. Demo `****6787` was not
 mutated or repaired in this gate.

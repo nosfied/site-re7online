@@ -1027,18 +1027,22 @@ module/route checks passed. Schema and migrations are unchanged; exact pre/post
 snapshots prove no Demo `****6787` Contact/Lead record was modified. A real
 post-deploy identity event remains unexercised.
 
-Operational Queue is IMPLEMENTED LOCAL / OWNER UX PASS / COMPLETE PRODUCTION
-MAPPING AUDIT DONE / OWNER DECISIONS COMPLETE / FINAL LOCAL CUTOVER PACKAGE
-PREPARED / NOT DEPLOYED. The nullable explicit relation, composite
+Operational Queue is CLOSED / DEPLOYED / PRODUCTION RECONCILED / SMOKE PASS.
+The nullable explicit relation, composite
 tenant/department FK, atomic lifecycle and Department-only Campaign/Guided UX
-passed local focused validation. The complete read-only
-production reconciliation of 54 departments is recorded in
+passed local focused validation and production rollout on 2026-09-18. The
+complete production reconciliation of 54 departments is recorded in
 `docs/saas/OPERATIONAL_QUEUE_PRODUCTION_MAPPING_AUDIT_2026-09-17.md`: 34
 exactly-one mappings are auto-safe, 8 inactive rows are null-allowed, 7
 multi-queue mappings are resolved by audit and the final 5 active blockers have
-owner decisions. Local reconciliation resolves 54/54 departments with 44
-explicit mappings, 2 owner-approved internal queues and 8 inactive null-allowed
-rows. The owner decision package is
-`docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Production
-migration/data reconciliation/deploy have not run. Campaign UX remains owner
-PASS; `****6787` repair remains separate.
+owner decisions. Production advanced by FF-only to
+`b166bcac8bf443d34ba7f3821016b6bae8069728`; backup
+`/opt/re7online/backups/operational-queue-rollout-20260918-104054` passed;
+migration `20260917213000_add_department_operational_queue` applied; first
+reconciliation resolved 44 explicit mappings and 2 owner-approved internal
+queues; second run was idempotent. Post-verify: 54 departments, 44 active
+resolved, 0 active unresolved, 8 inactive null-allowed, 2 inactive with queue
+and 0 cross-tenant/department links. Backend/frontend builds, targeted PM2
+reload and HTTP smoke passed. The owner decision package is
+`docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Campaign UX
+remains owner PASS; `****6787` repair remains separate.

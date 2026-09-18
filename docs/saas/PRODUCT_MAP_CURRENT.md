@@ -480,17 +480,18 @@ health/DB and read-only route/module smokes passed. No schema/migration or
 production repair was included; a real post-deploy identity event remains
 pending evidence.
 
-Operational Queue is implemented locally with an explicit nullable
+Operational Queue is deployed with an explicit nullable
 `Department.operationalQueueId`, database-enforced tenant/department ownership,
 atomic create/activation and Department-only Campaign/Guided UX. Status is
-OWNER UX PASS / OWNER DECISIONS COMPLETE / FINAL LOCAL CUTOVER PACKAGE
-PREPARED / NOT DEPLOYED. The read-only production reconciliation of all 54 departments is
+Closed / deployed / production reconciled / smoke pass. The production reconciliation of all 54 departments is
 in `docs/saas/OPERATIONAL_QUEUE_PRODUCTION_MAPPING_AUDIT_2026-09-17.md`: 34
 exactly-one mappings are auto-safe, 8 inactive rows are null-allowed, 7
 multi-queue mappings are resolved by audit and the final 5 active blockers now
-have owner decisions. Local reconciliation resolves 54/54 departments with 44
-explicit mappings, 2 owner-approved internal queues and 8 inactive null-allowed
-rows. The owner decision package is
-`docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Production
-migration/data reconciliation/deploy have not run. Campaign UX remains owner
-PASS and real `****6787` repair remains a separate pending gate.
+have owner decisions. Production rollout on 2026-09-18 advanced by FF-only to
+`b166bcac8bf443d34ba7f3821016b6bae8069728`, applied migration
+`20260917213000_add_department_operational_queue`, reconciled 44 explicit
+mappings, created/linked 2 owner-approved internal queues and left 8 inactive
+rows null-allowed. Post-verify active unresolved = 0 and cross-tenant/department
+links = 0. The owner decision package is
+`docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Campaign UX
+remains owner PASS and real `****6787` repair remains a separate pending gate.

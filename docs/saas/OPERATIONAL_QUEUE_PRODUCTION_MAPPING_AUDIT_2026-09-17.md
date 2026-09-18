@@ -1,8 +1,6 @@
 # Operational Queue Production Mapping Audit - 2026-09-17
 
-Status: READ-ONLY PRODUCTION AUDIT / OWNER LOCAL UX PASS / OWNER DECISIONS
-COMPLETE / FINAL LOCAL CUTOVER PACKAGE PREPARED / NO PRODUCTION MUTATION / NO
-DEPLOY.
+Status: CLOSED / DEPLOYED / PRODUCTION RECONCILED / SMOKE PASS.
 
 Owner local UX result: PASS, confirmed on 2026-09-17. This opened the mapping audit gate.
 
@@ -17,7 +15,9 @@ Rules applied:
 - exact ID mapping only;
 - inactive rows may remain nullable when intentionally not routable;
 - every active Department must have an explicit operational queue or approved remediation before cutover;
-- no production mutation and no deploy in this gate.
+- no queue-name/order/usage heuristic was used for production cutover;
+- production mutation/deploy happened only later under the controlled rollout
+  gate on 2026-09-18, after backup and owner decisions.
 
 Preflight:
 
@@ -26,7 +26,24 @@ Preflight:
 - production HEAD: `ed329ec8e778902d314ec84c2de3132b4f46b63a`;
 - production health: PASS, `/agent-api/health` returned `ok=true`, `db=ok` at 2026-09-17T23:37:07Z;
 - PM2 read-only: `re7-admin-front`, `re7-whatsapp-agent`, and `re7-whatsapp-web-worker` online;
-- migration status: production has 58 migrations and is up to date; local `20260917213000_add_department_operational_queue` is not deployed.
+- migration status before rollout: production had 58 migrations and was up to date; local `20260917213000_add_department_operational_queue` was not deployed.
+
+Controlled rollout result, 2026-09-18:
+
+- production advanced by FF-only to `b166bcac8bf443d34ba7f3821016b6bae8069728`;
+- backup PASS at `/opt/re7online/backups/operational-queue-rollout-20260918-104054`
+  (`20,664,912` bytes, 578 objects, SHA256
+  `a5898b277a82e5d0317314c9decaeb75dede023f76a8d55afc2044c4da230ddf`);
+- migration `20260917213000_add_department_operational_queue` applied by
+  `prisma migrate deploy`;
+- first reconciliation: 44 explicit mappings updated, 2 internal queues
+  created/linked;
+- second reconciliation: 44 explicit mappings noop, 2 internal queues noop;
+- final state: 54 departments, 44 active resolved, 0 active unresolved, 8
+  inactive null, 2 inactive with queue, 0 cross-tenant/department links;
+- backend/frontend builds PASS, targeted reload of `re7-whatsapp-agent` and
+  `re7-admin-front` PASS, `re7-whatsapp-web-worker` not reloaded, HTTP smoke
+  PASS.
 
 Initial audit result:
 

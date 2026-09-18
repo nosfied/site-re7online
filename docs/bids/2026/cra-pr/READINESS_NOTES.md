@@ -648,13 +648,15 @@ Sem envio real.
   health/DB e smokes read-only passaram. Sem schema, migration, backfill ou
   mutacao de `****6787`; snapshots pre/pos dos dois Contacts e Leads historicos
   foram identicos. Evento real de identidade pos-deploy ainda nao exercitado.
-- Queue operacional: IMPLEMENTED LOCAL / OWNER UX PASS / OWNER DECISIONS
-  COMPLETE / FINAL LOCAL CUTOVER PACKAGE PREPARED / NOT DEPLOYED. Relacao
-  explicita, FK composta, lifecycle atomico e UX apenas por Setor foram
-  validados localmente. A auditoria read-only completa dos 54 departamentos e
-  as 5 decisoes finais do owner estao documentadas em
+- Queue operacional: CLOSED / DEPLOYED / PRODUCTION RECONCILED / SMOKE PASS.
+  Relacao explicita, FK composta, lifecycle atomico e UX apenas por Setor foram
+  validados localmente e implantados em producao em 2026-09-18. A auditoria
+  completa dos 54 departamentos e as 5 decisoes finais do owner estao documentadas em
   `docs/saas/OPERATIONAL_QUEUE_PRODUCTION_MAPPING_AUDIT_2026-09-17.md` e
   `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`.
-  Producao ainda nao recebeu migration, reconciliacao de dados nem deploy.
-  Campaign UX permanece owner PASS; nao houve envio real nem mutacao de
-  `****6787`.
+  Producao avancou por FF-only para
+  `b166bcac8bf443d34ba7f3821016b6bae8069728`, aplicou a migration
+  `20260917213000_add_department_operational_queue`, reconciliou 44 mapeamentos
+  explicitos, criou/vinculou 2 filas internas aprovadas e terminou com 0
+  departamento ativo sem fila operacional. Campaign UX permanece owner PASS; nao
+  houve envio real nem mutacao de `****6787`.

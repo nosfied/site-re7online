@@ -370,14 +370,15 @@ implementation, schema, migration, backfill or production data repair. A real
 post-deploy identity event remains pending natural or separately authorized
 evidence.
 
-Operational Queue is IMPLEMENTED LOCAL / OWNER UX PASS / OWNER DECISIONS
-COMPLETE / FINAL LOCAL CUTOVER PACKAGE PREPARED / NOT DEPLOYED. Campaign UX
-remains owner PASS; Department-only destination and exact internal Queue
-persistence are locally implemented. Production remains gated by a separate
-controlled rollout, not by an open owner decision. The 54-department matrix and
-final owner decisions are documented in
+Operational Queue is CLOSED / DEPLOYED / PRODUCTION RECONCILED / SMOKE PASS.
+Campaign UX remains owner PASS; Department-only destination and exact internal
+Queue persistence are deployed. The 54-department matrix and final owner
+decisions are documented in
 `docs/saas/OPERATIONAL_QUEUE_PRODUCTION_MAPPING_AUDIT_2026-09-17.md` and
-`docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`.
-Demo `****6787` remained byte-for-byte unchanged in pre/post read-only Contact
-and Lead snapshots and requires a separate repair gate. This is product
-evidence, not CRA customer acceptance of duplicate prevention.
+`docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Production
+rollout on 2026-09-18 advanced by FF-only to
+`b166bcac8bf443d34ba7f3821016b6bae8069728`, applied migration
+`20260917213000_add_department_operational_queue`, reconciled 44 explicit
+mappings, created/linked 2 owner-approved internal queues and ended with 0
+active unresolved departments. Demo `****6787` remains a separate repair gate.
+This is product evidence, not CRA customer acceptance of duplicate prevention.
