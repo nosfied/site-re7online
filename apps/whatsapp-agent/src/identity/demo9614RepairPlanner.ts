@@ -12,6 +12,8 @@ export const DEMO_9614_TARGETS = {
   webSessionModernWaId: "5584999049614",
 } as const;
 
+export const DEMO_9614_SECONDARY_ARCHIVED_WA_ID = `archived:demo-9614-repair:${DEMO_9614_TARGETS.secondaryContactId}`;
+
 export type Demo9614Contact = {
   id: string;
   clientId: string;
@@ -131,21 +133,33 @@ export type Demo9614RepairPlan = {
   };
 };
 
-function hasIdentitySelector(record: {
+function hasLiveSecondarySelector(record: {
   waId?: string | null;
-  waIdCanonical?: string | null;
-  phone?: string | null;
+  channel?: string | null;
+  provider?: string | null;
+  channelAccountId?: string | null;
   externalUserHash?: string | null;
   externalUserRef?: string | null;
   legacyWaId?: string | null;
 }) {
+  const knownWaIds: string[] = [DEMO_9614_TARGETS.webSessionIdentityWaId, DEMO_9614_TARGETS.webSessionModernWaId];
   return Boolean(
-    record.waId ||
-      record.waIdCanonical ||
-      record.phone ||
+    knownWaIds.includes(record.waId ?? "") ||
+      record.channel ||
+      record.provider ||
+      record.channelAccountId ||
       record.externalUserHash ||
       record.externalUserRef ||
       record.legacyWaId
+  );
+}
+
+export function isDemo9614SecondaryNeutralized(contact: Demo9614Contact | null | undefined) {
+  return Boolean(
+    contact &&
+      contact.operationallyExcludedAt &&
+      contact.waId === DEMO_9614_SECONDARY_ARCHIVED_WA_ID &&
+      !hasLiveSecondarySelector(contact)
   );
 }
 
@@ -178,7 +192,9 @@ export function buildDemo9614RepairPlan(graph: Demo9614Graph): Demo9614RepairPla
   if (secondaryContact && secondaryContact.clientId !== graph.client.id) blockers.push("secondary_contact_tenant_mismatch");
   if (primaryLead && primaryLead.tenantId !== graph.client.id) blockers.push("primary_lead_tenant_mismatch");
   if (metaIdentity && metaIdentity.clientId !== graph.client.id) blockers.push("meta_identity_tenant_mismatch");
-  if (metaIdentity && metaIdentity.contactId !== targets.secondaryContactId) blockers.push("meta_identity_not_on_secondary");
+  const metaIdentityOnSecondary = metaIdentity?.contactId === targets.secondaryContactId;
+  const metaIdentityOnPrimary = metaIdentity?.contactId === targets.primaryContactId;
+  if (metaIdentity && !metaIdentityOnSecondary && !metaIdentityOnPrimary) blockers.push("meta_identity_unexpected_owner");
 
   if (graph.openConversations.length > 0) blockers.push("open_conversation_requires_manual_review");
   if (!graph.campaign) blockers.push("historical_campaign_missing");
@@ -197,24 +213,31 @@ export function buildDemo9614RepairPlan(graph: Demo9614Graph): Demo9614RepairPla
   );
 
   const liveSelectors: string[] = [];
-  if (secondaryContact && hasIdentitySelector(secondaryContact)) {
+  const secondaryNeutralized = isDemo9614SecondaryNeutralized(secondaryContact);
+  if (secondaryContact && !secondaryNeutralized && hasLiveSecondarySelector(secondaryContact)) {
     liveSelectors.push("secondary_contact_identity_selectors");
   }
-  if (metaIdentity) {
+  if (metaIdentityOnSecondary) {
     liveSelectors.push("meta_contact_channel_identity");
   }
   if (primaryLead && primaryLead.contactChannelIdentityId !== targets.metaIdentityId) {
     liveSelectors.push("primary_lead_current_web_session_identity");
   }
 
-  const plannedActions = [
-    `move identity ${targets.metaIdentityId} to contact ${targets.primaryContactId}`,
-    `preserve lead ${targets.primaryLeadId}`,
-    `neutralize secondary contact ${targets.secondaryContactId} selectors without hard delete`,
-    "preserve historical campaign, outbound, billing, opt-out and consent records",
-  ];
+  const plannedActions: string[] = [];
+  if (metaIdentityOnSecondary) {
+    plannedActions.push(`move identity ${targets.metaIdentityId} to contact ${targets.primaryContactId}`);
+  }
+  plannedActions.push(`preserve lead ${targets.primaryLeadId}`);
+  if (!secondaryNeutralized) {
+    plannedActions.push(`neutralize secondary contact ${targets.secondaryContactId} selectors without hard delete`);
+  }
+  plannedActions.push("preserve historical campaign, outbound, billing, opt-out and consent records");
   if (runtimeNeedsRelink) {
     plannedActions.push(`relink runtime state ${targets.runtimeStateId} to canonical selectors`);
+  }
+  if (metaIdentityOnPrimary && secondaryNeutralized && !runtimeNeedsRelink) {
+    plannedActions.push("noop: repair already applied");
   }
 
   const eligibility = {

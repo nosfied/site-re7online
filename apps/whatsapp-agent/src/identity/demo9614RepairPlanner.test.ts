@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildDemo9614RepairPlan,
+  DEMO_9614_SECONDARY_ARCHIVED_WA_ID,
   DEMO_9614_TARGETS,
   type Demo9614Graph,
 } from "./demo9614RepairPlanner.js";
@@ -165,4 +166,38 @@ test("demo 9614 planner requires explicit relink when runtime uses the secondary
   assert.equal(plan.ok, true);
   assert.equal(plan.runtimeImpact, "EXPLICIT_RELINK");
   assert.deepEqual(plan.liveReferencesToRelink, [`runtime:${DEMO_9614_TARGETS.runtimeStateId}`]);
+});
+
+test("demo 9614 planner treats the repaired graph as idempotent noop", () => {
+  const base = graph();
+  const plan = buildDemo9614RepairPlan({
+    ...base,
+    contacts: base.contacts.map((contact) =>
+      contact.id === DEMO_9614_TARGETS.secondaryContactId
+        ? {
+            ...contact,
+            waId: DEMO_9614_SECONDARY_ARCHIVED_WA_ID,
+            channel: null,
+            provider: null,
+            channelAccountId: null,
+            externalUserHash: null,
+            externalUserRef: null,
+            legacyWaId: null,
+            operationallyExcludedAt: new Date("2026-09-18T22:00:00.000Z"),
+          }
+        : contact
+    ),
+    identities: base.identities.map((identity) =>
+      identity.id === DEMO_9614_TARGETS.metaIdentityId
+        ? { ...identity, contactId: DEMO_9614_TARGETS.primaryContactId }
+        : identity
+    ),
+  });
+
+  assert.equal(plan.ok, true);
+  assert.deepEqual(plan.blockers, []);
+  assert.equal(plan.liveSelectors.includes("secondary_contact_identity_selectors"), false);
+  assert.equal(plan.liveSelectors.includes("meta_contact_channel_identity"), false);
+  assert.equal(plan.plannedActions.includes("noop: repair already applied"), true);
+  assert.equal(plan.eligibility.overall, "PROJECTED_ELIGIBLE");
 });

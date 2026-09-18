@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 import fs from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import process from "node:process";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
@@ -44,7 +45,7 @@ function parseArgs(argv: string[]): Options {
   return options;
 }
 
-function loadEnv() {
+export function loadEnv() {
   const appDir = path.resolve(process.cwd(), "apps/whatsapp-agent");
   const envPath = process.cwd().endsWith("apps/whatsapp-agent")
     ? path.join(process.cwd(), ".env")
@@ -52,7 +53,7 @@ function loadEnv() {
   dotenv.config({ path: envPath });
 }
 
-function databaseTarget() {
+export function databaseTarget() {
   const value = process.env.DATABASE_URL;
   if (!value) return null;
   const url = new URL(value);
@@ -72,7 +73,7 @@ function payloadHas9614(value: unknown) {
   return JSON.stringify(value ?? {}).includes("9614");
 }
 
-async function loadGraph(prisma: PrismaClient): Promise<Demo9614Graph & { snapshots: Record<string, unknown> }> {
+export async function loadGraph(prisma: PrismaClient): Promise<Demo9614Graph & { snapshots: Record<string, unknown> }> {
   const t = DEMO_9614_TARGETS;
   const client = await prisma.client.findUniqueOrThrow({
     where: { clientKey: t.tenantKey },
@@ -352,7 +353,7 @@ function printText(report: Record<string, unknown>) {
   console.log(`optOutHistoryDelta: 0`);
 }
 
-async function writeSnapshotPackage(snapshotDir: string, report: Record<string, unknown>) {
+export async function writeSnapshotPackage(snapshotDir: string, report: Record<string, unknown>) {
   await fs.mkdir(snapshotDir, { recursive: true });
   const reportPath = path.join(snapshotDir, "demo-9614-dry-run-report.json");
   await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
@@ -442,7 +443,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
