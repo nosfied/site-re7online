@@ -394,5 +394,27 @@ tariff data; persisted lifecycle tabs include `Enviando`, `Agendadas` and
 `Concluídas`; campaign detail renders recipient-level blocked/skipped/pending
 and opt-out result states from persisted events/data. No CRA customer send,
 no production deploy, no schema/migration and no `****6787` mutation occurred.
-Validation: UI contract 6/6 PASS, `campaignsFeatureRoutes.test.ts` 114/114
-PASS, backend/frontend builds PASS.
+Final local audit of Demo `Campanha teste set.2` proved that its repeated
+recipient line was a detail projection/fallback issue, not a duplicate send.
+The corrected authenticated detail reconciles one current result per intended
+recipient where possible, exposes the full phone, preserves draft/review
+masking and classifies delivered plus blocked as partial delivery.
+Read-only end-to-end closure also proved why `****9614` did not send: the
+canonical resolver found two Demo Contact candidates and one Lead and blocked
+before provider with `identity_conflict`. This is historical duplicate residue
+from the campaign bootstrap that predates Identity P1, not a template,
+opt-out, routing or provider failure. Current code did not reproduce a new
+duplicate factory, but the recipient remains ineligible until a separately
+authorized transactional repair. Canonical expected counters are total 2,
+delivered 1, blocked 1, pending 0 and technical failures 0. Validation: UI
+contract 9/9 PASS, `campaignsFeatureRoutes.test.ts` 115/115 PASS and focused
+identity-path matrix 106/106 PASS. No CRA send, production mutation or deploy.
+
+Campaign composition lifecycle, 2026-09-18: IMPLEMENTED LOCAL / OWNER REVIEW
+PENDING / NO DEPLOY. Abandoning an unsaved CRM/CSV/manual composition now
+clears all client-transient campaign data through one dirty/reset contract.
+Preview does not persist server records. Explicit drafts and Campaigns already
+scheduled, sending or completed remain protected, and closing progress does
+not stop execution. CSV CRM upserts occur only at explicit draft creation and
+remain canonical. This strengthens CRA campaign operational traceability; it
+does not constitute CRA customer acceptance or a real send.

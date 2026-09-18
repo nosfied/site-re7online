@@ -454,7 +454,29 @@ Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
 - Progress/detail modal can be closed without cancelling backend execution.
 - Recipient-level detail must show persisted blocked/skipped/pending/opt-out
   states and business-readable reasons when available.
-- Validation completed: UI contract 6/6 PASS, `campaignsFeatureRoutes.test.ts`
-  114/114 PASS, backend/frontend builds PASS, `git diff --check` PASS.
+- Final detail correction: Demo `Campanha teste set.2` had one delivered
+  provider attempt and one import-blocked recipient; a repeated visible line
+  was projection/fallback duplication, not another send. Authenticated detail
+  now shows one current outcome per intended recipient when possible, full
+  phone visibility, and partial delivery for mixed delivered/blocked evidence.
+- `****9614` was blocked before provider by `identity_conflict`: two
+  same-tenant canonical Contact candidates and one Lead. This is historical
+  campaign-bootstrap residue predating Identity P1, not template, opt-out,
+  routing or provider failure. Repair remains a separately authorized data
+  gate with no resend.
+- Validation completed: UI contract 9/9 PASS, `campaignsFeatureRoutes.test.ts`
+  115/115 PASS, backend/frontend builds PASS, `git diff --check` PASS.
 - No real Meta send, no production deploy, no schema/migration and no
   `****6787` repair/mutation occurred.
+
+## Composer lifecycle gate - 2026-09-18
+
+- Unsaved composition discard must return every CRM/CSV/manual field to a
+  pristine state.
+- CRM/CSV preview is read-only and creates no server cleanup obligation.
+- Explicitly saved drafts and scheduled/sending/completed campaigns are never
+  removed by composer cleanup.
+- Closing the progress/detail modal does not cancel campaign execution.
+- Explicit CSV draft creation may commit canonical CRM upserts; later draft
+  discard does not silently roll them back.
+- Local implementation is pending owner review; no Utility send was executed.

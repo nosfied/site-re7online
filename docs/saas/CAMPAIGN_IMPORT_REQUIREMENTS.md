@@ -260,8 +260,29 @@ Campaign import/result detail now preserves import-blocked recipients as
 inspectable campaign result truth through existing event/campaign data. The UI
 renders recipient-level blocked/skipped/pending/opt-out states and
 business-readable reasons without creating a shadow campaign-history model in
-Contact and without inventing historical sends. Validation: UI contract 6/6
-PASS and `campaignsFeatureRoutes.test.ts` 114/114 PASS on the safe local DB.
+Contact and without inventing historical sends. Final local audit of Demo
+`Campanha teste set.2` corrected projection/fallback duplication in the
+authenticated detail, preserving one current outcome per intended recipient
+when possible, full phone visibility in that authorized surface, masking in
+draft/review and partial-delivery classification for mixed outcomes.
+For `****9614`, the persisted import block is truthful: canonical resolution
+found two same-tenant Contacts and one Lead and stopped before provider. The
+second Contact is historical bootstrap residue predating Identity P1. Current
+creation-path tests do not reproduce the duplicate factory; the existing data
+still requires separately authorized reconciliation. Blocked outcomes are
+reported independently from technical failures. Validation: UI contract 9/9,
+`campaignsFeatureRoutes.test.ts` 115/115 and focused identity paths 106/106 PASS
+on the safe local DB.
+
+## Composer abandon/discard boundary - 2026-09-18
+
+CSV preview is read-only and remains transient client state. Only the explicit
+`Criar rascunho com CSV` action commits tenant-scoped CRM upserts, Campaign
+draft, seed and import report/events. Those CRM effects are canonical and are
+not silently rolled back if the persisted draft is later discarded. Cancelling
+an unsaved composition clears file text/name, headers, mappings, preview,
+report and validation state; a new campaign cannot inherit them. See
+`CAMPAIGN_COMPOSER_LIFECYCLE.md`.
 
 ## CRA Classification
 

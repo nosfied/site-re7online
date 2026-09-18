@@ -1060,7 +1060,28 @@ longer expose price/cost/tariff/Meta-rate estimates to the customer UX.
 Lifecycle tabs now map to persisted states (`Enviando`, `Agendadas`,
 `Concluídas`), the progress/detail modal observes backend state and can be
 closed without cancelling execution, and recipient detail surfaces persisted
-blocked/skipped/pending/opt-out result truth. Canonical integration validation: UI contract 6/6
-PASS, `campaignsFeatureRoutes.test.ts` 114/114 PASS, backend/frontend builds
+blocked/skipped/pending/opt-out result truth. The final local detail audit for
+`Campanha teste set.2` confirmed the repeated recipient line was caused by
+projection plus seed fallback, not a duplicate provider attempt. Detail now
+reconciles one current outcome per intended recipient when possible, exposes
+the full phone to authenticated campaign-detail users while preserving
+draft/review masking, and treats mixed delivered/blocked evidence as partial
+delivery. The `****9614` non-send is closed at root-cause level: two same-tenant
+Contact candidates and one Lead caused a pre-provider `identity_conflict`.
+This is historical campaign-bootstrap residue predating Identity P1; current
+creation paths did not reproduce an active bypass. The recipient remains
+blocked until separately authorized data repair. Canonical counters are total
+2, delivered 1, blocked 1, pending 0 and technical failures 0. Canonical
+integration validation: UI contract 9/9 PASS,
+`campaignsFeatureRoutes.test.ts` 115/115 PASS, backend/frontend builds
 PASS and `git diff --check` PASS. No schema/migration, production deploy, real
 Meta send or `****6787` mutation occurred.
+
+Campaign composer lifecycle (2026-09-18): IMPLEMENTED LOCAL / OWNER REVIEW
+PENDING / NO DEPLOY. Composition remains client-transient until explicit draft
+save or execution. One dirty-state contract and one reset clear all unsaved
+name/template/variables/recipients, CRM and CSV previews, destination and
+errors on discard or Campaign-tab abandonment. Explicit drafts and campaigns
+that are scheduled, sending or completed remain persisted; closing progress
+does not cancel execution. Preview has no server residue, while CRM upserts
+from explicit CSV draft creation remain canonical. No schema/migration.

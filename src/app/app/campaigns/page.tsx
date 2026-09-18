@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import { buildReplayFormFromCampaign, getFriendlyCampaignError } from "@/lib/campaignDrafts";
@@ -35,6 +35,7 @@ import {
   sendAppCampaignTest,
 } from "@/lib/appClientApi";
 import { getCampaignStatusUxLabel, getMetaTemplateCategoryUxLabel } from "@/lib/appUxLabels";
+import { isCampaignComposerDirty } from "@/lib/campaignComposerLifecycle";
 import { CampaignItem, formatDateTime, normalizeWaIdList } from "@/lib/whatsappAdminApi";
 
 type CampaignFormState = {
@@ -428,9 +429,11 @@ function getCampaignConfidence(campaign: CampaignItem) {
   const totalRecipients = campaign.totalRecipients || 0;
   const metaSummary = campaign.metaSummary;
   const deliveredOrRead = (metaSummary?.totalDelivered ?? 0) + (metaSummary?.totalRead ?? 0);
+  const sent = metaSummary?.totalSent ?? 0;
   const failed = metaSummary?.totalFailed ?? 0;
+  const hasSuccessfulDeliverySignal = deliveredOrRead > 0 || sent > 0;
 
-  if (totalRecipients > 0 && failed >= totalRecipients) {
+  if (totalRecipients > 0 && failed >= totalRecipients && !hasSuccessfulDeliverySignal) {
     return {
       label: "Falha na campanha",
       icon: "X",
@@ -453,13 +456,7 @@ function getCampaignConfidence(campaign: CampaignItem) {
 
 function formatCampaignRecipientReference(value: string) {
   const digits = value.replace(/\D/g, "");
-  if (digits.length >= 10) {
-    return `${digits.slice(0, 4)}****${digits.slice(-4)}`;
-  }
-  if (value.length > 8) {
-    return `${value.slice(0, 4)}****${value.slice(-4)}`;
-  }
-  return value || "-";
+  return digits || value || "-";
 }
 
 function getAudienceEligibilityClasses(eligible: boolean) {
@@ -556,6 +553,8 @@ export default function AppCampaignsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [toast, setToast] = useState<CampaignToast | null>(null);
+  const audienceRequestGenerationRef = useRef(0);
+  const csvRequestGenerationRef = useRef(0);
   const manualSendOpen = expandedCreationPanel === "manual";
 
   const showToast = useCallback((tone: CampaignToastTone, title: string, message: string) => {
@@ -726,6 +725,7 @@ export default function AppCampaignsPage() {
   );
 
   useEffect(() => {
+    csvRequestGenerationRef.current += 1;
     setCsvVariableColumns((previous) =>
       Object.fromEntries(templateVariableLabels.map((label) => [label, previous[label] ?? ""]))
     );
@@ -1020,6 +1020,96 @@ export default function AppCampaignsPage() {
 
   const canGenerateAudiencePreview = Boolean(session && form.templateId && !templateVariableMappingError && !loadingAudiencePreview);
 
+  const isComposerDirty = useMemo(() => {
+    return isCampaignComposerDirty({
+      form,
+      audienceFilters,
+      hasAudiencePreview: audiencePreview !== null,
+      csv: {
+        text: csvText,
+        fileName: csvFileName,
+        headers: csvHeaders,
+        phoneColumn: csvPhoneColumn,
+        nameColumn: csvNameColumn,
+        crmSituationColumn: csvCrmSituationColumn,
+        variableColumns: csvVariableColumns,
+        hasPreview: csvPreview !== null,
+        hasImportReport: csvImportReport !== null,
+      },
+    });
+  }, [
+    audienceFilters,
+    audiencePreview,
+    csvCrmSituationColumn,
+    csvFileName,
+    csvHeaders,
+    csvImportReport,
+    csvNameColumn,
+    csvPhoneColumn,
+    csvPreview,
+    csvText,
+    csvVariableColumns,
+    form,
+  ]);
+
+  const composerBusy =
+    loadingAudiencePreview || loadingCsvPreview || creatingDraft || creatingCsvDraft || creating;
+
+  const resetCampaignComposer = useCallback(() => {
+    audienceRequestGenerationRef.current += 1;
+    csvRequestGenerationRef.current += 1;
+    setForm(EMPTY_FORM);
+    setAudienceFilters(EMPTY_AUDIENCE_FILTERS);
+    setAudiencePreview(null);
+    setAudiencePage(1);
+    setLoadingAudiencePreview(false);
+    setAudiencePreviewError(null);
+    setCsvText("");
+    setCsvFileName("");
+    setCsvHeaders([]);
+    setCsvPhoneColumn("");
+    setCsvNameColumn("");
+    setCsvCrmSituationColumn("");
+    setCsvVariableColumns({});
+    setCsvPreview(null);
+    setCsvImportReport(null);
+    setCsvPreviewError(null);
+    setLoadingCsvPreview(false);
+    setCsvInputKey((current) => current + 1);
+    setExpandedCreationPanel(null);
+    setFormError(null);
+    setToast(null);
+  }, []);
+
+  const confirmComposerDiscard = useCallback(() => {
+    if (!isComposerDirty) return true;
+    return window.confirm(
+      "Descartar campanha?\n\nAs informações desta campanha que ainda não foram salvas serão removidas."
+    );
+  }, [isComposerDirty]);
+
+  const handleDiscardComposer = useCallback(() => {
+    if (composerBusy || !confirmComposerDiscard()) return;
+    resetCampaignComposer();
+    showToast("info", "Campanha descartada", "As informações que ainda não haviam sido salvas foram removidas.");
+  }, [composerBusy, confirmComposerDiscard, resetCampaignComposer, showToast]);
+
+  const handleCampaignTabChange = useCallback(
+    (tab: CampaignCenterTab) => {
+      if (tab === activeTab) return;
+      if (activeTab === "create" && composerBusy) {
+        showToast("info", "Operação em andamento", "Aguarde a operação atual antes de sair da nova campanha.");
+        return;
+      }
+      if (activeTab === "create" && !confirmComposerDiscard()) return;
+      resetCampaignComposer();
+      setActiveTab(tab);
+      setStatusFilter(getTabStatusFilter(tab));
+      setCurrentPage(1);
+    },
+    [activeTab, composerBusy, confirmComposerDiscard, resetCampaignComposer, showToast]
+  );
+
   const campaignStats = useMemo(() => {
     return campaigns.reduce(
       (acc, campaign) => {
@@ -1050,11 +1140,6 @@ export default function AppCampaignsPage() {
       refreshTemplates(session),
       fetchAppCampaignReturnDestinations(session).then((response) => {
         setReturnDestinations(response);
-        setForm((prev) => ({
-          ...prev,
-          returnDepartmentId: prev.returnDepartmentId || response.departments[0]?.id || "",
-          returnFlowId: prev.returnFlowId || response.flows[0]?.id || "",
-        }));
       }),
       fetchAppCrmStatuses(session)
         .then((response) => {
@@ -1310,7 +1395,7 @@ export default function AppCampaignsPage() {
       }
       setSelectedCampaignId(created.campaign.campaignId);
       setCurrentPage(1);
-      setForm(EMPTY_FORM);
+      resetCampaignComposer();
       setActiveTab("sending");
       setStatusFilter("sending");
       setDetailModalOpen(true);
@@ -1390,6 +1475,7 @@ export default function AppCampaignsPage() {
   const loadAudiencePreview = useCallback(
     async (nextPage = audiencePage) => {
       if (!session) return;
+      const requestGeneration = audienceRequestGenerationRef.current;
       setLoadingAudiencePreview(true);
       setAudiencePreviewError(null);
       try {
@@ -1408,9 +1494,11 @@ export default function AppCampaignsPage() {
           page: nextPage,
           limit: 25,
         });
+        if (requestGeneration !== audienceRequestGenerationRef.current) return;
         setAudiencePreview(response);
         setAudiencePage(nextPage);
       } catch (err) {
+        if (requestGeneration !== audienceRequestGenerationRef.current) return;
         const typed = err as { status?: number; message?: string };
         if (typed.status === 401) {
           handleUnauthorized();
@@ -1418,7 +1506,7 @@ export default function AppCampaignsPage() {
         }
         setAudiencePreviewError(typed.message || "Não foi possível gerar a prévia do público.");
       } finally {
-        setLoadingAudiencePreview(false);
+        if (requestGeneration === audienceRequestGenerationRef.current) setLoadingAudiencePreview(false);
       }
     },
     [audienceFilters, audiencePage, handleUnauthorized, session]
@@ -1435,10 +1523,13 @@ export default function AppCampaignsPage() {
   };
 
   const handleClearAudienceFilters = () => {
+    audienceRequestGenerationRef.current += 1;
     setAudienceFilters(EMPTY_AUDIENCE_FILTERS);
     setAudiencePage(1);
     setAudiencePreview(null);
     setAudiencePreviewError(null);
+    setLoadingAudiencePreview(false);
+    setToast(null);
     setForm((prev) => ({
       ...prev,
       templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, templateVariableLabels),
@@ -1446,6 +1537,7 @@ export default function AppCampaignsPage() {
   };
 
   const resetCsvImportState = () => {
+    csvRequestGenerationRef.current += 1;
     setCsvText("");
     setCsvFileName("");
     setCsvHeaders([]);
@@ -1456,7 +1548,9 @@ export default function AppCampaignsPage() {
     setCsvPreview(null);
     setCsvImportReport(null);
     setCsvPreviewError(null);
+    setLoadingCsvPreview(false);
     setCsvInputKey((prev) => prev + 1);
+    setToast(null);
   };
 
   const handleCreateDraftFromAudience = async () => {
@@ -1506,8 +1600,7 @@ export default function AppCampaignsPage() {
       setSelectedCampaign(detail.campaign);
       setSelectedCampaignId(created.campaign.id);
       setDetailModalOpen(true);
-      setForm(EMPTY_FORM);
-      setFormError(null);
+      resetCampaignComposer();
       setStatusFilter("draft");
       setActiveTab("drafts");
       setCurrentPage(1);
@@ -1531,6 +1624,7 @@ export default function AppCampaignsPage() {
   };
 
   const handleCsvFileChange = async (file: File | null) => {
+    const requestGeneration = csvRequestGenerationRef.current;
     setCsvPreview(null);
     setCsvPreviewError(null);
     if (!file) {
@@ -1538,6 +1632,7 @@ export default function AppCampaignsPage() {
       return;
     }
     const text = await file.text();
+    if (requestGeneration !== csvRequestGenerationRef.current) return;
     const headers = parseCsvHeadersForUi(text);
     setCsvText(text);
     setCsvFileName(file.name);
@@ -1576,6 +1671,7 @@ export default function AppCampaignsPage() {
 
   const handleCsvPreview = async () => {
     if (!session) return;
+    const requestGeneration = csvRequestGenerationRef.current;
     const templateId = form.templateId.trim();
     if (!templateId) {
       const message = "Selecione um modelo aprovado antes de importar CSV.";
@@ -1604,6 +1700,7 @@ export default function AppCampaignsPage() {
         csvText,
         mapping: buildCsvMappingPayload(),
       });
+      if (requestGeneration !== csvRequestGenerationRef.current) return;
       setCsvPreview(preview);
       showToast(
         "info",
@@ -1611,6 +1708,7 @@ export default function AppCampaignsPage() {
         `${preview.summary.readyToImport} destinatários prontos; ${preview.summary.received - preview.summary.readyToImport} bloqueados ou ignorados.`
       );
     } catch (err) {
+      if (requestGeneration !== csvRequestGenerationRef.current) return;
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
@@ -1620,7 +1718,7 @@ export default function AppCampaignsPage() {
       setCsvPreviewError(message);
       showToast("error", "Prévia CSV não gerada", message);
     } finally {
-      setLoadingCsvPreview(false);
+      if (requestGeneration === csvRequestGenerationRef.current) setLoadingCsvPreview(false);
     }
   };
 
@@ -1670,17 +1768,7 @@ export default function AppCampaignsPage() {
       setSelectedCampaign(detail.campaign);
       setSelectedCampaignId(created.campaign.id);
       setDetailModalOpen(true);
-      setForm(EMPTY_FORM);
-      setCsvText("");
-      setCsvFileName("");
-      setCsvHeaders([]);
-      setCsvPhoneColumn("");
-      setCsvNameColumn("");
-      setCsvCrmSituationColumn("");
-      setCsvVariableColumns({});
-      setCsvPreview(null);
-      setCsvImportReport(created.draft.report ?? null);
-      setFormError(null);
+      resetCampaignComposer();
       setStatusFilter("draft");
       setActiveTab("drafts");
       setCurrentPage(1);
@@ -1856,23 +1944,16 @@ export default function AppCampaignsPage() {
       if (mapping?.fallback) return mapping.fallback;
       return templateVariables[index] ?? "";
     });
-    setForm((prev) => ({
+    resetCampaignComposer();
+    setForm({
       ...EMPTY_FORM,
-      returnDestinationType: prev.returnDestinationType,
-      returnDepartmentId: prev.returnDepartmentId,
-      returnFlowId: prev.returnFlowId,
       templateVariables: syncTemplateVariables(fixedVariableValues, labels.length),
       templateVariableMappings: syncTemplateVariableMappings([], labels),
       ...replayForm,
       templateId: matchedTemplate?.id ?? "",
       templateName: matchedTemplate?.name ?? replayForm.templateName,
       templateParamsInput: syncTemplateVariables(fixedVariableValues, labels.length).join("\n"),
-    }));
-    setFormError(null);
-    setAudienceFilters(EMPTY_AUDIENCE_FILTERS);
-    setAudiencePreview(null);
-    setAudiencePreviewError(null);
-    setAudiencePage(1);
+    });
     setActiveTab("create");
     setExpandedCreationPanel("manual");
     if (replayForm.templateName && !matchedTemplate) {
@@ -2006,11 +2087,7 @@ export default function AppCampaignsPage() {
               type="button"
               role="tab"
               aria-selected={activeTab === tab.id}
-              onClick={() => {
-                setActiveTab(tab.id);
-                setStatusFilter(getTabStatusFilter(tab.id));
-                setCurrentPage(1);
-              }}
+              onClick={() => handleCampaignTabChange(tab.id)}
               className={`rounded-md border px-3 py-1.5 text-sm font-medium transition ${
                 activeTab === tab.id
                   ? "border-re7-sky bg-re7-sky/20 text-white"
@@ -2033,9 +2110,19 @@ export default function AppCampaignsPage() {
                 Configure o modelo uma vez e escolha entre importar CSV ou selecionar uma audiência do CRM.
               </p>
             </div>
-            <span className="rounded-full border border-sky-300/30 bg-sky-900/20 px-3 py-1 text-xs text-sky-100">
-              Sem envio
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-sky-300/30 bg-sky-900/20 px-3 py-1 text-xs text-sky-100">
+                Sem envio
+              </span>
+              <button
+                type="button"
+                disabled={composerBusy || !isComposerDirty}
+                onClick={handleDiscardComposer}
+                className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Descartar
+              </button>
+            </div>
           </div>
         </div>
         <div className="grid gap-3 p-3">
@@ -3057,7 +3144,7 @@ export default function AppCampaignsPage() {
                       <p className="mt-1 font-semibold text-emerald-200">{selectedCampaign.metaSummary?.totalRead ?? 0}</p>
                     </div>
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                      <p className="text-xs uppercase tracking-wide text-white/60">Falhas</p>
+                      <p className="text-xs uppercase tracking-wide text-white/60">Falhas técnicas</p>
                       <p className="mt-1 font-semibold text-red-200">{selectedCampaign.metaSummary?.totalFailed ?? 0}</p>
                     </div>
                   </div>

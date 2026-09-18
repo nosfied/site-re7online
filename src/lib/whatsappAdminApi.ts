@@ -529,6 +529,10 @@ export type CampaignItem = {
     totalDelivered: number;
     totalRead: number;
     totalFailed: number;
+    totalBlocked: number;
+    totalOptOut: number;
+    totalSkipped: number;
+    totalPending: number;
   };
   messagesMetaStatus?: Array<{
     waId: string;

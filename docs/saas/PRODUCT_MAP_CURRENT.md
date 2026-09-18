@@ -507,6 +507,22 @@ Customer-facing Campaigns and Inbox template shortcut surfaces remove financial
 price/cost/tariff estimates. Campaign lists/details expose persisted lifecycle
 tabs (`Enviando`, `Agendadas`, `Concluídas`), closeable backend-observing
 progress modal and recipient-level blocked/skipped/pending/opt-out result
-truth. Tests/builds: UI contract 6/6 PASS, `campaignsFeatureRoutes.test.ts`
-114/114 PASS, backend build PASS, frontend build PASS, diff check PASS. No
+truth. Final local audit of `Campanha teste set.2` corrected a detail-only
+projection/fallback duplicate: no duplicate provider send existed. The
+authenticated detail now reconciles one current outcome per intended recipient,
+shows the full phone, preserves draft/review masking and reports mixed
+delivered/blocked evidence as partial delivery. `****9614` was blocked before
+provider because historical pre-Identity-P1 residue left two same-tenant
+Contact candidates for one Lead; no active creation bypass was reproduced, and
+repair remains a separately authorized data action. Counters separate blocked
+from technical failures. Tests/builds: UI contract 9/9
+PASS, `campaignsFeatureRoutes.test.ts` 115/115 PASS, backend build PASS,
+frontend build PASS, diff check PASS. No
 schema/migration, deploy, real send or `****6787` mutation.
+
+Campaign composition lifecycle is implemented locally and pending owner review:
+unsaved form/CRM-preview/CSV/destination state has one dirty contract and one
+complete discard reset. Re-entry starts pristine. Intentional drafts,
+scheduled/sending/completed campaigns and execution history are outside this
+cleanup boundary. CSV preview is read-only; CRM upserts happen only at explicit
+draft creation and are not silently reversed. No schema/migration or deploy.

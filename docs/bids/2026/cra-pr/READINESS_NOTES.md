@@ -113,6 +113,37 @@ Follow-up de 2026-09-16:
   parte da campanha Utility atual; promover somente se evidencia contratual
   exigir decisao do owner.
 
+Follow-up de 2026-09-18, result truth/identidade de campanha Demo:
+
+- `Campanha teste set.2` terminou com um destinatario entregue (`****6787`) e
+  um bloqueado antes do provider (`****9614`); nao houve terceira tentativa.
+- `****9614` tinha dois Contacts canonicos same-tenant e um Lead. O resolver
+  atual retornou `identity_conflict` de forma fail-closed, sem OutboundMessage
+  ou chamada Meta. O segundo Contact veio do bootstrap historico de campanha
+  anterior ao Identity P1.
+- Classificacao: HISTORICAL DUPLICATE RESIDUE; ACTIVE PRODUCT BUG = NO; NEW
+  BYPASS FOUND = NO. Sem reparo, o destinatario continuaria bloqueado hoje.
+- Reparacao transacional foi apenas preparada em dry-run e exige autorizacao
+  separada do owner; nao inclui reenvio nem reescrita historica.
+- Contadores: total 2, entregue 1, bloqueado 1, pendente 0, falhas tecnicas 0;
+  campanha apresentada como entrega parcial.
+- Evidencia: `docs/saas/DEMO_9614_CAMPAIGN_IDENTITY_CLOSURE_2026-09-18.md`.
+
+Follow-up de 2026-09-18, ciclo de composicao de campanha:
+
+- IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO DEPLOY;
+- composicao nao salva e transitoria e volta limpa apos descarte/troca de aba;
+- previa CRM/CSV nao cria Campaign nem contato;
+- criar rascunho e o commit explicito; importacao CSV confirmada pode persistir
+  upsert CRM canonico, que nao e revertido silenciosamente;
+- rascunhos intencionais e campanhas agendadas, em envio ou concluidas nao sao
+  removidos pela limpeza do compositor;
+- sem schema/migration, envio real, provider call ou reparo de `****9614`.
+- gate local: contratos do compositor/pagina 18/18 PASS, backend Campaign
+  115/115 PASS, importacao/CRM 23/23 PASS, builds e lint focado PASS; smoke
+  autenticado confirmou descarte/reentrada limpos, cancelamento CSV sem estado
+  residual e preservacao do rascunho salvo. Revisao visual do owner pendente.
+
 Nota Demo Phase C, 2026-09-15: a campanha controlada em `demo-converta`
 `d9874c03-10e8-4061-a92e-6caa7b3001c3` encontrou bug generico de
 preflight/persistencia apos Meta. `****9614` foi aceito pela Meta e confirmado

@@ -72,3 +72,12 @@ aceite CRA permanecem pendentes.
 - Templates e custos Meta devem ser previstos.
 - Volumes como 60.000 templates exigem planejamento de custo, throughput e aprovacao.
 - Disparo proativo deve respeitar politica da Meta e base legal do controlador.
+
+# Ciclo de composicao e descarte
+
+A composicao de uma campanha permanece transitoria ate o salvamento explicito
+como rascunho ou o inicio da execucao. Ao descartar uma composicao nao salva, o
+Converta limpa nome, modelo, variaveis, audiencia, CSV, previa, destino e
+validacoes. Rascunhos intencionais e campanhas agendadas, em envio ou
+concluidas permanecem preservados. Fechar o acompanhamento de progresso nao
+cancela a campanha.

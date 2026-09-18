@@ -47,6 +47,46 @@ test("campaign result renders explicit blocked and skipped recipient states", ()
   assert.ok(pageSource.includes('return "Ignorada"'));
 });
 
+test("campaign detail result shows full recipient phone for authorized users", () => {
+  assert.ok(pageSource.includes('return digits || value || "-";'));
+  assert.ok(!pageSource.includes('`${digits.slice(0, 4)}****${digits.slice(-4)}`'));
+});
+
+test("campaign confidence treats mixed success and failure as partial delivery", () => {
+  assert.ok(pageSource.includes("const hasSuccessfulDeliverySignal = deliveredOrRead > 0 || sent > 0;"));
+  assert.ok(pageSource.includes("failed >= totalRecipients && !hasSuccessfulDeliverySignal"));
+});
+
+test("campaign detail distinguishes technical failures from blocked recipients", () => {
+  assert.ok(pageSource.includes("Falhas técnicas"));
+  assert.ok(pageSource.includes("selectedCampaign.blockedCount"));
+});
+
+test("campaign composer has one complete discard lifecycle", () => {
+  assert.ok(pageSource.includes("const resetCampaignComposer = useCallback"));
+  assert.ok(pageSource.includes("setForm(EMPTY_FORM)"));
+  assert.ok(pageSource.includes("setAudienceFilters(EMPTY_AUDIENCE_FILTERS)"));
+  assert.ok(pageSource.includes('setCsvText("")'));
+  assert.ok(pageSource.includes("setCsvPreview(null)"));
+  assert.ok(pageSource.includes("setExpandedCreationPanel(null)"));
+  assert.ok(pageSource.includes("setFormError(null)"));
+  assert.ok(pageSource.includes("setToast(null)"));
+});
+
+test("campaign tab navigation discards only after dirty confirmation", () => {
+  assert.ok(pageSource.includes("const handleCampaignTabChange = useCallback"));
+  assert.ok(pageSource.includes('activeTab === "create" && !confirmComposerDiscard()'));
+  assert.ok(pageSource.includes("As informações desta campanha que ainda não foram salvas serão removidas."));
+});
+
+test("explicit draft persistence and running campaign controls remain separate from composer discard", () => {
+  assert.ok(pageSource.includes("createAppCampaignDraft(session"));
+  assert.ok(pageSource.includes("createAppCampaignDraftFromCsv(session"));
+  assert.ok(pageSource.includes("sendAppCampaignDraft(session"));
+  assert.ok(pageSource.includes("scheduleAppCampaignDraft(session"));
+  assert.ok(pageSource.includes("setDetailModalOpen(false)"));
+});
+
 test("app shell keeps mobile title and content below the variable-height navigation", () => {
   assert.ok(appShellSource.includes("relative z-50 mx-auto w-full"));
   assert.ok(appShellSource.includes("sm:fixed sm:left-4"));

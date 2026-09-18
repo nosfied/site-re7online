@@ -12098,7 +12098,16 @@ test("campaign draft uses approved template and stores safe seed without sending
   const detail = await request<{
     campaign: {
       status: string;
-      metaSummary: { totalSent: number; totalDelivered: number; totalRead: number; totalFailed: number };
+      metaSummary: {
+        totalSent: number;
+        totalDelivered: number;
+        totalRead: number;
+        totalFailed: number;
+        totalBlocked: number;
+        totalOptOut: number;
+        totalSkipped: number;
+        totalPending: number;
+      };
       messagesMetaStatus: Array<{ status: string }>;
       draftReview: { recipients: Array<{ phoneDisplay: string | null; identifierDisplay: string }> };
     };
@@ -12695,7 +12704,16 @@ test("campaign lifecycle supports schedule pause resume cancel and formal test-s
   assert.equal("campaignId" in (testOutbound.rawPayload as Record<string, unknown>), false);
   const detailAfterTest = await request<{
     campaign: {
-      metaSummary: { totalSent: number; totalDelivered: number; totalRead: number; totalFailed: number };
+      metaSummary: {
+        totalSent: number;
+        totalDelivered: number;
+        totalRead: number;
+        totalFailed: number;
+        totalBlocked: number;
+        totalOptOut: number;
+        totalSkipped: number;
+        totalPending: number;
+      };
       messagesMetaStatus: Array<{ status: string }>;
     };
   }>("GET", `/app/campaigns/${created.body.campaign.id}`, businessAdmin);
@@ -14505,6 +14523,131 @@ test("campaign export reports delivered utility messages as billable", async () 
   assert.match(response.text, /5541999990001,delivered,[^\n]*,sim,/);
   assert.match(response.text, /5541999990002,sent,[^\n]*,nao,nao_entregue/);
   assert.match(response.text, /5541999990003,failed,[^\n]*,nao,falha/);
+});
+
+test("campaign detail reconciles seed recipients without duplicate fallback rows", async () => {
+  const blockedWaId = "5541999999614";
+  const deliveredWaId = "5541999996787";
+  const campaign = await prisma.campaign.create({
+    data: {
+      clientId: businessClientId,
+      name: "Campanha detalhe reconciliado",
+      templateName: "lembrete_vencimento_anuidade",
+      status: "completed",
+      totalRecipients: 2,
+      sentCount: 1,
+      blockedCount: 1,
+    },
+  });
+  await prisma.event.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        messageId: campaign.id,
+        requestId: `campaign-seed:${campaign.id}:result-truth`,
+        eventName: "campaign.seed.saved",
+        payloadJson: {
+          campaignId: campaign.id,
+          name: campaign.name,
+          templateName: campaign.templateName,
+          recipients: [blockedWaId, deliveredWaId],
+          templateParams: [],
+          summary: {
+            requested: 2,
+            accepted: 1,
+            blocked: 1,
+            duplicatesRemoved: 0,
+            blockedByReason: [{ reason: "identity_conflict", count: 1 }],
+          },
+        },
+      },
+      {
+        clientId: businessClientId,
+        messageId: campaign.id,
+        requestId: `campaign-import-blocked:${campaign.id}:1`,
+        eventName: "campaign.recipient.import_blocked",
+        payloadJson: {
+          campaignId: campaign.id,
+          rowNumber: 1,
+          reason: "identity_conflict",
+          label: "Identidade conflitante",
+        },
+      },
+    ],
+  });
+  await prisma.outboundMessage.create({
+    data: {
+      clientId: businessClientId,
+      waId: deliveredWaId,
+      waIdCanonical: deliveredWaId,
+      messageId: `campaign.${campaign.id}.1`,
+      type: "TEMPLATE",
+      status: "SENT",
+      templateName: campaign.templateName,
+      rawPayload: {
+        campaignId: campaign.id,
+        realProviderAttempt: true,
+        metaStatus: {
+          lastStatus: "delivered",
+          lastStatusAt: "2026-09-18T12:00:00.000Z",
+          pricingCategory: "utility",
+          pricingBillable: true,
+          pricingModel: "PMP",
+        },
+      },
+    },
+  });
+
+  const detail = await request<{
+    campaign: {
+      metaSummary: {
+        totalSent: number;
+        totalDelivered: number;
+        totalRead: number;
+        totalFailed: number;
+        totalBlocked: number;
+        totalOptOut: number;
+        totalSkipped: number;
+        totalPending: number;
+      };
+      messagesMetaStatus: Array<{ waId: string; status: string; error: string | null }>;
+    };
+  }>("GET", `/app/campaigns/${campaign.id}`, businessAdmin);
+
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.campaign.messagesMetaStatus.length, 2);
+  assert.deepEqual(
+    new Set(detail.body.campaign.messagesMetaStatus.map((item) => item.waId)),
+    new Set([blockedWaId, deliveredWaId])
+  );
+  assert.deepEqual(
+    new Set(detail.body.campaign.messagesMetaStatus.map((item) => item.status)),
+    new Set(["blocked", "delivered"])
+  );
+  assert.deepEqual(detail.body.campaign.metaSummary, {
+    totalSent: 0,
+    totalDelivered: 1,
+    totalRead: 0,
+    totalFailed: 0,
+    totalBlocked: 1,
+    totalOptOut: 0,
+    totalSkipped: 0,
+    totalPending: 0,
+  });
+  assert.equal(
+    await prisma.outboundMessage.count({ where: { clientId: businessClientId, waId: blockedWaId } }),
+    0
+  );
+  assert.equal(JSON.stringify(detail.body).includes("Envio individual nao encontrado"), false);
+  assert.equal(JSON.stringify(detail.body).includes("****6787"), false);
+
+  const crossTenant = await request<ErrorPayload>(
+    "GET",
+    `/app/campaigns/${campaign.id}`,
+    overrideAdmin
+  );
+  assert.equal(crossTenant.status, 404);
+  assert.equal(getErrorCode(crossTenant.body), "campaign_not_found");
 });
 
 test("event-based opt-out blocks recipient in app campaign and export", async () => {

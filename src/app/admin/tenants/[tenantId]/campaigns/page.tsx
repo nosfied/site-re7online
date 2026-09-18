@@ -847,7 +847,7 @@ export default function TenantCampaignsPage() {
                         </p>
                       </div>
                       <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                        <p className="text-xs uppercase tracking-wide text-white/60">Falhas</p>
+                        <p className="text-xs uppercase tracking-wide text-white/60">Falhas técnicas</p>
                         <p className="mt-1 font-semibold text-red-200">
                           {selectedCampaign.metaSummary?.totalFailed ?? 0}
                         </p>

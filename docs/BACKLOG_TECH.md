@@ -167,17 +167,51 @@ ACTIVE P1:
    while backend execution continues, and renders recipient-level blocked,
    skipped, pending and opt-out states from persisted backend data. Backend
    execution remains authoritative; the frontend only observes persisted
-   campaign state. Recovery artifact:
+   campaign state. Final local result-detail audit for Demo campaign `Campanha
+   teste set.2` / `lembrete_vencimento_anuidade` confirmed that the repeated
+   `****6787` line was a projection/fallback duplication, not a duplicate
+   provider send. Detail now reconciles one current outcome per intended
+   recipient when identity evidence exists, shows the full phone only inside
+   the authenticated campaign detail, preserves masking in draft/review, and
+   classifies mixed delivered/blocked evidence as partial delivery. Recovery artifact:
    `codex-recovery/campaign-ux-result-truth-delta-20260918.patch`, 36,387
    bytes, SHA256
    `5967b2baab3ceffa3333b6f04ec31b622652e2399e2cbcf69de60379a53db490`.
-   Validation: `campaignsPageContract.test.ts` 6/6 PASS,
-   `campaignsFeatureRoutes.test.ts` 114/114 PASS on safe local DB
-   `re7_queue_rollout_validate_20260918`, backend build PASS, frontend build
-   PASS, `git diff --check` PASS. Production remains protected at
-   `b166bcac8bf443d34ba7f3821016b6bae8069728`; production health/db/migrations
+   Root-cause closure for `****9614`: the runner blocked before provider
+   because canonical resolution found two same-tenant Contact candidates and
+   one Lead. The duplicate Contact is historical residue from the former
+   campaign bootstrap, created before Identity P1; no current creation bypass
+   was reproduced. The same recipient remains blocked until a separately
+   owner-authorized transactional data repair. Counters are separated as
+   delivered 1, blocked 1, pending 0 and technical failures 0, with campaign
+   wording `Entrega parcial`. Evidence and dry-run repair package:
+   `docs/saas/DEMO_9614_CAMPAIGN_IDENTITY_CLOSURE_2026-09-18.md`.
+   Validation: `campaignsPageContract.test.ts` 9/9 PASS,
+   `campaignsFeatureRoutes.test.ts` 115/115 PASS on safe local DB
+   `re7_campaign_result_truth_test`, backend build PASS, frontend build PASS,
+   `git diff --check` PASS. Production remains protected at
+   `b413eea04af15cef2cf7667dbc3fa84bca3f49bc`; production health/db/migrations
    PASS read-only. Owner visual revalidation on this integrated branch is still
    pending.
+
+   Open controlled data action: Demo `****9614` historical identity residue.
+   DATA REPAIR PREPARED / OWNER AUTHORIZATION REQUIRED / NO RESEND. Factory is
+   fixed; do not reopen Identity P1 as an active product bug without new
+   creation evidence contradicting the focused identity-path tests.
+
+   Campaign composer cleanup: IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO
+   DEPLOY. Unsaved composition is now governed by one dirty-state contract and
+   one idempotent reset. Explicit discard and Campaign-tab navigation clear
+   name, template/variables, recipients, CRM/CSV previews, mappings,
+   destination and errors; stale async preview responses are invalidated.
+   Preview creates no server record. Explicit drafts, CRM upserts committed by
+   CSV draft creation, scheduled/sending/completed campaigns, outbound, billing
+   and history remain preserved. Canonical lifecycle:
+   `docs/saas/CAMPAIGN_COMPOSER_LIFECYCLE.md`.
+   Local gate on 2026-09-18: composer/page contracts 18/18 PASS, Campaign
+   backend 115/115 PASS, import/CRM 23/23 PASS, both builds and focused lint
+   PASS. Authenticated smoke confirmed clean discard/re-entry, clean CSV cancel
+   and intentional draft preservation. Owner visual review remains pending.
 
 3. CRA Demo Utility Recipient B controlled send: COMPLETED / DEMO PRODUCT
    CAPABILITY VALIDATED / CRA ACCEPTANCE STILL SEPARATE. On 2026-09-16 the

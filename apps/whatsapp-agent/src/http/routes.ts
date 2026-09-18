@@ -24014,6 +24014,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             totalDelivered: 0,
             totalRead: 0,
             totalFailed: 0,
+            totalBlocked: 0,
+            totalOptOut: 0,
+            totalSkipped: 0,
+            totalPending: 0,
           };
           switch (nextItem.status) {
             case "read":
@@ -24042,6 +24046,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               totalDelivered: 0,
               totalRead: 0,
               totalFailed: 0,
+              totalBlocked: 0,
+              totalOptOut: 0,
+              totalSkipped: 0,
+              totalPending: 0,
             },
           })),
         });
@@ -29136,6 +29144,10 @@ type CampaignMetaSummary = {
   totalDelivered: number;
   totalRead: number;
   totalFailed: number;
+  totalBlocked: number;
+  totalOptOut: number;
+  totalSkipped: number;
+  totalPending: number;
 };
 
 type CampaignDraftSeed = {
@@ -29781,10 +29793,19 @@ function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMet
           acc.totalDelivered += 1;
           break;
         case "opt_out":
+          acc.totalOptOut += 1;
+          break;
         case "blocked":
+          acc.totalBlocked += 1;
+          break;
         case "skipped":
+          acc.totalSkipped += 1;
+          break;
         case "failed":
           acc.totalFailed += 1;
+          break;
+        case "pending":
+          acc.totalPending += 1;
           break;
         case "sent":
         default:
@@ -29798,8 +29819,94 @@ function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMet
       totalDelivered: 0,
       totalRead: 0,
       totalFailed: 0,
+      totalBlocked: 0,
+      totalOptOut: 0,
+      totalSkipped: 0,
+      totalPending: 0,
     }
   );
+}
+
+function campaignRecipientIdentityKey(value: string) {
+  return canonicalizeBrazilWaId(normalizeWaIdDigits(value)) ?? value;
+}
+
+function campaignMetaStatusRank(status: CampaignMetaStatus["status"]) {
+  switch (status) {
+    case "read":
+      return 8;
+    case "delivered":
+      return 7;
+    case "opt_out":
+      return 6;
+    case "blocked":
+      return 5;
+    case "failed":
+      return 4;
+    case "skipped":
+      return 3;
+    case "sent":
+      return 2;
+    case "pending":
+    default:
+      return 1;
+  }
+}
+
+function campaignMetaStatusTime(item: CampaignMetaStatus) {
+  const value = item.deliveredAt ?? item.sentAt;
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function pickCampaignRecipientStatus(items: CampaignMetaStatus[]) {
+  return items.reduce((selected, item) => {
+    const rankDifference = campaignMetaStatusRank(item.status) - campaignMetaStatusRank(selected.status);
+    if (rankDifference > 0) return item;
+    if (rankDifference === 0 && campaignMetaStatusTime(item) > campaignMetaStatusTime(selected)) return item;
+    return selected;
+  });
+}
+
+function buildCampaignRecipientResultStatuses(params: {
+  campaign: { sentCount: number; blockedCount: number; status: string; templateName: string };
+  seed: CampaignDraftSeed;
+  resultItems: CampaignMetaStatus[];
+}) {
+  const resultsByIdentity = new Map<string, CampaignMetaStatus[]>();
+  params.resultItems.forEach((item) => {
+    const key = campaignRecipientIdentityKey(item.waId);
+    resultsByIdentity.set(key, [...(resultsByIdentity.get(key) ?? []), item]);
+  });
+
+  const visibleItems: CampaignMetaStatus[] = [];
+  const consumedKeys = new Set<string>();
+  params.seed.recipients.forEach((waId, index) => {
+    const key = campaignRecipientIdentityKey(waId);
+    const matchingItems = resultsByIdentity.get(key);
+    if (matchingItems?.length) {
+      visibleItems.push(pickCampaignRecipientStatus(matchingItems));
+      consumedKeys.add(key);
+      return;
+    }
+    const fallbackSeed = { ...params.seed, recipients: [waId] };
+    const sentLimit = Math.max(params.campaign.sentCount || 0, 0);
+    const blockedLimit = sentLimit + Math.max(params.campaign.blockedCount || 0, 0);
+    const sentCount = index < sentLimit ? 1 : 0;
+    const blockedCount = index >= sentLimit && index < blockedLimit ? 1 : 0;
+    visibleItems.push(
+      ...buildCampaignSeedFallbackStatusItems(
+        { ...params.campaign, sentCount, blockedCount },
+        fallbackSeed
+      )
+    );
+  });
+
+  params.resultItems.forEach((item) => {
+    if (!consumedKeys.has(campaignRecipientIdentityKey(item.waId))) visibleItems.push(item);
+  });
+  return visibleItems;
 }
 
 function formatCampaignNonBillingReason(value: string | null) {
@@ -35220,6 +35327,10 @@ async function buildCampaignListPayload(
       totalDelivered: 0,
       totalRead: 0,
       totalFailed: 0,
+      totalBlocked: 0,
+      totalOptOut: 0,
+      totalSkipped: 0,
+      totalPending: 0,
     };
     switch (nextItem.status) {
       case "read":
@@ -35229,6 +35340,8 @@ async function buildCampaignListPayload(
         current.totalDelivered += 1;
         break;
       case "opt_out":
+        current.totalOptOut += 1;
+        break;
       case "failed":
         current.totalFailed += 1;
         break;
@@ -35249,6 +35362,10 @@ async function buildCampaignListPayload(
         totalDelivered: 0,
         totalRead: 0,
         totalFailed: 0,
+        totalBlocked: 0,
+        totalOptOut: 0,
+        totalSkipped: 0,
+        totalPending: 0,
       },
     })),
   };
@@ -35338,13 +35455,13 @@ async function buildCampaignDetailPayload(
   });
   const resultIdentityKeys = new Set(
     [...messagesMetaStatus, ...optOutMetaStatus, ...importBlockedMetaStatus].map(
-      (item) => canonicalizeBrazilWaId(normalizeWaIdDigits(item.waId)) ?? item.waId
+      (item) => campaignRecipientIdentityKey(item.waId)
     )
   );
   const fallbackDraftSeed = {
     ...draftSeed,
     recipients: draftSeed.recipients.filter((waId) => {
-      const key = canonicalizeBrazilWaId(normalizeWaIdDigits(waId)) ?? waId;
+      const key = campaignRecipientIdentityKey(waId);
       return !resultIdentityKeys.has(key);
     }),
   };
@@ -35374,15 +35491,11 @@ async function buildCampaignDetailPayload(
   const visibleMessagesMetaStatus =
     isDraftLikeCampaign
       ? [...optOutMetaStatus, ...importBlockedMetaStatus]
-      : [
-          ...messagesMetaStatus,
-          ...optOutMetaStatus,
-          ...importBlockedMetaStatus,
-          ...buildCampaignSeedFallbackStatusItems(
-            { ...campaign, sentCount: 0, blockedCount: 0 },
-            fallbackDraftSeed
-          ),
-        ];
+      : buildCampaignRecipientResultStatuses({
+          campaign,
+          seed: draftSeed,
+          resultItems: [...messagesMetaStatus, ...optOutMetaStatus, ...importBlockedMetaStatus],
+        });
   return {
     ok: true,
     campaign: {

@@ -741,7 +741,36 @@ template cost previews and financial columns, shows persisted lifecycle tabs
 while backend execution continues, and exposes recipient-level persisted result
 states/reasons.
 
-Validation: UI contract 6/6 PASS, `campaignsFeatureRoutes.test.ts` 114/114
-PASS on `re7_queue_rollout_validate_20260918`, backend/frontend builds PASS and
+Validation: UI contract 9/9 PASS, `campaignsFeatureRoutes.test.ts` 115/115
+PASS on `re7_campaign_result_truth_test`, backend/frontend builds PASS and
 `git diff --check` PASS. No production deploy, no real Meta send, no schema or
 migration, and no `****6787` mutation.
+
+Final result-detail correction: read-only evidence for `Campanha teste set.2`
+with template `lembrete_vencimento_anuidade` showed one delivered provider
+attempt for `****6787` and one import block for `****9614`. The extra visible
+line came from projection plus seed fallback, not another send. Local detail
+now reconciles those as two recipient outcomes, exposes the full phone only in
+the authenticated detail and reports the mixed result as partial delivery.
+The recipient itself was not omitted: `****9614` was blocked before provider
+because two same-tenant canonical Contact candidates existed for one Lead.
+Read-only comparison proved this graph existed at campaign execution and still
+exists. It is residue from the former campaign bootstrap before Identity P1;
+current creation paths did not reproduce a bypass. Without separately
+authorized data repair, the same recipient remains blocked today. Expected
+summary is total 2, delivered 1, blocked 1, pending 0 and technical failures 0.
+Validation updated to UI contract 9/9, backend focused suite 115/115 and
+identity-path matrix 106/106 PASS. No real send or production mutation.
+
+## Campaign composer cleanup - 2026-09-18
+
+Status: IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO DEPLOY.
+
+The Demo/CRA campaign operator must be able to abandon unsaved CRM audience,
+CSV or manual composition and start another campaign with pristine name,
+template, variables, recipients, file/preview, destination and validation
+state. Preview is read-only. Explicit draft creation is the persistence
+boundary; schedule is available only after that boundary. Saved drafts and
+scheduled/sending/completed campaigns survive navigation, and closing progress
+does not cancel execution. No real send or production mutation was used for
+this lifecycle validation.
