@@ -418,3 +418,14 @@ scheduled, sending or completed remain protected, and closing progress does
 not stop execution. CSV CRM upserts occur only at explicit draft creation and
 remain canonical. This strengthens CRA campaign operational traceability; it
 does not constitute CRA customer acceptance or a real send.
+
+Campaign Result Truth P1 12/13 reconciliation, 2026-09-18: VALIDATED LOCAL AND
+READ-ONLY / OWNER REVIEW READY / NO DEPLOY. The earlier synthetic gate missed
+the real persisted representation and production validation exposed a false
+missing-history failure for `****6787`. The corrected read model reuses the
+canonical Identity P1 candidate set and leaves all history unchanged. Replay
+of the actual Demo campaign records returns exactly 2 outcomes: delivered
+`****6787`, blocked `****9614`, 0 technical failures and `Entrega parcial`.
+This strengthens CRA recipient traceability evidence but is not CRA customer
+acceptance. Backend 118/118, complementary matrices 56/56 and 72/72 PASS;
+schema unchanged, migration none, no send, repair or deploy.

@@ -101,10 +101,21 @@ pre-mutation backup and before/after evidence. No resend is part of the repair.
 
 ## Validation
 
-- campaign backend suite: 115/115 PASS on dedicated local PostgreSQL;
-- campaign frontend contract: 9/9 PASS;
+The first synthetic Result Truth validation did not reproduce the production
+seed/outbound representation. The subsequent production gate exposed a
+13-digit seed and historical 12-digit delivered outbound for `****6787`; the
+literal projection added a false missing-history row. The gate stopped and the
+P1 read-model corrective reused the established canonical identity candidate
+set. An exact sanitized regression and a read-only replay of the actual records
+now produce two rows only: `****6787` delivered and `****9614` blocked, with no
+technical failure. This changes no conclusion or repair boundary for `****9614`.
+
+- campaign backend suite: 118/118 PASS on dedicated local PostgreSQL;
+- campaign frontend contract: 12/12 PASS;
 - current canonical resolver synthetic `9614`-shaped 13/12-digit test: PASS;
-- identity/CRM/import/Web Session focused matrix: 106/106 PASS;
+- complementary frontend/import/identity/Queue matrix: 56/56 PASS;
+- Contacts x Campaigns/channel/billing matrix: 72/72 PASS;
+- actual production campaign projection replay, read-only: 2 rows, PASS;
 - schema unchanged; migration none.
 
 Production remained read-only throughout this gate.

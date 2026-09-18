@@ -14525,9 +14525,10 @@ test("campaign export reports delivered utility messages as billable", async () 
   assert.match(response.text, /5541999990003,failed,[^\n]*,nao,falha/);
 });
 
-test("campaign detail reconciles seed recipients without duplicate fallback rows", async () => {
+test("campaign detail reconciles real 13-digit seed with historical 12-digit outbound", async () => {
   const blockedWaId = "5541999999614";
-  const deliveredWaId = "5541999996787";
+  const deliveredSeedWaId = "5541999996787";
+  const deliveredOutboundWaId = "554199996787";
   const campaign = await prisma.campaign.create({
     data: {
       clientId: businessClientId,
@@ -14550,7 +14551,7 @@ test("campaign detail reconciles seed recipients without duplicate fallback rows
           campaignId: campaign.id,
           name: campaign.name,
           templateName: campaign.templateName,
-          recipients: [blockedWaId, deliveredWaId],
+          recipients: [blockedWaId, deliveredSeedWaId],
           templateParams: [],
           summary: {
             requested: 2,
@@ -14578,8 +14579,8 @@ test("campaign detail reconciles seed recipients without duplicate fallback rows
   await prisma.outboundMessage.create({
     data: {
       clientId: businessClientId,
-      waId: deliveredWaId,
-      waIdCanonical: deliveredWaId,
+      waId: deliveredOutboundWaId,
+      waIdCanonical: deliveredOutboundWaId,
       messageId: `campaign.${campaign.id}.1`,
       type: "TEMPLATE",
       status: "SENT",
@@ -14595,6 +14596,18 @@ test("campaign detail reconciles seed recipients without duplicate fallback rows
           pricingModel: "PMP",
         },
       },
+    },
+  });
+  await prisma.outboundMessage.create({
+    data: {
+      clientId: overrideClientId,
+      waId: deliveredSeedWaId,
+      waIdCanonical: deliveredSeedWaId,
+      messageId: `campaign.${campaign.id}.cross-tenant`,
+      type: "TEMPLATE",
+      status: "FAILED",
+      templateName: campaign.templateName,
+      rawPayload: { campaignId: campaign.id, metaStatus: { lastStatus: "failed" } },
     },
   });
 
@@ -14618,7 +14631,7 @@ test("campaign detail reconciles seed recipients without duplicate fallback rows
   assert.equal(detail.body.campaign.messagesMetaStatus.length, 2);
   assert.deepEqual(
     new Set(detail.body.campaign.messagesMetaStatus.map((item) => item.waId)),
-    new Set([blockedWaId, deliveredWaId])
+    new Set([blockedWaId, deliveredOutboundWaId])
   );
   assert.deepEqual(
     new Set(detail.body.campaign.messagesMetaStatus.map((item) => item.status)),
@@ -14648,6 +14661,203 @@ test("campaign detail reconciles seed recipients without duplicate fallback rows
   );
   assert.equal(crossTenant.status, 404);
   assert.equal(getErrorCode(crossTenant.body), "campaign_not_found");
+});
+
+test("campaign detail reconciles reverse 12-digit seed with 13-digit outbound", async () => {
+  const seedWaId = "554199996787";
+  const outboundWaId = "5541999996787";
+  const campaign = await prisma.campaign.create({
+    data: {
+      clientId: businessClientId,
+      name: "Campanha detalhe reverso",
+      templateName: "lembrete_vencimento_anuidade",
+      status: "completed",
+      totalRecipients: 1,
+      sentCount: 1,
+      blockedCount: 0,
+    },
+  });
+  await prisma.event.create({
+    data: {
+      clientId: businessClientId,
+      messageId: campaign.id,
+      requestId: `campaign-seed:${campaign.id}:reverse-shape`,
+      eventName: "campaign.seed.saved",
+      payloadJson: {
+        campaignId: campaign.id,
+        name: campaign.name,
+        templateName: campaign.templateName,
+        recipients: [seedWaId],
+        templateParams: [],
+      },
+    },
+  });
+  await prisma.outboundMessage.create({
+    data: {
+      clientId: businessClientId,
+      waId: outboundWaId,
+      waIdCanonical: outboundWaId,
+      messageId: `campaign.${campaign.id}.1`,
+      type: "TEMPLATE",
+      status: "SENT",
+      templateName: campaign.templateName,
+      rawPayload: {
+        campaignId: campaign.id,
+        metaStatus: { lastStatus: "delivered", lastStatusAt: "2026-09-18T12:00:00.000Z" },
+      },
+    },
+  });
+
+  const detail = await request<{
+    campaign: {
+      metaSummary: { totalDelivered: number; totalFailed: number };
+      messagesMetaStatus: Array<{ waId: string; status: string; error: string | null }>;
+    };
+  }>("GET", `/app/campaigns/${campaign.id}`, businessAdmin);
+
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.campaign.messagesMetaStatus.length, 1);
+  assert.deepEqual(
+    {
+      waId: detail.body.campaign.messagesMetaStatus[0]?.waId,
+      status: detail.body.campaign.messagesMetaStatus[0]?.status,
+      error: detail.body.campaign.messagesMetaStatus[0]?.error,
+    },
+    { waId: outboundWaId, status: "delivered", error: null }
+  );
+  assert.equal(detail.body.campaign.metaSummary.totalDelivered, 1);
+  assert.equal(detail.body.campaign.metaSummary.totalFailed, 0);
+});
+
+test("campaign detail summarizes multiple real attempts without deleting attempt history", async () => {
+  const seedWaId = "5541999996787";
+  const historicalWaId = "554199996787";
+  const campaign = await prisma.campaign.create({
+    data: {
+      clientId: businessClientId,
+      name: "Campanha detalhe multiplas tentativas",
+      templateName: "lembrete_vencimento_anuidade",
+      status: "completed",
+      totalRecipients: 1,
+      sentCount: 1,
+      blockedCount: 0,
+    },
+  });
+  await prisma.event.create({
+    data: {
+      clientId: businessClientId,
+      messageId: campaign.id,
+      requestId: `campaign-seed:${campaign.id}:multiple-attempts`,
+      eventName: "campaign.seed.saved",
+      payloadJson: {
+        campaignId: campaign.id,
+        name: campaign.name,
+        templateName: campaign.templateName,
+        recipients: [seedWaId],
+        templateParams: [],
+      },
+    },
+  });
+  await prisma.outboundMessage.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        waId: seedWaId,
+        waIdCanonical: seedWaId,
+        messageId: `campaign.${campaign.id}.attempt-1`,
+        type: "TEMPLATE",
+        status: "FAILED",
+        templateName: campaign.templateName,
+        errorBody: "Falha técnica anterior",
+        rawPayload: { campaignId: campaign.id, metaStatus: { lastStatus: "failed" } },
+      },
+      {
+        clientId: businessClientId,
+        waId: historicalWaId,
+        waIdCanonical: historicalWaId,
+        messageId: `campaign.${campaign.id}.attempt-2`,
+        type: "TEMPLATE",
+        status: "SENT",
+        templateName: campaign.templateName,
+        rawPayload: {
+          campaignId: campaign.id,
+          metaStatus: { lastStatus: "delivered", lastStatusAt: "2026-09-18T12:05:00.000Z" },
+        },
+      },
+    ],
+  });
+
+  const detail = await request<{
+    campaign: {
+      metaSummary: { totalDelivered: number; totalFailed: number };
+      messagesMetaStatus: Array<{ status: string }>;
+    };
+  }>("GET", `/app/campaigns/${campaign.id}`, businessAdmin);
+
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.campaign.messagesMetaStatus.length, 1);
+  assert.equal(detail.body.campaign.messagesMetaStatus[0]?.status, "delivered");
+  assert.equal(detail.body.campaign.metaSummary.totalDelivered, 1);
+  assert.equal(detail.body.campaign.metaSummary.totalFailed, 0);
+  assert.equal(
+    await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, rawPayload: { path: ["campaignId"], equals: campaign.id } },
+    }),
+    2
+  );
+});
+
+test("campaign detail keeps genuine missing-history fallback", async () => {
+  const waId = "5541999994321";
+  const campaign = await prisma.campaign.create({
+    data: {
+      clientId: businessClientId,
+      name: "Campanha detalhe sem historico",
+      templateName: "lembrete_vencimento_anuidade",
+      status: "completed",
+      totalRecipients: 1,
+      sentCount: 0,
+      blockedCount: 0,
+    },
+  });
+  await prisma.event.create({
+    data: {
+      clientId: businessClientId,
+      messageId: campaign.id,
+      requestId: `campaign-seed:${campaign.id}:missing-history`,
+      eventName: "campaign.seed.saved",
+      payloadJson: {
+        campaignId: campaign.id,
+        name: campaign.name,
+        templateName: campaign.templateName,
+        recipients: [waId],
+        templateParams: [],
+      },
+    },
+  });
+
+  const detail = await request<{
+    campaign: {
+      metaSummary: { totalFailed: number };
+      messagesMetaStatus: Array<{ waId: string; status: string; error: string | null }>;
+    };
+  }>("GET", `/app/campaigns/${campaign.id}`, businessAdmin);
+
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.campaign.messagesMetaStatus.length, 1);
+  assert.deepEqual(
+    {
+      waId: detail.body.campaign.messagesMetaStatus[0]?.waId,
+      status: detail.body.campaign.messagesMetaStatus[0]?.status,
+      error: detail.body.campaign.messagesMetaStatus[0]?.error,
+    },
+    {
+      waId,
+      status: "failed",
+      error: "Envio individual nao encontrado no historico preservado.",
+    }
+  );
+  assert.equal(detail.body.campaign.metaSummary.totalFailed, 1);
 });
 
 test("event-based opt-out blocks recipient in app campaign and export", async () => {

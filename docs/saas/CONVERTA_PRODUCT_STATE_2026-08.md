@@ -1085,3 +1085,15 @@ errors on discard or Campaign-tab abandonment. Explicit drafts and campaigns
 that are scheduled, sending or completed remain persisted; closing progress
 does not cancel execution. Preview has no server residue, while CRM upserts
 from explicit CSV draft creation remain canonical. No schema/migration.
+
+Campaign Result Truth canonical 12/13 corrective (2026-09-18): P1 VALIDATED
+LOCAL AND READ-ONLY / OWNER REVIEW READY / NO DEPLOY. The original synthetic
+test passed but omitted the actual 13-digit seed versus 12-digit historical
+outbound shape. Production validation therefore exposed a false duplicate
+`****6787` failure and stopped at the hard gate. The corrective is projection
+only and reuses `buildCrmWhatsappIdentityCandidates`; historical campaign,
+outbound, event and billing rows are untouched. Read-only replay of campaign
+`0fb54d61-9f71-42ab-b89d-78ddb23bb694` returns 2 rows, delivered 1, blocked 1,
+pending 0, technical failures 0 and `Entrega parcial`. Campaign backend
+118/118 and complementary 56/56 plus 72/72 matrices pass. Schema unchanged,
+migration none, no real send, no identity repair and no deploy.

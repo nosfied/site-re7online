@@ -713,3 +713,18 @@ Validation completed locally: `campaignsPageContract.test.ts` 6/6 PASS,
 `re7_queue_rollout_validate_20260918`, backend build PASS, frontend build PASS
 and `git diff --check` PASS. No production deploy, no real Meta send, no
 schema/migration and no Demo `****6787` repair/mutation occurred.
+
+## Campaign Result Truth canonical 12/13 corrective - 2026-09-18
+
+Status: P1 VALIDATED LOCAL AND READ-ONLY / OWNER REVIEW READY / NO DEPLOY.
+
+The initial synthetic fixture passed but did not reproduce the real production
+shape. Demo seed `****6787` used 13 digits and its delivered historical outbound
+used 12 digits, so literal reconciliation created an incorrect fallback row.
+The hard gate stopped validation. The corrective reuses
+`buildCrmWhatsappIdentityCandidates`, preserves every historical attempt and
+does not add schema or migration. A read-only replay against the actual campaign
+records now yields 2 visible rows, delivered 1, blocked 1, pending 0, technical
+failures 0 and `Entrega parcial`. No CRA send, provider call, identity repair,
+production mutation or deploy occurred. Validation: 118/118 + 56/56 + 72/72
+PASS.

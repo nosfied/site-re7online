@@ -29827,8 +29827,15 @@ function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMet
   );
 }
 
-function campaignRecipientIdentityKey(value: string) {
-  return canonicalizeBrazilWaId(normalizeWaIdDigits(value)) ?? value;
+function campaignRecipientIdentityCandidates(value: string) {
+  return new Set(buildCrmWhatsappIdentityCandidates([value]));
+}
+
+function campaignRecipientIdentitiesMatch(left: Set<string>, right: Set<string>) {
+  for (const candidate of left) {
+    if (right.has(candidate)) return true;
+  }
+  return false;
 }
 
 function campaignMetaStatusRank(status: CampaignMetaStatus["status"]) {
@@ -29874,20 +29881,33 @@ function buildCampaignRecipientResultStatuses(params: {
   seed: CampaignDraftSeed;
   resultItems: CampaignMetaStatus[];
 }) {
-  const resultsByIdentity = new Map<string, CampaignMetaStatus[]>();
-  params.resultItems.forEach((item) => {
-    const key = campaignRecipientIdentityKey(item.waId);
-    resultsByIdentity.set(key, [...(resultsByIdentity.get(key) ?? []), item]);
-  });
+  const indexedResults = params.resultItems.map((item, index) => ({
+    index,
+    item,
+    candidates: campaignRecipientIdentityCandidates(item.waId),
+  }));
 
   const visibleItems: CampaignMetaStatus[] = [];
-  const consumedKeys = new Set<string>();
+  const consumedResultIndexes = new Set<number>();
+  const consumedSeedIdentities: Set<string>[] = [];
   params.seed.recipients.forEach((waId, index) => {
-    const key = campaignRecipientIdentityKey(waId);
-    const matchingItems = resultsByIdentity.get(key);
-    if (matchingItems?.length) {
-      visibleItems.push(pickCampaignRecipientStatus(matchingItems));
-      consumedKeys.add(key);
+    const seedCandidates = campaignRecipientIdentityCandidates(waId);
+    if (
+      consumedSeedIdentities.some((candidates) =>
+        campaignRecipientIdentitiesMatch(candidates, seedCandidates)
+      )
+    ) {
+      return;
+    }
+    consumedSeedIdentities.push(seedCandidates);
+    const matchingResults = indexedResults.filter(
+      (result) =>
+        !consumedResultIndexes.has(result.index) &&
+        campaignRecipientIdentitiesMatch(seedCandidates, result.candidates)
+    );
+    if (matchingResults.length) {
+      visibleItems.push(pickCampaignRecipientStatus(matchingResults.map((result) => result.item)));
+      matchingResults.forEach((result) => consumedResultIndexes.add(result.index));
       return;
     }
     const fallbackSeed = { ...params.seed, recipients: [waId] };
@@ -29903,8 +29923,15 @@ function buildCampaignRecipientResultStatuses(params: {
     );
   });
 
-  params.resultItems.forEach((item) => {
-    if (!consumedKeys.has(campaignRecipientIdentityKey(item.waId))) visibleItems.push(item);
+  indexedResults.forEach((result) => {
+    if (consumedResultIndexes.has(result.index)) return;
+    const matchingResults = indexedResults.filter(
+      (candidate) =>
+        !consumedResultIndexes.has(candidate.index) &&
+        campaignRecipientIdentitiesMatch(result.candidates, candidate.candidates)
+    );
+    visibleItems.push(pickCampaignRecipientStatus(matchingResults.map((candidate) => candidate.item)));
+    matchingResults.forEach((candidate) => consumedResultIndexes.add(candidate.index));
   });
   return visibleItems;
 }
@@ -35453,16 +35480,17 @@ async function buildCampaignDetailPayload(
       error: String(payload.label ?? "Destinatário bloqueado antes do envio."),
     };
   });
-  const resultIdentityKeys = new Set(
-    [...messagesMetaStatus, ...optOutMetaStatus, ...importBlockedMetaStatus].map(
-      (item) => campaignRecipientIdentityKey(item.waId)
-    )
+  const resultItems = [...messagesMetaStatus, ...optOutMetaStatus, ...importBlockedMetaStatus];
+  const resultIdentityCandidates = resultItems.map((item) =>
+    campaignRecipientIdentityCandidates(item.waId)
   );
   const fallbackDraftSeed = {
     ...draftSeed,
     recipients: draftSeed.recipients.filter((waId) => {
-      const key = campaignRecipientIdentityKey(waId);
-      return !resultIdentityKeys.has(key);
+      const seedCandidates = campaignRecipientIdentityCandidates(waId);
+      return !resultIdentityCandidates.some((candidates) =>
+        campaignRecipientIdentitiesMatch(seedCandidates, candidates)
+      );
     }),
   };
   const draftReview = {
@@ -35494,7 +35522,7 @@ async function buildCampaignDetailPayload(
       : buildCampaignRecipientResultStatuses({
           campaign,
           seed: draftSeed,
-          resultItems: [...messagesMetaStatus, ...optOutMetaStatus, ...importBlockedMetaStatus],
+          resultItems,
         });
   return {
     ok: true,

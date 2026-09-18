@@ -139,3 +139,14 @@ Local validation on 2026-09-18:
 
 Owner visual review PASS; production deployment and CRA customer acceptance remain
 pending.
+
+## Shared campaign identity projection follow-up - 2026-09-18
+
+Campaign Detail production validation exposed a 13-digit seed associated with a
+historical 12-digit outbound for one canonical recipient. The P1 correction is
+confined to Campaign Result Truth and reuses the same
+`buildCrmWhatsappIdentityCandidates` semantics already used by this Contacts x
+Campaigns read model. Contacts data, relationship storage and API contracts are
+unchanged. Focused `crmCapabilityRoutes.test.ts` coverage remains green inside
+the 72/72 Contacts/channel/billing matrix, including same-tenant scope and
+cross-tenant denial. No shadow history, schema, migration or deploy was added.

@@ -526,3 +526,15 @@ complete discard reset. Re-entry starts pristine. Intentional drafts,
 scheduled/sending/completed campaigns and execution history are outside this
 cleanup boundary. CSV preview is read-only; CRM upserts happen only at explicit
 draft creation and are not silently reversed. No schema/migration or deploy.
+
+Campaign Result Truth canonical 12/13 corrective (2026-09-18): P1 VALIDATED
+LOCAL AND READ-ONLY / OWNER REVIEW READY / NO DEPLOY. Production validation of
+`Campanha teste set.2` disproved the earlier synthetic fixture: the seed held
+the delivered recipient in 13-digit form while its historical outbound held
+the 12-digit form. The projection now reuses the canonical CRM/Identity P1
+candidate semantics and associates evidence without changing historical rows.
+Actual production records replay to exactly two visible outcomes: delivered
+`****6787`, blocked `****9614`, no pending or technical failure, `Entrega
+parcial`. Tests: 118/118 + 56/56 + 72/72 PASS. Schema unchanged; no migration,
+send, repair or deploy. Campaign Composer Cleanup remains deployed with its own
+production validation pending.

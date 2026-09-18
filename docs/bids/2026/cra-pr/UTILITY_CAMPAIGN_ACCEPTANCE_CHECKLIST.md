@@ -480,3 +480,19 @@ Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
 - Explicit CSV draft creation may commit canonical CRM upserts; later draft
   discard does not silently roll them back.
 - Local implementation is pending owner review; no Utility send was executed.
+
+## Result Truth canonical 12/13 corrective gate - 2026-09-18
+
+- Initial synthetic validation missed the actual 13-digit seed / 12-digit
+  outbound representation and production validation stopped on a false
+  `****6787` missing-history failure.
+- The projection now reuses canonical Identity P1 equivalence; no historical
+  campaign, outbound, event or billing record is changed.
+- Exact production-shape replay, read-only: 2 rows, 1 delivered, 1 blocked, 0
+  pending, 0 technical failures, `Entrega parcial`.
+- `****9614` remains a distinct pre-provider `identity_conflict`; provider
+  attempts remain zero and its separate repair gate is unchanged.
+- Validation: campaign backend 118/118, complementary matrices 56/56 and 72/72
+  PASS. Schema unchanged, migration none, no real send and no deploy.
+- Status: P1 VALIDATED LOCAL/READ-ONLY / OWNER REVIEW READY; post-deploy
+  production validation remains pending.

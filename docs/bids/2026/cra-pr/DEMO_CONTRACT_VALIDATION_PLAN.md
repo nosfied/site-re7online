@@ -774,3 +774,17 @@ boundary; schedule is available only after that boundary. Saved drafts and
 scheduled/sending/completed campaigns survive navigation, and closing progress
 does not cancel execution. No real send or production mutation was used for
 this lifecycle validation.
+
+## Campaign Result Truth P1 12/13 gate - 2026-09-18
+
+Status: CORRECTIVE VALIDATED / OWNER REVIEW READY / NO DEPLOY.
+
+The production validation gate discovered that the prior synthetic test did
+not model a 13-digit campaign seed associated with a historical 12-digit
+delivered outbound. The projection correction uses the established canonical
+identity candidates and changes no persisted data. Sanitized exact-shape,
+reverse-shape, multiple-attempt, real-fallback and cross-tenant regressions
+pass. The actual Demo records were replayed read-only and project 2 rows:
+`****6787` delivered and `****9614` blocked; totals are 2/1/1/0/0 and the label
+is `Entrega parcial`. This is product evidence only, not a new Demo send or CRA
+acceptance. Production validation after deployment remains pending.

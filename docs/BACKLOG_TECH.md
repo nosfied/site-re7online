@@ -194,6 +194,22 @@ ACTIVE P1:
    PASS read-only. Owner visual revalidation on this integrated branch is still
    pending.
 
+   P1 canonical 12/13-digit corrective, 2026-09-18: READY FOR OWNER REVIEW /
+   NO DEPLOY. The first synthetic result-truth test did not reproduce the real
+   persisted shape. Production validation at HEAD `6f63133d7c3bb09097a11c0b49eefa7b9f8383c3`
+   exposed a 13-digit seed and 12-digit delivered outbound for the same
+   `****6787` identity, creating a false missing-history failure. The hard gate
+   stopped validation. The projection now reuses
+   `buildCrmWhatsappIdentityCandidates`; it does not add a campaign normalizer
+   or rewrite history. Exact and reverse shapes, multiple real attempts,
+   genuine fallback, cross-tenant isolation and `****9614` blocked semantics are
+   covered. Read-only replay of the real records returns exactly 2 rows: 1
+   delivered, 1 blocked, 0 pending, 0 technical failures, `Entrega parcial`.
+   Validation: campaign backend 118/118, complementary matrices 56/56 and
+   72/72 PASS. Schema unchanged, migration none, no send, no repair. Canonical
+   record:
+   `docs/saas/CAMPAIGN_RESULT_TRUTH_CANONICAL_RECONCILIATION_2026-09-18.md`.
+
    Open controlled data action: Demo `****9614` historical identity residue.
    DATA REPAIR PREPARED / OWNER AUTHORIZATION REQUIRED / NO RESEND. Factory is
    fixed; do not reopen Identity P1 as an active product bug without new
