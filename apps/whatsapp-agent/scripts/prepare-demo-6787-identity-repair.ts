@@ -260,7 +260,7 @@ async function executeRepair() {
           tx.event.count({
             where: {
               clientId: client.id,
-              eventName: "billing.receptive_session.opened",
+              eventName: "billing.receptive_session.created",
               OR: [{ waId: { endsWith: "6787" } }, { waIdCanonical: { endsWith: "6787" } }],
             },
           }),
