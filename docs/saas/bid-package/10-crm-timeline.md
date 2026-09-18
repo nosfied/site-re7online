@@ -26,6 +26,13 @@ O CRM Timeline do Converta registra a jornada do contato/lead/cidadao ao longo d
 - dados capturados em fluxo/IA;
 - historico de campanhas/templates.
 
+Status local em 2026-09-18: a area Contacts/CRM possui implementacao local
+testada para relacionar contatos e campanhas sem criar historico paralelo em
+Contact. A lista mostra resumo compacto de campanhas por contato e o detalhe
+mostra historico recente com link para a campanha existente, usando fontes
+canonicas de campanha/outbound/eventos, same-tenant, sem valores financeiros na
+UX. Owner review, deploy e aceite CRA permanecem pendentes.
+
 ## CRM Conversacional
 
 O Converta organiza informacoes a partir das conversas, permitindo transformar interacoes em acompanhamento operacional.
@@ -60,4 +67,3 @@ Os status de CRM sao configuraveis por tenant e armazenados em configuracao oper
 - Campos e status devem ser definidos no onboarding.
 - Fluxos de IA/qualificacao precisam refletir o processo do tenant.
 - Dados pessoais devem ser tratados conforme LGPD.
-

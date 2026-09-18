@@ -159,14 +159,18 @@ PRINCIPLES AUDIT PASS / OWNER APPROVED LOCAL / DEPLOYED / PRODUCTION
 NON-DESTRUCTIVE VALIDATED em `cad9489c`. A revalidacao local do owner passou;
 import real e aceite CRA/customer permanecem pendentes.
 
-Contacts campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP. A area
-de Contacts/CRM deve expor historico e estado de campanhas por contato a partir
-das fontes canonicas ja persistidas (`Campaign`, `OutboundMessage`, billing,
-opt-out e eventos), sem criar modelo sombra de historico de campanha dentro de
-`Contact`. A lista deve evitar N+1, usando projecao agregada quando possivel, e
-o detalhe deve ser carregado sob demanda/expandido. Campos esperados: contagem
-de campanhas, ultima campanha, ultimo envio, template, delivery/read, motivo de
-falha, opt-out, motivo skipped/blocked, situacao CRM e navegacao para detalhe.
+Contacts campaign relationship view: CANONICALLY INTEGRATED / TEST VALIDATED /
+OWNER PASS / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP. A area de Contacts/CRM agora
+expoe uma projecao read-only de campanha por contato a partir de fontes
+canonicas ja persistidas (`Campaign`, `OutboundMessage` e eventos de campanha),
+sem criar historico sombra dentro de `Contact`, sem schema/migration e sem
+reescrever campanha/billing/opt-out. A lista mostra resumo compacto de
+campanhas para a pagina atual e o detalhe carrega historico recente sob demanda,
+same-tenant, sem N+1 por linha. A UX mostra apenas status operacional, sem preco
+ou custo. Validacao local: `crmCapabilityRoutes.test.ts` 19/19 PASS em
+`re7_queue_domain_test_20260917`, backend build PASS, frontend build PASS e
+`git diff --check` PASS. Owner review, producao e aceite CRA permanecem
+pendentes.
 
 ## Campanhas
 
@@ -201,8 +205,8 @@ must not absorb new requirements. Recipient B controlled Utility validation,
 opt-out E2E and reports/exports/billing Phase E are completed on Demo product
 evidence; CRA customer acceptance remains separate. The current CRA order is:
 campaign/CRM import/upsert/report with `Situação no CRM`, contacts campaign
-relationship view, final reports/export/billing package with CRA-approved scope
-and unit price, then acceptance package. The CRM import front is IMPLEMENTED /
+relationship view owner pass/production gate, final reports/export/billing
+package with CRA-approved scope and unit price, then acceptance package. The CRM import front is IMPLEMENTED /
 TEST VALIDATED / PRINCIPLES AUDIT PASS / OWNER APPROVED LOCAL / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED and is not only an optional
 column: it is tenant-scoped CRM upsert. Existing contacts update instead of
 duplicating; valid imported name may update the record; blank cells preserve
@@ -1072,7 +1076,7 @@ longer expose price/cost/tariff/Meta-rate estimates to the customer UX.
 Lifecycle tabs now map to persisted states (`Enviando`, `Agendadas`,
 `Concluídas`), the progress/detail modal observes backend state and can be
 closed without cancelling execution, and recipient detail surfaces persisted
-blocked/skipped/pending/opt-out result truth. Local validation: UI contract 6/6
+blocked/skipped/pending/opt-out result truth. Canonical integration validation: UI contract 6/6
 PASS, `campaignsFeatureRoutes.test.ts` 114/114 PASS, backend/frontend builds
 PASS and `git diff --check` PASS. Production validation: backup
 `/opt/re7online/backups/campaign-ux-result-truth-20260918-112226`, health/db

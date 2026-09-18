@@ -913,6 +913,230 @@ test("CRM contacts read model lists tenant-scoped leads with safe identifiers", 
   assert.equal(instagram.templateSendBlockedReason, "not_whatsapp");
 });
 
+test("CRM contact campaign relationship uses canonical campaign evidence without cross-tenant leakage", async () => {
+  const deliveredCampaign = await prisma.campaign.create({
+    data: {
+      clientId: businessClientId,
+      name: "Campanha CRM Entregue",
+      templateName: "data_exame",
+      status: "completed",
+      totalRecipients: 1,
+      sentCount: 1,
+      createdAt: new Date("2026-09-01T10:00:00.000Z"),
+      updatedAt: new Date("2026-09-01T10:05:00.000Z"),
+    },
+  });
+  await prisma.event.create({
+    data: {
+      clientId: businessClientId,
+      waId: `${prefix}-lead-waid`,
+      waIdCanonical: `${prefix}-lead-waid`,
+      eventName: "campaign.seed.saved",
+      messageId: deliveredCampaign.id,
+      requestId: `${prefix}-campaign-seed`,
+      payloadJson: {
+        leadIds: [leadId],
+        recipients: [`${prefix}-lead-waid`],
+      },
+      createdAt: new Date("2026-09-01T10:00:00.000Z"),
+    },
+  });
+  await prisma.outboundMessage.create({
+    data: {
+      clientId: businessClientId,
+      waId: `${prefix}-lead-waid`,
+      waIdCanonical: `${prefix}-lead-waid`,
+      messageId: `campaign.${deliveredCampaign.id}.1`,
+      type: "TEMPLATE",
+      status: "SENT",
+      templateName: "data_exame",
+      rawPayload: {
+        campaignId: deliveredCampaign.id,
+        metaStatus: {
+          lastStatus: "delivered",
+          lastStatusAt: "2026-09-01T10:06:00.000Z",
+        },
+      },
+      createdAt: new Date("2026-09-01T10:01:00.000Z"),
+    },
+  });
+  const optOutCampaign = await prisma.campaign.create({
+    data: {
+      clientId: businessClientId,
+      name: "Campanha CRM Opt-out",
+      templateName: "data_exame",
+      status: "completed",
+      totalRecipients: 1,
+      blockedCount: 1,
+      createdAt: new Date("2026-09-02T10:00:00.000Z"),
+      updatedAt: new Date("2026-09-02T10:00:00.000Z"),
+    },
+  });
+  await prisma.event.create({
+    data: {
+      clientId: businessClientId,
+      waId: `${prefix}-lead-waid`,
+      waIdCanonical: `${prefix}-lead-waid`,
+      eventName: "campaign.recipient.opt_out_blocked",
+      messageId: optOutCampaign.id,
+      requestId: `${prefix}-campaign-optout`,
+      payloadJson: { reason: "opt_out" },
+      createdAt: new Date("2026-09-02T10:00:00.000Z"),
+    },
+  });
+  const conflictCampaign = await prisma.campaign.create({
+    data: {
+      clientId: businessClientId,
+      name: "Campanha CRM Conflito",
+      templateName: "data_exame",
+      status: "blocked",
+      totalRecipients: 1,
+      blockedCount: 1,
+      createdAt: new Date("2026-09-03T10:00:00.000Z"),
+      updatedAt: new Date("2026-09-03T10:00:00.000Z"),
+    },
+  });
+  await prisma.event.create({
+    data: {
+      clientId: businessClientId,
+      waId: `${prefix}-lead-waid`,
+      waIdCanonical: `${prefix}-lead-waid`,
+      eventName: "campaign.recipient.import_blocked",
+      messageId: conflictCampaign.id,
+      requestId: `${prefix}-campaign-conflict`,
+      payloadJson: { recipient: `${prefix}-lead-waid`, reason: "identity_conflict" },
+      createdAt: new Date("2026-09-03T10:00:00.000Z"),
+    },
+  });
+  await prisma.campaign.create({
+    data: {
+      clientId: governmentClientId,
+      name: "Campanha Outro Tenant",
+      templateName: "data_exame",
+      status: "completed",
+      totalRecipients: 1,
+      sentCount: 1,
+      createdAt: new Date("2026-09-04T10:00:00.000Z"),
+      updatedAt: new Date("2026-09-04T10:00:00.000Z"),
+    },
+  });
+
+  const list = await request<{
+    ok: boolean;
+    items: Array<{
+      leadId: string;
+      crmStatusLabel: string;
+      campaignRelationship: {
+        campaignCount: number;
+        latestCampaignId: string | null;
+        latestCampaignName: string | null;
+        latestRecipientStatus: string | null;
+        latestResultReason: string | null;
+        hasOptOutBlock: boolean;
+      };
+    }>;
+  }>("GET", "/app/crm/contacts?limit=20", businessAdmin);
+
+  assert.equal(list.status, 200);
+  const contact = list.body.items.find((item) => item.leadId === leadId);
+  assert.ok(contact);
+  assert.equal(contact.crmStatusLabel, "Retorno futuro");
+  assert.equal(contact.campaignRelationship.campaignCount, 3);
+  assert.equal(contact.campaignRelationship.latestCampaignId, conflictCampaign.id);
+  assert.equal(contact.campaignRelationship.latestCampaignName, "Campanha CRM Conflito");
+  assert.equal(contact.campaignRelationship.latestRecipientStatus, "IDENTITY_CONFLICT");
+  assert.equal(contact.campaignRelationship.latestResultReason, "identity_conflict");
+  assert.equal(contact.campaignRelationship.hasOptOutBlock, true);
+  assert.doesNotMatch(JSON.stringify(list.body), /Campanha Outro Tenant|R\$|USD|billing|contractPrice/i);
+
+  const detail = await request<{
+    ok: boolean;
+    item: {
+      campaignRelationship: { campaignCount: number; latestCampaignId: string | null };
+    };
+    campaignRelationshipHistory: {
+      items: Array<{
+        campaignId: string;
+        campaignName: string;
+        recipientStatus: string;
+        resultReason: string | null;
+        deliveredAt: string | null;
+        campaignHref: string;
+      }>;
+      pagination: { total: number; hasMore: boolean };
+    };
+  }>("GET", `/app/crm/contacts/${encodeURIComponent(leadId)}`, businessAdmin);
+
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.item.campaignRelationship.campaignCount, 3);
+  assert.equal(detail.body.campaignRelationshipHistory.pagination.total, 3);
+  assert.equal(detail.body.campaignRelationshipHistory.pagination.hasMore, false);
+  assert.equal(detail.body.campaignRelationshipHistory.items[0]?.campaignId, conflictCampaign.id);
+  assert.equal(detail.body.campaignRelationshipHistory.items[0]?.campaignHref, `/app/campaigns?campaignId=${encodeURIComponent(conflictCampaign.id)}`);
+  assert.equal(
+    detail.body.campaignRelationshipHistory.items.find((item) => item.campaignId === deliveredCampaign.id)?.recipientStatus,
+    "DELIVERED"
+  );
+  assert.ok(detail.body.campaignRelationshipHistory.items.find((item) => item.campaignId === deliveredCampaign.id)?.deliveredAt);
+  assert.equal(
+    detail.body.campaignRelationshipHistory.items.find((item) => item.campaignId === optOutCampaign.id)?.recipientStatus,
+    "OPT_OUT"
+  );
+  assert.doesNotMatch(JSON.stringify(detail.body), /Campanha Outro Tenant|R\$|USD|billing|contractPrice/i);
+});
+
+test("CRM contact campaign relationship list projection remains bounded with 500 contacts", async () => {
+  const createdAt = new Date("2026-09-05T10:00:00.000Z");
+  await prisma.lead.createMany({
+    data: Array.from({ length: 500 }, (_, index) => ({
+      tenantId: businessClientId,
+      waId: `${prefix}-perf-${index}`,
+      waIdCanonical: `${prefix}-perf-${index}`,
+      phone: `5511888${String(index).padStart(6, "0")}`,
+      name: `Contato Performance ${index}`,
+      status: "QUALIFIED",
+      createdAt,
+      updatedAt: createdAt,
+    })),
+  });
+
+  const page20StartedAt = Date.now();
+  const page20 = await request<{ ok: boolean; items: Array<{ campaignRelationship: { campaignCount: number } }> }>(
+    "GET",
+    "/app/crm/contacts?limit=20",
+    businessAdmin
+  );
+  const page20DurationMs = Date.now() - page20StartedAt;
+  assert.equal(page20.status, 200);
+  assert.equal(page20.body.ok, true);
+  assert.ok(page20.body.items.length <= 20);
+  assert.ok(page20DurationMs < 2_500);
+
+  const page100StartedAt = Date.now();
+  const page100 = await request<{ ok: boolean; items: Array<{ campaignRelationship: { campaignCount: number } }> }>(
+    "GET",
+    "/app/crm/contacts?limit=100",
+    businessAdmin
+  );
+  const page100DurationMs = Date.now() - page100StartedAt;
+  assert.equal(page100.status, 200);
+  assert.equal(page100.body.ok, true);
+  assert.ok(page100.body.items.length <= 100);
+  assert.ok(page100DurationMs < 2_500);
+
+  const page3StartedAt = Date.now();
+  const page3 = await request<{ ok: boolean; items: Array<{ campaignRelationship: { campaignCount: number } }> }>(
+    "GET",
+    "/app/crm/contacts?limit=200&page=3",
+    businessAdmin
+  );
+  const page3DurationMs = Date.now() - page3StartedAt;
+  assert.equal(page3.status, 200);
+  assert.equal(page3.body.ok, true);
+  assert.ok(page3.body.items.length >= 100);
+  assert.ok(page3DurationMs < 2_500);
+});
+
 test("CRM contacts read model supports filters and partial records", async () => {
   const byStatus = await request<{ ok: boolean; items: Array<{ crmStatus: string }> }>(
     "GET",

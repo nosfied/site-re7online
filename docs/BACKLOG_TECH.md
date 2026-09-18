@@ -305,19 +305,22 @@ ACTIVE P1:
    reloaded; this is operational state, not a product defect. Completion
    telemetry and the broader lint baseline remain WATCH.
 
-6. Contacts - campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP.
-   Contacts/CRM must expose campaign-related history and state without
-   duplicating campaign source-of-truth data inside Contact. Per contact, when
-   applicable, show campaign count, last campaign, last send timestamp,
-   template used, delivery/read status, failed reason, opt-out status,
-   skipped/blocked reason, CRM Situation and navigation to campaign/history
-   detail. Canonical source remains existing campaign/outbound/billing/opt-out
-   records; do not create a shadow campaign-history model in Contact.
-   Multitenant scope is same-tenant only. Performance must avoid N+1 per
-   contact row, preferring aggregate/list projection plus on-demand expanded
-   detail. UX should follow the approved expandable administrative-row pattern
-   where appropriate. CRA relevance: campaign/contact traceability and
-   acceptance evidence.
+6. Contacts - campaign relationship view: CANONICALLY INTEGRATED / TEST
+   VALIDATED / OWNER PASS / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP. Implemented
+   in the CRM/Contacts area as a read-only projection from canonical
+   `Campaign`, `OutboundMessage` and campaign event evidence. Contact list now
+   shows compact campaign count, latest campaign/date/template/status, and the
+   contact detail drawer shows recent campaign history with navigation to the
+   existing campaign detail route. No Contact-owned shadow campaign-history
+   model, schema or migration was added; no campaign/billing history was
+   rewritten. Scope is same-tenant only and the list uses one bounded aggregate
+   projection for the current page plus on-demand detail to avoid per-row N+1.
+   Customer UX exposes operational statuses only, with no price/cost fields.
+   Validation on safe local DB `re7_queue_domain_test_20260917`:
+   `crmCapabilityRoutes.test.ts` 19/19 PASS including same-phone/cross-tenant
+   isolation, delivered status, opt-out block, identity conflict, detail link
+   and no financial strings; backend build PASS; frontend build PASS; diff
+   check PASS. CRA customer acceptance and production deployment remain pending.
 
 7. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente

@@ -17,6 +17,13 @@ import {
   isActiveOperationalBlockingConversation,
   isHiddenTechnicalBlockingConversation,
 } from "./crmContactMutations.js";
+import {
+  buildCrmCampaignRelationshipDetail,
+  buildCrmCampaignRelationshipSummaryByLeadId,
+  EMPTY_CRM_CAMPAIGN_RELATIONSHIP_SUMMARY,
+  type CrmCampaignRelationshipDetail,
+  type CrmCampaignRelationshipSummary,
+} from "./crmCampaignRelationship.js";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -73,6 +80,7 @@ export type CrmContactListItem = {
   hasValidWhatsappIdentity: boolean;
   canStartWhatsappTemplateCandidate: boolean;
   hasOpenConversationWindow: boolean | null;
+  campaignRelationship: CrmCampaignRelationshipSummary;
   templateSendBlockedReason:
     | "not_whatsapp"
     | "missing_phone"
@@ -153,6 +161,7 @@ export type CrmContactDetailPayload = {
     notesCount: number;
   };
   conversations: CrmContactDetailConversation[];
+  campaignRelationshipHistory: CrmCampaignRelationshipDetail;
   blockingConversation: CrmContactBlockingConversation | null;
   generatedAt: string;
 };
@@ -467,6 +476,7 @@ export async function buildCrmContactsPayload(
       | null;
     now?: Date;
     includeAnonymized?: boolean;
+    includeCampaignRelationships?: boolean;
   }
 ): Promise<CrmContactsPayload> {
   const q = normalizeOptionalText(params.query.q);
@@ -740,7 +750,7 @@ export async function buildCrmContactsPayload(
     if (source) importSourceByKey.set(key, source);
   }
 
-  const allItems = leads
+  const allItemsWithInternal = leads
     .map((lead) => {
       const key = getIdentityKey(lead);
       const canonical = lead.waIdCanonical ?? lead.waId;
@@ -825,10 +835,12 @@ export async function buildCrmContactsPayload(
         importedSource: importSourceByKey.get(canonical) ?? null,
         ...templateCandidate,
         hasOpenConversationWindow: lastConversation ? lastConversation.windowIsOpen : null,
+        campaignRelationship: { ...EMPTY_CRM_CAMPAIGN_RELATIONSHIP_SUMMARY },
         createdAt: lead.createdAt.toISOString(),
         updatedAt: lead.updatedAt.toISOString(),
+        campaignIdentityKeys: leadCandidates,
         isOperationalContact,
-      } satisfies CrmContactListItem & { isOperationalContact: boolean };
+      } satisfies CrmContactListItem & { isOperationalContact: boolean; campaignIdentityKeys: string[] };
     })
     .filter((item) => {
       if (!item.isOperationalContact) return false;
@@ -840,8 +852,25 @@ export async function buildCrmContactsPayload(
     })
     .map(({ isOperationalContact: _isOperationalContact, ...item }) => item);
 
-  const total = requiresPostFilter ? allItems.length : totalBeforePostFilter;
-  const pagedItems = requiresPostFilter ? allItems.slice((page - 1) * limit, page * limit) : allItems;
+  const total = requiresPostFilter ? allItemsWithInternal.length : totalBeforePostFilter;
+  const pagedItemsWithInternal = requiresPostFilter
+    ? allItemsWithInternal.slice((page - 1) * limit, page * limit)
+    : allItemsWithInternal;
+  const campaignSummaryByLeadId =
+    params.includeCampaignRelationships === true && pagedItemsWithInternal.length > 0
+      ? await buildCrmCampaignRelationshipSummaryByLeadId(prisma, {
+          clientId: params.clientId,
+          contacts: pagedItemsWithInternal.map((item) => ({
+            leadId: item.leadId,
+            identityKeys: item.campaignIdentityKeys,
+          })),
+        })
+      : new Map<string, CrmCampaignRelationshipSummary>();
+  const pagedItems = pagedItemsWithInternal.map(({ campaignIdentityKeys: _campaignIdentityKeys, ...item }) => ({
+    ...item,
+    campaignRelationship:
+      campaignSummaryByLeadId.get(item.leadId) ?? { ...EMPTY_CRM_CAMPAIGN_RELATIONSHIP_SUMMARY },
+  }));
   const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
 
   return {
@@ -883,6 +912,7 @@ export async function buildCrmContactDetailPayload(
       | null;
     now?: Date;
     includeOperationallyExcluded?: boolean;
+    includeCampaignRelationships?: boolean;
   }
 ): Promise<CrmContactDetailPayload | null> {
   const statusLabelById = buildStatusLabelMap(params.statuses);
@@ -1134,6 +1164,15 @@ export async function buildCrmContactDetailPayload(
       safePayloadString(event.payloadJson, ["source", "importedSource", "origin", "fileName", "classification"])
     )
     .find((value): value is string => Boolean(value)) ?? null;
+  const campaignRelationship =
+    params.includeCampaignRelationships === true
+      ? await buildCrmCampaignRelationshipDetail(prisma, {
+          clientId: params.clientId,
+          leadId: lead.id,
+          identityKeys,
+        })
+      : { items: [], pagination: { limit: 25, hasMore: false, total: 0 } };
+  const campaignSummary = summarizeDetailCampaignRelationship(campaignRelationship);
   const latestConversation = conversations[0] ?? null;
   const latestRuntime = latestConversation ? runtimeByKey.get(getIdentityKey(latestConversation)) ?? null : null;
   const blockingRuntime =
@@ -1197,6 +1236,7 @@ export async function buildCrmContactDetailPayload(
       importedSource: importSource,
       ...templateCandidate,
       hasOpenConversationWindow: latestConversation ? latestConversation.windowIsOpen : null,
+      campaignRelationship: campaignSummary,
       createdAt: lead.createdAt.toISOString(),
       updatedAt: lead.updatedAt.toISOString(),
       contactIdentity: identity
@@ -1232,7 +1272,24 @@ export async function buildCrmContactDetailPayload(
         createdAt: conversation.createdAt.toISOString(),
       };
     }),
+    campaignRelationshipHistory: campaignRelationship,
     blockingConversation,
     generatedAt: (params.now ?? new Date()).toISOString(),
+  };
+}
+
+function summarizeDetailCampaignRelationship(detail: CrmCampaignRelationshipDetail): CrmCampaignRelationshipSummary {
+  if (detail.items.length === 0) return { ...EMPTY_CRM_CAMPAIGN_RELATIONSHIP_SUMMARY };
+  const latest = detail.items[0];
+  return {
+    campaignCount: detail.pagination.total,
+    latestCampaignId: latest.campaignId,
+    latestCampaignName: latest.campaignName,
+    latestCampaignAt: latest.campaignAt,
+    latestTemplate: latest.templateName,
+    latestRecipientStatus: latest.recipientStatus,
+    latestResultReason: latest.resultReason,
+    hasOptOutBlock: detail.items.some((item) => item.hasOptOutBlock),
+    latestDeliveredAt: latest.deliveredAt,
   };
 }

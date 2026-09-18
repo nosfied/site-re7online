@@ -96,14 +96,16 @@ Follow-up de 2026-09-16:
   `apps/whatsapp-web-worker/.data/` permaneceu intacta e o worker nao foi
   recarregado. P2 residual:
   resolucao canonica sequencial por linha para posterior hardening de escala.
-- Contacts campaign relationship view: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP.
-  Contacts/CRM deve mostrar historico/estado de campanhas por contato quando
-  aplicavel, incluindo contagem, ultima campanha, ultimo envio, template,
-  status entregue/lido/falha, motivo de falha, opt-out, motivo de skip/bloqueio,
-  situacao CRM e navegacao para detalhe. Fonte canonica continua sendo
-  campaign/outbound/billing/opt-out/eventos ja persistidos; nao criar historico
-  sombra dentro de Contact. Consulta deve ser same-tenant e evitar N+1,
-  preferindo agregados na lista e detalhe sob demanda.
+- Contacts campaign relationship view: CANONICALLY INTEGRATED / TEST VALIDATED /
+  OWNER PASS / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP. Contacts/CRM mostra
+  resumo de campanhas por contato na lista e historico recente no detalhe,
+  usando `Campaign`, `OutboundMessage` e eventos canonicos ja persistidos.
+  Nao cria historico sombra dentro de Contact, nao altera schema/migration,
+  nao reescreve campanha/billing/opt-out, consulta same-tenant e evita N+1 por
+  linha com projecao agregada por pagina mais detalhe sob demanda. A UX nao
+  mostra preco/custo. Validacao local: `crmCapabilityRoutes.test.ts` 19/19
+  PASS, backend build PASS, frontend build PASS, diff check PASS. Owner review,
+  deploy e aceite CRA ainda pendentes.
 - Meta Marketing template media support: P2 / PRODUCT + META CAPABILITY.
   Inclui categoria MARKETING, headers IMAGE/VIDEO, exemplos/midia Meta,
   upload/handle, preview, variaveis, botoes suportados, submissao, status,

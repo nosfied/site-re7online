@@ -374,6 +374,7 @@ export type AppCrmContactItem = {
   hasValidWhatsappIdentity: boolean;
   canStartWhatsappTemplateCandidate: boolean;
   hasOpenConversationWindow: boolean | null;
+  campaignRelationship: AppCrmCampaignRelationshipSummary;
   templateSendBlockedReason:
     | "not_whatsapp"
     | "missing_phone"
@@ -383,6 +384,42 @@ export type AppCrmContactItem = {
     | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type AppCrmCampaignRelationshipStatus =
+  | "PENDING"
+  | "SENT"
+  | "ACCEPTED"
+  | "DELIVERED"
+  | "READ"
+  | "FAILED"
+  | "BLOCKED"
+  | "OPT_OUT"
+  | "SKIPPED"
+  | "IDENTITY_CONFLICT";
+
+export type AppCrmCampaignRelationshipSummary = {
+  campaignCount: number;
+  latestCampaignId: string | null;
+  latestCampaignName: string | null;
+  latestCampaignAt: string | null;
+  latestTemplate: string | null;
+  latestRecipientStatus: AppCrmCampaignRelationshipStatus | null;
+  latestResultReason: string | null;
+  hasOptOutBlock: boolean;
+  latestDeliveredAt: string | null;
+};
+
+export type AppCrmCampaignRelationshipHistoryItem = {
+  campaignId: string;
+  campaignName: string;
+  campaignAt: string;
+  templateName: string | null;
+  recipientStatus: AppCrmCampaignRelationshipStatus;
+  resultReason: string | null;
+  deliveredAt: string | null;
+  hasOptOutBlock: boolean;
+  campaignHref: string;
 };
 
 export type AppCrmContactConversationItem = {
@@ -414,6 +451,14 @@ export type AppCrmContactDetailResponse = {
     notesCount: number;
   };
   conversations: AppCrmContactConversationItem[];
+  campaignRelationshipHistory: {
+    items: AppCrmCampaignRelationshipHistoryItem[];
+    pagination: {
+      limit: number;
+      hasMore: boolean;
+      total: number;
+    };
+  };
   blockingConversation: AppHiddenBlockingConversation | null;
   createStatus?: "created" | "existing_active" | "reused";
   existingContact?: AppCrmExistingContactResolution | null;
