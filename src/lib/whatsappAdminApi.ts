@@ -533,7 +533,7 @@ export type CampaignItem = {
   messagesMetaStatus?: Array<{
     waId: string;
     templateName: string | null;
-    status: "sent" | "delivered" | "read" | "failed";
+    status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out";
     sentAt: string | null;
     deliveredAt: string | null;
     billable: boolean;

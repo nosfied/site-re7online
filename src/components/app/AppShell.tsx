@@ -1262,7 +1262,7 @@ export default function AppShell({
   return (
     <main className="theme-bg theme-workspace min-h-screen overflow-x-hidden px-3 py-3 sm:px-4 lg:px-5">
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-2.5">
-        <header className="theme-surface-strong theme-shadow fixed left-3 right-3 top-[calc(0.5rem+var(--safe-top))] z-50 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border px-3 py-1.5 backdrop-blur sm:left-4 sm:right-4 sm:w-[calc(100%-2rem)] lg:left-5 lg:right-5 lg:top-2 lg:w-[calc(100%-2.5rem)]">
+        <header className="theme-surface-strong theme-shadow relative z-50 mx-auto w-full max-w-[1400px] rounded-xl border px-3 py-1.5 backdrop-blur sm:fixed sm:left-4 sm:right-4 sm:top-[calc(0.5rem+var(--safe-top))] sm:w-[calc(100%-2rem)] lg:left-5 lg:right-5 lg:top-2 lg:w-[calc(100%-2.5rem)]">
           <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[82px_minmax(0,1fr)_minmax(190px,auto)] lg:items-center lg:gap-2 min-[1441px]:grid-cols-[128px_minmax(0,1fr)_minmax(230px,auto)] min-[1441px]:gap-3">
             <div className="flex min-w-0 items-center justify-between gap-2 lg:flex lg:justify-center">
               {logoButton}
@@ -1297,7 +1297,7 @@ export default function AppShell({
           </div>
         </header>
         {!hideTitleBar ? (
-          <section className={`${titleSurface === "strong" ? "theme-surface-strong" : "theme-surface"} theme-shadow fixed left-3 right-3 top-[calc(170px+var(--safe-top))] z-40 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border px-3 py-2 backdrop-blur sm:left-4 sm:right-4 sm:top-[calc(184px+var(--safe-top))] sm:w-[calc(100%-2rem)] sm:px-4 lg:left-5 lg:right-5 lg:top-[92px] lg:w-[calc(100%-2.5rem)] lg:py-1.5 min-[1441px]:top-[138px] min-[1441px]:py-2`}>
+          <section className={`${titleSurface === "strong" ? "theme-surface-strong" : "theme-surface"} theme-shadow relative z-40 mx-auto w-full max-w-[1400px] rounded-xl border px-3 py-2 backdrop-blur sm:fixed sm:left-4 sm:right-4 sm:top-[calc(184px+var(--safe-top))] sm:w-[calc(100%-2rem)] sm:px-4 lg:left-5 lg:right-5 lg:top-[92px] lg:w-[calc(100%-2.5rem)] lg:py-1.5 min-[1441px]:top-[138px] min-[1441px]:py-2`}>
             <h1 className="text-base font-bold min-[1441px]:text-lg">{title}</h1>
             {subtitle ? <p className="theme-muted mt-0.5 text-xs min-[1441px]:text-sm">{subtitle}</p> : null}
           </section>
@@ -1307,8 +1307,8 @@ export default function AppShell({
           aria-hidden="true"
           className={
             hideTitleBar
-              ? "h-[166px] sm:h-[178px] lg:h-[86px] min-[1441px]:h-[130px]"
-              : "h-[230px] sm:h-[244px] lg:h-[144px] min-[1441px]:h-[196px]"
+              ? "hidden sm:block sm:h-[178px] lg:h-[86px] min-[1441px]:h-[130px]"
+              : "hidden sm:block sm:h-[244px] lg:h-[144px] min-[1441px]:h-[196px]"
           }
         />
 

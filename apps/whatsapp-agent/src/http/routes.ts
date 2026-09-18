@@ -143,6 +143,7 @@ import {
   previewCampaignRecipientImport,
   resolveCampaignRecipientImportPlan,
   resolveCampaignImportTemplate,
+  type CampaignImportBlockedReason,
   type CampaignImportMapping,
   type CampaignImportRecipientInput,
 } from "../campaigns/campaignRecipientImport.js";
@@ -16232,12 +16233,25 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             })),
           })
         : null;
+      const importBlockedCount = importPlan
+        ? importPlan.preview.summary.blockedByReason.reduce((total, item) => total + item.count, 0)
+        : 0;
       const recipientPayload = importPlan
         ? {
             waIds: importPlan.acceptedWaIds,
-            totalRecipients: importPlan.acceptedWaIds.length + importPlan.optOutBlocked.length,
+            totalRecipients: importPlan.preview.summary.received,
             optOutBlocked: importPlan.optOutBlocked,
             seedWaIds: waIds,
+            blockedCount: importBlockedCount,
+            blockedResults: importPlan.preview.errors,
+            summary: {
+              requested: importPlan.preview.summary.received,
+              accepted: importPlan.acceptedWaIds.length,
+              blocked: importBlockedCount,
+              duplicatesRemoved:
+                importPlan.preview.summary.duplicates + importPlan.preview.summary.existingDuplicates,
+              blockedByReason: importPlan.preview.summary.blockedByReason,
+            },
           }
         : await buildOptOutFilteredCampaignRecipients(prisma, {
             clientId: client.id,
@@ -29101,7 +29115,7 @@ function serializeCampaign(campaign: {
 type CampaignMetaStatus = {
   waId: string;
   templateName: string | null;
-  status: "sent" | "delivered" | "read" | "failed" | "opt_out";
+  status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out";
   sentAt: string | null;
   deliveredAt: string | null;
   billable: boolean;
@@ -29137,6 +29151,7 @@ type CampaignDraftSeed = {
 
 type CampaignDraftBlockedReason =
   | CampaignAudienceBlockedReason
+  | CampaignImportBlockedReason
   | "duplicate_recipient"
   | "variable_missing_value";
 
@@ -29762,6 +29777,8 @@ function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMet
           acc.totalDelivered += 1;
           break;
         case "opt_out":
+        case "blocked":
+        case "skipped":
         case "failed":
           acc.totalFailed += 1;
           break;
@@ -35282,10 +35299,50 @@ async function buildCampaignDetailPayload(
     templateName: campaign.templateName,
     outboundMessages,
   });
-  const optOutWaIds = new Set(optOutMetaStatus.map((item) => item.waId));
+  const importBlockEvents = await prisma.event.findMany({
+    where: {
+      clientId: params.clientId,
+      eventName: "campaign.recipient.import_blocked",
+      messageId: campaign.id,
+    },
+    orderBy: { createdAt: "asc" },
+    select: { payloadJson: true, createdAt: true },
+  });
+  const importBlockedMetaStatus: CampaignMetaStatus[] = importBlockEvents.map((event) => {
+    const payload =
+      event.payloadJson && typeof event.payloadJson === "object" && !Array.isArray(event.payloadJson)
+        ? (event.payloadJson as Record<string, unknown>)
+        : {};
+    const rowNumber = Number(payload.rowNumber);
+    const seedWaId = Number.isInteger(rowNumber) && rowNumber > 0
+      ? draftSeed.recipients[rowNumber - 1]
+      : null;
+    return {
+      waId: seedWaId ?? String(payload.recipient ?? "Destinatário protegido"),
+      templateName: campaign.templateName,
+      status: "blocked",
+      sentAt: null,
+      deliveredAt: null,
+      billable: false,
+      nonBillingReason: String(payload.reason ?? "recipient_blocked"),
+      pricingCategory: null,
+      pricingBillable: null,
+      pricingModel: null,
+      conversationId: null,
+      error: String(payload.label ?? "Destinatário bloqueado antes do envio."),
+    };
+  });
+  const resultIdentityKeys = new Set(
+    [...messagesMetaStatus, ...optOutMetaStatus, ...importBlockedMetaStatus].map(
+      (item) => canonicalizeBrazilWaId(normalizeWaIdDigits(item.waId)) ?? item.waId
+    )
+  );
   const fallbackDraftSeed = {
     ...draftSeed,
-    recipients: draftSeed.recipients.filter((waId) => !optOutWaIds.has(waId)),
+    recipients: draftSeed.recipients.filter((waId) => {
+      const key = canonicalizeBrazilWaId(normalizeWaIdDigits(waId)) ?? waId;
+      return !resultIdentityKeys.has(key);
+    }),
   };
   const draftReview = {
     summary: draftSeed.summary ?? {
@@ -35312,10 +35369,16 @@ async function buildCampaignDetailPayload(
       : draftSeed;
   const visibleMessagesMetaStatus =
     isDraftLikeCampaign
-      ? optOutMetaStatus
-      : messagesMetaStatus.length > 0
-        ? [...messagesMetaStatus, ...optOutMetaStatus]
-        : [...buildCampaignSeedFallbackStatusItems(campaign, fallbackDraftSeed), ...optOutMetaStatus];
+      ? [...optOutMetaStatus, ...importBlockedMetaStatus]
+      : [
+          ...messagesMetaStatus,
+          ...optOutMetaStatus,
+          ...importBlockedMetaStatus,
+          ...buildCampaignSeedFallbackStatusItems(
+            { ...campaign, sentCount: 0, blockedCount: 0 },
+            fallbackDraftSeed
+          ),
+        ];
   return {
     ok: true,
     campaign: {
@@ -35339,6 +35402,14 @@ async function createScopedCampaign(params: {
   optOutBlocked?: CampaignOptOutBlockedRecipient[];
   seedWaIds?: string[];
   manualRecipientInput?: string[];
+  blockedCount?: number;
+  blockedResults?: Array<{
+    rowNumber: number | null;
+    reason: string;
+    label: string;
+    phoneDisplay: string | null;
+  }>;
+  summary?: CampaignDraftRecipientSummary | null;
   components: Array<{
     type: "body";
     parameters: Array<{ type: "text"; text: string }>;
@@ -35353,16 +35424,35 @@ async function createScopedCampaign(params: {
     totalRecipients: params.totalRecipients ?? params.waIds.length,
   });
   const optOutBlocked = params.optOutBlocked ?? [];
-  if (optOutBlocked.length > 0) {
+  const blockedCount = params.blockedCount ?? optOutBlocked.length;
+  if (blockedCount > 0) {
     campaign = await getPrisma().campaign.update({
       where: { id: campaign.id },
-      data: { blockedCount: optOutBlocked.length },
+      data: { blockedCount },
     });
+  }
+  if (optOutBlocked.length > 0) {
     await recordCampaignOptOutBlocks({
       clientId: params.clientId,
       campaignId: campaign.id,
       templateName: params.templateName,
       blocked: optOutBlocked,
+    });
+  }
+  for (const [index, blocked] of (params.blockedResults ?? []).entries()) {
+    if (blocked.reason === "active_send_blocked") continue;
+    await persistEvent({
+      clientId: params.clientId,
+      messageId: campaign.id,
+      requestId: `campaign-recipient-import-blocked:${campaign.id}:${index + 1}`,
+      eventName: "campaign.recipient.import_blocked",
+      payloadJson: {
+        campaignId: campaign.id,
+        rowNumber: blocked.rowNumber,
+        recipient: blocked.phoneDisplay,
+        reason: blocked.reason,
+        label: blocked.label,
+      },
     });
   }
   const campaignRunId = startCampaignRun({
@@ -35386,6 +35476,7 @@ async function createScopedCampaign(params: {
     manualRecipientInput: params.manualRecipientInput,
     components: params.components,
     returnDestination: params.returnDestination,
+    summary: params.summary ?? null,
   });
   return { campaign, campaignRunId };
 }

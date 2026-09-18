@@ -10,7 +10,6 @@ import {
   AppCampaignImportPreview,
   AppCampaignReturnDestination,
   AppCampaignReturnDestinationsResponse,
-  AppMetaCostPreview,
   AppSession,
   AppTemplateItem,
   CrmBusinessStatusConfig,
@@ -20,11 +19,9 @@ import {
   createAppCampaignDraft,
   createAppCampaignDraftFromCsv,
   discardAppCampaignDraft,
-  exportAppCampaignConsumptionCsv,
   fetchAppCampaignAudiencePreview,
   fetchAppCampaignReturnDestinations,
   fetchAppCrmStatuses,
-  fetchAppMetaUsagePreview,
   getAppCampaign,
   listAppCampaigns,
   listAppTemplates,
@@ -37,7 +34,7 @@ import {
   sendAppCampaignDraft,
   sendAppCampaignTest,
 } from "@/lib/appClientApi";
-import { getBooleanUxLabel, getCampaignStatusUxLabel, getMetaTemplateCategoryUxLabel } from "@/lib/appUxLabels";
+import { getCampaignStatusUxLabel, getMetaTemplateCategoryUxLabel } from "@/lib/appUxLabels";
 import { CampaignItem, formatDateTime, normalizeWaIdList } from "@/lib/whatsappAdminApi";
 
 type CampaignFormState = {
@@ -73,7 +70,7 @@ type CampaignStatusFilter =
   | "cancelled"
   | "failed";
 
-type CampaignCenterTab = "create" | "drafts" | "sent" | "blocked" | "all";
+type CampaignCenterTab = "create" | "drafts" | "sending" | "scheduled" | "completed" | "blocked" | "all";
 type CampaignCreationPanel = "audience" | "csv" | "manual";
 
 type CampaignToastTone = "success" | "warning" | "error" | "info";
@@ -129,7 +126,9 @@ const STATUS_FILTER_OPTIONS: CampaignStatusFilter[] = [
 const CAMPAIGN_CENTER_TABS: Array<{ id: CampaignCenterTab; label: string }> = [
   { id: "create", label: "Criar campanha" },
   { id: "drafts", label: "Rascunhos" },
-  { id: "sent", label: "Enviadas" },
+  { id: "sending", label: "Enviando" },
+  { id: "scheduled", label: "Agendadas" },
+  { id: "completed", label: "Concluídas" },
   { id: "blocked", label: "Bloqueadas e falhas" },
   { id: "all", label: "Todas" },
 ];
@@ -278,25 +277,6 @@ function CampaignMessagePreview({ content, detail }: { content: string | null; d
   );
 }
 
-function formatUsd(value: number | null) {
-  if (value === null) return "Valor a confirmar";
-  return `US$ ${value.toLocaleString("pt-BR", {
-    minimumFractionDigits: value >= 1 ? 2 : 4,
-    maximumFractionDigits: 4,
-  })}`;
-}
-
-function countManualRecipientsInput(input: string) {
-  return Array.from(
-    new Set(
-      input
-        .split(/[\n,;]+/)
-        .map((item) => item.trim())
-        .filter(Boolean)
-    )
-  ).length;
-}
-
 function parseCsvHeadersForUi(input: string) {
   const firstLine = String(input ?? "").replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0] ?? "";
   if (!firstLine.trim()) return [];
@@ -333,64 +313,6 @@ function normalizeCsvHeaderForUi(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
-}
-
-function CostPreviewCard({ preview, loading, emptyText }: {
-  preview: AppMetaCostPreview | null;
-  loading?: boolean;
-  emptyText: string;
-}) {
-  const toneClass =
-    preview?.warningLevel === "danger"
-      ? "border-red-300/30 bg-red-950/20 text-red-100"
-      : preview?.warningLevel === "warning"
-        ? "border-amber-300/30 bg-amber-950/20 text-amber-100"
-        : "border-re7-sky/25 bg-re7-sky/10 text-sky-100";
-  if (loading) {
-    return (
-      <div className="rounded-md border border-white/10 bg-white/5 p-3 text-xs text-white/65">
-        Calculando estimativa Meta...
-      </div>
-    );
-  }
-  if (!preview) {
-    return (
-      <div className="rounded-md border border-white/10 bg-white/5 p-3 text-xs text-white/65">
-        {emptyText}
-      </div>
-    );
-  }
-  return (
-    <div className={`rounded-md border p-3 text-xs ${toneClass}`}>
-      <div className="grid gap-2 sm:grid-cols-3">
-        <div>
-          <p className="uppercase tracking-wide opacity-70">Categoria</p>
-          <p className="mt-1 font-semibold">{getMetaTemplateCategoryUxLabel(preview.metaCategory)}</p>
-        </div>
-        <div>
-          <p className="uppercase tracking-wide opacity-70">Unitário estimado</p>
-          <p className="mt-1 font-semibold">{formatUsd(preview.unitCostUsd)}</p>
-        </div>
-        <div>
-          <p className="uppercase tracking-wide opacity-70">Total estimado</p>
-          <p className="mt-1 font-semibold">{formatUsd(preview.estimatedCostUsd)}</p>
-        </div>
-      </div>
-      <p className="mt-2 opacity-80">
-        {preview.eligibleCount} elegíveis entram na estimativa; {preview.blockedCount} bloqueados ficam fora.
-      </p>
-      {preview.usagePercentAfterSend !== null ? (
-        <p className="mt-1 opacity-80">
-          Uso mensal projetado: {preview.usagePercentAfterSend}% do limite configurado.
-        </p>
-      ) : null}
-      <ul className="mt-2 list-disc space-y-1 pl-4 opacity-85">
-        {preview.notes.slice(0, 3).map((note) => (
-          <li key={note}>{note}</li>
-        ))}
-      </ul>
-    </div>
-  );
 }
 
 function getStatusClasses(status: string) {
@@ -446,6 +368,13 @@ function getMetaStatusClasses(status: string) {
       return "bg-sky-600 text-white";
     case "failed":
       return "bg-red-600 text-white";
+    case "blocked":
+    case "opt_out":
+      return "bg-amber-600 text-white";
+    case "skipped":
+      return "bg-orange-600 text-white";
+    case "pending":
+      return "bg-indigo-600 text-white";
     case "sent":
     default:
       return "bg-slate-500 text-white";
@@ -460,6 +389,14 @@ function getMetaStatusLabel(status: string) {
       return "Entregue";
     case "failed":
       return "Falha";
+    case "blocked":
+      return "Bloqueada";
+    case "opt_out":
+      return "Opt-out";
+    case "skipped":
+      return "Ignorada";
+    case "pending":
+      return "Pendente";
     case "sent":
     default:
       return "Enviada";
@@ -514,10 +451,6 @@ function getCampaignConfidence(campaign: CampaignItem) {
   };
 }
 
-function formatBillingValue(value: boolean | null) {
-  return getBooleanUxLabel(value);
-}
-
 function formatCampaignRecipientReference(value: string) {
   const digits = value.replace(/\D/g, "");
   if (digits.length >= 10) {
@@ -553,8 +486,12 @@ function getTabStatusFilter(tab: CampaignCenterTab): CampaignStatusFilter {
   switch (tab) {
     case "drafts":
       return "draft";
-    case "sent":
+    case "completed":
       return "completed";
+    case "sending":
+      return "sending";
+    case "scheduled":
+      return "scheduled";
     case "blocked":
       return "blocked";
     case "all":
@@ -577,9 +514,6 @@ export default function AppCampaignsPage() {
   const [form, setForm] = useState<CampaignFormState>(EMPTY_FORM);
   const [audienceFilters, setAudienceFilters] = useState<AudiencePreviewFilters>(EMPTY_AUDIENCE_FILTERS);
   const [audiencePreview, setAudiencePreview] = useState<AppCampaignAudiencePreviewResponse | null>(null);
-  const [audienceCostPreview, setAudienceCostPreview] = useState<AppMetaCostPreview | null>(null);
-  const [manualCostPreview, setManualCostPreview] = useState<AppMetaCostPreview | null>(null);
-  const [costPreviewLoading, setCostPreviewLoading] = useState(false);
   const [audiencePage, setAudiencePage] = useState(1);
   const [loadingAudiencePreview, setLoadingAudiencePreview] = useState(false);
   const [audiencePreviewError, setAudiencePreviewError] = useState<string | null>(null);
@@ -617,7 +551,6 @@ export default function AppCampaignsPage() {
   const [testingCampaign, setTestingCampaign] = useState(false);
   const [scheduleInput, setScheduleInput] = useState("");
   const [testRecipientInput, setTestRecipientInput] = useState("");
-  const [exportingConsumption, setExportingConsumption] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -794,11 +727,6 @@ export default function AppCampaignsPage() {
     setCsvPreview(null);
     setCsvPreviewError(null);
   }, [templateVariableLabels]);
-
-  const manualRecipientCount = useMemo(
-    () => countManualRecipientsInput(form.recipientsInput),
-    [form.recipientsInput]
-  );
 
   const selectedReturnDepartment = useMemo(
     () => returnDestinations?.departments.find((item) => item.id === form.returnDepartmentId) ?? null,
@@ -989,7 +917,7 @@ export default function AppCampaignsPage() {
       ) : null}
       {selectedTemplateEffectiveCategory === "MARKETING" ? (
         <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
-          Este modelo está classificado como Marketing pela Meta. Revise política, consentimento e custos antes de enviar.
+          Este modelo está classificado como Marketing pela Meta. Revise política e consentimento antes de enviar.
         </div>
       ) : null}
       {returnDestinationEditor}
@@ -1086,64 +1014,6 @@ export default function AppCampaignsPage() {
     : templateVariableMappingError;
 
   const canGenerateAudiencePreview = Boolean(session && form.templateId && !templateVariableMappingError && !loadingAudiencePreview);
-
-  useEffect(() => {
-    if (!session || !form.templateId || !audiencePreview) {
-      setAudienceCostPreview(null);
-      return;
-    }
-    let cancelled = false;
-    setCostPreviewLoading(true);
-    fetchAppMetaUsagePreview(session, {
-      source: "campaign",
-      messageKind: "template",
-      templateId: form.templateId,
-      recipientCount: audiencePreview.summary.total,
-      eligibleCount: audiencePreview.summary.eligible,
-      blockedCount: audiencePreview.summary.blocked,
-      windowOpenAtSend: "unknown",
-      country: "BR",
-    })
-      .then((response) => {
-        if (!cancelled) setAudienceCostPreview(response.preview);
-      })
-      .catch(() => {
-        if (!cancelled) setAudienceCostPreview(null);
-      })
-      .finally(() => {
-        if (!cancelled) setCostPreviewLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [audiencePreview, form.templateId, session]);
-
-  useEffect(() => {
-    if (!session || !form.templateId || manualRecipientCount === 0 || !manualSendOpen) {
-      setManualCostPreview(null);
-      return;
-    }
-    let cancelled = false;
-    fetchAppMetaUsagePreview(session, {
-      source: "manual_campaign_send",
-      messageKind: "template",
-      templateId: form.templateId,
-      recipientCount: manualRecipientCount,
-      eligibleCount: manualRecipientCount,
-      blockedCount: 0,
-      windowOpenAtSend: "unknown",
-      country: "BR",
-    })
-      .then((response) => {
-        if (!cancelled) setManualCostPreview(response.preview);
-      })
-      .catch(() => {
-        if (!cancelled) setManualCostPreview(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [form.templateId, manualRecipientCount, manualSendOpen, session]);
 
   const campaignStats = useMemo(() => {
     return campaigns.reduce(
@@ -1340,7 +1210,7 @@ export default function AppCampaignsPage() {
         setScheduleInput(value.toISOString().slice(0, 16));
       }
     }
-  }, [selectedCampaign?.id, selectedCampaign?.scheduledAt]);
+  }, [selectedCampaign]);
 
   useEffect(() => {
     if (!detailModalOpen) return undefined;
@@ -1353,6 +1223,15 @@ export default function AppCampaignsPage() {
       document.documentElement.style.overflow = previousDocumentOverflow;
     };
   }, [detailModalOpen]);
+
+  useEffect(() => {
+    if (!session || !detailModalOpen || !selectedCampaignId || selectedCampaign?.status !== "sending") return;
+    const timer = window.setInterval(() => {
+      void refreshCampaignDetail(session, selectedCampaignId);
+      void refreshCampaigns(session, selectedCampaignId);
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [detailModalOpen, refreshCampaignDetail, refreshCampaigns, selectedCampaign?.status, selectedCampaignId, session]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -1422,6 +1301,9 @@ export default function AppCampaignsPage() {
       setSelectedCampaignId(created.campaign.campaignId);
       setCurrentPage(1);
       setForm(EMPTY_FORM);
+      setActiveTab("sending");
+      setStatusFilter("sending");
+      setDetailModalOpen(true);
       showToast(
         "success",
         "Envio imediato processado",
@@ -1495,36 +1377,6 @@ export default function AppCampaignsPage() {
     }
   };
 
-  const handleExportCampaignConsumption = async () => {
-    if (!session || !selectedCampaign) return;
-    setExportingConsumption(true);
-    setDetailError(null);
-    try {
-      const csv = await exportAppCampaignConsumptionCsv(session, selectedCampaign.id);
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `campaign-consumption-${selectedCampaign.id}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      showToast("success", "CSV gerado", "O relatório de consumo foi baixado.");
-    } catch (err) {
-      const typed = err as { status?: number; message?: string };
-      if (typed.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-      const message = typed.message || "Erro ao exportar consumo da campanha.";
-      setDetailError(message);
-      showToast("error", "CSV não gerado", message);
-    } finally {
-      setExportingConsumption(false);
-    }
-  };
-
   const loadAudiencePreview = useCallback(
     async (nextPage = audiencePage) => {
       if (!session) return;
@@ -1576,7 +1428,6 @@ export default function AppCampaignsPage() {
     setAudienceFilters(EMPTY_AUDIENCE_FILTERS);
     setAudiencePage(1);
     setAudiencePreview(null);
-    setAudienceCostPreview(null);
     setAudiencePreviewError(null);
     setForm((prev) => ({
       ...prev,
@@ -1854,8 +1705,9 @@ export default function AppCampaignsPage() {
       const response = await sendAppCampaignDraft(session, selectedCampaign.id);
       setSelectedCampaign(response.campaign);
       await refreshCampaigns(session, response.campaign.id);
-      setActiveTab("all");
+      setActiveTab("sending");
       setStatusFilter("sending");
+      setDetailModalOpen(true);
       showToast("success", "Envio iniciado", `${response.send.summary.accepted} destinatários elegíveis foram aceitos para processamento.`);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
@@ -1888,7 +1740,9 @@ export default function AppCampaignsPage() {
       const response = await scheduleAppCampaignDraft(session, selectedCampaign.id, scheduledAt.toISOString());
       setSelectedCampaign(response.campaign);
       await refreshCampaigns(session, response.campaign.id);
+      setActiveTab("scheduled");
       setStatusFilter("scheduled");
+      setDetailModalOpen(true);
       showToast("success", "Campanha agendada", `Envio programado com ${response.schedule.summary.accepted} destinatários elegíveis.`);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
@@ -2378,16 +2232,7 @@ export default function AppCampaignsPage() {
                 </p>
               ) : null}
               <div className="grid gap-3 rounded-md border border-white/10 bg-white/5 p-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-                <CostPreviewCard
-                  preview={audienceCostPreview}
-                  loading={costPreviewLoading}
-                  emptyText={
-                    form.templateId
-                      ? "A estimativa será exibida após a prévia de audiência."
-                      : "Selecione um modelo para estimar custo."
-                  }
-                />
-                <div className="flex flex-col justify-end gap-2">
+                <div className="flex flex-col justify-end gap-2 lg:col-start-2">
                   <p className="text-xs text-white/60">
                     {audienceEligibleItems.length} elegiveis serao incluidos; {audiencePreview.summary.blocked} bloqueados serao ignorados.
                   </p>
@@ -2922,16 +2767,6 @@ export default function AppCampaignsPage() {
                     Digite um número por linha, com código do país e DDD, somente números. Exemplo: 5584999999999.
                   </span>
                 </label>
-                <div className="lg:col-span-2">
-                  <CostPreviewCard
-                    preview={manualCostPreview}
-                    emptyText={
-                      form.templateId
-                        ? "Informe pelo menos um número para estimar o custo preliminar."
-                        : "Selecione um modelo e informe números para estimar custo."
-                    }
-                  />
-                </div>
                 {formError ? (
                   <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100 lg:col-span-2">
                     {formError}
@@ -3135,12 +2970,12 @@ export default function AppCampaignsPage() {
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-                  <div>
-                    <h2 className="text-sm font-semibold">Detalhe da campanha</h2>
-                    <p className="mt-1 text-xs text-white/55">
-                      Revise rascunho, situação, público e consumo sem sair da lista.
-                    </p>
-                  </div>
+                    <div>
+                      <h2 className="text-sm font-semibold">Detalhe da campanha</h2>
+                      <p className="mt-1 text-xs text-white/55">
+                      Acompanhe público, processamento e resultado sem interromper a execução.
+                      </p>
+                    </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <button
                       type="button"
@@ -3222,9 +3057,7 @@ export default function AppCampaignsPage() {
                   </div>
 
                   <div className="rounded-md border border-white/10 bg-white/5 p-3 text-sm text-white/70">
-                    A situação da campanha é baseada na confirmação da Meta.
-                    Relatórios comerciais podem considerar critérios de entrega, leitura e categoria
-                    do modelo conforme a regra contratual aplicável.
+                    A situação da campanha usa os registros persistidos do processamento e as confirmações do provedor.
                   </div>
 
                   {selectedCampaign.status === "draft" ? (
@@ -3458,23 +3291,6 @@ export default function AppCampaignsPage() {
                     </div>
                   ) : null}
 
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-white/10 bg-white/5 p-3">
-                    <div>
-                      <p className="text-sm font-semibold">Relatorio de consumo</p>
-                      <p className="mt-1 text-xs text-white/60">
-                        Exporta CSV com situação de entrega e critério operacional de faturamento.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={exportingConsumption}
-                      onClick={handleExportCampaignConsumption}
-                      className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {exportingConsumption ? "Exportando..." : "Exportar CSV"}
-                    </button>
-                  </div>
-
                   <div className="rounded-md border border-white/10 bg-white/5 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <p className="text-xs uppercase tracking-wide text-white/60">Progresso</p>
@@ -3511,8 +3327,6 @@ export default function AppCampaignsPage() {
                               <th className="px-3 py-2">Referência</th>
                               <th className="px-3 py-2">Situação</th>
                               <th className="px-3 py-2">Categoria</th>
-                              <th className="px-3 py-2">Cobrança</th>
-                              <th className="px-3 py-2">Faturável</th>
                               <th className="px-3 py-2">Entrega</th>
                               <th className="px-3 py-2">Erro</th>
                             </tr>
@@ -3527,8 +3341,6 @@ export default function AppCampaignsPage() {
                                   </span>
                                 </td>
                                 <td className="px-3 py-2">{getMetaTemplateCategoryUxLabel(item.pricingCategory)}</td>
-                                <td className="px-3 py-2">{formatBillingValue(item.pricingBillable)}</td>
-                                <td className="px-3 py-2">{getBooleanUxLabel(item.billable)}</td>
                                 <td className="px-3 py-2 text-xs text-white/70">
                                   {item.deliveredAt ? formatDateTime(item.deliveredAt) : "-"}
                                 </td>
