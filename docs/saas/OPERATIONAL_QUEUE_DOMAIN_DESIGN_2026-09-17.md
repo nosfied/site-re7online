@@ -1,10 +1,17 @@
 # Operational Queue Domain Design - 2026-09-17
 
-Status: APPROVED DESIGN / PENDING OWNER SCHEMA AUTHORIZATION / NOT IMPLEMENTED / NO MIGRATION / NO DATA MUTATION / NO DEPLOY.
+Status: IMPLEMENTED LOCAL / OWNER UX PASS / OWNER DECISIONS COMPLETE / FINAL
+LOCAL CUTOVER PACKAGE PREPARED / NOT DEPLOYED / NO PRODUCTION DATA MUTATION.
 
-The Canonical Identity P1 production deploy on 2026-09-17 did not alter this
-status. Its target diff contained no Queue schema/runtime implementation, and
-read-only pre/post snapshots of Demo departments and queues matched exactly.
+Implementation was prepared from canonical HEAD `45726ef9154e8904e87189573b3c2ea7faa258bb`
+in `/tmp/re7-operational-queue`. Production remains at
+`ed329ec8e778902d314ec84c2de3132b4f46b63a`; its database and runtime were only
+read. Migration `20260917213000_add_department_operational_queue` was applied
+only to dedicated local databases. Owner local UX validation passed on
+2026-09-17, which opened the read-only production mapping audit gate. On
+2026-09-18 the owner supplied the five remaining decisions, and the final local
+reconciliation package validated 54/54 departments with no active unresolved
+department.
 
 ## Decision
 
@@ -15,8 +22,7 @@ composite foreign key so the selected queue is provably owned by the same
 tenant and department. Runtime must never infer this relationship from queue
 name, creation order, reference count or usage frequency.
 
-Proposed Prisma shape, subject to a separate owner-approved implementation
-gate:
+Implemented Prisma shape:
 
 ```prisma
 model Department {
@@ -32,13 +38,12 @@ model Department {
 }
 
 model Queue {
-  operationalFor Department? @relation("DepartmentOperationalQueue")
+  operationalForDepartments Department[] @relation("DepartmentOperationalQueue")
   @@unique([clientId, departmentId, id])
 }
 ```
 
-The exact Prisma referential-action form must be validated in the migration
-gate. The database invariant is the important contract: the three source
+The database invariant uses `ON DELETE RESTRICT` and `ON UPDATE CASCADE`: the three source
 values `(clientId, departmentId, operationalQueueId)` reference the same three
 values on `Queue`. One field on one Department permits at most one operational
 queue. It remains nullable during rollout and for an inactive draft department.
@@ -115,7 +120,8 @@ use the explicit operational pointer.
 ## Production inventory
 
 Read-only production inventory on 2026-09-17 covered all 54 Department rows in
-10 tenants:
+10 tenants. The complete reconciliation matrix is recorded in
+`docs/saas/OPERATIONAL_QUEUE_PRODUCTION_MAPPING_AUDIT_2026-09-17.md`.
 
 | Queue cardinality | Departments | Active | Inactive |
 | --- | ---: | ---: | ---: |
@@ -123,10 +129,35 @@ Read-only production inventory on 2026-09-17 covered all 54 Department rows in
 | 1 | 34 | 32 | 2 |
 | more than 1 | 11 | 10 | 1 |
 
-Single-queue rows are candidates for audited one-time ID mapping, not runtime
+Single-queue rows are auto-safe for audited one-time ID mapping, not runtime
 inference. Every multi-queue row requires an explicit migration decision even
 when historical activity strongly indicates a likely choice. Active zero-queue
-rows require repair or deactivation before strict activation enforcement.
+rows require owner-approved repair or deactivation before strict activation
+enforcement.
+
+Complete audit classification:
+
+| Classification | Count |
+| --- | ---: |
+| exactly-one queue / auto-safe explicit mapping | 34 |
+| inactive null-allowed | 8 |
+| active zero-queue blocker | 2 |
+| multi-queue resolved by audit | 7 |
+| active multi-queue ambiguous blocker | 3 |
+
+Production cutover is **not executed**. The five previously unresolved active
+departments have explicit owner decisions recorded in
+`docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`; the local
+cutover package resolves all active departments explicitly. Production still
+has no schema migration, data mutation or deploy from this gate.
+
+| Tenant / department | Department ID | Owner decision |
+| --- | --- | --- |
+| `demo-converta` / Setor Teste | `cmu1no78102cf4sxsndoqtemc` | keep active; create/link internal queue `queue-operational-cmu1no78102cf4sxsndoqtemc` |
+| `lab-websession` / Department Lunch | `cmsqrqwhp00054sefz4tgu5j1` | keep active; create/link internal queue `queue-operational-cmsqrqwhp00054sefz4tgu5j1` |
+| `demo-converta` / Dúvidas Gerais - FUNDARPE | `cmsukc3vp00034s9pyfwbv7av` | select existing queue `cmsukc3wa00094s9pa16davow` |
+| `re7online` / Comercial | `cmraqfcly00014sisaysk2j9e` | select existing queue `cmraqfcm800034sisboqazhtv` |
+| `re7online` / Governo e Licitações | `cmraqfcmn00094sisicjhc2l0` | select existing queue `cmraqfcms000b4sis8s9wbqzs` |
 
 For Demo `Atendimento Geral`, the evidence supports proposing the one-time
 mapping to queue `cmsiyb2k200n94sdpu5khkee0`: it carries current runtime and
@@ -135,30 +166,106 @@ meaningful references. This is an audited migration proposal only. Once
 approved, the selected ID must be persisted; `Fila Geral` must never become a
 runtime rule.
 
-For Demo `Setor Teste`, the preferred remediation is to create an internal
-Queue and set `operationalQueueId` atomically if the owner confirms that the
-department should receive routing. Otherwise it must be deactivated until an
-operational queue is assigned. No production row was changed.
+For Demo `Setor Teste` and Lab Web Session `Department Lunch`, the read-only
+audit found active departments with zero queues but no current runtime/flow
+use. They must not be auto-repaired by assumption: the next gate must either
+approve exact internal queue creation and atomic linkage or deactivate the
+department until configured. The inactive null-allowed rows remain nullable.
+No production row was changed.
 
-## Rollout
+## Audited mapping manifest
 
-1. Add nullable `operationalQueueId`, composite Queue candidate key and
-   same-tenant/same-department FK. Do not switch runtime reads.
-2. Produce a reviewed mapping manifest. Auto-propose only one-queue rows;
-   manually decide all zero/multi-queue rows. Back up before any write.
-3. Backfill exact IDs transactionally and verify every active routable
-   Department. Keep unresolved rows blocked from the next phase.
-4. Switch standard handoff/campaign routing to the explicit relation, with
-   telemetry and fail-closed validation. Do not fall back to names.
-5. Make create/activate atomically ensure the internal queue and pointer;
-   enforce replacement/block behavior for deletion and deactivation.
-6. Remove legacy name-based default resolution only after all providers and
-   tenants pass validation. Rollback before this phase may restore old runtime
-   reads while retaining the nullable relation; backfill reversal must restore
-   pointers only, never rewrite historical queue references.
+The migration/backfill plan maps all 34 exactly-one rows structurally and seven
+multi-queue rows by audited exact IDs. It must leave the five active unresolved
+rows blocked until explicit owner decisions are recorded. The seven audited
+multi-queue targets are:
 
-Current campaign queue selector/badges are not approved for delivery. Campaign
-UX owner PASS remains valid for progress, background execution, `Enviando`,
-`Agendadas`, recipient-result truth, mobile behavior and absence of customer
-pricing; the complete candidate remains undeployed until the queue contract is
-approved and implemented.
+| Tenant / department | Operational Queue ID | Evidence |
+| --- | --- | --- |
+| `demo-prefeitura` / Saude | `cmookf7xl00074sqbtwwbi02j` | dominant runtime references |
+| `re7online` / Suporte | `cmraqfcmj00074siskfe5j2lh` | runtime plus active flow reference |
+| `secult-pe` / Mapa | `cmsrfhcu2000l4swiyjsxpdg1` | runtime, flow and snapshots |
+| `demo-converta` / Atendimento Geral | `cmsiyb2k200n94sdpu5khkee0` | runtime and campaign references; no contradiction |
+| `demo-converta` / SECULT | `cmsukc3w400074s9pw9rv1yxi` | runtime, flow and snapshots |
+| `demo-converta` / Mapa | `cmsukc3wf000b4s9psxgb1ju0` | active flow references |
+| `demo-converta` / Registro | `cmtg2g0uo00034sjgh37pwiy1` | flow and snapshot majority |
+
+Five active rows were previously unresolved and now have explicit owner
+decisions. Runtime fails closed with `operational_queue_unavailable` if a future
+active department lacks an explicit pointer and never chooses a candidate:
+
+| Tenant / department ID | Operational target | State |
+| --- | --- | --- |
+| `re7online` Comercial / `cmraqfcly00014sisaysk2j9e` | `cmraqfcm800034sisboqazhtv` | owner-selected existing queue |
+| `re7online` Governo e Licitacoes / `cmraqfcmn00094sisicjhc2l0` | `cmraqfcms000b4sis8s9wbqzs` | owner-selected existing queue |
+| `demo-converta` FUNDARPE / `cmsukc3vp00034s9pyfwbv7av` | `cmsukc3wa00094s9pa16davow` | owner-selected existing queue |
+| `demo-converta` Setor Teste / `cmu1no78102cf4sxsndoqtemc` | `queue-operational-cmu1no78102cf4sxsndoqtemc` | owner-approved internal queue creation |
+| `lab-websession` Department Lunch / `cmsqrqwhp00054sefz4tgu5j1` | `queue-operational-cmsqrqwhp00054sefz4tgu5j1` | owner-approved internal queue creation |
+
+`demo-converta` Projetos e Editais / `cmsiwk1o800034sdzdhd603l7` is inactive
+with multiple queues and is intentionally nullable until/unless it is activated.
+
+## Local implementation
+
+- Department create/activate creates and links the internal Queue in one
+  transaction; queue failure rolls the Department back.
+- Deactivation and metadata edits preserve the pointer and all Queue/history
+  rows. Consolidation clears only the source pointer before its existing queue
+  move and requires an operational target.
+- Reactivation reuses a preserved operational queue and does not create a
+  duplicate queue. Explicit replacement validates same tenant and same
+  department; the prior queue remains for history.
+- Campaign, chatbot handoff, manual transfer, Meta pending handoff, support and
+  webchat standard routing read the explicit pointer. Existing concrete Queue
+  IDs remain valid for historical/specialized records.
+- Campaign and Guided Builder expose only `Setor`; their internal resources
+  project at most the explicitly selected operational Queue. No multi-queue
+  selector, queue badge or queue name is shown in the standard flow.
+- Missing mapping blocks before provider/runtime mutation with: "Este setor
+  ainda não está disponível para receber atendimentos."
+
+## Production rollout package - not executed
+
+1. Reconfirm the owner-approved final package and production preflight. Do not
+   deploy if production inventory diverges from the 54-row reconciliation.
+2. Capture encrypted PostgreSQL backup and immutable preflight inventory; prove
+   current production HEAD, migration status, PM2 health and DB health.
+3. Deploy the schema/runtime release together, stop automatic traffic restart,
+   run `prisma migrate deploy`, and verify the composite FK, 59 applied
+   migrations and the exact mapping counts. Never use `prisma db push`.
+4. Validate that every active routing Department has one pointer, every pointer
+   joins the same client/department, Atendimento Geral points to
+   `cmsiyb2k200n94sdpu5khkee0`, and only approved inactive rows remain null.
+5. Build backend/frontend, reload only the WhatsApp agent and frontend PM2
+   processes. The Web Worker has no schema consumer change and requires no
+   targeted reload unless its deployed artifact changed.
+6. Smoke Department create/deactivate/reactivate, Campaign draft destination,
+   chatbot handoff resources, inbox transfer, outside-hours queueing, SECULT
+   hours and tenant isolation. No real campaign send is part of this rollout.
+7. Rollback constraint: code may be rolled back before new relation-dependent
+   writes; the nullable migration should remain forward-applied. Do not drop the
+   column/FK or rewrite historical queue IDs during an incident. Restore the DB
+   backup only for a proven migration-level failure under a separate gate.
+
+Local validation on 2026-09-18:
+
+- local schema migration: PASS, 59 migrations applied, no `prisma db push`;
+- reconciliation first run: 44 explicit mappings updated, 2 internal queues
+  created/linked, active unresolved 0;
+- reconciliation second run: 44 explicit mappings noop, 2 internal queues
+  noop, active unresolved 0;
+- domain tests: `operationalQueue.test.ts` 8/8 PASS;
+- runtime routing tests: `outboundReturnDestination.test.ts`,
+  `departmentAwareHandoff.test.ts`, `webchatInboundService.test.ts` 30/30 PASS;
+- identity tests: `canonicalRuntimeIdentity.test.ts`,
+  `crmWhatsappIdentity.test.ts`, `crmConversationStartRoutes.test.ts` 12/12
+  PASS;
+- campaigns/routes regression: `campaignsFeatureRoutes.test.ts` 114/114 PASS;
+- frontend guided builder regression: `ChatbotFlowBuilder.test.ts` 53/53 PASS;
+- backend build PASS; frontend build PASS.
+
+Campaign UX owner PASS remains valid for progress, background execution,
+`Enviando`, `Agendadas`, recipient-result truth, mobile behavior and absence of
+customer pricing. Queue-dependent delivery is implemented locally but remains
+undeployed pending controlled production rollout. Demo `****6787` was not
+mutated or repaired in this gate.

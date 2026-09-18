@@ -1217,8 +1217,7 @@ export type AppCampaignReturnDestinationsResponse = {
   departments: Array<{
     id: string;
     name: string;
-    queueMode: "missing" | "single" | "multiple";
-    queues: Array<{ id: string; name: string }>;
+    operationalReady: boolean;
   }>;
   flows: Array<{ id: string; name: string; entryPoint?: boolean }>;
 };

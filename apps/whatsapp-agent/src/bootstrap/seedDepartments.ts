@@ -1,6 +1,10 @@
 import type { PrismaClient } from "@prisma/client";
 import { DEFAULT_OPERATIONAL_DEPARTMENT_NAME } from "./defaultOperationalDepartment.js";
 import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
+import {
+  createDepartmentWithOperationalQueue,
+  updateDepartmentWithOperationalQueueLifecycle,
+} from "../departments/operationalQueue.js";
 
 export const DEFAULT_DEPARTMENTS = [
   { name: DEFAULT_OPERATIONAL_DEPARTMENT_NAME, isActive: true },
@@ -53,28 +57,30 @@ export async function ensureDefaultDepartments(
       },
     });
 
-    const department = await prisma.department.upsert({
-      where: {
-        clientId_slug: {
+    const department = existing
+      ? defaultDepartment.isActive
+        ? await updateDepartmentWithOperationalQueueLifecycle(prisma, {
+            clientId: params.clientId,
+            departmentId: existing.id,
+            isActive: true,
+          })
+        : await prisma.department.findUniqueOrThrow({
+            where: { id: existing.id },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              isActive: true,
+              createdAt: true,
+            },
+          })
+      : await createDepartmentWithOperationalQueue(prisma, {
           clientId: params.clientId,
+          name,
           slug,
-        },
-      },
-      update: defaultDepartment.isActive ? { isActive: true } : {},
-      create: {
-        clientId: params.clientId,
-        name,
-        slug,
-        isActive: defaultDepartment.isActive,
-      },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        isActive: true,
-        createdAt: true,
-      },
-    });
+          isActive: defaultDepartment.isActive,
+        });
+    if (!department) throw new Error(`department_not_found:${existing?.id}`);
 
     const action = !existing
       ? "created"

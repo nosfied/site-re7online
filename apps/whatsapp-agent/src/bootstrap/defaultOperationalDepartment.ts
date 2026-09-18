@@ -1,8 +1,11 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
+import {
+  createDepartmentWithOperationalQueue,
+  resolveDepartmentOperationalQueue,
+} from "../departments/operationalQueue.js";
 import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
 
 export const DEFAULT_OPERATIONAL_DEPARTMENT_NAME = "Atendimento Geral";
-export const DEFAULT_OPERATIONAL_QUEUE_NAME = "Fila Geral";
 const LEGACY_OPERATIONAL_DEPARTMENT_NAMES = new Set(["atendimento"]);
 const LEGACY_OPERATIONAL_DEPARTMENT_SLUGS = new Set(["atendimento"]);
 const LEGACY_OPERATIONAL_DEPARTMENT_NAME_PREFIX = "departamento legado";
@@ -51,14 +54,10 @@ export async function getDefaultOperationalDepartment(
   if (existing) return existing;
   if (!createIfMissing) return null;
   try {
-    return await prisma.department.create({
-      data: {
-        clientId,
-        name: DEFAULT_OPERATIONAL_DEPARTMENT_NAME,
-        slug,
-        isActive: true,
-      },
-      select: { id: true, name: true },
+    return await createDepartmentWithOperationalQueue(prisma, {
+      clientId,
+      name: DEFAULT_OPERATIONAL_DEPARTMENT_NAME,
+      slug,
     });
   } catch (error) {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) {
@@ -76,23 +75,11 @@ export async function ensureDefaultOperationalDepartmentAndQueue(
   if (!department) {
     throw new Error("default_operational_department_missing");
   }
-  const queue = await prisma.queue.upsert({
-    where: {
-      clientId_departmentId_name: {
-        clientId,
-        departmentId: department.id,
-        name: DEFAULT_OPERATIONAL_QUEUE_NAME,
-      },
-    },
-    update: {},
-    create: {
-      clientId,
-      departmentId: department.id,
-      name: DEFAULT_OPERATIONAL_QUEUE_NAME,
-    },
-    select: { id: true, name: true, departmentId: true },
+  const resolved = await resolveDepartmentOperationalQueue(prisma, {
+    clientId,
+    departmentId: department.id,
   });
-  return { department, queue };
+  return { department, queue: resolved.queue };
 }
 
 export async function resolveOperationalDepartmentId(

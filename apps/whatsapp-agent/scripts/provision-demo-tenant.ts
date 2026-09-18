@@ -276,8 +276,18 @@ async function main() {
         details: { department: name, queue: "Fila principal" },
       });
       if (options.apply && !existingQueue) {
-        await prisma.queue.create({
+        const queue = await prisma.queue.create({
           data: { clientId: client.id, departmentId: department.id, name: "Fila principal" },
+          select: { id: true },
+        });
+        await prisma.department.update({
+          where: { id: department.id },
+          data: { operationalQueueId: queue.id },
+        });
+      } else if (options.apply && existingQueue) {
+        await prisma.department.update({
+          where: { id: department.id },
+          data: { operationalQueueId: existingQueue.id },
         });
       }
     }

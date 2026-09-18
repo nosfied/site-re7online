@@ -83,7 +83,13 @@ export async function resolveDepartmentAwareHandoff(
   const department = departmentId
     ? await prisma.department.findFirst({
         where: { clientId: params.clientId, id: departmentId, isActive: true },
-        select: { id: true, name: true },
+        select: {
+          id: true,
+          name: true,
+          operationalQueue: {
+            select: { id: true, name: true, departmentId: true },
+          },
+        },
       })
     : null;
   if (departmentId && !department) {
@@ -108,18 +114,11 @@ export async function resolveDepartmentAwareHandoff(
   }
 
   if (!queue) {
-    const departmentQueues = await prisma.queue.findMany({
-      where: { clientId: params.clientId, departmentId: department.id },
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      select: { id: true, name: true, departmentId: true },
-      take: 2,
-    });
-    if (departmentQueues.length === 1) {
-      queue = departmentQueues[0];
-    } else {
+    queue = department.operationalQueue;
+    if (!queue) {
       return {
         kind: "blocked",
-        reason: departmentQueues.length === 0 ? "no_queue_for_department" : "queue_required",
+        reason: "no_queue_for_department",
         departmentId: department.id,
         queueId: null,
         shouldAssign: false,

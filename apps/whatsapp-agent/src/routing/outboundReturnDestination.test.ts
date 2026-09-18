@@ -72,6 +72,7 @@ test("human return destination resolves the single queue internally", async () =
       id: "department-1",
       name: "Atendimento",
       isActive: true,
+      operationalQueue: { id: "queue-1", name: "Fila Geral" },
       queues: [{ id: "queue-1", name: "Fila Geral" }],
     }),
     { clientId: "client-1", departmentId: "department-1" }
@@ -81,12 +82,13 @@ test("human return destination resolves the single queue internally", async () =
   assert.equal(result.ok && result.destination.type === "human_department" ? result.destination.queueId : null, "queue-1");
 });
 
-test("human return destination requires explicit queue for multiple queues", async () => {
+test("human return destination uses the explicit operational queue when multiple queues exist", async () => {
   const result = await resolveHumanDepartmentReturnDestination(
     prismaWithDepartment({
       id: "department-1",
       name: "Atendimento",
       isActive: true,
+      operationalQueue: { id: "queue-2", name: "Fila B" },
       queues: [
         { id: "queue-1", name: "Fila A" },
         { id: "queue-2", name: "Fila B" },
@@ -95,8 +97,8 @@ test("human return destination requires explicit queue for multiple queues", asy
     { clientId: "client-1", departmentId: "department-1" }
   );
 
-  assert.equal(result.ok, false);
-  assert.equal(result.ok ? null : result.error, "queue_required");
+  assert.equal(result.ok, true);
+  assert.equal(result.ok && result.destination.type === "human_department" ? result.destination.queueId : null, "queue-2");
 });
 
 test("human return destination blocks departments without queues", async () => {
@@ -105,6 +107,7 @@ test("human return destination blocks departments without queues", async () => {
       id: "department-1",
       name: "Atendimento",
       isActive: true,
+      operationalQueue: null,
       queues: [],
     }),
     { clientId: "client-1", departmentId: "department-1" }

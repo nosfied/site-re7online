@@ -282,6 +282,12 @@ import {
   resolveTenantOperationalTimezone,
 } from "../departments/businessHours.js";
 import {
+  createDepartmentWithOperationalQueue,
+  OperationalQueueUnavailableError,
+  resolveDepartmentOperationalQueue,
+  updateDepartmentWithOperationalQueueLifecycle,
+} from "../departments/operationalQueue.js";
+import {
   authorizeWebSessionNumber,
   disconnectWebSession,
   getWebSessionQr,
@@ -426,7 +432,6 @@ import {
 import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
 import {
   DEFAULT_OPERATIONAL_DEPARTMENT_NAME,
-  DEFAULT_OPERATIONAL_QUEUE_NAME,
   ensureDefaultOperationalDepartmentAndQueue,
   isLegacyOperationalDepartment,
 } from "../bootstrap/defaultOperationalDepartment.js";
@@ -9322,22 +9327,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         );
         return;
       }
-      const department = await prisma.department.create({
-        data: {
-          clientId: client.id,
-          name: parsed.data.name as string,
-          slug: parsed.data.slug as string,
-          ...(typeof parsed.data.isActive === "boolean"
-            ? { isActive: parsed.data.isActive }
-            : {}),
-        },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          isActive: true,
-          createdAt: true,
-        },
+      const department = await createDepartmentWithOperationalQueue(prisma, {
+        clientId: client.id,
+        name: parsed.data.name as string,
+        slug: parsed.data.slug as string,
+        isActive: parsed.data.isActive,
       });
       if (businessHours) {
         await replaceDepartmentBusinessHours(prisma, {
@@ -9508,23 +9502,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
       }
-      const department = await prisma.department.update({
-        where: { id: existing.id },
-        data: {
-          ...(parsed.data.name ? { name: parsed.data.name } : {}),
-          ...(parsed.data.slug ? { slug: parsed.data.slug } : {}),
-          ...(typeof parsed.data.isActive === "boolean"
-            ? { isActive: parsed.data.isActive }
-            : {}),
-        },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          isActive: true,
-          createdAt: true,
-        },
+      const department = await updateDepartmentWithOperationalQueueLifecycle(prisma, {
+        clientId: client.id,
+        departmentId: existing.id,
+        name: parsed.data.name,
+        slug: parsed.data.slug,
+        isActive: parsed.data.isActive,
       });
+      if (!department) {
+        json(res, 404, httpError("department_not_found", "Department not found"));
+        return;
+      }
       if (businessHours !== undefined) {
         await replaceDepartmentBusinessHours(prisma, {
           clientId: client.id,
@@ -9600,6 +9588,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           : department,
       });
     } catch (error) {
+      if (error instanceof OperationalQueueUnavailableError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
       if (error instanceof DepartmentBusinessHoursValidationError) {
         json(res, error.status, httpError(error.code, error.message));
         return;
@@ -9701,22 +9693,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         endpoint: pathname,
         requestId,
       }))) return;
-      const [departments, queues] = await Promise.all([
-        prisma.department.findMany({
+      const departments = await prisma.department.findMany({
           where: {
             clientId: client.id,
             isActive: true,
             ...LEGACY_OPERATIONAL_DEPARTMENT_FILTER,
           },
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          select: { id: true, name: true, slug: true, isActive: true },
-        }),
-        prisma.queue.findMany({
-          where: { clientId: client.id },
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          select: { id: true, name: true, departmentId: true },
-        }),
-      ]);
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            isActive: true,
+            operationalQueue: { select: { id: true, name: true, departmentId: true } },
+          },
+        });
+      const queues = departments.flatMap((department) =>
+        department.operationalQueue ? [department.operationalQueue] : []
+      );
       json(res, 200, { ok: true, departments, queues });
     } catch (error) {
       logger.error({
@@ -13119,7 +13113,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const queueId = currentDepartmentId
         ? currentQueue?.id ??
           (
-            await ensureQueueForDepartment(prisma, {
+            await resolveOperationalQueueForDepartment(prisma, {
               clientId: client.id,
               departmentId: currentDepartmentId,
             })
@@ -13242,6 +13236,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
       });
     } catch (error) {
+      if (error instanceof OperationalQueueUnavailableError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
       logger.error({
         event: "app.conversation.claim.error",
         message: (error as Error).message,
@@ -13545,7 +13543,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         : null;
       const queue =
         currentQueue ??
-        (await ensureQueueForDepartment(prisma, {
+        (await resolveOperationalQueueForDepartment(prisma, {
           clientId: client.id,
           departmentId: department.id,
         }));
@@ -13676,6 +13674,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
       });
     } catch (error) {
+      if (error instanceof OperationalQueueUnavailableError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
       logger.error({
         event: "app.conversation.release_to_general.error",
         message: (error as Error).message,
@@ -13814,7 +13816,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const queueId = currentDepartmentId
         ? currentQueue?.id ??
           (
-            await ensureQueueForDepartment(prisma, {
+            await resolveOperationalQueueForDepartment(prisma, {
               clientId: client.id,
               departmentId: currentDepartmentId,
             })
@@ -13903,6 +13905,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
       });
     } catch (error) {
+      if (error instanceof OperationalQueueUnavailableError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
       logger.error({
         event: "app.conversation.transfer.error",
         message: (error as Error).message,
@@ -14030,7 +14036,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         return;
       }
-      const queue = await ensureQueueForDepartment(prisma, {
+      const queue = await resolveOperationalQueueForDepartment(prisma, {
         clientId: client.id,
         departmentId: department.id,
       });
@@ -14121,6 +14127,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
       });
     } catch (error) {
+      if (error instanceof OperationalQueueUnavailableError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
       logger.error({
         event: "app.conversation.transfer_department.error",
         message: (error as Error).message,
@@ -17648,19 +17658,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           );
           return;
         }
-        const department = await prisma.department.create({
-          data: {
-            clientId: client.id,
-            name,
-            slug,
-          },
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            isActive: true,
-            createdAt: true,
-          },
+        const department = await createDepartmentWithOperationalQueue(prisma, {
+          clientId: client.id,
+          name,
+          slug,
         });
         if (businessHours) {
           await replaceDepartmentBusinessHours(prisma, {
@@ -17799,21 +17800,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             return;
           }
         }
-        const department = await prisma.department.update({
-          where: { id: existing.id },
-          data: {
-            ...(hasName ? { name } : {}),
-            ...(hasName ? { slug } : {}),
-            ...(hasActive ? { isActive: Boolean(body.isActive) } : {}),
-          },
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            isActive: true,
-            createdAt: true,
-          },
+        const department = await updateDepartmentWithOperationalQueueLifecycle(prisma, {
+          clientId: client.id,
+          departmentId: existing.id,
+          ...(hasName ? { name, slug } : {}),
+          ...(hasActive ? { isActive: Boolean(body.isActive) } : {}),
         });
+        if (!department) {
+          json(res, 404, httpError("department_not_found", "Department not found"));
+          return;
+        }
         if (hasActive && existing.isActive !== department.isActive) {
           logger.info({
             event: "department.toggled",
@@ -17864,6 +17860,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         json(res, 200, { ok: true, department: fullDepartment ?? department });
       } catch (error) {
+        if (error instanceof OperationalQueueUnavailableError) {
+          json(res, error.status, httpError(error.code, error.message));
+          return;
+        }
         if (error instanceof DepartmentBusinessHoursValidationError) {
           json(res, error.status, httpError(error.code, error.message));
           return;
@@ -17938,6 +17938,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               name: true,
               slug: true,
               isActive: true,
+              operationalQueueId: true,
             },
           }),
           prisma.department.findFirst({
@@ -17950,6 +17951,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               name: true,
               slug: true,
               isActive: true,
+              operationalQueueId: true,
             },
           }),
         ]);
@@ -17973,6 +17975,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           );
           return;
         }
+        if (!targetDepartment.operationalQueueId) {
+          json(
+            res,
+            409,
+            httpError("operational_queue_unavailable", "Este setor ainda não está disponível para receber atendimentos.")
+          );
+          return;
+        }
         logger.info({
           event: "department.consolidation.started",
           requestId,
@@ -17981,6 +17991,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           targetDepartmentId: targetDepartment.id,
         });
         const consolidation = await prisma.$transaction(async (tx) => {
+          if (sourceDepartment.operationalQueueId) {
+            await tx.department.update({
+              where: { id: sourceDepartment.id },
+              data: { operationalQueueId: null },
+            });
+          }
           const [sourceQueues, targetQueues] = await Promise.all([
             tx.queue.findMany({
               where: {
@@ -18168,22 +18184,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, httpError("client_not_found", "Client not found"));
           return;
         }
-        const [departments, queues] = await Promise.all([
-          prisma.department.findMany({
+        const departments = await prisma.department.findMany({
             where: {
               clientId: client.id,
               isActive: true,
               ...LEGACY_OPERATIONAL_DEPARTMENT_FILTER,
             },
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-            select: { id: true, name: true, slug: true, isActive: true },
-          }),
-          prisma.queue.findMany({
-            where: { clientId: client.id },
-            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-            select: { id: true, name: true, departmentId: true },
-          }),
-        ]);
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              isActive: true,
+              operationalQueue: { select: { id: true, name: true, departmentId: true } },
+            },
+          });
+        const queues = departments.flatMap((department) =>
+          department.operationalQueue ? [department.operationalQueue] : []
+        );
         json(res, 200, { ok: true, departments, queues });
       } catch (error) {
         logger.error({
@@ -19623,7 +19641,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
 
         const previousDepartmentId = conversation.departmentId ?? null;
-        const queue = await ensureQueueForDepartment(prisma, {
+        const queue = await resolveOperationalQueueForDepartment(prisma, {
           clientId: client.id,
           departmentId: department.id,
         });
@@ -19711,6 +19729,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         });
       } catch (error) {
+        if (error instanceof OperationalQueueUnavailableError) {
+          json(res, error.status, httpError(error.code, error.message));
+          return;
+        }
         logger.error({
           event: "admin.conversations.transfer_department.error",
           message: (error as Error).message,
@@ -30440,29 +30462,19 @@ async function findAssignedUserName(
   return user?.name ?? null;
 }
 
-async function ensureQueueForDepartment(
+async function resolveOperationalQueueForDepartment(
   prisma: ReturnType<typeof getPrisma>,
   params: {
     clientId: string;
     departmentId: string;
   }
 ) {
-  return prisma.queue.upsert({
-    where: {
-      clientId_departmentId_name: {
-        clientId: params.clientId,
-        departmentId: params.departmentId,
-        name: DEFAULT_OPERATIONAL_QUEUE_NAME,
-      },
-    },
-    update: {},
-    create: {
+  return (
+    await resolveDepartmentOperationalQueue(prisma, {
       clientId: params.clientId,
       departmentId: params.departmentId,
-      name: DEFAULT_OPERATIONAL_QUEUE_NAME,
-    },
-    select: { id: true, name: true, departmentId: true },
-  });
+    })
+  ).queue;
 }
 
 async function resolveAssignmentRouting(
@@ -30502,7 +30514,7 @@ async function resolveAssignmentRouting(
     fallbackQueue ??
     (departmentId === defaults.department?.id && defaults.queue
       ? defaults.queue
-      : await ensureQueueForDepartment(prisma, {
+      : await resolveOperationalQueueForDepartment(prisma, {
           clientId: params.clientId,
           departmentId,
         }));
@@ -30857,19 +30869,16 @@ async function loadOptionalDefaultDepartmentAndQueue(
       OR: [{ slug }, { name: DEFAULT_OPERATIONAL_DEPARTMENT_NAME }],
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    select: { id: true, name: true },
+    select: {
+      id: true,
+      name: true,
+      operationalQueue: {
+        select: { id: true, name: true, departmentId: true },
+      },
+    },
   });
   if (!department) return { department: null, queue: null };
-  const queue = await prisma.queue.findFirst({
-    where: {
-      clientId,
-      departmentId: department.id,
-      name: DEFAULT_OPERATIONAL_QUEUE_NAME,
-    },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    select: { id: true, name: true, departmentId: true },
-  });
-  return { department, queue };
+  return { department, queue: department.operationalQueue };
 }
 
 async function ensureConversationOperationalState(

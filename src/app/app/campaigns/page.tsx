@@ -50,7 +50,6 @@ type CampaignFormState = {
   recipientsInput: string;
   returnDestinationType: "human_department" | "automated_flow";
   returnDepartmentId: string;
-  returnQueueId: string;
   returnFlowId: string;
 };
 
@@ -103,7 +102,6 @@ const EMPTY_FORM: CampaignFormState = {
   recipientsInput: "",
   returnDestinationType: "human_department",
   returnDepartmentId: "",
-  returnQueueId: "",
   returnFlowId: "",
 };
 
@@ -819,26 +817,17 @@ export default function AppCampaignsPage() {
     }
     if (!form.returnDepartmentId) return { ok: false, message: "Selecione o setor que receberá as respostas." };
     if (!selectedReturnDepartment) return { ok: false, message: "Selecione um setor válido para receber as respostas." };
-    if (selectedReturnDepartment.queueMode === "missing") {
-      return { ok: false, message: "O setor selecionado não possui fila configurada." };
+    if (!selectedReturnDepartment.operationalReady) {
+      return { ok: false, message: "Este setor ainda não está disponível para receber atendimentos." };
     }
-    if (selectedReturnDepartment.queueMode === "multiple" && !form.returnQueueId) {
-      return { ok: false, message: "Selecione a fila que receberá as respostas." };
-    }
-    const queueId =
-      selectedReturnDepartment.queueMode === "single"
-        ? selectedReturnDepartment.queues[0]?.id
-        : form.returnQueueId;
-    if (!queueId) return { ok: false, message: "Selecione uma fila válida para receber as respostas." };
     return {
       ok: true,
       value: {
         type: "human_department",
         departmentId: selectedReturnDepartment.id,
-        queueId,
       },
     };
-  }, [form.returnDepartmentId, form.returnDestinationType, form.returnFlowId, form.returnQueueId, selectedReturnDepartment]);
+  }, [form.returnDepartmentId, form.returnDestinationType, form.returnFlowId, selectedReturnDepartment]);
 
   const returnDestinationEditor = (
     <div className="grid gap-3 rounded-md border border-white/10 bg-re7-navy/45 p-3 lg:col-span-3">
@@ -880,11 +869,9 @@ export default function AppCampaignsPage() {
               className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
               value={form.returnDepartmentId}
               onChange={(event) => {
-                const department = returnDestinations?.departments.find((item) => item.id === event.target.value) ?? null;
                 setForm((prev) => ({
                   ...prev,
                   returnDepartmentId: event.target.value,
-                  returnQueueId: department?.queueMode === "single" ? department.queues[0]?.id ?? "" : "",
                 }));
               }}
             >
@@ -896,26 +883,9 @@ export default function AppCampaignsPage() {
               ))}
             </select>
           </label>
-          {selectedReturnDepartment?.queueMode === "multiple" ? (
-            <label className="grid gap-1 text-sm">
-              <span className="text-white/70">Fila</span>
-              <select
-                className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
-                value={form.returnQueueId}
-                onChange={(event) => setForm((prev) => ({ ...prev, returnQueueId: event.target.value }))}
-              >
-                <option value="">Selecionar fila</option>
-                {selectedReturnDepartment.queues.map((queue) => (
-                  <option key={queue.id} value={queue.id}>
-                    {queue.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          {selectedReturnDepartment?.queueMode === "missing" ? (
+          {selectedReturnDepartment && !selectedReturnDepartment.operationalReady ? (
             <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100 md:col-span-2">
-              O setor selecionado não possui fila configurada.
+              Este setor ainda não está disponível para receber atendimentos.
             </p>
           ) : null}
         </div>
@@ -1208,7 +1178,6 @@ export default function AppCampaignsPage() {
         setForm((prev) => ({
           ...prev,
           returnDepartmentId: prev.returnDepartmentId || response.departments[0]?.id || "",
-          returnQueueId: prev.returnQueueId || response.departments[0]?.queues[0]?.id || "",
           returnFlowId: prev.returnFlowId || response.flows[0]?.id || "",
         }));
       }),
@@ -2027,7 +1996,6 @@ export default function AppCampaignsPage() {
       ...EMPTY_FORM,
       returnDestinationType: prev.returnDestinationType,
       returnDepartmentId: prev.returnDepartmentId,
-      returnQueueId: prev.returnQueueId,
       returnFlowId: prev.returnFlowId,
       templateVariables: syncTemplateVariables(fixedVariableValues, labels.length),
       templateVariableMappings: syncTemplateVariableMappings([], labels),

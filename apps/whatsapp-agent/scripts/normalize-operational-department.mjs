@@ -37,6 +37,10 @@ async function normalizeClient(client) {
     create: { clientId: client.id, departmentId: target.id, name: TARGET_QUEUE_NAME },
     select: { id: true },
   });
+  await prisma.department.update({
+    where: { id: target.id },
+    data: { operationalQueueId: targetQueue.id },
+  });
 
   const legacyDepartments = await prisma.department.findMany({
     where: {

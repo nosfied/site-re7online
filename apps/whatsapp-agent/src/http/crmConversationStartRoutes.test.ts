@@ -37,6 +37,7 @@ let tempRoot = "";
 let server: Server;
 let baseUrl = "";
 let clientId = "";
+let primaryDepartmentId = "";
 let admin: TestUser;
 let supervisor: TestUser;
 let agent: TestUser;
@@ -86,6 +87,22 @@ async function createUser(params: { role: string; suffix: string }): Promise<Tes
   return user;
 }
 
+async function assignPrimaryDepartment(userId: string) {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { departmentId: primaryDepartmentId },
+  });
+  await prisma.userDepartmentMembership.create({
+    data: {
+      clientId,
+      userId,
+      departmentId: primaryDepartmentId,
+      isActive: true,
+      isPrimary: true,
+    },
+  });
+}
+
 function authToken(user: TestUser) {
   return issueClientAuthToken(user, `${user.id}-session`);
 }
@@ -129,7 +146,11 @@ async function cleanup() {
   await prisma.channelAccount.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.tenantOperationalConfig.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.appAuthSession.deleteMany({ where: { clientId: { in: clientIds } } });
+  await prisma.userDepartmentMembership.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.user.deleteMany({ where: { clientId: { in: clientIds } } });
+  await prisma.department.updateMany({ where: { clientId: { in: clientIds } }, data: { operationalQueueId: null } });
+  await prisma.queue.deleteMany({ where: { clientId: { in: clientIds } } });
+  await prisma.department.deleteMany({ where: { clientId: { in: clientIds } } });
   await prisma.client.deleteMany({ where: { id: { in: clientIds } } });
 }
 
@@ -188,6 +209,31 @@ test.before(async () => {
   admin = await createUser({ role: "ADMIN", suffix: "admin" });
   supervisor = await createUser({ role: "SUPERVISOR", suffix: "supervisor" });
   agent = await createUser({ role: "AGENT", suffix: "agent" });
+  const primaryDepartment = await prisma.department.create({
+    data: {
+      clientId,
+      name: "Atendimento",
+      slug: "atendimento",
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  const primaryQueue = await prisma.queue.create({
+    data: {
+      clientId,
+      departmentId: primaryDepartment.id,
+      name: "Atendimento interno",
+    },
+    select: { id: true },
+  });
+  await prisma.department.update({
+    where: { id: primaryDepartment.id },
+    data: { operationalQueueId: primaryQueue.id },
+  });
+  primaryDepartmentId = primaryDepartment.id;
+  await assignPrimaryDepartment(admin.id);
+  await assignPrimaryDepartment(supervisor.id);
+  await assignPrimaryDepartment(agent.id);
 
   const { handleRequest } = await import("./routes.js");
   server = createServer((req, res) => {

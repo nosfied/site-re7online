@@ -197,5 +197,14 @@ Para licitacoes, propostas tecnicas, PoCs e diligencias, usar primeiro:
 - `CANONICAL_IDENTITY_P1_DELIVERY_2026-09-17.md`: implementation boundary,
   canonical resolver contract, 119-test validation, controlled deployment and
   production non-destructive validation.
-- `OPERATIONAL_QUEUE_DOMAIN_DESIGN_2026-09-17.md`: approved design pending owner
-  schema authorization; no implementation or runtime heuristic.
+- `OPERATIONAL_QUEUE_DOMAIN_DESIGN_2026-09-17.md`: implemented local explicit
+  Department-to-operational-Queue domain, audited production mapping manifest,
+  validation state and controlled rollout plan; owner UX PASS, owner decisions
+  complete, final local cutover package prepared, not deployed.
+- `OPERATIONAL_QUEUE_PRODUCTION_MAPPING_AUDIT_2026-09-17.md`: read-only
+  complete 54-department production reconciliation matrix, tenant summary,
+  proposed explicit IDs, null-allowed rows and final owner decisions for the
+  five previously active blockers.
+- `OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`: concise package for
+  the five previously active blockers, with final owner decisions, operational
+  consequences and local reconciliation evidence.

@@ -352,19 +352,14 @@ async function resolveWebchatHandoffRouting(params: {
           name: { equals: targetDepartmentName, mode: "insensitive" },
           isActive: true,
         },
-        select: { id: true, name: true },
-      })
-    : null;
-  const queue = targetQueueName
-    ? await params.prisma.queue.findFirst({
-        where: {
-          clientId: params.clientId,
-          name: { equals: targetQueueName, mode: "insensitive" },
-          ...(department?.id ? { departmentId: department.id } : {}),
+        select: {
+          id: true,
+          name: true,
+          operationalQueue: { select: { id: true, name: true, departmentId: true } },
         },
-        select: { id: true, name: true, departmentId: true },
       })
     : null;
+  const queue = department?.operationalQueue ?? null;
 
   if ((targetDepartmentName || targetQueueName) && !department && !queue) {
     logger.warn({
@@ -376,10 +371,10 @@ async function resolveWebchatHandoffRouting(params: {
   }
 
   return {
-    departmentId: queue?.departmentId ?? department?.id ?? params.currentDepartmentId,
+    departmentId: department?.id ?? params.currentDepartmentId,
     queueId: queue?.id ?? params.currentQueueId,
     departmentName: department?.name ?? targetDepartmentName ?? null,
-    queueName: queue?.name ?? targetQueueName ?? null,
+    queueName: null,
   };
 }
 
@@ -395,7 +390,6 @@ function buildWebchatHandoffOperationalNotice(params: {
     `Protocolo: ${params.protocol}`,
   ];
   if (params.departmentName) lines.push(`Área responsável: ${params.departmentName}`);
-  if (params.queueName) lines.push(`Fila: ${params.queueName}`);
   if (interest === "suporte" || interest === "support") {
     lines.push("Nossa equipe acompanhará este atendimento pelo SLA operacional.");
   } else {
@@ -508,7 +502,6 @@ async function resolveProtocolLookup(params: {
     "",
     `Protocolo: ${normalizedProtocol}`,
     `Área: ${department?.name ?? "Atendimento"}`,
-    ...(queue?.name ? [`Fila: ${queue.name}`] : []),
     `Status: ${formatOperationalStatus(state?.status, state?.closedAt ?? conversation.closedAt)}`,
     `Última atualização: ${formatProtocolLookupDate(lastUpdatedAt)}`,
     "",

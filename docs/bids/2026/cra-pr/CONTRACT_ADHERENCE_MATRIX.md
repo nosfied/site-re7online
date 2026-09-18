@@ -370,8 +370,14 @@ implementation, schema, migration, backfill or production data repair. A real
 post-deploy identity event remains pending natural or separately authorized
 evidence.
 
-Operational Queue has an approved design pending owner schema authorization.
-Campaign UX remains owner PASS, but queue-dependent delivery stays pending.
+Operational Queue is IMPLEMENTED LOCAL / OWNER UX PASS / OWNER DECISIONS
+COMPLETE / FINAL LOCAL CUTOVER PACKAGE PREPARED / NOT DEPLOYED. Campaign UX
+remains owner PASS; Department-only destination and exact internal Queue
+persistence are locally implemented. Production remains gated by a separate
+controlled rollout, not by an open owner decision. The 54-department matrix and
+final owner decisions are documented in
+`docs/saas/OPERATIONAL_QUEUE_PRODUCTION_MAPPING_AUDIT_2026-09-17.md` and
+`docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`.
 Demo `****6787` remained byte-for-byte unchanged in pre/post read-only Contact
 and Lead snapshots and requires a separate repair gate. This is product
 evidence, not CRA customer acceptance of duplicate prevention.

@@ -127,10 +127,18 @@ function slugify(value) {
 }
 
 async function upsertClient() {
+  const features = {
+    crm: true,
+    campaigns: true,
+    templates: true,
+    reports: true,
+    chatbot: true,
+    webchat: true,
+  };
   return prisma.client.upsert({
     where: { clientKey: CLIENT_KEY },
-    update: { name: CLIENT_NAME, status: "ACTIVE", profile: "government" },
-    create: { clientKey: CLIENT_KEY, name: CLIENT_NAME, status: "ACTIVE", profile: "government" },
+    update: { name: CLIENT_NAME, status: "ACTIVE", profile: "government", features },
+    create: { clientKey: CLIENT_KEY, name: CLIENT_NAME, status: "ACTIVE", profile: "government", features },
   });
 }
 
@@ -190,7 +198,11 @@ async function upsertDepartments(clientId) {
       update: {},
       create: { clientId, departmentId: department.id, name: item.queueName },
     });
-    departments[item.name] = { ...department, queue };
+    const operationalDepartment = await prisma.department.update({
+      where: { id: department.id },
+      data: { operationalQueueId: queue.id },
+    });
+    departments[item.name] = { ...operationalDepartment, queue };
   }
   return departments;
 }

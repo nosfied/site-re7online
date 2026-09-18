@@ -249,7 +249,11 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
       create: tx.event.create,
     },
     department: {
-      findFirst: async () => ({ id: "department_1", name: "Atendimento Geral" }),
+      findFirst: async () => ({
+        id: "department_1",
+        name: "Atendimento Geral",
+        operationalQueue: { id: "queue_1", name: "Fila Geral", departmentId: "department_1" },
+      }),
       create: async () => ({ id: "department_1", name: "Atendimento Geral" }),
     },
     queue: {
@@ -694,21 +698,25 @@ test("createWebchatInboundMessage preserves captured lead name after human hando
 });
 
 test("createWebchatInboundMessage applies target department and queue on support handoff", async () => {
-  const departments = new Map([
-    ["Suporte", { id: "department_support", name: "Suporte" }],
-    ["Comercial", { id: "department_commercial", name: "Comercial" }],
-    ["Governo e Licitações", { id: "department_government", name: "Governo e Licitações" }],
-  ]);
   const queues = new Map([
     ["Fila Suporte", { id: "queue_support", name: "Fila Suporte", departmentId: "department_support" }],
     ["Fila Comercial", { id: "queue_commercial", name: "Fila Comercial", departmentId: "department_commercial" }],
     ["Fila Governo", { id: "queue_government", name: "Fila Governo", departmentId: "department_government" }],
   ]);
+  const departments = new Map([
+    ["Suporte", { id: "department_support", name: "Suporte", operationalQueue: queues.get("Fila Suporte") }],
+    ["Comercial", { id: "department_commercial", name: "Comercial", operationalQueue: queues.get("Fila Comercial") }],
+    ["Governo e Licitações", { id: "department_government", name: "Governo e Licitações", operationalQueue: queues.get("Fila Governo") }],
+  ]);
   const prisma = makePrisma({
     department: {
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
         const serialized = JSON.stringify(where);
-        return Array.from(departments.entries()).find(([name]) => serialized.includes(name))?.[1] ?? null;
+        return Array.from(departments.entries()).find(([name]) => serialized.includes(name))?.[1] ?? {
+          id: "department_1",
+          name: "Atendimento Geral",
+          operationalQueue: { id: "queue_1", name: "Fila Geral", departmentId: "department_1" },
+        };
       },
       create: async () => ({ id: "department_1", name: "Atendimento Geral" }),
     },
@@ -750,24 +758,28 @@ test("createWebchatInboundMessage applies target department and queue on support
   assert.equal(prisma.state.runtimeStates[0].queueId, "queue_support");
   assert.match(String(prisma.state.outboundMessages.at(-1)?.bodyText), /Protocolo: CVT-/);
   assert.match(String(prisma.state.outboundMessages.at(-1)?.bodyText), /Área responsável: Suporte/);
-  assert.match(String(prisma.state.outboundMessages.at(-1)?.bodyText), /Fila: Fila Suporte/);
+  assert.doesNotMatch(String(prisma.state.outboundMessages.at(-1)?.bodyText), /Fila:/);
   assert.match(String(prisma.state.outboundMessages.at(-1)?.bodyText), /SLA operacional/);
 });
 
 test("createWebchatInboundMessage routes commercial and government handoff to configured queues", async () => {
-  const departments = new Map([
-    ["Comercial", { id: "department_commercial", name: "Comercial" }],
-    ["Governo e Licitações", { id: "department_government", name: "Governo e Licitações" }],
-  ]);
   const queues = new Map([
     ["Fila Comercial", { id: "queue_commercial", name: "Fila Comercial", departmentId: "department_commercial" }],
     ["Fila Governo", { id: "queue_government", name: "Fila Governo", departmentId: "department_government" }],
+  ]);
+  const departments = new Map([
+    ["Comercial", { id: "department_commercial", name: "Comercial", operationalQueue: queues.get("Fila Comercial") }],
+    ["Governo e Licitações", { id: "department_government", name: "Governo e Licitações", operationalQueue: queues.get("Fila Governo") }],
   ]);
   const makeRoutedPrisma = () => makePrisma({
     department: {
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
         const serialized = JSON.stringify(where);
-        return Array.from(departments.entries()).find(([name]) => serialized.includes(name))?.[1] ?? null;
+        return Array.from(departments.entries()).find(([name]) => serialized.includes(name))?.[1] ?? {
+          id: "department_1",
+          name: "Atendimento Geral",
+          operationalQueue: { id: "queue_1", name: "Fila Geral", departmentId: "department_1" },
+        };
       },
       create: async () => ({ id: "department_1", name: "Atendimento Geral" }),
     },
@@ -789,7 +801,7 @@ test("createWebchatInboundMessage routes commercial and government handoff to co
   await createWebchatInboundMessage({ prisma: commercialPrisma, requestId: "req_11d", input: { sessionToken: "wcs_existing", text: "1" }, origin: "https://portal.example.com", ip: "203.0.113.20" });
   assert.equal(commercialPrisma.state.runtimeStates[0].departmentId, "department_commercial");
   assert.equal(commercialPrisma.state.runtimeStates[0].queueId, "queue_commercial");
-  assert.match(String(commercialPrisma.state.outboundMessages.at(-1)?.bodyText), /Fila: Fila Comercial/);
+  assert.doesNotMatch(String(commercialPrisma.state.outboundMessages.at(-1)?.bodyText), /Fila:/);
   assert.match(String(commercialPrisma.state.outboundMessages.at(-1)?.bodyText), /Protocolo: CVT-/);
 
   const governmentPrisma = makeRoutedPrisma();
@@ -799,7 +811,7 @@ test("createWebchatInboundMessage routes commercial and government handoff to co
   await createWebchatInboundMessage({ prisma: governmentPrisma, requestId: "req_12b", input: { sessionToken: "wcs_existing", text: "3" }, origin: "https://portal.example.com", ip: "203.0.113.21" });
   assert.equal(governmentPrisma.state.runtimeStates[0].departmentId, "department_government");
   assert.equal(governmentPrisma.state.runtimeStates[0].queueId, "queue_government");
-  assert.match(String(governmentPrisma.state.outboundMessages.at(-1)?.bodyText), /Fila: Fila Governo/);
+  assert.doesNotMatch(String(governmentPrisma.state.outboundMessages.at(-1)?.bodyText), /Fila:/);
   assert.match(String(governmentPrisma.state.outboundMessages.at(-1)?.bodyText), /Protocolo: CVT-/);
 });
 
@@ -819,9 +831,17 @@ function useDynamicRuntimeLookup(prisma: any) {
 function useProtocolLookupDirectories(prisma: any) {
   prisma.department.findFirst = async ({ where }: { where: Record<string, unknown> }) => {
     if (where.id === "department_support" || JSON.stringify(where).includes("Suporte")) {
-      return { id: "department_support", name: "Suporte" };
+      return {
+        id: "department_support",
+        name: "Suporte",
+        operationalQueue: { id: "queue_support", name: "Fila Suporte", departmentId: "department_support" },
+      };
     }
-    return { id: "department_1", name: "Atendimento Geral" };
+    return {
+      id: "department_1",
+      name: "Atendimento Geral",
+      operationalQueue: { id: "queue_1", name: "Fila Geral", departmentId: "department_1" },
+    };
   };
   prisma.queue.findFirst = async ({ where }: { where: Record<string, unknown> }) => {
     if (where.id === "queue_support" || JSON.stringify(where).includes("Fila Suporte")) {
@@ -927,7 +947,7 @@ test("createWebchatInboundMessage validates protocol lookup and routes continuat
   assert.match(response, /Encontramos seu atendimento/);
   assert.match(response, /Protocolo: CVT-123E4567E89B/);
   assert.match(response, /Área: Suporte/);
-  assert.match(response, /Fila: Fila Suporte/);
+  assert.doesNotMatch(response, /Fila:/);
   assert.match(response, /Status: Aguardando atendimento/);
   assert.equal(currentRuntime?.departmentId, "department_support");
   assert.equal(currentRuntime?.queueId, "queue_support");

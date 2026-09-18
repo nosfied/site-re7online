@@ -578,7 +578,7 @@ test("direct handoff generator keeps one configured human destination", () => {
   assert.equal(definition.nodes.atendimento_humano.queueId, "queue");
 });
 
-test("guided destination validation resolves one queue and requires queue only for multi queue handoff", () => {
+test("guided destination validation resolves only the explicit internal queue projection", () => {
   const answers = {
     ...createDefaultWizardAnswers(),
     template: "direct_handoff" as const,
@@ -594,7 +594,7 @@ test("guided destination validation resolves one queue and requires queue only f
       { id: "queue_geral", name: "Fila Geral", departmentId: "dep_syer" },
       { id: "queue_atendimento", name: "Fila Atendimento", departmentId: "dep_syer" },
     ]),
-    ["Escolha a fila que receberá este atendimento."]
+    ["Este setor ainda não está disponível para receber atendimentos."]
   );
   assert.deepEqual(
     validateWizardStep({ ...answers, destinations: { 0: { ...answers.destinations[0], queueId: "queue_geral" } } }, "destination", [
@@ -604,7 +604,7 @@ test("guided destination validation resolves one queue and requires queue only f
   );
   assert.deepEqual(
     validateWizardStep(answers, "destination", []),
-    ["Este setor ainda não está preparado para receber atendimentos."]
+    ["Este setor ainda não está disponível para receber atendimentos."]
   );
 });
 
@@ -925,7 +925,7 @@ test("wizard hierarchy tones are based on menu nesting level", () => {
   assert.equal(wizardMenuLevelTone("0.1.2.3"), wizardMenuLevelTone("0.1.2"));
 });
 
-test("wizard destination options keep human routing unified with conditional queue field", () => {
+test("wizard destination options expose only the human department choice", () => {
   const labels = getWizardDestinationTypeOptions("").map((option) => option.label);
   const values = getWizardDestinationTypeOptions("").map((option) => option.value);
 
@@ -1059,18 +1059,18 @@ test("question chain builds three sequential capture nodes before the next actio
   assert.equal(definition.nodes.mensagem_dados_depois_depois_depois?.type, "text");
 });
 
-test("human handoff queue contract hides one queue blocks zero and requires selector only for multi queue", () => {
+test("human handoff contract hides the internal queue and blocks unavailable mappings", () => {
   const answers = createDefaultWizardAnswers();
   answers.template = "direct_handoff";
   answers.destinations = { 0: { type: "department", departmentId: "dep" } };
 
-  assert.ok(validateWizardStep(answers, "destination", []).includes("Este setor ainda não está preparado para receber atendimentos."));
+  assert.ok(validateWizardStep(answers, "destination", []).includes("Este setor ainda não está disponível para receber atendimentos."));
   assert.deepEqual(validateWizardStep(answers, "destination", [{ id: "queue_a", name: "Fila A", departmentId: "dep" }]), []);
   assert.equal(buildDirectHandoffFlow(answers, [{ id: "queue_a", name: "Fila A", departmentId: "dep" }]).nodes.atendimento_humano.queueId, "queue_a");
   assert.ok(validateWizardStep(answers, "destination", [
     { id: "queue_a", name: "Fila A", departmentId: "dep" },
     { id: "queue_b", name: "Fila B", departmentId: "dep" },
-  ]).includes("Escolha a fila que receberá este atendimento."));
+  ]).includes("Este setor ainda não está disponível para receber atendimentos."));
 
   const fixed = { ...answers, destinations: { 0: { type: "department" as const, departmentId: "dep", queueId: "queue_a" } } };
   assert.deepEqual(validateWizardStep(fixed, "destination", [
@@ -1080,13 +1080,13 @@ test("human handoff queue contract hides one queue blocks zero and requires sele
   assert.equal(buildDirectHandoffFlow(fixed).nodes.atendimento_humano.queueId, "queue_a");
 });
 
-test("guided queue UX state hides single queue and exposes selector only for multi queue", () => {
+test("guided queue UX hides the internal queue and never exposes a multi-queue selector", () => {
   assert.equal(getGuidedQueueUxState([], "dep"), "blocked");
   assert.equal(getGuidedQueueUxState([{ id: "queue", name: "Fila Geral", departmentId: "dep" }], "dep"), "hidden_single_queue");
   assert.equal(getGuidedQueueUxState([
     { id: "queue_a", name: "Fila A", departmentId: "dep" },
     { id: "queue_b", name: "Fila B", departmentId: "dep" },
-  ], "dep"), "conditional_selector");
+  ], "dep"), "blocked");
 });
 
 test("guided handoff editor does not render redundant sector instruction block", () => {
@@ -1119,7 +1119,7 @@ test("legacy existing null-queue handoff opens with warning and without auto mut
   );
 
   assert.equal(changed, false);
-  assert.match(html, /Este encaminhamento ainda não possui uma fila definida/);
+  assert.match(html, /Este setor ainda não está disponível para receber atendimentos/);
 });
 
 test("wizard default submenu labels use the parent option name and sequential option label", () => {

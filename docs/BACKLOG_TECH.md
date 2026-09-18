@@ -119,12 +119,19 @@ ACTIVE P0:
 
 ACTIVE P1:
 
-1. Canonical outbound return destination for campaigns/direct contact:
-   CLOSED / DEPLOYED / OWNER APPROVED / PROD NON-DESTRUCTIVE VALIDATED. New campaign
+1. Operational Queue production rollout:
+   IMPLEMENTED LOCAL / OWNER UX PASS / OWNER DECISIONS COMPLETE / FINAL LOCAL
+   CUTOVER PACKAGE PREPARED / PRODUCTION ROLLOUT PENDING / NOT DEPLOYED. The
+   deployed baseline supports
    creation/import now requires explicit `returnDestination` in the
    `campaign.seed.saved` contract: `human_department` with concrete
-   `departmentId` + `queueId` (single queue resolved internally, zero queue
-   blocked, multiple queues require selection) or `automated_flow` with any
+   `departmentId` + `queueId`. The local successor UI accepts Department only,
+   resolves explicit `Department.operationalQueueId`, blocks unavailable
+   mappings and never exposes a multi-queue selector. Strict production cutover
+   now has all 54 departments resolved in the local package, including the five
+   owner decisions recorded on 2026-09-18; production migration/data
+   reconciliation/deploy remain pending a separate controlled rollout gate.
+   `automated_flow` uses any
    active same-tenant `ChatbotFlow` persisted as `chatbot:<flowId>` at runtime.
    `entryPoint` is not required for explicit campaign invocation; it remains the
    default selector for unqualified/new inbound only.
@@ -133,10 +140,13 @@ ACTIVE P1:
    before provider send when missing. Legacy campaigns without this seed remain
    compatible through the old operational default fallback, but new campaign
    configuration has no implicit name-based destination. Tests/builds: focused
-   `outboundReturnDestination.test.ts` 8/8 PASS, `campaignsFeatureRoutes.test.ts`
-   113/113 PASS, backend build PASS, frontend build PASS. Production deployed
-   at `452d5826db42cc1b574eeff8fd8e0d038cd3491f` with non-destructive smoke
-   PASS. No real Meta send and no Recipient B attempt.
+   `operationalQueue.test.ts` 8/8 PASS, runtime routing 30/30 PASS, identity
+   12/12 PASS, `campaignsFeatureRoutes.test.ts` 114/114 PASS,
+   `ChatbotFlowBuilder.test.ts` 53/53 PASS, backend build PASS, frontend build
+   PASS. The prior outbound return destination production deployment remains
+   `452d5826db42cc1b574eeff8fd8e0d038cd3491f`; Operational Queue itself has no
+   production migration, data mutation or deploy yet. No real Meta send and no
+   `****6787` repair occurred.
 
 2. CRA Demo Utility Recipient B controlled send: COMPLETED / DEMO PRODUCT
    CAPABILITY VALIDATED / CRA ACCEPTANCE STILL SEPARATE. On 2026-09-16 the
@@ -1331,17 +1341,19 @@ capturada como PRODUCT GAP: o runtime atual tem captura sequencial por
 `capture.next`, mas nao possui predicados por valor capturado, igualdade,
 sim/nao ou fallback branch para resposta livre.
 
-Handoff humano no Guided segue o contrato canonico: `WAITING` humano precisa de
+Registro historico do Guided 2.4: `WAITING` humano precisava de
 `departmentId` + `queueId` concreto. Auditoria local de cardinalidade encontrou
 24 setores ativos sem fila, 56 com uma fila e 5 com duas ou mais filas. Os 5
 casos multi-fila foram classificados como `default` = INTERNAL DEFAULT/Re7 Demo
 e `campaigns-feature-*` = AUTOMATED TEST ARTIFACT por metadados reais
 (`phoneNumbers=0`, `channelAccounts=0`, fixture em
 `campaignsFeatureRoutes.test.ts`); nenhum fluxo ativo ou runtime usa multiplas
-filas dentro do mesmo setor. UX final: fila unica e resolvida internamente sem
+filas dentro do mesmo setor. A UX 2.4 resolvia fila unica internamente sem
 label/seletor/texto de fila; setor sem fila bloqueia com "Este setor ainda nao
 esta preparado para receber atendimentos."; somente setor com 2+ filas exibe
-seletor "Fila" como excecao. Fluxos existentes com `departmentId` e
+seletor "Fila" como excecao. Esse comportamento foi SUPERSEDED localmente pelo
+dominio explicito: a UX mostra apenas Setor e bloqueia se
+`operationalQueueId` estiver ausente. Fluxos existentes com `departmentId` e
 `queueId=null` exibem aviso e nao sao reescritos automaticamente ao abrir.
 
 Backlog 2.4: GUIDED BUILDER 2.4 = APPROVED FOR FRONTEND-ONLY DELIVERY /
@@ -1403,11 +1415,23 @@ GAP / OPEN; SYER ****9614 = CLOSED.
   build, targeted agent reload, health/DB checks and read-only route/module
   smokes passed without schema, migration, backfill or tenant hardcode. A real
   post-deploy identity event has not yet been exercised.
-- **QUEUE DOMAIN: APPROVED DESIGN / PENDING OWNER SCHEMA AUTHORIZATION.** The
-  proposed `Department.operationalQueueId` relation is documented but not
-  implemented. Runtime name/creation/usage heuristics remain prohibited.
-- **CAMPAIGN UX: OWNER PASS / QUEUE-DEPENDENT DELIVERY PENDING.** No Campaign UX
-  runtime file is included in the identity delivery.
+- **QUEUE DOMAIN: IMPLEMENTED LOCAL / OWNER UX PASS / OWNER DECISIONS COMPLETE
+  / FINAL LOCAL CUTOVER PACKAGE PREPARED / NOT DEPLOYED.**
+  Nullable `Department.operationalQueueId`, composite same-tenant/same-department
+  FK, atomic Department lifecycle and explicit routing are implemented in the
+  isolated worktree. Local migration/tests/builds pass. Read-only production
+  audit of all 54 departments found 34 auto-safe exactly-one mappings, 8
+  inactive null-allowed rows, 7 resolved multi-queue mappings and 5 active
+  owner-resolved rows: `demo-converta` Setor Teste and `lab-websession`
+  Department Lunch get owner-approved internal queues; `demo-converta` FUNDARPE,
+  `re7online` Comercial and `re7online` Governo e Licitações get exact
+  owner-selected existing queues. Runtime name/order/usage inference remains
+  prohibited. Local reconciliation resolves 54/54 departments; production
+  cutover remains pending a separate controlled rollout. Owner decision package:
+  `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`.
+- **CAMPAIGN UX: OWNER PASS / QUEUE-DEPENDENT DELIVERY IMPLEMENTED LOCAL.** The
+  normal UX selects only Setor and persists the exact internal queue. Production
+  delivery remains gated by owner validation and the Queue rollout package.
 - Demo `****6787`: pre/post read-only snapshots of both historical Contacts and
   Leads matched exactly; no production mutation occurred and repair remains a
   separate gate.

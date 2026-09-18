@@ -42,7 +42,9 @@ function makePrismaFake(params: {
       },
     },
     department: {
-      findFirst: async () => params.department ?? null,
+      findFirst: async () => params.department
+        ? { ...params.department, operationalQueue: params.queue ?? null }
+        : null,
     },
     tenantOperationalConfig: {
       findUnique: async () => ({ config: { timezone: "America/Fortaleza" } }),
@@ -89,10 +91,10 @@ test("resolveDepartmentAwareHandoff preserves legacy handoff when department has
   assert.equal(decision.shouldAssign, true);
 });
 
-test("resolveDepartmentAwareHandoff resolves department-only handoff to the single queue in the department", async () => {
+test("resolveDepartmentAwareHandoff resolves department-only handoff through the explicit operational queue", async () => {
   const decision = await resolveDepartmentAwareHandoff(makePrismaFake({
     department: { id: "department_1", name: "Campanha 2026" },
-    queues: [{ id: "queue_1", name: "Fila Geral", departmentId: "department_1" }],
+    queue: { id: "queue_1", name: "Fila Geral", departmentId: "department_1" },
     businessHours: [],
   }) as never, {
     clientId: "client_1",
@@ -107,7 +109,7 @@ test("resolveDepartmentAwareHandoff resolves department-only handoff to the sing
   assert.equal(decision.shouldAssign, true);
 });
 
-test("resolveDepartmentAwareHandoff blocks department-only handoff when queue is ambiguous", async () => {
+test("resolveDepartmentAwareHandoff does not infer from multiple queues without an explicit mapping", async () => {
   const decision = await resolveDepartmentAwareHandoff(makePrismaFake({
     department: { id: "department_1", name: "Campanha 2026" },
     queues: [
@@ -123,7 +125,7 @@ test("resolveDepartmentAwareHandoff blocks department-only handoff when queue is
   assert.equal(decision.kind, "blocked");
   assert.equal(decision.shouldAssign, false);
   if (decision.kind === "blocked") {
-    assert.equal(decision.reason, "queue_required");
+    assert.equal(decision.reason, "no_queue_for_department");
   }
 });
 

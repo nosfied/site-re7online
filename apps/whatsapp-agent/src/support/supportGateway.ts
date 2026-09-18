@@ -10,6 +10,7 @@ import {
 import { buildConversationProtocol } from "../inbox/conversationProtocol.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
+import { resolveDepartmentOperationalQueue } from "../departments/operationalQueue.js";
 import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
 import { getFeatures } from "../features/clientFeatures.js";
 import { runWebchatChatbotFlow } from "../webchat/webchatInboundService.js";
@@ -143,11 +144,10 @@ async function resolveSupportRouting(
     : null;
   const queue = configuredQueue ?? (
     configuredDepartment
-      ? await prisma.queue.findFirst({
-          where: { clientId: params.clientId, departmentId: configuredDepartment.id },
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          select: { id: true, name: true, departmentId: true },
-        })
+      ? (await resolveDepartmentOperationalQueue(prisma, {
+          clientId: params.clientId,
+          departmentId: configuredDepartment.id,
+        })).queue
       : null
   ) ?? defaults.queue;
 

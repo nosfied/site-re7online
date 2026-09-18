@@ -23,6 +23,7 @@ import {
 } from "@prisma/client";
 import type { ConversationState } from "../conversation/conversation.types.js";
 import { getDepartmentAvailability, getNextDepartmentOpenAt } from "../departments/businessHours.js";
+import { createDepartmentWithOperationalQueue } from "../departments/operationalQueue.js";
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "campaigns-feature-route-test-secret";
 process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || "campaigns-feature-route-test-admin-token";
@@ -14682,6 +14683,10 @@ test("inbox operations stay functional when tenant has no active general departm
       },
       select: { id: true },
     });
+    await prisma.department.update({
+      where: { id: department.id },
+      data: { operationalQueueId: queue.id },
+    });
     departments.push({ id: department.id, queueId: queue.id });
   }
 
@@ -15692,29 +15697,20 @@ test("inbox operations stay functional when tenant has no active general departm
 });
 
 test("tenant admins manage department schedule exceptions with RBAC and tenant isolation", async () => {
-  const departmentA = await prisma.department.create({
-    data: {
-      clientId: businessClientId,
-      name: `${prefix} Agenda A`,
-      slug: `${prefix}-agenda-a`,
-    },
-    select: { id: true },
+  const departmentA = await createDepartmentWithOperationalQueue(prisma, {
+    clientId: businessClientId,
+    name: `${prefix} Agenda A`,
+    slug: `${prefix}-agenda-a`,
   });
-  const departmentB = await prisma.department.create({
-    data: {
-      clientId: businessClientId,
-      name: `${prefix} Agenda B`,
-      slug: `${prefix}-agenda-b`,
-    },
-    select: { id: true },
+  const departmentB = await createDepartmentWithOperationalQueue(prisma, {
+    clientId: businessClientId,
+    name: `${prefix} Agenda B`,
+    slug: `${prefix}-agenda-b`,
   });
-  const otherDepartment = await prisma.department.create({
-    data: {
-      clientId: governmentClientId,
-      name: `${prefix} Agenda Gov`,
-      slug: `${prefix}-agenda-gov`,
-    },
-    select: { id: true },
+  const otherDepartment = await createDepartmentWithOperationalQueue(prisma, {
+    clientId: governmentClientId,
+    name: `${prefix} Agenda Gov`,
+    slug: `${prefix}-agenda-gov`,
   });
   const regularHours = [
     { weekday: 1, startMinute: 8 * 60, endMinute: 12 * 60 },

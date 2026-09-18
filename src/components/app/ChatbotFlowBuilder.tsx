@@ -112,9 +112,7 @@ function resolveSingleQueueIdForDepartment(queues: ChatbotFlowBuilderQueue[], de
 export function getGuidedQueueUxState(queues: ChatbotFlowBuilderQueue[], departmentId?: string | null) {
   if (!departmentId) return "department_only" as const;
   const availableQueues = queuesForDepartment(queues, departmentId);
-  if (availableQueues.length === 0) return "blocked" as const;
-  if (availableQueues.length === 1) return "hidden_single_queue" as const;
-  return "conditional_selector" as const;
+  return availableQueues.length === 1 ? "hidden_single_queue" as const : "blocked" as const;
 }
 
 const QUESTION_RESPONSE_TYPE_OPTIONS = [
@@ -184,7 +182,7 @@ function buildIssues(definition: FlowDefinition, queues: ChatbotFlowBuilderQueue
         if (stringValue(option.next)) inbound.add(stringValue(option.next));
         const queue = queues.find((item) => item.id === option.queueId);
         if (queue && option.departmentId && queue.departmentId !== option.departmentId) {
-          issues.push(`A opção "${label || index + 1}" usa fila de outro setor.`);
+          issues.push(`A opção "${label || index + 1}" usa um destino interno incompatível com o setor.`);
         }
       });
     }
@@ -203,16 +201,14 @@ function buildIssues(definition: FlowDefinition, queues: ChatbotFlowBuilderQueue
         issues.push(`A etapa "${nodeId}" encaminha para humano sem setor definido.`);
       } else if (!queueId) {
         const availableQueues = queuesForDepartment(queues, departmentId);
-        if (availableQueues.length === 0) {
-          issues.push(`A etapa "${nodeId}" encaminha para um setor sem fila cadastrada.`);
-        } else if (availableQueues.length > 1) {
-          issues.push(`A etapa "${nodeId}" precisa de uma fila específica para este setor.`);
+        if (availableQueues.length !== 1) {
+          issues.push(`A etapa "${nodeId}" encaminha para um setor indisponível para atendimentos.`);
         }
       }
     }
     const queue = queues.find((item) => item.id === node.queueId);
     if (queue && node.departmentId && queue.departmentId !== node.departmentId) {
-      issues.push(`A etapa "${nodeId}" usa fila de outro setor.`);
+      issues.push(`A etapa "${nodeId}" usa um destino interno incompatível com o setor.`);
     }
   }
   nodeIds.forEach((nodeId) => {
@@ -307,7 +303,7 @@ export function getChatbotNodeIssueSectionKeys(type: string, nodeId: string, nod
     if (issue.includes("aponta para etapa inexistente") && !issue.includes("opção")) {
       issueKeys.add(type === "consent" ? "consent" : "next");
     }
-    if (issue.includes("encaminha para humano sem setor definido") || issue.includes("usa fila de outro setor")) {
+    if (issue.includes("encaminha para humano sem setor definido") || issue.includes("destino interno incompatível")) {
       issueKeys.add(type === "menu" && issue.includes("opção") ? "options" : "destination");
     }
   }
@@ -495,7 +491,7 @@ const STANDARD_FLOW_TEMPLATES: Array<{
   {
     id: "direct_handoff",
     title: "Encaminhamento direto",
-    summary: "Receba a primeira mensagem e envie o cidadão para um setor ou fila.",
+    summary: "Receba a primeira mensagem e envie o cidadão para um setor.",
     example: ["Atendimento geral"],
     action: "Usar este modelo",
   },
@@ -1046,10 +1042,8 @@ export function validateWizardStep(
     }
     if ((destination.type === "department" || destination.type === "queue") && destination.departmentId) {
       const availableQueues = queuesForDepartment(queues, destination.departmentId);
-      if (availableQueues.length === 0) {
-        errors.push("Este setor ainda não está preparado para receber atendimentos.");
-      } else if (availableQueues.length > 1 && !destination.queueId) {
-        errors.push(`Escolha a fila que receberá ${label}.`);
+      if (!destination.queueId && availableQueues.length !== 1) {
+        errors.push("Este setor ainda não está disponível para receber atendimentos.");
       }
     }
     if (destination.type === "question") {
@@ -1129,20 +1123,13 @@ function getDepartmentName(departments: ChatbotFlowBuilderDepartment[], id: unkn
   return departments.find((department) => department.id === id)?.name ?? "Setor não encontrado";
 }
 
-function getQueueName(queues: ChatbotFlowBuilderQueue[], id: unknown) {
-  if (typeof id !== "string" || !id.trim()) return "";
-  return queues.find((queue) => queue.id === id)?.name ?? "Fila não encontrada";
-}
-
 function describeDestination(
   destination: Record<string, unknown>,
   departments: ChatbotFlowBuilderDepartment[],
-  queues: ChatbotFlowBuilderQueue[]
+  _queues: ChatbotFlowBuilderQueue[]
 ) {
   const department = getDepartmentName(departments, destination.departmentId);
-  const queue = getQueueName(queues, destination.queueId);
-  if (!department && !queue) return "Destino ainda não configurado.";
-  return [department || "Setor não configurado", queue || "Fila padrão"].join(" · ");
+  return department || "Setor não configurado";
 }
 
 function describeNodeForCitizen(nodeId: string, node: Record<string, unknown> | undefined) {
@@ -1356,14 +1343,14 @@ function buildChecklist(definition: FlowDefinition, issues: string[]) {
   const hasMenuOptions = !issues.some((issue) => issue.includes("precisa de título") || issue.includes("precisa de destino"));
   const hasValidRoutes = !issues.some((issue) => issue.includes("aponta para etapa inexistente") || issue.includes("etapa inexistente"));
   const hasHandoffDepartments = !issues.some((issue) => issue.includes("encaminha para humano sem setor definido"));
-  const hasCompatibleQueues = !issues.some((issue) => issue.includes("usa fila de outro setor"));
+  const hasCompatibleQueues = !issues.some((issue) => issue.includes("destino interno incompatível"));
   return [
     { group: "Estrutura", label: "Etapa inicial definida", status: hasStart ? "PASS" : "ERROR" },
     { group: "Estrutura", label: "Referências válidas", status: hasValidRoutes ? "PASS" : "ERROR" },
     { group: "Conteúdo", label: "Mensagens obrigatórias preenchidas", status: hasRequiredMessages ? "PASS" : "ERROR" },
     { group: "Conteúdo", label: "Menus possuem opções válidas", status: hasMenuOptions ? "PASS" : "ERROR" },
     { group: "Roteamento", label: "Atendimentos humanos possuem setor", status: hasHandoffDepartments ? "PASS" : "WARNING" },
-    { group: "Roteamento", label: "Filas compatíveis com setores", status: hasCompatibleQueues ? "PASS" : "ERROR" },
+    { group: "Roteamento", label: "Destinos humanos disponíveis", status: hasCompatibleQueues ? "PASS" : "ERROR" },
   ];
 }
 
@@ -1581,8 +1568,8 @@ export function getGuidedNextTask(definition: FlowDefinition, queues: ChatbotFlo
         return {
           kind: "handoff_destination",
           nodeId,
-          title: "Revise a fila deste atendimento",
-          summary: "A fila precisa pertencer ao setor escolhido.",
+          title: "Revise o destino deste atendimento",
+          summary: "O destino interno precisa pertencer ao setor escolhido.",
         };
       }
     }
@@ -1910,7 +1897,7 @@ export function ChatbotFlowBuilder({
       </div>
 
       {guidedTask.kind === "objective" ? (
-        <div className={`mt-3 grid gap-2 ${selectedDepartmentQueues.length > 1 ? "sm:grid-cols-2" : ""}`}>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {OBJECTIVE_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -2043,30 +2030,9 @@ export function ChatbotFlowBuilder({
               {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
             </select>
           </label>
-          {selectedDepartmentQueues.length > 1 ? (
-          <label className="grid gap-1 text-sm text-white/70">
-            Fila
-            <span className="text-xs text-white/55">
-              Este setor possui mais de uma fila de atendimento. Escolha para qual delas o atendimento deve ser encaminhado.
-            </span>
-            <select
-              value={stringValue(guidedTaskNode.queueId)}
-              disabled={disabled}
-              onChange={(event) => commit(setNodeField(definition, guidedTask.nodeId, "queueId", event.target.value))}
-              className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-            >
-              <option value="">{selectedDepartmentQueues.length === 0 ? "Nenhuma fila cadastrada" : "Escolha a fila"}</option>
-              {selectedDepartmentQueues.map((queue) => <option key={queue.id} value={queue.id}>{queue.name}</option>)}
-            </select>
-            {guidedTaskNode.departmentId && !guidedTaskNode.queueId ? (
-              <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
-                Este encaminhamento ainda não possui uma fila definida.
-              </span>
-            ) : null}
-          </label>
-          ) : guidedTaskNode.departmentId && selectedDepartmentQueues.length === 0 ? (
+          {guidedTaskNode.departmentId && selectedDepartmentQueues.length !== 1 ? (
             <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
-              Este setor ainda não está preparado para receber atendimentos.
+              Este setor ainda não está disponível para receber atendimentos.
             </span>
           ) : null}
         </div>
@@ -2277,7 +2243,7 @@ export function ChatbotFlowBuilder({
           <div>
             <p className="text-xs font-semibold uppercase text-white/45">Passo 5</p>
             <h4 className="mt-1 text-lg font-semibold text-white">Escolha destinos humanos</h4>
-            <p className="mt-1 text-sm text-white/65">Defina setor, fila e mensagem automática de encaminhamento quando existir atendimento humano.</p>
+            <p className="mt-1 text-sm text-white/65">Defina o setor e a mensagem automática de encaminhamento quando existir atendimento humano.</p>
           </div>
           <div className="grid gap-2">
             {handoffEntries.length > 0 ? handoffEntries.map((entry, index) => (
@@ -2507,7 +2473,7 @@ export function ChatbotFlowBuilder({
       showBuilderToast("Não foi possível gerar o fluxo com as respostas atuais.", "error");
       return;
     }
-    const blockingIssue = generatedIssues.find((issue) => issue.includes("precisa") || issue.includes("sem setor") || issue.includes("sem fila"));
+    const blockingIssue = generatedIssues.find((issue) => issue.includes("precisa") || issue.includes("sem setor") || issue.includes("indisponível"));
     if (blockingIssue) {
       setWizardApplyFeedback({ tone: "error", message: blockingIssue });
       showBuilderToast(blockingIssue, "error");
@@ -2583,9 +2549,8 @@ export function ChatbotFlowBuilder({
   };
   const renderDepartmentQueueFields = (index: number, destination: WizardDestination | undefined, menuKey = wizardMenuKey) => {
     const availableQueues = departmentQueues(destination?.departmentId);
-    const showQueueSelector = availableQueues.length > 1;
     return (
-      <div className={`grid gap-2 ${showQueueSelector ? "sm:grid-cols-2" : ""}`}>
+      <div className="grid gap-2">
         <label className="grid gap-1 text-sm text-white/70">
           Setor responsável
           <select
@@ -2619,29 +2584,9 @@ export function ChatbotFlowBuilder({
             </span>
           ) : null}
         </label>
-        {destination?.departmentId && showQueueSelector ? (
-          <label className="grid gap-1 text-sm text-white/70">
-            Fila
-            <span className="text-xs text-white/55">
-              Este setor possui mais de uma fila de atendimento. Escolha para qual delas o atendimento deve ser encaminhado.
-            </span>
-            <select
-              value={destination?.queueId ?? ""}
-              disabled={disabled}
-              onChange={(event) => updateWizardDestination(index, { queueId: event.target.value }, menuKey)}
-              className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-            >
-              <option className="bg-white text-slate-950" value="">
-                {availableQueues.length === 0 ? "Nenhuma fila cadastrada" : "Escolha a fila"}
-              </option>
-              {availableQueues.map((queue) => (
-                <option className="bg-white text-slate-950" key={queue.id} value={queue.id}>{queue.name}</option>
-              ))}
-            </select>
-          </label>
-        ) : destination?.departmentId && availableQueues.length === 0 ? (
+        {destination?.departmentId && availableQueues.length !== 1 ? (
           <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
-            Este setor ainda não está preparado para receber atendimentos.
+            Este setor ainda não está disponível para receber atendimentos.
           </span>
         ) : null}
       </div>
@@ -2652,9 +2597,8 @@ export function ChatbotFlowBuilder({
     updateDestination: (patch: Partial<WizardDestination>) => void
   ) => {
     const availableQueues = departmentQueues(destination.departmentId);
-    const showQueueSelector = availableQueues.length > 1;
     return (
-      <div className={`grid gap-2 ${showQueueSelector ? "sm:grid-cols-2" : ""}`}>
+      <div className="grid gap-2">
         <label className="grid gap-1 text-sm text-white/70">
           Setor responsável
           <select
@@ -2678,27 +2622,9 @@ export function ChatbotFlowBuilder({
             ))}
           </select>
         </label>
-        {destination.departmentId && showQueueSelector ? (
-          <label className="grid gap-1 text-sm text-white/70">
-            Fila
-            <span className="text-xs text-white/55">
-              Este setor possui mais de uma fila de atendimento. Escolha para qual delas o atendimento deve ser encaminhado.
-            </span>
-            <select
-              value={destination.queueId ?? ""}
-              disabled={disabled}
-              onChange={(event) => updateDestination({ queueId: event.target.value })}
-              className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-            >
-              <option className="bg-white text-slate-950" value="">Escolha a fila</option>
-              {availableQueues.map((queue) => (
-                <option className="bg-white text-slate-950" key={queue.id} value={queue.id}>{queue.name}</option>
-              ))}
-            </select>
-          </label>
-        ) : destination.departmentId && availableQueues.length === 0 ? (
+        {destination.departmentId && availableQueues.length !== 1 ? (
           <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
-            Este setor ainda não está preparado para receber atendimentos.
+            Este setor ainda não está disponível para receber atendimentos.
           </span>
         ) : null}
       </div>
@@ -3461,7 +3387,7 @@ export function ChatbotFlowBuilder({
                   Mensagem antes da transferência
                   <textarea value={stringValue(entry.node.text)} disabled={disabled} onChange={(event) => commit(setNodeField(definition, entry.nodeId, "text", event.target.value))} className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white" />
                 </label>
-                <div className={`grid gap-2 ${nodeQueues.length > 1 ? "sm:grid-cols-2" : ""}`}>
+                <div className="grid gap-2">
                   <label className="grid gap-1 text-sm text-white/70">
                     Departamento
                     <select
@@ -3483,30 +3409,9 @@ export function ChatbotFlowBuilder({
                       {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
                     </select>
                   </label>
-                  {nodeQueues.length > 1 ? (
-                  <label className="grid gap-1 text-sm text-white/70">
-                    Fila
-                    <span className="text-xs text-white/55">
-                      Este setor possui mais de uma fila de atendimento. Escolha para qual delas o atendimento deve ser encaminhado.
-                    </span>
-                    <select
-                      value={stringValue(entry.node.queueId)}
-                      disabled={disabled}
-                      onChange={(event) => commit(setNodeField(definition, entry.nodeId, "queueId", event.target.value))}
-                      className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-white"
-                    >
-                      <option value="">{nodeQueues.length === 0 ? "Nenhuma fila cadastrada" : "Escolha a fila"}</option>
-                      {nodeQueues.map((queue) => <option key={queue.id} value={queue.id}>{queue.name}</option>)}
-                    </select>
-                    {entry.node.departmentId && !entry.node.queueId ? (
-                      <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
-                        Este encaminhamento ainda não possui uma fila definida.
-                      </span>
-                    ) : null}
-                  </label>
-                  ) : entry.node.departmentId && nodeQueues.length === 0 ? (
+                  {entry.node.departmentId && nodeQueues.length !== 1 ? (
                     <span className="rounded-md border border-amber-300/25 bg-amber-500/10 px-2 py-1 text-xs text-amber-100">
-                      Este setor ainda não está preparado para receber atendimentos.
+                      Este setor ainda não está disponível para receber atendimentos.
                     </span>
                   ) : null}
                 </div>
@@ -3527,9 +3432,9 @@ export function ChatbotFlowBuilder({
         <div className="rounded-lg border border-white/10 bg-black/10 p-3"><p className="text-xs uppercase text-white/45">Encaminhamentos</p><p className="mt-1 text-lg font-semibold text-white">{handoffCount}</p></div>
         <div className="rounded-lg border border-white/10 bg-black/10 p-3"><p className="text-xs uppercase text-white/45">Estrutura</p><p className="mt-1 text-sm font-semibold text-white">{hasAdvancedFields(definition) ? "Avançada" : getClosestPattern(definition)}</p></div>
       </div>
-      {hasLegacyNullQueueHandoff || issues.some((issue) => issue.includes("sem fila") || issue.includes("fila específica")) ? (
+      {hasLegacyNullQueueHandoff || issues.some((issue) => issue.includes("setor indisponível")) ? (
         <div className="rounded-lg border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-          Este encaminhamento ainda não possui uma fila definida.
+          Este setor ainda não está disponível para receber atendimentos.
         </div>
       ) : null}
       <div className="flex flex-wrap gap-2">
@@ -3548,7 +3453,7 @@ export function ChatbotFlowBuilder({
       {wizardAnswers.template ? <div className="h-2 overflow-hidden rounded-full bg-black/20"><div className="h-full rounded-full bg-re7-sky transition-all" style={{ width: `${Math.round(((wizardStepIndex + 1) / wizardStepKeys.length) * 100)}%` }} /></div> : null}
       {wizardApplyFeedback ? <div className={`rounded-lg border p-3 text-sm ${wizardApplyFeedback.tone === "success" ? "border-emerald-300/25 bg-emerald-500/10 text-emerald-100" : wizardApplyFeedback.tone === "warning" ? "border-amber-300/25 bg-amber-500/10 text-amber-100" : "border-red-300/30 bg-red-500/10 text-red-100"}`}>{wizardApplyFeedback.message}</div> : null}
       {renderWizardStepFields()}
-      {wizardAnswers.template ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/10 px-3 py-3"><button type="button" disabled={wizardStepIndex <= 0} onClick={() => { setWizardErrors([]); setWizardApplyFeedback(null); setWizardStepIndex((current) => Math.max(current - 1, 0)); focusWizardSection(); }} className="rounded-md border border-slate-300/30 bg-slate-500/10 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-500/20 disabled:cursor-not-allowed disabled:opacity-45">Voltar</button><button type="button" disabled={disabled} onClick={cancelWizard} className="rounded-md border border-red-300/35 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50">Cancelar wizard</button>{currentWizardStep === "review" ? <button type="button" disabled={disabled || generatedIssues.some((issue) => issue.includes("precisa") || issue.includes("sem setor") || issue.includes("sem fila"))} onClick={applyGeneratedDraft} className="rounded-md border border-emerald-300/40 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50">Aplicar ao rascunho</button> : <button type="button" disabled={disabled} onClick={goToNextWizardStep} className="rounded-md border border-re7-sky/60 bg-re7-sky/25 px-3 py-2 text-sm font-semibold text-sky-50 hover:bg-re7-sky/35 disabled:cursor-not-allowed disabled:opacity-45">Continuar</button>}</div> : null}
+      {wizardAnswers.template ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/10 px-3 py-3"><button type="button" disabled={wizardStepIndex <= 0} onClick={() => { setWizardErrors([]); setWizardApplyFeedback(null); setWizardStepIndex((current) => Math.max(current - 1, 0)); focusWizardSection(); }} className="rounded-md border border-slate-300/30 bg-slate-500/10 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-500/20 disabled:cursor-not-allowed disabled:opacity-45">Voltar</button><button type="button" disabled={disabled} onClick={cancelWizard} className="rounded-md border border-red-300/35 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50">Cancelar wizard</button>{currentWizardStep === "review" ? <button type="button" disabled={disabled || generatedIssues.some((issue) => issue.includes("precisa") || issue.includes("sem setor") || issue.includes("indisponível"))} onClick={applyGeneratedDraft} className="rounded-md border border-emerald-300/40 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50">Aplicar ao rascunho</button> : <button type="button" disabled={disabled} onClick={goToNextWizardStep} className="rounded-md border border-re7-sky/60 bg-re7-sky/25 px-3 py-2 text-sm font-semibold text-sky-50 hover:bg-re7-sky/35 disabled:cursor-not-allowed disabled:opacity-45">Continuar</button>}</div> : null}
     </section>
   );
 

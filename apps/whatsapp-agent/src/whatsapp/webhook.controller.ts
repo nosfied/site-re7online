@@ -13,6 +13,7 @@ import { runFlowExecutor, runMidDemoFlowExecutor, runPostDemoFlowExecutor } from
 import { acquireConversationMutex } from "./conversationMutex.js";
 import { sendTemplateMessage, sendTextMessage } from "./whatsapp.client.js";
 import { getPrisma } from "../db.js";
+import { resolveDepartmentOperationalQueue } from "../departments/operationalQueue.js";
 import {
   applyAdminCommand,
   activateHumanHandoff,
@@ -1394,23 +1395,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       queueId = null;
     }
     if (department?.id && !queueId) {
-      const queue = await prisma.queue.upsert({
-        where: {
-          clientId_departmentId_name: {
-            clientId: tenantClientId,
-            departmentId: department.id,
-            name: "Fila Geral",
-          },
-        },
-        update: {},
-        create: {
-          clientId: tenantClientId,
-          departmentId: department.id,
-          name: "Fila Geral",
-        },
-        select: { id: true },
+      const resolved = await resolveDepartmentOperationalQueue(prisma, {
+        clientId: tenantClientId,
+        departmentId: department.id,
       });
-      queueId = queue.id;
+      queueId = resolved.queue.id;
     }
     return {
       ...state,

@@ -114,6 +114,9 @@ export async function resolveHumanDepartmentReturnDestination(
       id: true,
       name: true,
       isActive: true,
+      operationalQueue: {
+        select: { id: true, name: true },
+      },
       queues: {
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         select: { id: true, name: true },
@@ -136,9 +139,8 @@ export async function resolveHumanDepartmentReturnDestination(
       },
     };
   }
-  if (department.queues.length === 0) return { ok: false, error: "queue_missing", status: 400 };
-  if (department.queues.length > 1) return { ok: false, error: "queue_required", status: 400 };
-  const queue = department.queues[0];
+  const queue = department.operationalQueue;
+  if (!queue) return { ok: false, error: "queue_missing", status: 409 };
   return {
     ok: true,
     destination: {
@@ -273,10 +275,7 @@ export async function listOutboundReturnDestinationOptions(
       select: {
         id: true,
         name: true,
-        queues: {
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          select: { id: true, name: true },
-        },
+        operationalQueueId: true,
       },
     }),
     prisma.chatbotFlow.findMany({
@@ -289,13 +288,7 @@ export async function listOutboundReturnDestinationOptions(
     departments: departments.map((department) => ({
       id: department.id,
       name: department.name,
-      queues: department.queues,
-      queueMode:
-        department.queues.length === 0
-          ? "missing"
-          : department.queues.length === 1
-            ? "single"
-            : "multiple",
+      operationalReady: Boolean(department.operationalQueueId),
     })),
     flows,
   };
@@ -308,11 +301,9 @@ export function getOutboundReturnDestinationErrorMessage(error: OutboundReturnDe
     case "department_inactive":
       return "O setor selecionado está inativo.";
     case "queue_not_found":
-      return "Selecione uma fila válida para o setor escolhido.";
     case "queue_required":
-      return "Este setor possui mais de uma fila. Selecione a fila que receberá as respostas.";
     case "queue_missing":
-      return "O setor selecionado não possui fila configurada.";
+      return "Este setor ainda não está disponível para receber atendimentos.";
     case "flow_not_found":
       return "Selecione um fluxo automatizado válido para receber as respostas.";
     case "flow_inactive":

@@ -1448,19 +1448,24 @@ async function main() {
             data: { isActive: true },
           });
         }
-        const queue = await tx.queue.findFirst({
+        let queue = await tx.queue.findFirst({
           where: { clientId: client.id, departmentId: department.id, name: target.queue },
           select: { id: true },
         });
         if (!queue) {
-          await tx.queue.create({
+          queue = await tx.queue.create({
             data: {
               clientId: client.id,
               departmentId: department.id,
               name: target.queue,
             },
+            select: { id: true },
           });
         }
+        await tx.department.update({
+          where: { id: department.id },
+          data: { operationalQueueId: queue.id },
+        });
       }
 
         for (const name of preset.legacyFlowNames) {

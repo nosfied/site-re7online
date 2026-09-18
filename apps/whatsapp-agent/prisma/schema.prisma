@@ -777,14 +777,16 @@ model ContactChannelIdentity {
 }
 
 model Department {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String
-  clientId  String   @db.Uuid
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id                 String   @id @default(cuid())
+  name               String
+  slug               String
+  clientId           String   @db.Uuid
+  operationalQueueId String?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  operationalQueue Queue? @relation("DepartmentOperationalQueue", fields: [clientId, id, operationalQueueId], references: [clientId, departmentId, id], onDelete: Restrict, onUpdate: Cascade)
   users  User[]
   conversations Conversation[]
   queues Queue[]
@@ -800,6 +802,7 @@ model Department {
   @@unique([clientId, name])
   @@unique([clientId, slug])
   @@index([clientId, createdAt])
+  @@index([operationalQueueId])
 }
 
 model UserDepartmentMembership {
@@ -867,9 +870,11 @@ model Queue {
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
   department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  operationalForDepartments Department[] @relation("DepartmentOperationalQueue")
   runtimeStates ConversationRuntimeState[]
 
   @@unique([clientId, departmentId, name])
+  @@unique([clientId, departmentId, id])
   @@index([clientId, createdAt])
   @@index([departmentId, createdAt])
 }

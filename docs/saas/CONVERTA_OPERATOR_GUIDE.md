@@ -158,12 +158,13 @@ bloquear a tentativa com orientacao acionavel.
 
 ## Criador guiado de fluxos
 
-No Guided Builder 2.4 local, o encaminhamento humano deve ser explicado como
-escolha de setor. A fila e um mecanismo operacional interno: quando o setor tem
-uma unica fila ativa, a plataforma resolve essa fila sem mostrar campo de fila
-ao usuario. Quando o setor nao tem fila, o criador bloqueia a geracao com
-"Este setor ainda não está preparado para receber atendimentos.". Somente setores
-com mais de uma fila mostram o seletor `Fila`, como caso excepcional.
+No Guided Builder, o encaminhamento humano e sempre uma escolha de Setor. A
+fila e um mecanismo operacional interno resolvido exclusivamente por
+`Department.operationalQueueId`; cardinalidade, nome e ordem nao sao regras de
+roteamento. Se o Setor nao possui mapeamento explicito, o criador bloqueia com
+"Este setor ainda não está disponível para receber atendimentos.". A UX normal
+nao mostra seletor, badge ou nome de fila, mesmo quando registros historicos
+adicionais existem.
 
 Perguntas guiadas devem ter pergunta, tipo de resposta e proximo passo. O
 criador permite ate 3 perguntas consecutivas; depois disso o proximo passo deve

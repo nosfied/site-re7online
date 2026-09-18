@@ -196,6 +196,10 @@ async function upsertDepartments(params: { prisma: PrismaClient; clientId: strin
         name: item.queueName,
       },
     });
+    await params.prisma.department.update({
+      where: { id: department.id },
+      data: { operationalQueueId: queue.id },
+    });
     results.push({ department, queue });
   }
   return results;

@@ -331,3 +331,19 @@ A rota `/app/settings/channels/instagram` permanece apenas como legacy/fallback 
 8. Ativar `outboundEnabled` somente apos smoke outbound.
 9. Manter `aiEnabled`, `handoffEnabled` e `automationEnabled` desligados por padrao em Messenger/Instagram.
 10. Registrar validacao segura sem token, texto privado ou IDs sensiveis.
+
+## Setor e fila operacional
+
+Status em 2026-09-17: IMPLEMENTED LOCAL / OWNER VALIDATION PENDING / NOT
+DEPLOYED.
+
+Na UX administrativa normal, o cliente cria, ativa e escolhe apenas o Setor.
+Uma fila interna e criada e vinculada atomicamente ao ativar o Setor; seu nome
+nao define roteamento e nao deve aparecer como seletor ou badge. Campanhas,
+fluxos e transferencias padrao resolvem `Department.operationalQueueId` e
+persistem os IDs concretos internamente. Setor sem relacao valida e bloqueado
+com mensagem de negocio, sem fallback por nome, ordem ou uso. Desativar ou
+editar preserva a relacao e o historico.
+
+O manifesto de dados, os quatro mapeamentos ainda ambiguos e o plano de rollout
+estao em `OPERATIONAL_QUEUE_DOMAIN_DESIGN_2026-09-17.md`.
