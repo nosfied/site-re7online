@@ -26,7 +26,7 @@ O onboarding interno foi implementado, porém ainda não validado com novo tenan
 
 ### Vercel / Re7online deployment hygiene — 2026-09-18
 
-Status: IMPLEMENTED / PUSH PENDING / NO PRODUCTION REDEPLOY.
+Status: IMPLEMENTED / PUSHED / VERCEL VALIDATION QUEUED / NO PRODUCTION REDEPLOY.
 
 Auditoria confirmou que `site-re7online` na Vercel recebe Git previews para
 branches operacionais do mesmo repositorio, inclusive
@@ -46,8 +46,12 @@ Vercel-relevantes enquanto compartilharem o mesmo Next root, embora sejam
 operacionalmente publicados pela VPS.
 
 Validacao local: `bash scripts/test-vercel-ignore-build.sh` PASS; commits
-`4425923`, `a175bce` e `f8ad128` projetam SKIP. Nenhum alias Vercel,
-Production Branch, dominio, VPS runtime ou deployment de producao foi alterado.
+`4425923`, `a175bce` e `f8ad128` projetam SKIP. Branch
+`vercel-deployment-hygiene-20260918` foi enviada; commit docs-only
+`623ae9a3` criou Preview `target=null`, mas ainda estava `QUEUED`, portanto a
+execucao real do ignore na Vercel permanecia pendente de processamento da fila.
+Nenhum alias Vercel, Production Branch, dominio, VPS runtime ou deployment de
+producao foi alterado.
 
 ---
 
