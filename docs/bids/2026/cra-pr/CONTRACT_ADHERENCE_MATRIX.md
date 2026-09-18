@@ -427,6 +427,15 @@ not stop execution. CSV CRM upserts occur only at explicit draft creation and
 remain canonical. This strengthens CRA campaign operational traceability; it
 does not constitute CRA customer acceptance or a real send.
 
+Demo `****9614` historical duplicate identity repair, 2026-09-18: CLOSED /
+REPAIRED / HISTORY PRESERVED. The owner-authorized bounded transaction repaired
+future canonical identity resolution for the Demo evidence recipient by moving
+the known Meta identity to the primary Contact and operationally excluding the
+retained secondary Contact selectors. Historical campaign evidence remained
+unchanged: `****9614` is still blocked by `identity_conflict`, with no provider
+call, no OutboundMessage and no billing row. This strengthens CRA acceptance
+traceability without adding a send or mutating CRA tenant data.
+
 Campaign Result Truth P1 12/13 reconciliation, 2026-09-18: VALIDATED LOCAL AND
 READ-ONLY / OWNER REVIEW READY / NO DEPLOY. The earlier synthetic gate missed
 the real persisted representation and production validation exposed a false

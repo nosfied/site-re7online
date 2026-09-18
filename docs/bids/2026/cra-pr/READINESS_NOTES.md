@@ -736,3 +736,17 @@ records now yields 2 visible rows, delivered 1, blocked 1, pending 0, technical
 failures 0 and `Entrega parcial`. No CRA send, provider call, identity repair,
 production mutation or deploy occurred. Validation: 118/118 + 56/56 + 72/72
 PASS.
+
+## Demo ****9614 transactional identity repair - 2026-09-18
+
+Status: CLOSED / REPAIRED / HISTORY PRESERVED / NO RESEND.
+
+After explicit owner authorization, the Demo historical duplicate identity
+residue was repaired in production through one bounded DB transaction from the
+separate ops worktree. Meta identity `cmu5rf8lp02lz4sawqc929bi1` now belongs to
+primary Contact `77c780bf-3501-4a55-9261-673b2c6cbbc4`; secondary Contact
+`ee236657-cb12-467d-aac7-b35ed41ff421` remains retained but operationally
+excluded with archived selectors. Lead `cmtg3jmq4011p4s7d4vhpk0sd`, runtime
+state, campaign, outbound, billing, opt-out, consent and provider history were
+preserved. Idempotency dry-run passed with blockers 0 and PROJECTED_ELIGIBLE.
+No provider call, resend, app deploy, PM2 reload, schema or migration occurred.

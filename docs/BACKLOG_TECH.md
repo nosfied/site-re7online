@@ -210,27 +210,30 @@ ACTIVE P1:
    record:
    `docs/saas/CAMPAIGN_RESULT_TRUTH_CANONICAL_RECONCILIATION_2026-09-18.md`.
 
-   Open controlled data action: Demo `****9614` historical identity residue.
-   PRODUCTION DRY-RUN PASS / OWNER AUTHORIZATION REQUIRED / NO RESEND. Factory
-   is fixed; do not reopen Identity P1 as an active product bug without new
-   creation evidence contradicting the focused identity-path tests. The missing
-   production dry-run artifact was supplied as versioned ops tooling on branch
+   Closed controlled data action: Demo `****9614` historical identity residue.
+   REPAIRED / HISTORY PRESERVED / NO RESEND. Factory is fixed; do not reopen
+   Identity P1 as an active product bug without new creation evidence
+   contradicting the focused identity-path tests. The repair ran from the
+   separate versioned ops worktree on branch
    `ops-demo-9614-repair-readiness-20260918`, commit
-   `4425923041836ed05c7c37f571a3c3c14b0fd903`, without app deploy or PM2
-   reload. Tool hashes: script
-   `155c21ba247bb4cba892b8968cd4c9db2b95e0fa50d392d989b3437b31431d49`,
-   planner `8018c92664affbc527554a4caaa0ec26d59cabeaa25b43d139be32f5fe1150cf`.
-   Production dry-run from separate VPS worktree passed with blockers 0,
-   runtime impact NOOP, outbound/billing/campaign/opt-out/provider deltas 0,
-   and post-repair projection to Contact
-   `77c780bf-3501-4a55-9261-673b2c6cbbc4` plus Lead
-   `cmtg3jmq4011p4s7d4vhpk0sd`. Snapshot package:
-   `/opt/re7online/backups/converta-persistent/demo-9614-repair-readiness-20260918`.
-   Backup:
+   `bf8ca4ddb05b4a22c09c3eaabfcb31e44de8acc9`, with no app deploy or PM2
+   reload. The one bounded transaction moved Meta identity
+   `cmu5rf8lp02lz4sawqc929bi1` to primary Contact
+   `77c780bf-3501-4a55-9261-673b2c6cbbc4`, retained secondary Contact
+   `ee236657-cb12-467d-aac7-b35ed41ff421` as operationally excluded with
+   archived selector, preserved Lead `cmtg3jmq4011p4s7d4vhpk0sd`, and left
+   runtime/campaign/outbound/billing/opt-out/consent/provider history
+   unchanged. Readiness backup:
    `/opt/re7online/backups/converta-persistent/postgres/demo-9614-repair-readiness-20260918/whatsapp_agent-pre-demo-9614-repair-20260918-212055.dump`,
-   SHA256 `7a522196cec9ded7fd9d2c07cab9fac819ad1f707610144b7060cdbfce2ae44e`,
-   20,832,168 bytes, 596 restore-list lines. Pre/post hashes identical.
-   Operational correction: no mutable integration test may run with production
+   SHA256 `7a522196cec9ded7fd9d2c07cab9fac819ad1f707610144b7060cdbfce2ae44e`.
+   Repair artifacts:
+   `/opt/re7online/backups/converta-persistent/demo-9614-transactional-repair-execute-20260918-213342`;
+   idempotency snapshot:
+   `/opt/re7online/backups/converta-persistent/demo-9614-idempotency-20260918-213357`.
+   Post-repair dry-run passed with blockers 0, runtime NOOP and
+   PROJECTED_ELIGIBLE. Historical campaign `****9614` remains
+   `BLOCKED / identity_conflict` with outbound/provider/billing 0. Operational
+   correction remains: no mutable integration test may run with production
    `DATABASE_URL`; use isolated test DBs and non-mutating production dry-runs.
 
    Campaign composer cleanup: IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO

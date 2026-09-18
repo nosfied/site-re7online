@@ -64,7 +64,9 @@ fallback are regression-covered.
   two pre-existing baseline findings outside the changed projection
   (`routes.ts:6776` and `routes.ts:26307`); backend TypeScript build PASS;
 - schema unchanged; migration none;
-- real send none; `****6787` repair none; `****9614` repair none;
+- real send none during this corrective; `****6787` repair none; `****9614`
+  was repaired later on 2026-09-18 through a separate owner-authorized bounded
+  transaction that preserved this campaign's blocked historical result;
 - Campaign Composer Cleanup preserved and remains deployed with production
   validation pending.
 

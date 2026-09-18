@@ -527,6 +527,15 @@ scheduled/sending/completed campaigns and execution history are outside this
 cleanup boundary. CSV preview is read-only; CRM upserts happen only at explicit
 draft creation and are not silently reversed. No schema/migration or deploy.
 
+Demo `****9614` transactional identity repair (2026-09-18): CLOSED /
+PRODUCTION DATA REPAIRED / HISTORY PRESERVED. Owner-authorized one-transaction
+repair moved the Meta channel identity to the primary Contact and archived the
+secondary Contact's live selectors via operational exclusion. Lead/runtime and
+campaign/outbound/billing/opt-out/consent history were preserved; no provider
+call, resend, schema, deploy or PM2 reload occurred. The historical campaign
+row still shows `****9614` as blocked by `identity_conflict`; future canonical
+resolution is restored.
+
 Campaign Result Truth canonical 12/13 corrective (2026-09-18): P1 VALIDATED
 LOCAL AND READ-ONLY / OWNER REVIEW READY / NO DEPLOY. Production validation of
 `Campanha teste set.2` disproved the earlier synthetic fixture: the seed held

@@ -788,3 +788,15 @@ pass. The actual Demo records were replayed read-only and project 2 rows:
 `****6787` delivered and `****9614` blocked; totals are 2/1/1/0/0 and the label
 is `Entrega parcial`. This is product evidence only, not a new Demo send or CRA
 acceptance. Production validation after deployment remains pending.
+
+## Demo ****9614 identity repair closure - 2026-09-18
+
+Status: CLOSED / REPAIRED / HISTORY PRESERVED.
+
+The historical duplicate identity residue for Demo `****9614` was repaired only
+after explicit owner authorization. The bounded transaction moved the known
+Meta identity to the canonical primary Contact and neutralized the secondary
+Contact's live selectors through operational exclusion. The historical campaign
+remains the same acceptance evidence: `****6787` delivered, `****9614` blocked
+by `identity_conflict`, no provider/outbound/billing for `****9614`, and no
+resend.

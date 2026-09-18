@@ -1,9 +1,11 @@
 # Demo 9614 Campaign Identity Closure - 2026-09-18
 
-Status: ROOT CAUSE CLOSED / HISTORICAL DATA REPAIR REQUIRES OWNER AUTHORIZATION.
+Status: ROOT CAUSE CLOSED / HISTORICAL DATA REPAIR EXECUTED / HISTORY PRESERVED.
 
-This is a sanitized, read-only production audit. It did not send a message,
-change production data, rewrite history, deploy code, or add a schema migration.
+This started as a sanitized, read-only production audit. After explicit owner
+authorization, the historical duplicate identity graph was repaired through one
+bounded production DB transaction. It did not send a message, call a provider,
+rewrite history, deploy code, reload PM2, or add a schema migration.
 
 ## Campaign truth
 
@@ -76,9 +78,9 @@ same-tenant detail shows one row for each intended recipient and may show the
 full phone. Draft/review, logs, docs and cross-tenant/public surfaces remain
 masked or denied.
 
-## Transactional repair package - dry run only
+## Transactional repair package - executed
 
-The minimal proposed repair is intentionally separate from this audit:
+The executed repair remained inside the minimal owner-approved boundary:
 
 1. lock and re-read the primary Contact, secondary Contact, primary Lead and
    their channel identities in one transaction;
@@ -94,10 +96,9 @@ The minimal proposed repair is intentionally separate from this audit:
    one Lead, while campaign, outbound, billing, opt-out, consent and
    conversation history/counts remain unchanged.
 
-No merge by name, creation order or usage is allowed. There is no secondary
-Lead to relink. Current conversation runtime state and Cobranca routing must
-remain unchanged. Execution requires a separate, explicit owner authorization,
-pre-mutation backup and before/after evidence. No resend is part of the repair.
+No merge by name, creation order or usage was used. There was no secondary Lead
+to relink. Current conversation runtime state and Cobranca routing remained
+unchanged. No resend was part of the repair.
 
 ## Ops dry-run readiness - 2026-09-18
 
@@ -155,9 +156,96 @@ Pre/post dry-run hashes after snapshot and backup were identical:
 - snapshots:
   `31f2a679cfbed216195e67765ec49c47f05989cf559679ac0879b695dad9f2b4`.
 
-Status: PRODUCTION DRY-RUN PASS / REPAIR READY FOR OWNER AUTHORIZATION / NOT
-EXECUTED. No provider call, resend, schema, migration, PM2 reload or app deploy
-occurred.
+Status: SUPERSEDED BY OWNER-AUTHORIZED TRANSACTIONAL REPAIR BELOW. No provider
+call, resend, schema, migration, PM2 reload or app deploy occurred during the
+readiness phase.
+
+## Owner-authorized transactional repair - 2026-09-18
+
+Owner authorization: EXPLICIT PASS.
+
+Production runtime stayed on HEAD
+`4fbea0f78cad5080eac2773eb2c19e08f9b45e02`. The app checkout was not advanced,
+rebuilt, deployed or reloaded. Repair ran only from the separate VPS ops
+worktree on branch `ops-demo-9614-repair-readiness-20260918`, commit
+`bf8ca4ddb05b4a22c09c3eaabfcb31e44de8acc9`.
+
+Executor tooling:
+
+- execute script SHA-256:
+  `f446db723cc548b7861d30ad3cda2c6192dc33fe7d0fbf97960ea9079e5e7d0a`;
+- repair planner SHA-256:
+  `36418dc4a369c354fd23be7366847372c29e698c4cf2edd19cdd932c90f42d77`;
+- planner tests on VPS: 4/4 PASS.
+
+Fresh final dry-run immediately before write:
+
+- snapshot:
+  `/opt/re7online/backups/converta-persistent/demo-9614-transactional-repair-20260918-213327`;
+- blockers: 0;
+- runtime impact: NOOP;
+- projected eligibility: PROJECTED_ELIGIBLE;
+- outbound/provider/billing counts for `****9614`: 0/0/0;
+- campaign import block for `****9614`: 1.
+
+Transaction result:
+
+- status: COMMITTED;
+- Meta `ContactChannelIdentity` `cmu5rf8lp02lz4sawqc929bi1` moved to primary
+  Contact `77c780bf-3501-4a55-9261-673b2c6cbbc4`;
+- secondary Contact `ee236657-cb12-467d-aac7-b35ed41ff421` retained and
+  operationally excluded with archived selector
+  `archived:demo-9614-repair:ee236657-cb12-467d-aac7-b35ed41ff421`;
+- secondary Contact channel/provider/account/hash/ref selectors set to null;
+- primary Lead `cmtg3jmq4011p4s7d4vhpk0sd` preserved;
+- ConversationRuntimeState `91bc59ab-d6e8-41cc-bec8-ca00c6244217` preserved
+  as `WAITING` / `HUMAN`, department `cmtg2g0zs00154sjgd1kez3iv`, queue
+  `cmtg2g10000174sjgmir39vno`;
+- campaign `0fb54d61-9f71-42ab-b89d-78ddb23bb694` preserved as
+  `completed`, total 2, sent 1, blocked 1;
+- provider calls: 0;
+- resend: NO;
+- hard delete: NO.
+
+Fresh repair artifacts:
+
+- pre-repair snapshot:
+  `/opt/re7online/backups/converta-persistent/demo-9614-transactional-repair-execute-20260918-213342/demo-9614-pre-repair-snapshot.json`,
+  file SHA-256
+  `9677f37c762e0442206f4898a90eebc22db60c5a19d0e58fbe384779e6c75c7e`;
+- post-repair snapshot:
+  `/opt/re7online/backups/converta-persistent/demo-9614-transactional-repair-execute-20260918-213342/demo-9614-post-repair-snapshot.json`,
+  file SHA-256
+  `db2b031018ae9139ef03c156a7e0f97b249520ec9d73a3a40e7e7f171bf96c38`;
+- manifest:
+  `/opt/re7online/backups/converta-persistent/demo-9614-transactional-repair-execute-20260918-213342/demo-9614-repair-manifest.json`,
+  file SHA-256
+  `1b12924cfd442545aeb7f3a7699a5b89090b795f148b2c15268a5bd2e2a71261`.
+
+Idempotency dry-run after commit:
+
+- snapshot:
+  `/opt/re7online/backups/converta-persistent/demo-9614-idempotency-20260918-213357`;
+- blockers: 0;
+- runtime impact: NOOP;
+- planned action includes `noop: repair already applied`;
+- eligibility: PROJECTED_ELIGIBLE;
+- graph counts remain Contacts 2, Leads 1, Channel identities 3, open
+  Conversations 0, open ConversationRuntimeStates 1;
+- campaign checks remain outbound 0, provider 0, billing 0, import block 1.
+
+Post-repair direct DB verification:
+
+- primary Contact remains live with Web Session selectors;
+- secondary Contact remains as historical retained record, operationally
+  excluded and without live canonical selectors;
+- Meta identity owner is the primary Contact;
+- runtime state business status/mode/routing unchanged;
+- historical campaign remains `completed` with total 2, sent 1, blocked 1.
+
+The historical campaign result for `****9614` remains truthfully preserved as
+`BLOCKED / identity_conflict`; it was not converted into sent/delivered and no
+historical provider/outbound/billing event was invented.
 
 Operational lesson: mutable integration tests must never run with the
 production `DATABASE_URL`. Production readiness must use read-only SQL,

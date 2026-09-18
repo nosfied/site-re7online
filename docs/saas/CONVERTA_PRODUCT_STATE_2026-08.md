@@ -1086,6 +1086,18 @@ that are scheduled, sending or completed remain persisted; closing progress
 does not cancel execution. Preview has no server residue, while CRM upserts
 from explicit CSV draft creation remain canonical. No schema/migration.
 
+Demo `****9614` transactional identity repair (2026-09-18): CLOSED /
+PRODUCTION DATA REPAIRED / HISTORY PRESERVED / NO APP DEPLOY. After explicit
+owner authorization, one bounded DB transaction moved Meta identity
+`cmu5rf8lp02lz4sawqc929bi1` to primary Contact
+`77c780bf-3501-4a55-9261-673b2c6cbbc4` and retained the duplicate Contact
+`ee236657-cb12-467d-aac7-b35ed41ff421` as operationally excluded with archived
+selectors. Lead `cmtg3jmq4011p4s7d4vhpk0sd`, runtime state, campaign history,
+outbound, billing, opt-out and consent were preserved. Idempotency dry-run
+passed with blockers 0 and PROJECTED_ELIGIBLE. Historical campaign
+`****9614` remains `BLOCKED / identity_conflict`; no resend/provider call was
+made.
+
 Campaign Result Truth canonical 12/13 corrective (2026-09-18): P1 VALIDATED
 LOCAL AND READ-ONLY / OWNER REVIEW READY / NO DEPLOY. The original synthetic
 test passed but omitted the actual 13-digit seed versus 12-digit historical
