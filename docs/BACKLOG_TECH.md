@@ -301,7 +301,7 @@ ACTIVE P1:
    telemetry and the broader lint baseline remain WATCH.
 
 6. Contacts - campaign relationship view: CANONICALLY INTEGRATED / TEST
-   VALIDATED / OWNER PASS / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP. Implemented
+   VALIDATED / OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED / CRA CAMPAIGN-CRM FOLLOW-UP. Implemented
    in the CRM/Contacts area as a read-only projection from canonical
    `Campaign`, `OutboundMessage` and campaign event evidence. Contact list now
    shows compact campaign count, latest campaign/date/template/status, and the

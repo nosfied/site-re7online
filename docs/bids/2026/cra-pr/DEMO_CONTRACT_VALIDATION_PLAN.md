@@ -393,7 +393,7 @@ Marketing media templates:
 
 Contacts campaign relationship view:
 
-- status: CANONICALLY INTEGRATED / TEST VALIDATED / OWNER PASS / CLEAN DELIVERY PREPARED / PRODUCTION DEPLOY PENDING /
+- status: CANONICALLY INTEGRATED / TEST VALIDATED / OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED /
   CRA CAMPAIGN-CRM FOLLOW-UP;
 - Contacts list shows compact campaign count, latest campaign/date/template and
   translated recipient status where applicable;

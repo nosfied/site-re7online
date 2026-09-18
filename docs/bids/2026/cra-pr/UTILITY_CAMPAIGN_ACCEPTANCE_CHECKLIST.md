@@ -55,7 +55,7 @@ campaign must remain unsent.
 4. CRM import/upsert/report with `Situação no CRM` - production
    non-destructive validated; real CRA import not executed.
 5. Contacts campaign relationship view - CANONICALLY INTEGRATED / TEST VALIDATED
-   / OWNER PASS / PRODUCTION DEPLOY PENDING.
+   / OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED.
 6. Acceptance package.
 
 Approved outbound return destination is CLOSED / DEPLOYED / OWNER APPROVED /
@@ -84,7 +84,7 @@ them by owner decision.
 | Pause/resume/cancel | Supported by campaign lifecycle and app API | TESTED LOCALLY FOR LIFECYCLE |
 | Opt-out | Active opt-out blocks campaign recipient and records event | DEMO VALIDATED / CRA ACCEPTANCE STILL NEEDED |
 | Delivery status | Meta webhook updates status/history | PRODUCT SUPPORTED / NEEDS CRA SAMPLE |
-| Contacts campaign relationship | Contacts/CRM shows campaign count, latest campaign/status and recent same-tenant campaign history from canonical campaign/outbound/event evidence; no Contact shadow history and no financial UX | CANONICALLY INTEGRATED / TEST VALIDATED / OWNER PASS / PRODUCTION DEPLOY PENDING |
+| Contacts campaign relationship | Contacts/CRM shows campaign count, latest campaign/status and recent same-tenant campaign history from canonical campaign/outbound/event evidence; no Contact shadow history and no financial UX | CANONICALLY INTEGRATED / TEST VALIDATED / OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED |
 | Billing | Delivered/read Utility campaign outside 24h creates one billable event; read replay does not bill again | TESTED LOCALLY |
 | Reports/export | CSV/monthly evidence available; PDF/equivalent acceptance pack still required | DEMO VALIDATED / CRA ACCEPTANCE STILL NEEDED |
 

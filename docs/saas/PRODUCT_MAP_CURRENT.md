@@ -133,7 +133,7 @@ identity resolution remains P2 performance hardening; internal result wording
 remains P3 UX. Completion telemetry and the broader lint baseline remain WATCH.
 
 Contacts campaign relationship view is CANONICALLY INTEGRATED / TEST VALIDATED /
-OWNER PASS / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP. It exposes campaign count,
+OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED / CRA CAMPAIGN-CRM FOLLOW-UP. It exposes campaign count,
 last campaign/date/template/status and recent campaign history inside
 Contacts/CRM without creating Contact-owned campaign history. Canonical source
 remains existing campaign/outbound/event evidence, same-tenant only; the list

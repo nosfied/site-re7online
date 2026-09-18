@@ -1,12 +1,11 @@
 # Contacts Campaign Relationship View
 
-Status: CANONICALLY INTEGRATED / TEST VALIDATED / OWNER PASS / CLEAN DELIVERY
-PREPARED / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP.
+Status: CANONICALLY INTEGRATED / TEST VALIDATED / OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED / CRA CAMPAIGN-CRM FOLLOW-UP.
 
 Last updated: 2026-09-18.
 
 This document defines the product contract and current local implementation.
-It does not authorize real sends, production deployment, schema changes or
+It does not authorize real sends, schema changes, migrations or
 campaign/billing history rewrites.
 
 Clean delivery note, 2026-09-18: a production-base delivery branch was prepared
@@ -14,6 +13,19 @@ from exact production HEAD `04eb01ae2a044b993774dd21b37228b35bea11bc` with only
 the Contacts campaign relationship delta. Repair tooling, identity repair
 deltas, queue-domain deltas, schema changes and migrations are not part of this
 delivery.
+
+Production deploy note, 2026-09-18: the first deployment attempt correctly
+stopped at the target-diff gate because the target history contained unrelated
+repair tooling/docs. A clean branch was then prepared from exact production
+base and deployed by FF-only update to
+`b413eea04af15cef2cf7667dbc3fa84bca3f49bc`. Backup
+`/opt/re7online/backups/contacts-campaigns-clean-deploy-20260918-134036`
+passed; backend/frontend builds passed; only `re7-whatsapp-agent` and
+`re7-admin-front` were reloaded; `re7-whatsapp-web-worker` and its `.data/`
+directory were preserved. Production non-destructive validation passed for CRM
+page load, campaign-history projection, campaign link, same-tenant guard,
+monetary-value absence and Demo exact `558494786787` aggregation. CRA customer
+acceptance remains pending.
 
 ## Goal
 

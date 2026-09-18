@@ -160,7 +160,7 @@ NON-DESTRUCTIVE VALIDATED em `cad9489c`. A revalidacao local do owner passou;
 import real e aceite CRA/customer permanecem pendentes.
 
 Contacts campaign relationship view: CANONICALLY INTEGRATED / TEST VALIDATED /
-OWNER PASS / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP. A area de Contacts/CRM agora
+OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED / CRA CAMPAIGN-CRM FOLLOW-UP. A area de Contacts/CRM agora
 expoe uma projecao read-only de campanha por contato a partir de fontes
 canonicas ja persistidas (`Campaign`, `OutboundMessage` e eventos de campanha),
 sem criar historico sombra dentro de `Contact`, sem schema/migration e sem

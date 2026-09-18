@@ -97,7 +97,7 @@ Follow-up de 2026-09-16:
   recarregado. P2 residual:
   resolucao canonica sequencial por linha para posterior hardening de escala.
 - Contacts campaign relationship view: CANONICALLY INTEGRATED / TEST VALIDATED /
-  OWNER PASS / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP. Contacts/CRM mostra
+  OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED / CRA CAMPAIGN-CRM FOLLOW-UP. Contacts/CRM mostra
   resumo de campanhas por contato na lista e historico recente no detalhe,
   usando `Campaign`, `OutboundMessage` e eventos canonicos ja persistidos.
   Nao cria historico sombra dentro de Contact, nao altera schema/migration,
