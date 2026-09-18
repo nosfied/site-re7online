@@ -712,25 +712,26 @@ read-only module/route checks passed. Meta inbound/capture and campaign
 bootstrap now reuse the canonical CRM resolver; a real post-deploy identity
 event remains pending natural or separately authorized evidence.
 
-Queue is IMPLEMENTED LOCAL / OWNER UX PASS / OWNER DECISIONS COMPLETE / FINAL
-LOCAL CUTOVER PACKAGE PREPARED / NOT DEPLOYED. No name, creation order or usage
-inference is allowed. Campaign UX is owner-approved and its Department-only
-destination is locally implemented, but validation must not resume a real send
-from this gate. The complete 54-department read-only matrix and the five final
-owner decisions are recorded in
+Queue is CLOSED / DEPLOYED / PRODUCTION RECONCILED / SMOKE PASS. No name,
+creation order or usage inference is allowed. Campaign UX is owner-approved and
+its Department-only destination is deployed, but validation must not resume a
+real send from this gate. The complete 54-department read-only matrix and the
+five final owner decisions are recorded in
 `docs/saas/OPERATIONAL_QUEUE_PRODUCTION_MAPPING_AUDIT_2026-09-17.md` and
 `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Production
-migration/data reconciliation/deploy remain a separate controlled rollout. Real
-Demo `****6787` was not mutated or repaired here.
+cutover ended with 54 departments reconciled, 0 active unresolved and 0
+cross-tenant/department links. Real Demo `****6787` was not mutated or repaired
+here.
 
 ## Campaign UX / result truth canonical integration - 2026-09-18
 
-Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+Status: OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED.
 
 The recovered approved Campaign UX/result-truth delta is now integrated on the
-canonical Operational Queue baseline. This is product readiness for owner visual
-revalidation, not a new Demo/CRA send. The standard campaign return destination
-is Department-only; Queue remains internal through
+canonical Operational Queue baseline and deployed to production at
+`04eb01ae2a044b993774dd21b37228b35bea11bc`. This is product readiness evidence,
+not a new Demo/CRA send. The standard campaign return destination is
+Department-only; Queue remains internal through
 `Department.operationalQueueId`. The customer UX removes campaign/Inbox
 template cost previews and financial columns, shows persisted lifecycle tabs
 (`Enviando`, `Agendadas`, `Concluídas`), keeps the progress modal closeable
@@ -738,6 +739,8 @@ while backend execution continues, and exposes recipient-level persisted result
 states/reasons.
 
 Validation: UI contract 6/6 PASS, `campaignsFeatureRoutes.test.ts` 114/114
-PASS on `re7_queue_rollout_validate_20260918`, backend/frontend builds PASS and
-`git diff --check` PASS. No production deploy, no real Meta send, no schema or
-migration, and no `****6787` mutation.
+PASS on `re7_queue_rollout_validate_20260918`, backend/frontend builds PASS,
+`git diff --check` PASS, production health/db PASS, Campaigns/Inbox HTTP 200 and
+production UI contract 6/6 PASS. Backup:
+`/opt/re7online/backups/campaign-ux-result-truth-20260918-112226`. No real Meta
+send, no schema or migration, no web-worker reload and no `****6787` mutation.

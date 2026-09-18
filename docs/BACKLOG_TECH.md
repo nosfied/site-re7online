@@ -154,12 +154,13 @@ ACTIVE P1:
    and HTTP smoke passed. No real Meta send and no `****6787` repair occurred.
 
 2. Campaign UX / result truth canonical integration:
-   INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY. The
+   OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED. The
    owner-approved Campaign UX delta was recovered from
    `.codex-recovery/re7-cra-crm-integration-20260917T2015.tar.gz` and
    reapplied on the current canonical Operational Queue baseline
-   `6eec15c4c4725079c3dd5e48e3eb10d81643c2db`, without schema/migration,
-   queue-domain changes, production deploy, Meta send or `****6787` repair.
+   `6eec15c4c4725079c3dd5e48e3eb10d81643c2db`, then deployed by FF-only to
+   `04eb01ae2a044b993774dd21b37228b35bea11bc` on 2026-09-18, without
+   schema/migration, queue-domain changes, Meta send or `****6787` repair.
    Customer UX now keeps campaign destination Department-only, removes
    customer-facing price/cost/tariff surfaces from Campaigns and the Inbox
    template shortcut, exposes persisted lifecycle tabs `Enviando`,
@@ -171,6 +172,10 @@ ACTIVE P1:
    `codex-recovery/campaign-ux-result-truth-delta-20260918.patch`, 36,387
    bytes, SHA256
    `5967b2baab3ceffa3333b6f04ec31b622652e2399e2cbcf69de60379a53db490`.
+   Production backup:
+   `/opt/re7online/backups/campaign-ux-result-truth-20260918-112226`
+   (`20,922,242` bytes, 596 restore-list entries, SHA256
+   `87a73ed58b1d664e2c20f1224eae4f2c998a1fe6edb28876cf4adb606b5af538`).
    Validation: `campaignsPageContract.test.ts` 6/6 PASS,
    `campaignsFeatureRoutes.test.ts` 114/114 PASS on safe local DB
    `re7_queue_rollout_validate_20260918`, backend build PASS, frontend build

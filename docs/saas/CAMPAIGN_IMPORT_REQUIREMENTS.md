@@ -254,7 +254,7 @@ Mandatory:
 
 ## Result truth integration - 2026-09-18
 
-Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+Status: OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED.
 
 Campaign import/result detail now preserves import-blocked recipients as
 inspectable campaign result truth through existing event/campaign data. The UI
@@ -262,6 +262,11 @@ renders recipient-level blocked/skipped/pending/opt-out states and
 business-readable reasons without creating a shadow campaign-history model in
 Contact and without inventing historical sends. Validation: UI contract 6/6
 PASS and `campaignsFeatureRoutes.test.ts` 114/114 PASS on the safe local DB.
+Production deployment reached `04eb01ae2a044b993774dd21b37228b35bea11bc` by
+FF-only with backup
+`/opt/re7online/backups/campaign-ux-result-truth-20260918-112226`; production
+non-destructive checks passed without schema/migration, real send, web-worker
+reload or `****6787` mutation.
 
 ## CRA Classification
 

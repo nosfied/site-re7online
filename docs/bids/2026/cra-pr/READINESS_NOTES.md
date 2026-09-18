@@ -663,10 +663,11 @@ Sem envio real.
 
 ## Campaign UX / result truth integration - 2026-09-18
 
-Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+Status: OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED.
 
-The owner-approved Campaign UX/result-truth delta was recovered and reapplied on
-the canonical Operational Queue baseline. Campaign return destination remains
+The owner-approved Campaign UX/result-truth delta was recovered, reapplied on the
+canonical Operational Queue baseline and deployed by FF-only to
+`04eb01ae2a044b993774dd21b37228b35bea11bc`. Campaign return destination remains
 Department-only in the customer UI, while the backend resolves and persists the
 exact internal operational queue through `Department.operationalQueueId`. The
 customer Campaigns and Inbox template shortcut no longer show price, cost,
@@ -678,5 +679,9 @@ states and business-readable reasons.
 Validation completed locally: `campaignsPageContract.test.ts` 6/6 PASS,
 `campaignsFeatureRoutes.test.ts` 114/114 PASS on safe local DB
 `re7_queue_rollout_validate_20260918`, backend build PASS, frontend build PASS
-and `git diff --check` PASS. No production deploy, no real Meta send, no
-schema/migration and no Demo `****6787` repair/mutation occurred.
+and `git diff --check` PASS. Production validation: backup
+`/opt/re7online/backups/campaign-ux-result-truth-20260918-112226`, backend/front
+builds PASS, health/db PASS, Campaigns/Inbox HTTP 200, production UI contract
+6/6 PASS and queue read-only check 54 departments / 0 active unresolved / 0
+cross-tenant links. No real Meta send, no schema/migration, no web-worker reload
+and no Demo `****6787` repair/mutation occurred.

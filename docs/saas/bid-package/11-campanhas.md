@@ -52,8 +52,8 @@ O sistema pode manter evidencias de:
 
 ## UX e Resultado Operacional
 
-Status em 2026-09-18: Campaign UX/result-truth INTEGRATED LOCAL / OWNER
-REVALIDATION PENDING / NO DEPLOY. A tela operacional de campanhas deve mostrar
+Status em 2026-09-18: Campaign UX/result-truth OWNER PASS / DEPLOYED /
+PRODUCTION NON-DESTRUCTIVE VALIDATED. A tela operacional de campanhas deve mostrar
 destino humano por Setor, lifecycle persistido (`Enviando`, `Agendadas`,
 `Concluídas`), progresso que continua no backend mesmo com modal fechado e
 resultado por destinatario com motivos de bloqueio/falha/opt-out quando

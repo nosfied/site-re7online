@@ -352,7 +352,8 @@ do owner e o rollout estao em
 
 ## Campanhas - UX de lifecycle e resultado
 
-Status em 2026-09-18: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+Status em 2026-09-18: OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE
+VALIDATED.
 
 A UI de campanhas usa destino humano por Setor somente; fila operacional e
 detalhe interno resolvido pelo backend via `Department.operationalQueueId`.
