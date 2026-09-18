@@ -684,23 +684,32 @@ and `git diff --check` PASS. Production validation: backup
 builds PASS, health/db PASS, Campaigns/Inbox HTTP 200, production UI contract
 6/6 PASS and queue read-only check 54 departments / 0 active unresolved / 0
 cross-tenant links. No real Meta send, no schema/migration, no web-worker reload
-and no Demo `****6787` repair/mutation occurred.
+and no Demo `****6787` repair/mutation occurred in that campaign UX gate. The
+historical Demo `****6787` duplicate was repaired later in the separate
+owner-authorized data hygiene transaction below.
 
-## Demo `****6787` canonical identity repair preparation - 2026-09-18
+## Demo `****6787` canonical identity repair - 2026-09-18
 
-Status: HISTORICAL DUPLICATE / REPAIR PREPARED / NOT EXECUTED.
+Status: HISTORICAL DUPLICATE / TRANSACTIONAL REPAIR EXECUTED / VALIDATED.
 
-Read-only production audit confirmed the identity factory fix is already
-deployed and the remaining `****6787` issue is historical Demo duplicate data.
-Current graph: 2 Contacts, 2 Leads, 5 channel identities, 1 open
-`HUMAN`/`IN_PROGRESS` runtime conversation, 86 outbound rows, 58 inbound rows, 1
-target delivered active-message billing event for B `****6787`, 1
-receptive-session billing event, preserved opt-out recorded/revoked history and
-2 consent rows. Prepared dry-run script:
-`apps/whatsapp-agent/scripts/prepare-demo-6787-identity-repair.ts`.
+Read-only production audit confirmed the identity factory fix was already
+deployed and the remaining `****6787` issue was historical Demo duplicate data.
+Owner-authorized repair executed in one bounded transaction after full backup at
+`/opt/re7online/backups/demo-6787-identity-repair-20260918-121809`.
 
-Dry-run PASS with blockers=0. Future execution requires owner authorization,
-persistent backup and a bounded DB transaction. The plan must not rewrite
-campaign `e715b417-672e-43ca-8be2-d486feed65ba`, must not alter provider IDs,
-must not recompute billing and must not invent historical events. No mutation,
-deploy, schema/migration, provider call or real send occurred.
+The repair moved Meta identity `cmu44rnp700014s4qch0qm6lx` to surviving Contact
+`e96d8299-b36f-4118-a406-f2a365c5630d`, kept Lead
+`cmtvhkeo902u74s38b4pf9heg` canonical, retained duplicate Contact
+`97244912-0a78-48a7-8371-3c07b38dbf7b` and duplicate Lead
+`cmta6bjio00jl4s045pf4rfna` without live canonical identity selectors, and
+preserved campaign `e715b417-672e-43ca-8be2-d486feed65ba`, provider IDs,
+billing, opt-out recorded/revoked history and consent rows.
+
+Post-repair dry-run is `noop=true`, duplicate Contact identity count is 0,
+identity resolution for 12/13-digit and formatted variants targets the surviving
+Contact/Lead, open `HUMAN`/`IN_PROGRESS` runtime conversation count remains 1,
+outbound target count remains 86, delivered active-message billing remains 1
+and receptive-session billing remains 1. Pre/post hashes for outbound, billing,
+campaign, opt-out and consent history are unchanged. No deploy,
+schema/migration, provider call, real send, billing recomputation or historical
+event invention occurred.

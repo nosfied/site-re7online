@@ -380,16 +380,18 @@ rollout on 2026-09-18 advanced by FF-only to
 `b166bcac8bf443d34ba7f3821016b6bae8069728`, applied migration
 `20260917213000_add_department_operational_queue`, reconciled 44 explicit
 mappings, created/linked 2 owner-approved internal queues and ended with 0
-active unresolved departments. Demo `****6787` remains a separate repair gate.
-This is product evidence, not CRA customer acceptance of duplicate prevention.
+active unresolved departments. Demo `****6787` was later repaired as a separate
+owner-authorized Demo data hygiene gate. This is product evidence, not CRA
+customer acceptance of duplicate prevention.
 
-Demo `****6787` canonical identity repair preparation, 2026-09-18: HISTORICAL
-DUPLICATE / REPAIR PREPARED / NOT EXECUTED. This is Demo evidence hygiene, not
-CRA customer-data mutation. Production read-only dry-run PASS prepared an
-owner-gated transactional plan that preserves B-only Utility campaign evidence,
-the opt-out E2E reversal, billing, provider message IDs and the historical
-`e715b417-672e-43ca-8be2-d486feed65ba` seed truth. No production mutation, no
-deploy, no schema/migration and no campaign history rewrite occurred.
+Demo `****6787` canonical identity repair, 2026-09-18: CLOSED /
+TRANSACTIONAL REPAIR EXECUTED / VALIDATED. This is Demo evidence hygiene, not
+CRA customer-data mutation. Owner-authorized production repair preserved B-only
+Utility campaign evidence, the opt-out E2E reversal, billing, provider message
+IDs and the historical `e715b417-672e-43ca-8be2-d486feed65ba` seed truth.
+Evidence package:
+`/opt/re7online/backups/demo-6787-identity-repair-20260918-121809`. No deploy,
+schema/migration, provider call, real send or campaign history rewrite occurred.
 
 Campaign UX / result truth integration, 2026-09-18: OWNER PASS / DEPLOYED /
 PRODUCTION NON-DESTRUCTIVE VALIDATED. The recovered approved delta now sits on

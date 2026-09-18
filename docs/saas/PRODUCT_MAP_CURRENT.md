@@ -494,15 +494,17 @@ mappings, created/linked 2 owner-approved internal queues and left 8 inactive
 rows null-allowed. Post-verify active unresolved = 0 and cross-tenant/department
 links = 0. The owner decision package is
 `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Campaign UX
-remains owner PASS and real `****6787` repair remains a separate pending gate.
+remains owner PASS.
 
-Demo `****6787` historical duplicate (2026-09-18): REPAIR PREPARED / NOT
-EXECUTED. Identity factory remains CLOSED / DEPLOYED; the residual duplicate is
-historical data. Read-only production dry-run PASS prepared a transactional plan
-to move the secondary Meta identity to the primary Contact, retain the duplicate
-Contact/Lead without live canonical selectors and preserve all campaign,
-outbound, billing, opt-out, consent, assignment and transfer history. No
-production mutation, deploy, schema/migration or provider call occurred.
+Demo `****6787` historical duplicate (2026-09-18): CLOSED / TRANSACTIONAL
+REPAIR EXECUTED / VALIDATED. Identity factory remains CLOSED / DEPLOYED; the
+residual duplicate was historical Demo data. Owner-authorized production repair
+used `/opt/re7online/backups/demo-6787-identity-repair-20260918-121809`, moved
+the secondary Meta identity to the primary Contact, retained the duplicate
+Contact/Lead without live canonical selectors and preserved campaign, outbound,
+billing, opt-out, consent, assignment and transfer history. Post-repair dry-run
+is `noop=true`; no deploy, schema/migration, provider call or real send
+occurred.
 
 Campaign UX / result truth integration (2026-09-18): OWNER PASS / DEPLOYED /
 PRODUCTION NON-DESTRUCTIVE VALIDATED on the current Operational Queue baseline

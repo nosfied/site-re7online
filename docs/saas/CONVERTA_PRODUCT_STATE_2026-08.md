@@ -1024,7 +1024,9 @@ backend build, focused lint and diff validation. Status: DEPLOYED / PRODUCTION
 NON-DESTRUCTIVE VALIDATED at production HEAD `ed329ec8` on 2026-09-17. The
 production backend build, targeted agent reload, health/DB and read-only
 module/route checks passed. Schema and migrations are unchanged; exact pre/post
-snapshots prove no Demo `****6787` Contact/Lead record was modified. A real
+snapshots prove no Demo `****6787` Contact/Lead record was modified in that
+delivery gate. The historical Demo `****6787` duplicate was repaired later on
+2026-09-18 in a separate owner-authorized data hygiene transaction. A real
 post-deploy identity event remains unexercised.
 
 Operational Queue is CLOSED / DEPLOYED / PRODUCTION RECONCILED / SMOKE PASS.
@@ -1045,22 +1047,20 @@ resolved, 0 active unresolved, 8 inactive null-allowed, 2 inactive with queue
 and 0 cross-tenant/department links. Backend/frontend builds, targeted PM2
 reload and HTTP smoke passed. The owner decision package is
 `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Campaign UX
-remains owner PASS; `****6787` repair remains separate.
+remains owner PASS.
 
-Demo `****6787` canonical identity repair preparation (2026-09-18):
-HISTORICAL DUPLICATE / REPAIR PREPARED / NOT EXECUTED. Read-only production
-audit re-enumerated exactly 2 Contacts, 2 Leads, 5 channel identities, 1 open
-human runtime conversation, 86 outbound rows, 58 inbound rows, 1 delivered active
-message billing event for B `****6787`, 1 receptive-session billing event and
-immutable campaign/opt-out/consent history. Prepared dry-run script
-`apps/whatsapp-agent/scripts/prepare-demo-6787-identity-repair.ts` passed against
-production with blockers=0. Future repair must move the Meta identity to primary
-Contact `e96d8299-b36f-4118-a406-f2a365c5630d`, keep Lead
-`cmtvhkeo902u74s38b4pf9heg` as the canonical CRM read-model record, retain the
-duplicate Contact/Lead without live canonical identity selectors, preserve all
-events/campaigns/outbounds/billing/provider IDs and run only after owner
-authorization plus production backup. No mutation, deploy, schema/migration,
-provider call or campaign history rewrite occurred in this gate.
+Demo `****6787` canonical identity repair (2026-09-18): CLOSED /
+TRANSACTIONAL REPAIR EXECUTED / VALIDATED. Owner-authorized production repair
+used backup/evidence package
+`/opt/re7online/backups/demo-6787-identity-repair-20260918-121809`, moved Meta
+identity `cmu44rnp700014s4qch0qm6lx` to surviving Contact
+`e96d8299-b36f-4118-a406-f2a365c5630d`, retained duplicate Contact/Lead without
+live canonical selectors and kept Lead `cmtvhkeo902u74s38b4pf9heg` canonical.
+Post-repair dry-run is `noop=true`; 12/13-digit and formatted identity
+resolution targets the survivor; open human conversation count, outbound count,
+active/receptive billing counts and immutable campaign/opt-out/consent hashes
+are unchanged. No deploy, schema/migration, provider call, real send or campaign
+history rewrite occurred.
 
 Campaign UX / result truth integration (2026-09-18): OWNER PASS / DEPLOYED /
 PRODUCTION NON-DESTRUCTIVE VALIDATED. The approved Campaign UX delta has been

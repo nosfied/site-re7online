@@ -1,6 +1,6 @@
-# Demo `****6787` canonical identity repair preparation
+# Demo `****6787` canonical identity repair
 
-Status: HISTORICAL DUPLICATE / REPAIR PREPARED / NOT EXECUTED.
+Status: HISTORICAL DUPLICATE / TRANSACTIONAL REPAIR EXECUTED / VALIDATED.
 
 Date: 2026-09-18.
 
@@ -10,7 +10,7 @@ Scope:
 - target identity: WhatsApp canonical identity ending `****6787`
 - production runtime audited: `04eb01ae2a044b993774dd21b37228b35bea11bc`
 - canonical docs head audited: `7f3fd9293c49327422b069f493a72783b7f44743`
-- mutation: none
+- mutation: transactional identity repair executed on 2026-09-18
 - deploy: none
 - provider call/send: none
 
@@ -75,7 +75,7 @@ Direct FK references:
 - `SatisfactionResponse`: 0
 - `ContactConsent`: 2
 
-## Repair semantics prepared
+## Repair semantics executed
 
 The current resolver checks live Contact/Lead identity fields before the exclusion outcome can safely express a non-operational duplicate. Therefore, merely setting `operationallyExcludedAt` on the duplicate Contact is insufficient.
 
@@ -88,26 +88,42 @@ Prepared minimal repair:
 5. Retain duplicate Contact `97244912-0a78-48a7-8371-3c07b38dbf7b` without live canonical identity selectors and set `operationallyExcludedAt`.
 6. Retain duplicate Lead `cmta6bjio00jl4s045pf4rfna` without live canonical identity selectors and with `contactChannelIdentityId = NULL`.
 7. Preserve Event, Campaign, OutboundMessage, provider message IDs, billing, opt-out, consent, assignment and transfer history.
-8. Verify invariants, then commit only in a future owner-authorized execution gate.
+8. Verify invariants before commit.
 
 Hard delete: NO.
 
-No schema/migration is expected. If execution finds a new FK/unique blocker, stop before mutation.
+No schema/migration was used. No runtime deploy or PM2 reload was required.
 
-## Dry-run artifact
+## Execution artifact
 
 Script:
 
 `apps/whatsapp-agent/scripts/prepare-demo-6787-identity-repair.ts`
 
-Current mode:
+Modes:
 
-- `--dry-run` only
-- `--execute` is intentionally unsupported
+- `--dry-run`
+- `--execute --confirm-demo-6787-repair`
 - requires exact tenant/contact/lead constants
-- prints target, snapshot, operations, expected counts and blockers
+- prints target, snapshot, operations, expected counts, blockers and post-transaction checks
 
-Dry-run against production via SSH tunnel on 2026-09-18:
+Prepared/pushed script commits:
+
+- `ce2c032065467e4726072f9c1b2c6bc38adfff06` - dry-run preparation
+- `82ad33f3930b1d489f8199e415a3c560599e09a2` - transactional execute support
+- `dc710888f9ac9a376bbf5074a8430a8d58a0a94d` - align receptive billing check to actual event naming
+- `1a27fb8d214d4a9e428e9d1be73c2f8f09445446` - align handoff preservation check to actual schema field
+
+Production backup/evidence package:
+
+- `/opt/re7online/backups/demo-6787-identity-repair-20260918-121809`
+- full DB dump: `pre-repair.dump`
+- checksum: `pre-repair.dump.sha256`
+- restore list: `pre-repair.restore-list.txt`
+- dry-run/evaluate artifacts: `dry-run-before.json`, `dry-run-after-aborted-attempt.json`, `execute-result.json`, `dry-run-after.json`
+- immutable-history comparisons: `counts-hashes.diff` and `billing-event-names.diff` are empty
+
+Dry-run against production via SSH tunnel on 2026-09-18 before mutation:
 
 - PASS
 - blockers: none
@@ -118,26 +134,29 @@ Dry-run against production via SSH tunnel on 2026-09-18:
 - expected outbound change: 0
 - expected campaign history change: 0
 
+Execution result:
+
+- committed: YES
+- moved Meta identity `cmu44rnp700014s4qch0qm6lx`: 1
+- neutralized duplicate Contact `97244912-0a78-48a7-8371-3c07b38dbf7b`: 1
+- neutralized duplicate Lead `cmta6bjio00jl4s045pf4rfna`: 1
+- refreshed surviving Lead `cmtvhkeo902u74s38b4pf9heg`: 1
+- canonical resolution for 12-digit, 13-digit and formatted phone variants resolves to Contact `e96d8299-b36f-4118-a406-f2a365c5630d` and Lead `cmtvhkeo902u74s38b4pf9heg`
+- duplicate Contact identity count: 0
+- open conversation count: 1
+- `OutboundMessage` target count: 86
+- delivered active-message billing count: 1
+- receptive-session billing count: 1
+- post-repair dry-run: `noop=true`, blockers=0
+
+An earlier execution attempt aborted before commit because the validation used the obsolete field name `handoffState`; Prisma rolled the transaction back. A follow-up dry-run confirmed the original pre-repair graph was still unchanged before the successful execution.
+
 Synthetic local regression:
 
 - `canonicalIdentityRepairPlan.test.ts`: 2/2 PASS
 - validates planned operations and rerun-as-NOOP semantics
 
-## Future execution gate
-
-Required before any mutation:
-
-- owner authorization for production repair
-- persistent production DB backup
-- backup SHA256
-- restore-list/object count
-- pre-repair identity snapshot
-- pre-repair billing snapshot
-- pre-repair conversation snapshot
-- bounded DB transaction
-- no provider calls inside transaction
-
-Post-repair invariants:
+## Post-repair invariants
 
 - canonical active Contact count for identity: 1
 - canonical CRM Lead count: 1

@@ -1471,16 +1471,18 @@ GAP / OPEN; SYER ****9614 = CLOSED.
   normal UX selects only Setor and persists the exact internal queue. Production
   delivery is now backed by `Department.operationalQueueId`; no queue selector is
   exposed to the customer-facing admin UX.
-- Demo `****6787`: pre/post read-only snapshots of both historical Contacts and
-  Leads matched exactly; no production mutation occurred and repair remains a
-  separate gate.
-- Demo `****6787` historical duplicate: REPAIR PREPARED / NOT EXECUTED. A
-  read-only production re-audit on 2026-09-18 found exactly 2 Contacts, 2 Leads,
-  5 channel identities, 1 open `HUMAN`/`IN_PROGRESS` runtime state, 86
-  `OutboundMessage` rows, 58 `InboundMessage` rows, 1 target active-message
-  billing event for B `****6787`, 1 receptive-session billing event and preserved
-  opt-out/consent history. Prepared dry-run script:
-  `apps/whatsapp-agent/scripts/prepare-demo-6787-identity-repair.ts`; production
-  dry-run PASS with blockers=0. Future execution requires owner authorization,
-  persistent backup and one bounded DB transaction. No production mutation, no
-  deploy, no schema/migration, no provider call and no campaign history rewrite.
+- Demo `****6787` historical duplicate: CLOSED / TRANSACTIONAL REPAIR EXECUTED /
+  VALIDATED. Owner-authorized production repair on 2026-09-18 moved Meta
+  identity `cmu44rnp700014s4qch0qm6lx` to surviving Contact
+  `e96d8299-b36f-4118-a406-f2a365c5630d`, retained duplicate Contact
+  `97244912-0a78-48a7-8371-3c07b38dbf7b` and duplicate Lead
+  `cmta6bjio00jl4s045pf4rfna` without live canonical identity selectors, and
+  kept surviving Lead `cmtvhkeo902u74s38b4pf9heg` canonical. Evidence package:
+  `/opt/re7online/backups/demo-6787-identity-repair-20260918-121809`.
+  Post-repair dry-run is `noop=true`, duplicate Contact identity count is 0,
+  12/13-digit and formatted identity resolution targets the survivor, open human
+  conversation count remains 1, `OutboundMessage` target count remains 86,
+  delivered active-message billing remains 1 and receptive-session billing
+  remains 1. Pre/post hashes for outbound, billing, campaign, opt-out and
+  consent history are unchanged. No deploy, schema/migration, provider call,
+  real send or campaign history rewrite occurred.
