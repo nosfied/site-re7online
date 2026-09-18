@@ -1474,3 +1474,13 @@ GAP / OPEN; SYER ****9614 = CLOSED.
 - Demo `****6787`: pre/post read-only snapshots of both historical Contacts and
   Leads matched exactly; no production mutation occurred and repair remains a
   separate gate.
+- Demo `****6787` historical duplicate: REPAIR PREPARED / NOT EXECUTED. A
+  read-only production re-audit on 2026-09-18 found exactly 2 Contacts, 2 Leads,
+  5 channel identities, 1 open `HUMAN`/`IN_PROGRESS` runtime state, 86
+  `OutboundMessage` rows, 58 `InboundMessage` rows, 1 target active-message
+  billing event for B `****6787`, 1 receptive-session billing event and preserved
+  opt-out/consent history. Prepared dry-run script:
+  `apps/whatsapp-agent/scripts/prepare-demo-6787-identity-repair.ts`; production
+  dry-run PASS with blockers=0. Future execution requires owner authorization,
+  persistent backup and one bounded DB transaction. No production mutation, no
+  deploy, no schema/migration, no provider call and no campaign history rewrite.

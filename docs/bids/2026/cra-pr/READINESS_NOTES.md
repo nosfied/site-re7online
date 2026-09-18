@@ -685,3 +685,22 @@ builds PASS, health/db PASS, Campaigns/Inbox HTTP 200, production UI contract
 6/6 PASS and queue read-only check 54 departments / 0 active unresolved / 0
 cross-tenant links. No real Meta send, no schema/migration, no web-worker reload
 and no Demo `****6787` repair/mutation occurred.
+
+## Demo `****6787` canonical identity repair preparation - 2026-09-18
+
+Status: HISTORICAL DUPLICATE / REPAIR PREPARED / NOT EXECUTED.
+
+Read-only production audit confirmed the identity factory fix is already
+deployed and the remaining `****6787` issue is historical Demo duplicate data.
+Current graph: 2 Contacts, 2 Leads, 5 channel identities, 1 open
+`HUMAN`/`IN_PROGRESS` runtime conversation, 86 outbound rows, 58 inbound rows, 1
+target delivered active-message billing event for B `****6787`, 1
+receptive-session billing event, preserved opt-out recorded/revoked history and
+2 consent rows. Prepared dry-run script:
+`apps/whatsapp-agent/scripts/prepare-demo-6787-identity-repair.ts`.
+
+Dry-run PASS with blockers=0. Future execution requires owner authorization,
+persistent backup and a bounded DB transaction. The plan must not rewrite
+campaign `e715b417-672e-43ca-8be2-d486feed65ba`, must not alter provider IDs,
+must not recompute billing and must not invent historical events. No mutation,
+deploy, schema/migration, provider call or real send occurred.

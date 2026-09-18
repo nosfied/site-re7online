@@ -71,3 +71,17 @@ migration, Queue data, Setor Teste, Atendimento Geral mapping or historical
 identity data changed. These checks are non-destructive production evidence;
 duplicate prevention has not yet been exercised by a real post-deploy identity
 event.
+
+## Demo `****6787` repair preparation - 2026-09-18
+
+Identity factory remains CLOSED / DEPLOYED. A later read-only production
+preparation gate re-enumerated the historical Demo `****6787` duplicate graph
+and produced a dry-run-only repair plan in
+`DEMO_6787_CANONICAL_IDENTITY_REPAIR_PREPARATION_2026-09-18.md`.
+
+Status: HISTORICAL DUPLICATE / REPAIR PREPARED / NOT EXECUTED.
+
+The prepared plan preserves all historical Event, Campaign, OutboundMessage,
+provider message ID, billing, opt-out, consent, assignment and transfer history.
+It does not rewrite campaign `e715b417-672e-43ca-8be2-d486feed65ba` and does not
+claim that any production repair has already happened.

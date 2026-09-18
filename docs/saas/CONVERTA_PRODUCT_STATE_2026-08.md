@@ -1047,6 +1047,21 @@ reload and HTTP smoke passed. The owner decision package is
 `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Campaign UX
 remains owner PASS; `****6787` repair remains separate.
 
+Demo `****6787` canonical identity repair preparation (2026-09-18):
+HISTORICAL DUPLICATE / REPAIR PREPARED / NOT EXECUTED. Read-only production
+audit re-enumerated exactly 2 Contacts, 2 Leads, 5 channel identities, 1 open
+human runtime conversation, 86 outbound rows, 58 inbound rows, 1 delivered active
+message billing event for B `****6787`, 1 receptive-session billing event and
+immutable campaign/opt-out/consent history. Prepared dry-run script
+`apps/whatsapp-agent/scripts/prepare-demo-6787-identity-repair.ts` passed against
+production with blockers=0. Future repair must move the Meta identity to primary
+Contact `e96d8299-b36f-4118-a406-f2a365c5630d`, keep Lead
+`cmtvhkeo902u74s38b4pf9heg` as the canonical CRM read-model record, retain the
+duplicate Contact/Lead without live canonical identity selectors, preserve all
+events/campaigns/outbounds/billing/provider IDs and run only after owner
+authorization plus production backup. No mutation, deploy, schema/migration,
+provider call or campaign history rewrite occurred in this gate.
+
 Campaign UX / result truth integration (2026-09-18): OWNER PASS / DEPLOYED /
 PRODUCTION NON-DESTRUCTIVE VALIDATED. The approved Campaign UX delta has been
 recovered onto the current Operational Queue baseline and deployed to production

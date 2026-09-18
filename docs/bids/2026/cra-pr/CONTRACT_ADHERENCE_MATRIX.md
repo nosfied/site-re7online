@@ -383,6 +383,14 @@ mappings, created/linked 2 owner-approved internal queues and ended with 0
 active unresolved departments. Demo `****6787` remains a separate repair gate.
 This is product evidence, not CRA customer acceptance of duplicate prevention.
 
+Demo `****6787` canonical identity repair preparation, 2026-09-18: HISTORICAL
+DUPLICATE / REPAIR PREPARED / NOT EXECUTED. This is Demo evidence hygiene, not
+CRA customer-data mutation. Production read-only dry-run PASS prepared an
+owner-gated transactional plan that preserves B-only Utility campaign evidence,
+the opt-out E2E reversal, billing, provider message IDs and the historical
+`e715b417-672e-43ca-8be2-d486feed65ba` seed truth. No production mutation, no
+deploy, no schema/migration and no campaign history rewrite occurred.
+
 Campaign UX / result truth integration, 2026-09-18: OWNER PASS / DEPLOYED /
 PRODUCTION NON-DESTRUCTIVE VALIDATED. The recovered approved delta now sits on
 the canonical Operational Queue baseline and was deployed by FF-only to

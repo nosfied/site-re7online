@@ -268,6 +268,18 @@ FF-only with backup
 non-destructive checks passed without schema/migration, real send, web-worker
 reload or `****6787` mutation.
 
+## Demo `****6787` historical duplicate repair preparation - 2026-09-18
+
+Status: HISTORICAL DUPLICATE / REPAIR PREPARED / NOT EXECUTED.
+
+The current identity factory/import path is closed and deployed; the remaining
+Demo `****6787` issue is historical duplicate data from before the fix. A
+read-only production dry-run prepared a repair plan that converges future
+resolution to one Contact and one canonical Lead without rewriting campaign
+recipient evidence, outbound messages, billing, opt-out, consent or provider
+message IDs. Script:
+`apps/whatsapp-agent/scripts/prepare-demo-6787-identity-repair.ts`.
+
 ## CRA Classification
 
 This is not part of the current approved outbound return destination delivery.
