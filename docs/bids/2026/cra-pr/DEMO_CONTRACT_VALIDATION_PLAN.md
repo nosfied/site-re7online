@@ -722,3 +722,22 @@ owner decisions are recorded in
 `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Production
 migration/data reconciliation/deploy remain a separate controlled rollout. Real
 Demo `****6787` was not mutated or repaired here.
+
+## Campaign UX / result truth canonical integration - 2026-09-18
+
+Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+
+The recovered approved Campaign UX/result-truth delta is now integrated on the
+canonical Operational Queue baseline. This is product readiness for owner visual
+revalidation, not a new Demo/CRA send. The standard campaign return destination
+is Department-only; Queue remains internal through
+`Department.operationalQueueId`. The customer UX removes campaign/Inbox
+template cost previews and financial columns, shows persisted lifecycle tabs
+(`Enviando`, `Agendadas`, `Concluídas`), keeps the progress modal closeable
+while backend execution continues, and exposes recipient-level persisted result
+states/reasons.
+
+Validation: UI contract 6/6 PASS, `campaignsFeatureRoutes.test.ts` 114/114
+PASS on `re7_queue_rollout_validate_20260918`, backend/frontend builds PASS and
+`git diff --check` PASS. No production deploy, no real Meta send, no schema or
+migration, and no `****6787` mutation.

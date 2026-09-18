@@ -437,3 +437,21 @@ the 2-message scope.
 
 Stop condition: no retry, no replacement recipient and no configuration/code
 repair in this phase. Separate owner gate is required.
+
+## Campaign UX / Result Truth Integration - 2026-09-18
+
+Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+
+- Standard campaign destination remains Department-only; Queue is internal via
+  `Department.operationalQueueId`.
+- Campaign and Inbox template customer UX must not show price, cost, tariff,
+  Meta rate or estimated financial totals.
+- Lifecycle tabs are persisted-state based: `Enviando`, `Agendadas`,
+  `Concluídas`.
+- Progress/detail modal can be closed without cancelling backend execution.
+- Recipient-level detail must show persisted blocked/skipped/pending/opt-out
+  states and business-readable reasons when available.
+- Validation completed: UI contract 6/6 PASS, `campaignsFeatureRoutes.test.ts`
+  114/114 PASS, backend/frontend builds PASS, `git diff --check` PASS.
+- No real Meta send, no production deploy, no schema/migration and no
+  `****6787` repair/mutation occurred.

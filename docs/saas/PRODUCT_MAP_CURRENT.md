@@ -495,3 +495,15 @@ rows null-allowed. Post-verify active unresolved = 0 and cross-tenant/department
 links = 0. The owner decision package is
 `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Campaign UX
 remains owner PASS and real `****6787` repair remains a separate pending gate.
+
+Campaign UX / result truth integration (2026-09-18): integrated locally on the
+current Operational Queue baseline and ready for owner revalidation; not
+deployed. Campaign creation/return destination stays Department-only in the
+customer UI and uses internal `Department.operationalQueueId` resolution.
+Customer-facing Campaigns and Inbox template shortcut surfaces remove financial
+price/cost/tariff estimates. Campaign lists/details expose persisted lifecycle
+tabs (`Enviando`, `Agendadas`, `Concluídas`), closeable backend-observing
+progress modal and recipient-level blocked/skipped/pending/opt-out result
+truth. Tests/builds: UI contract 6/6 PASS, `campaignsFeatureRoutes.test.ts`
+114/114 PASS, backend build PASS, frontend build PASS, diff check PASS. No
+schema/migration, deploy, real send or `****6787` mutation.

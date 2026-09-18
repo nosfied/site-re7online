@@ -334,8 +334,7 @@ A rota `/app/settings/channels/instagram` permanece apenas como legacy/fallback 
 
 ## Setor e fila operacional
 
-Status em 2026-09-17: IMPLEMENTED LOCAL / OWNER VALIDATION PENDING / NOT
-DEPLOYED.
+Status em 2026-09-18: CLOSED / DEPLOYED / PRODUCTION RECONCILED / SMOKE PASS.
 
 Na UX administrativa normal, o cliente cria, ativa e escolhe apenas o Setor.
 Uma fila interna e criada e vinculada atomicamente ao ativar o Setor; seu nome
@@ -345,5 +344,21 @@ persistem os IDs concretos internamente. Setor sem relacao valida e bloqueado
 com mensagem de negocio, sem fallback por nome, ordem ou uso. Desativar ou
 editar preserva a relacao e o historico.
 
-O manifesto de dados, os quatro mapeamentos ainda ambiguos e o plano de rollout
-estao em `OPERATIONAL_QUEUE_DOMAIN_DESIGN_2026-09-17.md`.
+O manifesto de dados, a matriz completa de 54 departamentos, as decisoes finais
+do owner e o rollout estao em
+`OPERATIONAL_QUEUE_DOMAIN_DESIGN_2026-09-17.md`,
+`OPERATIONAL_QUEUE_PRODUCTION_MAPPING_AUDIT_2026-09-17.md` e
+`OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`.
+
+## Campanhas - UX de lifecycle e resultado
+
+Status em 2026-09-18: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+
+A UI de campanhas usa destino humano por Setor somente; fila operacional e
+detalhe interno resolvido pelo backend via `Department.operationalQueueId`.
+Abas de lifecycle devem refletir estado persistido (`Enviando`, `Agendadas`,
+`Concluídas`) e o modal de progresso/detalhe pode ser fechado sem cancelar a
+execucao backend. Campanhas e atalho de template da Inbox nao devem exibir
+preco, custo, tarifa, rate Meta ou total financeiro estimado ao cliente. Detalhe
+por destinatario deve mostrar estados persistidos de bloqueio, opt-out, falha,
+pendente, ignorado, entregue/lido quando disponiveis.

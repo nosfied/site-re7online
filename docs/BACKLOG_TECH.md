@@ -153,7 +153,33 @@ ACTIVE P1:
    0 cross-tenant/department links. Backend/frontend builds, targeted PM2 reload
    and HTTP smoke passed. No real Meta send and no `****6787` repair occurred.
 
-2. CRA Demo Utility Recipient B controlled send: COMPLETED / DEMO PRODUCT
+2. Campaign UX / result truth canonical integration:
+   INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY. The
+   owner-approved Campaign UX delta was recovered from
+   `.codex-recovery/re7-cra-crm-integration-20260917T2015.tar.gz` and
+   reapplied on the current canonical Operational Queue baseline
+   `6eec15c4c4725079c3dd5e48e3eb10d81643c2db`, without schema/migration,
+   queue-domain changes, production deploy, Meta send or `****6787` repair.
+   Customer UX now keeps campaign destination Department-only, removes
+   customer-facing price/cost/tariff surfaces from Campaigns and the Inbox
+   template shortcut, exposes persisted lifecycle tabs `Enviando`,
+   `Agendadas` and `Concluídas`, keeps the progress/detail modal closeable
+   while backend execution continues, and renders recipient-level blocked,
+   skipped, pending and opt-out states from persisted backend data. Backend
+   execution remains authoritative; the frontend only observes persisted
+   campaign state. Recovery artifact:
+   `codex-recovery/campaign-ux-result-truth-delta-20260918.patch`, 36,387
+   bytes, SHA256
+   `5967b2baab3ceffa3333b6f04ec31b622652e2399e2cbcf69de60379a53db490`.
+   Validation: `campaignsPageContract.test.ts` 6/6 PASS,
+   `campaignsFeatureRoutes.test.ts` 114/114 PASS on safe local DB
+   `re7_queue_rollout_validate_20260918`, backend build PASS, frontend build
+   PASS, `git diff --check` PASS. Production remains protected at
+   `b166bcac8bf443d34ba7f3821016b6bae8069728`; production health/db/migrations
+   PASS read-only. Owner visual revalidation on this integrated branch is still
+   pending.
+
+3. CRA Demo Utility Recipient B controlled send: COMPLETED / DEMO PRODUCT
    CAPABILITY VALIDATED / CRA ACCEPTANCE STILL SEPARATE. On 2026-09-16 the
    owner authorized exactly one Utility send to Recipient B `****6787` through
    campaign `bb1d30e2-3a98-471a-9531-1f5e5d76a214`. Preflight passed:

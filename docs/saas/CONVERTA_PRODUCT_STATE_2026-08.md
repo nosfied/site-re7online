@@ -1046,3 +1046,17 @@ and 0 cross-tenant/department links. Backend/frontend builds, targeted PM2
 reload and HTTP smoke passed. The owner decision package is
 `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Campaign UX
 remains owner PASS; `****6787` repair remains separate.
+
+Campaign UX / result truth integration (2026-09-18): INTEGRATED LOCAL / OWNER
+REVALIDATION PENDING / NO DEPLOY. The approved Campaign UX delta has been
+recovered onto the current Operational Queue baseline. Customer campaign
+destination remains Department-only; Queue is resolved internally from
+`Department.operationalQueueId`. Campaigns and the Inbox template shortcut no
+longer expose price/cost/tariff/Meta-rate estimates to the customer UX.
+Lifecycle tabs now map to persisted states (`Enviando`, `Agendadas`,
+`Concluídas`), the progress/detail modal observes backend state and can be
+closed without cancelling execution, and recipient detail surfaces persisted
+blocked/skipped/pending/opt-out result truth. Local validation: UI contract 6/6
+PASS, `campaignsFeatureRoutes.test.ts` 114/114 PASS, backend/frontend builds
+PASS and `git diff --check` PASS. No schema/migration, production deploy, real
+Meta send or `****6787` mutation occurred.

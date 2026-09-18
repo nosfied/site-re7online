@@ -660,3 +660,23 @@ Sem envio real.
   explicitos, criou/vinculou 2 filas internas aprovadas e terminou com 0
   departamento ativo sem fila operacional. Campaign UX permanece owner PASS; nao
   houve envio real nem mutacao de `****6787`.
+
+## Campaign UX / result truth integration - 2026-09-18
+
+Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+
+The owner-approved Campaign UX/result-truth delta was recovered and reapplied on
+the canonical Operational Queue baseline. Campaign return destination remains
+Department-only in the customer UI, while the backend resolves and persists the
+exact internal operational queue through `Department.operationalQueueId`. The
+customer Campaigns and Inbox template shortcut no longer show price, cost,
+tariff, Meta rate or estimated financial totals. Campaign list/detail now uses
+persisted lifecycle/result truth: `Enviando`, `Agendadas`, `Concluídas`,
+closeable progress/detail modal, recipient-level blocked/skipped/pending/opt-out
+states and business-readable reasons.
+
+Validation completed locally: `campaignsPageContract.test.ts` 6/6 PASS,
+`campaignsFeatureRoutes.test.ts` 114/114 PASS on safe local DB
+`re7_queue_rollout_validate_20260918`, backend build PASS, frontend build PASS
+and `git diff --check` PASS. No production deploy, no real Meta send, no
+schema/migration and no Demo `****6787` repair/mutation occurred.

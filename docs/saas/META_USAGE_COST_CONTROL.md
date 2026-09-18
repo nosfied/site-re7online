@@ -283,3 +283,8 @@ configuration and the completed B controlled Utility send on 2026-09-16.
 - Rate card e local e deve ser revisado quando a politica Meta mudar.
 - Ativacao de `metaUsagePolicy` por tenant deve ter runbook e autorizacao.
 - Dashboards visuais amplos permanecem como evolucao futura.
+- Campaign UX / Inbox template shortcut, 2026-09-18: customer-facing screens no
+  longer render price, cost, tariff, Meta rate, estimated campaign cost or
+  financial total. Operational quantities, lifecycle status and delivery/result
+  metrics remain visible. Billing/provider cost data remains internal and must
+  not be used as customer UX evidence without a separate billing/reporting gate.

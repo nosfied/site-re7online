@@ -50,10 +50,19 @@ O sistema pode manter evidencias de:
 - status operacional;
 - historico de envio.
 
+## UX e Resultado Operacional
+
+Status em 2026-09-18: Campaign UX/result-truth INTEGRATED LOCAL / OWNER
+REVALIDATION PENDING / NO DEPLOY. A tela operacional de campanhas deve mostrar
+destino humano por Setor, lifecycle persistido (`Enviando`, `Agendadas`,
+`Concluídas`), progresso que continua no backend mesmo com modal fechado e
+resultado por destinatario com motivos de bloqueio/falha/opt-out quando
+persistidos. A UX do cliente nao deve exibir preco, custo, tarifa ou estimativa
+financeira; evidencias financeiras pertencem ao gate de relatorios/billing.
+
 ## Premissas Para Editais
 
 - O edital deve distinguir atendimento receptivo de campanhas ativas.
 - Templates e custos Meta devem ser previstos.
 - Volumes como 60.000 templates exigem planejamento de custo, throughput e aprovacao.
 - Disparo proativo deve respeitar politica da Meta e base legal do controlador.
-

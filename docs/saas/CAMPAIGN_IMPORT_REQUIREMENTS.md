@@ -252,6 +252,17 @@ Mandatory:
 - Residual P3: translate remaining internal operation/error codes displayed in
   operator detail without changing persisted report semantics.
 
+## Result truth integration - 2026-09-18
+
+Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+
+Campaign import/result detail now preserves import-blocked recipients as
+inspectable campaign result truth through existing event/campaign data. The UI
+renders recipient-level blocked/skipped/pending/opt-out states and
+business-readable reasons without creating a shadow campaign-history model in
+Contact and without inventing historical sends. Validation: UI contract 6/6
+PASS and `campaignsFeatureRoutes.test.ts` 114/114 PASS on the safe local DB.
+
 ## CRA Classification
 
 This is not part of the current approved outbound return destination delivery.

@@ -382,3 +382,15 @@ rollout on 2026-09-18 advanced by FF-only to
 mappings, created/linked 2 owner-approved internal queues and ended with 0
 active unresolved departments. Demo `****6787` remains a separate repair gate.
 This is product evidence, not CRA customer acceptance of duplicate prevention.
+
+Campaign UX / result truth integration, 2026-09-18: INTEGRATED LOCAL / OWNER
+REVALIDATION PENDING / NO DEPLOY. The recovered approved delta now sits on the
+canonical Operational Queue baseline. Standard campaign UX remains
+Department-only, with Queue internal via `Department.operationalQueueId`;
+customer-facing campaign and Inbox template screens do not expose price/cost
+tariff data; persisted lifecycle tabs include `Enviando`, `Agendadas` and
+`Concluídas`; campaign detail renders recipient-level blocked/skipped/pending
+and opt-out result states from persisted events/data. No CRA customer send,
+no production deploy, no schema/migration and no `****6787` mutation occurred.
+Validation: UI contract 6/6 PASS, `campaignsFeatureRoutes.test.ts` 114/114
+PASS, backend/frontend builds PASS.
