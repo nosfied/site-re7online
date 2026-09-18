@@ -729,7 +729,7 @@ Demo `****6787` was not mutated or repaired here.
 
 ## Campaign UX / result truth canonical integration - 2026-09-18
 
-Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+Status: DEPLOYED / PRODUCTION VALIDATED.
 
 The recovered approved Campaign UX/result-truth delta is now integrated on the
 canonical Operational Queue baseline. This is product readiness for owner visual
@@ -743,8 +743,9 @@ states/reasons.
 
 Validation: UI contract 9/9 PASS, `campaignsFeatureRoutes.test.ts` 115/115
 PASS on `re7_campaign_result_truth_test`, backend/frontend builds PASS and
-`git diff --check` PASS. No production deploy, no real Meta send, no schema or
-migration, and no `****6787` mutation.
+`git diff --check` PASS. This was the initial local gate; controlled delivery
+later reached `4fbea0f78cad5080eac2773eb2c19e08f9b45e02`. No real Meta send,
+schema or migration, and no `****6787` mutation.
 
 Final result-detail correction: read-only evidence for `Campanha teste set.2`
 with template `lembrete_vencimento_anuidade` showed one delivered provider
@@ -764,20 +765,24 @@ identity-path matrix 106/106 PASS. No real send or production mutation.
 
 ## Campaign composer cleanup - 2026-09-18
 
-Status: IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO DEPLOY.
+Status: DEPLOYED / PRODUCTION VALIDATED.
 
 The Demo/CRA campaign operator must be able to abandon unsaved CRM audience,
 CSV or manual composition and start another campaign with pristine name,
 template, variables, recipients, file/preview, destination and validation
-state. Preview is read-only. Explicit draft creation is the persistence
+state. Production validation confirmed pristine discard/re-entry and read-only
+CSV preview cleanup. Explicit draft creation is the persistence
 boundary; schedule is available only after that boundary. Saved drafts and
 scheduled/sending/completed campaigns survive navigation, and closing progress
-does not cancel execution. No real send or production mutation was used for
-this lifecycle validation.
+does not cancel execution. One controlled one-recipient draft survived reload
+and was then discarded; it ended `cancelled`, `sentCount=0`, with zero
+OutboundMessage/provider calls. Completed history was observed in production;
+async invalidation and scheduled/sending survival remain TEST VALIDATED. No
+real send occurred.
 
 ## Campaign Result Truth P1 12/13 gate - 2026-09-18
 
-Status: CORRECTIVE VALIDATED / OWNER REVIEW READY / NO DEPLOY.
+Status: DEPLOYED / PRODUCTION VALIDATED.
 
 The production validation gate discovered that the prior synthetic test did
 not model a 13-digit campaign seed associated with a historical 12-digit
@@ -787,4 +792,7 @@ reverse-shape, multiple-attempt, real-fallback and cross-tenant regressions
 pass. The actual Demo records were replayed read-only and project 2 rows:
 `****6787` delivered and `****9614` blocked; totals are 2/1/1/0/0 and the label
 is `Entrega parcial`. This is product evidence only, not a new Demo send or CRA
-acceptance. Production validation after deployment remains pending.
+acceptance. Production advanced FF-only to
+`4fbea0f78cad5080eac2773eb2c19e08f9b45e02`; authenticated validation of the
+actual campaign and pre/post integrity evidence passed without history,
+billing, opt-out, provider-id or identity mutation.

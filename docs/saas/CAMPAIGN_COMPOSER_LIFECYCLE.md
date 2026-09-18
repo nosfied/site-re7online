@@ -1,6 +1,6 @@
 # Campaign Composer Lifecycle
 
-Status: IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO DEPLOY.
+Status: DEPLOYED / PRODUCTION VALIDATED.
 
 ## Permanent invariant
 
@@ -106,4 +106,26 @@ application does not auto-select the first Department/Flow as hidden state.
 - no real send or provider call was made. The local variable-template fixture
   correctly rejected scheduling with `template_variables_required`; persisted
   schedule survival and lifecycle protection remain covered by the backend
-  Campaign suite. Owner visual review remains pending.
+  Campaign suite.
+
+## Production validation - 2026-09-18
+
+Status: DEPLOYED / PRODUCTION VALIDATED, with unsafe timing/lifecycle
+sub-properties retained as TEST VALIDATED.
+
+- authenticated Demo unsaved composition populated name, template and
+  Department; explicit discard followed by tab change/re-entry returned a
+  pristine composer with no prior name, template, Department or preview;
+- read-only CSV preview completed with one ready row; while the result was
+  present the action was disabled as `Previa gerada`; discard/re-entry removed
+  the file, mappings and preview;
+- controlled draft `0630703c-b1ac-42cc-ae3f-dfc84d7e57d2` persisted across a
+  browser reload with one recipient and `status=draft`, then only that draft
+  was explicitly discarded; final status is `cancelled`;
+- database evidence for that draft shows `sentCount=0`, zero OutboundMessage by
+  request id or payload, and only `campaign.seed.saved` plus
+  `campaign.draft.discarded`; no real send or provider call occurred;
+- completed history was observed in production. Scheduled/sending survival and
+  stale async-response invalidation remain TEST VALIDATED because manufacturing
+  latency or execution in production would violate the no-send gate;
+- Demo `****9614` was not mutated and its repair remains a separate owner gate.

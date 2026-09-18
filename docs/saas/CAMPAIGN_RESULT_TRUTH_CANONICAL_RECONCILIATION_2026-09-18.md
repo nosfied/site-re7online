@@ -1,6 +1,6 @@
 # Campaign Result Truth - Canonical Reconciliation - 2026-09-18
 
-Status: P1 CORRECTIVE VALIDATED LOCAL AND READ-ONLY / OWNER REVIEW READY / NO DEPLOY.
+Status: DEPLOYED / PRODUCTION VALIDATED.
 
 ## Chronology
 
@@ -65,9 +65,25 @@ fallback are regression-covered.
   (`routes.ts:6776` and `routes.ts:26307`); backend TypeScript build PASS;
 - schema unchanged; migration none;
 - real send none; `****6787` repair none; `****9614` repair none;
-- Campaign Composer Cleanup preserved and remains deployed with production
-  validation pending.
+- Campaign Composer Cleanup preserved; its resumed production validation is
+  recorded in `docs/saas/CAMPAIGN_COMPOSER_LIFECYCLE.md`.
 
-Production still runs HEAD
-`6f63133d7c3bb09097a11c0b49eefa7b9f8383c3`; this P1 corrective is not deployed
-until the owner delivery gate is approved.
+## Production closure
+
+Production advanced by FF-only from
+`6f63133d7c3bb09097a11c0b49eefa7b9f8383c3` to
+`4fbea0f78cad5080eac2773eb2c19e08f9b45e02`. Persistent backup
+`/opt/re7online/backups/campaign-result-truth-hotfix-20260918/20260918-165826.dump`
+was verified with 581 objects and SHA256
+`d06ccd7bbac6cf25cb31b780537b7d30281871b8e8891e07a14e625cc4001378`.
+Only `re7-whatsapp-agent` was rebuilt/reloaded; the frontend and Web Session
+worker PIDs were preserved.
+
+Authenticated same-tenant validation of real campaign
+`0fb54d61-9f71-42ab-b89d-78ddb23bb694` returned exactly two rows: delivered
+`****6787` and blocked `****9614`. Summary was total 2, delivered 1, blocked 1,
+pending 0 and technical failures 0, with `Entrega parcial`; full phone remained
+restricted to the authorized Campaign Detail. Pre/post hashes and counts for
+Campaign, seed/events, OutboundMessage, billing and opt-out were unchanged.
+No provider call, real send, identity repair, schema change or migration
+occurred. Result Truth is therefore DEPLOYED / PRODUCTION VALIDATED.

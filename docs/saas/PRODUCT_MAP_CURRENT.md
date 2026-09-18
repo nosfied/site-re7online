@@ -499,9 +499,9 @@ links = 0. The owner decision package is
 `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Campaign UX
 remains owner PASS and real `****6787` repair remains a separate pending gate.
 
-Campaign UX / result truth integration (2026-09-18): integrated locally on the
-current Operational Queue baseline and ready for owner revalidation; not
-deployed. Campaign creation/return destination stays Department-only in the
+Campaign UX / result truth integration (2026-09-18): DEPLOYED / PRODUCTION
+VALIDATED on the current Operational Queue baseline. Campaign
+creation/return destination stays Department-only in the
 customer UI and uses internal `Department.operationalQueueId` resolution.
 Customer-facing Campaigns and Inbox template shortcut surfaces remove financial
 price/cost/tariff estimates. Campaign lists/details expose persisted lifecycle
@@ -518,17 +518,21 @@ repair remains a separately authorized data action. Counters separate blocked
 from technical failures. Tests/builds: UI contract 9/9
 PASS, `campaignsFeatureRoutes.test.ts` 115/115 PASS, backend build PASS,
 frontend build PASS, diff check PASS. No
-schema/migration, deploy, real send or `****6787` mutation.
+schema/migration, real send or `****6787` mutation.
 
-Campaign composition lifecycle is implemented locally and pending owner review:
+Campaign composition lifecycle is deployed and production validated:
 unsaved form/CRM-preview/CSV/destination state has one dirty contract and one
 complete discard reset. Re-entry starts pristine. Intentional drafts,
 scheduled/sending/completed campaigns and execution history are outside this
 cleanup boundary. CSV preview is read-only; CRM upserts happen only at explicit
-draft creation and are not silently reversed. No schema/migration or deploy.
+draft creation and are not silently reversed. Production proved clean
+discard/re-entry, CSV preview cleanup and a saved draft surviving reload before
+controlled discard; final draft status `cancelled`, no outbound/provider call.
+Completed was production-observed; async invalidation and scheduled/sending
+remain TEST VALIDATED. No schema/migration.
 
-Campaign Result Truth canonical 12/13 corrective (2026-09-18): P1 VALIDATED
-LOCAL AND READ-ONLY / OWNER REVIEW READY / NO DEPLOY. Production validation of
+Campaign Result Truth canonical 12/13 corrective (2026-09-18): DEPLOYED /
+PRODUCTION VALIDATED. Production validation of
 `Campanha teste set.2` disproved the earlier synthetic fixture: the seed held
 the delivered recipient in 13-digit form while its historical outbound held
 the 12-digit form. The projection now reuses the canonical CRM/Identity P1
@@ -536,5 +540,7 @@ candidate semantics and associates evidence without changing historical rows.
 Actual production records replay to exactly two visible outcomes: delivered
 `****6787`, blocked `****9614`, no pending or technical failure, `Entrega
 parcial`. Tests: 118/118 + 56/56 + 72/72 PASS. Schema unchanged; no migration,
-send, repair or deploy. Campaign Composer Cleanup remains deployed with its own
-production validation pending.
+send or repair. Production FF-only HEAD is
+`4fbea0f78cad5080eac2773eb2c19e08f9b45e02`; authenticated real campaign detail
+and pre/post DB integrity passed. Campaign Composer Cleanup is also production
+validated under the explicit no-send classifications above.

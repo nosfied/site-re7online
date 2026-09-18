@@ -154,12 +154,13 @@ ACTIVE P1:
    and HTTP smoke passed. No real Meta send and no `****6787` repair occurred.
 
 2. Campaign UX / result truth canonical integration:
-   INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY. The
+   DEPLOYED / PRODUCTION VALIDATED. The
    owner-approved Campaign UX delta was recovered from
    `.codex-recovery/re7-cra-crm-integration-20260917T2015.tar.gz` and
    reapplied on the current canonical Operational Queue baseline
    `6eec15c4c4725079c3dd5e48e3eb10d81643c2db`, without schema/migration,
-   queue-domain changes, production deploy, Meta send or `****6787` repair.
+   queue-domain changes, Meta send or `****6787` repair. This was the initial
+   local integration stage before the controlled production delivery below.
    Customer UX now keeps campaign destination Department-only, removes
    customer-facing price/cost/tariff surfaces from Campaigns and the Inbox
    template shortcut, exposes persisted lifecycle tabs `Enviando`,
@@ -189,14 +190,15 @@ ACTIVE P1:
    Validation: `campaignsPageContract.test.ts` 9/9 PASS,
    `campaignsFeatureRoutes.test.ts` 115/115 PASS on safe local DB
    `re7_campaign_result_truth_test`, backend build PASS, frontend build PASS,
-   `git diff --check` PASS. Production remains protected at
+   `git diff --check` PASS. At that initial gate production remained protected at
    `b413eea04af15cef2cf7667dbc3fa84bca3f49bc`; production health/db/migrations
-   PASS read-only. Owner visual revalidation on this integrated branch is still
-   pending.
+   PASS read-only. The subsequent delivery and real validation are recorded in
+   the Result Truth and Composer closure entries below.
 
-   P1 canonical 12/13-digit corrective, 2026-09-18: READY FOR OWNER REVIEW /
-   NO DEPLOY. The first synthetic result-truth test did not reproduce the real
-   persisted shape. Production validation at HEAD `6f63133d7c3bb09097a11c0b49eefa7b9f8383c3`
+   P1 canonical 12/13-digit corrective, 2026-09-18: CLOSED / DEPLOYED /
+   PRODUCTION VALIDATED. The first synthetic result-truth test did not
+   reproduce the real persisted shape. Production validation at HEAD
+   `6f63133d7c3bb09097a11c0b49eefa7b9f8383c3`
    exposed a 13-digit seed and 12-digit delivered outbound for the same
    `****6787` identity, creating a false missing-history failure. The hard gate
    stopped validation. The projection now reuses
@@ -206,7 +208,10 @@ ACTIVE P1:
    covered. Read-only replay of the real records returns exactly 2 rows: 1
    delivered, 1 blocked, 0 pending, 0 technical failures, `Entrega parcial`.
    Validation: campaign backend 118/118, complementary matrices 56/56 and
-   72/72 PASS. Schema unchanged, migration none, no send, no repair. Canonical
+   72/72 PASS. Production advanced FF-only to `4fbea0f78cad5080eac2773eb2c19e08f9b45e02`;
+   the authenticated real campaign returned delivered `****6787` plus blocked
+   `****9614`, and pre/post campaign/history/billing hashes remained unchanged.
+   Schema unchanged, migration none, no send, no repair. Canonical
    record:
    `docs/saas/CAMPAIGN_RESULT_TRUTH_CANONICAL_RECONCILIATION_2026-09-18.md`.
 
@@ -215,8 +220,8 @@ ACTIVE P1:
    fixed; do not reopen Identity P1 as an active product bug without new
    creation evidence contradicting the focused identity-path tests.
 
-   Campaign composer cleanup: IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO
-   DEPLOY. Unsaved composition is now governed by one dirty-state contract and
+   Campaign composer cleanup: CLOSED / DEPLOYED / PRODUCTION VALIDATED.
+   Unsaved composition is now governed by one dirty-state contract and
    one idempotent reset. Explicit discard and Campaign-tab navigation clear
    name, template/variables, recipients, CRM/CSV previews, mappings,
    destination and errors; stale async preview responses are invalidated.
@@ -227,7 +232,12 @@ ACTIVE P1:
    Local gate on 2026-09-18: composer/page contracts 18/18 PASS, Campaign
    backend 115/115 PASS, import/CRM 23/23 PASS, both builds and focused lint
    PASS. Authenticated smoke confirmed clean discard/re-entry, clean CSV cancel
-   and intentional draft preservation. Owner visual review remains pending.
+   and intentional draft preservation. Production repeated discard/re-entry
+   and read-only CSV cleanup, then created one controlled one-recipient draft,
+   proved persistence after reload and discarded only that draft. Final DB
+   state is `cancelled`, `sentCount=0`, OutboundMessage count 0. Completed was
+   production-observed; async invalidation and scheduled/sending survival
+   remain TEST VALIDATED under the no-send gate.
 
 3. CRA Demo Utility Recipient B controlled send: COMPLETED / DEMO PRODUCT
    CAPABILITY VALIDATED / CRA ACCEPTANCE STILL SEPARATE. On 2026-09-16 the

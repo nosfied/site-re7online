@@ -385,15 +385,15 @@ mappings, created/linked 2 owner-approved internal queues and ended with 0
 active unresolved departments. Demo `****6787` remains a separate repair gate.
 This is product evidence, not CRA customer acceptance of duplicate prevention.
 
-Campaign UX / result truth integration, 2026-09-18: INTEGRATED LOCAL / OWNER
-REVALIDATION PENDING / NO DEPLOY. The recovered approved delta now sits on the
+Campaign UX / result truth integration, 2026-09-18: DEPLOYED / PRODUCTION
+VALIDATED. The recovered approved delta now sits on the
 canonical Operational Queue baseline. Standard campaign UX remains
 Department-only, with Queue internal via `Department.operationalQueueId`;
 customer-facing campaign and Inbox template screens do not expose price/cost
 tariff data; persisted lifecycle tabs include `Enviando`, `Agendadas` and
 `Concluídas`; campaign detail renders recipient-level blocked/skipped/pending
 and opt-out result states from persisted events/data. No CRA customer send,
-no production deploy, no schema/migration and no `****6787` mutation occurred.
+schema/migration or `****6787` mutation occurred.
 Final local audit of Demo `Campanha teste set.2` proved that its repeated
 recipient line was a detail projection/fallback issue, not a duplicate send.
 The corrected authenticated detail reconciles one current result per intended
@@ -408,10 +408,10 @@ duplicate factory, but the recipient remains ineligible until a separately
 authorized transactional repair. Canonical expected counters are total 2,
 delivered 1, blocked 1, pending 0 and technical failures 0. Validation: UI
 contract 9/9 PASS, `campaignsFeatureRoutes.test.ts` 115/115 PASS and focused
-identity-path matrix 106/106 PASS. No CRA send, production mutation or deploy.
+identity-path matrix 106/106 PASS. No CRA send or production data mutation.
 
-Campaign composition lifecycle, 2026-09-18: IMPLEMENTED LOCAL / OWNER REVIEW
-PENDING / NO DEPLOY. Abandoning an unsaved CRM/CSV/manual composition now
+Campaign composition lifecycle, 2026-09-18: DEPLOYED / PRODUCTION VALIDATED.
+Abandoning an unsaved CRM/CSV/manual composition now
 clears all client-transient campaign data through one dirty/reset contract.
 Preview does not persist server records. Explicit drafts and Campaigns already
 scheduled, sending or completed remain protected, and closing progress does
@@ -419,8 +419,8 @@ not stop execution. CSV CRM upserts occur only at explicit draft creation and
 remain canonical. This strengthens CRA campaign operational traceability; it
 does not constitute CRA customer acceptance or a real send.
 
-Campaign Result Truth P1 12/13 reconciliation, 2026-09-18: VALIDATED LOCAL AND
-READ-ONLY / OWNER REVIEW READY / NO DEPLOY. The earlier synthetic gate missed
+Campaign Result Truth P1 12/13 reconciliation, 2026-09-18: DEPLOYED /
+PRODUCTION VALIDATED. The earlier synthetic gate missed
 the real persisted representation and production validation exposed a false
 missing-history failure for `****6787`. The corrected read model reuses the
 canonical Identity P1 candidate set and leaves all history unchanged. Replay
@@ -428,4 +428,11 @@ of the actual Demo campaign records returns exactly 2 outcomes: delivered
 `****6787`, blocked `****9614`, 0 technical failures and `Entrega parcial`.
 This strengthens CRA recipient traceability evidence but is not CRA customer
 acceptance. Backend 118/118, complementary matrices 56/56 and 72/72 PASS;
-schema unchanged, migration none, no send, repair or deploy.
+schema unchanged, migration none, no send or repair. Production FF-only HEAD is
+`4fbea0f78cad5080eac2773eb2c19e08f9b45e02`; authenticated campaign detail and
+pre/post database integrity checks passed. Composer production validation also
+proved pristine discard/re-entry, read-only CSV cleanup and persisted draft
+survival followed by controlled discard with zero outbound/provider calls.
+Completed was production-observed; async invalidation and scheduled/sending
+remain TEST VALIDATED. This is Demo product evidence, not CRA customer
+acceptance and not a new CRA/Meta send.

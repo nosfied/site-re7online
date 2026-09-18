@@ -1051,8 +1051,8 @@ reload and HTTP smoke passed. The owner decision package is
 `docs/saas/OPERATIONAL_QUEUE_OWNER_DECISION_PACKAGE_2026-09-17.md`. Campaign UX
 remains owner PASS; `****6787` repair remains separate.
 
-Campaign UX / result truth integration (2026-09-18): INTEGRATED LOCAL / OWNER
-REVALIDATION PENDING / NO DEPLOY. The approved Campaign UX delta has been
+Campaign UX / result truth integration (2026-09-18): DEPLOYED / PRODUCTION
+VALIDATED. The approved Campaign UX delta has been
 recovered onto the current Operational Queue baseline. Customer campaign
 destination remains Department-only; Queue is resolved internally from
 `Department.operationalQueueId`. Campaigns and the Inbox template shortcut no
@@ -1074,20 +1074,26 @@ blocked until separately authorized data repair. Canonical counters are total
 2, delivered 1, blocked 1, pending 0 and technical failures 0. Canonical
 integration validation: UI contract 9/9 PASS,
 `campaignsFeatureRoutes.test.ts` 115/115 PASS, backend/frontend builds
-PASS and `git diff --check` PASS. No schema/migration, production deploy, real
-Meta send or `****6787` mutation occurred.
+PASS and `git diff --check` PASS. The initial local gate preceded the controlled
+delivery recorded below. No schema/migration, real Meta send or `****6787`
+mutation occurred.
 
-Campaign composer lifecycle (2026-09-18): IMPLEMENTED LOCAL / OWNER REVIEW
-PENDING / NO DEPLOY. Composition remains client-transient until explicit draft
+Campaign composer lifecycle (2026-09-18): DEPLOYED / PRODUCTION VALIDATED.
+Composition remains client-transient until explicit draft
 save or execution. One dirty-state contract and one reset clear all unsaved
 name/template/variables/recipients, CRM and CSV previews, destination and
 errors on discard or Campaign-tab abandonment. Explicit drafts and campaigns
 that are scheduled, sending or completed remain persisted; closing progress
 does not cancel execution. Preview has no server residue, while CRM upserts
-from explicit CSV draft creation remain canonical. No schema/migration.
+from explicit CSV draft creation remain canonical. Production proved clean
+discard/re-entry, read-only CSV preview cleanup and one persisted one-recipient
+draft surviving reload before controlled discard. The draft ended `cancelled`,
+`sentCount=0`, with zero OutboundMessage/provider calls. Completed was
+production-observed; async invalidation and scheduled/sending remain TEST
+VALIDATED. No schema/migration.
 
-Campaign Result Truth canonical 12/13 corrective (2026-09-18): P1 VALIDATED
-LOCAL AND READ-ONLY / OWNER REVIEW READY / NO DEPLOY. The original synthetic
+Campaign Result Truth canonical 12/13 corrective (2026-09-18): DEPLOYED /
+PRODUCTION VALIDATED. The original synthetic
 test passed but omitted the actual 13-digit seed versus 12-digit historical
 outbound shape. Production validation therefore exposed a false duplicate
 `****6787` failure and stopped at the hard gate. The corrective is projection
@@ -1096,4 +1102,6 @@ outbound, event and billing rows are untouched. Read-only replay of campaign
 `0fb54d61-9f71-42ab-b89d-78ddb23bb694` returns 2 rows, delivered 1, blocked 1,
 pending 0, technical failures 0 and `Entrega parcial`. Campaign backend
 118/118 and complementary 56/56 plus 72/72 matrices pass. Schema unchanged,
-migration none, no real send, no identity repair and no deploy.
+migration none, no real send and no identity repair. Production FF-only HEAD
+`4fbea0f78cad5080eac2773eb2c19e08f9b45e02` returned the expected real campaign
+detail and preserved campaign/history/outbound/billing/opt-out integrity.

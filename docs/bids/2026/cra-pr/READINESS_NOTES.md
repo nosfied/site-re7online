@@ -131,7 +131,7 @@ Follow-up de 2026-09-18, result truth/identidade de campanha Demo:
 
 Follow-up de 2026-09-18, ciclo de composicao de campanha:
 
-- IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO DEPLOY;
+- DEPLOYED / PRODUCTION VALIDATED;
 - composicao nao salva e transitoria e volta limpa apos descarte/troca de aba;
 - previa CRM/CSV nao cria Campaign nem contato;
 - criar rascunho e o commit explicito; importacao CSV confirmada pode persistir
@@ -142,7 +142,15 @@ Follow-up de 2026-09-18, ciclo de composicao de campanha:
 - gate local: contratos do compositor/pagina 18/18 PASS, backend Campaign
   115/115 PASS, importacao/CRM 23/23 PASS, builds e lint focado PASS; smoke
   autenticado confirmou descarte/reentrada limpos, cancelamento CSV sem estado
-  residual e preservacao do rascunho salvo. Revisao visual do owner pendente.
+  residual e preservacao do rascunho salvo.
+- producao repetiu descarte/reentrada, previa CSV read-only e limpeza; um
+  rascunho controlado persistiu apos reload e foi descartado, terminando
+  `cancelled`, `sentCount=0` e sem OutboundMessage/provider call. Completed foi
+  observado em producao; async invalidation e scheduled/sending permanecem
+  TEST VALIDATED pelo gate sem envio.
+- Result Truth 12/13 foi implantado por FF-only em `4fbea0f78cad5080eac2773eb2c19e08f9b45e02`;
+  campanha historica real confirmou 2 linhas, entregue 1, bloqueado 1, falhas
+  tecnicas 0 e `Entrega parcial`, sem mutacao de historico ou reparo de `****9614`.
 
 Nota Demo Phase C, 2026-09-15: a campanha controlada em `demo-converta`
 `d9874c03-10e8-4061-a92e-6caa7b3001c3` encontrou bug generico de
@@ -696,7 +704,7 @@ Sem envio real.
 
 ## Campaign UX / result truth integration - 2026-09-18
 
-Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
+Status: DEPLOYED / PRODUCTION VALIDATED.
 
 The owner-approved Campaign UX/result-truth delta was recovered and reapplied on
 the canonical Operational Queue baseline. Campaign return destination remains
@@ -711,12 +719,13 @@ states and business-readable reasons.
 Validation completed locally: `campaignsPageContract.test.ts` 6/6 PASS,
 `campaignsFeatureRoutes.test.ts` 114/114 PASS on safe local DB
 `re7_queue_rollout_validate_20260918`, backend build PASS, frontend build PASS
-and `git diff --check` PASS. No production deploy, no real Meta send, no
-schema/migration and no Demo `****6787` repair/mutation occurred.
+and `git diff --check` PASS. This was the initial local gate; controlled
+production delivery later advanced to `4fbea0f78cad5080eac2773eb2c19e08f9b45e02`.
+No real Meta send, schema/migration or Demo `****6787` repair/mutation occurred.
 
 ## Campaign Result Truth canonical 12/13 corrective - 2026-09-18
 
-Status: P1 VALIDATED LOCAL AND READ-ONLY / OWNER REVIEW READY / NO DEPLOY.
+Status: DEPLOYED / PRODUCTION VALIDATED.
 
 The initial synthetic fixture passed but did not reproduce the real production
 shape. Demo seed `****6787` used 13 digits and its delivered historical outbound
@@ -726,5 +735,6 @@ The hard gate stopped validation. The corrective reuses
 does not add schema or migration. A read-only replay against the actual campaign
 records now yields 2 visible rows, delivered 1, blocked 1, pending 0, technical
 failures 0 and `Entrega parcial`. No CRA send, provider call, identity repair,
-production mutation or deploy occurred. Validation: 118/118 + 56/56 + 72/72
-PASS.
+production data mutation occurred. Validation: 118/118 + 56/56 + 72/72 PASS
+plus authenticated actual-campaign production verification and unchanged
+pre/post campaign/history/billing evidence.
