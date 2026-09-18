@@ -144,6 +144,12 @@ bash scripts/test-vercel-ignore-build.sh
 bash scripts/vercel-ignore-build.sh <base> <head>
 ```
 
+Validacao Git/Vercel:
+
+- o commit que introduz `vercel.json` deve buildar, pois altera o proprio
+  controle de build;
+- um commit posterior somente em docs deve ser ignorado pelo comando.
+
 Auditoria 2026-09-18:
 
 - previews `4425923`, `a175bce` e `f8ad128` foram criados por `source=git`,
