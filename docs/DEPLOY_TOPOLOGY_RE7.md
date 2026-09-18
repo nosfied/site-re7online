@@ -88,6 +88,74 @@ Observacao:
 
 ## Fluxos de deploy
 
+### 0. Higiene Vercel / Git
+
+Projeto Vercel:
+
+```text
+site-re7online
+prj_Ei43Wm38CyRWK4yaJHsQinQE7Lto
+team_I9ssuIuIMESmfBaoSnIkAZ25
+```
+
+Repositorio Git conectado:
+
+```text
+nosfied/site-re7online
+```
+
+O mesmo repositorio tambem contem codigo operacional do Converta servido pela
+VPS. Portanto, push Git no repositorio nao significa automaticamente que o site
+publico `re7online.com` precisa ser rebuildado na Vercel.
+
+Regra permanente:
+
+- `re7online.com` e `www.re7online.com`: Vercel public site;
+- `converta.re7online.com`, `admin.re7online.com` e `api.re7online.com`: VPS;
+- deploy Vercel e deploy VPS sao trilhas separadas;
+- commits somente de `docs/**`, tooling ops, backend `apps/whatsapp-agent/**`
+  ou worker `apps/whatsapp-web-worker/**` nao devem gerar build Vercel quando
+  nao alterarem arquivos do artefato Next publico;
+- commits em `src/**`, `public/**`, dependencias/config de build raiz,
+  `next.config.*` ou `vercel.json` continuam gerando build Vercel;
+- `src/app/app/**` e `src/app/admin/**` sao operacionalmente servidos pela VPS,
+  mas fazem parte do Next root que a Vercel compila. Por isso permanecem
+  classificados como Vercel-relevantes ate existir separacao fisica de apps;
+- branches `ops-*`, `repair-*` e docs-only nao devem ser promovidos/redeployados
+  para Production casualmente;
+- `source=redeploy` em deployment Vercel deve ser tratado como evento explicito
+  de deployment, nao como comportamento normal de Preview por Git.
+
+Controle versionado:
+
+```text
+vercel.json -> ignoreCommand: bash scripts/vercel-ignore-build.sh
+```
+
+Semantica Vercel:
+
+- exit `0`: pular build/deployment;
+- exit `1`: continuar build/deployment.
+
+Validacao local:
+
+```bash
+bash scripts/test-vercel-ignore-build.sh
+bash scripts/vercel-ignore-build.sh <base> <head>
+```
+
+Auditoria 2026-09-18:
+
+- previews `4425923`, `a175bce` e `f8ad128` foram criados por `source=git`,
+  `target=null`, branch `ops-demo-9614-repair-readiness-20260918`, sem aliases
+  de producao;
+- production deployment `2e043f67` foi observado como `source=redeploy`,
+  `target=production`, com aliases `re7online.com`, `www.re7online.com`,
+  `teste.re7online.com` e aliases Vercel do projeto;
+- a origem exata do `redeploy` nao foi provada pelas ferramentas disponiveis;
+  registrar como `UNKNOWN` se a auditoria Vercel nao expuser ator/mecanismo;
+- nao alterar aliases, Production Branch ou dominio sem aprovacao explicita.
+
 ### 1. Site publico (`re7online.com`)
 Usar quando mudar:
 - `src/app/page.tsx`

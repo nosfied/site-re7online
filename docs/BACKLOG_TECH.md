@@ -24,6 +24,31 @@ Produto operacional com observabilidade real da Meta e área do cliente funciona
 
 O onboarding interno foi implementado, porém ainda não validado com novo tenant via UI.
 
+### Vercel / Re7online deployment hygiene — 2026-09-18
+
+Status: IMPLEMENTED / PUSH PENDING / NO PRODUCTION REDEPLOY.
+
+Auditoria confirmou que `site-re7online` na Vercel recebe Git previews para
+branches operacionais do mesmo repositorio, inclusive
+`ops-demo-9614-repair-readiness-20260918`, commits `4425923`, `a175bce` e
+`f8ad128`, todos `source=git`, `target=null`, sem aliases de producao. Tambem
+foi observado production deployment `2e043f67` como `source=redeploy`,
+`target=production`; a origem exata do redeploy nao foi provada pelas
+ferramentas disponiveis e deve permanecer `UNKNOWN` sem evidencia adicional.
+
+Foi adicionado controle versionado `vercel.json` com
+`ignoreCommand: bash scripts/vercel-ignore-build.sh`. A regra e path-aware:
+docs, tooling ops, `apps/whatsapp-agent/**` e
+`apps/whatsapp-web-worker/**` pulam build quando isolados; `src/**`,
+`public/**`, dependencias/config raiz, `next.config.*` e `vercel.json`
+continuam buildando. `src/app/app/**` e `src/app/admin/**` permanecem
+Vercel-relevantes enquanto compartilharem o mesmo Next root, embora sejam
+operacionalmente publicados pela VPS.
+
+Validacao local: `bash scripts/test-vercel-ignore-build.sh` PASS; commits
+`4425923`, `a175bce` e `f8ad128` projetam SKIP. Nenhum alias Vercel,
+Production Branch, dominio, VPS runtime ou deployment de producao foi alterado.
+
 ---
 
 ## PRIORIDADE ATUAL

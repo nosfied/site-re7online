@@ -43,3 +43,34 @@ apps/whatsapp-agent/scripts/deploy-vps.sh --dry-run origin/flow-executor-quote-h
 O deploy integrado faz `git pull --ff-only`, calcula o range publicado, para em
 `REVIEW_REQUIRED=YES` ou `UNKNOWN_RUNTIME_IMPACT=YES`, builda todos os runtimes
 afetados e somente depois recarrega os processos PM2 correspondentes.
+
+## `vercel-ignore-build.sh`
+
+Controle versionado do Vercel Ignored Build Step para o projeto publico
+`site-re7online`.
+
+Uso no `vercel.json`:
+
+```json
+{
+  "ignoreCommand": "bash scripts/vercel-ignore-build.sh"
+}
+```
+
+Semantica exigida pela Vercel:
+
+- exit `0`: pular build;
+- exit `1`: continuar build.
+
+O script e conservador: qualquer alteracao em `src/**`, `public/**`,
+dependencias/config raiz, `next.config.*` ou `vercel.json` continua buildando.
+Docs, tooling operacional, `apps/whatsapp-agent/**` e
+`apps/whatsapp-web-worker/**` sao ignorados quando nao houver arquivo
+Vercel-relevante no mesmo commit.
+
+Teste local:
+
+```bash
+bash scripts/test-vercel-ignore-build.sh
+bash scripts/vercel-ignore-build.sh <base> <head>
+```
