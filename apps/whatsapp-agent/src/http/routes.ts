@@ -11073,6 +11073,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         statuses: resolvedStatuses.statuses,
         canStartWhatsappFreeform: startReadiness.allowed,
         startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
+        includeCampaignRelationships: getFeatures(client).campaigns,
       });
       json(res, 200, isAgentRole(clientAuth.role) ? stripCrmHistoryFromContactsPayload(payload) : payload);
     } catch (error) {
@@ -11145,6 +11146,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         statuses: resolvedStatuses.statuses,
         canStartWhatsappFreeform: startReadiness.allowed,
         startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
+        includeCampaignRelationships: getFeatures(client).campaigns,
       });
       if (!payload) {
         logger.error({
@@ -11334,6 +11336,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         canStartWhatsappFreeform: startReadiness.allowed,
         startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
         includeOperationallyExcluded,
+        includeCampaignRelationships: getFeatures(client).campaigns,
       });
       if (!payload) {
         json(res, 404, httpError("contact_not_found", "Contact not found"));
@@ -11796,6 +11799,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         statuses: resolvedStatuses.statuses,
         canStartWhatsappFreeform: startReadiness.allowed,
         startConversationBlockedReason: startReadiness.allowed ? null : startReadiness.reason,
+        includeCampaignRelationships: getFeatures(client).campaigns,
       });
       if (!payload) {
         json(res, 404, httpError("contact_not_found", "Contact not found"));

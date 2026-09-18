@@ -393,16 +393,20 @@ Marketing media templates:
 
 Contacts campaign relationship view:
 
-- status: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP;
-- show campaign count, last campaign, last send timestamp, template,
-  delivery/read/failure state, opt-out, skipped/blocked reason, CRM Situation
-  and campaign/history navigation inside Contacts where applicable;
-- source remains existing campaign/outbound/billing/opt-out/event records;
-- do not create a shadow campaign-history model inside Contact;
-- same-tenant only;
-- avoid N+1 per contact row by using aggregate/list projection and on-demand
-  expanded detail;
-- follow the approved expandable administrative-row pattern where appropriate.
+- status: CANONICALLY INTEGRATED / TEST VALIDATED / OWNER PASS / CLEAN DELIVERY PREPARED / PRODUCTION DEPLOY PENDING /
+  CRA CAMPAIGN-CRM FOLLOW-UP;
+- Contacts list shows compact campaign count, latest campaign/date/template and
+  translated recipient status where applicable;
+- contact detail shows recent campaign history and navigation to existing
+  campaign detail;
+- source remains existing campaign/outbound/event records; no Contact shadow
+  campaign-history model, schema or migration;
+- same-tenant only; focused regression covers cross-tenant leakage guard;
+- avoid N+1 per contact row by using bounded aggregate/list projection and
+  on-demand detail;
+- customer UX does not show financial values;
+- local validation: `crmCapabilityRoutes.test.ts` 19/19 PASS, backend build
+  PASS, frontend build PASS, diff check PASS.
 
 ### Phase B Owner Gate Package
 

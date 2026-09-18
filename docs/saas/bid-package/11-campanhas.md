@@ -60,6 +60,12 @@ resultado por destinatario com motivos de bloqueio/falha/opt-out quando
 persistidos. A UX do cliente nao deve exibir preco, custo, tarifa ou estimativa
 financeira; evidencias financeiras pertencem ao gate de relatorios/billing.
 
+Contacts/CRM campaign relationship em 2026-09-18: implementado localmente e
+testado para exibir resumo e historico recente de campanhas por contato a partir
+de `Campaign`, `OutboundMessage` e eventos canonicos, sem modelo sombra em
+Contact, sem schema/migration e sem preco/custo na UX. Owner review, deploy e
+aceite CRA permanecem pendentes.
+
 ## Premissas Para Editais
 
 - O edital deve distinguir atendimento receptivo de campanhas ativas.

@@ -503,6 +503,7 @@ function getTabStatusFilter(tab: CampaignCenterTab): CampaignStatusFilter {
 
 export default function AppCampaignsPage() {
   const router = useRouter();
+  const [requestedCampaignId, setRequestedCampaignId] = useState<string | null>(null);
   const [session, setSession] = useState<AppSession | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
   const [templates, setTemplates] = useState<AppTemplateItem[]>([]);
@@ -575,6 +576,10 @@ export default function AppCampaignsPage() {
     setSession(stored);
     saveAppSession(stored);
   }, [router]);
+
+  useEffect(() => {
+    setRequestedCampaignId(new URLSearchParams(window.location.search).get("campaignId"));
+  }, []);
 
   const refreshCampaigns = useCallback(
     async (activeSession: AppSession, keepSelectedId?: string | null) => {
@@ -1041,7 +1046,7 @@ export default function AppCampaignsPage() {
     setError(null);
 
     Promise.all([
-      refreshCampaigns(session),
+      refreshCampaigns(session, requestedCampaignId),
       refreshTemplates(session),
       fetchAppCampaignReturnDestinations(session).then((response) => {
         setReturnDestinations(response);
@@ -1077,7 +1082,12 @@ export default function AppCampaignsPage() {
     return () => {
       cancelled = true;
     };
-  }, [handleUnauthorized, refreshCampaigns, refreshTemplates, session]);
+  }, [handleUnauthorized, refreshCampaigns, refreshTemplates, requestedCampaignId, session]);
+
+  useEffect(() => {
+    if (!requestedCampaignId) return;
+    setSelectedCampaignId(requestedCampaignId);
+  }, [requestedCampaignId]);
 
   useEffect(() => {
     if (!form.templateName || form.templateId) return;

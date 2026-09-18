@@ -132,13 +132,15 @@ deployed FF-only with non-destructive validation. Sequential per-row
 identity resolution remains P2 performance hardening; internal result wording
 remains P3 UX. Completion telemetry and the broader lint baseline remain WATCH.
 
-Contacts campaign relationship view is OPEN / CRA CAMPAIGN-CRM FOLLOW-UP. It
-should expose campaign count, last campaign/send/template, delivery/read/failure
-state, opt-out/skipped/blocked context, CRM Situation and campaign/history
-navigation inside Contacts without creating a Contact-owned campaign history.
-Canonical source remains existing campaign/outbound/billing/opt-out records;
-the implementation should use same-tenant aggregate/list projection and
-on-demand expanded detail to avoid N+1 per contact row.
+Contacts campaign relationship view is CANONICALLY INTEGRATED / TEST VALIDATED /
+OWNER PASS / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP. It exposes campaign count,
+last campaign/date/template/status and recent campaign history inside
+Contacts/CRM without creating Contact-owned campaign history. Canonical source
+remains existing campaign/outbound/event evidence, same-tenant only; the list
+uses a bounded aggregate projection for the current page and detail is loaded
+on demand to avoid per-row N+1. Customer UX excludes price/cost/billing values.
+Focused CRM route regression passed 19/19 on safe local DB, with backend and
+frontend builds passing. Production delivery and CRA acceptance are pending.
 
 CRA-PR Demo mirror, 2026-09-15: `demo-converta` is the reusable multitenant
 product acceptance baseline for generic CRA requirements. Phase A created the
@@ -271,8 +273,9 @@ Current backlog classification:
   report CSV/PDF path, Meta usage CSV and active-message billing CSV were
   audited; A has one reconciled billing event, B has one delivered billing
   event and opt-out has zero outbound/billing. CRA customer report package and
-  final BRL contract unit remain pending. Next front is CRM import/upsert/report
-  with optional `Situacao no CRM`.
+  final BRL contract unit remain pending. Next fronts are CRM import/upsert/
+  report with optional `Situacao no CRM`, then owner/prod gate for Contacts
+  campaign relationship view.
 - Meta pricing source of truth / FinOps hardening is P2 generic product backlog.
   The broad future work is rate-card ingestion, resolver, snapshots, FX and
   staleness detection. It must not consume the current CRA adherence front

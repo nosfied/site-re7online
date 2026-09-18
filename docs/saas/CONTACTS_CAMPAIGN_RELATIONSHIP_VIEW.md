@@ -1,11 +1,19 @@
 # Contacts Campaign Relationship View
 
-Status: OPEN / CRA CAMPAIGN-CRM FOLLOW-UP.
+Status: CANONICALLY INTEGRATED / TEST VALIDATED / OWNER PASS / CLEAN DELIVERY
+PREPARED / PRODUCTION DEPLOY PENDING / CRA CAMPAIGN-CRM FOLLOW-UP.
 
-Last updated: 2026-09-16.
+Last updated: 2026-09-18.
 
-This document defines a future product contract. It does not implement code,
-change runtime behavior, add a schema or authorize real sends.
+This document defines the product contract and current local implementation.
+It does not authorize real sends, production deployment, schema changes or
+campaign/billing history rewrites.
+
+Clean delivery note, 2026-09-18: a production-base delivery branch was prepared
+from exact production HEAD `04eb01ae2a044b993774dd21b37228b35bea11bc` with only
+the Contacts campaign relationship delta. Repair tooling, identity repair
+deltas, queue-domain deltas, schema changes and migrations are not part of this
+delivery.
 
 ## Goal
 
@@ -41,6 +49,17 @@ history must use existing campaign events such as
 The Contacts surface may expose a projection/read model, but campaign source of
 truth remains in the existing campaign/outbound/billing/opt-out records.
 
+Current implementation uses a read-only projection from:
+
+- `Campaign`;
+- `OutboundMessage`;
+- `campaign.seed.saved`;
+- `campaign.recipient.opt_out_blocked`;
+- `campaign.recipient.import_blocked`.
+
+No Contact-owned campaign-history table, denormalized status field, schema
+change or migration was introduced.
+
 ## Multitenant Rules
 
 Mandatory:
@@ -62,6 +81,11 @@ Preferred shape:
 - reuse existing indexes and query patterns where possible;
 - defer heavy detail joins until the operator expands or navigates.
 
+Current implementation performs one bounded same-tenant projection for the
+current Contacts page and loads the recent campaign history on contact detail.
+The focused regression validates same-tenant aggregation without cross-tenant
+leakage.
+
 ## UX Contract
 
 Use the approved expandable administrative-row pattern where appropriate:
@@ -72,6 +96,15 @@ Use the approved expandable administrative-row pattern where appropriate:
 - navigation from contact to campaign/history detail.
 
 Do not duplicate full campaign management UI inside Contacts.
+
+Current UX:
+
+- Contacts list includes a compact `Campanhas` column with campaign count,
+  latest campaign, latest date and translated status;
+- contact detail includes `Campanhas` with latest summary and recent history;
+- campaign navigation reuses `/app/campaigns?campaignId=<id>`;
+- customer-facing Contacts UX does not display `R$`, `USD`, provider cost,
+  Meta rate, contract price or billing amount.
 
 ## CRA Relevance
 
@@ -89,3 +122,20 @@ This is separate from:
 - opt-out E2E, now Demo-validated as product capability on 2026-09-16;
 - reports / exports / billing closure;
 - CRM import/upsert/report with `Situação no CRM`.
+
+## Validation
+
+Local validation on 2026-09-18:
+
+- safe local DB: `re7_queue_domain_test_20260917`;
+- backend focused regression: `crmCapabilityRoutes.test.ts` 19/19 PASS;
+- covered no campaign, one/multiple campaigns through existing CRM fixtures,
+  delivered status, opt-out blocked, identity conflict, same-tenant scope,
+  cross-tenant leakage guard, campaign detail link, CRM Situation and no
+  financial strings;
+- backend build PASS;
+- frontend build PASS;
+- `git diff --check` PASS.
+
+Owner visual review PASS; production deployment and CRA customer acceptance remain
+pending.

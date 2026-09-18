@@ -12,6 +12,8 @@ import {
   AppCrmContactImportConfirmResponse,
   AppCrmContactImportPreviewResponse,
   AppCrmExistingContactResolution,
+  AppCrmCampaignRelationshipHistoryItem,
+  AppCrmCampaignRelationshipStatus,
   AppCrmContactItem,
   AppCrmContactsResponse,
   AppSession,
@@ -111,6 +113,72 @@ function getChannelLabel(channel: string | null) {
 
 function getConversationStatusLabel(status: string | null) {
   return status ? getConversationStatusUxLabel(status as never) : "-";
+}
+
+function getCampaignRelationshipStatusLabel(status: AppCrmCampaignRelationshipStatus | null) {
+  switch (status) {
+    case "PENDING":
+      return "Pendente";
+    case "SENT":
+      return "Enviada";
+    case "ACCEPTED":
+      return "Aceita";
+    case "DELIVERED":
+      return "Entregue";
+    case "READ":
+      return "Lida";
+    case "FAILED":
+      return "Falhou";
+    case "BLOCKED":
+      return "Bloqueada";
+    case "OPT_OUT":
+      return "Bloqueada por opt-out";
+    case "SKIPPED":
+      return "Ignorada";
+    case "IDENTITY_CONFLICT":
+      return "Conflito de contato";
+    default:
+      return "Sem campanha";
+  }
+}
+
+function getCampaignRelationshipReasonLabel(reason: string | null | undefined) {
+  switch (reason) {
+    case "opt_out":
+      return "Bloqueio por opt-out";
+    case "import_blocked":
+      return "Bloqueio na importação";
+    case "identity_conflict":
+      return "Conflito de contato";
+    case "send_failed":
+      return "Falha no envio";
+    case "provider_failed":
+      return "Falha informada pelo provedor";
+    case "provider_rejected":
+      return "Rejeitada pelo provedor";
+    default:
+      return reason || null;
+  }
+}
+
+function getCampaignRelationshipBadgeClass(status: AppCrmCampaignRelationshipStatus | null) {
+  switch (status) {
+    case "DELIVERED":
+    case "READ":
+      return "border-emerald-300/30 bg-emerald-400/10 text-emerald-100";
+    case "SENT":
+    case "ACCEPTED":
+      return "border-re7-sky/30 bg-re7-sky/10 text-re7-sky";
+    case "FAILED":
+    case "BLOCKED":
+    case "OPT_OUT":
+    case "IDENTITY_CONFLICT":
+      return "border-rose-300/30 bg-rose-400/10 text-rose-100";
+    case "SKIPPED":
+      return "border-amber-300/30 bg-amber-400/10 text-amber-100";
+    default:
+      return "border-white/10 bg-white/[0.05] text-white/70";
+  }
 }
 
 function getTemplateHint(item: AppCrmContactItem) {
@@ -228,6 +296,8 @@ function CrmContactRow({
 }) {
   const phoneLabel = getContactPhoneLabel(item);
   const canOpenConversation = canOpenOrStartConversation(item, canViewHistory);
+  const campaign = item.campaignRelationship;
+  const hasCampaign = campaign.campaignCount > 0;
   return (
     <tr className="border-b border-white/10 align-top transition hover:bg-white/[0.04]">
       <td className="px-4 py-3">
@@ -258,6 +328,28 @@ function CrmContactRow({
       </td>
       <td className="px-4 py-3">
         <div className="text-sm font-semibold text-white">{item.crmStatusLabel}</div>
+      </td>
+      <td className="px-4 py-3">
+        {hasCampaign ? (
+          <div className="grid gap-1">
+            <div className="text-sm font-semibold text-white">
+              {formatNumber(campaign.campaignCount)} campanha(s)
+            </div>
+            <div className="max-w-[220px] truncate text-xs theme-muted" title={campaign.latestCampaignName ?? undefined}>
+              {campaign.latestCampaignName || "Campanha sem nome"}
+            </div>
+            <div className="text-xs theme-muted">{formatDateTime(campaign.latestCampaignAt)}</div>
+            <span
+              className={`w-fit rounded-full border px-2 py-0.5 text-xs font-semibold ${getCampaignRelationshipBadgeClass(
+                campaign.latestRecipientStatus
+              )}`}
+            >
+              {getCampaignRelationshipStatusLabel(campaign.latestRecipientStatus)}
+            </span>
+          </div>
+        ) : (
+          <span className="text-sm theme-muted">Sem campanhas</span>
+        )}
       </td>
       {canViewHistory ? (
         <td className="px-4 py-3">
@@ -301,6 +393,38 @@ function CrmContactRow({
         </div>
       </td>
     </tr>
+  );
+}
+
+function CampaignHistoryRow({ campaign }: { campaign: AppCrmCampaignRelationshipHistoryItem }) {
+  const reason = getCampaignRelationshipReasonLabel(campaign.resultReason);
+  return (
+    <div className="grid gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3 md:grid-cols-[1fr_auto] md:items-center">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-white">{campaign.campaignName}</span>
+          <span
+            className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${getCampaignRelationshipBadgeClass(
+              campaign.recipientStatus
+            )}`}
+          >
+            {getCampaignRelationshipStatusLabel(campaign.recipientStatus)}
+          </span>
+        </div>
+        <div className="mt-2 text-xs theme-muted">
+          {formatDateTime(campaign.campaignAt)}
+          {campaign.templateName ? ` • Modelo: ${campaign.templateName}` : ""}
+          {campaign.deliveredAt ? ` • Entregue em ${formatDateTime(campaign.deliveredAt)}` : ""}
+        </div>
+        {reason ? <div className="mt-1 text-xs theme-muted">{reason}</div> : null}
+      </div>
+      <a
+        href={campaign.campaignHref}
+        className="inline-flex h-9 items-center justify-center rounded-md bg-re7-sky px-3 text-xs font-semibold text-slate-950 transition hover:brightness-110"
+      >
+        Abrir campanha
+      </a>
+    </div>
   );
 }
 
@@ -383,6 +507,7 @@ function CrmContactDetailDrawer({
 }) {
   const item = detail?.item ?? null;
   const conversations = detail?.conversations ?? [];
+  const campaignHistory = detail?.campaignRelationshipHistory?.items ?? [];
   const [editingBasics, setEditingBasics] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [hiddenBlockingConversation, setHiddenBlockingConversation] =
@@ -783,6 +908,39 @@ function CrmContactDetailDrawer({
                     )}
                   </div>
                 ) : null}
+              </DetailSection>
+
+              <DetailSection title="Campanhas">
+                <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2">
+                  <DetailField label="Campanhas vinculadas" value={item.campaignRelationship.campaignCount} />
+                  <DetailField label="Última campanha" value={item.campaignRelationship.latestCampaignName} />
+                  <DetailField label="Última data" value={formatDateTime(item.campaignRelationship.latestCampaignAt)} />
+                  <DetailField label="Modelo" value={item.campaignRelationship.latestTemplate} />
+                  <DetailField
+                    label="Último status"
+                    value={getCampaignRelationshipStatusLabel(item.campaignRelationship.latestRecipientStatus)}
+                  />
+                  <DetailField
+                    label="Motivo"
+                    value={getCampaignRelationshipReasonLabel(item.campaignRelationship.latestResultReason)}
+                  />
+                </div>
+                <div className="mt-4 grid gap-2">
+                  {campaignHistory.length === 0 ? (
+                    <div className="rounded-lg border border-white/10 p-4 text-sm theme-muted">
+                      Nenhuma campanha vinculada a este contato.
+                    </div>
+                  ) : (
+                    campaignHistory.map((campaign) => (
+                      <CampaignHistoryRow key={`${campaign.campaignId}:${campaign.campaignAt}`} campaign={campaign} />
+                    ))
+                  )}
+                  {detail?.campaignRelationshipHistory.pagination.hasMore ? (
+                    <div className="rounded-lg border border-white/10 p-3 text-xs theme-muted">
+                      Há mais registros. Abra campanhas para consultar o histórico completo.
+                    </div>
+                  ) : null}
+                </div>
               </DetailSection>
 
               {canViewHistory ? (
@@ -1857,13 +2015,14 @@ export default function AppCrmContactsPage() {
         ) : contacts ? (
           <div className="theme-surface overflow-hidden rounded-xl border shadow-sm">
             <div className="overflow-x-auto">
-              <table className={`${canViewCrmHistory ? "min-w-[1120px]" : "min-w-[960px]"} w-full text-left text-sm`}>
+              <table className={`${canViewCrmHistory ? "min-w-[1280px]" : "min-w-[1080px]"} w-full text-left text-sm`}>
                 <thead className="border-b border-white/10 bg-white/[0.04] text-xs uppercase tracking-[0.12em] theme-soft">
                   <tr>
                     <th className="px-4 py-3 font-semibold">Contato</th>
                     <th className="px-4 py-3 font-semibold">Empresa</th>
                     <th className="px-4 py-3 font-semibold">Canal</th>
                     <th className="px-4 py-3 font-semibold">Situação</th>
+                    <th className="px-4 py-3 font-semibold">Campanhas</th>
                     {canViewCrmHistory ? <th className="px-4 py-3 font-semibold">Última conversa</th> : null}
                     <th className="px-4 py-3 font-semibold">Atualização</th>
                     <th className="px-4 py-3 text-right font-semibold">Ações</th>
