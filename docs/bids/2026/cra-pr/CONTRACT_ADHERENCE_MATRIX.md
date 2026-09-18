@@ -410,6 +410,14 @@ delivered 1, blocked 1, pending 0 and technical failures 0. Validation: UI
 contract 9/9 PASS, `campaignsFeatureRoutes.test.ts` 115/115 PASS and focused
 identity-path matrix 106/106 PASS. No CRA send, production mutation or deploy.
 
+Ops readiness update, 2026-09-18: the `****9614` repair dry-run tool was
+supplied on a separate versioned ops branch and executed from a separate VPS
+worktree. Production dry-run PASS, blockers 0, runtime impact NOOP, projected
+canonical Contact/Lead fixed, and expected outbound/billing/campaign/opt-out
+deltas remain 0. Persistent snapshot and PostgreSQL backup were created.
+Repair remains NOT EXECUTED and still requires explicit owner authorization.
+This does not change CRA acceptance evidence or authorize any resend.
+
 Campaign composition lifecycle, 2026-09-18: IMPLEMENTED LOCAL / OWNER REVIEW
 PENDING / NO DEPLOY. Abandoning an unsaved CRM/CSV/manual composition now
 clears all client-transient campaign data through one dirty/reset contract.

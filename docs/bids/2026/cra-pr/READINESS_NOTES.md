@@ -129,6 +129,14 @@ Follow-up de 2026-09-18, result truth/identidade de campanha Demo:
   campanha apresentada como entrega parcial.
 - Evidencia: `docs/saas/DEMO_9614_CAMPAIGN_IDENTITY_CLOSURE_2026-09-18.md`.
 
+Atualizacao de prontidao operacional em 2026-09-18: o dry-run real de producao
+para o repair de `****9614` passou a existir como tooling ops versionado,
+separado do runtime da aplicacao. Foi executado de worktree separado no VPS,
+com blockers 0, runtime impact NOOP e deltas esperados 0 para outbound,
+billing, historico de campanha, opt-out, provider call e resend. Snapshot
+persistente e backup PostgreSQL foram criados. O repair continua NAO EXECUTADO
+e exige autorizacao explicita do owner.
+
 Follow-up de 2026-09-18, ciclo de composicao de campanha:
 
 - IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO DEPLOY;

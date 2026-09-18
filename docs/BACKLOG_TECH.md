@@ -211,9 +211,27 @@ ACTIVE P1:
    `docs/saas/CAMPAIGN_RESULT_TRUTH_CANONICAL_RECONCILIATION_2026-09-18.md`.
 
    Open controlled data action: Demo `****9614` historical identity residue.
-   DATA REPAIR PREPARED / OWNER AUTHORIZATION REQUIRED / NO RESEND. Factory is
-   fixed; do not reopen Identity P1 as an active product bug without new
-   creation evidence contradicting the focused identity-path tests.
+   PRODUCTION DRY-RUN PASS / OWNER AUTHORIZATION REQUIRED / NO RESEND. Factory
+   is fixed; do not reopen Identity P1 as an active product bug without new
+   creation evidence contradicting the focused identity-path tests. The missing
+   production dry-run artifact was supplied as versioned ops tooling on branch
+   `ops-demo-9614-repair-readiness-20260918`, commit
+   `4425923041836ed05c7c37f571a3c3c14b0fd903`, without app deploy or PM2
+   reload. Tool hashes: script
+   `155c21ba247bb4cba892b8968cd4c9db2b95e0fa50d392d989b3437b31431d49`,
+   planner `8018c92664affbc527554a4caaa0ec26d59cabeaa25b43d139be32f5fe1150cf`.
+   Production dry-run from separate VPS worktree passed with blockers 0,
+   runtime impact NOOP, outbound/billing/campaign/opt-out/provider deltas 0,
+   and post-repair projection to Contact
+   `77c780bf-3501-4a55-9261-673b2c6cbbc4` plus Lead
+   `cmtg3jmq4011p4s7d4vhpk0sd`. Snapshot package:
+   `/opt/re7online/backups/converta-persistent/demo-9614-repair-readiness-20260918`.
+   Backup:
+   `/opt/re7online/backups/converta-persistent/postgres/demo-9614-repair-readiness-20260918/whatsapp_agent-pre-demo-9614-repair-20260918-212055.dump`,
+   SHA256 `7a522196cec9ded7fd9d2c07cab9fac819ad1f707610144b7060cdbfce2ae44e`,
+   20,832,168 bytes, 596 restore-list lines. Pre/post hashes identical.
+   Operational correction: no mutable integration test may run with production
+   `DATABASE_URL`; use isolated test DBs and non-mutating production dry-runs.
 
    Campaign composer cleanup: IMPLEMENTED LOCAL / OWNER REVIEW PENDING / NO
    DEPLOY. Unsaved composition is now governed by one dirty-state contract and

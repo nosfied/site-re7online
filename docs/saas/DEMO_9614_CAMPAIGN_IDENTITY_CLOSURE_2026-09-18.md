@@ -99,6 +99,71 @@ Lead to relink. Current conversation runtime state and Cobranca routing must
 remain unchanged. Execution requires a separate, explicit owner authorization,
 pre-mutation backup and before/after evidence. No resend is part of the repair.
 
+## Ops dry-run readiness - 2026-09-18
+
+The production runtime checkout did not contain the previously prepared
+`apps/whatsapp-agent/scripts/demo-9614-identity-repair-dry-run.ts` artifact, so
+the readiness gate stopped before repair authorization. The tool is now
+versioned on the separate ops branch
+`ops-demo-9614-repair-readiness-20260918`, commit
+`4425923041836ed05c7c37f571a3c3c14b0fd903`, without changing or deploying the
+live application checkout.
+
+Tool hashes:
+
+- dry-run script:
+  `155c21ba247bb4cba892b8968cd4c9db2b95e0fa50d392d989b3437b31431d49`;
+- repair planner:
+  `8018c92664affbc527554a4caaa0ec26d59cabeaa25b43d139be32f5fe1150cf`.
+
+Validation:
+
+- planner unit tests: 3/3 PASS;
+- isolated test database:
+  `127.0.0.1:5432/re7_ops_9614_test_20260918`, not production;
+- test dry-run against seeded isolated graph: PASS, blockers 0;
+- production dry-run from separate VPS worktree:
+  `/opt/re7online/ops-worktrees/demo-9614-repair-readiness-20260918`;
+- production dry-run result: PASS, blockers 0;
+- graph counts: Contacts 2, Leads 1, Channel identities 3, open
+  Conversations 0, open ConversationRuntimeStates 1;
+- runtime state `91bc59ab-d6e8-41cc-bec8-ca00c6244217`: NOOP. It is already
+  Web Session-scoped to the primary identity selectors and does not reference
+  the secondary Meta identity;
+- projected eligibility: identity PASS, opt-out PASS, template PASS, return
+  destination PASS, 24h relevance `UTILITY_TEMPLATE_OK`;
+- expected deltas: outbound 0, billing 0, campaign history 0, opt-out history
+  0, provider call 0, hard delete NO.
+
+Persistent snapshot package:
+
+`/opt/re7online/backups/converta-persistent/demo-9614-repair-readiness-20260918`
+
+Persistent PostgreSQL backup:
+
+`/opt/re7online/backups/converta-persistent/postgres/demo-9614-repair-readiness-20260918/whatsapp_agent-pre-demo-9614-repair-20260918-212055.dump`
+
+- SHA-256:
+  `7a522196cec9ded7fd9d2c07cab9fac819ad1f707610144b7060cdbfce2ae44e`;
+- size: 20,832,168 bytes;
+- `pg_restore --list`: 596 lines.
+
+Pre/post dry-run hashes after snapshot and backup were identical:
+
+- graph:
+  `818dd6d7bd6a1551b6e086031c04af722721207c50955106233e732d545c6c9d`;
+- snapshots:
+  `31f2a679cfbed216195e67765ec49c47f05989cf559679ac0879b695dad9f2b4`.
+
+Status: PRODUCTION DRY-RUN PASS / REPAIR READY FOR OWNER AUTHORIZATION / NOT
+EXECUTED. No provider call, resend, schema, migration, PM2 reload or app deploy
+occurred.
+
+Operational lesson: mutable integration tests must never run with the
+production `DATABASE_URL`. Production readiness must use read-only SQL,
+purpose-built non-mutating dry-run tools, health checks and projection logic.
+Mutable tests belong only on isolated local/test databases.
+
 ## Validation
 
 The first synthetic Result Truth validation did not reproduce the production
