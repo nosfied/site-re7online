@@ -244,7 +244,7 @@ async function executeRepair() {
               waIdCanonical: { endsWith: "6787" },
               status: { not: "CLOSED" },
               mode: "HUMAN",
-              handoffState: "ACTIVE",
+              handoffStatus: "ACTIVE",
             },
           }),
           tx.outboundMessage.count({
