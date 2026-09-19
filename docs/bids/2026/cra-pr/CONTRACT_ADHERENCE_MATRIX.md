@@ -328,7 +328,7 @@ status, same-tenant CRM Situation and name/phone, supports filtered copy and can
 prefill a new draft through the existing composer from current canonical
 contacts only; historical rows without current reusable contact are excluded
 with explicit count. Dynamic CRM-filter scheduled campaigns are documented as
-OWNER PASS / LOCAL VALIDATED / NOT DEPLOYED in
+OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED in
 `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`: schedule-time stores the
 CRM Situation filter and execution-time creates one immutable snapshot. No
 schema/migration, no real send, no financial UX and no campaign/history rewrite.

@@ -187,13 +187,15 @@ technical provider/persistence note. Campaign detail now adds view-only filters
 by result status, CRM Situation and name/phone, copy of filtered rows and new
 campaign prefill from filtered current canonical contacts through the existing
 composer. Rows without current reusable contact are excluded explicitly.
-Dynamic CRM-filter scheduled campaigns are now OWNER PASS / LOCAL VALIDATED /
-NOT DEPLOYED and documented separately in
+Dynamic CRM-filter scheduled campaigns are now OWNER PASS / DEPLOYED /
+PRODUCTION NON-DESTRUCTIVE VALIDATED and documented separately in
 `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`. Static campaigns remain
 unchanged; dynamic schedule-time stores only the CRM Situation filter and
-execution-time creates one immutable snapshot. No schema, campaign history,
-opt-out semantics, operational queue abstraction, financial UX or real send
-changed.
+execution-time creates one immutable snapshot. The 2026-09-19 production gate
+validated health/build/read-only campaign payloads and zero mutation delta for
+campaigns, outbound messages, events and dynamic snapshots. No schema,
+campaign history, opt-out semantics, operational queue abstraction, financial
+UX, provider call or real send changed.
 
 ## Campanhas
 

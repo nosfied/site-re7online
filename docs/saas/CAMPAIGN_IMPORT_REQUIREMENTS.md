@@ -313,9 +313,10 @@ UX pass only reduces redundant operational information:
 - no financial values were introduced and no campaign/history/billing record is
   rewritten by this UX change.
 
-Dynamic CRM-filter scheduled campaigns are a separate OWNER PASS / LOCAL
-VALIDATED / NOT DEPLOYED front. They do not change CSV import/upsert
-semantics. Implementation note:
+Dynamic CRM-filter scheduled campaigns are a separate OWNER PASS / DEPLOYED /
+PRODUCTION NON-DESTRUCTIVE VALIDATED front. They do not change CSV
+import/upsert semantics and no real dynamic execution/send occurred during the
+production gate. Implementation note:
 `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`.
 
 ## CRA Classification

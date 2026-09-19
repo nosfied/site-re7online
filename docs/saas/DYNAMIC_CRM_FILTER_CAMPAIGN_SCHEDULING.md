@@ -1,10 +1,14 @@
 # Dynamic CRM-filter Campaign Scheduling
 
-Status: OWNER PASS / LOCAL VALIDATED / NOT DEPLOYED.
+Status: OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED.
 
-This note records the local implementation of the dynamic CRM-filter scheduling
-front. It has received owner pass in local validation, has not been deployed
-and has no production validation claim.
+This note records the implementation of the dynamic CRM-filter scheduling
+front. It received owner pass in local validation and was deployed to production
+on 2026-09-19 through the clean Contacts/Campaigns delivery at application HEAD
+`5208de159dd11b94dd5db2382446c66b38705c52`. Production validation was
+non-destructive: health, build, read-only campaign/list/detail payload checks
+and mutation counters passed. No real dynamic execution, provider send or
+customer acceptance evidence is claimed here.
 
 Core invariant:
 
@@ -70,4 +74,5 @@ Core invariant:
 - No silent recipient omission; exclusions need explicit counts/reasons.
 - No shadow campaign-history model inside Contact.
 - No schema or migration.
-- No real send, provider call or deploy occurred during local validation.
+- No real send, provider call or dynamic execution occurred during production
+  validation.

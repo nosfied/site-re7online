@@ -389,12 +389,17 @@ ACTIVE P1:
    into the existing composer as current canonical contacts with explicit
    excluded-without-current-contact counts. This prefill does not send and the
    normal composer path rechecks opt-out/identity at draft/send time. Dynamic
-   CRM-filter scheduled campaigns are now a separate OWNER PASS / LOCAL
-   VALIDATED / NOT DEPLOYED front documented in
+   CRM-filter scheduled campaigns are now a separate OWNER PASS / DEPLOYED /
+   PRODUCTION NON-DESTRUCTIVE VALIDATED front documented in
    `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`: schedule-time stores
    only the CRM Situation filter, execution-time creates one immutable snapshot,
-   and static campaigns remain unchanged. No schema/migration, no real send, no
-   financial customer UX and no campaign/history rewrite.
+   and static campaigns remain unchanged. Production delivery used clean
+   FF-only ancestry to `5208de159dd11b94dd5db2382446c66b38705c52`, reloaded
+   only the backend/frontend PM2 processes, left Web Session worker untouched,
+   and passed read-only campaign/list/detail checks with zero delta in
+   campaigns, outbound messages, events and dynamic snapshots. No
+   schema/migration, no real send, no provider call, no financial customer UX
+   and no campaign/history rewrite.
 
 7. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente
