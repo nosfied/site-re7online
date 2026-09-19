@@ -389,12 +389,16 @@ ACTIVE P1:
    into the existing composer as current canonical contacts with explicit
    excluded-without-current-contact counts. This prefill does not send and the
    normal composer path rechecks opt-out/identity at draft/send time. Dynamic
-   CRM-filter scheduled campaigns are now a separate OWNER PASS / LOCAL
-   VALIDATED / NOT DEPLOYED front documented in
+   CRM-filter scheduled campaigns are now DEPLOYED / REAL DYNAMIC EXECUTION:
+   DEMO E4 VALIDATED, documented in
    `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`: schedule-time stores
    only the CRM Situation filter, execution-time creates one immutable snapshot,
-   and static campaigns remain unchanged. No schema/migration, no real send, no
-   financial customer UX and no campaign/history rewrite.
+   and static campaigns remain unchanged. Controlled Demo validation on
+   2026-09-19 created campaign `c621ee16-d9b5-4805-bbec-365d8bd22e98`, moved
+   `****6787` out of the filter and `****9614` into it before execution,
+   produced exactly one snapshot, one Meta Utility provider call, one delivered
+   billing event and no duplicate result rows. No CRA tenant send, no
+   schema/migration, no financial customer UX and no campaign/history rewrite.
 
 7. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente

@@ -112,5 +112,15 @@ Phase C send result summary:
   Evidence files:
   `PHASE_E_REPORTS_EXPORTS_BILLING_2026-09-16.md` and
   `PHASE_E_REPORTS_EXPORTS_BILLING_2026-09-16.csv`.
+- Dynamic CRM-filter scheduling Phase F: on 2026-09-19 a controlled real Demo
+  E2E created campaign `c621ee16-d9b5-4805-bbec-365d8bd22e98` with CRM
+  Situation filter `QUALIFIED`, changed the matching CRM population before
+  execution, and validated execution-time evaluation. Result: one immutable
+  snapshot containing `****9614`, one Meta Utility provider call, one delivered
+  billing event, zero blocked/failed/pending recipients, zero duplicate
+  recipient rows and no second snapshot after replay. CRM statuses were
+  restored after the snapshot proof. This is Demo E4 product evidence only, not
+  CRA customer acceptance. Evidence file:
+  `PHASE_F_DYNAMIC_CRM_FILTER_E2E_2026-09-19.md`.
 - evidence: `PHASE_C_CONTROLLED_UTILITY_RESULT_2026-09-15.md`.
 - reconciliation audit: `RECIPIENT_A_RECONCILIATION_AUDIT_2026-09-15.md`.

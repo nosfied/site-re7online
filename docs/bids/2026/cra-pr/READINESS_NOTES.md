@@ -117,12 +117,14 @@ Follow-up de 2026-09-16:
   Situacao CRM same-tenant e busca nome/telefone, copia filtrados e pode
   iniciar rascunho a partir dos contatos canonicos atuais filtrados; linhas
   historicas sem contato atual reutilizavel sao excluidas com contagem
-  explicita. Campanhas agendadas dinamicas por filtro CRM seguem OWNER PASS /
-  LOCAL VALIDATED / NOT DEPLOYED em
+  explicita. Campanhas agendadas dinamicas por filtro CRM seguem DEPLOYED /
+  REAL DYNAMIC EXECUTION: DEMO E4 VALIDATED em
   `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`: o agendamento salva
-  apenas o filtro de Situacao CRM e a execucao cria snapshot imutavel. Nao
-  altera schema, opt-out, result truth, composer cleanup, Operational Queue,
-  historico, financeiro ou envio real.
+  apenas o filtro de Situacao CRM e a execucao cria snapshot imutavel. Em
+  2026-09-19, o Demo criou exatamente um snapshot, enviou uma mensagem Utility
+  elegivel, registrou um billing entregue e nao duplicou destinatario. Isso e
+  evidencia de produto no Demo, nao aceite CRA. Nao altera schema, opt-out,
+  result truth, composer cleanup, Operational Queue, historico ou financeiro.
 - Meta Marketing template media support: P2 / PRODUCT + META CAPABILITY.
   Inclui categoria MARKETING, headers IMAGE/VIDEO, exemplos/midia Meta,
   upload/handle, preview, variaveis, botoes suportados, submissao, status,

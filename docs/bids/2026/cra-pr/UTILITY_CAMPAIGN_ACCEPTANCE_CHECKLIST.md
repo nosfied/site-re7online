@@ -85,6 +85,7 @@ them by owner decision.
 | Opt-out | Active opt-out blocks campaign recipient and records event | DEMO VALIDATED / CRA ACCEPTANCE STILL NEEDED |
 | Delivery status | Meta webhook updates status/history | PRODUCT SUPPORTED / NEEDS CRA SAMPLE |
 | Contacts campaign relationship | Contacts/CRM shows campaign count, latest campaign/status and recent same-tenant campaign history from canonical campaign/outbound/event evidence; no Contact shadow history and no financial UX | CANONICALLY INTEGRATED / TEST VALIDATED / OWNER PASS / PRODUCTION DEPLOY PENDING |
+| Dynamic CRM-filter scheduling | Scheduled dynamic campaign stores CRM Situation filter before execution, creates one immutable same-tenant recipient snapshot at execution time, then uses the normal provider/result/billing path | DEPLOYED / REAL DYNAMIC EXECUTION: DEMO E4 VALIDATED; CRA CUSTOMER ACCEPTANCE STILL NEEDED |
 | Billing | Delivered/read Utility campaign outside 24h creates one billable event; read replay does not bill again | TESTED LOCALLY |
 | Reports/export | CSV/monthly evidence available; PDF/equivalent acceptance pack still required | DEMO VALIDATED / CRA ACCEPTANCE STILL NEEDED |
 

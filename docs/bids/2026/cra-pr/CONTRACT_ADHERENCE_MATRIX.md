@@ -77,6 +77,16 @@ evidence, using existing campaign/outbound/event records, same-tenant
 projection, aggregate list data and on-demand detail. Owner review, production
 delivery and CRA customer acceptance remain pending.
 
+Dynamic CRM-filter scheduling update, 2026-09-19: generic multitenant campaign
+capability is DEPLOYED / REAL DYNAMIC EXECUTION: DEMO E4 VALIDATED on
+`demo-converta`. Campaign `c621ee16-d9b5-4805-bbec-365d8bd22e98` stored only
+CRM Situation `QUALIFIED` at schedule time, then evaluated current same-tenant
+CRM data at execution time, created exactly one immutable snapshot containing
+`****9614`, sent one Meta Utility message, recorded one delivered billing event
+and produced no duplicate recipient rows. This is Demo product evidence only
+and does not close CRA customer campaign acceptance or CRA contractual billing
+acceptance.
+
 This document separates four things that must not be conflated:
 
 - contractual obligation;
@@ -328,10 +338,12 @@ status, same-tenant CRM Situation and name/phone, supports filtered copy and can
 prefill a new draft through the existing composer from current canonical
 contacts only; historical rows without current reusable contact are excluded
 with explicit count. Dynamic CRM-filter scheduled campaigns are documented as
-OWNER PASS / LOCAL VALIDATED / NOT DEPLOYED in
+DEPLOYED / REAL DYNAMIC EXECUTION: DEMO E4 VALIDATED in
 `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`: schedule-time stores the
-CRM Situation filter and execution-time creates one immutable snapshot. No
-schema/migration, no real send, no financial UX and no campaign/history rewrite.
+CRM Situation filter and execution-time creates one immutable snapshot.
+Controlled Demo execution on 2026-09-19 sent one eligible Utility recipient and
+persisted one delivered billing event with no duplicate recipient row. No
+schema/migration, no financial UX and no campaign/history rewrite.
 | 5 | CRA-SLA-001 / CRA-TRAIN-001 / CRA-LGPD-002 | Close documentary acceptance pack | Contractual readiness requires signed/evidenced operations | Dates/attendees/signatures | no | no | yes | possible Meta docs | SLA, support, training, LGPD/security, backup and Meta proof attached |
 | 6 | CRA-IG-001 / CRA-FB-001 / CRA-WEB-001 | Activate and validate Instagram, Facebook and webchat | Contract-required but customer-deferred | Customer delivery window/assets/site access | no, unless bug found | yes | yes | yes for Meta channels | E4/E5 evidence per channel |
 

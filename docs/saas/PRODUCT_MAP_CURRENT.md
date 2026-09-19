@@ -156,9 +156,13 @@ copy of filtered rows and "new campaign from filtered" prefill through current
 canonical contacts in the existing composer. Rows without current reusable
 contacts are excluded with explicit counts. Result truth, composer cleanup,
 opt-out and financial UX remain unchanged. Dynamic CRM-filter scheduled
-campaigns are a separate OWNER PASS / LOCAL VALIDATED / NOT DEPLOYED front
+campaigns are a separate DEPLOYED / REAL DYNAMIC EXECUTION: DEMO E4 VALIDATED
+front
 documented in `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`, with
-schedule-time filter persistence and execution-time immutable snapshot.
+schedule-time filter persistence and execution-time immutable snapshot. Demo
+validation on 2026-09-19 created exactly one execution snapshot, sent one
+eligible Utility message, persisted one delivered billing event and produced no
+duplicate recipient row; CRA customer acceptance remains pending.
 
 CRA-PR Demo mirror, 2026-09-15: `demo-converta` is the reusable multitenant
 product acceptance baseline for generic CRA requirements. Phase A created the
