@@ -73,6 +73,8 @@ type CampaignStatusFilter =
 
 type CampaignCenterTab = "create" | "drafts" | "sending" | "scheduled" | "completed" | "blocked" | "all";
 type CampaignCreationPanel = "audience" | "csv" | "manual";
+type CampaignResultStatusFilter = "all" | "delivered" | "sent" | "read" | "blocked" | "failed" | "pending";
+type CampaignResultItem = NonNullable<CampaignItem["messagesMetaStatus"]>[number];
 
 type CampaignToastTone = "success" | "warning" | "error" | "info";
 
@@ -133,6 +135,41 @@ const CAMPAIGN_CENTER_TABS: Array<{ id: CampaignCenterTab; label: string }> = [
   { id: "blocked", label: "Bloqueadas e falhas" },
   { id: "all", label: "Todas" },
 ];
+
+function ActionIconButton({
+  label,
+  icon,
+  onClick,
+  disabled,
+  variant = "neutral",
+}: {
+  label: string;
+  icon: string;
+  onClick: () => void;
+  disabled?: boolean;
+  variant?: "neutral" | "primary" | "destructive";
+}) {
+  const classes = {
+    neutral: "border-[#d4c7b5] bg-white/70 text-slate-800 hover:bg-white",
+    primary: "border-emerald-500/25 bg-emerald-50 text-emerald-900 hover:bg-emerald-100",
+    destructive: "border-red-500/25 bg-red-50 text-red-900 hover:bg-red-100",
+  }[variant];
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      disabled={disabled}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+      className={`flex h-9 w-9 items-center justify-center rounded-xl border text-base transition disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8 max-md:h-10 max-md:w-10 ${classes}`}
+    >
+      <span aria-hidden="true">{icon}</span>
+    </button>
+  );
+}
 
 function normalizeTemplateParams(input: string) {
   return input
@@ -535,6 +572,9 @@ export default function AppCampaignsPage() {
   const [activeTab, setActiveTab] = useState<CampaignCenterTab>("create");
   const [statusFilter, setStatusFilter] = useState<CampaignStatusFilter>("all");
   const [search, setSearch] = useState("");
+  const [resultStatusFilter, setResultStatusFilter] = useState<CampaignResultStatusFilter>("all");
+  const [resultCrmStatusFilter, setResultCrmStatusFilter] = useState("all");
+  const [resultSearch, setResultSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [loadingList, setLoadingList] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -1116,14 +1156,38 @@ export default function AppCampaignsPage() {
         acc.total += 1;
         if (campaign.status === "draft") acc.drafts += 1;
         if (campaign.status === "sending") acc.sending += 1;
-        if (campaign.status === "completed") acc.sent += 1;
+        if (campaign.status === "scheduled") acc.scheduled += 1;
+        if (campaign.status === "completed") acc.completed += 1;
         if (campaign.status === "blocked") acc.blocked += 1;
         if (campaign.status === "failed") acc.failed += 1;
         return acc;
       },
-      { total: 0, drafts: 0, sending: 0, sent: 0, blocked: 0, failed: 0 }
+      { total: 0, drafts: 0, sending: 0, scheduled: 0, completed: 0, blocked: 0, failed: 0 }
     );
   }, [campaigns]);
+
+  const getCampaignTabCount = useCallback(
+    (tab: CampaignCenterTab) => {
+      switch (tab) {
+        case "drafts":
+          return campaignStats.drafts;
+        case "sending":
+          return campaignStats.sending;
+        case "scheduled":
+          return campaignStats.scheduled;
+        case "completed":
+          return campaignStats.completed;
+        case "blocked":
+          return campaignStats.blocked + campaignStats.failed;
+        case "all":
+          return campaignStats.total;
+        case "create":
+        default:
+          return null;
+      }
+    },
+    [campaignStats]
+  );
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1229,12 +1293,75 @@ export default function AppCampaignsPage() {
     };
   }, [handleUnauthorized, selectedCampaignId, session]);
 
+  useEffect(() => {
+    setResultStatusFilter("all");
+    setResultCrmStatusFilter("all");
+    setResultSearch("");
+  }, [selectedCampaignId]);
+
   const shouldPoll = useMemo(() => {
     if (selectedCampaignId) {
       return selectedCampaign?.status === "sending";
     }
     return campaigns.some((item) => item.status === "sending");
   }, [campaigns, selectedCampaign?.status, selectedCampaignId]);
+
+  const campaignResultItems = useMemo(
+    () => selectedCampaign?.messagesMetaStatus ?? [],
+    [selectedCampaign?.messagesMetaStatus]
+  );
+
+  const resultStatusOptions = useMemo(() => {
+    const existing = new Set(campaignResultItems.map((item) => item.status));
+    const options: Array<{ id: CampaignResultStatusFilter; label: string }> = [{ id: "all", label: "Todos" }];
+    for (const option of [
+      { id: "delivered" as const, label: "Entregues" },
+      { id: "sent" as const, label: "Enviadas/aceitas" },
+      { id: "read" as const, label: "Lidas" },
+      { id: "blocked" as const, label: "Bloqueadas" },
+      { id: "failed" as const, label: "Falhas" },
+      { id: "pending" as const, label: "Pendentes" },
+    ]) {
+      if (
+        existing.has(option.id) ||
+        (option.id === "blocked" && (existing.has("blocked") || existing.has("opt_out") || existing.has("skipped")))
+      ) {
+        options.push(option);
+      }
+    }
+    return options;
+  }, [campaignResultItems]);
+
+  const resultCrmStatusOptions = useMemo(() => {
+    const existing = new Set(campaignResultItems.map((item) => item.crmStatus).filter(Boolean));
+    return crmStatuses.filter((status) => existing.has(status.id));
+  }, [campaignResultItems, crmStatuses]);
+
+  const filteredCampaignResultItems = useMemo(() => {
+    const query = resultSearch.trim().toLowerCase();
+    return campaignResultItems.filter((item) => {
+      if (resultStatusFilter !== "all") {
+        if (resultStatusFilter === "blocked") {
+          if (!["blocked", "opt_out", "skipped"].includes(item.status)) return false;
+        } else if (item.status !== resultStatusFilter) {
+          return false;
+        }
+      }
+      if (resultCrmStatusFilter !== "all" && item.crmStatus !== resultCrmStatusFilter) return false;
+      if (query) {
+        const haystack = [
+          item.contactName,
+          item.phoneDisplay,
+          item.waId,
+          item.crmStatusLabel,
+          item.crmStatus,
+          item.error,
+        ].join(" ").toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      return true;
+    });
+  }, [campaignResultItems, resultCrmStatusFilter, resultSearch, resultStatusFilter]);
 
   const filteredCampaigns = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -1534,6 +1661,136 @@ export default function AppCampaignsPage() {
       ...prev,
       templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, templateVariableLabels),
     }));
+  };
+
+  const copyTextToClipboard = async (text: string) => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+  };
+
+  const handleCopyFilteredResults = async () => {
+    if (!selectedCampaign) return;
+    const header = "Nome\tTelefone\tSituação CRM\tResultado\tEntrega\tErro";
+    const rows = filteredCampaignResultItems.map((item) =>
+      [
+        item.contactName || "",
+        item.phoneDisplay || item.waId,
+        item.crmStatusLabel || item.crmStatus || "",
+        getMetaStatusLabel(item.status),
+        item.deliveredAt ? formatDateTime(item.deliveredAt) : "",
+        getFriendlyCampaignError(item.error)?.summary || item.error || "",
+      ].join("\t")
+    );
+    try {
+      await copyTextToClipboard([header, ...rows].join("\n"));
+      showToast("success", "Filtrados copiados", `${rows.length} destinatário(s) copiados para a área de transferência.`);
+    } catch {
+      showToast("error", "Cópia não concluída", "Não foi possível acessar a área de transferência.");
+    }
+  };
+
+  const handleReuseFilteredResults = () => {
+    if (!selectedCampaign) return;
+    const reusable = filteredCampaignResultItems.filter((item) => item.leadId);
+    const excluded = filteredCampaignResultItems.length - reusable.length;
+    if (reusable.length === 0) {
+      showToast("warning", "Nenhum contato reutilizável", "Os filtrados não possuem contato canônico atual para pré-carregar.");
+      return;
+    }
+    const uniqueByLeadId = new Map<string, CampaignResultItem>();
+    for (const item of reusable) {
+      if (item.leadId && !uniqueByLeadId.has(item.leadId)) {
+        uniqueByLeadId.set(item.leadId, item);
+      }
+    }
+    const items = Array.from(uniqueByLeadId.values()).map((item) => ({
+      leadId: item.leadId as string,
+      contactId: null,
+      displayName: item.contactName ?? null,
+      companyName: null,
+      city: null,
+      crmStatus: item.crmStatus ?? "",
+      crmStatusLabel: item.crmStatusLabel ?? item.crmStatus ?? "",
+      channel: "whatsapp",
+      phoneDisplay: item.phoneDisplay ?? item.waId,
+      identifierDisplay: item.contactName || item.phoneDisplay || item.waId,
+      activeOptOut: false,
+      isAnonymized: false,
+      hasValidWhatsappIdentity: true,
+      lastConversationIdentity: null,
+      lastProtocol: null,
+      importedSource: `Filtro da campanha ${selectedCampaign.name || selectedCampaign.id}`,
+      updatedAt: selectedCampaign.updatedAt,
+      eligible: true,
+      blockedReason: null,
+      blockedReasonLabel: null,
+    }));
+    const syntheticPreview: AppCampaignAudiencePreviewResponse = {
+      ok: true,
+      filters: {
+        q: "",
+        status: null,
+        channel: "whatsapp",
+        hasConversation: null,
+        optOut: null,
+        updatedFrom: null,
+        updatedTo: null,
+        onlyWhatsappEligible: true,
+        excludeOptOut: null,
+        crmStatus: null,
+        city: null,
+        importedSource: "campaign-result-filter",
+      },
+      summary: {
+        total: filteredCampaignResultItems.length,
+        analyzed: filteredCampaignResultItems.length,
+        eligible: items.length,
+        blocked: excluded,
+        truncated: false,
+        blockedByReason: excluded > 0
+          ? [{ reason: "missing_contact", label: "Sem contato canônico atual", count: excluded }]
+          : [],
+      },
+      items,
+      pagination: {
+        page: 1,
+        limit: items.length,
+        total: items.length,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+      generatedAt: new Date().toISOString(),
+    };
+    setAudiencePreview(syntheticPreview);
+    setAudiencePreviewError(null);
+    setAudiencePage(1);
+    setForm((prev) => ({
+      ...prev,
+      name: prev.name || `Reuso - ${selectedCampaign.name || "campanha"}`,
+      templateId: prev.templateId || selectedCampaign.templateId || "",
+      templateName: prev.templateName || selectedCampaign.templateName || "",
+      templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, templateVariableLabels),
+    }));
+    setActiveTab("create");
+    setExpandedCreationPanel("audience");
+    setDetailModalOpen(false);
+    showToast(
+      excluded > 0 ? "warning" : "success",
+      "Filtrados carregados no composer",
+      `${items.length} contato(s) canônico(s) carregados. ${excluded > 0 ? `${excluded} sem contato atual foram excluídos explicitamente.` : "Nenhuma mensagem foi enviada."}`
+    );
   };
 
   const resetCsvImportState = () => {
@@ -2046,32 +2303,6 @@ export default function AppCampaignsPage() {
               </div>
             ))}
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            <div className="rounded-md border border-white/10 bg-white/5 p-3">
-              <p className="text-xs uppercase tracking-wide text-white/55">Rascunhos</p>
-              <p className="mt-1 text-xl font-semibold">{campaignStats.drafts}</p>
-            </div>
-            <div className="rounded-md border border-white/10 bg-white/5 p-3">
-              <p className="text-xs uppercase tracking-wide text-white/55">Em envio</p>
-              <p className="mt-1 text-xl font-semibold text-amber-100">{campaignStats.sending}</p>
-            </div>
-            <div className="rounded-md border border-white/10 bg-white/5 p-3">
-              <p className="text-xs uppercase tracking-wide text-white/55">Enviadas</p>
-              <p className="mt-1 text-xl font-semibold text-emerald-100">{campaignStats.sent}</p>
-            </div>
-            <div className="rounded-md border border-white/10 bg-white/5 p-3">
-              <p className="text-xs uppercase tracking-wide text-white/55">Bloqueadas</p>
-              <p className="mt-1 text-xl font-semibold text-orange-100">{campaignStats.blocked}</p>
-            </div>
-            <div className="rounded-md border border-white/10 bg-white/5 p-3">
-              <p className="text-xs uppercase tracking-wide text-white/55">Falhas</p>
-              <p className="mt-1 text-xl font-semibold text-red-100">{campaignStats.failed}</p>
-            </div>
-            <div className="rounded-md border border-white/10 bg-white/5 p-3">
-              <p className="text-xs uppercase tracking-wide text-white/55">Total recente</p>
-              <p className="mt-1 text-xl font-semibold">{campaignStats.total}</p>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -2094,7 +2325,12 @@ export default function AppCampaignsPage() {
                   : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10"
               }`}
             >
-              {tab.label}
+              <span>{tab.label}</span>
+              {getCampaignTabCount(tab.id) !== null ? (
+                <span className="ml-2 rounded-full border border-white/15 bg-white/10 px-1.5 py-0.5 text-[11px]">
+                  {getCampaignTabCount(tab.id)}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -2932,13 +3168,13 @@ export default function AppCampaignsPage() {
             <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-white/10 text-left">
                 <tr>
-                  <th className="px-2 py-2">Ações</th>
                   <th className="px-2 py-2">Campanha</th>
                   <th className="px-2 py-2">Situação</th>
-                  <th className="px-2 py-2 text-center">Enviadas</th>
+                  <th className="px-2 py-2 text-center">Processadas</th>
                   <th className="px-2 py-2 text-center">Total</th>
                   <th className="hidden px-2 py-2 lg:table-cell">Modelo</th>
                   <th className="hidden px-2 py-2 xl:table-cell">Criada em</th>
+                  <th className="px-2 py-2 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -2971,37 +3207,20 @@ export default function AppCampaignsPage() {
                             ? "bg-amber-500/10 hover:bg-amber-500/15"
                             : "hover:bg-white/5"
                       }`}
-                      onClick={() => setSelectedCampaignId(campaign.id)}
+                      onClick={() => {
+                        setSelectedCampaignId(campaign.id);
+                        setDetailModalOpen(true);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
+                        setSelectedCampaignId(campaign.id);
+                        setDetailModalOpen(true);
+                      }}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Ver detalhes da campanha ${campaign.name || campaign.id}`}
                     >
-                      <td className="px-2 py-2 align-top">
-                        <div className="flex flex-wrap gap-1.5">
-                          <button
-                            type="button"
-	                            onClick={(event) => {
-	                              event.stopPropagation();
-	                              setSelectedCampaignId(campaign.id);
-	                              setDetailModalOpen(true);
-	                            }}
-                            className="campaign-detail-action rounded-md border border-re7-sky/40 px-2 py-1 text-xs font-semibold text-sky-100 hover:bg-re7-sky/10"
-                          >
-                            Ver detalhes
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setActiveTab("create");
-                              setSelectedCampaignId(campaign.id);
-                              handleReuseCampaign(campaign);
-                            }}
-                            className="rounded-md border border-white/15 px-2 py-1 text-xs text-white/65 hover:bg-white/10"
-                            title="Reaproveitar campanha"
-                            aria-label={`Reaproveitar campanha ${campaign.name || campaign.id}`}
-                          >
-                            Reusar
-                          </button>
-                        </div>
-                      </td>
                       <td className="px-2 py-2">
                         <div className="min-w-0">
                           <p className="truncate font-medium text-white">{campaign.name || "(sem nome)"}</p>
@@ -3023,6 +3242,28 @@ export default function AppCampaignsPage() {
                         <div className="flex flex-col gap-1">
                           <span>{formatDateTime(campaign.createdAt)}</span>
                           <span className="text-xs text-white/60">{formatRelativeTime(campaign.createdAt)}</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 align-top">
+                        <div className="flex justify-end gap-1.5">
+                          <ActionIconButton
+                            label={`Ver detalhes da campanha ${campaign.name || campaign.id}`}
+                            icon="i"
+                            onClick={() => {
+                              setSelectedCampaignId(campaign.id);
+                              setDetailModalOpen(true);
+                            }}
+                          />
+                          <ActionIconButton
+                            label={`Reaproveitar campanha ${campaign.name || campaign.id}`}
+                            icon="↺"
+                            onClick={() => {
+                              setActiveTab("create");
+                              setSelectedCampaignId(campaign.id);
+                              handleReuseCampaign(campaign);
+                            }}
+                            variant="primary"
+                          />
                         </div>
                       </td>
                     </tr>
@@ -3074,24 +3315,20 @@ export default function AppCampaignsPage() {
                       </p>
                     </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <button
-                      type="button"
+                    <ActionIconButton
+                      label={refreshingDetail ? "Atualizando detalhe" : "Atualizar detalhe"}
+                      icon={refreshingDetail ? "…" : "↺"}
                       disabled={!session || !selectedCampaignId || refreshingDetail}
                       onClick={() => {
                         if (!session || !selectedCampaignId) return;
                         void refreshCampaignDetail(session, selectedCampaignId, true);
                       }}
-                      className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {refreshingDetail ? "Atualizando..." : "Atualizar"}
-                    </button>
-                    <button
-                      type="button"
+                    />
+                    <ActionIconButton
+                      label="Fechar detalhe"
+                      icon="×"
                       onClick={() => setDetailModalOpen(false)}
-                      className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10"
-                    >
-                      Fechar
-                    </button>
+                    />
                   </div>
                 </div>
                 <div className="grid gap-3 overflow-y-auto p-3 text-sm sm:p-4">
@@ -3108,53 +3345,49 @@ export default function AppCampaignsPage() {
               ) : null}
               {selectedCampaign ? (
                 <>
-                  <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                      <p className="text-xs uppercase tracking-wide text-white/60">Situação</p>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-white/60">Situação</p>
                       <p className={`mt-1 inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(selectedCampaign.status)}`}>
                         {getStatusLabel(selectedCampaign.status)}
                       </p>
-                      <p className="mt-2 text-xs text-white/60">{getStatusLabel(selectedCampaign.status)}</p>
                     </div>
-                    <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                      <p className="text-xs uppercase tracking-wide text-white/60">Enviadas</p>
+                    <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-white/60">Total</p>
+                      <p className="mt-1 font-semibold">{selectedCampaign.totalRecipients}</p>
+                    </div>
+                    <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-white/60">Processadas</p>
                       <p className="mt-1 font-semibold">{selectedCampaign.sentCount}</p>
                     </div>
-                    <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                      <p className="text-xs uppercase tracking-wide text-white/60">Bloqueados</p>
-                      <p className="mt-1 font-semibold">{selectedCampaign.blockedCount}</p>
-                    </div>
-                    <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                      <p className="text-xs uppercase tracking-wide text-white/60">Pendentes</p>
-                      <p className="mt-1 font-semibold">{selectedCampaign.progress.pendingCount}</p>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                      <p className="text-xs uppercase tracking-wide text-white/60">Enviadas</p>
+                    <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-white/60">Aceitas pelo provedor</p>
                       <p className="mt-1 font-semibold text-slate-100">{selectedCampaign.metaSummary?.totalSent ?? 0}</p>
                     </div>
-                    <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                      <p className="text-xs uppercase tracking-wide text-white/60">Entregues</p>
+                    <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-white/60">Entregues</p>
                       <p className="mt-1 font-semibold text-sky-200">{selectedCampaign.metaSummary?.totalDelivered ?? 0}</p>
                     </div>
-                    <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                      <p className="text-xs uppercase tracking-wide text-white/60">Lidas</p>
+                    <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-white/60">Lidas</p>
                       <p className="mt-1 font-semibold text-emerald-200">{selectedCampaign.metaSummary?.totalRead ?? 0}</p>
                     </div>
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
                       <p className="text-xs uppercase tracking-wide text-white/60">Falhas técnicas</p>
                       <p className="mt-1 font-semibold text-red-200">{selectedCampaign.metaSummary?.totalFailed ?? 0}</p>
                     </div>
+                    <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-white/60">Bloqueadas</p>
+                      <p className="mt-1 font-semibold text-orange-100">{selectedCampaign.blockedCount}</p>
+                    </div>
+                    <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-white/60">Pendentes</p>
+                      <p className="mt-1 font-semibold">{selectedCampaign.progress.pendingCount}</p>
+                    </div>
                   </div>
 
                   <div className={`rounded-md border p-3 text-sm ${getCampaignConfidence(selectedCampaign).classes}`}>
                     <p className="font-semibold">{getCampaignConfidence(selectedCampaign).icon} {getCampaignConfidence(selectedCampaign).label}</p>
-                  </div>
-
-                  <div className="rounded-md border border-white/10 bg-white/5 p-3 text-sm text-white/70">
-                    A situação da campanha usa os registros persistidos do processamento e as confirmações do provedor.
                   </div>
 
                   {selectedCampaign.status === "draft" ? (
@@ -3413,15 +3646,75 @@ export default function AppCampaignsPage() {
                   </div>
 
                   <div className="rounded-md border border-white/10 bg-white/5">
-                    <div className="border-b border-white/10 px-4 py-3">
-                      <h3 className="text-sm font-semibold">Situação real por mensagem</h3>
+                    <div className="grid gap-3 border-b border-white/10 px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-semibold">Situação real por mensagem</h3>
+                          <p className="mt-1 text-xs text-white/55">
+                            {filteredCampaignResultItems.length} de {campaignResultItems.length} destinatário(s)
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <ActionIconButton
+                            label="Copiar filtrados"
+                            icon="#"
+                            onClick={handleCopyFilteredResults}
+                            disabled={filteredCampaignResultItems.length === 0}
+                          />
+                          <ActionIconButton
+                            label="Nova campanha com filtrados"
+                            icon="↺"
+                            onClick={handleReuseFilteredResults}
+                            disabled={filteredCampaignResultItems.length === 0}
+                            variant="primary"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-2 md:grid-cols-[1fr_1fr_1.4fr]">
+                        <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-white/60">
+                          Resultado
+                          <select
+                            value={resultStatusFilter}
+                            onChange={(event) => setResultStatusFilter(event.target.value as CampaignResultStatusFilter)}
+                            className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-sm normal-case text-white outline-none focus:border-re7-sky"
+                          >
+                            {resultStatusOptions.map((option) => (
+                              <option key={option.id} value={option.id}>{option.label}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-white/60">
+                          Situação CRM
+                          <select
+                            value={resultCrmStatusFilter}
+                            onChange={(event) => setResultCrmStatusFilter(event.target.value)}
+                            className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-sm normal-case text-white outline-none focus:border-re7-sky"
+                          >
+                            <option value="all">Todas</option>
+                            {resultCrmStatusOptions.map((option) => (
+                              <option key={option.id} value={option.id}>{option.label}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-white/60">
+                          Buscar
+                          <input
+                            value={resultSearch}
+                            onChange={(event) => setResultSearch(event.target.value)}
+                            placeholder="Nome ou telefone"
+                            className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-sm normal-case text-white outline-none placeholder:text-white/35 focus:border-re7-sky"
+                          />
+                        </label>
+                      </div>
                     </div>
-                    {selectedCampaign.messagesMetaStatus?.length ? (
+                    {campaignResultItems.length ? (
                       <div className="overflow-x-auto">
                         <table className="w-full min-w-[780px] text-sm">
                           <thead className="bg-white/10 text-left">
                             <tr>
-                              <th className="px-3 py-2">Referência</th>
+                              <th className="px-3 py-2">Contato</th>
+                              <th className="px-3 py-2">Telefone</th>
+                              <th className="px-3 py-2">Situação CRM</th>
                               <th className="px-3 py-2">Situação</th>
                               <th className="px-3 py-2">Categoria</th>
                               <th className="px-3 py-2">Entrega</th>
@@ -3429,9 +3722,11 @@ export default function AppCampaignsPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {selectedCampaign.messagesMetaStatus.map((item, index) => (
+                            {filteredCampaignResultItems.map((item, index) => (
                               <tr key={`${item.waId}-${item.conversationId ?? "conversation"}-${index}`} className="border-t border-white/10">
-                                <td className="px-3 py-2 font-mono text-xs">{formatCampaignRecipientReference(item.waId)}</td>
+                                <td className="px-3 py-2">{item.contactName || "Contato sem nome"}</td>
+                                <td className="px-3 py-2 font-mono text-xs">{item.phoneDisplay || formatCampaignRecipientReference(item.waId)}</td>
+                                <td className="px-3 py-2">{item.crmStatusLabel || item.crmStatus || "-"}</td>
                                 <td className="px-3 py-2">
                                   <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getMetaStatusClasses(item.status)}`}>
                                     {getMetaStatusLabel(item.status)}
@@ -3451,6 +3746,13 @@ export default function AppCampaignsPage() {
                                 </td>
                               </tr>
                             ))}
+                            {filteredCampaignResultItems.length === 0 ? (
+                              <tr>
+                                <td className="px-3 py-4 text-white/65" colSpan={7}>
+                                  Nenhum destinatário corresponde aos filtros.
+                                </td>
+                              </tr>
+                            ) : null}
                           </tbody>
                         </table>
                       </div>

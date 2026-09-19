@@ -142,6 +142,23 @@ on demand to avoid per-row N+1. Customer UX excludes price/cost/billing values.
 Focused CRM route regression passed 19/19 on safe local DB, with backend and
 frontend builds passing. Production delivery and CRA acceptance are pending.
 
+Contacts + Campaigns UX refinement is implemented locally with owner pass:
+Contacts uses clickable rows, compact actions, full phone in authenticated
+same-tenant CRM, no duplicate top summary for CRM Situation/active-send/template
+eligibility, switch-based active-send block and one expandable related-campaign
+section. Delete is row-only in the Contact list and no longer appears inside
+Contact detail, which keeps close/edit/save/cancel semantics. Campaigns removes
+the redundant top counter panel, carries counts in
+tabs, opens detail from row click, right-aligns actions, uses distinct compact
+counter labels and removes implementation explanatory copy. Campaign detail
+adds view-only result filters by result status, CRM Situation and name/phone,
+copy of filtered rows and "new campaign from filtered" prefill through current
+canonical contacts in the existing composer. Rows without current reusable
+contacts are excluded with explicit counts. Domain behavior, schema, result
+truth, composer cleanup, opt-out and financial UX remain unchanged. Dynamic
+CRM-filter scheduled campaigns are a separate NEW FEATURE / NOT YET IMPLEMENTED
+front documented in `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`.
+
 CRA-PR Demo mirror, 2026-09-15: `demo-converta` is the reusable multitenant
 product acceptance baseline for generic CRA requirements. Phase A created the
 plan at `docs/bids/2026/cra-pr/DEMO_CONTRACT_VALIDATION_PLAN.md` and confirmed

@@ -87,6 +87,40 @@ test("explicit draft persistence and running campaign controls remain separate f
   assert.ok(pageSource.includes("setDetailModalOpen(false)"));
 });
 
+test("campaign result detail exposes status, CRM situation and text filters", () => {
+  assert.ok(pageSource.includes("const [resultStatusFilter, setResultStatusFilter]"));
+  assert.ok(pageSource.includes("const [resultCrmStatusFilter, setResultCrmStatusFilter]"));
+  assert.ok(pageSource.includes("const [resultSearch, setResultSearch]"));
+  assert.ok(pageSource.includes("const filteredCampaignResultItems = useMemo"));
+  assert.ok(pageSource.includes('resultStatusFilter === "blocked"'));
+  assert.ok(pageSource.includes("item.crmStatus !== resultCrmStatusFilter"));
+  assert.ok(pageSource.includes("item.contactName"));
+  assert.ok(pageSource.includes("item.phoneDisplay"));
+  assert.ok(pageSource.includes("{filteredCampaignResultItems.length} de {campaignResultItems.length} destinatário(s)"));
+});
+
+test("campaign result filtered actions only operate on the visible result set", () => {
+  assert.ok(pageSource.includes("const handleCopyFilteredResults"));
+  assert.ok(pageSource.includes("filteredCampaignResultItems.map((item)"));
+  assert.ok(pageSource.includes('const header = "Nome\\tTelefone\\tSituação CRM\\tResultado\\tEntrega\\tErro"'));
+  assert.ok(pageSource.includes("const handleReuseFilteredResults"));
+  assert.ok(pageSource.includes("const reusable = filteredCampaignResultItems.filter((item) => item.leadId)"));
+  assert.ok(pageSource.includes("const excluded = filteredCampaignResultItems.length - reusable.length"));
+  assert.ok(pageSource.includes('reason: "missing_contact"'));
+  assert.ok(pageSource.includes("sem contato atual foram excluídos explicitamente"));
+  assert.ok(pageSource.includes("setAudiencePreview(syntheticPreview)"));
+  assert.ok(pageSource.includes('setActiveTab("create")'));
+});
+
+test("campaign actions use the compact Inbox action-button language", () => {
+  assert.ok(pageSource.includes("function ActionIconButton"));
+  assert.ok(pageSource.includes("flex h-9 w-9 items-center justify-center rounded-xl border text-base transition"));
+  assert.ok(pageSource.includes("border-[#d4c7b5] bg-white/70 text-slate-800 hover:bg-white"));
+  assert.ok(pageSource.includes("border-emerald-500/25 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"));
+  assert.ok(pageSource.includes("border-red-500/25 bg-red-50 text-red-900 hover:bg-red-100"));
+  assert.ok(pageSource.includes("disabled:cursor-not-allowed disabled:opacity-50"));
+});
+
 test("app shell keeps mobile title and content below the variable-height navigation", () => {
   assert.ok(appShellSource.includes("relative z-50 mx-auto w-full"));
   assert.ok(appShellSource.includes("sm:fixed sm:left-4"));

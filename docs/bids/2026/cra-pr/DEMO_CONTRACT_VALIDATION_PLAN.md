@@ -408,6 +408,27 @@ Contacts campaign relationship view:
 - local validation: `crmCapabilityRoutes.test.ts` 19/19 PASS, backend build
   PASS, frontend build PASS, diff check PASS.
 
+Contacts + Campaigns UX refinement, 2026-09-19:
+
+- status: IMPLEMENTED LOCAL / OWNER PASS / NO DEPLOY;
+- scope: UX only, no domain rewrite;
+- Contacts rows open detail, actions are compact, authenticated same-tenant CRM
+  shows full phone, duplicate summary fields are removed, active-send block uses
+  a canonical opt-out switch and campaign history is grouped under one
+  expandable section; Delete remains only on the Contact list row and does not
+  appear inside Contact detail;
+- Campaigns removes the top counter panel, adds tab counts, opens detail on row
+  click, right-aligns actions, deduplicates detail counters and removes
+  technical provider/persistence copy;
+- Campaign detail adds filters by result status, same-tenant CRM Situation and
+  name/phone, filtered copy and draft prefill from filtered current canonical
+  contacts through the existing composer; rows without current reusable contact
+  are excluded explicitly and no real send occurs;
+- result truth, composer cleanup, operational queue, identity and opt-out
+  contracts remain unchanged.
+- Dynamic CRM-filter scheduled campaigns are separate NEW FEATURE / NOT YET
+  IMPLEMENTED; see `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`.
+
 ### Phase B Owner Gate Package
 
 ```text

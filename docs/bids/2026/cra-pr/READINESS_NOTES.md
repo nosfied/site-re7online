@@ -106,6 +106,22 @@ Follow-up de 2026-09-16:
   mostra preco/custo. Validacao local: `crmCapabilityRoutes.test.ts` 19/19
   PASS, backend build PASS, frontend build PASS, diff check PASS. Owner review,
   deploy e aceite CRA ainda pendentes.
+- Contacts + Campaigns UX refinement, 2026-09-19: IMPLEMENTED LOCAL / OWNER
+  PASS / NO DEPLOY. Refinamento visual/operacional apenas: linhas
+  clicaveis, acoes compactas, telefone completo no CRM autenticado same-tenant,
+  remocao de metadados duplicados, switch de bloqueio de envio ativo, campanhas
+  relacionadas agrupadas, Delete somente na linha da lista de Contacts sem acao
+  de Delete dentro do detalhe, contadores de campanhas em abas, linha de campanha
+  abrindo detalhe, acoes a direita, taxonomia unica de contadores e remocao de
+  nota tecnica. O detalhe de campanha agora filtra resultados por status,
+  Situacao CRM same-tenant e busca nome/telefone, copia filtrados e pode
+  iniciar rascunho a partir dos contatos canonicos atuais filtrados; linhas
+  historicas sem contato atual reutilizavel sao excluidas com contagem
+  explicita. Campanhas agendadas dinamicas por filtro CRM seguem NEW FEATURE /
+  NOT YET IMPLEMENTED em
+  `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`. Nao altera schema,
+  opt-out, result truth, composer cleanup, Operational Queue, historico,
+  financeiro ou envio real.
 - Meta Marketing template media support: P2 / PRODUCT + META CAPABILITY.
   Inclui categoria MARKETING, headers IMAGE/VIDEO, exemplos/midia Meta,
   upload/handle, preview, variaveis, botoes suportados, submissao, status,

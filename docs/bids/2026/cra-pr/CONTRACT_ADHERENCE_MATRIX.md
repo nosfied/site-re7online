@@ -315,6 +315,22 @@ cost, campaign name and number of messages.
 | 2 | CRA-REP-001 / CRA-REP-002 | Generate CRA report/export package | Acceptance needs evidence, not only code capability | Representative sample data | no | no | review | no | CSV/PDF/equivalent exports with filters and billing report |
 | 3 | CRA-CAMP-002A | Controlled production deployment preparation for owner-approved CRM situation import/upsert/report support | CRA campaign import enhancement after core Utility/report gates | Local implementation, principles audit, focused tests and owner revalidation PASS | no | no | production change gate; CRA evidence remains separate | no | Deploy the preserved audited delta, then verify existing contact update, blank preservation, unknown-status blocking, repeated-row consolidation and downloadable report without real send |
 | 4 | CRA-CAMP-002B | Owner-review and deliver Contacts campaign relationship view | Campaign/contact traceability and acceptance evidence | Canonical integration and focused tests PASS | no unless owner finds issue | no | owner PASS; CRA evidence review after deploy | no | Contact list shows aggregate campaign state without N+1; expanded/detail shows campaign history from canonical records; no Contact shadow history; no financial UX |
+
+Contacts + Campaigns UX refinement, 2026-09-19: IMPLEMENTED LOCAL / OWNER
+PASS / NO DEPLOY. This does not reopen CRA-CAMP-002B or campaign
+result-truth acceptance. It reduces redundant CRM/Campaigns UI: clickable rows,
+compact right-aligned actions, full phone in authenticated same-tenant CRM,
+switch-based active-send block, one expandable related-campaign group, row-only
+Contact list Delete with no detail-level Delete action, Campaigns tab counts,
+row-click detail, distinct detail counters and no technical
+provider/persistence note. Campaign detail filters result rows by result
+status, same-tenant CRM Situation and name/phone, supports filtered copy and can
+prefill a new draft through the existing composer from current canonical
+contacts only; historical rows without current reusable contact are excluded
+with explicit count. Dynamic CRM-filter scheduled campaigns are documented as
+NEW FEATURE / NOT YET IMPLEMENTED in
+`docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`. No schema/migration, no
+real send, no financial UX and no campaign/history rewrite.
 | 5 | CRA-SLA-001 / CRA-TRAIN-001 / CRA-LGPD-002 | Close documentary acceptance pack | Contractual readiness requires signed/evidenced operations | Dates/attendees/signatures | no | no | yes | possible Meta docs | SLA, support, training, LGPD/security, backup and Meta proof attached |
 | 6 | CRA-IG-001 / CRA-FB-001 / CRA-WEB-001 | Activate and validate Instagram, Facebook and webchat | Contract-required but customer-deferred | Customer delivery window/assets/site access | no, unless bug found | yes | yes | yes for Meta channels | E4/E5 evidence per channel |
 

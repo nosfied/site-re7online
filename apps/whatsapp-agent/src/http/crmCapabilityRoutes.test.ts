@@ -665,7 +665,7 @@ test("CRM contact create allows admin and supervisor, blocks agent, dedupes, and
   assert.equal(phoneOnly.status, 201);
   assert.equal(phoneOnly.body.ok, true);
   assert.equal(phoneOnly.body.item.displayName, null);
-  assert.match(phoneOnly.body.item.identifierDisplay, /^5541\*{5}9988$/);
+  assert.equal(phoneOnly.body.item.identifierDisplay, "5541999999988");
 
   const agent = await request<ErrorPayload>("POST", "/app/crm/contacts", businessAgent, {
     name: "Bloqueado",
@@ -894,7 +894,8 @@ test("CRM contacts read model lists tenant-scoped leads with safe identifiers", 
   assert.equal(whatsapp.isAnonymized, false);
   assert.equal(whatsapp.canStartWhatsappTemplateCandidate, false);
   assert.equal(whatsapp.templateSendBlockedReason, "opt_out");
-  assert.match(whatsapp.phoneDisplay ?? "", /^\d{4}\*{5}\d{4}$/);
+  assert.match(whatsapp.phoneDisplay ?? "", /^\d+$/);
+  assert.doesNotMatch(whatsapp.phoneDisplay ?? "", /\*/);
   assert.equal(response.body.items.some((item) => item.leadId === anonymizedLeadId), false);
   assert.doesNotMatch(
     JSON.stringify(response.body),
@@ -1225,7 +1226,8 @@ test("CRM contact detail is tenant-scoped and returns safe related conversations
   assert.equal(response.body.ok, true);
   assert.equal(response.body.item.leadId, leadId);
   assert.equal(response.body.item.activeOptOut, true);
-  assert.match(response.body.item.phoneDisplay ?? "", /^\d{4}\*{5}\d{4}$/);
+  assert.match(response.body.item.phoneDisplay ?? "", /^\d+$/);
+  assert.doesNotMatch(response.body.item.phoneDisplay ?? "", /\*/);
   assert.equal(response.body.conversations.length, 1);
   assert.equal(response.body.conversations[0]?.conversationId, leadConversationId);
   assert.equal(response.body.conversations[0]?.conversationIdentity, `${prefix}-lead-waid`);
