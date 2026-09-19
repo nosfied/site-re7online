@@ -29118,6 +29118,11 @@ function serializeCampaign(campaign: {
 
 type CampaignMetaStatus = {
   waId: string;
+  leadId?: string | null;
+  contactName?: string | null;
+  phoneDisplay?: string | null;
+  crmStatus?: string | null;
+  crmStatusLabel?: string | null;
   templateName: string | null;
   status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out";
   sentAt: string | null;
@@ -29733,6 +29738,65 @@ function buildCampaignMetaStatusItem(item: {
       stringifyCampaignError(metaStatus.errorData) ||
       stringifyCampaignError(metaStatus.errors),
   };
+}
+
+async function enrichCampaignMetaStatusWithCurrentContacts(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    statuses: CampaignMetaStatus[];
+    crmStatuses?: Array<{ id: string; label: string }>;
+  }
+) {
+  const canonicalByOriginal = new Map<string, string>();
+  for (const item of params.statuses) {
+    const canonical = canonicalizeBrazilWaId(normalizeWaIdDigits(item.waId));
+    if (canonical) canonicalByOriginal.set(item.waId, canonical);
+  }
+  const canonicalValues = Array.from(new Set(canonicalByOriginal.values()));
+  if (canonicalValues.length === 0) return params.statuses;
+
+  const leads = await prisma.lead.findMany({
+    where: {
+      tenantId: params.clientId,
+      OR: [
+        { waIdCanonical: { in: canonicalValues } },
+        { waId: { in: canonicalValues } },
+        { phone: { in: canonicalValues } },
+      ],
+    },
+    select: {
+      id: true,
+      waId: true,
+      waIdCanonical: true,
+      name: true,
+      phone: true,
+      status: true,
+    },
+  });
+  const leadByCanonical = new Map<string, (typeof leads)[number]>();
+  for (const lead of leads) {
+    for (const value of [lead.waIdCanonical, lead.waId, lead.phone]) {
+      if (!value) continue;
+      const canonical = canonicalizeBrazilWaId(normalizeWaIdDigits(value));
+      if (canonical && !leadByCanonical.has(canonical)) {
+        leadByCanonical.set(canonical, lead);
+      }
+    }
+  }
+  const statusLabelById = new Map((params.crmStatuses ?? []).map((status) => [status.id, status.label]));
+  return params.statuses.map((item) => {
+    const canonical = canonicalByOriginal.get(item.waId);
+    const lead = canonical ? leadByCanonical.get(canonical) : null;
+    return {
+      ...item,
+      leadId: lead?.id ?? null,
+      contactName: lead?.name ?? null,
+      phoneDisplay: lead?.phone ?? lead?.waIdCanonical ?? canonical ?? item.waId,
+      crmStatus: lead?.status ?? null,
+      crmStatusLabel: lead?.status ? statusLabelById.get(lead.status) ?? lead.status : null,
+    };
+  });
 }
 
 function buildCampaignSeedFallbackStatusItems(
@@ -35383,12 +35447,27 @@ async function buildCampaignDetailPayload(
             fallbackDraftSeed
           ),
         ];
+  const client = await prisma.client.findUnique({
+    where: { id: params.clientId },
+    select: { clientKey: true },
+  });
+  const tenants = await getTenants();
+  const resolvedStatuses = await resolveCrmBusinessStatuses({
+    prisma,
+    clientId: params.clientId,
+    tenant: client ? tenants[client.clientKey] ?? null : null,
+  });
+  const enrichedMessagesMetaStatus = await enrichCampaignMetaStatusWithCurrentContacts(prisma, {
+    clientId: params.clientId,
+    statuses: visibleMessagesMetaStatus,
+    crmStatuses: resolvedStatuses.statuses,
+  });
   return {
     ok: true,
     campaign: {
       ...serializeCampaign(campaign),
-      metaSummary: summarizeCampaignMetaStatuses(visibleMessagesMetaStatus),
-      messagesMetaStatus: visibleMessagesMetaStatus,
+      metaSummary: summarizeCampaignMetaStatuses(enrichedMessagesMetaStatus),
+      messagesMetaStatus: enrichedMessagesMetaStatus,
       draftSeed: responseDraftSeed,
       draftReview,
     },

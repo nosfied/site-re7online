@@ -172,6 +172,27 @@ ou custo. Validacao local: `crmCapabilityRoutes.test.ts` 19/19 PASS em
 `git diff --check` PASS. Owner review, producao e aceite CRA permanecem
 pendentes.
 
+Contacts + Campaigns UX refinement, 2026-09-19: IMPLEMENTED LOCAL / OWNER
+PASS / NO DEPLOY. Contacts now follows a row-driven administrative
+pattern: clickable rows open contact detail, actions are compact, authorized
+same-tenant CRM users see the full normalized phone number, redundant summary
+fields were removed, active-send block uses an ON/OFF switch backed by
+canonical opt-out events, and related campaign history is grouped under one
+expandable section. Final owner rule: Delete remains only on the Contact list
+row; Contact detail has close/back, edit, save/cancel as applicable and no
+delete action. Campaigns removed the redundant top counter panel, moved
+counts into tabs, made rows open details, right-aligned compact actions,
+normalized detail counters to avoid duplicate `Enviadas`, and removed the
+technical provider/persistence note. Campaign detail now adds view-only filters
+by result status, CRM Situation and name/phone, copy of filtered rows and new
+campaign prefill from filtered current canonical contacts through the existing
+composer. Rows without current reusable contact are excluded explicitly.
+Dynamic CRM-filter scheduled campaigns remain NEW FEATURE / NOT YET IMPLEMENTED
+and are documented separately in
+`docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`. No domain behavior,
+schema, campaign history, opt-out semantics, operational queue abstraction,
+financial UX or real send changed.
+
 ## Campanhas
 
 O centro de campanhas suporta:

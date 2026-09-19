@@ -152,6 +152,14 @@ function getBlockedReasonLabel(reason: CampaignAudienceBlockedReason) {
   }
 }
 
+function maskCampaignAudienceIdentifier(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return raw || null;
+  if (digits.length <= 8) return digits.replace(/\d(?=\d{2})/g, "*");
+  return `${digits.slice(0, 4)}${"*".repeat(Math.max(3, digits.length - 8))}${digits.slice(-4)}`;
+}
+
 function resolveBlockedReason(item: CrmContactListItem): CampaignAudienceBlockedReason | null {
   if (item.isAnonymized) return "anonymized_contact";
   if (item.isOperationallyExcluded) return "operationally_excluded_contact";
@@ -181,8 +189,8 @@ function toAudienceItem(item: CrmContactListItem): CampaignAudiencePreviewItem {
     crmStatus: item.crmStatus,
     crmStatusLabel: item.crmStatusLabel,
     channel: item.channel,
-    phoneDisplay: item.phoneDisplay,
-    identifierDisplay: item.identifierDisplay,
+    phoneDisplay: maskCampaignAudienceIdentifier(item.phoneDisplay),
+    identifierDisplay: maskCampaignAudienceIdentifier(item.identifierDisplay) ?? item.identifierDisplay,
     activeOptOut: item.activeOptOut,
     isAnonymized: item.isAnonymized,
     hasValidWhatsappIdentity: item.hasValidWhatsappIdentity,

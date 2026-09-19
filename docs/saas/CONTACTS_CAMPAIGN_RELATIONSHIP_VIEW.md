@@ -118,6 +118,33 @@ Current UX:
 - customer-facing Contacts UX does not display `R$`, `USD`, provider cost,
   Meta rate, contract price or billing amount.
 
+UX refinement on 2026-09-19:
+
+- Contacts rows are clickable and open the contact detail; compact row actions
+  remain buttons and do not double-trigger row click.
+- Final owner rule: Delete is available only from the Contact list row. Contact
+  detail keeps close/back, edit, save/cancel as applicable and has no Delete
+  action.
+- Authenticated same-tenant CRM list/detail shows the full normalized phone
+  number for authorized users. Sanitized evidence, exports and public/support
+  surfaces remain outside this change.
+- Redundant top-level CRM Situation, active-send block and template-eligibility
+  fields were removed from the contact summary. CRM Situation remains in its
+  dedicated selector; active-send remains in its dedicated operational section.
+- Active-send block uses an ON/OFF switch: ON blocks active outbound; OFF
+  allows active outbound subject to the existing canonical channel/template
+  rules. The switch preserves `recordContactOptOut` / revoke semantics.
+- Campaign relationship detail is grouped under one expandable line,
+  `Campanhas relacionadas`, with a count badge and compact summary. Individual
+  campaign rows render only inside the expanded section.
+- Campaign result detail now supports view-only recipient filters and reuses the
+  existing campaign composer path to start a draft from filtered canonical
+  contacts. Rows without a current reusable contact are excluded explicitly; no
+  Contact-owned campaign history or real send is created.
+- Contact exclusion remains the existing guarded operational-exclusion path.
+  Active/open conversations still block exclusion; the UI only clarifies the
+  instruction and does not auto-close, transfer or delete history.
+
 ## CRA Relevance
 
 This supports campaign/contact traceability and acceptance evidence:

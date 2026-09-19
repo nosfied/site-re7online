@@ -317,6 +317,33 @@ ACTIVE P1:
    and no financial strings; backend build PASS; frontend build PASS; diff
    check PASS. CRA customer acceptance and production deployment remain pending.
 
+7. Contacts + Campaigns UX refinement, 2026-09-19: IMPLEMENTED LOCAL / OWNER
+   PASS / NO DEPLOY. This is visual/interaction polish on already
+   closed domain behavior. Contacts now use clickable rows, compact
+   Inbox/Departments-like action buttons, full phone display only inside the
+   authenticated same-tenant CRM read model, no duplicate top-level CRM
+   Situation/active-send/template-eligibility summary, active-send control as an
+   ON/OFF switch backed by the canonical opt-out record/revoke path, and one
+   expandable "Campanhas relacionadas" section instead of repeated standalone
+   campaign cards. Final owner rule: contact deletion is available only from the
+   contact list row; the contact detail keeps close/edit/save/cancel semantics
+   and has no delete action. Contact exclusion remains the existing guarded
+   operational exclusion path; active/open conversations still block with
+   explicit instructions and no auto-close/transfer/delete. Campaigns removed the
+   redundant top counter panel, moved counts into tabs, made campaign rows open
+   detail directly, right-aligned compact actions, removed the technical
+   provider/persistence note and normalized detail counters so "Processadas"
+   and "Aceitas pelo provedor" are distinct. Campaign detail now has view-only
+   recipient/result filters by result status, same-tenant CRM Situation and
+   name/phone search; the filtered set can be copied as tabular text or loaded
+   into the existing composer as current canonical contacts with explicit
+   excluded-without-current-contact counts. This prefill does not send and the
+   normal composer path rechecks opt-out/identity at draft/send time. Dynamic
+   CRM-filter scheduled campaigns are documented as NEW FEATURE / NOT YET
+   IMPLEMENTED in `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`. No
+   schema/migration, no real send, no financial customer UX and no
+   campaign/history rewrite.
+
 7. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente
    2 mensagens Utility `data_exame` via META_CLOUD no `demo-converta` parou com

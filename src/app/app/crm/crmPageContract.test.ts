@@ -18,10 +18,54 @@ test("CRM contacts list exposes compact campaign relationship summary", () => {
 
 test("CRM contact detail exposes on-demand campaign history", () => {
   assert.ok(pageSource.includes("detail?.campaignRelationshipHistory?.items"));
-  assert.ok(pageSource.includes('<DetailSection title="Campanhas">'));
+  assert.ok(pageSource.includes('<DetailSection title="Histórico">'));
+  assert.ok(pageSource.includes("Campanhas relacionadas"));
   assert.ok(pageSource.includes("CampaignHistoryRow"));
   assert.ok(pageSource.includes("Nenhuma campanha vinculada a este contato."));
   assert.ok(pageSource.includes("Há mais registros. Abra campanhas para consultar o histórico completo."));
+});
+
+test("CRM campaign relationship reuses the departments expandable row pattern", () => {
+  assert.ok(pageSource.includes("theme-list-row theme-list-row-even overflow-hidden rounded-xl border"));
+  assert.ok(pageSource.includes("departments-settings-department-header grid"));
+  assert.ok(pageSource.includes("grid-cols-[minmax(0,1fr)_auto]"));
+  assert.ok(pageSource.includes("expand-row-action-slot"));
+  assert.ok(pageSource.includes("grid h-8 w-8 place-items-center rounded-full border"));
+  assert.ok(pageSource.includes('aria-expanded={campaignsExpanded}'));
+  assert.ok(pageSource.includes("aria-controls={`contact-campaign-panel-${item.leadId}`}"));
+  assert.ok(pageSource.includes("departments-settings-department-body grid gap-2 bg-black/10 px-3 py-3 md:px-4"));
+  assert.ok(pageSource.includes("›"));
+});
+
+test("CRM row actions expose only open and delete without row edit action", () => {
+  const rowBlock = pageSource.slice(
+    pageSource.indexOf("function CrmContactRow"),
+    pageSource.indexOf("function CampaignHistoryRow")
+  );
+  assert.ok(pageSource.includes("aria-label={label}"));
+  assert.ok(rowBlock.includes('label="Abrir contato"'));
+  assert.ok(rowBlock.includes('label="Excluir contato"'));
+  assert.ok(rowBlock.includes("onClick={() => onOpenDetail(item)}"));
+  assert.ok(rowBlock.includes("onClick={() => onDelete(item)}"));
+  assert.ok(rowBlock.includes("disabled={!canDelete || item.isOperationallyExcluded}"));
+  assert.ok(!rowBlock.includes('label="Editar cadastro"'));
+  assert.ok(pageSource.includes("requestContactExclusion"));
+  assert.ok(pageSource.includes("event.stopPropagation();"));
+  assert.ok(!pageSource.includes("border-red-300/30 bg-red-500/10 p-3"));
+});
+
+test("CRM detail keeps close navigation and edit semantics without detail delete", () => {
+  const shellBlock = pageSource.slice(
+    pageSource.indexOf('<aside'),
+    pageSource.indexOf('<div className="min-h-0 overflow-y-auto')
+  );
+  const headerBlock = shellBlock.slice(shellBlock.indexOf('<header className="theme-surface-strong'));
+  assert.ok(shellBlock.includes('aria-label="Fechar"'));
+  assert.ok(shellBlock.includes("absolute right-3 top-3 z-10"));
+  assert.ok(headerBlock.includes('label={editingBasics ? "Cancelar edicao" : "Editar dados"}'));
+  assert.ok(!headerBlock.includes("Excluir contato"));
+  assert.ok(!headerBlock.includes('variant="destructive"'));
+  assert.ok(!headerBlock.includes('aria-label="Fechar"'));
 });
 
 test("CRM campaign relationship labels hide raw internal status codes", () => {

@@ -532,6 +532,11 @@ export type CampaignItem = {
   };
   messagesMetaStatus?: Array<{
     waId: string;
+    leadId?: string | null;
+    contactName?: string | null;
+    phoneDisplay?: string | null;
+    crmStatus?: string | null;
+    crmStatusLabel?: string | null;
     templateName: string | null;
     status: "sent" | "delivered" | "read" | "failed" | "blocked" | "skipped" | "pending" | "opt_out";
     sentAt: string | null;

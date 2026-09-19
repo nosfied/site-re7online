@@ -263,6 +263,38 @@ business-readable reasons without creating a shadow campaign-history model in
 Contact and without inventing historical sends. Validation: UI contract 6/6
 PASS and `campaignsFeatureRoutes.test.ts` 114/114 PASS on the safe local DB.
 
+## Campaigns UX refinement - 2026-09-19
+
+Status: IMPLEMENTED LOCAL / OWNER PASS / NO DEPLOY.
+
+The campaign source of truth and composer cleanup contract are unchanged. This
+UX pass only reduces redundant operational information:
+
+- removed the separate top counter panel from Campaigns;
+- moved meaningful counts into the tab buttons;
+- campaign rows now open detail on row click and keep compact right-aligned
+  action buttons;
+- Contact list Delete is row-only; Contact detail keeps navigation/edit
+  actions and has no Delete action.
+- detail counters use one taxonomy: `Total`, `Processadas`, `Aceitas pelo
+  provedor`, `Entregues`, `Lidas`, `Bloqueadas`, `Falhas`, `Pendentes`;
+- duplicate `Enviadas` labels were removed by distinguishing local processing
+  from provider acceptance;
+- removed the implementation note about persisted processing/provider
+  confirmation from customer UI;
+- campaign detail result list now supports view-only filters by result status,
+  same-tenant CRM Situation and name/phone search;
+- filtered rows can be copied as tabular text;
+- filtered rows can start a new campaign draft flow through the existing
+  composer using current canonical contacts only; rows without a current
+  reusable contact are excluded with an explicit count/reason and no provider
+  call;
+- no financial values were introduced and no campaign/history/billing record is
+  rewritten by this UX change.
+
+Dynamic CRM-filter scheduled campaigns remain out of scope for this pass.
+Design/readiness note: `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`.
+
 ## CRA Classification
 
 This is not part of the current approved outbound return destination delivery.

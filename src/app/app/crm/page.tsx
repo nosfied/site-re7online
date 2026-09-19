@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { KeyboardEvent } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
@@ -243,20 +244,24 @@ function ActionIconButton({
   icon: string;
   onClick: () => void;
   disabled?: boolean;
-  variant?: "neutral" | "primary";
+  variant?: "neutral" | "primary" | "destructive";
 }) {
-  const classes =
-    variant === "primary"
-      ? "border-re7-sky/40 bg-re7-sky text-slate-950 hover:brightness-110"
-      : "theme-nav-link border-white/10 hover:bg-white/10";
+  const classes = {
+    neutral: "border-[#d4c7b5] bg-white/70 text-slate-800 shadow-sm hover:bg-white",
+    primary: "border-emerald-500/25 bg-emerald-50 text-emerald-900 hover:bg-emerald-100",
+    destructive: "border-red-500/25 bg-red-50 text-red-900 hover:bg-red-100",
+  }[variant];
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
       disabled={disabled}
       title={label}
       aria-label={label}
-      className={`inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${classes}`}
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-base transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8 max-md:h-10 max-md:w-10 ${classes}`}
     >
       <span aria-hidden="true">{icon}</span>
     </button>
@@ -286,20 +291,34 @@ function CrmContactRow({
   canViewHistory,
   onOpenDetail,
   onOpenConversation,
-  onCopyIdentifier,
+  onDelete,
+  canDelete,
 }: {
   item: AppCrmContactItem;
   canViewHistory: boolean;
   onOpenDetail: (item: AppCrmContactItem) => void;
   onOpenConversation: (item: AppCrmContactItem) => void;
-  onCopyIdentifier: (item: AppCrmContactItem) => void;
+  onDelete: (item: AppCrmContactItem) => void;
+  canDelete: boolean;
 }) {
   const phoneLabel = getContactPhoneLabel(item);
   const canOpenConversation = canOpenOrStartConversation(item, canViewHistory);
   const campaign = item.campaignRelationship;
   const hasCampaign = campaign.campaignCount > 0;
+  const openFromKeyboard = (event: KeyboardEvent<HTMLTableRowElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    onOpenDetail(item);
+  };
   return (
-    <tr className="border-b border-white/10 align-top transition hover:bg-white/[0.04]">
+    <tr
+      role="button"
+      tabIndex={0}
+      aria-label={`Abrir cadastro de ${getDisplayName(item)}`}
+      onClick={() => onOpenDetail(item)}
+      onKeyDown={openFromKeyboard}
+      className="cursor-pointer border-b border-white/10 align-top transition hover:bg-white/[0.04] focus:outline-none focus:ring-2 focus:ring-re7-sky/60"
+    >
       <td className="px-4 py-3">
         <div className="font-semibold text-white">{getDisplayName(item)}</div>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs theme-muted">
@@ -356,7 +375,10 @@ function CrmContactRow({
           {canOpenConversation ? (
             <button
               type="button"
-              onClick={() => onOpenConversation(item)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenConversation(item);
+              }}
               className="text-left text-sm font-semibold text-re7-sky transition hover:brightness-125"
             >
               {item.lastProtocol || getConversationActionLabel(item)}
@@ -377,18 +399,16 @@ function CrmContactRow({
         {item.importedSource ? (
           <div className="mt-1 text-xs theme-muted">Origem: {item.importedSource}</div>
         ) : null}
-        <div className="mt-1 text-xs theme-muted">{getTemplateHint(item)}</div>
       </td>
       <td className="px-4 py-3 text-right">
-        <div className="flex justify-end gap-2">
-          <ActionIconButton label="Abrir cadastro" icon="i" onClick={() => onOpenDetail(item)} />
-          <ActionIconButton label="Copiar telefone" icon="#" onClick={() => onCopyIdentifier(item)} disabled={!item.phoneDisplay} />
+        <div className="flex shrink-0 items-center justify-end gap-2 max-[1440px]:gap-1.5">
+          <ActionIconButton label="Abrir contato" icon="↗" onClick={() => onOpenDetail(item)} />
           <ActionIconButton
-            label={`${getConversationActionLabel(item)} na caixa de entrada`}
-            icon=">"
-            onClick={() => onOpenConversation(item)}
-            disabled={!canOpenConversation}
-            variant="primary"
+            label="Excluir contato"
+            icon="×"
+            onClick={() => onDelete(item)}
+            disabled={!canDelete || item.isOperationallyExcluded}
+            variant="destructive"
           />
         </div>
       </td>
@@ -478,7 +498,6 @@ function CrmContactDetailDrawer({
   onUpdateStatus,
   onRecordOptOut,
   onRevokeOptOut,
-  onExcludeFromOperation,
   onRemoveBlockingConversation,
   onReactivateFromOperation,
   canExcludeFromOperation,
@@ -500,7 +519,6 @@ function CrmContactDetailDrawer({
   onUpdateStatus: (leadId: string, status: string) => Promise<void>;
   onRecordOptOut: (leadId: string) => Promise<void>;
   onRevokeOptOut: (leadId: string) => Promise<void>;
-  onExcludeFromOperation: (leadId: string) => Promise<AppHiddenBlockingConversation | null>;
   onRemoveBlockingConversation: (conversationId: string) => Promise<void>;
   onReactivateFromOperation: (leadId: string) => Promise<void>;
   canExcludeFromOperation: boolean;
@@ -512,6 +530,7 @@ function CrmContactDetailDrawer({
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [hiddenBlockingConversation, setHiddenBlockingConversation] =
     useState<AppHiddenBlockingConversation | null>(null);
+  const [campaignsExpanded, setCampaignsExpanded] = useState(false);
   const [draft, setDraft] = useState({
     displayName: "",
     companyName: "",
@@ -530,6 +549,7 @@ function CrmContactDetailDrawer({
     });
     setActionLoading(null);
     setHiddenBlockingConversation(detail?.blockingConversation ?? null);
+    setCampaignsExpanded(false);
   }, [detail?.blockingConversation, item?.leadId]);
 
   const saveBasics = async () => {
@@ -580,21 +600,6 @@ function CrmContactDetailDrawer({
     }
   };
 
-  const excludeFromOperation = async () => {
-    if (!item) return;
-    const confirmed = window.confirm(
-      "Este contato deixará de aparecer no CRM e não poderá ser usado em novos atendimentos ou campanhas. O histórico existente será preservado."
-    );
-    if (!confirmed) return;
-    setActionLoading("exclude");
-    try {
-      const blockingConversation = await onExcludeFromOperation(item.leadId);
-      setHiddenBlockingConversation(blockingConversation);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
   const removeBlockingConversation = async () => {
     if (!item || !hiddenBlockingConversation) return;
     const confirmed = window.confirm(
@@ -625,6 +630,19 @@ function CrmContactDetailDrawer({
     }
   };
 
+  const toggleBasicsEditing = () => {
+    if (!item) return;
+    if (editingBasics) {
+      setDraft({
+        displayName: item.displayName || "",
+        companyName: item.companyName || "",
+        email: item.email || "",
+        city: item.city || "",
+      });
+    }
+    setEditingBasics((current) => !current);
+  };
+
   const emailDraftInvalid = Boolean(
     draft.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())
   );
@@ -645,7 +663,16 @@ function CrmContactDetailDrawer({
         className="theme-bg relative grid max-h-[calc(100vh-2rem)] w-full max-w-[880px] grid-rows-[auto_1fr] overflow-hidden rounded-2xl border border-white/10 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="theme-surface-strong theme-shadow border-b p-4">
+        <button
+          type="button"
+          title="Fechar"
+          aria-label="Fechar"
+          onClick={onClose}
+          className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full border border-white/15 bg-black/20 text-base font-semibold text-white/75 transition hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-re7-sky/70"
+        >
+          ×
+        </button>
+        <header className="theme-surface-strong theme-shadow border-b p-4 pr-14">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Cadastro CRM</p>
@@ -656,9 +683,18 @@ function CrmContactDetailDrawer({
                 {item ? item.companyName || getContactPhoneLabel(item) : "Detalhe operacional do contato"}
               </p>
             </div>
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 items-center gap-2 max-[1440px]:gap-1.5">
               <ActionIconButton label="Atualizar cadastro" icon="↺" onClick={onRefresh} disabled={loading} />
-              <ActionIconButton label="Fechar cadastro" icon="x" onClick={onClose} />
+              {item ? (
+                <>
+                  <ActionIconButton
+                    label={editingBasics ? "Cancelar edicao" : "Editar dados"}
+                    icon={editingBasics ? "x" : "✎"}
+                    onClick={toggleBasicsEditing}
+                    disabled={actionLoading === "basics"}
+                  />
+                </>
+              ) : null}
             </div>
           </div>
         </header>
@@ -696,22 +732,6 @@ function CrmContactDetailDrawer({
                       icon="#"
                       onClick={() => onCopyReference(item.phoneDisplay || "")}
                       disabled={!item.phoneDisplay}
-                    />
-                    <ActionIconButton
-                      label={editingBasics ? "Cancelar edicao" : "Editar dados"}
-                      icon={editingBasics ? "x" : "✎"}
-                      onClick={() => {
-                        if (editingBasics) {
-                          setDraft({
-                            displayName: item.displayName || "",
-                            companyName: item.companyName || "",
-                            email: item.email || "",
-                            city: item.city || "",
-                          });
-                        }
-                        setEditingBasics((current) => !current);
-                      }}
-                      disabled={actionLoading === "basics"}
                     />
                   </div>
                 }
@@ -761,7 +781,7 @@ function CrmContactDetailDrawer({
                         type="button"
                         onClick={saveBasics}
                         disabled={actionLoading === "basics" || emailDraftInvalid}
-                        className="rounded-md bg-re7-sky px-4 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex h-9 items-center justify-center rounded-md bg-re7-sky px-3 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {actionLoading === "basics" ? "Salvando..." : "Salvar dados"}
                       </button>
@@ -776,7 +796,7 @@ function CrmContactDetailDrawer({
                           });
                           setEditingBasics(false);
                         }}
-                        className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold"
+                        className="theme-nav-link inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-semibold"
                       >
                         Cancelar
                       </button>
@@ -793,11 +813,8 @@ function CrmContactDetailDrawer({
                 <div className="grid gap-x-5 gap-y-3 border-t border-white/10 pt-3 sm:grid-cols-2">
                   <DetailField label="Telefone" value={getContactPhoneLabel(item)} />
                   <DetailField label="Canal principal" value={getChannelLabel(item.channel)} />
-                  <DetailField label="Situação no CRM" value={item.crmStatusLabel} />
-                  <DetailField label="Bloqueio de envio ativo" value={item.activeOptOut ? "Ativo" : "Inativo"} />
                   <DetailField label="Origem" value={item.importedSource} />
                   <DetailField label="Notas registradas" value={item.notesCount} />
-                  <DetailField label="Uso com modelo aprovado" value={getTemplateHint(item)} />
                   <DetailField label="Criado em" value={formatDateTime(item.createdAt)} />
                   <DetailField label="Atualizado em" value={formatDateTime(item.updatedAt)} />
                 </div>
@@ -821,22 +838,34 @@ function CrmContactDetailDrawer({
                     </select>
                   </label>
                 </div>
-                <div className="grid gap-2 rounded-lg border border-white/10 p-3">
-                  <p className="text-sm theme-muted">
-                    Impede campanhas e envio de modelos iniciados pela empresa. O contato ainda poderá enviar mensagens e ser atendido normalmente.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
+                <div className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Bloquear envio ativo</p>
+                      <p className="mt-1 text-xs theme-muted">
+                        ON bloqueia campanhas e modelos iniciados pela empresa. OFF libera conforme canal, telefone e regras da Meta.
+                      </p>
+                    </div>
                     <button
                       type="button"
+                      role="switch"
+                      aria-checked={item.activeOptOut}
                       onClick={toggleOptOut}
                       disabled={Boolean(actionLoading)}
-                      className="theme-nav-link rounded-md border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                      className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full border transition focus:outline-none focus:ring-2 focus:ring-re7-sky/60 disabled:cursor-not-allowed disabled:opacity-50 ${
+                        item.activeOptOut
+                          ? "border-rose-300/50 bg-rose-500/40"
+                          : "border-emerald-300/45 bg-emerald-500/25"
+                      }`}
                     >
-                      {actionLoading === "opt-out"
-                        ? "Atualizando..."
-                        : item.activeOptOut
-                          ? "Liberar envio ativo"
-                          : "Bloquear envio ativo"}
+                      <span
+                        aria-hidden="true"
+                        className={`inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-white text-[8px] font-bold text-re7-navy transition ${
+                          item.activeOptOut ? "translate-x-7" : "translate-x-1"
+                        }`}
+                      >
+                        {item.activeOptOut ? "ON" : "OFF"}
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -856,91 +885,107 @@ function CrmContactDetailDrawer({
                       </button>
                     </div>
                   </div>
-                ) : canExcludeFromOperation ? (
-                  <div className="grid gap-2 rounded-lg border border-red-300/30 bg-red-500/10 p-3">
-                    {hiddenBlockingConversation?.visibility === "hidden" ? (
-                      <div className="grid gap-2 rounded-md border border-amber-300/40 bg-amber-400/10 p-3">
-                        <p className="text-sm text-amber-100">
-                          Existe uma conversa pendente associada a este contato que precisa ser retirada da operação antes da exclusão.
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={removeBlockingConversation}
-                            disabled={Boolean(actionLoading)}
-                            className="rounded-md bg-re7-sky px-3 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {actionLoading === "remove-hidden-conversation" ? "Retirando..." : "Retirar conversa da operação"}
-                          </button>
-                        </div>
-                      </div>
-                    ) : hiddenBlockingConversation?.visibility === "visible" ? (
-                      <div className="grid gap-2 rounded-md border border-amber-300/40 bg-amber-400/10 p-3">
-                        <p className="text-sm text-amber-100">
-                          Este contato possui uma conversa em andamento. Retire ou encerre a conversa antes de excluir o contato da operação.
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => onOpenInbox(hiddenBlockingConversation.conversationIdentity)}
-                            className="rounded-md bg-re7-sky px-3 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110"
-                          >
-                            Abrir conversa
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-sm text-red-100">
-                          Este contato deixará de aparecer no CRM operacional e não poderá ser usado em campanhas. O histórico existente será preservado.
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={excludeFromOperation}
-                            disabled={Boolean(actionLoading)}
-                            className="rounded-md border border-red-300/40 px-3 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {actionLoading === "exclude" ? "Excluindo..." : "Excluir contato da operação"}
-                          </button>
-                        </div>
-                      </>
-                    )}
+                ) : hiddenBlockingConversation?.visibility === "hidden" ? (
+                  <div className="grid gap-2 rounded-lg border border-amber-300/40 bg-amber-400/10 p-3">
+                    <p className="text-sm text-amber-100">
+                      Este contato possui uma conversa em andamento e não pode ser excluído agora. Retire a conversa da operação ou finalize o atendimento antes de excluir o contato.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={removeBlockingConversation}
+                        disabled={Boolean(actionLoading)}
+                        className="rounded-md bg-re7-sky px-3 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {actionLoading === "remove-hidden-conversation" ? "Retirando..." : "Retirar conversa da operação"}
+                      </button>
+                    </div>
+                  </div>
+                ) : hiddenBlockingConversation?.visibility === "visible" ? (
+                  <div className="grid gap-2 rounded-lg border border-amber-300/40 bg-amber-400/10 p-3">
+                    <p className="text-sm text-amber-100">
+                      Este contato possui uma conversa em andamento e não pode ser excluído agora. Finalize ou encerre a conversa antes de excluir o contato.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onOpenInbox(hiddenBlockingConversation.conversationIdentity)}
+                        className="rounded-md bg-re7-sky px-3 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110"
+                      >
+                        Abrir conversa
+                      </button>
+                    </div>
                   </div>
                 ) : null}
               </DetailSection>
 
-              <DetailSection title="Campanhas">
-                <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2">
-                  <DetailField label="Campanhas vinculadas" value={item.campaignRelationship.campaignCount} />
-                  <DetailField label="Última campanha" value={item.campaignRelationship.latestCampaignName} />
-                  <DetailField label="Última data" value={formatDateTime(item.campaignRelationship.latestCampaignAt)} />
-                  <DetailField label="Modelo" value={item.campaignRelationship.latestTemplate} />
-                  <DetailField
-                    label="Último status"
-                    value={getCampaignRelationshipStatusLabel(item.campaignRelationship.latestRecipientStatus)}
-                  />
-                  <DetailField
-                    label="Motivo"
-                    value={getCampaignRelationshipReasonLabel(item.campaignRelationship.latestResultReason)}
-                  />
-                </div>
-                <div className="mt-4 grid gap-2">
-                  {campaignHistory.length === 0 ? (
-                    <div className="rounded-lg border border-white/10 p-4 text-sm theme-muted">
-                      Nenhuma campanha vinculada a este contato.
+              <DetailSection title="Histórico">
+                <article className="theme-list-row theme-list-row-even overflow-hidden rounded-xl border border-white/10 transition-colors">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setCampaignsExpanded((current) => !current)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      setCampaignsExpanded((current) => !current);
+                    }}
+                    aria-expanded={campaignsExpanded}
+                    aria-controls={`contact-campaign-panel-${item.leadId}`}
+                    className="departments-settings-department-header grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-white/10 bg-white/[0.075] px-3 py-3 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 md:px-4"
+                  >
+                    <div className="min-w-0 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-white">Campanhas relacionadas</span>
+                        <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-xs theme-muted">
+                          {formatNumber(item.campaignRelationship.campaignCount)}
+                        </span>
+                      </div>
+                      <p className="mt-1 truncate text-xs theme-muted">
+                        {item.campaignRelationship.latestCampaignName
+                          ? `${item.campaignRelationship.latestCampaignName} · ${getCampaignRelationshipStatusLabel(item.campaignRelationship.latestRecipientStatus)}`
+                          : "Nenhuma campanha vinculada a este contato."}
+                      </p>
                     </div>
-                  ) : (
-                    campaignHistory.map((campaign) => (
-                      <CampaignHistoryRow key={`${campaign.campaignId}:${campaign.campaignAt}`} campaign={campaign} />
-                    ))
-                  )}
-                  {detail?.campaignRelationshipHistory.pagination.hasMore ? (
-                    <div className="rounded-lg border border-white/10 p-3 text-xs theme-muted">
-                      Há mais registros. Abra campanhas para consultar o histórico completo.
+                    <div className="expand-row-action-slot flex min-w-max shrink-0 items-center justify-end gap-3 justify-self-end whitespace-nowrap">
+                      <button
+                        type="button"
+                        aria-expanded={campaignsExpanded}
+                        aria-controls={`contact-campaign-panel-${item.leadId}`}
+                        aria-label={campaignsExpanded ? "Recolher linha" : "Expandir linha"}
+                        title={campaignsExpanded ? "Recolher linha" : "Expandir linha"}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setCampaignsExpanded((current) => !current);
+                        }}
+                        className={`grid h-8 w-8 place-items-center rounded-full border text-base font-semibold leading-none transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 disabled:cursor-not-allowed disabled:opacity-60 ${campaignsExpanded ? "rotate-90 border-re7-sky/50 bg-re7-sky/20 text-sky-50" : "border-white/15 text-white/70"}`}
+                      >
+                        ›
+                      </button>
+                    </div>
+                  </div>
+                  {campaignsExpanded ? (
+                    <div
+                      id={`contact-campaign-panel-${item.leadId}`}
+                      className="departments-settings-department-body grid gap-2 bg-black/10 px-3 py-3 md:px-4"
+                    >
+                      {campaignHistory.length === 0 ? (
+                        <div className="rounded-lg border border-white/10 p-4 text-sm theme-muted">
+                          Nenhuma campanha vinculada a este contato.
+                        </div>
+                      ) : (
+                        campaignHistory.map((campaign) => (
+                          <CampaignHistoryRow key={`${campaign.campaignId}:${campaign.campaignAt}`} campaign={campaign} />
+                        ))
+                      )}
+                      {detail?.campaignRelationshipHistory.pagination.hasMore ? (
+                        <div className="rounded-lg border border-white/10 p-3 text-xs theme-muted">
+                          Há mais registros. Abra campanhas para consultar o histórico completo.
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
-                </div>
+                </article>
               </DetailSection>
 
               {canViewHistory ? (
@@ -1654,6 +1699,23 @@ export default function AppCrmContactsPage() {
     [handleUnauthorized, loadContacts, page, session]
   );
 
+  const requestContactExclusion = useCallback(
+    async (item: AppCrmContactItem) => {
+      if (!canExcludeCrmContacts || item.isOperationallyExcluded) return;
+      const confirmed = window.confirm(
+        "Este contato deixará de aparecer no CRM e não poderá ser usado em novos atendimentos ou campanhas. O histórico existente será preservado."
+      );
+      if (!confirmed) return;
+      const blockingConversation = await excludeContactFromOperation(item.leadId);
+      if (blockingConversation) {
+        setSelectedLeadId(item.leadId);
+        setContactDetail(null);
+        loadContactDetail(item.leadId);
+      }
+    },
+    [canExcludeCrmContacts, excludeContactFromOperation, loadContactDetail]
+  );
+
   const removeBlockingConversationFromOperation = useCallback(
     async (conversationId: string) => {
       if (!session) return;
@@ -1745,20 +1807,6 @@ export default function AppCrmContactsPage() {
     },
     [loadContacts, session]
   );
-
-  const copyIdentifier = useCallback(async (item: AppCrmContactItem) => {
-    const value = item.phoneDisplay;
-    if (!value) {
-      setError("Este contato não possui telefone para copiar.");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(value);
-      setNotice("Telefone copiado.");
-    } catch {
-      setError("Não foi possível copiar o telefone.");
-    }
-  }, []);
 
   const copyReference = useCallback(async (value: string) => {
     if (!value) {
@@ -2036,7 +2084,8 @@ export default function AppCrmContactsPage() {
                       canViewHistory={canViewCrmHistory}
                       onOpenDetail={openContactDetail}
                       onOpenConversation={openConversation}
-                      onCopyIdentifier={copyIdentifier}
+                      onDelete={requestContactExclusion}
+                      canDelete={canExcludeCrmContacts}
                     />
                   ))}
                 </tbody>
@@ -2098,7 +2147,6 @@ export default function AppCrmContactsPage() {
           onUpdateStatus={updateContactStatus}
           onRecordOptOut={recordContactOptOut}
           onRevokeOptOut={revokeContactOptOut}
-          onExcludeFromOperation={excludeContactFromOperation}
           onRemoveBlockingConversation={removeBlockingConversationFromOperation}
           onReactivateFromOperation={reactivateContactFromOperation}
           canExcludeFromOperation={canExcludeCrmContacts}

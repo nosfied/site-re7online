@@ -246,12 +246,10 @@ function normalizeOperationalStatus(value: unknown): "active" | "excluded" {
   return normalizeText(value).toLowerCase() === "excluded" ? "excluded" : "active";
 }
 
-function maskPhone(value: string | null | undefined) {
+function formatCrmPhoneDisplay(value: string | null | undefined) {
   const digits = normalizeWaIdDigits(String(value ?? ""));
   if (!digits) return null;
-  if (digits.length <= 4) return `***${digits}`;
-  const prefix = digits.length >= 12 ? digits.slice(0, 4) : digits.slice(0, 2);
-  return `${prefix}*****${digits.slice(-4)}`;
+  return digits;
 }
 
 function isWhatsappChannel(channel: string | null | undefined) {
@@ -292,7 +290,7 @@ function isAnonymizedContactRecord(
 
 function buildIdentifierDisplay(lead: LeadRecord, contactDisplayName?: string | null) {
   if (isWhatsappChannel(lead.channel)) {
-    return maskPhone(lead.phone || lead.waIdCanonical || lead.waId) ?? "WhatsApp User";
+    return formatCrmPhoneDisplay(lead.phone || lead.waIdCanonical || lead.waId) ?? "WhatsApp User";
   }
   if (contactDisplayName) return contactDisplayName;
   if (lead.name) return lead.name;
@@ -798,7 +796,7 @@ export async function buildCrmContactsPayload(
         normalizeOptionalText(identity?.displayName) ??
         normalizeOptionalText(contact?.name);
       const phoneDisplay = isWhatsappChannel(lead.channel)
-        ? maskPhone(lead.phone || lead.waIdCanonical || lead.waId)
+        ? formatCrmPhoneDisplay(lead.phone || lead.waIdCanonical || lead.waId)
         : null;
       const lastConversation = conversationSummary.latest;
       return {
@@ -1157,7 +1155,7 @@ export async function buildCrmContactDetailPayload(
     normalizeOptionalText(identity?.displayName) ??
     normalizeOptionalText(contact?.name);
   const phoneDisplay = isWhatsappChannel(lead.channel)
-    ? maskPhone(lead.phone || lead.waIdCanonical || lead.waId)
+    ? formatCrmPhoneDisplay(lead.phone || lead.waIdCanonical || lead.waId)
     : null;
   const importSource = importEvents
     .map((event) =>
