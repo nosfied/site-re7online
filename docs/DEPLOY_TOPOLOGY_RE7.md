@@ -112,6 +112,34 @@ Observacao:
 - a VPS afeta `converta.re7online.com`, `admin.re7online.com` e os backends operacionais
 - o site publico `re7online.com` depende de deployment/promocao na Vercel
 
+### Auditoria de linhagem Vercel - 2026-09-19
+
+Status: AUDITED / CORRECTION PENDING.
+
+A auditoria read-only de 2026-09-19 confirmou que a producao Vercel atual do
+projeto `site-re7online` (`prj_Ei43Wm38CyRWK4yaJHsQinQE7Lto`) esta no
+deployment `dpl_F3CjH6eJRLsnriBVhP77o1ZXxz5R`, commit
+`bf8ca4ddb05b4a22c09c3eaabfcb31e44de8acc9`, branch
+`ops-demo-9614-repair-readiness-20260918`, `source=redeploy`,
+`target=production`.
+
+Essa linhagem e operacionalmente suspeita porque usa uma branch de reparo
+operacional como fonte de producao do site publico. A comparacao de arvore
+publica mostrou diferenca de output `NONE` nos arquivos publicos auditados,
+mas a proveniencia continua incorreta e deve ser corrigida em gate separado.
+
+O tooling read-only disponivel nao expos a Production Branch do projeto Vercel,
+portanto a fonte canonica do site publico permanece `UNKNOWN` ate verificacao
+direta nas configuracoes Vercel. O melhor candidato tecnico identificado para
+correcao futura e `origin/vercel-deployment-hygiene-20260918` em
+`1af24b54ee9261f75a8c9e69e9d87c20f33fd2db`, porque mantem a mesma arvore
+publica e contem `vercel.json` + `scripts/vercel-ignore-build.sh`.
+
+Nenhuma correcao foi executada nesta auditoria: sem deploy, sem promocao, sem
+redeploy, sem alias change, sem mudanca de config Vercel, sem VPS, sem DB e sem
+PM2. Detalhes completos:
+`docs/saas/VERCEL_PRODUCTION_LINEAGE_AUDIT_2026-09-19.md`.
+
 ### 2. Portal Converta / console interno (`converta.re7online.com`)
 Usar quando mudar:
 - `src/app/app/**`

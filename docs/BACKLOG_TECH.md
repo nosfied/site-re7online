@@ -24,6 +24,22 @@ Produto operacional com observabilidade real da Meta e área do cliente funciona
 
 O onboarding interno foi implementado, porém ainda não validado com novo tenant via UI.
 
+Vercel public-site lineage, 2026-09-19: AUDITED / CORRECTION PENDING. The
+public `re7online.com` production deployment is currently
+`dpl_F3CjH6eJRLsnriBVhP77o1ZXxz5R` at
+`bf8ca4ddb05b4a22c09c3eaabfcb31e44de8acc9` from branch
+`ops-demo-9614-repair-readiness-20260918`, `source=redeploy`. Public-site tree
+comparison found output difference `NONE` against recent production/preview
+candidates, but the lineage is operationally unsuitable. Production Branch was
+not exposed by available read-only tooling and remains UNKNOWN. IgnoreCommand
+is ISSUE because recent branches do not contain `vercel.json` or
+`scripts/vercel-ignore-build.sh`; the hygiene candidate is
+`origin/vercel-deployment-hygiene-20260918` at
+`1af24b54ee9261f75a8c9e69e9d87c20f33fd2db`. No Vercel production mutation,
+VPS change, DB change or PM2 change occurred in this audit. Next action:
+prove Production Branch in Vercel settings and run a separate owner-approved
+Vercel-only correction gate.
+
 ---
 
 ## PRIORIDADE ATUAL

@@ -10,6 +10,20 @@ O produto deve ser apresentado como solucao de atendimento, roteamento, chatbot/
 
 O baseline funcional estavel de agosto de 2026 consolida hardenings de Inbox, filas, Web Session, read-state, presenca de agentes e politicas de visibilidade. O tenant `secult-pe` opera no mesmo codigo SaaS multitenant publicado em producao; nao existe fork, build exclusivo, frontend exclusivo ou deploy especifico para SECULT-PE. Depois de novo frontend publicado, um reload normal do navegador carrega a versao atual.
 
+Public site Vercel lineage audit, 2026-09-19: AUDITED / CORRECTION PENDING.
+`re7online.com` is the Vercel public site and remains separated from the
+Converta VPS runtime (`converta.re7online.com`, `api.re7online.com`,
+`admin.re7online.com`). Read-only Vercel evidence shows current public
+production at deployment `dpl_F3CjH6eJRLsnriBVhP77o1ZXxz5R`, commit
+`bf8ca4ddb05b4a22c09c3eaabfcb31e44de8acc9`, branch
+`ops-demo-9614-repair-readiness-20260918`, `source=redeploy`. Public-site tree
+diff against recent candidates was `NONE`, but the lineage is operationally
+unsuitable and correction remains pending. Production Branch is UNKNOWN because
+available tooling did not expose it. IgnoreCommand hygiene is not effective in
+recent branches because `vercel.json` and `scripts/vercel-ignore-build.sh` are
+absent there. No deploy, promotion, Vercel config mutation, VPS, DB or PM2
+change occurred in the audit.
+
 ## Canais
 
 | Canal | Estado operacional | Observacao |
