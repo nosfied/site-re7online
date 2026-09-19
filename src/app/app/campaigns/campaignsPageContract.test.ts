@@ -72,6 +72,22 @@ test("campaign result filtered actions only operate on the visible result set", 
   assert.ok(pageSource.includes('setActiveTab("create")'));
 });
 
+test("campaign creation exposes dynamic CRM-filter scheduling without freezing preview recipients", () => {
+  assert.ok(pageSource.includes('type RecipientSelectionMode = "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER"'));
+  assert.ok(pageSource.includes("Filtro dinâmico do CRM"));
+  assert.ok(pageSource.includes("Os destinatários finais serão definidos no momento do envio."));
+  assert.ok(pageSource.includes("Gerar estimativa"));
+  assert.ok(pageSource.includes("Agendar filtro dinâmico"));
+  assert.ok(pageSource.includes('q: dynamicPreview ? "" : audienceFilters.q'));
+  assert.ok(pageSource.includes("channel: dynamicPreview ? null"));
+  assert.ok(pageSource.includes('disabled={audienceRecipientMode === "DYNAMIC_CRM_FILTER"}'));
+  assert.ok(pageSource.includes('campaign.selectionMode === "DYNAMIC_CRM_FILTER"'));
+  assert.ok(pageSource.includes('selectionMode: "DYNAMIC_CRM_FILTER"'));
+  assert.ok(pageSource.includes("dynamicFilter: { version: 1, crmBusinessStatusId }"));
+  assert.ok(pageSource.includes("selectedLeadIds: []"));
+  assert.ok(pageSource.includes("scheduleAppCampaignDraft(session, created.campaign.id, scheduledAt.toISOString())"));
+});
+
 test("campaign actions use the compact Inbox action-button language", () => {
   assert.ok(pageSource.includes("function ActionIconButton"));
   assert.ok(pageSource.includes("flex h-9 w-9 items-center justify-center rounded-xl border text-base transition"));

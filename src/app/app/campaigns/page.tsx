@@ -72,6 +72,7 @@ type CampaignStatusFilter =
 
 type CampaignCenterTab = "create" | "drafts" | "sending" | "scheduled" | "completed" | "blocked" | "all";
 type CampaignCreationPanel = "audience" | "csv" | "manual";
+type RecipientSelectionMode = "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
 type CampaignResultStatusFilter = "all" | "delivered" | "sent" | "read" | "blocked" | "failed" | "pending";
 type CampaignResultItem = NonNullable<CampaignItem["messagesMetaStatus"]>[number];
 
@@ -569,6 +570,7 @@ export default function AppCampaignsPage() {
   const [loadingCsvPreview, setLoadingCsvPreview] = useState(false);
   const [creatingCsvDraft, setCreatingCsvDraft] = useState(false);
   const [creatingDraft, setCreatingDraft] = useState(false);
+  const [audienceRecipientMode, setAudienceRecipientMode] = useState<RecipientSelectionMode>("STATIC_RECIPIENTS");
   const [sendingDraft, setSendingDraft] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [expandedCreationPanel, setExpandedCreationPanel] = useState<CampaignCreationPanel | null>(null);
@@ -1056,9 +1058,11 @@ export default function AppCampaignsPage() {
 
   const audiencePreviewDisabledReason = !form.templateId
     ? "Selecione um modelo aprovado para gerar a prévia."
-    : templateVariableMappingError;
+    : audienceRecipientMode === "DYNAMIC_CRM_FILTER" && !audienceFilters.status
+      ? "Selecione uma Situação no CRM para estimar a campanha dinâmica."
+      : templateVariableMappingError;
 
-  const canGenerateAudiencePreview = Boolean(session && form.templateId && !templateVariableMappingError && !loadingAudiencePreview);
+  const canGenerateAudiencePreview = Boolean(session && !audiencePreviewDisabledReason && !loadingAudiencePreview);
 
   const campaignStats = useMemo(() => {
     return campaigns.reduce(
@@ -1520,16 +1524,17 @@ export default function AppCampaignsPage() {
       setLoadingAudiencePreview(true);
       setAudiencePreviewError(null);
       try {
+        const dynamicPreview = audienceRecipientMode === "DYNAMIC_CRM_FILTER";
         const response = await fetchAppCampaignAudiencePreview(session, {
-          q: audienceFilters.q,
+          q: dynamicPreview ? "" : audienceFilters.q,
           status: audienceFilters.status,
-          channel: audienceFilters.channel === "all" ? null : audienceFilters.channel,
+          channel: dynamicPreview ? null : audienceFilters.channel === "all" ? null : audienceFilters.channel,
           hasConversation:
-            audienceFilters.hasConversation === "all"
+            dynamicPreview || audienceFilters.hasConversation === "all"
               ? null
               : audienceFilters.hasConversation === "true",
           optOut:
-            audienceFilters.optOut === "all"
+            dynamicPreview || audienceFilters.optOut === "all"
               ? null
               : audienceFilters.optOut === "true",
           page: nextPage,
@@ -1548,7 +1553,7 @@ export default function AppCampaignsPage() {
         setLoadingAudiencePreview(false);
       }
     },
-    [audienceFilters, audiencePage, handleUnauthorized, session]
+    [audienceFilters, audiencePage, audienceRecipientMode, handleUnauthorized, session]
   );
 
   const handleAudiencePreviewSubmit = async (event: FormEvent) => {
@@ -1782,6 +1787,88 @@ export default function AppCampaignsPage() {
       const message = typed.message || "Não foi possível criar o rascunho da campanha.";
       setAudiencePreviewError(message);
       showToast("error", "Rascunho não criado", message);
+    } finally {
+      setCreatingDraft(false);
+    }
+  };
+
+  const handleCreateDynamicScheduledCampaign = async () => {
+    if (!session) return;
+    const name = form.name.trim() || defaultDraftName;
+    const templateId = form.templateId.trim();
+    const crmBusinessStatusId = audienceFilters.status.trim();
+    const scheduledAt = scheduleInput ? new Date(scheduleInput) : null;
+    if (!templateId) {
+      const message = "Selecione um modelo aprovado antes de agendar.";
+      setAudiencePreviewError(message);
+      showToast("error", "Agendamento incompleto", message);
+      return;
+    }
+    if (!crmBusinessStatusId) {
+      const message = "Selecione uma Situação no CRM para o filtro dinâmico.";
+      setAudiencePreviewError(message);
+      showToast("error", "Filtro incompleto", message);
+      return;
+    }
+    if (!scheduledAt || !Number.isFinite(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
+      const message = "Informe uma data e horário futuros para o agendamento dinâmico.";
+      setAudiencePreviewError(message);
+      showToast("error", "Agendamento inválido", message);
+      return;
+    }
+    if (templateVariableMappingError) {
+      setAudiencePreviewError(templateVariableMappingError);
+      showToast("error", "Agendamento incompleto", templateVariableMappingError);
+      return;
+    }
+    const returnDestination = buildReturnDestinationPayload();
+    if (!returnDestination.ok) {
+      setAudiencePreviewError(returnDestination.message);
+      showToast("error", "Destino das respostas incompleto", returnDestination.message);
+      return;
+    }
+
+    setCreatingDraft(true);
+    setAudiencePreviewError(null);
+    try {
+      const created = await createAppCampaignDraft(session, {
+        name,
+        templateId,
+        selectedLeadIds: [],
+        returnDestination: returnDestination.value,
+        selectionMode: "DYNAMIC_CRM_FILTER",
+        dynamicFilter: { version: 1, crmBusinessStatusId },
+        ...(templateVariableLabels.length > 0
+          ? { templateVariableMappings: buildTemplateVariableMappingsPayload(form.templateVariableMappings) }
+          : {}),
+      });
+      const scheduled = await scheduleAppCampaignDraft(session, created.campaign.id, scheduledAt.toISOString());
+      await refreshCampaigns(session, scheduled.campaign.id);
+      const detail = await getAppCampaign(session, scheduled.campaign.id);
+      setSelectedCampaign(detail.campaign);
+      setSelectedCampaignId(scheduled.campaign.id);
+      setDetailModalOpen(true);
+      setForm(EMPTY_FORM);
+      setAudiencePreview(null);
+      setAudienceFilters(EMPTY_AUDIENCE_FILTERS);
+      setScheduleInput("");
+      setActiveTab("scheduled");
+      setStatusFilter("scheduled");
+      setCurrentPage(1);
+      showToast(
+        "success",
+        "Campanha dinâmica agendada",
+        "Os destinatários finais serão definidos no momento do envio."
+      );
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const message = typed.message || "Não foi possível agendar a campanha dinâmica.";
+      setAudiencePreviewError(message);
+      showToast("error", "Agendamento não concluído", message);
     } finally {
       setCreatingDraft(false);
     }
@@ -2322,10 +2409,36 @@ export default function AppCampaignsPage() {
           <div id="campaign-creation-panel-audience" className="bg-black/10 px-3 py-3 md:px-4">
           {audienceVariablesEditor}
           <div className={audienceVariablesEditor ? "mt-3" : ""}>
-            <CampaignMessagePreview
-              content={templatePreview}
-              detail="Prévia ilustrativa. Os valores finais serão calculados para cada contato selecionado no CRM."
-            />
+          <CampaignMessagePreview
+            content={templatePreview}
+            detail="Prévia ilustrativa. Os valores finais serão calculados para cada contato selecionado no CRM."
+          />
+          </div>
+          <div className="mt-3 grid gap-3 rounded-md border border-emerald-300/20 bg-emerald-950/20 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-white">Modo de destinatários</p>
+                <p className="mt-1 text-xs text-white/60">
+                  No modo dinâmico, a prévia é apenas uma estimativa; os destinatários finais serão definidos no horário agendado.
+                </p>
+              </div>
+              <div className="inline-flex overflow-hidden rounded-md border border-white/15 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setAudienceRecipientMode("STATIC_RECIPIENTS")}
+                  className={`px-3 py-2 font-semibold ${audienceRecipientMode === "STATIC_RECIPIENTS" ? "bg-re7-sky text-slate-950" : "bg-white/5 text-white/75 hover:bg-white/10"}`}
+                >
+                  Destinatários fixos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAudienceRecipientMode("DYNAMIC_CRM_FILTER")}
+                  className={`px-3 py-2 font-semibold ${audienceRecipientMode === "DYNAMIC_CRM_FILTER" ? "bg-re7-sky text-slate-950" : "bg-white/5 text-white/75 hover:bg-white/10"}`}
+                >
+                  Filtro dinâmico do CRM
+                </button>
+              </div>
+            </div>
           </div>
           <form className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_160px_150px_150px_150px_auto]" onSubmit={handleAudiencePreviewSubmit}>
             <label className="grid gap-1 text-sm">
@@ -2333,6 +2446,7 @@ export default function AppCampaignsPage() {
               <input
                 className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                 value={audienceFilters.q}
+                disabled={audienceRecipientMode === "DYNAMIC_CRM_FILTER"}
                 onChange={(event) =>
                   setAudienceFilters((prev) => ({ ...prev, q: event.target.value }))
                 }
@@ -2361,6 +2475,7 @@ export default function AppCampaignsPage() {
               <select
                 className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
                 value={audienceFilters.channel}
+                disabled={audienceRecipientMode === "DYNAMIC_CRM_FILTER"}
                 onChange={(event) =>
                   setAudienceFilters((prev) => ({ ...prev, channel: event.target.value }))
                 }
@@ -2377,6 +2492,7 @@ export default function AppCampaignsPage() {
               <select
                 className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
                 value={audienceFilters.optOut}
+                disabled={audienceRecipientMode === "DYNAMIC_CRM_FILTER"}
                 onChange={(event) =>
                   setAudienceFilters((prev) => ({ ...prev, optOut: event.target.value as AudiencePreviewFilters["optOut"] }))
                 }
@@ -2391,6 +2507,7 @@ export default function AppCampaignsPage() {
               <select
                 className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
                 value={audienceFilters.hasConversation}
+                disabled={audienceRecipientMode === "DYNAMIC_CRM_FILTER"}
                 onChange={(event) =>
                   setAudienceFilters((prev) => ({ ...prev, hasConversation: event.target.value as AudiencePreviewFilters["hasConversation"] }))
                 }
@@ -2407,7 +2524,11 @@ export default function AppCampaignsPage() {
                 title={audiencePreviewDisabledReason ?? undefined}
                 className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {loadingAudiencePreview ? "Gerando..." : "Gerar previa"}
+                {loadingAudiencePreview
+                  ? "Gerando..."
+                  : audienceRecipientMode === "DYNAMIC_CRM_FILTER"
+                    ? "Gerar estimativa"
+                    : "Gerar previa"}
               </button>
               <button
                 type="button"
@@ -2478,23 +2599,47 @@ export default function AppCampaignsPage() {
                 </p>
               ) : null}
               <div className="grid gap-3 rounded-md border border-white/10 bg-white/5 p-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-                <div className="flex flex-col justify-end gap-2 lg:col-start-2">
+                <div className="grid gap-2">
                   <p className="text-xs text-white/60">
-                    {audienceEligibleItems.length} elegiveis serao incluidos; {audiencePreview.summary.blocked} bloqueados serao ignorados.
+                    {audienceRecipientMode === "DYNAMIC_CRM_FILTER"
+                      ? `${audiencePreview.summary.total} correspondências neste momento. Os destinatários finais serão definidos no momento do envio.`
+                      : `${audienceEligibleItems.length} elegiveis serao incluidos; ${audiencePreview.summary.blocked} bloqueados serao ignorados.`}
                   </p>
+                  {audienceRecipientMode === "DYNAMIC_CRM_FILTER" ? (
+                    <label className="grid max-w-xs gap-1 text-sm">
+                      <span className="text-white/70">Data/hora</span>
+                      <input
+                        type="datetime-local"
+                        value={scheduleInput}
+                        onChange={(event) => setScheduleInput(event.target.value)}
+                        className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                      />
+                    </label>
+                  ) : null}
+                </div>
+                <div className="flex flex-col justify-end gap-2 lg:col-start-2">
                   <button
                     type="button"
                     disabled={
                       creatingDraft ||
-                      audienceEligibleItems.length === 0 ||
+                      (audienceRecipientMode === "STATIC_RECIPIENTS" && audienceEligibleItems.length === 0) ||
+                      (audienceRecipientMode === "DYNAMIC_CRM_FILTER" && (!audienceFilters.status || !scheduleInput)) ||
                       !form.templateId ||
                       templates.length === 0 ||
                       Boolean(templateVariableMappingError)
                     }
-                    onClick={handleCreateDraftFromAudience}
+                    onClick={
+                      audienceRecipientMode === "DYNAMIC_CRM_FILTER"
+                        ? handleCreateDynamicScheduledCampaign
+                        : handleCreateDraftFromAudience
+                    }
                     className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {creatingDraft ? "Criando..." : "Criar rascunho com audiência"}
+                    {creatingDraft
+                      ? "Criando..."
+                      : audienceRecipientMode === "DYNAMIC_CRM_FILTER"
+                        ? "Agendar filtro dinâmico"
+                        : "Criar rascunho com audiência"}
                   </button>
                 </div>
               </div>
@@ -3110,6 +3255,9 @@ export default function AppCampaignsPage() {
                 {paginatedCampaigns.map((campaign) => {
                   const isSelected = campaign.id === selectedCampaignId;
                   const isSending = campaign.status === "sending";
+                  const isDynamicCampaign =
+                    campaign.selectionMode === "DYNAMIC_CRM_FILTER" ||
+                    campaign.draftSeed?.selectionMode === "DYNAMIC_CRM_FILTER";
                   return (
                     <tr
                       key={campaign.id}
@@ -3136,7 +3284,14 @@ export default function AppCampaignsPage() {
                     >
                       <td className="px-2 py-2">
                         <div className="min-w-0">
-                          <p className="truncate font-medium text-white">{campaign.name || "(sem nome)"}</p>
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <p className="truncate font-medium text-white">{campaign.name || "(sem nome)"}</p>
+                            {isDynamicCampaign ? (
+                              <span className="rounded-full border border-emerald-300/30 bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-100">
+                                Dinâmica
+                              </span>
+                            ) : null}
+                          </div>
                           <p className="mt-1 text-xs text-white/55">{formatRelativeTime(campaign.updatedAt)}</p>
                         </div>
                       </td>
@@ -3302,6 +3457,44 @@ export default function AppCampaignsPage() {
                   <div className={`rounded-md border p-3 text-sm ${getCampaignConfidence(selectedCampaign).classes}`}>
                     <p className="font-semibold">{getCampaignConfidence(selectedCampaign).icon} {getCampaignConfidence(selectedCampaign).label}</p>
                   </div>
+
+                  {selectedCampaign.draftSeed?.selectionMode === "DYNAMIC_CRM_FILTER" ? (
+                    <div className="grid gap-3 rounded-md border border-emerald-300/25 bg-emerald-950/20 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-emerald-100">Filtro dinâmico do CRM</p>
+                          <p className="mt-1 text-xs text-emerald-100/75">
+                            Os destinatários são definidos no momento do envio e congelados após a criação do snapshot.
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-emerald-300/30 bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-100">
+                          Dinâmica
+                        </span>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
+                          <p className="text-xs text-white/60">Filtro</p>
+                          <p className="font-semibold">
+                            Situação no CRM = {
+                              crmStatuses.find((item) => item.id === selectedCampaign.draftSeed?.dynamicFilter?.crmBusinessStatusId)?.label ??
+                              selectedCampaign.draftSeed.dynamicFilter?.crmBusinessStatusId ??
+                              "-"
+                            }
+                          </p>
+                        </div>
+                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
+                          <p className="text-xs text-white/60">Agendado para</p>
+                          <p className="font-semibold">{selectedCampaign.scheduledAt ? formatDateTime(selectedCampaign.scheduledAt) : "Execução iniciada"}</p>
+                        </div>
+                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
+                          <p className="text-xs text-white/60">Snapshot</p>
+                          <p className="font-semibold">
+                            {selectedCampaign.status === "scheduled" || selectedCampaign.status === "draft" ? "Ainda não criado" : "Criado para esta execução"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {selectedCampaign.status === "draft" ? (
                     <div className="grid gap-3 rounded-md border border-sky-300/25 bg-sky-900/20 p-3">

@@ -530,6 +530,11 @@ export type CampaignItem = {
     totalRead: number;
     totalFailed: number;
   };
+  selectionMode?: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
+  dynamicFilter?: {
+    version: 1;
+    crmBusinessStatusId: string;
+  } | null;
   messagesMetaStatus?: Array<{
     waId: string;
     leadId?: string | null;
@@ -557,6 +562,11 @@ export type CampaignItem = {
     recipients: string[];
     manualRecipientInput?: string[];
     templateParams: string[];
+    selectionMode?: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
+    dynamicFilter?: {
+      version: 1;
+      crmBusinessStatusId: string;
+    } | null;
     templateVariableMappings?: Array<{
       position: string;
       source: string;
