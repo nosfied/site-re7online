@@ -358,9 +358,14 @@ same canonical candidate set; valid DDD+phone input without an explicit `55`
 country code remains accepted only when it normalizes deterministically to a
 Brazilian WhatsApp identity.
 
-Contacts CSV convergence, 2026-09-19: Contacts import now reuses the Campaign CSV
-parser and CRM Situation resolver where domain-compatible. Contacts-specific
+Contacts CSV convergence, 2026-09-19: DEPLOYED / PRODUCTION NON-DESTRUCTIVE
+VALIDATED. Contacts import now reuses the Campaign CSV parser and CRM Situation
+resolver where domain-compatible. Contacts-specific
 persistence still uses canonical CRM upsert, not Campaign seed/send semantics.
 `Situação no CRM` is accepted as an optional Contacts CSV column and must resolve
 to an existing same-tenant CRM status; blank preserves existing status/default,
 and invalid values reject the row with no Contact mutation.
+
+Production validation used preview/read-only paths only: Contact CSV and Campaign
+CSV preview both left Contact, Lead, Campaign and Outbound counts unchanged; no
+campaign send, provider call or billing mutation was executed.

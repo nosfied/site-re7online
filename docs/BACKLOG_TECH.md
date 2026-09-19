@@ -397,7 +397,7 @@ ACTIVE P1:
    financial customer UX and no campaign/history rewrite.
 
 8. Contacts UX finishing + phone normalization/import validation hardening,
-   2026-09-19: OWNER PASS / LOCAL VALIDATED / TEST VALIDATED / NO DEPLOY. Final local
+   2026-09-19: OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED. Final local
    polish keeps the active-conversation delete guard in the Contact list row but
    makes the blocking toast closable, removes the redundant active-conversation
    warning/action block from Contact detail, and makes `Abrir campanha` navigate
@@ -416,7 +416,17 @@ ACTIVE P1:
    persistence, preserves existing status when the CSV cell is blank, and uses the
    same preview/report philosophy with row-level errors and copy/download
    evidence. No provider call, schema, migration, production mutation, real send,
-   opt-out rewrite, result-history rewrite or tenant hardcode.
+   opt-out rewrite, result-history rewrite or tenant hardcode. Production
+   deployment `1f8304f8624e76ba3efc507b9eccd80060447adb` was applied by
+   fast-forward only from `5208de159dd11b94dd5db2382446c66b38705c52` after
+   verified PostgreSQL backup
+   `/opt/re7online/backups/converta-persistent/postgres/contacts-phone-integrity-20260919-233044/whatsapp_agent.dump`
+   (`sha256=e4c965d219c85aaeff211d12161b49cc74e8b553e47f34758c34b621e2b153cf`).
+   Production validation used Demo preview/read-only paths only: Contact CSV and
+   Campaign CSV preview produced zero Contact, Lead, Campaign or Outbound
+   mutations; no provider call, real send, billing event or schema/migration
+   occurred. Existing historical invalid phone rows remain an audit/repair topic
+   and were not mass-corrected by this gate.
 
 7. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente

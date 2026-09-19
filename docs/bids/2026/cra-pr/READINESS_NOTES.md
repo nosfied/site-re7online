@@ -123,8 +123,8 @@ Follow-up de 2026-09-16:
 	  apenas o filtro de Situacao CRM e a execucao cria snapshot imutavel. Nao
 	  altera schema, opt-out, result truth, composer cleanup, Operational Queue,
 	  historico, financeiro ou envio real.
-- Contacts/Campaigns phone/import finishing, 2026-09-19: OWNER PASS / LOCAL
-  VALIDATED / TEST VALIDATED / NO DEPLOY. Delete de Contact com conversa ativa permanece
+- Contacts/Campaigns phone/import finishing, 2026-09-19: OWNER PASS / DEPLOYED /
+  PRODUCTION NON-DESTRUCTIVE VALIDATED. Delete de Contact com conversa ativa permanece
   bloqueado pela lista com toast fechavel; o detalhe nao repete o bloco de aviso
   de conversa ativa; `Abrir campanha` abre o detalhe exato da campanha. Contact
   CSV preview/confirm agora mostra totais e erros por linha. Invariante
@@ -133,7 +133,9 @@ Follow-up de 2026-09-16:
   mas nao muda aceite formal CRA sem execucao CRA aprovada. Contacts CSV agora
   suporta `Situação no CRM` localmente, validada contra status CRM existentes no
   mesmo tenant; status invalido bloqueia a linha e valor em branco preserva ou
-  aplica default pela semantica canonica.
+  aplica default pela semantica canonica. Validacao produtiva usou apenas preview
+  e leitura no `demo-converta`, sem send real, provider call, billing ou mutacao
+  inesperada de Contact/Lead/Campaign/Outbound.
 - Meta Marketing template media support: P2 / PRODUCT + META CAPABILITY.
   Inclui categoria MARKETING, headers IMAGE/VIDEO, exemplos/midia Meta,
   upload/handle, preview, variaveis, botoes suportados, submissao, status,

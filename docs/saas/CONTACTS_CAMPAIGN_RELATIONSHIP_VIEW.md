@@ -147,14 +147,19 @@ skipped rows, failed rows and row-level validation errors. Preview actions are
 disabled while a request is pending and stale duplicate preview responses must
 not overwrite the current preview.
 
-Owner pass on 2026-09-19: Contacts CSV convergence is LOCAL VALIDATED / NOT
-DEPLOYED. Contacts CSV uses the same Campaign CSV parser
+Owner pass and production deploy on 2026-09-19: Contacts CSV convergence is
+DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED. Contacts CSV uses the same Campaign CSV parser
 and same CRM Situation resolver where domain-compatible. Supported columns are
 `Nome`, `Telefone`/`WhatsApp` aliases and `Situação no CRM`. CRM Situation values
 must match an existing same-tenant configured CRM status by the established exact
 normalized id/label semantics; unknown or ambiguous values reject that row and do
 not create a new status. Blank `Situação no CRM` preserves the existing Lead
 status, or uses the canonical default for a new Contact/Lead.
+
+Production evidence used Demo preview/read-only paths only. Contact CSV preview
+accepted the valid row, rejected missing-DDD, invalid-length, non-BR and invalid
+CRM-status rows, and produced zero Contact, Lead, Campaign or Outbound
+mutations. No real send or provider call was performed.
 
 Permanent invariant: NO NEW CONTACT/RECIPIENT PHONE MAY BE PERSISTED WITHOUT
 CANONICAL NORMALIZATION + VALIDATION.

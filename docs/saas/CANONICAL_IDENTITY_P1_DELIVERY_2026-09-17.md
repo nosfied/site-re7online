@@ -46,6 +46,13 @@ and pass phones through the canonical CRM WhatsApp identity path before any
 domain-specific persistence. Contacts-specific CRM status updates remain in CRM
 upsert; Campaign-specific seed/send behavior remains in Campaigns.
 
+Production closeout on 2026-09-19 deployed commit
+`1f8304f8624e76ba3efc507b9eccd80060447adb` after backup and fast-forward-only
+ancestry audit. Non-destructive Demo validation confirmed Contact CSV/Campaign
+CSV preview rejects invalid phones before persistence and preserves 12/13-digit
+canonical identity resolution for known Demo contacts `****9614` and `****6787`.
+Historical invalid data was not claimed cleaned.
+
 The clean delivery passed 119 focused tests: 88 identity/CRM/import/Web Session,
 7 selected Meta/campaign/opt-out routes, 5 campaign runner, 2 campaign
 lifecycle, 2 campaign seed privacy, 8 return-destination and 7 CRM conversation
