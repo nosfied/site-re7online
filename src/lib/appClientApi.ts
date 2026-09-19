@@ -479,16 +479,43 @@ export type AppCrmContactImportPreviewResponse = {
   delimiter: string;
   totalRows: number;
   validRows: number;
-  invalidRows: number;
-  duplicatesInFile: number;
-  existingContacts: number;
-  readyToImport: number;
-  sampleErrors: Array<{
-    rowNumber: number;
-    reason: string;
-    label: string;
-    phoneDisplay: string | null;
-  }>;
+	  invalidRows: number;
+	  invalidCrmStatuses?: number;
+	  duplicatesInFile: number;
+	  existingContacts: number;
+	  readyToImport: number;
+	  created?: number;
+	  updated?: number;
+	  unchanged?: number;
+	  rows?: Array<{
+	    rowNumber: number;
+	    name: string | null;
+	    inputPhone: string | null;
+	    normalizedPhone: string;
+	    phoneDisplay: string | null;
+	    operation: "CREATE" | "UPDATE" | "UNCHANGED";
+	    leadId: string | null;
+	    crmSituation: {
+	      input: string | null;
+	      statusId: string | null;
+	      label: string | null;
+	      previousStatusId: string | null;
+	      previousLabel: string | null;
+	    };
+	  }>;
+	  sampleErrors: Array<{
+	    rowNumber: number;
+	    reason: string;
+	    code?: string;
+	    label: string;
+	    inputPhone?: string | null;
+	    normalizedPhone?: string | null;
+	    normalizedPhoneDisplay?: string | null;
+	    phoneDisplay: string | null;
+	    crmSituationInput?: string | null;
+	    crmStatusId?: string | null;
+	    crmStatusLabel?: string | null;
+	  }>;
   truncatedErrors: boolean;
   excludedContacts?: number;
   provisionalContacts?: number;
@@ -500,15 +527,32 @@ export type AppCrmContactImportConfirmResponse = {
   received: number;
   created: number;
   reused: number;
-  updated: number;
-  duplicates: number;
-  invalid: number;
+	  updated: number;
+	  unchanged?: number;
+	  duplicates: number;
+	  invalid: number;
+	  invalidCrmStatuses?: number;
   readyToImport: number;
   promotedProvisional: number;
   excludedContacts?: number;
   provisionalContacts?: number;
   identityConflicts?: number;
   failed?: number;
+  skipped?: number;
+  errors?: Array<{
+    rowNumber: number;
+    reason: string;
+    code?: string;
+    label: string;
+    inputPhone?: string | null;
+	    normalizedPhone?: string | null;
+	    normalizedPhoneDisplay?: string | null;
+	    phoneDisplay: string | null;
+	    crmSituationInput?: string | null;
+	    crmStatusId?: string | null;
+	    crmStatusLabel?: string | null;
+	  }>;
+  truncatedErrors?: boolean;
 };
 
 export type AppCrmContactsResponse = {
@@ -4628,7 +4672,7 @@ export async function createAppCrmContact(
 
 export async function previewAppCrmContactCsvImport(
   session: AppSession,
-  payload: { csvText: string; mapping?: { phoneColumn?: string | null; nameColumn?: string | null } | null }
+  payload: { csvText: string; mapping?: { phoneColumn?: string | null; nameColumn?: string | null; crmSituationColumn?: string | null } | null }
 ): Promise<AppCrmContactImportPreviewResponse> {
   return requestAppJson(session, "/app/crm/contacts/import/preview", {
     method: "POST",
@@ -4638,7 +4682,7 @@ export async function previewAppCrmContactCsvImport(
 
 export async function confirmAppCrmContactCsvImport(
   session: AppSession,
-  payload: { csvText: string; mapping?: { phoneColumn?: string | null; nameColumn?: string | null } | null }
+  payload: { csvText: string; mapping?: { phoneColumn?: string | null; nameColumn?: string | null; crmSituationColumn?: string | null } | null }
 ): Promise<AppCrmContactImportConfirmResponse> {
   return requestAppJson(session, "/app/crm/contacts/import/confirm", {
     method: "POST",

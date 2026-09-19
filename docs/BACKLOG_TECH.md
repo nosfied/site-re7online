@@ -396,6 +396,28 @@ ACTIVE P1:
    and static campaigns remain unchanged. No schema/migration, no real send, no
    financial customer UX and no campaign/history rewrite.
 
+8. Contacts UX finishing + phone normalization/import validation hardening,
+   2026-09-19: OWNER PASS / LOCAL VALIDATED / TEST VALIDATED / NO DEPLOY. Final local
+   polish keeps the active-conversation delete guard in the Contact list row but
+   makes the blocking toast closable, removes the redundant active-conversation
+   warning/action block from Contact detail, and makes `Abrir campanha` navigate
+   to the existing campaign detail route. Contact CSV preview now disables while
+   pending and ignores stale duplicate responses; preview/confirm report created,
+   updated/reused, skipped, failed rows and detailed formula-safe errors with
+   copy/download actions. Permanent invariant: NO NEW CONTACT/RECIPIENT PHONE MAY
+   BE PERSISTED WITHOUT CANONICAL NORMALIZATION + VALIDATION. Manual Contact
+   create, Contact CSV import and Campaign CSV import now share the canonical CRM
+   WhatsApp identity normalizer, reject missing DDD, unsupported/non-Brazil and
+   structurally invalid phone numbers before persistence, and preserve approved
+   12/13-digit Brazilian identity equivalence. Follow-up convergence completed
+   locally: Contacts CSV now reuses the Campaign CSV parser/status resolver where
+   domain-compatible, supports `Situação no CRM`, validates that CRM statuses
+   already exist in the same tenant, rejects invalid status rows before
+   persistence, preserves existing status when the CSV cell is blank, and uses the
+   same preview/report philosophy with row-level errors and copy/download
+   evidence. No provider call, schema, migration, production mutation, real send,
+   opt-out rewrite, result-history rewrite or tenant hardcode.
+
 7. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente
    2 mensagens Utility `data_exame` via META_CLOUD no `demo-converta` parou com

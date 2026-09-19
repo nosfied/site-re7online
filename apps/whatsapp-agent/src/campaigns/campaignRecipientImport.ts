@@ -11,7 +11,10 @@ import { buildTemplateComponentsFromVariables, extractTemplatePlaceholderKeys } 
 import { normalizeWaIdDigits } from "../utils/waid.js";
 import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
 import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
-import { buildCrmWhatsappIdentityCandidates } from "../crm/crmWhatsappIdentity.js";
+import {
+  buildCrmWhatsappIdentityCandidates,
+  normalizeCrmWhatsappIdentity,
+} from "../crm/crmWhatsappIdentity.js";
 import type { CrmBusinessStatusConfig } from "../config/tenantConfig.js";
 import {
   buildPrivateCampaignSeedFields,
@@ -369,7 +372,7 @@ function normalizeCrmSituationLookupKey(value: unknown) {
     .trim();
 }
 
-function buildCrmSituationResolver(statuses: CrmBusinessStatusConfig[] | null | undefined) {
+export function buildCrmSituationResolver(statuses: CrmBusinessStatusConfig[] | null | undefined) {
   const byKey = new Map<string, CrmBusinessStatusConfig[]>();
   for (const status of statuses ?? []) {
     if (status.isActive === false) continue;
@@ -391,7 +394,7 @@ function buildCrmSituationResolver(statuses: CrmBusinessStatusConfig[] | null | 
   };
 }
 
-function buildStatusLabelById(statuses: CrmBusinessStatusConfig[] | null | undefined) {
+export function buildStatusLabelById(statuses: CrmBusinessStatusConfig[] | null | undefined) {
   return new Map(
     (statuses ?? [])
       .map((status) => [String(status.id ?? "").trim().toUpperCase(), status.label] as const)
@@ -463,31 +466,32 @@ export async function resolveCampaignRecipientImportPlan(
 
   for (const input of params.recipients.slice(0, CAMPAIGN_IMPORT_MAX_ROWS)) {
     const rowNumber = input.rowNumber ?? null;
-    const normalized = normalizeOptOutWaId(input.phone);
+    const normalized = normalizeCrmWhatsappIdentity(input.phone);
     if (!normalized) {
       addBlocked(blocked, blockedCounts, { rowNumber, reason: "invalid_whatsapp_identity", phone: input.phone });
       continue;
     }
+    const waIdCanonical = normalized.crmCanonicalPhone;
     const crmSituationInput = sanitizeOptionalImportText(input.crmSituation, 80);
     const crmSituation = resolveCrmSituation(crmSituationInput);
     if (crmSituation.kind === "unknown" || crmSituation.kind === "ambiguous") {
-      addBlocked(blocked, blockedCounts, { rowNumber, reason: "crm_situation_unresolved", phone: normalized.waIdCanonical });
+      addBlocked(blocked, blockedCounts, { rowNumber, reason: "crm_situation_unresolved", phone: waIdCanonical });
       continue;
     }
-    const identityCandidates = buildCrmWhatsappIdentityCandidates([input.phone, normalized.waIdCanonical]);
+    const identityCandidates = buildCrmWhatsappIdentityCandidates([input.phone, waIdCanonical]);
     if (identityCandidates.some((candidate) => existing.has(candidate))) {
-      addBlocked(blocked, blockedCounts, { rowNumber, reason: "existing_campaign_recipient", phone: normalized.waIdCanonical });
+      addBlocked(blocked, blockedCounts, { rowNumber, reason: "existing_campaign_recipient", phone: waIdCanonical });
       continue;
     }
     const variables = normalizeVariableMap(input.variables);
     const missing = requiredKeys.some((key) => !variables[key]);
     if (missing) {
-      addBlocked(blocked, blockedCounts, { rowNumber, reason: "variable_missing_value", phone: normalized.waIdCanonical });
+      addBlocked(blocked, blockedCounts, { rowNumber, reason: "variable_missing_value", phone: waIdCanonical });
       continue;
     }
     normalizedCandidates.push({
-      waId: normalized.waIdCanonical,
-      waIdCanonical: normalized.waIdCanonical,
+      waId: waIdCanonical,
+      waIdCanonical,
       rowNumber,
       variables,
       name: sanitizeOptionalImportText(input.name, 120),

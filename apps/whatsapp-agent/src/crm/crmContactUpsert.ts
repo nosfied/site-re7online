@@ -9,8 +9,11 @@ import {
   CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT,
   CAMPAIGN_IMPORT_MAX_CSV_BYTES,
   CAMPAIGN_IMPORT_MAX_ROWS,
+  buildCrmSituationResolver,
+  buildStatusLabelById,
   parseCampaignCsv,
 } from "../campaigns/campaignRecipientImport.js";
+import type { CrmBusinessStatusConfig } from "../config/tenantConfig.js";
 import { normalizeWaIdDigits } from "../utils/waid.js";
 import { persistEvent } from "../db/persist.js";
 import { hashWhatsAppExternalUser } from "../channels/whatsappBackfillDryRun.js";
@@ -30,6 +33,7 @@ export type CrmContactUpsertSource = "crm_manual" | "crm_import";
 export type CrmContactCsvMapping = {
   phoneColumn?: string | null;
   nameColumn?: string | null;
+  crmSituationColumn?: string | null;
 };
 
 export type CrmContactUpsertInput = {
@@ -99,6 +103,7 @@ export type CrmContactExistingMatch = {
 type CrmContactImportIssueReason =
   | "invalid_phone"
   | "duplicate_in_file"
+  | "invalid_crm_status"
   | "excluded_contact"
   | "provisional_contact"
   | "identity_conflict";
@@ -107,14 +112,26 @@ type CrmContactImportIssue = {
   rowNumber: number;
   reason: CrmContactImportIssueReason;
   label: string;
+  inputPhone: string | null;
+  normalizedPhone: string | null;
   phoneDisplay: string | null;
+  crmSituationInput: string | null;
+  crmStatusId: string | null;
+  crmStatusLabel: string | null;
 };
 
 type CrmContactImportReadyRow = {
   rowNumber: number;
   phone: string;
   waIdCanonical: string;
+  identityCandidates: string[];
   name: string | null;
+  crmSituationInput: string | null;
+  crmStatusId: string | null;
+  crmStatusLabel: string | null;
+  existingContact: boolean;
+  existingName: string | null;
+  existingLead: { id: string; name: string | null; status: string } | null;
 };
 
 type CrmContactImportClassification = {
@@ -284,6 +301,8 @@ function getImportIssueLabel(reason: CrmContactImportIssueReason) {
       return "Número de WhatsApp inválido";
     case "duplicate_in_file":
       return "Este número aparece mais de uma vez no arquivo";
+    case "invalid_crm_status":
+      return "Situação no CRM não encontrada";
     case "excluded_contact":
       return "Contato fora da operação";
     case "provisional_contact":
@@ -291,6 +310,33 @@ function getImportIssueLabel(reason: CrmContactImportIssueReason) {
     case "identity_conflict":
       return "Não foi possível determinar com segurança a identidade deste número";
   }
+}
+
+function normalizeImportIssueReason(reason: CrmContactImportIssueReason) {
+  switch (reason) {
+    case "invalid_phone":
+      return "INVALID_PHONE";
+    case "duplicate_in_file":
+      return "DUPLICATE";
+    case "invalid_crm_status":
+      return "INVALID_CRM_STATUS";
+    case "excluded_contact":
+      return "OTHER_VALIDATION_ERROR";
+    case "provisional_contact":
+      return "OTHER_VALIDATION_ERROR";
+    case "identity_conflict":
+      return "IDENTITY_CONFLICT";
+  }
+}
+
+function sanitizeIssueInputPhone(value: unknown) {
+  const normalized = String(value ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
+  return normalized.length > 0 ? normalized : null;
+}
+
+function sanitizeOptionalImportText(value: unknown, maxLength: number) {
+  const normalized = String(value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);
+  return normalized.length > 0 ? normalized : null;
 }
 
 function isAnonymizedIdentityHash(value: string | null | undefined) {
@@ -612,6 +658,15 @@ export function buildCrmContactImportRowsFromCsv(params: {
     throw new CrmContactUpsertError("missing_phone_column", "Missing phone column", 400, parsed.headers);
   }
   const nameColumn = resolveMappedColumn(parsed.headers, params.mapping?.nameColumn, ["nome", "name"]);
+  const crmSituationColumn = resolveMappedColumn(parsed.headers, params.mapping?.crmSituationColumn, [
+    "situacao no crm",
+    "situação no crm",
+    "situacao crm",
+    "situação crm",
+    "crm situation",
+    "status crm",
+    "crm status",
+  ]);
   return {
     headers: parsed.headers,
     delimiter: parsed.delimiter,
@@ -619,51 +674,88 @@ export function buildCrmContactImportRowsFromCsv(params: {
       rowNumber: row.rowNumber,
       phone: getMappedValue(row.values, phoneColumn),
       name: getMappedValue(row.values, nameColumn),
+      crmSituation: getMappedValue(row.values, crmSituationColumn),
     })),
   };
 }
 
 async function classifyCrmContactImportRows(
   prisma: PrismaClient,
-  params: {
-    clientId: string;
-    csvText: string;
-    mapping?: CrmContactCsvMapping | null;
-  }
-): Promise<CrmContactImportClassification> {
-  const parsed = buildCrmContactImportRowsFromCsv(params);
-  const issues: CrmContactImportIssue[] = [];
-  const seen = new Set<string>();
-  const accepted: CrmContactImportReadyRow[] = [];
-  for (const row of parsed.rows) {
-    const normalized = normalizeCrmWhatsappPhone(row.phone);
-    if (!normalized) {
-      issues.push({
-        rowNumber: row.rowNumber,
-        reason: "invalid_phone",
-        label: getImportIssueLabel("invalid_phone"),
-        phoneDisplay: maskPhone(row.phone),
-      });
-      continue;
-    }
-    if (seen.has(normalized.waIdCanonical)) {
-      issues.push({
+	  params: {
+	    clientId: string;
+	    csvText: string;
+	    mapping?: CrmContactCsvMapping | null;
+	    crmStatuses?: CrmBusinessStatusConfig[] | null;
+	  }
+	): Promise<CrmContactImportClassification> {
+	  const parsed = buildCrmContactImportRowsFromCsv(params);
+	  const issues: CrmContactImportIssue[] = [];
+	  const seen = new Set<string>();
+	  const accepted: CrmContactImportReadyRow[] = [];
+	  const resolveCrmSituation = buildCrmSituationResolver(params.crmStatuses);
+	  for (const row of parsed.rows) {
+	    const crmSituationInput = sanitizeOptionalImportText(row.crmSituation, 80);
+	    const crmSituation = resolveCrmSituation(crmSituationInput);
+	    const normalized = normalizeCrmWhatsappPhone(row.phone);
+	    if (!normalized) {
+	      issues.push({
+	        rowNumber: row.rowNumber,
+	        reason: "invalid_phone",
+	        label: getImportIssueLabel("invalid_phone"),
+	        inputPhone: sanitizeIssueInputPhone(row.phone),
+	        normalizedPhone: null,
+	        phoneDisplay: maskPhone(row.phone),
+	        crmSituationInput,
+	        crmStatusId: null,
+	        crmStatusLabel: null,
+	      });
+	      continue;
+	    }
+	    if (crmSituation.kind === "unknown" || crmSituation.kind === "ambiguous") {
+	      issues.push({
+	        rowNumber: row.rowNumber,
+	        reason: "invalid_crm_status",
+	        label: getImportIssueLabel("invalid_crm_status"),
+	        inputPhone: sanitizeIssueInputPhone(row.phone),
+	        normalizedPhone: normalized.waIdCanonical,
+	        phoneDisplay: maskPhone(normalized.waIdCanonical),
+	        crmSituationInput,
+	        crmStatusId: null,
+	        crmStatusLabel: null,
+	      });
+	      continue;
+	    }
+	    const identityCandidates = buildCrmWhatsappIdentityCandidates([row.phone, normalized.waIdCanonical]);
+	    if (identityCandidates.some((candidate) => seen.has(candidate))) {
+	      issues.push({
         rowNumber: row.rowNumber,
         reason: "duplicate_in_file",
         label: getImportIssueLabel("duplicate_in_file"),
-        phoneDisplay: maskPhone(normalized.waIdCanonical),
-      });
-      continue;
-    }
-    seen.add(normalized.waIdCanonical);
+	        inputPhone: sanitizeIssueInputPhone(row.phone),
+	        normalizedPhone: normalized.waIdCanonical,
+	        phoneDisplay: maskPhone(normalized.waIdCanonical),
+	        crmSituationInput,
+	        crmStatusId: crmSituation.kind === "matched" ? crmSituation.status.id : null,
+	        crmStatusLabel: crmSituation.kind === "matched" ? crmSituation.status.label : null,
+	      });
+	      continue;
+	    }
+    for (const candidate of identityCandidates) seen.add(candidate);
     accepted.push({
       rowNumber: row.rowNumber,
       phone: normalized.phone,
       waIdCanonical: normalized.waIdCanonical,
-      name: normalizeOptionalName(row.name),
-    });
-  }
-  const keys = Array.from(new Set(accepted.flatMap((row) => buildCrmWhatsappIdentityCandidates([row.waIdCanonical]))));
+	      identityCandidates,
+	      name: normalizeOptionalName(row.name),
+	      crmSituationInput,
+	      crmStatusId: crmSituation.kind === "matched" ? crmSituation.status.id : null,
+	      crmStatusLabel: crmSituation.kind === "matched" ? crmSituation.status.label : null,
+	      existingContact: false,
+	      existingName: null,
+	      existingLead: null,
+	    });
+	  }
+  const keys = Array.from(new Set(accepted.flatMap((row) => row.identityCandidates)));
   const hashKeys = keys.map(buildCrmWhatsappExternalUserHash);
   const [existingContacts, existingIdentities, existingLeads] = keys.length
     ? await Promise.all([
@@ -725,16 +817,17 @@ async function classifyCrmContactImportRows(
               { externalUserHash: { in: hashKeys } },
             ],
           },
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            waId: true,
-            waIdCanonical: true,
-            externalUserHash: true,
-            externalUserRef: true,
-            legacyWaId: true,
-          },
+	          select: {
+	            id: true,
+	            name: true,
+	            phone: true,
+	            status: true,
+	            waId: true,
+	            waIdCanonical: true,
+	            externalUserHash: true,
+	            externalUserRef: true,
+	            legacyWaId: true,
+	          },
         }),
       ])
     : [[], [], []] as const;
@@ -764,7 +857,7 @@ async function classifyCrmContactImportRows(
     ) || (Boolean(source.externalUserHash) && hashCandidates.has(String(source.externalUserHash)));
 
   for (const row of accepted) {
-    const rowIdentityCandidates = new Set(buildCrmWhatsappIdentityCandidates([row.waIdCanonical]));
+    const rowIdentityCandidates = new Set(row.identityCandidates);
     const rowHashCandidates = new Set(Array.from(rowIdentityCandidates).map(buildCrmWhatsappExternalUserHash));
     const matchingContacts = existingContacts.filter((contact) =>
       matchesIdentity(contact, rowIdentityCandidates, rowHashCandidates)
@@ -779,41 +872,63 @@ async function classifyCrmContactImportRows(
     const contact = matchingIdentityContacts[0] ?? matchingContacts[0] ?? null;
     if (contactIds.size > 1 || leadIds.size > 1) {
       conflictRows.push(row);
-      issues.push({
-        rowNumber: row.rowNumber,
-        reason: "identity_conflict",
-        label: getImportIssueLabel("identity_conflict"),
-        phoneDisplay: maskPhone(row.waIdCanonical),
-      });
-      continue;
-    }
+	      issues.push({
+	        rowNumber: row.rowNumber,
+	        reason: "identity_conflict",
+	        label: getImportIssueLabel("identity_conflict"),
+	        inputPhone: maskPhone(row.waIdCanonical),
+	        normalizedPhone: row.waIdCanonical,
+	        phoneDisplay: maskPhone(row.waIdCanonical),
+	        crmSituationInput: row.crmSituationInput,
+	        crmStatusId: row.crmStatusId,
+	        crmStatusLabel: row.crmStatusLabel,
+	      });
+	      continue;
+	    }
     if (
       Array.from(rowIdentityCandidates).some((candidate) => excludedKeys.has(candidate)) ||
       Boolean(contact?.operationallyExcludedAt)
     ) {
       excludedRows.push(row);
-      issues.push({
-        rowNumber: row.rowNumber,
-        reason: "excluded_contact",
-        label: getImportIssueLabel("excluded_contact"),
-        phoneDisplay: maskPhone(row.waIdCanonical),
-      });
-      continue;
-    }
+	      issues.push({
+	        rowNumber: row.rowNumber,
+	        reason: "excluded_contact",
+	        label: getImportIssueLabel("excluded_contact"),
+	        inputPhone: maskPhone(row.waIdCanonical),
+	        normalizedPhone: row.waIdCanonical,
+	        phoneDisplay: maskPhone(row.waIdCanonical),
+	        crmSituationInput: row.crmSituationInput,
+	        crmStatusId: row.crmStatusId,
+	        crmStatusLabel: row.crmStatusLabel,
+	      });
+	      continue;
+	    }
     if (contact?.lifecycle === CONTACT_LIFECYCLE_PROVISIONAL) {
       provisionalRows.push(row);
-      issues.push({
-        rowNumber: row.rowNumber,
-        reason: "provisional_contact",
-        label: getImportIssueLabel("provisional_contact"),
-        phoneDisplay: maskPhone(row.waIdCanonical),
-      });
-      continue;
-    }
-    if (contact || matchingLeads.length > 0) {
-      existingActiveRows.push(row);
-      continue;
-    }
+	      issues.push({
+	        rowNumber: row.rowNumber,
+	        reason: "provisional_contact",
+	        label: getImportIssueLabel("provisional_contact"),
+	        inputPhone: maskPhone(row.waIdCanonical),
+	        normalizedPhone: row.waIdCanonical,
+	        phoneDisplay: maskPhone(row.waIdCanonical),
+	        crmSituationInput: row.crmSituationInput,
+	        crmStatusId: row.crmStatusId,
+	        crmStatusLabel: row.crmStatusLabel,
+	      });
+	      continue;
+	    }
+	    if (contact || matchingLeads.length > 0) {
+	      existingActiveRows.push({
+	        ...row,
+	        existingContact: Boolean(contact),
+	        existingName: matchingLeads[0]?.name ?? contact?.name ?? null,
+	        existingLead: matchingLeads[0]
+	          ? { id: matchingLeads[0].id, name: matchingLeads[0].name, status: matchingLeads[0].status }
+	          : null,
+	      });
+	      continue;
+	    }
     readyRows.push(row);
   }
   return {
@@ -830,71 +945,157 @@ async function classifyCrmContactImportRows(
 
 export async function previewCrmContactCsvImport(
   prisma: PrismaClient,
-  params: {
-    clientId: string;
-    csvText: string;
-    mapping?: CrmContactCsvMapping | null;
-  }
-) {
-  const classification = await classifyCrmContactImportRows(prisma, params);
-  return {
-    ok: true as const,
-    headers: classification.parsed.headers,
-    delimiter: classification.parsed.delimiter,
-    totalRows: classification.parsed.rows.length,
-    validRows: classification.accepted.length,
-    invalidRows: classification.issues.filter((error) => error.reason === "invalid_phone").length,
-    duplicatesInFile: classification.issues.filter((error) => error.reason === "duplicate_in_file").length,
-    excludedContacts: classification.excludedRows.length,
-    provisionalContacts: classification.provisionalRows.length,
-    identityConflicts: classification.conflictRows.length,
-    existingContacts: classification.existingActiveRows.length,
-    readyToImport: classification.readyRows.length,
-    sampleErrors: classification.issues.slice(0, CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT),
+	  params: {
+	    clientId: string;
+	    csvText: string;
+	    mapping?: CrmContactCsvMapping | null;
+	    crmStatuses?: CrmBusinessStatusConfig[] | null;
+	  }
+	) {
+	  const classification = await classifyCrmContactImportRows(prisma, params);
+	  const statusLabelById = buildStatusLabelById(params.crmStatuses);
+	  const importableRows = [...classification.readyRows, ...classification.existingActiveRows];
+	  const previewRows = importableRows.slice(0, 200).map((row) => {
+	    const changes = [
+	      row.name !== null && row.name !== row.existingName,
+	      row.crmStatusId !== null && row.crmStatusId !== row.existingLead?.status,
+	    ].some(Boolean);
+	    return {
+	      rowNumber: row.rowNumber,
+	      name: row.name,
+	      inputPhone: maskPhone(row.phone),
+	      normalizedPhone: row.waIdCanonical,
+	      phoneDisplay: maskPhone(row.waIdCanonical),
+	      operation: !row.existingContact && !row.existingLead ? "CREATE" : changes ? "UPDATE" : "UNCHANGED",
+	      leadId: row.existingLead?.id ?? null,
+	      crmSituation: {
+	        input: row.crmSituationInput,
+	        statusId: row.crmStatusId,
+	        label: row.crmStatusLabel,
+	        previousStatusId: row.existingLead?.status ?? null,
+	        previousLabel: row.existingLead?.status
+	          ? statusLabelById.get(row.existingLead.status.toUpperCase()) ?? row.existingLead.status
+	          : null,
+	      },
+	    };
+	  });
+	  const updatedRows = classification.existingActiveRows.filter((row) =>
+	    [
+	      row.name !== null && row.name !== row.existingName,
+	      row.crmStatusId !== null && row.crmStatusId !== row.existingLead?.status,
+	    ].some(Boolean)
+	  ).length;
+	  const unchangedRows = classification.existingActiveRows.length - updatedRows;
+	  return {
+	    ok: true as const,
+	    headers: classification.parsed.headers,
+	    delimiter: classification.parsed.delimiter,
+	    totalRows: classification.parsed.rows.length,
+	    validRows: classification.accepted.length,
+	    invalidRows: classification.issues.filter((error) => error.reason === "invalid_phone" || error.reason === "invalid_crm_status").length,
+	    invalidCrmStatuses: classification.issues.filter((error) => error.reason === "invalid_crm_status").length,
+	    duplicatesInFile: classification.issues.filter((error) => error.reason === "duplicate_in_file").length,
+	    excludedContacts: classification.excludedRows.length,
+	    provisionalContacts: classification.provisionalRows.length,
+	    identityConflicts: classification.conflictRows.length,
+	    existingContacts: classification.existingActiveRows.length,
+	    readyToImport: importableRows.length,
+	    created: classification.readyRows.length,
+	    updated: updatedRows,
+	    unchanged: unchangedRows,
+	    rows: previewRows,
+	    sampleErrors: classification.issues.slice(0, CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT).map((issue) => ({
+	      ...issue,
+	      code: normalizeImportIssueReason(issue.reason),
+      normalizedPhoneDisplay: maskPhone(issue.normalizedPhone),
+    })),
     truncatedErrors: classification.issues.length > CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT,
   };
 }
 
 export async function confirmCrmContactCsvImport(
   prisma: PrismaClient,
-  params: {
-    clientId: string;
-    csvText: string;
-    mapping?: CrmContactCsvMapping | null;
-    actorUserId: string;
-    requestId: string;
-    audit?: boolean;
-  }
-) {
-  const classification = await classifyCrmContactImportRows(prisma, params);
-  let created = 0;
-  let reused = classification.existingActiveRows.length;
-  let excludedContacts = classification.excludedRows.length;
-  let provisionalContacts = classification.provisionalRows.length;
-  let identityConflicts = classification.conflictRows.length;
+	  params: {
+	    clientId: string;
+	    csvText: string;
+	    mapping?: CrmContactCsvMapping | null;
+	    crmStatuses?: CrmBusinessStatusConfig[] | null;
+	    actorUserId: string;
+	    requestId: string;
+	    audit?: boolean;
+	  }
+	) {
+	  const classification = await classifyCrmContactImportRows(prisma, params);
+	  let created = 0;
+	  let updated = 0;
+	  let unchanged = 0;
+	  let excludedContacts = classification.excludedRows.length;
+	  let provisionalContacts = classification.provisionalRows.length;
+	  let identityConflicts = classification.conflictRows.length;
   let failed = 0;
-  for (const row of classification.readyRows) {
-    try {
-      const result = await upsertCrmContact(prisma, {
-        clientId: params.clientId,
-        input: row,
-        actorUserId: params.actorUserId,
-        requestId: `${params.requestId}:${resultlessHash(row.phone)}`,
-        source: "crm_import",
-        audit: false,
-      });
-      if (result.createdContact || result.createdLead) created += 1;
-      else reused += 1;
-    } catch (error) {
+  const rowErrors = classification.issues.slice(0, CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT).map((issue) => ({
+    ...issue,
+    code: normalizeImportIssueReason(issue.reason),
+	    normalizedPhoneDisplay: maskPhone(issue.normalizedPhone),
+	  }));
+	  const importableRows = [...classification.readyRows, ...classification.existingActiveRows];
+	  for (const row of importableRows) {
+	    try {
+	      const result = await upsertCrmContact(prisma, {
+	        clientId: params.clientId,
+	        input: row,
+	        actorUserId: params.actorUserId,
+	        requestId: `${params.requestId}:${resultlessHash(row.phone)}`,
+	        source: "crm_import",
+	        crmStatusId: row.crmStatusId,
+	        audit: false,
+	      });
+	      if (result.createdContact || result.createdLead) created += 1;
+	      else if (
+	        [
+	          row.name !== null && row.name !== result.previousLead?.name,
+	          row.crmStatusId !== null && row.crmStatusId !== result.previousLead?.status,
+	        ].some(Boolean)
+	      ) updated += 1;
+	      else unchanged += 1;
+	    } catch (error) {
       if (error instanceof CrmContactUpsertError) {
         if (error.code === "contact_operationally_excluded") excludedContacts += 1;
         else if (error.code === "contact_already_provisional") provisionalContacts += 1;
         else if (error.code === "identity_conflict") identityConflicts += 1;
-        else failed += 1;
+        else {
+          failed += 1;
+          rowErrors.push({
+            rowNumber: row.rowNumber,
+            reason: "invalid_phone",
+            code: "OTHER_VALIDATION_ERROR",
+            label: "Falha de validação ao importar esta linha",
+            inputPhone: maskPhone(row.waIdCanonical),
+	            normalizedPhone: row.waIdCanonical,
+	            normalizedPhoneDisplay: maskPhone(row.waIdCanonical),
+	            phoneDisplay: maskPhone(row.waIdCanonical),
+	            crmSituationInput: row.crmSituationInput,
+	            crmStatusId: row.crmStatusId,
+	            crmStatusLabel: row.crmStatusLabel,
+	          });
+	        }
         continue;
       }
       if (getPrismaErrorCode(error) === "P2002") {
         identityConflicts += 1;
+        rowErrors.push({
+          rowNumber: row.rowNumber,
+          reason: "identity_conflict",
+          code: "IDENTITY_CONFLICT",
+          label: getImportIssueLabel("identity_conflict"),
+          inputPhone: maskPhone(row.waIdCanonical),
+	          normalizedPhone: row.waIdCanonical,
+	          normalizedPhoneDisplay: maskPhone(row.waIdCanonical),
+	          phoneDisplay: maskPhone(row.waIdCanonical),
+	          crmSituationInput: row.crmSituationInput,
+	          crmStatusId: row.crmStatusId,
+	          crmStatusLabel: row.crmStatusLabel,
+	        });
         continue;
       }
       throw error;
@@ -909,10 +1110,13 @@ export async function confirmCrmContactCsvImport(
         actorUserId: params.actorUserId,
         source: "crm_import",
         received: classification.parsed.rows.length,
-        created,
-        reused,
-        invalid: classification.issues.filter((error) => error.reason === "invalid_phone").length,
-        duplicates: classification.issues.filter((error) => error.reason === "duplicate_in_file").length,
+	        created,
+	        updated,
+	        unchanged,
+	        reused: updated + unchanged,
+	        invalid: classification.issues.filter((error) => error.reason === "invalid_phone").length,
+	        invalidCrmStatuses: classification.issues.filter((error) => error.reason === "invalid_crm_status").length,
+	        duplicates: classification.issues.filter((error) => error.reason === "duplicate_in_file").length,
         excludedContacts,
         provisionalContacts,
         identityConflicts,
@@ -923,18 +1127,29 @@ export async function confirmCrmContactCsvImport(
   }
   return {
     ok: true as const,
-    received: classification.parsed.rows.length,
-    created,
-    reused,
-    updated: reused,
-    duplicates: classification.issues.filter((error) => error.reason === "duplicate_in_file").length,
-    invalid: classification.issues.filter((error) => error.reason === "invalid_phone").length,
-    excludedContacts,
+	    received: classification.parsed.rows.length,
+	    created,
+	    reused: updated + unchanged,
+	    updated,
+	    unchanged,
+	    duplicates: classification.issues.filter((error) => error.reason === "duplicate_in_file").length,
+	    invalid: classification.issues.filter((error) => error.reason === "invalid_phone").length,
+	    invalidCrmStatuses: classification.issues.filter((error) => error.reason === "invalid_crm_status").length,
+	    excludedContacts,
     provisionalContacts,
     identityConflicts,
     failed,
-    readyToImport: classification.readyRows.length,
+	    readyToImport: importableRows.length,
     promotedProvisional: 0,
+    skipped:
+      classification.issues.filter((error) => error.reason === "duplicate_in_file").length +
+      excludedContacts +
+      provisionalContacts +
+      identityConflicts,
+    errors: rowErrors,
+    truncatedErrors:
+      classification.issues.length > CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT ||
+      rowErrors.length > CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT,
   };
 }
 

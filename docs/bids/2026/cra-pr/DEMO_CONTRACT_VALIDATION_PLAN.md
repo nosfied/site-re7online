@@ -429,6 +429,15 @@ Contacts + Campaigns UX refinement, 2026-09-19:
 - Dynamic CRM-filter scheduled campaigns are a separate OWNER PASS / LOCAL
   VALIDATED / NOT DEPLOYED front; see
   `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`.
+- Phone/import finishing, 2026-09-19: LOCAL IMPLEMENTED / TEST VALIDATED /
+  NO DEPLOY. Contact CSV preview/confirm reports totals and row-level errors;
+  duplicate/stale preview requests are blocked; manual Contact, Contact CSV and
+  Campaign CSV use the canonical CRM WhatsApp identity parser before
+  persistence. Permanent invariant: NO NEW CONTACT/RECIPIENT PHONE MAY BE
+  PERSISTED WITHOUT CANONICAL NORMALIZATION + VALIDATION. Contacts CSV now
+  supports optional `Situação no CRM`, resolving only to existing same-tenant CRM
+  statuses; invalid status rows are rejected and blank status preserves/defaults
+  through canonical CRM upsert semantics.
 
 ### Phase B Owner Gate Package
 

@@ -120,9 +120,20 @@ Follow-up de 2026-09-16:
   explicita. Campanhas agendadas dinamicas por filtro CRM seguem OWNER PASS /
   LOCAL VALIDATED / NOT DEPLOYED em
   `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`: o agendamento salva
-  apenas o filtro de Situacao CRM e a execucao cria snapshot imutavel. Nao
-  altera schema, opt-out, result truth, composer cleanup, Operational Queue,
-  historico, financeiro ou envio real.
+	  apenas o filtro de Situacao CRM e a execucao cria snapshot imutavel. Nao
+	  altera schema, opt-out, result truth, composer cleanup, Operational Queue,
+	  historico, financeiro ou envio real.
+- Contacts/Campaigns phone/import finishing, 2026-09-19: OWNER PASS / LOCAL
+  VALIDATED / TEST VALIDATED / NO DEPLOY. Delete de Contact com conversa ativa permanece
+  bloqueado pela lista com toast fechavel; o detalhe nao repete o bloco de aviso
+  de conversa ativa; `Abrir campanha` abre o detalhe exato da campanha. Contact
+  CSV preview/confirm agora mostra totais e erros por linha. Invariante
+  permanente: NO NEW CONTACT/RECIPIENT PHONE MAY BE PERSISTED WITHOUT CANONICAL
+  NORMALIZATION + VALIDATION. Isso fortalece a prontidao de import/result-truth,
+  mas nao muda aceite formal CRA sem execucao CRA aprovada. Contacts CSV agora
+  suporta `Situação no CRM` localmente, validada contra status CRM existentes no
+  mesmo tenant; status invalido bloqueia a linha e valor em branco preserva ou
+  aplica default pela semantica canonica.
 - Meta Marketing template media support: P2 / PRODUCT + META CAPABILITY.
   Inclui categoria MARKETING, headers IMAGE/VIDEO, exemplos/midia Meta,
   upload/handle, preview, variaveis, botoes suportados, submissao, status,

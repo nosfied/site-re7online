@@ -6,6 +6,17 @@ Status: fotografia documental do produto em agosto de 2026. Este documento nao a
 
 O Converta e um SaaS multitenant de atendimento omnichannel para operacoes B2B e B2G. A unidade operacional principal continua sendo `Conversation`, com suporte a Inbox humano, CRM operacional, campanhas com rascunho e envio explicito, catalogo de modelos Meta, mensagens prontas, auditoria por eventos e controles LGPD.
 
+Atualizacao local de 2026-09-19: Contacts/Campaigns receberam acabamento UX e
+hardening de telefone/importacao com OWNER PASS / LOCAL VALIDATED / sem deploy.
+A regra permanente passa a ser: NO NEW CONTACT/RECIPIENT PHONE MAY BE PERSISTED
+WITHOUT CANONICAL NORMALIZATION + VALIDATION. Criacao manual de Contact, Contact
+CSV e Campaign CSV reutilizam a identidade WhatsApp canonica, rejeitam telefones
+invalidos antes de persistir e preservam equivalencia brasileira 12/13 digitos.
+Contacts CSV tambem suporta `Situação no CRM`, validada contra status CRM
+existentes no mesmo tenant; valor invalido bloqueia a linha e valor em branco
+preserva/defaulta pela semantica canonica de CRM. Isto nao declara validacao em
+producao nem limpeza historica de dados invalidos.
+
 O produto deve ser apresentado como solucao de atendimento, roteamento, chatbot/fluxos, humano assistido, campanhas controladas e evidencia operacional. Nao deve ser apresentado como plataforma de IA generativa ampla quando esse nao for o escopo contratado.
 
 O baseline funcional estavel de agosto de 2026 consolida hardenings de Inbox, filas, Web Session, read-state, presenca de agentes e politicas de visibilidade. O tenant `secult-pe` opera no mesmo codigo SaaS multitenant publicado em producao; nao existe fork, build exclusivo, frontend exclusivo ou deploy especifico para SECULT-PE. Depois de novo frontend publicado, um reload normal do navegador carrega a versao atual.

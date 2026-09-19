@@ -89,6 +89,21 @@ Default government profile favors oversight and reporting:
 | Demo/POC data | Internal/demo | scripts | `seed-demo.mjs`, `seed-re7-demo-screenshots.mjs` | local/demo only |
 | Internal admin console | Operational | `/admin` | admin routes, tenant/channel/onboarding pages | `X-Admin-Token`, DB-backed `Client`, `TenantOperationalConfig`, legacy `tenants.json` fallback |
 
+Contacts/Campaigns local finishing, 2026-09-19: OWNER PASS / LOCAL VALIDATED /
+NOT DEPLOYED. Contact delete active-conversation
+guard remains in the list row with closable toast feedback; Contact detail no
+longer repeats the active-conversation warning/action block; related campaign
+navigation opens the exact campaign detail route. Contact CSV preview/confirm
+now exposes a detailed report and pending-state protection. Permanent invariant:
+NO NEW CONTACT/RECIPIENT PHONE MAY BE PERSISTED WITHOUT CANONICAL NORMALIZATION + VALIDATION.
+Manual Contact, Contact CSV and Campaign CSV share the canonical
+CRM WhatsApp identity parser and preserve Brazilian 12/13-digit equivalence. This
+is local/test-validated only and not deployed. Contacts CSV also accepts optional
+`Situação no CRM` using the same same-tenant CRM status resolver used by Campaign
+import where compatible; invalid status rows are blocked and blank status
+preserves/defaults through canonical CRM upsert semantics. Historical invalid
+data is not claimed cleaned without a separate audit/repair gate.
+
 CRA-PR controlled campaign readiness, 2026-09-15: the product capability for
 template request/review/submission, campaign drafts/import, lifecycle controls,
 opt-out blocking, delivery status, Meta usage ledger and active-message billing

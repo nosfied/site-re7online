@@ -18,12 +18,13 @@ function makeUpsertPrisma(params: {
     externalUserHash?: string | null;
     operationallyExcludedAt?: Date | null;
   } | null;
-  lead?: {
-    id?: string;
-    name?: string | null;
-    phone?: string | null;
-    contactChannelIdentityId?: string | null;
-  } | null;
+	  lead?: {
+	    id?: string;
+	    name?: string | null;
+	    phone?: string | null;
+	    status?: string;
+	    contactChannelIdentityId?: string | null;
+	  } | null;
   identities?: Array<{
     id: string;
     contactId?: string | null;
@@ -49,10 +50,11 @@ function makeUpsertPrisma(params: {
   const lead = params.lead
     ? {
         id: params.lead.id ?? "lead_1",
-        name: params.lead.name ?? contact?.name ?? "Contato",
-        phone: params.lead.phone ?? contact?.waId ?? "5584951957784",
-        contactChannelIdentityId: params.lead.contactChannelIdentityId ?? "identity_1",
-      }
+	        name: params.lead.name ?? contact?.name ?? "Contato",
+	        phone: params.lead.phone ?? contact?.waId ?? "5584951957784",
+	        status: params.lead.status ?? "NEW",
+	        contactChannelIdentityId: params.lead.contactChannelIdentityId ?? "identity_1",
+	      }
     : null;
   const state = {
     contacts: contact ? [contact] : [] as typeof contact[],
@@ -241,6 +243,37 @@ test("CRM manual create resolves excluded contacts through confirmed BR identity
   );
 });
 
+test("CRM manual create normalizes valid formatted BR phones and rejects unsafe phones before persistence", async () => {
+  const formattedPrisma = makeUpsertPrisma();
+  const formatted = await upsertCrmContact(formattedPrisma as never, {
+    clientId: "client_a",
+    input: { phone: "(84) 99904-9614", name: "Contato Formatado" },
+    actorUserId: "admin_1",
+    requestId: "req_formatted",
+    source: "crm_manual",
+    audit: false,
+  });
+  assert.equal(formatted.waIdCanonical, "5584999049614");
+  assert.equal(formattedPrisma.__state.createdContacts, 1);
+
+  for (const phone of ["99904-9614", "123", "558499904961499", "+1 415 555 0100"]) {
+    const prisma = makeUpsertPrisma();
+    await assert.rejects(
+      () =>
+        upsertCrmContact(prisma as never, {
+          clientId: "client_a",
+          input: { phone, name: "Invalido" },
+          actorUserId: "admin_1",
+          requestId: `req_invalid_${phone}`,
+          source: "crm_manual",
+        }),
+      (error) => error instanceof CrmContactUpsertError && error.code === "invalid_phone"
+    );
+    assert.equal(prisma.__state.createdContacts, 0);
+    assert.equal(prisma.__state.updatedContacts, 0);
+  }
+});
+
 test("CRM manual create rebinds reused leads away from anonymized detached identities", async () => {
   const prisma = makeUpsertPrisma({
     contact: {
@@ -396,15 +429,15 @@ test("CRM CSV import creates only genuinely new contacts", async () => {
   assert.equal(prisma.__state.createdContacts, 1);
 });
 
-test("CRM CSV import keeps existing active contacts without duplicating or rewriting", async () => {
+test("CRM CSV import updates existing active contacts without duplicating", async () => {
   const prisma = makeUpsertPrisma({
     contact: {
       id: "contact_existing",
       name: "Maria",
       waId: "5584999049614",
     },
-    lead: { id: "lead_existing", name: "Maria", phone: "5584999049614" },
-  });
+	    lead: { id: "lead_existing", name: "Maria", phone: "5584999049614", status: "NEW" },
+	  });
 
   const preview = await previewCrmContactCsvImport(prisma as never, {
     clientId: "client_a",
@@ -420,12 +453,56 @@ test("CRM CSV import keeps existing active contacts without duplicating or rewri
     audit: false,
   });
 
-  assert.equal(preview.existingContacts, 1);
-  assert.equal(preview.readyToImport, 0);
-  assert.equal(result.created, 0);
-  assert.equal(result.reused, 1);
-  assert.equal(prisma.__state.createdContacts, 0);
-  assert.equal(prisma.__state.updatedContacts, 0);
+	  assert.equal(preview.existingContacts, 1);
+	  assert.equal(preview.readyToImport, 1);
+	  assert.equal(preview.rows?.[0]?.operation, "UPDATE");
+	  assert.equal(result.created, 0);
+	  assert.equal(result.updated, 1);
+	  assert.equal(prisma.__state.createdContacts, 0);
+	  assert.equal(prisma.__state.updatedContacts, 1);
+});
+
+test("CRM CSV import resolves CRM situation and preserves existing status when blank", async () => {
+  const statuses = [
+    { id: "QUALIFIED", label: "Qualificado", isActive: true, campaignEligible: true },
+    { id: "FOLLOW_UP", label: "Follow-up", isActive: true, campaignEligible: true },
+  ];
+  const prisma = makeUpsertPrisma({
+    contact: {
+      id: "contact_existing",
+      name: "Preservar",
+      waId: "5584999049614",
+    },
+    lead: { id: "lead_existing", name: "Preservar", phone: "5584999049614", status: "FOLLOW_UP" },
+  });
+
+  const preview = await previewCrmContactCsvImport(prisma as never, {
+    clientId: "client_a",
+    csvText: "Telefone,Nome,Situação no CRM\n5584999049614,Preservar,\n5584999049615,Novo,Qualificado\n5584999049616,Erro,Status que não existe\n",
+    mapping: { phoneColumn: "Telefone", nameColumn: "Nome", crmSituationColumn: "Situação no CRM" },
+    crmStatuses: statuses,
+  });
+  const result = await confirmCrmContactCsvImport(prisma as never, {
+    clientId: "client_a",
+    csvText: "Telefone,Nome,Situação no CRM\n5584999049614,Preservar,\n5584999049615,Novo,Qualificado\n5584999049616,Erro,Status que não existe\n",
+    mapping: { phoneColumn: "Telefone", nameColumn: "Nome", crmSituationColumn: "Situação no CRM" },
+    crmStatuses: statuses,
+    actorUserId: "admin_1",
+    requestId: "import_crm_status",
+    audit: false,
+  });
+
+  assert.equal(preview.readyToImport, 2);
+  assert.equal(preview.invalidCrmStatuses, 1);
+  assert.equal(preview.rows?.find((row) => row.normalizedPhone === "5584999049614")?.operation, "UNCHANGED");
+  assert.equal(preview.rows?.find((row) => row.normalizedPhone === "5584999049615")?.crmSituation.statusId, "QUALIFIED");
+  assert.equal(preview.sampleErrors[0]?.code, "INVALID_CRM_STATUS");
+  assert.equal(result.created, 1);
+  assert.equal(result.unchanged, 1);
+  assert.equal(result.invalidCrmStatuses, 1);
+  assert.equal(prisma.__state.createdContacts, 1);
+  assert.equal(prisma.__state.leadUpdates.length, 1);
+  assert.equal((prisma.__state.leadUpdates[0] as { status?: string }).status, undefined);
 });
 
 test("CRM CSV import does not restore operationally excluded contacts", async () => {
@@ -507,7 +584,7 @@ test("CRM CSV import rejects duplicate rows before contact upsert", async () => 
   assert.equal(prisma.__state.createdContacts, 1);
 });
 
-test("CRM CSV import keeps modern and legacy variants distinct without confirmed alias", async () => {
+test("CRM CSV import deduplicates modern and legacy BR variants in the same file", async () => {
   const prisma = makeUpsertPrisma();
 
   const preview = await previewCrmContactCsvImport(prisma as never, {
@@ -516,9 +593,37 @@ test("CRM CSV import keeps modern and legacy variants distinct without confirmed
     mapping: { phoneColumn: "phone", nameColumn: "name" },
   });
 
-  assert.equal(preview.validRows, 2);
-  assert.equal(preview.duplicatesInFile, 0);
-  assert.equal(preview.readyToImport, 2);
+  assert.equal(preview.validRows, 1);
+  assert.equal(preview.duplicatesInFile, 1);
+  assert.equal(preview.readyToImport, 1);
+  assert.equal(preview.sampleErrors[0]?.code, "DUPLICATE");
+});
+
+test("CRM CSV import rejects invalid phone rows with detailed report and no persistence", async () => {
+  const prisma = makeUpsertPrisma();
+
+  const preview = await previewCrmContactCsvImport(prisma as never, {
+    clientId: "client_a",
+    csvText: "phone,name\n99904-9614,Sem DDD\n123,Curto\n+1 415 555 0100,Internacional\n84999049614,Com DDD\n",
+    mapping: { phoneColumn: "phone", nameColumn: "name" },
+  });
+  const result = await confirmCrmContactCsvImport(prisma as never, {
+    clientId: "client_a",
+    csvText: "phone,name\n99904-9614,Sem DDD\n123,Curto\n+1 415 555 0100,Internacional\n84999049614,Com DDD\n",
+    mapping: { phoneColumn: "phone", nameColumn: "name" },
+    actorUserId: "admin_1",
+    requestId: "import_invalid_phone_report",
+    audit: false,
+  });
+
+  assert.equal(preview.invalidRows, 3);
+  assert.equal(preview.readyToImport, 1);
+  assert.equal(preview.sampleErrors[0]?.code, "INVALID_PHONE");
+  assert.equal(result.invalid, 3);
+  assert.equal(result.created, 1);
+  assert.equal(result.errors?.length, 3);
+  assert.equal(result.errors?.[0]?.code, "INVALID_PHONE");
+  assert.equal(prisma.__state.createdContacts, 1);
 });
 
 test("CRM CSV import treats confirmed aliases as existing contact evidence", async () => {
@@ -537,8 +642,9 @@ test("CRM CSV import treats confirmed aliases as existing contact evidence", asy
     mapping: { phoneColumn: "phone", nameColumn: "name" },
   });
 
-  assert.equal(preview.existingContacts, 1);
-  assert.equal(preview.readyToImport, 0);
+	  assert.equal(preview.existingContacts, 1);
+	  assert.equal(preview.readyToImport, 1);
+	  assert.equal(preview.rows?.[0]?.operation, "UNCHANGED");
 });
 
 test("CRM CSV import allows anonymized detached history without relinking", async () => {

@@ -132,6 +132,32 @@ UX refinement on 2026-09-19:
 - Contact exclusion remains the existing guarded operational-exclusion path.
   Active/open conversations still block exclusion; the UI only clarifies the
   instruction and does not auto-close, transfer or delete history.
+- Final local finishing, 2026-09-19: the active-conversation delete guard
+  remains enforced from the Contact list row, the blocking feedback is a
+  closable toast, and the redundant active-conversation warning/action block was
+  removed from Contact detail.
+- `Abrir campanha` navigates to the existing campaign detail route for the exact
+  related campaign, preserving Campaigns as the source of truth.
+
+## Contact Import Report
+
+Contact CSV preview/confirm must show the operator an import report comparable
+to the Campaign import UX: totals, created contacts, updated/reused contacts,
+skipped rows, failed rows and row-level validation errors. Preview actions are
+disabled while a request is pending and stale duplicate preview responses must
+not overwrite the current preview.
+
+Owner pass on 2026-09-19: Contacts CSV convergence is LOCAL VALIDATED / NOT
+DEPLOYED. Contacts CSV uses the same Campaign CSV parser
+and same CRM Situation resolver where domain-compatible. Supported columns are
+`Nome`, `Telefone`/`WhatsApp` aliases and `Situação no CRM`. CRM Situation values
+must match an existing same-tenant configured CRM status by the established exact
+normalized id/label semantics; unknown or ambiguous values reject that row and do
+not create a new status. Blank `Situação no CRM` preserves the existing Lead
+status, or uses the canonical default for a new Contact/Lead.
+
+Permanent invariant: NO NEW CONTACT/RECIPIENT PHONE MAY BE PERSISTED WITHOUT
+CANONICAL NORMALIZATION + VALIDATION.
 
 ## CRA Relevance
 

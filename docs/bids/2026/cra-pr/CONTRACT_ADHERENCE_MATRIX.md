@@ -332,6 +332,19 @@ OWNER PASS / LOCAL VALIDATED / NOT DEPLOYED in
 `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`: schedule-time stores the
 CRM Situation filter and execution-time creates one immutable snapshot. No
 schema/migration, no real send, no financial UX and no campaign/history rewrite.
+
+Contacts/Campaigns phone/import finishing, 2026-09-19: OWNER PASS / LOCAL
+VALIDATED / TEST VALIDATED / NO DEPLOY. Contact list delete keeps the active-conversation guard
+with closable toast; Contact detail no longer repeats the active-conversation
+warning/action block; `Abrir campanha` opens the exact campaign detail. Contact
+CSV preview/confirm now exposes detailed totals and row-level error evidence.
+Permanent invariant recorded for CRA readiness: NO NEW CONTACT/RECIPIENT PHONE
+MAY BE PERSISTED WITHOUT CANONICAL NORMALIZATION + VALIDATION. This strengthens
+CRA import/result-truth evidence but does not change formal CRA acceptance status
+without an approved CRA run. Contacts CSV now supports `Situação no CRM` locally,
+resolved only against existing same-tenant CRM statuses, with invalid values
+blocked before persistence and blank values preserving/defaulting by canonical
+CRM semantics.
 | 5 | CRA-SLA-001 / CRA-TRAIN-001 / CRA-LGPD-002 | Close documentary acceptance pack | Contractual readiness requires signed/evidenced operations | Dates/attendees/signatures | no | no | yes | possible Meta docs | SLA, support, training, LGPD/security, backup and Meta proof attached |
 | 6 | CRA-IG-001 / CRA-FB-001 / CRA-WEB-001 | Activate and validate Instagram, Facebook and webchat | Contract-required but customer-deferred | Customer delivery window/assets/site access | no, unless bug found | yes | yes | yes for Meta channels | E4/E5 evidence per channel |
 

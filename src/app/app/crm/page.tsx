@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -21,7 +21,6 @@ import {
   clearAppSession,
   confirmAppCrmContactCsvImport,
   createAppCrmContact,
-  deleteAppConversationData,
   fetchAppCrmContactDetail,
   fetchAppCrmContacts,
   fetchAppCrmStatuses,
@@ -417,6 +416,7 @@ function CrmContactRow({
 }
 
 function CampaignHistoryRow({ campaign }: { campaign: AppCrmCampaignRelationshipHistoryItem }) {
+  const router = useRouter();
   const reason = getCampaignRelationshipReasonLabel(campaign.resultReason);
   return (
     <div className="grid gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3 md:grid-cols-[1fr_auto] md:items-center">
@@ -438,12 +438,13 @@ function CampaignHistoryRow({ campaign }: { campaign: AppCrmCampaignRelationship
         </div>
         {reason ? <div className="mt-1 text-xs theme-muted">{reason}</div> : null}
       </div>
-      <a
-        href={campaign.campaignHref}
+      <button
+        type="button"
+        onClick={() => router.push(campaign.campaignHref)}
         className="inline-flex h-9 items-center justify-center rounded-md bg-re7-sky px-3 text-xs font-semibold text-slate-950 transition hover:brightness-110"
       >
         Abrir campanha
-      </a>
+      </button>
     </div>
   );
 }
@@ -498,7 +499,6 @@ function CrmContactDetailDrawer({
   onUpdateStatus,
   onRecordOptOut,
   onRevokeOptOut,
-  onRemoveBlockingConversation,
   onReactivateFromOperation,
   canExcludeFromOperation,
 }: {
@@ -519,7 +519,6 @@ function CrmContactDetailDrawer({
   onUpdateStatus: (leadId: string, status: string) => Promise<void>;
   onRecordOptOut: (leadId: string) => Promise<void>;
   onRevokeOptOut: (leadId: string) => Promise<void>;
-  onRemoveBlockingConversation: (conversationId: string) => Promise<void>;
   onReactivateFromOperation: (leadId: string) => Promise<void>;
   canExcludeFromOperation: boolean;
 }) {
@@ -528,8 +527,6 @@ function CrmContactDetailDrawer({
   const campaignHistory = detail?.campaignRelationshipHistory?.items ?? [];
   const [editingBasics, setEditingBasics] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [hiddenBlockingConversation, setHiddenBlockingConversation] =
-    useState<AppHiddenBlockingConversation | null>(null);
   const [campaignsExpanded, setCampaignsExpanded] = useState(false);
   const [draft, setDraft] = useState({
     displayName: "",
@@ -548,9 +545,8 @@ function CrmContactDetailDrawer({
       city: item.city || "",
     });
     setActionLoading(null);
-    setHiddenBlockingConversation(detail?.blockingConversation ?? null);
     setCampaignsExpanded(false);
-  }, [detail?.blockingConversation, item?.leadId]);
+  }, [item?.leadId]);
 
   const saveBasics = async () => {
     if (!item) return;
@@ -595,24 +591,6 @@ function CrmContactDetailDrawer({
       } else {
         await onRecordOptOut(item.leadId);
       }
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const removeBlockingConversation = async () => {
-    if (!item || !hiddenBlockingConversation) return;
-    const confirmed = window.confirm(
-      "A conversa deixará de aparecer como ativa, mas seu histórico será preservado."
-    );
-    if (!confirmed) return;
-    setActionLoading("remove-hidden-conversation");
-    try {
-      await onRemoveBlockingConversation(hiddenBlockingConversation.conversationId);
-      setHiddenBlockingConversation(null);
-      onRefresh();
-    } catch {
-      // Error state is handled by the parent mutation handler.
     } finally {
       setActionLoading(null);
     }
@@ -882,37 +860,6 @@ function CrmContactDetailDrawer({
                         className="rounded-md bg-re7-sky px-3 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {actionLoading === "reactivate" ? "Restaurando..." : "Restaurar contato"}
-                      </button>
-                    </div>
-                  </div>
-                ) : hiddenBlockingConversation?.visibility === "hidden" ? (
-                  <div className="grid gap-2 rounded-lg border border-amber-300/40 bg-amber-400/10 p-3">
-                    <p className="text-sm text-amber-100">
-                      Este contato possui uma conversa em andamento e não pode ser excluído agora. Retire a conversa da operação ou finalize o atendimento antes de excluir o contato.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={removeBlockingConversation}
-                        disabled={Boolean(actionLoading)}
-                        className="rounded-md bg-re7-sky px-3 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {actionLoading === "remove-hidden-conversation" ? "Retirando..." : "Retirar conversa da operação"}
-                      </button>
-                    </div>
-                  </div>
-                ) : hiddenBlockingConversation?.visibility === "visible" ? (
-                  <div className="grid gap-2 rounded-lg border border-amber-300/40 bg-amber-400/10 p-3">
-                    <p className="text-sm text-amber-100">
-                      Este contato possui uma conversa em andamento e não pode ser excluído agora. Finalize ou encerre a conversa antes de excluir o contato.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onOpenInbox(hiddenBlockingConversation.conversationIdentity)}
-                        className="rounded-md bg-re7-sky px-3 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110"
-                      >
-                        Abrir conversa
                       </button>
                     </div>
                   </div>
@@ -1194,21 +1141,25 @@ function CreateContactModal({
 function CsvImportModal({
   onClose,
   onPreview,
-  onConfirm,
-}: {
-  onClose: () => void;
-  onPreview: (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null } }) => Promise<AppCrmContactImportPreviewResponse>;
-  onConfirm: (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null } }) => Promise<AppCrmContactImportConfirmResponse>;
-}) {
-  const [csvText, setCsvText] = useState("");
-  const [phoneColumn, setPhoneColumn] = useState("");
-  const [nameColumn, setNameColumn] = useState("");
+	  onConfirm,
+	}: {
+	  onClose: () => void;
+	  onPreview: (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null; crmSituationColumn: string | null } }) => Promise<AppCrmContactImportPreviewResponse>;
+	  onConfirm: (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null; crmSituationColumn: string | null } }) => Promise<AppCrmContactImportConfirmResponse>;
+	}) {
+	  const [csvText, setCsvText] = useState("");
+	  const [phoneColumn, setPhoneColumn] = useState("");
+	  const [nameColumn, setNameColumn] = useState("");
+	  const [crmSituationColumn, setCrmSituationColumn] = useState("");
   const [preview, setPreview] = useState<AppCrmContactImportPreviewResponse | null>(null);
   const [summary, setSummary] = useState<AppCrmContactImportConfirmResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const headers = preview?.headers ?? [];
-  const mapping = { phoneColumn: phoneColumn || null, nameColumn: nameColumn || null };
+	  const previewRequestSeq = useRef(0);
+	  const headers = preview?.headers ?? [];
+	  const mapping = { phoneColumn: phoneColumn || null, nameColumn: nameColumn || null, crmSituationColumn: crmSituationColumn || null };
+	  const loading = previewLoading || importLoading;
 
   const readFile = async (file: File | null) => {
     if (!file) return;
@@ -1220,31 +1171,41 @@ function CsvImportModal({
 
   const runPreview = async () => {
     if (!csvText.trim()) return;
-    setLoading(true);
+    const requestSeq = previewRequestSeq.current + 1;
+    previewRequestSeq.current = requestSeq;
+    setPreviewLoading(true);
     setLocalError(null);
     setSummary(null);
     try {
       const response = await onPreview({ csvText, mapping });
+      if (requestSeq !== previewRequestSeq.current) return;
       setPreview(response);
       if (!phoneColumn && response.headers.length > 0) {
         const guessed = response.headers.find((header) => /^(numero|número|telefone|phone|whatsapp)$/i.test(header.trim()));
         if (guessed) setPhoneColumn(guessed);
       }
-      if (!nameColumn && response.headers.length > 0) {
-        const guessed = response.headers.find((header) => /^(nome|name)$/i.test(header.trim()));
-        if (guessed) setNameColumn(guessed);
-      }
+	      if (!nameColumn && response.headers.length > 0) {
+	        const guessed = response.headers.find((header) => /^(nome|name)$/i.test(header.trim()));
+	        if (guessed) setNameColumn(guessed);
+	      }
+	      if (!crmSituationColumn && response.headers.length > 0) {
+	        const guessed = response.headers.find((header) =>
+	          /^(situa[cç][aã]o no crm|situa[cç][aã]o crm|status crm|crm status)$/i.test(header.trim())
+	        );
+	        if (guessed) setCrmSituationColumn(guessed);
+	      }
     } catch (err) {
+      if (requestSeq !== previewRequestSeq.current) return;
       const typed = err as AppApiError;
       setLocalError(normalizeAppErrorMessage(typed, "Não foi possível pré-visualizar o CSV."));
     } finally {
-      setLoading(false);
+      if (requestSeq === previewRequestSeq.current) setPreviewLoading(false);
     }
   };
 
   const runConfirm = async () => {
     if (!csvText.trim() || !preview) return;
-    setLoading(true);
+    setImportLoading(true);
     setLocalError(null);
     try {
       const response = await onConfirm({ csvText, mapping });
@@ -1253,8 +1214,48 @@ function CsvImportModal({
       const typed = err as AppApiError;
       setLocalError(normalizeAppErrorMessage(typed, "Não foi possível importar o CSV."));
     } finally {
-      setLoading(false);
+      setImportLoading(false);
     }
+  };
+
+  const errorRows = summary?.errors ?? preview?.sampleErrors ?? [];
+	  const reportLines = errorRows.map((error) => [
+	    `Linha ${error.rowNumber}`,
+	    error.inputPhone ? `Entrada: ${error.inputPhone}` : null,
+	    error.normalizedPhoneDisplay ? `Normalizado: ${error.normalizedPhoneDisplay}` : null,
+	    error.crmSituationInput ? `Situação CRM: ${error.crmSituationInput}` : null,
+	    error.code ?? error.reason,
+	    error.label,
+	  ].filter(Boolean).join(" | "));
+
+  const copyErrorReport = async () => {
+    if (reportLines.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(reportLines.join("\n"));
+    } catch {
+      setLocalError("Não foi possível copiar o relatório.");
+    }
+  };
+
+  const downloadErrorReport = () => {
+    if (errorRows.length === 0) return;
+	    const header = "linha,entrada,normalizado,situacao_crm,codigo,motivo";
+    const csvEscape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const body = errorRows.map((error) => [
+      error.rowNumber,
+	      error.inputPhone ?? "",
+	      error.normalizedPhoneDisplay ?? "",
+	      error.crmSituationInput ?? "",
+	      error.code ?? error.reason,
+	      error.label,
+	    ].map(csvEscape).join(","));
+    const blob = new Blob([[header, ...body].join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "relatorio-importacao-contatos.csv";
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -1275,10 +1276,10 @@ function CsvImportModal({
             />
             {preview ? (
               <div className="grid gap-3 rounded-lg border border-white/10 p-3">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="grid gap-1.5 text-sm">
-                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Coluna do telefone</span>
-                    <select value={phoneColumn} onChange={(event) => setPhoneColumn(event.target.value)} className="theme-input h-10 rounded-md border px-3 text-sm">
+	                <div className="grid gap-3 sm:grid-cols-3">
+	                  <label className="grid gap-1.5 text-sm">
+	                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Coluna do telefone</span>
+	                    <select value={phoneColumn} onChange={(event) => setPhoneColumn(event.target.value)} className="theme-input h-10 rounded-md border px-3 text-sm">
                       <option value="">Detectar automaticamente</option>
                       {headers.map((header) => <option key={header} value={header}>{header}</option>)}
                     </select>
@@ -1287,33 +1288,122 @@ function CsvImportModal({
                     <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Coluna do nome</span>
                     <select value={nameColumn} onChange={(event) => setNameColumn(event.target.value)} className="theme-input h-10 rounded-md border px-3 text-sm">
                       <option value="">Sem nome</option>
-                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
-                    </select>
-                  </label>
-                </div>
-                <div className="grid gap-2 text-sm theme-muted sm:grid-cols-3">
-                  <DetailField label="Linhas" value={preview.totalRows} />
-                  <DetailField label="Prontas" value={preview.readyToImport} />
-                  <DetailField label="Já cadastradas" value={preview.existingContacts} />
-                  <DetailField label="Inválidas" value={preview.invalidRows} />
-                  <DetailField label="Duplicadas" value={preview.duplicatesInFile} />
-                  <DetailField label="Excluídas" value={preview.excludedContacts ?? 0} />
-                  <DetailField label="Já associadas" value={preview.provisionalContacts ?? 0} />
-                  <DetailField label="Conflitos" value={preview.identityConflicts ?? 0} />
-                  <DetailField label="Delimitador" value={preview.delimiter} />
-                </div>
+	                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
+	                    </select>
+	                  </label>
+	                  <label className="grid gap-1.5 text-sm">
+	                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Situação no CRM</span>
+	                    <select value={crmSituationColumn} onChange={(event) => setCrmSituationColumn(event.target.value)} className="theme-input h-10 rounded-md border px-3 text-sm">
+	                      <option value="">Preservar/default</option>
+	                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
+	                    </select>
+	                  </label>
+	                </div>
+	                <div className="grid gap-2 text-sm theme-muted sm:grid-cols-3">
+	                  <DetailField label="Linhas" value={preview.totalRows} />
+	                  <DetailField label="Prontas" value={preview.readyToImport} />
+	                  <DetailField label="Já cadastradas" value={preview.existingContacts} />
+	                  <DetailField label="Inválidas" value={preview.invalidRows} />
+	                  <DetailField label="Status inválido" value={preview.invalidCrmStatuses ?? 0} />
+	                  <DetailField label="Duplicadas" value={preview.duplicatesInFile} />
+	                  <DetailField label="Novos" value={preview.created ?? 0} />
+	                  <DetailField label="Atualizações" value={preview.updated ?? 0} />
+	                  <DetailField label="Sem alteração" value={preview.unchanged ?? 0} />
+	                  <DetailField label="Excluídas" value={preview.excludedContacts ?? 0} />
+	                  <DetailField label="Já associadas" value={preview.provisionalContacts ?? 0} />
+	                  <DetailField label="Conflitos" value={preview.identityConflicts ?? 0} />
+	                  <DetailField label="Delimitador" value={preview.delimiter} />
+	                </div>
+	                {preview.rows?.length ? (
+	                  <div className="overflow-x-auto rounded-lg border border-white/10">
+	                    <table className="min-w-[760px] w-full text-left text-xs">
+	                      <thead className="bg-white/10 text-white">
+	                        <tr>
+	                          <th className="px-3 py-2">Linha</th>
+	                          <th className="px-3 py-2">Nome</th>
+	                          <th className="px-3 py-2">Telefone</th>
+	                          <th className="px-3 py-2">Situação no CRM</th>
+	                          <th className="px-3 py-2">Operação</th>
+	                        </tr>
+	                      </thead>
+	                      <tbody>
+	                        {preview.rows.slice(0, 8).map((row) => (
+	                          <tr key={`${row.rowNumber}:${row.normalizedPhone}`} className="border-t border-white/10">
+	                            <td className="px-3 py-2">{row.rowNumber}</td>
+	                            <td className="px-3 py-2 text-white">{row.name || "-"}</td>
+	                            <td className="px-3 py-2">{row.phoneDisplay ?? row.normalizedPhone}</td>
+	                            <td className="px-3 py-2">
+	                              {row.crmSituation.label ?? row.crmSituation.input ?? row.crmSituation.previousLabel ?? "-"}
+	                            </td>
+	                            <td className="px-3 py-2">{row.operation}</td>
+	                          </tr>
+	                        ))}
+	                      </tbody>
+	                    </table>
+	                  </div>
+	                ) : null}
                 {preview.sampleErrors.length > 0 ? (
-                  <div className="rounded-lg border border-amber-300/30 bg-amber-400/10 p-3 text-sm text-amber-100">
+                  <div className="grid gap-3 rounded-lg border border-amber-300/30 bg-amber-400/10 p-3 text-sm text-amber-100">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-semibold">Erros da prévia</span>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={copyErrorReport} className="rounded-md border border-amber-100/30 px-2 py-1 text-xs font-semibold">
+                          Copiar
+                        </button>
+                        <button type="button" onClick={downloadErrorReport} className="rounded-md border border-amber-100/30 px-2 py-1 text-xs font-semibold">
+                          Baixar CSV
+                        </button>
+                      </div>
+                    </div>
                     {preview.sampleErrors.slice(0, 5).map((error) => (
-                      <div key={`${error.rowNumber}:${error.reason}`}>Linha {error.rowNumber}: {error.label}</div>
+                      <div key={`${error.rowNumber}:${error.reason}`}>
+	                        Linha {error.rowNumber}: {error.code ?? error.reason} · {error.label}
+	                        {error.inputPhone ? ` · Entrada: ${error.inputPhone}` : ""}
+	                        {error.normalizedPhoneDisplay ? ` · Normalizado: ${error.normalizedPhoneDisplay}` : ""}
+	                        {error.crmSituationInput ? ` · Situação CRM: ${error.crmSituationInput}` : ""}
+	                      </div>
                     ))}
+                    {preview.truncatedErrors ? <div>Há mais erros no arquivo.</div> : null}
                   </div>
                 ) : null}
               </div>
             ) : null}
             {summary ? (
-              <div className="rounded-lg border border-emerald-300/30 bg-emerald-400/10 p-3 text-sm text-emerald-100">
-                Importação concluída: {summary.created} criado(s), {summary.reused} já cadastrado(s), {summary.invalid} inválido(s), {summary.duplicates} duplicado(s), {summary.excludedContacts ?? 0} fora da operação, {summary.provisionalContacts ?? 0} já associado(s), {summary.identityConflicts ?? 0} conflito(s).
+              <div className="grid gap-3 rounded-lg border border-emerald-300/30 bg-emerald-400/10 p-3 text-sm text-emerald-100">
+                <div className="font-semibold">Relatório da importação</div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <DetailField label="Linhas" value={summary.received} />
+	                  <DetailField label="Criados" value={summary.created} />
+	                  <DetailField label="Atualizados" value={summary.updated} />
+	                  <DetailField label="Sem alteração" value={summary.unchanged ?? 0} />
+	                  <DetailField label="Prontos" value={summary.readyToImport} />
+	                  <DetailField label="Ignorados" value={summary.skipped ?? summary.duplicates} />
+	                  <DetailField label="Falhas" value={(summary.failed ?? 0) + summary.invalid + (summary.invalidCrmStatuses ?? 0)} />
+                </div>
+                <div className="text-xs text-emerald-50/80">
+	                  Duplicados: {summary.duplicates} · Status inválido: {summary.invalidCrmStatuses ?? 0} · Fora da operação: {summary.excludedContacts ?? 0} · Já associados: {summary.provisionalContacts ?? 0} · Conflitos: {summary.identityConflicts ?? 0}
+                </div>
+                {summary.errors?.length ? (
+                  <div className="grid gap-2 rounded-md border border-emerald-100/20 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-semibold">Erros detalhados</span>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={copyErrorReport} className="rounded-md border border-emerald-100/30 px-2 py-1 text-xs font-semibold">
+                          Copiar
+                        </button>
+                        <button type="button" onClick={downloadErrorReport} className="rounded-md border border-emerald-100/30 px-2 py-1 text-xs font-semibold">
+                          Baixar CSV
+                        </button>
+                      </div>
+                    </div>
+                    {summary.errors.slice(0, 8).map((error) => (
+                      <div key={`${error.rowNumber}:${error.reason}:${error.inputPhone ?? ""}`} className="text-xs">
+	                        Linha {error.rowNumber} | {error.inputPhone ?? "-"} | {error.normalizedPhoneDisplay ?? "-"} | {error.crmSituationInput ?? "-"} | {error.code ?? error.reason} | {error.label}
+                      </div>
+                    ))}
+                    {summary.truncatedErrors ? <div className="text-xs">Há mais erros no arquivo.</div> : null}
+                  </div>
+                ) : null}
               </div>
             ) : null}
             {localError ? (
@@ -1326,18 +1416,18 @@ function CsvImportModal({
               <button
                 type="button"
                 onClick={runPreview}
-                disabled={!csvText.trim() || loading}
+                disabled={!csvText.trim() || previewLoading || importLoading}
                 className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {loading && !preview ? "Lendo..." : "Pré-visualizar"}
+                {previewLoading ? "Gerando prévia..." : "Pré-visualizar"}
               </button>
               <button
                 type="button"
                 onClick={runConfirm}
-                disabled={!preview || loading || preview.readyToImport === 0}
+                disabled={!preview || previewLoading || importLoading || preview.readyToImport === 0}
                 className="rounded-md bg-re7-sky px-4 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {loading && preview ? "Importando..." : "Confirmar importação"}
+                {importLoading ? "Importando..." : "Confirmar importação"}
               </button>
             </div>
           </div>
@@ -1689,7 +1779,6 @@ export default function AppCrmContactsPage() {
               ? "Existe uma conversa pendente associada a este contato que precisa ser retirada da operação antes da exclusão."
               : "Este contato possui uma conversa em andamento. Resolva a conversa antes de excluir o contato da operação.";
           setError(message);
-          setDetailError(message);
           return blockingConversation;
         }
         setError(normalizeAppErrorMessage(typed, "Não foi possível excluir o contato da operação."));
@@ -1708,34 +1797,10 @@ export default function AppCrmContactsPage() {
       if (!confirmed) return;
       const blockingConversation = await excludeContactFromOperation(item.leadId);
       if (blockingConversation) {
-        setSelectedLeadId(item.leadId);
-        setContactDetail(null);
-        loadContactDetail(item.leadId);
+        return;
       }
     },
-    [canExcludeCrmContacts, excludeContactFromOperation, loadContactDetail]
-  );
-
-  const removeBlockingConversationFromOperation = useCallback(
-    async (conversationId: string) => {
-      if (!session) return;
-      try {
-        await deleteAppConversationData(session, conversationId);
-        setNotice("Conversa retirada da operação. O histórico foi preservado.");
-        await loadContacts(session, page);
-      } catch (err) {
-        const typed = err as AppApiError;
-        if (typed.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-        const message = normalizeAppErrorMessage(typed, "Não foi possível retirar a conversa da operação.");
-        setDetailError(message);
-        setError(message);
-        throw typed;
-      }
-    },
-    [handleUnauthorized, loadContacts, page, session]
+    [canExcludeCrmContacts, excludeContactFromOperation]
   );
 
   const reactivateContactFromOperation = useCallback(
@@ -1788,19 +1853,19 @@ export default function AppCrmContactsPage() {
     [handleUnauthorized, loadContacts, replaceContactFromDetail, session]
   );
 
-  const previewCsvImport = useCallback(
-    async (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null } }) => {
-      if (!session) throw new Error("Sessão indisponível.");
-      return previewAppCrmContactCsvImport(session, payload);
-    },
+	  const previewCsvImport = useCallback(
+	    async (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null; crmSituationColumn: string | null } }) => {
+	      if (!session) throw new Error("Sessão indisponível.");
+	      return previewAppCrmContactCsvImport(session, payload);
+	    },
     [session]
   );
 
-  const confirmCsvImport = useCallback(
-    async (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null } }) => {
-      if (!session) throw new Error("Sessão indisponível.");
-      const response = await confirmAppCrmContactCsvImport(session, payload);
-      setNotice(`Importação concluída: ${response.created} criado(s), ${response.reused} reutilizado(s).`);
+	  const confirmCsvImport = useCallback(
+	    async (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null; crmSituationColumn: string | null } }) => {
+	      if (!session) throw new Error("Sessão indisponível.");
+	      const response = await confirmAppCrmContactCsvImport(session, payload);
+	      setNotice(`Importação concluída: ${response.created} criado(s), ${response.updated} atualizado(s), ${response.unchanged ?? 0} sem alteração.`);
       setPage(1);
       await loadContacts(session, 1);
       return response;
@@ -2095,7 +2160,7 @@ export default function AppCrmContactsPage() {
         ) : null}
       </section>
       {error && contacts ? (
-        <FeedbackToast variant="error" message={error} {...toastHandlers} />
+        <FeedbackToast variant="error" message={error} {...toastHandlers} onClose={() => setError(null)} />
       ) : null}
       {notice ? (
         <FeedbackToast
@@ -2147,7 +2212,6 @@ export default function AppCrmContactsPage() {
           onUpdateStatus={updateContactStatus}
           onRecordOptOut={recordContactOptOut}
           onRevokeOptOut={revokeContactOptOut}
-          onRemoveBlockingConversation={removeBlockingConversationFromOperation}
           onReactivateFromOperation={reactivateContactFromOperation}
           canExcludeFromOperation={canExcludeCrmContacts}
         />

@@ -13576,8 +13576,8 @@ test("campaign send resolves safe ninth digit variant to existing conversation",
       content: "Aviso de atendimento",
     },
   });
-  const conversationWaId = "554112349614";
-  const inputWaId = "5541912349614";
+  const conversationWaId = "554123459614";
+  const inputWaId = "5541923459614";
   const previousOutboundAt = new Date("2026-01-01T10:00:00.000Z");
   const conversation = await prisma.conversation.create({
     data: {

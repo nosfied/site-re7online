@@ -11178,6 +11178,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const message =
           error.code === "identity_conflict"
             ? "Encontramos mais de uma identificação possível para este número. Revise o contato antes de iniciar a conversa."
+            : error.code === "invalid_phone"
+              ? "Informe um WhatsApp válido com país, DDD e número. Ex.: 5584999999999."
             : error.code === "contact_operationally_excluded"
               ? "Este contato foi retirado da operação."
             : error.code === "contact_already_provisional"
@@ -11233,29 +11235,39 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       ) {
         return;
       }
-      const body = (await readJsonBody(req, res)) as Record<string, unknown> | null;
-      if (!body) return;
-      const csvText = typeof body.csvText === "string" ? body.csvText : "";
-      const mapping = body.mapping && typeof body.mapping === "object" ? body.mapping as Record<string, unknown> : {};
-      const payload = isConfirm
-        ? await confirmCrmContactCsvImport(prisma, {
-            clientId: client.id,
-            csvText,
-            mapping: {
-              phoneColumn: typeof mapping.phoneColumn === "string" ? mapping.phoneColumn : null,
-              nameColumn: typeof mapping.nameColumn === "string" ? mapping.nameColumn : null,
-            },
-            actorUserId: clientAuth.userId,
-            requestId,
-          })
-        : await previewCrmContactCsvImport(prisma, {
-            clientId: client.id,
-            csvText,
-            mapping: {
-              phoneColumn: typeof mapping.phoneColumn === "string" ? mapping.phoneColumn : null,
-              nameColumn: typeof mapping.nameColumn === "string" ? mapping.nameColumn : null,
-            },
-          });
+	      const body = (await readJsonBody(req, res)) as Record<string, unknown> | null;
+	      if (!body) return;
+	      const csvText = typeof body.csvText === "string" ? body.csvText : "";
+	      const mapping = body.mapping && typeof body.mapping === "object" ? body.mapping as Record<string, unknown> : {};
+	      const tenants = await getTenants();
+	      const resolvedStatuses = await resolveCrmBusinessStatuses({
+	        prisma,
+	        clientId: client.id,
+	        tenant: tenants[client.clientKey] ?? null,
+	      });
+	      const payload = isConfirm
+	        ? await confirmCrmContactCsvImport(prisma, {
+	            clientId: client.id,
+	            csvText,
+	            mapping: {
+	              phoneColumn: typeof mapping.phoneColumn === "string" ? mapping.phoneColumn : null,
+	              nameColumn: typeof mapping.nameColumn === "string" ? mapping.nameColumn : null,
+	              crmSituationColumn: typeof mapping.crmSituationColumn === "string" ? mapping.crmSituationColumn : null,
+	            },
+	            crmStatuses: resolvedStatuses.statuses,
+	            actorUserId: clientAuth.userId,
+	            requestId,
+	          })
+	        : await previewCrmContactCsvImport(prisma, {
+	            clientId: client.id,
+	            csvText,
+	            mapping: {
+	              phoneColumn: typeof mapping.phoneColumn === "string" ? mapping.phoneColumn : null,
+	              nameColumn: typeof mapping.nameColumn === "string" ? mapping.nameColumn : null,
+	              crmSituationColumn: typeof mapping.crmSituationColumn === "string" ? mapping.crmSituationColumn : null,
+	            },
+	            crmStatuses: resolvedStatuses.statuses,
+	          });
       json(res, 200, payload);
     } catch (error) {
       if (error instanceof CrmContactUpsertError) {

@@ -81,7 +81,10 @@ test("CRM campaign history links to the existing campaign detail surface", () =>
   assert.ok(pageSource.includes("campaign.campaignHref"));
   assert.ok(pageSource.includes("Abrir campanha"));
   assert.ok(campaignsPageSource.includes('new URLSearchParams(window.location.search).get("campaignId")'));
-  assert.ok(campaignsPageSource.includes("setSelectedCampaignId(requestedCampaignId)"));
+  assert.ok(campaignsPageSource.includes("openCampaignDetail(requestedCampaignId)"));
+  assert.ok(campaignsPageSource.includes("setDetailModalOpen(true)"));
+  assert.ok(campaignsPageSource.includes('current === "create" ? "all" : current'));
+  assert.ok(!campaignsPageSource.includes('setActiveTab("create");\n  }, [openCampaignDetail'));
 });
 
 test("CRM contacts campaign relationship keeps financial values out of customer UX", () => {

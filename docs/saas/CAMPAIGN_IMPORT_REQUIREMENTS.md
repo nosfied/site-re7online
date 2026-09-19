@@ -340,3 +340,27 @@ Meta inbound/capture and campaign bootstrap now reuse
 delivery is test validated and ready for controlled deploy without schema or
 migration. No Campaign UX, Queue implementation or production `****6787`
 repair is included.
+
+## Phone normalization hardening - 2026-09-19
+
+Campaign CSV import must not persist a recipient phone that fails the canonical
+CRM WhatsApp identity parser. The import path now reuses the shared CRM
+normalizer before CRM bootstrap, opt-out checks, seed persistence or outbound
+execution. Missing DDD, unsupported/non-Brazil numbers, impossible lengths and
+structurally invalid Brazilian subscribers are rejected as
+`invalid_whatsapp_identity`.
+
+Permanent invariant: NO NEW CONTACT/RECIPIENT PHONE MAY BE PERSISTED WITHOUT
+CANONICAL NORMALIZATION + VALIDATION.
+
+The approved Brazilian 12/13-digit equivalence remains preserved through the
+same canonical candidate set; valid DDD+phone input without an explicit `55`
+country code remains accepted only when it normalizes deterministically to a
+Brazilian WhatsApp identity.
+
+Contacts CSV convergence, 2026-09-19: Contacts import now reuses the Campaign CSV
+parser and CRM Situation resolver where domain-compatible. Contacts-specific
+persistence still uses canonical CRM upsert, not Campaign seed/send semantics.
+`Situação no CRM` is accepted as an optional Contacts CSV column and must resolve
+to an existing same-tenant CRM status; blank preserves existing status/default,
+and invalid values reject the row with no Contact mutation.

@@ -735,7 +735,7 @@ test("CRM contact create preserves existing provisional contact without changing
 });
 
 test("CRM CSV import previews without mutation and confirms idempotently", async () => {
-  const csvText = "\uFEFFnome;numero\nContato CSV;5541888877777\nSem Nome;5541888877778\nDuplicado;5541888877777\nInválido;abc\n";
+  const csvText = "\uFEFFnome;numero\nContato CSV;5541998877777\nSem Nome;5541998877778\nDuplicado;5541998877777\nInválido;abc\n";
   const conversationsBefore = await prisma.conversation.count({ where: { clientId: businessClientId } });
   const messagesBefore = await prisma.message.count({
     where: { conversation: { clientId: businessClientId } },

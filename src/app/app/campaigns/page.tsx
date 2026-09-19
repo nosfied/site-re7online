@@ -1193,6 +1193,12 @@ export default function AppCampaignsPage() {
     [campaignStats]
   );
 
+  const openCampaignDetail = useCallback((campaignId: string) => {
+    setSelectedCampaignId(campaignId);
+    setDetailModalOpen(true);
+    setActiveTab((current) => (current === "create" ? "all" : current));
+  }, []);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [search, statusFilter]);
@@ -1239,8 +1245,8 @@ export default function AppCampaignsPage() {
 
   useEffect(() => {
     if (!requestedCampaignId) return;
-    setSelectedCampaignId(requestedCampaignId);
-  }, [requestedCampaignId]);
+    openCampaignDetail(requestedCampaignId);
+  }, [openCampaignDetail, requestedCampaignId]);
 
   useEffect(() => {
     if (!form.templateName || form.templateId) return;
@@ -3354,17 +3360,15 @@ export default function AppCampaignsPage() {
                           : isSending
                             ? "bg-amber-500/10 hover:bg-amber-500/15"
                             : "hover:bg-white/5"
-                      }`}
-                      onClick={() => {
-                        setSelectedCampaignId(campaign.id);
-                        setDetailModalOpen(true);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter" && event.key !== " ") return;
-                        event.preventDefault();
-                        setSelectedCampaignId(campaign.id);
-                        setDetailModalOpen(true);
-                      }}
+	                      }`}
+	                      onClick={() => {
+	                        openCampaignDetail(campaign.id);
+	                      }}
+	                      onKeyDown={(event) => {
+	                        if (event.key !== "Enter" && event.key !== " ") return;
+	                        event.preventDefault();
+	                        openCampaignDetail(campaign.id);
+	                      }}
                       tabIndex={0}
                       role="button"
                       aria-label={`Ver detalhes da campanha ${campaign.name || campaign.id}`}
@@ -3405,8 +3409,7 @@ export default function AppCampaignsPage() {
                             label={`Ver detalhes da campanha ${campaign.name || campaign.id}`}
                             icon="i"
                             onClick={() => {
-                              setSelectedCampaignId(campaign.id);
-                              setDetailModalOpen(true);
+                              openCampaignDetail(campaign.id);
                             }}
                           />
                           <ActionIconButton

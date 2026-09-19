@@ -31,6 +31,21 @@ which canonical phone equivalence is undefined.
 - campaign provider execution and transport behavior are unchanged;
 - no tenant hardcode, schema, migration, backfill or historical rewrite.
 
+Additional local hardening on 2026-09-19 made the shared CRM WhatsApp identity
+parser the entry gate for new manual Contact phones, Contact CSV import rows and
+Campaign CSV recipient rows. Permanent invariant: NO NEW CONTACT/RECIPIENT PHONE
+MAY BE PERSISTED WITHOUT CANONICAL NORMALIZATION + VALIDATION. Missing DDD,
+unsupported/non-Brazil numbers, impossible lengths and structurally invalid
+Brazilian subscriber numbers are rejected before persistence; approved 12/13
+Brazilian identity equivalence remains preserved through the same canonical
+candidate set.
+
+Contacts/Campaigns CSV convergence on 2026-09-19 keeps this invariant at the API
+boundary: Contact CSV and Campaign CSV both parse through the shared CSV parser
+and pass phones through the canonical CRM WhatsApp identity path before any
+domain-specific persistence. Contacts-specific CRM status updates remain in CRM
+upsert; Campaign-specific seed/send behavior remains in Campaigns.
+
 The clean delivery passed 119 focused tests: 88 identity/CRM/import/Web Session,
 7 selected Meta/campaign/opt-out routes, 5 campaign runner, 2 campaign
 lifecycle, 2 campaign seed privacy, 8 return-destination and 7 CRM conversation

@@ -37,6 +37,8 @@ function parseBrazilSubscriber(digits: string) {
   const ddd = national.slice(0, 2);
   if (!isValidBrazilDdd(ddd)) return null;
   const subscriber = national.slice(2);
+  if (subscriber.length === 9 && !subscriber.startsWith("9")) return null;
+  if (subscriber.length === 8 && !/^[2-9]/.test(subscriber)) return null;
   return { ddd, subscriber };
 }
 
@@ -59,16 +61,10 @@ export function getBrazilNinthDigitVariant(value: string) {
   return null;
 }
 
-function normalizePossibleInternationalPhone(digits: string) {
-  if (digits.startsWith(BRAZIL_COUNTRY_CODE)) return null;
-  return /^\d{8,15}$/.test(digits) ? digits : null;
-}
-
 export function normalizeCrmWhatsappIdentity(value: unknown): CrmWhatsappIdentity | null {
   const inputDigits = normalizeWaIdDigits(String(value ?? ""));
   if (!inputDigits) return null;
-  const crmCanonicalPhone =
-    normalizeBrazilCrmPhone(inputDigits) ?? normalizePossibleInternationalPhone(inputDigits);
+  const crmCanonicalPhone = normalizeBrazilCrmPhone(inputDigits);
   if (!crmCanonicalPhone) return null;
   const variant = getBrazilNinthDigitVariant(crmCanonicalPhone);
   const providerCandidates = Array.from(new Set([crmCanonicalPhone, variant].filter(Boolean))) as string[];

@@ -109,12 +109,14 @@ test("campaign CSV import previews and persists eligible recipients without send
     "\uFEFFtelefone;nome;primeiro_nome;protocolo",
     "5541991100002;Maria Silva;Maria;P-001",
     "\"+55 (41) 99110-0002\";Maria Duplicada;Maria;P-001",
+    "4199110008;DDD Sem Pais;DDD;P-008",
     "5541991100003;João Souza;;P-002",
     "5541991100004;Opt Out;Opt;P-003",
     "5541991100005;Pendente Consentimento;Pendente;P-005",
     "5541991100006;Pendente Alias;Pendente;P-006",
     "5541991100007;Contato Excluido;Excluido;P-007",
     "5541991100001;Existente;Ja;P-004",
+    "99990000;Sem DDD;X;P-009",
     "telefone ruim;Inválido;X;P-005",
   ].join("\r\n");
   const parsed = buildCampaignImportRecipientsFromCsv({
@@ -150,11 +152,11 @@ test("campaign CSV import previews and persists eligible recipients without send
   assert.equal(eventsAfterPreview, eventsBeforePreview);
   assert.equal(campaignAfterPreview.totalRecipients, campaignBeforePreview.totalRecipients);
   assert.equal(campaignAfterPreview.status, campaignBeforePreview.status);
-  assert.equal(preview.summary.received, 9);
-  assert.equal(preview.summary.readyToImport, 1);
+  assert.equal(preview.summary.received, 11);
+  assert.equal(preview.summary.readyToImport, 2);
   assert.equal(preview.summary.duplicates, 1);
   assert.equal(preview.summary.existingDuplicates, 1);
-  assert.equal(preview.summary.invalid, 1);
+  assert.equal(preview.summary.invalid, 2);
   assert.equal(preview.summary.missingRequiredVariables, 1);
   assert.equal(preview.summary.optOutBlocked, 1);
   assert.equal(preview.summary.blockedByReason.find((item) => item.reason === "provisional_contact")?.count, 2);
@@ -171,8 +173,8 @@ test("campaign CSV import previews and persists eligible recipients without send
     recipients: parsed.recipients,
   });
   assert.equal(imported.ok, true);
-  assert.equal(imported.importedCount, 1);
-  assert.equal(imported.campaign?.totalRecipients, 2);
+  assert.equal(imported.importedCount, 2);
+  assert.equal(imported.campaign?.totalRecipients, 3);
   assert.equal(imported.campaign?.sentCount, 0);
   const outboundAfter = await prisma.outboundMessage.count({ where: { clientId } });
   assert.equal(outboundAfter, outboundBefore);
@@ -186,9 +188,11 @@ test("campaign CSV import previews and persists eligible recipients without send
   assert.equal(JSON.stringify(seedPayload).includes("5541991100001"), false);
   assert.equal(JSON.stringify(seedPayload).includes("5541991100002"), false);
   const privateSeed = readPrivateCampaignSeedFields(seedPayload);
-  assert.deepEqual(privateSeed.recipients, ["5541991100001", "5541991100002"]);
+  assert.deepEqual(privateSeed.recipients, ["5541991100001", "5541991100002", "554199110008"]);
   const componentsByWaId = privateSeed.componentsByWaId as Record<string, unknown>;
   assert.ok(componentsByWaId["5541991100002"]);
+  assert.ok(componentsByWaId["554199110008"]);
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waIdCanonical: "99990000" } }), 0);
 
   const repeat = await importCampaignRecipients(prisma, {
     clientId,
@@ -199,7 +203,7 @@ test("campaign CSV import previews and persists eligible recipients without send
   });
   assert.equal(repeat.ok, true);
   assert.equal(repeat.importedCount, 0);
-  assert.equal(repeat.campaign?.totalRecipients, 2);
+  assert.equal(repeat.campaign?.totalRecipients, 3);
 
   await cleanup(clientId);
 });

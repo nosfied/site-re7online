@@ -112,6 +112,22 @@ test("campaign result filtered actions only operate on the visible result set", 
   assert.ok(pageSource.includes('setActiveTab("create")'));
 });
 
+test("campaign detail deep link reuses list detail navigation instead of composer", () => {
+  assert.ok(pageSource.includes("const openCampaignDetail = useCallback((campaignId: string) => {"));
+  assert.ok(pageSource.includes("setSelectedCampaignId(campaignId);"));
+  assert.ok(pageSource.includes("setDetailModalOpen(true);"));
+  assert.ok(pageSource.includes('setActiveTab((current) => (current === "create" ? "all" : current));'));
+  assert.ok(pageSource.includes("openCampaignDetail(requestedCampaignId);"));
+  assert.ok(pageSource.includes("openCampaignDetail(campaign.id);"));
+  const detailHelper = pageSource.slice(
+    pageSource.indexOf("const openCampaignDetail"),
+    pageSource.indexOf("useEffect(() => {\n    setCurrentPage")
+  );
+  assert.ok(!detailHelper.includes('setActiveTab("create")'));
+  assert.ok(!detailHelper.includes("handleReuseCampaign"));
+}
+);
+
 test("campaign creation exposes dynamic CRM-filter scheduling without freezing preview recipients", () => {
   assert.ok(pageSource.includes('type RecipientSelectionMode = "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER"'));
   assert.ok(pageSource.includes("Filtro dinâmico do CRM"));
