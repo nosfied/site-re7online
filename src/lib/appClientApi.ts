@@ -4978,9 +4978,14 @@ export async function createAppCampaignDraft(
   payload: {
     name: string;
     templateId: string;
-    selectedLeadIds: string[];
+    selectedLeadIds?: string[];
     templateParams?: string[];
     returnDestination: AppCampaignReturnDestination;
+    selectionMode?: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
+    dynamicFilter?: {
+      version: 1;
+      crmBusinessStatusId: string;
+    } | null;
     templateVariableMappings?: Array<{
       position: string;
       source: "contact.displayName" | "lead.companyName" | "lead.city" | "fixed" | "";

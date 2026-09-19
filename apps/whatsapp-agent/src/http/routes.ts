@@ -15401,6 +15401,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const selectedLeadIds = Array.isArray(body.selectedLeadIds)
         ? body.selectedLeadIds.map((value) => String(value ?? "").trim()).filter(Boolean)
         : [];
+      const selectionMode = normalizeCampaignSelectionMode(body.selectionMode);
+      const dynamicFilter = extractCampaignDynamicCrmFilter(body.dynamicFilter);
       const components = parseTemplateComponents(body.templateParams);
       if (!name) {
         json(res, 400, httpError("bad_request", "Campaign name is required"));
@@ -15410,8 +15412,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, httpError("template_required", "Approved template is required"));
         return;
       }
-      if (selectedLeadIds.length === 0) {
+      if (selectionMode === "STATIC_RECIPIENTS" && selectedLeadIds.length === 0) {
         json(res, 400, httpError("invalid_recipients", "Select at least one eligible contact"));
+        return;
+      }
+      if (selectionMode === "DYNAMIC_CRM_FILTER" && !dynamicFilter) {
+        json(res, 400, httpError("invalid_dynamic_filter", "Selecione uma Situacao no CRM para o filtro dinamico."));
         return;
       }
       if (selectedLeadIds.length > 1000) {
@@ -15434,6 +15440,28 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         endpoint: pathname,
         requestId,
       }))) return;
+      if (selectionMode === "DYNAMIC_CRM_FILTER") {
+        if (!(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: pathname,
+          requestId,
+        }))) return;
+        const tenants = await getTenants();
+        const statuses = await resolveCrmBusinessStatuses({
+          prisma,
+          clientId: client.id,
+          tenant: tenants[client.clientKey] ?? null,
+        });
+        const statusExists = statuses.statuses.some(
+          (item) => item.id === dynamicFilter?.crmBusinessStatusId && item.isActive !== false
+        );
+        if (!statusExists) {
+          json(res, 400, httpError("crm_status_not_found", "Situacao no CRM nao encontrada para este tenant."));
+          return;
+        }
+      }
       const resolvedTemplate = await resolveCampaignTemplateInput(prisma, {
         clientId: client.id,
         templateId,
@@ -15473,6 +15501,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         components,
         templateVariableMappings: variableMappings.mappings,
         returnDestination: returnDestination.destination,
+        selectionMode,
+        dynamicFilter,
       });
       if (!created.ok) {
         json(
@@ -15935,6 +15965,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               ? getOutboundReturnDestinationErrorMessage("return_destination_required")
               : scheduled.error === WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED
               ? WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED_LABEL
+              : scheduled.error === "invalid_dynamic_filter"
+              ? "Selecione uma Situacao no CRM para o filtro dinamico."
               : scheduled.error
           )
         );
@@ -29168,6 +29200,13 @@ type CampaignDraftSeed = {
   returnDestination?: OutboundReturnDestination | null;
   source?: string | null;
   summary?: CampaignDraftRecipientSummary | null;
+  selectionMode: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
+  dynamicFilter?: CampaignDynamicCrmFilter | null;
+};
+
+type CampaignDynamicCrmFilter = {
+  version: 1;
+  crmBusinessStatusId: string;
 };
 
 type CampaignDraftBlockedReason =
@@ -29407,6 +29446,23 @@ function extractCampaignTemplateVariableMappings(input: unknown): CampaignTempla
     .filter((value): value is CampaignTemplateVariableMapping => Boolean(value));
 }
 
+function normalizeCampaignDynamicCrmStatusId(value: unknown) {
+  const status = String(value ?? "").trim().toUpperCase();
+  return /^[A-Z0-9_-]{2,80}$/.test(status) ? status : null;
+}
+
+function normalizeCampaignSelectionMode(value: unknown): "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER" {
+  return value === "DYNAMIC_CRM_FILTER" ? "DYNAMIC_CRM_FILTER" : "STATIC_RECIPIENTS";
+}
+
+function extractCampaignDynamicCrmFilter(input: unknown): CampaignDynamicCrmFilter | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  const typed = input as Record<string, unknown>;
+  const crmBusinessStatusId = normalizeCampaignDynamicCrmStatusId(typed.crmBusinessStatusId);
+  if (!crmBusinessStatusId) return null;
+  return { version: 1, crmBusinessStatusId };
+}
+
 function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return null;
   const typed = rawPayload as Record<string, unknown>;
@@ -29444,6 +29500,8 @@ function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null
       : undefined;
   const templateVariableMappings = extractCampaignTemplateVariableMappings(typed.templateVariableMappings);
   const returnDestination = parseOutboundReturnDestination(typed.returnDestination);
+  const selectionMode = normalizeCampaignSelectionMode(typed.selectionMode);
+  const dynamicFilter = extractCampaignDynamicCrmFilter(typed.dynamicFilter);
   if (!name || !templateName) return null;
   return {
     name,
@@ -29461,6 +29519,8 @@ function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null
       typed.summary && typeof typed.summary === "object" && !Array.isArray(typed.summary)
         ? (typed.summary as CampaignDraftRecipientSummary)
         : null,
+    selectionMode,
+    dynamicFilter,
   };
 }
 
@@ -35443,22 +35503,57 @@ async function buildCampaignListPayload(
     }
     campaignMetaMap.set(outboundCampaignId, current);
   }
+  const seedEvents =
+    campaignIds.size > 0
+      ? await prisma.event.findMany({
+          where: {
+            clientId: params.clientId,
+            eventName: "campaign.seed.saved",
+            messageId: { in: Array.from(campaignIds) },
+          },
+          orderBy: { createdAt: "desc" },
+          select: { messageId: true, payloadJson: true },
+        })
+      : [];
+  const campaignSeedModeMap = new Map<
+    string,
+    {
+      selectionMode: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
+      dynamicFilter: CampaignDynamicCrmFilter | null;
+    }
+  >();
+  for (const event of seedEvents) {
+    if (!event.messageId || campaignSeedModeMap.has(event.messageId)) continue;
+    const payload =
+      event.payloadJson && typeof event.payloadJson === "object" && !Array.isArray(event.payloadJson)
+        ? (event.payloadJson as Record<string, unknown>)
+        : {};
+    campaignSeedModeMap.set(event.messageId, {
+      selectionMode: normalizeCampaignSelectionMode(payload.selectionMode),
+      dynamicFilter: extractCampaignDynamicCrmFilter(payload.dynamicFilter),
+    });
+  }
   return {
     ok: true,
     count: campaigns.length,
-    items: campaigns.map((campaign) => ({
-      ...serializeCampaign(campaign),
-      metaSummary: campaignMetaMap.get(campaign.id) ?? {
-        totalSent: 0,
-        totalDelivered: 0,
-        totalRead: 0,
-        totalFailed: 0,
-        totalBlocked: 0,
-        totalOptOut: 0,
-        totalSkipped: 0,
-        totalPending: 0,
-      },
-    })),
+    items: campaigns.map((campaign) => {
+      const seedMode = campaignSeedModeMap.get(campaign.id);
+      return {
+        ...serializeCampaign(campaign),
+        selectionMode: seedMode?.selectionMode ?? "STATIC_RECIPIENTS",
+        dynamicFilter: seedMode?.dynamicFilter ?? null,
+        metaSummary: campaignMetaMap.get(campaign.id) ?? {
+          totalSent: 0,
+          totalDelivered: 0,
+          totalRead: 0,
+          totalFailed: 0,
+          totalBlocked: 0,
+          totalOptOut: 0,
+          totalSkipped: 0,
+          totalPending: 0,
+        },
+      };
+    }),
   };
 }
 
@@ -35609,6 +35704,8 @@ async function buildCampaignDetailPayload(
       ...serializeCampaign(campaign),
       metaSummary: summarizeCampaignMetaStatuses(enrichedMessagesMetaStatus),
       messagesMetaStatus: enrichedMessagesMetaStatus,
+      selectionMode: draftSeed.selectionMode,
+      dynamicFilter: draftSeed.dynamicFilter ?? null,
       draftSeed: responseDraftSeed,
       draftReview,
     },
@@ -35714,8 +35811,61 @@ async function createScopedCampaignDraft(params: {
   components: CampaignTemplateComponents | undefined;
   templateVariableMappings?: CampaignTemplateVariableMapping[];
   returnDestination: OutboundReturnDestination;
+  selectionMode?: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
+  dynamicFilter?: CampaignDynamicCrmFilter | null;
 }) {
   const prisma = getPrisma();
+  if (params.selectionMode === "DYNAMIC_CRM_FILTER") {
+    if (!params.dynamicFilter) {
+      return {
+        ok: false as const,
+        reason: "invalid_dynamic_filter" as const,
+        recipients: {
+          summary: { requested: 0, accepted: 0, blocked: 0, duplicatesRemoved: 0, blockedByReason: [] },
+          acceptedWaIds: [],
+          blocked: [],
+          safeRecipients: [],
+          acceptedVariableValues: [],
+        },
+      };
+    }
+    const campaign = await createCampaign({
+      clientId: params.clientId,
+      templateId: params.templateId,
+      name: params.name,
+      templateName: params.templateName,
+      totalRecipients: 0,
+      status: "draft",
+    });
+    const summary = { requested: 0, accepted: 0, blocked: 0, duplicatesRemoved: 0, blockedByReason: [] };
+    await persistCampaignDraftSeed({
+      clientId: params.clientId,
+      campaignId: campaign.id,
+      templateId: params.templateId,
+      name: params.name,
+      templateName: params.templateName,
+      leadIds: [],
+      waIds: [],
+      components: params.components,
+      templateVariableMappings: params.templateVariableMappings ?? [],
+      returnDestination: params.returnDestination,
+      source: "dynamic_crm_filter",
+      summary,
+      selectionMode: "DYNAMIC_CRM_FILTER",
+      dynamicFilter: params.dynamicFilter,
+    });
+    return {
+      ok: true as const,
+      campaign,
+      recipients: {
+        summary,
+        acceptedWaIds: [],
+        blocked: [],
+        safeRecipients: [],
+        acceptedVariableValues: [],
+      },
+    };
+  }
   const recipients = await resolveCampaignDraftRecipientsFromLeadIds(prisma, {
     clientId: params.clientId,
     selectedLeadIds: params.selectedLeadIds,
@@ -35744,6 +35894,8 @@ async function createScopedCampaignDraft(params: {
     returnDestination: params.returnDestination,
     source: "crm_audience_preview",
     summary: recipients.summary,
+    selectionMode: "STATIC_RECIPIENTS",
+    dynamicFilter: null,
   });
   return { ok: true as const, campaign, recipients };
 }
@@ -35929,6 +36081,66 @@ async function scheduleScopedCampaignDraft(params: {
   });
   if (!seed.returnDestination) {
     return { ok: false as const, status: 400 as const, error: "return_destination_required" as const };
+  }
+  if (seed.selectionMode === "DYNAMIC_CRM_FILTER") {
+    if (!seed.dynamicFilter) {
+      return { ok: false as const, status: 400 as const, error: "invalid_dynamic_filter" as const };
+    }
+    assertCampaignTransition(campaign.status, "scheduled");
+    const emptySummary: CampaignDraftRecipientSummary = {
+      requested: 0,
+      accepted: 0,
+      blocked: 0,
+      duplicatesRemoved: 0,
+      blockedByReason: [],
+    };
+    const updated = await prisma.campaign.update({
+      where: { id: campaign.id },
+      data: {
+        status: "scheduled",
+        scheduledAt: params.scheduledAt,
+        totalRecipients: 0,
+        sentCount: 0,
+        blockedCount: 0,
+      },
+    });
+    await persistCampaignDraftSeed({
+      clientId: params.clientId,
+      campaignId: campaign.id,
+      templateId: campaign.templateId,
+      name: campaign.name,
+      templateName: resolvedTemplate.templateName,
+      leadIds: [],
+      waIds: [],
+      components:
+        seed.templateParams.length > 0
+          ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
+          : undefined,
+      templateVariableMappings: seed.templateVariableMappings ?? [],
+      componentsByWaId: seed.componentsByWaId,
+      returnDestination: seed.returnDestination,
+      source: seed.source ?? "dynamic_crm_filter",
+      summary: seed.summary ?? emptySummary,
+      selectionMode: "DYNAMIC_CRM_FILTER",
+      dynamicFilter: seed.dynamicFilter,
+    });
+    await persistEvent({
+      clientId: params.clientId,
+      messageId: campaign.id,
+      requestId: `campaign-scheduled:${campaign.id}`,
+      eventName: "campaign.scheduled",
+      payloadJson: {
+        campaignId: campaign.id,
+        templateId: campaign.templateId,
+        templateName: resolvedTemplate.templateName,
+        scheduledAt: params.scheduledAt.toISOString(),
+        scheduledBy: params.userId,
+        selectionMode: "DYNAMIC_CRM_FILTER",
+        dynamicFilter: seed.dynamicFilter,
+        summary: emptySummary,
+      },
+    });
+    return { ok: true as const, campaign: updated, recipients: { summary: emptySummary } };
   }
   const variableMappings = parseCampaignTemplateVariableMappings(
     seed.templateVariableMappings ?? [],
@@ -36502,6 +36714,8 @@ async function persistCampaignDraftSeed(params: {
   returnDestination?: OutboundReturnDestination | null;
   source?: string | null;
   summary?: CampaignDraftRecipientSummary | null;
+  selectionMode?: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
+  dynamicFilter?: CampaignDynamicCrmFilter | null;
 }) {
   await persistEvent({
     clientId: params.clientId,
@@ -36525,6 +36739,8 @@ async function persistCampaignDraftSeed(params: {
       returnDestination: serializeOutboundReturnDestination(params.returnDestination ?? null),
       source: params.source ?? null,
       summary: params.summary ?? null,
+      selectionMode: params.selectionMode ?? "STATIC_RECIPIENTS",
+      dynamicFilter: params.dynamicFilter ?? null,
     },
   });
 }
@@ -36585,6 +36801,8 @@ async function buildCampaignDraftSeed(
     templateParams,
     templateVariableMappings: [],
     returnDestination: null,
+    selectionMode: "STATIC_RECIPIENTS",
+    dynamicFilter: null,
   };
 }
 

@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { MessageStatus, MessageType } from "@prisma/client";
 import { getTenant } from "../config/tenantConfig.js";
+import { resolveCrmBusinessStatuses } from "../config/tenantOperationalConfig.js";
 import { getPrisma } from "../db.js";
 import { persistEvent, persistOutboundMessage } from "../db/persist.js";
 import { logger } from "../logger/logger.js";
@@ -30,11 +31,15 @@ import {
   recordCampaignOptOutBlocks,
 } from "./optOutRegistry.js";
 import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
-import { readPrivateCampaignSeedFields } from "./campaignSeedPrivacy.js";
 import {
   isWhatsappTemplateCategoryAllowedForTenant,
   WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED,
 } from "../meta/templateCategoryPolicy.js";
+import {
+  buildPrivateCampaignSeedFields,
+  readPrivateCampaignSeedFields,
+} from "./campaignSeedPrivacy.js";
+import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
 
 const CAMPAIGN_THROTTLE_MS = 1000;
 const CAMPAIGN_SCHEDULE_TICK_MS = 60_000;
@@ -65,6 +70,28 @@ type ScheduledCampaignSeed = {
   components?: CampaignTemplateComponents;
   componentsByWaId?: Record<string, CampaignTemplateComponents>;
   returnDestination?: OutboundReturnDestination | null;
+  selectionMode: "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
+  dynamicFilter?: {
+    version: 1;
+    crmBusinessStatusId: string;
+  } | null;
+  templateVariableMappings?: CampaignTemplateVariableMapping[];
+};
+
+type CampaignTemplateVariableMapping = {
+  position: string;
+  source: "contact.displayName" | "lead.companyName" | "lead.city" | "fixed";
+  value?: string;
+  fallback?: string;
+};
+
+type DynamicLeadRecipient = {
+  id: string;
+  waId: string;
+  waIdCanonical: string | null;
+  name: string | null;
+  company: string | null;
+  city: string | null;
 };
 
 function sleep(ms: number) {
@@ -113,11 +140,49 @@ function extractComponentsByWaId(value: unknown): Record<string, CampaignTemplat
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
+function extractTemplateVariableMappings(value: unknown): CampaignTemplateVariableMapping[] {
+  if (!Array.isArray(value)) return [];
+  const mappings: CampaignTemplateVariableMapping[] = [];
+  for (const item of value) {
+      if (!isRecord(item)) continue;
+      const source = String(item.source ?? "").trim();
+      if (
+        source !== "contact.displayName" &&
+        source !== "lead.companyName" &&
+        source !== "lead.city" &&
+        source !== "fixed"
+      ) {
+        continue;
+      }
+      const position = String(item.position ?? "").trim();
+      if (!position) continue;
+      mappings.push({
+        position,
+        source,
+        value: typeof item.value === "string" ? item.value.trim() : undefined,
+        fallback: typeof item.fallback === "string" ? item.fallback.trim() : undefined,
+      });
+  }
+  return mappings;
+}
+
+function extractDynamicFilter(value: unknown): ScheduledCampaignSeed["dynamicFilter"] {
+  if (!isRecord(value)) return null;
+  const version = Number(value.version);
+  const crmBusinessStatusId = String(value.crmBusinessStatusId ?? "").trim().toUpperCase();
+  if (version !== 1 || !/^[A-Z0-9_-]{2,80}$/.test(crmBusinessStatusId)) return null;
+  return { version: 1, crmBusinessStatusId };
+}
+
 function extractScheduledCampaignSeed(value: unknown): ScheduledCampaignSeed | null {
   if (!isRecord(value)) return null;
+  const selectionMode =
+    value.selectionMode === "DYNAMIC_CRM_FILTER" ? "DYNAMIC_CRM_FILTER" : "STATIC_RECIPIENTS";
+  const dynamicFilter = extractDynamicFilter(value.dynamicFilter);
   const privateSeed = readPrivateCampaignSeedFields(value);
   const recipients = privateSeed.recipients.map((item) => String(item ?? "").trim()).filter(Boolean);
-  if (recipients.length === 0) return null;
+  if (selectionMode === "STATIC_RECIPIENTS" && recipients.length === 0) return null;
+  if (selectionMode === "DYNAMIC_CRM_FILTER" && !dynamicFilter) return null;
   const templateParams = Array.isArray(value.templateParams)
     ? value.templateParams.map((item) => String(item ?? "").trim()).filter(Boolean)
     : [];
@@ -127,6 +192,162 @@ function extractScheduledCampaignSeed(value: unknown): ScheduledCampaignSeed | n
     components: extractComponents(value.components),
     componentsByWaId: extractComponentsByWaId(privateSeed.componentsByWaId),
     returnDestination: parseOutboundReturnDestination(value.returnDestination),
+    selectionMode,
+    dynamicFilter,
+    templateVariableMappings: extractTemplateVariableMappings(value.templateVariableMappings),
+  };
+}
+
+function resolveDynamicMappingValue(mapping: CampaignTemplateVariableMapping, lead: DynamicLeadRecipient) {
+  const value =
+    mapping.source === "fixed"
+      ? mapping.value ?? ""
+      : mapping.source === "contact.displayName"
+        ? lead.name ?? ""
+        : mapping.source === "lead.companyName"
+          ? lead.company ?? ""
+          : lead.city ?? "";
+  return String(value || mapping.fallback || "").trim().slice(0, 240);
+}
+
+function buildDynamicComponentsForLead(
+  mappings: CampaignTemplateVariableMapping[] | undefined,
+  lead: DynamicLeadRecipient
+): CampaignTemplateComponents | null | undefined {
+  if (!mappings || mappings.length === 0) return undefined;
+  const values: string[] = [];
+  for (const mapping of mappings) {
+    const value = resolveDynamicMappingValue(mapping, lead);
+    if (!value) return null;
+    values.push(value);
+  }
+  return [{ type: "body", parameters: values.map((text) => ({ type: "text" as const, text })) }];
+}
+
+async function getExistingDynamicSnapshot(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; campaignId: string }
+) {
+  const event = await prisma.event.findFirst({
+    where: {
+      clientId: params.clientId,
+      messageId: params.campaignId,
+      eventName: "campaign.dynamic_snapshot.created",
+    },
+    orderBy: { createdAt: "desc" },
+    select: { payloadJson: true },
+  });
+  if (!event) return null;
+  const privateSeed = readPrivateCampaignSeedFields(event.payloadJson);
+  return {
+    recipients: privateSeed.recipients.map((item) => String(item ?? "").trim()).filter(Boolean),
+    componentsByWaId: extractComponentsByWaId(privateSeed.componentsByWaId),
+  };
+}
+
+async function materializeDynamicCampaignSnapshot(params: {
+  campaignId: string;
+  clientId: string;
+  clientKey: string;
+  seed: ScheduledCampaignSeed;
+  now: Date;
+}): Promise<
+  | { ok: true; recipients: string[]; componentsByWaId?: Record<string, CampaignTemplateComponents> }
+  | { ok: false; reason: string }
+> {
+  const prisma = getPrisma();
+  const existing = await getExistingDynamicSnapshot(prisma, params);
+  if (existing) {
+    return { ok: true, recipients: existing.recipients, componentsByWaId: existing.componentsByWaId };
+  }
+  const statusId = params.seed.dynamicFilter?.crmBusinessStatusId;
+  if (!statusId) return { ok: false, reason: "dynamic_filter_invalid" };
+  const tenant = await getTenant(params.clientKey);
+  const resolvedStatuses = await resolveCrmBusinessStatuses({
+    prisma,
+    clientId: params.clientId,
+    tenant,
+  });
+  const status = resolvedStatuses.statuses.find((item) => item.id === statusId && item.isActive !== false);
+  if (!status) return { ok: false, reason: "crm_status_not_found" };
+
+  const leads = await prisma.lead.findMany({
+    where: {
+      tenantId: params.clientId,
+      status: statusId,
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
+    take: 1001,
+    select: {
+      id: true,
+      waId: true,
+      waIdCanonical: true,
+      name: true,
+      company: true,
+      city: true,
+    },
+  });
+  if (leads.length > 1000) return { ok: false, reason: "dynamic_match_limit_exceeded" };
+
+  const recipients: string[] = [];
+  const componentsByWaId: Record<string, CampaignTemplateComponents> = {};
+  const blocked: Array<{ leadId: string; reason: string }> = [];
+  const seen = new Set<string>();
+  for (const lead of leads) {
+    const rawWaId = normalizeWaIdDigits(lead.waIdCanonical || lead.waId);
+    const canonical = canonicalizeBrazilWaId(rawWaId);
+    const dedupeKey = canonical || rawWaId;
+    if (!rawWaId || !canonical) {
+      blocked.push({ leadId: lead.id, reason: "blocked_identity" });
+      continue;
+    }
+    if (seen.has(dedupeKey)) {
+      blocked.push({ leadId: lead.id, reason: "duplicate_identity" });
+      continue;
+    }
+    const components = buildDynamicComponentsForLead(params.seed.templateVariableMappings, lead);
+    if (components === null) {
+      blocked.push({ leadId: lead.id, reason: "variable_missing_value" });
+      continue;
+    }
+    seen.add(dedupeKey);
+    recipients.push(canonical);
+    if (components) componentsByWaId[canonical] = components;
+  }
+
+  await persistEvent({
+    clientId: params.clientId,
+    messageId: params.campaignId,
+    requestId: `campaign-dynamic-snapshot:${params.campaignId}`,
+    eventName: "campaign.dynamic_snapshot.created",
+    payloadJson: {
+      campaignId: params.campaignId,
+      selectionMode: "DYNAMIC_CRM_FILTER",
+      dynamicFilter: params.seed.dynamicFilter,
+      statusLabel: status.label,
+      createdAt: params.now.toISOString(),
+      matchedCount: leads.length,
+      eligibleCount: recipients.length,
+      blockedCount: blocked.length,
+      blocked,
+      ...buildPrivateCampaignSeedFields({
+        clientId: params.clientId,
+        waIds: recipients,
+        componentsByWaId: Object.keys(componentsByWaId).length > 0 ? componentsByWaId : undefined,
+      }),
+    },
+  });
+  await prisma.campaign.updateMany({
+    where: { id: params.campaignId, clientId: params.clientId, status: "sending" },
+    data: {
+      totalRecipients: recipients.length,
+      blockedCount: blocked.length,
+    },
+  });
+  return {
+    ok: true,
+    recipients,
+    componentsByWaId: Object.keys(componentsByWaId).length > 0 ? componentsByWaId : undefined,
   };
 }
 
@@ -203,15 +424,42 @@ export async function processDueScheduledCampaigns(params: { now?: Date; limit?:
         startedAt: now.toISOString(),
       },
     });
+    const executionSeed =
+      seed.selectionMode === "DYNAMIC_CRM_FILTER"
+        ? await materializeDynamicCampaignSnapshot({
+            campaignId: campaign.id,
+            clientId: campaign.clientId,
+            clientKey: campaign.client.clientKey,
+            seed,
+            now,
+          })
+        : { ok: true as const, recipients: seed.recipients, componentsByWaId: seed.componentsByWaId };
+    if (!executionSeed.ok) {
+      await prisma.campaign.update({
+        where: { id: campaign.id },
+        data: { status: "failed" },
+      });
+      await persistEvent({
+        clientId: campaign.clientId,
+        messageId: campaign.id,
+        requestId: `campaign-dynamic-start-failed:${campaign.id}`,
+        eventName: "campaign.dynamic_snapshot.failed",
+        payloadJson: {
+          campaignId: campaign.id,
+          reason: executionSeed.reason,
+        },
+      });
+      continue;
+    }
     startCampaignRun({
       campaignId: campaign.id,
       clientId: campaign.clientId,
       clientKey: campaign.client.clientKey,
       name: campaign.name,
       templateName: campaign.templateName,
-      waIds: seed.recipients,
+      waIds: executionSeed.recipients,
       components: seed.components,
-      componentsByWaId: seed.componentsByWaId,
+      componentsByWaId: executionSeed.componentsByWaId ?? seed.componentsByWaId,
       returnDestination: seed.returnDestination,
     });
   }
@@ -336,7 +584,7 @@ async function runCampaignInBackground(
   });
 
   let resolvedReturnDestination: OutboundReturnDestination | null = null;
-  if (waIds.length > 0 && params.returnDestination) {
+  if (params.returnDestination) {
     const destinationResult = await revalidateOutboundReturnDestination(prisma, {
       clientId: params.clientId,
       destination: params.returnDestination,

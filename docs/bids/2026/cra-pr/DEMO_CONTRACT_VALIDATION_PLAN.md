@@ -426,8 +426,9 @@ Contacts + Campaigns UX refinement, 2026-09-19:
   are excluded explicitly and no real send occurs;
 - result truth, composer cleanup, operational queue, identity and opt-out
   contracts remain unchanged.
-- Dynamic CRM-filter scheduled campaigns are separate NEW FEATURE / NOT YET
-  IMPLEMENTED; see `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`.
+- Dynamic CRM-filter scheduled campaigns are a separate OWNER PASS / LOCAL
+  VALIDATED / NOT DEPLOYED front; see
+  `docs/saas/DYNAMIC_CRM_FILTER_CAMPAIGN_SCHEDULING.md`.
 
 ### Phase B Owner Gate Package
 
