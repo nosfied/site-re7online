@@ -138,6 +138,15 @@ deployments: CONFIG NOT PRESENT IN BRANCH for the audited recent branches. No
 evidence was found that Vercel executed an ignoreCommand and ignored its result;
 the required config was absent in those branch lineages.
 
+Post-audit documentation push evidence: the docs-only branch
+`vercel-production-lineage-audit-20260919` at
+`2e5ab575a606f11fdf894386ecf1b002ea05eeeb` produced Preview deployment
+`dpl_Es912bt1sPjm93d8tBH92LEFaHvv`, `source=git`, `target=null`, `state=READY`,
+with only preview alias
+`site-re7online-git-vercel-production-l-206098-nosfieds-projects.vercel.app`.
+This did not change production, but confirms the current branch lineage still
+lacks an effective ignored-build guard for docs-only changes.
+
 IgnoreCommand status: ISSUE until the Vercel public-site production source is
 corrected to a branch/commit that contains the hygiene files and the project
 setting is verified.

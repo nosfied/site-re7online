@@ -38,7 +38,11 @@ is ISSUE because recent branches do not contain `vercel.json` or
 `1af24b54ee9261f75a8c9e69e9d87c20f33fd2db`. No Vercel production mutation,
 VPS change, DB change or PM2 change occurred in this audit. Next action:
 prove Production Branch in Vercel settings and run a separate owner-approved
-Vercel-only correction gate.
+Vercel-only correction gate. Follow-up evidence from the docs-only audit push:
+Preview `dpl_Es912bt1sPjm93d8tBH92LEFaHvv` was created as `target=null` from
+branch `vercel-production-lineage-audit-20260919`; production remained
+unchanged, but the preview confirms the ignored-build guard is not active in
+that branch lineage.
 
 ---
 
