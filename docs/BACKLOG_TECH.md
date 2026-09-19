@@ -24,9 +24,9 @@ Produto operacional com observabilidade real da Meta e área do cliente funciona
 
 O onboarding interno foi implementado, porém ainda não validado com novo tenant via UI.
 
-### Vercel / Re7online deployment hygiene — 2026-09-18
+### Vercel / Re7online deployment hygiene — 2026-09-18 / 2026-09-19
 
-Status: IMPLEMENTED / PUSH PENDING / NO PRODUCTION REDEPLOY.
+Status: CLOSED / MAIN HYGIENE ACTIVE / PRODUCTION LINEAGE CORRECTED.
 
 Auditoria confirmou que `site-re7online` na Vercel recebe Git previews para
 branches operacionais do mesmo repositorio, inclusive
@@ -46,8 +46,28 @@ Vercel-relevantes enquanto compartilharem o mesmo Next root, embora sejam
 operacionalmente publicados pela VPS.
 
 Validacao local: `bash scripts/test-vercel-ignore-build.sh` PASS; commits
-`4425923`, `a175bce` e `f8ad128` projetam SKIP. Nenhum alias Vercel,
-Production Branch, dominio, VPS runtime ou deployment de producao foi alterado.
+`4425923`, `a175bce` e `f8ad128` projetam SKIP.
+
+Correcao final em 2026-09-19:
+
+- Vercel Project Settings confirmou Production Branch = `main`;
+- branch candidata `origin/vercel-deployment-hygiene-20260918` estava
+  contaminada com mudancas de runtime/backend/app e nao foi integrada;
+- hygiene foi reconstruido limpo a partir de `origin/main`;
+- commit limpo `6fe957dfd7094299decf62923406bdd5e1b7d792` adicionou apenas
+  `vercel.json`, `scripts/vercel-ignore-build.sh`,
+  `scripts/test-vercel-ignore-build.sh` e documentacao operacional;
+- deployment Vercel Production `dpl_QSE5F2vAbXqTH6Esiir66aAKuGmD` foi criado
+  por Git a partir de `main`, commit `6fe957dfd7094299decf62923406bdd5e1b7d792`,
+  e substituiu a linhagem operacional anterior;
+- aliases `re7online.com`, `www.re7online.com`, `teste.re7online.com` e
+  `site-re7online.vercel.app` resolvem para o deployment `main`;
+- deployment antigo `dpl_F3CjH6eJRLsnriBVhP77o1ZXxz5R` /
+  `bf8ca4ddb05b4a22c09c3eaabfcb31e44de8acc9` permanece apenas como historico;
+- smoke publico: `/`, `/converta`, `/sistemas`, `/privacy` e
+  `/manifest.webmanifest` HTTP 200; Vercel runtime errors: nenhum nos ultimos
+  30 minutos;
+- VPS, DB, PM2, Web Session, Meta e backend Converta nao foram alterados.
 
 ---
 

@@ -64,6 +64,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | --- | --- | --- |
 | `docs/RUNBOOK_WHATSAPP_AGENT.md` | atual | Deploy, migration, retencao e operacao principal |
 | `docs/DEPLOY_TOPOLOGY_RE7.md` | atual | Topologia de deploy Vercel/VPS, dominios, regras de promotion e higiene Git com Ignored Build Step |
+| `docs/saas/VERCEL_PRODUCTION_LINEAGE_AUDIT_2026-09-19.md` | atual | Auditoria e fechamento da correcao de linhagem Vercel para Production em `main` |
 | `docs/DEPLOY_LOG.md` | atual como historico | Registro historico, nao fonte primaria de arquitetura |
 | `docs/onboarding.md` | atual | Onboarding Meta/WhatsApp, readiness, partial bind e recuperacao operacional |
 | `docs/smoke-template-fallback.md` | parcialmente atual | Smoke especifico de template fallback |

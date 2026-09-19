@@ -156,6 +156,29 @@ Auditoria 2026-09-18:
   registrar como `UNKNOWN` se a auditoria Vercel nao expuser ator/mecanismo;
 - nao alterar aliases, Production Branch ou dominio sem aprovacao explicita.
 
+Correcao 2026-09-19:
+
+- Production Branch foi provado no painel Vercel como `main`;
+- a producao anterior estava em `dpl_F3CjH6eJRLsnriBVhP77o1ZXxz5R`,
+  commit `bf8ca4ddb05b4a22c09c3eaabfcb31e44de8acc9`, branch
+  `ops-demo-9614-repair-readiness-20260918`, `source=redeploy`;
+- a branch `origin/vercel-deployment-hygiene-20260918` foi considerada
+  contaminada para merge direto por conter mudancas amplas de app/backend;
+- o hygiene foi reconstruido limpo sobre `origin/main` e publicado no commit
+  `6fe957dfd7094299decf62923406bdd5e1b7d792`;
+- o deployment Production efetivo passou a ser
+  `dpl_QSE5F2vAbXqTH6Esiir66aAKuGmD`, branch `main`, `source=git`, `READY`;
+- `re7online.com`, `www.re7online.com`, `teste.re7online.com` e
+  `site-re7online.vercel.app` resolvem para esse deployment `main`;
+- smoke publico em `/`, `/converta`, `/sistemas`, `/privacy` e
+  `/manifest.webmanifest`: HTTP 200;
+- Vercel runtime errors nos ultimos 30 minutos: nenhum;
+- VPS, DB, PM2, Web Session, Meta e backend Converta permaneceram inalterados.
+
+Ver tambem:
+
+- `docs/saas/VERCEL_PRODUCTION_LINEAGE_AUDIT_2026-09-19.md`
+
 ### 1. Site publico (`re7online.com`)
 Usar quando mudar:
 - `src/app/page.tsx`
