@@ -62,6 +62,10 @@ function signTokenPart(unsignedToken: string) {
   return toBase64Url(crypto.createHmac("sha256", secret).update(unsignedToken).digest());
 }
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 export function hashPassword(password: string) {
   const salt = crypto.randomBytes(16);
   const derived = crypto.scryptSync(password, salt, 64);
@@ -136,6 +140,7 @@ export function verifyClientAuthTokenDetailed(token: string, now = new Date()): 
       payload.ver !== TOKEN_VERSION ||
       !payload.sub ||
       !payload.clientId ||
+      !isUuid(payload.clientId) ||
       !payload.email ||
       !payload.name ||
       !payload.role ||
@@ -145,6 +150,7 @@ export function verifyClientAuthTokenDetailed(token: string, now = new Date()): 
           payload.supportAccess.accessType !== "platform_support" ||
           !payload.supportAccess.grantId ||
           !payload.supportAccess.supportClientId ||
+          !isUuid(payload.supportAccess.supportClientId) ||
           !payload.supportAccess.supportUserId))
     ) {
       return { ok: false, reason: "invalid_payload" };

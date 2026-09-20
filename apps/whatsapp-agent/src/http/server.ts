@@ -1,6 +1,8 @@
 import http from "node:http";
+import crypto from "node:crypto";
 import { handleRequest } from "./routes.js";
 import { classifyMetricModule, metrics, normalizeMetricRoute } from "../metrics/internalMetrics.js";
+import { logger } from "../logger/logger.js";
 
 const ALLOWED_ORIGIN = "http://localhost:3000";
 const ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
@@ -20,7 +22,37 @@ function applyCors(req: http.IncomingMessage, res: http.ServerResponse) {
   }
 }
 
-export function createServer() {
+type RequestHandler = typeof handleRequest;
+
+function getHeaderValue(req: http.IncomingMessage, name: string) {
+  const value = req.headers[name.toLowerCase()];
+  if (Array.isArray(value)) return value[0] ?? "";
+  return typeof value === "string" ? value : "";
+}
+
+function respondWithUnhandledRequestError(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  error: unknown
+) {
+  const requestId = getHeaderValue(req, "x-request-id") || crypto.randomUUID();
+  logger.error({
+    event: "http.request.unhandled_error",
+    requestId,
+    method: req.method ?? "GET",
+    path: req.url ? new URL(req.url, "http://localhost").pathname : "/",
+    errorName: error instanceof Error ? error.name : typeof error,
+  });
+  if (res.writableEnded || res.destroyed) return;
+  if (res.headersSent) {
+    res.end();
+    return;
+  }
+  res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+  res.end(JSON.stringify({ error: "server_error", requestId }));
+}
+
+export function createServer(handler: RequestHandler = handleRequest) {
   return http.createServer((req, res) => {
     const startedAt = Date.now();
     inFlightRequests += 1;
@@ -59,6 +91,8 @@ export function createServer() {
       res.end();
       return;
     }
-    void handleRequest(req, res);
+    void handler(req, res).catch((error: unknown) => {
+      respondWithUnhandledRequestError(req, res, error);
+    });
   });
 }

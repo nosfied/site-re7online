@@ -9,7 +9,9 @@ import {
   buildResendPasswordResetPayload,
   buildSessionExpiredMessage,
   hashSensitiveValue,
+  validateAppSessionFromRequest,
 } from "./appSessionService.js";
+import { issueClientAuthToken } from "./clientAuth.js";
 import { buildAppAuthSessionExpiresAt, getEffectiveAppAuthSessionExpiresAt } from "./sessionPolicy.js";
 
 test("session governance uses 12 hour app sessions and 30 minute reset tokens", () => {
@@ -85,4 +87,24 @@ test("resend payload keeps API key and reset token out of metadata", () => {
   assert.deepEqual(Object.keys(payload).sort(), ["from", "html", "subject", "text", "to"]);
   assert.deepEqual(payload.to, ["user@example.com"]);
   assert.equal(JSON.stringify(payload).includes("re_"), false);
+});
+
+test("session validation rejects malformed uuid-backed client id before database lookup", async () => {
+  process.env.APP_AUTH_SECRET = "test-secret";
+  const token = issueClientAuthToken(
+    {
+      id: "user-1",
+      clientId: "malformed-client-id",
+      name: "User",
+      email: "user@example.test",
+      role: "ADMIN",
+    },
+    "session-1"
+  );
+
+  const result = await validateAppSessionFromRequest({
+    headers: { authorization: `Bearer ${token}` },
+  } as never);
+
+  assert.deepEqual(result, { ok: false, reason: "invalid_token" });
 });
