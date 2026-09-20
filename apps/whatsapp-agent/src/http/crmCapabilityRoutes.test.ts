@@ -850,6 +850,66 @@ test("CRM operational statuses are tenant-scoped and allow custom lead statuses"
 });
 
 test("CRM contacts read model lists tenant-scoped leads with safe identifiers", async () => {
+  const projectableLead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: `${prefix}-projectable-waid`,
+      waIdCanonical: `${prefix}-projectable-waid`,
+      phone: "5511988887777",
+      name: "Lead com atendimento humano",
+      status: "QUALIFIED",
+    },
+    select: { id: true },
+  });
+  const projectableDepartment = await prisma.department.create({
+    data: {
+      clientId: businessClientId,
+      name: `${prefix} Atendimento Humano`,
+      slug: `${prefix}-atendimento-humano`,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  const projectableQueue = await prisma.queue.create({
+    data: {
+      clientId: businessClientId,
+      departmentId: projectableDepartment.id,
+      name: `${prefix} Fila Humana`,
+    },
+    select: { id: true },
+  });
+  const projectableConversationId = crypto.randomUUID();
+  await prisma.conversation.create({
+    data: {
+      id: projectableConversationId,
+      clientId: businessClientId,
+      waId: `${prefix}-projectable-waid`,
+      waIdCanonical: `${prefix}-projectable-waid`,
+      channel: "whatsapp",
+      provider: "meta",
+      departmentId: projectableDepartment.id,
+      windowIsOpen: true,
+      updatedAt: new Date("2026-07-28T11:00:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId: `${prefix}-projectable-waid`,
+      waIdCanonical: `${prefix}-projectable-waid`,
+      conversationKey: `${prefix}-business:${prefix}-projectable-waid`,
+      channel: "whatsapp",
+      provider: "meta",
+      status: "WAITING",
+      mode: "HUMAN",
+      handoffStatus: "ACTIVE",
+      departmentId: projectableDepartment.id,
+      queueId: projectableQueue.id,
+      answers: {},
+      updatedAt: new Date("2026-07-28T11:01:00.000Z"),
+    },
+  });
+
   const response = await request<{
     ok: boolean;
     items: Array<{
@@ -886,11 +946,12 @@ test("CRM contacts read model lists tenant-scoped leads with safe identifiers", 
   assert.equal(whatsapp.crmStatusLabel, "Retorno futuro");
   assert.equal(whatsapp.hasConversation, true);
   assert.equal(whatsapp.conversationsCount, 1);
-  assert.equal(whatsapp.lastConversationId, leadConversationId);
-  assert.equal(whatsapp.lastConversationIdentity, `${prefix}-lead-waid`);
-  assert.match(whatsapp.lastProtocol ?? "", /^CVT-[0-9A-F]{12}$/);
-  assert.equal(whatsapp.lastConversationStatus, "WAITING");
+  assert.equal(whatsapp.lastConversationId, null);
+  assert.equal(whatsapp.lastConversationIdentity, null);
+  assert.equal(whatsapp.lastProtocol, null);
+  assert.equal(whatsapp.lastConversationStatus, null);
   assert.equal(whatsapp.activeOptOut, true);
+  assert.equal(whatsapp.importedSource, "Campanha / audiência");
   assert.equal(whatsapp.isAnonymized, false);
   assert.equal(whatsapp.canStartWhatsappTemplateCandidate, false);
   assert.equal(whatsapp.templateSendBlockedReason, "opt_out");
@@ -901,6 +962,29 @@ test("CRM contacts read model lists tenant-scoped leads with safe identifiers", 
     JSON.stringify(response.body),
     /rawPayload|hash:|Usuario Anonimizado|Empresa Anonimizada|anonimizado@example\.test|551188887777/
   );
+  assert.equal(
+    await prisma.conversation.count({ where: { id: leadConversationId, clientId: businessClientId } }),
+    1
+  );
+  assert.equal(
+    await prisma.conversationRuntimeState.count({
+      where: {
+        clientId: businessClientId,
+        waId: `${prefix}-lead-waid`,
+        status: "WAITING",
+      },
+    }),
+    1
+  );
+
+  const projectable = response.body.items.find((item) => item.leadId === projectableLead.id);
+  assert.ok(projectable);
+  assert.equal(projectable.hasConversation, true);
+  assert.equal(projectable.conversationsCount, 1);
+  assert.equal(projectable.lastConversationId, projectableConversationId);
+  assert.equal(projectable.lastConversationIdentity, `${prefix}-projectable-waid`);
+  assert.match(projectable.lastProtocol ?? "", /^CVT-[0-9A-F]{12}$/);
+  assert.equal(projectable.lastConversationStatus, "WAITING");
 
   const instagram = response.body.items.find((item) => item.leadId === instagramLeadId);
   assert.ok(instagram);

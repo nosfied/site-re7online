@@ -1668,19 +1668,21 @@ function CsvImportModal({
               <button type="button" onClick={onClose} disabled={loading} className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
                 Fechar
               </button>
-              {(preview || summary || csvText) ? (
+              {!reportVisible && (preview || csvText) ? (
                 <button type="button" onClick={resetImportState} disabled={loading} className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
                   Cancelar importação
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={runPreview}
-                disabled={previewButtonDisabled}
-                className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {previewLoading ? "Gerando prévia..." : previewMappingDirty ? "Atualizar prévia" : "Pré-visualizar"}
-              </button>
+              {!reportVisible ? (
+                <button
+                  type="button"
+                  onClick={runPreview}
+                  disabled={previewButtonDisabled}
+                  className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {previewLoading ? "Gerando prévia..." : previewMappingDirty ? "Atualizar prévia" : "Pré-visualizar"}
+                </button>
+              ) : null}
               {previewReady ? (
                 <button
                   type="button"

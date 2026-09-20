@@ -66,6 +66,20 @@ erro canonico `invalid_phone` passa a exibir `Informe um número de WhatsApp
 válido com código do país 55 e DDD.` sem alterar backend, normalizador canonico,
 CSV, campanhas ou regras de persistencia.
 
+CRM post-deploy hardening, 2026-09-20: LOCAL VALIDATED / NOT DEPLOYED. A origem
+do contato passa a ser uma categoria de proveniencia derivada somente de
+evidencia canonica ja existente, sem novo campo persistido: `Cadastro manual`,
+`Importação CSV`, `Campanha / audiência`, `Atendimento / conversa`,
+`Integração / sistema` ou `Não identificado` quando registros legados nao tem
+prova confiavel. A importacao CSV de contatos mantem `Fechar` apos o relatorio,
+mas deixa de mostrar `Cancelar importação` depois do processamento. No CRM, a
+contagem/historico de conversas permanece preservada, mas a acao de abrir Inbox
+usa apenas conversa projetavel pela politica canonica
+`shouldProjectConversationToHumanInbox(...)`; conversas historicas BOT-only ou
+sem destino humano completo nao sao transformadas em falso atalho de Inbox.
+Nao houve schema, migration, provider call, envio real, criacao de conversa ou
+mutacao de runtime.
+
 Split de escopo pre-producao: a entrega limpa de Privacidade nao inclui
 materializacao de `Contact` para `Retirar da operação` em registros Lead-only.
 Esse comportamento operacional permanece como follow-up separado porque altera
@@ -200,7 +214,7 @@ O console interno `/admin/training` administra criacao, edicao, publicacao, desp
 
 ## CRM operacional
 
-O CRM atual e um read model seguro de contatos/leads por tenant. Ele exibe dados minimizados e operacionais, como nome exibivel, identificador seguro, canal, classificacao, empresa quando houver, ultima conversa, status da conversa, ultima atualizacao, bloqueio de envio ativo e origem importada.
+O CRM atual e um read model seguro de contatos/leads por tenant. Ele exibe dados minimizados e operacionais, como nome exibivel, identificador seguro, canal, classificacao, empresa quando houver, ultima conversa operacional abrivel no Inbox, contagem/historico de conversas, status da conversa, ultima atualizacao, bloqueio de envio ativo e origem/proveniencia derivada de evidencia canonica.
 
 O CRM operacional:
 
@@ -212,6 +226,14 @@ O CRM operacional:
 - permite alterar status entre situacoes ativas configuradas no tenant;
 - permite bloquear/liberar envio ativo via eventos de opt-out;
 - nao executa hard delete pela tela operacional.
+
+Origem do contato significa como o registro CRM/operacional entrou na base,
+nao o status CRM nem o canal atual. O valor e derivado de eventos/fonte ja
+persistidos e, para legados sem evidencia confiavel, deve permanecer
+`Não identificado`. Historico de conversa e preservado, mas a acao primaria
+`Abrir conversa` so aponta para Inbox quando a conversa passa pela politica
+canonica de projecao humana; conversas historicas nao projetaveis continuam
+como evidencia de historico, sem ficarem visiveis na Inbox por esse motivo.
 
 Importacao CRA implementada localmente para campanhas CSV: campanha/contatos
 com `Situação no CRM` reutilizam a identidade canonica do CRM. Quando o import

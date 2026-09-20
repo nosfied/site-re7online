@@ -160,6 +160,18 @@ test("CRM CSV import requires preview before confirmation and locks duplicate pr
   assert.ok(modalBlock.includes("Cancelar importação"));
 });
 
+test("CRM CSV import hides cancel and import actions after completed summary", () => {
+  const modalBlock = pageSource.slice(
+    pageSource.indexOf("function CsvImportModal"),
+    pageSource.indexOf("export default function AppCrmContactsPage")
+  );
+  assert.ok(modalBlock.includes("const reportVisible = Boolean(summary);"));
+  assert.ok(modalBlock.includes("!reportVisible && (preview || csvText) ? ("));
+  assert.ok(modalBlock.includes("!reportVisible ? (\n                <button"));
+  assert.ok(modalBlock.includes("const previewReady = Boolean(preview && !reportVisible);"));
+  assert.ok(modalBlock.includes("{previewReady ? ("));
+});
+
 test("CRM CSV import can refresh preview after column mapping changes", () => {
   const modalBlock = pageSource.slice(
     pageSource.indexOf("function CsvImportModal"),

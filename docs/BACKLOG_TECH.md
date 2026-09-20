@@ -504,6 +504,23 @@ ACTIVE P1:
    canonical phone normalization, formula-safe report CSV, no provider call, no
    real send, no schema/migration.
 
+   CRM post-deploy hardening, 2026-09-20: LOCAL VALIDATED / COMMIT PENDING /
+   NOT DEPLOYED. Contact origin semantics were hardened without adding a
+   persistence field: `crm.contact.created` with `crm_manual` maps to
+   `Cadastro manual`, `crm_import` maps to `Importacao CSV`,
+   campaign/audience evidence maps to `Campanha / audiencia`, explicit
+   conversation/inbound/system sources map to their user-facing categories and
+   legacy records without reliable evidence show `Nao identificado` rather than
+   fabricated provenance. Contacts CSV completed-state UX now keeps `Fechar`
+   but hides `Cancelar importacao` and import/preview actions after the summary
+   is visible, so cancel only means abandon/reset before processing. CRM
+   conversation actions now preserve historical count/history while exposing
+   `Abrir conversa` only when the selected conversation is projectable by the
+   canonical Inbox policy `shouldProjectConversationToHumanInbox(...)`. BOT-only
+   or otherwise non-projectable historical conversations remain historical CRM
+   evidence and no longer create false Inbox-open actions. No schema/migration,
+   no provider call, no real send, no runtime mutation and no new conversation.
+
 7. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente
    2 mensagens Utility `data_exame` via META_CLOUD no `demo-converta` parou com

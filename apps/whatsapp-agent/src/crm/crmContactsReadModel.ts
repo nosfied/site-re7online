@@ -19,6 +19,8 @@ import {
   isActiveOperationalBlockingConversation,
   isHiddenTechnicalBlockingConversation,
 } from "./crmContactMutations.js";
+import { shouldProjectConversationToHumanInbox } from "../inbox/messageVisibility.js";
+import { CRM_CONTACT_CREATED_EVENT } from "./crmContactUpsert.js";
 import {
   buildCrmCampaignRelationshipDetail,
   buildCrmCampaignRelationshipSummaryByLeadId,
@@ -30,6 +32,22 @@ import {
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 const IMPORT_EVENT_NAMES = ["contact.imported_for_campaign", "lead.imported_for_campaign"];
+const CAMPAIGN_PROVENANCE_EVENT_NAMES = [
+  "campaign.recipient.contact_bootstrap_ready",
+  "campaign.recipient.conversation_created",
+  "campaign.recipient.conversation_reactivated",
+];
+const CONTACT_PROVENANCE_EVENT_NAMES = [
+  CRM_CONTACT_CREATED_EVENT,
+  ...IMPORT_EVENT_NAMES,
+  ...CAMPAIGN_PROVENANCE_EVENT_NAMES,
+];
+const CONTACT_ORIGIN_UNKNOWN = "Não identificado";
+const CONTACT_ORIGIN_MANUAL = "Cadastro manual";
+const CONTACT_ORIGIN_CSV = "Importação CSV";
+const CONTACT_ORIGIN_CONVERSATION = "Atendimento / conversa";
+const CONTACT_ORIGIN_CAMPAIGN = "Campanha / audiência";
+const CONTACT_ORIGIN_SYSTEM = "Integração / sistema";
 
 export type CrmContactsQuery = {
   q?: string | null;
@@ -407,6 +425,67 @@ function safePayloadString(payload: Prisma.JsonValue, keys: string[]) {
   return null;
 }
 
+function classifyContactOriginEvent(event: {
+  eventName: string;
+  payloadJson: Prisma.JsonValue;
+}) {
+  if (IMPORT_EVENT_NAMES.includes(event.eventName) || CAMPAIGN_PROVENANCE_EVENT_NAMES.includes(event.eventName)) {
+    return CONTACT_ORIGIN_CAMPAIGN;
+  }
+
+  if (event.eventName !== CRM_CONTACT_CREATED_EVENT) return null;
+  const source = safePayloadString(event.payloadJson, ["source", "origin", "importedSource"])?.toLowerCase() ?? "";
+  if (source === "crm_manual") return CONTACT_ORIGIN_MANUAL;
+  if (source === "crm_import") return CONTACT_ORIGIN_CSV;
+  if (source.includes("campaign")) return CONTACT_ORIGIN_CAMPAIGN;
+  if (source.includes("conversation") || source.includes("inbound") || source.includes("chatbot")) {
+    return CONTACT_ORIGIN_CONVERSATION;
+  }
+  if (source) return CONTACT_ORIGIN_SYSTEM;
+  return null;
+}
+
+function buildContactOriginLabel(params: {
+  events: Array<{ eventName: string; payloadJson: Prisma.JsonValue; createdAt: Date }>;
+}) {
+  for (const event of params.events) {
+    const origin = classifyContactOriginEvent(event);
+    if (origin) return origin;
+  }
+  return CONTACT_ORIGIN_UNKNOWN;
+}
+
+function isHumanInboxProjectableConversation(
+  conversation: { departmentId?: string | null },
+  runtime?: {
+    status?: string | null;
+    mode?: string | null;
+    handoffStatus?: string | null;
+    assignedUserId?: string | null;
+    assignedAt?: Date | string | null;
+    departmentId?: string | null;
+    queueId?: string | null;
+    handoffActivatedAt?: Date | string | null;
+  } | null
+) {
+  if (!runtime) return false;
+  const assignedAt = runtime.assignedAt instanceof Date ? runtime.assignedAt.toISOString() : runtime.assignedAt;
+  const handoffActivatedAt =
+    runtime.handoffActivatedAt instanceof Date
+      ? runtime.handoffActivatedAt.toISOString()
+      : runtime.handoffActivatedAt;
+  return shouldProjectConversationToHumanInbox({
+    status: runtime.status,
+    mode: runtime.mode,
+    handoffStatus: runtime.handoffStatus,
+    assignedUserId: runtime.assignedUserId,
+    assignedAt,
+    departmentId: runtime.departmentId ?? conversation.departmentId ?? null,
+    queueId: runtime.queueId,
+    handoffActivatedAt,
+  });
+}
+
 function resolveActiveOptOuts(
   events: Array<{
     waId: string | null;
@@ -666,6 +745,7 @@ export async function buildCrmContactsPayload(
           id: true,
           waId: true,
           waIdCanonical: true,
+          departmentId: true,
           windowIsOpen: true,
           createdAt: true,
           updatedAt: true,
@@ -682,6 +762,13 @@ export async function buildCrmContactsPayload(
           waIdCanonical: true,
           channel: true,
           status: true,
+          mode: true,
+          handoffStatus: true,
+          assignedUserId: true,
+          assignedAt: true,
+          departmentId: true,
+          queueId: true,
+          handoffActivatedAt: true,
           answers: true,
           updatedAt: true,
         },
@@ -703,14 +790,15 @@ export async function buildCrmContactsPayload(
       prisma.event.findMany({
         where: {
           clientId: params.clientId,
-          eventName: { in: IMPORT_EVENT_NAMES },
+          eventName: { in: CONTACT_PROVENANCE_EVENT_NAMES },
           waIdCanonical: { in: canonicalWaIds },
         },
         orderBy: { createdAt: "desc" },
-        take: Math.min(identityKeys.length * 2, 800),
+        take: Math.min(identityKeys.length * 4, 1200),
         select: {
           waId: true,
           waIdCanonical: true,
+          eventName: true,
           payloadJson: true,
           createdAt: true,
         },
@@ -746,7 +834,7 @@ export async function buildCrmContactsPayload(
     }
     const values = Array.from(byId.values());
     values.sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
-    return { count: values.length, latest: values[0] ?? null };
+    return { count: values.length, latest: values[0] ?? null, values };
   };
   const runtimeByKey = new Map<string, (typeof runtimeStates)[number]>();
   for (const runtime of runtimeStates) {
@@ -756,18 +844,13 @@ export async function buildCrmContactsPayload(
     }
   }
   const activeOptOuts = resolveActiveOptOuts(optOutEvents);
-  const importSourceByKey = new Map<string, string>();
+  const provenanceEventsByKey = new Map<string, Array<(typeof importEvents)[number]>>();
   for (const event of importEvents) {
     const key = event.waIdCanonical ?? event.waId;
-    if (!key || importSourceByKey.has(key)) continue;
-    const source = safePayloadString(event.payloadJson, [
-      "source",
-      "importedSource",
-      "origin",
-      "fileName",
-      "classification",
-    ]);
-    if (source) importSourceByKey.set(key, source);
+    if (!key) continue;
+    const current = provenanceEventsByKey.get(key) ?? [];
+    current.push(event);
+    provenanceEventsByKey.set(key, current);
   }
 
   const allItemsWithInternal = leads
@@ -788,10 +871,6 @@ export async function buildCrmContactsPayload(
         null;
       const leadCandidates = buildLeadIdentityCandidates(lead, identity, contact);
       const conversationSummary = getConversationSummary([...leadCandidates, key]);
-      const runtime =
-        leadCandidates.map((candidate) => runtimeByKey.get(candidate)).find(Boolean) ??
-        runtimeByKey.get(key) ??
-        null;
       const hasConversationValue = conversationSummary.count > 0;
       const activeOptOut = getOptOutCanonicalCandidates(lead).some((candidate) =>
         activeOptOuts.has(candidate)
@@ -800,8 +879,17 @@ export async function buildCrmContactsPayload(
       const isAnonymized = isAnonymizedContactRecord(lead, contact, identity);
       const isOperationalContact = !contact || isOperationalContactLifecycle(contact.lifecycle);
       const isOperationallyExcluded = leadCandidates.some((candidate) => operationallyExcludedWaIds.has(candidate));
+      const lastInboxConversation =
+        conversationSummary.values.find((conversation) => {
+          const runtime = runtimeByKey.get(getIdentityKey(conversation)) ?? null;
+          return isHumanInboxProjectableConversation(conversation, runtime);
+        }) ?? null;
+      const lastInboxRuntime = lastInboxConversation
+        ? runtimeByKey.get(getIdentityKey(lastInboxConversation)) ?? null
+        : null;
+      const hasInboxConversationValue = Boolean(lastInboxConversation);
       const startConversationBlockedReason =
-        hasConversationValue
+        hasInboxConversationValue
           ? null
           : isOperationallyExcluded
             ? "contact_operationally_excluded"
@@ -821,7 +909,15 @@ export async function buildCrmContactsPayload(
       const phoneDisplay = isWhatsappChannel(lead.channel)
         ? formatCrmPhoneDisplay(lead.phone || lead.waIdCanonical || lead.waId)
         : null;
-      const lastConversation = conversationSummary.latest;
+      const contactOrigin = buildContactOriginLabel({
+        events: Array.from(
+          new Map(
+            leadCandidates
+              .flatMap((candidate) => provenanceEventsByKey.get(candidate) ?? [])
+              .map((event) => [`${event.eventName}:${event.createdAt.toISOString()}`, event] as const)
+          ).values()
+        ).sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime()),
+      });
       return {
         leadId: lead.id,
         contactId: identity?.contactId ?? contact?.id ?? null,
@@ -836,26 +932,26 @@ export async function buildCrmContactsPayload(
         crmStatus: lead.status,
         crmStatusLabel: statusLabelById.get(lead.status.toUpperCase()) ?? lead.status,
         leadStatus: lead.status,
-        lastConversationId: lastConversation?.id ?? null,
-        lastConversationIdentity: lastConversation ? getIdentityKey(lastConversation) : null,
-        lastProtocol: lastConversation
-          ? getServiceCycleForDisplay(runtime)?.protocol ?? buildConversationProtocol(lastConversation)
+        lastConversationId: lastInboxConversation?.id ?? null,
+        lastConversationIdentity: lastInboxConversation ? getIdentityKey(lastInboxConversation) : null,
+        lastProtocol: lastInboxConversation
+          ? getServiceCycleForDisplay(lastInboxRuntime)?.protocol ?? buildConversationProtocol(lastInboxConversation)
           : null,
-        lastConversationStatus: runtime?.status ?? null,
-        lastConversationUpdatedAt: lastConversation?.updatedAt.toISOString() ?? null,
+        lastConversationStatus: lastInboxRuntime?.status ?? null,
+        lastConversationUpdatedAt: lastInboxConversation?.updatedAt.toISOString() ?? null,
         conversationsCount: conversationSummary.count,
         hasConversation: hasConversationValue,
         canStartConversation:
-          !hasConversationValue &&
+          !hasInboxConversationValue &&
           !isAnonymized &&
           startConversationBlockedReason === null,
         startConversationBlockedReason,
         activeOptOut,
         isAnonymized,
         isOperationallyExcluded,
-        importedSource: importSourceByKey.get(canonical) ?? null,
+        importedSource: contactOrigin,
         ...templateCandidate,
-        hasOpenConversationWindow: lastConversation ? lastConversation.windowIsOpen : null,
+        hasOpenConversationWindow: lastInboxConversation ? lastInboxConversation.windowIsOpen : null,
         campaignRelationship: { ...EMPTY_CRM_CAMPAIGN_RELATIONSHIP_SUMMARY },
         createdAt: lead.createdAt.toISOString(),
         updatedAt: lead.updatedAt.toISOString(),
@@ -1100,7 +1196,7 @@ export async function buildCrmContactDetailPayload(
       prisma.event.findMany({
         where: {
           clientId: params.clientId,
-          eventName: { in: IMPORT_EVENT_NAMES },
+          eventName: { in: CONTACT_PROVENANCE_EVENT_NAMES },
           waIdCanonical: { in: identityKeys },
         },
         orderBy: { createdAt: "desc" },
@@ -1108,6 +1204,7 @@ export async function buildCrmContactDetailPayload(
         select: {
           waId: true,
           waIdCanonical: true,
+          eventName: true,
           payloadJson: true,
           createdAt: true,
         },
@@ -1166,13 +1263,21 @@ export async function buildCrmContactDetailPayload(
   const isOperationallyExcluded = identityKeys.some((candidate) => operationallyExcludedWaIds.has(candidate));
   if (isOperationallyExcluded && params.includeOperationallyExcluded !== true) return null;
   if (isAnonymized) return null;
+  const latestInboxConversation =
+    conversations.find((conversation) => {
+      const runtime = runtimeByKey.get(getIdentityKey(conversation)) ?? null;
+      return isHumanInboxProjectableConversation(conversation, runtime);
+    }) ?? null;
+  const latestInboxRuntime = latestInboxConversation
+    ? runtimeByKey.get(getIdentityKey(latestInboxConversation)) ?? null
+    : null;
   const canStartConversation =
-    conversations.length === 0 &&
+    !latestInboxConversation &&
     templateCandidate.hasValidWhatsappIdentity &&
     !activeOptOut &&
     params.canStartWhatsappFreeform === true;
   const startConversationBlockedReason =
-    conversations.length > 0
+    latestInboxConversation
       ? null
       : isOperationallyExcluded
         ? "contact_operationally_excluded"
@@ -1190,11 +1295,7 @@ export async function buildCrmContactDetailPayload(
   const phoneDisplay = isWhatsappChannel(lead.channel)
     ? formatCrmPhoneDisplay(lead.phone || lead.waIdCanonical || lead.waId)
     : null;
-  const importSource = importEvents
-    .map((event) =>
-      safePayloadString(event.payloadJson, ["source", "importedSource", "origin", "fileName", "classification"])
-    )
-    .find((value): value is string => Boolean(value)) ?? null;
+  const contactOrigin = buildContactOriginLabel({ events: importEvents });
   const campaignRelationship =
     params.includeCampaignRelationships === true
       ? await buildCrmCampaignRelationshipDetail(prisma, {
@@ -1204,8 +1305,6 @@ export async function buildCrmContactDetailPayload(
         })
       : { items: [], pagination: { limit: 25, hasMore: false, total: 0 } };
   const campaignSummary = summarizeDetailCampaignRelationship(campaignRelationship);
-  const latestConversation = conversations[0] ?? null;
-  const latestRuntime = latestConversation ? runtimeByKey.get(getIdentityKey(latestConversation)) ?? null : null;
   const blockingRuntime =
     runtimeStates.find((runtime) => isActiveOperationalBlockingConversation(runtime)) ?? null;
   const blockingConversation = blockingRuntime
@@ -1250,13 +1349,13 @@ export async function buildCrmContactDetailPayload(
       crmStatus: lead.status,
       crmStatusLabel: statusLabelById.get(lead.status.toUpperCase()) ?? lead.status,
       leadStatus: lead.status,
-      lastConversationId: latestConversation?.id ?? null,
-      lastConversationIdentity: latestConversation ? getIdentityKey(latestConversation) : null,
-      lastProtocol: latestConversation
-        ? getServiceCycleForDisplay(latestRuntime)?.protocol ?? buildConversationProtocol(latestConversation)
+      lastConversationId: latestInboxConversation?.id ?? null,
+      lastConversationIdentity: latestInboxConversation ? getIdentityKey(latestInboxConversation) : null,
+      lastProtocol: latestInboxConversation
+        ? getServiceCycleForDisplay(latestInboxRuntime)?.protocol ?? buildConversationProtocol(latestInboxConversation)
         : null,
-      lastConversationStatus: latestRuntime?.status ?? null,
-      lastConversationUpdatedAt: latestConversation?.updatedAt.toISOString() ?? null,
+      lastConversationStatus: latestInboxRuntime?.status ?? null,
+      lastConversationUpdatedAt: latestInboxConversation?.updatedAt.toISOString() ?? null,
       conversationsCount: conversations.length,
       hasConversation: conversations.length > 0,
       canStartConversation,
@@ -1264,9 +1363,9 @@ export async function buildCrmContactDetailPayload(
       activeOptOut,
       isAnonymized,
       isOperationallyExcluded,
-      importedSource: importSource,
+      importedSource: contactOrigin,
       ...templateCandidate,
-      hasOpenConversationWindow: latestConversation ? latestConversation.windowIsOpen : null,
+      hasOpenConversationWindow: latestInboxConversation ? latestInboxConversation.windowIsOpen : null,
       campaignRelationship: campaignSummary,
       createdAt: lead.createdAt.toISOString(),
       updatedAt: lead.updatedAt.toISOString(),
