@@ -27,7 +27,7 @@ O onboarding interno foi implementado, porém ainda não validado com novo tenan
 ### Privacidade / LGPD por titular - 2026-09-20
 
 Data Subject Privacy / LGPD contact-centric anonymization: OWNER PASS / LOCAL
-VALIDATED / CLEAN DELIVERY READY / NOT DEPLOYED. A nova frente adiciona preview e execucao de
+VALIDATED / CLEAN DELIVERY DEPLOYED / PRODUCTION HEALTH VALIDATED. A nova frente adiciona preview e execucao de
 anonimizacao por titular a partir de `Contact` canonico do mesmo tenant, com
 fallback para `Lead.id` quando `Contact.id` ainda e nulo, busca/seleção pelo CRM
 autenticado, confirmacao forte
@@ -54,7 +54,21 @@ Lead-only e operacionalmente excluidos, sem alterar a lista operacional normal
 do CRM. Invariante permanente: OPERATIONAL EXCLUSION DOES NOT REMOVE SUBJECT
 FROM PRIVACY GOVERNANCE DISCOVERY.
 
-Invalid phone UX mapping: OWNER PASS / LOCAL VALIDATED / NOT DEPLOYED. Erros
+Production deploy, 2026-09-20: clean privacy head
+`2527eb6cd01261c2825e2127191c1e3edcf88692` was fast-forward deployed over
+`9bb5f88f6a10ff3280e5adcdc777e9df0b0f7657` after persistent PostgreSQL backup
+`/opt/re7online/backups/converta-persistent/postgres/privacy-clean-20260920T200352Z-predeploy.dump`.
+Backend/frontend builds passed, `re7-whatsapp-agent` and `re7-admin-front`
+were reloaded, and `re7-whatsapp-web-worker` was preserved. Health returned
+`ok`/`db=ok`. Domain counts for Contact, Lead, ContactChannelIdentity,
+Conversation and OutboundMessage stayed unchanged during validation. No
+`privacy.subject.anonymized`, provider send, `crm.contact.created` or
+materialization event was emitted. Authenticated visual smoke was not exercised
+because no valid current production app credential was available and an old
+demo-prefeitura ADMIN session was rejected as expired by runtime auth policy;
+no real anonymization was executed.
+
+Invalid phone UX mapping: OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY DEPLOYED. Erros
 `invalid_phone` vindos da validacao canonica de CRM agora mostram
 `Informe um número de WhatsApp válido com código do país 55 e DDD.` no app. O
 backend, normalizador canonico, CSV, campanhas e regras de persistencia nao

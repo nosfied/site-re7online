@@ -29,8 +29,8 @@ alteradas. A validade da previa fica presa ao mapeamento exato de colunas; se
 telefone, nome ou `Situação no CRM` muda, a previa fica stale, a importacao e
 bloqueada e o operador precisa atualizar a previa.
 
-Atualizacao local de 2026-09-20: Data Subject Privacy / LGPD contact-centric
-anonymization esta OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY READY / NOT DEPLOYED. A tela de
+Atualizacao de 2026-09-20: Data Subject Privacy / LGPD contact-centric
+anonymization esta OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY DEPLOYED / PRODUCTION HEALTH VALIDATED. A tela de
 Privacidade passa a permitir buscar e selecionar um titular no CRM autenticado,
 gerar previa sem mutacao e executar anonimizacao por titular somente com
 confirmacao forte. A capacidade parte de `Contact.id` quando disponivel e usa
@@ -39,7 +39,17 @@ no mesmo tenant, sem criar Contact artificial e sem usar telefone cru como chave
 de mutacao. A implementacao bloqueia identidade ambigua, reutiliza as primitivas
 existentes de `privacyRetentionService.ts` e registra auditoria sanitizada sem
 PII. Nao houve schema, migration, hard delete, provider call, envio real ou
-deploy.
+deploy inicial de codigo funcional.
+
+Deploy de producao: o HEAD limpo
+`2527eb6cd01261c2825e2127191c1e3edcf88692` foi aplicado por fast-forward apos
+backup persistente. Builds backend/frontend passaram, health retornou
+`ok`/`db=ok`, e nao houve anonimização real, provider call, envio real nem
+materializacao de Contact durante a validacao. Smoke visual autenticado ficou
+nao exercido por falta de credencial app valida em producao; sessao legada
+ADMIN de `demo-prefeitura` foi rejeitada como expirada pela politica runtime.
+As contagens de Contact, Lead, ContactChannelIdentity, Conversation e
+OutboundMessage permaneceram estaveis.
 
 Owner UX addition/correction local: Contacts recebeu atalho compacto
 `Privacidade` com icone de cadeado na linha do contato (`Abrir contato /
@@ -489,7 +499,7 @@ Anonimizacao nao e hard delete. Ela remove dados pessoais da operacao visivel, m
 
 Inbound e upserts multicanal possuem guarda para nao restaurar dados antigos de identidades anonimizadas. Eventos de seguranca e privacidade usam payload sanitizado.
 
-A anonimizacao por titular, OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY READY / NOT DEPLOYED,
+A anonimizacao por titular, OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY DEPLOYED / PRODUCTION HEALTH VALIDATED,
 expande a operacao para casos sem conversa: o operador ADMIN seleciona um
 titular canonico do CRM por Contact ou Lead-only, revisa a previa de impacto e confirma
 `ANONIMIZAR TITULAR`. A orquestracao cobre Contact, ContactChannelIdentity,
