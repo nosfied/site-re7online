@@ -39,6 +39,8 @@ function makePrisma(params: {
   runtimeStatus?: string | null;
   runtime?: ReturnType<typeof makeRuntime> | null;
   excludedAt?: Date | null;
+  directIdentity?: boolean;
+  existingContact?: boolean;
 } = {}) {
   const contact = {
     id: "contact_1",
@@ -47,6 +49,7 @@ function makePrisma(params: {
     legacyWaId: "5584951957784",
     operationallyExcludedAt: params.excludedAt ?? null,
   };
+  let materializedContact: typeof contact | null = params.existingContact === false ? null : contact;
   const events: Array<Record<string, unknown>> = [];
   const lead = {
     id: "lead_1",
@@ -62,15 +65,31 @@ function makePrisma(params: {
     email: null,
     company: null,
     status: "NEW",
-    contactChannelIdentity: {
-      contactId: contact.id,
-      contact,
-    },
+    contactChannelIdentity:
+      params.directIdentity === false
+        ? null
+        : {
+            contactId: materializedContact?.id ?? contact.id,
+            contact: materializedContact ?? contact,
+          },
   };
   const prisma = {
     $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(prisma),
     lead: {
       findFirst: async () => lead,
+      findMany: async () => [
+        {
+          id: lead.id,
+          name: lead.name,
+          phone: lead.phone,
+          status: lead.status,
+          contactChannelIdentityId: lead.contactChannelIdentityId,
+        },
+      ],
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        Object.assign(lead, data);
+        return { id: lead.id };
+      },
     },
     conversationRuntimeState: {
       findFirst: async () =>
@@ -80,10 +99,44 @@ function makePrisma(params: {
             ? makeRuntime({ status: params.runtimeStatus })
             : null,
     },
+    contactChannelIdentity: {
+      findFirst: async () => ({
+        id: lead.contactChannelIdentityId,
+        contactId: null,
+        externalUserHash: "anon:old",
+        externalUserRef: null,
+        legacyWaId: null,
+      }),
+      findMany: async () =>
+        materializedContact
+          ? [
+              {
+                contactId: materializedContact.id,
+                contact: materializedContact,
+              },
+            ]
+          : [],
+      upsert: async () => {
+        lead.contactChannelIdentityId = "identity_created";
+        return { id: "identity_created" };
+      },
+    },
     contact: {
+      findMany: async () => (materializedContact ? [materializedContact] : []),
+      findFirst: async () => materializedContact,
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        materializedContact = {
+          id: "contact_created",
+          waId: String(data.waId ?? ""),
+          externalUserRef: String(data.externalUserRef ?? ""),
+          legacyWaId: String(data.legacyWaId ?? ""),
+          operationallyExcludedAt: null,
+        };
+        return { id: materializedContact.id, name: data.name ?? null, lifecycle: data.lifecycle ?? null };
+      },
       update: async ({ data }: { data: Record<string, unknown> }) => {
-        Object.assign(contact, data);
-        return contact;
+        Object.assign(materializedContact ?? contact, data);
+        return materializedContact ?? contact;
       },
     },
     event: {
@@ -93,6 +146,7 @@ function makePrisma(params: {
       },
     },
     __contact: contact,
+    __getMaterializedContact: () => materializedContact,
     __events: events,
   };
   return prisma;
@@ -187,6 +241,33 @@ test("CRM operational exclusion allows closed historical conversations", async (
   });
 
   assert.ok(prisma.__contact.operationallyExcludedAt instanceof Date);
+  assert.equal(prisma.__events[0]?.eventName, "crm.contact.excluded");
+});
+
+test("CRM operational exclusion resolves existing canonical contact without direct lead identity", async () => {
+  const prisma = makePrisma({ directIdentity: false });
+  await excludeCrmContactFromOperation(prisma as never, {
+    clientId: "client_1",
+    leadId: "lead_1",
+    userId: "admin_1",
+    requestId: "req_indirect",
+  });
+
+  assert.ok(prisma.__contact.operationallyExcludedAt instanceof Date);
+  assert.equal(prisma.__events[0]?.eventName, "crm.contact.excluded");
+});
+
+test("CRM operational exclusion materializes lead-only CRM contact before excluding", async () => {
+  const prisma = makePrisma({ directIdentity: false, existingContact: false });
+  await excludeCrmContactFromOperation(prisma as never, {
+    clientId: "client_1",
+    leadId: "lead_1",
+    userId: "admin_1",
+    requestId: "req_materialize",
+  });
+
+  assert.equal(prisma.__getMaterializedContact()?.id, "contact_created");
+  assert.ok(prisma.__getMaterializedContact()?.operationallyExcludedAt instanceof Date);
   assert.equal(prisma.__events[0]?.eventName, "crm.contact.excluded");
 });
 

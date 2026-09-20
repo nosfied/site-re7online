@@ -58,7 +58,7 @@ Acao aplicada em producao:
 | `/app/reports` | `ConversationMetrics` e estado operacional por conversa | OK com efeito esperado de retencao | Relatorios podem ficar vazios/reduzidos apos retencao ou limpeza do tenant. Foi adicionado aviso quando ADMIN estiver com retencao menor que 30 dias. |
 | `/app/settings/users` | `User` e `Department` | OK | Independe de historico de conversas. |
 | `/app/settings/departments` | `Department` | OK | Independe de historico de conversas. |
-| `/app/settings/privacy` | `RetentionConfig` e acoes LGPD | OK | Acoes exigem ADMIN. Retencao e exclusao usam soft delete/anonimizacao, sem delete fisico em cascata. |
+| `/app/settings/privacy` | `RetentionConfig`, acoes LGPD de conversa e anonimizacao por titular | OK / subject OWNER PASS / local validated / not deployed | Acoes exigem ADMIN. Retencao e exclusao usam soft delete/anonimizacao, sem delete fisico em cascata. Anonimizacao por titular parte de Contact canonico do mesmo tenant ou Lead-only quando `contactId = null`, possui previa read-only e confirmacao forte, e reutiliza primitivas existentes sem duplicar engine de anonimizacao. |
 | `/app/login` | autenticacao e sessao | OK | Sem dependencia de historico operacional. |
 
 ## Campanhas e detalhe por numero
@@ -88,6 +88,12 @@ Politica atual:
 - mensagens/eventos/metricas/leads/contacts nao sao removidos fisicamente nesta
   fase;
 - `/app/conversations` oculta `deletedAt != null` por padrao.
+- anonimizacao por titular reutiliza as primitivas existentes para minimizar
+  Contact, ContactChannelIdentity, Lead, LeadNote, conversas associadas,
+  runtime state, mensagens e eventos sanitizaveis; a previa nao executa mutacao.
+- descoberta de titular em Privacidade nao usa a mesma visibilidade da lista
+  operacional do CRM: `operationallyExcludedAt` continua ocultavel no CRM normal,
+  mas nao impede previa/anonymizacao por titular.
 
 Recomendacao de operacao:
 

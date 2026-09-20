@@ -6,7 +6,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 
 | Documento | Status | Uso |
 | --- | --- | --- |
-| `docs/saas/CONVERTA_PRODUCT_STATE_2026-08.md` | atual | Fotografia documental do produto, canais, Inbox, Support Hub, CRM, campanhas, Campaign UX/result-truth, refinamento UX Contacts/Campaigns e hardening local de telefone/importacao sem deploy, templates, relatorios de acesso/sessao, LGPD, uso Meta, limites, padrao administrativo expansivo e regra de desativacao de usuario deployada e validada nao destrutivamente |
+| `docs/saas/CONVERTA_PRODUCT_STATE_2026-08.md` | atual | Fotografia documental do produto, canais, Inbox, Support Hub, CRM, campanhas, Campaign UX/result-truth, refinamento UX Contacts/Campaigns e hardening local de telefone/importacao, privacidade LGPD por titular local/no deploy, templates, relatorios de acesso/sessao, LGPD, uso Meta, limites, padrao administrativo expansivo e regra de desativacao de usuario deployada e validada nao destrutivamente |
 | `docs/saas/CONVERTA_OPERATOR_GUIDE.md` | atual | Guia de uso operacional para Inbox, Support Hub, usuarios, Treinamentos, templates, mensagens prontas, campanhas, relatorio Acessos/Sessoes, opt-out, anonimizacao e custos Meta |
 | `docs/saas/DEMO_TENANT_READINESS.md` | atual | Readiness do tenant generico `demo-converta`, auditoria de configuracoes e checker somente leitura |
 | `docs/saas/DEMO_TENANT_PROVISIONING_CHECKLIST.md` | atual | Checklist manual de provisionamento seguro do tenant de demonstracao |
@@ -14,7 +14,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | `docs/saas/DEMO_PRESENTATION_SCRIPT_SECULT_PE.md` | atual | Roteiro tematico SECULT-PE usando tenant generico de demonstracao |
 | `docs/saas/secult-pe-demo-2026-08.md` | atual | Roteiro de demonstracao/treinamento SECULT-PE e respostas operacionais as solicitacoes levantadas |
 | `docs/saas/SECULT_PE_BACKLOG.md` | backlog | Backlog SECULT-PE: balanceamento de fila, auditoria de sessao, nome social, relatorios, reconnect e retificacao |
-| `docs/saas/lgpd-anonymization-policy.md` | atual | Politica operacional LGPD: soft delete, anonimizacao, opt-out, bloqueio de reidratacao e limites |
+| `docs/saas/lgpd-anonymization-policy.md` | atual | Politica operacional LGPD: soft delete, anonimizacao de conversa, anonimizacao por titular, opt-out, bloqueio de reidratacao e limites |
 | `docs/saas/META_USAGE_COST_CONTROL.md` | atual | Controle estimativo de uso Meta: ledger, resumo, preview, relatorio mensal, limites e alertas |
 | `docs/saas/META_PRICING_SOURCE_OF_TRUTH.md` | P2 FinOps | Fonte canonica proposta para precos Meta oficiais, separacao provider cost/FX/preco contratual e staleness; gate estreito Brazil Utility para B ja provado |
 | `docs/saas/CAMPAIGN_IMPORT_REQUIREMENTS.md` | deployed / production non-destructive validated / result-truth integrated local / contacts csv complete lot owner pass local / real import pending | Contrato para importacao/upsert CRM em campanhas e convergencia Contacts CSV: identidade canonica unica, `Situação no CRM`, atomicidade por linha, nao duplicacao, autorizacao CRM, telefone validado pelo normalizador canonico, relatorio CSV protegido, preview preso ao mapeamento de colunas e detalhe de resultado sem historico paralelo |

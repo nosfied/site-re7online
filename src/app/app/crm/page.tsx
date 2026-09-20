@@ -40,7 +40,7 @@ import { formatUserDisplayName } from "@/lib/userDisplayName";
 
 const PAGE_LIMIT = 50;
 const PERSISTENT_CRM_NOTICES = new Set([
-  "Contato excluído da operação. O histórico foi preservado.",
+  "Contato retirado da operação. O histórico foi preservado.",
   "Conversa retirada da operação. O histórico foi preservado.",
   "Contato restaurado para a operação.",
 ]);
@@ -105,6 +105,35 @@ function getBlockingConversation(error: AppApiError): AppHiddenBlockingConversat
     assignedUserName: typeof record.assignedUserName === "string" ? record.assignedUserName : null,
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : null,
   };
+}
+
+function isActiveConversationExclusionError(error: AppApiError) {
+  const code = String(error.errorCode ?? "").trim();
+  if (code === "hidden_active_conversation_exists" || code === "active_conversation_exists") return true;
+  const message = String(error.message ?? "").toLowerCase();
+  return error.status === 409 && (message.includes("conversation") || message.includes("conversa"));
+}
+
+function getContactExclusionErrorMessage(error: AppApiError, blockingConversation: AppHiddenBlockingConversation | null) {
+  if (blockingConversation || isActiveConversationExclusionError(error)) {
+    return "Este contato tem um atendimento ativo vinculado. Finalize ou retire esse atendimento da operação antes de retirar o contato. O contato não foi alterado.";
+  }
+  if (error.status === 401) {
+    return "Sua sessão expirou. Entre novamente para continuar.";
+  }
+  if (error.status === 403) {
+    return "Seu usuário não tem permissão para retirar contatos da operação.";
+  }
+  if (error.status === 404 || error.errorCode === "contact_not_found") {
+    return "Este contato não foi encontrado nesta organização. Atualize a lista e tente novamente.";
+  }
+  if (error.errorCode === "identity_conflict") {
+    return "Não foi possível determinar com segurança qual contato retirar. Atualize a lista e revise o cadastro antes de tentar novamente.";
+  }
+  if (error.errorCode === "network_error" || error.errorCode === "network_timeout" || error.status === 0) {
+    return "Sem resposta do servidor. Verifique se o ambiente local está ativo e tente novamente.";
+  }
+  return "Não foi possível concluir a retirada. Atualize a lista e tente novamente.";
 }
 
 function getChannelLabel(channel: string | null) {
@@ -315,12 +344,14 @@ function getStartBlockedLabel(reason: AppCrmContactItem["startConversationBlocke
 
 function ActionIconButton({
   label,
+  ariaLabel,
   icon,
   onClick,
   disabled,
   variant = "neutral",
 }: {
   label: string;
+  ariaLabel?: string;
   icon: string;
   onClick: () => void;
   disabled?: boolean;
@@ -340,7 +371,7 @@ function ActionIconButton({
       }}
       disabled={disabled}
       title={label}
-      aria-label={label}
+      aria-label={ariaLabel ?? label}
       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-base transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8 max-md:h-10 max-md:w-10 ${classes}`}
     >
       <span aria-hidden="true">{icon}</span>
@@ -371,14 +402,18 @@ function CrmContactRow({
   canViewHistory,
   onOpenDetail,
   onOpenConversation,
+  onOpenPrivacy,
   onDelete,
+  canOpenPrivacy,
   canDelete,
 }: {
   item: AppCrmContactItem;
   canViewHistory: boolean;
   onOpenDetail: (item: AppCrmContactItem) => void;
   onOpenConversation: (item: AppCrmContactItem) => void;
+  onOpenPrivacy: (item: AppCrmContactItem) => void;
   onDelete: (item: AppCrmContactItem) => void;
+  canOpenPrivacy: boolean;
   canDelete: boolean;
 }) {
   const phoneLabel = getContactPhoneLabel(item);
@@ -483,8 +518,16 @@ function CrmContactRow({
       <td className="px-4 py-3 text-right">
         <div className="flex shrink-0 items-center justify-end gap-2 max-[1440px]:gap-1.5">
           <ActionIconButton label="Abrir contato" icon="↗" onClick={() => onOpenDetail(item)} />
+          {canOpenPrivacy ? (
+            <ActionIconButton
+              label="Privacidade"
+              ariaLabel="Gerenciar privacidade do contato"
+              icon="🔒"
+              onClick={() => onOpenPrivacy(item)}
+            />
+          ) : null}
           <ActionIconButton
-            label="Excluir contato"
+            label="Retirar da operação"
             icon="×"
             onClick={() => onDelete(item)}
             disabled={!canDelete || item.isOperationallyExcluded}
@@ -1685,6 +1728,7 @@ export default function AppCrmContactsPage() {
   const canViewCrmHistory = String(session?.user.role ?? "").trim().toUpperCase() !== "AGENT";
   const canManageCrmContacts = canViewCrmHistory;
   const canExcludeCrmContacts = String(session?.user.role ?? "").trim().toUpperCase() === "ADMIN";
+  const canOpenContactPrivacy = canExcludeCrmContacts;
 
   useEffect(() => {
     if (!selectedLeadId) return;
@@ -1884,6 +1928,16 @@ export default function AppCrmContactsPage() {
     [router]
   );
 
+  const openContactPrivacy = useCallback(
+    (item: AppCrmContactItem) => {
+      const query = item.contactId
+        ? `contactId=${encodeURIComponent(item.contactId)}`
+        : `leadId=${encodeURIComponent(item.leadId)}`;
+      router.push(`/app/settings/privacy?${query}`);
+    },
+    [router]
+  );
+
   const replaceContactFromDetail = useCallback((detail: AppCrmContactDetailResponse) => {
     setContactDetail(detail);
     setContacts((current) => {
@@ -1979,12 +2033,6 @@ export default function AppCrmContactsPage() {
       if (!session) return null;
       try {
         await excludeAppCrmContactFromOperation(session, leadId);
-        setContactDetail(null);
-        setSelectedLeadId(null);
-        setNotice("Contato excluído da operação. O histórico foi preservado.");
-        setOperationalStatus("active");
-        await loadContacts(session, page);
-        return null;
       } catch (err) {
         const typed = err as AppApiError;
         if (typed.status === 401) {
@@ -1992,17 +2040,29 @@ export default function AppCrmContactsPage() {
           return null;
         }
         const blockingConversation = getBlockingConversation(typed);
-        if (blockingConversation) {
-          const message =
-            blockingConversation.visibility === "hidden"
-              ? "Existe uma conversa pendente associada a este contato que precisa ser retirada da operação antes da exclusão."
-              : "Este contato possui uma conversa em andamento. Resolva a conversa antes de excluir o contato da operação.";
-          setError(message);
+        setNotice(null);
+        setError(getContactExclusionErrorMessage(typed, blockingConversation));
+        if (blockingConversation || isActiveConversationExclusionError(typed)) {
           return blockingConversation;
         }
-        setError(normalizeAppErrorMessage(typed, "Não foi possível excluir o contato da operação."));
         return null;
       }
+      setError(null);
+      setContactDetail(null);
+      setSelectedLeadId(null);
+      setNotice("Contato retirado da operação. O histórico foi preservado.");
+      setOperationalStatus("active");
+      try {
+        await loadContacts(session, page);
+      } catch (err) {
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return null;
+        }
+        setNotice("Contato retirado da operação. Atualize a página se a lista não refletir a alteração.");
+      }
+      return null;
     },
     [handleUnauthorized, loadContacts, page, session]
   );
@@ -2011,7 +2071,7 @@ export default function AppCrmContactsPage() {
     async (item: AppCrmContactItem) => {
       if (!canExcludeCrmContacts || item.isOperationallyExcluded) return;
       const confirmed = window.confirm(
-        "Este contato deixará de aparecer no CRM e não poderá ser usado em novos atendimentos ou campanhas. O histórico existente será preservado."
+        "Retirar este contato da operação? Ele deixará de aparecer no uso operacional e não poderá ser usado em novos atendimentos ou campanhas. O histórico existente será preservado."
       );
       if (!confirmed) return;
       const blockingConversation = await excludeContactFromOperation(item.leadId);
@@ -2368,7 +2428,9 @@ export default function AppCrmContactsPage() {
                       canViewHistory={canViewCrmHistory}
                       onOpenDetail={openContactDetail}
                       onOpenConversation={openConversation}
+                      onOpenPrivacy={openContactPrivacy}
                       onDelete={requestContactExclusion}
+                      canOpenPrivacy={canOpenContactPrivacy}
                       canDelete={canExcludeCrmContacts}
                     />
                   ))}

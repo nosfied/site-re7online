@@ -37,33 +37,78 @@ test("CRM campaign relationship reuses the departments expandable row pattern", 
   assert.ok(pageSource.includes("›"));
 });
 
-test("CRM row actions expose only open and delete without row edit action", () => {
+test("CRM row actions expose open, privacy and delete without row edit action", () => {
   const rowBlock = pageSource.slice(
     pageSource.indexOf("function CrmContactRow"),
     pageSource.indexOf("function CampaignHistoryRow")
   );
-  assert.ok(pageSource.includes("aria-label={label}"));
+  assert.ok(pageSource.includes("aria-label={ariaLabel ?? label}"));
   assert.ok(rowBlock.includes('label="Abrir contato"'));
-  assert.ok(rowBlock.includes('label="Excluir contato"'));
+  assert.ok(rowBlock.includes('label="Privacidade"'));
+  assert.ok(rowBlock.includes('ariaLabel="Gerenciar privacidade do contato"'));
+  assert.ok(rowBlock.includes('icon="🔒"'));
+  assert.ok(rowBlock.includes('label="Retirar da operação"'));
+  assert.ok(!rowBlock.includes('label="Excluir contato"'));
   assert.ok(rowBlock.includes("onClick={() => onOpenDetail(item)}"));
+  assert.ok(rowBlock.includes("onClick={() => onOpenPrivacy(item)}"));
   assert.ok(rowBlock.includes("onClick={() => onDelete(item)}"));
+  assert.ok(!rowBlock.includes("disabled={!item.contactId}"));
+  assert.ok(!rowBlock.includes("disabled={!item.hasConversation"));
+  assert.ok(!rowBlock.includes("disabled={!item.conversationsCount"));
   assert.ok(rowBlock.includes("disabled={!canDelete || item.isOperationallyExcluded}"));
   assert.ok(!rowBlock.includes('label="Editar cadastro"'));
   assert.ok(pageSource.includes("requestContactExclusion"));
+  assert.ok(pageSource.includes("router.push(`/app/settings/privacy?${query}`);"));
+  assert.ok(pageSource.includes("contactId=${encodeURIComponent(item.contactId)}"));
+  assert.ok(pageSource.includes("leadId=${encodeURIComponent(item.leadId)}"));
+  assert.ok(pageSource.includes("Retirar este contato da operação?"));
   assert.ok(pageSource.includes("event.stopPropagation();"));
   assert.ok(!pageSource.includes("border-red-300/30 bg-red-500/10 p-3"));
 });
 
+test("CRM manual contact modal uses shared app error labels for invalid phone", () => {
+  const modalBlock = pageSource.slice(
+    pageSource.indexOf("function CreateContactModal"),
+    pageSource.indexOf("function ContactDetailPanel")
+  );
+  assert.ok(modalBlock.includes('normalizeAppErrorMessage(typed, "Não foi possível salvar o contato.")'));
+  assert.ok(pageSource.includes("getAppErrorUxMessage"));
+  assert.ok(!modalBlock.includes("normalizeCrmWhatsappIdentity"));
+  assert.ok(!modalBlock.includes("normalizeCrmContactInput"));
+  assert.ok(!modalBlock.includes("invalid_phone"));
+});
+
+test("CRM contact exclusion with active conversation shows actionable user copy", () => {
+  assert.ok(pageSource.includes("function isActiveConversationExclusionError"));
+  assert.ok(pageSource.includes("active_conversation_exists"));
+  assert.ok(pageSource.includes("hidden_active_conversation_exists"));
+  assert.ok(pageSource.includes("Este contato tem um atendimento ativo vinculado."));
+  assert.ok(pageSource.includes("Finalize ou retire esse atendimento da operação antes de retirar o contato."));
+  assert.ok(pageSource.includes("O contato não foi alterado."));
+  assert.ok(pageSource.includes("getContactExclusionErrorMessage(typed, blockingConversation)"));
+  assert.ok(!pageSource.includes('normalizeAppErrorMessage(error, "Não foi possível retirar o contato da operação.")'));
+  assert.ok(pageSource.includes("Não foi possível concluir a retirada. Atualize a lista e tente novamente."));
+});
+
+test("CRM contact exclusion does not report mutation failure when only list refresh fails", () => {
+  assert.ok(pageSource.includes("await excludeAppCrmContactFromOperation(session, leadId);"));
+  assert.ok(pageSource.includes("setError(null);"));
+  assert.ok(pageSource.includes("Contato retirado da operação. O histórico foi preservado."));
+  assert.ok(pageSource.includes("Contato retirado da operação. Atualize a página se a lista não refletir a alteração."));
+  assert.ok(pageSource.includes("try {\n        await loadContacts(session, page);"));
+});
+
 test("CRM detail keeps close navigation and edit semantics without detail delete", () => {
+  const detailStart = pageSource.indexOf('<aside');
   const shellBlock = pageSource.slice(
-    pageSource.indexOf('<aside'),
-    pageSource.indexOf('<div className="min-h-0 overflow-y-auto')
+    detailStart,
+    pageSource.indexOf('<div className="min-h-0 overflow-y-auto', detailStart)
   );
   const headerBlock = shellBlock.slice(shellBlock.indexOf('<header className="theme-surface-strong'));
   assert.ok(shellBlock.includes('aria-label="Fechar"'));
   assert.ok(shellBlock.includes("absolute right-3 top-3 z-10"));
   assert.ok(headerBlock.includes('label={editingBasics ? "Cancelar edicao" : "Editar dados"}'));
-  assert.ok(!headerBlock.includes("Excluir contato"));
+  assert.ok(!headerBlock.includes("Retirar da operação"));
   assert.ok(!headerBlock.includes('variant="destructive"'));
   assert.ok(!headerBlock.includes('aria-label="Fechar"'));
 });

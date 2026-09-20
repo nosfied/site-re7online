@@ -84,7 +84,7 @@ Default government profile favors oversight and reporting:
 | Departments/queues | Operational | `/app/departments`, admin | `Department`, `Queue` | feature flag, inbox assignment |
 | Users/RBAC | Operational | `/app/users`, auth routes | `User`, `AppAuthSession`, `PasswordResetToken` | auth/session governance |
 | Feature flags | Operational | app/admin | `Client.features`, `Client.profile` | backend/frontend defaults |
-| LGPD/privacy | Operational | `/app/settings/privacy` | `RetentionConfig`, privacy retention service | retention job |
+| LGPD/privacy | Operational + subject anonymization OWNER PASS / local validated / not deployed | `/app/settings/privacy` | `RetentionConfig`, privacy retention service, Contact/Lead subject orchestrator, privacy subject search | retention job; subject anonymization local only/no deploy; operational CRM exclusion does not remove subject from privacy discovery; Contact target preferred, Lead-only target supported |
 | Push/PWA notifications | Operational with platform limits | app shell/inbox | `PushSubscription`, `webPushService.ts`, service worker | browser permission/support |
 | Demo/POC data | Internal/demo | scripts | `seed-demo.mjs`, `seed-re7-demo-screenshots.mjs` | local/demo only |
 | Internal admin console | Operational | `/admin` | admin routes, tenant/channel/onboarding pages | `X-Admin-Token`, DB-backed `Client`, `TenantOperationalConfig`, legacy `tenants.json` fallback |

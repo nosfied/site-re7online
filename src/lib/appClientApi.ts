@@ -4535,6 +4535,106 @@ export async function executeAppRetention(
   });
 }
 
+export type AppPrivacySubjectPreview = {
+  ok: true;
+  subject: {
+    contactId: string | null;
+    leadId: string | null;
+    leadIds: string[];
+    alreadyAnonymized: boolean;
+    operationalStatus: "active" | "excluded";
+    privacyStatus: "identifiable" | "anonymized";
+    displayName: string | null;
+    phoneDisplay: string | null;
+  };
+  counts: {
+    contacts: number;
+    leads: number;
+    contactChannelIdentities: number;
+    conversations: number;
+    runtimeStates: number;
+    leadNotes: number;
+    inboundMessages: number;
+    outboundMessages: number;
+    events: number;
+    consentRecords: number;
+    optOutEvents: number;
+    campaignRelationships: number;
+  };
+  actions: Array<{ entity: string; count: number; action: string }>;
+  fieldsToAnonymize: string[];
+  historicalObjectsPreserved: string[];
+};
+
+export type AppPrivacySubjectSearchResponse = {
+  ok: true;
+  items: AppCrmContactItem[];
+  generatedAt: string;
+};
+
+export type AppPrivacySubjectResolutionResponse = {
+  ok: true;
+  contactId: string | null;
+  leadId: string;
+  item: AppCrmContactDetailResponse["item"];
+};
+
+export type AppPrivacySubjectTarget =
+  | { contactId: string; leadId?: string | null }
+  | { contactId?: string | null; leadId: string };
+
+function buildAppPrivacySubjectPath(target: AppPrivacySubjectTarget, action: "preview" | "anonymize") {
+  if (target.contactId) return `/app/privacy/subjects/${encodeURIComponent(target.contactId)}/${action}`;
+  if (!target.leadId) throw new Error("privacy_subject_target_required");
+  return `/app/privacy/subjects/${encodeURIComponent(target.leadId)}/${action}?target=lead`;
+}
+
+export async function searchAppPrivacySubjects(
+  session: AppSession,
+  filters?: Pick<AppCrmContactsFilter, "q" | "page" | "limit">
+): Promise<AppPrivacySubjectSearchResponse> {
+  const params = new URLSearchParams();
+  if (filters?.q?.trim()) params.set("q", filters.q.trim());
+  if (typeof filters?.page === "number" && Number.isFinite(filters.page)) {
+    params.set("page", String(Math.max(1, Math.floor(filters.page))));
+  }
+  if (typeof filters?.limit === "number" && Number.isFinite(filters.limit)) {
+    params.set("limit", String(Math.max(1, Math.floor(filters.limit))));
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return requestAppJson(session, `/app/privacy/subjects/search${suffix}`);
+}
+
+export async function resolveAppPrivacySubjectFromCrmLead(
+  session: AppSession,
+  leadId: string
+): Promise<AppPrivacySubjectResolutionResponse> {
+  return requestAppJson(session, "/app/privacy/subjects/resolve", {
+    method: "POST",
+    body: JSON.stringify({ leadId }),
+  });
+}
+
+export async function previewAppPrivacySubject(
+  session: AppSession,
+  target: AppPrivacySubjectTarget
+): Promise<AppPrivacySubjectPreview> {
+  return requestAppJson(session, buildAppPrivacySubjectPath(target, "preview"), {
+    method: "POST",
+  });
+}
+
+export async function anonymizeAppPrivacySubject(
+  session: AppSession,
+  target: AppPrivacySubjectTarget,
+  confirmation: string
+): Promise<{ ok: true; preview: AppPrivacySubjectPreview; anonymized?: Record<string, number>; alreadyAnonymized?: true }> {
+  return requestAppJson(session, buildAppPrivacySubjectPath(target, "anonymize"), {
+    method: "POST",
+    body: JSON.stringify({ confirmation }),
+  });
+}
+
 export async function fetchAppCrmSettings(session: AppSession): Promise<AppCrmSettingsResponse> {
   return requestAppJson(session, "/app/crm/settings");
 }

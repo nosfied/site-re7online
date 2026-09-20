@@ -37,6 +37,33 @@ Contact, ContactChannelIdentity, Lead, Campaign, OutboundMessage e Event ficaram
 com delta zero. Nao houve envio real, chamada de provider, billing, schema,
 migration ou importacao de dados CRA.
 
+Atualizacao local de 2026-09-20: Data Subject Privacy / LGPD contact-centric
+anonymization esta OWNER PASS / LOCAL VALIDATED / NOT DEPLOYED. A tela de
+Privacidade passa a permitir buscar e selecionar um titular no CRM autenticado,
+gerar previa sem mutacao e executar anonimizacao por titular somente com
+confirmacao forte. A capacidade parte de `Contact.id` quando disponivel e usa
+`Lead.id` como fallback para sujeitos Lead-only com `contactId = null`, sempre
+no mesmo tenant, sem criar Contact artificial e sem usar telefone cru como chave
+de mutacao. A implementacao bloqueia identidade ambigua, reutiliza as primitivas
+existentes de `privacyRetentionService.ts` e registra auditoria sanitizada sem
+PII. Nao houve schema, migration, hard delete, provider call, envio real ou
+deploy.
+
+Owner UX addition/correction local: Contacts recebeu atalho compacto
+`Privacidade` com icone de cadeado na linha do contato (`Abrir contato /
+Privacidade / Retirar da operação`). O atalho nao anonimiza diretamente e nao
+depende de conversa; quando a linha ainda nao tem `Contact.id`, a tela de
+Privacidade usa `Lead.id` como alvo governado, preservando a mesma previa e a
+mesma confirmacao `ANONIMIZAR TITULAR`. A busca de titular em Privacidade inclui
+contatos operacionalmente excluidos e Lead-only sem reexibi-los na lista
+operacional normal do CRM. Invariante permanente: exclusao operacional nao
+remove o titular da descoberta de governanca LGPD.
+
+Invalid phone UX mapping esta OWNER PASS / LOCAL VALIDATED / NOT DEPLOYED: o
+erro canonico `invalid_phone` passa a exibir `Informe um número de WhatsApp
+válido com código do país 55 e DDD.` sem alterar backend, normalizador canonico,
+CSV, campanhas ou regras de persistencia.
+
 O produto deve ser apresentado como solucao de atendimento, roteamento, chatbot/fluxos, humano assistido, campanhas controladas e evidencia operacional. Nao deve ser apresentado como plataforma de IA generativa ampla quando esse nao for o escopo contratado.
 
 O baseline funcional estavel de agosto de 2026 consolida hardenings de Inbox, filas, Web Session, read-state, presenca de agentes e politicas de visibilidade. O tenant `secult-pe` opera no mesmo codigo SaaS multitenant publicado em producao; nao existe fork, build exclusivo, frontend exclusivo ou deploy especifico para SECULT-PE. Depois de novo frontend publicado, um reload normal do navegador carrega a versao atual.
@@ -462,6 +489,19 @@ report with optional `Situacao no CRM`.
 Anonimizacao nao e hard delete. Ela remove dados pessoais da operacao visivel, minimiza conteudo e impede reidratacao automatica. O CRM oculta registros anonimizados por padrao e campanhas bloqueiam esses contatos com motivo `anonymized_contact`.
 
 Inbound e upserts multicanal possuem guarda para nao restaurar dados antigos de identidades anonimizadas. Eventos de seguranca e privacidade usam payload sanitizado.
+
+A anonimizacao por titular, OWNER PASS / LOCAL VALIDATED / NOT DEPLOYED,
+expande a operacao para casos sem conversa: o operador ADMIN seleciona um
+titular canonico do CRM por Contact ou Lead-only, revisa a previa de impacto e confirma
+`ANONIMIZAR TITULAR`. A orquestracao cobre Contact, ContactChannelIdentity,
+Lead, LeadNote, conversas relacionadas, runtime state, mensagens/eventos
+operacionais e preserva historico apenas de forma minimizada.
+
+Lista operacional de CRM e descoberta de Privacidade sao superficies distintas:
+contatos com `operationallyExcludedAt` podem ficar fora da operacao normal, mas
+continuam localizaveis em Privacidade para previa/anonymizacao enquanto o grafo
+ainda for identificavel. Reentrada cria/usa novo ciclo operacional e nao
+desanonimiza historico previamente minimizado.
 
 ## Ledger e controle de custo Meta
 

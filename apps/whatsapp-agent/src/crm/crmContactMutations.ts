@@ -4,12 +4,22 @@ import {
   recordContactOptOut,
   revokeContactOptOut,
 } from "../campaigns/optOutRegistry.js";
+import { hashWhatsAppExternalUser } from "../channels/whatsappBackfillDryRun.js";
 import {
   recordCrmContactOperationalExclusion,
   recordCrmContactOperationalReactivation,
 } from "../contacts/contactOperationalExclusion.js";
 import { persistEvent } from "../db/persist.js";
 import { shouldProjectConversationToHumanInbox } from "../inbox/messageVisibility.js";
+import { normalizeWaIdDigits } from "../utils/waid.js";
+import {
+  CrmContactUpsertError,
+  upsertCrmContactInTransaction,
+} from "./crmContactUpsert.js";
+import {
+  buildCrmWhatsappExternalUserHash,
+  buildCrmWhatsappIdentityCandidates,
+} from "./crmWhatsappIdentity.js";
 
 export const CRM_CONTACT_UPDATED_EVENT = "crm.contact.updated";
 export const CRM_LEAD_STATUS_CHANGED_EVENT = "crm.lead.status_changed";
@@ -37,6 +47,7 @@ export class CrmContactMutationError extends Error {
       | "invalid_email"
       | "status_not_configured"
       | "opt_out_identity_unavailable"
+      | "identity_conflict"
       | "active_conversation_exists"
       | "hidden_active_conversation_exists",
     message: string,
@@ -90,6 +101,9 @@ async function getLeadForTenant(prisma: PrismaClient, clientId: string, leadId: 
       contactChannelIdentityId: true,
       name: true,
       phone: true,
+      externalUserRef: true,
+      legacyWaId: true,
+      externalUserHash: true,
       city: true,
       email: true,
       company: true,
@@ -114,6 +128,164 @@ async function getLeadForTenant(prisma: PrismaClient, clientId: string, leadId: 
     throw new CrmContactMutationError("contact_not_found", "Contact not found", 404);
   }
   return lead;
+}
+
+type CrmMutationLead = Awaited<ReturnType<typeof getLeadForTenant>>;
+
+function buildOperationalContactLookupCandidates(lead: CrmMutationLead) {
+  const directValues = [
+    lead.waId,
+    lead.waIdCanonical,
+    lead.phone,
+    normalizeWaIdDigits(lead.phone ?? ""),
+    normalizeWaIdDigits(lead.waIdCanonical ?? ""),
+    normalizeWaIdDigits(lead.waId ?? ""),
+    lead.externalUserRef,
+    lead.legacyWaId,
+    lead.contactChannelIdentity?.contact?.waId,
+    lead.contactChannelIdentity?.contact?.externalUserRef,
+    lead.contactChannelIdentity?.contact?.legacyWaId,
+  ]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+  return Array.from(new Set([...directValues, ...buildCrmWhatsappIdentityCandidates(directValues)]));
+}
+
+function buildOperationalContactHashCandidates(identityCandidates: string[], lead: CrmMutationLead) {
+  return Array.from(
+    new Set(
+      [
+        lead.externalUserHash,
+        ...identityCandidates.flatMap((candidate) => [
+          buildCrmWhatsappExternalUserHash(candidate),
+          hashWhatsAppExternalUser(candidate),
+          `hash:${hashWhatsAppExternalUser(candidate)}`,
+        ]),
+      ]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+async function resolveOperationalContactForLead(
+  prisma: PrismaClient,
+  params: { clientId: string; lead: CrmMutationLead }
+) {
+  const direct = params.lead.contactChannelIdentity?.contactId && params.lead.contactChannelIdentity.contact
+    ? {
+        id: params.lead.contactChannelIdentity.contactId,
+        waId: params.lead.contactChannelIdentity.contact.waId,
+        externalUserRef: params.lead.contactChannelIdentity.contact.externalUserRef,
+        legacyWaId: params.lead.contactChannelIdentity.contact.legacyWaId,
+        operationallyExcludedAt: params.lead.contactChannelIdentity.contact.operationallyExcludedAt,
+      }
+    : null;
+  if (direct) return direct;
+
+  const identityCandidates = buildOperationalContactLookupCandidates(params.lead);
+  const hashCandidates = buildOperationalContactHashCandidates(identityCandidates, params.lead);
+  if (identityCandidates.length === 0 && hashCandidates.length === 0) return null;
+
+  const [identities, contacts] = await Promise.all([
+    prisma.contactChannelIdentity.findMany({
+      where: {
+        clientId: params.clientId,
+        OR: [
+          ...(params.lead.contactChannelIdentityId ? [{ id: params.lead.contactChannelIdentityId }] : []),
+          { externalUserRef: { in: identityCandidates } },
+          { legacyWaId: { in: identityCandidates } },
+          { externalUserHash: { in: hashCandidates } },
+        ],
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 3,
+      select: {
+        contactId: true,
+        contact: {
+          select: {
+            id: true,
+            waId: true,
+            externalUserRef: true,
+            legacyWaId: true,
+            operationallyExcludedAt: true,
+          },
+        },
+      },
+    }),
+    prisma.contact.findMany({
+      where: {
+        clientId: params.clientId,
+        OR: [
+          { waId: { in: identityCandidates } },
+          { externalUserRef: { in: identityCandidates } },
+          { legacyWaId: { in: identityCandidates } },
+          { externalUserHash: { in: hashCandidates } },
+        ],
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 3,
+      select: {
+        id: true,
+        waId: true,
+        externalUserRef: true,
+        legacyWaId: true,
+        operationallyExcludedAt: true,
+      },
+    }),
+  ]);
+  const identityContacts = identities.flatMap((identity) => (identity.contact ? [identity.contact] : []));
+  const resolved = [...identityContacts, ...contacts];
+  const contactIds = new Set(resolved.map((contact) => contact.id));
+  if (contactIds.size > 1) {
+    throw new CrmContactMutationError(
+      "identity_conflict",
+      "Multiple possible contacts found for this identity",
+      409
+    );
+  }
+  return resolved[0] ?? null;
+}
+
+async function materializeOperationalContactForLead(
+  prisma: PrismaClient,
+  params: {
+    clientId: string;
+    lead: CrmMutationLead;
+    userId: string;
+    requestId: string;
+  }
+) {
+  const phone = params.lead.phone ?? params.lead.waIdCanonical ?? params.lead.waId;
+  try {
+    const result = await upsertCrmContactInTransaction(prisma as never, {
+      clientId: params.clientId,
+      input: {
+        name: params.lead.name,
+        phone,
+      },
+      actorUserId: params.userId,
+      requestId: `crm-contact-operational-materialize:${params.lead.id}:${params.requestId}`,
+      source: "crm_manual",
+      audit: false,
+      crmStatusId: params.lead.status,
+    });
+    return prisma.contact.findFirst({
+      where: { clientId: params.clientId, id: result.contactId },
+      select: {
+        id: true,
+        waId: true,
+        externalUserRef: true,
+        legacyWaId: true,
+        operationallyExcludedAt: true,
+      },
+    });
+  } catch (error) {
+    if (error instanceof CrmContactUpsertError && error.code === "identity_conflict") {
+      throw new CrmContactMutationError("identity_conflict", error.message, error.status);
+    }
+    throw new CrmContactMutationError("contact_not_found", "Contact not found", 404);
+  }
 }
 
 function isWhatsappChannel(channel: string | null | undefined) {
@@ -458,17 +630,33 @@ export async function excludeCrmContactFromOperation(
 ) {
   return prisma.$transaction(async (tx) => {
     const lead = await getLeadForTenant(tx as PrismaClient, params.clientId, params.leadId);
-    const contactId = lead.contactChannelIdentity?.contactId ?? null;
-    if (!contactId) {
+    const contact =
+      (await resolveOperationalContactForLead(tx as PrismaClient, {
+        clientId: params.clientId,
+        lead,
+      })) ??
+      (await materializeOperationalContactForLead(tx as PrismaClient, {
+      clientId: params.clientId,
+      lead,
+        userId: params.userId,
+        requestId: params.requestId,
+      }));
+    if (!contact) {
       throw new CrmContactMutationError("contact_not_found", "Contact not found", 404);
     }
     await assertNoActiveOperationalConversation(tx as PrismaClient, {
       clientId: params.clientId,
-      identityKeys: resolveLeadOperationalIdentityKeys(lead),
+      identityKeys: resolveLeadOperationalIdentityKeys({
+        ...lead,
+        contactChannelIdentity: {
+          ...(lead.contactChannelIdentity ?? {}),
+          contact,
+        },
+      }),
     });
-    if (!lead.contactChannelIdentity?.contact?.operationallyExcludedAt) {
+    if (!contact.operationallyExcludedAt) {
       await tx.contact.update({
-        where: { id: contactId },
+        where: { id: contact.id },
         data: { operationallyExcludedAt: new Date() },
       });
     }
@@ -476,7 +664,7 @@ export async function excludeCrmContactFromOperation(
       prisma: tx as PrismaClient,
       clientId: params.clientId,
       leadId: lead.id,
-      contactId,
+      contactId: contact.id,
       waId: lead.waId,
       waIdCanonical: resolveLeadOperationalIdentity(lead),
       actorUserId: params.userId,
@@ -498,13 +686,16 @@ export async function reactivateCrmContactForOperation(
 ) {
   return prisma.$transaction(async (tx) => {
     const lead = await getLeadForTenant(tx as PrismaClient, params.clientId, params.leadId);
-    const contactId = lead.contactChannelIdentity?.contactId ?? null;
-    if (!contactId) {
+    const contact = await resolveOperationalContactForLead(tx as PrismaClient, {
+      clientId: params.clientId,
+      lead,
+    });
+    if (!contact) {
       throw new CrmContactMutationError("contact_not_found", "Contact not found", 404);
     }
-    if (lead.contactChannelIdentity?.contact?.operationallyExcludedAt) {
+    if (contact.operationallyExcludedAt) {
       await tx.contact.update({
-        where: { id: contactId },
+        where: { id: contact.id },
         data: { operationallyExcludedAt: null },
       });
     }
@@ -512,7 +703,7 @@ export async function reactivateCrmContactForOperation(
       prisma: tx as PrismaClient,
       clientId: params.clientId,
       leadId: lead.id,
-      contactId,
+      contactId: contact.id,
       waId: lead.waId,
       waIdCanonical: resolveLeadOperationalIdentity(lead),
       actorUserId: params.userId,
