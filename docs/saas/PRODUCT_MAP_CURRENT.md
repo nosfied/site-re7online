@@ -274,6 +274,14 @@ Current backlog classification:
 
 - P0: none.
 - P1: none.
+- Auth malformed-claim process crash P1 is CLOSED / DEPLOYED / PRODUCTION
+  HEALTH VALIDATED in `8f15eedf4eb11dd8f0bea4f1dd79bb50cae3be9e`.
+  UUID-backed auth claims are validated before Prisma; malformed signed
+  `clientId` resolves to controlled `401 invalid_token`, and unexpected request
+  failures are contained by an HTTP request boundary with generic 500 output.
+  Production smoke used a real existing session and an obviously invalid token;
+  no malformed signed token was reproduced in production, and logs after smoke
+  showed no `unhandledRejection` or Prisma `P2023`.
 - Campaign post-Meta persistence / operational default is CLOSED / DEPLOYED /
   TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Demo Phase C
   `data_exame` accepted one Meta send for `****9614`; owner confirmed real

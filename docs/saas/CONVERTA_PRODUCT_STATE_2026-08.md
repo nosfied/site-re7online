@@ -563,6 +563,16 @@ Superficies atuais:
 
 `Acessos/Sessoes` e auditoria operacional de autenticacao. Nao e controle de ponto, jornada ou presenca laboral. A fonte primaria e `AppAuthSession`; `Event` registra trilha complementar `auth.*` para login, logout, renovacao, expiracao e revogacoes futuras. Sessoes possuem TTL absoluto de 12 horas, sem sliding expiration. `lastSeenAt` permanece apenas como ultima atividade observada. Sessoes vencidas sem `revokedAt` podem ser exibidas como expiradas sem inventar logout.
 
+Auth robustness P1, 2026-09-20: CLOSED / DEPLOYED / PRODUCTION HEALTH
+VALIDATED em `8f15eedf4eb11dd8f0bea4f1dd79bb50cae3be9e`. Token assinado com
+`clientId` malformado agora falha antes de Prisma com `401 invalid_token`; o
+servidor HTTP tambem contem rejeicoes inesperadas de `handleRequest` e devolve
+500 generico sem expor stack, mensagem Prisma, token, PII ou segredo. O deploy
+foi backend-only, com reload apenas de `re7-whatsapp-agent`; admin-front e
+web-worker foram preservados. O smoke de producao usou sessao real existente e
+token claramente invalido, sem reproduzir token assinado malformado; health
+`ok/db=ok`, sem `unhandledRejection` e sem `P2023` apos o smoke.
+
 Atividade dos atendentes e distribuicao operacional sao conceitos separados. Mensagens por atendente contam apenas outbound humano com `rawPayload.actor.userId`; bot, automacao, campanha e historico sem ator ficam fora. Conversas atribuidas por atendente medem ownership/distribuicao e nao devem ser apresentadas como produtividade individual.
 
 Fechamentos por atendente e SLA por responsavel permanecem P2 enquanto nao houver snapshot confiavel do responsavel no momento do fechamento ou do evento de SLA. O produto nao deve inferir esses indicadores a partir do responsavel atual.

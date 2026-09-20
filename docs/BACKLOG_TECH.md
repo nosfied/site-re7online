@@ -173,6 +173,22 @@ Fechado / validado:
   conversa, handoff, fila, capacidade, presenca, claim, transferencia, envio,
   fechamento, atribuicao automatica ou RBAC canonico. A restricao de acesso de
   AGENT a conversas `CLOSED` permanece mais forte e preservada.
+- P1 Auth malformed claim process crash: CLOSED / DEPLOYED / PRODUCTION HEALTH
+  VALIDATED. Em 2026-09-20, smoke pos-deploy revelou que token assinado com
+  `clientId` malformado podia chegar ao Prisma em `AppAuthSession.clientId`
+  (`@db.Uuid`), gerar `P2023`, escapar como `unhandledRejection` e reiniciar
+  `re7-whatsapp-agent` via PM2. O fix `8f15eedf4eb11dd8f0bea4f1dd79bb50cae3be9e`
+  valida claims UUID-backed antes de qualquer lookup Prisma e adiciona boundary
+  de promise/erro ao ciclo HTTP de `handleRequest`: claim malformada retorna
+  `401 invalid_token`; falha inesperada de request retorna 500 generico sem
+  stack, mensagem Prisma, token, PII ou segredo no cliente. Global
+  `unhandledRejection` permanece como last-resort fora do ciclo HTTP. Deploy
+  production FF-only feito sobre `1a28cf2a82a8bc37dec0343f0487f2faf6be2962`,
+  backend build PASS, reload somente de `re7-whatsapp-agent`, admin-front e
+  web-worker preservados. Smoke seguro usou sessao real existente e token
+  claramente invalido; NAO houve reproducao de token assinado malformado em
+  producao. Health `ok/db=ok`, PID do agent preservado apos smoke, logs sem
+  `process.unhandledRejection` e sem Prisma `P2023`.
 
 ACTIVE P0:
 

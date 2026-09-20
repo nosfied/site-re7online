@@ -137,6 +137,14 @@ non-destructive validated. A regra de seguranca e backend-authoritative; o front
 apresenta feedback. A desativacao nunca transfere, encerra, remove atribuicao,
 troca fila ou altera lifecycle de conversa silenciosamente.
 
+Auth/request boundary, 2026-09-20: P1 fechado e implantado em
+`8f15eedf4eb11dd8f0bea4f1dd79bb50cae3be9e`. Rotas `/app/*` agora rejeitam
+claims UUID-backed malformadas antes de qualquer lookup Prisma, retornando
+`401 invalid_token`; excecoes inesperadas dentro do ciclo HTTP ficam contidas
+com 500 generico e log sanitizado. Nao ha mudanca de UX/admin planejada:
+assinatura invalida, token expirado, sessao desconhecida/revogada e mismatch
+tenant/usuario continuam seguindo rejeicoes controladas existentes.
+
 ## Chatbot Flow Active vs Entrypoint
 
 Auditoria read-only de 2026-09-15 classificou a UX atual de `Ativo` +
