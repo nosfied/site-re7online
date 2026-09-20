@@ -18,8 +18,9 @@ existentes no mesmo tenant; valor invalido bloqueia a linha e valor em branco
 preserva/defaulta pela semantica canonica de CRM. Isto nao declara limpeza
 historica de dados invalidos.
 
-Atualizacao local de 2026-09-20: o lote completo de UX/integridade do Contacts
-CSV esta OWNER PASS / LOCAL VALIDATED / NOT DEPLOYED. O modal local
+Atualizacao de 2026-09-20: o lote completo de UX/integridade do Contacts
+CSV esta OWNER PASS / DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED em
+`9bb5f88f6a10ff3280e5adcdc777e9df0b0f7657`. O modal
 usa prévia antes da importação, nao mostra confirmacao inicial, trava ações
 duplicadas durante prévia/importação/relatorio, oferece cancelar/resetar,
 traduz operações para portugues e usa cards/tabelas/badges no padrao Campaign
@@ -28,6 +29,13 @@ relatorio de importação de Contacts; regras externas de mascaramento nao foram
 alteradas. A validade da previa fica presa ao mapeamento exato de colunas; se
 telefone, nome ou `Situação no CRM` muda, a previa fica stale, a importacao e
 bloqueada e o operador precisa atualizar a previa.
+O deploy foi fast-forward only apos backup PostgreSQL
+`/opt/re7online/backups/converta-persistent/postgres/20260920-132221.dump`
+(`sha256=4079ee78f71484bbf59dfee46c15a5a4020db99b4c5ff9ac9d7331d3b56e7c8e`).
+A validacao produtiva usou apenas previsualizacoes/leitura no `demo-converta`;
+Contact, ContactChannelIdentity, Lead, Campaign, OutboundMessage e Event ficaram
+com delta zero. Nao houve envio real, chamada de provider, billing, schema,
+migration ou importacao de dados CRA.
 
 O produto deve ser apresentado como solucao de atendimento, roteamento, chatbot/fluxos, humano assistido, campanhas controladas e evidencia operacional. Nao deve ser apresentado como plataforma de IA generativa ampla quando esse nao for o escopo contratado.
 

@@ -370,8 +370,13 @@ Production validation used preview/read-only paths only: Contact CSV and Campaig
 CSV preview both left Contact, Lead, Campaign and Outbound counts unchanged; no
 campaign send, provider call or billing mutation was executed.
 
-Contacts CSV complete UX/data-integrity lot, 2026-09-20: OWNER PASS / LOCAL
-VALIDATED / NOT DEPLOYED. Contacts CSV must keep the same source-of-truth and CRM
+Contacts CSV complete UX/data-integrity lot, 2026-09-20: OWNER PASS / DEPLOYED /
+PRODUCTION NON-DESTRUCTIVE VALIDATED. Commit
+`9bb5f88f6a10ff3280e5adcdc777e9df0b0f7657` was deployed by fast-forward only
+after PostgreSQL backup
+`/opt/re7online/backups/converta-persistent/postgres/20260920-132221.dump`
+(`sha256=4079ee78f71484bbf59dfee46c15a5a4020db99b4c5ff9ac9d7331d3b56e7c8e`,
+size 20986539 bytes, 581 objects). Contacts CSV must keep the same source-of-truth and CRM
 upsert semantics above, but the operator surface now mirrors the Campaign CSV
 flow where applicable: file loader first, preview before import, no initial
 confirm action, duplicate preview disabled after preview/report, cancel/reset
@@ -381,3 +386,10 @@ allowed in authenticated Contacts CSV preview/report evidence for reconciliation
 external/public masking rules are unchanged. A preview is valid only for the
 exact phone/name/CRM Situation column mapping that generated it; mapping changes
 make the existing preview stale, block import and require refreshed preview.
+Production validation used Demo preview/read-only paths only: Contact CSV preview
+accepted valid 12/13-digit Brazilian phone forms, rejected a duplicate and an
+invalid phone, and Campaign CSV preview rejected duplicate, invalid phone and
+missing required variable rows. Contact, ContactChannelIdentity, Lead, Campaign,
+OutboundMessage and Event counts all remained unchanged; no real send, provider
+call, billing mutation, schema or migration occurred. This is not a CRA
+customer-data import run.

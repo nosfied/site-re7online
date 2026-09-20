@@ -352,14 +352,19 @@ unchanged, with no real send, provider call or billing mutation. This improves
 CRA readiness evidence but does not replace a CRA-approved customer acceptance
 run.
 
-Contacts CSV complete UX/data-integrity lot, 2026-09-20: OWNER PASS / LOCAL
-VALIDATED / NOT DEPLOYED. The local Contacts import workflow now matches the
+Contacts CSV complete UX/data-integrity lot, 2026-09-20: OWNER PASS / DEPLOYED /
+PRODUCTION NON-DESTRUCTIVE VALIDATED. The Contacts import workflow now matches the
 Campaign CSV visual/import language and records preview validity against the
 exact selected columns for phone, name and same-tenant CRM Situation. Mapping
 changes keep the old preview visible but stale, block import, and require
 `Atualizar prévia` before any persistence path is enabled. No schema, migration,
 provider call, real send, cross-tenant CRM status, duplicate-contact creation or
-invalid-phone persistence is introduced.
+invalid-phone persistence is introduced. Production closeout deployed commit
+`9bb5f88f6a10ff3280e5adcdc777e9df0b0f7657` by fast-forward only after verified
+PostgreSQL backup; Demo preview/read-only validation left Contact,
+ContactChannelIdentity, Lead, Campaign, OutboundMessage and Event counts
+unchanged. This improves CRA readiness evidence but does not replace an
+approved CRA customer-data import run.
 | 5 | CRA-SLA-001 / CRA-TRAIN-001 / CRA-LGPD-002 | Close documentary acceptance pack | Contractual readiness requires signed/evidenced operations | Dates/attendees/signatures | no | no | yes | possible Meta docs | SLA, support, training, LGPD/security, backup and Meta proof attached |
 | 6 | CRA-IG-001 / CRA-FB-001 / CRA-WEB-001 | Activate and validate Instagram, Facebook and webchat | Contract-required but customer-deferred | Customer delivery window/assets/site access | no, unless bug found | yes | yes | yes for Meta channels | E4/E5 evidence per channel |
 

@@ -428,8 +428,13 @@ ACTIVE P1:
    occurred. Existing historical invalid phone rows remain an audit/repair topic
    and were not mass-corrected by this gate.
 
-   Contacts CSV complete UX/data-integrity lot, 2026-09-20: OWNER PASS / LOCAL
-   VALIDATED / NOT DEPLOYED. Owner production feedback required the Contacts
+   Contacts CSV complete UX/data-integrity lot, 2026-09-20: OWNER PASS /
+   DEPLOYED / PRODUCTION NON-DESTRUCTIVE VALIDATED. Commit
+   `9bb5f88f6a10ff3280e5adcdc777e9df0b0f7657` was deployed by fast-forward
+   only after verified PostgreSQL backup
+   `/opt/re7online/backups/converta-persistent/postgres/20260920-132221.dump`
+   (`sha256=4079ee78f71484bbf59dfee46c15a5a4020db99b4c5ff9ac9d7331d3b56e7c8e`,
+   size 20986539 bytes, 581 objects). Owner production feedback required the Contacts
    CSV modal to converge visually and behaviorally with the Campaign CSV import
    flow. Local delta removes the initial `Confirmar importacao` action until a
    preview exists, locks duplicate preview/import actions during pending/result
@@ -441,7 +446,11 @@ ACTIVE P1:
    block import and require `Atualizar previa`. Domain behavior remains
    unchanged: preview before import, same-tenant CRM Situation resolution,
    canonical phone normalization, formula-safe report CSV, no provider call, no
-   real send, no schema/migration.
+   real send, no schema/migration. Production validation used Demo preview/read-only
+   paths only: Contact CSV preview and Campaign CSV preview produced zero
+   Contact, ContactChannelIdentity, Lead, Campaign, OutboundMessage or Event
+   mutations; no provider call, billing mutation or real send occurred. This
+   does not claim a CRA customer-data import run.
 
 7. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente

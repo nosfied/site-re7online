@@ -161,8 +161,8 @@ accepted the valid row, rejected missing-DDD, invalid-length, non-BR and invalid
 CRM-status rows, and produced zero Contact, Lead, Campaign or Outbound
 mutations. No real send or provider call was performed.
 
-Contacts CSV complete UX/data-integrity lot, 2026-09-20: OWNER PASS / LOCAL
-VALIDATED / NOT DEPLOYED. Contacts CSV import now follows the Campaign CSV import interaction
+Contacts CSV complete UX/data-integrity lot, 2026-09-20: OWNER PASS / DEPLOYED /
+PRODUCTION NON-DESTRUCTIVE VALIDATED. Contacts CSV import now follows the Campaign CSV import interaction
 language: the first modal state is file selection plus `Pre-visualizar`, import
 confirmation appears only after preview, controls are locked while preview/import
 or final report feedback is active, and the operator can cancel/reset the
@@ -173,6 +173,15 @@ does not change public/customer masking rules elsewhere. Preview validity is
 tied to the exact selected phone/name/CRM Situation column mapping; changing a
 mapping keeps the previous preview visible but stale, disables import and
 requires `Atualizar prévia`.
+
+Production closeout for this lot deployed commit
+`9bb5f88f6a10ff3280e5adcdc777e9df0b0f7657` by fast-forward only after backup
+`/opt/re7online/backups/converta-persistent/postgres/20260920-132221.dump`
+(`sha256=4079ee78f71484bbf59dfee46c15a5a4020db99b4c5ff9ac9d7331d3b56e7c8e`).
+Demo preview/read-only validation left Contact, ContactChannelIdentity, Lead,
+Campaign, OutboundMessage and Event counts unchanged. No real send, provider
+call, billing mutation, schema change, migration or CRA customer-data import was
+performed.
 
 Permanent invariant: NO NEW CONTACT/RECIPIENT PHONE MAY BE PERSISTED WITHOUT
 CANONICAL NORMALIZATION + VALIDATION.
