@@ -53,6 +53,15 @@ CSV preview rejects invalid phones before persistence and preserves 12/13-digit
 canonical identity resolution for known Demo contacts `****9614` and `****6787`.
 Historical invalid data was not claimed cleaned.
 
+Contacts CSV complete lot addendum, 2026-09-20: OWNER PASS / LOCAL VALIDATED /
+NOT DEPLOYED. Contact CSV import keeps the same canonical identity boundary and
+adds a preview-mapping invariant: a preview is valid only for the exact phone,
+name and CRM Situation column mapping that produced it. If any mapping changes,
+the stale preview remains visible for comparison, import is blocked, and the
+operator must refresh the preview before persistence can proceed. This preserves
+the permanent rule that no Contact or campaign recipient phone may persist
+without canonical normalization and validation.
+
 The clean delivery passed 119 focused tests: 88 identity/CRM/import/Web Session,
 7 selected Meta/campaign/opt-out routes, 5 campaign runner, 2 campaign
 lifecycle, 2 campaign seed privacy, 8 return-destination and 7 CRM conversation

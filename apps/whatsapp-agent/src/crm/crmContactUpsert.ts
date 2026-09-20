@@ -321,9 +321,9 @@ function normalizeImportIssueReason(reason: CrmContactImportIssueReason) {
     case "invalid_crm_status":
       return "INVALID_CRM_STATUS";
     case "excluded_contact":
-      return "OTHER_VALIDATION_ERROR";
+      return "EXCLUDED_CONTACT";
     case "provisional_contact":
-      return "OTHER_VALIDATION_ERROR";
+      return "PROVISIONAL_CONTACT";
     case "identity_conflict":
       return "IDENTITY_CONFLICT";
   }
@@ -704,7 +704,7 @@ async function classifyCrmContactImportRows(
 	        label: getImportIssueLabel("invalid_phone"),
 	        inputPhone: sanitizeIssueInputPhone(row.phone),
 	        normalizedPhone: null,
-	        phoneDisplay: maskPhone(row.phone),
+	        phoneDisplay: row.phone,
 	        crmSituationInput,
 	        crmStatusId: null,
 	        crmStatusLabel: null,
@@ -718,7 +718,7 @@ async function classifyCrmContactImportRows(
 	        label: getImportIssueLabel("invalid_crm_status"),
 	        inputPhone: sanitizeIssueInputPhone(row.phone),
 	        normalizedPhone: normalized.waIdCanonical,
-	        phoneDisplay: maskPhone(normalized.waIdCanonical),
+	        phoneDisplay: normalized.waIdCanonical,
 	        crmSituationInput,
 	        crmStatusId: null,
 	        crmStatusLabel: null,
@@ -733,7 +733,7 @@ async function classifyCrmContactImportRows(
         label: getImportIssueLabel("duplicate_in_file"),
 	        inputPhone: sanitizeIssueInputPhone(row.phone),
 	        normalizedPhone: normalized.waIdCanonical,
-	        phoneDisplay: maskPhone(normalized.waIdCanonical),
+	        phoneDisplay: normalized.waIdCanonical,
 	        crmSituationInput,
 	        crmStatusId: crmSituation.kind === "matched" ? crmSituation.status.id : null,
 	        crmStatusLabel: crmSituation.kind === "matched" ? crmSituation.status.label : null,
@@ -876,9 +876,9 @@ async function classifyCrmContactImportRows(
 	        rowNumber: row.rowNumber,
 	        reason: "identity_conflict",
 	        label: getImportIssueLabel("identity_conflict"),
-	        inputPhone: maskPhone(row.waIdCanonical),
+	        inputPhone: row.waIdCanonical,
 	        normalizedPhone: row.waIdCanonical,
-	        phoneDisplay: maskPhone(row.waIdCanonical),
+	        phoneDisplay: row.waIdCanonical,
 	        crmSituationInput: row.crmSituationInput,
 	        crmStatusId: row.crmStatusId,
 	        crmStatusLabel: row.crmStatusLabel,
@@ -894,9 +894,9 @@ async function classifyCrmContactImportRows(
 	        rowNumber: row.rowNumber,
 	        reason: "excluded_contact",
 	        label: getImportIssueLabel("excluded_contact"),
-	        inputPhone: maskPhone(row.waIdCanonical),
+	        inputPhone: row.waIdCanonical,
 	        normalizedPhone: row.waIdCanonical,
-	        phoneDisplay: maskPhone(row.waIdCanonical),
+	        phoneDisplay: row.waIdCanonical,
 	        crmSituationInput: row.crmSituationInput,
 	        crmStatusId: row.crmStatusId,
 	        crmStatusLabel: row.crmStatusLabel,
@@ -909,9 +909,9 @@ async function classifyCrmContactImportRows(
 	        rowNumber: row.rowNumber,
 	        reason: "provisional_contact",
 	        label: getImportIssueLabel("provisional_contact"),
-	        inputPhone: maskPhone(row.waIdCanonical),
+	        inputPhone: row.waIdCanonical,
 	        normalizedPhone: row.waIdCanonical,
-	        phoneDisplay: maskPhone(row.waIdCanonical),
+	        phoneDisplay: row.waIdCanonical,
 	        crmSituationInput: row.crmSituationInput,
 	        crmStatusId: row.crmStatusId,
 	        crmStatusLabel: row.crmStatusLabel,
@@ -963,9 +963,9 @@ export async function previewCrmContactCsvImport(
 	    return {
 	      rowNumber: row.rowNumber,
 	      name: row.name,
-	      inputPhone: maskPhone(row.phone),
+	      inputPhone: row.phone,
 	      normalizedPhone: row.waIdCanonical,
-	      phoneDisplay: maskPhone(row.waIdCanonical),
+	      phoneDisplay: row.waIdCanonical,
 	      operation: !row.existingContact && !row.existingLead ? "CREATE" : changes ? "UPDATE" : "UNCHANGED",
 	      leadId: row.existingLead?.id ?? null,
 	      crmSituation: {
@@ -1007,7 +1007,7 @@ export async function previewCrmContactCsvImport(
 	    sampleErrors: classification.issues.slice(0, CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT).map((issue) => ({
 	      ...issue,
 	      code: normalizeImportIssueReason(issue.reason),
-      normalizedPhoneDisplay: maskPhone(issue.normalizedPhone),
+      normalizedPhoneDisplay: issue.normalizedPhone,
     })),
     truncatedErrors: classification.issues.length > CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT,
   };
@@ -1036,7 +1036,7 @@ export async function confirmCrmContactCsvImport(
   const rowErrors = classification.issues.slice(0, CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT).map((issue) => ({
     ...issue,
     code: normalizeImportIssueReason(issue.reason),
-	    normalizedPhoneDisplay: maskPhone(issue.normalizedPhone),
+	    normalizedPhoneDisplay: issue.normalizedPhone,
 	  }));
 	  const importableRows = [...classification.readyRows, ...classification.existingActiveRows];
 	  for (const row of importableRows) {
@@ -1070,10 +1070,10 @@ export async function confirmCrmContactCsvImport(
             reason: "invalid_phone",
             code: "OTHER_VALIDATION_ERROR",
             label: "Falha de validação ao importar esta linha",
-            inputPhone: maskPhone(row.waIdCanonical),
+            inputPhone: row.waIdCanonical,
 	            normalizedPhone: row.waIdCanonical,
-	            normalizedPhoneDisplay: maskPhone(row.waIdCanonical),
-	            phoneDisplay: maskPhone(row.waIdCanonical),
+	            normalizedPhoneDisplay: row.waIdCanonical,
+	            phoneDisplay: row.waIdCanonical,
 	            crmSituationInput: row.crmSituationInput,
 	            crmStatusId: row.crmStatusId,
 	            crmStatusLabel: row.crmStatusLabel,
@@ -1088,10 +1088,10 @@ export async function confirmCrmContactCsvImport(
           reason: "identity_conflict",
           code: "IDENTITY_CONFLICT",
           label: getImportIssueLabel("identity_conflict"),
-          inputPhone: maskPhone(row.waIdCanonical),
+          inputPhone: row.waIdCanonical,
 	          normalizedPhone: row.waIdCanonical,
-	          normalizedPhoneDisplay: maskPhone(row.waIdCanonical),
-	          phoneDisplay: maskPhone(row.waIdCanonical),
+	          normalizedPhoneDisplay: row.waIdCanonical,
+	          phoneDisplay: row.waIdCanonical,
 	          crmSituationInput: row.crmSituationInput,
 	          crmStatusId: row.crmStatusId,
 	          crmStatusLabel: row.crmStatusLabel,

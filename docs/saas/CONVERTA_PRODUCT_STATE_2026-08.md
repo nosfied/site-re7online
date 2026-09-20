@@ -18,6 +18,17 @@ existentes no mesmo tenant; valor invalido bloqueia a linha e valor em branco
 preserva/defaulta pela semantica canonica de CRM. Isto nao declara limpeza
 historica de dados invalidos.
 
+Atualizacao local de 2026-09-20: o lote completo de UX/integridade do Contacts
+CSV esta OWNER PASS / LOCAL VALIDATED / NOT DEPLOYED. O modal local
+usa prévia antes da importação, nao mostra confirmacao inicial, trava ações
+duplicadas durante prévia/importação/relatorio, oferece cancelar/resetar,
+traduz operações para portugues e usa cards/tabelas/badges no padrao Campaign
+CSV. Telefones completos aparecem apenas na evidencia autenticada da prévia e
+relatorio de importação de Contacts; regras externas de mascaramento nao foram
+alteradas. A validade da previa fica presa ao mapeamento exato de colunas; se
+telefone, nome ou `Situação no CRM` muda, a previa fica stale, a importacao e
+bloqueada e o operador precisa atualizar a previa.
+
 O produto deve ser apresentado como solucao de atendimento, roteamento, chatbot/fluxos, humano assistido, campanhas controladas e evidencia operacional. Nao deve ser apresentado como plataforma de IA generativa ampla quando esse nao for o escopo contratado.
 
 O baseline funcional estavel de agosto de 2026 consolida hardenings de Inbox, filas, Web Session, read-state, presenca de agentes e politicas de visibilidade. O tenant `secult-pe` opera no mesmo codigo SaaS multitenant publicado em producao; nao existe fork, build exclusivo, frontend exclusivo ou deploy especifico para SECULT-PE. Depois de novo frontend publicado, um reload normal do navegador carrega a versao atual.

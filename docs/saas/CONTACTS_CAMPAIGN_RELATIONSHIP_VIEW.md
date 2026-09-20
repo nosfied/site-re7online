@@ -161,6 +161,19 @@ accepted the valid row, rejected missing-DDD, invalid-length, non-BR and invalid
 CRM-status rows, and produced zero Contact, Lead, Campaign or Outbound
 mutations. No real send or provider call was performed.
 
+Contacts CSV complete UX/data-integrity lot, 2026-09-20: OWNER PASS / LOCAL
+VALIDATED / NOT DEPLOYED. Contacts CSV import now follows the Campaign CSV import interaction
+language: the first modal state is file selection plus `Pre-visualizar`, import
+confirmation appears only after preview, controls are locked while preview/import
+or final report feedback is active, and the operator can cancel/reset the
+started import. Preview, result and error evidence use Campaign-style cards,
+badges, tables and copy/download actions. Authenticated Contacts CSV preview and
+report show the full phone evidence needed for operator reconciliation; this
+does not change public/customer masking rules elsewhere. Preview validity is
+tied to the exact selected phone/name/CRM Situation column mapping; changing a
+mapping keeps the previous preview visible but stale, disables import and
+requires `Atualizar prévia`.
+
 Permanent invariant: NO NEW CONTACT/RECIPIENT PHONE MAY BE PERSISTED WITHOUT
 CANONICAL NORMALIZATION + VALIDATION.
 

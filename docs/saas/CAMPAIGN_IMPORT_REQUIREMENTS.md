@@ -369,3 +369,15 @@ and invalid values reject the row with no Contact mutation.
 Production validation used preview/read-only paths only: Contact CSV and Campaign
 CSV preview both left Contact, Lead, Campaign and Outbound counts unchanged; no
 campaign send, provider call or billing mutation was executed.
+
+Contacts CSV complete UX/data-integrity lot, 2026-09-20: OWNER PASS / LOCAL
+VALIDATED / NOT DEPLOYED. Contacts CSV must keep the same source-of-truth and CRM
+upsert semantics above, but the operator surface now mirrors the Campaign CSV
+flow where applicable: file loader first, preview before import, no initial
+confirm action, duplicate preview disabled after preview/report, cancel/reset
+available, Portuguese operation labels, Campaign-style summary cards, result
+badges, error table and downloadable/copyable report. Full phone values are
+allowed in authenticated Contacts CSV preview/report evidence for reconciliation;
+external/public masking rules are unchanged. A preview is valid only for the
+exact phone/name/CRM Situation column mapping that generated it; mapping changes
+make the existing preview stale, block import and require refreshed preview.

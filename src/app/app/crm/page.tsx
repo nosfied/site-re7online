@@ -181,6 +181,87 @@ function getCampaignRelationshipBadgeClass(status: AppCrmCampaignRelationshipSta
   }
 }
 
+function getCrmImportOperationLabel(operation: string | null | undefined) {
+  switch (operation) {
+    case "CREATE":
+      return "Criar";
+    case "UPDATE":
+      return "Atualizar";
+    case "UNCHANGED":
+      return "Sem alteração";
+    case "SKIP":
+      return "Ignorar";
+    case "INVALID":
+      return "Inválido";
+    case "CONFLICT":
+      return "Conflito";
+    default:
+      return operation || "-";
+  }
+}
+
+function getCrmImportOperationBadgeClass(operation: string | null | undefined) {
+  switch (operation) {
+    case "CREATE":
+      return "border-emerald-400/30 bg-emerald-900/25 text-emerald-100";
+    case "UPDATE":
+      return "border-sky-400/30 bg-sky-900/25 text-sky-100";
+    case "UNCHANGED":
+      return "border-white/15 bg-white/5 text-white/75";
+    case "INVALID":
+    case "CONFLICT":
+      return "border-red-400/30 bg-red-900/25 text-red-100";
+    default:
+      return "border-amber-400/30 bg-amber-900/25 text-amber-100";
+  }
+}
+
+function getCrmImportIssueCodeLabel(code: string | null | undefined, reason: string | null | undefined) {
+  switch (code || reason) {
+    case "INVALID_PHONE":
+    case "invalid_phone":
+      return "Telefone inválido";
+    case "INVALID_CRM_STATUS":
+    case "invalid_crm_status":
+      return "Situação no CRM não encontrada";
+    case "DUPLICATE":
+    case "duplicate_in_file":
+      return "Contato duplicado";
+    case "EXCLUDED_CONTACT":
+    case "excluded_contact":
+      return "Fora da operação";
+    case "PROVISIONAL_CONTACT":
+    case "provisional_contact":
+      return "Já associado";
+    case "IDENTITY_CONFLICT":
+    case "identity_conflict":
+      return "Conflito de identidade";
+    default:
+      return "Validação";
+  }
+}
+
+function getCrmImportIssueBadgeClass(code: string | null | undefined, reason: string | null | undefined) {
+  switch (code || reason) {
+    case "INVALID_PHONE":
+    case "invalid_phone":
+    case "INVALID_CRM_STATUS":
+    case "invalid_crm_status":
+    case "IDENTITY_CONFLICT":
+    case "identity_conflict":
+      return "border-red-400/30 bg-red-900/25 text-red-100";
+    case "DUPLICATE":
+    case "duplicate_in_file":
+    case "EXCLUDED_CONTACT":
+    case "excluded_contact":
+    case "PROVISIONAL_CONTACT":
+    case "provisional_contact":
+      return "border-amber-400/30 bg-amber-900/25 text-amber-100";
+    default:
+      return "border-white/15 bg-white/5 text-white/75";
+  }
+}
+
 function getTemplateHint(item: AppCrmContactItem) {
   if (item.canStartWhatsappTemplateCandidate) return "Pode receber modelo aprovado";
   switch (item.templateSendBlockedReason) {
@@ -1148,25 +1229,62 @@ function CsvImportModal({
 	  onConfirm: (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null; crmSituationColumn: string | null } }) => Promise<AppCrmContactImportConfirmResponse>;
 	}) {
 	  const [csvText, setCsvText] = useState("");
+	  const [csvFileName, setCsvFileName] = useState("");
 	  const [phoneColumn, setPhoneColumn] = useState("");
 	  const [nameColumn, setNameColumn] = useState("");
 	  const [crmSituationColumn, setCrmSituationColumn] = useState("");
   const [preview, setPreview] = useState<AppCrmContactImportPreviewResponse | null>(null);
   const [summary, setSummary] = useState<AppCrmContactImportConfirmResponse | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [importLoading, setImportLoading] = useState(false);
-  const [localError, setLocalError] = useState<string | null>(null);
+	  const [previewLoading, setPreviewLoading] = useState(false);
+	  const [importLoading, setImportLoading] = useState(false);
+	  const [localError, setLocalError] = useState<string | null>(null);
+	  const [previewMappingKey, setPreviewMappingKey] = useState("");
 	  const previewRequestSeq = useRef(0);
 	  const headers = preview?.headers ?? [];
 	  const mapping = { phoneColumn: phoneColumn || null, nameColumn: nameColumn || null, crmSituationColumn: crmSituationColumn || null };
+	  const mappingKey = JSON.stringify(mapping);
 	  const loading = previewLoading || importLoading;
+	  const reportVisible = Boolean(summary);
+
+	  const resetImportState = () => {
+	    previewRequestSeq.current += 1;
+	    setCsvText("");
+	    setCsvFileName("");
+	    setPhoneColumn("");
+	    setNameColumn("");
+	    setCrmSituationColumn("");
+	    setPreview(null);
+	    setSummary(null);
+	    setLocalError(null);
+	    setPreviewMappingKey("");
+	    setPreviewLoading(false);
+	    setImportLoading(false);
+	  };
 
   const readFile = async (file: File | null) => {
     if (!file) return;
+    previewRequestSeq.current += 1;
     setPreview(null);
     setSummary(null);
     setLocalError(null);
+    setPreviewMappingKey("");
+    setCsvFileName(file.name);
     setCsvText(await file.text());
+  };
+
+  const updatePhoneColumn = (value: string) => {
+    setPhoneColumn(value);
+    setSummary(null);
+  };
+
+  const updateNameColumn = (value: string) => {
+    setNameColumn(value);
+    setSummary(null);
+  };
+
+  const updateCrmSituationColumn = (value: string) => {
+    setCrmSituationColumn(value);
+    setSummary(null);
   };
 
   const runPreview = async () => {
@@ -1180,20 +1298,37 @@ function CsvImportModal({
       const response = await onPreview({ csvText, mapping });
       if (requestSeq !== previewRequestSeq.current) return;
       setPreview(response);
+      let nextPhoneColumn = phoneColumn;
+      let nextNameColumn = nameColumn;
+      let nextCrmSituationColumn = crmSituationColumn;
       if (!phoneColumn && response.headers.length > 0) {
         const guessed = response.headers.find((header) => /^(numero|número|telefone|phone|whatsapp)$/i.test(header.trim()));
-        if (guessed) setPhoneColumn(guessed);
+        if (guessed) {
+          nextPhoneColumn = guessed;
+          setPhoneColumn(guessed);
+        }
       }
 	      if (!nameColumn && response.headers.length > 0) {
 	        const guessed = response.headers.find((header) => /^(nome|name)$/i.test(header.trim()));
-	        if (guessed) setNameColumn(guessed);
+	        if (guessed) {
+	          nextNameColumn = guessed;
+	          setNameColumn(guessed);
+	        }
 	      }
 	      if (!crmSituationColumn && response.headers.length > 0) {
 	        const guessed = response.headers.find((header) =>
 	          /^(situa[cç][aã]o no crm|situa[cç][aã]o crm|status crm|crm status)$/i.test(header.trim())
 	        );
-	        if (guessed) setCrmSituationColumn(guessed);
+	        if (guessed) {
+	          nextCrmSituationColumn = guessed;
+	          setCrmSituationColumn(guessed);
+	        }
 	      }
+	      setPreviewMappingKey(JSON.stringify({
+	        phoneColumn: nextPhoneColumn || null,
+	        nameColumn: nextNameColumn || null,
+	        crmSituationColumn: nextCrmSituationColumn || null,
+	      }));
     } catch (err) {
       if (requestSeq !== previewRequestSeq.current) return;
       const typed = err as AppApiError;
@@ -1219,14 +1354,74 @@ function CsvImportModal({
   };
 
   const errorRows = summary?.errors ?? preview?.sampleErrors ?? [];
-	  const reportLines = errorRows.map((error) => [
-	    `Linha ${error.rowNumber}`,
-	    error.inputPhone ? `Entrada: ${error.inputPhone}` : null,
-	    error.normalizedPhoneDisplay ? `Normalizado: ${error.normalizedPhoneDisplay}` : null,
-	    error.crmSituationInput ? `Situação CRM: ${error.crmSituationInput}` : null,
-	    error.code ?? error.reason,
-	    error.label,
-	  ].filter(Boolean).join(" | "));
+  const reportLines = errorRows.map((error) => [
+    `Linha ${error.rowNumber}`,
+    error.inputPhone ? `Entrada: ${error.inputPhone}` : null,
+    error.normalizedPhoneDisplay ? `Normalizado: ${error.normalizedPhoneDisplay}` : null,
+    error.crmSituationInput ? `Situação CRM: ${error.crmSituationInput}` : null,
+    getCrmImportIssueCodeLabel(error.code, error.reason),
+    error.label,
+  ].filter(Boolean).join(" | "));
+  const previewReady = Boolean(preview && !reportVisible);
+  const previewMappingDirty = Boolean(preview && !reportVisible && previewMappingKey !== mappingKey);
+  const previewButtonDisabled = !csvText.trim() || previewLoading || importLoading || reportVisible || (Boolean(preview) && !previewMappingDirty);
+  const confirmButtonDisabled = !preview || reportVisible || previewLoading || importLoading || previewMappingDirty || preview.readyToImport === 0;
+  const totalReportFailures = summary ? (summary.failed ?? 0) + summary.invalid + (summary.invalidCrmStatuses ?? 0) : 0;
+
+  const renderIssueTable = (
+    rows: typeof errorRows,
+    options: { tone: "amber" | "emerald"; truncated?: boolean }
+  ) => {
+    if (rows.length === 0) return null;
+    const toneClasses = options.tone === "emerald"
+      ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-50"
+      : "border-amber-300/30 bg-amber-400/10 text-amber-50";
+    const actionBorder = options.tone === "emerald" ? "border-emerald-100/30" : "border-amber-100/30";
+    return (
+      <div className={`grid gap-3 rounded-md border p-3 text-sm ${toneClasses}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-semibold">{summary ? "Erros detalhados" : "Erros da prévia"}</span>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={copyErrorReport} disabled={loading} className={`rounded-md border px-2 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${actionBorder}`}>
+              Copiar
+            </button>
+            <button type="button" onClick={downloadErrorReport} disabled={loading} className={`rounded-md border px-2 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${actionBorder}`}>
+              Baixar CSV
+            </button>
+          </div>
+        </div>
+        <div className="overflow-x-auto rounded-md border border-white/10">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead className="bg-white/10 text-left text-white">
+              <tr>
+                <th className="px-3 py-2">Linha</th>
+                <th className="px-3 py-2">Telefone</th>
+                <th className="px-3 py-2">Situação CRM</th>
+                <th className="px-3 py-2">Resultado</th>
+                <th className="px-3 py-2">Motivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 8).map((error) => (
+                <tr key={`${error.rowNumber}:${error.reason}:${error.inputPhone ?? ""}`} className="border-t border-white/10">
+                  <td className="px-3 py-2">{error.rowNumber}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-white">{error.normalizedPhoneDisplay ?? error.normalizedPhone ?? error.inputPhone ?? error.phoneDisplay ?? "-"}</td>
+                  <td className="px-3 py-2">{error.crmSituationInput ?? error.crmStatusLabel ?? "-"}</td>
+                  <td className="px-3 py-2">
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getCrmImportIssueBadgeClass(error.code, error.reason)}`}>
+                      {getCrmImportIssueCodeLabel(error.code, error.reason)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">{error.label}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {options.truncated ? <div className="text-xs">Há mais erros no arquivo.</div> : null}
+      </div>
+    );
+  };
 
   const copyErrorReport = async () => {
     if (reportLines.length === 0) return;
@@ -1260,7 +1455,7 @@ function CsvImportModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 px-3 py-4 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <button type="button" aria-label="Fechar importação" className="absolute inset-0 cursor-default" onClick={onClose} />
+      <button type="button" aria-label="Fechar importação" className="absolute inset-0 cursor-default disabled:cursor-wait" onClick={onClose} disabled={loading} />
       <section className="theme-bg relative grid max-h-[calc(100vh-2rem)] w-full max-w-3xl grid-rows-[auto_1fr] overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
         <header className="theme-surface-strong border-b p-4">
           <h2 className="text-lg font-bold text-white">Importar CSV</h2>
@@ -1268,62 +1463,94 @@ function CsvImportModal({
         </header>
         <div className="min-h-0 overflow-y-auto p-4">
           <div className="grid gap-4">
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(event) => void readFile(event.target.files?.[0] ?? null)}
-              className="theme-input rounded-md border p-2 text-sm"
-            />
-            {preview ? (
-              <div className="grid gap-3 rounded-lg border border-white/10 p-3">
+            <div className="grid gap-3 rounded-md border border-white/10 bg-white/[0.03] p-3">
+              <div>
+                <div className="text-sm font-semibold text-white">Arquivo CSV</div>
+                <p className="mt-1 text-xs theme-muted">Selecione o arquivo e gere a prévia antes de confirmar a importação.</p>
+              </div>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(event) => void readFile(event.target.files?.[0] ?? null)}
+                disabled={loading || reportVisible}
+                className="theme-input rounded-md border p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              {csvFileName ? <div className="text-xs theme-muted">Arquivo selecionado: <span className="text-white">{csvFileName}</span></div> : null}
+            </div>
+            {preview && !reportVisible ? (
+              <div className="grid gap-3 rounded-md border border-white/10 bg-slate-950/20 p-3">
 	                <div className="grid gap-3 sm:grid-cols-3">
 	                  <label className="grid gap-1.5 text-sm">
 	                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Coluna do telefone</span>
-	                    <select value={phoneColumn} onChange={(event) => setPhoneColumn(event.target.value)} className="theme-input h-10 rounded-md border px-3 text-sm">
+	                    <select value={phoneColumn} onChange={(event) => updatePhoneColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
                       <option value="">Detectar automaticamente</option>
                       {headers.map((header) => <option key={header} value={header}>{header}</option>)}
                     </select>
                   </label>
                   <label className="grid gap-1.5 text-sm">
                     <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Coluna do nome</span>
-                    <select value={nameColumn} onChange={(event) => setNameColumn(event.target.value)} className="theme-input h-10 rounded-md border px-3 text-sm">
+                    <select value={nameColumn} onChange={(event) => updateNameColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
                       <option value="">Sem nome</option>
 	                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 	                    </select>
 	                  </label>
 	                  <label className="grid gap-1.5 text-sm">
 	                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Situação no CRM</span>
-	                    <select value={crmSituationColumn} onChange={(event) => setCrmSituationColumn(event.target.value)} className="theme-input h-10 rounded-md border px-3 text-sm">
+	                    <select value={crmSituationColumn} onChange={(event) => updateCrmSituationColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
 	                      <option value="">Preservar/default</option>
 	                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 	                    </select>
 	                  </label>
 	                </div>
-	                <div className="grid gap-2 text-sm theme-muted sm:grid-cols-3">
-	                  <DetailField label="Linhas" value={preview.totalRows} />
-	                  <DetailField label="Prontas" value={preview.readyToImport} />
-	                  <DetailField label="Já cadastradas" value={preview.existingContacts} />
-	                  <DetailField label="Inválidas" value={preview.invalidRows} />
-	                  <DetailField label="Status inválido" value={preview.invalidCrmStatuses ?? 0} />
-	                  <DetailField label="Duplicadas" value={preview.duplicatesInFile} />
-	                  <DetailField label="Novos" value={preview.created ?? 0} />
-	                  <DetailField label="Atualizações" value={preview.updated ?? 0} />
-	                  <DetailField label="Sem alteração" value={preview.unchanged ?? 0} />
-	                  <DetailField label="Excluídas" value={preview.excludedContacts ?? 0} />
-	                  <DetailField label="Já associadas" value={preview.provisionalContacts ?? 0} />
-	                  <DetailField label="Conflitos" value={preview.identityConflicts ?? 0} />
-	                  <DetailField label="Delimitador" value={preview.delimiter} />
-	                </div>
+	                {previewMappingDirty ? (
+	                  <div className="rounded-md border border-amber-300/30 bg-amber-400/10 p-3 text-sm text-amber-100">
+	                    As colunas foram alteradas. Atualize a prévia antes de confirmar a importação.
+	                  </div>
+	                ) : null}
+	                <div className="grid gap-3 sm:grid-cols-4">
+                    <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+                      <p className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Linhas</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{preview.totalRows}</p>
+                    </div>
+                    <div className="rounded-md border border-emerald-400/30 bg-emerald-900/20 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-100/75">Prontas</p>
+                      <p className="mt-1 text-lg font-semibold text-emerald-100">{preview.readyToImport}</p>
+                    </div>
+                    <div className="rounded-md border border-amber-400/30 bg-amber-900/20 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-100/75">Duplicadas</p>
+                      <p className="mt-1 text-lg font-semibold text-amber-100">{preview.duplicatesInFile}</p>
+                    </div>
+                    <div className="rounded-md border border-red-400/30 bg-red-900/20 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-red-100/75">Bloqueadas</p>
+                      <p className="mt-1 text-lg font-semibold text-red-100">{preview.invalidRows + (preview.invalidCrmStatuses ?? 0) + (preview.excludedContacts ?? 0) + (preview.provisionalContacts ?? 0) + (preview.identityConflicts ?? 0)}</p>
+                    </div>
+                    <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+                      <p className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Novos contatos</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{preview.created ?? 0}</p>
+                    </div>
+                    <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+                      <p className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Atualizações</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{preview.updated ?? 0}</p>
+                    </div>
+                    <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+                      <p className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Sem alteração</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{preview.unchanged ?? 0}</p>
+                    </div>
+                    <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+                      <p className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Consolidados</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{preview.existingContacts}</p>
+                    </div>
+                  </div>
 	                {preview.rows?.length ? (
-	                  <div className="overflow-x-auto rounded-lg border border-white/10">
-	                    <table className="min-w-[760px] w-full text-left text-xs">
+	                  <div className="overflow-x-auto rounded-md border border-white/10">
+	                    <table className="w-full min-w-[760px] text-sm">
 	                      <thead className="bg-white/10 text-white">
 	                        <tr>
 	                          <th className="px-3 py-2">Linha</th>
-	                          <th className="px-3 py-2">Nome</th>
+	                          <th className="px-3 py-2">Contato</th>
 	                          <th className="px-3 py-2">Telefone</th>
-	                          <th className="px-3 py-2">Situação no CRM</th>
 	                          <th className="px-3 py-2">Operação</th>
+	                          <th className="px-3 py-2">Situação no CRM</th>
 	                        </tr>
 	                      </thead>
 	                      <tbody>
@@ -1331,104 +1558,96 @@ function CsvImportModal({
 	                          <tr key={`${row.rowNumber}:${row.normalizedPhone}`} className="border-t border-white/10">
 	                            <td className="px-3 py-2">{row.rowNumber}</td>
 	                            <td className="px-3 py-2 text-white">{row.name || "-"}</td>
-	                            <td className="px-3 py-2">{row.phoneDisplay ?? row.normalizedPhone}</td>
+	                            <td className="px-3 py-2 font-mono text-xs">{row.normalizedPhone ?? row.phoneDisplay ?? row.inputPhone}</td>
 	                            <td className="px-3 py-2">
-	                              {row.crmSituation.label ?? row.crmSituation.input ?? row.crmSituation.previousLabel ?? "-"}
-	                            </td>
-	                            <td className="px-3 py-2">{row.operation}</td>
+                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getCrmImportOperationBadgeClass(row.operation)}`}>
+                                  {getCrmImportOperationLabel(row.operation)}
+                                </span>
+                              </td>
+	                            <td className="px-3 py-2">{row.crmSituation.label ?? row.crmSituation.input ?? row.crmSituation.previousLabel ?? "-"}</td>
 	                          </tr>
 	                        ))}
 	                      </tbody>
 	                    </table>
 	                  </div>
 	                ) : null}
-                {preview.sampleErrors.length > 0 ? (
-                  <div className="grid gap-3 rounded-lg border border-amber-300/30 bg-amber-400/10 p-3 text-sm text-amber-100">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-semibold">Erros da prévia</span>
-                      <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={copyErrorReport} className="rounded-md border border-amber-100/30 px-2 py-1 text-xs font-semibold">
-                          Copiar
-                        </button>
-                        <button type="button" onClick={downloadErrorReport} className="rounded-md border border-amber-100/30 px-2 py-1 text-xs font-semibold">
-                          Baixar CSV
-                        </button>
-                      </div>
-                    </div>
-                    {preview.sampleErrors.slice(0, 5).map((error) => (
-                      <div key={`${error.rowNumber}:${error.reason}`}>
-	                        Linha {error.rowNumber}: {error.code ?? error.reason} · {error.label}
-	                        {error.inputPhone ? ` · Entrada: ${error.inputPhone}` : ""}
-	                        {error.normalizedPhoneDisplay ? ` · Normalizado: ${error.normalizedPhoneDisplay}` : ""}
-	                        {error.crmSituationInput ? ` · Situação CRM: ${error.crmSituationInput}` : ""}
-	                      </div>
-                    ))}
-                    {preview.truncatedErrors ? <div>Há mais erros no arquivo.</div> : null}
-                  </div>
-                ) : null}
+                {renderIssueTable(preview.sampleErrors, { tone: "amber", truncated: preview.truncatedErrors })}
               </div>
             ) : null}
             {summary ? (
-              <div className="grid gap-3 rounded-lg border border-emerald-300/30 bg-emerald-400/10 p-3 text-sm text-emerald-100">
-                <div className="font-semibold">Relatório da importação</div>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <DetailField label="Linhas" value={summary.received} />
-	                  <DetailField label="Criados" value={summary.created} />
-	                  <DetailField label="Atualizados" value={summary.updated} />
-	                  <DetailField label="Sem alteração" value={summary.unchanged ?? 0} />
-	                  <DetailField label="Prontos" value={summary.readyToImport} />
-	                  <DetailField label="Ignorados" value={summary.skipped ?? summary.duplicates} />
-	                  <DetailField label="Falhas" value={(summary.failed ?? 0) + summary.invalid + (summary.invalidCrmStatuses ?? 0)} />
+              <div className="grid gap-3 rounded-md border border-emerald-300/30 bg-emerald-400/10 p-3 text-sm text-emerald-100">
+                <div>
+                  <div className="font-semibold">Relatório da importação</div>
+                  <p className="mt-1 text-xs text-emerald-50/80">
+                    {summary.created + summary.updated + (summary.unchanged ?? 0)} processados; {totalReportFailures} com erro.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <div className="rounded-md border border-emerald-100/20 bg-emerald-950/20 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-50/70">Linhas</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{summary.received}</p>
+                  </div>
+                  <div className="rounded-md border border-emerald-100/20 bg-emerald-950/20 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-50/70">Criados</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{summary.created}</p>
+                  </div>
+                  <div className="rounded-md border border-emerald-100/20 bg-emerald-950/20 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-50/70">Atualizados</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{summary.updated}</p>
+                  </div>
+                  <div className="rounded-md border border-emerald-100/20 bg-emerald-950/20 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-50/70">Sem alteração</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{summary.unchanged ?? 0}</p>
+                  </div>
+                  <div className="rounded-md border border-emerald-100/20 bg-emerald-950/20 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-50/70">Prontos</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{summary.readyToImport}</p>
+                  </div>
+                  <div className="rounded-md border border-emerald-100/20 bg-emerald-950/20 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-50/70">Ignorados</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{summary.skipped ?? summary.duplicates}</p>
+                  </div>
+                  <div className="rounded-md border border-red-300/30 bg-red-900/20 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-red-100/75">Falhas</p>
+                    <p className="mt-1 text-lg font-semibold text-red-100">{totalReportFailures}</p>
+                  </div>
                 </div>
                 <div className="text-xs text-emerald-50/80">
 	                  Duplicados: {summary.duplicates} · Status inválido: {summary.invalidCrmStatuses ?? 0} · Fora da operação: {summary.excludedContacts ?? 0} · Já associados: {summary.provisionalContacts ?? 0} · Conflitos: {summary.identityConflicts ?? 0}
                 </div>
-                {summary.errors?.length ? (
-                  <div className="grid gap-2 rounded-md border border-emerald-100/20 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-semibold">Erros detalhados</span>
-                      <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={copyErrorReport} className="rounded-md border border-emerald-100/30 px-2 py-1 text-xs font-semibold">
-                          Copiar
-                        </button>
-                        <button type="button" onClick={downloadErrorReport} className="rounded-md border border-emerald-100/30 px-2 py-1 text-xs font-semibold">
-                          Baixar CSV
-                        </button>
-                      </div>
-                    </div>
-                    {summary.errors.slice(0, 8).map((error) => (
-                      <div key={`${error.rowNumber}:${error.reason}:${error.inputPhone ?? ""}`} className="text-xs">
-	                        Linha {error.rowNumber} | {error.inputPhone ?? "-"} | {error.normalizedPhoneDisplay ?? "-"} | {error.crmSituationInput ?? "-"} | {error.code ?? error.reason} | {error.label}
-                      </div>
-                    ))}
-                    {summary.truncatedErrors ? <div className="text-xs">Há mais erros no arquivo.</div> : null}
-                  </div>
-                ) : null}
+                {renderIssueTable(summary.errors ?? [], { tone: "emerald", truncated: summary.truncatedErrors })}
               </div>
             ) : null}
             {localError ? (
               <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 p-3 text-sm text-rose-100">{localError}</div>
             ) : null}
             <div className="flex flex-wrap justify-end gap-2">
-              <button type="button" onClick={onClose} className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold">
+              <button type="button" onClick={onClose} disabled={loading} className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
                 Fechar
               </button>
+              {(preview || summary || csvText) ? (
+                <button type="button" onClick={resetImportState} disabled={loading} className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+                  Cancelar importação
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={runPreview}
-                disabled={!csvText.trim() || previewLoading || importLoading}
+                disabled={previewButtonDisabled}
                 className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {previewLoading ? "Gerando prévia..." : "Pré-visualizar"}
+                {previewLoading ? "Gerando prévia..." : previewMappingDirty ? "Atualizar prévia" : "Pré-visualizar"}
               </button>
-              <button
-                type="button"
-                onClick={runConfirm}
-                disabled={!preview || previewLoading || importLoading || preview.readyToImport === 0}
-                className="rounded-md bg-re7-sky px-4 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {importLoading ? "Importando..." : "Confirmar importação"}
-              </button>
+              {previewReady ? (
+                <button
+                  type="button"
+                  onClick={runConfirm}
+                  disabled={confirmButtonDisabled}
+                  className="rounded-md bg-re7-sky px-4 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {importLoading ? "Importando..." : "Confirmar importação"}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

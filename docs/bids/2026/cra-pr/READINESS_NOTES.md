@@ -136,6 +136,14 @@ Follow-up de 2026-09-16:
   aplica default pela semantica canonica. Validacao produtiva usou apenas preview
   e leitura no `demo-converta`, sem send real, provider call, billing ou mutacao
   inesperada de Contact/Lead/Campaign/Outbound.
+- Contacts CSV complete UX/data-integrity lot, 2026-09-20: OWNER PASS / LOCAL
+  VALIDATED / NOT DEPLOYED. O fluxo de importacao de Contacts segue a linguagem
+  visual/operacional de Campaign CSV, mantem telefone completo apenas na evidencia
+  autenticada de preview/relatorio, e a validade da previa fica presa ao
+  mapeamento exato de `Telefone`, `Nome` e `Situação no CRM`. Se o mapeamento
+  muda, a previa antiga permanece visivel como stale, `Confirmar importacao`
+  fica bloqueado e o operador precisa executar `Atualizar previa`; nao ha caminho
+  de importacao com preview stale.
 - Meta Marketing template media support: P2 / PRODUCT + META CAPABILITY.
   Inclui categoria MARKETING, headers IMAGE/VIDEO, exemplos/midia Meta,
   upload/handle, preview, variaveis, botoes suportados, submissao, status,

@@ -428,6 +428,21 @@ ACTIVE P1:
    occurred. Existing historical invalid phone rows remain an audit/repair topic
    and were not mass-corrected by this gate.
 
+   Contacts CSV complete UX/data-integrity lot, 2026-09-20: OWNER PASS / LOCAL
+   VALIDATED / NOT DEPLOYED. Owner production feedback required the Contacts
+   CSV modal to converge visually and behaviorally with the Campaign CSV import
+   flow. Local delta removes the initial `Confirmar importacao` action until a
+   preview exists, locks duplicate preview/import actions during pending/result
+   states, provides an explicit cancel/reset path, renders preview/report/errors
+   with Campaign-style cards, badges and tables, localizes operation/reason
+   labels, and shows full authenticated phone evidence in the Contacts CSV
+   preview/report. Preview validity is tied to the exact selected phone/name/CRM
+   Situation column mapping; mapping changes keep the stale preview visible,
+   block import and require `Atualizar previa`. Domain behavior remains
+   unchanged: preview before import, same-tenant CRM Situation resolution,
+   canonical phone normalization, formula-safe report CSV, no provider call, no
+   real send, no schema/migration.
+
 7. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
    TEST VALIDATED / PROD NON-DESTRUCTIVE VALIDATED. Em 2026-09-15, Phase C autorizada para exatamente
    2 mensagens Utility `data_exame` via META_CLOUD no `demo-converta` parou com

@@ -438,6 +438,13 @@ Contacts + Campaigns UX refinement, 2026-09-19:
   supports optional `Situação no CRM`, resolving only to existing same-tenant CRM
   statuses; invalid status rows are rejected and blank status preserves/defaults
   through canonical CRM upsert semantics.
+- Contacts CSV complete UX/data-integrity addendum, 2026-09-20: OWNER PASS /
+  LOCAL VALIDATED / NOT DEPLOYED. The Contacts CSV preview is valid only for the
+  exact phone/name/CRM Situation column mapping that generated it. Mapping
+  changes keep the stale preview visible, change the action to `Atualizar
+  prévia`, disable import, and require refreshed preview before persistence.
+  This closes the local owner UX gate without real send, provider call,
+  schema/migration or CRA customer-data import.
 
 Production deploy closeout on 2026-09-19: commit
 `1f8304f8624e76ba3efc507b9eccd80060447adb` was deployed to Converta by

@@ -105,6 +105,17 @@ data is not claimed cleaned without a separate audit/repair gate. Production
 validation used Demo preview/read-only paths only and produced zero Contact,
 Lead, Campaign or Outbound mutations.
 
+Contacts CSV complete UX/data-integrity lot, 2026-09-20: OWNER PASS / LOCAL
+VALIDATED / NOT DEPLOYED. Contacts CSV now mirrors the Campaign CSV operator
+pattern locally: file selection then preview, import confirmation only after
+preview, locked duplicate actions while preview/import/report is active,
+cancel/reset available, Portuguese operation labels and Campaign-style
+cards/tables/badges. Full phone values are shown only in authenticated Contacts
+CSV import preview/report evidence for reconciliation. Preview validity is tied
+to the exact phone/name/CRM Situation mapping used; mapping changes stale the
+visible preview, block import and require refreshed preview. No schema,
+migration, provider call, real send or production deploy occurred.
+
 CRA-PR controlled campaign readiness, 2026-09-15: the product capability for
 template request/review/submission, campaign drafts/import, lifecycle controls,
 opt-out blocking, delivery status, Meta usage ledger and active-message billing

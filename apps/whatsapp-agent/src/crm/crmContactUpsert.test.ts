@@ -177,7 +177,10 @@ test("CRM CSV preview blocks operationally excluded contacts without creating du
   assert.equal(preview.excludedContacts, 1);
   assert.equal(preview.readyToImport, 0);
   assert.equal(preview.sampleErrors[0]?.reason, "excluded_contact");
+  assert.equal(preview.sampleErrors[0]?.code, "EXCLUDED_CONTACT");
   assert.equal(preview.sampleErrors[0]?.label, "Contato fora da operação");
+  assert.equal(preview.sampleErrors[0]?.phoneDisplay, "5584951957784");
+  assert.equal(preview.sampleErrors[0]?.normalizedPhoneDisplay, "5584951957784");
 });
 
 test("CRM manual create returns an actionable excluded-contact conflict without duplicates", async () => {
@@ -528,6 +531,9 @@ test("CRM CSV import does not restore operationally excluded contacts", async ()
   assert.equal(result.created, 0);
   assert.equal(result.reused, 0);
   assert.equal(result.excludedContacts, 1);
+  assert.equal(result.errors?.[0]?.code, "EXCLUDED_CONTACT");
+  assert.equal(result.errors?.[0]?.phoneDisplay, "5584999040528");
+  assert.equal(result.errors?.[0]?.normalizedPhoneDisplay, "5584999040528");
   assert.equal(prisma.__state.createdContacts, 0);
   assert.equal(prisma.__state.updatedContacts, 0);
 });
@@ -562,6 +568,8 @@ test("CRM CSV import does not promote provisional contacts", async () => {
   assert.equal(result.created, 0);
   assert.equal(result.promotedProvisional, 0);
   assert.equal(result.provisionalContacts, 1);
+  assert.equal(preview.sampleErrors[0]?.code, "PROVISIONAL_CONTACT");
+  assert.equal(result.errors?.[0]?.code, "PROVISIONAL_CONTACT");
   assert.equal(prisma.__state.createdContacts, 0);
   assert.equal(prisma.__state.updatedContacts, 0);
 });

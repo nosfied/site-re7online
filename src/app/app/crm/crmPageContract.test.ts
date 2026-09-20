@@ -99,3 +99,57 @@ test("CRM campaign relationship remains responsive in list and detail", () => {
   assert.ok(pageSource.includes("md:grid-cols-[1fr_auto] md:items-center"));
   assert.ok(pageSource.includes("max-h-[calc(100vh-2rem)]"));
 });
+
+test("CRM CSV import requires preview before confirmation and locks duplicate preview actions", () => {
+  const modalBlock = pageSource.slice(
+    pageSource.indexOf("function CsvImportModal"),
+    pageSource.indexOf("export default function AppCrmContactsPage")
+  );
+  assert.ok(modalBlock.includes("Selecione o arquivo e gere a prévia antes de confirmar a importação."));
+  assert.ok(modalBlock.includes("const previewReady = Boolean(preview && !reportVisible);"));
+  assert.ok(modalBlock.includes("const previewMappingDirty = Boolean(preview && !reportVisible && previewMappingKey !== mappingKey);"));
+  assert.ok(modalBlock.includes("Boolean(preview) && !previewMappingDirty"));
+  assert.ok(modalBlock.includes("previewMappingDirty || preview.readyToImport === 0"));
+  assert.ok(modalBlock.includes("{preview && !reportVisible ? ("));
+  assert.ok(modalBlock.includes("Confirmar importação"));
+  assert.ok(modalBlock.includes("Cancelar importação"));
+});
+
+test("CRM CSV import can refresh preview after column mapping changes", () => {
+  const modalBlock = pageSource.slice(
+    pageSource.indexOf("function CsvImportModal"),
+    pageSource.indexOf("export default function AppCrmContactsPage")
+  );
+  assert.ok(modalBlock.includes("const [previewMappingKey, setPreviewMappingKey] = useState(\"\");"));
+  assert.ok(modalBlock.includes("const mappingKey = JSON.stringify(mapping);"));
+  assert.ok(modalBlock.includes("setPreviewMappingKey(JSON.stringify({"));
+  assert.ok(modalBlock.includes("phoneColumn: nextPhoneColumn || null"));
+  assert.ok(modalBlock.includes("nameColumn: nextNameColumn || null"));
+  assert.ok(modalBlock.includes("crmSituationColumn: nextCrmSituationColumn || null"));
+  assert.ok(modalBlock.includes("updatePhoneColumn(event.target.value)"));
+  assert.ok(modalBlock.includes("updateNameColumn(event.target.value)"));
+  assert.ok(modalBlock.includes("updateCrmSituationColumn(event.target.value)"));
+  assert.ok(modalBlock.includes("As colunas foram alteradas. Atualize a prévia antes de confirmar a importação."));
+  assert.ok(modalBlock.includes('previewMappingDirty ? "Atualizar prévia" : "Pré-visualizar"'));
+  assert.ok(modalBlock.includes("previewMappingDirty || preview.readyToImport === 0"));
+  assert.ok(modalBlock.includes("setPreviewMappingKey(\"\");"));
+  assert.ok(modalBlock.includes("if (requestSeq !== previewRequestSeq.current) return;"));
+  assert.ok(modalBlock.includes("previewLoading || importLoading"));
+});
+
+test("CRM CSV import uses campaign-style preview/report tables and localized result labels", () => {
+  const modalBlock = pageSource.slice(
+    pageSource.indexOf("function CsvImportModal"),
+    pageSource.indexOf("export default function AppCrmContactsPage")
+  );
+  assert.ok(pageSource.includes('return "Criar"'));
+  assert.ok(pageSource.includes('return "Atualizar"'));
+  assert.ok(pageSource.includes('return "Sem alteração"'));
+  assert.ok(pageSource.includes('return "Fora da operação"'));
+  assert.ok(pageSource.includes('return "Já associado"'));
+  assert.ok(modalBlock.includes('className="w-full min-w-[760px] text-sm"'));
+  assert.ok(modalBlock.includes("getCrmImportOperationLabel(row.operation)"));
+  assert.ok(modalBlock.includes("getCrmImportIssueCodeLabel(error.code, error.reason)"));
+  assert.ok(modalBlock.includes("error.normalizedPhoneDisplay ?? error.normalizedPhone ?? error.inputPhone ?? error.phoneDisplay"));
+  assert.ok(!modalBlock.includes("{row.operation}</td>"));
+});
