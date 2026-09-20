@@ -598,10 +598,12 @@ import {
   upsertPushSubscription,
 } from "../push/webPushService.js";
 import {
+  anonymizeDataSubject,
   executePrivacyRetention,
   findPrivacyConversationTarget,
   getOrCreateRetentionConfig,
   normalizeRetentionDays,
+  previewDataSubjectAnonymization,
 } from "../privacy/privacyRetentionService.js";
 import {
   canSendInstagramOutbound,
@@ -4267,6 +4269,212 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       json(res, 200, { ok: true, ...result });
     } catch (error) {
       logger.error({ event: "privacy.retention.execute.error", requestId, message: (error as Error).message });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/privacy/subjects/search") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminRole(clientAuth.role)) {
+      json(res, 403, { error: "forbidden", message: "Apenas ADMIN pode executar ações LGPD." });
+      return;
+    }
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey] ?? null;
+      const resolvedStatuses = await resolveCrmBusinessStatuses({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const baseQuery = {
+        q: typeof query.q === "string" ? query.q : null,
+        page: 1,
+        limit: typeof query.limit === "string" ? query.limit : 8,
+        hasConversation: null,
+        optOut: null,
+      };
+      const [active, excluded] = await Promise.all([
+        buildCrmContactsPayload(prisma, {
+          clientId: client.id,
+          query: { ...baseQuery, operationalStatus: "active" },
+          statuses: resolvedStatuses.statuses,
+          canStartWhatsappFreeform: false,
+          startConversationBlockedReason: "not_authorized",
+          includeAnonymized: true,
+          includeCampaignRelationships: false,
+        }),
+        buildCrmContactsPayload(prisma, {
+          clientId: client.id,
+          query: { ...baseQuery, operationalStatus: "excluded" },
+          statuses: resolvedStatuses.statuses,
+          canStartWhatsappFreeform: false,
+          startConversationBlockedReason: "not_authorized",
+          includeAnonymized: true,
+          includeCampaignRelationships: false,
+        }),
+      ]);
+      const seen = new Set<string>();
+      const items = [...active.items, ...excluded.items].filter((item) => {
+        const key = item.contactId ?? item.leadId;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return Boolean(item.contactId || item.leadId);
+      });
+      json(res, 200, { ok: true, items, generatedAt: new Date().toISOString() });
+    } catch (error) {
+      logger.error({ event: "privacy.subject.search.error", requestId, message: (error as Error).message });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if ((req.method === "GET" || req.method === "POST") && pathname === "/app/privacy/subjects/resolve") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminRole(clientAuth.role)) {
+      json(res, 403, { error: "forbidden", message: "Apenas ADMIN pode executar ações LGPD." });
+      return;
+    }
+    try {
+      const body = req.method === "POST" ? ((await readJsonBody(req, res)) as Record<string, unknown> | null) : null;
+      if (req.method === "POST" && !body) return;
+      const leadId =
+        req.method === "POST"
+          ? typeof body?.leadId === "string"
+            ? body.leadId.trim()
+            : ""
+          : typeof query.leadId === "string"
+            ? query.leadId.trim()
+            : "";
+      if (!leadId) {
+        json(res, 400, { error: "bad_request", message: "Informe o contato titular." });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey] ?? null;
+      const resolvedStatuses = await resolveCrmBusinessStatuses({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      let resolvedLeadId = leadId;
+      let payload = await buildCrmContactDetailPayload(prisma, {
+        clientId: client.id,
+        leadId: resolvedLeadId,
+        statuses: resolvedStatuses.statuses,
+        canStartWhatsappFreeform: false,
+        startConversationBlockedReason: "not_authorized",
+        includeOperationallyExcluded: true,
+        includeCampaignRelationships: false,
+      });
+      let item = payload?.item ?? null;
+      let contactId = item?.contactId ?? null;
+      if (!contactId) {
+        const lead = await prisma.lead.findFirst({
+          where: { id: resolvedLeadId, tenantId: client.id },
+          select: { id: true },
+        });
+        if (!lead) {
+          json(res, 404, {
+            error: "subject_not_found",
+            message: "Titular não encontrado nesta organização.",
+          });
+          return;
+        }
+      }
+      if (!item) {
+        json(res, 404, { error: "subject_not_found", message: "Titular não encontrado nesta organização." });
+        return;
+      }
+      json(res, 200, { ok: true, contactId, leadId: item.leadId, item });
+    } catch (error) {
+      logger.error({ event: "privacy.subject.resolve.error", requestId, message: (error as Error).message });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  const subjectPrivacyMatch = pathname.match(/^\/app\/privacy\/subjects\/([^/]+)\/(preview|anonymize)$/);
+  if (subjectPrivacyMatch && req.method === "POST") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminRole(clientAuth.role)) {
+      json(res, 403, { error: "forbidden", message: "Apenas ADMIN pode executar ações LGPD." });
+      return;
+    }
+    try {
+      const subjectId = decodeURIComponent(subjectPrivacyMatch[1] ?? "").trim();
+      const targetType = query.target === "lead" ? "lead" : "contact";
+      const action = subjectPrivacyMatch[2];
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (!subjectId) {
+        json(res, 400, { error: "bad_request", message: "Informe o contato titular." });
+        return;
+      }
+      const subjectTarget = targetType === "lead" ? { leadId: subjectId } : { contactId: subjectId };
+      if (action === "preview") {
+        const result = await previewDataSubjectAnonymization(prisma, {
+          clientId: client.id,
+          ...subjectTarget,
+        });
+        if (!result.ok) {
+          json(res, 404, { error: result.error, message: "Titular não encontrado nesta organização." });
+          return;
+        }
+        json(res, 200, result);
+        return;
+      }
+      const body = (await readJsonBody(req, res)) as Record<string, unknown> | null;
+      if (!body) return;
+      const result = await anonymizeDataSubject(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        ...subjectTarget,
+        actorId: clientAuth.userId,
+        requestId,
+        confirmation: typeof body.confirmation === "string" ? body.confirmation : "",
+      });
+      if (!result.ok) {
+        const status = result.error === "confirmation_required" ? 400 : 404;
+        json(res, status, { error: result.error, message: status === 400 ? "Confirmação inválida." : "Titular não encontrado nesta organização." });
+        return;
+      }
+      json(res, 200, result);
+    } catch (error) {
+      const message = (error as Error).message;
+      if (message === "ambiguous_subject_identity") {
+        json(res, 409, { error: "ambiguous_subject_identity", message: "Identidade ambígua. A operação foi bloqueada." });
+        return;
+      }
+      logger.error({ event: "privacy.subject.error", requestId, message });
       json(res, 500, { error: "server_error" });
     }
     return;

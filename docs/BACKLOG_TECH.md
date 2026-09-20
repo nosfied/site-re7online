@@ -24,6 +24,53 @@ Produto operacional com observabilidade real da Meta e área do cliente funciona
 
 O onboarding interno foi implementado, porém ainda não validado com novo tenant via UI.
 
+### Privacidade / LGPD por titular - 2026-09-20
+
+Data Subject Privacy / LGPD contact-centric anonymization: OWNER PASS / LOCAL
+VALIDATED / CLEAN DELIVERY READY / NOT DEPLOYED. A nova frente adiciona preview e execucao de
+anonimizacao por titular a partir de `Contact` canonico do mesmo tenant, com
+fallback para `Lead.id` quando `Contact.id` ainda e nulo, busca/seleção pelo CRM
+autenticado, confirmacao forte
+`ANONIMIZAR TITULAR`, bloqueio de identidade ambigua e evento auditavel
+sanitizado `privacy.subject.anonymized`. A implementacao reutiliza as primitivas
+de `privacyRetentionService.ts`; a logica comum de minimizacao de Contact,
+ContactChannelIdentity, Lead, LeadNote, OutboundMessage e Event foi extraida
+para helper compartilhado, preservando a anonimizacao/retencao de conversa
+existente. Nao houve schema, migration, hard delete, provider call, envio real,
+ou deploy. Distincoes preservadas: exclusao operacional no CRM nao e
+anonimizacao LGPD; exclusao de conversa e anonimizacao de conversa permanecem
+com seus contratos atuais; retencao continua sendo rotina separada; reentrada
+cria/usa novo ciclo operacional sem reidratar historico anonimizado.
+
+Owner UX addition/correction: Contacts agora possui atalho compacto
+`Privacidade` com icone de cadeado entre `Abrir contato` e `Retirar da
+operação`, visivel para ADMIN, que apenas abre `/app/settings/privacy` com o
+titular preselecionado. O atalho nao depende de conversa: quando a linha ainda
+nao materializa `Contact.id`, a tela de Privacidade usa `Lead.id` como alvo sem
+criar Contact artificial, sem telefone cru como chave de mutacao e sem segunda
+engine de anonimizacao. A busca de titular em Privacidade passou a usar endpoint
+governamental proprio que reutiliza o read model do CRM para contatos ativos,
+Lead-only e operacionalmente excluidos, sem alterar a lista operacional normal
+do CRM. Invariante permanente: OPERATIONAL EXCLUSION DOES NOT REMOVE SUBJECT
+FROM PRIVACY GOVERNANCE DISCOVERY.
+
+Invalid phone UX mapping: OWNER PASS / LOCAL VALIDATED / NOT DEPLOYED. Erros
+`invalid_phone` vindos da validacao canonica de CRM agora mostram
+`Informe um número de WhatsApp válido com código do país 55 e DDD.` no app. O
+backend, normalizador canonico, CSV, campanhas e regras de persistencia nao
+foram alterados; nao ha segundo validador frontend.
+
+Lead-only operational exclusion materialization: SEPARATE FOLLOW-UP / NOT
+DEPLOYED / OWNER DECISION PENDING. A auditoria do split confirmou que a
+anonimizacao LGPD Lead-only nao precisa criar `Contact`; ela usa `Lead.id` como
+alvo governado. Ja a acao operacional `Retirar da operação` ainda usa
+`Contact.operationallyExcludedAt` como estado canonico; no schema atual nao ha
+campo equivalente em `Lead` ou `ContactChannelIdentity`. Portanto, se linhas
+Lead-only precisarem suportar `Retirar da operação`, sera necessaria decisao
+separada sobre materializar `Contact` operacional ou criar outro primitivo de
+dominio. A entrega limpa de Privacidade preserva o comportamento anterior:
+Lead-only sem Contact retorna `contact_not_found` nessa acao operacional.
+
 ---
 
 ## PRIORIDADE ATUAL

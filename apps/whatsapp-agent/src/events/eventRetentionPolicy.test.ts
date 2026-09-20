@@ -4,6 +4,7 @@ import { classifyEventRetentionPolicy } from "./eventRetentionPolicy.js";
 
 test("classifyEventRetentionPolicy preserves privacy and handoff audit events", () => {
   assert.equal(classifyEventRetentionPolicy("conversation.anonymized"), "CRITICAL");
+  assert.equal(classifyEventRetentionPolicy("privacy.subject.anonymized"), "CRITICAL");
   assert.equal(classifyEventRetentionPolicy("privacy.retention.started"), "CRITICAL");
   assert.equal(classifyEventRetentionPolicy("retention.executed"), "CRITICAL");
   assert.equal(classifyEventRetentionPolicy("handoff.lead_notification.sent"), "CRITICAL");

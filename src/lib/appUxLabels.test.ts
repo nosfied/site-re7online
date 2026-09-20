@@ -38,6 +38,30 @@ test("template category policy errors use a friendly message", () => {
   );
 });
 
+test("invalid manual WhatsApp phone uses a specific PT-BR validation message", () => {
+  assert.equal(
+    getAppErrorUxMessage({
+      status: 400,
+      errorCode: "invalid_phone",
+      message: "Invalid WhatsApp number",
+      fallback: "Não foi possível salvar o contato.",
+    }),
+    "Informe um número de WhatsApp válido com código do país 55 e DDD."
+  );
+});
+
+test("contact operationally excluded message remains specific", () => {
+  assert.equal(
+    getAppErrorUxMessage({
+      status: 409,
+      errorCode: "contact_operationally_excluded",
+      message: "Contact is outside operation",
+      fallback: "Não foi possível salvar o contato.",
+    }),
+    "Este contato foi retirado da operação."
+  );
+});
+
 test("session audit open status does not imply realtime presence", () => {
   assert.equal(getSessionAuditStatusUxLabel("OPEN"), "Aberta");
 });

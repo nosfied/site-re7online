@@ -8,8 +8,10 @@ import { buildConversationProtocol } from "../inbox/conversationProtocol.js";
 import { getServiceCycleForDisplay } from "../conversation/serviceCycle.js";
 import { isOperationalContactLifecycle } from "../contacts/contactLifecycle.js";
 import { loadOperationallyExcludedWaIds } from "../contacts/contactOperationalExclusion.js";
+import { hashWhatsAppExternalUser } from "../channels/whatsappBackfillDryRun.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
 import {
+  buildCrmWhatsappExternalUserHash,
   buildCrmWhatsappIdentityCandidates,
   normalizeCrmWhatsappIdentity,
 } from "./crmWhatsappIdentity.js";
@@ -317,6 +319,18 @@ function getOptOutCanonicalCandidates(lead: LeadRecord) {
   return buildCrmWhatsappIdentityCandidates([lead.phone, lead.waIdCanonical, lead.waId]);
 }
 
+function buildExternalUserHashCandidates(identityKeys: string[]) {
+  return Array.from(
+    new Set(
+      identityKeys.flatMap((key) => [
+        buildCrmWhatsappExternalUserHash(key),
+        hashWhatsAppExternalUser(key),
+        `hash:${hashWhatsAppExternalUser(key)}`,
+      ])
+    )
+  );
+}
+
 function buildLeadIdentityCandidates(
   lead: Pick<
     LeadRecord,
@@ -564,6 +578,7 @@ export async function buildCrmContactsPayload(
   }
 
   const identityKeys = Array.from(new Set(leads.flatMap((lead) => buildCrmWhatsappIdentityCandidates([lead.phone, lead.waIdCanonical, lead.waId]))));
+  const identityHashes = buildExternalUserHashCandidates(identityKeys);
   const waIds = Array.from(new Set(leads.flatMap((lead) => buildCrmWhatsappIdentityCandidates([lead.waId]))));
   const canonicalWaIds = Array.from(new Set(leads.flatMap((lead) => buildCrmWhatsappIdentityCandidates([lead.waIdCanonical ?? lead.waId, lead.phone]))));
   const optOutCanonicalWaIds = Array.from(
@@ -578,6 +593,7 @@ export async function buildCrmContactsPayload(
       { waId: { in: identityKeys } },
       { externalUserRef: { in: identityKeys } },
       { legacyWaId: { in: identityKeys } },
+      { externalUserHash: { in: identityHashes } },
     ],
   };
   const conversationWhere = {
@@ -605,9 +621,15 @@ export async function buildCrmContactsPayload(
           updatedAt: true,
         },
       }),
-      contactIdentityIds.length > 0
+      contactIdentityIds.length > 0 || identityHashes.length > 0
         ? prisma.contactChannelIdentity.findMany({
-            where: { clientId: params.clientId, id: { in: contactIdentityIds } },
+            where: {
+              clientId: params.clientId,
+              OR: [
+                { id: { in: contactIdentityIds } },
+                ...(identityHashes.length > 0 ? [{ externalUserHash: { in: identityHashes } }] : []),
+              ],
+            },
             select: {
               id: true,
               contactId: true,
@@ -701,7 +723,7 @@ export async function buildCrmContactsPayload(
 
   const contactByIdentity = new Map<string, (typeof contacts)[number]>();
   for (const contact of contacts) {
-    for (const key of [contact.waId, contact.externalUserRef, contact.legacyWaId].filter(Boolean) as string[]) {
+    for (const key of [contact.waId, contact.externalUserRef, contact.legacyWaId, contact.externalUserHash].filter(Boolean) as string[]) {
       const current = contactByIdentity.get(key);
       if (!current || contact.updatedAt > current.updatedAt) contactByIdentity.set(key, contact);
     }
@@ -760,6 +782,7 @@ export async function buildCrmContactsPayload(
         identity?.contact ??
         (identity?.contactId ? contacts.find((item) => item.id === identity.contactId) : null) ??
         seedLeadCandidates.map((candidate) => contactByIdentity.get(candidate)).find(Boolean) ??
+        contactByIdentity.get(lead.externalUserHash ?? "") ??
         contactByIdentity.get(lead.waIdCanonical ?? "") ??
         contactByIdentity.get(lead.waId) ??
         null;
@@ -941,6 +964,9 @@ export async function buildCrmContactDetailPayload(
   if (!lead) return null;
 
   const seedIdentityKeys = buildLeadIdentityCandidates(lead);
+  const seedIdentityHashes = Array.from(
+    new Set([lead.externalUserHash, ...buildExternalUserHashCandidates(seedIdentityKeys)].filter(Boolean) as string[])
+  );
   const [contact, identity] =
     await Promise.all([
       prisma.contact.findFirst({
@@ -950,6 +976,7 @@ export async function buildCrmContactDetailPayload(
             { waId: { in: seedIdentityKeys } },
             { externalUserRef: { in: seedIdentityKeys } },
             { legacyWaId: { in: seedIdentityKeys } },
+            { externalUserHash: { in: seedIdentityHashes } },
           ],
         },
         orderBy: { updatedAt: "desc" },
@@ -967,9 +994,15 @@ export async function buildCrmContactDetailPayload(
           updatedAt: true,
         },
       }),
-      lead.contactChannelIdentityId
+      lead.contactChannelIdentityId || seedIdentityHashes.length > 0
         ? prisma.contactChannelIdentity.findFirst({
-            where: { clientId: params.clientId, id: lead.contactChannelIdentityId },
+            where: {
+              clientId: params.clientId,
+              OR: [
+                ...(lead.contactChannelIdentityId ? [{ id: lead.contactChannelIdentityId }] : []),
+                ...(seedIdentityHashes.length > 0 ? [{ externalUserHash: { in: seedIdentityHashes } }] : []),
+              ],
+            },
             select: {
               id: true,
               contactId: true,

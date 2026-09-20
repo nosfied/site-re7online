@@ -6,14 +6,20 @@ import AppShell from "@/components/app/AppShell";
 import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
   anonymizeAppConversationData,
+  anonymizeAppPrivacySubject,
   AppApiError,
+  AppCrmContactItem,
+  AppPrivacySubjectPreview,
   AppSession,
   clearAppSession,
   deleteAppConversationData,
   executeAppRetention,
   fetchAppRetentionConfig,
   loadAppSession,
+  previewAppPrivacySubject,
+  resolveAppPrivacySubjectFromCrmLead,
   saveAppSession,
+  searchAppPrivacySubjects,
   updateAppRetentionConfig,
 } from "@/lib/appClientApi";
 import { getAppErrorUxMessage } from "@/lib/appUxLabels";
@@ -24,11 +30,22 @@ function isAdminRole(role: string) {
 
 function normalizePrivacyError(error: AppApiError, fallback: string) {
   if (error.status === 403) return "Apenas administradores podem executar ações LGPD.";
+  if (error.errorCode === "subject_not_found") return "Titular não encontrado nesta organização.";
+  if (error.errorCode === "ambiguous_subject_identity") return "Identidade ambígua. A operação foi bloqueada.";
+  if (error.errorCode === "confirmation_required") return "Confirmação inválida.";
   if (error.errorCode === "conversation_not_found" || error.status === 404) {
     return "Conversa não encontrada nesta organização.";
   }
   if (error.errorCode === "bad_request") return error.message || fallback;
   return getAppErrorUxMessage({ status: error.status, errorCode: error.errorCode, message: error.message, fallback });
+}
+
+function buildSubjectDisplayLabel(contact: Pick<AppCrmContactItem, "displayName" | "phoneDisplay">) {
+  return contact.displayName || contact.phoneDisplay || "Contato selecionado";
+}
+
+function buildSubjectPreviewDisplayLabel(subject: AppPrivacySubjectPreview["subject"]) {
+  return subject.displayName || subject.phoneDisplay || "Contato selecionado";
 }
 
 export default function AppPrivacySettingsPage() {
@@ -39,13 +56,25 @@ export default function AppPrivacySettingsPage() {
   const [executingRetention, setExecutingRetention] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [anonymizing, setAnonymizing] = useState(false);
+  const [previewingSubject, setPreviewingSubject] = useState(false);
+  const [anonymizingSubject, setAnonymizingSubject] = useState(false);
+  const [searchingSubject, setSearchingSubject] = useState(false);
   const [retentionDays, setRetentionDays] = useState("90");
   const [conversationId, setConversationId] = useState("");
+  const [subjectSearch, setSubjectSearch] = useState("");
+  const [subjectResults, setSubjectResults] = useState<AppCrmContactItem[]>([]);
+  const [selectedSubjectLabel, setSelectedSubjectLabel] = useState("");
+  const [subjectContactId, setSubjectContactId] = useState("");
+  const [subjectLeadId, setSubjectLeadId] = useState("");
+  const [subjectFromShortcut, setSubjectFromShortcut] = useState(false);
+  const [subjectPreview, setSubjectPreview] = useState<AppPrivacySubjectPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [anonymizeModalOpen, setAnonymizeModalOpen] = useState(false);
   const [anonymizeConfirmation, setAnonymizeConfirmation] = useState("");
+  const [subjectModalOpen, setSubjectModalOpen] = useState(false);
+  const [subjectConfirmation, setSubjectConfirmation] = useState("");
   const [retentionModalOpen, setRetentionModalOpen] = useState(false);
   const [retentionConfirmation, setRetentionConfirmation] = useState("");
 
@@ -78,6 +107,18 @@ export default function AppPrivacySettingsPage() {
     const queryConversationId = params.get("conversationId")?.trim();
     if (queryConversationId) {
       setConversationId(queryConversationId);
+    }
+    const queryContactId = params.get("contactId")?.trim();
+    if (queryContactId) {
+      setSubjectContactId(queryContactId);
+      setSelectedSubjectLabel("Carregando contato...");
+      setSubjectFromShortcut(true);
+    }
+    const queryLeadId = params.get("leadId")?.trim();
+    if (!queryContactId && queryLeadId) {
+      setSubjectLeadId(queryLeadId);
+      setSelectedSubjectLabel("Carregando contato...");
+      setSubjectFromShortcut(true);
     }
   }, []);
 
@@ -236,6 +277,163 @@ export default function AppPrivacySettingsPage() {
     }
   };
 
+  const selectSubjectContact = (contact: AppCrmContactItem) => {
+    if (!contact.contactId && !contact.leadId) return;
+    setSubjectContactId(contact.contactId ?? "");
+    setSubjectLeadId(contact.leadId);
+    setSelectedSubjectLabel(buildSubjectDisplayLabel(contact));
+    setSubjectPreview(null);
+  };
+
+  const handleSubjectSearch = async () => {
+    if (!session) return;
+    const query = subjectSearch.trim();
+    if (!query) {
+      setError("Informe nome, telefone ou referência para buscar o titular.");
+      return;
+    }
+    setSearchingSubject(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await searchAppPrivacySubjects(session, { q: query, page: 1, limit: 8 });
+      setSubjectResults(response.items.filter((item) => Boolean(item.contactId || item.leadId)));
+      if (response.items.length === 0) {
+        setError("Nenhum contato encontrado nesta organização.");
+      }
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(normalizePrivacyError(typed, "Não foi possível buscar contatos do CRM."));
+    } finally {
+      setSearchingSubject(false);
+    }
+  };
+
+  const handleSubjectPreview = async () => {
+    if (!session) return;
+    const contactId = subjectContactId.trim();
+    const leadId = subjectLeadId.trim();
+    if (!contactId && !leadId) {
+      setError("Selecione um contato titular do CRM.");
+      return;
+    }
+    setPreviewingSubject(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await previewAppPrivacySubject(session, contactId ? { contactId } : { leadId });
+      setSubjectPreview(response);
+      setSelectedSubjectLabel(buildSubjectPreviewDisplayLabel(response.subject));
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (typed.status === 404) {
+        setError("Titular não encontrado nesta organização.");
+        return;
+      }
+      setError(normalizePrivacyError(typed, "Não foi possível preparar este titular."));
+    } finally {
+      setPreviewingSubject(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!session || !subjectFromShortcut || subjectContactId || !subjectLeadId) return;
+    let cancelled = false;
+    setPreviewingSubject(true);
+    setError(null);
+    resolveAppPrivacySubjectFromCrmLead(session, subjectLeadId)
+      .then((response) => {
+        if (cancelled) return;
+        setSubjectContactId(response.contactId ?? "");
+        setSubjectLeadId(response.leadId);
+        setSelectedSubjectLabel(buildSubjectDisplayLabel(response.item));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setSubjectFromShortcut(false);
+        setError("Titular não encontrado nesta organização.");
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewingSubject(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [handleUnauthorized, session, subjectContactId, subjectFromShortcut, subjectLeadId]);
+
+  useEffect(() => {
+    if (!session || !subjectFromShortcut || (!subjectContactId && !subjectLeadId) || subjectPreview || previewingSubject) return;
+    setSubjectFromShortcut(false);
+    void handleSubjectPreview();
+  }, [previewingSubject, session, subjectContactId, subjectFromShortcut, subjectLeadId, subjectPreview]);
+
+  useEffect(() => {
+    if (!session || subjectFromShortcut || (!subjectContactId && !subjectLeadId) || subjectPreview || previewingSubject) return;
+    void handleSubjectPreview();
+  }, [previewingSubject, session, subjectContactId, subjectFromShortcut, subjectLeadId, subjectPreview]);
+
+  const openSubjectModal = () => {
+    if (previewingSubject) {
+      setError("Aguarde a preparação do titular.");
+      return;
+    }
+    if (!subjectPreview) {
+      setError("Selecione um titular antes de anonimizar.");
+      return;
+    }
+    setSubjectConfirmation("");
+    setSubjectModalOpen(true);
+  };
+
+  const handleSubjectAnonymize = async () => {
+    if (!session || !subjectPreview) return;
+    setAnonymizingSubject(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const target = subjectPreview.subject.contactId
+        ? { contactId: subjectPreview.subject.contactId, leadId: subjectPreview.subject.leadId }
+        : { contactId: null, leadId: subjectPreview.subject.leadId ?? subjectLeadId };
+      if (!target.contactId && !target.leadId) {
+        setError("Selecione um titular antes de anonimizar.");
+        return;
+      }
+      await anonymizeAppPrivacySubject(session, target, subjectConfirmation);
+      setSubjectModalOpen(false);
+      setSubjectConfirmation("");
+      setSubjectSearch("");
+      setSubjectResults([]);
+      setSubjectContactId("");
+      setSubjectLeadId("");
+      setSelectedSubjectLabel("");
+      setSubjectFromShortcut(false);
+      setSubjectPreview(null);
+      setSuccess("Titular anonimizado. O formulário foi limpo para uma nova operação.");
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(normalizePrivacyError(typed, "Não foi possível anonimizar o titular."));
+    } finally {
+      setAnonymizingSubject(false);
+    }
+  };
+
   if (!session) {
     return <main className="min-h-screen bg-re7-navy" />;
   }
@@ -250,6 +448,98 @@ export default function AppPrivacySettingsPage() {
       <FeedbackToast message={success} variant="success" {...toastHandlers} />
 
       <div className="privacy-settings-theme grid gap-3 min-[1441px]:gap-4">
+      <section className="theme-surface rounded-xl border">
+        <div className="theme-border border-b p-3 min-[1441px]:p-4">
+          <h2 className="text-base font-semibold min-[1441px]:text-lg">Titulares / Dados pessoais</h2>
+          <p className="theme-muted mt-0.5 text-xs min-[1441px]:mt-1 min-[1441px]:text-sm">
+            Anonimize o grafo canônico de um contato, inclusive quando não existir conversa.
+          </p>
+        </div>
+        <div className="grid gap-3 p-3 min-[1441px]:gap-4 min-[1441px]:p-4">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <div>
+              <label className="theme-muted block text-xs font-medium min-[1441px]:text-sm" htmlFor="subject-search">
+                Buscar contato titular no CRM
+              </label>
+              <input
+                id="subject-search"
+                value={subjectSearch}
+                onChange={(event) => setSubjectSearch(event.target.value)}
+                placeholder="Nome, telefone ou referência"
+                className="theme-select mt-2 w-full rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-re7-sky/40 min-[1441px]:rounded-xl min-[1441px]:px-3 min-[1441px]:py-2 min-[1441px]:text-sm"
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={handleSubjectSearch}
+                disabled={loading || searchingSubject || previewingSubject || anonymizingSubject}
+                className="theme-nav-link rounded-lg border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 min-[1441px]:px-4 min-[1441px]:py-2 min-[1441px]:text-sm"
+              >
+                {searchingSubject ? "Buscando..." : "Buscar"}
+              </button>
+            </div>
+          </div>
+          {subjectResults.length > 0 ? (
+            <div className="theme-surface-strong grid gap-2 rounded-xl border p-2">
+              {subjectResults.map((contact) => (
+                <button
+                  key={`${contact.leadId}:${contact.contactId}`}
+                  type="button"
+                  onClick={() => selectSubjectContact(contact)}
+                  className="theme-row-surface flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-xs transition hover:border-re7-sky/40 min-[1441px]:text-sm"
+                >
+                  <span>
+                    <span className="block font-semibold">
+                      {contact.displayName || contact.identifierDisplay || "Contato sem nome"}
+                    </span>
+                    <span className="theme-muted block">
+                      {contact.phoneDisplay || contact.identifierDisplay} · {contact.crmStatusLabel}
+                    </span>
+                  </span>
+                  <span className="theme-muted shrink-0 text-[11px]">Selecionar</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <div>
+              <label className="theme-muted block text-xs font-medium min-[1441px]:text-sm" htmlFor="subject-contact-id">
+                Contato selecionado
+              </label>
+              <input
+                id="subject-contact-id"
+                value={selectedSubjectLabel || subjectContactId}
+                readOnly
+                placeholder="Nenhum titular selecionado"
+                className="theme-select mt-2 w-full rounded-lg px-2.5 py-1.5 text-xs outline-none min-[1441px]:rounded-xl min-[1441px]:px-3 min-[1441px]:py-2 min-[1441px]:text-sm"
+              />
+            </div>
+            <div className="flex items-end gap-2">
+              <button
+                type="button"
+                onClick={openSubjectModal}
+                disabled={(!subjectContactId && !subjectLeadId) || !subjectPreview || previewingSubject || anonymizingSubject}
+                className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 min-[1441px]:px-4 min-[1441px]:py-2 min-[1441px]:text-sm"
+              >
+                {previewingSubject ? "Preparando..." : "Anonimizar titular"}
+              </button>
+            </div>
+          </div>
+        </div>
+        {subjectContactId || subjectLeadId ? (
+          <div className="border-t border-white/10 p-3 min-[1441px]:p-4">
+            <div className="theme-surface-strong rounded-xl border p-3">
+              <p className="text-sm font-semibold">Resumo da anonimização</p>
+              <p className="theme-muted mt-2 text-sm leading-relaxed">
+                Ao confirmar, os dados pessoais que identificam este titular serão removidos ou substituídos por
+                informação anônima. O histórico necessário para auditoria e acompanhamento da operação poderá ser
+                preservado sem identificação direta da pessoa.
+              </p>
+            </div>
+          </div>
+        ) : null}
+      </section>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_310px] min-[1441px]:gap-4 min-[1441px]:lg:grid-cols-[minmax(0,1fr)_360px]">
         <section className="theme-surface rounded-xl border">
           <div className="theme-border border-b p-3 min-[1441px]:p-4">
@@ -366,7 +656,7 @@ export default function AppPrivacySettingsPage() {
           <div className="theme-surface-strong w-full max-w-md rounded-2xl border p-5 shadow-[0_24px_90px_rgba(0,0,0,0.22)]">
             <h2 className="text-lg font-semibold">Excluir conversa da operação</h2>
             <p className="theme-muted mt-3 text-sm leading-relaxed">
-              Essa ação remove a conversa da operação, mas mantém dados técnicos para auditoria.
+              Essa ação remove a conversa da operação, mas mantém registros necessários para auditoria.
             </p>
             <p className="theme-surface mt-3 rounded-xl border px-3 py-2 text-sm">
               {conversationId.trim()}
@@ -480,6 +770,52 @@ export default function AppPrivacySettingsPage() {
                 className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {anonymizing ? "Anonimizando..." : "Confirmar anonimização"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {subjectModalOpen && subjectPreview ? (
+        <div className="theme-modal-backdrop fixed inset-0 z-[80] flex items-center justify-center px-4 backdrop-blur-sm">
+          <div className="theme-surface-strong w-full max-w-lg rounded-2xl border border-red-700 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.22)]">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold">Anonimizar titular</h2>
+              <span className="theme-soft-danger-badge rounded-full border px-2 py-0.5 text-[11px] font-semibold">
+                Irreversivel
+              </span>
+            </div>
+            <p className="theme-muted mt-3 text-sm leading-relaxed">
+              Esta ação remove ou anonimiza os dados pessoais vinculados a este titular. O histórico operacional necessário poderá ser preservado sem permitir a identificação direta do titular.
+            </p>
+            <div className="theme-surface mt-3 rounded-xl border px-3 py-2 text-sm">
+              Titular selecionado: {selectedSubjectLabel || "contato selecionado"}
+            </div>
+            <label className="theme-muted mt-4 block text-sm font-medium" htmlFor="subject-confirmation">
+              Digite ANONIMIZAR TITULAR para confirmar
+            </label>
+            <input
+              id="subject-confirmation"
+              value={subjectConfirmation}
+              onChange={(event) => setSubjectConfirmation(event.target.value)}
+              autoFocus
+              className="theme-select mt-2 w-full rounded-xl px-3 py-2 text-sm outline-none focus:border-red-300/50"
+            />
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSubjectModalOpen(false)}
+                disabled={anonymizingSubject}
+                className="theme-nav-link rounded-lg border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSubjectAnonymize}
+                disabled={anonymizingSubject || subjectConfirmation !== "ANONIMIZAR TITULAR"}
+                className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {anonymizingSubject ? "Anonimizando..." : "Confirmar anonimização"}
               </button>
             </div>
           </div>

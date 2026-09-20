@@ -218,6 +218,13 @@ O caso CRA-PR e estrategico por exigir combinacao de atendimento receptivo, volu
 - Ledger por outbound e eventos de acompanhamento.
 - RBAC e tenant isolation.
 - Politica LGPD documentada.
+- Anonimizacao LGPD por titular esta OWNER PASS / LOCAL VALIDATED / NOT
+  DEPLOYED: busca Contact canonico ou Lead-only do mesmo tenant no CRM, gera
+  previa sem mutacao, exige confirmacao forte e preserva auditoria sanitizada.
+  O atalho `Privacidade` em Contacts apenas preseleciona o titular; exclusao
+  operacional do CRM nao remove o titular da descoberta de governanca.
+  Nao substitui o pacote contratual CRA de retencao/exportacao/eliminacao ate
+  validacao e evidencia especificas.
 
 ## Estado operacional atual - 2026-09-04
 
