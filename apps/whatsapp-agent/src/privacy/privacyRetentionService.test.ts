@@ -1,5 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {
+  buildPrivateCampaignSeedFields,
+  readPrivateCampaignSeedFields,
+} from "../campaigns/campaignSeedPrivacy.js";
 import { runtimeStorage } from "../storage/runtimeStorage.js";
 import {
   anonymizeDataSubject,
@@ -8,6 +12,13 @@ import {
   normalizeRetentionDays,
   previewDataSubjectAnonymization,
 } from "./privacyRetentionService.js";
+
+process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "privacy-retention-service-test-secret";
+
+async function runFakeTransaction(self: unknown, input: Array<Promise<unknown>> | ((tx: unknown) => Promise<unknown>)) {
+  if (typeof input === "function") return input(self);
+  return Promise.all(input);
+}
 
 test("normalizeRetentionDays accepts configured bounds", () => {
   assert.equal(normalizeRetentionDays(1), 1);
@@ -115,6 +126,9 @@ test("conversation anonymize deletes original and anonymized runtime states", as
       },
     },
     contactChannelIdentity: {
+      async findMany() {
+        return [{ id: "identity-1", contactId: "contact-1" }];
+      },
       async updateMany() {
         return { count: 1 };
       },
@@ -143,8 +157,8 @@ test("conversation anonymize deletes original and anonymized runtime states", as
         return {};
       },
     },
-    async $transaction(operations: Array<Promise<unknown>>) {
-      return Promise.all(operations);
+    async $transaction(input: Array<Promise<unknown>> | ((tx: unknown) => Promise<unknown>)) {
+      return runFakeTransaction(this, input);
     },
   };
 
@@ -365,9 +379,12 @@ test("conversation anonymize clears multichannel identity for messenger records"
       },
     },
     contactChannelIdentity: {
+      async findMany() {
+        return [{ id: "identity-1", contactId: "contact-1" }];
+      },
       async updateMany({ data }: { data: Record<string, unknown> }) {
         updatePayloads.push({ model: "contactChannelIdentity", data });
-        assert.equal(data.externalUserHash, "anon:12345678-123");
+        assert.match(String(data.externalUserHash), /^anon:cci:[a-f0-9]{32}$/);
         assert.equal(data.externalUserRef, null);
         assert.equal(data.legacyWaId, null);
         assert.equal(data.contactId, null);
@@ -402,8 +419,8 @@ test("conversation anonymize clears multichannel identity for messenger records"
         return {};
       },
     },
-    async $transaction(operations: Array<Promise<unknown>>) {
-      return Promise.all(operations);
+    async $transaction(input: Array<Promise<unknown>> | ((tx: unknown) => Promise<unknown>)) {
+      return runFakeTransaction(this, input);
     },
   };
 
@@ -443,10 +460,49 @@ function makeSubjectPrivacyPrisma(params: {
   alreadyAnonymized?: boolean;
   softDeletedConversation?: boolean;
   leadOnly?: boolean;
+  multipleIdentities?: boolean;
+  partialState?: boolean;
+  failOnIdentityUpdate?: boolean;
+  withCampaignSeed?: boolean;
 } = {}) {
   const subjectId = params.leadOnly ? "lead-1" : "contact-1";
   const contactWaId = params.alreadyAnonymized ? `anon:subject:${subjectId}` : "558499990001";
   const operationallyExcludedAt: Date | null = params.operationallyExcludedAt ?? null;
+  const identities = [
+    {
+      id: "identity-1",
+      contactId: params.leadOnly || params.partialState ? null : "contact-1",
+      externalUserHash: params.partialState ? "anon:conversation-1" : "whatsapp:oldhash",
+      externalUserRef: params.partialState ? null : "558499990001",
+      legacyWaId: params.partialState ? null : "558499990001",
+      displayName: params.partialState ? "Usuario Anonimizado" : "Maria Privacidade",
+    },
+    ...(params.multipleIdentities || params.partialState
+      ? [{
+          id: "identity-2",
+          contactId: params.leadOnly ? null : "contact-1",
+          externalUserHash: "whatsapp:oldhash-2",
+          externalUserRef: "8499990001",
+          legacyWaId: "8499990001",
+          displayName: "Maria Privacidade",
+        }]
+      : []),
+  ];
+  const campaignSeedPayload = params.withCampaignSeed
+    ? {
+        campaignId: "campaign-1",
+        templateName: "data_exame",
+        leadIds: ["lead-1", "lead-other"],
+        ...buildPrivateCampaignSeedFields({
+          clientId: "client-1",
+          waIds: ["558499990001", "558400000002"],
+          componentsByWaId: {
+            "558499990001": [{ type: "body", parameters: [{ type: "text", text: "Maria" }] }],
+            "558400000002": [{ type: "body", parameters: [{ type: "text", text: "Outro" }] }],
+          },
+        }),
+      }
+    : null;
   const state = {
     contact: {
       id: "contact-1",
@@ -461,13 +517,8 @@ function makeSubjectPrivacyPrisma(params: {
       legacyWaId: "8499990001",
       operationallyExcludedAt,
     },
-    identity: {
-      id: "identity-1",
-      contactId: params.leadOnly ? null : "contact-1",
-      externalUserHash: "whatsapp:oldhash",
-      legacyWaId: "558499990001",
-      displayName: "Maria Privacidade",
-    },
+    identities,
+    identity: identities[0],
     lead: {
       id: "lead-1",
       waId: contactWaId,
@@ -482,7 +533,42 @@ function makeSubjectPrivacyPrisma(params: {
       company: "Empresa",
     },
     note: { id: "note-1", body: "observacao pessoal" },
-    events: [] as Array<{ eventName: string; payloadJson: unknown; waId?: string | null; waIdCanonical?: string | null }>,
+    events: [
+      ...(campaignSeedPayload
+        ? [{
+            id: "seed-event-1",
+            eventName: "campaign.seed.saved",
+            payloadJson: campaignSeedPayload,
+            messageId: "campaign-1",
+          }]
+        : []),
+    ] as Array<{ id?: string; eventName: string; payloadJson: unknown; waId?: string | null; waIdCanonical?: string | null; messageId?: string | null }>,
+    conversation: {
+      id: "conversation-1",
+      waId: params.partialState ? "anon:conversation-1" : "558499990001",
+      waIdCanonical: params.partialState ? "anon:conversation-1" : "558499990001",
+      channel: "whatsapp",
+      provider: "meta",
+      channelAccountId: "phone-1",
+      externalUserHash: params.partialState ? null : "whatsapp:oldhash",
+      externalUserRef: null,
+      legacyWaId: null,
+      deletedAt: params.softDeletedConversation || params.partialState ? new Date("2026-09-20T10:00:00.000Z") : null,
+      anonymizedAt: params.partialState ? new Date("2026-09-20T10:00:00.000Z") : null,
+    },
+  };
+  const restoreObject = (target: Record<string, unknown>, source: Record<string, unknown>) => {
+    for (const key of Object.keys(target)) delete target[key];
+    Object.assign(target, source);
+  };
+  const restoreState = (restored: typeof state) => {
+    restoreObject(state.contact as unknown as Record<string, unknown>, restored.contact as unknown as Record<string, unknown>);
+    state.identities.splice(0, state.identities.length, ...restored.identities);
+    state.identity = state.identities[0];
+    restoreObject(state.lead as unknown as Record<string, unknown>, restored.lead as unknown as Record<string, unknown>);
+    restoreObject(state.note as unknown as Record<string, unknown>, restored.note as unknown as Record<string, unknown>);
+    state.events.splice(0, state.events.length, ...restored.events);
+    restoreObject(state.conversation as unknown as Record<string, unknown>, restored.conversation as unknown as Record<string, unknown>);
   };
   const prisma = {
     contact: {
@@ -498,11 +584,13 @@ function makeSubjectPrivacyPrisma(params: {
     },
     contactChannelIdentity: {
       async findMany() {
-        return [{ id: state.identity.id, contactId: state.identity.contactId }];
+        return state.identities.map((identity) => ({ id: identity.id, contactId: identity.contactId }));
       },
-      async updateMany({ data }: { data: Record<string, unknown> }) {
-        Object.assign(state.identity, data);
-        return { count: 1 };
+      async updateMany({ where, data }: { where?: { id?: string }; data: Record<string, unknown> }) {
+        const matches = state.identities.filter((identity) => !where?.id || identity.id === where.id);
+        if (params.failOnIdentityUpdate) throw new Error("injected_identity_failure");
+        for (const identity of matches) Object.assign(identity, data);
+        return { count: matches.length };
       },
     },
     lead: {
@@ -527,27 +615,27 @@ function makeSubjectPrivacyPrisma(params: {
       },
     },
     conversation: {
+      async updateMany({ data }: { data: Record<string, unknown> }) {
+        Object.assign(state.conversation, data);
+        return { count: 1 };
+      },
       async findMany() {
-        return params.softDeletedConversation
-          ? [{
-              id: "conversation-1",
-              waId: "558499990001",
-              waIdCanonical: "558499990001",
-              channel: "whatsapp",
-              provider: "meta",
-              channelAccountId: "phone-1",
-              externalUserHash: "whatsapp:oldhash",
-              externalUserRef: null,
-              legacyWaId: null,
-              deletedAt: new Date("2026-09-20T10:00:00.000Z"),
-              anonymizedAt: null,
-            }]
+        return params.softDeletedConversation || params.partialState
+          ? [state.conversation]
           : [];
       },
     },
     conversationRuntimeState: {
       async findMany() {
         return [];
+      },
+      async updateMany() {
+        return { count: 1 };
+      },
+    },
+    message: {
+      async updateMany() {
+        return { count: 1 };
       },
     },
     inboundMessage: {
@@ -571,9 +659,23 @@ function makeSubjectPrivacyPrisma(params: {
         if (where?.eventName?.in?.includes("contact.opt_out.recorded")) return 1;
         return 3;
       },
+      async findMany({ where }: { where?: { eventName?: string | { in?: string[] } } } = {}) {
+        const eventNames =
+          typeof where?.eventName === "string"
+            ? [where.eventName]
+            : where?.eventName?.in ?? null;
+        return eventNames
+          ? state.events.filter((event) => eventNames.includes(event.eventName))
+          : state.events;
+      },
       async updateMany({ data }: { data: Record<string, unknown> }) {
         state.events.push({ eventName: "event.updateMany", payloadJson: data.payloadJson, waId: data.waId as string, waIdCanonical: data.waIdCanonical as string });
         return { count: 3 };
+      },
+      async update({ where, data }: { where: { id: string }; data: { payloadJson: unknown } }) {
+        const event = state.events.find((item) => item.id === where.id);
+        if (event) event.payloadJson = data.payloadJson;
+        return event ?? {};
       },
       async create({ data }: { data: { eventName: string; payloadJson: unknown; waId?: string | null; waIdCanonical?: string | null } }) {
         state.events.push(data);
@@ -585,8 +687,15 @@ function makeSubjectPrivacyPrisma(params: {
         return 1;
       },
     },
-    async $transaction(operations: Array<Promise<unknown>>) {
-      return Promise.all(operations);
+    async $transaction(input: Array<Promise<unknown>> | ((tx: unknown) => Promise<unknown>)) {
+      if (typeof input !== "function") return Promise.all(input);
+      const snapshot = structuredClone(state);
+      try {
+        return await input(this);
+      } catch (error) {
+        restoreState(snapshot);
+        throw error;
+      }
     },
   };
   return { prisma, state };
@@ -744,6 +853,138 @@ test("data subject anonymization handles operationally excluded zero-conversatio
   assert.equal(state.contact.waId, "anon:subject:contact-1");
   assert.equal(state.contact.name, "Usuario Anonimizado");
   assert.equal(state.note.body, "[nota anonimizada]");
+});
+
+test("data subject anonymization rolls back conversation mutations when a later identity update fails", async () => {
+  const deletedWaIds: string[] = [];
+  const originalDeleteConversation = runtimeStorage.deleteConversation;
+  runtimeStorage.deleteConversation = async (waId: string) => {
+    deletedWaIds.push(waId);
+  };
+  const { prisma, state } = makeSubjectPrivacyPrisma({
+    softDeletedConversation: true,
+    failOnIdentityUpdate: true,
+  });
+  const originalConversation = { ...state.conversation };
+  const originalContact = { ...state.contact };
+  const originalIdentity = { ...state.identity };
+  const originalLead = { ...state.lead };
+
+  try {
+    await assert.rejects(
+      anonymizeDataSubject(prisma as never, {
+        clientId: "client-1",
+        clientKey: "tenant",
+        contactId: "contact-1",
+        actorId: "admin-1",
+        requestId: "subject-late-failure",
+        confirmation: "ANONIMIZAR TITULAR",
+      }),
+      /injected_identity_failure/
+    );
+
+    assert.deepEqual(state.conversation, originalConversation);
+    assert.deepEqual(state.contact, originalContact);
+    assert.deepEqual(state.identity, originalIdentity);
+    assert.deepEqual(state.lead, originalLead);
+    assert.equal(state.events.some((event) => event.eventName === "privacy.subject.anonymized"), false);
+    assert.equal(state.events.some((event) => event.eventName === "conversation.anonymized"), false);
+    assert.deepEqual(deletedWaIds, []);
+  } finally {
+    runtimeStorage.deleteConversation = originalDeleteConversation;
+  }
+});
+
+test("data subject anonymization assigns unique deterministic hashes to multiple CCIs in the same tuple", async () => {
+  const { prisma, state } = makeSubjectPrivacyPrisma({ multipleIdentities: true });
+  const result = await anonymizeDataSubject(prisma as never, {
+    clientId: "client-1",
+    clientKey: "tenant",
+    contactId: "contact-1",
+    actorId: "admin-1",
+    requestId: "subject-multiple-cci",
+    confirmation: "ANONIMIZAR TITULAR",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.identities.length, 2);
+  const hashes = state.identities.map((identity) => identity.externalUserHash);
+  assert.equal(new Set(hashes).size, 2);
+  for (const identity of state.identities) {
+    assert.match(identity.externalUserHash, /^anon:cci:[a-f0-9]{32}$/);
+    assert.equal(identity.externalUserRef, null);
+    assert.equal(identity.legacyWaId, null);
+    assert.equal(identity.contactId, null);
+    assert.equal(identity.displayName, "Usuario Anonimizado");
+    assert.equal(JSON.stringify(identity).includes("558499990001"), false);
+  }
+});
+
+test("data subject anonymization converges production-like partial state without duplicate conversation event", async () => {
+  const { prisma, state } = makeSubjectPrivacyPrisma({
+    partialState: true,
+    softDeletedConversation: true,
+  });
+  const result = await anonymizeDataSubject(prisma as never, {
+    clientId: "client-1",
+    clientKey: "tenant",
+    contactId: "contact-1",
+    actorId: "admin-1",
+    requestId: "subject-partial-recovery",
+    confirmation: "ANONIMIZAR TITULAR",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.contact.waId, "anon:subject:contact-1");
+  assert.equal(state.lead.waId, "anon:subject:contact-1");
+  assert.equal(state.conversation.waId, "anon:conversation-1");
+  assert.equal(state.events.filter((event) => event.eventName === "conversation.anonymized").length, 0);
+  assert.equal(state.events.filter((event) => event.eventName === "privacy.subject.anonymized").length, 1);
+  assert.equal(new Set(state.identities.map((identity) => identity.externalUserHash)).size, state.identities.length);
+  assert.equal(state.identities.every((identity) => identity.contactId === null), true);
+});
+
+test("data subject anonymization unlinks campaign seed so re-registering the same phone does not resurrect relationships", async () => {
+  const { prisma, state } = makeSubjectPrivacyPrisma({ withCampaignSeed: true });
+  const seedBefore = state.events.find((event) => event.eventName === "campaign.seed.saved");
+  assert.ok(seedBefore);
+  assert.deepEqual(readPrivateCampaignSeedFields(seedBefore.payloadJson).recipients, ["558499990001", "558400000002"]);
+
+  const preview = await previewDataSubjectAnonymization(prisma as never, {
+    clientId: "client-1",
+    contactId: "contact-1",
+  });
+  assert.equal(preview.ok, true);
+  assert.equal(preview.counts.campaignRelationships, 3);
+
+  const result = await anonymizeDataSubject(prisma as never, {
+    clientId: "client-1",
+    clientKey: "tenant",
+    contactId: "contact-1",
+    actorId: "admin-1",
+    requestId: "subject-campaign-unlink",
+    confirmation: "ANONIMIZAR TITULAR",
+  });
+
+  assert.equal(result.ok, true);
+  const seedAfter = state.events.find((event) => event.id === "seed-event-1");
+  assert.ok(seedAfter);
+  assert.equal(seedAfter.messageId, "campaign-1");
+  assert.equal(JSON.stringify(seedAfter.payloadJson).includes("558499990001"), false);
+  assert.equal(JSON.stringify(seedAfter.payloadJson).includes("lead-1"), false);
+  const privateSeed = readPrivateCampaignSeedFields(seedAfter.payloadJson);
+  assert.deepEqual(privateSeed.recipients, ["558400000002"]);
+  assert.deepEqual(privateSeed.componentsByWaId?.["558400000002"], [
+    { type: "body", parameters: [{ type: "text", text: "Outro" }] },
+  ]);
+  assert.equal(privateSeed.componentsByWaId?.["558499990001"], undefined);
+  assert.deepEqual((seedAfter.payloadJson as { leadIds?: string[] }).leadIds, ["lead-other"]);
+
+  const reRegisteredIdentityCandidates = ["558499990001"];
+  const wouldRelinkBySeedRecipient = privateSeed.recipients.some((recipient) => reRegisteredIdentityCandidates.includes(recipient));
+  const wouldRelinkByLeadId = ((seedAfter.payloadJson as { leadIds?: string[] }).leadIds ?? []).includes("lead-new");
+  assert.equal(wouldRelinkBySeedRecipient, false);
+  assert.equal(wouldRelinkByLeadId, false);
 });
 
 test("data subject anonymization requires strong confirmation and is idempotent", async () => {

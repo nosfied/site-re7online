@@ -548,6 +548,23 @@ titular canonico do CRM por Contact ou Lead-only, revisa a previa de impacto e c
 Lead, LeadNote, conversas relacionadas, runtime state, mensagens/eventos
 operacionais e preserva historico apenas de forma minimizada.
 
+Atualizacao P1 de 2026-09-21: a execucao real de anonimizacao por titular em
+producao deve ficar suspensa ate deploy da correcao de atomicidade. O incidente
+Demo `****6787` mostrou mutacao parcial quando a conversa foi anonimizada antes
+da transacao do titular e a etapa de CCI falhou por colisao de
+`externalUserHash`. A correcao local preparada move toda a mutacao DB do titular
+para uma unica transacao Prisma, usa hash anonimo deterministico por CCI e deixa
+cleanup de runtime apenas apos commit. Preview/busca seguem disponiveis; nenhum
+repair real de `****6787` foi executado neste lote local.
+
+A mesma correcao local inclui desvinculacao de relacionamento com campanhas:
+`campaign.seed.saved` preserva a campanha e agregados, mas remove do seed
+privado apenas os `leadIds`, destinatario, `recipientRefs` e componentes do
+titular anonimizado. Destinatarios nao relacionados permanecem. Eventos de
+bloqueio de importacao por destinatario tambem perdem o recipient bruto quando
+for o titular. Isso impede que um re-cadastro do mesmo telefone volte a exibir
+campanhas historicas daquele titular.
+
 Lista operacional de CRM e descoberta de Privacidade sao superficies distintas:
 contatos com `operationallyExcludedAt` podem ficar fora da operacao normal, mas
 continuam localizaveis em Privacidade para previa/anonymizacao enquanto o grafo

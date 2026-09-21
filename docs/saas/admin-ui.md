@@ -215,6 +215,15 @@ Reconciliação documental de 2026-09-16:
   WhatsApp valida e comprovadamente seguro para mutacao. Divida separada: 2
   expectativas de masking em `crmConversationStartRoutes.test.ts` falham igual
   no base `fa507507`;
+- Privacy subject atomicity P1 de 2026-09-21: incidente Demo `****6787`
+  confirmou mutacao parcial quando anonimizacao de conversa foi gravada antes
+  da transacao final do titular e a atualizacao ampla de CCI colidiu no indice
+  unico de identidade. Correcao local preparada: uma unica transacao Prisma para
+  dados DB do titular, hash anonimo por CCI, cleanup de runtime apenas apos
+  commit. Extensao local: seeds privados de campanha removem apenas vinculos do
+  titular (`leadIds`, destinatario, `recipientRefs`, componentes), preservando
+  campanha/agregados e destinatarios nao relacionados. Ate deploy, nao executar
+  anonimizacao real por titular em producao;
 - Marketing templates com mídia ficam em P2: categoria MARKETING, headers
   IMAGE/VIDEO, exemplos/handles Meta, preview, variáveis, botões suportados,
   submissão, aprovação/rejeição/motivo, envio aprovado e fonte oficial de preço

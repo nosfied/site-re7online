@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { Prisma } from "@prisma/client";
+import { buildCrmWhatsappIdentityCandidates } from "../crm/crmWhatsappIdentity.js";
 import { normalizeWaIdDigits } from "../utils/waid.js";
 
 const CIPHER_PREFIX = "v1:";
@@ -123,5 +124,90 @@ export function readPrivateCampaignSeedFields(payload: unknown): {
   return {
     recipients: decryptedRecipients.length > 0 ? decryptedRecipients : legacyRecipients,
     componentsByWaId,
+  };
+}
+
+function getSeedRecord(payload: unknown): Record<string, unknown> {
+  return payload && typeof payload === "object" && !Array.isArray(payload)
+    ? (payload as Record<string, unknown>)
+    : {};
+}
+
+function buildSeedIdentityCandidateSet(values: string[]) {
+  return new Set(
+    values.flatMap((value) => {
+      const raw = String(value ?? "").trim();
+      const digits = normalizeWaIdDigits(raw);
+      return [raw, digits, ...buildCrmWhatsappIdentityCandidates([raw, digits])]
+        .map((candidate) => String(candidate ?? "").trim())
+        .filter(Boolean);
+    })
+  );
+}
+
+export function removeCampaignSeedSubjectReferences(params: {
+  clientId: string;
+  payload: unknown;
+  identityCandidates: string[];
+  leadIds?: string[];
+}): {
+  changed: boolean;
+  payload: Prisma.InputJsonValue;
+  removedRecipients: number;
+  removedRecipientRefs: number;
+  removedComponents: number;
+  removedLeadIds: number;
+} {
+  const record = getSeedRecord(params.payload);
+  const privateSeed = readPrivateCampaignSeedFields(record);
+  const identityCandidates = buildSeedIdentityCandidateSet(params.identityCandidates);
+  const leadIdsToRemove = new Set(params.leadIds?.map((value) => String(value ?? "").trim()).filter(Boolean) ?? []);
+  const shouldRemoveRecipient = (recipient: string) => {
+    const candidates = buildSeedIdentityCandidateSet([recipient]);
+    return Array.from(candidates).some((candidate) => identityCandidates.has(candidate));
+  };
+
+  const recipients = privateSeed.recipients.filter((recipient) => !shouldRemoveRecipient(recipient));
+  const removedRecipients = privateSeed.recipients.length - recipients.length;
+  const sourceComponents = privateSeed.componentsByWaId ?? {};
+  const componentsByWaId: Record<string, CampaignTemplateComponents> = {};
+  let removedComponents = 0;
+  for (const [waId, components] of Object.entries(sourceComponents)) {
+    if (shouldRemoveRecipient(waId)) {
+      removedComponents += 1;
+      continue;
+    }
+    componentsByWaId[waId] = components;
+  }
+
+  const currentLeadIds = Array.isArray(record.leadIds)
+    ? record.leadIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+    : [];
+  const leadIds = currentLeadIds.filter((leadId) => !leadIdsToRemove.has(leadId));
+  const removedLeadIds = currentLeadIds.length - leadIds.length;
+  const rebuiltPrivateFields =
+    removedRecipients > 0 || removedComponents > 0
+      ? buildPrivateCampaignSeedFields({
+          clientId: params.clientId,
+          waIds: recipients,
+          componentsByWaId: Object.keys(componentsByWaId).length > 0 ? componentsByWaId : undefined,
+        })
+      : {};
+  const removedRecipientRefs =
+    Array.isArray(record.recipientRefs) && "recipientRefs" in rebuiltPrivateFields
+      ? record.recipientRefs.length - ((rebuiltPrivateFields.recipientRefs as unknown[])?.length ?? 0)
+      : removedRecipients;
+  const nextPayload = {
+    ...record,
+    ...rebuiltPrivateFields,
+    ...(currentLeadIds.length > 0 || removedLeadIds > 0 ? { leadIds } : {}),
+  };
+  return {
+    changed: removedRecipients > 0 || removedComponents > 0 || removedLeadIds > 0,
+    payload: nextPayload as Prisma.InputJsonValue,
+    removedRecipients,
+    removedRecipientRefs,
+    removedComponents,
+    removedLeadIds,
   };
 }
