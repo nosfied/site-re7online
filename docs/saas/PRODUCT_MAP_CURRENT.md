@@ -116,9 +116,9 @@ to the exact phone/name/CRM Situation mapping used; mapping changes stale the
 visible preview, block import and require refreshed preview. No schema,
 migration, provider call, real send or production deploy occurred.
 
-CRM post-deploy hardening, 2026-09-21: LOCAL VALIDATED / NOT DEPLOYED. CRM
-contact origin now means first reliable provenance of the operational/CRM record
-and is derived from canonical evidence only: manual, CSV import,
+CRM post-deploy hardening, 2026-09-21: DEPLOYED / PRODUCTION SMOKE VALIDATED on
+head `fa507507c372b0b2c3b5124b5a7a06dba5edfd0f`. CRM contact origin now means
+first reliable provenance of the operational/CRM record and is derived from canonical evidence only: manual, CSV import,
 campaign/audience, conversation/inbound, system/integration or unknown for
 legacy records without reliable evidence. CSV confirm persists individual
 per-contact provenance through the existing audit event; no new persistence
@@ -129,6 +129,11 @@ summary. CRM keeps historical conversation count/history, but Inbox-open fields
 and detail/history action are populated only for conversations projectable by
 the canonical human Inbox policy; BOT-only historical records do not create
 false Inbox navigation.
+Demo smoke created only the intended safe CSV contact `5584998877665`, observed
+legacy `Não identificado`, confirmed `558494784366` remains historical-only for
+Inbox navigation, and confirmed one human/projectable conversation remains
+openable. No provider call, real send, schema/migration or conversation runtime
+mutation occurred.
 
 CRA-PR controlled campaign readiness, 2026-09-15: the product capability for
 template request/review/submission, campaign drafts/import, lifecycle controls,

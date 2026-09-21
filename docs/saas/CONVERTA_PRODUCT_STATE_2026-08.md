@@ -29,8 +29,9 @@ alteradas. A validade da previa fica presa ao mapeamento exato de colunas; se
 telefone, nome ou `Situação no CRM` muda, a previa fica stale, a importacao e
 bloqueada e o operador precisa atualizar a previa.
 
-Atualizacao local de 2026-09-21: CRM owner-fails hardening esta LOCAL VALIDATED
-/ NOT DEPLOYED. Importacao CSV de Contacts grava proveniencia individual por
+Atualizacao de producao de 2026-09-21: CRM owner-fails hardening esta DEPLOYED
+/ PRODUCTION SMOKE VALIDATED no head `fa507507c372b0b2c3b5124b5a7a06dba5edfd0f`.
+Importacao CSV de Contacts grava proveniencia individual por
 contato usando o evento de auditoria existente; `Origem` segue sem novo campo
 persistido e usa a primeira evidencia confiavel: manual continua manual mesmo
 apos CSV posterior, CSV criado mostra `Importação CSV`, e legado sem evidencia
@@ -39,6 +40,12 @@ conversas historicas, mas so mostra acao de abrir na Inbox quando a conversa e
 projetavel pela politica canonica da Inbox humana. O modal CSV usa `Cancelar`
 antes do processamento e `Fechar` apos o resumo concluido, sem a duplicidade
 Fechar/Cancelar.
+
+Smoke autenticado em Demo criou apenas o contato CSV seguro `5584998877665` e
+validou `Origem=Importação CSV`. O contato `558494784366` preservou historico
+BOT no CRM sem acao falsa de Inbox, enquanto uma conversa humana projetavel
+permaneceu abrivel. Nao houve provider call, envio real, migration ou novo
+runtime de conversa.
 
 Atualizacao de 2026-09-20: Data Subject Privacy / LGPD contact-centric
 anonymization esta OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY DEPLOYED / PRODUCTION HEALTH VALIDATED. A tela de

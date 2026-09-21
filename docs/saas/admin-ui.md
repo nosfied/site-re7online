@@ -192,7 +192,7 @@ Reconciliação documental de 2026-09-16:
   sombra, usando fontes canonicas de campanha/outbound/billing/opt-out. A lista
   deve mostrar agregado leve e o detalhe deve abrir sob demanda, seguindo o
   padrao aprovado de linhas expansivas quando fizer sentido;
-- hardening local de 2026-09-21: `Origem` em Contacts passa a representar a
+- hardening de producao de 2026-09-21: `Origem` em Contacts passa a representar a
   primeira proveniencia confiavel do registro CRM/operacional, derivada somente
   de evidencia canonica existente. Importacao CSV agora grava evidencia
   individual por contato via evento de auditoria existente; contato manual
@@ -203,7 +203,11 @@ Reconciliação documental de 2026-09-16:
   `Abrir conversa` no CRM so deve aparecer para conversas projetaveis na Inbox
   humana pela politica canonica; historico BOT-only ou sem destino humano
   completo continua preservado, mas nao vira atalho falso de Inbox. Status:
-  LOCAL VALIDATED / NOT DEPLOYED;
+  DEPLOYED / PRODUCTION SMOKE VALIDATED no head
+  `fa507507c372b0b2c3b5124b5a7a06dba5edfd0f`. Smoke Demo criou apenas o contato
+  CSV seguro `5584998877665`, confirmou origem CSV, confirmou `558494784366`
+  como historico sem atalho falso de Inbox e preservou atalho em conversa humana
+  projetavel;
 - Marketing templates com mídia ficam em P2: categoria MARKETING, headers
   IMAGE/VIDEO, exemplos/handles Meta, preview, variáveis, botões suportados,
   submissão, aprovação/rejeição/motivo, envio aprovado e fonte oficial de preço

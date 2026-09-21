@@ -520,8 +520,9 @@ ACTIVE P1:
    canonical phone normalization, formula-safe report CSV, no provider call, no
    real send, no schema/migration.
 
-   CRM post-deploy hardening, 2026-09-21: LOCAL VALIDATED / COMMIT PENDING /
-   NOT DEPLOYED. Contact origin semantics were hardened without adding a
+   CRM post-deploy hardening, 2026-09-21: DEPLOYED / PRODUCTION SMOKE
+   VALIDATED on head `fa507507c372b0b2c3b5124b5a7a06dba5edfd0f`.
+   Contact origin semantics were hardened without adding a
    persistence field: CRM CSV confirm now persists individual per-contact
    canonical provenance through the existing `crm.contact.created` audit event;
    `crm_manual` maps to `Cadastro manual`, `crm_import` maps to `Importacao CSV`,
@@ -537,7 +538,12 @@ ACTIVE P1:
    `Abrir conversa` only when the selected conversation is projectable by the
    canonical Inbox policy `shouldProjectConversationToHumanInbox(...)`. BOT-only
    or otherwise non-projectable historical conversations remain historical CRM
-   evidence and no longer create false Inbox-open actions. No schema/migration,
+   evidence and no longer create false Inbox-open actions. Production smoke used
+   a real Demo ADMIN session: CSV safe contact `5584998877665` was created with
+   `Origem=Importação CSV`; legacy unknown evidence was observed; contact
+   `558494784366` kept historical BOT conversation `3167c9e6-7657-4623-845c-5bd5c051f62a`
+   with no Inbox-open action; human/projectable conversation
+   `b671877e-ccb3-4b40-a493-d9741b279eed` remained openable. No schema/migration,
    no provider call, no real send, no runtime mutation and no new conversation.
 
 7. Campaign post-Meta persistence / operational default: CLOSED / DEPLOYED /
