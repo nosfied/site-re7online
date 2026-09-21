@@ -74,8 +74,8 @@ Invalid phone UX mapping: OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY DEPLOYED
 backend, normalizador canonico, CSV, campanhas e regras de persistencia nao
 foram alterados; nao ha segundo validador frontend.
 
-Lead-only operational exclusion materialization: LOCAL VALIDATED / NOT
-DEPLOYED. A acao operacional `Retirar da operação` agora suporta linhas
+Lead-only operational exclusion materialization: DEPLOYED / PRODUCTION HEALTH
+VALIDATED / REAL LEAD-ONLY E2E NOT EXERCISED. A acao operacional `Retirar da operação` agora suporta linhas
 Lead-only usando resolucao canonica de identidade e materializando `Contact`
 somente quando o operador executa explicitamente essa acao. Antes da
 materializacao, o guard de conversa ativa e aplicado; conflitos de identidade
@@ -84,7 +84,12 @@ duplicar contato; reativacao usa o mesmo `Contact`. A materializacao registra o
 evento `crm.contact.materialized_for_operational_exclusion` e exibe origem CRM
 como `Integração / sistema`. Privacidade/LGPD permanece separada e preservada:
 anonimizacao Lead-only continua usando o fluxo de titular existente, sem criar
-`Contact` para privacidade. Divida do teste
+`Contact` para privacidade. Deploy de producao em `fa7744ac01292f78e094302e932a4d2bd73cb9c9`
+foi validado com backup, FF-only, build backend, reload apenas de
+`re7-whatsapp-agent`, health/db OK e PM2 estavel. A busca read-only encontrou
+candidatos Lead-only no tenant Demo, mas nenhum fixture com identidade WhatsApp
+valida e comprovadamente seguro para mutacao; por isso o E2E real ficou
+`NOT EXERCISED` e nenhum dado de CRM foi fabricado. Divida do teste
 `crmConversationStartRoutes.test.ts`: 2 falhas de expectativa de masking foram
 confirmadas identicas no base `fa507507` e nao sao regressao deste follow-up.
 

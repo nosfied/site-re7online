@@ -91,15 +91,20 @@ sem destino humano completo nao sao transformadas em falso atalho de Inbox.
 Nao houve schema, migration, provider call, envio real, criacao de conversa ou
 mutacao de runtime.
 
-Follow-up Lead-only operational exclusion: LOCAL VALIDATED / NOT DEPLOYED. A
-acao operacional `Retirar da operação` passou a resolver identidade canonica de
-Lead-only e materializar `Contact` apenas nessa acao explicita, apos o guard de
-conversa ativa. Conflitos de identidade sao bloqueados, CCI canonico e
-reutilizado/criado sem duplicidade, reativacao usa o mesmo `Contact`, campanhas
-e importacoes respeitam a exclusao operacional, e o evento de auditoria
+Follow-up Lead-only operational exclusion: DEPLOYED / PRODUCTION HEALTH
+VALIDATED / REAL LEAD-ONLY E2E NOT EXERCISED. A acao operacional `Retirar da
+operação` passou a resolver identidade canonica de Lead-only e materializar
+`Contact` apenas nessa acao explicita, apos o guard de conversa ativa.
+Conflitos de identidade sao bloqueados, CCI canonico e reutilizado/criado sem
+duplicidade, reativacao usa o mesmo `Contact`, campanhas e importacoes
+respeitam a exclusao operacional, e o evento de auditoria
 `crm.contact.materialized_for_operational_exclusion` define a origem como
 `Integração / sistema`. Privacidade permanece preservada e separada: o fluxo
-LGPD Lead-only nao cria `Contact`. Divida separada: 2 expectativas de masking em
+LGPD Lead-only nao cria `Contact`. Producao esta em
+`fa7744ac01292f78e094302e932a4d2bd73cb9c9` com health/db OK apos reload
+somente do backend; o E2E real nao foi executado porque nao havia fixture
+Lead-only com identidade WhatsApp valida e comprovadamente seguro para mutacao
+no Demo. Divida separada: 2 expectativas de masking em
 `crmConversationStartRoutes.test.ts` falham igual no base `fa507507`.
 
 O produto deve ser apresentado como solucao de atendimento, roteamento, chatbot/fluxos, humano assistido, campanhas controladas e evidencia operacional. Nao deve ser apresentado como plataforma de IA generativa ampla quando esse nao for o escopo contratado.
