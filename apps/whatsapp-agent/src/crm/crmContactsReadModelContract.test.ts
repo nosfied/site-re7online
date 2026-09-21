@@ -10,6 +10,8 @@ const source = fs.readFileSync(sourcePath, "utf8");
 
 test("CRM contact origin is derived from canonical provenance evidence", () => {
   assert.ok(source.includes("CRM_CONTACT_CREATED_EVENT"));
+  assert.ok(source.includes("CRM_CONTACT_MATERIALIZED_FOR_OPERATIONAL_EXCLUSION_EVENT"));
+  assert.ok(source.includes("crm.contact.materialized_for_operational_exclusion"));
   assert.ok(source.includes("CONTACT_PROVENANCE_EVENT_NAMES"));
   assert.ok(source.includes('source === "crm_manual"'));
   assert.ok(source.includes("CONTACT_ORIGIN_MANUAL"));

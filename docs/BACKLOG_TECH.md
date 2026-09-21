@@ -74,16 +74,19 @@ Invalid phone UX mapping: OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY DEPLOYED
 backend, normalizador canonico, CSV, campanhas e regras de persistencia nao
 foram alterados; nao ha segundo validador frontend.
 
-Lead-only operational exclusion materialization: SEPARATE FOLLOW-UP / NOT
-DEPLOYED / OWNER DECISION PENDING. A auditoria do split confirmou que a
-anonimizacao LGPD Lead-only nao precisa criar `Contact`; ela usa `Lead.id` como
-alvo governado. Ja a acao operacional `Retirar da operação` ainda usa
-`Contact.operationallyExcludedAt` como estado canonico; no schema atual nao ha
-campo equivalente em `Lead` ou `ContactChannelIdentity`. Portanto, se linhas
-Lead-only precisarem suportar `Retirar da operação`, sera necessaria decisao
-separada sobre materializar `Contact` operacional ou criar outro primitivo de
-dominio. A entrega limpa de Privacidade preserva o comportamento anterior:
-Lead-only sem Contact retorna `contact_not_found` nessa acao operacional.
+Lead-only operational exclusion materialization: LOCAL VALIDATED / NOT
+DEPLOYED. A acao operacional `Retirar da operação` agora suporta linhas
+Lead-only usando resolucao canonica de identidade e materializando `Contact`
+somente quando o operador executa explicitamente essa acao. Antes da
+materializacao, o guard de conversa ativa e aplicado; conflitos de identidade
+bloqueiam a mutacao com erro seguro; CCI canonico e reutilizado/criado sem
+duplicar contato; reativacao usa o mesmo `Contact`. A materializacao registra o
+evento `crm.contact.materialized_for_operational_exclusion` e exibe origem CRM
+como `Integração / sistema`. Privacidade/LGPD permanece separada e preservada:
+anonimizacao Lead-only continua usando o fluxo de titular existente, sem criar
+`Contact` para privacidade. Divida do teste
+`crmConversationStartRoutes.test.ts`: 2 falhas de expectativa de masking foram
+confirmadas identicas no base `fa507507` e nao sao regressao deste follow-up.
 
 ---
 

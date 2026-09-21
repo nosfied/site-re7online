@@ -10,9 +10,22 @@ import {
 } from "../contacts/contactOperationalExclusion.js";
 import { persistEvent } from "../db/persist.js";
 import { shouldProjectConversationToHumanInbox } from "../inbox/messageVisibility.js";
+import { normalizeWaIdDigits } from "../utils/waid.js";
+import { hashWhatsAppExternalUser } from "../channels/whatsappBackfillDryRun.js";
+import {
+  buildCrmWhatsappExternalUserHash,
+  buildCrmWhatsappIdentityCandidates,
+  normalizeCrmWhatsappIdentity,
+} from "./crmWhatsappIdentity.js";
+import {
+  CRM_CONTACT_MANUAL_CHANNEL_ACCOUNT_ID,
+  CRM_CONTACT_MANUAL_PROVIDER,
+} from "./crmContactUpsert.js";
 
 export const CRM_CONTACT_UPDATED_EVENT = "crm.contact.updated";
 export const CRM_LEAD_STATUS_CHANGED_EVENT = "crm.lead.status_changed";
+export const CRM_CONTACT_MATERIALIZED_FOR_OPERATIONAL_EXCLUSION_EVENT =
+  "crm.contact.materialized_for_operational_exclusion";
 
 export type CrmStatusConfig = {
   id: string;
@@ -37,6 +50,7 @@ export class CrmContactMutationError extends Error {
       | "invalid_email"
       | "status_not_configured"
       | "opt_out_identity_unavailable"
+      | "identity_conflict"
       | "active_conversation_exists"
       | "hidden_active_conversation_exists",
     message: string,
@@ -90,6 +104,9 @@ async function getLeadForTenant(prisma: PrismaClient, clientId: string, leadId: 
       contactChannelIdentityId: true,
       name: true,
       phone: true,
+      externalUserRef: true,
+      legacyWaId: true,
+      externalUserHash: true,
       city: true,
       email: true,
       company: true,
@@ -116,6 +133,234 @@ async function getLeadForTenant(prisma: PrismaClient, clientId: string, leadId: 
   return lead;
 }
 
+type CrmMutationLead = Awaited<ReturnType<typeof getLeadForTenant>>;
+
+type OperationalContactSnapshot = {
+  id: string;
+  waId: string | null;
+  externalUserRef: string | null;
+  legacyWaId: string | null;
+  operationallyExcludedAt: Date | string | null;
+};
+
+type LeadOperationalIdentity = {
+  waId: string;
+  waIdCanonical: string;
+  externalUserHash: string;
+  identityCandidates: string[];
+  hashCandidates: string[];
+};
+
+function resolveLeadWhatsappIdentity(lead: CrmMutationLead): LeadOperationalIdentity | null {
+  const values = [
+    lead.phone,
+    lead.waIdCanonical,
+    lead.waId,
+    lead.externalUserRef,
+    lead.legacyWaId,
+    normalizeWaIdDigits(lead.phone ?? ""),
+    normalizeWaIdDigits(lead.waIdCanonical ?? ""),
+    normalizeWaIdDigits(lead.waId ?? ""),
+  ];
+  const normalized = values
+    .map((value) => normalizeCrmWhatsappIdentity(value))
+    .find((identity) => identity !== null);
+  if (!normalized) return null;
+  const identityCandidates = buildCrmWhatsappIdentityCandidates([
+    ...values,
+    normalized.crmCanonicalPhone,
+    ...normalized.providerCandidates,
+  ]);
+  const hashCandidates = Array.from(
+    new Set(
+      [
+        lead.externalUserHash,
+        normalized.externalUserHash,
+        ...identityCandidates.flatMap((candidate) => [
+          buildCrmWhatsappExternalUserHash(candidate),
+          hashWhatsAppExternalUser(candidate),
+          `hash:${hashWhatsAppExternalUser(candidate)}`,
+        ]),
+      ]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+  return {
+    waId: normalized.crmCanonicalPhone,
+    waIdCanonical: normalized.crmCanonicalPhone,
+    externalUserHash: normalized.externalUserHash,
+    identityCandidates,
+    hashCandidates,
+  };
+}
+
+function uniqueContacts(contacts: Array<OperationalContactSnapshot | null | undefined>) {
+  const byId = new Map<string, OperationalContactSnapshot>();
+  for (const contact of contacts) {
+    if (contact?.id) byId.set(contact.id, contact);
+  }
+  return Array.from(byId.values());
+}
+
+async function resolveOperationalContactForLead(
+  prisma: PrismaClient,
+  params: { clientId: string; lead: CrmMutationLead; identity: LeadOperationalIdentity }
+) {
+  const direct = params.lead.contactChannelIdentity?.contactId && params.lead.contactChannelIdentity.contact
+    ? {
+        id: params.lead.contactChannelIdentity.contactId,
+        waId: params.lead.contactChannelIdentity.contact.waId,
+        externalUserRef: params.lead.contactChannelIdentity.contact.externalUserRef,
+        legacyWaId: params.lead.contactChannelIdentity.contact.legacyWaId,
+        operationallyExcludedAt: params.lead.contactChannelIdentity.contact.operationallyExcludedAt,
+      }
+    : null;
+  const [identities, contacts] = await Promise.all([
+    prisma.contactChannelIdentity.findMany({
+      where: {
+        clientId: params.clientId,
+        channel: "whatsapp",
+        OR: [
+          ...(params.lead.contactChannelIdentityId ? [{ id: params.lead.contactChannelIdentityId }] : []),
+          { externalUserHash: { in: params.identity.hashCandidates } },
+          { externalUserRef: { in: params.identity.identityCandidates } },
+          { legacyWaId: { in: params.identity.identityCandidates } },
+        ],
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 3,
+      select: {
+        contact: {
+          select: {
+            id: true,
+            waId: true,
+            externalUserRef: true,
+            legacyWaId: true,
+            operationallyExcludedAt: true,
+          },
+        },
+      },
+    }),
+    prisma.contact.findMany({
+      where: {
+        clientId: params.clientId,
+        OR: [
+          { waId: { in: params.identity.identityCandidates } },
+          { externalUserRef: { in: params.identity.identityCandidates } },
+          { legacyWaId: { in: params.identity.identityCandidates } },
+          { externalUserHash: { in: params.identity.hashCandidates } },
+        ],
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 3,
+      select: {
+        id: true,
+        waId: true,
+        externalUserRef: true,
+        legacyWaId: true,
+        operationallyExcludedAt: true,
+      },
+    }),
+  ]);
+  const resolved = uniqueContacts([direct, ...identities.map((identity) => identity.contact), ...contacts]);
+  if (resolved.length > 1) {
+    throw new CrmContactMutationError(
+      "identity_conflict",
+      "Multiple possible contacts found for this identity",
+      409
+    );
+  }
+  return resolved[0] ?? null;
+}
+
+async function materializeOperationalContactForLead(
+  prisma: PrismaClient,
+  params: {
+    clientId: string;
+    lead: CrmMutationLead;
+    identity: LeadOperationalIdentity;
+    userId: string;
+    requestId: string;
+    reason?: string | null;
+  }
+) {
+  const contact = await prisma.contact.create({
+    data: {
+      clientId: params.clientId,
+      waId: params.identity.waId,
+      name: params.lead.name,
+      channel: "whatsapp",
+      provider: CRM_CONTACT_MANUAL_PROVIDER,
+      channelAccountId: CRM_CONTACT_MANUAL_CHANNEL_ACCOUNT_ID,
+      externalUserHash: params.identity.externalUserHash,
+      externalUserRef: params.identity.waIdCanonical,
+      legacyWaId: params.identity.waIdCanonical,
+    },
+    select: {
+      id: true,
+      waId: true,
+      externalUserRef: true,
+      legacyWaId: true,
+      operationallyExcludedAt: true,
+    },
+  });
+  const identity = await prisma.contactChannelIdentity.upsert({
+    where: {
+      clientId_channel_provider_channelAccountId_externalUserHash: {
+        clientId: params.clientId,
+        channel: "whatsapp",
+        provider: CRM_CONTACT_MANUAL_PROVIDER,
+        channelAccountId: CRM_CONTACT_MANUAL_CHANNEL_ACCOUNT_ID,
+        externalUserHash: params.identity.externalUserHash,
+      },
+    },
+    update: {
+      contactId: contact.id,
+      externalUserRef: params.identity.waIdCanonical,
+      legacyWaId: params.identity.waIdCanonical,
+      displayName: params.lead.name,
+    },
+    create: {
+      clientId: params.clientId,
+      contactId: contact.id,
+      channel: "whatsapp",
+      provider: CRM_CONTACT_MANUAL_PROVIDER,
+      channelAccountId: CRM_CONTACT_MANUAL_CHANNEL_ACCOUNT_ID,
+      externalUserHash: params.identity.externalUserHash,
+      externalUserRef: params.identity.waIdCanonical,
+      legacyWaId: params.identity.waIdCanonical,
+      displayName: params.lead.name,
+    },
+    select: { id: true },
+  });
+  if (params.lead.contactChannelIdentityId !== identity.id) {
+    await prisma.lead.update({
+      where: { id: params.lead.id },
+      data: { contactChannelIdentityId: identity.id },
+    });
+  }
+  await recordCrmEvent({
+    prisma,
+    clientId: params.clientId,
+    lead: {
+      id: params.lead.id,
+      waId: params.lead.waId,
+      waIdCanonical: params.identity.waIdCanonical,
+    },
+    eventName: CRM_CONTACT_MATERIALIZED_FOR_OPERATIONAL_EXCLUSION_EVENT,
+    requestId: params.requestId,
+    payloadJson: {
+      contactId: contact.id,
+      actorUserId: params.userId,
+      source: "operational_exclusion",
+      reason: params.reason ?? null,
+      timestamp: new Date().toISOString(),
+    },
+  });
+  return contact;
+}
+
 function isWhatsappChannel(channel: string | null | undefined) {
   return !channel || channel.toLowerCase() === "whatsapp";
 }
@@ -136,13 +381,14 @@ function resolveOptOutWaId(lead: {
 }
 
 async function recordCrmEvent(params: {
+  prisma?: { event?: { create?(args: { data: Record<string, unknown> }): Promise<unknown> } };
   clientId: string;
   lead: { id: string; waId: string; waIdCanonical: string | null; status?: string | null };
   eventName: string;
   requestId: string;
   payloadJson: Record<string, unknown>;
 }) {
-  await persistEvent({
+  const data = {
     clientId: params.clientId,
     waId: params.lead.waId,
     waIdCanonical: params.lead.waIdCanonical,
@@ -152,7 +398,12 @@ async function recordCrmEvent(params: {
       leadId: params.lead.id,
       ...params.payloadJson,
     },
-  });
+  };
+  if (params.prisma?.event?.create) {
+    await params.prisma.event.create({ data });
+    return;
+  }
+  await persistEvent(data);
 }
 
 export async function updateCrmContactBasics(
@@ -220,6 +471,7 @@ export async function updateCrmContactBasics(
       }
     }
     await recordCrmEvent({
+      prisma,
       clientId: params.clientId,
       lead,
       eventName: CRM_CONTACT_UPDATED_EVENT,
@@ -405,6 +657,21 @@ async function assertNoActiveOperationalConversation(
   }
 }
 
+function buildLeadOperationalIdentityKeys(lead: CrmMutationLead, identity: LeadOperationalIdentity, contact?: OperationalContactSnapshot | null) {
+  return Array.from(
+    new Set([
+      ...resolveLeadOperationalIdentityKeys({
+        ...lead,
+        contactChannelIdentity: {
+          ...(lead.contactChannelIdentity ?? {}),
+          contact: contact ?? lead.contactChannelIdentity?.contact ?? null,
+        },
+      }),
+      ...identity.identityCandidates,
+    ])
+  );
+}
+
 export function isHiddenTechnicalBlockingConversation(conversation: {
   status?: string | null;
   mode?: string | null;
@@ -458,17 +725,32 @@ export async function excludeCrmContactFromOperation(
 ) {
   return prisma.$transaction(async (tx) => {
     const lead = await getLeadForTenant(tx as PrismaClient, params.clientId, params.leadId);
-    const contactId = lead.contactChannelIdentity?.contactId ?? null;
-    if (!contactId) {
+    const identity = resolveLeadWhatsappIdentity(lead);
+    if (!identity) {
       throw new CrmContactMutationError("contact_not_found", "Contact not found", 404);
     }
+    const existingContact = await resolveOperationalContactForLead(tx as PrismaClient, {
+      clientId: params.clientId,
+      lead,
+      identity,
+    });
     await assertNoActiveOperationalConversation(tx as PrismaClient, {
       clientId: params.clientId,
-      identityKeys: resolveLeadOperationalIdentityKeys(lead),
+      identityKeys: buildLeadOperationalIdentityKeys(lead, identity, existingContact),
     });
-    if (!lead.contactChannelIdentity?.contact?.operationallyExcludedAt) {
+    const contact =
+      existingContact ??
+      (await materializeOperationalContactForLead(tx as PrismaClient, {
+        clientId: params.clientId,
+        lead,
+        identity,
+        userId: params.userId,
+        requestId: params.requestId,
+        reason: params.reason,
+      }));
+    if (!contact.operationallyExcludedAt) {
       await tx.contact.update({
-        where: { id: contactId },
+        where: { id: contact.id },
         data: { operationallyExcludedAt: new Date() },
       });
     }
@@ -476,9 +758,9 @@ export async function excludeCrmContactFromOperation(
       prisma: tx as PrismaClient,
       clientId: params.clientId,
       leadId: lead.id,
-      contactId,
+      contactId: contact.id,
       waId: lead.waId,
-      waIdCanonical: resolveLeadOperationalIdentity(lead),
+      waIdCanonical: identity.waIdCanonical,
       actorUserId: params.userId,
       requestId: params.requestId,
       reason: params.reason,
@@ -498,13 +780,21 @@ export async function reactivateCrmContactForOperation(
 ) {
   return prisma.$transaction(async (tx) => {
     const lead = await getLeadForTenant(tx as PrismaClient, params.clientId, params.leadId);
-    const contactId = lead.contactChannelIdentity?.contactId ?? null;
-    if (!contactId) {
+    const identity = resolveLeadWhatsappIdentity(lead);
+    if (!identity) {
       throw new CrmContactMutationError("contact_not_found", "Contact not found", 404);
     }
-    if (lead.contactChannelIdentity?.contact?.operationallyExcludedAt) {
+    const contact = await resolveOperationalContactForLead(tx as PrismaClient, {
+      clientId: params.clientId,
+      lead,
+      identity,
+    });
+    if (!contact) {
+      throw new CrmContactMutationError("contact_not_found", "Contact not found", 404);
+    }
+    if (contact.operationallyExcludedAt) {
       await tx.contact.update({
-        where: { id: contactId },
+        where: { id: contact.id },
         data: { operationallyExcludedAt: null },
       });
     }
@@ -512,9 +802,9 @@ export async function reactivateCrmContactForOperation(
       prisma: tx as PrismaClient,
       clientId: params.clientId,
       leadId: lead.id,
-      contactId,
+      contactId: contact.id,
       waId: lead.waId,
-      waIdCanonical: resolveLeadOperationalIdentity(lead),
+      waIdCanonical: identity.waIdCanonical,
       actorUserId: params.userId,
       requestId: params.requestId,
       source: "manual_crm_reactivation",

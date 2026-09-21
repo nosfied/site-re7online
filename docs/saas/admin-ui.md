@@ -204,6 +204,14 @@ Reconciliação documental de 2026-09-16:
   humana pela politica canonica; historico BOT-only ou sem destino humano
   completo continua preservado, mas nao vira atalho falso de Inbox. Status:
   LOCAL VALIDATED / NOT DEPLOYED;
+- Lead-only operational exclusion local de 2026-09-21: `Retirar da operação`
+  em linha Lead-only resolve identidade canonica e materializa `Contact`
+  somente na acao explicita, depois do guard de conversa ativa. A trilha de
+  auditoria usa `crm.contact.materialized_for_operational_exclusion`, a origem
+  exibida e `Integração / sistema`, reativacao usa o mesmo contato, e o fluxo de
+  Privacidade/LGPD permanece separado sem criar `Contact`. Status: LOCAL
+  VALIDATED / NOT DEPLOYED. Divida separada: 2 expectativas de masking em
+  `crmConversationStartRoutes.test.ts` falham igual no base `fa507507`;
 - Marketing templates com mídia ficam em P2: categoria MARKETING, headers
   IMAGE/VIDEO, exemplos/handles Meta, preview, variáveis, botões suportados,
   submissão, aprovação/rejeição/motivo, envio aprovado e fonte oficial de preço

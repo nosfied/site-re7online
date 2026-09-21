@@ -32,6 +32,8 @@ import {
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 const IMPORT_EVENT_NAMES = ["contact.imported_for_campaign", "lead.imported_for_campaign"];
+const CRM_CONTACT_MATERIALIZED_FOR_OPERATIONAL_EXCLUSION_EVENT =
+  "crm.contact.materialized_for_operational_exclusion";
 const CAMPAIGN_PROVENANCE_EVENT_NAMES = [
   "campaign.recipient.contact_bootstrap_ready",
   "campaign.recipient.conversation_created",
@@ -39,6 +41,7 @@ const CAMPAIGN_PROVENANCE_EVENT_NAMES = [
 ];
 const CONTACT_PROVENANCE_EVENT_NAMES = [
   CRM_CONTACT_CREATED_EVENT,
+  CRM_CONTACT_MATERIALIZED_FOR_OPERATIONAL_EXCLUSION_EVENT,
   ...IMPORT_EVENT_NAMES,
   ...CAMPAIGN_PROVENANCE_EVENT_NAMES,
 ];
@@ -432,6 +435,9 @@ function classifyContactOriginEvent(event: {
 }) {
   if (IMPORT_EVENT_NAMES.includes(event.eventName) || CAMPAIGN_PROVENANCE_EVENT_NAMES.includes(event.eventName)) {
     return CONTACT_ORIGIN_CAMPAIGN;
+  }
+  if (event.eventName === CRM_CONTACT_MATERIALIZED_FOR_OPERATIONAL_EXCLUSION_EVENT) {
+    return CONTACT_ORIGIN_SYSTEM;
   }
 
   if (event.eventName !== CRM_CONTACT_CREATED_EVENT) return null;
