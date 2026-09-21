@@ -321,7 +321,7 @@ O centro de campanhas suporta:
 Criar rascunho nao envia mensagem. Envio real exige acao explicita do operador.
 
 Campaign flow integrity review, 2026-09-21: IMPLEMENTED LOCAL / VALIDATED /
-NOT DEPLOYED. Campaign CSV no longer maps business variables from arbitrary raw
+DEPLOYED / HEALTH VALIDATED / AUTHENTICATED CAMPAIGN SMOKE BLOCKED. Campaign CSV no longer maps business variables from arbitrary raw
 headers; the operator maps `Contato`, `Campo 1`, `Campo 2` and `Campo 3`, and
 template variables can only point to those generic fields. Generic fields do not
 update CRM name or CRM situation. Authenticated CSV preview/report shows full
@@ -333,7 +333,11 @@ Variable-template test sends require explicit variable values when the test
 number is not an existing campaign recipient and stop before provider call or
 aggregate mutation when incomplete. CRM campaign relationship/history is
 actual-send evidence only; draft, seed, import, test-send and scheduled-not-run
-records are not shown as contact campaign history.
+records are not shown as contact campaign history. Production FF-only deploy
+`77e087a724fd53bcf06ed6d19267a655a06118b8` passed backend/frontend builds and
+health with no schema or migration. The deploy smoke made no provider call and
+no real send; authenticated campaign API validation remains pending because the
+production shell had no usable real Demo login/session for this smoke.
 
 Atualizacao local de contrato, 2026-09-15: novas campanhas nao dependem de
 default operacional implicito ou nomeado como destino canonico das respostas. O

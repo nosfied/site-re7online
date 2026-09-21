@@ -222,7 +222,8 @@ Fechado / validado:
   claramente invalido; NAO houve reproducao de token assinado malformado em
   producao. Health `ok/db=ok`, PID do agent preservado apos smoke, logs sem
   `process.unhandledRejection` e sem Prisma `P2023`.
-- Campaign flow integrity review: IMPLEMENTED LOCAL / VALIDATED / NO DEPLOY.
+- Campaign flow integrity review: IMPLEMENTED LOCAL / VALIDATED / DEPLOYED /
+  HEALTH VALIDATED / AUTHENTICATED CAMPAIGN SMOKE BLOCKED.
   Campaign CSV uses the generic mapping model `Contato`, `Campo 1`, `Campo 2`
   and `Campo 3`; template variables can only source those mapped generic fields,
   and generic fields do not mutate CRM name or CRM situation. Authenticated
@@ -235,7 +236,15 @@ Fechado / validado:
   explicit variables when the test number is not a saved recipient; incomplete
   tests stop before provider calls or campaign aggregate mutation. CRM campaign
   history remains actual-send evidence only: draft, seed, import, test-send and
-  scheduled-not-run data stay excluded.
+  scheduled-not-run data stay excluded. Production FF-only deploy
+  `77e087a724fd53bcf06ed6d19267a655a06118b8` was applied on 2026-09-21 over
+  `55acabafd21a1a594b8650d4fd4ebc8bf14f0263`; backend and frontend builds
+  passed, schema/migration unchanged, reload limited to `re7-whatsapp-agent`
+  and `re7-admin-front`, worker preserved, health `ok/db=ok`. No provider call
+  or real send was executed by the deploy smoke. Authenticated campaign smoke
+  could not proceed because no usable real Demo credential/session was
+  available from the production shell; the documented Demo password was rejected
+  and token-forging was not used as validation evidence.
 
 ACTIVE P0:
 

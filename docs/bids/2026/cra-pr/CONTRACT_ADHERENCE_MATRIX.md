@@ -476,7 +476,7 @@ acceptance. Backend 118/118, complementary matrices 56/56 and 72/72 PASS;
 schema unchanged, migration none, no send, repair or deploy.
 
 Campaign flow integrity review, 2026-09-21: IMPLEMENTED LOCAL / VALIDATED /
-NO DEPLOY. The campaign CSV contract is now operator-stable and CRA-auditable:
+DEPLOYED / HEALTH VALIDATED / AUTHENTICATED CAMPAIGN SMOKE BLOCKED. The campaign CSV contract is now operator-stable and CRA-auditable:
 `Contato` identifies the recipient, `Campo 1`, `Campo 2` and `Campo 3` carry
 template values, and those generic fields do not update CRM name or CRM
 situation. Authenticated preview/report uses full normalized WhatsApp numbers

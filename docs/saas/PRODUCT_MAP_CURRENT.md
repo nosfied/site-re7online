@@ -607,7 +607,7 @@ send, repair or deploy. Campaign Composer Cleanup remains deployed with its own
 production validation pending.
 
 Campaign flow integrity review (2026-09-21): IMPLEMENTED LOCAL / VALIDATED /
-NO DEPLOY. Campaign CSV mapping is now `Contato`, `Campo 1`, `Campo 2`,
+DEPLOYED / HEALTH VALIDATED / AUTHENTICATED CAMPAIGN SMOKE BLOCKED. Campaign CSV mapping is now `Contato`, `Campo 1`, `Campo 2`,
 `Campo 3`; template variables can only source those generic fields and generic
 fields do not mutate CRM name/status. Authenticated preview/report shows full
 normalized WhatsApp identifiers and one table with ready, blocked and error
@@ -617,4 +617,9 @@ execution use persisted seed truth. Variable-template test-send requires
 explicit variables when the test target is not a saved recipient and stops
 before provider/aggregate mutation when incomplete. CRM campaign relationship
 history remains actual-send-only; draft, import, test-send and scheduled
-not-run records stay excluded.
+not-run records stay excluded. Production deploy
+`77e087a724fd53bcf06ed6d19267a655a06118b8` is live with backend/frontend build
+PASS, health PASS, schema unchanged and no migration. No real send/provider
+call was made by the smoke; authenticated campaign flow smoke is still pending
+because a valid real Demo session/credential was not available in the
+production shell.

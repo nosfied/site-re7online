@@ -410,7 +410,8 @@ Contacts campaign relationship view:
 
 Contacts + Campaigns UX refinement, 2026-09-19:
 
-- status: IMPLEMENTED LOCAL / OWNER PASS / NO DEPLOY;
+- status: IMPLEMENTED LOCAL / OWNER PASS / DEPLOYED / HEALTH VALIDATED /
+  AUTHENTICATED CAMPAIGN SMOKE BLOCKED;
 - scope: UX only, no domain rewrite;
 - Contacts rows open detail, actions are compact, authenticated same-tenant CRM
   shows full phone, duplicate summary fields are removed, active-send block uses

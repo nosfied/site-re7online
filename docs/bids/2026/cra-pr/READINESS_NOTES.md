@@ -778,7 +778,8 @@ PASS.
 
 ## Campaign flow integrity review - 2026-09-21
 
-Status: IMPLEMENTED LOCAL / VALIDATED / NO DEPLOY.
+Status: IMPLEMENTED LOCAL / VALIDATED / DEPLOYED / HEALTH VALIDATED /
+AUTHENTICATED CAMPAIGN SMOKE BLOCKED.
 
 The campaign creation flow now uses a clearer and auditable CSV mapping model:
 `Contato` plus `Campo 1`, `Campo 2` and `Campo 3`. Template variables may only
@@ -796,3 +797,14 @@ history remains actual-send-only: drafts, imports, test sends and scheduled
 campaigns not yet run are not shown as contact campaign history. This improves
 CRA operator evidence and traceability, but is not a real send and not formal
 CRA acceptance.
+
+Production deploy note: commit `77e087a724fd53bcf06ed6d19267a655a06118b8` was
+fast-forward deployed on 2026-09-21 over
+`55acabafd21a1a594b8650d4fd4ebc8bf14f0263`. Backend and frontend builds passed;
+schema and migrations were unchanged; only `re7-whatsapp-agent` and
+`re7-admin-front` were reloaded; `re7-whatsapp-web-worker` was preserved.
+Health returned `ok/db=ok`. The deploy smoke did not perform provider calls or
+real sends. Authenticated campaign API validation remains pending because no
+usable real Demo credential/session was available from the production shell;
+the documented Demo password was rejected and synthetic token attempts are not
+accepted as product validation evidence.
