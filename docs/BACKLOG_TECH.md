@@ -93,23 +93,27 @@ valida e comprovadamente seguro para mutacao; por isso o E2E real ficou
 `crmConversationStartRoutes.test.ts`: 2 falhas de expectativa de masking foram
 confirmadas identicas no base `fa507507` e nao sao regressao deste follow-up.
 
-P1 Privacy subject atomicity, 2026-09-21: LOCAL FIX PREPARED / NOT COMMITTED /
-NOT DEPLOYED. Incidente confirmado no tenant Demo para titular `****6787`,
+P1 Privacy subject atomicity, 2026-09-21: DEPLOYED / PRODUCTION HEALTH +
+READ-ONLY PRIVACY VALIDATED. Head implantado:
+`55acabafd21a1a594b8650d4fd4ebc8bf14f0263`. Incidente confirmado no tenant Demo para titular `****6787`,
 requestId `46f4aba3-23d6-422b-b018-520c540839d5`: a anonimizacao por titular
 executou a anonimização de conversa antes da transacao do titular e depois
 falhou em `ContactChannelIdentity` por colisao no indice unico
 `(clientId, channel, provider, channelAccountId, externalUserHash)` quando mais
-de uma CCI do mesmo tuple recebia o mesmo hash anonimo. A correcao local coloca
+de uma CCI do mesmo tuple recebia o mesmo hash anonimo. A correcao implantada coloca
 conversa, runtime DB state, Contact, CCI, Lead, LeadNote, mensagens/eventos e
 evento final `privacy.subject.anonymized` na mesma transacao Prisma; cleanup de
 runtime JSON ocorre somente apos commit e e best-effort. CCI deixa de usar
 `updateMany` amplo com hash compartilhado e passa a receber hash deterministico
-non-PII por identidade. Ate deploy dessa correcao, NAO EXECUTAR anonimizacao
-real por titular em producao; preview/busca continuam utilizaveis e
-anonimizacao de conversa isolada preserva contrato existente. Nenhum repair de
-`****6787` foi executado neste lote local.
+non-PII por identidade. O deploy teve backup PostgreSQL, FF-only, build backend,
+reload apenas de `re7-whatsapp-agent`, health/db OK, busca/preview de
+Privacidade 200, preview Lead-only 200 quando havia sujeito natural, nenhum
+confirm `ANONIMIZAR TITULAR`, nenhum repair de `****6787` e nenhum envio Meta
+iniciado pelo smoke. A anonimizacao real por titular continua PAUSADA ate plano
+e gate separados de repair/validacao; preview/busca continuam utilizaveis e
+anonimizacao de conversa isolada preserva contrato existente.
 
-Extensao local do mesmo P1: a anonimizacao por titular tambem desvincula o
+Extensao implantada do mesmo P1: a anonimizacao por titular tambem desvincula o
 titular de sementes privadas de campanha dentro da mesma transacao. Campanhas,
 templates, datas, agregados, ledger/billing e evidencias anonimas permanecem;
 o seed `campaign.seed.saved` remove apenas `leadIds`, destinatario privado,

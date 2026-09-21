@@ -548,16 +548,19 @@ titular canonico do CRM por Contact ou Lead-only, revisa a previa de impacto e c
 Lead, LeadNote, conversas relacionadas, runtime state, mensagens/eventos
 operacionais e preserva historico apenas de forma minimizada.
 
-Atualizacao P1 de 2026-09-21: a execucao real de anonimizacao por titular em
-producao deve ficar suspensa ate deploy da correcao de atomicidade. O incidente
-Demo `****6787` mostrou mutacao parcial quando a conversa foi anonimizada antes
-da transacao do titular e a etapa de CCI falhou por colisao de
-`externalUserHash`. A correcao local preparada move toda a mutacao DB do titular
-para uma unica transacao Prisma, usa hash anonimo deterministico por CCI e deixa
-cleanup de runtime apenas apos commit. Preview/busca seguem disponiveis; nenhum
-repair real de `****6787` foi executado neste lote local.
+Atualizacao P1 de 2026-09-21: a correcao de atomicidade foi implantada em
+producao no head `55acabafd21a1a594b8650d4fd4ebc8bf14f0263`, com backup,
+FF-only, build backend, reload apenas de `re7-whatsapp-agent`, health/db OK e
+smoke autenticado read-only de Privacidade. O incidente Demo `****6787` mostrou
+mutacao parcial quando a conversa foi anonimizada antes da transacao do titular
+e a etapa de CCI falhou por colisao de `externalUserHash`. A correcao implantada
+move toda a mutacao DB do titular para uma unica transacao Prisma, usa hash
+anonimo deterministico por CCI e deixa cleanup de runtime apenas apos commit.
+Preview/busca seguem disponiveis; nenhum `ANONIMIZAR TITULAR` foi confirmado no
+smoke e nenhum repair real de `****6787` foi executado. A anonimizacao real por
+titular permanece pausada ate gate separado de repair/validacao controlada.
 
-A mesma correcao local inclui desvinculacao de relacionamento com campanhas:
+A mesma correcao implantada inclui desvinculacao de relacionamento com campanhas:
 `campaign.seed.saved` preserva a campanha e agregados, mas remove do seed
 privado apenas os `leadIds`, destinatario, `recipientRefs` e componentes do
 titular anonimizado. Destinatarios nao relacionados permanecem. Eventos de

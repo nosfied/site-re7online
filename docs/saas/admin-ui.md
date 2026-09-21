@@ -218,12 +218,16 @@ Reconciliação documental de 2026-09-16:
 - Privacy subject atomicity P1 de 2026-09-21: incidente Demo `****6787`
   confirmou mutacao parcial quando anonimizacao de conversa foi gravada antes
   da transacao final do titular e a atualizacao ampla de CCI colidiu no indice
-  unico de identidade. Correcao local preparada: uma unica transacao Prisma para
+  unico de identidade. Correcao implantada no head
+  `55acabafd21a1a594b8650d4fd4ebc8bf14f0263`: uma unica transacao Prisma para
   dados DB do titular, hash anonimo por CCI, cleanup de runtime apenas apos
-  commit. Extensao local: seeds privados de campanha removem apenas vinculos do
+  commit. O deploy teve smoke autenticado read-only de busca/preview de
+  Privacidade e preview Lead-only; nenhum `ANONIMIZAR TITULAR` foi confirmado.
+  Extensao implantada: seeds privados de campanha removem apenas vinculos do
   titular (`leadIds`, destinatario, `recipientRefs`, componentes), preservando
-  campanha/agregados e destinatarios nao relacionados. Ate deploy, nao executar
-  anonimizacao real por titular em producao;
+  campanha/agregados e destinatarios nao relacionados. A anonimizacao real por
+  titular segue pausada ate gate separado de repair/validacao; `****6787`
+  permanece pendente de repair controlado;
 - Marketing templates com mídia ficam em P2: categoria MARKETING, headers
   IMAGE/VIDEO, exemplos/handles Meta, preview, variáveis, botões suportados,
   submissão, aprovação/rejeição/motivo, envio aprovado e fonte oficial de preço
