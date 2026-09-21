@@ -556,9 +556,17 @@ mutacao parcial quando a conversa foi anonimizada antes da transacao do titular
 e a etapa de CCI falhou por colisao de `externalUserHash`. A correcao implantada
 move toda a mutacao DB do titular para uma unica transacao Prisma, usa hash
 anonimo deterministico por CCI e deixa cleanup de runtime apenas apos commit.
-Preview/busca seguem disponiveis; nenhum `ANONIMIZAR TITULAR` foi confirmado no
-smoke e nenhum repair real de `****6787` foi executado. A anonimizacao real por
-titular permanece pausada ate gate separado de repair/validacao controlada.
+Preview/busca seguem disponiveis. O smoke inicial nao confirmou
+`ANONIMIZAR TITULAR`; em seguida, o owner autorizou repair controlado para
+`****6787` e exatamente uma anonimização real foi executada via workflow
+canonico de Privacidade. Resultado: Contact anonimizado, CCI alvo destacada com
+hash anonimo unico, conversa previamente anonimizada preservada, evento
+`privacy.subject.anonymized` registrado, oito relacoes de seed de campanha
+removidas, campanhas/agregados e destinatarios nao relacionados preservados,
+sem novo Contact/Lead/Conversation/OutboundMessage, sem provider call e sem
+envio real. Pos-preview retornou sujeito `anonymized` e
+`campaignRelationships=0`. A anonimizacao real por titular pode ser despausada
+sob o fluxo normal ADMIN + preview + confirmacao forte.
 
 A mesma correcao implantada inclui desvinculacao de relacionamento com campanhas:
 `campaign.seed.saved` preserva a campanha e agregados, mas remove do seed

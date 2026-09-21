@@ -109,9 +109,20 @@ non-PII por identidade. O deploy teve backup PostgreSQL, FF-only, build backend,
 reload apenas de `re7-whatsapp-agent`, health/db OK, busca/preview de
 Privacidade 200, preview Lead-only 200 quando havia sujeito natural, nenhum
 confirm `ANONIMIZAR TITULAR`, nenhum repair de `****6787` e nenhum envio Meta
-iniciado pelo smoke. A anonimizacao real por titular continua PAUSADA ate plano
-e gate separados de repair/validacao; preview/busca continuam utilizaveis e
-anonimizacao de conversa isolada preserva contrato existente.
+iniciado pelo smoke. Repair controlado posterior de `****6787`, autorizado pelo
+owner em 2026-09-21, executou exatamente uma anonimizacao real via workflow
+canonico de Privacidade no Contact `e96d8299-b36f-4118-a406-f2a365c5630d`:
+Contact anonimizado, CCI alvo destacada com hash anonimo unico no mesmo tuple,
+conversa previamente anonimizada preservada, `privacy.subject.anonymized`
+registrado, oito vinculos de seed de campanha removidos, oito `recipientRefs`
+removidos, dois componentes por destinatario removidos, campanhas/agregados e
+destinatarios nao relacionados preservados. Nenhum novo Contact, Lead,
+Conversation, OutboundMessage, provider call ou envio real foi criado; health/db
+OK, sem P2002/P2023/unhandledRejection e sem restart de processo. Pos-preview
+retornou sujeito `anonymized` e `campaignRelationships=0`. Com o repair
+concluido, a anonimizacao real por titular pode ser despausada sob o fluxo
+normal ADMIN + preview + confirmacao forte; anonimizacao de conversa isolada
+preserva contrato existente.
 
 Extensao implantada do mesmo P1: a anonimizacao por titular tambem desvincula o
 titular de sementes privadas de campanha dentro da mesma transacao. Campanhas,

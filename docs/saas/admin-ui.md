@@ -225,9 +225,12 @@ Reconciliação documental de 2026-09-16:
   Privacidade e preview Lead-only; nenhum `ANONIMIZAR TITULAR` foi confirmado.
   Extensao implantada: seeds privados de campanha removem apenas vinculos do
   titular (`leadIds`, destinatario, `recipientRefs`, componentes), preservando
-  campanha/agregados e destinatarios nao relacionados. A anonimizacao real por
-  titular segue pausada ate gate separado de repair/validacao; `****6787`
-  permanece pendente de repair controlado;
+  campanha/agregados e destinatarios nao relacionados. Repair controlado de
+  `****6787` foi executado em 2026-09-21 via fluxo canonico: sujeito convergiu
+  para `anonymized`, seed de campanha ficou sem vinculos pessoais do titular,
+  campanhas/agregados foram preservados, nenhum provider call/envio real ocorreu
+  e nao houve P2002/P2023/restart. A anonimizacao real por titular pode operar
+  sob o fluxo ADMIN normal com preview e confirmacao forte;
 - Marketing templates com mídia ficam em P2: categoria MARKETING, headers
   IMAGE/VIDEO, exemplos/handles Meta, preview, variáveis, botões suportados,
   submissão, aprovação/rejeição/motivo, envio aprovado e fonte oficial de preço
