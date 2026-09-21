@@ -1105,12 +1105,14 @@ function CrmContactDetailDrawer({
                               Atualizada em {formatDateTime(conversation.updatedAt)}
                             </div>
                           </div>
-                          <ActionIconButton
-                            label="Abrir conversa na caixa de entrada"
-                            icon=">"
-                            onClick={() => onOpenInbox(conversation.conversationIdentity)}
-                            variant="primary"
-                          />
+                          {conversation.canOpenInInbox ? (
+                            <ActionIconButton
+                              label="Abrir conversa na caixa de entrada"
+                              icon=">"
+                              onClick={() => onOpenInbox(conversation.conversationIdentity)}
+                              variant="primary"
+                            />
+                          ) : null}
                         </div>
                       ))
                     )}
@@ -1288,21 +1290,6 @@ function CsvImportModal({
 	  const mappingKey = JSON.stringify(mapping);
 	  const loading = previewLoading || importLoading;
 	  const reportVisible = Boolean(summary);
-
-	  const resetImportState = () => {
-	    previewRequestSeq.current += 1;
-	    setCsvText("");
-	    setCsvFileName("");
-	    setPhoneColumn("");
-	    setNameColumn("");
-	    setCrmSituationColumn("");
-	    setPreview(null);
-	    setSummary(null);
-	    setLocalError(null);
-	    setPreviewMappingKey("");
-	    setPreviewLoading(false);
-	    setImportLoading(false);
-	  };
 
   const readFile = async (file: File | null) => {
     if (!file) return;
@@ -1498,7 +1485,7 @@ function CsvImportModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 px-3 py-4 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <button type="button" aria-label="Fechar importação" className="absolute inset-0 cursor-default disabled:cursor-wait" onClick={onClose} disabled={loading} />
+      <button type="button" aria-label={reportVisible ? "Fechar importação" : "Cancelar importação"} className="absolute inset-0 cursor-default disabled:cursor-wait" onClick={onClose} disabled={loading} />
       <section className="theme-bg relative grid max-h-[calc(100vh-2rem)] w-full max-w-3xl grid-rows-[auto_1fr] overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
         <header className="theme-surface-strong border-b p-4">
           <h2 className="text-lg font-bold text-white">Importar CSV</h2>
@@ -1666,13 +1653,8 @@ function CsvImportModal({
             ) : null}
             <div className="flex flex-wrap justify-end gap-2">
               <button type="button" onClick={onClose} disabled={loading} className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
-                Fechar
+                {reportVisible ? "Fechar" : "Cancelar"}
               </button>
-              {!reportVisible && (preview || csvText) ? (
-                <button type="button" onClick={resetImportState} disabled={loading} className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
-                  Cancelar importação
-                </button>
-              ) : null}
               {!reportVisible ? (
                 <button
                   type="button"

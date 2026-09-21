@@ -192,14 +192,18 @@ Reconciliação documental de 2026-09-16:
   sombra, usando fontes canonicas de campanha/outbound/billing/opt-out. A lista
   deve mostrar agregado leve e o detalhe deve abrir sob demanda, seguindo o
   padrao aprovado de linhas expansivas quando fizer sentido;
-- hardening local de 2026-09-20: `Origem` em Contacts passa a representar
-  proveniencia do registro CRM/operacional, derivada somente de evidencia
-  canonica existente. Legados sem prova confiavel exibem `Não identificado`.
-  A importacao CSV concluida deixa de mostrar `Cancelar importação`, mantendo
-  `Fechar`. A acao `Abrir conversa` no CRM so deve aparecer para conversas
-  projetaveis na Inbox humana pela politica canonica; historico BOT-only ou
-  sem destino humano completo continua preservado, mas nao vira atalho falso de
-  Inbox. Status: LOCAL VALIDATED / NOT DEPLOYED;
+- hardening local de 2026-09-21: `Origem` em Contacts passa a representar a
+  primeira proveniencia confiavel do registro CRM/operacional, derivada somente
+  de evidencia canonica existente. Importacao CSV agora grava evidencia
+  individual por contato via evento de auditoria existente; contato manual
+  depois atualizado por CSV continua `Cadastro manual`, contato criado por CSV
+  mostra `Importação CSV`, e legados sem prova confiavel exibem `Não
+  identificado`. O modal CSV usa `Cancelar` antes do processamento e `Fechar`
+  no relatorio concluido, sem dupla `Fechar` + `Cancelar importação`. A acao
+  `Abrir conversa` no CRM so deve aparecer para conversas projetaveis na Inbox
+  humana pela politica canonica; historico BOT-only ou sem destino humano
+  completo continua preservado, mas nao vira atalho falso de Inbox. Status:
+  LOCAL VALIDATED / NOT DEPLOYED;
 - Marketing templates com mídia ficam em P2: categoria MARKETING, headers
   IMAGE/VIDEO, exemplos/handles Meta, preview, variáveis, botões suportados,
   submissão, aprovação/rejeição/motivo, envio aprovado e fonte oficial de preço

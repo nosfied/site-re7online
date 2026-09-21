@@ -116,15 +116,19 @@ to the exact phone/name/CRM Situation mapping used; mapping changes stale the
 visible preview, block import and require refreshed preview. No schema,
 migration, provider call, real send or production deploy occurred.
 
-CRM post-deploy hardening, 2026-09-20: LOCAL VALIDATED / NOT DEPLOYED. CRM
-contact origin now means provenance of the operational/CRM record and is derived
-from canonical existing evidence only: manual, CSV import, campaign/audience,
-conversation/inbound, system/integration or unknown for legacy records without
-reliable evidence. No new persistence field was added. Contacts CSV completed
-state keeps close but hides cancel/import semantics after processing. CRM keeps
-historical conversation count/history, but Inbox-open fields are populated only
-for conversations projectable by the canonical human Inbox policy; BOT-only
-historical records do not create false Inbox navigation.
+CRM post-deploy hardening, 2026-09-21: LOCAL VALIDATED / NOT DEPLOYED. CRM
+contact origin now means first reliable provenance of the operational/CRM record
+and is derived from canonical evidence only: manual, CSV import,
+campaign/audience, conversation/inbound, system/integration or unknown for
+legacy records without reliable evidence. CSV confirm persists individual
+per-contact provenance through the existing audit event; no new persistence
+field was added. Manual contacts later updated by CSV remain `Cadastro manual`;
+CSV-created contacts show `Importação CSV`. Contacts CSV state has one secondary
+action per state: `Cancelar` before processing and `Fechar` after completed
+summary. CRM keeps historical conversation count/history, but Inbox-open fields
+and detail/history action are populated only for conversations projectable by
+the canonical human Inbox policy; BOT-only historical records do not create
+false Inbox navigation.
 
 CRA-PR controlled campaign readiness, 2026-09-15: the product capability for
 template request/review/submission, campaign drafts/import, lifecycle controls,

@@ -139,6 +139,7 @@ export type CrmContactsPayload = {
 export type CrmContactDetailConversation = {
   conversationId: string;
   conversationIdentity: string;
+  canOpenInInbox: boolean;
   protocol: string;
   channel: string | null;
   provider: string | null;
@@ -448,7 +449,8 @@ function classifyContactOriginEvent(event: {
 function buildContactOriginLabel(params: {
   events: Array<{ eventName: string; payloadJson: Prisma.JsonValue; createdAt: Date }>;
 }) {
-  for (const event of params.events) {
+  const events = [...params.events].sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
+  for (const event of events) {
     const origin = classifyContactOriginEvent(event);
     if (origin) return origin;
   }
@@ -793,7 +795,7 @@ export async function buildCrmContactsPayload(
           eventName: { in: CONTACT_PROVENANCE_EVENT_NAMES },
           waIdCanonical: { in: canonicalWaIds },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: "asc" },
         take: Math.min(identityKeys.length * 4, 1200),
         select: {
           waId: true,
@@ -1199,7 +1201,7 @@ export async function buildCrmContactDetailPayload(
           eventName: { in: CONTACT_PROVENANCE_EVENT_NAMES },
           waIdCanonical: { in: identityKeys },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: "asc" },
         take: 5,
         select: {
           waId: true,
@@ -1384,9 +1386,11 @@ export async function buildCrmContactDetailPayload(
       const departmentId = runtime?.departmentId ?? conversation.departmentId ?? null;
       const queueId = runtime?.queueId ?? null;
       const assignedUserId = runtime?.assignedUserId ?? null;
+      const canOpenInInbox = isHumanInboxProjectableConversation(conversation, runtime);
       return {
         conversationId: conversation.id,
         conversationIdentity: getIdentityKey(conversation),
+        canOpenInInbox,
         protocol: getServiceCycleForDisplay(runtime)?.protocol ?? buildConversationProtocol(conversation),
         channel: runtime?.channel ?? conversation.channel,
         provider: conversation.provider,

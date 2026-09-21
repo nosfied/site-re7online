@@ -1048,7 +1048,7 @@ export async function confirmCrmContactCsvImport(
 	        requestId: `${params.requestId}:${resultlessHash(row.phone)}`,
 	        source: "crm_import",
 	        crmStatusId: row.crmStatusId,
-	        audit: false,
+	        audit: params.audit,
 	      });
 	      if (result.createdContact || result.createdLead) created += 1;
 	      else if (

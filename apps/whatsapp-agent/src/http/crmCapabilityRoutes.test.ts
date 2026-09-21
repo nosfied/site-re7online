@@ -735,7 +735,16 @@ test("CRM contact create preserves existing provisional contact without changing
 });
 
 test("CRM CSV import previews without mutation and confirms idempotently", async () => {
-  const csvText = "\uFEFFnome;numero\nContato CSV;5541998877777\nSem Nome;5541998877778\nDuplicado;5541998877777\nInválido;abc\n";
+  const manual = await request<{ ok: boolean; item: { leadId: string } }>(
+    "POST",
+    "/app/crm/contacts",
+    businessSupervisor,
+    { name: "Contato Manual Antes CSV", phone: "5541998877799" }
+  );
+  assert.equal(manual.status, 201);
+  assert.equal(manual.body.ok, true);
+
+  const csvText = "\uFEFFnome;numero\nContato CSV;5541998877777\nSem Nome;5541998877778\nDuplicado;5541998877777\nManual Atualizado CSV;5541998877799\nInválido;abc\n";
   const conversationsBefore = await prisma.conversation.count({ where: { clientId: businessClientId } });
   const messagesBefore = await prisma.message.count({
     where: { conversation: { clientId: businessClientId } },
@@ -758,11 +767,11 @@ test("CRM CSV import previews without mutation and confirms idempotently", async
   });
   assert.equal(preview.status, 200);
   assert.equal(preview.body.ok, true);
-  assert.equal(preview.body.totalRows, 4);
-  assert.equal(preview.body.validRows, 2);
+  assert.equal(preview.body.totalRows, 5);
+  assert.equal(preview.body.validRows, 3);
   assert.equal(preview.body.invalidRows, 1);
   assert.equal(preview.body.duplicatesInFile, 1);
-  assert.equal(preview.body.readyToImport, 2);
+  assert.equal(preview.body.readyToImport, 3);
   assert.equal(preview.body.sampleErrors.length, 2);
   assert.equal(await prisma.contact.count({ where: { clientId: businessClientId } }), contactsBefore);
   assert.equal(await prisma.lead.count({ where: { tenantId: businessClientId } }), leadsBefore);
@@ -772,6 +781,7 @@ test("CRM CSV import previews without mutation and confirms idempotently", async
     received: number;
     created: number;
     reused: number;
+    updated: number;
     invalid: number;
     duplicates: number;
   }>("POST", "/app/crm/contacts/import/confirm", businessSupervisor, {
@@ -780,9 +790,10 @@ test("CRM CSV import previews without mutation and confirms idempotently", async
   });
   assert.equal(confirm.status, 200);
   assert.equal(confirm.body.ok, true);
-  assert.equal(confirm.body.received, 4);
+  assert.equal(confirm.body.received, 5);
   assert.equal(confirm.body.created, 2);
-  assert.equal(confirm.body.reused, 0);
+  assert.equal(confirm.body.reused, 1);
+  assert.equal(confirm.body.updated, 1);
   assert.equal(confirm.body.invalid, 1);
   assert.equal(confirm.body.duplicates, 1);
 
@@ -795,7 +806,19 @@ test("CRM CSV import previews without mutation and confirms idempotently", async
   assert.equal(repeat.status, 200);
   assert.equal(repeat.body.ok, true);
   assert.equal(repeat.body.created, 0);
-  assert.equal(repeat.body.reused, 2);
+  assert.equal(repeat.body.reused, 3);
+
+  const importedList = await request<{
+    ok: boolean;
+    items: Array<{ phoneDisplay: string | null; importedSource: string | null }>;
+  }>("GET", "/app/crm/contacts?limit=100", businessSupervisor);
+  assert.equal(importedList.status, 200);
+  const csvCreated = importedList.body.items.find((item) => item.phoneDisplay === "5541998877777");
+  assert.ok(csvCreated);
+  assert.equal(csvCreated.importedSource, "Importação CSV");
+  const manualThenCsv = importedList.body.items.find((item) => item.phoneDisplay === "5541998877799");
+  assert.ok(manualThenCsv);
+  assert.equal(manualThenCsv.importedSource, "Cadastro manual");
 
   assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId } }), conversationsBefore);
   assert.equal(await prisma.message.count({ where: { conversation: { clientId: businessClientId } } }), messagesBefore);
@@ -807,6 +830,19 @@ test("CRM CSV import previews without mutation and confirms idempotently", async
   });
   assert.doesNotMatch(JSON.stringify(summaryEvent.payloadJson), /888877777|888877778|Contato CSV/);
 
+  const csvProvenanceEvent = await prisma.event.findFirstOrThrow({
+    where: {
+      clientId: businessClientId,
+      eventName: "crm.contact.created",
+      payloadJson: { path: ["source"], equals: "crm_import" },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { payloadJson: true, requestId: true },
+  });
+  assert.equal((csvProvenanceEvent.payloadJson as { source?: string }).source, "crm_import");
+  assert.match(csvProvenanceEvent.requestId ?? "", /^crm\.contact\.created:/);
+  assert.doesNotMatch(JSON.stringify(csvProvenanceEvent.payloadJson), /888877777|888877778|Contato CSV/);
+
   const agentPreview = await request<ErrorPayload>(
     "POST",
     "/app/crm/contacts/import/preview",
@@ -816,7 +852,7 @@ test("CRM CSV import previews without mutation and confirms idempotently", async
   assert.equal(agentPreview.status, 403);
   assert.equal(getErrorCode(agentPreview.body), "forbidden");
 
-  const cleanupWaIds = ["5541888877777", "5541888877778"]
+  const cleanupWaIds = ["5541998877777", "5541998877778", "5541998877799"]
     .map((value) => normalizeOptOutWaId(value)?.waIdCanonical)
     .filter((value): value is string => Boolean(value));
   await prisma.lead.deleteMany({ where: { tenantId: businessClientId, waId: { in: cleanupWaIds } } });
@@ -985,6 +1021,28 @@ test("CRM contacts read model lists tenant-scoped leads with safe identifiers", 
   assert.equal(projectable.lastConversationIdentity, `${prefix}-projectable-waid`);
   assert.match(projectable.lastProtocol ?? "", /^CVT-[0-9A-F]{12}$/);
   assert.equal(projectable.lastConversationStatus, "WAITING");
+
+  const historicalDetail = await request<{
+    ok: boolean;
+    item: { conversationsCount: number; lastConversationId: string | null };
+    conversations: Array<{ conversationId: string; conversationIdentity: string; canOpenInInbox: boolean }>;
+  }>("GET", `/app/crm/contacts/${encodeURIComponent(leadId)}`, businessAdmin);
+  assert.equal(historicalDetail.status, 200);
+  assert.equal(historicalDetail.body.item.conversationsCount, 1);
+  assert.equal(historicalDetail.body.item.lastConversationId, null);
+  assert.equal(historicalDetail.body.conversations[0]?.conversationId, leadConversationId);
+  assert.equal(historicalDetail.body.conversations[0]?.canOpenInInbox, false);
+
+  const projectableDetail = await request<{
+    ok: boolean;
+    item: { conversationsCount: number; lastConversationId: string | null };
+    conversations: Array<{ conversationId: string; conversationIdentity: string; canOpenInInbox: boolean }>;
+  }>("GET", `/app/crm/contacts/${encodeURIComponent(projectableLead.id)}`, businessAdmin);
+  assert.equal(projectableDetail.status, 200);
+  assert.equal(projectableDetail.body.item.conversationsCount, 1);
+  assert.equal(projectableDetail.body.item.lastConversationId, projectableConversationId);
+  assert.equal(projectableDetail.body.conversations[0]?.conversationId, projectableConversationId);
+  assert.equal(projectableDetail.body.conversations[0]?.canOpenInInbox, true);
 
   const instagram = response.body.items.find((item) => item.leadId === instagramLeadId);
   assert.ok(instagram);
@@ -1460,7 +1518,7 @@ test("CRM and inbox resolve related conversations through confirmed WhatsApp leg
   const detail = await request<{
     ok: boolean;
     item: { displayName: string | null; conversationsCount: number; lastConversationId: string | null };
-    conversations: Array<{ conversationId: string; conversationIdentity: string; assignedUserName: string | null }>;
+    conversations: Array<{ conversationId: string; conversationIdentity: string; canOpenInInbox: boolean; assignedUserName: string | null }>;
     blockingConversation: {
       conversationId: string;
       conversationIdentity: string;
@@ -1473,6 +1531,7 @@ test("CRM and inbox resolve related conversations through confirmed WhatsApp leg
   assert.equal(detail.body.item.conversationsCount, 1);
   assert.equal(detail.body.item.lastConversationId, conversation.id);
   assert.equal(detail.body.conversations[0]?.conversationIdentity, "558494786787");
+  assert.equal(detail.body.conversations[0]?.canOpenInInbox, true);
   assert.equal(detail.body.conversations[0]?.assignedUserName, businessAdmin.name);
   assert.equal(detail.body.blockingConversation?.conversationId, conversation.id);
   assert.equal(detail.body.blockingConversation?.conversationIdentity, "558494786787");

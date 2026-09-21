@@ -29,6 +29,17 @@ alteradas. A validade da previa fica presa ao mapeamento exato de colunas; se
 telefone, nome ou `Situação no CRM` muda, a previa fica stale, a importacao e
 bloqueada e o operador precisa atualizar a previa.
 
+Atualizacao local de 2026-09-21: CRM owner-fails hardening esta LOCAL VALIDATED
+/ NOT DEPLOYED. Importacao CSV de Contacts grava proveniencia individual por
+contato usando o evento de auditoria existente; `Origem` segue sem novo campo
+persistido e usa a primeira evidencia confiavel: manual continua manual mesmo
+apos CSV posterior, CSV criado mostra `Importação CSV`, e legado sem evidencia
+permanece `Não identificado`. O detalhe/historico de atendimento no CRM preserva
+conversas historicas, mas so mostra acao de abrir na Inbox quando a conversa e
+projetavel pela politica canonica da Inbox humana. O modal CSV usa `Cancelar`
+antes do processamento e `Fechar` apos o resumo concluido, sem a duplicidade
+Fechar/Cancelar.
+
 Atualizacao de 2026-09-20: Data Subject Privacy / LGPD contact-centric
 anonymization esta OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY DEPLOYED / PRODUCTION HEALTH VALIDATED. A tela de
 Privacidade passa a permitir buscar e selecionar um titular no CRM autenticado,

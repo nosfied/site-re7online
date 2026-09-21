@@ -425,6 +425,7 @@ export type AppCrmCampaignRelationshipHistoryItem = {
 export type AppCrmContactConversationItem = {
   conversationId: string;
   conversationIdentity: string;
+  canOpenInInbox: boolean;
   protocol: string;
   channel: string | null;
   provider: string | null;

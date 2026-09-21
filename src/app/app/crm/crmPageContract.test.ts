@@ -98,6 +98,27 @@ test("CRM contact exclusion does not report mutation failure when only list refr
   assert.ok(pageSource.includes("try {\n        await loadContacts(session, page);"));
 });
 
+test("CRM contact detail opens only Inbox-projectable historical conversations", () => {
+  const detailBlock = pageSource.slice(
+    pageSource.indexOf('<DetailSection title="Atendimento">'),
+    pageSource.indexOf('</DetailSection>', pageSource.indexOf('<DetailSection title="Atendimento">'))
+  );
+  assert.ok(detailBlock.includes("conversation.canOpenInInbox ? ("));
+  assert.ok(detailBlock.includes('label="Abrir conversa na caixa de entrada"'));
+  assert.ok(detailBlock.includes("onOpenInbox(conversation.conversationIdentity)"));
+});
+
+test("CRM CSV import modal uses one secondary action per import state", () => {
+  const importBlock = pageSource.slice(
+    pageSource.indexOf("function CsvImportModal"),
+    pageSource.indexOf("export default function AppCrmContactsPage")
+  );
+  assert.ok(importBlock.includes('{reportVisible ? "Fechar" : "Cancelar"}'));
+  assert.ok(importBlock.includes('aria-label={reportVisible ? "Fechar importação" : "Cancelar importação"}'));
+  assert.ok(!importBlock.includes("Cancelar importação\n                </button>"));
+  assert.ok(!importBlock.includes("resetImportState"));
+});
+
 test("CRM detail keeps close navigation and edit semantics without detail delete", () => {
   const detailStart = pageSource.indexOf('<aside');
   const shellBlock = pageSource.slice(
@@ -157,7 +178,8 @@ test("CRM CSV import requires preview before confirmation and locks duplicate pr
   assert.ok(modalBlock.includes("previewMappingDirty || preview.readyToImport === 0"));
   assert.ok(modalBlock.includes("{preview && !reportVisible ? ("));
   assert.ok(modalBlock.includes("Confirmar importação"));
-  assert.ok(modalBlock.includes("Cancelar importação"));
+  assert.ok(modalBlock.includes('{reportVisible ? "Fechar" : "Cancelar"}'));
+  assert.ok(!modalBlock.includes("Cancelar importação\n                </button>"));
 });
 
 test("CRM CSV import hides cancel and import actions after completed summary", () => {
@@ -166,10 +188,11 @@ test("CRM CSV import hides cancel and import actions after completed summary", (
     pageSource.indexOf("export default function AppCrmContactsPage")
   );
   assert.ok(modalBlock.includes("const reportVisible = Boolean(summary);"));
-  assert.ok(modalBlock.includes("!reportVisible && (preview || csvText) ? ("));
   assert.ok(modalBlock.includes("!reportVisible ? (\n                <button"));
   assert.ok(modalBlock.includes("const previewReady = Boolean(preview && !reportVisible);"));
   assert.ok(modalBlock.includes("{previewReady ? ("));
+  assert.ok(modalBlock.includes('{reportVisible ? "Fechar" : "Cancelar"}'));
+  assert.ok(!modalBlock.includes("resetImportState"));
 });
 
 test("CRM CSV import can refresh preview after column mapping changes", () => {

@@ -29,6 +29,8 @@ test("CRM Inbox action uses only human-Inbox-projectable conversations", () => {
   assert.ok(source.includes("shouldProjectConversationToHumanInbox({"));
   assert.ok(source.includes("const lastInboxConversation ="));
   assert.ok(source.includes("const latestInboxConversation ="));
+  assert.ok(source.includes("canOpenInInbox"));
+  assert.ok(source.includes("const canOpenInInbox = isHumanInboxProjectableConversation(conversation, runtime);"));
   assert.ok(source.includes("lastConversationId: lastInboxConversation?.id ?? null"));
   assert.ok(source.includes("lastConversationIdentity: lastInboxConversation ? getIdentityKey(lastInboxConversation) : null"));
   assert.ok(source.includes("conversationsCount: conversationSummary.count"));
