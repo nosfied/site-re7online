@@ -5158,6 +5158,10 @@ export async function previewAppCampaignCsv(
     templateId: string;
     csvText: string;
     mapping: {
+      contactColumn?: string | null;
+      field1Column?: string | null;
+      field2Column?: string | null;
+      field3Column?: string | null;
       phoneColumn?: string | null;
       nameColumn?: string | null;
       crmSituationColumn?: string | null;
@@ -5178,6 +5182,10 @@ export async function createAppCampaignDraftFromCsv(
     templateId: string;
     csvText: string;
     mapping: {
+      contactColumn?: string | null;
+      field1Column?: string | null;
+      field2Column?: string | null;
+      field3Column?: string | null;
       phoneColumn?: string | null;
       nameColumn?: string | null;
       crmSituationColumn?: string | null;
@@ -5257,11 +5265,12 @@ export async function resumeAppCampaign(
 export async function sendAppCampaignTest(
   session: AppSession,
   campaignId: string,
-  waId: string
+  waId: string,
+  variables?: Record<string, string>
 ): Promise<{ ok: true; messageId: string }> {
   return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}/test-send`, {
     method: "POST",
-    body: JSON.stringify({ waId }),
+    body: JSON.stringify({ waId, variables: variables ?? {} }),
   });
 }
 

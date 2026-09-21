@@ -1139,15 +1139,23 @@ test("CRM contact campaign relationship uses canonical campaign evidence without
       updatedAt: new Date("2026-09-03T10:00:00.000Z"),
     },
   });
-  await prisma.event.create({
+  await prisma.outboundMessage.create({
     data: {
       clientId: businessClientId,
       waId: `${prefix}-lead-waid`,
       waIdCanonical: `${prefix}-lead-waid`,
-      eventName: "campaign.recipient.import_blocked",
-      messageId: conflictCampaign.id,
-      requestId: `${prefix}-campaign-conflict`,
-      payloadJson: { recipient: `${prefix}-lead-waid`, reason: "identity_conflict" },
+      messageId: `campaign.${conflictCampaign.id}.1`,
+      type: "TEMPLATE",
+      status: "FAILED",
+      templateName: "data_exame",
+      errorBody: "identity_conflict",
+      rawPayload: {
+        campaignId: conflictCampaign.id,
+        metaStatus: {
+          lastStatus: "failed",
+          statusDetail: "identity_conflict",
+        },
+      },
       createdAt: new Date("2026-09-03T10:00:00.000Z"),
     },
   });
@@ -1187,7 +1195,7 @@ test("CRM contact campaign relationship uses canonical campaign evidence without
   assert.equal(contact.campaignRelationship.campaignCount, 3);
   assert.equal(contact.campaignRelationship.latestCampaignId, conflictCampaign.id);
   assert.equal(contact.campaignRelationship.latestCampaignName, "Campanha CRM Conflito");
-  assert.equal(contact.campaignRelationship.latestRecipientStatus, "IDENTITY_CONFLICT");
+  assert.equal(contact.campaignRelationship.latestRecipientStatus, "FAILED");
   assert.equal(contact.campaignRelationship.latestResultReason, "identity_conflict");
   assert.equal(contact.campaignRelationship.hasOptOutBlock, true);
   assert.doesNotMatch(JSON.stringify(list.body), /Campanha Outro Tenant|R\$|USD|billing|contractPrice/i);

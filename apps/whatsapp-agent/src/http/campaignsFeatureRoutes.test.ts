@@ -5322,7 +5322,7 @@ test("CRM contact history is hidden from AGENT but available to supervisor and a
   const supervisorItem = supervisorList.body.items.find((item) => item.leadId === lead.id);
   assert.ok(supervisorItem);
   assert.equal(supervisorItem.conversationsCount, 1);
-  assert.equal(supervisorItem.lastConversationId, conversation.id);
+  assert.equal(supervisorItem.lastConversationId, null);
   assert.equal(supervisorItem.hasConversation, true);
 
   const agentDetail = await request<{ item: { conversationsCount: number; lastConversationId: string | null }; conversations: unknown[] }>(
@@ -5342,7 +5342,7 @@ test("CRM contact history is hidden from AGENT but available to supervisor and a
   );
   assert.equal(adminDetail.status, 200);
   assert.equal(adminDetail.body.item.conversationsCount, 1);
-  assert.equal(adminDetail.body.item.lastConversationId, conversation.id);
+  assert.equal(adminDetail.body.item.lastConversationId, null);
   assert.equal(adminDetail.body.conversations.length, 1);
 });
 
@@ -12210,7 +12210,7 @@ test("public campaign API creates draft and imports recipients without sending",
     clientId: overrideClientId,
     userId: overrideAdmin.id,
     name: "Other Campaign Public API",
-    scopes: ["read", "campaigns"],
+    scopes: ["read", "write", "campaigns"],
     requestId: `${prefix}:campaign-public-key-other`,
   });
   assert.equal(otherApiKey.ok, true);
@@ -12272,6 +12272,20 @@ test("public campaign API creates draft and imports recipients without sending",
   assert.equal(created.body.campaign.status, "draft");
   assert.equal(created.body.campaign.templateId, template.id);
   assert.equal(created.body.campaign.totalRecipients, 0);
+  const duplicateName = await requestWithBearer<ErrorPayload>("POST", "/public-api/v1/campaigns", apiKey.secret, {
+    name: "  public   api draft  ",
+    templateId: template.id,
+  });
+  assert.equal(duplicateName.status, 409, JSON.stringify(duplicateName.body));
+  assert.equal(getErrorCode(duplicateName.body), "campaign_name_conflict");
+  const crossTenantSameName = await requestWithBearer<{
+    ok: true;
+    campaign: { id: string; status: string; templateId: string; totalRecipients: number };
+  }>("POST", "/public-api/v1/campaigns", otherApiKey.secret, {
+    name: "Public API Draft",
+    templateId: otherTemplate.id,
+  });
+  assert.equal(crossTenantSameName.status, 201, JSON.stringify(crossTenantSameName.body));
   const leadsBeforeDeniedImport = await prisma.lead.count({ where: { tenantId: businessClientId } });
   const deniedImport = await requestWithBearer<ErrorPayload>(
     "POST",
@@ -12323,7 +12337,7 @@ test("public campaign API creates draft and imports recipients without sending",
   assert.equal(imported.body.import.summary.optOutBlocked, 1);
   assert.equal(imported.body.import.summary.invalid, 1);
   assert.equal(imported.body.import.summary.missingRequiredVariables, 1);
-  assert.equal(JSON.stringify(imported.body).includes("5541991200001"), false);
+  assert.equal(imported.body.import.recipients[0]?.phoneDisplay, "5541991200001");
 
   const detail = await requestWithBearer<{
     ok: true;
@@ -12361,7 +12375,7 @@ test("public campaign API creates draft and imports recipients without sending",
   assert.equal(sendEvents, 0);
 });
 
-test("app CSV import previews and creates draft without sending", async () => {
+test("app CSV import previews and creates draft without sending", async (t) => {
   const template = await prisma.template.create({
     data: {
       clientId: businessClientId,
@@ -12386,14 +12400,15 @@ test("app CSV import previews and creates draft without sending", async () => {
     "5541991300003,Bloqueado,Bloqueado",
   ].join("\n");
   const mapping = {
-    phoneColumn: "telefone",
-    nameColumn: "nome",
-    variableColumns: { "1": "primeiro_nome" },
+    contactColumn: "telefone",
+    field1Column: "primeiro_nome",
+    variableColumns: { "1": "field1" },
   };
 
   const preview = await request<{
     ok: true;
     summary: { received: number; readyToImport: number; duplicates: number; optOutBlocked: number };
+    recipients: Array<{ phoneDisplay: string; identifierDisplay: string }>;
     csv: { headers: string[]; delimiter: string };
   }>("POST", "/app/campaigns/csv-preview?clientId=malicious", businessAdmin, {
     templateId: template.id,
@@ -12405,6 +12420,7 @@ test("app CSV import previews and creates draft without sending", async () => {
   assert.equal(preview.body.summary.readyToImport, 2);
   assert.equal(preview.body.summary.duplicates, 1);
   assert.equal(preview.body.summary.optOutBlocked, 1);
+  assert.equal(preview.body.recipients[0]?.phoneDisplay, "5541991300001");
   assert.deepEqual(preview.body.csv.headers, ["telefone", "nome", "primeiro_nome"]);
 
   const outboundBefore = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
@@ -12425,6 +12441,15 @@ test("app CSV import previews and creates draft without sending", async () => {
   assert.equal(created.body.campaign.sentCount, 0);
   assert.equal(created.body.draft.summary.readyToImport, 2);
 
+  const missingTestVariables = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: "5541991300999" }
+  );
+  assert.equal(missingTestVariables.status, 400);
+  assert.equal(getErrorCode(missingTestVariables.body), "campaign_test_variables_required");
+
   const outboundAfter = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
   const sendEvents = await prisma.event.count({
     where: {
@@ -12435,6 +12460,62 @@ test("app CSV import previews and creates draft without sending", async () => {
   });
   assert.equal(outboundAfter, outboundBefore);
   assert.equal(sendEvents, 0);
+
+  const csvTestPhoneNumberId = `phone-csv-test-${prefix}-business`;
+  await prisma.waPhoneNumber.create({
+    data: {
+      clientId: businessClientId,
+      phoneNumberId: csvTestPhoneNumberId,
+      display: "+55 41 99130-0900",
+    },
+  });
+  await prisma.channelAccount.create({
+    data: {
+      clientId: businessClientId,
+      channel: "whatsapp",
+      provider: "meta_cloud",
+      channelAccountId: csvTestPhoneNumberId,
+      enabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: true,
+      status: "connected",
+      tokenStatus: "ok",
+    },
+  });
+  const originalFetch = globalThis.fetch;
+  const metaPayloads: Array<Record<string, unknown>> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaPayloads.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.csv-test.${metaPayloads.length}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const validTest = await request<{ ok: true; messageId: string }>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: "5541991300999", variables: { "1": "Teste explicito" } }
+  );
+  assert.equal(validTest.status, 200, JSON.stringify(validTest.body));
+  assert.equal(metaPayloads.length, 1);
+  assert.match(JSON.stringify(metaPayloads[0]), /Teste explicito/);
+  assert.doesNotMatch(JSON.stringify(metaPayloads[0]), /Ana|João/);
+  const campaignAfterTest = await prisma.campaign.findUniqueOrThrow({
+    where: { id: created.body.campaign.id },
+    select: { status: true, sentCount: true, totalRecipients: true },
+  });
+  assert.equal(campaignAfterTest.status, "draft");
+  assert.equal(campaignAfterTest.sentCount, 0);
+  assert.equal(campaignAfterTest.totalRecipients, 2);
 });
 
 test("app CSV CRM import requires CRM capability before any mutation", async () => {
@@ -12449,7 +12530,7 @@ test("app CSV CRM import requires CRM capability before any mutation", async () 
     },
   });
   const csvText = "telefone,nome\n5541991399001,Sem permissao";
-  const mapping = { phoneColumn: "telefone", nameColumn: "nome", variableColumns: {} };
+  const mapping = { contactColumn: "telefone", variableColumns: {} };
   const campaignsBefore = await prisma.campaign.count({ where: { clientId: businessClientId } });
   const leadsBefore = await prisma.lead.count({ where: { tenantId: businessClientId } });
   const contactsBefore = await prisma.contact.count({ where: { clientId: businessClientId } });

@@ -320,6 +320,21 @@ O centro de campanhas suporta:
 
 Criar rascunho nao envia mensagem. Envio real exige acao explicita do operador.
 
+Campaign flow integrity review, 2026-09-21: IMPLEMENTED LOCAL / VALIDATED /
+NOT DEPLOYED. Campaign CSV no longer maps business variables from arbitrary raw
+headers; the operator maps `Contato`, `Campo 1`, `Campo 2` and `Campo 3`, and
+template variables can only point to those generic fields. Generic fields do not
+update CRM name or CRM situation. Authenticated CSV preview/report shows full
+normalized WhatsApp identifiers, ready/blocked/error rows in the same table, and
+copy/export evidence. Campaign names are unique per tenant by trim,
+case-insensitive and whitespace-normalized comparison. Reopened drafts, send,
+schedule and scheduled execution use the persisted seed as canonical truth.
+Variable-template test sends require explicit variable values when the test
+number is not an existing campaign recipient and stop before provider call or
+aggregate mutation when incomplete. CRM campaign relationship/history is
+actual-send evidence only; draft, seed, import, test-send and scheduled-not-run
+records are not shown as contact campaign history.
+
 Atualizacao local de contrato, 2026-09-15: novas campanhas nao dependem de
 default operacional implicito ou nomeado como destino canonico das respostas. O
 rascunho/importacao/envio grava `returnDestination` no seed da campanha:

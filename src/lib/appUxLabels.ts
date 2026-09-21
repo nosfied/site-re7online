@@ -96,6 +96,8 @@ export function getAppErrorUxMessage(input: {
       return "Este contato foi retirado da operação.";
     case "invalid_phone":
       return "Informe um número de WhatsApp válido com código do país 55 e DDD.";
+    case "campaign_name_conflict":
+      return "Já existe uma campanha com este nome. Use outro nome para continuar.";
     case "contact_already_provisional":
       return "Este número já possui um contato associado.";
     case "crm_contact_created_read_model_unavailable":

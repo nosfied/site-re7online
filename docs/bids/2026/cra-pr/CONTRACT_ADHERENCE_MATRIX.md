@@ -474,3 +474,18 @@ of the actual Demo campaign records returns exactly 2 outcomes: delivered
 This strengthens CRA recipient traceability evidence but is not CRA customer
 acceptance. Backend 118/118, complementary matrices 56/56 and 72/72 PASS;
 schema unchanged, migration none, no send, repair or deploy.
+
+Campaign flow integrity review, 2026-09-21: IMPLEMENTED LOCAL / VALIDATED /
+NO DEPLOY. The campaign CSV contract is now operator-stable and CRA-auditable:
+`Contato` identifies the recipient, `Campo 1`, `Campo 2` and `Campo 3` carry
+template values, and those generic fields do not update CRM name or CRM
+situation. Authenticated preview/report uses full normalized WhatsApp numbers
+and one table for ready, blocked and error rows, with copy/export evidence.
+Campaign names are unique inside each tenant after normalized comparison.
+Persisted seed truth governs draft reopen, explicit send, scheduling and
+runner execution. Test sends for variable templates require explicit values for
+non-recipient test numbers and stop before provider calls when incomplete. CRM
+campaign history remains based on real send evidence only; draft/import/test
+and scheduled-not-run records are excluded. This supports CRA traceability and
+operator evidence, but remains local product validation, not formal CRA
+acceptance.

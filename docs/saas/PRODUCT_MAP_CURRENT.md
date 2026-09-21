@@ -605,3 +605,16 @@ Actual production records replay to exactly two visible outcomes: delivered
 parcial`. Tests: 118/118 + 56/56 + 72/72 PASS. Schema unchanged; no migration,
 send, repair or deploy. Campaign Composer Cleanup remains deployed with its own
 production validation pending.
+
+Campaign flow integrity review (2026-09-21): IMPLEMENTED LOCAL / VALIDATED /
+NO DEPLOY. Campaign CSV mapping is now `Contato`, `Campo 1`, `Campo 2`,
+`Campo 3`; template variables can only source those generic fields and generic
+fields do not mutate CRM name/status. Authenticated preview/report shows full
+normalized WhatsApp identifiers and one table with ready, blocked and error
+rows plus copy/export evidence. Campaign name uniqueness is tenant-scoped and
+normalized by trim/case/whitespace. Draft reopen, send, schedule and scheduled
+execution use persisted seed truth. Variable-template test-send requires
+explicit variables when the test target is not a saved recipient and stops
+before provider/aggregate mutation when incomplete. CRM campaign relationship
+history remains actual-send-only; draft, import, test-send and scheduled
+not-run records stay excluded.

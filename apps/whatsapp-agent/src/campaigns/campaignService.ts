@@ -17,8 +17,40 @@ export type CreateCampaignParams = {
   scheduledAt?: Date | null;
 };
 
+export class CampaignNameConflictError extends Error {
+  readonly code = "campaign_name_conflict";
+
+  constructor() {
+    super("Campaign name already exists for this tenant.");
+    this.name = "CampaignNameConflictError";
+  }
+}
+
+export function normalizeCampaignNameForUniqueness(name: string) {
+  return String(name ?? "").trim().replace(/\s+/g, " ").toLocaleLowerCase("pt-BR");
+}
+
+export function isCampaignNameConflictError(error: unknown): error is CampaignNameConflictError {
+  return error instanceof CampaignNameConflictError;
+}
+
+async function assertCampaignNameAvailable(params: { clientId: string; name: string }) {
+  const prisma = getPrisma();
+  const normalized = normalizeCampaignNameForUniqueness(params.name);
+  if (!normalized) return;
+  const existing = await prisma.campaign.findMany({
+    where: { clientId: params.clientId },
+    select: { name: true },
+    take: 5000,
+  });
+  if (existing.some((campaign) => normalizeCampaignNameForUniqueness(campaign.name) === normalized)) {
+    throw new CampaignNameConflictError();
+  }
+}
+
 export async function createCampaign(params: CreateCampaignParams) {
   const prisma = getPrisma();
+  await assertCampaignNameAvailable({ clientId: params.clientId, name: params.name });
   return prisma.campaign.create({
     data: {
       clientId: params.clientId,

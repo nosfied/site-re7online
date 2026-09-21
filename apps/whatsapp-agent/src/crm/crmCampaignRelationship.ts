@@ -1,7 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { listCampaigns } from "../campaigns/campaignService.js";
 import { CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT } from "../campaigns/optOutRegistry.js";
-import { readPrivateCampaignSeedFields } from "../campaigns/campaignSeedPrivacy.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
 
 const MAX_LIST_CAMPAIGNS = 500;
@@ -207,18 +206,6 @@ function campaignHref(campaignId: string) {
   return `/app/campaigns?campaignId=${encodeURIComponent(campaignId)}`;
 }
 
-function parseSeedLeadIds(payloadJson: Prisma.JsonValue) {
-  const typed = getRecord(payloadJson);
-  if (!typed) return [];
-  return Array.isArray(typed.leadIds)
-    ? typed.leadIds.map((value) => String(value ?? "").trim()).filter(Boolean)
-    : [];
-}
-
-function parseSeedRecipients(payloadJson: Prisma.JsonValue) {
-  return readPrivateCampaignSeedFields(payloadJson).recipients.map(canonicalIdentityKey).filter((value): value is string => Boolean(value));
-}
-
 function upsertEvidence(
   target: Map<string, RelationshipEvidence>,
   campaign: CampaignRow,
@@ -319,7 +306,7 @@ async function collectCampaignRelationshipEvidence(
     null
   );
 
-  const [outboundMessages, seedEvents, optOutBlockEvents, importBlockedEvents] = await Promise.all([
+  const [outboundMessages, optOutBlockEvents] = await Promise.all([
     allIdentityKeys.length > 0 && oldestCampaignAt
       ? prisma.outboundMessage.findMany({
           where: {
@@ -342,16 +329,6 @@ async function collectCampaignRelationshipEvidence(
           },
         })
       : Promise.resolve([]),
-    prisma.event.findMany({
-      where: {
-        clientId: params.clientId,
-        eventName: "campaign.seed.saved",
-        messageId: { in: campaignIds },
-      },
-      orderBy: { createdAt: "desc" },
-      take: MAX_LIST_EVENTS,
-      select: { messageId: true, payloadJson: true, createdAt: true },
-    }),
     allIdentityKeys.length > 0
       ? prisma.event.findMany({
           where: {
@@ -365,16 +342,6 @@ async function collectCampaignRelationshipEvidence(
           select: { waId: true, waIdCanonical: true, messageId: true, payloadJson: true, createdAt: true },
         })
       : Promise.resolve([]),
-    prisma.event.findMany({
-      where: {
-        clientId: params.clientId,
-        eventName: "campaign.recipient.import_blocked",
-        messageId: { in: campaignIds },
-      },
-      orderBy: { createdAt: "desc" },
-      take: MAX_LIST_EVENTS,
-      select: { messageId: true, payloadJson: true, createdAt: true },
-    }),
   ]);
 
   const evidenceByLeadId = new Map<string, Map<string, RelationshipEvidence>>(
@@ -388,8 +355,6 @@ async function collectCampaignRelationshipEvidence(
       leadIdsByIdentity.set(key, current);
     }
   }
-  const leadIdsByLeadId = new Map(contacts.map((contact) => [contact.leadId, contact.leadId]));
-
   const applyToIdentity = (
     identity: string | null | undefined,
     campaign: CampaignRow | null,
@@ -403,29 +368,6 @@ async function collectCampaignRelationshipEvidence(
       if (bucket) upsertEvidence(bucket, campaign, update);
     }
   };
-
-  for (const event of seedEvents) {
-    const campaign = event.messageId ? campaignById.get(event.messageId) ?? null : null;
-    if (!campaign) continue;
-    for (const leadId of parseSeedLeadIds(event.payloadJson)) {
-      if (!leadIdsByLeadId.has(leadId)) continue;
-      const bucket = evidenceByLeadId.get(leadId);
-      if (bucket) {
-        upsertEvidence(bucket, campaign, {
-          status: "PENDING",
-          templateName: campaign.templateName,
-          evidenceAt: event.createdAt,
-        });
-      }
-    }
-    for (const recipient of parseSeedRecipients(event.payloadJson)) {
-      applyToIdentity(recipient, campaign, {
-        status: "PENDING",
-        templateName: campaign.templateName,
-        evidenceAt: event.createdAt,
-      });
-    }
-  }
 
   for (const outbound of outboundMessages) {
     const campaignId = resolveOutboundCampaignId(outbound);
@@ -445,29 +387,13 @@ async function collectCampaignRelationshipEvidence(
   for (const event of optOutBlockEvents) {
     const campaign = event.messageId ? campaignById.get(event.messageId) ?? null : null;
     if (!campaign) continue;
+    if (campaign.status === "draft" || campaign.status === "scheduled" || campaign.status === "cancelled") continue;
     applyToIdentity(event.waIdCanonical ?? event.waId, campaign, {
       status: "OPT_OUT",
       reason: "opt_out",
       templateName: campaign.templateName,
       evidenceAt: event.createdAt,
       hasOptOutBlock: true,
-    });
-  }
-
-  for (const event of importBlockedEvents) {
-    const campaign = event.messageId ? campaignById.get(event.messageId) ?? null : null;
-    if (!campaign) continue;
-    const payload = getRecord(event.payloadJson);
-    const reason = typeof payload?.reason === "string" ? payload.reason : "recipient_blocked";
-    const status: CrmCampaignRelationshipStatus =
-      reason === "identity_conflict" ? "IDENTITY_CONFLICT" : reason === "opt_out" ? "OPT_OUT" : "BLOCKED";
-    const recipient = typeof payload?.recipient === "string" ? payload.recipient : null;
-    applyToIdentity(recipient, campaign, {
-      status,
-      reason,
-      templateName: campaign.templateName,
-      evidenceAt: event.createdAt,
-      hasOptOutBlock: status === "OPT_OUT",
     });
   }
 

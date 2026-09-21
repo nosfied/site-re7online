@@ -222,6 +222,20 @@ Fechado / validado:
   claramente invalido; NAO houve reproducao de token assinado malformado em
   producao. Health `ok/db=ok`, PID do agent preservado apos smoke, logs sem
   `process.unhandledRejection` e sem Prisma `P2023`.
+- Campaign flow integrity review: IMPLEMENTED LOCAL / VALIDATED / NO DEPLOY.
+  Campaign CSV uses the generic mapping model `Contato`, `Campo 1`, `Campo 2`
+  and `Campo 3`; template variables can only source those mapped generic fields,
+  and generic fields do not mutate CRM name or CRM situation. Authenticated
+  campaign CSV preview/report exposes full normalized WhatsApp identifiers and
+  renders ready, blocked and error rows in one operational table with reusable
+  copy/export evidence. Campaign names are unique per tenant after trim,
+  case-insensitive and whitespace-normalized comparison, returning
+  `campaign_name_conflict` with PT-BR UX copy. Draft reopen/send/schedule and
+  runner use persisted seed truth. Variable-template test-send requires
+  explicit variables when the test number is not a saved recipient; incomplete
+  tests stop before provider calls or campaign aggregate mutation. CRM campaign
+  history remains actual-send evidence only: draft, seed, import, test-send and
+  scheduled-not-run data stay excluded.
 
 ACTIVE P0:
 

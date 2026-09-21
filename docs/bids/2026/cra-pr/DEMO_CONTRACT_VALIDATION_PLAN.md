@@ -833,3 +833,19 @@ pass. The actual Demo records were replayed read-only and project 2 rows:
 `****6787` delivered and `****9614` blocked; totals are 2/1/1/0/0 and the label
 is `Entrega parcial`. This is product evidence only, not a new Demo send or CRA
 acceptance. Production validation after deployment remains pending.
+
+## Campaign flow integrity review - 2026-09-21
+
+Status: IMPLEMENTED LOCAL / VALIDATED / NO DEPLOY.
+
+Demo/CRA campaign validation must treat Campaign CSV files through the generic
+mapping model `Contato`, `Campo 1`, `Campo 2` and `Campo 3`. Template variables
+come only from those generic fields; generic fields do not change CRM name or
+CRM situation. Authenticated preview/report shows full normalized WhatsApp
+identifiers, one table for ready/blocked/error rows and copy/export evidence.
+Campaign names are unique within a tenant after normalized comparison. The
+saved campaign seed is canonical for reopen, send, schedule and scheduled
+execution. Variable-template test sends require explicit values when the test
+number is outside the saved recipients and fail before provider calls if
+incomplete. Contact campaign history is based only on actual send evidence, not
+drafts, import seeds, test sends or scheduled-not-run campaigns.

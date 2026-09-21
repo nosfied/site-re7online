@@ -144,6 +144,51 @@ test("campaign creation exposes dynamic CRM-filter scheduling without freezing p
   assert.ok(pageSource.includes("scheduleAppCampaignDraft(session, created.campaign.id, scheduledAt.toISOString())"));
 });
 
+test("campaign CSV import uses generic contact and field mapping", () => {
+  assert.ok(pageSource.includes("csvPhoneColumn"));
+  assert.ok(pageSource.includes("csvNameColumn"));
+  assert.ok(pageSource.includes("csvCrmSituationColumn"));
+  assert.ok(pageSource.includes("csvField3Column"));
+  assert.ok(pageSource.includes("<span className=\"text-white/70\">Contato</span>"));
+  assert.ok(pageSource.includes("<span className=\"text-white/70\">Campo 1</span>"));
+  assert.ok(pageSource.includes("<span className=\"text-white/70\">Campo 2</span>"));
+  assert.ok(pageSource.includes("<span className=\"text-white/70\">Campo 3</span>"));
+  assert.ok(pageSource.includes("contactColumn: csvPhoneColumn"));
+  assert.ok(pageSource.includes("field1Column: csvNameColumn"));
+  assert.ok(pageSource.includes("field2Column: csvCrmSituationColumn"));
+  assert.ok(pageSource.includes("field3Column: csvField3Column"));
+  assert.ok(pageSource.includes("<option value=\"field1\">Campo 1</option>"));
+  assert.ok(pageSource.includes("<option value=\"field2\">Campo 2</option>"));
+  assert.ok(pageSource.includes("<option value=\"field3\">Campo 3</option>"));
+  assert.ok(pageSource.includes("csvVariableMappingIncomplete"));
+  assert.ok(pageSource.includes("Vincule cada variável do modelo a Campo 1, Campo 2 ou Campo 3."));
+});
+
+test("campaign CSV preview renders ready blocked and error rows in one reportable table", () => {
+  assert.ok(pageSource.includes("csvPreview.recipients.length > 0 || csvPreview.errors.length > 0"));
+  assert.ok(pageSource.includes("csvPreview.recipients.slice(0, 8).map"));
+  assert.ok(pageSource.includes("csvPreview.errors.slice(0, Math.max(0, 8 - csvPreview.recipients.slice(0, 8).length)).map"));
+  assert.ok(pageSource.includes("Pronto"));
+  assert.ok(pageSource.includes("Bloqueado"));
+  assert.ok(pageSource.includes("Linha"));
+  assert.ok(pageSource.includes("Contato"));
+  assert.ok(pageSource.includes("Motivo"));
+  assert.ok(pageSource.includes("handleCopyCsvImportReport"));
+  assert.ok(pageSource.includes("handleDownloadCsvImportReport"));
+  assert.ok(pageSource.includes("Copiar relatório"));
+  assert.ok(pageSource.includes("Baixar relatório CSV"));
+});
+
+test("campaign test send requires explicit variables for variable templates", () => {
+  assert.ok(pageSource.includes("testVariableValues"));
+  assert.ok(pageSource.includes("selectedCampaignTestVariableLabels"));
+  assert.ok(pageSource.includes("Variável {{"));
+  assert.ok(pageSource.includes("Object.fromEntries("));
+  assert.ok(pageSource.includes("sendAppCampaignTest(session, selectedCampaign.id, waId, variables)"));
+  assert.ok(pageSource.includes("campaignTestVariablesIncomplete"));
+  assert.ok(pageSource.includes("disabled={testingCampaign || !testRecipientInput.trim() || campaignTestVariablesIncomplete}"));
+});
+
 test("campaign actions use the compact Inbox action-button language", () => {
   assert.ok(pageSource.includes("function ActionIconButton"));
   assert.ok(pageSource.includes("flex h-9 w-9 items-center justify-center rounded-xl border text-base transition"));

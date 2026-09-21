@@ -26,6 +26,7 @@ export type CampaignComposerDirtySnapshot = {
     phoneColumn: string;
     nameColumn: string;
     crmSituationColumn: string;
+    field3Column?: string;
     variableColumns: Record<string, string>;
     hasPreview: boolean;
     hasImportReport: boolean;
@@ -61,6 +62,7 @@ export function isCampaignComposerDirty(snapshot: CampaignComposerDirtySnapshot)
     csv.phoneColumn !== "" ||
     csv.nameColumn !== "" ||
     csv.crmSituationColumn !== "" ||
+    (csv.field3Column ?? "") !== "" ||
     Object.values(csv.variableColumns).some((value) => value !== "") ||
     csv.hasPreview ||
     csv.hasImportReport;

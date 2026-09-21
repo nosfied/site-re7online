@@ -122,11 +122,12 @@ test("campaign CSV import previews and persists eligible recipients without send
   const parsed = buildCampaignImportRecipientsFromCsv({
     csvText: csv,
     mapping: {
-      phoneColumn: "telefone",
-      nameColumn: "nome",
+      contactColumn: "telefone",
+      field1Column: "primeiro_nome",
+      field2Column: "protocolo",
       variableColumns: {
-        "1": "primeiro_nome",
-        "2": "protocolo",
+        "1": "field1",
+        "2": "field2",
       },
     },
   });
@@ -161,8 +162,8 @@ test("campaign CSV import previews and persists eligible recipients without send
   assert.equal(preview.summary.optOutBlocked, 1);
   assert.equal(preview.summary.blockedByReason.find((item) => item.reason === "provisional_contact")?.count, 2);
   assert.equal(preview.summary.blockedByReason.find((item) => item.reason === "excluded_contact")?.count, 1);
-  assert.equal(preview.recipients[0]?.identifierDisplay, "Maria Silva");
-  assert.equal(JSON.stringify(preview).includes("5541991100002"), false);
+  assert.equal(preview.recipients[0]?.identifierDisplay, "5541991100002");
+  assert.equal(preview.recipients[0]?.phoneDisplay, "5541991100002");
 
   const outboundBefore = await prisma.outboundMessage.count({ where: { clientId } });
   const imported = await importCampaignRecipients(prisma, {
@@ -192,6 +193,11 @@ test("campaign CSV import previews and persists eligible recipients without send
   const componentsByWaId = privateSeed.componentsByWaId as Record<string, unknown>;
   assert.ok(componentsByWaId["5541991100002"]);
   assert.ok(componentsByWaId["554199110008"]);
+  const importedLead = await prisma.lead.findFirst({
+    where: { tenantId: clientId, waIdCanonical: "5541991100002" },
+    select: { name: true, status: true },
+  });
+  assert.equal(importedLead?.name, null);
   assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waIdCanonical: "99990000" } }), 0);
 
   const repeat = await importCampaignRecipients(prisma, {
@@ -212,13 +218,14 @@ test("campaign CSV parser accepts comma quoted values and reports missing phone 
   const parsed = buildCampaignImportRecipientsFromCsv({
     csvText: 'phone,name,first\n"5541991100005","Ana, Operadora","Ana"',
     mapping: {
-      phoneColumn: "phone",
-      nameColumn: "name",
-      variableColumns: { "1": "first" },
+      contactColumn: "phone",
+      field1Column: "first",
+      variableColumns: { "1": "field1" },
     },
   });
   assert.equal(parsed.ok, true);
-  assert.equal(parsed.recipients[0]?.name, "Ana, Operadora");
+  assert.equal(parsed.recipients[0]?.name, null);
+  assert.equal(parsed.recipients[0]?.variables?.["1"], "Ana");
 
   const missing = buildCampaignImportRecipientsFromCsv({
     csvText: "phone,name\n5541991100006,João",
@@ -242,7 +249,7 @@ test("campaign CSV parser accepts comma quoted values and reports missing phone 
   assert.equal(malformed.error, "csv_malformed");
 });
 
-test("campaign CSV import upserts CRM contacts and resolves Situação no CRM safely", async () => {
+test("campaign CSV import upserts identity without semantic CRM field mutation", async () => {
   const clientId = crypto.randomUUID();
   const otherClientId = crypto.randomUUID();
   await cleanup(clientId).catch(() => undefined);
@@ -327,10 +334,10 @@ test("campaign CSV import upserts CRM contacts and resolves Situação no CRM sa
   const parsed = buildCampaignImportRecipientsFromCsv({
     csvText: csv,
     mapping: {
-      phoneColumn: "telefone",
-      nameColumn: "nome",
-      crmSituationColumn: "Situação no CRM",
-      variableColumns: { "1": "primeiro_nome" },
+      contactColumn: "telefone",
+      field1Column: "primeiro_nome",
+      field2Column: "Situação no CRM",
+      variableColumns: { "1": "field1" },
     },
   });
   assert.equal(parsed.ok, true);
@@ -353,14 +360,14 @@ test("campaign CSV import upserts CRM contacts and resolves Situação no CRM sa
     recipients: parsed.recipients,
     crmStatuses: statuses,
   });
-  assert.equal(preview.summary.readyToImport, 3);
-  assert.equal(preview.summary.created, 1);
-  assert.equal(preview.summary.updated, 1);
-  assert.equal(preview.summary.unchanged, 1);
-  assert.equal(preview.summary.unresolvedCrmSituations, 1);
+  assert.equal(preview.summary.readyToImport, 4);
+  assert.equal(preview.summary.created, 2);
+  assert.equal(preview.summary.updated, 0);
+  assert.equal(preview.summary.unchanged, 2);
+  assert.equal(preview.summary.unresolvedCrmSituations, 0);
   assert.equal(preview.summary.duplicates, 1);
-  assert.equal(preview.recipients.find((item) => item.operation === "NOVO")?.crmSituation.statusId, "QUALIFIED");
-  assert.equal(preview.recipients.find((item) => item.leadId !== null && item.operation === "ATUALIZAR")?.crmSituation.statusId, "FOLLOW_UP");
+  assert.equal(preview.recipients.find((item) => item.operation === "NOVO")?.crmSituation.statusId, null);
+  assert.equal(preview.recipients.find((item) => item.leadId !== null)?.operation, "SEM_ALTERACAO");
 
   const imported = await importCampaignRecipients(prisma, {
     clientId,
@@ -372,19 +379,19 @@ test("campaign CSV import upserts CRM contacts and resolves Situação no CRM sa
     crmStatuses: statuses,
   });
   assert.equal(imported.ok, true);
-  assert.equal(imported.report.summary.created, 1);
-  assert.equal(imported.report.summary.updated, 1);
-  assert.equal(imported.report.summary.unchanged, 1);
-  assert.equal(imported.report.summary.errors, 1);
+  assert.equal(imported.report.summary.created, 2);
+  assert.equal(imported.report.summary.updated, 0);
+  assert.equal(imported.report.summary.unchanged, 2);
+  assert.equal(imported.report.summary.errors, 0);
   assert.equal(imported.report.summary.duplicatesConsolidated, 1);
   assert.match(imported.report.csv, /sourceRow,maskedIdentity,operation/);
 
   const newLead = await prisma.lead.findFirstOrThrow({ where: { tenantId: clientId, waIdCanonical: "5541992200001" } });
-  assert.equal(newLead.name, "Novo Contato");
-  assert.equal(newLead.status, "QUALIFIED");
+  assert.equal(newLead.name, null);
+  assert.equal(newLead.status, "NEW");
   const updatedLead = await prisma.lead.findFirstOrThrow({ where: { tenantId: clientId, waIdCanonical: "5541992200002" } });
-  assert.equal(updatedLead.name, "Nome Atualizado");
-  assert.equal(updatedLead.status, "FOLLOW_UP");
+  assert.equal(updatedLead.name, "Nome Antigo");
+  assert.equal(updatedLead.status, "NEW");
   const preservedLead = await prisma.lead.findFirstOrThrow({ where: { tenantId: clientId, waIdCanonical: "5541992200003" } });
   assert.equal(preservedLead.name, "Preservar");
   assert.equal(preservedLead.status, "QUALIFIED");

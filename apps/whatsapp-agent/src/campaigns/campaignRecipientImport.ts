@@ -41,6 +41,10 @@ export type CampaignImportBlockedReason =
   | "crm_situation_unresolved";
 
 export type CampaignImportMapping = {
+  contactColumn?: string | null;
+  field1Column?: string | null;
+  field2Column?: string | null;
+  field3Column?: string | null;
   phoneColumn?: string | null;
   nameColumn?: string | null;
   crmSituationColumn?: string | null;
@@ -186,12 +190,11 @@ function addBlockedCount(counts: Map<CampaignImportBlockedReason, number>, reaso
   counts.set(reason, (counts.get(reason) ?? 0) + 1);
 }
 
-function maskRecipient(value: string | null | undefined) {
+function formatCampaignImportRecipient(value: string | null | undefined) {
   const digits = normalizeWaIdDigits(String(value ?? ""));
-  if (!digits) return null;
-  if (digits.length <= 4) return `***${digits}`;
-  const prefix = digits.length >= 12 ? digits.slice(0, 4) : digits.slice(0, 2);
-  return `${prefix}*****${digits.slice(-4)}`;
+  if (digits) return digits;
+  const fallback = String(value ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
+  return fallback || null;
 }
 
 function sanitizeVariableValue(input: unknown) {
@@ -408,26 +411,49 @@ export function buildCampaignImportRecipientsFromCsv(params: {
 }) {
   const parsed = parseCampaignCsv(params.csvText);
   if (!parsed.ok) return parsed;
-  const phoneColumn = params.mapping.phoneColumn?.trim();
-  if (!phoneColumn || !parsed.headers.includes(phoneColumn)) {
+  const contactColumn = (params.mapping.contactColumn ?? params.mapping.phoneColumn)?.trim();
+  if (!contactColumn || !parsed.headers.includes(contactColumn)) {
     return { ok: false as const, error: "missing_phone_column" as const, headers: parsed.headers };
   }
+  const fieldColumns = {
+    field1: params.mapping.field1Column?.trim() || null,
+    field2: params.mapping.field2Column?.trim() || null,
+    field3: params.mapping.field3Column?.trim() || null,
+  };
   const variableColumns = params.mapping.variableColumns ?? {};
   return {
     ok: true as const,
     headers: parsed.headers,
     delimiter: parsed.delimiter,
-    recipients: parsed.rows.map((row) => ({
-      rowNumber: row.rowNumber,
-      phone: getMappedColumn(row.values, phoneColumn),
-      name: getMappedColumn(row.values, params.mapping.nameColumn),
-      crmSituation: getMappedColumn(row.values, params.mapping.crmSituationColumn),
-      variables: Object.fromEntries(
-        Object.entries(variableColumns)
-          .map(([position, column]) => [position, getMappedColumn(row.values, column)] as const)
-          .filter(([position]) => Boolean(position))
-      ),
-    })),
+    recipients: parsed.rows.map((row) => {
+      const fields = {
+        field1: getMappedColumn(row.values, fieldColumns.field1),
+        field2: getMappedColumn(row.values, fieldColumns.field2),
+        field3: getMappedColumn(row.values, fieldColumns.field3),
+      };
+      return {
+        rowNumber: row.rowNumber,
+        phone: getMappedColumn(row.values, contactColumn),
+        name: null,
+        crmSituation: null,
+        variables: Object.fromEntries(
+          Object.entries(variableColumns)
+            .map(([position, source]) => {
+              const normalizedSource = String(source ?? "").trim();
+              const genericValue =
+                normalizedSource === "field1"
+                  ? fields.field1
+                  : normalizedSource === "field2"
+                    ? fields.field2
+                    : normalizedSource === "field3"
+                      ? fields.field3
+                      : getMappedColumn(row.values, normalizedSource);
+              return [position, genericValue] as const;
+            })
+            .filter(([position]) => Boolean(position))
+        ),
+      };
+    }),
   };
 }
 
@@ -669,8 +695,8 @@ export async function resolveCampaignRecipientImportPlan(
       },
       recipients: acceptedRows.slice(0, 200).map((item) => ({
         rowNumber: item.rowNumber,
-        phoneDisplay: maskRecipient(item.waIdCanonical) ?? "WhatsApp User",
-        identifierDisplay: item.name || maskRecipient(item.waIdCanonical) || "WhatsApp User",
+        phoneDisplay: formatCampaignImportRecipient(item.waIdCanonical) ?? "WhatsApp User",
+        identifierDisplay: formatCampaignImportRecipient(item.waIdCanonical) || "WhatsApp User",
         variables: item.variables,
         operation: !item.existingLead
           ? "NOVO"
@@ -726,7 +752,7 @@ function addBlocked(
     rowNumber: params.rowNumber,
     reason: params.reason,
     label: labelForImportReason(params.reason),
-    phoneDisplay: maskRecipient(String(params.phone ?? "")),
+    phoneDisplay: formatCampaignImportRecipient(String(params.phone ?? "")),
   });
 }
 
@@ -855,7 +881,7 @@ export async function importCampaignRecipients(
         const previousStatus = previous?.status ?? null;
         const reportRow: CampaignImportReportRow = {
           sourceRow: row.rowNumber,
-          maskedIdentity: maskRecipient(row.waIdCanonical),
+          maskedIdentity: formatCampaignImportRecipient(row.waIdCanonical),
           operation,
           leadId: upserted.leadId,
           contactId: upserted.contactId,
@@ -887,7 +913,7 @@ export async function importCampaignRecipients(
       transactionFailureCount += 1;
       importReportRows.push({
         sourceRow: row.rowNumber,
-        maskedIdentity: maskRecipient(row.waIdCanonical),
+        maskedIdentity: formatCampaignImportRecipient(row.waIdCanonical),
         operation: "ERRO",
         leadId: null,
         contactId: null,

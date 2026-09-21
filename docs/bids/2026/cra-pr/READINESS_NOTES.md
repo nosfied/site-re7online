@@ -775,3 +775,24 @@ records now yields 2 visible rows, delivered 1, blocked 1, pending 0, technical
 failures 0 and `Entrega parcial`. No CRA send, provider call, identity repair,
 production mutation or deploy occurred. Validation: 118/118 + 56/56 + 72/72
 PASS.
+
+## Campaign flow integrity review - 2026-09-21
+
+Status: IMPLEMENTED LOCAL / VALIDATED / NO DEPLOY.
+
+The campaign creation flow now uses a clearer and auditable CSV mapping model:
+`Contato` plus `Campo 1`, `Campo 2` and `Campo 3`. Template variables may only
+use those generic fields. Generic fields are campaign-only and do not change CRM
+name or CRM situation. Authenticated preview/report shows full normalized
+WhatsApp identifiers and combines ready, blocked and error rows in the same
+table, with copy/export evidence. Campaign name uniqueness is enforced inside
+the same tenant with trim/case/whitespace normalization.
+
+Persisted campaign seed is the truth for draft reopen, explicit send,
+scheduling and runner execution. Test-send for variable templates requires
+explicit variable values when the test number is not a saved recipient and
+stops before provider call or aggregate mutation when incomplete. CRM campaign
+history remains actual-send-only: drafts, imports, test sends and scheduled
+campaigns not yet run are not shown as contact campaign history. This improves
+CRA operator evidence and traceability, but is not a real send and not formal
+CRA acceptance.
