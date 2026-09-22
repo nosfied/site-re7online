@@ -1573,8 +1573,8 @@ function CsvImportModal({
                   </div>
 	                {preview.rows?.length ? (
 	                  <div className="overflow-x-auto rounded-md border border-white/10">
-	                    <table className="w-full min-w-[760px] text-sm">
-	                      <thead className="bg-white/10 text-white">
+		                    <table className="w-full min-w-[760px] text-left text-sm">
+		                      <thead className="bg-white/10 text-white">
 	                        <tr>
 	                          <th className="px-3 py-2">Linha</th>
 	                          <th className="px-3 py-2">Contato</th>

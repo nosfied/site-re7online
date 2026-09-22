@@ -818,3 +818,24 @@ observed Demo `Campanha teste set.9`
 still require canonical template-variable mappings. No production DB mutation,
 provider call, real send, schema change, migration, commit, push or deploy was
 performed in this local pass.
+
+## Campaign execution truth + CRM UX follow-up - 2026-09-22
+
+Status: LOCAL FIX PREPARED / NOT DEPLOYED.
+
+Campaign CSV preview, draft creation, scheduling and discard now persist only
+campaign-owned private seed/components; they do not create Contact, Lead,
+ContactChannelIdentity or CRM situation changes. Contact/Lead/CCI bootstrap is
+deferred until an eligible campaign recipient reaches effective execution after
+send preflight and provider attempt. Blocked-before-send, discarded and
+never-sent campaigns therefore do not create CRM contacts or appear as contact
+campaign history.
+
+CRM-filter preview now shows only eligible recipients, removes the
+operator-facing "Envio ativo" selector, hides blocked recipients from
+count/table, and displays full authenticated identifiers. Result filters and
+CSV mapping selects were corrected for dark theme readability. Campaign reuse
+restores available modality, destination and variable mappings; CSV reuse still
+requires reloading the source file. Contacts CSV preview header alignment was
+corrected. No production DB mutation, schema change, migration, provider call,
+real send, commit, push or deploy was performed in this local pass.

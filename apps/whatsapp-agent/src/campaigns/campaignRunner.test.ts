@@ -311,6 +311,7 @@ test("campaign runner fails local operational preflight before Meta send", async
 
   assert.equal(metaCalls, 0);
   assert.equal(await prisma.outboundMessage.count({ where: { clientId } }), 0);
+  assert.equal(await prisma.contact.count({ where: { clientId, waId: recipient } }), 0);
   const preflightFailure = await prisma.event.findFirst({
     where: {
       clientId,
@@ -403,6 +404,21 @@ test("campaign runner persists provider acceptance and local outbound for succes
   });
   assert.equal(outbound?.metaMessageId, metaMessageId);
   assert.equal(outbound?.status, MessageStatus.SENT);
+  const contact = await prisma.contact.findFirst({
+    where: { clientId, waId: recipient },
+    select: { id: true, lifecycle: true },
+  });
+  assert.ok(contact);
+  assert.equal(contact.lifecycle, "ACTIVE");
+  assert.equal(
+    await prisma.contactChannelIdentity.count({
+      where: {
+        clientId,
+        contactId: contact.id,
+      },
+    }),
+    1
+  );
   assert.equal(
     await prisma.event.count({
       where: {

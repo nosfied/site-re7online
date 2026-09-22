@@ -577,6 +577,13 @@ export type CampaignItem = {
       value?: string;
       fallback?: string;
     }>;
+    returnDestination?: {
+      type: "human_department" | "automated_flow";
+      departmentId?: string | null;
+      queueId?: string | null;
+      flowId?: string | null;
+    } | null;
+    source?: string | null;
   };
   draftReview?: {
     summary: CampaignDraftSummary;

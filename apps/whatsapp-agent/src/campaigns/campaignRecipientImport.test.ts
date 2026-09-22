@@ -193,11 +193,7 @@ test("campaign CSV import previews and persists eligible recipients without send
   const componentsByWaId = privateSeed.componentsByWaId as Record<string, unknown>;
   assert.ok(componentsByWaId["5541991100002"]);
   assert.ok(componentsByWaId["554199110008"]);
-  const importedLead = await prisma.lead.findFirst({
-    where: { tenantId: clientId, waIdCanonical: "5541991100002" },
-    select: { name: true, status: true },
-  });
-  assert.equal(importedLead?.name, null);
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waIdCanonical: "5541991100002" } }), 0);
   assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waIdCanonical: "99990000" } }), 0);
 
   const repeat = await importCampaignRecipients(prisma, {
@@ -263,7 +259,7 @@ test("campaign CSV parser maps template variables from ten generic fields", () =
   assert.equal(parsed.recipients[0]?.variables?.["1"], "Valor 10");
 });
 
-test("campaign CSV import upserts identity without semantic CRM field mutation", async () => {
+test("campaign CSV import saves audience without pre-send CRM mutation", async () => {
   const clientId = crypto.randomUUID();
   const otherClientId = crypto.randomUUID();
   await cleanup(clientId).catch(() => undefined);
@@ -380,8 +376,8 @@ test("campaign CSV import upserts identity without semantic CRM field mutation",
   assert.equal(preview.summary.unchanged, 2);
   assert.equal(preview.summary.unresolvedCrmSituations, 0);
   assert.equal(preview.summary.duplicates, 1);
-  assert.equal(preview.recipients.find((item) => item.operation === "NOVO")?.crmSituation.statusId, null);
-  assert.equal(preview.recipients.find((item) => item.leadId !== null)?.operation, "SEM_ALTERACAO");
+  assert.equal(preview.recipients.find((item) => item.rowNumber === 2)?.operation, "NOVO_NA_AUDIENCIA");
+  assert.equal(preview.recipients.find((item) => item.leadId !== null)?.operation, "JA_EXISTENTE");
 
   const imported = await importCampaignRecipients(prisma, {
     clientId,
@@ -400,16 +396,14 @@ test("campaign CSV import upserts identity without semantic CRM field mutation",
   assert.equal(imported.report.summary.duplicatesConsolidated, 1);
   assert.match(imported.report.csv, /sourceRow,maskedIdentity,operation/);
 
-  const newLead = await prisma.lead.findFirstOrThrow({ where: { tenantId: clientId, waIdCanonical: "5541992200001" } });
-  assert.equal(newLead.name, null);
-  assert.equal(newLead.status, "NEW");
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waIdCanonical: "5541992200001" } }), 0);
   const updatedLead = await prisma.lead.findFirstOrThrow({ where: { tenantId: clientId, waIdCanonical: "5541992200002" } });
   assert.equal(updatedLead.name, "Nome Antigo");
   assert.equal(updatedLead.status, "NEW");
   const preservedLead = await prisma.lead.findFirstOrThrow({ where: { tenantId: clientId, waIdCanonical: "5541992200003" } });
   assert.equal(preservedLead.name, "Preservar");
   assert.equal(preservedLead.status, "QUALIFIED");
-  assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waIdCanonical: "5541992200001" } }), 1);
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waIdCanonical: "5541992200001" } }), 0);
   const otherTenantLead = await prisma.lead.findFirstOrThrow({ where: { tenantId: otherClientId, waIdCanonical: "5541992200001" } });
   assert.equal(otherTenantLead.name, "Outro Tenant");
   assert.equal(otherTenantLead.status, "LOST");
@@ -424,7 +418,7 @@ test("campaign CSV import upserts identity without semantic CRM field mutation",
     crmStatuses: statuses,
   });
   assert.equal(repeat.ok, true);
-  assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waIdCanonical: "5541992200001" } }), 1);
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waIdCanonical: "5541992200001" } }), 0);
   assert.equal(repeat.importedCount, 0);
 
   await cleanup(clientId);
@@ -505,7 +499,7 @@ test("campaign CRM import uses canonical hash identity and deterministic duplica
   assert.equal(preview.summary.duplicates, 1);
   const hashPreview = preview.recipients.find((item) => item.rowNumber === 1);
   assert.equal(hashPreview?.leadId, hashOnlyLead.id);
-  assert.equal(hashPreview?.operation, "ATUALIZAR");
+  assert.equal(hashPreview?.operation, "JA_EXISTENTE");
   assert.ok(preview.recipients.some((item) => item.rowNumber === 3));
   assert.ok(preview.recipients.some((item) => item.rowNumber === 4));
   assert.equal(preview.errors.find((item) => item.rowNumber === 2)?.reason, "crm_situation_unresolved");
@@ -524,7 +518,7 @@ test("campaign CRM import uses canonical hash identity and deterministic duplica
   assert.equal(imported.ok, true);
   assert.equal(imported.importedCount, 5);
   assert.equal(imported.report.summary.created, 4);
-  assert.equal(imported.report.summary.updated, 1);
+  assert.equal(imported.report.summary.updated, 0);
   assert.equal(imported.report.summary.errors, 2);
   assert.equal(imported.report.summary.duplicatesConsolidated, 1);
   assert.match(imported.report.csv, /'=1\+1/);
@@ -532,8 +526,8 @@ test("campaign CRM import uses canonical hash identity and deterministic duplica
   assert.match(imported.report.csv, /'-1\+2/);
   assert.match(imported.report.csv, /'@cmd/);
   const reusedHashLead = await prisma.lead.findFirstOrThrow({ where: { tenantId: clientId, id: hashOnlyLead.id } });
-  assert.equal(reusedHashLead.name, "Hash Atualizado");
-  assert.equal(reusedHashLead.status, "EQ");
+  assert.equal(reusedHashLead.name, "Nome Hash");
+  assert.equal(reusedHashLead.status, "NEW");
   assert.equal(await prisma.lead.count({ where: { tenantId: clientId, externalUserHash: hashOnlyLead.externalUserHash } }), 1);
   const untouchedOtherTenant = await prisma.lead.findUniqueOrThrow({ where: { id: otherTenantLead.id } });
   assert.equal(untouchedOtherTenant.name, "Outro Tenant");
@@ -550,13 +544,13 @@ test("campaign CRM import uses canonical hash identity and deterministic duplica
   });
   assert.equal(repeat.ok, true);
   assert.equal(repeat.importedCount, 0);
-  assert.equal(await prisma.lead.count({ where: { tenantId: clientId } }), 5);
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId } }), 1);
 
   await cleanup(clientId);
   await cleanup(otherClientId);
 });
 
-test("campaign CRM import rolls back CRM changes when row seed persistence fails", async () => {
+test("campaign CRM import rolls back campaign seed persistence without CRM mutation", async () => {
   const clientId = crypto.randomUUID();
   await cleanup(clientId).catch(() => undefined);
   await prisma.client.create({
@@ -569,25 +563,25 @@ test("campaign CRM import rolls back CRM changes when row seed persistence fails
     data: { tenantId: clientId, waId: "5541992400001", waIdCanonical: "5541992400001", phone: "5541992400001", name: "Antes", status: "NEW" },
   });
   const statuses = [{ id: "QUALIFIED", label: "Qualificado", isActive: true, campaignEligible: true }];
-  for (const [index, hook] of ["afterCrmMutation", "beforeCampaignSeedPersist"].entries()) {
+  for (const [index, hook] of ["beforeCampaignSeedPersist"].entries()) {
     const campaign = await prisma.campaign.create({
       data: { clientId, name: `Rollback ${hook}`, templateId: template.id, templateName: template.name, status: "draft", totalRecipients: 0 },
     });
     const phone = index === 0 ? "5541992400001" : "5541992400002";
-    const result = await importCampaignRecipients(prisma, {
-      clientId,
-      campaignId: campaign.id,
-      actorId: "tester",
-      requestId: `${prefix}:rollback:${hook}`,
-      source: "csv",
-      recipients: [{ rowNumber: 1, phone, name: "Depois", crmSituation: "QUALIFIED" }],
-      crmStatuses: statuses,
-      testHooks: { [hook]: () => { throw new Error(`controlled-${hook}`); } },
-    });
-    assert.equal(result.ok, true);
-    assert.equal(result.importedCount, 0);
-    assert.equal(result.report.summary.errors, 1);
-    assert.equal(result.report.rows[result.report.rows.length - 1]?.errorCode, "import_transaction_failed");
+    await assert.rejects(
+      () =>
+        importCampaignRecipients(prisma, {
+          clientId,
+          campaignId: campaign.id,
+          actorId: "tester",
+          requestId: `${prefix}:rollback:${hook}`,
+          source: "csv",
+          recipients: [{ rowNumber: 1, phone, name: "Depois", crmSituation: "QUALIFIED" }],
+          crmStatuses: statuses,
+          testHooks: { [hook]: () => { throw new Error(`controlled-${hook}`); } },
+        }),
+      /controlled-beforeCampaignSeedPersist/
+    );
     const persistedCampaign = await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } });
     assert.equal(persistedCampaign.totalRecipients, 0);
     assert.equal(await prisma.event.count({ where: { clientId, messageId: campaign.id, eventName: "campaign.seed.saved" } }), 0);

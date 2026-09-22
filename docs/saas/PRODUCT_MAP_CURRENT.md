@@ -629,3 +629,14 @@ draft seeds with complete per-recipient `componentsByWaId` and empty
 `templateVariableMappings` are accepted for send/schedule without DB repair;
 dynamic CRM-filter campaigns still require canonical template-variable
 mappings.
+
+Campaign execution truth + CRM UX follow-up (2026-09-22): LOCAL FIX PREPARED /
+NOT DEPLOYED. Campaign CSV preview/draft/schedule/discard persists only the
+campaign-owned private seed and components; Contact/Lead/CCI creation and CRM
+situation mutation are deferred until an eligible recipient reaches real
+campaign execution after preflight and provider attempt. CRM-filter preview is
+eligible-only, with blocked contacts hidden from the audience count and full
+authenticated identifiers shown. Draft/discarded/never-sent campaigns remain
+excluded from contact campaign history. Campaign result filters, CSV mapping
+selects, reuse state restoration and Contacts CSV preview alignment were
+hardened locally without schema, migration, provider call or real send.

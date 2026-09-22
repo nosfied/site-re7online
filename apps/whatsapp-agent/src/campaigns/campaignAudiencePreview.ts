@@ -152,14 +152,6 @@ function getBlockedReasonLabel(reason: CampaignAudienceBlockedReason) {
   }
 }
 
-function maskCampaignAudienceIdentifier(value: string | null | undefined) {
-  const raw = String(value ?? "").trim();
-  const digits = raw.replace(/\D/g, "");
-  if (!digits) return raw || null;
-  if (digits.length <= 8) return digits.replace(/\d(?=\d{2})/g, "*");
-  return `${digits.slice(0, 4)}${"*".repeat(Math.max(3, digits.length - 8))}${digits.slice(-4)}`;
-}
-
 function resolveBlockedReason(item: CrmContactListItem): CampaignAudienceBlockedReason | null {
   if (item.isAnonymized) return "anonymized_contact";
   if (item.isOperationallyExcluded) return "operationally_excluded_contact";
@@ -189,8 +181,8 @@ function toAudienceItem(item: CrmContactListItem): CampaignAudiencePreviewItem {
     crmStatus: item.crmStatus,
     crmStatusLabel: item.crmStatusLabel,
     channel: item.channel,
-    phoneDisplay: maskCampaignAudienceIdentifier(item.phoneDisplay),
-    identifierDisplay: maskCampaignAudienceIdentifier(item.identifierDisplay) ?? item.identifierDisplay,
+    phoneDisplay: item.phoneDisplay,
+    identifierDisplay: item.identifierDisplay,
     activeOptOut: item.activeOptOut,
     isAnonymized: item.isAnonymized,
     hasValidWhatsappIdentity: item.hasValidWhatsappIdentity,
@@ -289,20 +281,11 @@ export async function buildCampaignAudiencePreviewPayload(
     city,
     importedSource,
   });
-  const pagedItems = filteredItems.slice((page - 1) * limit, page * limit);
-  const blockedByReason = new Map<CampaignAudienceBlockedReason, number>();
-  let eligible = 0;
-  let blocked = 0;
-  for (const item of filteredItems) {
-    if (item.eligible) {
-      eligible += 1;
-    } else {
-      blocked += 1;
-      const reason = item.blockedReason ?? "unknown";
-      blockedByReason.set(reason, (blockedByReason.get(reason) ?? 0) + 1);
-    }
-  }
-  const filteredTotal = filteredItems.length;
+  const eligibleItems = filteredItems
+    .filter((item) => item.eligible)
+    .map((item) => ({ ...item, blockedReason: null, blockedReasonLabel: null }));
+  const pagedItems = eligibleItems.slice((page - 1) * limit, page * limit);
+  const filteredTotal = eligibleItems.length;
   const previewTotalPages = filteredTotal > 0 ? Math.ceil(filteredTotal / limit) : 0;
 
   return {
@@ -324,14 +307,10 @@ export async function buildCampaignAudiencePreviewPayload(
     summary: {
       total: filteredTotal,
       analyzed: analyzedItems.length,
-      eligible,
-      blocked,
+      eligible: filteredTotal,
+      blocked: 0,
       truncated: firstPage.pagination.total > MAX_ANALYSIS_ITEMS,
-      blockedByReason: Array.from(blockedByReason.entries()).map(([reason, count]) => ({
-        reason,
-        label: getBlockedReasonLabel(reason),
-        count,
-      })),
+      blockedByReason: [],
     },
     items: pagedItems,
     pagination: {

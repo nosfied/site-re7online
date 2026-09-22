@@ -320,14 +320,16 @@ changed.
 O centro de campanhas suporta:
 
 - previa de audiencia CRM sem criar campanha;
-- filtros por busca, canal, status CRM, conversa existente e bloqueio ativo;
+- filtros por busca, canal, status CRM e conversa existente;
 - bloqueio de contatos sem WhatsApp valido, canal nao suportado, duplicados, opt-out e anonimizados;
 - rascunho com `Campaign.status = draft`;
 - envio explicito separado da criacao do rascunho;
 - mapeamento de variaveis por destinatario;
 - envio imediato manual mantido como compatibilidade/fluxo avancado;
 - ponte com Inbox para conversa existente;
-- bootstrap operacional minimo de conversa/CRM para numero inedito somente apos sucesso do envio Meta.
+- bootstrap operacional minimo de conversa/CRM para numero inedito somente em
+  execucao efetiva de campanha, depois do preflight e da tentativa de envio;
+  preview, rascunho, agendamento e descarte nao materializam contato CRM.
 
 Criar rascunho nao envia mensagem. Envio real exige acao explicita do operador.
 
@@ -345,6 +347,18 @@ number is not an existing campaign recipient and stop before provider call or
 aggregate mutation when incomplete. CRM campaign relationship/history is
 actual-send evidence only; draft, seed, import, test-send and scheduled-not-run
 records are not shown as contact campaign history.
+
+Campaign execution truth + CRM UX follow-up, 2026-09-22: LOCAL FIX PREPARED /
+NOT DEPLOYED. Campaign CSV import now persists only campaign-owned audience
+seed/components before execution; it does not create/update Contact, Lead,
+ContactChannelIdentity or CRM situation in preview/draft/schedule/discard
+paths. CRM/contact bootstrap is deferred to eligible runtime execution after
+send preflight and provider attempt. CRM-filter preview is eligible-only with
+full authenticated identifiers and no separate "Envio ativo" selector. Result
+filters and CSV mapping controls were corrected for dark theme readability,
+reuse restores known campaign modality/destination/mappings, never-sent drafts
+stay out of contact campaign history, and Contacts CSV preview headers align
+with row data. No production validation is claimed.
 
 Atualizacao local de contrato, 2026-09-15: novas campanhas nao dependem de
 default operacional implicito ou nomeado como destino canonico das respostas. O

@@ -117,6 +117,10 @@ const EMPTY_AUDIENCE_FILTERS: AudiencePreviewFilters = {
 
 const PAGE_SIZE = 5;
 const CSV_GENERIC_FIELD_COUNT = 10;
+const DARK_SELECT_CLASS =
+  "w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky [&>option]:bg-slate-950 [&>option]:text-white";
+const DARK_RESULT_SELECT_CLASS =
+  "rounded-md border border-white/15 bg-slate-950 px-3 py-2 text-sm normal-case text-white outline-none focus:border-re7-sky [&>option]:bg-slate-950 [&>option]:text-white";
 const CSV_GENERIC_FIELDS = Array.from({ length: CSV_GENERIC_FIELD_COUNT }, (_, index) => ({
   index: index + 1,
   key: `field${index + 1}` as CsvGenericFieldKey,
@@ -261,6 +265,25 @@ function getVariableSourceLabel(source: TemplateVariableSource) {
   }
 }
 
+function getCampaignCsvReportOperationLabel(operation: string) {
+  switch (operation) {
+    case "NOVO_NA_AUDIENCIA":
+      return "Novo na audiência";
+    case "JA_EXISTENTE":
+      return "Já existente";
+    case "ELEGIVEL":
+      return "Elegível";
+    case "DUPLICADO_CONSOLIDADO":
+      return "Duplicado consolidado";
+    case "ERRO":
+      return "Erro";
+    case "IGNORADO":
+      return "Ignorado";
+    default:
+      return operation || "-";
+  }
+}
+
 function getIllustrativeVariableValue(mapping: TemplateVariableMappingFormState) {
   if (mapping.source === "fixed") return mapping.value.trim();
   if (mapping.fallback.trim()) return mapping.fallback.trim();
@@ -290,6 +313,28 @@ function buildTemplateVariableMappingsPayload(mappings: TemplateVariableMappingF
     ...(mapping.source === "fixed" ? { value: mapping.value.trim() } : {}),
     ...(mapping.fallback.trim() ? { fallback: mapping.fallback.trim() } : {}),
   }));
+}
+
+function buildTemplateVariableMappingsFormState(
+  positions: string[],
+  mappings: NonNullable<CampaignItem["draftSeed"]>["templateVariableMappings"] | undefined
+): TemplateVariableMappingFormState[] {
+  return positions.map((position) => {
+    const mapping = mappings?.find((item) => item.position === position);
+    const source =
+      mapping?.source === "contact.displayName" ||
+      mapping?.source === "lead.companyName" ||
+      mapping?.source === "lead.city" ||
+      mapping?.source === "fixed"
+        ? mapping.source
+        : "";
+    return {
+      position,
+      source,
+      value: mapping?.value ?? "",
+      fallback: mapping?.fallback ?? "",
+    };
+  });
 }
 
 function getTemplateVariableMappingError(mappings: TemplateVariableMappingFormState[]) {
@@ -2385,6 +2430,7 @@ export default function AppCampaignsPage() {
 
   const handleReuseCampaign = (campaign: CampaignItem) => {
     const replayForm = buildReplayFormFromCampaign(campaign);
+    const draftSeed = campaign.draftSeed;
     const replayTemplateId = campaign.draftSeed?.templateId || campaign.templateId || "";
     const matchedTemplate =
       templates.find((item) => replayTemplateId && item.id === replayTemplateId) ??
@@ -2393,23 +2439,41 @@ export default function AppCampaignsPage() {
     const labels = getTemplateVariablePositions(matchedTemplate);
     const templateVariables = normalizeTemplateParams(replayForm.templateParamsInput);
     const fixedVariableValues = labels.map((position, index) => {
-      const mapping = campaign.draftSeed?.templateVariableMappings?.find((item) => item.position === position);
+      const mapping = draftSeed?.templateVariableMappings?.find((item) => item.position === position);
       if (mapping?.source === "fixed" && mapping.value) return mapping.value;
       if (mapping?.fallback) return mapping.fallback;
       return templateVariables[index] ?? "";
     });
+    const restoredMappings = buildTemplateVariableMappingsFormState(labels, draftSeed?.templateVariableMappings);
+    const returnDestination = draftSeed?.returnDestination;
+    const source = String(draftSeed?.source ?? "");
+    const isDynamicCrm = draftSeed?.selectionMode === "DYNAMIC_CRM_FILTER" && draftSeed.dynamicFilter?.crmBusinessStatusId;
+    const isCsv = source.startsWith("recipient_import:");
+    const isCrmAudience = isDynamicCrm || source === "crm_audience_preview";
     resetCampaignComposer();
     setForm({
       ...EMPTY_FORM,
       templateVariables: syncTemplateVariables(fixedVariableValues, labels.length),
-      templateVariableMappings: syncTemplateVariableMappings([], labels),
+      templateVariableMappings: restoredMappings,
       ...replayForm,
       templateId: matchedTemplate?.id ?? "",
       templateName: matchedTemplate?.name ?? replayForm.templateName,
       templateParamsInput: syncTemplateVariables(fixedVariableValues, labels.length).join("\n"),
+      returnDestinationType: returnDestination?.type ?? EMPTY_FORM.returnDestinationType,
+      returnDepartmentId: returnDestination?.type === "human_department" ? returnDestination.departmentId ?? "" : "",
+      returnFlowId: returnDestination?.type === "automated_flow" ? returnDestination.flowId ?? "" : "",
     });
+    if (isDynamicCrm && draftSeed?.dynamicFilter?.crmBusinessStatusId) {
+      setAudienceRecipientMode("DYNAMIC_CRM_FILTER");
+      setAudienceFilters((prev) => ({
+        ...EMPTY_AUDIENCE_FILTERS,
+        status: draftSeed.dynamicFilter?.crmBusinessStatusId ?? prev.status,
+      }));
+    } else {
+      setAudienceRecipientMode("STATIC_RECIPIENTS");
+    }
     setActiveTab("create");
-    setExpandedCreationPanel("manual");
+    setExpandedCreationPanel(isCrmAudience ? "audience" : isCsv ? "csv" : "manual");
     if (replayForm.templateName && !matchedTemplate) {
       showToast(
         "warning",
@@ -2420,8 +2484,10 @@ export default function AppCampaignsPage() {
     }
     showToast(
       "info",
-      "Campanha carregada para reuso no envio imediato manual",
-      "Revise números, modelo e variáveis antes de enviar."
+      "Campanha carregada para reuso",
+      isCsv
+        ? "Modelo e destino foram restaurados. Carregue o CSV novamente para criar um novo rascunho."
+        : "Revise audiência, modelo, destino e variáveis antes de criar uma nova campanha."
     );
   };
 
@@ -2637,7 +2703,7 @@ export default function AppCampaignsPage() {
               </div>
             </div>
           </div>
-          <form className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_160px_150px_150px_150px_auto]" onSubmit={handleAudiencePreviewSubmit}>
+          <form className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_160px_150px_150px_auto]" onSubmit={handleAudiencePreviewSubmit}>
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Busca</span>
               <input
@@ -2653,7 +2719,7 @@ export default function AppCampaignsPage() {
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Situação no CRM</span>
               <select
-                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+                className={DARK_SELECT_CLASS}
                 value={audienceFilters.status}
                 onChange={(event) =>
                   setAudienceFilters((prev) => ({ ...prev, status: event.target.value }))
@@ -2670,7 +2736,7 @@ export default function AppCampaignsPage() {
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Canal</span>
               <select
-                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+                className={DARK_SELECT_CLASS}
                 value={audienceFilters.channel}
                 disabled={audienceRecipientMode === "DYNAMIC_CRM_FILTER"}
                 onChange={(event) =>
@@ -2685,24 +2751,9 @@ export default function AppCampaignsPage() {
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="text-white/70">Envio ativo</span>
-              <select
-                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
-                value={audienceFilters.optOut}
-                disabled={audienceRecipientMode === "DYNAMIC_CRM_FILTER"}
-                onChange={(event) =>
-                  setAudienceFilters((prev) => ({ ...prev, optOut: event.target.value as AudiencePreviewFilters["optOut"] }))
-                }
-              >
-                <option value="all">Todos</option>
-                <option value="false">Liberado</option>
-                <option value="true">Bloqueado</option>
-              </select>
-            </label>
-            <label className="grid gap-1 text-sm">
               <span className="text-white/70">Conversa</span>
               <select
-                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+                className={DARK_SELECT_CLASS}
                 value={audienceFilters.hasConversation}
                 disabled={audienceRecipientMode === "DYNAMIC_CRM_FILTER"}
                 onChange={(event) =>
@@ -2764,7 +2815,7 @@ export default function AppCampaignsPage() {
 
           {audiencePreview ? (
             <div className="grid gap-3">
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-2">
                 <div className="rounded-md border border-white/10 bg-white/5 p-3">
                   <p className="text-xs uppercase tracking-wide text-white/60">Total</p>
                   <p className="mt-1 text-xl font-semibold">{audiencePreview.summary.total}</p>
@@ -2773,23 +2824,7 @@ export default function AppCampaignsPage() {
                   <p className="text-xs uppercase tracking-wide text-emerald-100/70">Elegiveis</p>
                   <p className="mt-1 text-xl font-semibold text-emerald-100">{audiencePreview.summary.eligible}</p>
                 </div>
-                <div className="rounded-md border border-amber-400/20 bg-amber-900/20 p-3">
-                  <p className="text-xs uppercase tracking-wide text-amber-100/70">Bloqueados</p>
-                  <p className="mt-1 text-xl font-semibold text-amber-100">{audiencePreview.summary.blocked}</p>
-                </div>
               </div>
-              {audiencePreview.summary.blockedByReason.length > 0 ? (
-                <div className="flex flex-wrap gap-2 text-xs">
-                  {audiencePreview.summary.blockedByReason.map((item) => (
-                    <span
-                      key={item.reason}
-                      className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-white/75"
-                    >
-                      {item.label}: {item.count}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
               {audiencePreview.summary.truncated ? (
                 <p className="rounded-md border border-amber-400/30 bg-amber-900/20 p-3 text-sm text-amber-100">
                   A analise foi limitada aos primeiros {audiencePreview.summary.analyzed} contatos para proteger desempenho.
@@ -2800,7 +2835,7 @@ export default function AppCampaignsPage() {
                   <p className="text-xs text-white/60">
                     {audienceRecipientMode === "DYNAMIC_CRM_FILTER"
                       ? `${audiencePreview.summary.total} correspondências neste momento. Os destinatários finais serão definidos no momento do envio.`
-                      : `${audienceEligibleItems.length} elegiveis serao incluidos; ${audiencePreview.summary.blocked} bloqueados serao ignorados.`}
+                      : `${audienceEligibleItems.length} contato(s) elegível(is) serão incluídos.`}
                   </p>
                   {audienceRecipientMode === "DYNAMIC_CRM_FILTER" ? (
                     <label className="grid max-w-xs gap-1 text-sm">
@@ -2879,7 +2914,7 @@ export default function AppCampaignsPage() {
                         <td className="px-3 py-2">{item.channel || "whatsapp"}</td>
                         <td className="px-3 py-2">
                           <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${getAudienceEligibilityClasses(item.eligible)}`}>
-                            {item.eligible ? "Elegivel para envio ativo" : "Bloqueado"}
+                            {item.eligible ? "Elegível para campanha" : "Bloqueado"}
                           </span>
                           {!item.eligible && item.blockedReasonLabel ? (
                             <p className="mt-1 text-xs text-white/60">{item.blockedReasonLabel}</p>
@@ -2994,7 +3029,7 @@ export default function AppCampaignsPage() {
                     setCsvPhoneColumn(event.target.value);
                     setCsvPreview(null);
                   }}
-                  className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white disabled:opacity-50"
+                  className={`${DARK_SELECT_CLASS} h-10 disabled:opacity-50`}
                 >
                   <option value="">Selecione</option>
                   {csvHeaders.map((header) => (
@@ -3011,7 +3046,7 @@ export default function AppCampaignsPage() {
                     value={csvGenericFieldColumns[field.key]}
                     disabled={csvHeaders.length === 0}
                     onChange={(event) => updateCsvGenericFieldColumn(field.key, event.target.value)}
-                    className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white disabled:opacity-50"
+                    className={`${DARK_SELECT_CLASS} h-10 disabled:opacity-50`}
                   >
                     <option value="">Não usar</option>
                     {csvHeaders.map((header) => (
@@ -3039,7 +3074,7 @@ export default function AppCampaignsPage() {
                           setCsvPreview(null);
                           setCsvImportReport(null);
                         }}
-                        className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white disabled:opacity-50"
+                        className={`${DARK_SELECT_CLASS} h-10 disabled:opacity-50`}
                       >
                         <option value="">Selecione</option>
                         {mappedCsvGenericFields.map((field) => (
@@ -3098,15 +3133,15 @@ export default function AppCampaignsPage() {
                 </div>
                 <div className="grid gap-2 sm:grid-cols-4">
                   <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                    <p className="text-xs uppercase tracking-wide text-white/55">Novos contatos</p>
+                    <p className="text-xs uppercase tracking-wide text-white/55">Novos na audiência</p>
                     <p className="mt-1 text-lg font-semibold">{csvPreview.summary.created ?? 0}</p>
                   </div>
                   <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                    <p className="text-xs uppercase tracking-wide text-white/55">Atualizações</p>
+                    <p className="text-xs uppercase tracking-wide text-white/55">Alterariam CRM</p>
                     <p className="mt-1 text-lg font-semibold">{csvPreview.summary.updated ?? 0}</p>
                   </div>
                   <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                    <p className="text-xs uppercase tracking-wide text-white/55">Sem alteração</p>
+                    <p className="text-xs uppercase tracking-wide text-white/55">Já existentes</p>
                     <p className="mt-1 text-lg font-semibold">{csvPreview.summary.unchanged ?? 0}</p>
                   </div>
                   <div className="rounded-md border border-white/10 bg-white/5 p-3">
@@ -3186,8 +3221,7 @@ export default function AppCampaignsPage() {
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-emerald-100/70">Relatório da importação</p>
                     <p className="mt-1 text-sm text-white/75">
-                      {csvImportReport.summary.created ?? 0} criados, {csvImportReport.summary.updated ?? 0} atualizados,{" "}
-                      {csvImportReport.summary.unchanged ?? 0} sem alteração.
+                      {csvImportReport.summary.unchanged ?? 0} já existente(s) na audiência. Contatos novos só serão criados se houver tentativa real de envio.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -3225,7 +3259,7 @@ export default function AppCampaignsPage() {
                           <tr key={`${row.sourceRow ?? "row"}-${row.maskedIdentity}-${index}`} className="border-t border-white/10">
                             <td className="px-3 py-2 text-white/65">{row.sourceRow ?? "-"}</td>
                             <td className="px-3 py-2 font-mono text-xs text-white/70">{row.maskedIdentity}</td>
-                            <td className="px-3 py-2 text-white/75">{row.operation}</td>
+                            <td className="px-3 py-2 text-white/75">{getCampaignCsvReportOperationLabel(row.operation)}</td>
                             <td className="px-3 py-2 text-white/75">{row.fieldsChanged.join(", ") || "-"}</td>
                             <td className="px-3 py-2 text-white/75">
                               {row.newCrmSituationLabel ?? row.oldCrmSituationLabel ?? "-"}
@@ -4020,7 +4054,7 @@ export default function AppCampaignsPage() {
                           <select
                             value={resultStatusFilter}
                             onChange={(event) => setResultStatusFilter(event.target.value as CampaignResultStatusFilter)}
-                            className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-sm normal-case text-white outline-none focus:border-re7-sky"
+                            className={DARK_RESULT_SELECT_CLASS}
                           >
                             {resultStatusOptions.map((option) => (
                               <option key={option.id} value={option.id}>{option.label}</option>
@@ -4032,7 +4066,7 @@ export default function AppCampaignsPage() {
                           <select
                             value={resultCrmStatusFilter}
                             onChange={(event) => setResultCrmStatusFilter(event.target.value)}
-                            className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-sm normal-case text-white outline-none focus:border-re7-sky"
+                            className={DARK_RESULT_SELECT_CLASS}
                           >
                             <option value="all">Todas</option>
                             {resultCrmStatusOptions.map((option) => (

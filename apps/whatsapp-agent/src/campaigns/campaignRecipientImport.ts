@@ -86,7 +86,7 @@ export type CampaignImportPreview = {
     phoneDisplay: string;
     identifierDisplay: string;
     variables: Record<string, string>;
-    operation: "NOVO" | "ATUALIZAR" | "SEM_ALTERACAO";
+    operation: "NOVO_NA_AUDIENCIA" | "JA_EXISTENTE";
     leadId: string | null;
     fieldsChanged: Array<"name" | "crmStatus">;
     crmSituation: {
@@ -147,7 +147,13 @@ type ExistingLeadSnapshot = {
 type CampaignImportReportRow = {
   sourceRow: number | null;
   maskedIdentity: string | null;
-  operation: "CRIADO" | "ATUALIZADO" | "SEM_ALTERACAO" | "ERRO" | "DUPLICADO_CONSOLIDADO" | "IGNORADO";
+  operation:
+    | "ELEGIVEL"
+    | "JA_EXISTENTE"
+    | "NOVO_NA_AUDIENCIA"
+    | "ERRO"
+    | "DUPLICADO_CONSOLIDADO"
+    | "IGNORADO";
   leadId: string | null;
   contactId: string | null;
   fieldsChanged: string[];
@@ -650,20 +656,11 @@ export async function resolveCampaignRecipientImportPlan(
     label: labelForImportReason(reason),
     count,
   }));
-  let created = 0;
-  let updated = 0;
-  let unchanged = 0;
+  let newAudienceCount = 0;
+  let existingAudienceCount = 0;
   for (const row of acceptedRows) {
-    if (!row.existingLead) {
-      created += 1;
-      continue;
-    }
-    const changes = [
-      row.name !== null && row.name !== row.existingLead.name,
-      row.crmStatusId !== null && row.crmStatusId !== row.existingLead.status,
-    ].some(Boolean);
-    if (changes) updated += 1;
-    else unchanged += 1;
+    if (row.existingLead) existingAudienceCount += 1;
+    else newAudienceCount += 1;
   }
   const errorReportRows: CampaignImportReportRow[] = blocked.map((item) => ({
     sourceRow: item.rowNumber,
@@ -696,9 +693,9 @@ export async function resolveCampaignRecipientImportPlan(
         missingRequiredVariables: blockedCounts.get("variable_missing_value") ?? 0,
         unresolvedCrmSituations: blockedCounts.get("crm_situation_unresolved") ?? 0,
         readyToImport: acceptedRows.length,
-        created,
-        updated,
-        unchanged,
+        created: newAudienceCount,
+        updated: 0,
+        unchanged: existingAudienceCount,
         consolidated: blockedCounts.get("duplicate_recipient") ?? 0,
         blockedByReason,
       },
@@ -707,12 +704,7 @@ export async function resolveCampaignRecipientImportPlan(
         phoneDisplay: formatCampaignImportRecipient(item.waIdCanonical) ?? "WhatsApp User",
         identifierDisplay: formatCampaignImportRecipient(item.waIdCanonical) || "WhatsApp User",
         variables: item.variables,
-        operation: !item.existingLead
-          ? "NOVO"
-          : (item.name !== null && item.name !== item.existingLead.name) ||
-              (item.crmStatusId !== null && item.crmStatusId !== item.existingLead.status)
-            ? "ATUALIZAR"
-            : "SEM_ALTERACAO",
+        operation: item.existingLead ? "JA_EXISTENTE" : "NOVO_NA_AUDIENCIA",
         leadId: item.existingLead?.id ?? null,
         fieldsChanged: [
           item.name !== null && item.name !== item.existingLead?.name ? "name" : null,
@@ -777,7 +769,6 @@ export async function importCampaignRecipients(
     crmStatuses?: CrmBusinessStatusConfig[] | null;
     returnDestination?: OutboundReturnDestination | null;
     testHooks?: {
-      afterCrmMutation?: () => void | Promise<void>;
       beforeCampaignSeedPersist?: () => void | Promise<void>;
     };
   }
@@ -814,145 +805,53 @@ export async function importCampaignRecipients(
 
   const statusLabelById = buildStatusLabelById(params.crmStatuses);
   const importReportRows: CampaignImportReportRow[] = [...plan.reportRows];
-  let createdCount = 0;
-  let updatedCount = 0;
-  let unchangedCount = 0;
-  let transactionFailureCount = 0;
-  let importedCount = 0;
-  const { upsertCrmContactInTransaction } = await import("../crm/crmContactUpsert.js");
+  let newAudienceCount = 0;
+  let existingAudienceCount = 0;
+  let acceptedCount = 0;
   for (const row of plan.acceptedRows) {
-    try {
-      const committed = await prisma.$transaction(async (tx) => {
-        const upserted = await upsertCrmContactInTransaction(tx, {
-          clientId: params.clientId,
-          input: { phone: row.waIdCanonical, name: row.name },
-          actorUserId: params.actorId ?? "system",
-          requestId: `${params.requestId}:campaign-import-upsert:${row.rowNumber ?? row.waIdCanonical}`,
-          source: "crm_import",
-          audit: false,
-          crmStatusId: row.crmStatusId,
-        });
-        await params.testHooks?.afterCrmMutation?.();
-        const previous = upserted.previousLead;
-        const fieldsChanged: string[] = [];
-        const nameChanged = !upserted.createdLead && row.name !== null && row.name !== previous?.name;
-        const statusChanged = !upserted.createdLead && row.crmStatusId !== null && row.crmStatusId !== previous?.status;
-        if (nameChanged) fieldsChanged.push("name");
-        if (statusChanged) fieldsChanged.push("crmStatus");
-        const operation: CampaignImportReportRow["operation"] = upserted.createdLead
-          ? "CRIADO"
-          : fieldsChanged.length > 0
-            ? "ATUALIZADO"
-            : "SEM_ALTERACAO";
-        const candidateRecipients = nextRecipients.includes(row.waIdCanonical)
-          ? [...nextRecipients]
-          : [...nextRecipients, row.waIdCanonical];
-        const candidateComponents = { ...componentsByWaId };
-        const rowComponents = plan.componentsByWaId[row.waIdCanonical];
-        if (rowComponents) candidateComponents[row.waIdCanonical] = rowComponents;
-        await params.testHooks?.beforeCampaignSeedPersist?.();
-        await tx.campaign.update({
-          where: { id: campaign.id },
-          data: {
-            totalRecipients: candidateRecipients.length,
-            blockedCount:
-              preview.summary.optOutBlocked +
-              preview.summary.invalid +
-              preview.summary.missingRequiredVariables +
-              preview.summary.unresolvedCrmSituations,
-          },
-        });
-        await tx.event.create({
-          data: {
-            clientId: params.clientId,
-            messageId: campaign.id,
-            requestId: `campaign-seed:${campaign.id}:${crypto.randomUUID()}`,
-            eventName: "campaign.seed.saved",
-            payloadJson: {
-              campaignId: campaign.id,
-              templateId: campaign.templateId,
-              name: campaign.name,
-              templateName: campaign.templateName,
-              ...buildPrivateCampaignSeedFields({
-                clientId: params.clientId,
-                waIds: candidateRecipients,
-                componentsByWaId: candidateComponents,
-              }),
-              manualRecipientInputCount: params.recipients.length,
-              templateParams: [],
-              templateVariableMappings: [],
-              returnDestination: serializeOutboundReturnDestination(params.returnDestination ?? null),
-              source: `recipient_import:${params.source}`,
-              summary: preview.summary,
-            } satisfies Prisma.JsonObject,
-          },
-        });
-        const previousStatus = previous?.status ?? null;
-        const reportRow: CampaignImportReportRow = {
-          sourceRow: row.rowNumber,
-          maskedIdentity: formatCampaignImportRecipient(row.waIdCanonical),
-          operation,
-          leadId: upserted.leadId,
-          contactId: upserted.contactId,
-          fieldsChanged,
-          oldCrmSituation: previousStatus,
-          newCrmSituation: upserted.leadStatus,
-          oldCrmSituationLabel: previousStatus
-            ? statusLabelById.get(previousStatus.toUpperCase()) ?? previousStatus
-            : null,
-          newCrmSituationLabel:
-            row.crmStatusLabel ??
-            statusLabelById.get(upserted.leadStatus.toUpperCase()) ??
-            upserted.leadStatus,
-          nameUpdated: nameChanged,
-          duplicate: false,
-          errorCode: null,
-          reason: null,
-        };
-        return { candidateRecipients, candidateComponents, operation, reportRow };
-      });
-      nextRecipients = committed.candidateRecipients;
-      componentsByWaId = committed.candidateComponents;
-      importReportRows.push(committed.reportRow);
-      importedCount += 1;
-      if (committed.operation === "CRIADO") createdCount += 1;
-      else if (committed.operation === "ATUALIZADO") updatedCount += 1;
-      else unchangedCount += 1;
-    } catch {
-      transactionFailureCount += 1;
-      importReportRows.push({
-        sourceRow: row.rowNumber,
-        maskedIdentity: formatCampaignImportRecipient(row.waIdCanonical),
-        operation: "ERRO",
-        leadId: null,
-        contactId: null,
-        fieldsChanged: [],
-        oldCrmSituation: row.existingLead?.status ?? null,
-        newCrmSituation: row.existingLead?.status ?? null,
-        oldCrmSituationLabel: row.existingLead?.status
+    nextRecipients = nextRecipients.includes(row.waIdCanonical)
+      ? [...nextRecipients]
+      : [...nextRecipients, row.waIdCanonical];
+    const rowComponents = plan.componentsByWaId[row.waIdCanonical];
+    if (rowComponents) componentsByWaId = { ...componentsByWaId, [row.waIdCanonical]: rowComponents };
+    acceptedCount += 1;
+    if (row.existingLead) existingAudienceCount += 1;
+    else newAudienceCount += 1;
+    importReportRows.push({
+      sourceRow: row.rowNumber,
+      maskedIdentity: formatCampaignImportRecipient(row.waIdCanonical),
+      operation: row.existingLead ? "JA_EXISTENTE" : "NOVO_NA_AUDIENCIA",
+      leadId: row.existingLead?.id ?? null,
+      contactId: null,
+      fieldsChanged: [],
+      oldCrmSituation: row.existingLead?.status ?? null,
+      newCrmSituation: row.crmStatusId ?? row.existingLead?.status ?? null,
+      oldCrmSituationLabel: row.existingLead?.status
+        ? statusLabelById.get(row.existingLead.status.toUpperCase()) ?? row.existingLead.status
+        : null,
+      newCrmSituationLabel:
+        row.crmStatusLabel ??
+        (row.existingLead?.status
           ? statusLabelById.get(row.existingLead.status.toUpperCase()) ?? row.existingLead.status
-          : null,
-        newCrmSituationLabel: row.existingLead?.status
-          ? statusLabelById.get(row.existingLead.status.toUpperCase()) ?? row.existingLead.status
-          : null,
-        nameUpdated: false,
-        duplicate: false,
-        errorCode: "import_transaction_failed",
-        reason: "Falha ao importar esta linha; nenhuma alteracao foi aplicada.",
-      });
-    }
+          : null),
+      nameUpdated: false,
+      duplicate: false,
+      errorCode: null,
+      reason: null,
+    });
   }
   const reportSummary = {
     total: preview.summary.received,
-    created: createdCount,
-    updated: updatedCount,
-    unchanged: unchangedCount,
+    created: newAudienceCount,
+    updated: 0,
+    unchanged: existingAudienceCount,
     ignored: preview.summary.existingDuplicates + preview.summary.optOutBlocked,
-    errors: preview.errors.filter((item) => item.reason !== "duplicate_recipient").length + transactionFailureCount,
+    errors: preview.errors.filter((item) => item.reason !== "duplicate_recipient").length,
     duplicatesConsolidated: preview.summary.duplicates,
   };
 
   await prisma.$transaction(async (tx) => {
+    await params.testHooks?.beforeCampaignSeedPersist?.();
     await tx.campaign.update({
       where: { id: campaign.id },
       data: {
@@ -961,8 +860,32 @@ export async function importCampaignRecipients(
           preview.summary.optOutBlocked +
           preview.summary.invalid +
           preview.summary.missingRequiredVariables +
-          preview.summary.unresolvedCrmSituations +
-          transactionFailureCount,
+          preview.summary.unresolvedCrmSituations,
+      },
+    });
+    await tx.event.create({
+      data: {
+        clientId: params.clientId,
+        messageId: campaign.id,
+        requestId: `campaign-seed:${campaign.id}:${crypto.randomUUID()}`,
+        eventName: "campaign.seed.saved",
+        payloadJson: {
+          campaignId: campaign.id,
+          templateId: campaign.templateId,
+          name: campaign.name,
+          templateName: campaign.templateName,
+          ...buildPrivateCampaignSeedFields({
+            clientId: params.clientId,
+            waIds: nextRecipients,
+            componentsByWaId,
+          }),
+          manualRecipientInputCount: params.recipients.length,
+          templateParams: [],
+          templateVariableMappings: [],
+          returnDestination: serializeOutboundReturnDestination(params.returnDestination ?? null),
+          source: `recipient_import:${params.source}`,
+          summary: preview.summary,
+        } satisfies Prisma.JsonObject,
       },
     });
     await tx.event.create({
@@ -980,8 +903,18 @@ export async function importCampaignRecipients(
           invalidCount: preview.summary.invalid,
           duplicateCount: preview.summary.duplicates + preview.summary.existingDuplicates,
           optOutBlockedCount: preview.summary.optOutBlocked,
-          importedCount,
-          crmUpsert: reportSummary,
+          importedCount: acceptedCount,
+          audience: {
+            accepted: acceptedCount,
+            newToAudience: newAudienceCount,
+            alreadyKnown: existingAudienceCount,
+          },
+          crmUpsert: {
+            created: 0,
+            updated: 0,
+            unchanged: 0,
+            deferredUntilExecution: true,
+          },
           reportRows: importReportRows.slice(0, 500),
           timestamp: new Date().toISOString(),
         } satisfies Prisma.JsonObject,
@@ -1004,13 +937,13 @@ export async function importCampaignRecipients(
       ...preview,
       summary: {
         ...preview.summary,
-        created: createdCount,
-        updated: updatedCount,
-        unchanged: unchangedCount,
-        readyToImport: importedCount,
+        created: newAudienceCount,
+        updated: 0,
+        unchanged: existingAudienceCount,
+        readyToImport: acceptedCount,
       },
     },
-    importedCount,
+    importedCount: acceptedCount,
     report: {
       summary: reportSummary,
       rows: importReportRows,

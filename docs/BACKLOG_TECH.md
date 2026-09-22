@@ -252,6 +252,21 @@ Fechado / validado:
   components-only seeds as ready without DB repair. Dynamic CRM-filter
   campaigns still require canonical `templateVariableMappings`. Production
   deploy and owner validation remain pending.
+- Campaign execution truth + CRM UX follow-up, 2026-09-22: LOCAL FIX PREPARED /
+  NOT DEPLOYED. Campaign CSV preview/draft/schedule/discard no longer creates
+  Contact/Lead/CCI or writes CRM situation; it only persists the campaign-owned
+  private recipient seed and per-recipient components. Contact/Lead/CCI
+  bootstrap now happens only when an eligible recipient reaches effective
+  campaign execution after send preflight and provider attempt; preflight blocks
+  and discarded drafts do not create contacts. CRM-filter audience preview is
+  eligible-only, removes the "Envio ativo" filter concept from the operator
+  flow, hides blocked contacts from the count/table and shows full authenticated
+  identifiers. Draft/discarded/never-sent campaigns remain excluded from contact
+  campaign history. Result filters and CSV mapping selects were hardened for
+  dark-theme readability, campaign reuse restores available modality,
+  destination and variable mapping state, and Contacts CSV preview table header
+  alignment was corrected. No schema, migration, provider call, real send,
+  production DB mutation, commit, push or deploy in this local pass.
 
 ACTIVE P0:
 

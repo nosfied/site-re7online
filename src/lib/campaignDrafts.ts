@@ -87,7 +87,7 @@ export function buildReplayFormFromCampaign(campaign: CampaignItem) {
     : (seed?.recipients || []).map(fixLegacyBrazilDuplicateNinthDigitForDisplay);
 
   return {
-    name: seed?.name ? `${seed.name}-replay` : `${campaign.name || "campanha"}-replay`,
+    name: `Cópia de ${seed?.name || campaign.name || "campanha"}`,
     templateName: seed?.templateName || campaign.templateName || "",
     templateParamsInput: (seed?.templateParams || []).join("\n"),
     recipientsInput: recipients.join("\n"),
