@@ -630,8 +630,9 @@ draft seeds with complete per-recipient `componentsByWaId` and empty
 dynamic CRM-filter campaigns still require canonical template-variable
 mappings.
 
-Campaign execution truth + CRM UX follow-up (2026-09-22): LOCAL FIX PREPARED /
-NOT DEPLOYED. Campaign CSV preview/draft/schedule/discard persists only the
+Campaign execution truth + CRM UX follow-up (2026-09-22): DEPLOYED /
+PRODUCTION TECHNICAL SMOKE PARTIAL at
+`31a65a2bc6a74d7dd8fc5d5086133735155c64d4`. Campaign CSV preview/draft/schedule/discard persists only the
 campaign-owned private seed and components; Contact/Lead/CCI creation and CRM
 situation mutation are deferred until an eligible recipient reaches real
 campaign execution after preflight and an actual provider request, including
@@ -641,4 +642,10 @@ eligible-only, with blocked contacts hidden from the audience count and full
 authenticated identifiers shown. Draft/discarded/never-sent campaigns remain
 excluded from contact campaign history. Campaign result filters, CSV mapping
 selects, reuse state restoration and Contacts CSV preview alignment were
-hardened locally without schema, migration, provider call or real send.
+hardened and deployed without schema, migration, provider call or real send
+during smoke. Backup, backend/frontend builds, health checks and PM2 reload
+passed; the worker process was preserved. Authenticated owner UI validation,
+CSV zero-materialization via browser, schedule/discard smoke and real execution
+materialization remain NOT EXERCISED by Codex and require owner/natural
+production evidence. Name uniqueness remains a documented WATCH with
+application-level enforcement only.

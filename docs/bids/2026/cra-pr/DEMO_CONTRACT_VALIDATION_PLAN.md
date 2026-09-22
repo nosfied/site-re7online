@@ -861,8 +861,9 @@ existing DB records, covering the observed Demo `Campanha teste set.9`
 (`a1e01fb2-09f2-4be1-a180-3679a3ba008f`) shape. Dynamic CRM-filter campaigns
 continue to require canonical template-variable mappings at schedule/runtime.
 
-Campaign execution truth + CRM UX follow-up, 2026-09-22: LOCAL FIX PREPARED /
-NOT DEPLOYED. Campaign CSV preview/draft/schedule/discard now persists only
+Campaign execution truth + CRM UX follow-up, 2026-09-22: DEPLOYED /
+PRODUCTION TECHNICAL SMOKE PARTIAL at
+`31a65a2bc6a74d7dd8fc5d5086133735155c64d4`. Campaign CSV preview/draft/schedule/discard now persists only
 campaign-owned private seed/components; Contact/Lead/CCI bootstrap and CRM
 situation mutation are deferred until eligible effective campaign execution
 after preflight and provider attempt. CRM-filter preview is eligible-only,
@@ -870,4 +871,7 @@ blocked contacts are hidden from audience count/table, full authenticated
 identifiers are shown, and draft/discarded/never-sent campaigns remain outside
 contact campaign history. This local pass includes dark-theme result/mapping
 select fixes, reuse-state restoration and Contacts CSV preview header
-alignment. No real send, provider call or production data mutation occurred.
+alignment. Deploy smoke performed no real send/provider call. Browser-based
+owner UI checks, zero-materialization schedule/discard proof and real execution
+materialization remain NOT EXERCISED unless produced by natural authorized
+operation.

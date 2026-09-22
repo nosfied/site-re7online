@@ -252,8 +252,14 @@ Fechado / validado:
   components-only seeds as ready without DB repair. Dynamic CRM-filter
   campaigns still require canonical `templateVariableMappings`. Production
   deploy and owner validation remain pending.
-- Campaign execution truth + CRM UX follow-up, 2026-09-22: LOCAL FIX PREPARED /
-  NOT DEPLOYED. Campaign CSV preview/draft/schedule/discard no longer creates
+- Campaign execution truth + CRM UX follow-up, 2026-09-22: DEPLOYED /
+  PRODUCTION TECHNICAL SMOKE PARTIAL at
+  `31a65a2bc6a74d7dd8fc5d5086133735155c64d4` over
+  `07971ca6f1a6d1942978274f58599574629359a3`. Backup:
+  `/opt/re7online/backups/converta-persistent/postgres/20260922-212530.dump`
+  (`21656950` bytes, `581` objects,
+  `3e69646a22cb475a810c827d0caee5ff5acc9cd0f63b19314ccce403b03685c6`).
+  Campaign CSV preview/draft/schedule/discard no longer creates
   Contact/Lead/CCI or writes CRM situation; it only persists the campaign-owned
   private recipient seed and per-recipient components. Contact/Lead/CCI
   bootstrap now happens only when an eligible recipient reaches effective
@@ -268,8 +274,16 @@ Fechado / validado:
   campaign history. Result filters and CSV mapping selects were hardened for
   dark-theme readability, campaign reuse restores available modality,
   destination and variable mapping state, and Contacts CSV preview table header
-  alignment was corrected. No schema, migration, provider call, real send,
-  production DB mutation, commit, push or deploy in this local pass.
+  alignment was corrected. Backend/frontend builds passed, PM2 reload was
+  limited to `re7-whatsapp-agent` and `re7-admin-front`, and
+  `re7-whatsapp-web-worker` was preserved. Health and `/app/campaigns` +
+  `/app/crm` returned 200. No schema, migration, provider call or real campaign
+  send occurred in smoke. Authenticated owner UI checks were NOT EXERCISED from
+  Codex because no reusable authenticated browser session/tool was available;
+  owner acceptance remains separate from production health. Event count changed
+  only due live chatbot inactivity events unrelated to campaign deploy. Name
+  uniqueness remains WATCH: application-level guard only, no DB unique
+  constraint or migration.
 
 ACTIVE P0:
 

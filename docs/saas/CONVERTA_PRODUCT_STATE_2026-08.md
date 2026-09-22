@@ -348,8 +348,9 @@ aggregate mutation when incomplete. CRM campaign relationship/history is
 actual-send evidence only; draft, seed, import, test-send and scheduled-not-run
 records are not shown as contact campaign history.
 
-Campaign execution truth + CRM UX follow-up, 2026-09-22: LOCAL FIX PREPARED /
-NOT DEPLOYED. Campaign CSV import now persists only campaign-owned audience
+Campaign execution truth + CRM UX follow-up, 2026-09-22: DEPLOYED /
+PRODUCTION TECHNICAL SMOKE PARTIAL at
+`31a65a2bc6a74d7dd8fc5d5086133735155c64d4`. Campaign CSV import now persists only campaign-owned audience
 seed/components before execution; it does not create/update Contact, Lead,
 ContactChannelIdentity or CRM situation in preview/draft/schedule/discard
 paths. CRM/contact bootstrap is deferred to eligible runtime execution after
@@ -361,7 +362,14 @@ full authenticated identifiers and no separate "Envio ativo" selector. Result
 filters and CSV mapping controls were corrected for dark theme readability,
 reuse restores known campaign modality/destination/mappings, never-sent drafts
 stay out of contact campaign history, and Contacts CSV preview headers align
-with row data. No production validation is claimed.
+with row data. Production deploy used FF-only from
+`07971ca6f1a6d1942978274f58599574629359a3`, persistent backup
+`/opt/re7online/backups/converta-persistent/postgres/20260922-212530.dump`,
+backend/frontend builds, and reload only of agent/admin-front with worker
+preserved. Health and public app routes passed; authenticated owner UI smoke and
+real execution materialization were NOT EXERCISED from Codex. No schema,
+migration, provider call or real campaign send occurred. Name uniqueness remains
+WATCH at application level.
 
 Atualizacao local de contrato, 2026-09-15: novas campanhas nao dependem de
 default operacional implicito ou nomeado como destino canonico das respostas. O

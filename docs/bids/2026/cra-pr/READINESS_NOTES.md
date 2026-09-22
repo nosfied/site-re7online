@@ -799,7 +799,7 @@ CRA acceptance.
 
 ## Campaign flow follow-up CSV readiness - 2026-09-22
 
-Status: LOCAL FIX PREPARED / NOT DEPLOYED.
+Status: DEPLOYED / PRODUCTION TECHNICAL SMOKE PARTIAL.
 
 Owner production validation found the Campaign CSV composer still confusing and
 one persisted static CSV seed shape blocked send/schedule incorrectly. The
@@ -837,5 +837,21 @@ count/table, and displays full authenticated identifiers. Result filters and
 CSV mapping selects were corrected for dark theme readability. Campaign reuse
 restores available modality, destination and variable mappings; CSV reuse still
 requires reloading the source file. Contacts CSV preview header alignment was
-corrected. No production DB mutation, schema change, migration, provider call,
-real send, commit, push or deploy was performed in this local pass.
+corrected.
+
+Production deploy target:
+`31a65a2bc6a74d7dd8fc5d5086133735155c64d4`, from
+`07971ca6f1a6d1942978274f58599574629359a3`, FF-only. Persistent backup:
+`/opt/re7online/backups/converta-persistent/postgres/20260922-212530.dump`
+(`21656950` bytes, `581` objects,
+`3e69646a22cb475a810c827d0caee5ff5acc9cd0f63b19314ccce403b03685c6`).
+Backend and frontend builds passed; reload was limited to
+`re7-whatsapp-agent` and `re7-admin-front`; `re7-whatsapp-web-worker` stayed on
+the same PID. Health, `/app/campaigns` and `/app/crm` returned OK. No schema
+change, migration, provider call or real campaign send occurred. Authenticated
+owner UI smoke, CSV zero-materialization via browser, schedule/discard checks
+and real execution materialization were NOT EXERCISED by Codex because no
+genuine authenticated browser session/tool was available and no real campaign
+was authorized solely for smoke. Production event delta observed during smoke
+was live chatbot inactivity activity, not campaign-domain mutation. Name
+uniqueness remains WATCH: application-level lookup, no DB unique constraint.

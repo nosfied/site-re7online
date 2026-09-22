@@ -502,8 +502,10 @@ historical DB rows; dynamic CRM-filter campaigns still require canonical
 variable mappings. This keeps CRA-CAMP-002/004 as product-local readiness and
 does not claim CRA formal acceptance.
 
-Campaign execution truth + CRM UX follow-up, 2026-09-22: LOCAL FIX PREPARED /
-NOT DEPLOYED. Campaign CSV no longer performs CRM upsert during preview, draft
+Campaign execution truth + CRM UX follow-up, 2026-09-22: DEPLOYED /
+PRODUCTION TECHNICAL SMOKE PARTIAL. Target
+`31a65a2bc6a74d7dd8fc5d5086133735155c64d4` includes campaign execution truth
+and failed provider-attempt CRM materialization. Campaign CSV no longer performs CRM upsert during preview, draft
 creation, scheduling or discard; it persists only campaign-owned private seed
 and components until eligible runtime execution. Contact/Lead/CCI bootstrap is
 deferred to effective send execution after preflight and provider attempt, so
@@ -511,5 +513,7 @@ blocked-before-send and never-sent campaigns do not create contacts or campaign
 history. CRM-filter preview is eligible-only, hides blocked contacts from
 counts/table, removes the operator-facing "Envio ativo" selector and shows full
 authenticated identifiers. Result filters, mapping controls, campaign reuse and
-Contacts CSV preview alignment were locally corrected. CRA formal acceptance is
-not claimed before deployment and controlled CRA evidence.
+Contacts CSV preview alignment were corrected. Production health/build/reload
+passed, but authenticated owner UI validation and controlled CRA campaign
+evidence remain outside this smoke. CRA formal acceptance is not claimed by this
+deployment.
