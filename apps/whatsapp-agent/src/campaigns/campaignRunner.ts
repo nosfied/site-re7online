@@ -19,7 +19,10 @@ import {
   resolveCampaignRecipientConversationTarget,
   summarizeCampaignRecipientResolution,
 } from "./campaignRecipientConversationBridge.js";
-import { ensureCampaignOutboundConversation } from "./campaignOutboundConversation.js";
+import {
+  ensureCampaignOutboundConversation,
+  ensureCampaignOutboundCrmAttemptMaterialization,
+} from "./campaignOutboundConversation.js";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import {
   parseOutboundReturnDestination,
@@ -994,7 +997,18 @@ async function runCampaignInBackground(
                 conversationId: resolvedRecipient.conversationId ?? null,
                 returnDestination: resolvedReturnDestination,
               })
-            : null;
+            : await ensureCampaignOutboundCrmAttemptMaterialization(prisma, {
+                clientId: params.clientId,
+                waId,
+                waIdCanonical,
+                phoneNumberId,
+                messageId,
+                campaignId: params.campaignId,
+                campaignRunId,
+                templateName: params.templateName,
+                source: "campaign",
+                conversationId: resolvedRecipient.conversationId ?? null,
+              });
           const usagePayload = buildMetaUsageEventPayload({
             outboundMessageId: messageId,
             conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,

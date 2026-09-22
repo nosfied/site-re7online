@@ -257,8 +257,11 @@ Fechado / validado:
   Contact/Lead/CCI or writes CRM situation; it only persists the campaign-owned
   private recipient seed and per-recipient components. Contact/Lead/CCI
   bootstrap now happens only when an eligible recipient reaches effective
-  campaign execution after send preflight and provider attempt; preflight blocks
-  and discarded drafts do not create contacts. CRM-filter audience preview is
+  campaign execution after send preflight and an actual provider request. A
+  provider-returned `FAILED` attempt is effective campaign evidence and
+  materializes/reuses Contact/CCI/Lead without creating a new Conversation or
+  RuntimeState; pre-provider blocks and discarded drafts do not create contacts.
+  CRM-filter audience preview is
   eligible-only, removes the "Envio ativo" filter concept from the operator
   flow, hides blocked contacts from the count/table and shows full authenticated
   identifiers. Draft/discarded/never-sent campaigns remain excluded from contact

@@ -14180,7 +14180,7 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
   );
 });
 
-test("campaign send failure does not reactivate soft-deleted conversation or CRM bootstrap", async (t) => {
+test("campaign send failure materializes CRM without reactivating soft-deleted conversation", async (t) => {
   const template = await prisma.template.create({
     data: {
       clientId: businessClientId,
@@ -14250,13 +14250,29 @@ test("campaign send failure does not reactivate soft-deleted conversation or CRM
   assert.equal(preserved.anonymizedAt, null);
   assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId } }), 1);
   assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId } }), 0);
-  assert.equal(await prisma.contact.count({ where: { clientId: businessClientId, waId } }), 0);
-  assert.equal(await prisma.lead.count({ where: { tenantId: businessClientId, waId } }), 0);
+  const contact = await prisma.contact.findFirst({
+    where: { clientId: businessClientId, waId },
+    select: { id: true },
+  });
+  assert.ok(contact);
+  assert.equal(await prisma.contact.count({ where: { clientId: businessClientId, waId } }), 1);
+  assert.equal(await prisma.contactChannelIdentity.count({ where: { clientId: businessClientId, contactId: contact.id } }), 1);
+  assert.equal(await prisma.lead.count({ where: { tenantId: businessClientId, waId } }), 1);
   assert.equal(
     await prisma.event.count({
       where: { clientId: businessClientId, eventName: "campaign.recipient.conversation_reactivated", conversationId: conversation.id },
     }),
     0
+  );
+  assert.equal(
+    await prisma.event.count({
+      where: {
+        clientId: businessClientId,
+        eventName: "campaign.recipient.contact_bootstrap_ready",
+        conversationId: conversation.id,
+      },
+    }),
+    1
   );
 });
 

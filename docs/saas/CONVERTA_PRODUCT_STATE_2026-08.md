@@ -353,7 +353,10 @@ NOT DEPLOYED. Campaign CSV import now persists only campaign-owned audience
 seed/components before execution; it does not create/update Contact, Lead,
 ContactChannelIdentity or CRM situation in preview/draft/schedule/discard
 paths. CRM/contact bootstrap is deferred to eligible runtime execution after
-send preflight and provider attempt. CRM-filter preview is eligible-only with
+send preflight and an actual provider request; provider-returned `FAILED`
+attempts materialize/reuse Contact/CCI/Lead as campaign evidence without
+creating a new Conversation/RuntimeState, while pre-provider blocks do not.
+CRM-filter preview is eligible-only with
 full authenticated identifiers and no separate "Envio ativo" selector. Result
 filters and CSV mapping controls were corrected for dark theme readability,
 reuse restores known campaign modality/destination/mappings, never-sent drafts

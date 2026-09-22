@@ -53,7 +53,7 @@ export async function ensureCampaignOutboundCrmBootstrap(
     waId: string;
     waIdCanonical: string;
     phoneNumberId?: string | null;
-    conversationId: string;
+    conversationId?: string | null;
     campaignId: string;
     campaignRunId: string;
     messageId: string;
@@ -163,7 +163,7 @@ export async function ensureCampaignOutboundCrmBootstrap(
 
   await persistEvent({
     clientId: params.clientId,
-    conversationId: params.conversationId,
+    conversationId: params.conversationId ?? null,
     waId: params.waId,
     waIdCanonical: params.waIdCanonical,
     messageId: params.messageId,
@@ -183,6 +183,70 @@ export async function ensureCampaignOutboundCrmBootstrap(
   });
 
   return { contactId: contact.id, leadId: lead.id };
+}
+
+export async function ensureCampaignOutboundCrmAttemptMaterialization(
+  prisma: PrismaClient,
+  params: {
+    clientId: string;
+    waId: string;
+    waIdCanonical?: string | null;
+    phoneNumberId?: string | null;
+    conversationId?: string | null;
+    campaignId: string;
+    campaignRunId: string;
+    messageId: string;
+    templateName: string;
+    source: "campaign" | "manual" | "bot";
+  }
+) {
+  const waIdCanonical = params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId);
+  const existingConversation = params.conversationId
+    ? await prisma.conversation.findFirst({
+        where: { id: params.conversationId, clientId: params.clientId, anonymizedAt: null },
+        select: { id: true },
+      })
+    : await prisma.conversation.findFirst({
+        where: {
+          clientId: params.clientId,
+          anonymizedAt: null,
+          OR: [{ waId: params.waId }, { waIdCanonical }],
+        },
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        select: { id: true },
+      });
+  const anonymizedExisting = existingConversation
+    ? null
+    : params.conversationId
+      ? await prisma.conversation.findFirst({
+          where: { id: params.conversationId, clientId: params.clientId, anonymizedAt: { not: null } },
+          select: { id: true },
+        })
+      : await prisma.conversation.findFirst({
+          where: {
+            clientId: params.clientId,
+            anonymizedAt: { not: null },
+            OR: [{ waId: params.waId }, { waIdCanonical }],
+          },
+          select: { id: true },
+        });
+  if (anonymizedExisting) {
+    return { conversationId: null, contactId: null, leadId: null, skipped: "anonymized" as const };
+  }
+
+  const crm = await ensureCampaignOutboundCrmBootstrap(prisma, {
+    clientId: params.clientId,
+    waId: params.waId,
+    waIdCanonical,
+    phoneNumberId: params.phoneNumberId,
+    conversationId: existingConversation?.id ?? null,
+    campaignId: params.campaignId,
+    campaignRunId: params.campaignRunId,
+    messageId: params.messageId,
+    templateName: params.templateName,
+    source: params.source,
+  });
+  return { conversationId: existingConversation?.id ?? null, ...crm };
 }
 
 export async function ensureCampaignOutboundConversation(

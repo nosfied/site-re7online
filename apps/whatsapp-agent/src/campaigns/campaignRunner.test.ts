@@ -4,6 +4,7 @@ import test from "node:test";
 import { MessageStatus } from "@prisma/client";
 import { getPrisma } from "../db.js";
 import { startCampaignRun } from "./campaignRunner.js";
+import { recordContactOptOut } from "./optOutRegistry.js";
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "campaign-runner-test-secret";
 process.env.WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || "campaign-runner-test-token";
@@ -120,6 +121,14 @@ test("campaign runner skips operationally excluded recipients at send-time", asy
   assert.equal(completed.sentCount, 2);
   assert.equal(completed.blockedCount, 1);
   assert.deepEqual(metaRecipients, [recipients[0], recipients[2]]);
+  assert.equal(await prisma.contact.count({ where: { clientId } }), 3);
+  const excludedContact = await prisma.contact.findFirst({
+    where: { clientId, waId: recipients[1] },
+    select: { id: true },
+  });
+  assert.ok(excludedContact);
+  assert.equal(await prisma.contactChannelIdentity.count({ where: { clientId, contactId: excludedContact.id } }), 0);
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waId: recipients[1] } }), 0);
   const excludedOutbound = await prisma.outboundMessage.count({
     where: { clientId, waId: recipients[1], status: MessageStatus.SENT },
   });
@@ -218,6 +227,9 @@ test("campaign runner blocks send-time when template effective category is not a
   assert.equal(blocked.blockedCount, 0);
   assert.equal(metaCalls, 0);
   assert.equal(await prisma.outboundMessage.count({ where: { clientId } }), 0);
+  assert.equal(await prisma.contact.count({ where: { clientId } }), 0);
+  assert.equal(await prisma.contactChannelIdentity.count({ where: { clientId } }), 0);
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId } }), 0);
   const blockedEvent = await prisma.event.findFirst({
     where: {
       clientId,
@@ -312,6 +324,8 @@ test("campaign runner fails local operational preflight before Meta send", async
   assert.equal(metaCalls, 0);
   assert.equal(await prisma.outboundMessage.count({ where: { clientId } }), 0);
   assert.equal(await prisma.contact.count({ where: { clientId, waId: recipient } }), 0);
+  assert.equal(await prisma.contactChannelIdentity.count({ where: { clientId } }), 0);
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId } }), 0);
   const preflightFailure = await prisma.event.findFirst({
     where: {
       clientId,
@@ -419,6 +433,9 @@ test("campaign runner persists provider acceptance and local outbound for succes
     }),
     1
   );
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waId: recipient } }), 1);
+  assert.equal(await prisma.conversation.count({ where: { clientId, waId: recipient } }), 1);
+  assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId, waId: recipient } }), 1);
   assert.equal(
     await prisma.event.count({
       where: {
@@ -436,6 +453,196 @@ test("campaign runner persists provider acceptance and local outbound for succes
         eventName: "campaign.message.provider_accepted",
         messageId: `campaign.${campaign.id}.1`,
       },
+    }),
+    1
+  );
+});
+
+test("campaign runner materializes CRM identity for provider failure without creating conversation runtime", async (t) => {
+  const clientId = crypto.randomUUID();
+  const clientKey = `campaign-runner-provider-fail-${process.pid}-${Date.now()}`;
+  const templateName = `campaign_runner_provider_fail_${Date.now()}`;
+  const recipient = "5541991100451";
+  await cleanup(clientId).catch(() => undefined);
+  t.after(() => {
+    void cleanup(clientId).catch(() => undefined);
+  });
+
+  await prisma.client.create({
+    data: {
+      id: clientId,
+      clientKey,
+      name: "Campaign Runner Provider Failure Test",
+      profile: "business",
+      features: { campaigns: true },
+    },
+  });
+  await prisma.template.create({
+    data: {
+      clientId,
+      name: templateName,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso",
+    },
+  });
+  const campaign = await prisma.campaign.create({
+    data: {
+      clientId,
+      name: "Provider failure",
+      templateName,
+      status: "sending",
+      totalRecipients: 1,
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  const metaRecipients: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      const request = JSON.parse(String(init?.body ?? "{}")) as { to?: string };
+      if (request.to) metaRecipients.push(request.to);
+      return new Response(JSON.stringify({ error: { message: "Provider rejected", code: 131000 } }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const runId = startCampaignRun({
+    campaignId: campaign.id,
+    clientId,
+    clientKey,
+    name: campaign.name,
+    templateName,
+    waIds: [recipient],
+  });
+  assert.ok(runId);
+
+  await waitFor(async () => {
+    const refreshed = await prisma.campaign.findUnique({ where: { id: campaign.id } });
+    return refreshed?.status === "failed";
+  });
+
+  assert.deepEqual(metaRecipients, [recipient]);
+  const outbound = await prisma.outboundMessage.findUnique({
+    where: { clientId_messageId: { clientId, messageId: `campaign.${campaign.id}.1` } },
+  });
+  assert.equal(outbound?.status, MessageStatus.FAILED);
+  assert.match(outbound?.errorBody ?? "", /Provider rejected|131000/);
+  assert.equal(await prisma.event.count({ where: { clientId, eventName: "campaign.message.failed" } }), 1);
+
+  const contact = await prisma.contact.findFirst({
+    where: { clientId, waId: recipient },
+    select: { id: true, lifecycle: true },
+  });
+  assert.ok(contact);
+  assert.equal(contact.lifecycle, "ACTIVE");
+  assert.equal(await prisma.contact.count({ where: { clientId, waId: recipient } }), 1);
+  assert.equal(await prisma.contactChannelIdentity.count({ where: { clientId, contactId: contact.id } }), 1);
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waId: recipient } }), 1);
+  assert.equal(await prisma.conversation.count({ where: { clientId, waId: recipient } }), 0);
+  assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId, waId: recipient } }), 0);
+  const bootstrapEvent = await prisma.event.findFirst({
+    where: {
+      clientId,
+      eventName: "campaign.recipient.contact_bootstrap_ready",
+      messageId: `campaign.${campaign.id}.1`,
+    },
+    select: { conversationId: true, payloadJson: true },
+  });
+  assert.ok(bootstrapEvent);
+  assert.equal(bootstrapEvent.conversationId, null);
+  assert.equal((bootstrapEvent.payloadJson as Record<string, unknown>).conversationId, null);
+});
+
+test("campaign runner opt-out block does not materialize CRM or call provider", async (t) => {
+  const clientId = crypto.randomUUID();
+  const clientKey = `campaign-runner-optout-${process.pid}-${Date.now()}`;
+  const templateName = `campaign_runner_optout_${Date.now()}`;
+  const recipient = "5541991100461";
+  await cleanup(clientId).catch(() => undefined);
+  t.after(() => {
+    void cleanup(clientId).catch(() => undefined);
+  });
+
+  await prisma.client.create({
+    data: {
+      id: clientId,
+      clientKey,
+      name: "Campaign Runner Opt-out Test",
+      profile: "business",
+      features: { campaigns: true },
+    },
+  });
+  await prisma.template.create({
+    data: {
+      clientId,
+      name: templateName,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso",
+    },
+  });
+  await recordContactOptOut({
+    clientId,
+    waId: recipient,
+    source: "test",
+    requestId: `test-opt-out:${recipient}`,
+  });
+  const campaign = await prisma.campaign.create({
+    data: {
+      clientId,
+      name: "Opt-out block",
+      templateName,
+      status: "sending",
+      totalRecipients: 1,
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  let metaCalls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaCalls += 1;
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const runId = startCampaignRun({
+    campaignId: campaign.id,
+    clientId,
+    clientKey,
+    name: campaign.name,
+    templateName,
+    waIds: [recipient],
+  });
+  assert.ok(runId);
+
+  await waitFor(async () => {
+    const refreshed = await prisma.campaign.findUnique({ where: { id: campaign.id } });
+    return refreshed?.status === "completed";
+  });
+
+  assert.equal(metaCalls, 0);
+  assert.equal(await prisma.contact.count({ where: { clientId } }), 0);
+  assert.equal(await prisma.contactChannelIdentity.count({ where: { clientId } }), 0);
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId } }), 0);
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId } }), 0);
+  assert.equal(
+    await prisma.event.count({
+      where: { clientId, eventName: "campaign.recipient.opt_out_blocked", messageId: campaign.id },
     }),
     1
   );

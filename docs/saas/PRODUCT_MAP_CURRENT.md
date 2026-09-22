@@ -634,7 +634,9 @@ Campaign execution truth + CRM UX follow-up (2026-09-22): LOCAL FIX PREPARED /
 NOT DEPLOYED. Campaign CSV preview/draft/schedule/discard persists only the
 campaign-owned private seed and components; Contact/Lead/CCI creation and CRM
 situation mutation are deferred until an eligible recipient reaches real
-campaign execution after preflight and provider attempt. CRM-filter preview is
+campaign execution after preflight and an actual provider request, including
+provider-returned `FAILED` attempts without new Conversation/RuntimeState.
+Pre-provider blocks still do not materialize CRM. CRM-filter preview is
 eligible-only, with blocked contacts hidden from the audience count and full
 authenticated identifiers shown. Draft/discarded/never-sent campaigns remain
 excluded from contact campaign history. Campaign result filters, CSV mapping
