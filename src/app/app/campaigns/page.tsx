@@ -76,6 +76,7 @@ type CampaignCreationPanel = "audience" | "csv" | "manual";
 type RecipientSelectionMode = "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
 type CampaignResultStatusFilter = "all" | "delivered" | "sent" | "read" | "blocked" | "failed" | "pending";
 type CampaignResultItem = NonNullable<CampaignItem["messagesMetaStatus"]>[number];
+type CsvGenericFieldKey = `field${number}`;
 
 type CampaignToastTone = "success" | "warning" | "error" | "info";
 
@@ -115,6 +116,12 @@ const EMPTY_AUDIENCE_FILTERS: AudiencePreviewFilters = {
 };
 
 const PAGE_SIZE = 5;
+const CSV_GENERIC_FIELD_COUNT = 10;
+const CSV_GENERIC_FIELDS = Array.from({ length: CSV_GENERIC_FIELD_COUNT }, (_, index) => ({
+  index: index + 1,
+  key: `field${index + 1}` as CsvGenericFieldKey,
+  label: `Campo ${index + 1}`,
+}));
 const STATUS_FILTER_OPTIONS: CampaignStatusFilter[] = [
   "all",
   "draft",
@@ -550,9 +557,9 @@ export default function AppCampaignsPage() {
   const [csvInputKey, setCsvInputKey] = useState(0);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvPhoneColumn, setCsvPhoneColumn] = useState("");
-  const [csvNameColumn, setCsvNameColumn] = useState("");
-  const [csvCrmSituationColumn, setCsvCrmSituationColumn] = useState("");
-  const [csvField3Column, setCsvField3Column] = useState("");
+  const [csvGenericFieldColumns, setCsvGenericFieldColumns] = useState<Record<CsvGenericFieldKey, string>>(
+    () => Object.fromEntries(CSV_GENERIC_FIELDS.map((field) => [field.key, ""])) as Record<CsvGenericFieldKey, string>
+  );
   const [csvVariableColumns, setCsvVariableColumns] = useState<Record<string, string>>({});
   const [csvPreview, setCsvPreview] = useState<AppCampaignImportPreview | null>(null);
   const [csvImportReport, setCsvImportReport] = useState<AppCampaignImportReport | null>(null);
@@ -1077,15 +1084,19 @@ export default function AppCampaignsPage() {
       : templateVariableMappingError;
 
   const canGenerateAudiencePreview = Boolean(session && !audiencePreviewDisabledReason && !loadingAudiencePreview);
+  const mappedCsvGenericFields = useMemo(
+    () => CSV_GENERIC_FIELDS.filter((field) => Boolean(csvGenericFieldColumns[field.key])),
+    [csvGenericFieldColumns]
+  );
   const csvFieldColumnsByKey = useMemo(
-    () => ({ field1: csvNameColumn, field2: csvCrmSituationColumn, field3: csvField3Column }),
-    [csvCrmSituationColumn, csvField3Column, csvNameColumn]
+    () => csvGenericFieldColumns,
+    [csvGenericFieldColumns]
   );
   const csvVariableMappingIncomplete = useMemo(
     () =>
       templateVariableLabels.some((label) => {
         const source = csvVariableColumns[label];
-        return !source || !csvFieldColumnsByKey[source as keyof typeof csvFieldColumnsByKey];
+        return !source || !csvFieldColumnsByKey[source as CsvGenericFieldKey];
       }),
     [csvFieldColumnsByKey, csvVariableColumns, templateVariableLabels]
   );
@@ -1100,9 +1111,7 @@ export default function AppCampaignsPage() {
         fileName: csvFileName,
         headers: csvHeaders,
         phoneColumn: csvPhoneColumn,
-        nameColumn: csvNameColumn,
-        crmSituationColumn: csvCrmSituationColumn,
-        field3Column: csvField3Column,
+        genericFieldColumns: csvGenericFieldColumns,
         variableColumns: csvVariableColumns,
         hasPreview: csvPreview !== null,
         hasImportReport: csvImportReport !== null,
@@ -1111,12 +1120,10 @@ export default function AppCampaignsPage() {
   }, [
     audienceFilters,
     audiencePreview,
-    csvCrmSituationColumn,
-    csvField3Column,
     csvFileName,
+    csvGenericFieldColumns,
     csvHeaders,
     csvImportReport,
-    csvNameColumn,
     csvPhoneColumn,
     csvPreview,
     csvText,
@@ -1140,9 +1147,9 @@ export default function AppCampaignsPage() {
     setCsvFileName("");
     setCsvHeaders([]);
     setCsvPhoneColumn("");
-    setCsvNameColumn("");
-    setCsvCrmSituationColumn("");
-    setCsvField3Column("");
+    setCsvGenericFieldColumns(
+      Object.fromEntries(CSV_GENERIC_FIELDS.map((field) => [field.key, ""])) as Record<CsvGenericFieldKey, string>
+    );
     setCsvVariableColumns({});
     setCsvPreview(null);
     setCsvImportReport(null);
@@ -1839,9 +1846,9 @@ export default function AppCampaignsPage() {
     setCsvFileName("");
     setCsvHeaders([]);
     setCsvPhoneColumn("");
-    setCsvNameColumn("");
-    setCsvCrmSituationColumn("");
-    setCsvField3Column("");
+    setCsvGenericFieldColumns(
+      Object.fromEntries(CSV_GENERIC_FIELDS.map((field) => [field.key, ""])) as Record<CsvGenericFieldKey, string>
+    );
     setCsvVariableColumns({});
     setCsvPreview(null);
     setCsvImportReport(null);
@@ -2018,14 +2025,19 @@ export default function AppCampaignsPage() {
     setCsvFileName(file.name);
     setCsvHeaders(headers);
     setCsvPhoneColumn((previous) => (previous && headers.includes(previous) ? previous : headers[0] ?? ""));
-    setCsvNameColumn((previous) => (previous && headers.includes(previous) ? previous : ""));
-    setCsvCrmSituationColumn((previous) => (previous && headers.includes(previous) ? previous : ""));
-    setCsvField3Column((previous) => (previous && headers.includes(previous) ? previous : ""));
+    setCsvGenericFieldColumns((previous) =>
+      Object.fromEntries(
+        CSV_GENERIC_FIELDS.map((field) => [
+          field.key,
+          previous[field.key] && headers.includes(previous[field.key]) ? previous[field.key] : "",
+        ])
+      ) as Record<CsvGenericFieldKey, string>
+    );
     setCsvVariableColumns((previous) =>
       Object.fromEntries(
         templateVariableLabels.map((label) => [
           label,
-          ["field1", "field2", "field3"].includes(previous[label]) ? previous[label] : "",
+          CSV_GENERIC_FIELDS.some((field) => field.key === previous[label]) ? previous[label] : "",
         ])
       )
     );
@@ -2034,11 +2046,25 @@ export default function AppCampaignsPage() {
 
   const buildCsvMappingPayload = () => ({
     contactColumn: csvPhoneColumn || null,
-    field1Column: csvNameColumn || null,
-    field2Column: csvCrmSituationColumn || null,
-    field3Column: csvField3Column || null,
+    field1Column: csvGenericFieldColumns.field1 || null,
+    field2Column: csvGenericFieldColumns.field2 || null,
+    field3Column: csvGenericFieldColumns.field3 || null,
+    genericFieldColumns: Object.fromEntries(
+      CSV_GENERIC_FIELDS.map((field) => [String(field.index), csvGenericFieldColumns[field.key] || null])
+    ),
     variableColumns: csvVariableColumns,
   });
+
+  const updateCsvGenericFieldColumn = (key: CsvGenericFieldKey, value: string) => {
+    setCsvGenericFieldColumns((previous) => ({ ...previous, [key]: value }));
+    setCsvVariableColumns((previous) =>
+      Object.fromEntries(
+        Object.entries(previous).map(([label, source]) => [label, source === key && !value ? "" : source])
+      )
+    );
+    setCsvPreview(null);
+    setCsvImportReport(null);
+  };
 
   const handleDownloadCsvImportReport = () => {
     if (!csvImportReport?.csv) return;
@@ -2060,6 +2086,25 @@ export default function AppCampaignsPage() {
       showToast("success", "Relatório copiado", "O relatório da importação foi copiado.");
     } catch {
       showToast("error", "Cópia não concluída", "Não foi possível copiar o relatório.");
+    }
+  };
+
+  const handleCopyCsvPreviewBlocks = async () => {
+    if (!csvPreview || csvPreview.errors.length === 0) return;
+    const header = "Linha\tContato\tResultado\tMotivo";
+    const rows = csvPreview.errors.map((item) =>
+      [
+        item.rowNumber ?? "",
+        item.phoneDisplay ?? "",
+        "Bloqueado",
+        item.label,
+      ].join("\t")
+    );
+    try {
+      await copyTextToClipboard([header, ...rows].join("\n"));
+      showToast("success", "Erros copiados", `${rows.length} linha(s) copiadas para a área de transferência.`);
+    } catch {
+      showToast("error", "Cópia não concluída", "Não foi possível copiar os erros da prévia.");
     }
   };
 
@@ -2086,7 +2131,7 @@ export default function AppCampaignsPage() {
       return;
     }
     if (csvVariableMappingIncomplete) {
-      const message = "Vincule cada variável do modelo a Campo 1, Campo 2 ou Campo 3.";
+      const message = "Vincule cada variável do modelo a um campo mapeado do CSV.";
       setCsvPreviewError(message);
       showToast("error", "CSV incompleto", message);
       return;
@@ -2139,7 +2184,7 @@ export default function AppCampaignsPage() {
       return;
     }
     if (csvVariableMappingIncomplete) {
-      const message = "Vincule cada variável do modelo a Campo 1, Campo 2 ou Campo 3.";
+      const message = "Vincule cada variável do modelo a um campo mapeado do CSV.";
       setCsvPreviewError(message);
       showToast("error", "Rascunho CSV incompleto", message);
       return;
@@ -2924,7 +2969,11 @@ export default function AppCampaignsPage() {
             </div>
             {expandedCreationPanel === "csv" ? (
             <div id="campaign-creation-panel-csv" className="bg-black/10 px-3 py-3 md:px-4">
-            <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(180px,260px)_minmax(180px,260px)]">
+            <div className="mt-3 grid gap-4">
+            <div className="rounded-md border border-white/10 bg-slate-950/35 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-white/60">1. Mapear colunas do CSV</p>
+              <p className="mt-1 text-xs text-white/50">Associe as colunas do arquivo aos campos que poderão ser usados nesta campanha.</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <label className="grid gap-1 text-sm">
                 <span className="text-white/70">Arquivo CSV</span>
                 <input
@@ -2955,67 +3004,30 @@ export default function AppCampaignsPage() {
                   ))}
                 </select>
               </label>
-              <label className="grid gap-1 text-sm">
-                <span className="text-white/70">Campo 1</span>
-                <select
-                  value={csvNameColumn}
-                  disabled={csvHeaders.length === 0}
-                  onChange={(event) => {
-                    setCsvNameColumn(event.target.value);
-                    setCsvPreview(null);
-                  }}
-                  className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white disabled:opacity-50"
-                >
-                  <option value="">Não usar</option>
-                  {csvHeaders.map((header) => (
-                    <option key={header} value={header}>
-                      {header}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="text-white/70">Campo 2</span>
-                <select
-                  value={csvCrmSituationColumn}
-                  disabled={csvHeaders.length === 0}
-                  onChange={(event) => {
-                    setCsvCrmSituationColumn(event.target.value);
-                    setCsvPreview(null);
-                    setCsvImportReport(null);
-                  }}
-                  className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white disabled:opacity-50"
-                >
-                  <option value="">Não usar</option>
-                  {csvHeaders.map((header) => (
-                    <option key={header} value={header}>
-                      {header}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="text-white/70">Campo 3</span>
-                <select
-                  value={csvField3Column}
-                  disabled={csvHeaders.length === 0}
-                  onChange={(event) => {
-                    setCsvField3Column(event.target.value);
-                    setCsvPreview(null);
-                    setCsvImportReport(null);
-                  }}
-                  className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white disabled:opacity-50"
-                >
-                  <option value="">Não usar</option>
-                  {csvHeaders.map((header) => (
-                    <option key={header} value={header}>
-                      {header}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {CSV_GENERIC_FIELDS.map((field) => (
+                <label key={field.key} className="grid gap-1 text-sm">
+                  <span className="text-white/70">{field.label}</span>
+                  <select
+                    value={csvGenericFieldColumns[field.key]}
+                    disabled={csvHeaders.length === 0}
+                    onChange={(event) => updateCsvGenericFieldColumn(field.key, event.target.value)}
+                    className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white disabled:opacity-50"
+                  >
+                    <option value="">Não usar</option>
+                    {csvHeaders.map((header) => (
+                      <option key={header} value={header}>
+                        {header}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+              </div>
+            </div>
               {templateVariableLabels.length > 0 ? (
-                <div className="grid gap-2 lg:col-span-3 md:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-md border border-sky-300/15 bg-sky-950/15 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-sky-100/70">2. Preencher variáveis da mensagem</p>
+                  <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                   {templateVariableLabels.map((label) => (
                     <label key={label} className="grid gap-1 text-sm">
                       <span className="text-white/70">{`Variável {{${label}}}`}</span>
@@ -3030,12 +3042,15 @@ export default function AppCampaignsPage() {
                         className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white disabled:opacity-50"
                       >
                         <option value="">Selecione</option>
-                        <option value="field1">Campo 1</option>
-                        <option value="field2">Campo 2</option>
-                        <option value="field3">Campo 3</option>
+                        {mappedCsvGenericFields.map((field) => (
+                          <option key={field.key} value={field.key}>
+                            {field.label} · coluna "{csvGenericFieldColumns[field.key]}"
+                          </option>
+                        ))}
                       </select>
                     </label>
                   ))}
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -3100,12 +3115,23 @@ export default function AppCampaignsPage() {
                   </div>
                 </div>
                 {csvPreview.summary.blockedByReason.length > 0 ? (
-                  <div className="flex flex-wrap gap-2 text-xs">
-                    {csvPreview.summary.blockedByReason.map((item) => (
-                      <span key={item.reason} className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-white/75">
-                        {item.label}: {item.count}
-                      </span>
-                    ))}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      {csvPreview.summary.blockedByReason.map((item) => (
+                        <span key={item.reason} className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-white/75">
+                          {item.label}: {item.count}
+                        </span>
+                      ))}
+                    </div>
+                    {csvPreview.errors.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={handleCopyCsvPreviewBlocks}
+                        className="rounded-md border border-amber-300/30 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-900/25"
+                      >
+                        Copiar erros e bloqueios
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
                 {csvPreview.recipients.length > 0 || csvPreview.errors.length > 0 ? (

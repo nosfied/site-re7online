@@ -40,6 +40,17 @@ projetavel pela politica canonica da Inbox humana. O modal CSV usa `Cancelar`
 antes do processamento e `Fechar` apos o resumo concluido, sem a duplicidade
 Fechar/Cancelar.
 
+Atualizacao local de 2026-09-22: Campaign CSV readiness/UX esta LOCAL FIX
+PREPARED / NOT DEPLOYED. Campanhas CSV passam a mapear `Contato` obrigatorio e
+`Campo 1` a `Campo 10` opcionais, com variaveis do modelo visiveis somente
+para campos genericos ja mapeados. A tela separa mapeamento de colunas CSV do
+preenchimento das variaveis da mensagem, adiciona copia de erros/bloqueios da
+previa e mostra identificadores WhatsApp completos apenas em contexto
+autenticado de detalhe/rascunho. Seeds estaticas de CSV com
+`componentsByWaId` completo e `templateVariableMappings` vazio sao prontas para
+envio/agendamento sem reparo de banco; campanhas dinamicas por filtro CRM
+continuam exigindo mapeamentos canonicos.
+
 Atualizacao de 2026-09-20: Data Subject Privacy / LGPD contact-centric
 anonymization esta OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY DEPLOYED / PRODUCTION HEALTH VALIDATED. A tela de
 Privacidade passa a permitir buscar e selecionar um titular no CRM autenticado,

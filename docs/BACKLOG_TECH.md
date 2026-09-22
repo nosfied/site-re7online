@@ -236,6 +236,22 @@ Fechado / validado:
   tests stop before provider calls or campaign aggregate mutation. CRM campaign
   history remains actual-send evidence only: draft, seed, import, test-send and
   scheduled-not-run data stay excluded.
+- Campaign flow follow-up CSV readiness, 2026-09-22: LOCAL FIX PREPARED /
+  NOT DEPLOYED. Owner production feedback after head
+  `77e087a724fd53bcf06ed6d19267a655a06118b8` found that Campaign CSV generic
+  fields and template-variable mapping were visually mixed, unmapped generic
+  fields could appear as variable sources, CSV preview lacked copy/report
+  affordance, draft detail still masked recipients, and static CSV drafts such
+  as Demo `Campanha teste set.9` (`a1e01fb2-09f2-4be1-a180-3679a3ba008f`)
+  could have empty `templateVariableMappings` with valid per-recipient
+  `componentsByWaId`. Local fix expands Campaign CSV mapping to required
+  `Contato` plus optional `Campo 1` through `Campo 10`, exposes only mapped
+  generic fields as variable sources, separates CSV column mapping from message
+  variable mapping, adds copyable preview errors/blocks, shows authenticated
+  draft recipients with full WhatsApp identifiers, and treats static
+  components-only seeds as ready without DB repair. Dynamic CRM-filter
+  campaigns still require canonical `templateVariableMappings`. Production
+  deploy and owner validation remain pending.
 
 ACTIVE P0:
 

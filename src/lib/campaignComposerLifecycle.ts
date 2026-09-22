@@ -24,9 +24,10 @@ export type CampaignComposerDirtySnapshot = {
     fileName: string;
     headers: string[];
     phoneColumn: string;
-    nameColumn: string;
-    crmSituationColumn: string;
+    nameColumn?: string;
+    crmSituationColumn?: string;
     field3Column?: string;
+    genericFieldColumns?: Record<string, string>;
     variableColumns: Record<string, string>;
     hasPreview: boolean;
     hasImportReport: boolean;
@@ -60,9 +61,10 @@ export function isCampaignComposerDirty(snapshot: CampaignComposerDirtySnapshot)
     csv.fileName !== "" ||
     csv.headers.length > 0 ||
     csv.phoneColumn !== "" ||
-    csv.nameColumn !== "" ||
-    csv.crmSituationColumn !== "" ||
+    (csv.nameColumn ?? "") !== "" ||
+    (csv.crmSituationColumn ?? "") !== "" ||
     (csv.field3Column ?? "") !== "" ||
+    Object.values(csv.genericFieldColumns ?? {}).some((value) => value !== "") ||
     Object.values(csv.variableColumns).some((value) => value !== "") ||
     csv.hasPreview ||
     csv.hasImportReport;

@@ -249,6 +249,20 @@ test("campaign CSV parser accepts comma quoted values and reports missing phone 
   assert.equal(malformed.error, "csv_malformed");
 });
 
+test("campaign CSV parser maps template variables from ten generic fields", () => {
+  const parsed = buildCampaignImportRecipientsFromCsv({
+    csvText: "telefone,campo10\n5541991100099,Valor 10",
+    mapping: {
+      contactColumn: "telefone",
+      genericFieldColumns: { "10": "campo10" },
+      variableColumns: { "1": "field10" },
+    },
+  });
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.recipients[0]?.variables?.["1"], "Valor 10");
+});
+
 test("campaign CSV import upserts identity without semantic CRM field mutation", async () => {
   const clientId = crypto.randomUUID();
   const otherClientId = crypto.randomUUID();

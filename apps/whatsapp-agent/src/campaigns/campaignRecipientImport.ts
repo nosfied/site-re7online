@@ -28,6 +28,7 @@ import {
 export const CAMPAIGN_IMPORT_MAX_CSV_BYTES = 2 * 1024 * 1024;
 export const CAMPAIGN_IMPORT_MAX_ROWS = 10_000;
 export const CAMPAIGN_IMPORT_ERROR_SAMPLE_LIMIT = 50;
+export const CAMPAIGN_IMPORT_GENERIC_FIELD_COUNT = 10;
 
 export type CampaignImportBlockedReason =
   | "invalid_whatsapp_identity"
@@ -45,6 +46,7 @@ export type CampaignImportMapping = {
   field1Column?: string | null;
   field2Column?: string | null;
   field3Column?: string | null;
+  genericFieldColumns?: Record<string, string | null | undefined> | null;
   phoneColumn?: string | null;
   nameColumn?: string | null;
   crmSituationColumn?: string | null;
@@ -415,11 +417,22 @@ export function buildCampaignImportRecipientsFromCsv(params: {
   if (!contactColumn || !parsed.headers.includes(contactColumn)) {
     return { ok: false as const, error: "missing_phone_column" as const, headers: parsed.headers };
   }
-  const fieldColumns = {
-    field1: params.mapping.field1Column?.trim() || null,
-    field2: params.mapping.field2Column?.trim() || null,
-    field3: params.mapping.field3Column?.trim() || null,
-  };
+  const fieldColumns = Object.fromEntries(
+    Array.from({ length: CAMPAIGN_IMPORT_GENERIC_FIELD_COUNT }, (_, index) => {
+      const position = String(index + 1);
+      const legacyKey = `field${position}Column` as keyof CampaignImportMapping;
+      const legacyValue = params.mapping[legacyKey];
+      const genericValue = params.mapping.genericFieldColumns?.[position];
+      return [
+        `field${position}`,
+        typeof genericValue === "string"
+          ? genericValue.trim() || null
+          : typeof legacyValue === "string"
+            ? legacyValue.trim() || null
+            : null,
+      ];
+    })
+  ) as Record<string, string | null>;
   const variableColumns = params.mapping.variableColumns ?? {};
   return {
     ok: true as const,
@@ -427,9 +440,9 @@ export function buildCampaignImportRecipientsFromCsv(params: {
     delimiter: parsed.delimiter,
     recipients: parsed.rows.map((row) => {
       const fields = {
-        field1: getMappedColumn(row.values, fieldColumns.field1),
-        field2: getMappedColumn(row.values, fieldColumns.field2),
-        field3: getMappedColumn(row.values, fieldColumns.field3),
+        ...Object.fromEntries(
+          Object.entries(fieldColumns).map(([key, column]) => [key, getMappedColumn(row.values, column)])
+        ),
       };
       return {
         rowNumber: row.rowNumber,
@@ -441,13 +454,9 @@ export function buildCampaignImportRecipientsFromCsv(params: {
             .map(([position, source]) => {
               const normalizedSource = String(source ?? "").trim();
               const genericValue =
-                normalizedSource === "field1"
-                  ? fields.field1
-                  : normalizedSource === "field2"
-                    ? fields.field2
-                    : normalizedSource === "field3"
-                      ? fields.field3
-                      : getMappedColumn(row.values, normalizedSource);
+                normalizedSource.startsWith("field") && fields[normalizedSource] !== undefined
+                  ? fields[normalizedSource]
+                  : getMappedColumn(row.values, normalizedSource);
               return [position, genericValue] as const;
             })
             .filter(([position]) => Boolean(position))

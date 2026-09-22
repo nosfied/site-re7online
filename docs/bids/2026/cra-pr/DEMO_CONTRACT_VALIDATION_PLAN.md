@@ -849,3 +849,14 @@ execution. Variable-template test sends require explicit values when the test
 number is outside the saved recipients and fail before provider calls if
 incomplete. Contact campaign history is based only on actual send evidence, not
 drafts, import seeds, test sends or scheduled-not-run campaigns.
+
+Follow-up local correction, 2026-09-22: Campaign CSV readiness/UX is LOCAL FIX
+PREPARED / NOT DEPLOYED. The generic CSV mapping model is now `Contato`
+required plus optional `Campo 1` through `Campo 10`; only mapped generic fields
+may appear as template-variable sources. The UI separates CSV column mapping
+from message-variable mapping and adds copyable preview errors/blocks. Static
+CSV draft seeds with complete per-recipient `componentsByWaId` and empty
+`templateVariableMappings` are valid for send/schedule without repairing
+existing DB records, covering the observed Demo `Campanha teste set.9`
+(`a1e01fb2-09f2-4be1-a180-3679a3ba008f`) shape. Dynamic CRM-filter campaigns
+continue to require canonical template-variable mappings at schedule/runtime.

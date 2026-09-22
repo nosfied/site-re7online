@@ -146,22 +146,18 @@ test("campaign creation exposes dynamic CRM-filter scheduling without freezing p
 
 test("campaign CSV import uses generic contact and field mapping", () => {
   assert.ok(pageSource.includes("csvPhoneColumn"));
-  assert.ok(pageSource.includes("csvNameColumn"));
-  assert.ok(pageSource.includes("csvCrmSituationColumn"));
-  assert.ok(pageSource.includes("csvField3Column"));
+  assert.ok(pageSource.includes("CSV_GENERIC_FIELD_COUNT = 10"));
+  assert.ok(pageSource.includes("csvGenericFieldColumns"));
   assert.ok(pageSource.includes("<span className=\"text-white/70\">Contato</span>"));
-  assert.ok(pageSource.includes("<span className=\"text-white/70\">Campo 1</span>"));
-  assert.ok(pageSource.includes("<span className=\"text-white/70\">Campo 2</span>"));
-  assert.ok(pageSource.includes("<span className=\"text-white/70\">Campo 3</span>"));
+  assert.ok(pageSource.includes("1. Mapear colunas do CSV"));
+  assert.ok(pageSource.includes("2. Preencher variáveis da mensagem"));
+  assert.ok(pageSource.includes("field.label"));
   assert.ok(pageSource.includes("contactColumn: csvPhoneColumn"));
-  assert.ok(pageSource.includes("field1Column: csvNameColumn"));
-  assert.ok(pageSource.includes("field2Column: csvCrmSituationColumn"));
-  assert.ok(pageSource.includes("field3Column: csvField3Column"));
-  assert.ok(pageSource.includes("<option value=\"field1\">Campo 1</option>"));
-  assert.ok(pageSource.includes("<option value=\"field2\">Campo 2</option>"));
-  assert.ok(pageSource.includes("<option value=\"field3\">Campo 3</option>"));
+  assert.ok(pageSource.includes("genericFieldColumns"));
+  assert.ok(pageSource.includes("mappedCsvGenericFields.map"));
+  assert.ok(pageSource.includes("updateCsvGenericFieldColumn"));
   assert.ok(pageSource.includes("csvVariableMappingIncomplete"));
-  assert.ok(pageSource.includes("Vincule cada variável do modelo a Campo 1, Campo 2 ou Campo 3."));
+  assert.ok(pageSource.includes("Vincule cada variável do modelo a um campo mapeado do CSV."));
 });
 
 test("campaign CSV preview renders ready blocked and error rows in one reportable table", () => {
@@ -174,7 +170,9 @@ test("campaign CSV preview renders ready blocked and error rows in one reportabl
   assert.ok(pageSource.includes("Contato"));
   assert.ok(pageSource.includes("Motivo"));
   assert.ok(pageSource.includes("handleCopyCsvImportReport"));
+  assert.ok(pageSource.includes("handleCopyCsvPreviewBlocks"));
   assert.ok(pageSource.includes("handleDownloadCsvImportReport"));
+  assert.ok(pageSource.includes("Copiar erros e bloqueios"));
   assert.ok(pageSource.includes("Copiar relatório"));
   assert.ok(pageSource.includes("Baixar relatório CSV"));
 });

@@ -5162,6 +5162,7 @@ export async function previewAppCampaignCsv(
       field1Column?: string | null;
       field2Column?: string | null;
       field3Column?: string | null;
+      genericFieldColumns?: Record<string, string | null>;
       phoneColumn?: string | null;
       nameColumn?: string | null;
       crmSituationColumn?: string | null;
@@ -5186,6 +5187,7 @@ export async function createAppCampaignDraftFromCsv(
       field1Column?: string | null;
       field2Column?: string | null;
       field3Column?: string | null;
+      genericFieldColumns?: Record<string, string | null>;
       phoneColumn?: string | null;
       nameColumn?: string | null;
       crmSituationColumn?: string | null;

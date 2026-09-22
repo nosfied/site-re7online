@@ -138,6 +138,7 @@ import {
 } from "../campaigns/campaignAudiencePreview.js";
 import {
   buildCampaignImportRecipientsFromCsv,
+  CAMPAIGN_IMPORT_GENERIC_FIELD_COUNT,
   CAMPAIGN_IMPORT_MAX_CSV_BYTES,
   CAMPAIGN_IMPORT_MAX_ROWS,
   importCampaignRecipients,
@@ -29941,6 +29942,132 @@ function applyCampaignTemplateVariableMappingsToRecipients(params: {
   };
 }
 
+type CampaignDraftMessageReadiness =
+  | {
+      ready: true;
+      strategy: "per_recipient_components" | "variable_mappings" | "fixed_params";
+      recipients: CampaignDraftRecipientResolution;
+      components?: CampaignTemplateComponents;
+      componentsByWaId?: Record<string, CampaignTemplateComponents>;
+      templateVariableMappings: CampaignTemplateVariableMapping[];
+    }
+  | {
+      ready: false;
+      strategy: null;
+      error: "template_variables_required" | "invalid_template_variable_mapping" | "no_eligible_recipients";
+      recipients?: CampaignDraftRecipientResolution;
+    };
+
+function hasCompleteTemplateComponents(components: CampaignTemplateComponents | undefined, requiredPositions: string[]) {
+  const required = requiredPositions
+    .map((position) => Number(position))
+    .filter((position) => Number.isInteger(position) && position > 0);
+  if (required.length === 0) return true;
+  const body = components?.find((component) => component.type === "body");
+  if (!body || !Array.isArray(body.parameters)) return false;
+  return required.every((position) => {
+    const value = body.parameters[position - 1]?.text;
+    return typeof value === "string" && value.trim().length > 0;
+  });
+}
+
+function buildFixedTemplateComponentsFromSeed(seed: CampaignDraftSeed, requiredPositions: string[]) {
+  const components =
+    seed.templateParams.length > 0
+      ? [{ type: "body" as const, parameters: seed.templateParams.map((text) => ({ type: "text" as const, text })) }]
+      : undefined;
+  return hasCompleteTemplateComponents(components, requiredPositions) ? components : undefined;
+}
+
+function resolveCampaignDraftMessageReadiness(params: {
+  seed: CampaignDraftSeed;
+  requiredPositions: string[];
+  recipients: CampaignDraftRecipientResolution;
+}): CampaignDraftMessageReadiness {
+  const requiredPositions = Array.from(new Set(params.requiredPositions.map((value) => value.trim()).filter(Boolean)));
+  if (params.recipients.acceptedWaIds.length === 0) {
+    return { ready: false, strategy: null, error: "no_eligible_recipients", recipients: params.recipients };
+  }
+  if (requiredPositions.length === 0) {
+    return {
+      ready: true,
+      strategy: "fixed_params",
+      recipients: params.recipients,
+      templateVariableMappings: [],
+    };
+  }
+
+  if (params.seed.selectionMode === "DYNAMIC_CRM_FILTER") {
+    const variableMappings = parseCampaignTemplateVariableMappings(
+      params.seed.templateVariableMappings ?? [],
+      requiredPositions
+    );
+    if (!variableMappings.ok) return { ready: false, strategy: null, error: variableMappings.error };
+    const mapped = applyCampaignTemplateVariableMappingsToRecipients({
+      recipients: params.recipients,
+      mappings: variableMappings.mappings,
+    });
+    if (mapped.recipients.acceptedWaIds.length === 0) {
+      return { ready: false, strategy: null, error: "no_eligible_recipients", recipients: mapped.recipients };
+    }
+    return {
+      ready: true,
+      strategy: "variable_mappings",
+      recipients: mapped.recipients,
+      componentsByWaId: mapped.componentsByWaId,
+      templateVariableMappings: variableMappings.mappings,
+    };
+  }
+
+  if ((params.seed.templateVariableMappings ?? []).length > 0) {
+    const variableMappings = parseCampaignTemplateVariableMappings(params.seed.templateVariableMappings, requiredPositions);
+    if (!variableMappings.ok) return { ready: false, strategy: null, error: variableMappings.error };
+    const mapped = applyCampaignTemplateVariableMappingsToRecipients({
+      recipients: params.recipients,
+      mappings: variableMappings.mappings,
+    });
+    if (mapped.recipients.acceptedWaIds.length === 0) {
+      return { ready: false, strategy: null, error: "no_eligible_recipients", recipients: mapped.recipients };
+    }
+    return {
+      ready: true,
+      strategy: "variable_mappings",
+      recipients: mapped.recipients,
+      componentsByWaId: mapped.componentsByWaId,
+      templateVariableMappings: variableMappings.mappings,
+    };
+  }
+
+  const componentsByWaId = params.seed.componentsByWaId;
+  if (
+    componentsByWaId &&
+    params.recipients.acceptedWaIds.every((waId) =>
+      hasCompleteTemplateComponents(componentsByWaId[waId], requiredPositions)
+    )
+  ) {
+    return {
+      ready: true,
+      strategy: "per_recipient_components",
+      recipients: params.recipients,
+      componentsByWaId,
+      templateVariableMappings: params.seed.templateVariableMappings ?? [],
+    };
+  }
+
+  const fixedComponents = buildFixedTemplateComponentsFromSeed(params.seed, requiredPositions);
+  if (fixedComponents) {
+    return {
+      ready: true,
+      strategy: "fixed_params",
+      recipients: params.recipients,
+      components: fixedComponents,
+      templateVariableMappings: params.seed.templateVariableMappings ?? [],
+    };
+  }
+
+  return { ready: false, strategy: null, error: "template_variables_required", recipients: params.recipients };
+}
+
 function isAnonymizedCampaignMarker(value: unknown) {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (!normalized) return false;
@@ -35922,8 +36049,8 @@ async function buildCampaignDetailPayload(
       blockedByReason: [],
     },
     recipients: fallbackDraftSeed.recipients.slice(0, 200).map((waId) => ({
-      phoneDisplay: maskCampaignRecipientIdentifier(waId),
-      identifierDisplay: maskCampaignRecipientIdentifier(waId) ?? "WhatsApp User",
+      phoneDisplay: waId,
+      identifierDisplay: waId || "WhatsApp User",
     })),
   };
   const isDraftLikeCampaign = campaign.status === "draft" || campaign.status === "scheduled";
@@ -35931,9 +36058,7 @@ async function buildCampaignDetailPayload(
     isDraftLikeCampaign
       ? {
           ...draftSeed,
-          recipients: draftSeed.recipients.map(
-            (waId) => maskCampaignRecipientIdentifier(waId) ?? "WhatsApp User"
-          ),
+          recipients: draftSeed.recipients,
         }
       : draftSeed;
   const visibleMessagesMetaStatus =
@@ -36193,13 +36318,6 @@ async function sendScopedCampaignDraft(params: {
   if (!seed.returnDestination) {
     return { ok: false as const, status: 400 as const, error: "return_destination_required" as const };
   }
-  const variableMappings = parseCampaignTemplateVariableMappings(
-    seed.templateVariableMappings ?? [],
-    resolvedTemplate.variableKeys
-  );
-  if (!variableMappings.ok) {
-    return { ok: false as const, status: 400 as const, error: variableMappings.error };
-  }
   const resolvedRecipients =
     seed.leadIds && seed.leadIds.length > 0
       ? await resolveCampaignDraftRecipientsFromLeadIds(prisma, {
@@ -36229,12 +36347,21 @@ async function sendScopedCampaignDraft(params: {
             city: null,
           })),
         };
-  const { recipients, componentsByWaId } = applyCampaignTemplateVariableMappingsToRecipients({
+  const readiness = resolveCampaignDraftMessageReadiness({
+    seed,
+    requiredPositions: resolvedTemplate.variableKeys,
     recipients: resolvedRecipients,
-    mappings: variableMappings.mappings,
   });
-  const effectiveComponentsByWaId =
-    variableMappings.mappings.length === 0 ? seed.componentsByWaId : componentsByWaId;
+  if (!readiness.ready) {
+    return {
+      ok: false as const,
+      status: 400 as const,
+      error: readiness.error,
+      campaign,
+      recipients: readiness.recipients ?? resolvedRecipients,
+    };
+  }
+  const { recipients } = readiness;
   if (recipients.acceptedWaIds.length === 0) {
     await persistCampaignDraftSeed({
       clientId: params.clientId,
@@ -36244,12 +36371,9 @@ async function sendScopedCampaignDraft(params: {
       templateName: resolvedTemplate.templateName,
       leadIds: seed.leadIds ?? [],
       waIds: recipients.acceptedWaIds,
-      components:
-        variableMappings.mappings.length === 0 && seed.templateParams.length > 0
-          ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
-          : undefined,
-      templateVariableMappings: variableMappings.mappings,
-      componentsByWaId: effectiveComponentsByWaId,
+      components: readiness.components,
+      templateVariableMappings: readiness.templateVariableMappings,
+      componentsByWaId: readiness.componentsByWaId,
       returnDestination: seed.returnDestination,
       source: seed.source ?? "crm_audience_preview",
       summary: recipients.summary,
@@ -36273,12 +36397,9 @@ async function sendScopedCampaignDraft(params: {
     templateName: resolvedTemplate.templateName,
     leadIds: seed.leadIds ?? [],
     waIds: recipients.acceptedWaIds,
-    components:
-      variableMappings.mappings.length === 0 && seed.templateParams.length > 0
-        ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
-        : undefined,
-    templateVariableMappings: variableMappings.mappings,
-    componentsByWaId: effectiveComponentsByWaId,
+    components: readiness.components,
+    templateVariableMappings: readiness.templateVariableMappings,
+    componentsByWaId: readiness.componentsByWaId,
     returnDestination: seed.returnDestination,
     source: seed.source ?? "crm_audience_preview",
     summary: recipients.summary,
@@ -36302,11 +36423,8 @@ async function sendScopedCampaignDraft(params: {
     name: campaign.name,
     templateName: resolvedTemplate.templateName,
     waIds: recipients.acceptedWaIds,
-    components:
-      variableMappings.mappings.length === 0 && seed.templateParams.length > 0
-        ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
-        : undefined,
-    componentsByWaId: effectiveComponentsByWaId,
+    components: readiness.components,
+    componentsByWaId: readiness.componentsByWaId,
     returnDestination: seed.returnDestination,
   });
   return { ok: true as const, campaign: updated, campaignRunId, recipients };
@@ -36349,6 +36467,13 @@ async function scheduleScopedCampaignDraft(params: {
     if (!seed.dynamicFilter) {
       return { ok: false as const, status: 400 as const, error: "invalid_dynamic_filter" as const };
     }
+    const variableMappings = parseCampaignTemplateVariableMappings(
+      seed.templateVariableMappings ?? [],
+      resolvedTemplate.variableKeys
+    );
+    if (!variableMappings.ok) {
+      return { ok: false as const, status: 400 as const, error: variableMappings.error };
+    }
     assertCampaignTransition(campaign.status, "scheduled");
     const emptySummary: CampaignDraftRecipientSummary = {
       requested: 0,
@@ -36379,7 +36504,7 @@ async function scheduleScopedCampaignDraft(params: {
         seed.templateParams.length > 0
           ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
           : undefined,
-      templateVariableMappings: seed.templateVariableMappings ?? [],
+      templateVariableMappings: variableMappings.mappings,
       componentsByWaId: seed.componentsByWaId,
       returnDestination: seed.returnDestination,
       source: seed.source ?? "dynamic_crm_filter",
@@ -36404,13 +36529,6 @@ async function scheduleScopedCampaignDraft(params: {
       },
     });
     return { ok: true as const, campaign: updated, recipients: { summary: emptySummary } };
-  }
-  const variableMappings = parseCampaignTemplateVariableMappings(
-    seed.templateVariableMappings ?? [],
-    resolvedTemplate.variableKeys
-  );
-  if (!variableMappings.ok) {
-    return { ok: false as const, status: 400 as const, error: variableMappings.error };
   }
   const resolvedRecipients =
     seed.leadIds && seed.leadIds.length > 0
@@ -36441,12 +36559,21 @@ async function scheduleScopedCampaignDraft(params: {
             city: null,
           })),
         };
-  const { recipients, componentsByWaId } = applyCampaignTemplateVariableMappingsToRecipients({
+  const readiness = resolveCampaignDraftMessageReadiness({
+    seed,
+    requiredPositions: resolvedTemplate.variableKeys,
     recipients: resolvedRecipients,
-    mappings: variableMappings.mappings,
   });
-  const effectiveComponentsByWaId =
-    variableMappings.mappings.length === 0 ? seed.componentsByWaId : componentsByWaId;
+  if (!readiness.ready) {
+    return {
+      ok: false as const,
+      status: 400 as const,
+      error: readiness.error,
+      campaign,
+      recipients: readiness.recipients ?? resolvedRecipients,
+    };
+  }
+  const { recipients } = readiness;
   if (recipients.acceptedWaIds.length === 0) {
     return { ok: false as const, status: 400 as const, error: "no_eligible_recipients" as const, campaign, recipients };
   }
@@ -36469,12 +36596,9 @@ async function scheduleScopedCampaignDraft(params: {
     templateName: resolvedTemplate.templateName,
     leadIds: seed.leadIds ?? [],
     waIds: recipients.acceptedWaIds,
-    components:
-      variableMappings.mappings.length === 0 && seed.templateParams.length > 0
-        ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
-        : undefined,
-    componentsByWaId: effectiveComponentsByWaId,
-    templateVariableMappings: variableMappings.mappings,
+    components: readiness.components,
+    componentsByWaId: readiness.componentsByWaId,
+    templateVariableMappings: readiness.templateVariableMappings,
     returnDestination: seed.returnDestination,
     source: seed.source ?? "crm_audience_preview",
     summary: recipients.summary,
@@ -37257,6 +37381,24 @@ function normalizeCampaignCsvMapping(input: unknown): CampaignImportMapping {
             .filter(([position]) => Boolean(position))
         )
       : {};
+  const genericFieldColumns = Object.fromEntries(
+    Array.from({ length: CAMPAIGN_IMPORT_GENERIC_FIELD_COUNT }, (_, index) => {
+      const position = String(index + 1);
+      const genericValue =
+        typed.genericFieldColumns && typeof typed.genericFieldColumns === "object" && !Array.isArray(typed.genericFieldColumns)
+          ? (typed.genericFieldColumns as Record<string, unknown>)[position]
+          : undefined;
+      const legacyValue = (typed as Record<string, unknown>)[`field${position}Column`];
+      return [
+        position,
+        typeof genericValue === "string"
+          ? genericValue.trim()
+          : typeof legacyValue === "string"
+            ? legacyValue.trim()
+            : "",
+      ];
+    }).filter(([, column]) => Boolean(column))
+  );
   return {
     contactColumn:
       typeof typed.contactColumn === "string"
@@ -37267,6 +37409,7 @@ function normalizeCampaignCsvMapping(input: unknown): CampaignImportMapping {
     field1Column: typeof typed.field1Column === "string" ? typed.field1Column.trim() : null,
     field2Column: typeof typed.field2Column === "string" ? typed.field2Column.trim() : null,
     field3Column: typeof typed.field3Column === "string" ? typed.field3Column.trim() : null,
+    genericFieldColumns,
     phoneColumn: typeof typed.phoneColumn === "string" ? typed.phoneColumn.trim() : null,
     nameColumn: typeof typed.nameColumn === "string" ? typed.nameColumn.trim() : null,
     crmSituationColumn: typeof typed.crmSituationColumn === "string" ? typed.crmSituationColumn.trim() : null,

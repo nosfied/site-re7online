@@ -12120,7 +12120,8 @@ test("campaign draft uses approved template and stores safe seed without sending
   assert.equal(detail.body.campaign.metaSummary.totalFailed, 0);
   assert.equal(detail.body.campaign.messagesMetaStatus.length, 0);
   assert.equal(detail.body.campaign.draftReview.recipients.length, 2);
-  assert.equal(JSON.stringify(detail.body).includes(eligibleWaId), false);
+  assert.equal(detail.body.campaign.draftReview.recipients[0]?.phoneDisplay, eligibleWaId);
+  assert.equal(JSON.stringify(detail.body).includes(eligibleWaId), true);
 
   const crossTenantDiscard = await request<ErrorPayload>(
     "POST",
@@ -14493,9 +14494,13 @@ test("campaign draft send blocks mapped recipients without value or fallback", a
     select: { payloadJson: true },
   });
   assert.ok(seed);
-  const summary = (seed.payloadJson as { summary?: { blockedByReason?: Array<{ reason: string; count: number }> } })
-    .summary;
-  assert.ok(summary?.blockedByReason?.some((item) => item.reason === "variable_missing_value" && item.count === 1));
+  const seedPayload = seed.payloadJson as {
+    templateVariableMappings?: Array<{ position?: string; source?: string }>;
+  };
+  assert.deepEqual(seedPayload.templateVariableMappings, [
+    { position: "1", source: "contact.displayName" },
+    { position: "2", source: "lead.city" },
+  ]);
   const outboundCount = await prisma.outboundMessage.count({ where: { clientId: businessClientId, waId } });
   assert.equal(outboundCount, 0);
 });

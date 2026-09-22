@@ -489,3 +489,15 @@ campaign history remains based on real send evidence only; draft/import/test
 and scheduled-not-run records are excluded. This supports CRA traceability and
 operator evidence, but remains local product validation, not formal CRA
 acceptance.
+
+Campaign flow follow-up, 2026-09-22: LOCAL FIX PREPARED / NOT DEPLOYED. Owner
+feedback expanded the generic Campaign CSV fields to `Campo 1` through
+`Campo 10`, with `Contato` remaining required. Only mapped generic fields can
+source template variables, CSV column mapping is visually separated from
+message-variable mapping, preview errors/blocks have copyable evidence, and
+authenticated draft detail shows full WhatsApp identifiers. Static CSV seeds
+with complete per-recipient `componentsByWaId` and empty
+`templateVariableMappings` are valid for send/schedule without repairing
+historical DB rows; dynamic CRM-filter campaigns still require canonical
+variable mappings. This keeps CRA-CAMP-002/004 as product-local readiness and
+does not claim CRA formal acceptance.

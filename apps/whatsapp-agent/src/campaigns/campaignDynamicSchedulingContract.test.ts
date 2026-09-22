@@ -34,3 +34,18 @@ test("dynamic snapshot uses tenant-scoped CRM status id and canonical recipient 
   assert.ok(runnerSource.includes("variable_missing_value"));
   assert.ok(runnerSource.includes("buildPrivateCampaignSeedFields"));
 });
+
+test("static CSV drafts can be ready from per-recipient components without variable mappings", () => {
+  assert.ok(routesSource.includes("function resolveCampaignDraftMessageReadiness"));
+  assert.ok(routesSource.includes('strategy: "per_recipient_components"'));
+  assert.ok(routesSource.includes("hasCompleteTemplateComponents(componentsByWaId[waId]"));
+  assert.ok(routesSource.includes("componentsByWaId: readiness.componentsByWaId"));
+  assert.ok(routesSource.includes("templateVariableMappings: readiness.templateVariableMappings"));
+});
+
+test("dynamic scheduled drafts still require canonical variable mappings", () => {
+  assert.ok(routesSource.includes('params.seed.selectionMode === "DYNAMIC_CRM_FILTER"'));
+  assert.ok(routesSource.includes('seed.selectionMode === "DYNAMIC_CRM_FILTER"'));
+  assert.ok(routesSource.includes("parseCampaignTemplateVariableMappings("));
+  assert.ok(routesSource.includes('source: seed.source ?? "dynamic_crm_filter"'));
+});

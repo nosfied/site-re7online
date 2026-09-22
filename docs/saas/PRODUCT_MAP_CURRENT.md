@@ -618,3 +618,14 @@ explicit variables when the test target is not a saved recipient and stops
 before provider/aggregate mutation when incomplete. CRM campaign relationship
 history remains actual-send-only; draft, import, test-send and scheduled
 not-run records stay excluded.
+
+Campaign flow follow-up (2026-09-22): LOCAL FIX PREPARED / NOT DEPLOYED.
+Campaign CSV mapping is expanded to required `Contato` plus optional
+`Campo 1` through `Campo 10`; unmapped generic fields are not offered as
+template-variable sources. CSV column mapping and message variable mapping are
+separate UI groups, preview errors/blocks can be copied for report evidence,
+and authenticated draft detail exposes full WhatsApp identifiers. Static CSV
+draft seeds with complete per-recipient `componentsByWaId` and empty
+`templateVariableMappings` are accepted for send/schedule without DB repair;
+dynamic CRM-filter campaigns still require canonical template-variable
+mappings.

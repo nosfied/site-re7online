@@ -796,3 +796,25 @@ history remains actual-send-only: drafts, imports, test sends and scheduled
 campaigns not yet run are not shown as contact campaign history. This improves
 CRA operator evidence and traceability, but is not a real send and not formal
 CRA acceptance.
+
+## Campaign flow follow-up CSV readiness - 2026-09-22
+
+Status: LOCAL FIX PREPARED / NOT DEPLOYED.
+
+Owner production validation found the Campaign CSV composer still confusing and
+one persisted static CSV seed shape blocked send/schedule incorrectly. The
+local correction keeps `Contato` as the required recipient column and expands
+generic campaign-only value fields to `Campo 1` through `Campo 10`. Unmapped
+generic fields no longer appear as template-variable sources. The UI separates
+CSV column mapping from message-variable mapping, adds copyable preview
+errors/blocks and keeps authenticated draft/detail recipient identifiers
+unmasked for operational evidence.
+
+The readiness correction is code-based, not a DB repair: static CSV campaign
+seeds with complete per-recipient `componentsByWaId` and empty
+`templateVariableMappings` are now valid for send/schedule, including the
+observed Demo `Campanha teste set.9`
+(`a1e01fb2-09f2-4be1-a180-3679a3ba008f`) shape. Dynamic CRM-filter campaigns
+still require canonical template-variable mappings. No production DB mutation,
+provider call, real send, schema change, migration, commit, push or deploy was
+performed in this local pass.
