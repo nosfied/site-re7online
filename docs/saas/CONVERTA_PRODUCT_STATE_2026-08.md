@@ -74,8 +74,10 @@ codigo de erro antes de mensagem bruta, mantendo `template_variables_required`
 separado de `no_eligible_recipients` e traduzindo motivos conhecidos para
 PT-BR.
 
-Atualizacao local de 2026-09-23: Zero-eligible campaign + CRM eligibility
-counts esta LOCAL FIX PREPARED / NOT DEPLOYED. Campanhas manuais imediatas
+Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
+counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
+VALIDATED / OWNER UI PENDING no head
+`b8166b1cafea08f183646976a28b5649550729cd`. Campanhas manuais imediatas
 param antes de criar campanha quando todos os destinatarios solicitados estao
 bloqueados antes do provider; nesse caso nao ha Campaign, Outbound, Runtime ou
 provider call. Requisicoes mistas seguem para os elegiveis e preservam
@@ -85,7 +87,12 @@ da campanha e tentativas reais de provider. Contagens de CRM settings e preparo
 de destinatarios passam a usar a mesma projecao elegivel da preparacao de
 campanha, excluindo anonimizados, opt-out/envio ativo, removidos da operacao e
 identidades invalidas. O toast de reaproveitamento e o alinhamento dos campos
-nome/modelo receberam polimento local.
+nome/modelo receberam polimento. Validacao read-only de producao confirmou
+health/db OK, paginas `/app/campaigns`, `/app/crm`, `/app/settings/crm` e
+`/app/inbox` respondendo, tenant Demo com `rawLeadTotal=251` e
+`totalEligible=4` pela projecao de campanha, bloqueio pre-provider `****6787`
+sem evidencia outbound para o mesmo campaign/waId, tentativa real FAILED
+`****9614` preservada como historico e evidencia delivered preservada.
 
 Atualizacao de 2026-09-20: Data Subject Privacy / LGPD contact-centric
 anonymization esta OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY DEPLOYED / PRODUCTION HEALTH VALIDATED. A tela de

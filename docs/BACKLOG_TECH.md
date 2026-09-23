@@ -1881,7 +1881,8 @@ Production head: `9cfb0d439ed3acd8447659cb033519fa3507b3b3`.
 
 ## P1 - Campaign Reuse Contract + Owner-Facing Error Normalization - 2026-09-23
 
-Status: LOCAL FIX PREPARED / NOT DEPLOYED.
+Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN VALIDATED /
+OWNER UI PENDING.
 
 - `Reaproveitar campanha` and `Nova campanha com filtrados` now share one
   campaign reuse contract: rebuild the original composer semantics as far as
@@ -1926,6 +1927,20 @@ Status: LOCAL FIX PREPARED / NOT DEPLOYED.
   `crmCapabilityRoutes.test.ts` 20/20 PASS; campaigns frontend contracts
   27/27 PASS. Backend build PASS; normal production frontend build
   `npm run build` PASS with real local `node_modules`; final diff check PASS.
+- Production deployment: head `b8166b1cafea08f183646976a28b5649550729cd`
+  fast-forwarded from `332672508347836e2c4d4dbdd0aeb61272129b2c` after
+  persistent PostgreSQL backup. Backend and normal frontend production builds
+  passed; only `re7-whatsapp-agent` and `re7-admin-front` were reloaded, and
+  `re7-whatsapp-web-worker` was preserved.
+- Production read-only validation: health/db OK through `/agent-api/health`;
+  `/app/campaigns`, `/app/crm`, `/app/settings/crm` and `/app/inbox`
+  reachable. Demo CRM campaign-audience projection returned raw lead total 251
+  and eligible total 4; anonymized, opt-out/active-send blocked,
+  operationally excluded and invalid-identity exclusions remain governed by the
+  shared preparation helper. Pre-provider block sample `****6787` had no
+  outbound evidence for the same campaign/waId; real failed attempt `****9614`
+  and delivered evidence remained represented. No provider call, no real send
+  and no intended production test mutation were performed during validation.
 
 ## P1 - Campaign RBAC / Active Sends Authorization - 2026-09-23
 
