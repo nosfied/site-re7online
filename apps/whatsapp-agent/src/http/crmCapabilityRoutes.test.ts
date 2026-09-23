@@ -776,6 +776,32 @@ test("CRM CSV import previews without mutation and confirms idempotently", async
   assert.equal(await prisma.contact.count({ where: { clientId: businessClientId } }), contactsBefore);
   assert.equal(await prisma.lead.count({ where: { tenantId: businessClientId } }), leadsBefore);
 
+  const autoMappedPreview = await request<{
+    ok: boolean;
+    readyToImport: number;
+    rows: Array<{ operation: string; fieldsToUpdate: string[] }>;
+  }>("POST", "/app/crm/contacts/import/preview", businessSupervisor, {
+    csvText: "Telefone,Nome,Situação no CRM\n5541998877788,Auto Match,\n",
+    mapping: {},
+  });
+  assert.equal(autoMappedPreview.status, 200);
+  assert.equal(autoMappedPreview.body.ok, true);
+  assert.equal(autoMappedPreview.body.readyToImport, 1);
+  assert.equal(autoMappedPreview.body.rows[0]?.operation, "CREATE");
+
+  const unmappedOptionalPreview = await request<{
+    ok: boolean;
+    readyToImport: number;
+    rows: Array<{ operation: string; fieldsToUpdate: string[] }>;
+  }>("POST", "/app/crm/contacts/import/preview", businessSupervisor, {
+    csvText: "Telefone,Nome\n5541998877799,Nome Ignorado\n",
+    mapping: { phoneColumn: "Telefone", nameColumn: null },
+  });
+  assert.equal(unmappedOptionalPreview.status, 200);
+  assert.equal(unmappedOptionalPreview.body.ok, true);
+  assert.equal(unmappedOptionalPreview.body.readyToImport, 1);
+  assert.equal(unmappedOptionalPreview.body.rows[0]?.fieldsToUpdate.includes("Nome"), false);
+
   const confirm = await request<{
     ok: boolean;
     received: number;

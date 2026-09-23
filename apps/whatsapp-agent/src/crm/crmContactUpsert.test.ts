@@ -520,6 +520,81 @@ test("CRM CSV import resolves CRM situation and preserves existing status when b
   assert.equal((prisma.__state.leadUpdates[0] as { status?: string }).status, undefined);
 });
 
+test("CRM CSV import accepts phone-only mapping and defaults new contacts to NEW", async () => {
+  const prisma = makeUpsertPrisma();
+  const csvText = "Telefone\n5584999049614\n";
+
+  const preview = await previewCrmContactCsvImport(prisma as never, {
+    clientId: "client_a",
+    csvText,
+    mapping: {},
+  });
+  const result = await confirmCrmContactCsvImport(prisma as never, {
+    clientId: "client_a",
+    csvText,
+    mapping: {},
+    actorUserId: "admin_1",
+    requestId: "import_phone_only",
+    audit: false,
+  });
+
+  assert.equal(preview.readyToImport, 1);
+  assert.equal(preview.rows?.[0]?.operation, "CREATE");
+  assert.equal(result.created, 1);
+  assert.equal((prisma.__state.leadCreates[0] as { status?: string }).status, "NEW");
+});
+
+test("CRM CSV import respects explicitly unmapped optional columns", async () => {
+  const statuses = [{ id: "QUALIFIED", label: "Qualificado", isActive: true, campaignEligible: true }];
+  const prisma = makeUpsertPrisma({
+    contact: {
+      id: "contact_existing",
+      name: "Preservar",
+      waId: "5584999049614",
+    },
+    lead: { id: "lead_existing", name: "Preservar", phone: "5584999049614", status: "NEW" },
+  });
+  const csvText = "Telefone,Nome,Situação no CRM\n5584999049614,Novo Nome,Qualificado\n";
+
+  const preview = await previewCrmContactCsvImport(prisma as never, {
+    clientId: "client_a",
+    csvText,
+    mapping: { phoneColumn: "Telefone", nameColumn: null, crmSituationColumn: null },
+    crmStatuses: statuses,
+  });
+  const result = await confirmCrmContactCsvImport(prisma as never, {
+    clientId: "client_a",
+    csvText,
+    mapping: { phoneColumn: "Telefone", nameColumn: null, crmSituationColumn: null },
+    crmStatuses: statuses,
+    actorUserId: "admin_1",
+    requestId: "import_unmapped_optional",
+    audit: false,
+  });
+
+  assert.equal(preview.readyToImport, 1);
+  assert.equal(preview.rows?.[0]?.operation, "UNCHANGED");
+  assert.deepEqual(preview.rows?.[0]?.fieldsToUpdate, []);
+  assert.equal(result.unchanged, 1);
+  assert.equal(prisma.__state.leadUpdates.length, 1);
+  assert.equal((prisma.__state.leadUpdates[0] as { name?: string; status?: string }).name, "Preservar");
+  assert.equal((prisma.__state.leadUpdates[0] as { name?: string; status?: string }).status, undefined);
+});
+
+test("CRM CSV import blocks when phone mapping is explicitly disabled", async () => {
+  const prisma = makeUpsertPrisma();
+
+  await assert.rejects(
+    () =>
+      previewCrmContactCsvImport(prisma as never, {
+        clientId: "client_a",
+        csvText: "Telefone,Nome\n5584999049614,Novo\n",
+        mapping: { phoneColumn: null },
+      }),
+    (error) => error instanceof CrmContactUpsertError && error.code === "missing_phone_column"
+  );
+});
+
 test("CRM CSV import maps all editable fields and preserves blank mapped values", async () => {
   const prisma = makeUpsertPrisma({
     contact: {

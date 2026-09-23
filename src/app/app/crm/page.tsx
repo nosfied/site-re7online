@@ -1274,6 +1274,16 @@ function CsvImportModal({
 		  onPreview: (payload: { csvText: string; mapping: AppCrmContactCsvMapping }) => Promise<AppCrmContactImportPreviewResponse>;
 		  onConfirm: (payload: { csvText: string; mapping: AppCrmContactCsvMapping }) => Promise<AppCrmContactImportConfirmResponse>;
 		}) {
+		  type CsvMappingField = keyof AppCrmContactCsvMapping;
+		  const initialMappingTouched: Record<CsvMappingField, boolean> = {
+		    phoneColumn: false,
+		    nameColumn: false,
+		    crmSituationColumn: false,
+		    companyColumn: false,
+		    cityColumn: false,
+		    emailColumn: false,
+		    serviceColumn: false,
+		  };
 		  const [csvText, setCsvText] = useState("");
 		  const [phoneColumn, setPhoneColumn] = useState("");
 		  const [nameColumn, setNameColumn] = useState("");
@@ -1282,6 +1292,7 @@ function CsvImportModal({
 		  const [cityColumn, setCityColumn] = useState("");
 		  const [emailColumn, setEmailColumn] = useState("");
 		  const [serviceColumn, setServiceColumn] = useState("");
+		  const [mappingTouched, setMappingTouched] = useState<Record<CsvMappingField, boolean>>(initialMappingTouched);
   const [preview, setPreview] = useState<AppCrmContactImportPreviewResponse | null>(null);
   const [summary, setSummary] = useState<AppCrmContactImportConfirmResponse | null>(null);
 	  const [previewLoading, setPreviewLoading] = useState(false);
@@ -1290,18 +1301,38 @@ function CsvImportModal({
 	  const [previewMappingKey, setPreviewMappingKey] = useState("");
 	  const previewRequestSeq = useRef(0);
 	  const headers = preview?.headers ?? [];
-		  const mapping = {
-		    phoneColumn: phoneColumn || null,
-		    nameColumn: nameColumn || null,
-		    crmSituationColumn: crmSituationColumn || null,
-		    companyColumn: companyColumn || null,
-		    cityColumn: cityColumn || null,
-		    emailColumn: emailColumn || null,
-		    serviceColumn: serviceColumn || null,
+		  const setColumnTouched = (field: CsvMappingField) => {
+		    setMappingTouched((current) => ({ ...current, [field]: true }));
 		  };
+		  const buildMappedColumn = (field: CsvMappingField, value: string) => {
+		    const trimmed = value.trim();
+		    if (trimmed) return trimmed;
+		    return mappingTouched[field] ? null : undefined;
+		  };
+		  const mapping = {
+		    phoneColumn: buildMappedColumn("phoneColumn", phoneColumn),
+		    nameColumn: buildMappedColumn("nameColumn", nameColumn),
+		    crmSituationColumn: buildMappedColumn("crmSituationColumn", crmSituationColumn),
+		    companyColumn: buildMappedColumn("companyColumn", companyColumn),
+		    cityColumn: buildMappedColumn("cityColumn", cityColumn),
+		    emailColumn: buildMappedColumn("emailColumn", emailColumn),
+		    serviceColumn: buildMappedColumn("serviceColumn", serviceColumn),
+		  };
+		  const getMappingKey = (value: AppCrmContactCsvMapping) => JSON.stringify(value);
 	  const mappingKey = JSON.stringify(mapping);
 	  const loading = previewLoading || importLoading;
 	  const reportVisible = Boolean(summary);
+
+		  const resetColumnMapping = () => {
+		    setPhoneColumn("");
+		    setNameColumn("");
+		    setCrmSituationColumn("");
+		    setCompanyColumn("");
+		    setCityColumn("");
+		    setEmailColumn("");
+		    setServiceColumn("");
+		    setMappingTouched(initialMappingTouched);
+		  };
 
   const readFile = async (file: File | null) => {
     if (!file) return;
@@ -1310,40 +1341,48 @@ function CsvImportModal({
     setSummary(null);
     setLocalError(null);
     setPreviewMappingKey("");
+	    resetColumnMapping();
 	    setCsvText(await file.text());
 	  };
 
   const updatePhoneColumn = (value: string) => {
+	    setColumnTouched("phoneColumn");
     setPhoneColumn(value);
     setSummary(null);
   };
 
   const updateNameColumn = (value: string) => {
+	    setColumnTouched("nameColumn");
     setNameColumn(value);
     setSummary(null);
   };
 
 	  const updateCrmSituationColumn = (value: string) => {
+	    setColumnTouched("crmSituationColumn");
 	    setCrmSituationColumn(value);
 	    setSummary(null);
 	  };
 
 	  const updateCompanyColumn = (value: string) => {
+	    setColumnTouched("companyColumn");
 	    setCompanyColumn(value);
 	    setSummary(null);
 	  };
 
 	  const updateCityColumn = (value: string) => {
+	    setColumnTouched("cityColumn");
 	    setCityColumn(value);
 	    setSummary(null);
 	  };
 
 	  const updateEmailColumn = (value: string) => {
+	    setColumnTouched("emailColumn");
 	    setEmailColumn(value);
 	    setSummary(null);
 	  };
 
 	  const updateServiceColumn = (value: string) => {
+	    setColumnTouched("serviceColumn");
 	    setServiceColumn(value);
 	    setSummary(null);
 	  };
@@ -1366,21 +1405,21 @@ function CsvImportModal({
 	      let nextCityColumn = cityColumn;
 	      let nextEmailColumn = emailColumn;
 	      let nextServiceColumn = serviceColumn;
-      if (!phoneColumn && response.headers.length > 0) {
+      if (!phoneColumn && !mappingTouched.phoneColumn && response.headers.length > 0) {
         const guessed = response.headers.find((header) => /^(numero|número|telefone|phone|whatsapp)$/i.test(header.trim()));
         if (guessed) {
           nextPhoneColumn = guessed;
           setPhoneColumn(guessed);
         }
       }
-	      if (!nameColumn && response.headers.length > 0) {
+	      if (!nameColumn && !mappingTouched.nameColumn && response.headers.length > 0) {
 	        const guessed = response.headers.find((header) => /^(nome|name)$/i.test(header.trim()));
 	        if (guessed) {
 	          nextNameColumn = guessed;
 	          setNameColumn(guessed);
 	        }
 	      }
-		      if (!crmSituationColumn && response.headers.length > 0) {
+		      if (!crmSituationColumn && !mappingTouched.crmSituationColumn && response.headers.length > 0) {
 	        const guessed = response.headers.find((header) =>
 	          /^(situa[cç][aã]o no crm|situa[cç][aã]o crm|status crm|crm status)$/i.test(header.trim())
 	        );
@@ -1389,42 +1428,42 @@ function CsvImportModal({
 		          setCrmSituationColumn(guessed);
 		        }
 		      }
-		      if (!companyColumn && response.headers.length > 0) {
+		      if (!companyColumn && !mappingTouched.companyColumn && response.headers.length > 0) {
 		        const guessed = response.headers.find((header) => /^(empresa|company|organiza[cç][aã]o)$/i.test(header.trim()));
 		        if (guessed) {
 		          nextCompanyColumn = guessed;
 		          setCompanyColumn(guessed);
 		        }
 		      }
-		      if (!cityColumn && response.headers.length > 0) {
+		      if (!cityColumn && !mappingTouched.cityColumn && response.headers.length > 0) {
 		        const guessed = response.headers.find((header) => /^(cidade|city|munic[ií]pio)$/i.test(header.trim()));
 		        if (guessed) {
 		          nextCityColumn = guessed;
 		          setCityColumn(guessed);
 		        }
 		      }
-		      if (!emailColumn && response.headers.length > 0) {
+		      if (!emailColumn && !mappingTouched.emailColumn && response.headers.length > 0) {
 		        const guessed = response.headers.find((header) => /^(email|e-mail)$/i.test(header.trim()));
 		        if (guessed) {
 		          nextEmailColumn = guessed;
 		          setEmailColumn(guessed);
 		        }
 		      }
-		      if (!serviceColumn && response.headers.length > 0) {
+		      if (!serviceColumn && !mappingTouched.serviceColumn && response.headers.length > 0) {
 		        const guessed = response.headers.find((header) => /^(servi[cç]o|interesse|service|interest)$/i.test(header.trim()));
 		        if (guessed) {
 		          nextServiceColumn = guessed;
 		          setServiceColumn(guessed);
 		        }
 		      }
-		      setPreviewMappingKey(JSON.stringify({
-		        phoneColumn: nextPhoneColumn || null,
-		        nameColumn: nextNameColumn || null,
-		        crmSituationColumn: nextCrmSituationColumn || null,
-		        companyColumn: nextCompanyColumn || null,
-		        cityColumn: nextCityColumn || null,
-		        emailColumn: nextEmailColumn || null,
-		        serviceColumn: nextServiceColumn || null,
+		      setPreviewMappingKey(getMappingKey({
+		        phoneColumn: nextPhoneColumn || (mappingTouched.phoneColumn ? null : undefined),
+		        nameColumn: nextNameColumn || (mappingTouched.nameColumn ? null : undefined),
+		        crmSituationColumn: nextCrmSituationColumn || (mappingTouched.crmSituationColumn ? null : undefined),
+		        companyColumn: nextCompanyColumn || (mappingTouched.companyColumn ? null : undefined),
+		        cityColumn: nextCityColumn || (mappingTouched.cityColumn ? null : undefined),
+		        emailColumn: nextEmailColumn || (mappingTouched.emailColumn ? null : undefined),
+		        serviceColumn: nextServiceColumn || (mappingTouched.serviceColumn ? null : undefined),
 		      }));
     } catch (err) {
       if (requestSeq !== previewRequestSeq.current) return;

@@ -201,15 +201,17 @@ test("CRM CSV import can refresh preview after column mapping changes", () => {
     pageSource.indexOf("export default function AppCrmContactsPage")
   );
   assert.ok(modalBlock.includes("const [previewMappingKey, setPreviewMappingKey] = useState(\"\");"));
+  assert.ok(modalBlock.includes("const [mappingTouched, setMappingTouched]"));
+  assert.ok(modalBlock.includes("const buildMappedColumn = (field: CsvMappingField, value: string)"));
   assert.ok(modalBlock.includes("const mappingKey = JSON.stringify(mapping);"));
-  assert.ok(modalBlock.includes("setPreviewMappingKey(JSON.stringify({"));
-  assert.ok(modalBlock.includes("phoneColumn: nextPhoneColumn || null"));
-  assert.ok(modalBlock.includes("nameColumn: nextNameColumn || null"));
-  assert.ok(modalBlock.includes("crmSituationColumn: nextCrmSituationColumn || null"));
-  assert.ok(modalBlock.includes("companyColumn: nextCompanyColumn || null"));
-  assert.ok(modalBlock.includes("cityColumn: nextCityColumn || null"));
-  assert.ok(modalBlock.includes("emailColumn: nextEmailColumn || null"));
-  assert.ok(modalBlock.includes("serviceColumn: nextServiceColumn || null"));
+  assert.ok(modalBlock.includes("setPreviewMappingKey(getMappingKey({"));
+  assert.ok(modalBlock.includes("phoneColumn: nextPhoneColumn || (mappingTouched.phoneColumn ? null : undefined)"));
+  assert.ok(modalBlock.includes("nameColumn: nextNameColumn || (mappingTouched.nameColumn ? null : undefined)"));
+  assert.ok(modalBlock.includes("crmSituationColumn: nextCrmSituationColumn || (mappingTouched.crmSituationColumn ? null : undefined)"));
+  assert.ok(modalBlock.includes("companyColumn: nextCompanyColumn || (mappingTouched.companyColumn ? null : undefined)"));
+  assert.ok(modalBlock.includes("cityColumn: nextCityColumn || (mappingTouched.cityColumn ? null : undefined)"));
+  assert.ok(modalBlock.includes("emailColumn: nextEmailColumn || (mappingTouched.emailColumn ? null : undefined)"));
+  assert.ok(modalBlock.includes("serviceColumn: nextServiceColumn || (mappingTouched.serviceColumn ? null : undefined)"));
   assert.ok(modalBlock.includes("updatePhoneColumn(event.target.value)"));
   assert.ok(modalBlock.includes("updateNameColumn(event.target.value)"));
   assert.ok(modalBlock.includes("updateCrmSituationColumn(event.target.value)"));
@@ -223,6 +225,25 @@ test("CRM CSV import can refresh preview after column mapping changes", () => {
   assert.ok(modalBlock.includes("setPreviewMappingKey(\"\");"));
   assert.ok(modalBlock.includes("if (requestSeq !== previewRequestSeq.current) return;"));
   assert.ok(modalBlock.includes("previewLoading || importLoading"));
+});
+
+test("CRM CSV import auto-matches optional columns without making them required", () => {
+  const modalBlock = pageSource.slice(
+    pageSource.indexOf("function CsvImportModal"),
+    pageSource.indexOf("export default function AppCrmContactsPage")
+  );
+  assert.ok(modalBlock.includes("return mappingTouched[field] ? null : undefined;"));
+  assert.ok(modalBlock.includes("resetColumnMapping();"));
+  assert.ok(modalBlock.includes("!mappingTouched.phoneColumn"));
+  assert.ok(modalBlock.includes("!mappingTouched.nameColumn"));
+  assert.ok(modalBlock.includes("!mappingTouched.crmSituationColumn"));
+  assert.ok(modalBlock.includes("!mappingTouched.companyColumn"));
+  assert.ok(modalBlock.includes("!mappingTouched.cityColumn"));
+  assert.ok(modalBlock.includes("!mappingTouched.emailColumn"));
+  assert.ok(modalBlock.includes("!mappingTouched.serviceColumn"));
+  assert.ok(modalBlock.includes("setColumnTouched(\"phoneColumn\")"));
+  assert.ok(modalBlock.includes("setColumnTouched(\"crmSituationColumn\")"));
+  assert.ok(modalBlock.includes("<option value=\"\">Preservar/default</option>"));
 });
 
 test("CRM CSV import uses campaign-style preview/report tables and localized result labels", () => {

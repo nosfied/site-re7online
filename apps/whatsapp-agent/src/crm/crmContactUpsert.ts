@@ -719,7 +719,9 @@ function normalizeHeader(value: string) {
 
 function resolveMappedColumn(headers: string[], explicit: string | null | undefined, aliases: string[]) {
   const normalizedByHeader = new Map(headers.map((header) => [normalizeHeader(header), header] as const));
+  if (explicit === null) return null;
   const explicitTrimmed = explicit?.trim();
+  if (explicit !== undefined && !explicitTrimmed) return null;
   if (explicitTrimmed) {
     if (headers.includes(explicitTrimmed)) return explicitTrimmed;
     return normalizedByHeader.get(normalizeHeader(explicitTrimmed)) ?? null;

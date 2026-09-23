@@ -11458,6 +11458,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 	      if (!body) return;
 	      const csvText = typeof body.csvText === "string" ? body.csvText : "";
 	      const mapping = body.mapping && typeof body.mapping === "object" ? body.mapping as Record<string, unknown> : {};
+	      const mapCsvColumn = (key: string) => {
+	        if (!Object.prototype.hasOwnProperty.call(mapping, key)) return undefined;
+	        if (typeof mapping[key] !== "string") return null;
+	        const trimmed = String(mapping[key]).trim();
+	        return trimmed ? trimmed : null;
+	      };
 	      const tenants = await getTenants();
 	      const resolvedStatuses = await resolveCrmBusinessStatuses({
 	        prisma,
@@ -11469,13 +11475,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 	            clientId: client.id,
 	            csvText,
 		            mapping: {
-		              phoneColumn: typeof mapping.phoneColumn === "string" ? mapping.phoneColumn : null,
-		              nameColumn: typeof mapping.nameColumn === "string" ? mapping.nameColumn : null,
-		              crmSituationColumn: typeof mapping.crmSituationColumn === "string" ? mapping.crmSituationColumn : null,
-		              companyColumn: typeof mapping.companyColumn === "string" ? mapping.companyColumn : null,
-		              cityColumn: typeof mapping.cityColumn === "string" ? mapping.cityColumn : null,
-		              emailColumn: typeof mapping.emailColumn === "string" ? mapping.emailColumn : null,
-		              serviceColumn: typeof mapping.serviceColumn === "string" ? mapping.serviceColumn : null,
+		              phoneColumn: mapCsvColumn("phoneColumn"),
+		              nameColumn: mapCsvColumn("nameColumn"),
+		              crmSituationColumn: mapCsvColumn("crmSituationColumn"),
+		              companyColumn: mapCsvColumn("companyColumn"),
+		              cityColumn: mapCsvColumn("cityColumn"),
+		              emailColumn: mapCsvColumn("emailColumn"),
+		              serviceColumn: mapCsvColumn("serviceColumn"),
 		            },
 	            crmStatuses: resolvedStatuses.statuses,
 	            actorUserId: clientAuth.userId,
@@ -11485,13 +11491,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 	            clientId: client.id,
 	            csvText,
 		            mapping: {
-		              phoneColumn: typeof mapping.phoneColumn === "string" ? mapping.phoneColumn : null,
-		              nameColumn: typeof mapping.nameColumn === "string" ? mapping.nameColumn : null,
-		              crmSituationColumn: typeof mapping.crmSituationColumn === "string" ? mapping.crmSituationColumn : null,
-		              companyColumn: typeof mapping.companyColumn === "string" ? mapping.companyColumn : null,
-		              cityColumn: typeof mapping.cityColumn === "string" ? mapping.cityColumn : null,
-		              emailColumn: typeof mapping.emailColumn === "string" ? mapping.emailColumn : null,
-		              serviceColumn: typeof mapping.serviceColumn === "string" ? mapping.serviceColumn : null,
+		              phoneColumn: mapCsvColumn("phoneColumn"),
+		              nameColumn: mapCsvColumn("nameColumn"),
+		              crmSituationColumn: mapCsvColumn("crmSituationColumn"),
+		              companyColumn: mapCsvColumn("companyColumn"),
+		              cityColumn: mapCsvColumn("cityColumn"),
+		              emailColumn: mapCsvColumn("emailColumn"),
+		              serviceColumn: mapCsvColumn("serviceColumn"),
 		            },
 	            crmStatuses: resolvedStatuses.statuses,
 	          });
