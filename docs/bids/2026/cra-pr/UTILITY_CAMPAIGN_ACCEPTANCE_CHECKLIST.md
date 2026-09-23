@@ -510,5 +510,7 @@ Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
 - Manual campaign recipients, CSV campaign draft recipients and Inbox template
   sends preserve active opt-out/send-block guards before provider calls.
 - Campaigns/Inbox customer UX must not show billing notices or price guidance.
-- Status: LOCAL FIX PREPARED / NOT DEPLOYED; CRA controlled evidence still
-  required before formal acceptance.
+- Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING;
+  CRA controlled evidence still required before formal acceptance. Deploy head:
+  `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`; no smoke provider call and no
+  real campaign send were performed.

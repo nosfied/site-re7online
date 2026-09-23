@@ -1779,7 +1779,24 @@ GAP / OPEN; SYER ****9614 = CLOSED.
 
 ## CRM origin + full Contacts CSV + campaign block guards - 2026-09-23
 
-Status: LOCAL FIX PREPARED / NOT DEPLOYED.
+Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING.
+
+Production deploy 2026-09-23:
+- Previous head: `31a65a2bc6a74d7dd8fc5d5086133735155c64d4`.
+- Deployed head: `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`.
+- Backup:
+  `/opt/re7online/backups/postgres/pre-crm-origin-csv-campaign-guards-2a652e69-20260923T004417Z.dump`
+  (`21677788` bytes,
+  sha256 `99d2bbccd613dada93d27c19ee6d05a3f941cbe5a311d759036a10cb9f4688aa`,
+  `596` objects).
+- Production health after reload: `/agent-api/health` PASS (`ok=true`,
+  `db=ok`); `/app/crm`, `/app/campaigns`, `/app/inbox` and
+  `/app/settings/crm` returned HTTP 200.
+- Reloaded only `re7-whatsapp-agent` and `re7-admin-front`; worker PID/restart
+  count preserved.
+- Authenticated owner UI smoke and real CSV/campaign mutation evidence were not
+  exercised; no fabricated session, no real campaign send and no provider call
+  were used for smoke.
 
 - CRM origin preserves earliest reliable provenance and records inbound/contact
   materialization as `Atendimento / conversa` without a new persistence field.

@@ -643,13 +643,17 @@ excluded from contact campaign history. Campaign result filters, CSV mapping
 selects, reuse state restoration and Contacts CSV preview alignment were
 hardened locally without schema, migration, provider call or real send.
 
-CRM origin + full Contacts CSV + campaign block guards (2026-09-23): LOCAL FIX
-PREPARED / NOT DEPLOYED. Contact origin remains event-derived and earliest
-reliable provenance wins; inbound-created contacts/leads are classified as
-`Atendimento / conversa`. Contacts CSV maps all editable CRM fields currently
-available in the manual/contact surface while preserving blank/unmapped
-existing data. CRM `NEW` is enforced as active system status and excluded from
-campaign eligibility. Campaign and Inbox active-send blocks remain before
-provider calls and now expose owner-friendly reasons; Campaigns/Inbox remain
-free of billing notices in customer UX. No schema/migration, no provider call
-and no real send.
+CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
+PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was
+fast-forwarded to `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`;
+backend/frontend builds and health passed, and only agent/admin-front were
+reloaded. Contact origin remains event-derived and earliest reliable provenance
+wins; inbound-created contacts/leads are classified as `Atendimento / conversa`.
+Contacts CSV maps all editable CRM fields currently available in the
+manual/contact surface while preserving blank/unmapped existing data. CRM
+`NEW` is enforced as active system status and campaign-eligible by default; it
+is not a send block by itself. Campaign and Inbox active-send blocks remain
+before provider calls and now expose owner-friendly reasons; Campaigns/Inbox
+remain free of billing notices in customer UX. No schema/migration, no smoke
+provider call and no real campaign send. Authenticated owner UI and real
+post-deploy CSV/campaign mutation evidence remain not exercised.

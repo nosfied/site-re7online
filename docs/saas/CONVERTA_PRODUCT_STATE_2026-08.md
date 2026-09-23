@@ -1313,8 +1313,16 @@ pending 0, technical failures 0 and `Entrega parcial`. Campaign backend
 118/118 and complementary 56/56 plus 72/72 matrices pass. Schema unchanged,
 migration none, no real send, no identity repair and no deploy.
 
-CRM origin + full Contacts CSV + campaign block guards (2026-09-23): LOCAL FIX
-PREPARED / NOT DEPLOYED. CRM read model origin remains a canonical
+CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
+PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production head
+`2a652e693a4bce5cfaa7e0a1fa5ef667537f154a` was fast-forwarded from
+`31a65a2bc6a74d7dd8fc5d5086133735155c64d4` after PostgreSQL backup
+`/opt/re7online/backups/postgres/pre-crm-origin-csv-campaign-guards-2a652e69-20260923T004417Z.dump`
+(`21677788` bytes, sha256
+`99d2bbccd613dada93d27c19ee6d05a3f941cbe5a311d759036a10cb9f4688aa`,
+`596` objects). Backend/frontend builds and production health passed; only
+`re7-whatsapp-agent` and `re7-admin-front` were reloaded, with
+`re7-whatsapp-web-worker` preserved. CRM read model origin remains a canonical
 event-derived projection: manual, CSV, campaign/audience, conversation/inbound,
 system and legacy unknown stay distinct. Contacts CSV import supports optional
 company, city, email and service/interest columns in addition to phone, name
@@ -1322,4 +1330,7 @@ and CRM situation; blank or unmapped optional fields preserve existing data.
 `NEW` is mandatory and active, but it does not create campaign ineligibility by
 itself. Campaign manual/CSV and Inbox template paths preserve pre-provider
 active-send/opt-out blocking and display non-technical reasons. No schema,
-migration, production mutation, provider call or real send occurred.
+migration, smoke provider call or real campaign send occurred. Authenticated
+owner UI, real post-deploy CSV import, real post-deploy blocked campaign
+evidence and real new inbound-origin evidence remain not exercised until a
+separately authorized natural validation path exists.

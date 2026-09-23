@@ -842,9 +842,10 @@ real send, commit, push or deploy was performed in this local pass.
 
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 
-Status: LOCAL FIX PREPARED / NOT DEPLOYED / NOT CRA FORMAL ACCEPTANCE.
+Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING /
+NOT CRA FORMAL ACCEPTANCE.
 
-The local product follow-up records inbound-created contacts/leads as
+The product follow-up records inbound-created contacts/leads as
 `Atendimento / conversa` through existing CRM provenance events, while keeping
 manual, CSV, campaign/audience, system and unknown legacy origins separate.
 Contacts CSV now supports all editable CRM import fields: phone required;
@@ -853,6 +854,9 @@ or unmapped optional cells preserve existing data, and preview lists which
 fields will change. CRM `NEW` is mandatory and active, but does not create
 campaign ineligibility by itself. Campaign manual/CSV block guards and Inbox
 template active-send guard continue before provider calls; the customer UI no
-longer shows billing notices in Campaigns/Inbox. This improves CRA readiness
-evidence for import/upsert, opt-out and operator traceability, but does not
-replace the controlled CRA run.
+longer shows billing notices in Campaigns/Inbox. Production deploy reached
+`2a652e693a4bce5cfaa7e0a1fa5ef667537f154a` with backend/frontend builds and
+health PASS, no schema/migration, no smoke provider call and no real campaign
+send. Authenticated owner UI, real post-deploy CSV import and real CRA campaign
+evidence remain not exercised. This improves CRA readiness for import/upsert,
+opt-out and operator traceability, but does not replace the controlled CRA run.

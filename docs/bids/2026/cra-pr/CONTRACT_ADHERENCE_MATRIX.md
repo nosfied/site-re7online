@@ -514,8 +514,9 @@ authenticated identifiers. Result filters, mapping controls, campaign reuse and
 Contacts CSV preview alignment were locally corrected. CRA formal acceptance is
 not claimed before deployment and controlled CRA evidence.
 
-CRM origin + Contacts CSV + campaign block guards, 2026-09-23: LOCAL FIX
-PREPARED / NOT DEPLOYED. The CRM read model records inbound-origin contacts as
+CRM origin + Contacts CSV + campaign block guards, 2026-09-23: DEPLOYED /
+PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. The CRM read model
+records inbound-origin contacts as
 `Atendimento / conversa` through existing provenance events, Contacts CSV maps
 phone plus optional name, CRM situation, company, city, email and
 service/interest, and blank/unmapped optional values preserve existing data.
@@ -523,4 +524,7 @@ service/interest, and blank/unmapped optional values preserve existing data.
 ineligibility by itself. Campaign manual/CSV and Inbox template paths preserve
 pre-provider active-send/opt-out guards and remove customer billing notices.
 This strengthens CRA-CAMP-002, CRA-OPT-001 and CRM traceability readiness;
-formal CRA acceptance still requires controlled CRA evidence after deployment.
+formal CRA acceptance still requires controlled CRA evidence. Production deploy
+reached head `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a` with health PASS and
+no smoke provider call or real campaign send; authenticated owner UI and real
+CRA CSV/campaign evidence remain not exercised.
