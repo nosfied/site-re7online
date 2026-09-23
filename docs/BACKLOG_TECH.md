@@ -1856,7 +1856,8 @@ Status: LOCAL FIX VALIDATED / NOT DEPLOYED.
 
 ## Final CSV inspection + Campaign Detail UX - 2026-09-23
 
-Status: LOCAL VALIDATED / NOT DEPLOYED.
+Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING.
+Production head: `9cfb0d439ed3acd8447659cb033519fa3507b3b3`.
 
 - Contacts CSV now separates file inspection from mapped import preview. The
   operator can load/inspect a valid CSV, see all headers and then explicitly
@@ -1872,6 +1873,11 @@ Status: LOCAL VALIDATED / NOT DEPLOYED.
   before display/copy where supported, while preserving provider details for
   unknown diagnostics. Refresh keeps icon `↺`; `Nova campanha com filtrados`
   uses a distinct creation icon `＋`.
+- Production deploy validated backend health (`ok=true`, `db=ok`) and app
+  shell reachability for `/app/crm`, `/app/campaigns` and `/app/inbox`.
+  Authenticated owner UI smoke was not exercised in this gate because no
+  genuine owner session was available to reuse without fabricating
+  authentication.
 
 ## P1 - Campaign RBAC / Active Sends Authorization - 2026-09-23
 
