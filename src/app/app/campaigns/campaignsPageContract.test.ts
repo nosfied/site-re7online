@@ -46,6 +46,7 @@ test("campaign destination remains department-only in standard flow", () => {
 test("campaign result renders explicit blocked and skipped recipient states", () => {
   assert.ok(pageSource.includes('case "blocked":'));
   assert.ok(pageSource.includes('return "Bloqueada"'));
+  assert.ok(pageSource.includes('return "Bloqueada para envios ativos"'));
   assert.ok(pageSource.includes('case "skipped":'));
   assert.ok(pageSource.includes('return "Ignorada"'));
 });
@@ -107,11 +108,11 @@ test("campaign result filtered actions only operate on the visible result set", 
   assert.ok(pageSource.includes("filteredCampaignResultItems.map((item)"));
   assert.ok(pageSource.includes('const header = "Nome\\tTelefone\\tSituação CRM\\tResultado\\tEntrega\\tErro"'));
   assert.ok(pageSource.includes("const handleReuseFilteredResults"));
-  assert.ok(pageSource.includes("const reusable = filteredCampaignResultItems.filter((item) => item.leadId)"));
-  assert.ok(pageSource.includes("const excluded = filteredCampaignResultItems.length - reusable.length"));
-  assert.ok(pageSource.includes('reason: "missing_contact"'));
-  assert.ok(pageSource.includes("sem contato atual foram excluídos explicitamente"));
-  assert.ok(pageSource.includes("setAudiencePreview(syntheticPreview)"));
+  assert.ok(pageSource.includes("applyCampaignReuse(selectedCampaign, {"));
+  assert.ok(pageSource.includes('mode: "filtered_results"'));
+  assert.ok(pageSource.includes("buildCampaignReuseState(campaign, options)"));
+  assert.ok(pageSource.includes("buildAudiencePreviewFromCampaignResults"));
+  assert.ok(pageSource.includes("buildAudiencePreviewFromDraftSeed"));
   assert.ok(pageSource.includes('setActiveTab("create")'));
 });
 
@@ -197,6 +198,8 @@ test("campaign detail uses localized block reasons and distinct refresh/reuse ic
   assert.ok(campaignDraftsSource.includes('contact_operationally_excluded: "Contato excluído da operação"'));
   assert.ok(campaignDraftsSource.includes('invalid_identity: "Número/identidade inválida para envio"'));
   assert.ok(campaignDraftsSource.includes('missing_contact: "Contato atual não localizado"'));
+  assert.ok(campaignDraftsSource.includes('no_eligible_recipients: "Nenhum destinatário está elegível para esta campanha."'));
+  assert.ok(campaignDraftsSource.includes('template_variables_required: "Preencha todas as variáveis obrigatórias do modelo antes de enviar."'));
   assert.ok(pageSource.includes('label={refreshingDetail ? "Atualizando detalhe" : "Atualizar detalhe"}'));
   assert.ok(pageSource.includes('icon={refreshingDetail ? "…" : "↺"}'));
   assert.ok(pageSource.includes('label="Nova campanha com filtrados"'));

@@ -63,6 +63,17 @@ de `Nova campanha com filtrados` (`＋`). Health de producao passou; smoke UI
 autenticado com owner ficou pendente porque o gate nao reutilizou nem fabricou
 sessao de autenticacao.
 
+Atualizacao local de 2026-09-23: Campaign reuse contract + owner-facing error
+normalization esta LOCAL FIX PREPARED / NOT DEPLOYED. O reuso de campanha passa
+a significar reconstrucao maxima do composer original com base no `draftSeed`
+persistido: manual permanece manual, audiencia CRM estatica permanece CRM,
+filtro dinamico e CSV sao restaurados quando possivel, e subconjuntos filtrados
+sao congelados explicitamente quando a origem original nao pode ser preservada
+sem inventar evidencia historica. Erros/toasts de campanha passam a mapear
+codigo de erro antes de mensagem bruta, mantendo `template_variables_required`
+separado de `no_eligible_recipients` e traduzindo motivos conhecidos para
+PT-BR.
+
 Atualizacao de 2026-09-20: Data Subject Privacy / LGPD contact-centric
 anonymization esta OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY DEPLOYED / PRODUCTION HEALTH VALIDATED. A tela de
 Privacidade passa a permitir buscar e selecionar um titular no CRM autenticado,

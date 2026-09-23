@@ -1513,7 +1513,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const templateId = typeof body.templateId === "string" ? body.templateId.trim() : "";
       const templateName = typeof body.templateName === "string" ? body.templateName.trim() : "";
       if (!name) {
-        json(res, 400, { error: { code: "bad_request", message: "Campaign name is required.", requestId } });
+        json(res, 400, { error: { code: "bad_request", message: "Informe o nome da campanha.", requestId } });
         return;
       }
       const resolvedTemplate = await resolveCampaignTemplateInput(prisma, {
@@ -1523,7 +1523,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       if ("error" in resolvedTemplate || !resolvedTemplate.templateId) {
         const code = "error" in resolvedTemplate ? resolvedTemplate.error : "template_required";
-        const message = "message" in resolvedTemplate ? resolvedTemplate.message : "Approved template is required.";
+        const message = "message" in resolvedTemplate ? resolvedTemplate.message : "Selecione um modelo aprovado antes de continuar.";
         json(res, "status" in resolvedTemplate ? resolvedTemplate.status : 400, {
           error: { code, message, requestId },
         });
@@ -1669,7 +1669,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         campaignId,
       });
       if (!result) {
-        json(res, 404, { error: { code: "campaign_not_found", message: "Campaign not found.", requestId } });
+        json(res, 404, { error: { code: "campaign_not_found", message: "Campanha não encontrada.", requestId } });
         return;
       }
       await recordPublicApiAuditEvent(prisma, {
@@ -15206,7 +15206,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         templateId: typeof body.templateId === "string" ? body.templateId : null,
       });
       if (!template) {
-        json(res, 404, httpError("template_not_found", "Approved template not found"));
+        json(res, 404, httpError("template_not_found", "Modelo aprovado não encontrado."));
         return;
       }
       const categoryPolicyBlock = await getTemplateCategoryPolicyUsageBlock(prisma, {
@@ -15259,11 +15259,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const name = String(body.name ?? body.campaignName ?? "").trim();
       const templateId = String(body.templateId ?? "").trim();
       if (!name) {
-        json(res, 400, httpError("bad_request", "Campaign name is required"));
+        json(res, 400, httpError("bad_request", "Informe o nome da campanha."));
         return;
       }
       if (!templateId) {
-        json(res, 400, httpError("template_required", "Approved template is required"));
+        json(res, 400, httpError("template_required", "Selecione um modelo aprovado antes de continuar."));
         return;
       }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
@@ -15298,7 +15298,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const error = "error" in resolvedTemplate ? resolvedTemplate : {
           status: 404 as const,
           error: "template_not_found",
-          message: "Approved template not found",
+          message: "Modelo aprovado não encontrado.",
         };
         json(res, error.status, httpError(error.error, error.message));
         return;
@@ -15316,7 +15316,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         templateId: resolvedTemplate.templateId,
       });
       if (!template) {
-        json(res, 404, httpError("template_not_found", "Approved template not found"));
+        json(res, 404, httpError("template_not_found", "Modelo aprovado não encontrado."));
         return;
       }
       const categoryPolicyBlock = await getTemplateCategoryPolicyUsageBlock(prisma, {
@@ -15340,7 +15340,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         crmStatuses: resolvedStatuses.statuses,
       });
       if (preview.summary.readyToImport === 0) {
-        json(res, 400, httpError("no_eligible_recipients", "No eligible recipients for this campaign draft", {
+        json(res, 400, httpError("no_eligible_recipients", "Nenhum destinatário está elegível para esta campanha.", {
           summary: preview.summary,
         }));
         return;
@@ -15739,15 +15739,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const dynamicFilter = extractCampaignDynamicCrmFilter(body.dynamicFilter);
       const components = parseTemplateComponents(body.templateParams);
       if (!name) {
-        json(res, 400, httpError("bad_request", "Campaign name is required"));
+        json(res, 400, httpError("bad_request", "Informe o nome da campanha."));
         return;
       }
       if (!templateId) {
-        json(res, 400, httpError("template_required", "Approved template is required"));
+        json(res, 400, httpError("template_required", "Selecione um modelo aprovado antes de continuar."));
         return;
       }
       if (selectionMode === "STATIC_RECIPIENTS" && selectedLeadIds.length === 0) {
-        json(res, 400, httpError("invalid_recipients", "Select at least one eligible contact"));
+        json(res, 400, httpError("invalid_recipients", "Selecione ao menos um contato elegível."));
         return;
       }
       if (selectionMode === "DYNAMIC_CRM_FILTER" && !dynamicFilter) {
@@ -15805,7 +15805,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const error = "error" in resolvedTemplate ? resolvedTemplate : {
           status: 404 as const,
           error: "template_not_found",
-          message: "Approved template not found",
+          message: "Modelo aprovado não encontrado.",
         };
         json(res, error.status, httpError(error.error, error.message));
         return;
@@ -15842,7 +15842,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(
           res,
           400,
-          httpError("no_eligible_recipients", "No eligible recipients for this campaign draft", {
+          httpError("no_eligible_recipients", "Nenhum destinatário está elegível para esta campanha.", {
             summary: created.recipients.summary,
           })
         );
@@ -15999,7 +15999,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     try {
       const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
       if (!campaignId) {
-        json(res, 400, httpError("bad_request", "Campaign id is required"));
+        json(res, 400, httpError("bad_request", "Informe a campanha."));
         return;
       }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
@@ -16023,7 +16023,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         campaignId,
       });
       if (!result) {
-        json(res, 404, httpError("campaign_not_found", "Campaign not found"));
+        json(res, 404, httpError("campaign_not_found", "Campanha não encontrada."));
         return;
       }
       const csv = buildCampaignConsumptionCsv(
@@ -16063,7 +16063,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     try {
       const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
       if (!campaignId) {
-        json(res, 400, httpError("bad_request", "Campaign id is required"));
+        json(res, 400, httpError("bad_request", "Informe a campanha."));
         return;
       }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
@@ -16087,7 +16087,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         campaignId,
       });
       if (!result) {
-        json(res, 404, httpError("campaign_not_found", "Campaign not found"));
+        json(res, 404, httpError("campaign_not_found", "Campanha não encontrada."));
         return;
       }
       json(res, 200, result);
@@ -16114,7 +16114,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     try {
       const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
       if (!campaignId) {
-        json(res, 400, httpError("bad_request", "Campaign id is required"));
+        json(res, 400, httpError("bad_request", "Informe a campanha."));
         return;
       }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
@@ -16142,8 +16142,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (!discarded.ok) {
         const message =
           discarded.error === "campaign_not_draft"
-            ? "Only draft campaigns can be discarded"
-            : "Campaign not found";
+            ? "A campanha precisa estar em rascunho para ser descartada."
+            : "Campanha não encontrada.";
         json(res, discarded.status, httpError(discarded.error, message));
         return;
       }
@@ -16174,7 +16174,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     try {
       const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
       if (!campaignId) {
-        json(res, 400, httpError("bad_request", "Campaign id is required"));
+        json(res, 400, httpError("bad_request", "Informe a campanha."));
         return;
       }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
@@ -16202,24 +16202,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const status = sent.status;
         const message =
           sent.error === "campaign_not_draft"
-            ? "Campaign must be draft before sending"
+            ? "A campanha precisa estar em rascunho antes do envio."
             : sent.error === "no_eligible_recipients"
-              ? "No eligible recipients for this campaign"
+              ? "Nenhum destinatário está elegível para esta campanha."
               : sent.error === "template_required"
-                ? "Approved template is required"
+                ? "Selecione um modelo aprovado antes de continuar."
                 : sent.error === "template_not_found"
-                  ? "Approved template not found"
+                  ? "Modelo aprovado não encontrado."
                   : sent.error === "template_locally_disabled"
-                    ? "Template disabled locally in Converta"
+                    ? "Este modelo está desativado localmente no Converta."
                     : sent.error === WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED
                       ? WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED_LABEL
                     : sent.error === "template_variables_required"
-                      ? "Mapeie todas as variaveis do template antes de enviar"
+                      ? "Preencha todas as variáveis obrigatórias do modelo antes de enviar."
                     : sent.error === "invalid_template_variable_mapping"
-                      ? "Mapeamento de variavel invalido"
+                      ? "Mapeamento de variável inválido."
                       : sent.error === "return_destination_required"
                         ? getOutboundReturnDestinationErrorMessage("return_destination_required")
-                  : "Campaign not found";
+                  : "Campanha não encontrada.";
         json(res, status, httpError(sent.error, message));
         return;
       }
@@ -16260,7 +16260,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
       const scheduledAt = normalizeScheduledAt(body.scheduledAt);
       if (!campaignId) {
-        json(res, 400, httpError("bad_request", "Campaign id is required"));
+        json(res, 400, httpError("bad_request", "Informe a campanha."));
         return;
       }
       if (scheduledAt === "invalid") {
@@ -16340,7 +16340,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (!body) return;
       const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
       if (!campaignId) {
-        json(res, 400, httpError("bad_request", "Campaign id is required"));
+        json(res, 400, httpError("bad_request", "Informe a campanha."));
         return;
       }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
@@ -16464,7 +16464,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     try {
       const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
       if (!campaignId) {
-        json(res, 400, httpError("bad_request", "Campaign id is required"));
+        json(res, 400, httpError("bad_request", "Informe a campanha."));
         return;
       }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
@@ -16490,14 +16490,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
       });
       if (!cancelled) {
-        json(res, 404, httpError("campaign_not_found", "Campaign not found"));
+        json(res, 404, httpError("campaign_not_found", "Campanha não encontrada."));
         return;
       }
       if (cancelled === "not_cancelable") {
         json(
           res,
           409,
-          httpError("campaign_not_cancelable", "Campaign is not cancelable", {
+          httpError("campaign_not_cancelable", "Esta campanha não pode ser cancelada neste estado.", {
             status: "not_sending",
           })
         );
@@ -16538,19 +16538,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ? body.waIds
           : [];
       if (!name) {
-        json(res, 400, httpError("bad_request", "Campaign name is required"));
+        json(res, 400, httpError("bad_request", "Informe o nome da campanha."));
         return;
       }
       if (!templateId && !requestedTemplateName) {
-        json(res, 400, httpError("invalid_template_name", "Template name is required"));
+        json(res, 400, httpError("invalid_template_name", "Selecione um modelo aprovado antes de continuar."));
         return;
       }
       if (!Array.isArray(rawWaIds) || rawWaIds.length === 0) {
-        json(res, 400, httpError("invalid_recipients", "Recipients must be a non-empty array"));
+        json(res, 400, httpError("invalid_recipients", "Informe ao menos um destinatário válido."));
         return;
       }
       if (rawWaIds.some((value) => String(value ?? "").trim().length <= 5)) {
-        json(res, 400, httpError("invalid_recipients", "Recipients must contain valid waIds"));
+        json(res, 400, httpError("invalid_recipients", "Informe destinatários válidos."));
         return;
       }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
@@ -16576,7 +16576,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
       });
       if (waIds.length === 0) {
-        json(res, 400, httpError("invalid_recipients", "Recipients must contain valid waIds"));
+        json(res, 400, httpError("invalid_recipients", "Informe destinatários válidos."));
         return;
       }
       if (waIds.length > 1000) {
@@ -16640,7 +16640,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             waIds,
           });
       if (recipientPayload.waIds.length === 0 && recipientPayload.optOutBlocked.length === 0) {
-        json(res, 400, httpError("no_eligible_recipients", "No eligible recipients for this campaign"));
+        const details = "summary" in recipientPayload ? { summary: recipientPayload.summary } : undefined;
+        json(res, 400, httpError("no_eligible_recipients", "Nenhum destinatário está elegível para esta campanha.", details));
         return;
       }
       const returnDestination = await resolveCampaignReturnDestinationOrHttpError(prisma, {
@@ -24454,7 +24455,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       try {
         const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
         if (!campaignId) {
-          json(res, 400, httpError("bad_request", "Campaign id is required"));
+          json(res, 400, httpError("bad_request", "Informe a campanha."));
           return;
         }
         const clientKey = await getScopedClientKey();
@@ -24472,7 +24473,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           campaignId,
         });
         if (!result) {
-          json(res, 404, httpError("campaign_not_found", "Campaign not found"));
+          json(res, 404, httpError("campaign_not_found", "Campanha não encontrada."));
           return;
         }
         json(res, 200, result);
@@ -24496,7 +24497,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       try {
         const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
         if (!campaignId) {
-          json(res, 400, httpError("bad_request", "Campaign id is required"));
+          json(res, 400, httpError("bad_request", "Informe a campanha."));
           return;
         }
         const clientKey = await getScopedClientKey();
@@ -24511,14 +24512,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         const campaign = await getCampaignById(campaignId, client.id);
         if (!campaign) {
-          json(res, 404, httpError("campaign_not_found", "Campaign not found"));
+          json(res, 404, httpError("campaign_not_found", "Campanha não encontrada."));
           return;
         }
         if (!canTransitionCampaignStatus(campaign.status, "cancelled")) {
           json(
             res,
             409,
-            httpError("campaign_not_cancelable", "Campaign is not cancelable", {
+            httpError("campaign_not_cancelable", "Esta campanha não pode ser cancelada neste estado.", {
               status: campaign.status,
             })
           );
@@ -24573,11 +24574,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ? body.waIds
             : [];
         if (!name) {
-          json(res, 400, httpError("bad_request", "Campaign name is required"));
+          json(res, 400, httpError("bad_request", "Informe o nome da campanha."));
           return;
         }
         if (!templateId && !requestedTemplateName) {
-          json(res, 400, httpError("invalid_template_name", "Template name is required"));
+          json(res, 400, httpError("invalid_template_name", "Selecione um modelo aprovado antes de continuar."));
           return;
         }
         if (!Array.isArray(rawWaIds) || rawWaIds.length === 0) {
@@ -31179,7 +31180,7 @@ async function resolveCampaignTemplateInput(
     return {
       status: 404,
       error: "template_not_found",
-      message: "Approved template not found",
+      message: "Modelo aprovado não encontrado.",
     };
   }
   const availability = await getTemplateLocalAvailabilityMap(prisma, {

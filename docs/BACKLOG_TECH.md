@@ -1879,6 +1879,29 @@ Production head: `9cfb0d439ed3acd8447659cb033519fa3507b3b3`.
   genuine owner session was available to reuse without fabricating
   authentication.
 
+## P1 - Campaign Reuse Contract + Owner-Facing Error Normalization - 2026-09-23
+
+Status: LOCAL FIX PREPARED / NOT DEPLOYED.
+
+- `Reaproveitar campanha` and `Nova campanha com filtrados` now share one
+  campaign reuse contract: rebuild the original composer semantics as far as
+  persisted `draftSeed` and result evidence allow, instead of maintaining two
+  divergent reconstruction paths.
+- Full reuse preserves method semantics for manual, static CRM audience,
+  dynamic CRM filter and CSV. CSV reuse restores template/destination and asks
+  for file re-selection when the original raw file is not retained.
+- Filtered-result reuse preserves the original method where compatible.
+  Manual campaigns remain manual with filtered recipients prefilled. Dynamic
+  CRM and CSV filtered subsets are explicitly frozen into a static recipient
+  subset with an operator warning.
+- Template variables are restored as editable composer state. Missing required
+  variables are normalized as `template_variables_required` with PT-BR copy and
+  are not misclassified as `no_eligible_recipients`.
+- Campaign owner-facing errors/toasts now map campaign error codes first and
+  translate known blocked/result reasons and status labels to PT-BR. Structured
+  `no_eligible_recipients` summaries can explain known block reasons such as
+  active-send block without exposing backend English strings.
+
 ## P1 - Campaign RBAC / Active Sends Authorization - 2026-09-23
 
 Status: AUDITED / BACKLOG / NOT IMPLEMENTED.

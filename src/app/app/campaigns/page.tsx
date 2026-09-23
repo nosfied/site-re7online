@@ -3,7 +3,11 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
-import { buildReplayFormFromCampaign, getFriendlyCampaignError } from "@/lib/campaignDrafts";
+import {
+  buildCampaignReuseState,
+  getCampaignUserFacingError,
+  getFriendlyCampaignError,
+} from "@/lib/campaignDrafts";
 import {
   AppCampaignAudiencePreviewResponse,
   AppCampaignImportReport,
@@ -500,7 +504,7 @@ function getMetaStatusLabel(status: string) {
     case "blocked":
       return "Bloqueada";
     case "opt_out":
-      return "Opt-out";
+      return "Bloqueada para envios ativos";
     case "skipped":
       return "Ignorada";
     case "pending":
@@ -734,7 +738,7 @@ export default function AppCampaignsPage() {
           handleUnauthorized();
           return null;
         }
-        const message = typed.message || "Falha ao atualizar detalhe da campanha.";
+        const message = getCampaignUserFacingError(typed, "Falha ao atualizar detalhe da campanha.");
         setDetailError(message);
         if (notify) {
           showToast("error", "Atualização não concluída", message);
@@ -769,7 +773,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      const message = typed.message || "Erro ao atualizar campanhas.";
+      const message = getCampaignUserFacingError(typed, "Erro ao atualizar campanhas.");
       setError(message);
       showToast("error", "Atualização não concluída", message);
     } finally {
@@ -1338,7 +1342,7 @@ export default function AppCampaignsPage() {
           handleUnauthorized();
           return;
         }
-        setError(err.message || "Erro ao carregar campanhas.");
+        setError(getCampaignUserFacingError(err, "Erro ao carregar campanhas."));
       })
       .finally(() => {
         if (!cancelled) setLoadingList(false);
@@ -1398,7 +1402,7 @@ export default function AppCampaignsPage() {
           handleUnauthorized();
           return;
         }
-        setDetailError(err.message || "Falha ao carregar detalhe da campanha.");
+        setDetailError(getCampaignUserFacingError(err, "Falha ao carregar detalhe da campanha."));
       })
       .finally(() => {
         if (!cancelled) setLoadingDetail(false);
@@ -1653,7 +1657,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      const message = typed.message || "Erro ao criar campanha. Verifique modelo e destinatários.";
+      const message = getCampaignUserFacingError(typed, "Erro ao criar campanha. Verifique modelo e destinatários.");
       setFormError(message);
       showToast("error", "Envio imediato não processado", message);
     } finally {
@@ -1677,7 +1681,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      const message = typed.message || "Erro ao cancelar campanha.";
+      const message = getCampaignUserFacingError(typed, "Erro ao cancelar campanha.");
       setDetailError(message);
       showToast("error", "Cancelamento não concluído", message);
     } finally {
@@ -1707,7 +1711,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      const message = typed.message || "Não foi possível descartar o rascunho.";
+      const message = getCampaignUserFacingError(typed, "Não foi possível descartar o rascunho.");
       setDetailError(message);
       showToast("error", "Rascunho não descartado", message);
     } finally {
@@ -1748,7 +1752,7 @@ export default function AppCampaignsPage() {
           handleUnauthorized();
           return;
         }
-        setAudiencePreviewError(typed.message || "Não foi possível gerar a prévia do público.");
+        setAudiencePreviewError(getCampaignUserFacingError(typed, "Não foi possível gerar a prévia do público."));
       } finally {
         if (requestGeneration === audienceRequestGenerationRef.current) setLoadingAudiencePreview(false);
       }
@@ -1817,19 +1821,14 @@ export default function AppCampaignsPage() {
     }
   };
 
-  const handleReuseFilteredResults = () => {
-    if (!selectedCampaign) return;
-    const reusable = filteredCampaignResultItems.filter((item) => item.leadId);
-    const excluded = filteredCampaignResultItems.length - reusable.length;
-    if (reusable.length === 0) {
-      showToast("warning", "Nenhum contato reutilizável", "Os filtrados não possuem contato canônico atual para pré-carregar.");
-      return;
-    }
+  const buildAudiencePreviewFromCampaignResults = (
+    campaign: CampaignItem,
+    resultItems: CampaignResultItem[],
+    source: string
+  ): AppCampaignAudiencePreviewResponse => {
     const uniqueByLeadId = new Map<string, CampaignResultItem>();
-    for (const item of reusable) {
-      if (item.leadId && !uniqueByLeadId.has(item.leadId)) {
-        uniqueByLeadId.set(item.leadId, item);
-      }
+    for (const item of resultItems) {
+      if (item.leadId && !uniqueByLeadId.has(item.leadId)) uniqueByLeadId.set(item.leadId, item);
     }
     const items = Array.from(uniqueByLeadId.values()).map((item) => ({
       leadId: item.leadId as string,
@@ -1847,13 +1846,14 @@ export default function AppCampaignsPage() {
       hasValidWhatsappIdentity: true,
       lastConversationIdentity: null,
       lastProtocol: null,
-      importedSource: `Filtro da campanha ${selectedCampaign.name || selectedCampaign.id}`,
-      updatedAt: selectedCampaign.updatedAt,
+      importedSource: `Filtro da campanha ${campaign.name || campaign.id}`,
+      updatedAt: campaign.updatedAt,
       eligible: true,
       blockedReason: null,
       blockedReasonLabel: null,
     }));
-    const syntheticPreview: AppCampaignAudiencePreviewResponse = {
+    const excluded = resultItems.length - items.length;
+    return {
       ok: true,
       filters: {
         q: "",
@@ -1867,11 +1867,11 @@ export default function AppCampaignsPage() {
         excludeOptOut: null,
         crmStatus: null,
         city: null,
-        importedSource: "campaign-result-filter",
+        importedSource: source,
       },
       summary: {
-        total: filteredCampaignResultItems.length,
-        analyzed: filteredCampaignResultItems.length,
+        total: resultItems.length,
+        analyzed: resultItems.length,
         eligible: items.length,
         blocked: excluded,
         truncated: false,
@@ -1890,24 +1890,165 @@ export default function AppCampaignsPage() {
       },
       generatedAt: new Date().toISOString(),
     };
-    setAudiencePreview(syntheticPreview);
+  };
+
+  const buildAudiencePreviewFromDraftSeed = (campaign: CampaignItem): AppCampaignAudiencePreviewResponse | null => {
+    const leadIds = campaign.draftSeed?.leadIds ?? [];
+    if (leadIds.length === 0) return null;
+    const recipients = campaign.draftSeed?.recipients ?? [];
+    const items = leadIds.map((leadId, index) => ({
+      leadId,
+      contactId: null,
+      displayName: null,
+      companyName: null,
+      city: null,
+      crmStatus: "",
+      crmStatusLabel: "",
+      channel: "whatsapp",
+      phoneDisplay: recipients[index] ?? leadId,
+      identifierDisplay: recipients[index] ?? leadId,
+      activeOptOut: false,
+      isAnonymized: false,
+      hasValidWhatsappIdentity: true,
+      lastConversationIdentity: null,
+      lastProtocol: null,
+      importedSource: `Reuso da campanha ${campaign.name || campaign.id}`,
+      updatedAt: campaign.updatedAt,
+      eligible: true,
+      blockedReason: null,
+      blockedReasonLabel: null,
+    }));
+    return {
+      ok: true,
+      filters: {
+        q: "",
+        status: null,
+        channel: "whatsapp",
+        hasConversation: null,
+        optOut: null,
+        updatedFrom: null,
+        updatedTo: null,
+        onlyWhatsappEligible: true,
+        excludeOptOut: null,
+        crmStatus: null,
+        city: null,
+        importedSource: "campaign-reuse",
+      },
+      summary: {
+        total: items.length,
+        analyzed: items.length,
+        eligible: items.length,
+        blocked: 0,
+        truncated: false,
+        blockedByReason: [],
+      },
+      items,
+      pagination: {
+        page: 1,
+        limit: items.length,
+        total: items.length,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+      generatedAt: new Date().toISOString(),
+    };
+  };
+
+  const applyCampaignReuse = (
+    campaign: CampaignItem,
+    options: { recipientOverride?: { mode: "filtered_results"; recipients: CampaignResultItem[] } } = {}
+  ) => {
+    const reuseState = buildCampaignReuseState(campaign, options);
+    const replayForm = reuseState.form;
+    const draftSeed = campaign.draftSeed;
+    const replayTemplateId = campaign.draftSeed?.templateId || campaign.templateId || "";
+    const matchedTemplate =
+      templates.find((item) => replayTemplateId && item.id === replayTemplateId) ??
+      templates.find((item) => item.name === replayForm.templateName) ??
+      null;
+    const labels = getTemplateVariablePositions(matchedTemplate);
+    const templateVariables = normalizeTemplateParams(replayForm.templateParamsInput);
+    const fixedVariableValues = labels.map((position, index) => {
+      const mapping = draftSeed?.templateVariableMappings?.find((item) => item.position === position);
+      if (mapping?.source === "fixed" && mapping.value) return mapping.value;
+      if (mapping?.fallback) return mapping.fallback;
+      return templateVariables[index] ?? "";
+    });
+    const syncedFixedVariables = syncTemplateVariables(fixedVariableValues, labels.length);
+    const restoredMappings = buildTemplateVariableMappingsFormState(labels, draftSeed?.templateVariableMappings);
+    const returnDestination = draftSeed?.returnDestination;
+    resetCampaignComposer();
+    setAudiencePreview(null);
     setAudiencePreviewError(null);
     setAudiencePage(1);
-    setForm((prev) => ({
-      ...prev,
-      name: prev.name || `Reuso - ${selectedCampaign.name || "campanha"}`,
-      templateId: prev.templateId || selectedCampaign.templateId || "",
-      templateName: prev.templateName || selectedCampaign.templateName || "",
-      templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, templateVariableLabels),
-    }));
+    setForm({
+      ...EMPTY_FORM,
+      ...replayForm,
+      templateId: matchedTemplate?.id ?? "",
+      templateName: matchedTemplate?.name ?? replayForm.templateName,
+      templateVariables: syncedFixedVariables,
+      templateParamsInput: syncedFixedVariables.join("\n"),
+      templateVariableMappings: restoredMappings,
+      returnDestinationType: returnDestination?.type ?? EMPTY_FORM.returnDestinationType,
+      returnDepartmentId: returnDestination?.type === "human_department" ? returnDestination.departmentId ?? "" : "",
+      returnFlowId: returnDestination?.type === "automated_flow" ? returnDestination.flowId ?? "" : "",
+    });
+    if (reuseState.mode === "crm_dynamic" && draftSeed?.dynamicFilter?.crmBusinessStatusId) {
+      setAudienceRecipientMode("DYNAMIC_CRM_FILTER");
+      setAudienceFilters({
+        ...EMPTY_AUDIENCE_FILTERS,
+        status: draftSeed.dynamicFilter.crmBusinessStatusId,
+      });
+    } else {
+      setAudienceRecipientMode("STATIC_RECIPIENTS");
+      if (reuseState.mode === "crm_static") {
+        const preview = options.recipientOverride?.mode === "filtered_results"
+          ? buildAudiencePreviewFromCampaignResults(
+              campaign,
+              options.recipientOverride.recipients as CampaignResultItem[],
+              "campaign-result-filter"
+            )
+          : buildAudiencePreviewFromDraftSeed(campaign);
+        if (preview) setAudiencePreview(preview);
+      }
+    }
     setActiveTab("create");
-    setExpandedCreationPanel("audience");
+    setExpandedCreationPanel(reuseState.mode === "csv" ? "csv" : reuseState.mode === "manual" ? "manual" : "audience");
     setDetailModalOpen(false);
+    if (replayForm.templateName && !matchedTemplate) {
+      showToast(
+        "warning",
+        "Campanha carregada para reuso",
+        "O modelo original não está disponível para campanha. Selecione um modelo ativo antes de criar novo rascunho ou usar envio imediato."
+      );
+      return;
+    }
+    const warning = reuseState.warnings[0];
     showToast(
-      excluded > 0 ? "warning" : "success",
-      "Filtrados carregados no composer",
-      `${items.length} contato(s) canônico(s) carregados. ${excluded > 0 ? `${excluded} sem contato atual foram excluídos explicitamente.` : "Nenhuma mensagem foi enviada."}`
+      warning ? "warning" : "info",
+      "Campanha carregada para reuso",
+      warning ?? "Revise audiência, modelo, destino e variáveis antes de criar uma nova campanha."
     );
+  };
+
+  const handleReuseFilteredResults = () => {
+    if (!selectedCampaign) return;
+    if (filteredCampaignResultItems.length === 0) {
+      showToast("warning", "Nenhum resultado filtrado", "Ajuste os filtros antes de criar uma nova campanha.");
+      return;
+    }
+    const reusable = filteredCampaignResultItems.filter((item) => item.leadId || item.waId);
+    if (reusable.length === 0) {
+      showToast("warning", "Nenhum contato reutilizável", "Os filtrados não possuem destinatário atual para pré-carregar.");
+      return;
+    }
+    applyCampaignReuse(selectedCampaign, {
+      recipientOverride: {
+        mode: "filtered_results",
+        recipients: reusable,
+      },
+    });
   };
 
   const resetCsvImportState = () => {
@@ -1990,7 +2131,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      const message = typed.message || "Não foi possível criar o rascunho da campanha.";
+      const message = getCampaignUserFacingError(typed, "Não foi possível criar o rascunho da campanha.");
       setAudiencePreviewError(message);
       showToast("error", "Rascunho não criado", message);
     } finally {
@@ -2072,7 +2213,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      const message = typed.message || "Não foi possível agendar a campanha dinâmica.";
+      const message = getCampaignUserFacingError(typed, "Não foi possível agendar a campanha dinâmica.");
       setAudiencePreviewError(message);
       showToast("error", "Agendamento não concluído", message);
     } finally {
@@ -2238,7 +2379,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      const message = typed.message || "Não foi possível gerar a prévia do CSV.";
+      const message = getCampaignUserFacingError(typed, "Não foi possível gerar a prévia do CSV.");
       setCsvPreviewError(message);
       showToast("error", "Prévia CSV não gerada", message);
     } finally {
@@ -2313,7 +2454,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      const message = typed.message || "Não foi possível criar o rascunho pelo CSV.";
+      const message = getCampaignUserFacingError(typed, "Não foi possível criar o rascunho pelo CSV.");
       setCsvPreviewError(message);
       showToast("error", "Rascunho CSV não criado", message);
     } finally {
@@ -2343,7 +2484,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      const message = typed.message || "Não foi possível enviar o rascunho.";
+      const message = getCampaignUserFacingError(typed, "Não foi possível enviar o rascunho.");
       setDetailError(message);
       showToast("error", "Envio não iniciado", message);
     } finally {
@@ -2378,7 +2519,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      const message = typed.message || "Não foi possível agendar a campanha.";
+      const message = getCampaignUserFacingError(typed, "Não foi possível agendar a campanha.");
       setDetailError(message);
       showToast("error", "Agendamento não concluído", message);
     } finally {
@@ -2401,7 +2542,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      const message = typed.message || "Não foi possível pausar a campanha.";
+      const message = getCampaignUserFacingError(typed, "Não foi possível pausar a campanha.");
       setDetailError(message);
       showToast("error", "Pausa não concluída", message);
     } finally {
@@ -2425,7 +2566,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      const message = typed.message || "Não foi possível retomar a campanha.";
+      const message = getCampaignUserFacingError(typed, "Não foi possível retomar a campanha.");
       setDetailError(message);
       showToast("error", "Retomada não concluída", message);
     } finally {
@@ -2454,7 +2595,7 @@ export default function AppCampaignsPage() {
         handleUnauthorized();
         return;
       }
-      const message = typed.message || "Não foi possível enviar o teste.";
+      const message = getCampaignUserFacingError(typed, "Não foi possível enviar o teste.");
       setDetailError(message);
       showToast("error", "Teste não enviado", message);
     } finally {
@@ -2462,68 +2603,7 @@ export default function AppCampaignsPage() {
     }
   };
 
-  const handleReuseCampaign = (campaign: CampaignItem) => {
-    const replayForm = buildReplayFormFromCampaign(campaign);
-    const draftSeed = campaign.draftSeed;
-    const replayTemplateId = campaign.draftSeed?.templateId || campaign.templateId || "";
-    const matchedTemplate =
-      templates.find((item) => replayTemplateId && item.id === replayTemplateId) ??
-      templates.find((item) => item.name === replayForm.templateName) ??
-      null;
-    const labels = getTemplateVariablePositions(matchedTemplate);
-    const templateVariables = normalizeTemplateParams(replayForm.templateParamsInput);
-    const fixedVariableValues = labels.map((position, index) => {
-      const mapping = draftSeed?.templateVariableMappings?.find((item) => item.position === position);
-      if (mapping?.source === "fixed" && mapping.value) return mapping.value;
-      if (mapping?.fallback) return mapping.fallback;
-      return templateVariables[index] ?? "";
-    });
-    const restoredMappings = buildTemplateVariableMappingsFormState(labels, draftSeed?.templateVariableMappings);
-    const returnDestination = draftSeed?.returnDestination;
-    const source = String(draftSeed?.source ?? "");
-    const isDynamicCrm = draftSeed?.selectionMode === "DYNAMIC_CRM_FILTER" && draftSeed.dynamicFilter?.crmBusinessStatusId;
-    const isCsv = source.startsWith("recipient_import:");
-    const isCrmAudience = isDynamicCrm || source === "crm_audience_preview";
-    resetCampaignComposer();
-    setForm({
-      ...EMPTY_FORM,
-      templateVariables: syncTemplateVariables(fixedVariableValues, labels.length),
-      templateVariableMappings: restoredMappings,
-      ...replayForm,
-      templateId: matchedTemplate?.id ?? "",
-      templateName: matchedTemplate?.name ?? replayForm.templateName,
-      templateParamsInput: syncTemplateVariables(fixedVariableValues, labels.length).join("\n"),
-      returnDestinationType: returnDestination?.type ?? EMPTY_FORM.returnDestinationType,
-      returnDepartmentId: returnDestination?.type === "human_department" ? returnDestination.departmentId ?? "" : "",
-      returnFlowId: returnDestination?.type === "automated_flow" ? returnDestination.flowId ?? "" : "",
-    });
-    if (isDynamicCrm && draftSeed?.dynamicFilter?.crmBusinessStatusId) {
-      setAudienceRecipientMode("DYNAMIC_CRM_FILTER");
-      setAudienceFilters((prev) => ({
-        ...EMPTY_AUDIENCE_FILTERS,
-        status: draftSeed.dynamicFilter?.crmBusinessStatusId ?? prev.status,
-      }));
-    } else {
-      setAudienceRecipientMode("STATIC_RECIPIENTS");
-    }
-    setActiveTab("create");
-    setExpandedCreationPanel(isCrmAudience ? "audience" : isCsv ? "csv" : "manual");
-    if (replayForm.templateName && !matchedTemplate) {
-      showToast(
-        "warning",
-        "Campanha carregada para reuso",
-        "O modelo original não está disponível para campanha. Selecione um modelo ativo antes de criar novo rascunho ou usar envio imediato."
-      );
-      return;
-    }
-    showToast(
-      "info",
-      "Campanha carregada para reuso",
-      isCsv
-        ? "Modelo e destino foram restaurados. Carregue o CSV novamente para criar um novo rascunho."
-        : "Revise audiência, modelo, destino e variáveis antes de criar uma nova campanha."
-    );
-  };
+  const handleReuseCampaign = (campaign: CampaignItem) => applyCampaignReuse(campaign);
 
   if (!session) {
     return <main className="min-h-screen bg-re7-navy" />;
