@@ -1041,11 +1041,6 @@ export default function AppCampaignsPage() {
               </option>
             ))}
           </select>
-          {selectedTemplate ? (
-            <span className="text-xs text-white/55">
-              Categoria na Meta: {getMetaTemplateCategoryUxLabel(selectedTemplateEffectiveCategory || selectedTemplate.category)}
-            </span>
-          ) : null}
         </label>
       </div>
       {templates.length === 0 ? (
