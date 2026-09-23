@@ -1007,7 +1007,9 @@ export default function AppCampaignsPage() {
       </div>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(240px,360px)]">
         <label className="grid gap-1 text-sm">
-          <span className="text-white/70">Nome do rascunho</span>
+          <span className="flex min-h-5 items-center justify-between gap-2 text-white/70">
+            <span>Nome do rascunho</span>
+          </span>
           <input
             className={campaignComposerControlClasses}
             value={form.name}
@@ -1016,7 +1018,14 @@ export default function AppCampaignsPage() {
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="text-white/70">Modelo aprovado</span>
+          <span className="flex min-h-5 items-center justify-between gap-2 text-white/70">
+            <span>Modelo aprovado</span>
+            {selectedTemplate ? (
+              <span className="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/70">
+                {getMetaTemplateCategoryUxLabel(selectedTemplateEffectiveCategory || selectedTemplate.category)}
+              </span>
+            ) : null}
+          </span>
           <select
             className={campaignComposerControlClasses}
             value={form.templateId}

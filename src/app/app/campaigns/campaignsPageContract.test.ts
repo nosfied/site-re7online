@@ -123,6 +123,10 @@ test("campaign reuse toast and shared composer controls keep owner-visible polis
   assert.ok(pageSource.includes('warning ? "warning" : "reuse"'));
   assert.ok(pageSource.includes("const campaignComposerControlClasses ="));
   assert.ok(pageSource.includes("h-10 w-full min-w-0 rounded-md border border-white/20"));
+  assert.ok(pageSource.includes('className="flex min-h-5 items-center justify-between gap-2 text-white/70"'));
+  assert.ok(pageSource.includes('className="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/70"'));
+  assert.ok(pageSource.includes("getMetaTemplateCategoryUxLabel(selectedTemplateEffectiveCategory || selectedTemplate.category)"));
+  assert.ok(!pageSource.includes("Categoria na Meta:"));
   assert.equal(pageSource.match(/className=\{campaignComposerControlClasses\}/g)?.length ?? 0, 2);
 });
 
