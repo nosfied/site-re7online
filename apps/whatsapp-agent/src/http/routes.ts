@@ -423,6 +423,7 @@ import {
 import {
   confirmCrmContactCsvImport,
   CrmContactUpsertError,
+  inspectCrmContactCsvImport,
   previewCrmContactCsvImport,
   upsertCrmContact,
 } from "../crm/crmContactUpsert.js";
@@ -11413,6 +11414,58 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       logger.error({
         event: "app.crm.contact_create.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname === "/app/crm/contacts/import/inspect"
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can import CRM contacts."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: "/app/crm/contacts/import/inspect",
+          requestId,
+        }))
+      ) {
+        return;
+      }
+      const body = (await readJsonBody(req, res)) as Record<string, unknown> | null;
+      if (!body) return;
+      const csvText = typeof body.csvText === "string" ? body.csvText : "";
+      const payload = inspectCrmContactCsvImport(csvText);
+      json(res, 200, payload);
+    } catch (error) {
+      if (error instanceof CrmContactUpsertError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
+      logger.error({
+        event: "app.crm.contact_import_inspect.error",
         message: (error as Error).message,
         requestId,
       });

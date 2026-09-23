@@ -484,6 +484,14 @@ export type AppCrmContactCsvMapping = {
   serviceColumn?: string | null;
 };
 
+export type AppCrmContactImportInspectResponse = {
+  ok: true;
+  headers: string[];
+  delimiter: string;
+  totalRows: number;
+  mapping: AppCrmContactCsvMapping;
+};
+
 export type AppCrmContactImportPreviewResponse = {
   ok: true;
   headers: string[];
@@ -4782,6 +4790,16 @@ export async function createAppCrmContact(
   payload: { name?: string | null; phone: string }
 ): Promise<AppCrmContactDetailResponse> {
   return requestAppJson(session, "/app/crm/contacts", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function inspectAppCrmContactCsvImport(
+  session: AppSession,
+  payload: { csvText: string }
+): Promise<AppCrmContactImportInspectResponse> {
+  return requestAppJson(session, "/app/crm/contacts/import/inspect", {
     method: "POST",
     body: JSON.stringify(payload),
   });

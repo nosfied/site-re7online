@@ -176,7 +176,7 @@ test("CRM CSV import requires preview before confirmation and locks duplicate pr
   assert.ok(modalBlock.includes("const previewMappingDirty = Boolean(preview && !reportVisible && previewMappingKey !== mappingKey);"));
   assert.ok(modalBlock.includes("Boolean(preview) && !previewMappingDirty"));
   assert.ok(modalBlock.includes("previewMappingDirty || preview.readyToImport === 0"));
-  assert.ok(modalBlock.includes("{preview && !reportVisible ? ("));
+  assert.ok(modalBlock.includes("{(inspection || preview) && !reportVisible ? ("));
   assert.ok(modalBlock.includes("Confirmar importação"));
   assert.ok(modalBlock.includes('{reportVisible ? "Fechar" : "Cancelar"}'));
   assert.ok(!modalBlock.includes("Cancelar importação\n                </button>"));
@@ -200,6 +200,13 @@ test("CRM CSV import can refresh preview after column mapping changes", () => {
     pageSource.indexOf("function CsvImportModal"),
     pageSource.indexOf("export default function AppCrmContactsPage")
   );
+  assert.ok(modalBlock.includes("const [inspection, setInspection] = useState"));
+  assert.ok(modalBlock.includes("const [inspectLoading, setInspectLoading] = useState(false);"));
+  assert.ok(modalBlock.includes("onInspect({ csvText: nextCsvText })"));
+  assert.ok(modalBlock.includes("const headers = inspection?.headers ?? preview?.headers ?? [];"));
+  assert.ok(modalBlock.includes("Selecione a coluna que contém o telefone para gerar a prévia."));
+  assert.ok(modalBlock.includes("setLocalError(\"Selecione a coluna que contém o telefone.\");"));
+  assert.ok(modalBlock.includes("!phoneColumn.trim()"));
   assert.ok(modalBlock.includes("const [previewMappingKey, setPreviewMappingKey] = useState(\"\");"));
   assert.ok(modalBlock.includes("const [mappingTouched, setMappingTouched]"));
   assert.ok(modalBlock.includes("const buildMappedColumn = (field: CsvMappingField, value: string)"));
@@ -224,7 +231,7 @@ test("CRM CSV import can refresh preview after column mapping changes", () => {
   assert.ok(modalBlock.includes("previewMappingDirty || preview.readyToImport === 0"));
   assert.ok(modalBlock.includes("setPreviewMappingKey(\"\");"));
   assert.ok(modalBlock.includes("if (requestSeq !== previewRequestSeq.current) return;"));
-  assert.ok(modalBlock.includes("previewLoading || importLoading"));
+  assert.ok(modalBlock.includes("inspectLoading || previewLoading || importLoading"));
 });
 
 test("CRM CSV import auto-matches optional columns without making them required", () => {

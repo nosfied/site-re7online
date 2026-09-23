@@ -1854,6 +1854,25 @@ Status: LOCAL FIX VALIDATED / NOT DEPLOYED.
   `campaignsFeatureRoutes.test.ts` 118/118 PASS. Schema unchanged and
   migration none.
 
+## Final CSV inspection + Campaign Detail UX - 2026-09-23
+
+Status: LOCAL VALIDATED / NOT DEPLOYED.
+
+- Contacts CSV now separates file inspection from mapped import preview. The
+  operator can load/inspect a valid CSV, see all headers and then explicitly
+  select an arbitrary phone column when no safe `Telefone`/`Numero`/`Phone`/
+  `WhatsApp` alias exists. No contact mutation occurs during inspection.
+- Missing safe phone alias is a normal mapping state, not a generic preview
+  failure. Preview/confirmation still require a selected phone column; invalid
+  values in the chosen column remain row-level preview errors.
+- Optional Contacts CSV mappings preserve the existing tri-state semantics:
+  `undefined` permits auto-detection, `null` explicitly unmaps, and `string`
+  selects a column.
+- Campaign Detail now localizes known blocked/result reason codes in PT-BR
+  before display/copy where supported, while preserving provider details for
+  unknown diagnostics. Refresh keeps icon `↺`; `Nova campanha com filtrados`
+  uses a distinct creation icon `＋`.
+
 ## P1 - Campaign RBAC / Active Sends Authorization - 2026-09-23
 
 Status: AUDITED / BACKLOG / NOT IMPLEMENTED.

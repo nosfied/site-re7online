@@ -3188,7 +3188,7 @@ export default function AppCampaignsPage() {
                     <div className="flex flex-wrap gap-2 text-xs">
                       {csvPreview.summary.blockedByReason.map((item) => (
                         <span key={item.reason} className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-white/75">
-                          {item.label}: {item.count}
+                          {getFriendlyCampaignError(item.reason)?.summary ?? item.label}: {item.count}
                         </span>
                       ))}
                     </div>
@@ -3834,7 +3834,7 @@ export default function AppCampaignsPage() {
                         <div className="flex flex-wrap gap-2 text-xs">
                           {selectedCampaign.draftReview.summary.blockedByReason.map((item) => (
                             <span key={item.reason} className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-white/75">
-                              {item.label}: {item.count}
+                              {getFriendlyCampaignError(item.reason)?.summary ?? item.label}: {item.count}
                             </span>
                           ))}
                         </div>
@@ -4075,7 +4075,7 @@ export default function AppCampaignsPage() {
                           />
                           <ActionIconButton
                             label="Nova campanha com filtrados"
-                            icon="↺"
+                            icon="＋"
                             onClick={handleReuseFilteredResults}
                             disabled={filteredCampaignResultItems.length === 0}
                             variant="primary"

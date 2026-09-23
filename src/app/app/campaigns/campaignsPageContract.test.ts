@@ -6,6 +6,7 @@ import test from "node:test";
 const pageSource = fs.readFileSync(path.join(process.cwd(), "src/app/app/campaigns/page.tsx"), "utf8");
 const inboxSource = fs.readFileSync(path.join(process.cwd(), "src/app/app/inbox/page.tsx"), "utf8");
 const appShellSource = fs.readFileSync(path.join(process.cwd(), "src/components/app/AppShell.tsx"), "utf8");
+const campaignDraftsSource = fs.readFileSync(path.join(process.cwd(), "src/lib/campaignDrafts.ts"), "utf8");
 
 test("campaign center exposes persisted lifecycle tabs", () => {
   assert.ok(pageSource.includes('{ id: "sending", label: "Enviando" }'));
@@ -189,6 +190,18 @@ test("campaign CSV preview renders ready blocked and error rows in one reportabl
   assert.ok(pageSource.includes("Copiar erros e bloqueios"));
   assert.ok(pageSource.includes("Copiar relatório"));
   assert.ok(pageSource.includes("Baixar relatório CSV"));
+});
+
+test("campaign detail uses localized block reasons and distinct refresh/reuse icons", () => {
+  assert.ok(campaignDraftsSource.includes('opt_out: "Contato bloqueado para envios ativos"'));
+  assert.ok(campaignDraftsSource.includes('contact_operationally_excluded: "Contato excluído da operação"'));
+  assert.ok(campaignDraftsSource.includes('invalid_identity: "Número/identidade inválida para envio"'));
+  assert.ok(campaignDraftsSource.includes('missing_contact: "Contato atual não localizado"'));
+  assert.ok(pageSource.includes('label={refreshingDetail ? "Atualizando detalhe" : "Atualizar detalhe"}'));
+  assert.ok(pageSource.includes('icon={refreshingDetail ? "…" : "↺"}'));
+  assert.ok(pageSource.includes('label="Nova campanha com filtrados"'));
+  assert.ok(pageSource.includes('icon="＋"'));
+  assert.ok(!pageSource.includes('label="Nova campanha com filtrados"\\n                            icon="↺"'));
 });
 
 test("campaign test send requires explicit variables for variable templates", () => {

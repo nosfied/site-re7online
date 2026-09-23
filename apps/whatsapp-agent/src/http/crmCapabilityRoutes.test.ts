@@ -752,6 +752,22 @@ test("CRM CSV import previews without mutation and confirms idempotently", async
   const contactsBefore = await prisma.contact.count({ where: { clientId: businessClientId } });
   const leadsBefore = await prisma.lead.count({ where: { tenantId: businessClientId } });
 
+  const inspect = await request<{
+    ok: boolean;
+    headers: string[];
+    totalRows: number;
+    mapping: { phoneColumn: string | null };
+  }>("POST", "/app/crm/contacts/import/inspect", businessSupervisor, {
+    csvText: "Nome completo,Celular principal,Situação\nFulano,5541998877777,Ativo\n",
+  });
+  assert.equal(inspect.status, 200);
+  assert.equal(inspect.body.ok, true);
+  assert.deepEqual(inspect.body.headers, ["Nome completo", "Celular principal", "Situação"]);
+  assert.equal(inspect.body.totalRows, 1);
+  assert.equal(inspect.body.mapping.phoneColumn, null);
+  assert.equal(await prisma.contact.count({ where: { clientId: businessClientId } }), contactsBefore);
+  assert.equal(await prisma.lead.count({ where: { tenantId: businessClientId } }), leadsBefore);
+
   const preview = await request<{
     ok: boolean;
     totalRows: number;

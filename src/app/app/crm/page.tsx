@@ -11,6 +11,7 @@ import {
   AppCrmContactDetailResponse,
   AppHiddenBlockingConversation,
   AppCrmContactImportConfirmResponse,
+  AppCrmContactImportInspectResponse,
   AppCrmContactImportPreviewResponse,
   AppCrmContactCsvMapping,
   AppCrmExistingContactResolution,
@@ -26,6 +27,7 @@ import {
   fetchAppCrmContacts,
   fetchAppCrmStatuses,
   excludeAppCrmContactFromOperation,
+  inspectAppCrmContactCsvImport,
   loadAppSession,
   previewAppCrmContactCsvImport,
   reactivateAppCrmContactForOperation,
@@ -1267,10 +1269,12 @@ function CreateContactModal({
 
 function CsvImportModal({
   onClose,
+  onInspect,
   onPreview,
 	  onConfirm,
 		}: {
 		  onClose: () => void;
+		  onInspect: (payload: { csvText: string }) => Promise<AppCrmContactImportInspectResponse>;
 		  onPreview: (payload: { csvText: string; mapping: AppCrmContactCsvMapping }) => Promise<AppCrmContactImportPreviewResponse>;
 		  onConfirm: (payload: { csvText: string; mapping: AppCrmContactCsvMapping }) => Promise<AppCrmContactImportConfirmResponse>;
 		}) {
@@ -1293,14 +1297,16 @@ function CsvImportModal({
 		  const [emailColumn, setEmailColumn] = useState("");
 		  const [serviceColumn, setServiceColumn] = useState("");
 		  const [mappingTouched, setMappingTouched] = useState<Record<CsvMappingField, boolean>>(initialMappingTouched);
+  const [inspection, setInspection] = useState<AppCrmContactImportInspectResponse | null>(null);
   const [preview, setPreview] = useState<AppCrmContactImportPreviewResponse | null>(null);
   const [summary, setSummary] = useState<AppCrmContactImportConfirmResponse | null>(null);
+	  const [inspectLoading, setInspectLoading] = useState(false);
 	  const [previewLoading, setPreviewLoading] = useState(false);
 	  const [importLoading, setImportLoading] = useState(false);
 	  const [localError, setLocalError] = useState<string | null>(null);
 	  const [previewMappingKey, setPreviewMappingKey] = useState("");
 	  const previewRequestSeq = useRef(0);
-	  const headers = preview?.headers ?? [];
+	  const headers = inspection?.headers ?? preview?.headers ?? [];
 		  const setColumnTouched = (field: CsvMappingField) => {
 		    setMappingTouched((current) => ({ ...current, [field]: true }));
 		  };
@@ -1320,7 +1326,7 @@ function CsvImportModal({
 		  };
 		  const getMappingKey = (value: AppCrmContactCsvMapping) => JSON.stringify(value);
 	  const mappingKey = JSON.stringify(mapping);
-	  const loading = previewLoading || importLoading;
+	  const loading = inspectLoading || previewLoading || importLoading;
 	  const reportVisible = Boolean(summary);
 
 		  const resetColumnMapping = () => {
@@ -1334,15 +1340,41 @@ function CsvImportModal({
 		    setMappingTouched(initialMappingTouched);
 		  };
 
+  const applyInspection = (response: AppCrmContactImportInspectResponse) => {
+    setInspection(response);
+    if (response.mapping.phoneColumn) setPhoneColumn(response.mapping.phoneColumn);
+    if (response.mapping.nameColumn) setNameColumn(response.mapping.nameColumn);
+    if (response.mapping.crmSituationColumn) setCrmSituationColumn(response.mapping.crmSituationColumn);
+    if (response.mapping.companyColumn) setCompanyColumn(response.mapping.companyColumn);
+    if (response.mapping.cityColumn) setCityColumn(response.mapping.cityColumn);
+    if (response.mapping.emailColumn) setEmailColumn(response.mapping.emailColumn);
+    if (response.mapping.serviceColumn) setServiceColumn(response.mapping.serviceColumn);
+  };
+
   const readFile = async (file: File | null) => {
     if (!file) return;
-    previewRequestSeq.current += 1;
+    const requestSeq = previewRequestSeq.current + 1;
+    previewRequestSeq.current = requestSeq;
+    setInspection(null);
     setPreview(null);
     setSummary(null);
     setLocalError(null);
     setPreviewMappingKey("");
 	    resetColumnMapping();
-	    setCsvText(await file.text());
+    const nextCsvText = await file.text();
+	    setCsvText(nextCsvText);
+    setInspectLoading(true);
+    try {
+      const response = await onInspect({ csvText: nextCsvText });
+      if (requestSeq !== previewRequestSeq.current) return;
+      applyInspection(response);
+    } catch (err) {
+      if (requestSeq !== previewRequestSeq.current) return;
+      const typed = err as AppApiError;
+      setLocalError(normalizeAppErrorMessage(typed, "Não foi possível ler o CSV."));
+    } finally {
+      if (requestSeq === previewRequestSeq.current) setInspectLoading(false);
+    }
 	  };
 
   const updatePhoneColumn = (value: string) => {
@@ -1389,6 +1421,10 @@ function CsvImportModal({
 
   const runPreview = async () => {
     if (!csvText.trim()) return;
+    if (!phoneColumn.trim()) {
+      setLocalError("Selecione a coluna que contém o telefone.");
+      return;
+    }
     const requestSeq = previewRequestSeq.current + 1;
     previewRequestSeq.current = requestSeq;
     setPreviewLoading(true);
@@ -1500,8 +1536,8 @@ function CsvImportModal({
   ].filter(Boolean).join(" | "));
   const previewReady = Boolean(preview && !reportVisible);
   const previewMappingDirty = Boolean(preview && !reportVisible && previewMappingKey !== mappingKey);
-  const previewButtonDisabled = !csvText.trim() || previewLoading || importLoading || reportVisible || (Boolean(preview) && !previewMappingDirty);
-  const confirmButtonDisabled = !preview || reportVisible || previewLoading || importLoading || previewMappingDirty || preview.readyToImport === 0;
+  const previewButtonDisabled = !csvText.trim() || !phoneColumn.trim() || inspectLoading || previewLoading || importLoading || reportVisible || (Boolean(preview) && !previewMappingDirty);
+  const confirmButtonDisabled = !preview || reportVisible || inspectLoading || previewLoading || importLoading || previewMappingDirty || preview.readyToImport === 0;
   const totalReportFailures = summary ? (summary.failed ?? 0) + summary.invalid + (summary.invalidCrmStatuses ?? 0) : 0;
 
   const renderIssueTable = (
@@ -1612,13 +1648,13 @@ function CsvImportModal({
                 className="theme-input rounded-md border p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
               />
 	            </div>
-            {preview && !reportVisible ? (
+            {(inspection || preview) && !reportVisible ? (
               <div className="grid gap-3 rounded-md border border-white/10 bg-slate-950/20 p-3">
 		                <div className="grid gap-3 sm:grid-cols-3">
 	                  <label className="grid gap-1.5 text-sm">
 	                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Coluna do telefone</span>
 	                    <select value={phoneColumn} onChange={(event) => updatePhoneColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
-                      <option value="">Detectar automaticamente</option>
+                      <option value="">Selecionar coluna</option>
                       {headers.map((header) => <option key={header} value={header}>{header}</option>)}
                     </select>
                   </label>
@@ -1667,11 +1703,17 @@ function CsvImportModal({
 		                    </select>
 		                  </label>
 		                </div>
+	                {!phoneColumn.trim() ? (
+	                  <div className="rounded-md border border-sky-300/30 bg-sky-400/10 p-3 text-sm text-sky-100">
+	                    Selecione a coluna que contém o telefone para gerar a prévia.
+	                  </div>
+	                ) : null}
 	                {previewMappingDirty ? (
 	                  <div className="rounded-md border border-amber-300/30 bg-amber-400/10 p-3 text-sm text-amber-100">
 	                    As colunas foram alteradas. Atualize a prévia antes de confirmar a importação.
 	                  </div>
 	                ) : null}
+	                {preview ? (
 	                <div className="grid gap-3 sm:grid-cols-4">
                     <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
                       <p className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Linhas</p>
@@ -1706,7 +1748,8 @@ function CsvImportModal({
                       <p className="mt-1 text-lg font-semibold text-white">{preview.existingContacts}</p>
                     </div>
                   </div>
-	                {preview.rows?.length ? (
+	                ) : null}
+	                {preview?.rows?.length ? (
 	                  <div className="overflow-x-auto rounded-md border border-white/10">
 			                    <table className="w-full min-w-[900px] text-left text-sm">
 		                      <thead className="bg-white/10 text-white">
@@ -1738,7 +1781,7 @@ function CsvImportModal({
 	                    </table>
 	                  </div>
 	                ) : null}
-                {renderIssueTable(preview.sampleErrors, { tone: "amber", truncated: preview.truncatedErrors })}
+                {preview ? renderIssueTable(preview.sampleErrors, { tone: "amber", truncated: preview.truncatedErrors }) : null}
               </div>
             ) : null}
             {summary ? (
@@ -1799,7 +1842,7 @@ function CsvImportModal({
                   disabled={previewButtonDisabled}
                   className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {previewLoading ? "Gerando prévia..." : previewMappingDirty ? "Atualizar prévia" : "Pré-visualizar"}
+                  {inspectLoading ? "Lendo CSV..." : previewLoading ? "Gerando prévia..." : previewMappingDirty ? "Atualizar prévia" : "Pré-visualizar"}
                 </button>
               ) : null}
               {previewReady ? (
@@ -2261,6 +2304,14 @@ export default function AppCrmContactsPage() {
     [session]
   );
 
+		  const inspectCsvImport = useCallback(
+		    async (payload: { csvText: string }) => {
+	      if (!session) throw new Error("Sessão indisponível.");
+	      return inspectAppCrmContactCsvImport(session, payload);
+	    },
+    [session]
+  );
+
 		  const confirmCsvImport = useCallback(
 		    async (payload: { csvText: string; mapping: AppCrmContactCsvMapping }) => {
 	      if (!session) throw new Error("Sessão indisponível.");
@@ -2590,6 +2641,7 @@ export default function AppCrmContactsPage() {
       {csvModalOpen && canManageCrmContacts ? (
         <CsvImportModal
           onClose={() => setCsvModalOpen(false)}
+          onInspect={inspectCsvImport}
           onPreview={previewCsvImport}
           onConfirm={confirmCsvImport}
         />

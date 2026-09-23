@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   confirmCrmContactCsvImport,
   CrmContactUpsertError,
+  inspectCrmContactCsvImport,
   previewCrmContactCsvImport,
   upsertCrmContact,
 } from "./crmContactUpsert.js";
@@ -593,6 +594,36 @@ test("CRM CSV import blocks when phone mapping is explicitly disabled", async ()
       }),
     (error) => error instanceof CrmContactUpsertError && error.code === "missing_phone_column"
   );
+});
+
+test("CRM CSV inspection returns arbitrary headers without phone mapping", () => {
+  const result = inspectCrmContactCsvImport("Nome completo,Celular principal,Situação\nFulano,5584999999999,Ativo\n");
+
+  assert.deepEqual(result.headers, ["Nome completo", "Celular principal", "Situação"]);
+  assert.equal(result.totalRows, 1);
+  assert.equal(result.mapping.phoneColumn, null);
+});
+
+test("CRM CSV inspection keeps safe phone auto-match", () => {
+  const result = inspectCrmContactCsvImport("Nome,Telefone\nFulano,5584999999999\n");
+
+  assert.deepEqual(result.headers, ["Nome", "Telefone"]);
+  assert.equal(result.mapping.phoneColumn, "Telefone");
+  assert.equal(result.mapping.nameColumn, "Nome");
+});
+
+test("CRM CSV preview reports invalid values in selected arbitrary phone column", async () => {
+  const prisma = makeUpsertPrisma();
+  const preview = await previewCrmContactCsvImport(prisma as never, {
+    clientId: "client_a",
+    csvText: "Nome completo,Celular principal\nFulano,abc\n",
+    mapping: { phoneColumn: "Celular principal", nameColumn: "Nome completo" },
+  });
+
+  assert.equal(preview.totalRows, 1);
+  assert.equal(preview.readyToImport, 0);
+  assert.equal(preview.invalidRows, 1);
+  assert.equal(preview.sampleErrors[0]?.reason, "invalid_phone");
 });
 
 test("CRM CSV import maps all editable fields and preserves blank mapped values", async () => {

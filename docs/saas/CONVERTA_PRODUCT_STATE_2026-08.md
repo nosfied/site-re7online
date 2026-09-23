@@ -51,6 +51,15 @@ autenticado de detalhe/rascunho. Seeds estaticas de CSV com
 envio/agendamento sem reparo de banco; campanhas dinamicas por filtro CRM
 continuam exigindo mapeamentos canonicos.
 
+Atualizacao local de 2026-09-23: Contacts CSV inspection + Campaign Detail UX
+esta LOCAL VALIDATED / NOT DEPLOYED. Contacts CSV passa a inspecionar arquivo
+valido antes do mapeamento de telefone, exibindo headers arbitrarios para
+selecao explicita quando nao houver alias seguro. A falta de coluna `Telefone`
+nao e mais erro generico de previa; previa/importacao exigem telefone mapeado e
+telefones invalidos continuam como erro por linha. O detalhe de campanha exibe
+motivos operacionais conhecidos em PT-BR e diferencia `Atualizar detalhe` (`↺`)
+de `Nova campanha com filtrados` (`＋`).
+
 Atualizacao de 2026-09-20: Data Subject Privacy / LGPD contact-centric
 anonymization esta OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY DEPLOYED / PRODUCTION HEALTH VALIDATED. A tela de
 Privacidade passa a permitir buscar e selecionar um titular no CRM autenticado,

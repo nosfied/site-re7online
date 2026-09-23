@@ -3,6 +3,28 @@ import type { CampaignItem } from "@/lib/whatsappAdminApi";
 export function getFriendlyCampaignError(error: string | null) {
   if (!error) return null;
 
+  const normalizedCode = error.trim().toLowerCase();
+  const knownReasonLabels: Record<string, string> = {
+    blocked: "Bloqueado para envio",
+    opt_out: "Contato bloqueado para envios ativos",
+    "opt-out": "Contato bloqueado para envios ativos",
+    active_send_blocked: "Contato bloqueado para envios ativos",
+    contact_operationally_excluded: "Contato excluído da operação",
+    invalid_identity: "Número/identidade inválida para envio",
+    blocked_identity: "Número/identidade inválida para envio",
+    usage_blocked: "Bloqueado por limite de uso",
+    missing_contact: "Contato atual não localizado",
+    duplicate_identity: "Identidade duplicada no público",
+    variable_missing_value: "Variável obrigatória sem valor",
+  };
+  if (knownReasonLabels[normalizedCode]) {
+    return {
+      summary: knownReasonLabels[normalizedCode],
+      detail: null,
+      raw: error,
+    };
+  }
+
   const parseJson = (input: string) => {
     try {
       return JSON.parse(input) as Record<string, unknown>;
@@ -42,6 +64,14 @@ export function getFriendlyCampaignError(error: string | null) {
   if (code === 131049) {
     return {
       summary: "A Meta bloqueou esta entrega para preservar a qualidade do ecossistema. Ref. 131049.",
+      detail: details || message,
+      raw: error,
+    };
+  }
+
+  if (code === 131026) {
+    return {
+      summary: "A Meta informou que a mensagem não pôde ser entregue. Ref. 131026.",
       detail: details || message,
       raw: error,
     };

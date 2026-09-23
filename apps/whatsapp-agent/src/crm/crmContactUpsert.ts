@@ -737,6 +737,57 @@ function getMappedValue(row: Record<string, string>, column: string | null) {
   return column ? row[column] ?? "" : "";
 }
 
+function resolveSafeAutoMappedColumn(headers: string[], aliases: string[]) {
+  return resolveMappedColumn(headers, undefined, aliases);
+}
+
+export function inspectCrmContactCsvImport(csvText: string) {
+  const parsed = parseCampaignCsv(csvText);
+  if (!parsed.ok) {
+    throw new CrmContactUpsertError(parsed.error, "Invalid CSV", 400);
+  }
+  return {
+    ok: true as const,
+    headers: parsed.headers,
+    delimiter: parsed.delimiter,
+    totalRows: parsed.rows.length,
+    mapping: {
+      phoneColumn: resolveSafeAutoMappedColumn(parsed.headers, [
+        "numero",
+        "número",
+        "telefone",
+        "phone",
+        "whatsapp",
+      ]),
+      nameColumn: resolveSafeAutoMappedColumn(parsed.headers, ["nome", "name"]),
+      crmSituationColumn: resolveSafeAutoMappedColumn(parsed.headers, [
+        "situacao no crm",
+        "situação no crm",
+        "situacao crm",
+        "situação crm",
+        "crm situation",
+        "status crm",
+        "crm status",
+      ]),
+      companyColumn: resolveSafeAutoMappedColumn(parsed.headers, [
+        "empresa",
+        "company",
+        "organizacao",
+        "organização",
+      ]),
+      cityColumn: resolveSafeAutoMappedColumn(parsed.headers, ["cidade", "city", "municipio", "município"]),
+      emailColumn: resolveSafeAutoMappedColumn(parsed.headers, ["email", "e-mail"]),
+      serviceColumn: resolveSafeAutoMappedColumn(parsed.headers, [
+        "servico",
+        "serviço",
+        "interesse",
+        "service",
+        "interest",
+      ]),
+    },
+  };
+}
+
 export function buildCrmContactImportRowsFromCsv(params: {
   csvText: string;
   mapping?: CrmContactCsvMapping | null;
