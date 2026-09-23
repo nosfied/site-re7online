@@ -117,6 +117,7 @@ import {
 } from "../billing/metaUsageLedger.js";
 import { recordActiveMessageDeliveryIfNeeded } from "../billing/activeMessageBilling.js";
 import { recordReceptiveSessionIfNeeded } from "../billing/receptiveSessionMeter.js";
+import { parseProviderStatusTimestamp, shouldApplyProviderStatus } from "../campaigns/campaignDeliveryTruth.js";
 import {
   ConversationIntent,
   ConversationState,
@@ -2901,26 +2902,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         return null;
       }
     };
-    const normalizeStatusTimestamp = (timestamp: string | null) => {
-      if (!timestamp) return new Date().toISOString();
-      const parsed = Number(timestamp);
-      if (!Number.isFinite(parsed)) return new Date().toISOString();
-      return new Date(parsed * 1000).toISOString();
-    };
-    const getMetaStatusPriority = (status: string | null) => {
-      switch ((status || "").trim().toLowerCase()) {
-        case "read":
-          return 3;
-        case "delivered":
-          return 2;
-        case "sent":
-          return 1;
-        case "failed":
-          return 0;
-        default:
-          return -1;
-      }
-    };
+    const normalizeStatusTimestamp = (timestamp: string | null) =>
+      parseProviderStatusTimestamp(timestamp)?.toISOString() ?? new Date().toISOString();
 
     for (const item of statuses) {
       if (!item.id) continue;
@@ -2941,6 +2924,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             messageId: true,
             metaMessageId: true,
             type: true,
+            status: true,
             templateName: true,
             errorBody: true,
             rawPayload: true,
@@ -2983,9 +2967,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             : null;
         const currentStatus =
           typeof currentMetaStatus?.lastStatus === "string" ? currentMetaStatus.lastStatus : null;
-        const currentPriority = getMetaStatusPriority(currentStatus);
-        const nextPriority = getMetaStatusPriority(item.status);
-        if (currentPriority > nextPriority) {
+        if (!shouldApplyProviderStatus({
+          currentStatus,
+          currentStatusAt: currentMetaStatus?.lastStatusAt,
+          incomingStatus: item.status,
+          incomingStatusAt: item.timestamp,
+        })) {
           continue;
         }
 
@@ -3017,7 +3004,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             pricingCategory,
             pricingBillable,
             pricingModel,
-            lastStatusAt: item.timestamp,
+            lastStatusAt: parseProviderStatusTimestamp(item.timestamp)?.toISOString() ?? null,
             statusDetail: item.status_detail,
             errorData: item.error_data,
             errors: item.errors,
@@ -3100,6 +3087,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         await prisma.outboundMessage.update({
           where: { id: outbound.id },
           data: {
+            status: normalizedStatus === "FAILED" ? MessageStatus.FAILED : outbound.status,
+            errorBody: normalizedStatus === "FAILED" ? statusErrorBody : outbound.errorBody,
             rawPayload: {
               ...nextRawPayload,
               metaStatus: {

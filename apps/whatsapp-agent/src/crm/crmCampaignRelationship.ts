@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { getProviderStatusTieRank, parseProviderStatusTimestamp } from "../campaigns/campaignDeliveryTruth.js";
 import { listCampaigns } from "../campaigns/campaignService.js";
 import { CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT } from "../campaigns/optOutRegistry.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
@@ -76,6 +77,7 @@ type RelationshipEvidence = {
   campaignId: string;
   campaignName: string;
   campaignAt: Date;
+  statusAt: Date | null;
   templateName: string | null;
   status: CrmCampaignRelationshipStatus;
   reason: string | null;
@@ -172,29 +174,21 @@ function normalizeOutboundStatus(metaStatus: string | null, messageStatus: strin
   }
 }
 
-function statusRank(status: CrmCampaignRelationshipStatus) {
+function relationshipStatusTieRank(status: CrmCampaignRelationshipStatus) {
+  const providerRank = getProviderStatusTieRank(status);
+  if (providerRank >= 0) return providerRank;
   switch (status) {
-    case "READ":
-      return 8;
-    case "DELIVERED":
-      return 7;
     case "ACCEPTED":
-      return 6;
-    case "SENT":
-      return 5;
-    case "FAILED":
-      return 4;
+      return -1;
     case "OPT_OUT":
-      return 3;
     case "BLOCKED":
-      return 2;
     case "IDENTITY_CONFLICT":
-      return 2;
+      return -2;
     case "SKIPPED":
-      return 1;
+      return -3;
     case "PENDING":
     default:
-      return 0;
+      return -4;
   }
 }
 
@@ -225,6 +219,7 @@ function upsertEvidence(
       campaignId: campaign.id,
       campaignName: campaign.name,
       campaignAt,
+      statusAt: update.evidenceAt ?? null,
       templateName: update.templateName ?? campaign.templateName ?? null,
       status: update.status,
       reason: update.reason ?? null,
@@ -233,11 +228,14 @@ function upsertEvidence(
     });
     return;
   }
-  const nextRank = statusRank(update.status);
-  const currentRank = statusRank(existing.status);
-  if (nextRank > currentRank || (nextRank === currentRank && campaignAt > existing.campaignAt)) {
+  const nextRank = relationshipStatusTieRank(update.status);
+  const currentRank = relationshipStatusTieRank(existing.status);
+  const currentChronology = existing.statusAt ?? existing.campaignAt;
+  const nextChronology = update.evidenceAt ?? campaignAt;
+  if (nextChronology > currentChronology || (nextChronology.getTime() === currentChronology.getTime() && nextRank >= currentRank)) {
     existing.status = update.status;
     existing.campaignAt = campaignAt;
+    existing.statusAt = update.evidenceAt ?? null;
     existing.templateName = update.templateName ?? existing.templateName;
     existing.reason = update.reason ?? existing.reason;
   }
@@ -380,7 +378,7 @@ async function collectCampaignRelationshipEvidence(
       reason: outbound.errorBody ?? meta.statusDetail,
       templateName: outbound.templateName ?? campaign.templateName,
       deliveredAt: isDeliveredStatus(status) ? parseDate(meta.lastStatusAt) ?? outbound.createdAt : null,
-      evidenceAt: outbound.createdAt,
+      evidenceAt: parseProviderStatusTimestamp(meta.lastStatusAt) ?? outbound.createdAt,
     });
   }
 

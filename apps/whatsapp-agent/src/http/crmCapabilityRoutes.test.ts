@@ -1266,6 +1266,241 @@ test("CRM contact campaign relationship uses canonical campaign evidence without
   assert.doesNotMatch(JSON.stringify(detail.body), /Campanha Outro Tenant|R\$|USD|billing|contractPrice/i);
 });
 
+test("CRM contact campaign relationship follows provider chronology without requiring conversations", async () => {
+  const createLead = async (suffix: string, waId: string) => {
+    const lead = await prisma.lead.create({
+      data: {
+        tenantId: businessClientId,
+        waId,
+        waIdCanonical: waId,
+        phone: waId,
+        name: `Lead Relacionamento ${suffix}`,
+        status: "QUALIFIED",
+      },
+      select: { id: true },
+    });
+    return lead.id;
+  };
+  const createCampaign = async (suffix: string, at: string) =>
+    prisma.campaign.create({
+      data: {
+        clientId: businessClientId,
+        name: `Campanha Relacionamento ${suffix}`,
+        templateName: "data_exame",
+        status: "completed",
+        totalRecipients: 1,
+        sentCount: 1,
+        createdAt: new Date(at),
+        updatedAt: new Date(at),
+      },
+    });
+  const createOutbound = async (params: {
+    campaignId: string;
+    waId: string;
+    messageIndex: number;
+    status: "SENT" | "FAILED";
+    metaStatus: "sent" | "delivered" | "read" | "failed";
+    statusAt: string;
+    createdAt: string;
+    errorBody?: string;
+  }) =>
+    prisma.outboundMessage.create({
+      data: {
+        clientId: businessClientId,
+        waId: params.waId,
+        waIdCanonical: params.waId,
+        messageId: `campaign.${params.campaignId}.${params.messageIndex}`,
+        type: "TEMPLATE",
+        status: params.status,
+        templateName: "data_exame",
+        errorBody: params.errorBody,
+        rawPayload: {
+          campaignId: params.campaignId,
+          metaStatus: {
+            lastStatus: params.metaStatus,
+            lastStatusAt: params.statusAt,
+            statusDetail: params.errorBody,
+          },
+        },
+        createdAt: new Date(params.createdAt),
+      },
+    });
+  const detailFor = async (lead: string) =>
+    request<{
+      campaignRelationshipHistory: {
+        items: Array<{ campaignId: string; recipientStatus: string; resultReason: string | null }>;
+        pagination: { total: number };
+      };
+    }>("GET", `/app/crm/contacts/${encodeURIComponent(lead)}`, businessAdmin);
+
+  const failedWaId = `${prefix}-relationship-failed`;
+  const failedLeadId = await createLead("Falha", failedWaId);
+  const failedCampaign = await createCampaign("Falha", "2026-09-10T10:00:00.000Z");
+  await createOutbound({
+    campaignId: failedCampaign.id,
+    waId: failedWaId,
+    messageIndex: 1,
+    status: "SENT",
+    metaStatus: "sent",
+    statusAt: "2026-09-10T10:00:00.000Z",
+    createdAt: "2026-09-10T10:00:01.000Z",
+  });
+  await createOutbound({
+    campaignId: failedCampaign.id,
+    waId: failedWaId,
+    messageIndex: 2,
+    status: "FAILED",
+    metaStatus: "failed",
+    statusAt: "2026-09-10T10:01:00.000Z",
+    createdAt: "2026-09-10T10:01:01.000Z",
+    errorBody: "Message undeliverable",
+  });
+  const failedDetail = await detailFor(failedLeadId);
+  assert.equal(failedDetail.status, 200);
+  assert.equal(failedDetail.body.campaignRelationshipHistory.pagination.total, 1);
+  assert.equal(failedDetail.body.campaignRelationshipHistory.items[0]?.campaignId, failedCampaign.id);
+  assert.equal(failedDetail.body.campaignRelationshipHistory.items[0]?.recipientStatus, "FAILED");
+  assert.match(failedDetail.body.campaignRelationshipHistory.items[0]?.resultReason ?? "", /Message undeliverable/);
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId: failedWaId } }), 0);
+
+  const readWaId = `${prefix}-relationship-read`;
+  const readLeadId = await createLead("Lido", readWaId);
+  const readCampaign = await createCampaign("Lido", "2026-09-11T10:00:00.000Z");
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId: readWaId,
+      waIdCanonical: readWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      updatedAt: new Date("2026-09-11T10:02:00.000Z"),
+    },
+  });
+  await createOutbound({
+    campaignId: readCampaign.id,
+    waId: readWaId,
+    messageIndex: 1,
+    status: "SENT",
+    metaStatus: "sent",
+    statusAt: "2026-09-11T10:00:00.000Z",
+    createdAt: "2026-09-11T10:00:01.000Z",
+  });
+  await createOutbound({
+    campaignId: readCampaign.id,
+    waId: readWaId,
+    messageIndex: 2,
+    status: "SENT",
+    metaStatus: "delivered",
+    statusAt: "2026-09-11T10:01:00.000Z",
+    createdAt: "2026-09-11T10:01:01.000Z",
+  });
+  await createOutbound({
+    campaignId: readCampaign.id,
+    waId: readWaId,
+    messageIndex: 3,
+    status: "SENT",
+    metaStatus: "read",
+    statusAt: "2026-09-11T10:02:00.000Z",
+    createdAt: "2026-09-11T10:02:01.000Z",
+  });
+  const readDetail = await detailFor(readLeadId);
+  assert.equal(readDetail.status, 200);
+  assert.equal(readDetail.body.campaignRelationshipHistory.items[0]?.recipientStatus, "READ");
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId: readWaId } }), 1);
+
+  const replayWaId = `${prefix}-relationship-replay`;
+  const replayLeadId = await createLead("Replay", replayWaId);
+  const replayCampaign = await createCampaign("Replay", "2026-09-12T10:00:00.000Z");
+  await createOutbound({
+    campaignId: replayCampaign.id,
+    waId: replayWaId,
+    messageIndex: 1,
+    status: "SENT",
+    metaStatus: "delivered",
+    statusAt: "2026-09-12T10:01:00.000Z",
+    createdAt: "2026-09-12T10:01:01.000Z",
+  });
+  await createOutbound({
+    campaignId: replayCampaign.id,
+    waId: replayWaId,
+    messageIndex: 2,
+    status: "SENT",
+    metaStatus: "sent",
+    statusAt: "2026-09-12T10:00:00.000Z",
+    createdAt: "2026-09-12T10:02:00.000Z",
+  });
+  const replayDetail = await detailFor(replayLeadId);
+  assert.equal(replayDetail.status, 200);
+  assert.equal(replayDetail.body.campaignRelationshipHistory.items[0]?.recipientStatus, "DELIVERED");
+
+  const blockedWaId = `${prefix}-relationship-blocked`;
+  const blockedLeadId = await createLead("Bloqueado", blockedWaId);
+  const blockedCampaign = await createCampaign("Bloqueado", "2026-09-13T10:00:00.000Z");
+  await prisma.event.create({
+    data: {
+      clientId: businessClientId,
+      waId: blockedWaId,
+      waIdCanonical: blockedWaId,
+      eventName: "campaign.recipient.opt_out_blocked",
+      messageId: blockedCampaign.id,
+      requestId: `${prefix}-relationship-blocked`,
+      payloadJson: { reason: "opt_out" },
+      createdAt: new Date("2026-09-13T10:00:00.000Z"),
+    },
+  });
+  const blockedDetail = await detailFor(blockedLeadId);
+  assert.equal(blockedDetail.status, 200);
+  assert.equal(blockedDetail.body.campaignRelationshipHistory.items[0]?.recipientStatus, "OPT_OUT");
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId: blockedWaId } }), 0);
+
+  const existingWaId = `${prefix}-relationship-existing`;
+  const existingLeadId = await createLead("Existente", existingWaId);
+  const existingCampaign = await createCampaign("Existente", "2026-09-14T10:00:00.000Z");
+  const existingConversation = await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId: existingWaId,
+      waIdCanonical: existingWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      updatedAt: new Date("2026-09-14T09:00:00.000Z"),
+    },
+    select: { id: true },
+  });
+  await createOutbound({
+    campaignId: existingCampaign.id,
+    waId: existingWaId,
+    messageIndex: 1,
+    status: "FAILED",
+    metaStatus: "failed",
+    statusAt: "2026-09-14T10:01:00.000Z",
+    createdAt: "2026-09-14T10:01:01.000Z",
+    errorBody: "Message undeliverable",
+  });
+  const existingDetail = await detailFor(existingLeadId);
+  assert.equal(existingDetail.status, 200);
+  assert.equal(existingDetail.body.campaignRelationshipHistory.items[0]?.recipientStatus, "FAILED");
+  assert.equal(await prisma.conversation.count({ where: { id: existingConversation.id } }), 1);
+
+  const aliasLeadId = await createLead("Alias", "5511949806683");
+  const aliasCampaign = await createCampaign("Alias", "2026-09-15T10:00:00.000Z");
+  await createOutbound({
+    campaignId: aliasCampaign.id,
+    waId: "551149806683",
+    messageIndex: 1,
+    status: "FAILED",
+    metaStatus: "failed",
+    statusAt: "2026-09-15T10:01:00.000Z",
+    createdAt: "2026-09-15T10:01:01.000Z",
+    errorBody: "Message undeliverable",
+  });
+  const aliasDetail = await detailFor(aliasLeadId);
+  assert.equal(aliasDetail.status, 200);
+  assert.equal(aliasDetail.body.campaignRelationshipHistory.pagination.total, 1);
+  assert.equal(aliasDetail.body.campaignRelationshipHistory.items[0]?.campaignId, aliasCampaign.id);
+  assert.equal(aliasDetail.body.campaignRelationshipHistory.items[0]?.recipientStatus, "FAILED");
+});
+
 test("CRM contact campaign relationship list projection remains bounded with 500 contacts", async () => {
   const createdAt = new Date("2026-09-05T10:00:00.000Z");
   await prisma.lead.createMany({

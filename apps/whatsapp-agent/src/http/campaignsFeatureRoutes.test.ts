@@ -7464,6 +7464,249 @@ test("meta status webhook creates one active message billing event on delivered 
   );
 });
 
+test("meta status webhook reconciles provider chronology before semantic tie-break", async () => {
+  const phoneNumberId = `${prefix}.chronology-phone`;
+  await prisma.waPhoneNumber.upsert({
+    where: { phoneNumberId },
+    update: { clientId: businessClientId },
+    create: {
+      clientId: businessClientId,
+      phoneNumberId,
+      display: "+55 84 0000-0002",
+    },
+  });
+  await prisma.channelAccount.upsert({
+    where: {
+      clientId_provider_channel_channelAccountId: {
+        clientId: businessClientId,
+        provider: "meta_cloud",
+        channel: "whatsapp",
+        channelAccountId: phoneNumberId,
+      },
+    },
+    update: {
+      enabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: true,
+      status: "connected",
+      tokenStatus: "ok",
+    },
+    create: {
+      clientId: businessClientId,
+      channel: "whatsapp",
+      provider: "meta_cloud",
+      channelAccountId: phoneNumberId,
+      enabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: true,
+      status: "connected",
+      tokenStatus: "ok",
+    },
+  });
+
+  const t1 = new Date("2026-09-23T10:00:00.000Z");
+  const t2 = new Date("2026-09-23T10:01:00.000Z");
+  const t3 = new Date("2026-09-23T10:02:00.000Z");
+  const epoch = (value: Date) => String(Math.floor(value.getTime() / 1000));
+
+  const createAttempt = async (label: string) => {
+    const waId = `55849955${String(Math.floor(Math.random() * 9000) + 1000)}`;
+    const campaign = await prisma.campaign.create({
+      data: {
+        clientId: businessClientId,
+        name: `Cronologia Meta ${label}`,
+        templateName: "cronologia_meta",
+        status: "completed",
+        totalRecipients: 1,
+        sentCount: 1,
+        blockedCount: 0,
+      },
+    });
+    await prisma.event.create({
+      data: {
+        clientId: businessClientId,
+        messageId: campaign.id,
+        requestId: `campaign-seed:${campaign.id}:chronology-${label}`,
+        eventName: "campaign.seed.saved",
+        payloadJson: {
+          campaignId: campaign.id,
+          name: campaign.name,
+          templateName: campaign.templateName,
+          recipients: [waId],
+          templateParams: [],
+        },
+      },
+    });
+    const messageId = `campaign.${campaign.id}.1`;
+    const metaMessageId = `${prefix}.wamid.chronology.${label}`;
+    await prisma.outboundMessage.create({
+      data: {
+        clientId: businessClientId,
+        phoneNumberId,
+        waId,
+        waIdCanonical: waId,
+        messageId,
+        metaMessageId,
+        channel: "whatsapp",
+        provider: "meta_cloud",
+        type: "TEMPLATE",
+        templateName: campaign.templateName,
+        status: "SENT",
+        rawPayload: {
+          source: "campaign",
+          campaignId: campaign.id,
+          campaignRunId: `chronology-${label}`,
+          templateCategory: "utility",
+          returnDestination: defaultCampaignReturnDestination(),
+          metaUsage: { source: "campaign", metaCategory: "utility" },
+        },
+      },
+    });
+    return { campaign, waId, messageId, metaMessageId };
+  };
+
+  const postStatus = async (
+    attempt: Awaited<ReturnType<typeof createAttempt>>,
+    status: "sent" | "delivered" | "read" | "failed",
+    timestamp: Date,
+    error?: { code: number; message: string }
+  ) => {
+    const response = await requestUnauth("POST", "/webhook", {
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          id: `${prefix}.waba`,
+          changes: [
+            {
+              field: "messages",
+              value: {
+                metadata: {
+                  phone_number_id: phoneNumberId,
+                  display_phone_number: "558400000002",
+                },
+                statuses: [
+                  {
+                    id: attempt.metaMessageId,
+                    recipient_id: attempt.waId,
+                    status,
+                    timestamp: epoch(timestamp),
+                    ...(status === "failed"
+                      ? {
+                          errors: [{ code: error?.code ?? 131026, message: error?.message ?? "Message undeliverable" }],
+                          error_data: { details: error?.message ?? "Message undeliverable" },
+                          status_detail: error?.message ?? "Message undeliverable",
+                        }
+                      : {
+                          conversation: {
+                            id: `${prefix}.conversation.${attempt.campaign.id}`,
+                            origin: { type: "utility" },
+                          },
+                          pricing: { billable: true, category: "utility", pricing_model: "CBP" },
+                        }),
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+  };
+
+  const readAttempt = async (attempt: Awaited<ReturnType<typeof createAttempt>>) => {
+    const outbound = await prisma.outboundMessage.findUniqueOrThrow({
+      where: { clientId_messageId: { clientId: businessClientId, messageId: attempt.messageId } },
+      select: { status: true, errorBody: true, rawPayload: true },
+    });
+    const raw = outbound.rawPayload && typeof outbound.rawPayload === "object" && !Array.isArray(outbound.rawPayload)
+      ? outbound.rawPayload as Record<string, unknown>
+      : {};
+    const metaStatus = raw.metaStatus && typeof raw.metaStatus === "object" && !Array.isArray(raw.metaStatus)
+      ? raw.metaStatus as Record<string, unknown>
+      : {};
+    return { outbound, raw, metaStatus };
+  };
+  const waitStatus = (attempt: Awaited<ReturnType<typeof createAttempt>>, status: string) =>
+    waitFor(async () => (await readAttempt(attempt)).metaStatus.lastStatus === status);
+
+  const sentThenFailed = await createAttempt("sent-failed-6683");
+  await postStatus(sentThenFailed, "sent", t1);
+  await waitStatus(sentThenFailed, "sent");
+  await postStatus(sentThenFailed, "failed", t2, { code: 131026, message: "Message undeliverable" });
+  await waitFor(async () => {
+    const { outbound, metaStatus } = await readAttempt(sentThenFailed);
+    return outbound.status === MessageStatus.FAILED && metaStatus.lastStatus === "failed";
+  });
+  const failedState = await readAttempt(sentThenFailed);
+  assert.equal(failedState.outbound.status, MessageStatus.FAILED);
+  assert.match(failedState.outbound.errorBody ?? "", /Message undeliverable|131026/);
+  assert.equal(failedState.metaStatus.lastStatus, "failed");
+  assert.equal((failedState.raw.metaUsage as Record<string, unknown> | undefined)?.deliveryStatus, "failed");
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId: sentThenFailed.waId } }), 0);
+  assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId: sentThenFailed.waId } }), 0);
+
+  const sentDeliveredReplay = await createAttempt("sent-delivered-replay");
+  await postStatus(sentDeliveredReplay, "sent", t1);
+  await waitStatus(sentDeliveredReplay, "sent");
+  await postStatus(sentDeliveredReplay, "delivered", t2);
+  await waitStatus(sentDeliveredReplay, "delivered");
+  await postStatus(sentDeliveredReplay, "sent", t1);
+  await waitStatus(sentDeliveredReplay, "delivered");
+  assert.equal((await readAttempt(sentDeliveredReplay)).metaStatus.lastStatus, "delivered");
+
+  const deliveredLateFailed = await createAttempt("delivered-late-failed");
+  await postStatus(deliveredLateFailed, "delivered", t2);
+  await waitStatus(deliveredLateFailed, "delivered");
+  await postStatus(deliveredLateFailed, "failed", t1);
+  await waitStatus(deliveredLateFailed, "delivered");
+  assert.equal((await readAttempt(deliveredLateFailed)).metaStatus.lastStatus, "delivered");
+
+  const failedLateSent = await createAttempt("failed-late-sent");
+  await postStatus(failedLateSent, "failed", t2);
+  await waitStatus(failedLateSent, "failed");
+  await postStatus(failedLateSent, "sent", t1);
+  await waitStatus(failedLateSent, "failed");
+  assert.equal((await readAttempt(failedLateSent)).metaStatus.lastStatus, "failed");
+
+  const readLateDelivered = await createAttempt("read-late-delivered");
+  await postStatus(readLateDelivered, "sent", t1);
+  await waitStatus(readLateDelivered, "sent");
+  await postStatus(readLateDelivered, "delivered", t2);
+  await waitStatus(readLateDelivered, "delivered");
+  await postStatus(readLateDelivered, "read", t3);
+  await waitStatus(readLateDelivered, "read");
+  await postStatus(readLateDelivered, "delivered", t2);
+  await waitStatus(readLateDelivered, "read");
+  assert.equal((await readAttempt(readLateDelivered)).metaStatus.lastStatus, "read");
+
+  const deliveredThenLaterFailed = await createAttempt("delivered-later-failed");
+  await postStatus(deliveredThenLaterFailed, "sent", t1);
+  await waitStatus(deliveredThenLaterFailed, "sent");
+  await postStatus(deliveredThenLaterFailed, "delivered", t2);
+  await waitFor(async () => {
+    const state = await readAttempt(deliveredThenLaterFailed);
+    return state.metaStatus.lastStatus === "delivered" && typeof state.raw.conversationId === "string";
+  });
+  const deliveredConversationId = (await readAttempt(deliveredThenLaterFailed)).raw.conversationId;
+  await postStatus(deliveredThenLaterFailed, "failed", t3, { code: 131026, message: "Message undeliverable" });
+  await waitFor(async () => (await readAttempt(deliveredThenLaterFailed)).metaStatus.lastStatus === "failed");
+  const finalState = await readAttempt(deliveredThenLaterFailed);
+  assert.equal(finalState.metaStatus.lastStatus, "failed");
+  assert.equal(finalState.raw.conversationId, deliveredConversationId);
+
+  const detail = await request<{
+    campaign: {
+      messagesMetaStatus: Array<{ status: string; error: string | null }>;
+      metaSummary: { totalFailed: number };
+    };
+  }>("GET", `/app/campaigns/${sentThenFailed.campaign.id}`, businessAdmin);
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.campaign.messagesMetaStatus[0]?.status, "failed");
+  assert.match(detail.body.campaign.messagesMetaStatus[0]?.error ?? "", /Message undeliverable|131026/);
+  assert.equal(detail.body.campaign.metaSummary.totalFailed, 1);
+});
+
 test("meta status webhook records orphan status evidence without billing when outbound is missing", async () => {
   const waId = "5584999905678";
   const metaMessageId = `${prefix}.wamid.webhook.orphan.1`;
