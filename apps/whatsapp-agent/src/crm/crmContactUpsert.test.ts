@@ -18,13 +18,17 @@ function makeUpsertPrisma(params: {
     externalUserHash?: string | null;
     operationallyExcludedAt?: Date | null;
   } | null;
-	  lead?: {
-	    id?: string;
-	    name?: string | null;
-	    phone?: string | null;
-	    status?: string;
-	    contactChannelIdentityId?: string | null;
-	  } | null;
+		  lead?: {
+		    id?: string;
+		    name?: string | null;
+		    phone?: string | null;
+		    status?: string;
+        company?: string | null;
+        city?: string | null;
+        email?: string | null;
+        service?: string | null;
+		    contactChannelIdentityId?: string | null;
+		  } | null;
   identities?: Array<{
     id: string;
     contactId?: string | null;
@@ -50,11 +54,15 @@ function makeUpsertPrisma(params: {
   const lead = params.lead
     ? {
         id: params.lead.id ?? "lead_1",
-	        name: params.lead.name ?? contact?.name ?? "Contato",
-	        phone: params.lead.phone ?? contact?.waId ?? "5584951957784",
-	        status: params.lead.status ?? "NEW",
-	        contactChannelIdentityId: params.lead.contactChannelIdentityId ?? "identity_1",
-	      }
+		        name: params.lead.name ?? contact?.name ?? "Contato",
+		        phone: params.lead.phone ?? contact?.waId ?? "5584951957784",
+		        status: params.lead.status ?? "NEW",
+            company: params.lead.company ?? null,
+            city: params.lead.city ?? null,
+            email: params.lead.email ?? null,
+            service: params.lead.service ?? null,
+		        contactChannelIdentityId: params.lead.contactChannelIdentityId ?? "identity_1",
+		      }
     : null;
   const state = {
     contacts: contact ? [contact] : [] as typeof contact[],
@@ -62,6 +70,7 @@ function makeUpsertPrisma(params: {
     createdContacts: 0,
     updatedContacts: 0,
     leadUpdates: [] as unknown[],
+    leadCreates: [] as unknown[],
     events: [] as unknown[],
   };
   const matchesIdentityWhere = (item: typeof contact, where: unknown) => {
@@ -144,7 +153,10 @@ function makeUpsertPrisma(params: {
         state.leadUpdates.push(data);
         return { id: lead?.id ?? "lead_1" };
       },
-      create: async () => ({ id: "lead_created" }),
+      create: async ({ data }: { data: unknown }) => {
+        state.leadCreates.push(data);
+        return { id: "lead_created" };
+      },
     },
     event: {
       create: async ({ data }: { data: unknown }) => {
@@ -506,6 +518,75 @@ test("CRM CSV import resolves CRM situation and preserves existing status when b
   assert.equal(prisma.__state.createdContacts, 1);
   assert.equal(prisma.__state.leadUpdates.length, 1);
   assert.equal((prisma.__state.leadUpdates[0] as { status?: string }).status, undefined);
+});
+
+test("CRM CSV import maps all editable fields and preserves blank mapped values", async () => {
+  const prisma = makeUpsertPrisma({
+    contact: {
+      id: "contact_existing",
+      name: "Contato Base",
+      waId: "5584999049614",
+    },
+    lead: {
+      id: "lead_existing",
+      name: "Contato Base",
+      phone: "5584999049614",
+      status: "NEW",
+      company: "Empresa Original",
+      city: "Natal",
+      email: "base@example.com",
+      service: "Servico Original",
+    },
+  });
+  const csvText =
+    "Telefone,Nome,Empresa,Cidade,E-mail,Serviço / interesse\n" +
+    "5584999049614,Contato Atualizado,,Mossoro,NOVO@EXAMPLE.COM,Servico Novo\n";
+
+  const preview = await previewCrmContactCsvImport(prisma as never, {
+    clientId: "client_a",
+    csvText,
+    mapping: {
+      phoneColumn: "Telefone",
+      nameColumn: "Nome",
+      companyColumn: "Empresa",
+      cityColumn: "Cidade",
+      emailColumn: "E-mail",
+      serviceColumn: "Serviço / interesse",
+    },
+  });
+  const result = await confirmCrmContactCsvImport(prisma as never, {
+    clientId: "client_a",
+    csvText,
+    mapping: {
+      phoneColumn: "Telefone",
+      nameColumn: "Nome",
+      companyColumn: "Empresa",
+      cityColumn: "Cidade",
+      emailColumn: "E-mail",
+      serviceColumn: "Serviço / interesse",
+    },
+    actorUserId: "admin_1",
+    requestId: "import_full_fields",
+    audit: false,
+  });
+
+  assert.equal(preview.readyToImport, 1);
+  assert.equal(preview.rows?.[0]?.operation, "UPDATE");
+  assert.deepEqual(preview.rows?.[0]?.fieldsToUpdate, ["Nome", "Cidade", "E-mail", "Serviço / interesse"]);
+  assert.equal(result.updated, 1);
+  assert.equal(prisma.__state.leadUpdates.length, 1);
+  const update = prisma.__state.leadUpdates[0] as {
+    name?: string;
+    company?: string;
+    city?: string;
+    email?: string;
+    service?: string;
+  };
+  assert.equal(update.name, "Contato Atualizado");
+  assert.equal(update.company, undefined);
+  assert.equal(update.city, "Mossoro");
+  assert.equal(update.email, "novo@example.com");
+  assert.equal(update.service, "Servico Novo");
 });
 
 test("CRM CSV import does not restore operationally excluded contacts", async () => {

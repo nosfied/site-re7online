@@ -358,7 +358,7 @@ test("campaign CSV import saves audience without pre-send CRM mutation", async (
   });
   assert.ok(importTemplate);
   const statuses = [
-    { id: "NEW", label: "Novo", isActive: true, campaignEligible: false },
+    { id: "NEW", label: "Novo", isActive: true, campaignEligible: true },
     { id: "QUALIFIED", label: "Qualificado", isActive: true, campaignEligible: true },
     { id: "FOLLOW_UP", label: "Follow-up", isActive: true, campaignEligible: true },
     { id: "LOST", label: "Perdido", isActive: true, campaignEligible: true },

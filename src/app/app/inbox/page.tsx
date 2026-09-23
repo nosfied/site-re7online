@@ -7081,9 +7081,6 @@ export default function AppInboxPage() {
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.85fr)]">
                 <section className="space-y-3">
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
-                    A cobrança depende da categoria, país, entrega e política vigente da Meta.
-                  </div>
                   <div>
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <h3 className="text-sm font-semibold text-slate-900">Modelos disponíveis</h3>
@@ -7244,9 +7241,6 @@ export default function AppInboxPage() {
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
                 <section className="space-y-3">
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
-                    Mensagem pronta é enviada como texto comum. A cobrança depende da entrega e da política vigente da Meta.
-                  </div>
                   <div className="flex items-center gap-2">
                     <input
                       value={cannedReplySearch}

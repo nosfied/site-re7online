@@ -7,6 +7,7 @@ import { publishRealtimeEvent } from "../realtime/hub.js";
 import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
 import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
 import { reactivateOperationallyExcludedContactIfNeeded } from "../contacts/contactOperationalExclusion.js";
+import { recordCrmConversationContactOrigin } from "../crm/crmContactUpsert.js";
 import {
   hasConfiguredTelegramToken,
   markTelegramWebhookReplay,
@@ -428,6 +429,16 @@ export async function persistTelegramInboundMessage(params: {
     contactId: contact.id,
     waId: syntheticWaId,
     waIdCanonical: syntheticWaId,
+    requestId: params.requestId,
+    source: "telegram_inbound",
+  });
+  await recordCrmConversationContactOrigin({
+    clientId: account.clientId,
+    leadId: lead.id,
+    contactId: contact.id,
+    waId: syntheticWaId,
+    waIdCanonical: syntheticWaId,
+    conversationId: conversation.id,
     requestId: params.requestId,
     source: "telegram_inbound",
   });

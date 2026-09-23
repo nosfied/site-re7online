@@ -865,14 +865,18 @@ test("CRM CSV import previews without mutation and confirms idempotently", async
 test("CRM operational statuses are tenant-scoped and allow custom lead statuses", async () => {
   const statuses = await request<{
     ok: boolean;
-    settings: { crmBusinessStatuses: Array<{ id: string; label: string }> };
+    settings: { crmBusinessStatuses: Array<{ id: string; label: string; isActive: boolean; campaignEligible: boolean }> };
   }>("GET", "/app/crm/statuses", businessAgent);
   assert.equal(statuses.status, 200);
   assert.equal(statuses.body.ok, true);
   assert.deepEqual(
     statuses.body.settings.crmBusinessStatuses.map((item) => item.id),
-    ["QUALIFIED", "OPEN", "RETORNO_FUTURO", "INATIVO", "ARQUIVADO"]
+    ["NEW", "QUALIFIED", "OPEN", "RETORNO_FUTURO", "INATIVO", "ARQUIVADO"]
   );
+  const systemNew = statuses.body.settings.crmBusinessStatuses.find((item) => item.id === "NEW");
+  assert.ok(systemNew);
+  assert.equal(systemNew.isActive, true);
+  assert.equal(systemNew.campaignEligible, true);
 
   const update = await request<{ ok: boolean; lead: { status: string } }>(
     "PATCH",

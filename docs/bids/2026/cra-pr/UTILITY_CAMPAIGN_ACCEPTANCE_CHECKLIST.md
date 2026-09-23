@@ -496,3 +496,19 @@ Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
   PASS. Schema unchanged, migration none, no real send and no deploy.
 - Status: P1 VALIDATED LOCAL/READ-ONLY / OWNER REVIEW READY; post-deploy
   production validation remains pending.
+
+## CRM origin + Contacts CSV + block guards - 2026-09-23
+
+- Contacts/CRM origin is projection-only and now classifies inbound
+  materialization as `Atendimento / conversa` when that is the earliest reliable
+  provenance.
+- Contacts CSV import supports phone, name, CRM situation, company, city,
+  email and service/interest; optional blank/unmapped fields preserve existing
+  values.
+- CRM `NEW` is a mandatory active system status and does not create campaign
+  ineligibility by itself.
+- Manual campaign recipients, CSV campaign draft recipients and Inbox template
+  sends preserve active opt-out/send-block guards before provider calls.
+- Campaigns/Inbox customer UX must not show billing notices or price guidance.
+- Status: LOCAL FIX PREPARED / NOT DEPLOYED; CRA controlled evidence still
+  required before formal acceptance.

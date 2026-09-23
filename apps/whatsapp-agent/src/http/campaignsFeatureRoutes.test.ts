@@ -11778,6 +11778,8 @@ test("admin submit persists safe structured Meta provider errors", async (t) => 
 test("campaign audience preview is tenant scoped and does not create operational records", async () => {
   const eligibleWaId = "5541991177001";
   const blockedWaId = "5541991177002";
+  const excludedWaId = "5541991177005";
+  const invalidWaId = `${prefix}-new-invalid-audience`;
   const otherTenantWaId = "5541991177003";
   const anonymizedWaId = "5541******7004:anon001";
 
@@ -11789,11 +11791,11 @@ test("campaign audience preview is tenant scoped and does not create operational
         waIdCanonical: eligibleWaId,
         channel: "whatsapp",
         provider: "meta",
-        name: "Cliente Elegivel",
+        name: "New Status Gate Elegivel",
         phone: eligibleWaId,
         company: "Empresa Elegivel",
         city: "Curitiba",
-        status: "RETORNO_FUTURO",
+        status: "NEW",
       },
       {
         tenantId: businessClientId,
@@ -11801,9 +11803,29 @@ test("campaign audience preview is tenant scoped and does not create operational
         waIdCanonical: blockedWaId,
         channel: "whatsapp",
         provider: "meta",
-        name: "Cliente Bloqueado",
+        name: "New Status Gate Opt Out",
         phone: blockedWaId,
-        status: "RETORNO_FUTURO",
+        status: "NEW",
+      },
+      {
+        tenantId: businessClientId,
+        waId: excludedWaId,
+        waIdCanonical: excludedWaId,
+        channel: "whatsapp",
+        provider: "meta",
+        name: "New Status Gate Excluido",
+        phone: excludedWaId,
+        status: "NEW",
+      },
+      {
+        tenantId: businessClientId,
+        waId: invalidWaId,
+        waIdCanonical: invalidWaId,
+        channel: "whatsapp",
+        provider: "meta",
+        name: "New Status Gate Invalido",
+        phone: "telefone-invalido",
+        status: "NEW",
       },
       {
         tenantId: businessClientId,
@@ -11841,6 +11863,15 @@ test("campaign audience preview is tenant scoped and does not create operational
     source: "test",
     reason: "preview block",
   });
+  await prisma.contact.create({
+    data: {
+      clientId: businessClientId,
+      waId: excludedWaId,
+      name: "Contato Excluido",
+      lifecycle: "ACTIVE",
+      operationallyExcludedAt: new Date("2026-09-22T10:00:00.000Z"),
+    },
+  });
 
   const campaignsBefore = await prisma.campaign.count({ where: { clientId: businessClientId } });
   const eventsBefore = await prisma.event.count({ where: { clientId: businessClientId } });
@@ -11866,7 +11897,7 @@ test("campaign audience preview is tenant scoped and does not create operational
     pagination: { total: number; page: number; limit: number };
   }>(
     "GET",
-    "/app/campaigns/audience-preview?status=RETORNO_FUTURO&limit=20&clientId=malicious",
+    "/app/campaigns/audience-preview?status=NEW&q=New%20Status%20Gate&limit=20&clientId=malicious",
     businessAdmin
   );
 
@@ -11877,12 +11908,14 @@ test("campaign audience preview is tenant scoped and does not create operational
   assert.equal(response.body.summary.blocked, 0);
   assert.equal(response.body.items.some((item) => item.displayName === "Outro Tenant"), false);
 
-  const eligible = response.body.items.find((item) => item.displayName === "Cliente Elegivel");
+  const eligible = response.body.items.find((item) => item.displayName === "New Status Gate Elegivel");
   assert.ok(eligible);
   assert.equal(eligible.eligible, true);
   assert.equal(eligible.phoneDisplay, eligibleWaId);
   assert.equal(eligible.identifierDisplay, eligibleWaId);
-  assert.equal(response.body.items.some((item) => item.displayName === "Cliente Bloqueado"), false);
+  assert.equal(response.body.items.some((item) => item.displayName === "New Status Gate Opt Out"), false);
+  assert.equal(response.body.items.some((item) => item.displayName === "New Status Gate Excluido"), false);
+  assert.equal(response.body.items.some((item) => item.displayName === "New Status Gate Invalido"), false);
   assert.equal(response.body.items.some((item) => item.displayName === "Usuario Anonimizado"), false);
   assert.equal(response.body.items.some((item) => item.displayName === "Contato Instagram"), false);
   assert.deepEqual(response.body.summary.blockedByReason, []);

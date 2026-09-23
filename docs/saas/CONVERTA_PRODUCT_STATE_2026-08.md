@@ -1312,3 +1312,14 @@ outbound, event and billing rows are untouched. Read-only replay of campaign
 pending 0, technical failures 0 and `Entrega parcial`. Campaign backend
 118/118 and complementary 56/56 plus 72/72 matrices pass. Schema unchanged,
 migration none, no real send, no identity repair and no deploy.
+
+CRM origin + full Contacts CSV + campaign block guards (2026-09-23): LOCAL FIX
+PREPARED / NOT DEPLOYED. CRM read model origin remains a canonical
+event-derived projection: manual, CSV, campaign/audience, conversation/inbound,
+system and legacy unknown stay distinct. Contacts CSV import supports optional
+company, city, email and service/interest columns in addition to phone, name
+and CRM situation; blank or unmapped optional fields preserve existing data.
+`NEW` is mandatory and active, but it does not create campaign ineligibility by
+itself. Campaign manual/CSV and Inbox template paths preserve pre-provider
+active-send/opt-out blocking and display non-technical reasons. No schema,
+migration, production mutation, provider call or real send occurred.

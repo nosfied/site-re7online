@@ -746,33 +746,33 @@ export async function openSupportConversation(params: {
       },
       select: { id: true },
     });
-    if (existingLead) {
-      await tx.lead.update({
-        where: { id: existingLead.id },
-        data: {
-          waId,
-          waIdCanonical: waId,
-          name: requesterLabel,
-          status: "NEW",
-          contactChannelIdentityId: identity.id,
-        },
-      });
-    } else {
-      await tx.lead.create({
-        data: {
-          tenantId: supportTenant.client.id,
-          waId,
-          waIdCanonical: waId,
-          name: requesterLabel,
-          status: "NEW",
-          channel: SUPPORT_CHANNEL,
-          provider: SUPPORT_PROVIDER,
-          channelAccountId: SUPPORT_CHANNEL_ACCOUNT_ID,
-          externalUserHash: sourceHash,
-          contactChannelIdentityId: identity.id,
-        },
-      });
-    }
+    const leadRecord = existingLead
+      ? await tx.lead.update({
+          where: { id: existingLead.id },
+          data: {
+            waId,
+            waIdCanonical: waId,
+            name: requesterLabel,
+            status: "NEW",
+            contactChannelIdentityId: identity.id,
+          },
+          select: { id: true },
+        })
+      : await tx.lead.create({
+          data: {
+            tenantId: supportTenant.client.id,
+            waId,
+            waIdCanonical: waId,
+            name: requesterLabel,
+            status: "NEW",
+            channel: SUPPORT_CHANNEL,
+            provider: SUPPORT_PROVIDER,
+            channelAccountId: SUPPORT_CHANNEL_ACCOUNT_ID,
+            externalUserHash: sourceHash,
+            contactChannelIdentityId: identity.id,
+          },
+          select: { id: true },
+        });
     const created = await tx.conversation.create({
       data: {
         clientId: supportTenant.client.id,
@@ -852,6 +852,33 @@ export async function openSupportConversation(params: {
           requesterRole: params.requester.role,
         } satisfies Prisma.InputJsonValue,
       },
+    });
+    await tx.event.upsert({
+      where: {
+        clientId_eventName_requestId: {
+          clientId: supportTenant.client.id,
+          eventName: "crm.contact.created",
+          requestId: `crm.contact.created:conversation:${leadRecord.id}`,
+        },
+      },
+      create: {
+        clientId: supportTenant.client.id,
+        conversationId: created.id,
+        waId,
+        waIdCanonical: waId,
+        requestId: `crm.contact.created:conversation:${leadRecord.id}`,
+        eventName: "crm.contact.created",
+        payloadJson: {
+          contactId: contact.id,
+          leadId: leadRecord.id,
+          source: "support_inbound",
+          createdContact: !existingContact,
+          createdLead: !existingLead,
+          waIdLast4: waId.slice(-4),
+          waIdLength: waId.length,
+        } satisfies Prisma.InputJsonValue,
+      },
+      update: {},
     });
     return created;
   });

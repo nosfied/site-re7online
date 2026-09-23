@@ -94,6 +94,8 @@ export function getAppErrorUxMessage(input: {
       return "Este tipo de arquivo não pode ser enviado por aqui.";
     case "contact_operationally_excluded":
       return "Este contato foi retirado da operação.";
+    case "active_send_blocked":
+      return "Este contato optou por não receber envios ativos.";
     case "invalid_phone":
       return "Informe um número de WhatsApp válido com código do país 55 e DDD.";
     case "campaign_name_conflict":

@@ -31,6 +31,8 @@ test("customer campaign and inbox surfaces do not render financial estimates", (
   for (const forbidden of ["formatMetaUsd", "InboxCostPreview", "Unitário:", "Estimado:"]) {
     assert.ok(!inboxSource.includes(forbidden), `inbox page still contains ${forbidden}`);
   }
+  assert.ok(!inboxSource.includes("A cobrança depende da categoria"));
+  assert.ok(!inboxSource.includes("Mensagem pronta é enviada como texto comum. A cobrança depende"));
 });
 
 test("campaign destination remains department-only in standard flow", () => {
@@ -142,6 +144,16 @@ test("campaign creation exposes dynamic CRM-filter scheduling without freezing p
   assert.ok(pageSource.includes("dynamicFilter: { version: 1, crmBusinessStatusId }"));
   assert.ok(pageSource.includes("selectedLeadIds: []"));
   assert.ok(pageSource.includes("scheduleAppCampaignDraft(session, created.campaign.id, scheduledAt.toISOString())"));
+});
+
+test("campaign CRM audience panel uses neutral administrative tone", () => {
+  const audienceBlock = pageSource.slice(
+    pageSource.indexOf(">Audiência CRM<") - 1200,
+    pageSource.indexOf("id=\"campaign-creation-panel-audience\"")
+  );
+  assert.ok(audienceBlock.includes("border border-white/15 bg-white/[0.045]"));
+  assert.ok(audienceBlock.includes("focus:ring-re7-sky/60"));
+  assert.ok(!audienceBlock.includes("emerald"));
 });
 
 test("campaign CSV import uses generic contact and field mapping", () => {

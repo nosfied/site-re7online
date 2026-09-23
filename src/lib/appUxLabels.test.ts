@@ -62,6 +62,18 @@ test("contact operationally excluded message remains specific", () => {
   );
 });
 
+test("active send block uses a specific opt-out message", () => {
+  assert.equal(
+    getAppErrorUxMessage({
+      status: 409,
+      errorCode: "active_send_blocked",
+      message: "Contato bloqueado para envio ativo.",
+      fallback: "Não foi possível enviar o modelo.",
+    }),
+    "Este contato optou por não receber envios ativos."
+  );
+});
+
 test("session audit open status does not imply realtime presence", () => {
   assert.equal(getSessionAuditStatusUxLabel("OPEN"), "Aberta");
 });

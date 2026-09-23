@@ -2626,7 +2626,7 @@ export default function AppCampaignsPage() {
         </div>
         <div className="grid gap-3 p-3">
           {draftSetupEditor}
-          <article className="overflow-hidden rounded-xl border border-emerald-300/20 bg-emerald-950/10">
+          <article className="overflow-hidden rounded-xl border border-white/15 bg-white/[0.045]">
             <div
               role="button"
               tabIndex={0}
@@ -2639,17 +2639,17 @@ export default function AppCampaignsPage() {
                   setExpandedCreationPanel((current) => current === "audience" ? null : "audience");
                 }
               }}
-              className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-white/10 bg-white/[0.075] px-3 py-3 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-300/60 md:px-4"
+              className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-white/10 bg-white/[0.075] px-3 py-3 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/60 md:px-4"
             >
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-100/80">Audiência CRM</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Audiência CRM</p>
                 <h3 className="mt-1 text-sm font-semibold">Selecionar por filtros</h3>
                 <p className="mt-1 text-xs text-white/60">
                   Gere uma prévia dos contatos elegíveis do CRM e crie rascunho com essa audiência.
                 </p>
               </div>
               <div className="expand-row-action-slot flex min-w-max shrink-0 items-center justify-end gap-3 justify-self-end whitespace-nowrap">
-                <span className="hidden rounded-full border border-emerald-300/25 bg-emerald-900/20 px-3 py-1 text-xs text-emerald-100 sm:inline-flex">
+                <span className="hidden rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/70 sm:inline-flex">
                   Opcional
                 </span>
                 <button
@@ -2662,7 +2662,7 @@ export default function AppCampaignsPage() {
                     event.stopPropagation();
                     setExpandedCreationPanel((current) => current === "audience" ? null : "audience");
                   }}
-                  className={`grid h-8 w-8 place-items-center rounded-full border text-base font-semibold leading-none transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-300/60 ${expandedCreationPanel === "audience" ? "rotate-90 border-emerald-300/50 bg-emerald-900/30 text-emerald-50" : "border-white/15 text-white/70"}`}
+                  className={`grid h-8 w-8 place-items-center rounded-full border text-base font-semibold leading-none transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/60 ${expandedCreationPanel === "audience" ? "rotate-90 border-re7-sky/60 bg-re7-sky/15 text-white" : "border-white/15 text-white/70"}`}
                 >
                   ›
                 </button>
@@ -2677,7 +2677,7 @@ export default function AppCampaignsPage() {
             detail="Prévia ilustrativa. Os valores finais serão calculados para cada contato selecionado no CRM."
           />
           </div>
-          <div className="mt-3 grid gap-3 rounded-md border border-emerald-300/20 bg-emerald-950/20 p-3">
+          <div className="mt-3 grid gap-3 rounded-md border border-white/15 bg-white/[0.045] p-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-white">Modo de destinatários</p>

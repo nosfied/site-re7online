@@ -11468,11 +11468,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 	        ? await confirmCrmContactCsvImport(prisma, {
 	            clientId: client.id,
 	            csvText,
-	            mapping: {
-	              phoneColumn: typeof mapping.phoneColumn === "string" ? mapping.phoneColumn : null,
-	              nameColumn: typeof mapping.nameColumn === "string" ? mapping.nameColumn : null,
-	              crmSituationColumn: typeof mapping.crmSituationColumn === "string" ? mapping.crmSituationColumn : null,
-	            },
+		            mapping: {
+		              phoneColumn: typeof mapping.phoneColumn === "string" ? mapping.phoneColumn : null,
+		              nameColumn: typeof mapping.nameColumn === "string" ? mapping.nameColumn : null,
+		              crmSituationColumn: typeof mapping.crmSituationColumn === "string" ? mapping.crmSituationColumn : null,
+		              companyColumn: typeof mapping.companyColumn === "string" ? mapping.companyColumn : null,
+		              cityColumn: typeof mapping.cityColumn === "string" ? mapping.cityColumn : null,
+		              emailColumn: typeof mapping.emailColumn === "string" ? mapping.emailColumn : null,
+		              serviceColumn: typeof mapping.serviceColumn === "string" ? mapping.serviceColumn : null,
+		            },
 	            crmStatuses: resolvedStatuses.statuses,
 	            actorUserId: clientAuth.userId,
 	            requestId,
@@ -11480,11 +11484,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 	        : await previewCrmContactCsvImport(prisma, {
 	            clientId: client.id,
 	            csvText,
-	            mapping: {
-	              phoneColumn: typeof mapping.phoneColumn === "string" ? mapping.phoneColumn : null,
-	              nameColumn: typeof mapping.nameColumn === "string" ? mapping.nameColumn : null,
-	              crmSituationColumn: typeof mapping.crmSituationColumn === "string" ? mapping.crmSituationColumn : null,
-	            },
+		            mapping: {
+		              phoneColumn: typeof mapping.phoneColumn === "string" ? mapping.phoneColumn : null,
+		              nameColumn: typeof mapping.nameColumn === "string" ? mapping.nameColumn : null,
+		              crmSituationColumn: typeof mapping.crmSituationColumn === "string" ? mapping.crmSituationColumn : null,
+		              companyColumn: typeof mapping.companyColumn === "string" ? mapping.companyColumn : null,
+		              cityColumn: typeof mapping.cityColumn === "string" ? mapping.cityColumn : null,
+		              emailColumn: typeof mapping.emailColumn === "string" ? mapping.emailColumn : null,
+		              serviceColumn: typeof mapping.serviceColumn === "string" ? mapping.serviceColumn : null,
+		            },
 	            crmStatuses: resolvedStatuses.statuses,
 	          });
       json(res, 200, payload);

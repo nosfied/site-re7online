@@ -357,7 +357,7 @@ export const DEFAULT_CRM_BUSINESS_STATUSES: CrmBusinessStatusConfig[] = [
     id: "NEW",
     label: "Novo",
     isActive: true,
-    campaignEligible: false,
+    campaignEligible: true,
     description: "Lead recem-criado ou ainda sem qualificacao.",
   },
   {
@@ -427,6 +427,7 @@ export function normalizeCrmBusinessStatuses(input: unknown): CrmBusinessStatusC
   if (!Array.isArray(input)) return [...DEFAULT_CRM_BUSINESS_STATUSES];
   const seen = new Set<string>();
   const items: CrmBusinessStatusConfig[] = [];
+  const defaultNew = DEFAULT_CRM_BUSINESS_STATUSES.find((status) => status.id === "NEW")!;
   for (const rawItem of input.slice(0, 40)) {
     if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) continue;
     const item = rawItem as Record<string, unknown>;
@@ -436,13 +437,26 @@ export function normalizeCrmBusinessStatuses(input: unknown): CrmBusinessStatusC
     seen.add(id);
     const description =
       typeof item.description === "string" ? item.description.trim().slice(0, 180) : "";
-    items.push({
-      id,
-      label,
-      isActive: item.isActive !== false,
-      campaignEligible: item.campaignEligible === true,
-      ...(description ? { description } : {}),
-    });
+    if (id === "NEW") {
+      items.push({
+        ...defaultNew,
+        label: label || defaultNew.label,
+        isActive: true,
+        campaignEligible: item.campaignEligible !== false,
+        ...(description ? { description } : {}),
+      });
+    } else {
+      items.push({
+        id,
+        label,
+        isActive: item.isActive !== false,
+        campaignEligible: item.campaignEligible === true,
+        ...(description ? { description } : {}),
+      });
+    }
+  }
+  if (!seen.has("NEW")) {
+    items.unshift({ ...defaultNew, isActive: true });
   }
   return items.length ? items : [...DEFAULT_CRM_BUSINESS_STATUSES];
 }

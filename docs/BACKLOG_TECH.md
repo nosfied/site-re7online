@@ -1776,3 +1776,29 @@ GAP / OPEN; SYER ****9614 = CLOSED.
 - Demo `****6787`: pre/post read-only snapshots of both historical Contacts and
   Leads matched exactly; no production mutation occurred and repair remains a
   separate gate.
+
+## CRM origin + full Contacts CSV + campaign block guards - 2026-09-23
+
+Status: LOCAL FIX PREPARED / NOT DEPLOYED.
+
+- CRM origin preserves earliest reliable provenance and records inbound/contact
+  materialization as `Atendimento / conversa` without a new persistence field.
+- Contacts CSV import removes duplicated selected-file text and supports phone
+  plus optional name, CRM situation, company, city, email and service/interest
+  mappings.
+- Unmapped or blank optional Contacts CSV fields preserve existing CRM data;
+  preview reports the fields that will change.
+- CRM `NEW` is a mandatory system status: active and restored if tenant
+  settings omit it. It does not create campaign ineligibility by itself;
+  eligibility remains governed by campaign status configuration and explicit
+  send guards such as opt-out, operational exclusion, anonymization and valid
+  WhatsApp identity.
+- Campaign manual/CSV guards and Inbox template guards preserve pre-provider
+  opt-out/active-send blocking and show user-facing reasons.
+- Customer Campaigns/Inbox UX remains free of billing/price notices, and the
+  CRM audience panel uses neutral administrative styling.
+- Local validation: frontend contracts 46/46 PASS; backend focused
+  unit/contracts 25/25 PASS; `campaignRecipientImport` 7/7 PASS;
+  `crmCapabilityRoutes` 19/19 PASS; `campaignsFeatureRoutes` 118/118 PASS;
+  backend/frontend builds PASS; schema unchanged, migration none, provider
+  calls 0, real send NO.

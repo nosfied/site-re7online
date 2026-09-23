@@ -14,6 +14,7 @@ import { guardAgainstAnonymizedIdentityRehydration } from "../privacy/anonymized
 import { applyBalancedQueueAssignment } from "../queue/assignmentPolicy.js";
 import { CONTACT_LIFECYCLE_ACTIVE } from "../contacts/contactLifecycle.js";
 import { reactivateOperationallyExcludedContactIfNeeded } from "../contacts/contactOperationalExclusion.js";
+import { recordCrmConversationContactOrigin } from "../crm/crmContactUpsert.js";
 
 export const MESSENGER_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
@@ -442,6 +443,16 @@ export async function persistMessengerInboundEvent(params: {
     contactId: contact.id,
     waId: syntheticWaId,
     waIdCanonical: syntheticWaId,
+    requestId,
+    source: "messenger_inbound",
+  });
+  await recordCrmConversationContactOrigin({
+    clientId: client.id,
+    leadId: lead.id,
+    contactId: contact.id,
+    waId: syntheticWaId,
+    waIdCanonical: syntheticWaId,
+    conversationId: conversation.id,
     requestId,
     source: "messenger_inbound",
   });

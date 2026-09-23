@@ -12,6 +12,7 @@ import {
   AppHiddenBlockingConversation,
   AppCrmContactImportConfirmResponse,
   AppCrmContactImportPreviewResponse,
+  AppCrmContactCsvMapping,
   AppCrmExistingContactResolution,
   AppCrmCampaignRelationshipHistoryItem,
   AppCrmCampaignRelationshipStatus,
@@ -1268,16 +1269,19 @@ function CsvImportModal({
   onClose,
   onPreview,
 	  onConfirm,
-	}: {
-	  onClose: () => void;
-	  onPreview: (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null; crmSituationColumn: string | null } }) => Promise<AppCrmContactImportPreviewResponse>;
-	  onConfirm: (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null; crmSituationColumn: string | null } }) => Promise<AppCrmContactImportConfirmResponse>;
-	}) {
-	  const [csvText, setCsvText] = useState("");
-	  const [csvFileName, setCsvFileName] = useState("");
-	  const [phoneColumn, setPhoneColumn] = useState("");
-	  const [nameColumn, setNameColumn] = useState("");
-	  const [crmSituationColumn, setCrmSituationColumn] = useState("");
+		}: {
+		  onClose: () => void;
+		  onPreview: (payload: { csvText: string; mapping: AppCrmContactCsvMapping }) => Promise<AppCrmContactImportPreviewResponse>;
+		  onConfirm: (payload: { csvText: string; mapping: AppCrmContactCsvMapping }) => Promise<AppCrmContactImportConfirmResponse>;
+		}) {
+		  const [csvText, setCsvText] = useState("");
+		  const [phoneColumn, setPhoneColumn] = useState("");
+		  const [nameColumn, setNameColumn] = useState("");
+		  const [crmSituationColumn, setCrmSituationColumn] = useState("");
+		  const [companyColumn, setCompanyColumn] = useState("");
+		  const [cityColumn, setCityColumn] = useState("");
+		  const [emailColumn, setEmailColumn] = useState("");
+		  const [serviceColumn, setServiceColumn] = useState("");
   const [preview, setPreview] = useState<AppCrmContactImportPreviewResponse | null>(null);
   const [summary, setSummary] = useState<AppCrmContactImportConfirmResponse | null>(null);
 	  const [previewLoading, setPreviewLoading] = useState(false);
@@ -1286,7 +1290,15 @@ function CsvImportModal({
 	  const [previewMappingKey, setPreviewMappingKey] = useState("");
 	  const previewRequestSeq = useRef(0);
 	  const headers = preview?.headers ?? [];
-	  const mapping = { phoneColumn: phoneColumn || null, nameColumn: nameColumn || null, crmSituationColumn: crmSituationColumn || null };
+		  const mapping = {
+		    phoneColumn: phoneColumn || null,
+		    nameColumn: nameColumn || null,
+		    crmSituationColumn: crmSituationColumn || null,
+		    companyColumn: companyColumn || null,
+		    cityColumn: cityColumn || null,
+		    emailColumn: emailColumn || null,
+		    serviceColumn: serviceColumn || null,
+		  };
 	  const mappingKey = JSON.stringify(mapping);
 	  const loading = previewLoading || importLoading;
 	  const reportVisible = Boolean(summary);
@@ -1298,9 +1310,8 @@ function CsvImportModal({
     setSummary(null);
     setLocalError(null);
     setPreviewMappingKey("");
-    setCsvFileName(file.name);
-    setCsvText(await file.text());
-  };
+	    setCsvText(await file.text());
+	  };
 
   const updatePhoneColumn = (value: string) => {
     setPhoneColumn(value);
@@ -1312,10 +1323,30 @@ function CsvImportModal({
     setSummary(null);
   };
 
-  const updateCrmSituationColumn = (value: string) => {
-    setCrmSituationColumn(value);
-    setSummary(null);
-  };
+	  const updateCrmSituationColumn = (value: string) => {
+	    setCrmSituationColumn(value);
+	    setSummary(null);
+	  };
+
+	  const updateCompanyColumn = (value: string) => {
+	    setCompanyColumn(value);
+	    setSummary(null);
+	  };
+
+	  const updateCityColumn = (value: string) => {
+	    setCityColumn(value);
+	    setSummary(null);
+	  };
+
+	  const updateEmailColumn = (value: string) => {
+	    setEmailColumn(value);
+	    setSummary(null);
+	  };
+
+	  const updateServiceColumn = (value: string) => {
+	    setServiceColumn(value);
+	    setSummary(null);
+	  };
 
   const runPreview = async () => {
     if (!csvText.trim()) return;
@@ -1328,9 +1359,13 @@ function CsvImportModal({
       const response = await onPreview({ csvText, mapping });
       if (requestSeq !== previewRequestSeq.current) return;
       setPreview(response);
-      let nextPhoneColumn = phoneColumn;
-      let nextNameColumn = nameColumn;
-      let nextCrmSituationColumn = crmSituationColumn;
+	      let nextPhoneColumn = phoneColumn;
+	      let nextNameColumn = nameColumn;
+	      let nextCrmSituationColumn = crmSituationColumn;
+	      let nextCompanyColumn = companyColumn;
+	      let nextCityColumn = cityColumn;
+	      let nextEmailColumn = emailColumn;
+	      let nextServiceColumn = serviceColumn;
       if (!phoneColumn && response.headers.length > 0) {
         const guessed = response.headers.find((header) => /^(numero|número|telefone|phone|whatsapp)$/i.test(header.trim()));
         if (guessed) {
@@ -1345,20 +1380,52 @@ function CsvImportModal({
 	          setNameColumn(guessed);
 	        }
 	      }
-	      if (!crmSituationColumn && response.headers.length > 0) {
+		      if (!crmSituationColumn && response.headers.length > 0) {
 	        const guessed = response.headers.find((header) =>
 	          /^(situa[cç][aã]o no crm|situa[cç][aã]o crm|status crm|crm status)$/i.test(header.trim())
 	        );
 	        if (guessed) {
 	          nextCrmSituationColumn = guessed;
-	          setCrmSituationColumn(guessed);
-	        }
-	      }
-	      setPreviewMappingKey(JSON.stringify({
-	        phoneColumn: nextPhoneColumn || null,
-	        nameColumn: nextNameColumn || null,
-	        crmSituationColumn: nextCrmSituationColumn || null,
-	      }));
+		          setCrmSituationColumn(guessed);
+		        }
+		      }
+		      if (!companyColumn && response.headers.length > 0) {
+		        const guessed = response.headers.find((header) => /^(empresa|company|organiza[cç][aã]o)$/i.test(header.trim()));
+		        if (guessed) {
+		          nextCompanyColumn = guessed;
+		          setCompanyColumn(guessed);
+		        }
+		      }
+		      if (!cityColumn && response.headers.length > 0) {
+		        const guessed = response.headers.find((header) => /^(cidade|city|munic[ií]pio)$/i.test(header.trim()));
+		        if (guessed) {
+		          nextCityColumn = guessed;
+		          setCityColumn(guessed);
+		        }
+		      }
+		      if (!emailColumn && response.headers.length > 0) {
+		        const guessed = response.headers.find((header) => /^(email|e-mail)$/i.test(header.trim()));
+		        if (guessed) {
+		          nextEmailColumn = guessed;
+		          setEmailColumn(guessed);
+		        }
+		      }
+		      if (!serviceColumn && response.headers.length > 0) {
+		        const guessed = response.headers.find((header) => /^(servi[cç]o|interesse|service|interest)$/i.test(header.trim()));
+		        if (guessed) {
+		          nextServiceColumn = guessed;
+		          setServiceColumn(guessed);
+		        }
+		      }
+		      setPreviewMappingKey(JSON.stringify({
+		        phoneColumn: nextPhoneColumn || null,
+		        nameColumn: nextNameColumn || null,
+		        crmSituationColumn: nextCrmSituationColumn || null,
+		        companyColumn: nextCompanyColumn || null,
+		        cityColumn: nextCityColumn || null,
+		        emailColumn: nextEmailColumn || null,
+		        serviceColumn: nextServiceColumn || null,
+		      }));
     } catch (err) {
       if (requestSeq !== previewRequestSeq.current) return;
       const typed = err as AppApiError;
@@ -1505,11 +1572,10 @@ function CsvImportModal({
                 disabled={loading || reportVisible}
                 className="theme-input rounded-md border p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
               />
-              {csvFileName ? <div className="text-xs theme-muted">Arquivo selecionado: <span className="text-white">{csvFileName}</span></div> : null}
-            </div>
+	            </div>
             {preview && !reportVisible ? (
               <div className="grid gap-3 rounded-md border border-white/10 bg-slate-950/20 p-3">
-	                <div className="grid gap-3 sm:grid-cols-3">
+		                <div className="grid gap-3 sm:grid-cols-3">
 	                  <label className="grid gap-1.5 text-sm">
 	                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Coluna do telefone</span>
 	                    <select value={phoneColumn} onChange={(event) => updatePhoneColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
@@ -1530,8 +1596,38 @@ function CsvImportModal({
 	                      <option value="">Preservar/default</option>
 	                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
 	                    </select>
-	                  </label>
-	                </div>
+		                  </label>
+		                </div>
+		                <div className="grid gap-3 sm:grid-cols-4">
+		                  <label className="grid gap-1.5 text-sm">
+		                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Empresa</span>
+		                    <select value={companyColumn} onChange={(event) => updateCompanyColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+		                      <option value="">Preservar</option>
+		                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
+		                    </select>
+		                  </label>
+		                  <label className="grid gap-1.5 text-sm">
+		                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Cidade</span>
+		                    <select value={cityColumn} onChange={(event) => updateCityColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+		                      <option value="">Preservar</option>
+		                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
+		                    </select>
+		                  </label>
+		                  <label className="grid gap-1.5 text-sm">
+		                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">E-mail</span>
+		                    <select value={emailColumn} onChange={(event) => updateEmailColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+		                      <option value="">Preservar</option>
+		                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
+		                    </select>
+		                  </label>
+		                  <label className="grid gap-1.5 text-sm">
+		                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Serviço / interesse</span>
+		                    <select value={serviceColumn} onChange={(event) => updateServiceColumn(event.target.value)} disabled={loading} className="theme-input h-10 rounded-md border px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+		                      <option value="">Preservar</option>
+		                      {headers.map((header) => <option key={header} value={header}>{header}</option>)}
+		                    </select>
+		                  </label>
+		                </div>
 	                {previewMappingDirty ? (
 	                  <div className="rounded-md border border-amber-300/30 bg-amber-400/10 p-3 text-sm text-amber-100">
 	                    As colunas foram alteradas. Atualize a prévia antes de confirmar a importação.
@@ -1573,14 +1669,15 @@ function CsvImportModal({
                   </div>
 	                {preview.rows?.length ? (
 	                  <div className="overflow-x-auto rounded-md border border-white/10">
-		                    <table className="w-full min-w-[760px] text-left text-sm">
+			                    <table className="w-full min-w-[900px] text-left text-sm">
 		                      <thead className="bg-white/10 text-white">
 	                        <tr>
 	                          <th className="px-3 py-2">Linha</th>
 	                          <th className="px-3 py-2">Contato</th>
 	                          <th className="px-3 py-2">Telefone</th>
-	                          <th className="px-3 py-2">Operação</th>
-	                          <th className="px-3 py-2">Situação no CRM</th>
+		                          <th className="px-3 py-2">Operação</th>
+		                          <th className="px-3 py-2">Campos a atualizar</th>
+		                          <th className="px-3 py-2">Situação no CRM</th>
 	                        </tr>
 	                      </thead>
 	                      <tbody>
@@ -1589,12 +1686,13 @@ function CsvImportModal({
 	                            <td className="px-3 py-2">{row.rowNumber}</td>
 	                            <td className="px-3 py-2 text-white">{row.name || "-"}</td>
 	                            <td className="px-3 py-2 font-mono text-xs">{row.normalizedPhone ?? row.phoneDisplay ?? row.inputPhone}</td>
-	                            <td className="px-3 py-2">
-                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getCrmImportOperationBadgeClass(row.operation)}`}>
-                                  {getCrmImportOperationLabel(row.operation)}
-                                </span>
-                              </td>
-	                            <td className="px-3 py-2">{row.crmSituation.label ?? row.crmSituation.input ?? row.crmSituation.previousLabel ?? "-"}</td>
+		                            <td className="px-3 py-2">
+	                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getCrmImportOperationBadgeClass(row.operation)}`}>
+	                                  {getCrmImportOperationLabel(row.operation)}
+	                                </span>
+	                              </td>
+		                            <td className="px-3 py-2">{row.fieldsToUpdate?.length ? row.fieldsToUpdate.join(", ") : "-"}</td>
+		                            <td className="px-3 py-2">{row.crmSituation.label ?? row.crmSituation.input ?? row.crmSituation.previousLabel ?? "-"}</td>
 	                          </tr>
 	                        ))}
 	                      </tbody>
@@ -2116,16 +2214,16 @@ export default function AppCrmContactsPage() {
     [handleUnauthorized, loadContacts, replaceContactFromDetail, session]
   );
 
-	  const previewCsvImport = useCallback(
-	    async (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null; crmSituationColumn: string | null } }) => {
+		  const previewCsvImport = useCallback(
+		    async (payload: { csvText: string; mapping: AppCrmContactCsvMapping }) => {
 	      if (!session) throw new Error("Sessão indisponível.");
 	      return previewAppCrmContactCsvImport(session, payload);
 	    },
     [session]
   );
 
-	  const confirmCsvImport = useCallback(
-	    async (payload: { csvText: string; mapping: { phoneColumn: string | null; nameColumn: string | null; crmSituationColumn: string | null } }) => {
+		  const confirmCsvImport = useCallback(
+		    async (payload: { csvText: string; mapping: AppCrmContactCsvMapping }) => {
 	      if (!session) throw new Error("Sessão indisponível.");
 	      const response = await confirmAppCrmContactCsvImport(session, payload);
 	      setNotice(`Importação concluída: ${response.created} criado(s), ${response.updated} atualizado(s), ${response.unchanged ?? 0} sem alteração.`);

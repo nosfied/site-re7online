@@ -513,3 +513,14 @@ counts/table, removes the operator-facing "Envio ativo" selector and shows full
 authenticated identifiers. Result filters, mapping controls, campaign reuse and
 Contacts CSV preview alignment were locally corrected. CRA formal acceptance is
 not claimed before deployment and controlled CRA evidence.
+
+CRM origin + Contacts CSV + campaign block guards, 2026-09-23: LOCAL FIX
+PREPARED / NOT DEPLOYED. The CRM read model records inbound-origin contacts as
+`Atendimento / conversa` through existing provenance events, Contacts CSV maps
+phone plus optional name, CRM situation, company, city, email and
+service/interest, and blank/unmapped optional values preserve existing data.
+`NEW` is a mandatory active CRM status and does not create campaign
+ineligibility by itself. Campaign manual/CSV and Inbox template paths preserve
+pre-provider active-send/opt-out guards and remove customer billing notices.
+This strengthens CRA-CAMP-002, CRA-OPT-001 and CRM traceability readiness;
+formal CRA acceptance still requires controlled CRA evidence after deployment.

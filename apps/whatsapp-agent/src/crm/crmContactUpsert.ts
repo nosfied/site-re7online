@@ -34,11 +34,19 @@ export type CrmContactCsvMapping = {
   phoneColumn?: string | null;
   nameColumn?: string | null;
   crmSituationColumn?: string | null;
+  companyColumn?: string | null;
+  cityColumn?: string | null;
+  emailColumn?: string | null;
+  serviceColumn?: string | null;
 };
 
 export type CrmContactUpsertInput = {
   name?: unknown;
   phone: unknown;
+  company?: unknown;
+  city?: unknown;
+  email?: unknown;
+  service?: unknown;
 };
 
 export class CrmContactUpsertError extends Error {
@@ -80,6 +88,10 @@ type ExistingCrmIdentity = {
     name: string | null;
     phone: string | null;
     status: string;
+    company: string | null;
+    city: string | null;
+    email: string | null;
+    service: string | null;
     contactChannelIdentityId: string | null;
   } | null;
 };
@@ -126,12 +138,24 @@ type CrmContactImportReadyRow = {
   waIdCanonical: string;
   identityCandidates: string[];
   name: string | null;
+  company: string | null;
+  city: string | null;
+  email: string | null;
+  service: string | null;
   crmSituationInput: string | null;
   crmStatusId: string | null;
   crmStatusLabel: string | null;
   existingContact: boolean;
   existingName: string | null;
-  existingLead: { id: string; name: string | null; status: string } | null;
+  existingLead: {
+    id: string;
+    name: string | null;
+    status: string;
+    company: string | null;
+    city: string | null;
+    email: string | null;
+    service: string | null;
+  } | null;
 };
 
 type CrmContactImportClassification = {
@@ -148,6 +172,17 @@ type CrmContactImportClassification = {
 function normalizeOptionalName(value: unknown) {
   const normalized = String(value ?? "").trim().replace(/\s+/g, " ").slice(0, 120);
   return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeOptionalCrmText(value: unknown, maxLength: number) {
+  const normalized = String(value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeOptionalCrmEmail(value: unknown) {
+  const normalized = normalizeOptionalCrmText(value, 180);
+  if (!normalized) return null;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) ? normalized.toLowerCase() : null;
 }
 
 export function normalizeCrmWhatsappPhone(value: unknown): NormalizedCrmContactInput | null {
@@ -237,7 +272,17 @@ async function findExistingCrmIdentity(
       },
       orderBy: [{ updatedAt: "desc" }],
       take: 3,
-      select: { id: true, name: true, phone: true, status: true, contactChannelIdentityId: true },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          status: true,
+          company: true,
+          city: true,
+          email: true,
+          service: true,
+          contactChannelIdentityId: true,
+        },
     }),
   ]);
   const contactIds = new Set([
@@ -522,8 +567,20 @@ export async function upsertCrmContactInTransaction(
           operationalIdentityId: identity.id,
         })
       : identity.id;
+    const inputCompany = normalizeOptionalCrmText(params.input.company, 120);
+    const inputCity = normalizeOptionalCrmText(params.input.city, 120);
+    const inputEmail = normalizeOptionalCrmEmail(params.input.email);
+    const inputService = normalizeOptionalCrmText(params.input.service, 120);
     const previousLead = existing.lead
-      ? { id: existing.lead.id, name: existing.lead.name, status: existing.lead.status }
+      ? {
+          id: existing.lead.id,
+          name: existing.lead.name,
+          status: existing.lead.status,
+          company: existing.lead.company,
+          city: existing.lead.city,
+          email: existing.lead.email,
+          service: existing.lead.service,
+        }
       : null;
     const leadStatus = params.crmStatusId ?? existing.lead?.status ?? "NEW";
     const lead = existing.lead
@@ -540,6 +597,10 @@ export async function upsertCrmContactInTransaction(
             contactChannelIdentityId: leadContactChannelIdentityId,
             phone: normalized.phone,
             name: leadName,
+            ...(inputCompany ? { company: inputCompany } : {}),
+            ...(inputCity ? { city: inputCity } : {}),
+            ...(inputEmail ? { email: inputEmail } : {}),
+            ...(inputService ? { service: inputService } : {}),
             ...(params.crmStatusId ? { status: params.crmStatusId } : {}),
           },
           select: { id: true },
@@ -558,6 +619,10 @@ export async function upsertCrmContactInTransaction(
             contactChannelIdentityId: identity.id,
             name: contact.name ?? normalized.name,
             phone: normalized.phone,
+            company: inputCompany,
+            city: inputCity,
+            email: inputEmail,
+            service: inputService,
             status: leadStatus,
           },
           select: { id: true },
@@ -613,6 +678,37 @@ export async function upsertCrmContact(
   return result;
 }
 
+export async function recordCrmConversationContactOrigin(params: {
+  clientId: string;
+  leadId: string;
+  contactId?: string | null;
+  waId: string;
+  waIdCanonical?: string | null;
+  conversationId?: string | null;
+  requestId: string;
+  source?: string | null;
+}) {
+  const canonical = params.waIdCanonical ?? normalizeWaIdDigits(params.waId) ?? params.waId;
+  await persistEvent({
+    clientId: params.clientId,
+    conversationId: params.conversationId ?? null,
+    waId: params.waId,
+    waIdCanonical: canonical,
+    requestId: `${CRM_CONTACT_CREATED_EVENT}:conversation:${params.leadId}`,
+    eventName: CRM_CONTACT_CREATED_EVENT,
+    payloadJson: {
+      contactId: params.contactId ?? null,
+      leadId: params.leadId,
+      source: params.source ?? "conversation_inbound",
+      createdContact: false,
+      createdLead: true,
+      waIdLast4: canonical.slice(-4),
+      waIdLength: canonical.length,
+      requestId: params.requestId,
+    },
+  });
+}
+
 function normalizeHeader(value: string) {
   return value
     .trim()
@@ -658,6 +754,21 @@ export function buildCrmContactImportRowsFromCsv(params: {
     throw new CrmContactUpsertError("missing_phone_column", "Missing phone column", 400, parsed.headers);
   }
   const nameColumn = resolveMappedColumn(parsed.headers, params.mapping?.nameColumn, ["nome", "name"]);
+  const companyColumn = resolveMappedColumn(parsed.headers, params.mapping?.companyColumn, [
+    "empresa",
+    "company",
+    "organizacao",
+    "organização",
+  ]);
+  const cityColumn = resolveMappedColumn(parsed.headers, params.mapping?.cityColumn, ["cidade", "city", "municipio", "município"]);
+  const emailColumn = resolveMappedColumn(parsed.headers, params.mapping?.emailColumn, ["email", "e-mail"]);
+  const serviceColumn = resolveMappedColumn(parsed.headers, params.mapping?.serviceColumn, [
+    "servico",
+    "serviço",
+    "interesse",
+    "service",
+    "interest",
+  ]);
   const crmSituationColumn = resolveMappedColumn(parsed.headers, params.mapping?.crmSituationColumn, [
     "situacao no crm",
     "situação no crm",
@@ -674,6 +785,10 @@ export function buildCrmContactImportRowsFromCsv(params: {
       rowNumber: row.rowNumber,
       phone: getMappedValue(row.values, phoneColumn),
       name: getMappedValue(row.values, nameColumn),
+      company: getMappedValue(row.values, companyColumn),
+      city: getMappedValue(row.values, cityColumn),
+      email: getMappedValue(row.values, emailColumn),
+      service: getMappedValue(row.values, serviceColumn),
       crmSituation: getMappedValue(row.values, crmSituationColumn),
     })),
   };
@@ -747,6 +862,10 @@ async function classifyCrmContactImportRows(
       waIdCanonical: normalized.waIdCanonical,
 	      identityCandidates,
 	      name: normalizeOptionalName(row.name),
+	      company: normalizeOptionalCrmText(row.company, 120),
+	      city: normalizeOptionalCrmText(row.city, 120),
+	      email: normalizeOptionalCrmEmail(row.email),
+	      service: normalizeOptionalCrmText(row.service, 120),
 	      crmSituationInput,
 	      crmStatusId: crmSituation.kind === "matched" ? crmSituation.status.id : null,
 	      crmStatusLabel: crmSituation.kind === "matched" ? crmSituation.status.label : null,
@@ -817,12 +936,16 @@ async function classifyCrmContactImportRows(
               { externalUserHash: { in: hashKeys } },
             ],
           },
-	          select: {
-	            id: true,
-	            name: true,
-	            phone: true,
-	            status: true,
-	            waId: true,
+		          select: {
+		            id: true,
+		            name: true,
+		            phone: true,
+		            status: true,
+		            company: true,
+		            city: true,
+		            email: true,
+		            service: true,
+		            waId: true,
 	            waIdCanonical: true,
 	            externalUserHash: true,
 	            externalUserRef: true,
@@ -923,9 +1046,17 @@ async function classifyCrmContactImportRows(
 	        ...row,
 	        existingContact: Boolean(contact),
 	        existingName: matchingLeads[0]?.name ?? contact?.name ?? null,
-	        existingLead: matchingLeads[0]
-	          ? { id: matchingLeads[0].id, name: matchingLeads[0].name, status: matchingLeads[0].status }
-	          : null,
+		        existingLead: matchingLeads[0]
+		          ? {
+		              id: matchingLeads[0].id,
+		              name: matchingLeads[0].name,
+		              status: matchingLeads[0].status,
+		              company: matchingLeads[0].company,
+		              city: matchingLeads[0].city,
+		              email: matchingLeads[0].email,
+		              service: matchingLeads[0].service,
+		            }
+		          : null,
 	      });
 	      continue;
 	    }
@@ -954,21 +1085,38 @@ export async function previewCrmContactCsvImport(
 	) {
 	  const classification = await classifyCrmContactImportRows(prisma, params);
 	  const statusLabelById = buildStatusLabelById(params.crmStatuses);
-	  const importableRows = [...classification.readyRows, ...classification.existingActiveRows];
-	  const previewRows = importableRows.slice(0, 200).map((row) => {
-	    const changes = [
-	      row.name !== null && row.name !== row.existingName,
-	      row.crmStatusId !== null && row.crmStatusId !== row.existingLead?.status,
-	    ].some(Boolean);
-	    return {
-	      rowNumber: row.rowNumber,
-	      name: row.name,
-	      inputPhone: row.phone,
-	      normalizedPhone: row.waIdCanonical,
-	      phoneDisplay: row.waIdCanonical,
-	      operation: !row.existingContact && !row.existingLead ? "CREATE" : changes ? "UPDATE" : "UNCHANGED",
-	      leadId: row.existingLead?.id ?? null,
-	      crmSituation: {
+		  const importableRows = [...classification.readyRows, ...classification.existingActiveRows];
+		  const previewRows = importableRows.slice(0, 200).map((row) => {
+		    const fieldChanges = [
+		      row.name !== null && row.name !== row.existingName,
+		      row.company !== null && row.company !== row.existingLead?.company,
+		      row.city !== null && row.city !== row.existingLead?.city,
+		      row.email !== null && row.email !== row.existingLead?.email,
+		      row.service !== null && row.service !== row.existingLead?.service,
+		      row.crmStatusId !== null && row.crmStatusId !== row.existingLead?.status,
+		    ];
+		    const changes = fieldChanges.some(Boolean);
+		    return {
+		      rowNumber: row.rowNumber,
+		      name: row.name,
+		      company: row.company,
+		      city: row.city,
+		      email: row.email,
+		      service: row.service,
+		      inputPhone: row.phone,
+		      normalizedPhone: row.waIdCanonical,
+		      phoneDisplay: row.waIdCanonical,
+		      operation: !row.existingContact && !row.existingLead ? "CREATE" : changes ? "UPDATE" : "UNCHANGED",
+		      leadId: row.existingLead?.id ?? null,
+		      fieldsToUpdate: [
+		        row.name !== null && row.name !== row.existingName ? "Nome" : null,
+		        row.company !== null && row.company !== row.existingLead?.company ? "Empresa" : null,
+		        row.city !== null && row.city !== row.existingLead?.city ? "Cidade" : null,
+		        row.email !== null && row.email !== row.existingLead?.email ? "E-mail" : null,
+		        row.service !== null && row.service !== row.existingLead?.service ? "Serviço / interesse" : null,
+		        row.crmStatusId !== null && row.crmStatusId !== row.existingLead?.status ? "Situação no CRM" : null,
+		      ].filter((field): field is string => Boolean(field)),
+		      crmSituation: {
 	        input: row.crmSituationInput,
 	        statusId: row.crmStatusId,
 	        label: row.crmStatusLabel,
@@ -979,11 +1127,15 @@ export async function previewCrmContactCsvImport(
 	      },
 	    };
 	  });
-	  const updatedRows = classification.existingActiveRows.filter((row) =>
-	    [
-	      row.name !== null && row.name !== row.existingName,
-	      row.crmStatusId !== null && row.crmStatusId !== row.existingLead?.status,
-	    ].some(Boolean)
+		  const updatedRows = classification.existingActiveRows.filter((row) =>
+		    [
+		      row.name !== null && row.name !== row.existingName,
+		      row.company !== null && row.company !== row.existingLead?.company,
+		      row.city !== null && row.city !== row.existingLead?.city,
+		      row.email !== null && row.email !== row.existingLead?.email,
+		      row.service !== null && row.service !== row.existingLead?.service,
+		      row.crmStatusId !== null && row.crmStatusId !== row.existingLead?.status,
+		    ].some(Boolean)
 	  ).length;
 	  const unchangedRows = classification.existingActiveRows.length - updatedRows;
 	  return {
@@ -1041,9 +1193,16 @@ export async function confirmCrmContactCsvImport(
 	  const importableRows = [...classification.readyRows, ...classification.existingActiveRows];
 	  for (const row of importableRows) {
 	    try {
-	      const result = await upsertCrmContact(prisma, {
-	        clientId: params.clientId,
-	        input: row,
+		      const result = await upsertCrmContact(prisma, {
+		        clientId: params.clientId,
+		        input: {
+		          phone: row.phone,
+		          name: row.name,
+		          company: row.company,
+		          city: row.city,
+		          email: row.email,
+		          service: row.service,
+		        },
 	        actorUserId: params.actorUserId,
 	        requestId: `${params.requestId}:${resultlessHash(row.phone)}`,
 	        source: "crm_import",
@@ -1053,8 +1212,12 @@ export async function confirmCrmContactCsvImport(
 	      if (result.createdContact || result.createdLead) created += 1;
 	      else if (
 	        [
-	          row.name !== null && row.name !== result.previousLead?.name,
-	          row.crmStatusId !== null && row.crmStatusId !== result.previousLead?.status,
+		          row.name !== null && row.name !== result.previousLead?.name,
+		          row.company !== null && row.company !== result.previousLead?.company,
+		          row.city !== null && row.city !== result.previousLead?.city,
+		          row.email !== null && row.email !== result.previousLead?.email,
+		          row.service !== null && row.service !== result.previousLead?.service,
+		          row.crmStatusId !== null && row.crmStatusId !== result.previousLead?.status,
 	        ].some(Boolean)
 	      ) updated += 1;
 	      else unchanged += 1;

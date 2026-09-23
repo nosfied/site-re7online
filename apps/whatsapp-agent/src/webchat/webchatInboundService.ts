@@ -14,6 +14,7 @@ import {
 import { executeChatbotFlowWithConsent, isChatbotConsentRequired } from "../chatbot/chatbotConsentRuntime.js";
 import { resolveInitialContactLifecycle } from "../contacts/contactLifecycle.js";
 import { reactivateOperationallyExcludedContactIfNeeded } from "../contacts/contactOperationalExclusion.js";
+import { recordCrmConversationContactOrigin } from "../crm/crmContactUpsert.js";
 import { resolveDepartmentAwareHandoff } from "../chatbot/departmentAwareHandoff.js";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import type { ConversationState, FlowContext } from "../conversation/conversation.types.js";
@@ -1200,6 +1201,16 @@ export async function createWebchatInboundMessage(params: {
     contactId: contact.id,
     waId: syntheticWaId,
     waIdCanonical: syntheticWaId,
+    requestId: params.requestId,
+    source: "webchat_inbound",
+  });
+  await recordCrmConversationContactOrigin({
+    clientId: session.clientId,
+    leadId: lead.id,
+    contactId: contact.id,
+    waId: syntheticWaId,
+    waIdCanonical: syntheticWaId,
+    conversationId: conversation.id,
     requestId: params.requestId,
     source: "webchat_inbound",
   });

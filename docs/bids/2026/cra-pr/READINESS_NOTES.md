@@ -839,3 +839,20 @@ restores available modality, destination and variable mappings; CSV reuse still
 requires reloading the source file. Contacts CSV preview header alignment was
 corrected. No production DB mutation, schema change, migration, provider call,
 real send, commit, push or deploy was performed in this local pass.
+
+## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
+
+Status: LOCAL FIX PREPARED / NOT DEPLOYED / NOT CRA FORMAL ACCEPTANCE.
+
+The local product follow-up records inbound-created contacts/leads as
+`Atendimento / conversa` through existing CRM provenance events, while keeping
+manual, CSV, campaign/audience, system and unknown legacy origins separate.
+Contacts CSV now supports all editable CRM import fields: phone required;
+name, CRM situation, company, city, email and service/interest optional. Blank
+or unmapped optional cells preserve existing data, and preview lists which
+fields will change. CRM `NEW` is mandatory and active, but does not create
+campaign ineligibility by itself. Campaign manual/CSV block guards and Inbox
+template active-send guard continue before provider calls; the customer UI no
+longer shows billing notices in Campaigns/Inbox. This improves CRA readiness
+evidence for import/upsert, opt-out and operator traceability, but does not
+replace the controlled CRA run.

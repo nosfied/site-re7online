@@ -479,7 +479,9 @@ export default function AppCrmSettingsPage() {
           </p>
         ) : (
           <div className="space-y-2 min-[1441px]:space-y-3">
-            {filteredStatuses.map((status, index) => (
+            {filteredStatuses.map((status, index) => {
+              const isSystemNew = status.id === "NEW";
+              return (
               <article
                 key={status.id}
                 className={`theme-list-row ${
@@ -489,6 +491,7 @@ export default function AppCrmSettingsPage() {
                 <div className="grid gap-2 lg:grid-cols-[130px_minmax(0,1fr)_minmax(0,1.2fr)_auto] lg:items-center min-[1441px]:gap-3 min-[1441px]:lg:grid-cols-[170px_minmax(0,1fr)_minmax(0,1.2fr)_auto]">
                   <div>
                     <p className="font-mono text-xs text-white/60">{status.id}</p>
+                    {isSystemNew ? <p className="mt-1 text-xs font-semibold text-re7-sky">Status sistêmico obrigatório.</p> : null}
                     <p className="theme-soft mt-1 text-xs">{formatCount(counts[status.id])} contato(s)</p>
                   </div>
                   <input
@@ -506,7 +509,8 @@ export default function AppCrmSettingsPage() {
                     <label className="inline-flex items-center gap-1.5 text-white/75 min-[1441px]:gap-2">
                       <input
                         type="checkbox"
-                        checked={status.isActive}
+                        checked={isSystemNew ? true : status.isActive}
+                        disabled={isSystemNew}
                         onChange={(event) => patchStatus(status.id, { isActive: event.target.checked })}
                       />
                       Ativa
@@ -524,7 +528,8 @@ export default function AppCrmSettingsPage() {
                   </div>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

@@ -474,6 +474,16 @@ export type AppCrmExistingContactResolution = {
   phoneDisplay: string | null;
 };
 
+export type AppCrmContactCsvMapping = {
+  phoneColumn?: string | null;
+  nameColumn?: string | null;
+  crmSituationColumn?: string | null;
+  companyColumn?: string | null;
+  cityColumn?: string | null;
+  emailColumn?: string | null;
+  serviceColumn?: string | null;
+};
+
 export type AppCrmContactImportPreviewResponse = {
   ok: true;
   headers: string[];
@@ -489,13 +499,18 @@ export type AppCrmContactImportPreviewResponse = {
 	  updated?: number;
 	  unchanged?: number;
 	  rows?: Array<{
-	    rowNumber: number;
-	    name: string | null;
-	    inputPhone: string | null;
+		    rowNumber: number;
+		    name: string | null;
+		    company?: string | null;
+		    city?: string | null;
+		    email?: string | null;
+		    service?: string | null;
+		    inputPhone: string | null;
 	    normalizedPhone: string;
 	    phoneDisplay: string | null;
-	    operation: "CREATE" | "UPDATE" | "UNCHANGED";
-	    leadId: string | null;
+		    operation: "CREATE" | "UPDATE" | "UNCHANGED";
+		    leadId: string | null;
+		    fieldsToUpdate?: string[];
 	    crmSituation: {
 	      input: string | null;
 	      statusId: string | null;
@@ -4773,7 +4788,7 @@ export async function createAppCrmContact(
 
 export async function previewAppCrmContactCsvImport(
   session: AppSession,
-  payload: { csvText: string; mapping?: { phoneColumn?: string | null; nameColumn?: string | null; crmSituationColumn?: string | null } | null }
+  payload: { csvText: string; mapping?: AppCrmContactCsvMapping | null }
 ): Promise<AppCrmContactImportPreviewResponse> {
   return requestAppJson(session, "/app/crm/contacts/import/preview", {
     method: "POST",
@@ -4783,7 +4798,7 @@ export async function previewAppCrmContactCsvImport(
 
 export async function confirmAppCrmContactCsvImport(
   session: AppSession,
-  payload: { csvText: string; mapping?: { phoneColumn?: string | null; nameColumn?: string | null; crmSituationColumn?: string | null } | null }
+  payload: { csvText: string; mapping?: AppCrmContactCsvMapping | null }
 ): Promise<AppCrmContactImportConfirmResponse> {
   return requestAppJson(session, "/app/crm/contacts/import/confirm", {
     method: "POST",

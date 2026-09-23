@@ -16,6 +16,7 @@ import { shouldResetClosedConversationForBotReentry } from "../conversation/auto
 import type { ConversationState, QuoteSiteAnswers } from "../conversation/conversation.types.js";
 import { activateHumanHandoff, updateOutbound } from "../conversation/conversation.service.js";
 import { buildCrmWhatsappExternalUserHash } from "../crm/crmWhatsappIdentity.js";
+import { recordCrmConversationContactOrigin } from "../crm/crmContactUpsert.js";
 import {
   buildCompletedServiceSnapshotExpectation,
   clearActiveServiceCycle,
@@ -2435,6 +2436,15 @@ async function ensureWebSessionContactIdentity(params: {
     waId: params.message.sender,
     waIdCanonical: params.message.senderCanonical,
     requestId: `web-session-contact-reactivation:${params.message.channelAccountDbId}:${params.message.externalMessageId}`,
+    source: "web_session_inbound",
+  });
+  await recordCrmConversationContactOrigin({
+    clientId: params.message.clientId,
+    leadId: lead.id,
+    contactId: contact.id,
+    waId: params.message.sender,
+    waIdCanonical: params.message.senderCanonical,
+    requestId: `web-session-contact-origin:${params.message.channelAccountDbId}:${params.message.externalMessageId}`,
     source: "web_session_inbound",
   });
 }
