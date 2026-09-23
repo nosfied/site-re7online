@@ -1902,6 +1902,31 @@ Status: LOCAL FIX PREPARED / NOT DEPLOYED.
   `no_eligible_recipients` summaries can explain known block reasons such as
   active-send block without exposing backend English strings.
 
+## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
+
+Status: LOCAL FIX PREPARED / NOT DEPLOYED.
+
+- Immediate manual campaign creation now stops before campaign creation when
+  every requested recipient is blocked before provider execution. It returns a
+  controlled `no_eligible_recipients` response with PT-BR message and safe
+  summary; no campaign, outbound, runtime or provider call is created.
+- Mixed blocked + eligible requests still create the campaign and preserve the
+  blocked audit/result context, but only eligible recipients reach outbound
+  execution.
+- Contact campaign history now excludes pre-provider opt-out/active-send block
+  events. Campaign-level audit evidence remains preserved in canonical events;
+  real provider attempts such as failed/delivered/read remain campaign history.
+- CRM settings and campaign recipient preparation now use the same eligible
+  campaign-audience projection, excluding anonymized, opt-out/active-send
+  blocked, operationally excluded and invalid-identity subjects from eligible
+  counts.
+- Owner UX polish: campaign reuse success toast uses a distinct high-contrast
+  tone, and campaign name/template controls share the same height/alignment.
+- Local validation: `campaignsFeatureRoutes.test.ts` 120/120 PASS;
+  `crmCapabilityRoutes.test.ts` 20/20 PASS; campaigns frontend contracts
+  27/27 PASS. Backend build PASS; normal production frontend build
+  `npm run build` PASS with real local `node_modules`; final diff check PASS.
+
 ## P1 - Campaign RBAC / Active Sends Authorization - 2026-09-23
 
 Status: AUDITED / BACKLOG / NOT IMPLEMENTED.

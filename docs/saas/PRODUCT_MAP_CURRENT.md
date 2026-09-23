@@ -658,6 +658,18 @@ remain free of billing notices in customer UX. No schema/migration, no smoke
 provider call and no real campaign send. Authenticated owner UI and real
 post-deploy CSV/campaign mutation evidence remain not exercised.
 
+Zero-eligible campaign + CRM eligibility counts (2026-09-23): LOCAL FIX
+PREPARED / NOT DEPLOYED. Manual immediate campaigns with every recipient
+blocked before provider execution now return controlled
+`no_eligible_recipients` before creating Campaign/Outbound/Runtime or making a
+provider call. Mixed requests preserve campaign/block audit context and execute
+only eligible recipients. Contact campaign history remains actual-send/provider
+evidence only: pre-provider opt-out/active-send blocks are not listed as
+contact campaign history, while real failed/delivered/read attempts remain.
+CRM settings and campaign recipient preparation share the same eligible
+audience projection, excluding anonymized, opt-out/active-send blocked,
+operationally excluded and invalid-identity subjects from eligible counts.
+
 P1 campaign delivery truth + alias-safe blocking (2026-09-23): LOCAL FIX
 VALIDATED / NOT DEPLOYED. Campaign delivery semantics now distinguish provider
 accepted/submitted from delivered/read truth. Outbound submission can create CRM

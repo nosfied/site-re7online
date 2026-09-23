@@ -13026,6 +13026,100 @@ test("campaign draft send revalidates recipients before starting", async () => {
   assert.equal(sentEventCount, 0);
 });
 
+test("manual immediate campaign rejects zero eligible recipients before campaign creation", async (t) => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `manual_zero_eligible_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso institucional",
+    },
+  });
+  const blockedWaId = "5541991189301";
+  const eligibleWaId = "5541991189302";
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: blockedWaId,
+    source: "test",
+    reason: "manual immediate all blocked",
+  });
+
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      const payload = JSON.parse(String(init?.body ?? "{}")) as { template?: { name?: string } };
+      if (payload.template?.name === template.name) {
+        providerCalls += 1;
+      }
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.manual.${providerCalls}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const campaignsBefore = await prisma.campaign.count({ where: { clientId: businessClientId } });
+  const outboundBefore = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+  const allBlocked = await request<
+    ErrorPayload & {
+      details?: {
+        summary?: {
+          accepted: number;
+          blocked: number;
+          blockedByReason: Array<{ reason: string; label: string; count: number }>;
+        };
+      };
+    }
+  >("POST", "/app/campaigns", businessAdmin, {
+    name: "Envio imediato todo bloqueado",
+    templateId: template.id,
+    recipients: [blockedWaId],
+    returnDestination: defaultCampaignReturnDestination(),
+  });
+  assert.equal(allBlocked.status, 400, JSON.stringify(allBlocked.body));
+  assert.equal(getErrorCode(allBlocked.body), "no_eligible_recipients");
+  assert.equal(allBlocked.body.details?.summary?.accepted, 0);
+  assert.equal(allBlocked.body.details?.summary?.blocked, 1);
+  assert.equal(
+    allBlocked.body.details?.summary?.blockedByReason.some(
+      (item) => item.reason === "active_send_blocked" && item.label === "Envio ativo bloqueado" && item.count === 1
+    ),
+    true
+  );
+  assert.equal(await prisma.campaign.count({ where: { clientId: businessClientId } }), campaignsBefore);
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId: businessClientId } }), outboundBefore);
+  assert.equal(providerCalls, 0);
+
+  const mixed = await request<{ ok: boolean; campaign: { id: string; totalRecipients: number } }>(
+    "POST",
+    "/app/campaigns",
+    businessAdmin,
+    {
+      name: "Envio imediato misto",
+      templateId: template.id,
+      recipients: [blockedWaId, eligibleWaId],
+      returnDestination: defaultCampaignReturnDestination(),
+    }
+  );
+  assert.equal(mixed.status, 200, JSON.stringify(mixed.body));
+  assert.equal(mixed.body.campaign.totalRecipients, 2);
+  await waitFor(async () => providerCalls === 1);
+  assert.equal(
+    await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${mixed.body.campaign.id}.` } },
+    }),
+    1
+  );
+});
+
 test("campaign lifecycle supports schedule pause resume cancel and formal test-send", async (t) => {
   const template = await prisma.template.create({
     data: {
@@ -15368,7 +15462,7 @@ test("campaign detail keeps genuine missing-history fallback", async () => {
   assert.equal(detail.body.campaign.metaSummary.totalFailed, 1);
 });
 
-test("event-based opt-out blocks recipient in app campaign and export", async () => {
+test("event-based opt-out rejects all-blocked app campaign before creation", async () => {
   const waId = "5541999981001";
   const optOut = await request<{ ok: boolean; status: string; waIdCanonical: string }>(
     "POST",
@@ -15387,14 +15481,14 @@ test("event-based opt-out blocks recipient in app campaign and export", async ()
   assert.equal(optOut.body.ok, true);
   assert.equal(optOut.body.status, "recorded");
 
-  const created = await request<{
-    ok: boolean;
-    campaign: {
-      id: string;
-      campaignId: string;
-      totalRecipients: number;
-      sentCount: number;
-      blockedCount: number;
+  const campaignsBefore = await prisma.campaign.count({ where: { clientId: businessClientId } });
+  const created = await request<ErrorPayload & {
+    details?: {
+      summary?: {
+        accepted: number;
+        blocked: number;
+        blockedByReason: Array<{ reason: string; label: string; count: number }>;
+      };
     };
   }>("POST", "/app/campaigns", businessAdmin, {
     name: "Campanha com opt-out",
@@ -15403,11 +15497,15 @@ test("event-based opt-out blocks recipient in app campaign and export", async ()
     returnDestination: defaultCampaignReturnDestination(),
   });
 
-  assert.equal(created.status, 200);
-  assert.equal(created.body.ok, true);
-  assert.equal(created.body.campaign.totalRecipients, 1);
-  assert.equal(created.body.campaign.blockedCount, 1);
-  assert.equal(created.body.campaign.sentCount, 0);
+  assert.equal(created.status, 400);
+  assert.equal(getErrorCode(created.body), "no_eligible_recipients");
+  assert.equal(created.body.details?.summary?.accepted, 0);
+  assert.equal(created.body.details?.summary?.blocked, 1);
+  assert.equal(
+    created.body.details?.summary?.blockedByReason.some((item) => item.reason === "active_send_blocked"),
+    true
+  );
+  assert.equal(await prisma.campaign.count({ where: { clientId: businessClientId } }), campaignsBefore);
 
   const outboundCount = await prisma.outboundMessage.count({
     where: {
@@ -15416,14 +15514,6 @@ test("event-based opt-out blocks recipient in app campaign and export", async ()
     },
   });
   assert.equal(outboundCount, 0);
-
-  const response = await requestText(
-    "GET",
-    `/app/campaigns/${created.body.campaign.id}/export`,
-    businessAdmin
-  );
-  assert.equal(response.status, 200);
-  assert.match(response.text, /5541999981001,opt_out,[^\n]*,nao,opt_out/);
 });
 
 test("event-based opt-out revoke allows recipient and tenant isolation is preserved", async () => {

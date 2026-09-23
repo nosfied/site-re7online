@@ -82,7 +82,7 @@ type CampaignResultStatusFilter = "all" | "delivered" | "sent" | "read" | "block
 type CampaignResultItem = NonNullable<CampaignItem["messagesMetaStatus"]>[number];
 type CsvGenericFieldKey = `field${number}`;
 
-type CampaignToastTone = "success" | "warning" | "error" | "info";
+type CampaignToastTone = "success" | "warning" | "error" | "info" | "reuse";
 
 type CampaignToast = {
   tone: CampaignToastTone;
@@ -584,11 +584,16 @@ function getToastClasses(tone: CampaignToastTone) {
       return "border-amber-400/35 bg-amber-950/95 text-amber-50";
     case "error":
       return "border-red-400/35 bg-red-950/95 text-red-50";
+    case "reuse":
+      return "border-cyan-300/45 bg-cyan-950/95 text-cyan-50 ring-1 ring-cyan-300/15";
     case "info":
     default:
       return "border-sky-400/30 bg-sky-950/95 text-sky-50";
   }
 }
+
+const campaignComposerControlClasses =
+  "h-10 w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 text-sm leading-10 text-white outline-none focus:border-re7-sky";
 
 function getTabStatusFilter(tab: CampaignCenterTab): CampaignStatusFilter {
   switch (tab) {
@@ -1004,7 +1009,7 @@ export default function AppCampaignsPage() {
         <label className="grid gap-1 text-sm">
           <span className="text-white/70">Nome do rascunho</span>
           <input
-            className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+            className={campaignComposerControlClasses}
             value={form.name}
             onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
             placeholder={defaultDraftName}
@@ -1013,7 +1018,7 @@ export default function AppCampaignsPage() {
         <label className="grid gap-1 text-sm">
           <span className="text-white/70">Modelo aprovado</span>
           <select
-            className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+            className={campaignComposerControlClasses}
             value={form.templateId}
             onChange={(event) => {
               const template = templates.find((item) => item.id === event.target.value) ?? null;
@@ -2026,7 +2031,7 @@ export default function AppCampaignsPage() {
     }
     const warning = reuseState.warnings[0];
     showToast(
-      warning ? "warning" : "info",
+      warning ? "warning" : "reuse",
       "Campanha carregada para reuso",
       warning ?? "Revise audiência, modelo, destino e variáveis antes de criar uma nova campanha."
     );

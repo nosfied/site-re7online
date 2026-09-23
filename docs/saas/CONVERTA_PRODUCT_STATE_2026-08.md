@@ -74,6 +74,19 @@ codigo de erro antes de mensagem bruta, mantendo `template_variables_required`
 separado de `no_eligible_recipients` e traduzindo motivos conhecidos para
 PT-BR.
 
+Atualizacao local de 2026-09-23: Zero-eligible campaign + CRM eligibility
+counts esta LOCAL FIX PREPARED / NOT DEPLOYED. Campanhas manuais imediatas
+param antes de criar campanha quando todos os destinatarios solicitados estao
+bloqueados antes do provider; nesse caso nao ha Campaign, Outbound, Runtime ou
+provider call. Requisicoes mistas seguem para os elegiveis e preservam
+evidencia de bloqueio. Historico de campanha no contato deixa de incluir
+bloqueios pre-provider por opt-out/envio ativo, preservando eventos auditaveis
+da campanha e tentativas reais de provider. Contagens de CRM settings e preparo
+de destinatarios passam a usar a mesma projecao elegivel da preparacao de
+campanha, excluindo anonimizados, opt-out/envio ativo, removidos da operacao e
+identidades invalidas. O toast de reaproveitamento e o alinhamento dos campos
+nome/modelo receberam polimento local.
+
 Atualizacao de 2026-09-20: Data Subject Privacy / LGPD contact-centric
 anonymization esta OWNER PASS / LOCAL VALIDATED / CLEAN DELIVERY DEPLOYED / PRODUCTION HEALTH VALIDATED. A tela de
 Privacidade passa a permitir buscar e selecionar um titular no CRM autenticado,

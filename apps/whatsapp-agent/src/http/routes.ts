@@ -11007,13 +11007,23 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         tenant,
       });
       const statuses = resolvedStatuses.statuses;
-      const counts = await prisma.lead.groupBy({
-        by: ["status"],
-        where: { tenantId: client.id },
-        _count: { _all: true },
-      });
+      const campaignEligibleStatuses = statuses.filter((item) => item.isActive && item.campaignEligible);
       const leadCountsByStatus = Object.fromEntries(
-        counts.map((item) => [item.status, item._count._all])
+        await Promise.all(
+          campaignEligibleStatuses.map(async (status) => {
+            const payload = await buildCampaignAudiencePreviewPayload(prisma, {
+              clientId: client.id,
+              query: {
+                status: status.id,
+                onlyWhatsappEligible: true,
+                excludeOptOut: true,
+                limit: 1,
+              },
+              statuses,
+            });
+            return [status.id, payload.summary.eligible] as const;
+          })
+        )
       );
       json(res, 200, {
         ok: true,
@@ -12267,121 +12277,40 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         5000,
         Math.max(1, Number.isFinite(Number(query.limit)) ? Math.floor(Number(query.limit)) : 1000)
       );
-      const leads = await prisma.lead.findMany({
-        where: {
-          tenantId: client.id,
-          status: { in: requestedStatuses },
-        },
-        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-        take: limit,
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          waId: true,
-          waIdCanonical: true,
-          externalUserHash: true,
-          externalUserRef: true,
-          legacyWaId: true,
-          contactChannelIdentity: {
-            select: {
-              contact: {
-                select: {
-                  lifecycle: true,
-                },
-              },
-            },
-          },
-          status: true,
-          updatedAt: true,
-        },
-      });
-      const lifecycleLookupKeys = Array.from(
-        new Set(
-          leads
-            .flatMap((lead) => [
-              lead.waId,
-              lead.waIdCanonical,
-              lead.externalUserRef,
-              lead.legacyWaId,
-              String(lead.phone ?? "").replace(/\D/g, ""),
-            ])
-            .map((value) => String(value ?? "").trim())
-            .filter(Boolean)
-        )
-      );
-      const [operationallyExcludedWaIds] = await Promise.all([
-        loadOperationallyExcludedWaIds(prisma, {
-          clientId: client.id,
-          waIds: lifecycleLookupKeys,
-        }),
-      ]);
-      const contactsByLookupKey = new Map<string, { lifecycle: unknown }>();
-      if (lifecycleLookupKeys.length > 0) {
-        const contacts = await prisma.contact.findMany({
-          where: {
-            clientId: client.id,
-            OR: [
-              { waId: { in: lifecycleLookupKeys } },
-              { externalUserRef: { in: lifecycleLookupKeys } },
-              { legacyWaId: { in: lifecycleLookupKeys } },
-            ],
-          },
-          select: { waId: true, externalUserRef: true, legacyWaId: true, lifecycle: true },
-        });
-        for (const contact of contacts) {
-          for (const key of [contact.waId, contact.externalUserRef, contact.legacyWaId]) {
-            const normalizedKey = String(key ?? "").trim();
-            if (normalizedKey) contactsByLookupKey.set(normalizedKey, { lifecycle: contact.lifecycle });
-          }
-        }
-      }
       const seen = new Set<string>();
-      const items = leads
-        .map((lead) => {
-          const matchedContact =
-            lead.contactChannelIdentity?.contact ??
-            contactsByLookupKey.get(lead.waIdCanonical ?? "") ??
-            contactsByLookupKey.get(lead.waId) ??
-            contactsByLookupKey.get(lead.externalUserRef ?? "") ??
-            contactsByLookupKey.get(lead.legacyWaId ?? "") ??
-            contactsByLookupKey.get(String(lead.phone ?? "").replace(/\D/g, "")) ??
-            null;
-          if (matchedContact && !isOperationalContactLifecycle(matchedContact.lifecycle)) return null;
-          if (
-            [
-              lead.waId,
-              lead.waIdCanonical,
-              lead.externalUserRef,
-              lead.legacyWaId,
-              String(lead.phone ?? "").replace(/\D/g, ""),
-            ].some((candidate) => operationallyExcludedWaIds.has(String(candidate ?? "").trim()))
-          ) {
-            return null;
+      const items: Array<{ leadId: string; name: string | null; phone: string; status: string; updatedAt: string }> = [];
+      for (const status of requestedStatuses) {
+        let page = 1;
+        while (items.length < limit) {
+          const payload = await buildCampaignAudiencePreviewPayload(prisma, {
+            clientId: client.id,
+            query: {
+              status,
+              onlyWhatsappEligible: true,
+              excludeOptOut: true,
+              page,
+              limit: Math.min(200, Math.max(1, limit - items.length)),
+            },
+            statuses: configuredStatuses,
+          });
+          for (const item of payload.items) {
+            const phone = String(item.lastConversationIdentity ?? item.phoneDisplay ?? "").replace(/\D/g, "");
+            if (!phone || seen.has(phone)) continue;
+            seen.add(phone);
+            items.push({
+              leadId: item.leadId,
+              name: item.displayName,
+              phone,
+              status: item.crmStatus,
+              updatedAt: item.updatedAt,
+            });
+            if (items.length >= limit) break;
           }
-          if (
-            [
-              lead.waId,
-              lead.waIdCanonical,
-              lead.externalUserHash,
-              lead.name,
-              lead.phone,
-            ].some(isAnonymizedCampaignMarker)
-          ) {
-            return null;
-          }
-          const phone = String(lead.phone ?? lead.waIdCanonical ?? lead.waId ?? "").replace(/\D/g, "");
-          if (!phone || seen.has(phone)) return null;
-          seen.add(phone);
-          return {
-            leadId: lead.id,
-            name: lead.name,
-            phone,
-            status: lead.status,
-            updatedAt: lead.updatedAt.toISOString(),
-          };
-        })
-        .filter(Boolean);
+          if (!payload.pagination.hasNextPage) break;
+          page += 1;
+        }
+        if (items.length >= limit) break;
+      }
       logger.info({
         event: "app.crm.campaign_recipients.prepared",
         requestId,
@@ -16638,10 +16567,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         : await buildOptOutFilteredCampaignRecipients(prisma, {
             clientId: client.id,
             waIds,
-          });
-      if (recipientPayload.waIds.length === 0 && recipientPayload.optOutBlocked.length === 0) {
+      });
+      if (recipientPayload.waIds.length === 0) {
         const details = "summary" in recipientPayload ? { summary: recipientPayload.summary } : undefined;
-        json(res, 400, httpError("no_eligible_recipients", "Nenhum destinatário está elegível para esta campanha.", details));
+        json(res, 400, {
+          error: {
+            code: "no_eligible_recipients",
+            message: "Nenhum destinatário está elegível para esta campanha.",
+          },
+          ...(details ? { details } : {}),
+        });
         return;
       }
       const returnDestination = await resolveCampaignReturnDestinationOrHttpError(prisma, {
@@ -37134,6 +37069,20 @@ async function buildOptOutFilteredCampaignRecipients(
     totalRecipients: filtered.allowed.length + filtered.blocked.length,
     optOutBlocked: filtered.blocked,
     seedWaIds: params.waIds,
+    summary: {
+      requested: params.waIds.length,
+      accepted: filtered.allowed.length,
+      blocked: filtered.blocked.length,
+      duplicatesRemoved: 0,
+      blockedByReason:
+        filtered.blocked.length > 0
+          ? [{
+              reason: "active_send_blocked" as CampaignDraftBlockedReason,
+              label: getCampaignBlockedReasonLabel("active_send_blocked"),
+              count: filtered.blocked.length,
+            }]
+          : [],
+    },
   };
 }
 

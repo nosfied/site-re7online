@@ -116,6 +116,16 @@ test("campaign result filtered actions only operate on the visible result set", 
   assert.ok(pageSource.includes('setActiveTab("create")'));
 });
 
+test("campaign reuse toast and shared composer controls keep owner-visible polish", () => {
+  assert.ok(pageSource.includes('type CampaignToastTone = "success" | "warning" | "error" | "info" | "reuse"'));
+  assert.ok(pageSource.includes('case "reuse":'));
+  assert.ok(pageSource.includes("border-cyan-300/45 bg-cyan-950/95 text-cyan-50"));
+  assert.ok(pageSource.includes('warning ? "warning" : "reuse"'));
+  assert.ok(pageSource.includes("const campaignComposerControlClasses ="));
+  assert.ok(pageSource.includes("h-10 w-full min-w-0 rounded-md border border-white/20"));
+  assert.equal(pageSource.match(/className=\{campaignComposerControlClasses\}/g)?.length ?? 0, 2);
+});
+
 test("campaign detail deep link reuses list detail navigation instead of composer", () => {
   assert.ok(pageSource.includes("const openCampaignDetail = useCallback((campaignId: string) => {"));
   assert.ok(pageSource.includes("setSelectedCampaignId(campaignId);"));

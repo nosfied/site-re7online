@@ -1,12 +1,10 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { getProviderStatusTieRank, parseProviderStatusTimestamp } from "../campaigns/campaignDeliveryTruth.js";
 import { listCampaigns } from "../campaigns/campaignService.js";
-import { CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT } from "../campaigns/optOutRegistry.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
 
 const MAX_LIST_CAMPAIGNS = 500;
 const MAX_LIST_OUTBOUND = 3000;
-const MAX_LIST_EVENTS = 3000;
 const MAX_DETAIL_ITEMS = 25;
 
 export type CrmCampaignRelationshipStatus =
@@ -298,15 +296,14 @@ async function collectCampaignRelationshipEvidence(
   });
   const campaignById = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
   if (campaigns.length === 0) return new Map(contacts.map((contact) => [contact.leadId, []]));
-  const campaignIds = campaigns.map((campaign) => campaign.id);
   const oldestCampaignAt = campaigns.reduce<Date | null>(
     (oldest, campaign) => (!oldest || campaign.createdAt < oldest ? campaign.createdAt : oldest),
     null
   );
 
-  const [outboundMessages, optOutBlockEvents] = await Promise.all([
+  const outboundMessages =
     allIdentityKeys.length > 0 && oldestCampaignAt
-      ? prisma.outboundMessage.findMany({
+      ? await prisma.outboundMessage.findMany({
           where: {
             clientId: params.clientId,
             type: "TEMPLATE",
@@ -326,21 +323,7 @@ async function collectCampaignRelationshipEvidence(
             createdAt: true,
           },
         })
-      : Promise.resolve([]),
-    allIdentityKeys.length > 0
-      ? prisma.event.findMany({
-          where: {
-            clientId: params.clientId,
-            eventName: CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT,
-            messageId: { in: campaignIds },
-            OR: [{ waId: { in: allIdentityKeys } }, { waIdCanonical: { in: allIdentityKeys } }],
-          },
-          orderBy: { createdAt: "desc" },
-          take: MAX_LIST_EVENTS,
-          select: { waId: true, waIdCanonical: true, messageId: true, payloadJson: true, createdAt: true },
-        })
-      : Promise.resolve([]),
-  ]);
+      : [];
 
   const evidenceByLeadId = new Map<string, Map<string, RelationshipEvidence>>(
     contacts.map((contact) => [contact.leadId, new Map()])
@@ -379,19 +362,6 @@ async function collectCampaignRelationshipEvidence(
       templateName: outbound.templateName ?? campaign.templateName,
       deliveredAt: isDeliveredStatus(status) ? parseDate(meta.lastStatusAt) ?? outbound.createdAt : null,
       evidenceAt: parseProviderStatusTimestamp(meta.lastStatusAt) ?? outbound.createdAt,
-    });
-  }
-
-  for (const event of optOutBlockEvents) {
-    const campaign = event.messageId ? campaignById.get(event.messageId) ?? null : null;
-    if (!campaign) continue;
-    if (campaign.status === "draft" || campaign.status === "scheduled" || campaign.status === "cancelled") continue;
-    applyToIdentity(event.waIdCanonical ?? event.waId, campaign, {
-      status: "OPT_OUT",
-      reason: "opt_out",
-      templateName: campaign.templateName,
-      evidenceAt: event.createdAt,
-      hasOptOutBlock: true,
     });
   }
 

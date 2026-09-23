@@ -564,9 +564,28 @@ test.after(async () => {
 });
 
 test("business profile default can access CRM app routes without capability denial", async () => {
-  const settings = await request<{ ok: boolean }>("GET", "/app/crm/settings", businessAdmin);
+  const eligibleSettingsWaId = "5511999999998";
+  await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: eligibleSettingsWaId,
+      waIdCanonical: eligibleSettingsWaId,
+      phone: eligibleSettingsWaId,
+      name: "Lead Elegivel Settings",
+      channel: "whatsapp",
+      provider: "meta",
+      status: "QUALIFIED",
+    },
+  });
+  const settings = await request<{ ok: boolean; leadCountsByStatus: Record<string, number | undefined> }>(
+    "GET",
+    "/app/crm/settings",
+    businessAdmin
+  );
   assert.equal(settings.status, 200);
   assert.equal(settings.body.ok, true);
+  assert.equal(settings.body.leadCountsByStatus.QUALIFIED, 1);
+  assert.equal(settings.body.leadCountsByStatus.INATIVO ?? 0, 0);
 
   const recipients = await request<{ ok: boolean; count: number; numbers: string[] }>(
     "GET",
@@ -576,7 +595,7 @@ test("business profile default can access CRM app routes without capability deni
   assert.equal(recipients.status, 200);
   assert.equal(recipients.body.ok, true);
   assert.equal(recipients.body.count, 1);
-  assert.deepEqual(recipients.body.numbers, ["5511999999999"]);
+  assert.deepEqual(recipients.body.numbers, [eligibleSettingsWaId]);
 
   const update = await request<{ ok: boolean; lead: { name: string | null } }>(
     "PATCH",
@@ -1238,12 +1257,12 @@ test("CRM contact campaign relationship uses canonical campaign evidence without
   const contact = list.body.items.find((item) => item.leadId === leadId);
   assert.ok(contact);
   assert.equal(contact.crmStatusLabel, "Retorno futuro");
-  assert.equal(contact.campaignRelationship.campaignCount, 3);
+  assert.equal(contact.campaignRelationship.campaignCount, 2);
   assert.equal(contact.campaignRelationship.latestCampaignId, conflictCampaign.id);
   assert.equal(contact.campaignRelationship.latestCampaignName, "Campanha CRM Conflito");
   assert.equal(contact.campaignRelationship.latestRecipientStatus, "FAILED");
   assert.equal(contact.campaignRelationship.latestResultReason, "identity_conflict");
-  assert.equal(contact.campaignRelationship.hasOptOutBlock, true);
+  assert.equal(contact.campaignRelationship.hasOptOutBlock, false);
   assert.doesNotMatch(JSON.stringify(list.body), /Campanha Outro Tenant|R\$|USD|billing|contractPrice/i);
 
   const detail = await request<{
@@ -1265,8 +1284,8 @@ test("CRM contact campaign relationship uses canonical campaign evidence without
   }>("GET", `/app/crm/contacts/${encodeURIComponent(leadId)}`, businessAdmin);
 
   assert.equal(detail.status, 200);
-  assert.equal(detail.body.item.campaignRelationship.campaignCount, 3);
-  assert.equal(detail.body.campaignRelationshipHistory.pagination.total, 3);
+  assert.equal(detail.body.item.campaignRelationship.campaignCount, 2);
+  assert.equal(detail.body.campaignRelationshipHistory.pagination.total, 2);
   assert.equal(detail.body.campaignRelationshipHistory.pagination.hasMore, false);
   assert.equal(detail.body.campaignRelationshipHistory.items[0]?.campaignId, conflictCampaign.id);
   assert.equal(detail.body.campaignRelationshipHistory.items[0]?.campaignHref, `/app/campaigns?campaignId=${encodeURIComponent(conflictCampaign.id)}`);
@@ -1275,10 +1294,7 @@ test("CRM contact campaign relationship uses canonical campaign evidence without
     "DELIVERED"
   );
   assert.ok(detail.body.campaignRelationshipHistory.items.find((item) => item.campaignId === deliveredCampaign.id)?.deliveredAt);
-  assert.equal(
-    detail.body.campaignRelationshipHistory.items.find((item) => item.campaignId === optOutCampaign.id)?.recipientStatus,
-    "OPT_OUT"
-  );
+  assert.equal(detail.body.campaignRelationshipHistory.items.some((item) => item.campaignId === optOutCampaign.id), false);
   assert.doesNotMatch(JSON.stringify(detail.body), /Campanha Outro Tenant|R\$|USD|billing|contractPrice/i);
 });
 
@@ -1466,7 +1482,8 @@ test("CRM contact campaign relationship follows provider chronology without requ
   });
   const blockedDetail = await detailFor(blockedLeadId);
   assert.equal(blockedDetail.status, 200);
-  assert.equal(blockedDetail.body.campaignRelationshipHistory.items[0]?.recipientStatus, "OPT_OUT");
+  assert.equal(blockedDetail.body.campaignRelationshipHistory.pagination.total, 0);
+  assert.equal(blockedDetail.body.campaignRelationshipHistory.items.length, 0);
   assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId: blockedWaId } }), 0);
 
   const existingWaId = `${prefix}-relationship-existing`;
