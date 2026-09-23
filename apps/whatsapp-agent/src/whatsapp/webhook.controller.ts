@@ -162,6 +162,8 @@ import {
   safeApplyWhatsAppMultichannelShadow,
 } from "../channels/whatsappMultichannelShadowWrite.js";
 import { createWebSessionTextOutboundMessage } from "../web-session/webSessionOutboundService.js";
+import { ensureCampaignOutboundConversation } from "../campaigns/campaignOutboundConversation.js";
+import { parseOutboundReturnDestination } from "../routing/outboundReturnDestination.js";
 
 const agentBrain = createAgentBrain();
 const adminTemplateDedup = new Map<string, number>();
@@ -2933,6 +2935,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           select: {
             id: true,
             clientId: true,
+            phoneNumberId: true,
             waId: true,
             waIdCanonical: true,
             messageId: true,
@@ -3045,9 +3048,41 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           typeof currentRaw.conversationId === "string" ? currentRaw.conversationId : null;
         const campaignId =
           typeof currentRaw.campaignId === "string" ? currentRaw.campaignId : null;
+        let materializedCampaignConversationId = conversationId;
+        if (
+          campaignId &&
+          (normalizedStatus === "DELIVERED" || normalizedStatus === "READ") &&
+          !conversationId
+        ) {
+          const campaignRunId =
+            typeof currentRaw.campaignRunId === "string" ? currentRaw.campaignRunId : `webhook:${outbound.messageId}`;
+          const client = await prisma.client.findUnique({
+            where: { id: outbound.clientId },
+            select: { clientKey: true },
+          });
+          const returnDestination = parseOutboundReturnDestination(currentRaw.returnDestination);
+          const materialized = client
+            ? await ensureCampaignOutboundConversation(prisma, {
+                clientId: outbound.clientId,
+                clientKey: client.clientKey,
+                waId: outbound.waId,
+                waIdCanonical: outbound.waIdCanonical,
+                phoneNumberId: outbound.phoneNumberId,
+                messageId: outbound.messageId ?? item.id,
+                campaignId,
+                campaignRunId,
+                templateName: outbound.templateName ?? "",
+                sentAt: new Date(normalizeStatusTimestamp(item.timestamp)),
+                source: "campaign",
+                conversationId: typeof currentRaw.previousConversationId === "string" ? currentRaw.previousConversationId : null,
+                returnDestination,
+              })
+            : null;
+          materializedCampaignConversationId = materialized?.conversationId ?? null;
+        }
         const metaUsage = buildMetaUsageEventPayload({
           outboundMessageId: outbound.messageId,
-          conversationId,
+          conversationId: materializedCampaignConversationId,
           campaignId,
           source,
           messageKind: outbound.type === MessageType.TEMPLATE ? "template" : source === "canned_reply" ? "canned_reply" : "free_text",
@@ -3067,14 +3102,20 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           data: {
             rawPayload: {
               ...nextRawPayload,
+              metaStatus: {
+                ...nextRawPayload.metaStatus,
+                providerConversationId: nextRawPayload.metaStatus.conversationId,
+                conversationId: materializedCampaignConversationId,
+              },
               metaUsage,
+              conversationId: materializedCampaignConversationId,
             } as Prisma.InputJsonValue,
           },
         });
         await recordMetaUsageLedgerEvent({
           prisma,
           clientId: outbound.clientId,
-          conversationId,
+          conversationId: materializedCampaignConversationId,
           waId: outbound.waId,
           waIdCanonical: outbound.waIdCanonical ?? canonicalizeBrazilWaId(outbound.waId),
           messageId: outbound.messageId,
@@ -3082,7 +3123,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           eventName: "meta.usage.updated",
           input: {
             outboundMessageId: outbound.messageId,
-            conversationId,
+            conversationId: materializedCampaignConversationId,
             campaignId,
             source,
             messageKind: outbound.type === MessageType.TEMPLATE ? "template" : source === "canned_reply" ? "canned_reply" : "free_text",

@@ -871,3 +871,18 @@ identifiers are shown, and draft/discarded/never-sent campaigns remain outside
 contact campaign history. This local pass includes dark-theme result/mapping
 select fixes, reuse-state restoration and Contacts CSV preview header
 alignment. No real send, provider call or production data mutation occurred.
+
+P1 delivery truth follow-up, 2026-09-23: LOCAL FIX VALIDATED / NOT DEPLOYED.
+Future Demo/CRA campaign validation must treat provider accepted/submitted as
+submission evidence only. Delivered/read classification and Inbox
+Conversation/Runtime materialization require delivered/read webhook evidence.
+CSV phone mapping supports arbitrary headers only through explicit operator
+mapping when no safe alias is detected. Opt-out/send-block checks are
+alias-safe across Brazilian 12/13 digit identities, and Meta reaction-only
+payloads are suppressed as non-content. `Campaign.sentCount` remains legacy
+submitted/accepted count, not delivered/read/final success evidence. Real
+`****6683` controlled repair remains pending for campaign
+`ad354ce4-35dc-4fca-85e5-3108cc9a2332` and conversation
+`9a07b043-6657-4dc3-9e7f-2b904caf939c`. Campaign RBAC/active-send
+authorization is P1 backlog only, not implemented here. No real send, provider
+call, production repair or deploy occurred in this local gate.

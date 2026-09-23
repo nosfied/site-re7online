@@ -339,7 +339,7 @@ test("campaign runner fails local operational preflight before Meta send", async
   assert.equal(payload.reason, "default_operational_department_missing");
 });
 
-test("campaign runner persists provider acceptance and local outbound for successful preflight", async (t) => {
+test("campaign runner persists provider acceptance without opening operational conversation", async (t) => {
   const clientId = crypto.randomUUID();
   const clientKey = `campaign-runner-provider-${process.pid}-${Date.now()}`;
   const templateName = `campaign_runner_provider_${Date.now()}`;
@@ -418,6 +418,9 @@ test("campaign runner persists provider acceptance and local outbound for succes
   });
   assert.equal(outbound?.metaMessageId, metaMessageId);
   assert.equal(outbound?.status, MessageStatus.SENT);
+  const outboundRaw = outbound?.rawPayload as Record<string, unknown> | undefined;
+  assert.equal(outboundRaw?.conversationId, null);
+  assert.equal(outboundRaw?.deliveryConversationPending, true);
   const contact = await prisma.contact.findFirst({
     where: { clientId, waId: recipient },
     select: { id: true, lifecycle: true },
@@ -434,8 +437,8 @@ test("campaign runner persists provider acceptance and local outbound for succes
     1
   );
   assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waId: recipient } }), 1);
-  assert.equal(await prisma.conversation.count({ where: { clientId, waId: recipient } }), 1);
-  assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId, waId: recipient } }), 1);
+  assert.equal(await prisma.conversation.count({ where: { clientId, waId: recipient } }), 0);
+  assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId, waId: recipient } }), 0);
   assert.equal(
     await prisma.event.count({
       where: {

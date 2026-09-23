@@ -1334,3 +1334,20 @@ migration, smoke provider call or real campaign send occurred. Authenticated
 owner UI, real post-deploy CSV import, real post-deploy blocked campaign
 evidence and real new inbound-origin evidence remain not exercised until a
 separately authorized natural validation path exists.
+
+P1 campaign delivery truth + alias-safe blocking (2026-09-23): LOCAL FIX
+VALIDATED / NOT DEPLOYED. Campaign CSV phone mapping now keeps arbitrary headers
+and requires explicit operator mapping when no safe phone alias is found, instead
+of guessing the first column. Opt-out/active-send blocking is alias-safe across
+Brazilian 12/13 digit WhatsApp identities. Provider accepted/submitted is only
+submission evidence; delivered/read webhook evidence is required before
+operational Conversation/Runtime creation or reactivation and before treating a
+recipient as delivered in the UI. Reaction-only Meta webhooks are ignored as
+non-content events. `Campaign.sentCount` remains a legacy submitted/accepted
+counter, not delivered/read/final success truth. Real `****6683` repair for
+campaign `ad354ce4-35dc-4fca-85e5-3108cc9a2332` and conversation
+`9a07b043-6657-4dc3-9e7f-2b904caf939c` is controlled-repair pending with no
+mutation in this gate. Campaign RBAC/active-send authorization is a separate P1
+backlog item: AGENT no campaign access, SUPERVISOR/ADMIN allowed, backend
+authoritative; not implemented here. No schema/migration, no production repair,
+no provider call and no real send.

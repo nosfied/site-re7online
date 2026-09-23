@@ -44,6 +44,10 @@ type IncomingPayload = {
             name?: string;
             address?: string;
           };
+          reaction?: {
+            message_id?: string;
+            emoji?: string;
+          };
         }>;
       };
     }>;
@@ -62,6 +66,10 @@ function mapType(type?: string): MessageType {
   if (type === "document") return "document";
   if (type === "location") return "location";
   return "unknown";
+}
+
+function isNonContentMessage(message: IncomingMessagePayload) {
+  return message.type === "reaction";
 }
 
 function normalizeMediaPayload(message: IncomingMessagePayload, type: MessageType): NormalizedMediaPayload | null {
@@ -140,7 +148,12 @@ export function normalizeWebhook(payload: IncomingPayload): NormalizeResult {
     }
   }
 
-  const normalized: NormalizedMessage[] = messages.map((message) => {
+  const contentMessages = messages.filter((message) => !isNonContentMessage(message));
+  if (contentMessages.length === 0) {
+    return { messages: [], reason: "non_content_reaction" };
+  }
+
+  const normalized: NormalizedMessage[] = contentMessages.map((message) => {
     const timestamp = message.timestamp
       ? new Date(Number(message.timestamp) * 1000).toISOString()
       : new Date().toISOString();

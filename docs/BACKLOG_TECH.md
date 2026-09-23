@@ -1819,3 +1819,61 @@ Production deploy 2026-09-23:
   `crmCapabilityRoutes` 19/19 PASS; `campaignsFeatureRoutes` 118/118 PASS;
   backend/frontend builds PASS; schema unchanged, migration none, provider
   calls 0, real send NO.
+
+## P1 campaign delivery truth + alias-safe blocking - 2026-09-23
+
+Status: LOCAL FIX VALIDATED / NOT DEPLOYED.
+
+- Campaign CSV preview/import now preserves arbitrary CSV headers and requires
+  explicit phone-column mapping when no safe phone alias is detected. It no
+  longer silently selects the first CSV column as WhatsApp.
+- Active send blocking/opt-out lookup now evaluates Brazilian 12/13 digit
+  identity aliases as one canonical identity group and applies latest event wins
+  across record/revoke.
+- Provider accepted/submitted is not treated as delivered, read or Inbox-ready
+  evidence. Campaign execution persists outbound/submission and CRM attempt
+  materialization only; operational Conversation/Runtime is created or
+  reactivated only after Meta delivered/read webhook evidence.
+- Campaign result truth keeps submitted/accepted separate from delivered/read,
+  failed and blocked. Provider acceptance alone does not make a successful
+  delivery. Current `Campaign.sentCount` remains a legacy submitted/accepted
+  counter; it is not delivered count, read count or final success count.
+- Meta Cloud reaction-only webhook payloads are non-content events and do not
+  create inbox bubbles, unread/sound, bot transitions, CRM or runtime side
+  effects.
+- Real `****6683` repair remains plan-only/read-only. No production mutation,
+  no provider call, no real send and no deploy occurred in this local gate.
+  Pending controlled repair target remains campaign
+  `ad354ce4-35dc-4fca-85e5-3108cc9a2332` and conversation
+  `9a07b043-6657-4dc3-9e7f-2b904caf939c`, only after deployed fix and
+  read-only proof that the conversation came solely from a failed campaign send
+  with no legitimate inbound/human interaction. Campaign, Outbound, Event and
+  Billing/usage history must be preserved.
+- Local validation: focused campaign/import/webhook/runner/opt-out tests
+  23/23 PASS; `campaignsPageContract.test.ts` 21/21 PASS;
+  `campaignsFeatureRoutes.test.ts` 118/118 PASS. Schema unchanged and
+  migration none.
+
+## P1 - Campaign RBAC / Active Sends Authorization - 2026-09-23
+
+Status: AUDITED / BACKLOG / NOT IMPLEMENTED.
+
+Problem: AGENT does not see Campaigns in the normal UI, but backend campaign
+routes are mainly guarded by authenticated tenant session plus `campaigns`
+feature, not by explicit SUPERVISOR/ADMIN role enforcement.
+
+Risk: AGENT may potentially call campaign endpoints directly or reach campaign
+surfaces through saved URL/state despite UI omission.
+
+Future domain rule:
+- AGENT: no Campaign access and no active campaign operations.
+- SUPERVISOR: allowed.
+- ADMIN: allowed.
+- Backend is authoritative; UI omission is not sufficient.
+
+Future acceptance must cover: `/app/campaigns`, campaign detail/export policy,
+audience preview, CSV preview, drafts, CSV drafts, create, send, schedule,
+pause, resume, test-send and cancel. Backend tests must assert AGENT=403 and
+SUPERVISOR/ADMIN allowed. Frontend must centralize Campaigns minRole as
+SUPERVISOR or equivalent. Do not change opt-out, eligibility, anonymization,
+templates, billing or provider mechanics in that future RBAC implementation.

@@ -55,7 +55,7 @@ test("campaign detail result shows full recipient phone for authorized users", (
 });
 
 test("campaign confidence treats mixed success and failure as partial delivery", () => {
-  assert.ok(pageSource.includes("const hasSuccessfulDeliverySignal = deliveredOrRead > 0 || sent > 0;"));
+  assert.ok(pageSource.includes("const hasSuccessfulDeliverySignal = deliveredOrRead > 0;"));
   assert.ok(pageSource.includes("failed >= totalRecipients && !hasSuccessfulDeliverySignal"));
 });
 
@@ -168,6 +168,8 @@ test("campaign CSV import uses generic contact and field mapping", () => {
   assert.ok(pageSource.includes("genericFieldColumns"));
   assert.ok(pageSource.includes("mappedCsvGenericFields.map"));
   assert.ok(pageSource.includes("updateCsvGenericFieldColumn"));
+  assert.ok(pageSource.includes("detectCsvPhoneColumn(headers)"));
+  assert.ok(pageSource.includes("previous && headers.includes(previous) ? previous : detectedPhoneColumn"));
   assert.ok(pageSource.includes("csvVariableMappingIncomplete"));
   assert.ok(pageSource.includes("Vincule cada variável do modelo a um campo mapeado do CSV."));
 });

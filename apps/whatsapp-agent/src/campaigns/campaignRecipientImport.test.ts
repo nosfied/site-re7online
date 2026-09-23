@@ -229,6 +229,22 @@ test("campaign CSV parser accepts comma quoted values and reports missing phone 
   });
   assert.equal(missing.ok, false);
   assert.equal(missing.error, "missing_phone_column");
+  assert.deepEqual(missing.headers, ["phone", "name"]);
+
+  const arbitraryHeaders = buildCampaignImportRecipientsFromCsv({
+    csvText: "Nome,Documento,WhatsApp principal\nCliente,123,5541991100008",
+    mapping: {},
+  });
+  assert.equal(arbitraryHeaders.ok, false);
+  assert.equal(arbitraryHeaders.error, "missing_phone_column");
+  assert.deepEqual(arbitraryHeaders.headers, ["Nome", "Documento", "WhatsApp principal"]);
+
+  const mappedArbitraryHeaders = buildCampaignImportRecipientsFromCsv({
+    csvText: "Nome,Documento,WhatsApp principal\nCliente,123,5541991100008",
+    mapping: { phoneColumn: "WhatsApp principal" },
+  });
+  assert.equal(mappedArbitraryHeaders.ok, true);
+  assert.equal(mappedArbitraryHeaders.recipients[0]?.phone, "5541991100008");
 
   const empty = buildCampaignImportRecipientsFromCsv({
     csvText: "   ",

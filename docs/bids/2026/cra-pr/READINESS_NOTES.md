@@ -860,3 +860,23 @@ health PASS, no schema/migration, no smoke provider call and no real campaign
 send. Authenticated owner UI, real post-deploy CSV import and real CRA campaign
 evidence remain not exercised. This improves CRA readiness for import/upsert,
 opt-out and operator traceability, but does not replace the controlled CRA run.
+
+## P1 campaign delivery truth + alias-safe blocking - 2026-09-23
+
+Local-only corrective gate completed for campaign delivery truth and send
+blocking. Campaign CSV import now supports arbitrary phone headers through
+explicit operator mapping when no safe alias is detected, without unsafe
+first-column guessing. Opt-out/active-send blocking is evaluated across
+Brazilian 12/13 digit identity aliases with latest event wins. Provider
+accepted/submitted is submission evidence only; delivered/read callback evidence
+is required before Inbox Conversation/Runtime materialization and before
+classifying a recipient as delivered/read in customer UX. Meta reaction-only
+webhooks are suppressed as non-content events. `Campaign.sentCount` remains
+legacy submitted/accepted count, not delivered/read/final success evidence.
+Real `****6683` repair remains controlled-repair pending for campaign
+`ad354ce4-35dc-4fca-85e5-3108cc9a2332` and conversation
+`9a07b043-6657-4dc3-9e7f-2b904caf939c`; no repair mutation occurred. Campaign
+RBAC/active-send authorization is P1 backlog only and was not implemented in
+this gate. This strengthens CRA campaign evidence requirements but does not
+claim a new CRA formal acceptance run, real send, provider call, production data
+repair or deploy.

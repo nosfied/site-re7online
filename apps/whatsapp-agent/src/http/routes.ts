@@ -15113,6 +15113,38 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const mapping = normalizeCampaignCsvMapping(body.mapping);
       const parsed = buildCampaignImportRecipientsFromCsv({ csvText, mapping });
       if (!parsed.ok) {
+        if (parsed.error === "missing_phone_column") {
+          json(res, 200, {
+            ok: true,
+            summary: {
+              received: 0,
+              valid: 0,
+              invalid: 0,
+              duplicates: 0,
+              existingDuplicates: 0,
+              optOutBlocked: 0,
+              missingRequiredVariables: 0,
+              unresolvedCrmSituations: 0,
+              readyToImport: 0,
+              created: 0,
+              updated: 0,
+              unchanged: 0,
+              consolidated: 0,
+              blockedByReason: [],
+            },
+            recipients: [],
+            errors: [],
+            truncatedErrors: false,
+            csv: {
+              headers: parsed.headers,
+              delimiter: "delimiter" in parsed ? parsed.delimiter : ",",
+              maxRows: CAMPAIGN_IMPORT_MAX_ROWS,
+              maxBytes: CAMPAIGN_IMPORT_MAX_CSV_BYTES,
+              phoneMappingRequired: true,
+            },
+          });
+          return;
+        }
         json(res, 400, httpError(parsed.error, parsed.error, "headers" in parsed ? { headers: parsed.headers } : undefined));
         return;
       }

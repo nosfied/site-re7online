@@ -528,3 +528,20 @@ formal CRA acceptance still requires controlled CRA evidence. Production deploy
 reached head `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a` with health PASS and
 no smoke provider call or real campaign send; authenticated owner UI and real
 CRA CSV/campaign evidence remain not exercised.
+
+P1 campaign delivery truth + alias-safe blocking, 2026-09-23: LOCAL FIX
+VALIDATED / NOT DEPLOYED. CRA campaign evidence must distinguish provider
+accepted/submitted from delivered/read. Inbox Conversation/Runtime
+materialization is now gated by delivered/read webhook evidence; provider
+acceptance alone is not enough to classify a recipient as delivered or
+Inbox-ready. Campaign CSV phone mapping preserves arbitrary headers and requires
+explicit mapping when no safe alias is detected. Opt-out/send-block evaluation
+is alias-safe across Brazilian 12/13 digit identities, and Meta reaction-only
+webhooks are non-content events. `Campaign.sentCount` remains legacy
+submitted/accepted count, not delivered/read/final success evidence. Real
+`****6683` controlled repair remains pending for campaign
+`ad354ce4-35dc-4fca-85e5-3108cc9a2332` and conversation
+`9a07b043-6657-4dc3-9e7f-2b904caf939c`. Campaign RBAC/active-send
+authorization is a separate P1 backlog item, not implemented here. This
+strengthens CRA-CAMP/CRA-OPT evidence rules but does not claim formal CRA
+acceptance, production repair, provider call, real send or deploy.

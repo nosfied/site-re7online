@@ -122,6 +122,73 @@ test("normalizeWebhook extrai nome do perfil WhatsApp quando disponivel", () => 
   assert.equal(result.messages[0]?.profileName, "Maria Cliente");
 });
 
+test("normalizeWebhook ignora reaction-only como evento sem conteudo", () => {
+  const result = normalizeWebhook({
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              messages: [
+                {
+                  id: "wamid.reaction.1",
+                  from: "5511999999999",
+                  timestamp: "1776816000",
+                  type: "reaction",
+                  reaction: {
+                    message_id: "wamid.outbound.1",
+                    emoji: "ok",
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.deepEqual(result.messages, []);
+  assert.equal(result.reason, "non_content_reaction");
+});
+
+test("normalizeWebhook preserva mensagens de conteudo quando reaction vem no mesmo payload", () => {
+  const result = normalizeWebhook({
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              messages: [
+                {
+                  id: "wamid.reaction.2",
+                  from: "5511999999999",
+                  timestamp: "1776816000",
+                  type: "reaction",
+                  reaction: {
+                    message_id: "wamid.outbound.2",
+                    emoji: "ok",
+                  },
+                },
+                {
+                  id: "wamid.text.after-reaction",
+                  from: "5511999999999",
+                  timestamp: "1776816001",
+                  type: "text",
+                  text: { body: "oi" },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.messages.length, 1);
+  assert.equal(result.messages[0]?.messageId, "wamid.text.after-reaction");
+});
+
 test("normalizeWebhook extrai fileName e caption de document", () => {
   const result = normalizeWebhook({
     entry: [

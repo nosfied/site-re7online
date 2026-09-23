@@ -514,3 +514,26 @@ Status: INTEGRATED LOCAL / OWNER REVALIDATION PENDING / NO DEPLOY.
   CRA controlled evidence still required before formal acceptance. Deploy head:
   `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`; no smoke provider call and no
   real campaign send were performed.
+
+## P1 delivery truth + alias-safe blocking - 2026-09-23
+
+- Provider accepted/submitted is not sufficient evidence of delivery, reading
+  or Inbox availability.
+- Controlled Utility evidence must use delivered/read webhook evidence for
+  delivered/read classification and operational Conversation/Runtime
+  materialization.
+- Campaign CSV phone columns with arbitrary labels require explicit operator
+  mapping unless a safe phone alias is detected.
+- Opt-out/send-block checks are alias-safe across Brazilian 12/13 digit
+  WhatsApp identities.
+- Meta reaction-only webhook payloads are non-content events and must not create
+  inbox bubbles, unread/sound, bot transitions, CRM or runtime side effects.
+- `Campaign.sentCount` remains legacy submitted/accepted count. It is not
+  delivered count, read count or final success count.
+- Real `****6683` controlled repair remains pending for campaign
+  `ad354ce4-35dc-4fca-85e5-3108cc9a2332` and conversation
+  `9a07b043-6657-4dc3-9e7f-2b904caf939c`; no repair mutation occurred here.
+- Campaign RBAC/active-send authorization is P1 backlog only: AGENT blocked,
+  SUPERVISOR/ADMIN allowed, backend authoritative. Not implemented here.
+- Status: LOCAL FIX VALIDATED / NOT DEPLOYED. No CRA formal acceptance run, real
+  send, provider call, production repair or deploy occurred.

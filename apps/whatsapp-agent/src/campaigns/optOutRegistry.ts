@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { persistEvent } from "../db/persist.js";
+import { buildCrmWhatsappIdentityCandidates } from "../crm/crmWhatsappIdentity.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
 
 export const CONTACT_OPT_OUT_RECORDED_EVENT = "contact.opt_out.recorded";
@@ -27,20 +28,46 @@ export function normalizeOptOutWaId(input: unknown) {
   return { waId, waIdCanonical };
 }
 
-function resolveActiveOptOutEvents(events: OptOutEvent[]) {
-  const latestByCanonical = new Map<string, OptOutEvent>();
+function buildOptOutIdentityGroup(values: Array<string | null | undefined>) {
+  const candidates = Array.from(
+    new Set(
+      buildCrmWhatsappIdentityCandidates(values)
+        .map((value) => normalizeOptOutWaId(value)?.waIdCanonical ?? normalizeWaIdDigits(value))
+        .filter(Boolean)
+    )
+  );
+  return {
+    candidates,
+    key: candidates.slice().sort().join("|"),
+  };
+}
+
+function resolveActiveOptOutEventsByGroup(
+  events: OptOutEvent[],
+  groups: Map<string, string[]>
+) {
+  const groupByCandidate = new Map<string, string>();
+  for (const [groupKey, candidates] of groups.entries()) {
+    for (const candidate of candidates) groupByCandidate.set(candidate, groupKey);
+  }
+  const latestByGroup = new Map<string, OptOutEvent>();
   for (const event of events) {
-    const canonical = event.waIdCanonical ?? (event.waId ? canonicalizeBrazilWaId(event.waId) : "");
-    if (!canonical) continue;
-    const current = latestByCanonical.get(canonical);
-    if (!current || event.createdAt >= current.createdAt) {
-      latestByCanonical.set(canonical, event);
+    const eventCandidates = buildOptOutIdentityGroup([event.waIdCanonical, event.waId]).candidates;
+    const groupKeys = Array.from(
+      new Set(eventCandidates.map((candidate) => groupByCandidate.get(candidate)).filter(Boolean))
+    ) as string[];
+    for (const groupKey of groupKeys) {
+      const current = latestByGroup.get(groupKey);
+      if (!current || event.createdAt >= current.createdAt) {
+        latestByGroup.set(groupKey, event);
+      }
     }
   }
   const active = new Map<string, OptOutEvent>();
-  for (const [canonical, event] of latestByCanonical.entries()) {
-    if (event.eventName === CONTACT_OPT_OUT_RECORDED_EVENT) {
-      active.set(canonical, event);
+  for (const [groupKey, event] of latestByGroup.entries()) {
+    if (event.eventName !== CONTACT_OPT_OUT_RECORDED_EVENT) continue;
+    for (const candidate of groups.get(groupKey) ?? []) {
+      active.set(candidate, event);
     }
   }
   return active;
@@ -53,14 +80,13 @@ export async function getActiveOptOutsForRecipients(
     waIds: string[];
   }
 ) {
-  const canonicalRecipients = Array.from(
-    new Set(
-      params.waIds
-        .map((waId) => normalizeOptOutWaId(waId)?.waIdCanonical)
-        .filter((value): value is string => Boolean(value))
-    )
-  );
-  if (canonicalRecipients.length === 0) return new Map<string, OptOutEvent>();
+  const groups = new Map<string, string[]>();
+  for (const waId of params.waIds) {
+    const group = buildOptOutIdentityGroup([waId]);
+    if (group.candidates.length > 0) groups.set(group.key, group.candidates);
+  }
+  const lookupCandidates = Array.from(new Set(Array.from(groups.values()).flat()));
+  if (lookupCandidates.length === 0) return new Map<string, OptOutEvent>();
 
   const events = await prisma.event.findMany({
     where: {
@@ -68,9 +94,10 @@ export async function getActiveOptOutsForRecipients(
       eventName: {
         in: [CONTACT_OPT_OUT_RECORDED_EVENT, CONTACT_OPT_OUT_REVOKED_EVENT],
       },
-      waIdCanonical: {
-        in: canonicalRecipients,
-      },
+      OR: [
+        { waIdCanonical: { in: lookupCandidates } },
+        { waId: { in: lookupCandidates } },
+      ],
     },
     orderBy: { createdAt: "asc" },
     select: {
@@ -81,7 +108,7 @@ export async function getActiveOptOutsForRecipients(
     },
   });
 
-  return resolveActiveOptOutEvents(events);
+  return resolveActiveOptOutEventsByGroup(events, groups);
 }
 
 export async function filterOptedOutCampaignRecipients(

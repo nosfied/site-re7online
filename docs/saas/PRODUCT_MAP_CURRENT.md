@@ -657,3 +657,20 @@ before provider calls and now expose owner-friendly reasons; Campaigns/Inbox
 remain free of billing notices in customer UX. No schema/migration, no smoke
 provider call and no real campaign send. Authenticated owner UI and real
 post-deploy CSV/campaign mutation evidence remain not exercised.
+
+P1 campaign delivery truth + alias-safe blocking (2026-09-23): LOCAL FIX
+VALIDATED / NOT DEPLOYED. Campaign delivery semantics now distinguish provider
+accepted/submitted from delivered/read truth. Outbound submission can create CRM
+attempt evidence, but Inbox conversation/runtime materialization is gated by
+Meta delivered/read webhook evidence. Campaign CSV import no longer guesses the
+first column as phone when headers are arbitrary; the operator must map the phone
+column unless a safe alias is detected. Opt-out/send-block evaluation is
+alias-safe for Brazilian 12/13 digit identities. Meta reaction-only webhooks are
+suppressed as non-content events. `Campaign.sentCount` remains a legacy
+submitted/accepted counter and must not be read as delivered/read/final success
+truth. Real `****6683` repair remains pending for campaign
+`ad354ce4-35dc-4fca-85e5-3108cc9a2332` and conversation
+`9a07b043-6657-4dc3-9e7f-2b904caf939c`. Campaign RBAC/active-send
+authorization is logged as P1 backlog only: AGENT blocked, SUPERVISOR/ADMIN
+allowed, backend authoritative. No schema/migration, production repair,
+provider call or real send occurred in this local gate.

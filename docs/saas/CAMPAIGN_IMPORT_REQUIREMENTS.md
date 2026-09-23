@@ -381,3 +381,15 @@ allowed in authenticated Contacts CSV preview/report evidence for reconciliation
 external/public masking rules are unchanged. A preview is valid only for the
 exact phone/name/CRM Situation column mapping that generated it; mapping changes
 make the existing preview stale, block import and require refreshed preview.
+
+Campaign delivery truth follow-up, 2026-09-23: LOCAL FIX VALIDATED / NOT
+DEPLOYED. Campaign CSV import must preserve arbitrary headers and require
+explicit phone-column mapping when no safe phone alias is detected; selecting
+the first column silently is prohibited. Provider accepted/submitted is not
+delivered/read evidence. Campaign execution may persist submission/outbound and
+CRM attempt evidence after a provider attempt, but operational
+Conversation/Runtime materialization is gated by delivered/read webhook
+evidence. Opt-out/send-block evaluation must consider canonical Brazilian 12/13
+digit identity aliases, and reaction-only Meta webhooks are non-content events.
+`Campaign.sentCount` remains a legacy submitted/accepted counter, not
+delivered/read/final success truth.

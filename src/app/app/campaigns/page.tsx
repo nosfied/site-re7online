@@ -126,6 +126,17 @@ const CSV_GENERIC_FIELDS = Array.from({ length: CSV_GENERIC_FIELD_COUNT }, (_, i
   key: `field${index + 1}` as CsvGenericFieldKey,
   label: `Campo ${index + 1}`,
 }));
+const CSV_PHONE_COLUMN_ALIASES = new Set([
+  "telefone",
+  "phone",
+  "whatsapp",
+  "waid",
+  "wa_id",
+  "numero",
+  "número",
+  "celular",
+  "contato",
+]);
 const STATUS_FILTER_OPTIONS: CampaignStatusFilter[] = [
   "all",
   "draft",
@@ -398,6 +409,20 @@ function parseCsvHeadersForUi(input: string) {
   return headers.filter(Boolean);
 }
 
+function normalizeCsvHeaderForMatch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function detectCsvPhoneColumn(headers: string[]) {
+  return headers.find((header) => CSV_PHONE_COLUMN_ALIASES.has(normalizeCsvHeaderForMatch(header))) ?? "";
+}
+
 function getStatusClasses(status: string) {
   switch (status) {
     case "draft":
@@ -513,7 +538,7 @@ function getCampaignConfidence(campaign: CampaignItem) {
   const deliveredOrRead = (metaSummary?.totalDelivered ?? 0) + (metaSummary?.totalRead ?? 0);
   const sent = metaSummary?.totalSent ?? 0;
   const failed = metaSummary?.totalFailed ?? 0;
-  const hasSuccessfulDeliverySignal = deliveredOrRead > 0 || sent > 0;
+  const hasSuccessfulDeliverySignal = deliveredOrRead > 0;
 
   if (totalRecipients > 0 && failed >= totalRecipients && !hasSuccessfulDeliverySignal) {
     return {
@@ -2066,10 +2091,11 @@ export default function AppCampaignsPage() {
     const text = await file.text();
     if (requestGeneration !== csvRequestGenerationRef.current) return;
     const headers = parseCsvHeadersForUi(text);
+    const detectedPhoneColumn = detectCsvPhoneColumn(headers);
     setCsvText(text);
     setCsvFileName(file.name);
     setCsvHeaders(headers);
-    setCsvPhoneColumn((previous) => (previous && headers.includes(previous) ? previous : headers[0] ?? ""));
+    setCsvPhoneColumn((previous) => (previous && headers.includes(previous) ? previous : detectedPhoneColumn));
     setCsvGenericFieldColumns((previous) =>
       Object.fromEntries(
         CSV_GENERIC_FIELDS.map((field) => [
@@ -2192,6 +2218,14 @@ export default function AppCampaignsPage() {
       });
       if (requestGeneration !== csvRequestGenerationRef.current) return;
       setCsvPreview(preview);
+      const phoneMappingRequired = Boolean(
+        (preview as { csv?: { phoneMappingRequired?: boolean } }).csv?.phoneMappingRequired
+      );
+      if (phoneMappingRequired) {
+        setCsvPreviewError("Selecione qual coluna do arquivo contém o WhatsApp para gerar a prévia.");
+        showToast("warning", "Mapeie a coluna WhatsApp", "O arquivo foi lido. Escolha a coluna de telefone para validar os destinatários.");
+        return;
+      }
       showToast(
         "info",
         "Prévia CSV gerada",

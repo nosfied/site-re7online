@@ -20,7 +20,6 @@ import {
   summarizeCampaignRecipientResolution,
 } from "./campaignRecipientConversationBridge.js";
 import {
-  ensureCampaignOutboundConversation,
   ensureCampaignOutboundCrmAttemptMaterialization,
 } from "./campaignOutboundConversation.js";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
@@ -981,34 +980,18 @@ async function runCampaignInBackground(
               },
             });
           }
-          const conversationOutcome = result.ok
-            ? await ensureCampaignOutboundConversation(prisma, {
-                clientId: params.clientId,
-                clientKey: params.clientKey,
-                waId,
-                waIdCanonical,
-                phoneNumberId,
-                messageId,
-                campaignId: params.campaignId,
-                campaignRunId,
-                templateName: params.templateName,
-                sentAt: deliveredAt,
-                source: "campaign",
-                conversationId: resolvedRecipient.conversationId ?? null,
-                returnDestination: resolvedReturnDestination,
-              })
-            : await ensureCampaignOutboundCrmAttemptMaterialization(prisma, {
-                clientId: params.clientId,
-                waId,
-                waIdCanonical,
-                phoneNumberId,
-                messageId,
-                campaignId: params.campaignId,
-                campaignRunId,
-                templateName: params.templateName,
-                source: "campaign",
-                conversationId: resolvedRecipient.conversationId ?? null,
-              });
+          const conversationOutcome = await ensureCampaignOutboundCrmAttemptMaterialization(prisma, {
+            clientId: params.clientId,
+            waId,
+            waIdCanonical,
+            phoneNumberId,
+            messageId,
+            campaignId: params.campaignId,
+            campaignRunId,
+            templateName: params.templateName,
+            source: "campaign",
+            conversationId: resolvedRecipient.conversationId ?? null,
+          });
           const usagePayload = buildMetaUsageEventPayload({
             outboundMessageId: messageId,
             conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
@@ -1044,7 +1027,9 @@ async function runCampaignInBackground(
               templateName: params.templateName,
               components: components ?? null,
               recipientResolution: resolutionSummary,
-              conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
+              conversationId: null,
+              previousConversationId: resolvedRecipient.conversationId ?? null,
+              deliveryConversationPending: result.ok,
               metaUsage: usagePayload,
               returnDestination: resolvedReturnDestination,
             },
@@ -1089,7 +1074,9 @@ async function runCampaignInBackground(
               status: result.status ?? null,
               errorBody: result.errorBody ?? null,
               components: components ?? null,
-              conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
+              conversationId: null,
+              previousConversationId: resolvedRecipient.conversationId ?? null,
+              deliveryConversationPending: result.ok,
             },
           });
 

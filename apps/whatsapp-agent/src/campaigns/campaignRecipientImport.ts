@@ -421,7 +421,7 @@ export function buildCampaignImportRecipientsFromCsv(params: {
   if (!parsed.ok) return parsed;
   const contactColumn = (params.mapping.contactColumn ?? params.mapping.phoneColumn)?.trim();
   if (!contactColumn || !parsed.headers.includes(contactColumn)) {
-    return { ok: false as const, error: "missing_phone_column" as const, headers: parsed.headers };
+    return { ok: false as const, error: "missing_phone_column" as const, headers: parsed.headers, delimiter: parsed.delimiter };
   }
   const fieldColumns = Object.fromEntries(
     Array.from({ length: CAMPAIGN_IMPORT_GENERIC_FIELD_COUNT }, (_, index) => {

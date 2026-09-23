@@ -386,6 +386,108 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 3000) {
   assert.fail("Timed out waiting for async condition");
 }
 
+async function deliverCampaignOutbound(campaignId: string, position = 1) {
+  const messageId = `campaign.${campaignId}.${position}`;
+  const outbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, messageId },
+    select: { metaMessageId: true, phoneNumberId: true, waId: true },
+  });
+  assert.ok(outbound.metaMessageId);
+  const tenantMeta = await prisma.tenantMetaConfig.findUnique({
+    where: { clientId: businessClientId },
+    select: { phoneNumberId: true },
+  });
+  const phoneNumberId =
+    outbound.phoneNumberId?.trim() ||
+    tenantMeta?.phoneNumberId?.trim() ||
+    process.env.WHATSAPP_PHONE_NUMBER_ID ||
+    "campaign-test-phone";
+  await prisma.waPhoneNumber.upsert({
+    where: { phoneNumberId },
+    update: { clientId: businessClientId },
+    create: { clientId: businessClientId, phoneNumberId, display: "+55 84 0000-0000" },
+  });
+  await prisma.channelAccount.upsert({
+    where: {
+      clientId_provider_channel_channelAccountId: {
+        clientId: businessClientId,
+        provider: "meta_cloud",
+        channel: "whatsapp",
+        channelAccountId: phoneNumberId,
+      },
+    },
+    update: {
+      enabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: true,
+      status: "connected",
+      tokenStatus: "ok",
+    },
+    create: {
+      clientId: businessClientId,
+      channel: "whatsapp",
+      provider: "meta_cloud",
+      channelAccountId: phoneNumberId,
+      enabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: true,
+      status: "connected",
+      tokenStatus: "ok",
+    },
+  });
+  const response = await requestUnauth("POST", "/webhook", {
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: `${prefix}-waba`,
+        changes: [
+          {
+            field: "messages",
+            value: {
+              messaging_product: "whatsapp",
+              metadata: {
+                phone_number_id: phoneNumberId,
+              },
+              statuses: [
+                {
+                  id: outbound.metaMessageId,
+                  recipient_id: outbound.waId,
+                  status: "delivered",
+                  timestamp: String(Math.floor(Date.now() / 1000)),
+                  conversation: {
+                    id: `${prefix}-campaign-delivered-${campaignId}-${position}`,
+                    origin: { type: "utility" },
+                  },
+                  pricing: {
+                    billable: true,
+                    category: "utility",
+                    pricing_model: "CBP",
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  await waitFor(async () => {
+    const updated = await prisma.outboundMessage.findFirst({
+      where: { clientId: businessClientId, messageId },
+      select: { rawPayload: true },
+    });
+    const raw = updated?.rawPayload && typeof updated.rawPayload === "object" && !Array.isArray(updated.rawPayload)
+      ? updated.rawPayload as Record<string, unknown>
+      : {};
+    const metaStatus = raw.metaStatus && typeof raw.metaStatus === "object" && !Array.isArray(raw.metaStatus)
+      ? raw.metaStatus as Record<string, unknown>
+      : {};
+    return metaStatus.lastStatus === "delivered";
+  });
+  return outbound;
+}
+
 async function seedHybridRuntimeState(
   state: Pick<
     ConversationState,
@@ -7245,7 +7347,7 @@ test("meta status webhook creates one active message billing event on delivered 
       createdAt: new Date("2026-09-03T10:00:00.000Z"),
     },
   });
-  const statusPayload = (status: "delivered" | "read") => ({
+  const statusPayload = (status: "sent" | "delivered" | "read") => ({
     object: "whatsapp_business_account",
     entry: [
       {
@@ -7278,6 +7380,30 @@ test("meta status webhook creates one active message billing event on delivered 
     ],
   });
 
+  const sent = await fetch(`${baseUrl}/webhook`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(statusPayload("sent")),
+  });
+  assert.equal(sent.status, 200);
+  assert.equal(
+    await waitForEventually(async () => {
+      const message = await prisma.outboundMessage.findUnique({
+        where: { clientId_messageId: { clientId: businessClientId, messageId: `${prefix}.active.webhook.message.1` } },
+        select: { rawPayload: true },
+      });
+      const raw = message?.rawPayload && typeof message.rawPayload === "object" && !Array.isArray(message.rawPayload)
+        ? message.rawPayload as Record<string, unknown>
+        : {};
+      const metaStatus = raw.metaStatus && typeof raw.metaStatus === "object" && !Array.isArray(raw.metaStatus)
+        ? raw.metaStatus as Record<string, unknown>
+        : {};
+      return metaStatus.lastStatus === "sent" && raw.conversationId === null;
+    }),
+    true
+  );
+  assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId } }), 0);
+
   const delivered = await fetch(`${baseUrl}/webhook`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -7293,7 +7419,15 @@ test("meta status webhook creates one active message billing event on delivered 
           requestId: `billing:active_message:delivered:${businessClientId}:whatsapp:meta_cloud:${metaMessageId}`,
         },
       });
-      return count === 1;
+      const message = await prisma.outboundMessage.findUnique({
+        where: { clientId_messageId: { clientId: businessClientId, messageId: `${prefix}.active.webhook.message.1` } },
+        select: { rawPayload: true },
+      });
+      const raw = message?.rawPayload && typeof message.rawPayload === "object" && !Array.isArray(message.rawPayload)
+        ? message.rawPayload as Record<string, unknown>
+        : {};
+      const runtimeCount = await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId } });
+      return count === 1 && typeof raw.conversationId === "string" && runtimeCount === 1;
     }),
     true
   );
@@ -13766,6 +13900,8 @@ test("campaign send resolves safe ninth digit variant to existing conversation",
   assert.equal(resolution?.inputLast4, "9614");
   assert.equal(JSON.stringify(resolution).includes(inputWaId), false);
 
+  await deliverCampaignOutbound(response.body.campaign.id);
+
   const updatedConversation = await prisma.conversation.findUniqueOrThrow({
     where: { id: conversation.id },
     select: { lastOutboundAt: true },
@@ -13874,6 +14010,14 @@ test("campaign send reactivates soft-deleted non-anonymized conversation", async
     }
   );
   assert.equal(response.status, 200);
+
+  await waitFor(async () => {
+    const count = await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${response.body.campaign.id}.` } },
+    });
+    return count === 1;
+  });
+  await deliverCampaignOutbound(response.body.campaign.id);
 
   await waitFor(async () => {
     const event = await prisma.event.findFirst({
@@ -14069,11 +14213,18 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
   assert.equal(response.status, 200);
 
   await waitFor(async () => {
+    const count = await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${response.body.campaign.id}.` } },
+    });
+    return count === 1;
+  });
+  await deliverCampaignOutbound(response.body.campaign.id);
+
+  await waitFor(async () => {
     const event = await prisma.event.findFirst({
       where: {
         clientId: businessClientId,
-        eventName: "campaign.message.sent",
-        messageId: `campaign.${response.body.campaign.id}.1`,
+        eventName: "campaign.recipient.conversation_created",
         conversationId: { not: null },
       },
       select: { id: true },

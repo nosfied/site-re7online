@@ -986,6 +986,7 @@ export type AppCampaignImportPreview = {
     delimiter: string;
     maxRows?: number;
     maxBytes?: number;
+    phoneMappingRequired?: boolean;
   };
 };
 
