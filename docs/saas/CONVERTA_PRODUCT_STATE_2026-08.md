@@ -94,6 +94,20 @@ bloqueados preserva `no_eligible_recipients`. `Situacao no CRM` nao e bloqueio
 de envio por si so. A hidratacao atual usa detalhe CRM por `leadId` selecionado;
 nao ha endpoint batch por `leadIds` para essa tela nesta etapa.
 
+Correcao pontual pos-revisao `be4f2d51`, 2026-09-24: a hidratacao da previa de
+reuso abre a composicao imediatamente, mostra carregamento explicito, usa
+concorrencia limitada para os detalhes CRM e bloqueia uso da previa enquanto a
+hidratacao esta incompleta. Erros 404, 401/403 e rede/consulta sao rotulados de
+forma distinta e permanecem inelegiveis; "Sem situacao" fica restrito a consulta
+bem-sucedida sem Situacao CRM cadastrada. Respostas obsoletas apos cancelamento,
+reset ou outro reaproveitamento nao podem alterar aba, painel, modal, toast ou
+previa. Status: LOCAL FIX PREPARED / NOT DEPLOYED / OWNER UI PENDING.
+Validacao comportamental local: `campaignReusePreview.test.ts` 6/6 PASS com CRM
+simulado para sucesso sem Situacao, 404/auth/rede, reuso A seguido de B,
+cancelamento/reset durante carregamento, limite de 4 consultas simultaneas e
+preservacao da selecao/bloqueio atual; contrato da pagina 25/25 PASS; frontend
+build PASS.
+
 Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
 counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
 VALIDATED / OWNER UI PENDING no head

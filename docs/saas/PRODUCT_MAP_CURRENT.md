@@ -656,6 +656,16 @@ participacao; audiencia mista preserva envio aos elegiveis e todos bloqueados
 preserva zero-eligible. `Situacao no CRM` continua informativa, nao bloqueio.
 Limitacao mantida: filtros estaticos historicos ausentes do seed nao sao
 inferidos, e a hidratacao da UI usa leitura de detalhe por `leadId` selecionado.
+Follow-up de revisao `be4f2d51`: a leitura por contato agora tem concorrencia
+limitada, loading explicito antes da previa final e protecao completa contra
+respostas obsoletas apos cancelamento/reset/outro reuso. Falha 404, auth/403 e
+rede/consulta ficam inelegiveis com rotulos proprios; "Sem situacao" aparece
+somente quando a consulta CRM atual foi bem-sucedida e o contato realmente nao
+tem situacao cadastrada. Status: LOCAL FIX PREPARED / NOT DEPLOYED / OWNER UI
+PENDING.
+Validacao comportamental local concluida: helper de hidratacao 6/6 PASS,
+contrato da pagina de campanhas 25/25 PASS e frontend build PASS; nenhuma
+producao, provider real, envio real, schema ou migration.
 
 CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
 PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was

@@ -40,6 +40,11 @@ import {
   sendAppCampaignDraft,
   sendAppCampaignTest,
 } from "@/lib/appClientApi";
+import {
+  buildHydratedCampaignReusePreview,
+  CampaignReusePreviewState,
+  getAudienceCrmStatusDisplay,
+} from "@/lib/campaignReusePreview";
 import { getCampaignStatusUxLabel, getMetaTemplateCategoryUxLabel } from "@/lib/appUxLabels";
 import { isCampaignComposerDirty } from "@/lib/campaignComposerLifecycle";
 import { CampaignItem, formatDateTime, normalizeWaIdList } from "@/lib/whatsappAdminApi";
@@ -696,6 +701,7 @@ export default function AppCampaignsPage() {
   const [audiencePage, setAudiencePage] = useState(1);
   const [loadingAudiencePreview, setLoadingAudiencePreview] = useState(false);
   const [audiencePreviewError, setAudiencePreviewError] = useState<string | null>(null);
+  const [campaignReusePreviewState, setCampaignReusePreviewState] = useState<CampaignReusePreviewState>("idle");
   const [csvText, setCsvText] = useState("");
   const [csvFileName, setCsvFileName] = useState("");
   const [csvInputKey, setCsvInputKey] = useState(0);
@@ -1298,6 +1304,7 @@ export default function AppCampaignsPage() {
     setAudiencePage(1);
     setLoadingAudiencePreview(false);
     setAudiencePreviewError(null);
+    setCampaignReusePreviewState("idle");
     setCsvText("");
     setCsvFileName("");
     setCsvHeaders([]);
@@ -1820,6 +1827,7 @@ export default function AppCampaignsPage() {
       const requestGeneration = audienceRequestGenerationRef.current;
       setLoadingAudiencePreview(true);
       setAudiencePreviewError(null);
+      setCampaignReusePreviewState("idle");
       try {
         const dynamicPreview = audienceRecipientMode === "DYNAMIC_CRM_FILTER";
         const response = await fetchAppCampaignAudiencePreview(session, {
@@ -1872,6 +1880,7 @@ export default function AppCampaignsPage() {
     setAudiencePreview(null);
     setAudiencePreviewError(null);
     setLoadingAudiencePreview(false);
+    setCampaignReusePreviewState("idle");
     setToast(null);
     setForm((prev) => ({
       ...prev,
@@ -2056,119 +2065,15 @@ export default function AppCampaignsPage() {
     activeSession: AppSession,
     campaign: CampaignItem,
     generation: number
-  ): Promise<AppCampaignAudiencePreviewResponse | null> => {
-    const leadIds = campaign.draftSeed?.leadIds ?? [];
-    if (leadIds.length === 0) return null;
-    const itemsByLeadId = new Map<string, AppCampaignAudiencePreviewItem>();
-    const blockedByReason = new Map<string, { reason: AppCampaignAudiencePreviewItem["blockedReason"]; label: string; count: number }>();
-    for (const leadId of leadIds) {
-      if (audienceRequestGenerationRef.current !== generation) return null;
-      try {
-        const detail = await fetchAppCrmContactDetail(activeSession, leadId);
-        const item = detail.item;
-        const blockedReason = resolveAudienceBlockedReasonFromCrmContact(item);
-        const blockedReasonLabel = getAudienceBlockedReasonLabel(blockedReason);
-        if (blockedReason && blockedReasonLabel) {
-          const current = blockedByReason.get(blockedReason);
-          blockedByReason.set(blockedReason, {
-            reason: blockedReason,
-            label: blockedReasonLabel,
-            count: (current?.count ?? 0) + 1,
-          });
-        }
-        itemsByLeadId.set(leadId, {
-          leadId: item.leadId,
-          contactId: item.contactId,
-          displayName: item.displayName,
-          companyName: item.companyName,
-          city: item.city,
-          crmStatus: item.crmStatus,
-          crmStatusLabel: item.crmStatusLabel,
-          channel: item.channel,
-          phoneDisplay: item.phoneDisplay,
-          identifierDisplay: item.identifierDisplay,
-          activeOptOut: item.activeOptOut,
-          isAnonymized: item.isAnonymized,
-          hasValidWhatsappIdentity: item.hasValidWhatsappIdentity,
-          lastConversationIdentity: item.lastConversationIdentity,
-          lastProtocol: item.lastProtocol,
-          importedSource: item.importedSource,
-          updatedAt: item.updatedAt,
-          eligible: !blockedReason,
-          blockedReason,
-          blockedReasonLabel,
-        });
-      } catch {
-        const current = blockedByReason.get("missing_contact");
-        blockedByReason.set("missing_contact", {
-          reason: "missing_contact",
-          label: "Contato atual não localizado",
-          count: (current?.count ?? 0) + 1,
-        });
-        itemsByLeadId.set(leadId, {
-          leadId,
-          contactId: null,
-          displayName: null,
-          companyName: null,
-          city: null,
-          crmStatus: "",
-          crmStatusLabel: "",
-          channel: "whatsapp",
-          phoneDisplay: campaign.draftSeed?.recipients?.[leadIds.indexOf(leadId)] ?? leadId,
-          identifierDisplay: campaign.draftSeed?.recipients?.[leadIds.indexOf(leadId)] ?? leadId,
-          activeOptOut: false,
-          isAnonymized: false,
-          hasValidWhatsappIdentity: false,
-          lastConversationIdentity: null,
-          lastProtocol: null,
-          importedSource: `Reuso da campanha ${campaign.name || campaign.id}`,
-          updatedAt: campaign.updatedAt,
-          eligible: false,
-          blockedReason: "missing_contact",
-          blockedReasonLabel: "Contato atual não localizado",
-        });
-      }
-    }
-    const items = leadIds.map((leadId) => itemsByLeadId.get(leadId)).filter((item): item is AppCampaignAudiencePreviewItem => Boolean(item));
-    const eligible = items.filter((item) => item.eligible).length;
-    return {
-      ok: true,
-      filters: {
-        q: "",
-        status: null,
-        channel: "whatsapp",
-        hasConversation: null,
-        optOut: null,
-        updatedFrom: null,
-        updatedTo: null,
-        onlyWhatsappEligible: null,
-        excludeOptOut: null,
-        crmStatus: campaign.draftSeed?.dynamicFilter?.crmBusinessStatusId ?? null,
-        city: null,
-        importedSource: "campaign-reuse",
-      },
-      summary: {
-        total: items.length,
-        analyzed: items.length,
-        eligible,
-        blocked: items.length - eligible,
-        truncated: false,
-        blockedByReason: Array.from(blockedByReason.values()).filter(
-          (item): item is { reason: NonNullable<AppCampaignAudiencePreviewItem["blockedReason"]>; label: string; count: number } =>
-            Boolean(item.reason)
-        ),
-      },
-      items,
-      pagination: {
-        page: 1,
-        limit: items.length,
-        total: items.length,
-        totalPages: 1,
-        hasNextPage: false,
-        hasPreviousPage: false,
-      },
-      generatedAt: new Date().toISOString(),
-    };
+  ): Promise<{ preview: AppCampaignAudiencePreviewResponse; state: Extract<CampaignReusePreviewState, "ready" | "partial"> } | null> => {
+    return buildHydratedCampaignReusePreview({
+      campaign,
+      generation,
+      isCurrentGeneration: (candidate) => audienceRequestGenerationRef.current === candidate,
+      fetchContactDetail: async (leadId) => (await fetchAppCrmContactDetail(activeSession, leadId)).item,
+      resolveBlockedReason: resolveAudienceBlockedReasonFromCrmContact,
+      getBlockedReasonLabel: getAudienceBlockedReasonLabel,
+    });
   };
 
   const applyCampaignReuse = async (
@@ -2198,6 +2103,7 @@ export default function AppCampaignsPage() {
     const reuseGeneration = audienceRequestGenerationRef.current;
     setAudiencePreview(null);
     setAudiencePreviewError(null);
+    setCampaignReusePreviewState("idle");
     setAudiencePage(1);
     setForm({
       ...EMPTY_FORM,
@@ -2211,6 +2117,9 @@ export default function AppCampaignsPage() {
       returnDepartmentId: returnDestination?.type === "human_department" ? returnDestination.departmentId ?? "" : "",
       returnFlowId: returnDestination?.type === "automated_flow" ? returnDestination.flowId ?? "" : "",
     });
+    setActiveTab("create");
+    setExpandedCreationPanel(reuseState.mode === "csv" ? "csv" : reuseState.mode === "manual" ? "manual" : "audience");
+    setDetailModalOpen(false);
     if (reuseState.mode === "crm_dynamic" && draftSeed?.dynamicFilter?.crmBusinessStatusId) {
       setAudienceRecipientMode("DYNAMIC_CRM_FILTER");
       setAudienceFilters({
@@ -2229,13 +2138,17 @@ export default function AppCampaignsPage() {
           setAudiencePreview(preview);
         } else if (session) {
           setLoadingAudiencePreview(true);
+          setCampaignReusePreviewState("loading");
           try {
-            const preview = await buildHydratedAudiencePreviewFromDraftSeed(session, campaign, reuseGeneration);
-            if (audienceRequestGenerationRef.current === reuseGeneration && preview) setAudiencePreview(preview);
+            const result = await buildHydratedAudiencePreviewFromDraftSeed(session, campaign, reuseGeneration);
+            if (audienceRequestGenerationRef.current !== reuseGeneration || !result) return;
+            setAudiencePreview(result.preview);
+            setCampaignReusePreviewState(result.state);
           } catch {
             if (audienceRequestGenerationRef.current === reuseGeneration) {
               const fallbackPreview = buildAudiencePreviewFromDraftSeed(campaign);
               if (fallbackPreview) setAudiencePreview(fallbackPreview);
+              setCampaignReusePreviewState("failed");
               setAudiencePreviewError(
                 "Não foi possível atualizar os dados atuais dos contatos. A seleção original foi preservada para revisão."
               );
@@ -2246,12 +2159,11 @@ export default function AppCampaignsPage() {
         } else {
           const preview = buildAudiencePreviewFromDraftSeed(campaign);
           if (preview) setAudiencePreview(preview);
+          setCampaignReusePreviewState("failed");
         }
       }
     }
-    setActiveTab("create");
-    setExpandedCreationPanel(reuseState.mode === "csv" ? "csv" : reuseState.mode === "manual" ? "manual" : "audience");
-    setDetailModalOpen(false);
+    if (audienceRequestGenerationRef.current !== reuseGeneration) return;
     if (replayForm.templateName && !matchedTemplate) {
       showToast(
         "warning",
@@ -2307,6 +2219,12 @@ export default function AppCampaignsPage() {
 
   const handleCreateDraftFromAudience = async () => {
     if (!session || !audiencePreview) return;
+    if (campaignReusePreviewState === "loading") {
+      const message = "Aguarde a atualização da prévia antes de criar o rascunho.";
+      setAudiencePreviewError(message);
+      showToast("warning", "Prévia em atualização", message);
+      return;
+    }
     const selectedLeadIds = audienceEligibleItems.map((item) => item.leadId);
     const name = form.name.trim() || defaultDraftName;
     const templateId = form.templateId.trim();
@@ -3180,6 +3098,12 @@ export default function AppCampaignsPage() {
             </p>
           ) : null}
 
+          {campaignReusePreviewState === "loading" ? (
+            <p className="rounded-md border border-cyan-300/25 bg-cyan-950/25 p-3 text-sm text-cyan-50">
+              Atualizando dados atuais dos contatos selecionados...
+            </p>
+          ) : null}
+
           {audiencePreview ? (
             <div className="grid gap-3">
               <div className="grid gap-2 sm:grid-cols-2">
@@ -3221,6 +3145,7 @@ export default function AppCampaignsPage() {
                     type="button"
                     disabled={
                       creatingDraft ||
+                      campaignReusePreviewState === "loading" ||
                       (audienceRecipientMode === "STATIC_RECIPIENTS" && audienceEligibleItems.length === 0) ||
                       (audienceRecipientMode === "DYNAMIC_CRM_FILTER" && (!audienceFilters.status || !scheduleInput)) ||
                       !form.templateId ||
@@ -3275,7 +3200,7 @@ export default function AppCampaignsPage() {
                         </td>
                         <td className="px-3 py-2">
                           <span className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-xs text-white/80">
-                            {item.crmStatusLabel || item.crmStatus || "Sem situação"}
+                            {getAudienceCrmStatusDisplay(item)}
                           </span>
                         </td>
                         <td className="px-3 py-2">{item.channel || "whatsapp"}</td>

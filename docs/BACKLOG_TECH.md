@@ -1925,6 +1925,18 @@ OWNER UI PENDING.
   the zero-eligible contract. CRM `Situacao` remains descriptive only and is
   not treated as a send block by itself. Current frontend hydration uses exact
   per-lead CRM detail reads because no batch-by-leadIds endpoint exists yet.
+- Review follow-up for commit `be4f2d51`, 2026-09-24: reuse hydration now
+  distinguishes missing contact, auth/permission and network/query failures in
+  the preview instead of labeling every failure as "Sem situação"; stale
+  hydration responses cannot change the composer after cancel/reset/another
+  reuse; the composer opens immediately with explicit loading and limited
+  concurrency while the current CRM data is refreshed. Status remains NOT
+  DEPLOYED / OWNER UI PENDING.
+- Behavioral validation: `campaignReusePreview.test.ts` 6/6 PASS covers
+  successful current CRM detail without Situation, 404 vs auth vs network
+  failure, late response after another reuse, late response after cancel/reset,
+  selected order/current block preservation and max four concurrent CRM detail
+  reads. `campaignsPageContract.test.ts` 25/25 PASS and frontend build PASS.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 

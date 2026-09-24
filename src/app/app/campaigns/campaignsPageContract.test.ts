@@ -7,6 +7,7 @@ const pageSource = fs.readFileSync(path.join(process.cwd(), "src/app/app/campaig
 const inboxSource = fs.readFileSync(path.join(process.cwd(), "src/app/app/inbox/page.tsx"), "utf8");
 const appShellSource = fs.readFileSync(path.join(process.cwd(), "src/components/app/AppShell.tsx"), "utf8");
 const campaignDraftsSource = fs.readFileSync(path.join(process.cwd(), "src/lib/campaignDrafts.ts"), "utf8");
+const campaignReusePreviewSource = fs.readFileSync(path.join(process.cwd(), "src/lib/campaignReusePreview.ts"), "utf8");
 
 test("campaign center exposes persisted lifecycle tabs", () => {
   assert.ok(pageSource.includes('{ id: "sending", label: "Enviando" }'));
@@ -145,13 +146,28 @@ test("campaign result filtered actions only operate on the visible result set", 
 
 test("campaign reuse hydrates static preview from current CRM contacts without expanding selection", () => {
   assert.ok(pageSource.includes("buildHydratedAudiencePreviewFromDraftSeed"));
-  assert.ok(pageSource.includes("fetchAppCrmContactDetail(activeSession, leadId)"));
-  assert.ok(pageSource.includes("leadIds.map((leadId) => itemsByLeadId.get(leadId))"));
-  assert.ok(pageSource.includes("resolveAudienceBlockedReasonFromCrmContact(item)"));
-  assert.ok(pageSource.includes('blockedReason: "missing_contact"'));
+  assert.ok(pageSource.includes("buildHydratedCampaignReusePreview({"));
+  assert.ok(pageSource.includes("fetchContactDetail: async (leadId) => (await fetchAppCrmContactDetail(activeSession, leadId)).item"));
+  assert.ok(pageSource.includes("resolveBlockedReason: resolveAudienceBlockedReasonFromCrmContact"));
+  assert.ok(campaignReusePreviewSource.includes("CAMPAIGN_REUSE_PREVIEW_CONCURRENCY = 4"));
+  assert.ok(campaignReusePreviewSource.includes("mapWithConcurrency(leadIds, CAMPAIGN_REUSE_PREVIEW_CONCURRENCY"));
+  assert.ok(campaignReusePreviewSource.includes("leadIds.map((leadId) => itemsByLeadId.get(leadId))"));
+  assert.ok(campaignReusePreviewSource.includes("blockedReason: copy.reason"));
+  assert.ok(campaignReusePreviewSource.includes('case "not_found":'));
+  assert.ok(campaignReusePreviewSource.includes('case "unauthorized":'));
+  assert.ok(campaignReusePreviewSource.includes('case "network":'));
+  assert.ok(pageSource.includes("getAudienceCrmStatusDisplay(item)"));
+  assert.ok(campaignReusePreviewSource.includes('if (item.crmStatusLabel || item.crmStatus) return item.crmStatusLabel || item.crmStatus;'));
+  assert.ok(campaignReusePreviewSource.includes('return "Sem situação";'));
+  assert.ok(pageSource.includes('Atualizando dados atuais dos contatos selecionados...'));
+  assert.ok(pageSource.includes('campaignReusePreviewState === "loading"'));
+  assert.ok(pageSource.includes('if (campaignReusePreviewState === "loading")'));
   assert.ok(pageSource.includes('"Não foi possível atualizar os dados atuais dos contatos. A seleção original foi preservada para revisão."'));
-  assert.ok(pageSource.includes('item.crmStatusLabel || item.crmStatus || "Sem situação"'));
+  assert.ok(pageSource.includes('if (audienceRequestGenerationRef.current !== reuseGeneration || !result) return;'));
+  assert.ok(pageSource.includes('if (audienceRequestGenerationRef.current !== reuseGeneration) return;'));
+  assert.ok(pageSource.includes('setCampaignReusePreviewState("idle")'));
   assert.ok(!pageSource.includes('crmStatus: "",\n      crmStatusLabel: "",\n      channel: "whatsapp",\n      phoneDisplay: recipients[index] ?? leadId,\n      identifierDisplay: recipients[index] ?? leadId,\n      activeOptOut: false,\n      isAnonymized: false,\n      hasValidWhatsappIdentity: true,\n      lastConversationIdentity: null,\n      lastProtocol: null,\n      importedSource: `Reuso da campanha ${campaign.name || campaign.id}`,\n      updatedAt: campaign.updatedAt,\n      eligible: true'));
+  assert.ok(!pageSource.includes('item.crmStatusLabel || item.crmStatus || "Sem situação"'));
 });
 
 test("campaign reuse toast and shared composer controls keep owner-visible polish", () => {

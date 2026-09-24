@@ -858,6 +858,18 @@ Situation is descriptive and not treated as an active-send block. Static
 filters not stored in `draftSeed` remain unrecoverable; the current UI
 hydration uses exact CRM detail reads per persisted `leadId`.
 
+Review follow-up for `be4f2d51`, 2026-09-24: reuse preview hydration now opens
+the composer immediately with an explicit loading state, limits concurrent CRM
+detail reads and prevents incomplete previews from being used. Missing contact,
+permission/session and network/query failures remain ineligible with distinct
+labels; "Sem situacao" is reserved for successful CRM detail reads without a
+stored CRM Situation. Stale responses after cancel/reset/another reuse cannot
+change the composer, modal, preview or toast. Status remains LOCAL FIX PREPARED
+/ NOT DEPLOYED / OWNER UI PENDING.
+Local behavioral tests passed: `campaignReusePreview.test.ts` 6/6,
+`campaignsPageContract.test.ts` 25/25 and frontend build PASS. No production
+access, provider call, real send, schema change or migration was performed.
+
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING /
