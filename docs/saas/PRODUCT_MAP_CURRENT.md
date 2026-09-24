@@ -642,6 +642,20 @@ authenticated identifiers shown. Draft/discarded/never-sent campaigns remain
 excluded from contact campaign history. Campaign result filters, CSV mapping
 selects, reuse state restoration and Contacts CSV preview alignment were
 hardened locally without schema, migration, provider call or real send.
+Follow-up local de reuso de campanha, 2026-09-24: a previa reaproveitada de
+audiencia CRM estatica deve atualizar `Situacao no CRM` e elegibilidade a partir
+do read model CRM atual para os `leadIds` persistidos, sem ampliar a audiencia
+por filtros nao persistidos. O filtro dinamico de CRM continua restauravel
+quando `dynamicFilter.crmBusinessStatusId` existe no seed. Status: LOCAL FIX
+PREPARED / NOT DEPLOYED.
+Complemento local de validacao: opt-out/bloqueio posterior a campanha original,
+posterior a previa ou posterior ao agendamento e revalidado antes do provider
+por preflight de rascunho/envio ou pelo runner. O contato bloqueado nao recebe
+novo Outbound, Conversation, RuntimeState, provider call nem historico de nova
+participacao; audiencia mista preserva envio aos elegiveis e todos bloqueados
+preserva zero-eligible. `Situacao no CRM` continua informativa, nao bloqueio.
+Limitacao mantida: filtros estaticos historicos ausentes do seed nao sao
+inferidos, e a hidratacao da UI usa leitura de detalhe por `leadId` selecionado.
 
 CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
 PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was

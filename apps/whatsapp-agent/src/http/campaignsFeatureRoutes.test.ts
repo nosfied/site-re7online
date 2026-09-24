@@ -14241,6 +14241,135 @@ test("campaign draft requires mappings for approved template variables", async (
   assert.equal(campaigns, 0);
 });
 
+test("scheduled campaign execution revalidates opt-out before provider", async (t) => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `scheduled_post_block_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso sem variaveis.",
+    },
+  });
+  const blockedWaId = "5541991189401";
+  const allowedWaId = "5541991189402";
+  const blockedLead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: blockedWaId,
+      waIdCanonical: blockedWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Agendado Bloqueado Depois",
+      phone: blockedWaId,
+      status: "RETORNO_FUTURO",
+    },
+  });
+  const allowedLead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: allowedWaId,
+      waIdCanonical: allowedWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Agendado Permitido",
+      phone: allowedWaId,
+      status: "RETORNO_FUTURO",
+    },
+  });
+  const draft = await request<{
+    ok: true;
+    campaign: { id: string; status: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Agendada com bloqueio posterior",
+    templateId: template.id,
+    selectedLeadIds: [blockedLead.id, allowedLead.id],
+    returnDestination: defaultCampaignReturnDestination(),
+  });
+  assert.equal(draft.status, 200, JSON.stringify(draft.body));
+  assert.equal(draft.body.campaign.totalRecipients, 2);
+  const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const scheduled = await request<{
+    ok: true;
+    campaign: { status: string; scheduledAt: string | null; totalRecipients: number };
+  }>("POST", `/app/campaigns/${draft.body.campaign.id}/schedule`, businessAdmin, { scheduledAt });
+  assert.equal(scheduled.status, 200, JSON.stringify(scheduled.body));
+  assert.equal(scheduled.body.campaign.status, "scheduled");
+  assert.equal(scheduled.body.campaign.totalRecipients, 2);
+
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: blockedWaId,
+    source: "test",
+    reason: "scheduled post-block",
+  });
+  const countsBeforeDue = {
+    blockedOutbound: await prisma.outboundMessage.count({ where: { clientId: businessClientId, waId: blockedWaId } }),
+    blockedConversation: await prisma.conversation.count({ where: { clientId: businessClientId, waId: blockedWaId } }),
+    blockedRuntime: await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId: blockedWaId } }),
+  };
+  const originalFetch = globalThis.fetch;
+  const metaRecipients: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      const payload = JSON.parse(String(init?.body ?? "{}")) as { to?: string };
+      if (payload.to) metaRecipients.push(payload.to);
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.scheduled.${metaRecipients.length + 1}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const { processDueScheduledCampaigns } = await import("../campaigns/campaignRunner.js");
+  const due = await processDueScheduledCampaigns({ now: new Date(Date.now() + 2 * 60 * 60 * 1000), limit: 5 });
+  assert.equal(due.claimed, 1);
+  await waitFor(async () => {
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: draft.body.campaign.id },
+      select: { status: true, sentCount: true, blockedCount: true },
+    });
+    return campaign?.status === "completed" && campaign.sentCount === 1 && campaign.blockedCount === 1;
+  });
+  assert.deepEqual(metaRecipients, [allowedWaId]);
+  assert.equal(
+    await prisma.outboundMessage.count({ where: { clientId: businessClientId, waId: blockedWaId } }),
+    countsBeforeDue.blockedOutbound
+  );
+  assert.equal(
+    await prisma.conversation.count({ where: { clientId: businessClientId, waId: blockedWaId } }),
+    countsBeforeDue.blockedConversation
+  );
+  assert.equal(
+    await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId: blockedWaId } }),
+    countsBeforeDue.blockedRuntime
+  );
+  assert.equal(
+    await prisma.event.count({
+      where: {
+        clientId: businessClientId,
+        messageId: draft.body.campaign.id,
+        eventName: "campaign.recipient.opt_out_blocked",
+      },
+    }),
+    1
+  );
+  const blockedHistory = await request<{
+    campaignRelationshipHistory: { items: Array<{ campaignId: string }> };
+  }>("GET", `/app/crm/contacts/${encodeURIComponent(blockedLead.id)}`, businessAdmin);
+  assert.equal(blockedHistory.status, 200, JSON.stringify(blockedHistory.body));
+  assert.equal(
+    blockedHistory.body.campaignRelationshipHistory.items.some((item) => item.campaignId === draft.body.campaign.id),
+    false
+  );
+});
+
 test("campaign draft explicit send blocks locally disabled template without sending", async () => {
   const template = await prisma.template.create({
     data: {
@@ -15442,6 +15571,170 @@ test("campaign recipient bridge does not cross tenants and skips ambiguous match
     assert.equal(JSON.stringify(payload).includes(otherTenantWaId), false);
     assert.equal(JSON.stringify(payload).includes(ambiguousInput), false);
   }
+});
+
+test("campaign reuse candidates blocked after original participation cannot be sent again", async (t) => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `reuse_post_block_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso sem variaveis.",
+    },
+  });
+  const originalWaId = "5511949806683";
+  const aliasWaId = "551149806683";
+  const stalePreviewWaId = "5541991189302";
+  const originalLead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: originalWaId,
+      waIdCanonical: originalWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Reuse Original Participante",
+      phone: originalWaId,
+      status: "RETORNO_FUTURO",
+    },
+  });
+  const stalePreviewLead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: stalePreviewWaId,
+      waIdCanonical: stalePreviewWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Reuse Preview Stale",
+      phone: stalePreviewWaId,
+      status: "RETORNO_FUTURO",
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  const metaRecipients: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      const payload = JSON.parse(String(init?.body ?? "{}")) as { to?: string };
+      if (payload.to) metaRecipients.push(payload.to);
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.reuse.${metaRecipients.length + 1}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const originalDraft = await request<{
+    ok: true;
+    campaign: { id: string; status: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Campanha original para reuso bloqueado",
+    templateId: template.id,
+    selectedLeadIds: [originalLead.id],
+    returnDestination: defaultCampaignReturnDestination(),
+  });
+  assert.equal(originalDraft.status, 200, JSON.stringify(originalDraft.body));
+  const originalSend = await request<{ ok: true; campaign: { status: string } }>(
+    "POST",
+    `/app/campaigns/${originalDraft.body.campaign.id}/send`,
+    businessAdmin
+  );
+  assert.equal(originalSend.status, 200, JSON.stringify(originalSend.body));
+  await waitFor(async () => {
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: originalDraft.body.campaign.id },
+      select: { status: true, sentCount: true },
+    });
+    return campaign?.status === "completed" && campaign.sentCount === 1;
+  });
+  assert.deepEqual(metaRecipients, [originalWaId]);
+
+  const originalHistory = await request<{
+    campaignRelationshipHistory: { items: Array<{ campaignId: string; recipientStatus: string }> };
+  }>("GET", `/app/crm/contacts/${encodeURIComponent(originalLead.id)}`, businessAdmin);
+  assert.equal(originalHistory.status, 200, JSON.stringify(originalHistory.body));
+  assert.equal(
+    originalHistory.body.campaignRelationshipHistory.items.some((item) => item.campaignId === originalDraft.body.campaign.id),
+    true
+  );
+
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: aliasWaId,
+    source: "test",
+    reason: "reuse post-block",
+  });
+  const countsBeforeBlockedReuse = {
+    outbound: await prisma.outboundMessage.count({ where: { clientId: businessClientId } }),
+    conversation: await prisma.conversation.count({ where: { clientId: businessClientId } }),
+    runtime: await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId } }),
+    providerCalls: metaRecipients.length,
+  };
+
+  const blockedReuse = await request<ErrorPayload>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Reuso bloqueado depois da original",
+    templateId: template.id,
+    selectedLeadIds: [originalLead.id],
+    returnDestination: defaultCampaignReturnDestination(),
+  });
+  assert.equal(blockedReuse.status, 400, JSON.stringify(blockedReuse.body));
+  assert.equal(getErrorCode(blockedReuse.body), "no_eligible_recipients");
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId: businessClientId } }), countsBeforeBlockedReuse.outbound);
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId } }), countsBeforeBlockedReuse.conversation);
+  assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId } }), countsBeforeBlockedReuse.runtime);
+  assert.equal(metaRecipients.length, countsBeforeBlockedReuse.providerCalls);
+
+  const staleDraft = await request<{
+    ok: true;
+    campaign: { id: string; status: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Rascunho com preview antes do bloqueio",
+    templateId: template.id,
+    selectedLeadIds: [stalePreviewLead.id],
+    returnDestination: defaultCampaignReturnDestination(),
+  });
+  assert.equal(staleDraft.status, 200, JSON.stringify(staleDraft.body));
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: stalePreviewWaId,
+    source: "test",
+    reason: "stale preview block",
+  });
+  const outboundBeforeStaleSend = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+  const staleSend = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${staleDraft.body.campaign.id}/send`,
+    businessAdmin
+  );
+  assert.equal(staleSend.status, 400, JSON.stringify(staleSend.body));
+  assert.equal(getErrorCode(staleSend.body), "no_eligible_recipients");
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId: businessClientId } }), outboundBeforeStaleSend);
+  assert.equal(metaRecipients.length, countsBeforeBlockedReuse.providerCalls);
+  const staleCampaign = await prisma.campaign.findUniqueOrThrow({
+    where: { id: staleDraft.body.campaign.id },
+    select: { status: true, sentCount: true },
+  });
+  assert.equal(staleCampaign.status, "draft");
+  assert.equal(staleCampaign.sentCount, 0);
+
+  const historyAfterBlockedReuse = await request<{
+    campaignRelationshipHistory: { items: Array<{ campaignId: string; recipientStatus: string }> };
+  }>("GET", `/app/crm/contacts/${encodeURIComponent(originalLead.id)}`, businessAdmin);
+  assert.equal(historyAfterBlockedReuse.status, 200, JSON.stringify(historyAfterBlockedReuse.body));
+  assert.equal(
+    historyAfterBlockedReuse.body.campaignRelationshipHistory.items.some((item) => item.campaignId === originalDraft.body.campaign.id),
+    true
+  );
+  assert.equal(
+    historyAfterBlockedReuse.body.campaignRelationshipHistory.items.some((item) => item.campaignId === staleDraft.body.campaign.id),
+    false
+  );
 });
 
 test("campaign draft send blocks mapped recipients without value or fallback", async () => {

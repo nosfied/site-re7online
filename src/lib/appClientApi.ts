@@ -613,6 +613,7 @@ export type AppCampaignAudiencePreviewFilter = AppCrmContactsFilter & {
 
 export type AppCampaignAudienceBlockedReason =
   | "anonymized_contact"
+  | "operationally_excluded_contact"
   | "active_send_blocked"
   | "missing_whatsapp_identity"
   | "non_whatsapp_channel"

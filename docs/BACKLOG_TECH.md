@@ -1905,6 +1905,26 @@ OWNER UI PENDING.
   translate known blocked/result reasons and status labels to PT-BR. Structured
   `no_eligible_recipients` summaries can explain known block reasons such as
   active-send block without exposing backend English strings.
+- Local follow-up, 2026-09-24: campaign reuse preview hydration is being
+  corrected so static CRM reuse preserves the original `draftSeed.leadIds`
+  selection but refreshes each selected contact from the same-tenant CRM read
+  model before showing `Situacao no CRM` and eligibility. Persisted static
+  audience filters are not available in historical seeds, so the UI must not
+  infer filters from recipients or add new contacts. Dynamic CRM reuse can
+  restore the persisted `dynamicFilter.crmBusinessStatusId`. Status:
+  LOCAL FIX PREPARED / NOT DEPLOYED.
+- Local validation complement, 2026-09-24: post-reuse active-send blocking was
+  exercised with simulated providers. A recipient that participated in the
+  original campaign and was later opted out becomes ineligible on reuse without
+  expanding the preserved static `leadIds`; if blocking happens after preview
+  but before send, `sendScopedCampaignDraft` revalidates through
+  `resolveCampaignDraftRecipientsFromLeadIds` and stops with zero additional
+  OutboundMessage, Conversation, RuntimeState or provider call. Scheduled
+  static campaigns are revalidated by `campaignRunner` before provider calls;
+  mixed audiences send only eligible recipients and all-blocked audiences keep
+  the zero-eligible contract. CRM `Situacao` remains descriptive only and is
+  not treated as a send block by itself. Current frontend hydration uses exact
+  per-lead CRM detail reads because no batch-by-leadIds endpoint exists yet.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 

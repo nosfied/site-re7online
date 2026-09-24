@@ -10,6 +10,7 @@ import {
 } from "@/lib/campaignDrafts";
 import {
   AppCampaignAudiencePreviewResponse,
+  AppCampaignAudiencePreviewItem,
   AppCampaignImportReport,
   AppCampaignImportPreview,
   AppCampaignReturnDestination,
@@ -24,6 +25,7 @@ import {
   createAppCampaignDraftFromCsv,
   discardAppCampaignDraft,
   fetchAppCampaignAudiencePreview,
+  fetchAppCrmContactDetail,
   fetchAppCampaignReturnDestinations,
   fetchAppCrmStatuses,
   getAppCampaign,
@@ -581,6 +583,61 @@ function getAudienceEligibilityClasses(eligible: boolean) {
   return eligible
     ? "campaign-panel-success"
     : "campaign-panel-warning";
+}
+
+function getAudienceBlockedReasonLabel(reason: AppCampaignAudiencePreviewItem["blockedReason"]) {
+  switch (reason) {
+    case "anonymized_contact":
+      return "Contato anonimizado";
+    case "operationally_excluded_contact":
+      return "Contato excluído da operação";
+    case "active_send_blocked":
+      return "Envio ativo bloqueado";
+    case "missing_whatsapp_identity":
+      return "Sem WhatsApp válido";
+    case "non_whatsapp_channel":
+      return "Canal não WhatsApp";
+    case "invalid_whatsapp_identity":
+      return "Identidade WhatsApp inválida";
+    case "missing_contact":
+      return "Contato atual não localizado";
+    case "unsupported_channel":
+      return "Canal não suportado";
+    case "unknown":
+      return "Indeterminado";
+    case null:
+    default:
+      return null;
+  }
+}
+
+function resolveAudienceBlockedReasonFromCrmContact(
+  item: Pick<
+    import("@/lib/appClientApi").AppCrmContactItem,
+    | "activeOptOut"
+    | "canStartWhatsappTemplateCandidate"
+    | "channel"
+    | "hasValidWhatsappIdentity"
+    | "isAnonymized"
+    | "isOperationallyExcluded"
+    | "templateSendBlockedReason"
+  >
+): AppCampaignAudiencePreviewItem["blockedReason"] {
+  if (item.isAnonymized) return "anonymized_contact";
+  if (item.isOperationallyExcluded) return "operationally_excluded_contact";
+  if (item.activeOptOut) return "active_send_blocked";
+  if (!item.channel || item.channel.toLowerCase() === "whatsapp") {
+    if (!item.hasValidWhatsappIdentity) {
+      return item.templateSendBlockedReason === "missing_phone"
+        ? "missing_whatsapp_identity"
+        : "invalid_whatsapp_identity";
+    }
+    if (item.templateSendBlockedReason === "unsupported_channel") return "unsupported_channel";
+    if (item.templateSendBlockedReason === "unknown") return "unknown";
+    if (item.canStartWhatsappTemplateCandidate) return null;
+    return "unknown";
+  }
+  return "non_whatsapp_channel";
 }
 
 function getToastClasses(tone: CampaignToastTone) {
@@ -1952,9 +2009,9 @@ export default function AppCampaignsPage() {
       lastProtocol: null,
       importedSource: `Reuso da campanha ${campaign.name || campaign.id}`,
       updatedAt: campaign.updatedAt,
-      eligible: true,
-      blockedReason: null,
-      blockedReasonLabel: null,
+      eligible: false,
+      blockedReason: "missing_contact" as const,
+      blockedReasonLabel: "Contato atual não localizado",
     }));
     return {
       ok: true,
@@ -1975,10 +2032,12 @@ export default function AppCampaignsPage() {
       summary: {
         total: items.length,
         analyzed: items.length,
-        eligible: items.length,
-        blocked: 0,
+        eligible: 0,
+        blocked: items.length,
         truncated: false,
-        blockedByReason: [],
+        blockedByReason: items.length
+          ? [{ reason: "missing_contact" as const, label: "Contato atual não localizado", count: items.length }]
+          : [],
       },
       items,
       pagination: {
@@ -1993,7 +2052,126 @@ export default function AppCampaignsPage() {
     };
   };
 
-  const applyCampaignReuse = (
+  const buildHydratedAudiencePreviewFromDraftSeed = async (
+    activeSession: AppSession,
+    campaign: CampaignItem,
+    generation: number
+  ): Promise<AppCampaignAudiencePreviewResponse | null> => {
+    const leadIds = campaign.draftSeed?.leadIds ?? [];
+    if (leadIds.length === 0) return null;
+    const itemsByLeadId = new Map<string, AppCampaignAudiencePreviewItem>();
+    const blockedByReason = new Map<string, { reason: AppCampaignAudiencePreviewItem["blockedReason"]; label: string; count: number }>();
+    for (const leadId of leadIds) {
+      if (audienceRequestGenerationRef.current !== generation) return null;
+      try {
+        const detail = await fetchAppCrmContactDetail(activeSession, leadId);
+        const item = detail.item;
+        const blockedReason = resolveAudienceBlockedReasonFromCrmContact(item);
+        const blockedReasonLabel = getAudienceBlockedReasonLabel(blockedReason);
+        if (blockedReason && blockedReasonLabel) {
+          const current = blockedByReason.get(blockedReason);
+          blockedByReason.set(blockedReason, {
+            reason: blockedReason,
+            label: blockedReasonLabel,
+            count: (current?.count ?? 0) + 1,
+          });
+        }
+        itemsByLeadId.set(leadId, {
+          leadId: item.leadId,
+          contactId: item.contactId,
+          displayName: item.displayName,
+          companyName: item.companyName,
+          city: item.city,
+          crmStatus: item.crmStatus,
+          crmStatusLabel: item.crmStatusLabel,
+          channel: item.channel,
+          phoneDisplay: item.phoneDisplay,
+          identifierDisplay: item.identifierDisplay,
+          activeOptOut: item.activeOptOut,
+          isAnonymized: item.isAnonymized,
+          hasValidWhatsappIdentity: item.hasValidWhatsappIdentity,
+          lastConversationIdentity: item.lastConversationIdentity,
+          lastProtocol: item.lastProtocol,
+          importedSource: item.importedSource,
+          updatedAt: item.updatedAt,
+          eligible: !blockedReason,
+          blockedReason,
+          blockedReasonLabel,
+        });
+      } catch {
+        const current = blockedByReason.get("missing_contact");
+        blockedByReason.set("missing_contact", {
+          reason: "missing_contact",
+          label: "Contato atual não localizado",
+          count: (current?.count ?? 0) + 1,
+        });
+        itemsByLeadId.set(leadId, {
+          leadId,
+          contactId: null,
+          displayName: null,
+          companyName: null,
+          city: null,
+          crmStatus: "",
+          crmStatusLabel: "",
+          channel: "whatsapp",
+          phoneDisplay: campaign.draftSeed?.recipients?.[leadIds.indexOf(leadId)] ?? leadId,
+          identifierDisplay: campaign.draftSeed?.recipients?.[leadIds.indexOf(leadId)] ?? leadId,
+          activeOptOut: false,
+          isAnonymized: false,
+          hasValidWhatsappIdentity: false,
+          lastConversationIdentity: null,
+          lastProtocol: null,
+          importedSource: `Reuso da campanha ${campaign.name || campaign.id}`,
+          updatedAt: campaign.updatedAt,
+          eligible: false,
+          blockedReason: "missing_contact",
+          blockedReasonLabel: "Contato atual não localizado",
+        });
+      }
+    }
+    const items = leadIds.map((leadId) => itemsByLeadId.get(leadId)).filter((item): item is AppCampaignAudiencePreviewItem => Boolean(item));
+    const eligible = items.filter((item) => item.eligible).length;
+    return {
+      ok: true,
+      filters: {
+        q: "",
+        status: null,
+        channel: "whatsapp",
+        hasConversation: null,
+        optOut: null,
+        updatedFrom: null,
+        updatedTo: null,
+        onlyWhatsappEligible: null,
+        excludeOptOut: null,
+        crmStatus: campaign.draftSeed?.dynamicFilter?.crmBusinessStatusId ?? null,
+        city: null,
+        importedSource: "campaign-reuse",
+      },
+      summary: {
+        total: items.length,
+        analyzed: items.length,
+        eligible,
+        blocked: items.length - eligible,
+        truncated: false,
+        blockedByReason: Array.from(blockedByReason.values()).filter(
+          (item): item is { reason: NonNullable<AppCampaignAudiencePreviewItem["blockedReason"]>; label: string; count: number } =>
+            Boolean(item.reason)
+        ),
+      },
+      items,
+      pagination: {
+        page: 1,
+        limit: items.length,
+        total: items.length,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+      generatedAt: new Date().toISOString(),
+    };
+  };
+
+  const applyCampaignReuse = async (
     campaign: CampaignItem,
     options: { recipientOverride?: { mode: "filtered_results"; recipients: CampaignResultItem[] } } = {}
   ) => {
@@ -2017,6 +2195,7 @@ export default function AppCampaignsPage() {
     const restoredMappings = buildTemplateVariableMappingsFormState(labels, draftSeed?.templateVariableMappings);
     const returnDestination = draftSeed?.returnDestination;
     resetCampaignComposer();
+    const reuseGeneration = audienceRequestGenerationRef.current;
     setAudiencePreview(null);
     setAudiencePreviewError(null);
     setAudiencePage(1);
@@ -2041,14 +2220,33 @@ export default function AppCampaignsPage() {
     } else {
       setAudienceRecipientMode("STATIC_RECIPIENTS");
       if (reuseState.mode === "crm_static") {
-        const preview = options.recipientOverride?.mode === "filtered_results"
-          ? buildAudiencePreviewFromCampaignResults(
-              campaign,
-              options.recipientOverride.recipients as CampaignResultItem[],
-              "campaign-result-filter"
-            )
-          : buildAudiencePreviewFromDraftSeed(campaign);
-        if (preview) setAudiencePreview(preview);
+        if (options.recipientOverride?.mode === "filtered_results") {
+          const preview = buildAudiencePreviewFromCampaignResults(
+            campaign,
+            options.recipientOverride.recipients as CampaignResultItem[],
+            "campaign-result-filter"
+          );
+          setAudiencePreview(preview);
+        } else if (session) {
+          setLoadingAudiencePreview(true);
+          try {
+            const preview = await buildHydratedAudiencePreviewFromDraftSeed(session, campaign, reuseGeneration);
+            if (audienceRequestGenerationRef.current === reuseGeneration && preview) setAudiencePreview(preview);
+          } catch {
+            if (audienceRequestGenerationRef.current === reuseGeneration) {
+              const fallbackPreview = buildAudiencePreviewFromDraftSeed(campaign);
+              if (fallbackPreview) setAudiencePreview(fallbackPreview);
+              setAudiencePreviewError(
+                "Não foi possível atualizar os dados atuais dos contatos. A seleção original foi preservada para revisão."
+              );
+            }
+          } finally {
+            if (audienceRequestGenerationRef.current === reuseGeneration) setLoadingAudiencePreview(false);
+          }
+        } else {
+          const preview = buildAudiencePreviewFromDraftSeed(campaign);
+          if (preview) setAudiencePreview(preview);
+        }
       }
     }
     setActiveTab("create");
@@ -3077,7 +3275,7 @@ export default function AppCampaignsPage() {
                         </td>
                         <td className="px-3 py-2">
                           <span className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-xs text-white/80">
-                            {item.crmStatusLabel || item.crmStatus}
+                            {item.crmStatusLabel || item.crmStatus || "Sem situação"}
                           </span>
                         </td>
                         <td className="px-3 py-2">{item.channel || "whatsapp"}</td>

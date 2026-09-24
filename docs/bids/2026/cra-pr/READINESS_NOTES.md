@@ -840,6 +840,24 @@ requires reloading the source file. Contacts CSV preview header alignment was
 corrected. No production DB mutation, schema change, migration, provider call,
 real send, commit, push or deploy was performed in this local pass.
 
+Local follow-up, 2026-09-24: campaign reuse preview hydration must preserve the
+historical selected `leadIds` while refreshing current same-tenant CRM status
+and eligibility for those contacts. Historical static filters are not claimed
+when absent from `draftSeed`; dynamic CRM status is restorable only when
+persisted as `dynamicFilter.crmBusinessStatusId`. Status: LOCAL FIX PREPARED /
+NOT DEPLOYED.
+
+Local validation complement, 2026-09-24: later opt-out/active-send blocking was
+validated for reuse preview, post-preview send, scheduled execution and mixed
+audiences with simulated providers. Blocked recipients produce zero new
+provider call, OutboundMessage, Conversation or RuntimeState for the reused
+campaign and do not gain new contact campaign-history participation, while the
+original campaign history remains intact. Mixed audiences still send eligible
+recipients; all-blocked audiences keep the zero-eligible contract. CRM
+Situation is descriptive and not treated as an active-send block. Static
+filters not stored in `draftSeed` remain unrecoverable; the current UI
+hydration uses exact CRM detail reads per persisted `leadId`.
+
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING /

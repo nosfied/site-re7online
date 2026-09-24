@@ -143,6 +143,17 @@ test("campaign result filtered actions only operate on the visible result set", 
   assert.ok(pageSource.includes('setActiveTab("create")'));
 });
 
+test("campaign reuse hydrates static preview from current CRM contacts without expanding selection", () => {
+  assert.ok(pageSource.includes("buildHydratedAudiencePreviewFromDraftSeed"));
+  assert.ok(pageSource.includes("fetchAppCrmContactDetail(activeSession, leadId)"));
+  assert.ok(pageSource.includes("leadIds.map((leadId) => itemsByLeadId.get(leadId))"));
+  assert.ok(pageSource.includes("resolveAudienceBlockedReasonFromCrmContact(item)"));
+  assert.ok(pageSource.includes('blockedReason: "missing_contact"'));
+  assert.ok(pageSource.includes('"Não foi possível atualizar os dados atuais dos contatos. A seleção original foi preservada para revisão."'));
+  assert.ok(pageSource.includes('item.crmStatusLabel || item.crmStatus || "Sem situação"'));
+  assert.ok(!pageSource.includes('crmStatus: "",\n      crmStatusLabel: "",\n      channel: "whatsapp",\n      phoneDisplay: recipients[index] ?? leadId,\n      identifierDisplay: recipients[index] ?? leadId,\n      activeOptOut: false,\n      isAnonymized: false,\n      hasValidWhatsappIdentity: true,\n      lastConversationIdentity: null,\n      lastProtocol: null,\n      importedSource: `Reuso da campanha ${campaign.name || campaign.id}`,\n      updatedAt: campaign.updatedAt,\n      eligible: true'));
+});
+
 test("campaign reuse toast and shared composer controls keep owner-visible polish", () => {
   assert.ok(pageSource.includes('type CampaignToastTone = "success" | "warning" | "error" | "info" | "reuse"'));
   assert.ok(pageSource.includes('case "reuse":'));

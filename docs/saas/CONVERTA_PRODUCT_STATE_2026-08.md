@@ -74,6 +74,26 @@ codigo de erro antes de mensagem bruta, mantendo `template_variables_required`
 separado de `no_eligible_recipients` e traduzindo motivos conhecidos para
 PT-BR.
 
+Complemento local de 2026-09-24: a previa de reuso para audiencia CRM estatica
+deve hidratar os contatos atuais pelos `leadIds` persistidos antes de exibir
+`Situacao no CRM` e elegibilidade, preservando a selecao original sem reconstruir
+por filtros. Quando filtros estaticos antigos nao foram armazenados no seed,
+eles nao devem ser inferidos a partir dos destinatarios; somente filtros
+dinamicos persistidos sao restauraveis. Status: LOCAL FIX PREPARED / NOT
+DEPLOYED.
+
+Validacao local complementar de 2026-09-24: bloqueio posterior ao reuso foi
+testado com provider simulado. Destinatario que participou da campanha original
+e depois recebeu opt-out fica inelegivel no reaproveitamento sem ampliar a
+selecao; bloqueio aplicado apos a previa e antes do envio e bloqueio aplicado
+apos agendamento sao revalidados antes do provider. O destinatario bloqueado
+fica com provider calls 0, novos Outbound/Conversation/Runtime 0 e sem nova
+participacao no historico da campanha reaproveitada; a campanha original
+permanece preservada. Audiencia mista envia somente elegiveis, e todos
+bloqueados preserva `no_eligible_recipients`. `Situacao no CRM` nao e bloqueio
+de envio por si so. A hidratacao atual usa detalhe CRM por `leadId` selecionado;
+nao ha endpoint batch por `leadIds` para essa tela nesta etapa.
+
 Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
 counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
 VALIDATED / OWNER UI PENDING no head
