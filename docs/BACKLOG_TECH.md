@@ -1952,6 +1952,11 @@ Status: LOCAL FIX PREPARED / NOT DEPLOYED.
 Status: LOCAL IMPLEMENTED / TECHNICAL BROWSER VALIDATED / NOT DEPLOYED /
 OWNER UI NOT VALIDATED.
 
+Publication note: commit `69f71222e851ef05b23d40e5cb984b69cfef69f2` was
+published to GitHub for review, but was not deployed and was not owner UI
+validated. The functional coverage complement below is local-only and is not
+yet committed.
+
 Previous audit problem: app navigation had `feature: "campaigns"` but no
 `minRole`, so the UI omission/visibility contract was not explicit enough, and
 backend campaign routes were mainly guarded by authenticated tenant session
@@ -1991,6 +1996,11 @@ Local validation:
   transport is mocked and asserted at zero calls. SUPERVISOR and ADMIN are
   exercised across the same protected route set with explicit expected
   functional responses.
+- Complement on 2026-09-24: the same backend test now also exercises
+  SUPERVISOR and ADMIN with valid fixtures for CSV preview, CSV draft, CRM
+  draft, manual immediate creation, explicit send, schedule, resume and
+  test-send. Provider calls remain simulated; the AGENT negative block still
+  proves zero provider calls and unchanged preexisting records/counts.
 - `campaignsPageContract.test.ts` 24/24 PASS. Added contract proves app
   navigation role gate, direct page denied state and no protected list/detail
   or polling data loading unless `campaignAccess === "allowed"`.
@@ -2014,3 +2024,14 @@ Local validation:
   also passed against the local test DB.
 - No schema/migration, production DB access, provider call, real send, commit,
   push or deploy occurred in this local implementation step.
+
+Future deployment route, prepared but not executed, follows
+`docs/DEPLOY_TOPOLOGY_RE7.md`, `docs/RUNBOOK_WHATSAPP_AGENT.md` and
+`docs/whatsapp-agent/ops/DEPLOY_VPS_PM2.md`: confirm production HEAD and clean
+authorized dirt only, verify target ancestry and changed files, create
+persistent PostgreSQL backup with hash/object count, fast-forward only, build
+backend and frontend because both app/API surfaces changed, reload only
+`re7-whatsapp-agent` and `re7-admin-front`, preserve worker unless dependency
+evidence requires it, smoke `/agent-api/health`, `/app/campaigns`, AGENT
+denial and SUPERVISOR/ADMIN read access without real send/provider call, and
+rollback by returning to the previous HEAD plus PM2 reload if smoke fails.

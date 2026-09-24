@@ -694,7 +694,8 @@ billing/meta usage, Contact, Lead and CCI were preserved, including failed Meta
 evidence `131026`.
 
 Campaign RBAC/active-send authorization update on 2026-09-24 is LOCAL
-IMPLEMENTED / TECHNICAL BROWSER VALIDATED / NOT DEPLOYED / OWNER UI NOT
+IMPLEMENTED / TECHNICAL BROWSER VALIDATED / GITHUB REVIEW PUBLISHED at
+`69f71222e851ef05b23d40e5cb984b69cfef69f2` / NOT DEPLOYED / OWNER UI NOT
 VALIDATED. The
 audit found the Campaign nav item had `feature: "campaigns"` but no explicit
 manager `minRole`; the local patch hides Campaigns from AGENT navigation,
@@ -707,7 +708,11 @@ backend campaign feature suite 121/121 PASS on the dedicated local DB and
 frontend campaign contract 24/24 PASS; isolated browser smoke on ports
 `3039`/`3000` confirmed AGENT controlled denial with no protected campaign API
 hydration and SUPERVISOR/ADMIN campaign loading; backend/frontend builds PASS.
+The 2026-09-24 local complement added valid SUPERVISOR/ADMIN fixtures for CSV
+preview/draft, CRM draft, manual immediate create, send, schedule, resume and
+test-send with simulated provider calls; AGENT negatives still assert no
+mutation and no provider call.
 Regression mapping remained green: `campaignRunner.test.ts` 7/7,
 `campaignRecipientImport.test.ts` 7/7 and `tenantConfig.test.ts` 3/3. No
-schema/migration, production DB access, provider call, real send, commit, push
-or deploy occurred in this local RBAC step.
+schema/migration, production DB access, real provider call, real send or deploy
+occurred in this RBAC line; the latest complement remains local and uncommitted.

@@ -1398,7 +1398,8 @@ Contact, Lead and CCI were preserved; failure evidence `131026` / `Message
 undeliverable` remains campaign history.
 
 Campaign RBAC/active-send authorization update on 2026-09-24 is LOCAL
-IMPLEMENTED / TECHNICAL BROWSER VALIDATED / NOT DEPLOYED / OWNER UI NOT
+IMPLEMENTED / TECHNICAL BROWSER VALIDATED / GITHUB REVIEW PUBLISHED at
+`69f71222e851ef05b23d40e5cb984b69cfef69f2` / NOT DEPLOYED / OWNER UI NOT
 VALIDATED. The
 audit found Campaign navigation had the `campaigns` feature flag but no
 explicit `minRole`; the local patch adds SUPERVISOR/ADMIN gating in navigation,
@@ -1412,5 +1413,9 @@ preserved for CRM contact opt-out behavior. Local validation passed with
 builds PASS, `campaignRunner.test.ts` 7/7, `campaignRecipientImport.test.ts`
 7/7 and `tenantConfig.test.ts` 3/3. The only loading failures during this
 closure were sandbox IPC `tsx` failures and passed after approved local rerun.
-No schema/migration, production DB access, provider call, real send, commit,
-push or deploy occurred in this local RBAC step.
+The 2026-09-24 local complement added valid SUPERVISOR/ADMIN fixtures for CSV
+preview/draft, CRM draft, manual immediate create, send, schedule, resume and
+test-send with simulated provider calls; AGENT negatives still assert no
+mutation and no provider call. No schema/migration, production DB access, real
+provider call, real send or deploy occurred; the complement remains local and
+uncommitted.

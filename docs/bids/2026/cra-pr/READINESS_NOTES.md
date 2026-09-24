@@ -882,7 +882,8 @@ billing/meta usage, Contact, Lead and CCI were preserved, including failed Meta
 evidence `131026`.
 
 Campaign RBAC/active-send authorization update on 2026-09-24 is LOCAL
-IMPLEMENTED / TECHNICAL BROWSER VALIDATED / NOT DEPLOYED / OWNER UI NOT
+IMPLEMENTED / TECHNICAL BROWSER VALIDATED / GITHUB REVIEW PUBLISHED at
+`69f71222e851ef05b23d40e5cb984b69cfef69f2` / NOT DEPLOYED / OWNER UI NOT
 VALIDATED. The
 audit found Campaign navigation had the `campaigns` feature flag but lacked an
 explicit `minRole`; the local patch adds SUPERVISOR/ADMIN gating in navigation,
@@ -897,5 +898,10 @@ confirmed AGENT restricted UX/no protected campaign hydration and
 SUPERVISOR/ADMIN campaign loading; backend/frontend builds PASS. Required
 regression evidence remains green through `campaignRunner.test.ts` 7/7,
 `campaignRecipientImport.test.ts` 7/7 and `tenantConfig.test.ts` 3/3. This
+was complemented locally on 2026-09-24 with valid SUPERVISOR/ADMIN fixtures for
+CSV preview/draft, CRM draft, manual immediate create, send, schedule, resume
+and test-send using simulated provider calls; AGENT negative coverage still
+proves no mutation and no provider call. This
 strengthens CRA campaign operator-readiness evidence but does not claim OWNER UI
-VALIDATED, a new CRA formal acceptance run, deploy, real send or provider call.
+VALIDATED, a new CRA formal acceptance run, deploy, real send or real provider
+call.

@@ -1044,6 +1044,53 @@ test("campaign app routes require supervisor or admin before campaign payload pr
       select: { id: true },
     });
 
+    const managerPhoneNumberId = `phone-rbac-manager-${label}-${prefix}-business`;
+    await prisma.waPhoneNumber.create({
+      data: {
+        clientId: businessClientId,
+        phoneNumberId: managerPhoneNumberId,
+        display: "+55 41 99140-0000",
+      },
+    });
+    await prisma.channelAccount.create({
+      data: {
+        clientId: businessClientId,
+        channel: "whatsapp",
+        provider: "meta_cloud",
+        channelAccountId: managerPhoneNumberId,
+        enabled: true,
+        inboundPersistenceEnabled: true,
+        outboundEnabled: true,
+        status: "connected",
+        tokenStatus: "ok",
+      },
+    });
+    const managerWaIdBase = label === "supervisor" ? "55419914010" : "55419914020";
+    const managerLead = await prisma.lead.create({
+      data: {
+        tenantId: businessClientId,
+        waId: `${managerWaIdBase}01`,
+        waIdCanonical: `${managerWaIdBase}01`,
+        channel: "whatsapp",
+        provider: "meta",
+        name: `RBAC ${label} Lead`,
+        phone: `${managerWaIdBase}01`,
+        status: "RETORNO_FUTURO",
+      },
+    });
+    const managerSendLead = await prisma.lead.create({
+      data: {
+        tenantId: businessClientId,
+        waId: `${managerWaIdBase}02`,
+        waIdCanonical: `${managerWaIdBase}02`,
+        channel: "whatsapp",
+        provider: "meta",
+        name: `RBAC ${label} Send`,
+        phone: `${managerWaIdBase}02`,
+        status: "RETORNO_FUTURO",
+      },
+    });
+
     const jsonCases = [
       {
         method: "GET",
@@ -1165,11 +1212,157 @@ test("campaign app routes require supervisor or admin before campaign payload pr
     const exportResponse = await requestText("GET", `/app/campaigns/${managerDraft.id}/export`, user);
     assert.equal(exportResponse.status, 200, `${label} export: ${exportResponse.text}`);
     assert.equal(exportResponse.contentType?.includes("text/csv"), true, `${label} export content type`);
+
+    const csvText = [
+      "telefone,nome,primeiro_nome",
+      `${managerWaIdBase}03,RBAC CSV ${label},RBAC`,
+    ].join("\n");
+    const mapping = {
+      contactColumn: "telefone",
+      field1Column: "primeiro_nome",
+      variableColumns: { "1": "field1" },
+    };
+
+    const csvPreview = await request<{
+      ok: true;
+      summary: { received: number; readyToImport: number };
+    }>("POST", "/app/campaigns/csv-preview", user, {
+      templateId: managerTemplate.id,
+      csvText,
+      mapping,
+    });
+    assert.equal(csvPreview.status, 200, `${label} valid csv preview: ${JSON.stringify(csvPreview.body)}`);
+    assert.equal(csvPreview.body.summary.received, 1);
+    assert.equal(csvPreview.body.summary.readyToImport, 1);
+
+    const csvDraft = await request<{
+      ok: true;
+      campaign: { id: string; status: string; totalRecipients: number };
+    }>("POST", "/app/campaigns/drafts/csv", user, {
+      name: `RBAC CSV draft ${label}`,
+      templateId: managerTemplate.id,
+      csvText,
+      mapping,
+      returnDestination: defaultCampaignReturnDestination(),
+    });
+    assert.equal(csvDraft.status, 200, `${label} valid csv draft: ${JSON.stringify(csvDraft.body)}`);
+    assert.equal(csvDraft.body.campaign.status, "draft");
+    assert.equal(csvDraft.body.campaign.totalRecipients, 1);
+
+    const validDraft = await request<{
+      ok: true;
+      campaign: { id: string; status: string; totalRecipients: number };
+    }>("POST", "/app/campaigns/drafts", user, {
+      name: `RBAC functional draft ${label}`,
+      templateId: managerTemplate.id,
+      selectedLeadIds: [managerLead.id],
+      returnDestination: defaultCampaignReturnDestination(),
+      templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+    });
+    assert.equal(validDraft.status, 200, `${label} valid draft: ${JSON.stringify(validDraft.body)}`);
+    assert.equal(validDraft.body.campaign.status, "draft");
+    assert.equal(validDraft.body.campaign.totalRecipients, 1);
+
+    const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const validSchedule = await request<{
+      ok: true;
+      campaign: { status: string; scheduledAt: string | null };
+    }>("POST", `/app/campaigns/${validDraft.body.campaign.id}/schedule`, user, { scheduledAt });
+    assert.equal(validSchedule.status, 200, `${label} valid schedule: ${JSON.stringify(validSchedule.body)}`);
+    assert.equal(validSchedule.body.campaign.status, "scheduled");
+    assert.equal(validSchedule.body.campaign.scheduledAt, scheduledAt);
+
+    const validTestSend = await request<{ ok: true; messageId: string }>(
+      "POST",
+      `/app/campaigns/${validDraft.body.campaign.id}/test-send`,
+      user,
+      { waId: `${managerWaIdBase}09`, variables: { "1": "Teste RBAC" } }
+    );
+    assert.equal(validTestSend.status, 200, `${label} valid test-send: ${JSON.stringify(validTestSend.body)}`);
+    assert.match(validTestSend.body.messageId, /^campaign-test\./);
+
+    const validSendDraft = await request<{
+      ok: true;
+      campaign: { id: string; status: string; totalRecipients: number };
+    }>("POST", "/app/campaigns/drafts", user, {
+      name: `RBAC send draft ${label}`,
+      templateId: managerTemplate.id,
+      selectedLeadIds: [managerSendLead.id],
+      returnDestination: defaultCampaignReturnDestination(),
+      templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+    });
+    assert.equal(validSendDraft.status, 200, `${label} send draft: ${JSON.stringify(validSendDraft.body)}`);
+    const validSend = await request<{ ok: true; campaign: { status: string } }>(
+      "POST",
+      `/app/campaigns/${validSendDraft.body.campaign.id}/send`,
+      user
+    );
+    assert.equal(validSend.status, 200, `${label} valid send: ${JSON.stringify(validSend.body)}`);
+
+    const validImmediate = await request<{ ok: true; campaign: { id: string; totalRecipients: number } }>(
+      "POST",
+      "/app/campaigns",
+      user,
+      {
+        name: `RBAC immediate ${label}`,
+        templateId: managerTemplate.id,
+        recipients: [`${managerWaIdBase}04`],
+        returnDestination: defaultCampaignReturnDestination(),
+        templateParams: ["Imediato RBAC"],
+      }
+    );
+    assert.equal(validImmediate.status, 200, `${label} valid immediate: ${JSON.stringify(validImmediate.body)}`);
+    assert.equal(validImmediate.body.campaign.totalRecipients, 1);
+
+    const resumableCampaign = await prisma.campaign.create({
+      data: {
+        clientId: businessClientId,
+        templateId: managerTemplate.id,
+        name: `RBAC resumable ${label}`,
+        templateName: managerTemplate.name,
+        status: "sending",
+        totalRecipients: 1,
+      },
+    });
+    await prisma.event.create({
+      data: {
+        clientId: businessClientId,
+        messageId: resumableCampaign.id,
+        requestId: `campaign-seed:${resumableCampaign.id}:${label}`,
+        eventName: "campaign.seed.saved",
+        payloadJson: {
+          campaignId: resumableCampaign.id,
+          templateId: managerTemplate.id,
+          name: resumableCampaign.name,
+          templateName: managerTemplate.name,
+          recipients: [`${managerWaIdBase}05`],
+          templateParams: ["Retomada RBAC"],
+          templateVariableMappings: [{ position: "1", source: "fixed", value: "Retomada RBAC" }],
+          returnDestination: defaultCampaignReturnDestination(),
+        },
+      },
+    });
+    const validPause = await request<{ ok: true; campaign: { status: string } }>(
+      "POST",
+      `/app/campaigns/${resumableCampaign.id}/pause`,
+      user
+    );
+    assert.equal(validPause.status, 200, `${label} valid pause before resume: ${JSON.stringify(validPause.body)}`);
+    assert.equal(validPause.body.campaign.status, "paused");
+    const validResume = await request<{ ok: true; campaign: { status: string } }>(
+      "POST",
+      `/app/campaigns/${resumableCampaign.id}/resume`,
+      user
+    );
+    assert.equal(validResume.status, 200, `${label} valid resume: ${JSON.stringify(validResume.body)}`);
+    assert.equal(validResume.body.campaign.status, "sending");
   }
 
+  const managerProviderCallsBefore = providerCalls;
   await assertManagerCampaignAccess(businessSupervisor, "supervisor");
   await assertManagerCampaignAccess(businessAdmin, "admin");
-  assert.equal(providerCalls, 0);
+  await waitFor(async () => providerCalls - managerProviderCallsBefore >= 8);
+  assert.equal(providerCalls - managerProviderCallsBefore, 8);
 });
 
 test("internal web session handoff realtime endpoint requires worker auth and validates payload", async () => {
