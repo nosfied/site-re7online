@@ -730,8 +730,10 @@ New backlog item opened: **P2 / UX + PRODUCT CLARIFICATION / OPEN**.
 Future Guided Builder must explain two independent bot inactivity policies in
 business language:
 
-- return reset: "Por quanto tempo a pessoa pode voltar e continuar de onde
-  parou?", mapped internally to `resetAfterMinutes`;
+- return reset: "Por quanto tempo a pessoa pode voltar e reiniciar a
+  automacao no proximo retorno?", mapped internally to `resetAfterMinutes`
+  and applied only on the next inbound after the threshold, not by timer and
+  not as resume from the previous node;
 - automatic human handoff: "Se a pessoa abandonar a automacao, deseja
   encaminha-la automaticamente para atendimento humano apos algum tempo?",
   mapped internally to `inactivityPolicy.timeoutMinutes` + `action=HANDOFF`.

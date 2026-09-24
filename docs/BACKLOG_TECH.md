@@ -927,11 +927,12 @@ ACTIVE P2:
    department/queue concretos, protocolo e posicao na fila quando o destino e
    valido. Residuais: limpeza/copy de `flowContext`, UX de timeout e paridade
    cross-provider do hardening, sem auto-close HUMAN.
-9. Guided Builder - BOT inactivity policy UX: P2 / UX + PRODUCT CLARIFICATION /
+10. Guided Builder - BOT inactivity policy UX: P2 / UX + PRODUCT CLARIFICATION /
    OPEN. Futuro Guided deve explicar em linguagem de negocio duas politicas
-   independentes: por quanto tempo a pessoa pode voltar e continuar de onde
-   parou (`resetAfterMinutes`) e se abandono de automacao deve gerar handoff
-   humano automatico (`inactivityPolicy.timeoutMinutes` + `action=HANDOFF`).
+   independentes: por quanto tempo a pessoa pode voltar e reiniciar a
+   automacao no proximo retorno (`resetAfterMinutes`) e se abandono de
+   automacao deve gerar handoff humano automatico
+   (`inactivityPolicy.timeoutMinutes` + `action=HANDOFF`).
    Antes de implementar, auditar valores/defaults reais em producao e exigir
    que owner veja valores atuais, entenda consequencias, escolha duracao
    conscientemente e veja resumo no review. Nao criar nem reabrir
@@ -957,7 +958,7 @@ WATCH only:
   com reproducao ou evidencia nova.
 - billing/ledger Meta como conciliacao futura.
 
-Proximas cinco frentes:
+Proximas quatro frentes:
 
 1. P2 Guided Builder - BOT inactivity policy UX. Why now: o runtime ja suporta
    `resetAfterMinutes` e handoff automatico por `inactivityPolicy`, mas a
@@ -2061,10 +2062,12 @@ Next front audit - P2 Guided Builder BOT inactivity policy UX:
   controls for automatic handoff timeout/action nor explain the distinction.
 - Minimal implementation proposed: add a dedicated Guided lifecycle section
   using current definition fields only, with two separate controls/copy blocks:
-  "Retomar automação de onde parou" mapped to `resetAfterMinutes`, and
-  "Encaminhar ao atendimento humano após abandono" mapped to
-  `timeoutMinutes` + `action=HANDOFF`, showing current values/defaults in the
-  review step. No schema, runtime, provider, production data or HUMAN auto-close
+  "Reiniciar automacao quando a pessoa voltar depois do intervalo" mapped to
+  `resetAfterMinutes`, and "Encaminhar ao atendimento humano apos abandono"
+  mapped to `timeoutMinutes` + `action=HANDOFF`, showing current
+  values/defaults in the review step. This does not resume from the previous
+  node and does not run by timer; it is applied on the next inbound after the
+  threshold. No schema, runtime, provider, production data or HUMAN auto-close
   change.
 - Acceptance criteria: owner sees current values, can consciously set/clear
   each policy, review explains practical effect, Advanced JSON remains
