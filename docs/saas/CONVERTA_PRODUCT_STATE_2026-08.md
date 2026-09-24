@@ -1397,10 +1397,9 @@ projection rows were deleted (`ConversationRuntimeState
 Contact, Lead and CCI were preserved; failure evidence `131026` / `Message
 undeliverable` remains campaign history.
 
-Campaign RBAC/active-send authorization update on 2026-09-24 is LOCAL
-IMPLEMENTED / TECHNICAL BROWSER VALIDATED / GITHUB REVIEW PUBLISHED at
-`69f71222e851ef05b23d40e5cb984b69cfef69f2` / NOT DEPLOYED / OWNER UI NOT
-VALIDATED. The
+Campaign RBAC/active-send authorization update on 2026-09-24 is DEPLOYED /
+PRODUCTION HEALTH VALIDATED / TECHNICAL SMOKE PASS / OWNER UI NOT VALIDATED at
+functional production head `b1a528a00d63b5dc3fea6c9ff45f9273e23f4294`. The
 audit found Campaign navigation had the `campaigns` feature flag but no
 explicit `minRole`; the local patch adds SUPERVISOR/ADMIN gating in navigation,
 direct `/app/campaigns` hydration and backend app campaign routes. AGENT direct
@@ -1416,6 +1415,12 @@ closure were sandbox IPC `tsx` failures and passed after approved local rerun.
 The 2026-09-24 local complement added valid SUPERVISOR/ADMIN fixtures for CSV
 preview/draft, CRM draft, manual immediate create, send, schedule, resume and
 test-send with simulated provider calls; AGENT negatives still assert no
-mutation and no provider call. No schema/migration, production DB access, real
-provider call, real send or deploy occurred; the complement remains local and
-uncommitted.
+mutation and no provider call. Production deployment moved by FF-only from
+`957f19caced77693188a387bb7f7840a24092c67` after backup
+`/opt/re7online/backups/converta-persistent/postgres/campaign-rbac-b1a528a-20260924T143728Z/20260924-143729.dump`
+(sha256 `215049ecb9aafdb6bd1e209b5a2f414b0ef8b0247447ec5719207de039a9ef58`,
+581 objects). Backend/frontend builds and health passed; only
+`re7-whatsapp-agent` and `re7-admin-front` were reloaded, worker preserved.
+Smoke covered health and route reachability without POST, provider call or real
+send. Legitimate role sessions were not available, so production AGENT 403 and
+SUPERVISOR/ADMIN read smoke are NOT EXERCISED and owner UI remains pending.

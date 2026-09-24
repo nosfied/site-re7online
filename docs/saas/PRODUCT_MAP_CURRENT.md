@@ -693,10 +693,9 @@ truth. Real `****6683` controlled repair was executed in production on
 billing/meta usage, Contact, Lead and CCI were preserved, including failed Meta
 evidence `131026`.
 
-Campaign RBAC/active-send authorization update on 2026-09-24 is LOCAL
-IMPLEMENTED / TECHNICAL BROWSER VALIDATED / GITHUB REVIEW PUBLISHED at
-`69f71222e851ef05b23d40e5cb984b69cfef69f2` / NOT DEPLOYED / OWNER UI NOT
-VALIDATED. The
+Campaign RBAC/active-send authorization update on 2026-09-24 is DEPLOYED /
+PRODUCTION HEALTH VALIDATED / TECHNICAL SMOKE PASS / OWNER UI NOT VALIDATED at
+functional production head `b1a528a00d63b5dc3fea6c9ff45f9273e23f4294`. The
 audit found the Campaign nav item had `feature: "campaigns"` but no explicit
 manager `minRole`; the local patch hides Campaigns from AGENT navigation,
 denies direct `/app/campaigns` without loading protected campaign data, and
@@ -714,5 +713,13 @@ test-send with simulated provider calls; AGENT negatives still assert no
 mutation and no provider call.
 Regression mapping remained green: `campaignRunner.test.ts` 7/7,
 `campaignRecipientImport.test.ts` 7/7 and `tenantConfig.test.ts` 3/3. No
-schema/migration, production DB access, real provider call, real send or deploy
-occurred in this RBAC line; the latest complement remains local and uncommitted.
+schema/migration, real provider call or real send occurred in this RBAC deploy.
+Production moved by FF-only from `957f19caced77693188a387bb7f7840a24092c67`
+after backup
+`/opt/re7online/backups/converta-persistent/postgres/campaign-rbac-b1a528a-20260924T143728Z/20260924-143729.dump`
+(sha256 `215049ecb9aafdb6bd1e209b5a2f414b0ef8b0247447ec5719207de039a9ef58`,
+581 objects). Backend/frontend builds and health passed; only
+`re7-whatsapp-agent` and `re7-admin-front` were reloaded and the worker was
+preserved. Role-specific production smoke remains NOT EXERCISED because no
+legitimate AGENT/SUPERVISOR/ADMIN sessions were available; owner UI validation
+remains pending.

@@ -1949,13 +1949,13 @@ Status: LOCAL FIX PREPARED / NOT DEPLOYED.
 
 ## P1 - Campaign RBAC / Active Sends Authorization - 2026-09-23
 
-Status: LOCAL IMPLEMENTED / TECHNICAL BROWSER VALIDATED / NOT DEPLOYED /
+Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / TECHNICAL SMOKE PASS /
 OWNER UI NOT VALIDATED.
 
 Publication note: commit `69f71222e851ef05b23d40e5cb984b69cfef69f2` was
-published to GitHub for review, but was not deployed and was not owner UI
-validated. The functional coverage complement below is local-only and is not
-yet committed.
+published to GitHub for review first. Complement commit
+`b1a528a00d63b5dc3fea6c9ff45f9273e23f4294` was then published and deployed to
+production on 2026-09-24. Owner UI validation remains pending.
 
 Previous audit problem: app navigation had `feature: "campaigns"` but no
 `minRole`, so the UI omission/visibility contract was not explicit enough, and
@@ -2025,13 +2025,22 @@ Local validation:
 - No schema/migration, production DB access, provider call, real send, commit,
   push or deploy occurred in this local implementation step.
 
-Future deployment route, prepared but not executed, follows
+Production deployment on 2026-09-24 followed
 `docs/DEPLOY_TOPOLOGY_RE7.md`, `docs/RUNBOOK_WHATSAPP_AGENT.md` and
-`docs/whatsapp-agent/ops/DEPLOY_VPS_PM2.md`: confirm production HEAD and clean
-authorized dirt only, verify target ancestry and changed files, create
-persistent PostgreSQL backup with hash/object count, fast-forward only, build
-backend and frontend because both app/API surfaces changed, reload only
-`re7-whatsapp-agent` and `re7-admin-front`, preserve worker unless dependency
-evidence requires it, smoke `/agent-api/health`, `/app/campaigns`, AGENT
-denial and SUPERVISOR/ADMIN read access without real send/provider call, and
-rollback by returning to the previous HEAD plus PM2 reload if smoke fails.
+`docs/whatsapp-agent/ops/DEPLOY_VPS_PM2.md`: production moved by fast-forward
+from `957f19caced77693188a387bb7f7840a24092c67` to
+`b1a528a00d63b5dc3fea6c9ff45f9273e23f4294` after persistent PostgreSQL backup
+`/opt/re7online/backups/converta-persistent/postgres/campaign-rbac-b1a528a-20260924T143728Z/20260924-143729.dump`
+(22,212,175 bytes, sha256
+`215049ecb9aafdb6bd1e209b5a2f414b0ef8b0247447ec5719207de039a9ef58`, 581
+objects). Backend and frontend production builds passed; schema unchanged and
+no migration ran. PM2 reload scope was only `re7-whatsapp-agent`
+(`686274 -> 838501`) and `re7-admin-front` (`700707 -> 838522`);
+`re7-whatsapp-web-worker` stayed online and unchanged (`3747763`). Health
+returned `ok=true` / `db=ok`; `/app/campaigns`, `/app/crm`, `/app/inbox` and
+`/app/login` returned 200; unauthenticated `/app/campaigns` returned controlled
+401. No legitimate AGENT/SUPERVISOR/ADMIN production session was available to
+exercise role-specific UI/API smoke, so AGENT 403 and manager read smoke remain
+NOT EXERCISED in production and owner UI validation remains pending. No POST
+campaign/opt-out mutation, provider call or real send was executed; rollback
+was prepared but not needed.

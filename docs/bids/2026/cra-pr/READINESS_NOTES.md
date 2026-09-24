@@ -881,10 +881,9 @@ projection rows were deleted (`ConversationRuntimeState
 billing/meta usage, Contact, Lead and CCI were preserved, including failed Meta
 evidence `131026`.
 
-Campaign RBAC/active-send authorization update on 2026-09-24 is LOCAL
-IMPLEMENTED / TECHNICAL BROWSER VALIDATED / GITHUB REVIEW PUBLISHED at
-`69f71222e851ef05b23d40e5cb984b69cfef69f2` / NOT DEPLOYED / OWNER UI NOT
-VALIDATED. The
+Campaign RBAC/active-send authorization update on 2026-09-24 is DEPLOYED /
+PRODUCTION HEALTH VALIDATED / TECHNICAL SMOKE PASS / OWNER UI NOT VALIDATED at
+functional production head `b1a528a00d63b5dc3fea6c9ff45f9273e23f4294`. The
 audit found Campaign navigation had the `campaigns` feature flag but lacked an
 explicit `minRole`; the local patch adds SUPERVISOR/ADMIN gating in navigation,
 direct page hydration and backend app campaign routes. AGENT has no Campaign
@@ -903,5 +902,11 @@ CSV preview/draft, CRM draft, manual immediate create, send, schedule, resume
 and test-send using simulated provider calls; AGENT negative coverage still
 proves no mutation and no provider call. This
 strengthens CRA campaign operator-readiness evidence but does not claim OWNER UI
-VALIDATED, a new CRA formal acceptance run, deploy, real send or real provider
-call.
+VALIDATED or a new CRA formal acceptance run. Production deploy was FF-only
+from `957f19caced77693188a387bb7f7840a24092c67` after PostgreSQL backup
+`/opt/re7online/backups/converta-persistent/postgres/campaign-rbac-b1a528a-20260924T143728Z/20260924-143729.dump`
+(sha256 `215049ecb9aafdb6bd1e209b5a2f414b0ef8b0247447ec5719207de039a9ef58`,
+581 objects), backend/frontend builds passed, only agent/admin-front were
+reloaded, worker was preserved, and no POST mutation, real send or provider
+call was executed. Role-specific production smoke remains NOT EXERCISED due to
+absence of legitimate role sessions.
