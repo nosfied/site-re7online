@@ -14962,27 +14962,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
   if (req.method === "GET" && pathname === "/app/campaigns") {
     const prisma = getPrisma();
-    const clientAuth = requireClientAuth(req, res);
-    if (!clientAuth) return;
     try {
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const { client } = access;
       const limitRaw = Number(query.limit ?? 50);
       const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 50;
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, { error: "client_not_found" });
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, { error: "client_inactive" });
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
       const result = await buildCampaignListPayload(prisma, {
         clientId: client.id,
         limit,
@@ -15001,25 +14986,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
   if (req.method === "GET" && pathname === "/app/campaigns/audience-preview") {
     const prisma = getPrisma();
-    const clientAuth = requireClientAuth(req, res);
-    if (!clientAuth) return;
     try {
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, httpError("client_inactive", "Client inactive"));
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const { client, clientAuth } = access;
       if (
         !(await enforceAppCapability(prisma, res, {
           client,
@@ -15057,27 +15027,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
   if (req.method === "POST" && pathname === "/app/campaigns/csv-preview") {
     const prisma = getPrisma();
-    const clientAuth = requireClientAuth(req, res);
-    if (!clientAuth) return;
     try {
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const { client, clientAuth } = access;
       const body = await readJsonBodyWithLimit(req, res, CAMPAIGN_IMPORT_MAX_JSON_BODY_BYTES);
       if (!body) return;
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, httpError("client_inactive", "Client inactive"));
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
       if (!(await enforceAppCapability(prisma, res, {
         client,
         userId: clientAuth.userId,
@@ -15180,9 +15135,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
   if (req.method === "POST" && pathname === "/app/campaigns/drafts/csv") {
     const prisma = getPrisma();
-    const clientAuth = requireClientAuth(req, res);
-    if (!clientAuth) return;
     try {
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const { client, clientAuth } = access;
       const body = await readJsonBodyWithLimit(req, res, CAMPAIGN_IMPORT_MAX_JSON_BODY_BYTES);
       if (!body) return;
       const name = String(body.name ?? body.campaignName ?? "").trim();
@@ -15195,22 +15151,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, httpError("template_required", "Selecione um modelo aprovado antes de continuar."));
         return;
       }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, httpError("client_inactive", "Client inactive"));
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
       if (!(await enforceAppCapability(prisma, res, {
         client,
         userId: clientAuth.userId,
@@ -15654,9 +15594,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
   if (req.method === "POST" && pathname === "/app/campaigns/drafts") {
     const prisma = getPrisma();
-    const clientAuth = requireClientAuth(req, res);
-    if (!clientAuth) return;
     try {
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const { client, clientAuth } = access;
       const body = await readJsonBody(req, res);
       if (!body) return;
       const name = String(body.name ?? body.campaignName ?? "").trim();
@@ -15687,22 +15628,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, httpError("too_many_recipients", "Recipients limit exceeded", { limit: 1000 }));
         return;
       }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, httpError("client_inactive", "Client inactive"));
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
       if (selectionMode === "DYNAMIC_CRM_FILTER") {
         if (!(await enforceAppCapability(prisma, res, {
           client,
@@ -15805,25 +15730,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
   if (req.method === "GET" && pathname === "/app/campaigns/return-destinations") {
     const prisma = getPrisma();
-    const clientAuth = requireClientAuth(req, res);
-    if (!clientAuth) return;
     try {
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, httpError("client_inactive", "Client inactive"));
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const { client, clientAuth } = access;
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
         clientId: client.id,
         userId: clientAuth.userId,
@@ -15923,30 +15833,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     pathname.endsWith("/export")
   ) {
     const prisma = getPrisma();
-    const clientAuth = requireClientAuth(req, res);
-    if (!clientAuth) return;
     try {
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const { client } = access;
       const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
       if (!campaignId) {
         json(res, 400, httpError("bad_request", "Informe a campanha."));
         return;
       }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, { error: "client_inactive" });
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
       const result = await buildCampaignDetailPayload(prisma, {
         clientId: client.id,
         campaignId,
@@ -15987,30 +15882,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     pathname.split("/").length === 4
   ) {
     const prisma = getPrisma();
-    const clientAuth = requireClientAuth(req, res);
-    if (!clientAuth) return;
     try {
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const { client } = access;
       const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
       if (!campaignId) {
         json(res, 400, httpError("bad_request", "Informe a campanha."));
         return;
       }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, { error: "client_inactive" });
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
       const result = await buildCampaignDetailPayload(prisma, {
         clientId: client.id,
         campaignId,
@@ -16038,30 +15918,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     pathname.endsWith("/discard")
   ) {
     const prisma = getPrisma();
-    const clientAuth = requireClientAuth(req, res);
-    if (!clientAuth) return;
     try {
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const { client, clientAuth } = access;
       const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
       if (!campaignId) {
         json(res, 400, httpError("bad_request", "Informe a campanha."));
         return;
       }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, httpError("client_inactive", "Client inactive"));
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
       const discarded = await discardScopedCampaignDraft(prisma, {
         clientId: client.id,
         campaignId,
@@ -16098,30 +15963,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     pathname.endsWith("/send")
   ) {
     const prisma = getPrisma();
-    const clientAuth = requireClientAuth(req, res);
-    if (!clientAuth) return;
     try {
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const { client } = access;
       const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
       if (!campaignId) {
         json(res, 400, httpError("bad_request", "Informe a campanha."));
         return;
       }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, httpError("client_inactive", "Client inactive"));
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
       const sent = await sendScopedCampaignDraft({
         clientId: client.id,
         clientKey: client.clientKey,
@@ -16181,9 +16031,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     pathname.endsWith("/schedule")
   ) {
     const prisma = getPrisma();
-    const clientAuth = requireClientAuth(req, res);
-    if (!clientAuth) return;
     try {
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const { client, clientAuth } = access;
       const body = await readJsonBody(req, res);
       if (!body) return;
       const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
@@ -16200,22 +16051,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, httpError("scheduled_at_must_be_future", "Scheduled date must be in the future"));
         return;
       }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, httpError("client_inactive", "Client inactive"));
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
       const scheduled = await scheduleScopedCampaignDraft({
         clientId: client.id,
         campaignId,
@@ -16262,9 +16097,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     (pathname.endsWith("/pause") || pathname.endsWith("/resume") || pathname.endsWith("/test-send"))
   ) {
     const prisma = getPrisma();
-    const clientAuth = requireClientAuth(req, res);
-    if (!clientAuth) return;
     try {
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const { client, clientAuth } = access;
       const body = pathname.endsWith("/test-send") ? await readJsonBody(req, res) : {};
       if (!body) return;
       const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
@@ -16272,23 +16108,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, httpError("bad_request", "Informe a campanha."));
         return;
       }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, httpError("client_inactive", "Client inactive"));
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
-
       if (pathname.endsWith("/pause")) {
         const paused = await pauseScopedCampaign({
           clientId: client.id,
@@ -16388,30 +16207,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     pathname.endsWith("/cancel")
   ) {
     const prisma = getPrisma();
-    const clientAuth = requireClientAuth(req, res);
-    if (!clientAuth) return;
     try {
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const { client, clientAuth } = access;
       const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
       if (!campaignId) {
         json(res, 400, httpError("bad_request", "Informe a campanha."));
         return;
       }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, { error: "client_inactive" });
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
       const cancelled = await cancelScopedCampaign(prisma, {
         clientId: client.id,
         campaignId,
@@ -16449,9 +16253,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
   if (req.method === "POST" && pathname === "/app/campaigns") {
     const prisma = getPrisma();
-    const clientAuth = requireClientAuth(req, res);
-    if (!clientAuth) return;
     try {
+      const access = await requireCampaignsAppAccess(req, res, requestId, pathname);
+      if (!access) return;
+      const { client } = access;
       const body = await readJsonBody(req, res);
       if (!body) return;
       const name = String(body.name ?? "").trim();
@@ -16482,22 +16287,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, httpError("invalid_recipients", "Informe destinatários válidos."));
         return;
       }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, { error: "client_inactive" });
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "campaigns",
-        endpoint: pathname,
-        requestId,
-      }))) return;
       const waIds = dedupeCampaignRecipients(rawWaIds, {
         source: "app_campaign_create",
         clientId: client.id,
@@ -30632,6 +30421,39 @@ async function requireSchedulingAppAccess(
     client,
     userId: clientAuth.userId,
     feature: "scheduling",
+    endpoint,
+    requestId,
+  });
+  if (!enabled) return null;
+  return { clientAuth, client };
+}
+
+async function requireCampaignsAppAccess(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestId: string,
+  endpoint: string
+) {
+  const prisma = getPrisma();
+  const clientAuth = requireClientAuth(req, res);
+  if (!clientAuth) return null;
+  if (!isAdminOrSupervisorRole(clientAuth.role)) {
+    json(res, 403, httpError("forbidden", "Only supervisor or admin can manage campaigns."));
+    return null;
+  }
+  const client = await getScopedClientById(prisma, clientAuth.clientId);
+  if (!client) {
+    json(res, 404, httpError("client_not_found", "Client not found"));
+    return null;
+  }
+  if (client.status !== "ACTIVE") {
+    json(res, 403, httpError("client_inactive", "Client inactive"));
+    return null;
+  }
+  const enabled = await enforceAppFeature(prisma, res, {
+    client,
+    userId: clientAuth.userId,
+    feature: "campaigns",
     endpoint,
     requestId,
   });

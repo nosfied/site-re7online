@@ -90,6 +90,8 @@ type CampaignToast = {
   message: string;
 };
 
+type CampaignAccessState = "checking" | "allowed" | "denied";
+
 type AudiencePreviewFilters = {
   q: string;
   status: string;
@@ -223,6 +225,11 @@ function getTemplateVariableLabels(variables: unknown): string[] {
       return raw.trim();
     })
     .filter(Boolean);
+}
+
+function canManageCampaigns(session: AppSession) {
+  const role = session.user.role.trim().toUpperCase();
+  return role === "ADMIN" || role === "SUPERVISOR";
 }
 
 function syncTemplateVariables(values: string[], total: number) {
@@ -618,6 +625,7 @@ export default function AppCampaignsPage() {
   const router = useRouter();
   const [requestedCampaignId, setRequestedCampaignId] = useState<string | null>(null);
   const [session, setSession] = useState<AppSession | null>(null);
+  const [campaignAccess, setCampaignAccess] = useState<CampaignAccessState>("checking");
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
   const [templates, setTemplates] = useState<AppTemplateItem[]>([]);
   const [returnDestinations, setReturnDestinations] = useState<AppCampaignReturnDestinationsResponse | null>(null);
@@ -694,7 +702,14 @@ export default function AppCampaignsPage() {
       router.replace("/app/login");
       return;
     }
+    if (!canManageCampaigns(stored)) {
+      setSession(stored);
+      setCampaignAccess("denied");
+      saveAppSession(stored);
+      return;
+    }
     setSession(stored);
+    setCampaignAccess("allowed");
     saveAppSession(stored);
   }, [router]);
 
@@ -1323,7 +1338,7 @@ export default function AppCampaignsPage() {
   }, [search, statusFilter]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || campaignAccess !== "allowed") return;
     let cancelled = false;
     setLoadingList(true);
     setError(null);
@@ -1360,7 +1375,7 @@ export default function AppCampaignsPage() {
     return () => {
       cancelled = true;
     };
-  }, [handleUnauthorized, refreshCampaigns, refreshTemplates, requestedCampaignId, session]);
+  }, [campaignAccess, handleUnauthorized, refreshCampaigns, refreshTemplates, requestedCampaignId, session]);
 
   useEffect(() => {
     if (!requestedCampaignId) return;
@@ -1389,7 +1404,7 @@ export default function AppCampaignsPage() {
   }, [form.templateId, form.templateName, templates]);
 
   useEffect(() => {
-    if (!session || !selectedCampaignId) {
+    if (!session || campaignAccess !== "allowed" || !selectedCampaignId) {
       setSelectedCampaign(null);
       setDetailError(null);
       return;
@@ -1420,7 +1435,7 @@ export default function AppCampaignsPage() {
     return () => {
       cancelled = true;
     };
-  }, [handleUnauthorized, selectedCampaignId, session]);
+  }, [campaignAccess, handleUnauthorized, selectedCampaignId, session]);
 
   useEffect(() => {
     setResultStatusFilter("all");
@@ -1524,7 +1539,7 @@ export default function AppCampaignsPage() {
   }, [currentPage, filteredCampaigns]);
 
   useEffect(() => {
-    if (!session || !shouldPoll) return;
+    if (!session || campaignAccess !== "allowed" || !shouldPoll) return;
     const interval = window.setInterval(async () => {
       try {
         if (selectedCampaignId) {
@@ -1542,7 +1557,7 @@ export default function AppCampaignsPage() {
     }, 3000);
 
     return () => window.clearInterval(interval);
-  }, [handleUnauthorized, refreshCampaigns, selectedCampaignId, session, shouldPoll]);
+  }, [campaignAccess, handleUnauthorized, refreshCampaigns, selectedCampaignId, session, shouldPoll]);
 
   useEffect(() => {
     if (!selectedCampaignId || !selectedCampaign) return;
@@ -1576,13 +1591,27 @@ export default function AppCampaignsPage() {
   }, [detailModalOpen]);
 
   useEffect(() => {
-    if (!session || !detailModalOpen || !selectedCampaignId || selectedCampaign?.status !== "sending") return;
+    if (
+      !session ||
+      campaignAccess !== "allowed" ||
+      !detailModalOpen ||
+      !selectedCampaignId ||
+      selectedCampaign?.status !== "sending"
+    ) return;
     const timer = window.setInterval(() => {
       void refreshCampaignDetail(session, selectedCampaignId);
       void refreshCampaigns(session, selectedCampaignId);
     }, 2500);
     return () => window.clearInterval(timer);
-  }, [detailModalOpen, refreshCampaignDetail, refreshCampaigns, selectedCampaign?.status, selectedCampaignId, session]);
+  }, [
+    campaignAccess,
+    detailModalOpen,
+    refreshCampaignDetail,
+    refreshCampaigns,
+    selectedCampaign?.status,
+    selectedCampaignId,
+    session,
+  ]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -2614,8 +2643,25 @@ export default function AppCampaignsPage() {
 
   const handleReuseCampaign = (campaign: CampaignItem) => applyCampaignReuse(campaign);
 
-  if (!session) {
+  if (!session || campaignAccess === "checking") {
     return <main className="min-h-screen bg-re7-navy" />;
+  }
+
+  if (campaignAccess === "denied") {
+    return (
+      <AppShell
+        session={session}
+        title="Campanhas"
+        subtitle="Acesso restrito a supervisores e administradores."
+      >
+        <section className="rounded-xl border border-amber-300/25 bg-amber-950/30 p-4 text-amber-50">
+          <h2 className="text-base font-semibold">Sem permissão para campanhas</h2>
+          <p className="mt-2 text-sm leading-6 text-amber-50/80">
+            Campanhas e envios ativos são gerenciados por supervisores e administradores.
+          </p>
+        </section>
+      </AppShell>
+    );
   }
 
   return (

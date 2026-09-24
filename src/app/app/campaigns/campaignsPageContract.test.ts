@@ -16,6 +16,33 @@ test("campaign center exposes persisted lifecycle tabs", () => {
   assert.ok(pageSource.includes('case "scheduled":'));
 });
 
+test("campaigns require supervisor or admin in app navigation and direct page access", () => {
+  const campaignsNavBlock = appShellSource.slice(
+    appShellSource.indexOf('href: "/app/campaigns"') - 120,
+    appShellSource.indexOf('href: "/app/crm"')
+  );
+  assert.ok(campaignsNavBlock.includes('feature: "campaigns"'));
+  assert.ok(campaignsNavBlock.includes('minRole: "SUPERVISOR"'));
+  assert.ok(pageSource.includes('type CampaignAccessState = "checking" | "allowed" | "denied"'));
+  assert.ok(pageSource.includes("function canManageCampaigns(session: AppSession)"));
+  assert.ok(pageSource.includes('setCampaignAccess("denied")'));
+  assert.ok(pageSource.includes('setCampaignAccess("allowed")'));
+  assert.ok(pageSource.includes('if (!session || campaignAccess !== "allowed") return;'));
+  assert.ok(pageSource.includes("Sem permissão para campanhas"));
+  const initialLoadEffect = pageSource.slice(
+    pageSource.indexOf("Promise.all(["),
+    pageSource.indexOf("fetchAppCrmStatuses(session)")
+  );
+  assert.ok(initialLoadEffect.includes("refreshCampaigns(session, requestedCampaignId)"));
+  assert.ok(initialLoadEffect.includes("refreshTemplates(session)"));
+  assert.ok(initialLoadEffect.includes("fetchAppCampaignReturnDestinations(session)"));
+  assert.ok(pageSource.includes('if (!session || campaignAccess !== "allowed" || !selectedCampaignId)'));
+  assert.ok(pageSource.includes('if (!session || campaignAccess !== "allowed" || !shouldPoll) return;'));
+  assert.ok(pageSource.includes('campaignAccess !== "allowed" ||\n      !detailModalOpen'));
+  assert.ok(pageSource.includes("getAppCampaign(session, selectedCampaignId)"));
+  assert.ok(pageSource.includes("refreshCampaignDetail(session, selectedCampaignId)"));
+});
+
 test("campaign progress modal observes backend state and can be closed", () => {
   assert.ok(pageSource.includes('selectedCampaign?.status !== "sending"'));
   assert.ok(pageSource.includes("refreshCampaignDetail(session, selectedCampaignId)"));

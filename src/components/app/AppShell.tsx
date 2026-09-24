@@ -231,6 +231,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     icon: "📢",
     group: "operation",
     feature: "campaigns",
+    minRole: "SUPERVISOR",
     labels: { business: "Campanhas", government: "Comunicados" },
   },
   {

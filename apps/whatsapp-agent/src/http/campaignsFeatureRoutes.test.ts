@@ -867,6 +867,311 @@ test("business profile default can access campaigns route", async () => {
   assert.equal(response.body.count, 0);
 });
 
+test("campaign app routes require supervisor or admin before campaign payload processing", async (t) => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `rbac_campaign_template_${prefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Comunicado oficial",
+    },
+  });
+  const draft = await prisma.campaign.create({
+    data: {
+      clientId: businessClientId,
+      name: "RBAC draft",
+      templateId: template.id,
+      templateName: template.name,
+      status: "draft",
+      totalRecipients: 0,
+      sentCount: 0,
+      blockedCount: 0,
+    },
+    select: { id: true },
+  });
+  const sending = await prisma.campaign.create({
+    data: {
+      clientId: businessClientId,
+      name: "RBAC sending",
+      templateId: template.id,
+      templateName: template.name,
+      status: "sending",
+      totalRecipients: 1,
+      sentCount: 0,
+      blockedCount: 0,
+    },
+    select: { id: true },
+  });
+
+  const campaignsBefore = await prisma.campaign.count({ where: { clientId: businessClientId } });
+  const outboundBefore = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+  const conversationsBefore = await prisma.conversation.count({ where: { clientId: businessClientId } });
+  const runtimeBefore = await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId } });
+  const eventsBefore = await prisma.event.count({ where: { clientId: businessClientId } });
+  const templateBefore = await prisma.template.findUniqueOrThrow({
+    where: { id: template.id },
+    select: { id: true, name: true, status: true, category: true, content: true },
+  });
+  const draftBefore = await prisma.campaign.findUniqueOrThrow({
+    where: { id: draft.id },
+    select: { id: true, status: true, sentCount: true, blockedCount: true, scheduledAt: true },
+  });
+  const sendingBefore = await prisma.campaign.findUniqueOrThrow({
+    where: { id: sending.id },
+    select: { id: true, status: true, sentCount: true, blockedCount: true, scheduledAt: true },
+  });
+
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      providerCalls += 1;
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.rbac-denied.${providerCalls}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const protectedRoutes = [
+    { method: "GET", route: "/app/campaigns" },
+    { method: "GET", route: `/app/campaigns/${draft.id}` },
+    { method: "GET", route: `/app/campaigns/${draft.id}/export` },
+    { method: "GET", route: "/app/campaigns/audience-preview" },
+    { method: "GET", route: "/app/campaigns/return-destinations" },
+    { method: "POST", route: "/app/campaigns/csv-preview", body: { csvText: "not,a,real,csv" } },
+    { method: "POST", route: "/app/campaigns/drafts/csv", body: { csvText: "", name: "", templateId: "" } },
+    { method: "POST", route: "/app/campaigns/drafts", body: { invalid: true } },
+    { method: "POST", route: "/app/campaigns", body: { invalid: true } },
+    { method: "POST", route: `/app/campaigns/${draft.id}/discard` },
+    { method: "POST", route: `/app/campaigns/${draft.id}/send` },
+    { method: "POST", route: `/app/campaigns/${draft.id}/schedule`, body: { scheduledAt: "invalid" } },
+    { method: "POST", route: `/app/campaigns/${sending.id}/pause` },
+    { method: "POST", route: `/app/campaigns/${sending.id}/resume` },
+    { method: "POST", route: `/app/campaigns/${draft.id}/test-send`, body: { waId: "" } },
+    { method: "POST", route: `/app/campaigns/${sending.id}/cancel` },
+  ];
+
+  for (const item of protectedRoutes) {
+    const denied = await request<ErrorPayload>(item.method, item.route, businessAgent, item.body);
+    assert.equal(denied.status, 403, `${item.method} ${item.route}: ${JSON.stringify(denied.body)}`);
+    assert.equal(getErrorCode(denied.body), "forbidden", `${item.method} ${item.route}`);
+  }
+
+  const supervisorList = await request<{ ok: boolean }>("GET", "/app/campaigns", businessSupervisor);
+  assert.equal(supervisorList.status, 200, JSON.stringify(supervisorList.body));
+  assert.equal(supervisorList.body.ok, true);
+
+  const adminList = await request<{ ok: boolean }>("GET", "/app/campaigns", businessAdmin);
+  assert.equal(adminList.status, 200, JSON.stringify(adminList.body));
+  assert.equal(adminList.body.ok, true);
+
+  const campaignsAfter = await prisma.campaign.count({ where: { clientId: businessClientId } });
+  const outboundAfter = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+  const conversationsAfter = await prisma.conversation.count({ where: { clientId: businessClientId } });
+  const runtimeAfter = await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId } });
+
+  assert.equal(campaignsAfter, campaignsBefore);
+  assert.equal(outboundAfter, outboundBefore);
+  assert.equal(conversationsAfter, conversationsBefore);
+  assert.equal(runtimeAfter, runtimeBefore);
+  assert.equal(await prisma.event.count({ where: { clientId: businessClientId } }), eventsBefore);
+  assert.deepEqual(
+    await prisma.template.findUniqueOrThrow({
+      where: { id: template.id },
+      select: { id: true, name: true, status: true, category: true, content: true },
+    }),
+    templateBefore
+  );
+  assert.deepEqual(
+    await prisma.campaign.findUniqueOrThrow({
+      where: { id: draft.id },
+      select: { id: true, status: true, sentCount: true, blockedCount: true, scheduledAt: true },
+    }),
+    draftBefore
+  );
+  assert.deepEqual(
+    await prisma.campaign.findUniqueOrThrow({
+      where: { id: sending.id },
+      select: { id: true, status: true, sentCount: true, blockedCount: true, scheduledAt: true },
+    }),
+    sendingBefore
+  );
+  assert.equal(providerCalls, 0);
+
+  async function assertManagerCampaignAccess(user: TestUser, label: string) {
+    const managerTemplate = await prisma.template.create({
+      data: {
+        clientId: businessClientId,
+        name: `rbac_manager_${label}_${safeTemplatePrefix}`,
+        category: "UTILITY",
+        language: "pt_BR",
+        status: "approved",
+        content: "Aviso RBAC {{1}}",
+      },
+    });
+    const managerDraft = await prisma.campaign.create({
+      data: {
+        clientId: businessClientId,
+        name: `RBAC manager draft ${label}`,
+        templateId: managerTemplate.id,
+        templateName: managerTemplate.name,
+        status: "draft",
+        totalRecipients: 0,
+        sentCount: 0,
+        blockedCount: 0,
+      },
+      select: { id: true },
+    });
+    const managerSending = await prisma.campaign.create({
+      data: {
+        clientId: businessClientId,
+        name: `RBAC manager sending ${label}`,
+        templateId: managerTemplate.id,
+        templateName: managerTemplate.name,
+        status: "sending",
+        totalRecipients: 0,
+        sentCount: 0,
+        blockedCount: 0,
+      },
+      select: { id: true },
+    });
+
+    const jsonCases = [
+      {
+        method: "GET",
+        route: "/app/campaigns",
+        status: 200,
+        assertBody: (body: { ok?: boolean }) => assert.equal(body.ok, true, `${label} list`),
+      },
+      {
+        method: "GET",
+        route: `/app/campaigns/${managerDraft.id}`,
+        status: 200,
+        assertBody: (body: { campaign?: { id?: string } }) => assert.equal(body.campaign?.id, managerDraft.id),
+      },
+      {
+        method: "GET",
+        route: "/app/campaigns/audience-preview",
+        status: 200,
+        assertBody: (body: { ok?: boolean }) => assert.equal(body.ok, true, `${label} audience preview`),
+      },
+      {
+        method: "GET",
+        route: "/app/campaigns/return-destinations",
+        status: 200,
+        assertBody: (body: { ok?: boolean }) => assert.equal(body.ok, true, `${label} destinations`),
+      },
+      {
+        method: "POST",
+        route: "/app/campaigns/csv-preview",
+        body: { templateId: managerTemplate.id, csvText: "", mapping: {} },
+        status: 400,
+        error: "csv_empty",
+      },
+      {
+        method: "POST",
+        route: "/app/campaigns/drafts/csv",
+        body: { name: "", templateId: "", csvText: "", mapping: {} },
+        status: 400,
+        error: "bad_request",
+      },
+      {
+        method: "POST",
+        route: "/app/campaigns/drafts",
+        body: { invalid: true },
+        status: 400,
+        error: "bad_request",
+      },
+      {
+        method: "POST",
+        route: "/app/campaigns",
+        body: { invalid: true },
+        status: 400,
+        error: "bad_request",
+      },
+      {
+        method: "POST",
+        route: `/app/campaigns/${managerDraft.id}/discard`,
+        status: 200,
+        assertBody: (body: { ok?: boolean; campaign?: { status?: string } }) => {
+          assert.equal(body.ok, true, `${label} discard`);
+          assert.equal(body.campaign?.status, "cancelled");
+        },
+      },
+      {
+        method: "POST",
+        route: `/app/campaigns/${managerDraft.id}/send`,
+        status: 409,
+        error: "campaign_not_draft",
+      },
+      {
+        method: "POST",
+        route: `/app/campaigns/${managerDraft.id}/schedule`,
+        body: { scheduledAt: "invalid" },
+        status: 400,
+        error: "invalid_scheduled_at",
+      },
+      {
+        method: "POST",
+        route: `/app/campaigns/${managerSending.id}/pause`,
+        status: 200,
+        assertBody: (body: { ok?: boolean; campaign?: { status?: string } }) => {
+          assert.equal(body.ok, true, `${label} pause`);
+          assert.equal(body.campaign?.status, "paused");
+        },
+      },
+      {
+        method: "POST",
+        route: `/app/campaigns/${managerSending.id}/resume`,
+        status: 400,
+        error: "return_destination_required",
+      },
+      {
+        method: "POST",
+        route: `/app/campaigns/${managerDraft.id}/test-send`,
+        body: { waId: "" },
+        status: 409,
+        error: "campaign_test_not_allowed",
+      },
+      {
+        method: "POST",
+        route: `/app/campaigns/${managerSending.id}/cancel`,
+        status: 200,
+        assertBody: (body: { ok?: boolean; campaign?: { status?: string } }) => {
+          assert.equal(body.ok, true, `${label} cancel`);
+          assert.equal(body.campaign?.status, "cancelled");
+        },
+      },
+    ];
+
+    for (const item of jsonCases) {
+      const response = await request<ErrorPayload & Record<string, unknown>>(item.method, item.route, user, item.body);
+      assert.equal(response.status, item.status, `${label} ${item.method} ${item.route}: ${JSON.stringify(response.body)}`);
+      if ("error" in item) {
+        assert.equal(getErrorCode(response.body), item.error, `${label} ${item.method} ${item.route}`);
+      } else {
+        item.assertBody(response.body as { ok?: boolean; campaign?: { id?: string; status?: string } });
+      }
+    }
+
+    const exportResponse = await requestText("GET", `/app/campaigns/${managerDraft.id}/export`, user);
+    assert.equal(exportResponse.status, 200, `${label} export: ${exportResponse.text}`);
+    assert.equal(exportResponse.contentType?.includes("text/csv"), true, `${label} export content type`);
+  }
+
+  await assertManagerCampaignAccess(businessSupervisor, "supervisor");
+  await assertManagerCampaignAccess(businessAdmin, "admin");
+  assert.equal(providerCalls, 0);
+});
+
 test("internal web session handoff realtime endpoint requires worker auth and validates payload", async () => {
   const previousToken = process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN;
   process.env.WHATSAPP_WEB_WORKER_CONTROL_TOKEN = "handoff-realtime-test-token";

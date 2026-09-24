@@ -879,7 +879,23 @@ projection rows were deleted (`ConversationRuntimeState
 38012577-8dbb-43d5-8bdd-2ef8ba541038` and `Conversation
 9a07b043-6657-4dc3-9e7f-2b904caf939c`). Campaign, Outbound, Event,
 billing/meta usage, Contact, Lead and CCI were preserved, including failed Meta
-evidence `131026`. Campaign
-RBAC/active-send authorization is P1 backlog only and was not implemented in
-this gate. This strengthens CRA campaign evidence requirements but does not
-claim a new CRA formal acceptance run, real send or provider call.
+evidence `131026`.
+
+Campaign RBAC/active-send authorization update on 2026-09-24 is LOCAL
+IMPLEMENTED / TECHNICAL BROWSER VALIDATED / NOT DEPLOYED / OWNER UI NOT
+VALIDATED. The
+audit found Campaign navigation had the `campaigns` feature flag but lacked an
+explicit `minRole`; the local patch adds SUPERVISOR/ADMIN gating in navigation,
+direct page hydration and backend app campaign routes. AGENT has no Campaign
+navigation or app campaign API access, direct Campaign URL is denied without
+protected data loading, and SUPERVISOR/ADMIN remain authorized through the
+existing tenant, session, feature and capability layers. Opt-out/revoke routes
+were audited and preserved for CRM consumers. Local validation: backend campaign
+feature suite 121/121 PASS on the dedicated local DB; frontend campaign
+contract 24/24 PASS; isolated local browser smoke on ports `3039`/`3000`
+confirmed AGENT restricted UX/no protected campaign hydration and
+SUPERVISOR/ADMIN campaign loading; backend/frontend builds PASS. Required
+regression evidence remains green through `campaignRunner.test.ts` 7/7,
+`campaignRecipientImport.test.ts` 7/7 and `tenantConfig.test.ts` 3/3. This
+strengthens CRA campaign operator-readiness evidence but does not claim OWNER UI
+VALIDATED, a new CRA formal acceptance run, deploy, real send or provider call.

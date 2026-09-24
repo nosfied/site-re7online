@@ -1395,7 +1395,22 @@ projection rows were deleted (`ConversationRuntimeState
 `ad354ce4-35dc-4fca-85e5-3108cc9a2332`, Outbound
 `b5193677-2f28-41ea-879f-1dfebdfe08d9`, Event references, billing/meta usage,
 Contact, Lead and CCI were preserved; failure evidence `131026` / `Message
-undeliverable` remains campaign history. Campaign RBAC/active-send authorization is a separate P1
-backlog item: AGENT no campaign access, SUPERVISOR/ADMIN allowed, backend
-authoritative; not implemented here. No schema/migration, no provider call and
-no real send occurred during the repair.
+undeliverable` remains campaign history.
+
+Campaign RBAC/active-send authorization update on 2026-09-24 is LOCAL
+IMPLEMENTED / TECHNICAL BROWSER VALIDATED / NOT DEPLOYED / OWNER UI NOT
+VALIDATED. The
+audit found Campaign navigation had the `campaigns` feature flag but no
+explicit `minRole`; the local patch adds SUPERVISOR/ADMIN gating in navigation,
+direct `/app/campaigns` hydration and backend app campaign routes. AGENT direct
+access shows a controlled no-permission state without protected campaign data
+loading, and backend routes deny non-manager app roles before body parsing,
+mutation or provider execution. Opt-out/revoke routes were audited and
+preserved for CRM contact opt-out behavior. Local validation passed with
+`campaignsFeatureRoutes.test.ts` 121/121, `campaignsPageContract.test.ts`
+24/24, browser smoke on isolated local ports `3039`/`3000`, backend/frontend
+builds PASS, `campaignRunner.test.ts` 7/7, `campaignRecipientImport.test.ts`
+7/7 and `tenantConfig.test.ts` 3/3. The only loading failures during this
+closure were sandbox IPC `tsx` failures and passed after approved local rerun.
+No schema/migration, production DB access, provider call, real send, commit,
+push or deploy occurred in this local RBAC step.

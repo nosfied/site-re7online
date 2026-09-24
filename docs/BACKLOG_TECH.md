@@ -1949,24 +1949,68 @@ Status: LOCAL FIX PREPARED / NOT DEPLOYED.
 
 ## P1 - Campaign RBAC / Active Sends Authorization - 2026-09-23
 
-Status: AUDITED / BACKLOG / NOT IMPLEMENTED.
+Status: LOCAL IMPLEMENTED / TECHNICAL BROWSER VALIDATED / NOT DEPLOYED /
+OWNER UI NOT VALIDATED.
 
-Problem: AGENT does not see Campaigns in the normal UI, but backend campaign
-routes are mainly guarded by authenticated tenant session plus `campaigns`
-feature, not by explicit SUPERVISOR/ADMIN role enforcement.
+Previous audit problem: app navigation had `feature: "campaigns"` but no
+`minRole`, so the UI omission/visibility contract was not explicit enough, and
+backend campaign routes were mainly guarded by authenticated tenant session
+plus `campaigns` feature, not by explicit SUPERVISOR/ADMIN role enforcement.
 
-Risk: AGENT may potentially call campaign endpoints directly or reach campaign
-surfaces through saved URL/state despite UI omission.
+Local implementation:
+- `AppShell` marks `/app/campaigns` as `minRole: "SUPERVISOR"`, so AGENT no
+  longer sees Campanhas/Comunicados in app navigation.
+- `/app/campaigns` page performs local role gating before loading protected
+  campaign data. AGENT direct URL shows a controlled no-permission state and
+  does not run campaign list/template/destination/CRM status loading while
+  authorization is checking or denied.
+- Backend now centralizes app campaign authorization through
+  `requireCampaignsAppAccess(...)`, reusing current client-session,
+  `isAdminOrSupervisorRole`, scoped client lookup and `campaigns` feature gate.
+  AGENT and unknown/non-manager app roles receive controlled 403 before body
+  parsing, payload validation, mutation or provider execution.
+- Protected app campaign routes covered locally: list, detail, export,
+  audience preview, return destinations, CSV preview, CSV draft, CRM draft,
+  manual create, discard, send, schedule, pause, resume, test-send and cancel.
+- Opt-out routes `/app/campaigns/opt-out` and `/app/campaigns/opt-out/revoke`
+  were audited and intentionally preserved because CRM consumes them for
+  contact opt-out/revoke behavior. No broad prefix block was applied there.
 
-Future domain rule:
+Domain rule:
 - AGENT: no Campaign access and no active campaign operations.
 - SUPERVISOR: allowed.
 - ADMIN: allowed.
 - Backend is authoritative; UI omission is not sufficient.
 
-Future acceptance must cover: `/app/campaigns`, campaign detail/export policy,
-audience preview, CSV preview, drafts, CSV drafts, create, send, schedule,
-pause, resume, test-send and cancel. Backend tests must assert AGENT=403 and
-SUPERVISOR/ADMIN allowed. Frontend must centralize Campaigns minRole as
-SUPERVISOR or equivalent. Do not change opt-out, eligibility, anonymization,
-templates, billing or provider mechanics in that future RBAC implementation.
+Local validation:
+- `campaignsFeatureRoutes.test.ts` 121/121 PASS against local dedicated DB
+  `127.0.0.1:55432/re7_contacts_campaigns_ux_test`. Added regression proves
+  AGENT gets 403, including invalid payload attempts, and negative attempts do
+  not change existing Template/Campaign records or Campaign, OutboundMessage,
+  Conversation, ConversationRuntimeState and Event counts. The provider
+  transport is mocked and asserted at zero calls. SUPERVISOR and ADMIN are
+  exercised across the same protected route set with explicit expected
+  functional responses.
+- `campaignsPageContract.test.ts` 24/24 PASS. Added contract proves app
+  navigation role gate, direct page denied state and no protected list/detail
+  or polling data loading unless `campaignAccess === "allowed"`.
+- Isolated local browser validation on 2026-09-24 used backend `3039`,
+  frontend `3000`, tenant `rbac-local-smoke` and local DB
+  `127.0.0.1:55432/re7_contacts_campaigns_ux_test`: AGENT navigation omitted
+  Campaigns, direct `/app/campaigns` showed the controlled restricted state
+  without protected backend campaign API calls, and SUPERVISOR/ADMIN loaded
+  Campaigns with campaign API requests returning controlled 204/200 responses.
+  Evidence stored locally in ignored development evidence directory
+  `.codex/evidence/campaign-rbac-2026-09-24/`.
+- Builds after the final gap closure: backend `npm run build` PASS and frontend
+  `npm run build` PASS.
+- Required campaign regressions mapped and rechecked locally: delivery truth
+  via `campaignRunner.test.ts` 7/7 PASS; zero eligible/reuse via
+  `campaignsPageContract.test.ts` 24/24 PASS; CRM eligibility/import via
+  `campaignRecipientImport.test.ts` 7/7 PASS and `tenantConfig.test.ts` 3/3
+  PASS. The loading failures observed during this closure were sandbox IPC
+  `tsx` failures (`listen EPERM /tmp/tsx-1000/*.pipe`) and passed when rerun
+  with approved local execution; `campaignRunner` and `campaignRecipientImport`
+  also passed against the local test DB.
+- No schema/migration, production DB access, provider call, real send, commit,
+  push or deploy occurred in this local implementation step.

@@ -691,7 +691,23 @@ truth. Real `****6683` controlled repair was executed in production on
 `38012577-8dbb-43d5-8bdd-2ef8ba541038` and conversation
 `9a07b043-6657-4dc3-9e7f-2b904caf939c`. Campaign, Outbound, Event,
 billing/meta usage, Contact, Lead and CCI were preserved, including failed Meta
-evidence `131026`. Campaign RBAC/active-send
-authorization is logged as P1 backlog only: AGENT blocked, SUPERVISOR/ADMIN
-allowed, backend authoritative. No schema/migration, provider call or real send
-occurred during the repair.
+evidence `131026`.
+
+Campaign RBAC/active-send authorization update on 2026-09-24 is LOCAL
+IMPLEMENTED / TECHNICAL BROWSER VALIDATED / NOT DEPLOYED / OWNER UI NOT
+VALIDATED. The
+audit found the Campaign nav item had `feature: "campaigns"` but no explicit
+manager `minRole`; the local patch hides Campaigns from AGENT navigation,
+denies direct `/app/campaigns` without loading protected campaign data, and
+enforces SUPERVISOR/ADMIN centrally in app campaign APIs before body parsing,
+mutation or provider execution. SUPERVISOR/ADMIN access remains layered with
+tenant, session, feature and CRM capability gates. Campaign opt-out/revoke
+endpoints were audited and preserved for CRM consumers. Local validation:
+backend campaign feature suite 121/121 PASS on the dedicated local DB and
+frontend campaign contract 24/24 PASS; isolated browser smoke on ports
+`3039`/`3000` confirmed AGENT controlled denial with no protected campaign API
+hydration and SUPERVISOR/ADMIN campaign loading; backend/frontend builds PASS.
+Regression mapping remained green: `campaignRunner.test.ts` 7/7,
+`campaignRecipientImport.test.ts` 7/7 and `tenantConfig.test.ts` 3/3. No
+schema/migration, production DB access, provider call, real send, commit, push
+or deploy occurred in this local RBAC step.
