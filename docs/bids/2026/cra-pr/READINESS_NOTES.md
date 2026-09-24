@@ -873,10 +873,13 @@ is required before Inbox Conversation/Runtime materialization and before
 classifying a recipient as delivered/read in customer UX. Meta reaction-only
 webhooks are suppressed as non-content events. `Campaign.sentCount` remains
 legacy submitted/accepted count, not delivered/read/final success evidence.
-Real `****6683` repair remains controlled-repair pending for campaign
-`ad354ce4-35dc-4fca-85e5-3108cc9a2332` and conversation
-`9a07b043-6657-4dc3-9e7f-2b904caf939c`; no repair mutation occurred. Campaign
+Real `****6683` controlled repair was executed in production on 2026-09-24 for
+campaign `ad354ce4-35dc-4fca-85e5-3108cc9a2332`: only false operational
+projection rows were deleted (`ConversationRuntimeState
+38012577-8dbb-43d5-8bdd-2ef8ba541038` and `Conversation
+9a07b043-6657-4dc3-9e7f-2b904caf939c`). Campaign, Outbound, Event,
+billing/meta usage, Contact, Lead and CCI were preserved, including failed Meta
+evidence `131026`. Campaign
 RBAC/active-send authorization is P1 backlog only and was not implemented in
 this gate. This strengthens CRA campaign evidence requirements but does not
-claim a new CRA formal acceptance run, real send, provider call, production data
-repair or deploy.
+claim a new CRA formal acceptance run, real send or provider call.

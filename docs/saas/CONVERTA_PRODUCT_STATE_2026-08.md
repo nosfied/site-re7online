@@ -1387,10 +1387,15 @@ submission evidence; delivered/read webhook evidence is required before
 operational Conversation/Runtime creation or reactivation and before treating a
 recipient as delivered in the UI. Reaction-only Meta webhooks are ignored as
 non-content events. `Campaign.sentCount` remains a legacy submitted/accepted
-counter, not delivered/read/final success truth. Real `****6683` repair for
-campaign `ad354ce4-35dc-4fca-85e5-3108cc9a2332` and conversation
-`9a07b043-6657-4dc3-9e7f-2b904caf939c` is controlled-repair pending with no
-mutation in this gate. Campaign RBAC/active-send authorization is a separate P1
+counter, not delivered/read/final success truth. Real `****6683` controlled
+repair was executed in production on 2026-09-24: only false operational
+projection rows were deleted (`ConversationRuntimeState
+38012577-8dbb-43d5-8bdd-2ef8ba541038` and `Conversation
+9a07b043-6657-4dc3-9e7f-2b904caf939c`). Campaign
+`ad354ce4-35dc-4fca-85e5-3108cc9a2332`, Outbound
+`b5193677-2f28-41ea-879f-1dfebdfe08d9`, Event references, billing/meta usage,
+Contact, Lead and CCI were preserved; failure evidence `131026` / `Message
+undeliverable` remains campaign history. Campaign RBAC/active-send authorization is a separate P1
 backlog item: AGENT no campaign access, SUPERVISOR/ADMIN allowed, backend
-authoritative; not implemented here. No schema/migration, no production repair,
-no provider call and no real send.
+authoritative; not implemented here. No schema/migration, no provider call and
+no real send occurred during the repair.

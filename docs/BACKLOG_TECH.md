@@ -1841,14 +1841,19 @@ Status: LOCAL FIX VALIDATED / NOT DEPLOYED.
 - Meta Cloud reaction-only webhook payloads are non-content events and do not
   create inbox bubbles, unread/sound, bot transitions, CRM or runtime side
   effects.
-- Real `****6683` repair remains plan-only/read-only. No production mutation,
-  no provider call, no real send and no deploy occurred in this local gate.
-  Pending controlled repair target remains campaign
-  `ad354ce4-35dc-4fca-85e5-3108cc9a2332` and conversation
-  `9a07b043-6657-4dc3-9e7f-2b904caf939c`, only after deployed fix and
-  read-only proof that the conversation came solely from a failed campaign send
-  with no legitimate inbound/human interaction. Campaign, Outbound, Event and
-  Billing/usage history must be preserved.
+- Real `****6683` controlled repair was executed in production on 2026-09-24
+  after backup
+  `/opt/re7online/backups/converta-persistent/postgres/20260924-105431.dump`
+  (`sha256=0b0905dbb115737fd9975438b0b750829d92b52a198eeddb5e2958fa049cb747`).
+  The repair deleted only false operational projections:
+  `ConversationRuntimeState 38012577-8dbb-43d5-8bdd-2ef8ba541038` and
+  `Conversation 9a07b043-6657-4dc3-9e7f-2b904caf939c`. Persistent repair
+  artifact:
+  `/opt/re7online/backups/converta-persistent/repairs/6683-2026-09-24-1057/`.
+  Campaign `ad354ce4-35dc-4fca-85e5-3108cc9a2332`, Outbound
+  `b5193677-2f28-41ea-879f-1dfebdfe08d9`, Event references, billing/meta usage,
+  Contact, Lead and CCI were preserved. Meta failed evidence `131026` /
+  `Message undeliverable` remains preserved as campaign failure history.
 - Local validation: focused campaign/import/webhook/runner/opt-out tests
   23/23 PASS; `campaignsPageContract.test.ts` 21/21 PASS;
   `campaignsFeatureRoutes.test.ts` 118/118 PASS. Schema unchanged and

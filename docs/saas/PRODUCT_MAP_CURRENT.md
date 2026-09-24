@@ -685,9 +685,13 @@ column unless a safe alias is detected. Opt-out/send-block evaluation is
 alias-safe for Brazilian 12/13 digit identities. Meta reaction-only webhooks are
 suppressed as non-content events. `Campaign.sentCount` remains a legacy
 submitted/accepted counter and must not be read as delivered/read/final success
-truth. Real `****6683` repair remains pending for campaign
-`ad354ce4-35dc-4fca-85e5-3108cc9a2332` and conversation
-`9a07b043-6657-4dc3-9e7f-2b904caf939c`. Campaign RBAC/active-send
+truth. Real `****6683` controlled repair was executed in production on
+2026-09-24, deleting only false operational projections for campaign
+`ad354ce4-35dc-4fca-85e5-3108cc9a2332`: runtime
+`38012577-8dbb-43d5-8bdd-2ef8ba541038` and conversation
+`9a07b043-6657-4dc3-9e7f-2b904caf939c`. Campaign, Outbound, Event,
+billing/meta usage, Contact, Lead and CCI were preserved, including failed Meta
+evidence `131026`. Campaign RBAC/active-send
 authorization is logged as P1 backlog only: AGENT blocked, SUPERVISOR/ADMIN
-allowed, backend authoritative. No schema/migration, production repair,
-provider call or real send occurred in this local gate.
+allowed, backend authoritative. No schema/migration, provider call or real send
+occurred during the repair.
