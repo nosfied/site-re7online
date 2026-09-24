@@ -694,8 +694,8 @@ billing/meta usage, Contact, Lead and CCI were preserved, including failed Meta
 evidence `131026`.
 
 Campaign RBAC/active-send authorization update on 2026-09-24 is DEPLOYED /
-PRODUCTION HEALTH VALIDATED / TECHNICAL SMOKE PASS / OWNER UI NOT VALIDATED at
-functional production head `b1a528a00d63b5dc3fea6c9ff45f9273e23f4294`. The
+PRODUCTION HEALTH VALIDATED / OWNER VALIDATED / CLOSED at functional production
+head `b1a528a00d63b5dc3fea6c9ff45f9273e23f4294`. The
 audit found the Campaign nav item had `feature: "campaigns"` but no explicit
 manager `minRole`; the local patch hides Campaigns from AGENT navigation,
 denies direct `/app/campaigns` without loading protected campaign data, and
@@ -721,5 +721,16 @@ after backup
 581 objects). Backend/frontend builds and health passed; only
 `re7-whatsapp-agent` and `re7-admin-front` were reloaded and the worker was
 preserved. Role-specific production smoke remains NOT EXERCISED because no
-legitimate AGENT/SUPERVISOR/ADMIN sessions were available; owner UI validation
-remains pending.
+legitimate AGENT/SUPERVISOR/ADMIN sessions were available during automated
+smoke. Owner later declared "validação passou"; that closes the RBAC front.
+
+Next P2 remains Guided Builder BOT inactivity policy UX. Existing runtime uses
+flow-level `inactivityPolicy.resetAfterMinutes` for next-inbound BOT reset and
+`timeoutMinutes/action=HANDOFF` for background BOT-to-HUMAN/WAITING handoff
+when destination/consent are valid. Current Guided UI preserves the field and
+summarizes reset, but lacks explicit operator controls/copy for automatic
+handoff. Smallest proposed implementation: add a lifecycle policy section in
+Guided and final review using existing fields only; preserve Advanced JSON,
+runtime, schema, provider behavior and HUMAN/WAITING manual control. CRA
+business hours remain configured/validated and are not a pending implementation
+item.

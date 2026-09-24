@@ -974,12 +974,6 @@ Proximas cinco frentes:
    esperado: talvez, reaproveitando executor/processador existente. Config
    esperado: flow-level primeiro. Risco: medio por lifecycle. Done: abandono de
    menu/captura/submenu, inbound tardio, restart e tenant isolation testados.
-3. CRA hours configuration and operational validation. Why now: cliente real
-   ainda sem horarios salvos nos departamentos. Valor: ativa o comportamento
-   fora de expediente ja existente sem bloquear autoatendimento. Dependencia:
-   cliente configurar horarios. Demo validavel: sim. Code esperado: nao.
-   Config esperado: sim. Risco: baixo. Done: horario CRA salvo e fluxo validado
-   dentro/fora do expediente.
 3. P2 Question conditional branching. Why now: lacuna descoberta durante 2.4 e
    valor direto para fluxos institucionais. Valor: respostas sim/nao e caminhos
    por resposta. Dependencia: desenho de runtime/predicados. Demo validavel:
@@ -990,6 +984,9 @@ Proximas cinco frentes:
    supervisao/contratos. Dependencia: definir campos e filtros. Demo validavel:
    sim. Code esperado: sim. Config esperado: nao. Risco: medio. Done:
    relatorios mostram contexto sem distorcer historico.
+
+Reconciliation note: CRA business hours remain CONFIGURED / OPERATIONALLY
+VALIDATED and are not an implementation-pending front.
 
 ---
 
@@ -1949,13 +1946,14 @@ Status: LOCAL FIX PREPARED / NOT DEPLOYED.
 
 ## P1 - Campaign RBAC / Active Sends Authorization - 2026-09-23
 
-Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / TECHNICAL SMOKE PASS /
-OWNER UI NOT VALIDATED.
+Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER VALIDATED / CLOSED.
 
 Publication note: commit `69f71222e851ef05b23d40e5cb984b69cfef69f2` was
 published to GitHub for review first. Complement commit
 `b1a528a00d63b5dc3fea6c9ff45f9273e23f4294` was then published and deployed to
-production on 2026-09-24. Owner UI validation remains pending.
+production on 2026-09-24. Owner later declared "validação passou"; this is the
+owner acceptance record, distinct from the earlier technical smoke where
+role-specific production sessions were not available.
 
 Previous audit problem: app navigation had `feature: "campaigns"` but no
 `minRole`, so the UI omission/visibility contract was not explicit enough, and
@@ -2041,6 +2039,34 @@ returned `ok=true` / `db=ok`; `/app/campaigns`, `/app/crm`, `/app/inbox` and
 `/app/login` returned 200; unauthenticated `/app/campaigns` returned controlled
 401. No legitimate AGENT/SUPERVISOR/ADMIN production session was available to
 exercise role-specific UI/API smoke, so AGENT 403 and manager read smoke remain
-NOT EXERCISED in production and owner UI validation remains pending. No POST
-campaign/opt-out mutation, provider call or real send was executed; rollback
-was prepared but not needed.
+NOT EXERCISED in automated production smoke. Owner validation subsequently
+passed and closes the RBAC front. No POST campaign/opt-out mutation, provider
+call or real send was executed; rollback was prepared but not needed.
+
+Next front audit - P2 Guided Builder BOT inactivity policy UX:
+- Existing runtime/config: `ChatbotFlow.definition.inactivityPolicy` is already
+  normalized and persisted by the chatbot flow definition path. Existing keys
+  are `resetAfterMinutes`, `timeoutMinutes` and `action`; runtime accepts
+  `HANDOFF`, `CLOSE` and `RESET_TO_ROOT`, while the background processor only
+  acts on `timeoutMinutes` with `action=HANDOFF`.
+- Existing behavior: `resetAfterMinutes` is inline on the next inbound and
+  resets BOT flow to the start node without moving HUMAN/CLOSED; the inactivity
+  processor promotes eligible BOT runtimes once to HUMAN/WAITING with concrete
+  department/queue, protocol/queue messaging and skip events for invalid
+  consent/destination. HUMAN/WAITING remains under human control and must not
+  auto-close.
+- Existing UI: `ChatbotFlowBuilder` preserves `inactivityPolicy` as a simple
+  top-level field and the review currently only summarizes reset as
+  "Inatividade: N minuto(s) para reiniciar"; it does not offer clear Guided
+  controls for automatic handoff timeout/action nor explain the distinction.
+- Minimal implementation proposed: add a dedicated Guided lifecycle section
+  using current definition fields only, with two separate controls/copy blocks:
+  "Retomar automação de onde parou" mapped to `resetAfterMinutes`, and
+  "Encaminhar ao atendimento humano após abandono" mapped to
+  `timeoutMinutes` + `action=HANDOFF`, showing current values/defaults in the
+  review step. No schema, runtime, provider, production data or HUMAN auto-close
+  change.
+- Acceptance criteria: owner sees current values, can consciously set/clear
+  each policy, review explains practical effect, Advanced JSON remains
+  equivalent, existing reset/handoff tests pass, and no human service is closed
+  automatically.

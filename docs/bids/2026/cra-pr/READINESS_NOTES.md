@@ -882,8 +882,8 @@ billing/meta usage, Contact, Lead and CCI were preserved, including failed Meta
 evidence `131026`.
 
 Campaign RBAC/active-send authorization update on 2026-09-24 is DEPLOYED /
-PRODUCTION HEALTH VALIDATED / TECHNICAL SMOKE PASS / OWNER UI NOT VALIDATED at
-functional production head `b1a528a00d63b5dc3fea6c9ff45f9273e23f4294`. The
+PRODUCTION HEALTH VALIDATED / OWNER VALIDATED / CLOSED at functional production
+head `b1a528a00d63b5dc3fea6c9ff45f9273e23f4294`. The
 audit found Campaign navigation had the `campaigns` feature flag but lacked an
 explicit `minRole`; the local patch adds SUPERVISOR/ADMIN gating in navigation,
 direct page hydration and backend app campaign routes. AGENT has no Campaign
@@ -909,4 +909,14 @@ from `957f19caced77693188a387bb7f7840a24092c67` after PostgreSQL backup
 581 objects), backend/frontend builds passed, only agent/admin-front were
 reloaded, worker was preserved, and no POST mutation, real send or provider
 call was executed. Role-specific production smoke remains NOT EXERCISED due to
-absence of legitimate role sessions.
+absence of legitimate role sessions during automated smoke. Owner later
+declared "validação passou"; that owner statement closes the RBAC front without
+inventing additional technical evidence.
+
+Next P2 for product hardening is Guided Builder BOT inactivity policy UX:
+runtime already supports `resetAfterMinutes` and
+`timeoutMinutes/action=HANDOFF`, but the Guided UI must show current values,
+let the operator choose/clear them consciously and summarize practical behavior
+in review. This should be implemented over existing fields only, with no
+schema/runtime/provider change, no HUMAN auto-close and no reopening of CRA
+business hours, which remain CONFIGURED / OPERATIONALLY VALIDATED.

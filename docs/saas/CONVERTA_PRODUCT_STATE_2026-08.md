@@ -1398,8 +1398,8 @@ Contact, Lead and CCI were preserved; failure evidence `131026` / `Message
 undeliverable` remains campaign history.
 
 Campaign RBAC/active-send authorization update on 2026-09-24 is DEPLOYED /
-PRODUCTION HEALTH VALIDATED / TECHNICAL SMOKE PASS / OWNER UI NOT VALIDATED at
-functional production head `b1a528a00d63b5dc3fea6c9ff45f9273e23f4294`. The
+PRODUCTION HEALTH VALIDATED / OWNER VALIDATED / CLOSED at functional production
+head `b1a528a00d63b5dc3fea6c9ff45f9273e23f4294`. The
 audit found Campaign navigation had the `campaigns` feature flag but no
 explicit `minRole`; the local patch adds SUPERVISOR/ADMIN gating in navigation,
 direct `/app/campaigns` hydration and backend app campaign routes. AGENT direct
@@ -1423,4 +1423,16 @@ mutation and no provider call. Production deployment moved by FF-only from
 `re7-whatsapp-agent` and `re7-admin-front` were reloaded, worker preserved.
 Smoke covered health and route reachability without POST, provider call or real
 send. Legitimate role sessions were not available, so production AGENT 403 and
-SUPERVISOR/ADMIN read smoke are NOT EXERCISED and owner UI remains pending.
+SUPERVISOR/ADMIN read smoke are NOT EXERCISED in automated smoke. Owner later
+declared "validação passou"; that owner acceptance closes RBAC and is distinct
+from the earlier technical smoke evidence.
+
+Next P2 confirmed: Guided Builder BOT inactivity policy UX. Audit found the
+runtime already supports and persists `ChatbotFlow.definition.inactivityPolicy`
+with `resetAfterMinutes`, `timeoutMinutes` and `action`; inline reset restarts
+BOT flow on later inbound, while `timeoutMinutes/action=HANDOFF` is handled by
+the background processor for BOT runtimes only. Current Guided UI only surfaces
+reset in review text and does not clearly configure/explain automatic handoff.
+Minimal next implementation is UX-only over existing fields, with no
+schema/runtime/provider change and no HUMAN auto-close. CRA business hours
+remain CONFIGURED / OPERATIONALLY VALIDATED and are not reopened.
