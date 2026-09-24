@@ -870,6 +870,18 @@ Local behavioral tests passed: `campaignReusePreview.test.ts` 6/6,
 `campaignsPageContract.test.ts` 25/25 and frontend build PASS. No production
 access, provider call, real send, schema change or migration was performed.
 
+Production deploy on 2026-09-24 advanced the functional head from
+`b1a528a00d63b5dc3fea6c9ff45f9273e23f4294` to
+`1ea1fef7556e161a9cf938dbbf23442fdfd1e1f6` after persistent PostgreSQL backup
+`/opt/re7online/backups/converta-persistent/postgres/campaign-reuse-preview-1ea1fef-20260924T200821Z/20260924-200822.dump`
+(`sha256=3d87e903c379e63e7ccd60ea3c0f583fd7ac3929a4f6f0d8e8965f1148f5124c`,
+581 objects). Frontend build passed and only `re7-admin-front` was reloaded;
+`re7-whatsapp-agent` and `re7-whatsapp-web-worker` were preserved. Health and
+basic `/app/campaigns`, `/app/crm`, `/app/inbox` route checks passed.
+Authenticated owner reuse validation remains pending; no draft, schedule, send,
+provider call, schema change or migration was performed by the deploy smoke.
+Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
+
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING /

@@ -108,6 +108,19 @@ cancelamento/reset durante carregamento, limite de 4 consultas simultaneas e
 preservacao da selecao/bloqueio atual; contrato da pagina 25/25 PASS; frontend
 build PASS.
 
+Deploy de producao, 2026-09-24: a correcao de hidratacao da previa de
+reaproveitamento foi implantada no head funcional
+`1ea1fef7556e161a9cf938dbbf23442fdfd1e1f6`, a partir de
+`b1a528a00d63b5dc3fea6c9ff45f9273e23f4294`, com backup persistente
+`/opt/re7online/backups/converta-persistent/postgres/campaign-reuse-preview-1ea1fef-20260924T200821Z/20260924-200822.dump`
+(`sha256=3d87e903c379e63e7ccd60ea3c0f583fd7ac3929a4f6f0d8e8965f1148f5124c`,
+581 objetos). Build frontend passou; somente `re7-admin-front` foi recarregado,
+com `re7-whatsapp-agent` e worker preservados. Health, `/app/campaigns`,
+`/app/crm` e `/app/inbox` passaram. Smoke autenticado especifico de
+`Campanha teste set.27` ficou NOT EXERCISED por ausencia de sessao legitima no
+terminal de deploy. Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI
+PENDING.
+
 Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
 counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
 VALIDATED / OWNER UI PENDING no head

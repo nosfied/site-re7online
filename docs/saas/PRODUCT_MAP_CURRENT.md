@@ -667,6 +667,17 @@ Validacao comportamental local concluida: helper de hidratacao 6/6 PASS,
 contrato da pagina de campanhas 25/25 PASS e frontend build PASS; nenhuma
 producao, provider real, envio real, schema ou migration.
 
+Deploy de producao, 2026-09-24: head funcional
+`1ea1fef7556e161a9cf938dbbf23442fdfd1e1f6` implantado por FF-only a partir de
+`b1a528a00d63b5dc3fea6c9ff45f9273e23f4294`, depois do backup PostgreSQL
+persistente
+`/opt/re7online/backups/converta-persistent/postgres/campaign-reuse-preview-1ea1fef-20260924T200821Z/20260924-200822.dump`
+(`sha256=3d87e903c379e63e7ccd60ea3c0f583fd7ac3929a4f6f0d8e8965f1148f5124c`,
+581 objetos). Build frontend PASS; reload somente de `re7-admin-front`; backend
+agent e worker preservados. Health e rotas `/app/campaigns`, `/app/crm` e
+`/app/inbox` PASS. Validacao visual autenticada do owner segue pendente.
+Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
+
 CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
 PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was
 fast-forwarded to `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`;

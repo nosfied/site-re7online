@@ -1937,6 +1937,18 @@ OWNER UI PENDING.
   failure, late response after another reuse, late response after cancel/reset,
   selected order/current block preservation and max four concurrent CRM detail
   reads. `campaignsPageContract.test.ts` 25/25 PASS and frontend build PASS.
+- Production deploy, 2026-09-24: functional head
+  `1ea1fef7556e161a9cf938dbbf23442fdfd1e1f6` was deployed by FF-only from
+  `b1a528a00d63b5dc3fea6c9ff45f9273e23f4294` after persistent PostgreSQL
+  backup
+  `/opt/re7online/backups/converta-persistent/postgres/campaign-reuse-preview-1ea1fef-20260924T200821Z/20260924-200822.dump`
+  (`sha256=3d87e903c379e63e7ccd60ea3c0f583fd7ac3929a4f6f0d8e8965f1148f5124c`,
+  581 objects). Frontend build PASS; only `re7-admin-front` was reloaded.
+  `re7-whatsapp-agent` and `re7-whatsapp-web-worker` were preserved. Health and
+  `/app/campaigns`, `/app/crm`, `/app/inbox` returned PASS. Authenticated owner
+  reuse smoke for `Campanha teste set.27` was NOT EXERCISED from the deploy
+  shell because no genuine session was available. Status:
+  DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 
