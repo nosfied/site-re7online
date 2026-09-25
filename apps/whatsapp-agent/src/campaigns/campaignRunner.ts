@@ -109,6 +109,27 @@ function normalizeCampaignRunRecipientWaId(value: string) {
   return normalizeCrmWhatsappIdentity(raw)?.crmCanonicalPhone ?? digits;
 }
 
+function buildNormalizedCampaignRunRecipients(params: {
+  waIds: string[];
+  componentsByWaId?: Record<string, CampaignTemplateComponents>;
+}) {
+  const waIds: string[] = [];
+  const componentsByWaId: Record<string, CampaignTemplateComponents> = {};
+  const seen = new Set<string>();
+  for (const originalWaId of params.waIds) {
+    const normalizedWaId = normalizeCampaignRunRecipientWaId(originalWaId);
+    if (!normalizedWaId || seen.has(normalizedWaId)) continue;
+    seen.add(normalizedWaId);
+    waIds.push(normalizedWaId);
+    const components = params.componentsByWaId?.[originalWaId] ?? params.componentsByWaId?.[normalizedWaId];
+    if (components) componentsByWaId[normalizedWaId] = components;
+  }
+  return {
+    waIds,
+    componentsByWaId: Object.keys(componentsByWaId).length > 0 ? componentsByWaId : undefined,
+  };
+}
+
 export function startCampaignRun(params: StartCampaignRunParams) {
   if (runningCampaigns.has(params.campaignId)) {
     logger.warn({
@@ -551,9 +572,11 @@ async function runCampaignInBackground(
     return;
   }
   const usageSource = params.source ?? "campaign";
-  const requestedWaIds = Array.from(
-    new Set(params.waIds.map((waId) => normalizeCampaignRunRecipientWaId(waId)).filter(Boolean))
-  );
+  const normalizedRecipients = buildNormalizedCampaignRunRecipients({
+    waIds: params.waIds,
+    componentsByWaId: params.componentsByWaId,
+  });
+  const requestedWaIds = normalizedRecipients.waIds;
   const filteredRecipients = await filterOptedOutCampaignRecipients(prisma, {
     clientId: params.clientId,
     waIds: requestedWaIds,
@@ -872,7 +895,10 @@ async function runCampaignInBackground(
             continue;
           }
           const components =
-            params.componentsByWaId?.[inputWaId] ?? params.componentsByWaId?.[waId] ?? params.components;
+            normalizedRecipients.componentsByWaId?.[inputWaId] ??
+            normalizedRecipients.componentsByWaId?.[waId] ??
+            normalizedRecipients.componentsByWaId?.[waIdCanonical] ??
+            params.components;
           const previousSubmitStarted = await prisma.event.findFirst({
             where: {
               clientId: params.clientId,

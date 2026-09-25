@@ -346,6 +346,8 @@ test("campaign runner persists provider acceptance without opening operational c
   const recipient = "5541991100401";
   const ddd55NationalRecipient = "55991400002";
   const ddd55CanonicalRecipient = "5555991400002";
+  const ddd55NationalComponents = [{ type: "body" as const, parameters: [{ type: "text" as const, text: "DDD55 Nacional" }] }];
+  const ddd55CanonicalComponents = [{ type: "body" as const, parameters: [{ type: "text" as const, text: "DDD55 Completo" }] }];
   const metaMessageId = `wamid.${crypto.randomUUID()}`;
   await cleanup(clientId).catch(() => undefined);
   t.after(() => {
@@ -383,11 +385,16 @@ test("campaign runner persists provider acceptance without opening operational c
 
   const originalFetch = globalThis.fetch;
   const metaRecipients: string[] = [];
+  const metaComponentsByRecipient = new Map<string, unknown>();
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     if (url.startsWith("https://graph.facebook.com/")) {
-      const request = JSON.parse(String(init?.body ?? "{}")) as { to?: string };
+      const request = JSON.parse(String(init?.body ?? "{}")) as {
+        to?: string;
+        template?: { components?: unknown };
+      };
       if (request.to) metaRecipients.push(request.to);
+      if (request.to) metaComponentsByRecipient.set(request.to, request.template?.components);
       return new Response(JSON.stringify({ messages: [{ id: metaMessageId }] }), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -405,7 +412,11 @@ test("campaign runner persists provider acceptance without opening operational c
     clientKey,
     name: campaign.name,
     templateName,
-    waIds: [recipient, ddd55NationalRecipient],
+    waIds: [recipient, ddd55NationalRecipient, ddd55CanonicalRecipient],
+    componentsByWaId: {
+      [ddd55NationalRecipient]: ddd55NationalComponents,
+      [ddd55CanonicalRecipient]: ddd55CanonicalComponents,
+    },
   });
   assert.ok(runId);
 
@@ -415,6 +426,7 @@ test("campaign runner persists provider acceptance without opening operational c
   });
 
   assert.deepEqual(metaRecipients, [recipient, ddd55CanonicalRecipient]);
+  assert.deepEqual(metaComponentsByRecipient.get(ddd55CanonicalRecipient), ddd55NationalComponents);
   const outbound = await prisma.outboundMessage.findUnique({
     where: { clientId_messageId: { clientId, messageId: `campaign.${campaign.id}.1` } },
   });

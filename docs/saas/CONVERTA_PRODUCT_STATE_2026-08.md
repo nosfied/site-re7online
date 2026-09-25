@@ -270,6 +270,14 @@ sends use existing conversation/contact identities and are not arbitrary
 typed-phone surfaces. Provider calls were simulated only. Status:
 LOCAL VALIDATED / NOT DEPLOYED.
 
+Review follow-up on 2026-09-25: the campaign runner now keeps recipient
+variables attached to the original entry while normalizing destinations. A
+static seed keyed by national DDD `55` sends to the full canonical destination
+with that recipient's own components, and national/full duplicate forms collapse
+to one provider call without mixing variables. Focused runner and route tests
+plus backend build passed with provider mocked. Status:
+LOCAL VALIDATED / NOT DEPLOYED.
+
 Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
 counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
 VALIDATED / OWNER UI PENDING no head

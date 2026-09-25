@@ -806,6 +806,13 @@ CRM/Inbox sends use stored conversation/contact identities instead of accepting
 free-form phone entry. Provider calls were simulated only. Status:
 LOCAL VALIDATED / NOT DEPLOYED.
 
+Review follow-up on 2026-09-25: destination normalization in the campaign
+runner now carries `componentsByWaId` through the original-to-canonical mapping.
+National DDD `55` recipients keep their own variables after normalization to
+full canonical form; national/full duplicate entries are sent once and do not
+mix another recipient's data. Focused runner and route tests plus backend build
+passed with providers mocked. Status: LOCAL VALIDATED / NOT DEPLOYED.
+
 CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
 PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was
 fast-forwarded to `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`;

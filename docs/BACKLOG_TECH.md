@@ -2100,6 +2100,14 @@ OWNER UI PENDING.
   conversation/identity-backed paths, not arbitrary typed-phone entry points.
   Provider calls were simulated only. Status:
   LOCAL VALIDATED / NOT DEPLOYED.
+- Review follow-up, 2026-09-25: campaign runner normalization now preserves the
+  original recipient-to-components association when a national DDD `55` entry
+  is normalized to full canonical form. Static seeds with
+  `componentsByWaId["55991400002"]` send to `5555991400002` using that exact
+  recipient's variables; national/full collisions dedupe to one send without
+  mixing data from another recipient. Focused runner and route tests plus
+  backend build passed with providers mocked. Status:
+  LOCAL VALIDATED / NOT DEPLOYED.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 

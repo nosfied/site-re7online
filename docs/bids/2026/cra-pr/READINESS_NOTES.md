@@ -1009,6 +1009,13 @@ and zero provider calls; CRM/Inbox template sends are identity/conversation
 backed and not free-form phone entry points. Provider calls were simulated only.
 Status: LOCAL VALIDATED / NOT DEPLOYED; not CRA formal acceptance.
 
+Review follow-up on 2026-09-25: the ordinary campaign runner now preserves
+recipient-specific variables while normalizing DDD `55` inputs. A seed keyed by
+`55991400002` sends to `5555991400002` with that recipient's own variables;
+national/full duplicate forms produce one send and no variable mixing. Focused
+runner and route tests plus backend build passed with provider mocked. Status:
+LOCAL VALIDATED / NOT DEPLOYED; not CRA formal acceptance.
+
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING /
