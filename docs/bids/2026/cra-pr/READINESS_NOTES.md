@@ -942,6 +942,18 @@ chips while preserving campaign counters, recipient review and eligibility
 truth. Status: LOCAL FIX PREPARED / NOT DEPLOYED / OWNER UI PENDING; not CRA
 formal acceptance.
 
+Follow-up on 2026-09-25: the campaign test-send sample resolver was corrected
+locally to prioritize the typed destination after CRM mapping readiness is
+rebuilt. A destination that belongs to the campaign audience, including 12/13
+digit aliases, uses its own current recipient values; an incomplete known
+recipient blocks before provider rather than using another recipient's data.
+External test numbers still use the first eligible complete sample and may skip
+incomplete candidates. Focused local coverage passed for static CRM audience,
+dynamic CRM filter, alias matching, exact destination, zero provider call on
+incomplete known recipient, and unchanged draft campaign status. Status: LOCAL
+VALIDATED / NOT DEPLOYED / OWNER UI PENDING; not CRA formal acceptance.
+formal acceptance.
+
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING /

@@ -200,6 +200,16 @@ chips tecnicos de motivo), mantendo os contadores principais da campanha,
 tabela de destinatarios, elegibilidade e validacoes backend. Status: LOCAL FIX
 PREPARED / NOT DEPLOYED / OWNER UI PENDING.
 
+Complemento local de 2026-09-25: o test-send reusa a prontidao canonica do
+rascunho antes de escolher a amostra. Se o numero informado pertence a audiencia
+original, inclusive por alias 12/13 digitos, a mensagem usa os dados atuais do
+proprio destinatario; se esse destinatario conhecido estiver sem variavel
+obrigatoria, bloqueia antes do provider em vez de usar outra pessoa como
+amostra. Para numero externo, candidatos incompletos podem ser pulados ate a
+primeira amostra elegivel completa. Validacao local focada passou para audiencia
+CRM estatica, filtro CRM dinamico, alias, destino exato e campanha preservada.
+Status: LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+
 Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
 counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
 VALIDATED / OWNER UI PENDING no head

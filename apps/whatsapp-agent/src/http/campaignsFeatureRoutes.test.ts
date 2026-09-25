@@ -13492,6 +13492,262 @@ test("app CSV import previews and creates draft without sending", async (t) => {
   assert.equal(campaignAfterTest.totalRecipients, 2);
 });
 
+test("campaign test-send prioritizes resolved audience recipient data", async (t) => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `app_test_send_sample_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Olá {{1}}",
+    },
+  });
+  const firstWaId = "5541991400001";
+  const secondWaId = "5541991400002";
+  const incompleteWaId = "5541991400003";
+  const externalWaId = "5541991400999";
+  const aliasCanonicalWaId = "5511949806684";
+  const aliasTypedWaId = "551149806684";
+  const dynamicFirstWaId = "5541991400011";
+  const dynamicSecondWaId = "5541991400012";
+  const firstLead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: firstWaId,
+      waIdCanonical: firstWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Primeiro Mapeado",
+      phone: firstWaId,
+      status: "RETORNO_FUTURO",
+    },
+  });
+  const secondLead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: secondWaId,
+      waIdCanonical: secondWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Segundo Mapeado",
+      phone: secondWaId,
+      status: "RETORNO_FUTURO",
+    },
+  });
+  const incompleteLead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: incompleteWaId,
+      waIdCanonical: incompleteWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: null,
+      phone: incompleteWaId,
+      status: "RETORNO_FUTURO",
+    },
+  });
+  const aliasLead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: aliasCanonicalWaId,
+      waIdCanonical: aliasCanonicalWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Alias Mapeado",
+      phone: aliasCanonicalWaId,
+      status: "RETORNO_FUTURO",
+    },
+  });
+  await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: dynamicFirstWaId,
+      waIdCanonical: dynamicFirstWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Dinamico Primeiro",
+      phone: dynamicFirstWaId,
+      status: "NEW",
+    },
+  });
+  await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: dynamicSecondWaId,
+      waIdCanonical: dynamicSecondWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Dinamico Segundo",
+      phone: dynamicSecondWaId,
+      status: "NEW",
+    },
+  });
+
+  const staticDraft = await request<{
+    ok: true;
+    campaign: { id: string; status: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Rascunho test-send CRM",
+    templateId: template.id,
+    selectedLeadIds: [firstLead.id, secondLead.id, incompleteLead.id, aliasLead.id],
+    returnDestination: defaultCampaignReturnDestination(),
+    templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+  });
+  assert.equal(staticDraft.status, 200, JSON.stringify(staticDraft.body));
+  const staticSeed = await prisma.event.findFirst({
+    where: {
+      clientId: businessClientId,
+      eventName: "campaign.seed.saved",
+      messageId: staticDraft.body.campaign.id,
+    },
+    orderBy: { createdAt: "desc" },
+    select: { payloadJson: true },
+  });
+  assert.ok(staticSeed);
+  assert.equal(JSON.stringify(staticSeed.payloadJson).includes("componentsByWaId"), false);
+
+  const phoneNumberId = `phone-test-send-sample-${safeTemplatePrefix}`;
+  await prisma.waPhoneNumber.create({
+    data: {
+      clientId: businessClientId,
+      phoneNumberId,
+      display: "+55 41 99140-0900",
+    },
+  });
+  await prisma.channelAccount.create({
+    data: {
+      clientId: businessClientId,
+      channel: "whatsapp",
+      provider: "meta_cloud",
+      channelAccountId: phoneNumberId,
+      enabled: true,
+      inboundPersistenceEnabled: true,
+      outboundEnabled: true,
+      status: "connected",
+      tokenStatus: "ok",
+    },
+  });
+  const originalFetch = globalThis.fetch;
+  const metaPayloads: Array<Record<string, unknown>> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaPayloads.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.test-send-sample.${metaPayloads.length}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const secondRecipientTest = await request<{ ok: true; messageId: string }>(
+    "POST",
+    `/app/campaigns/${staticDraft.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: secondWaId }
+  );
+  assert.equal(secondRecipientTest.status, 200, JSON.stringify(secondRecipientTest.body));
+  assert.equal(metaPayloads.length, 1);
+  assert.match(JSON.stringify(metaPayloads[0]), /Segundo Mapeado/);
+  assert.doesNotMatch(JSON.stringify(metaPayloads[0]), /Primeiro Mapeado|Alias Mapeado/);
+
+  const aliasRecipientTest = await request<{ ok: true; messageId: string }>(
+    "POST",
+    `/app/campaigns/${staticDraft.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: aliasTypedWaId }
+  );
+  assert.equal(aliasRecipientTest.status, 200, JSON.stringify(aliasRecipientTest.body));
+  assert.equal(metaPayloads.length, 2);
+  assert.match(JSON.stringify(metaPayloads[1]), /Alias Mapeado/);
+  assert.match(JSON.stringify(metaPayloads[1]), new RegExp(aliasTypedWaId));
+  assert.doesNotMatch(JSON.stringify(metaPayloads[1]), /Primeiro Mapeado|Segundo Mapeado/);
+
+  const incompleteRecipientCalls = metaPayloads.length;
+  const incompleteKnownRecipient = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${staticDraft.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: incompleteWaId }
+  );
+  assert.equal(incompleteKnownRecipient.status, 400);
+  assert.equal(getErrorCode(incompleteKnownRecipient.body), "campaign_test_variables_required");
+  assert.equal(metaPayloads.length, incompleteRecipientCalls);
+
+  const externalTest = await request<{ ok: true; messageId: string }>(
+    "POST",
+    `/app/campaigns/${staticDraft.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: externalWaId }
+  );
+  assert.equal(externalTest.status, 200, JSON.stringify(externalTest.body));
+  assert.equal(metaPayloads.length, 3);
+  assert.match(JSON.stringify(metaPayloads[2]), /Primeiro Mapeado/);
+  assert.match(JSON.stringify(metaPayloads[2]), new RegExp(externalWaId));
+  assert.doesNotMatch(JSON.stringify(metaPayloads[2]), /Segundo Mapeado|Alias Mapeado/);
+
+  const incompleteFirstDraft = await request<{
+    ok: true;
+    campaign: { id: string; status: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Rascunho test-send amostra",
+    templateId: template.id,
+    selectedLeadIds: [incompleteLead.id, secondLead.id],
+    returnDestination: defaultCampaignReturnDestination(),
+    templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+  });
+  assert.equal(incompleteFirstDraft.status, 200, JSON.stringify(incompleteFirstDraft.body));
+  const externalSkipsIncomplete = await request<{ ok: true; messageId: string }>(
+    "POST",
+    `/app/campaigns/${incompleteFirstDraft.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: "5541991400888" }
+  );
+  assert.equal(externalSkipsIncomplete.status, 200, JSON.stringify(externalSkipsIncomplete.body));
+  assert.equal(metaPayloads.length, 4);
+  assert.match(JSON.stringify(metaPayloads[3]), /Segundo Mapeado/);
+  assert.match(JSON.stringify(metaPayloads[3]), /5541991400888/);
+  assert.doesNotMatch(JSON.stringify(metaPayloads[3]), /Primeiro Mapeado/);
+
+  const dynamicDraft = await request<{
+    ok: true;
+    campaign: { id: string; status: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Rascunho test-send dinamico",
+    templateId: template.id,
+    selectionMode: "DYNAMIC_CRM_FILTER",
+    dynamicFilter: { crmBusinessStatusId: "NEW" },
+    returnDestination: defaultCampaignReturnDestination(),
+    templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+  });
+  assert.equal(dynamicDraft.status, 200, JSON.stringify(dynamicDraft.body));
+  const dynamicRecipientTest = await request<{ ok: true; messageId: string }>(
+    "POST",
+    `/app/campaigns/${dynamicDraft.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: dynamicSecondWaId }
+  );
+  assert.equal(dynamicRecipientTest.status, 200, JSON.stringify(dynamicRecipientTest.body));
+  assert.equal(metaPayloads.length, 5);
+  assert.match(JSON.stringify(metaPayloads[4]), /Dinamico Segundo/);
+  assert.match(JSON.stringify(metaPayloads[4]), new RegExp(dynamicSecondWaId));
+  assert.doesNotMatch(JSON.stringify(metaPayloads[4]), /Dinamico Primeiro|Primeiro Mapeado|Alias Mapeado/);
+
+  for (const campaignId of [staticDraft.body.campaign.id, incompleteFirstDraft.body.campaign.id, dynamicDraft.body.campaign.id]) {
+    const campaign = await prisma.campaign.findUniqueOrThrow({
+      where: { id: campaignId },
+      select: { status: true, sentCount: true },
+    });
+    assert.equal(campaign.status, "draft");
+    assert.equal(campaign.sentCount, 0);
+  }
+});
+
 test("app CSV CRM import requires CRM capability before any mutation", async () => {
   const template = await prisma.template.create({
     data: {

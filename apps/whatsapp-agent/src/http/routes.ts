@@ -29817,6 +29817,15 @@ function buildFixedTemplateComponentsFromSeed(seed: CampaignDraftSeed, requiredP
   return hasCompleteTemplateComponents(components, requiredPositions) ? components : undefined;
 }
 
+function findMatchingCampaignTestRecipientWaId(acceptedWaIds: string[], waId: string) {
+  const targetCandidates = campaignRecipientIdentityCandidates(waId);
+  return (
+    acceptedWaIds.find((candidateWaId) =>
+      campaignRecipientIdentitiesMatch(targetCandidates, campaignRecipientIdentityCandidates(candidateWaId))
+    ) ?? null
+  );
+}
+
 async function resolveDynamicCampaignTestRecipients(
   prisma: ReturnType<typeof getPrisma>,
   params: {
@@ -29937,23 +29946,37 @@ function resolveCampaignTestComponents(params: {
   if (params.explicitComponents) {
     return { ok: true, source: "explicit", components: params.explicitComponents, sampleWaId: null };
   }
-  const ownComponents = params.seed.componentsByWaId?.[params.waId];
-  if (
-    params.seedRecipients.acceptedWaIds.includes(params.waId) &&
-    hasCompleteTemplateComponents(ownComponents, requiredPositions)
-  ) {
-    return { ok: true, source: "own_recipient", components: ownComponents, sampleWaId: params.waId };
-  }
-  const fixedComponents = buildFixedTemplateComponentsFromSeed(params.seed, requiredPositions);
-  if (fixedComponents) {
-    return { ok: true, source: "fixed_params", components: fixedComponents, sampleWaId: null };
-  }
+  const seedRecipientWaId = findMatchingCampaignTestRecipientWaId(params.seedRecipients.acceptedWaIds, params.waId);
   const readiness = resolveCampaignDraftMessageReadiness({
     seed: params.seed,
     requiredPositions,
     recipients: params.seedRecipients,
   });
+  if (seedRecipientWaId && !readiness.ready) {
+    return { ok: false, error: "campaign_test_variables_required" };
+  }
   if (!readiness.ready) return { ok: false, error: "campaign_test_variables_required" };
+  const resolvedRecipientWaId = findMatchingCampaignTestRecipientWaId(readiness.recipients.acceptedWaIds, params.waId);
+  if (seedRecipientWaId) {
+    if (!resolvedRecipientWaId) return { ok: false, error: "campaign_test_variables_required" };
+    const ownComponents =
+      readiness.componentsByWaId?.[resolvedRecipientWaId] ??
+      readiness.components ??
+      params.seed.componentsByWaId?.[resolvedRecipientWaId] ??
+      params.seed.componentsByWaId?.[params.waId];
+    if (hasCompleteTemplateComponents(ownComponents, requiredPositions)) {
+      return {
+        ok: true,
+        source: readiness.strategy === "fixed_params" ? "fixed_params" : "own_recipient",
+        components: ownComponents,
+        sampleWaId: resolvedRecipientWaId,
+      };
+    }
+    return { ok: false, error: "campaign_test_variables_required" };
+  }
+  if (readiness.components && hasCompleteTemplateComponents(readiness.components, requiredPositions)) {
+    return { ok: true, source: "fixed_params", components: readiness.components, sampleWaId: null };
+  }
   for (const candidateWaId of readiness.recipients.acceptedWaIds) {
     const components = readiness.componentsByWaId?.[candidateWaId] ?? readiness.components;
     if (hasCompleteTemplateComponents(components, requiredPositions)) {

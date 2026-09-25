@@ -2030,6 +2030,17 @@ OWNER UI PENDING.
   campaign main counters, draft recipient review, backend validation and
   eligibility data. Status:
   LOCAL FIX PREPARED / NOT DEPLOYED / OWNER UI PENDING.
+- Local correction, 2026-09-25: test-send sample resolution now re-prioritizes
+  the typed number after canonical draft readiness rebuilds CRM mapping-derived
+  components. A test destination that belongs to the audience, including 12/13
+  digit aliases, uses its own current data; if that recipient lacks required
+  variables, the request blocks instead of silently using another person's
+  sample. External test destinations may still skip incomplete candidates and
+  use the next eligible complete sample. Focused local coverage passed for
+  static CRM audience, dynamic CRM filter, alias matching, exact typed
+  destination, zero provider call on incomplete known recipient, and unchanged
+  draft campaign status. Status:
+  LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 

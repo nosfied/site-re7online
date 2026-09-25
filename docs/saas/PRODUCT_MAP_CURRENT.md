@@ -739,6 +739,18 @@ chips) while preserving campaign main counters, recipient review, eligibility
 and backend validation. Status: LOCAL FIX PREPARED / NOT DEPLOYED / OWNER UI
 PENDING.
 
+Follow-up on 2026-09-25: the backend now chooses campaign test-send sample data
+after canonical draft readiness resolves CRM mappings. A typed test number that
+belongs to the audience, including Brazilian 12/13 digit aliases, uses that
+recipient's own current values; if the known recipient is incomplete, the test
+blocks before provider instead of borrowing another recipient's values. External
+test numbers may still use the first eligible complete sample, skipping
+incomplete candidates deterministically. Focused local coverage passed for
+static CRM audience, dynamic CRM filter, alias matching, exact test
+destination, no provider call for incomplete known recipient, and preserved
+draft campaign status. Status: LOCAL VALIDATED / NOT DEPLOYED / OWNER UI
+PENDING.
+
 CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
 PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was
 fast-forwarded to `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`;
