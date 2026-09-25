@@ -8,6 +8,7 @@ const inboxSource = fs.readFileSync(path.join(process.cwd(), "src/app/app/inbox/
 const appShellSource = fs.readFileSync(path.join(process.cwd(), "src/components/app/AppShell.tsx"), "utf8");
 const campaignDraftsSource = fs.readFileSync(path.join(process.cwd(), "src/lib/campaignDrafts.ts"), "utf8");
 const campaignReusePreviewSource = fs.readFileSync(path.join(process.cwd(), "src/lib/campaignReusePreview.ts"), "utf8");
+const campaignResultEvidenceSource = fs.readFileSync(path.join(process.cwd(), "src/lib/campaignResultEvidence.ts"), "utf8");
 
 test("campaign center exposes persisted lifecycle tabs", () => {
   assert.ok(pageSource.includes('{ id: "sending", label: "Enviando" }'));
@@ -302,10 +303,11 @@ test("campaign detail layout keeps status badge actions progress and draft table
   assert.ok(!pageSource.includes("formatRelativeTime(selectedCampaign.updatedAt)"));
   assert.ok(!pageSource.includes("formatRelativeTime(selectedCampaign.createdAt)"));
   assert.ok(pageSource.includes('id="campaign-schedule-at"'));
-  assert.ok(pageSource.includes("hasRealCampaignResultEvidence"));
-  assert.ok(pageSource.includes('item.nonBillingReason === "missing_individual_history"'));
-  assert.ok(pageSource.includes('typeof item.pricingBillable === "boolean"'));
-  assert.ok(!pageSource.includes('pricingBillable !== null'));
+  assert.ok(pageSource.includes("hasCampaignResultEvidence(item, selectedCampaign?.status)"));
+  assert.ok(pageSource.includes("getCampaignResultEvidenceLabel(item) ?? getMetaStatusLabel(item.status)"));
+  assert.ok(campaignResultEvidenceSource.includes('item.nonBillingReason === "missing_individual_history"'));
+  assert.ok(campaignResultEvidenceSource.includes('typeof item.pricingBillable === "boolean"'));
+  assert.ok(!campaignResultEvidenceSource.includes('pricingBillable !== null'));
   assert.ok(pageSource.includes("hasRealCampaignResultItems ? ("));
 });
 

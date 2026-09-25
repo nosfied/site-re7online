@@ -9,6 +9,10 @@ import {
   getFriendlyCampaignError,
 } from "@/lib/campaignDrafts";
 import {
+  getCampaignResultEvidenceLabel,
+  hasCampaignResultEvidence,
+} from "@/lib/campaignResultEvidence";
+import {
   AppCampaignAudiencePreviewResponse,
   AppCampaignAudiencePreviewItem,
   AppCampaignImportReport,
@@ -88,29 +92,6 @@ type RecipientSelectionMode = "STATIC_RECIPIENTS" | "DYNAMIC_CRM_FILTER";
 type CampaignResultStatusFilter = "all" | "delivered" | "sent" | "read" | "blocked" | "failed" | "pending";
 type CampaignResultItem = NonNullable<CampaignItem["messagesMetaStatus"]>[number];
 type CsvGenericFieldKey = `field${number}`;
-
-function hasRealCampaignResultEvidence(item: CampaignResultItem) {
-  const isMissingHistoryFallback = item.nonBillingReason === "missing_individual_history";
-  if (isMissingHistoryFallback) return false;
-  return Boolean(
-    item.sentAt ||
-      item.deliveredAt ||
-      item.conversationId ||
-      item.pricingCategory ||
-      typeof item.pricingBillable === "boolean" ||
-      item.pricingModel ||
-      item.nonBillingReason === "opt_out" ||
-      item.nonBillingReason === "recipient_blocked" ||
-      item.nonBillingReason === "failed_or_blocked" ||
-      item.nonBillingReason === "status_unconfirmed" ||
-      item.status === "delivered" ||
-      item.status === "read" ||
-      item.status === "sent" ||
-      item.status === "blocked" ||
-      item.status === "opt_out" ||
-      (item.status === "failed" && item.error)
-  );
-}
 
 type CampaignToastTone = "success" | "warning" | "error" | "info" | "reuse";
 
@@ -1520,8 +1501,8 @@ export default function AppCampaignsPage() {
     [selectedCampaign?.messagesMetaStatus]
   );
   const hasRealCampaignResultItems = useMemo(
-    () => campaignResultItems.some(hasRealCampaignResultEvidence),
-    [campaignResultItems]
+    () => campaignResultItems.some((item) => hasCampaignResultEvidence(item, selectedCampaign?.status)),
+    [campaignResultItems, selectedCampaign?.status]
   );
 
   const resultStatusOptions = useMemo(() => {
@@ -4377,7 +4358,7 @@ export default function AppCampaignsPage() {
                                 <td className="px-3 py-2">{item.crmStatusLabel || item.crmStatus || "-"}</td>
                                 <td className="px-3 py-2">
                                   <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getMetaStatusClasses(item.status)}`}>
-                                    {getMetaStatusLabel(item.status)}
+                                    {getCampaignResultEvidenceLabel(item) ?? getMetaStatusLabel(item.status)}
                                   </span>
                                 </td>
                                 <td className="px-3 py-2">{getMetaTemplateCategoryUxLabel(item.pricingCategory)}</td>

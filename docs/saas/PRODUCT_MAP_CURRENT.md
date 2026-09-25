@@ -701,11 +701,12 @@ campaign A responses/errors from changing state after campaign B or cancel.
 Draft copy is neutral unless readiness is actually validated. Campaign result
 visibility uses structured `missing_individual_history` for seed placeholders
 and treats `pricingBillable` as evidence only when boolean, so genuine failures
-remain visible while draft/no-history placeholders stay hidden. Validation so
-far: page/reuse contracts 32/32 PASS and focused backend campaign routes 3/3
+remain visible, draft/no-execution placeholders stay hidden and completed
+missing-history rows appear as historical inconsistency instead of proven
+provider failure. Validation so far: page/reuse contracts 32/32 PASS and focused backend campaign routes 3/3
 PASS on local DB; frontend/backend builds PASS; authenticated local smoke on
-frontend `3068` / backend `3067` PASS for neutral draft copy, hidden placeholder
-result section, reuse without silent manual fallback and bounded draft table.
+frontend `3068` / backend `3067` PASS for neutral draft copy, hidden
+draft/seed-only result section, reuse without silent manual fallback and bounded draft table.
 Evidence: `.codex/evidence/campaign-review-efbcc62-2026-09-25/`. Status: LOCAL
 FIX PREPARED / NOT DEPLOYED / OWNER UI PENDING.
 

@@ -154,15 +154,17 @@ reaproveitamento agora comeca antes do primeiro `getAppCampaign`, impedindo que
 resposta ou erro tardio de uma campanha anterior altere campanha selecionada,
 formulario, modo, aba, modal ou toast apos outro reuso ou cancelamento. O texto
 de rascunho deixou de declarar prontidao de envio apenas por `status=draft`.
-Falha real de historico permanece visivel, mas placeholders de seed sem
-historico individual passam a ser marcados por `missing_individual_history`, sem
-depender de correspondencia textual; `pricingBillable` indefinido nao conta
-como evidencia de resultado. Validacao local neste complemento:
+Falha real de historico permanece visivel, e seed sem historico individual
+passa a ser marcado por `missing_individual_history`, sem depender de
+correspondencia textual; em campanha concluida esse caso aparece como
+inconsistencia historica, nao como falha comprovada do provider. `pricingBillable`
+indefinido nao conta como evidencia de resultado. Validacao local neste
+complemento:
 campanhas page/reuse 32/32 PASS e rotas backend focadas 3/3 PASS no banco local.
 Frontend build PASS, backend build PASS e smoke autenticado local em
 frontend `3068` / backend `3067` PASS para texto neutro de rascunho, secao de
-resultado oculta quando ha apenas placeholder de historico ausente, reuso sem
-fallback manual silencioso e tabela de rascunho rolavel. Evidencias:
+resultado oculta para rascunho/seed-only sem execucao, reuso sem fallback manual
+silencioso e tabela de rascunho rolavel. Evidencias:
 `.codex/evidence/campaign-review-efbcc62-2026-09-25/`. Status: LOCAL FIX
 PREPARED / NOT DEPLOYED / OWNER UI PENDING.
 

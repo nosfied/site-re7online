@@ -1992,9 +1992,11 @@ OWNER UI PENDING.
   backend focused campaign routes 3/3 PASS on local DB
   `127.0.0.1:55432/re7_contacts_campaigns_ux_test`; frontend build PASS;
   backend build PASS. Authenticated local smoke on frontend `3068` / backend
-  `3067` confirmed no draft readiness claim, no result section for missing
-  individual history placeholder, reuse opening without silent manual fallback
-  and bounded draft table. Evidence stored in
+  `3067` confirmed no draft readiness claim, no result section for
+  draft/seed-only placeholder without execution, reuse opening without silent
+  manual fallback and bounded draft table. Follow-up correction: completed
+  campaigns with `missing_individual_history` remain visible as historical
+  inconsistency, not as proven provider failure. Evidence stored in
   `.codex/evidence/campaign-review-efbcc62-2026-09-25/`. Status: LOCAL FIX
   PREPARED / NOT DEPLOYED / OWNER UI PENDING.
 

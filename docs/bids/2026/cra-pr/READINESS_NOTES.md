@@ -904,13 +904,15 @@ Review follow-up `efbcc62`, 2026-09-25: the local reuse correction now guards
 stale responses before the initial detail fetch, neutralizes draft readiness
 language and replaces text-matching of missing individual history with the
 structured `missing_individual_history` marker. Genuine failed/blocked
-historical evidence remains visible, and `pricingBillable` only counts when the
-API returns a boolean. Validation in this complement: campaign page/reuse
+historical evidence remains visible; completed rows with missing individual
+history appear as historical inconsistency rather than proven provider failure;
+and `pricingBillable` only counts when the API returns a boolean. Validation in
+this complement: campaign page/reuse
 contracts 32/32 PASS and focused backend campaign routes 3/3 PASS against the
 local dedicated DB; frontend/backend builds PASS; authenticated local smoke on
-frontend `3068` / backend `3067` PASS for neutral draft copy, hidden missing-history
-placeholder section, reuse without silent manual fallback and bounded draft
-table. Evidence: `.codex/evidence/campaign-review-efbcc62-2026-09-25/`. Status:
+frontend `3068` / backend `3067` PASS for neutral draft copy, hidden
+draft/seed-only placeholder section, reuse without silent manual fallback and
+bounded draft table. Evidence: `.codex/evidence/campaign-review-efbcc62-2026-09-25/`. Status:
 LOCAL FIX PREPARED / NOT DEPLOYED / OWNER UI PENDING; not CRA formal acceptance.
 
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
