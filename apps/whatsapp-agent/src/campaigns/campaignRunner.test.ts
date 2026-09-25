@@ -344,6 +344,8 @@ test("campaign runner persists provider acceptance without opening operational c
   const clientKey = `campaign-runner-provider-${process.pid}-${Date.now()}`;
   const templateName = `campaign_runner_provider_${Date.now()}`;
   const recipient = "5541991100401";
+  const ddd55NationalRecipient = "55991400002";
+  const ddd55CanonicalRecipient = "5555991400002";
   const metaMessageId = `wamid.${crypto.randomUUID()}`;
   await cleanup(clientId).catch(() => undefined);
   t.after(() => {
@@ -375,7 +377,7 @@ test("campaign runner persists provider acceptance without opening operational c
       name: "Provider acceptance",
       templateName,
       status: "sending",
-      totalRecipients: 1,
+      totalRecipients: 2,
     },
   });
 
@@ -403,7 +405,7 @@ test("campaign runner persists provider acceptance without opening operational c
     clientKey,
     name: campaign.name,
     templateName,
-    waIds: [recipient],
+    waIds: [recipient, ddd55NationalRecipient],
   });
   assert.ok(runId);
 
@@ -412,7 +414,7 @@ test("campaign runner persists provider acceptance without opening operational c
     return refreshed?.status === "completed";
   });
 
-  assert.deepEqual(metaRecipients, [recipient]);
+  assert.deepEqual(metaRecipients, [recipient, ddd55CanonicalRecipient]);
   const outbound = await prisma.outboundMessage.findUnique({
     where: { clientId_messageId: { clientId, messageId: `campaign.${campaign.id}.1` } },
   });
@@ -437,6 +439,9 @@ test("campaign runner persists provider acceptance without opening operational c
     1
   );
   assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waId: recipient } }), 1);
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId, waId: ddd55CanonicalRecipient } }), 1);
+  assert.equal(await prisma.contact.count({ where: { clientId, waId: ddd55CanonicalRecipient } }), 1);
+  assert.equal(await prisma.lead.count({ where: { tenantId: clientId, waId: ddd55CanonicalRecipient } }), 1);
   assert.equal(await prisma.conversation.count({ where: { clientId, waId: recipient } }), 0);
   assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId, waId: recipient } }), 0);
   assert.equal(
@@ -569,7 +574,8 @@ test("campaign runner opt-out block does not materialize CRM or call provider", 
   const clientId = crypto.randomUUID();
   const clientKey = `campaign-runner-optout-${process.pid}-${Date.now()}`;
   const templateName = `campaign_runner_optout_${Date.now()}`;
-  const recipient = "5541991100461";
+  const recipient = "55991400004";
+  const recipientCanonical = "5555991400004";
   await cleanup(clientId).catch(() => undefined);
   t.after(() => {
     void cleanup(clientId).catch(() => undefined);
@@ -596,9 +602,9 @@ test("campaign runner opt-out block does not materialize CRM or call provider", 
   });
   await recordContactOptOut({
     clientId,
-    waId: recipient,
+    waId: recipientCanonical,
     source: "test",
-    requestId: `test-opt-out:${recipient}`,
+    requestId: `test-opt-out:${recipientCanonical}`,
   });
   const campaign = await prisma.campaign.create({
     data: {
@@ -646,6 +652,12 @@ test("campaign runner opt-out block does not materialize CRM or call provider", 
   assert.equal(
     await prisma.event.count({
       where: { clientId, eventName: "campaign.recipient.opt_out_blocked", messageId: campaign.id },
+    }),
+    1
+  );
+  assert.equal(
+    await prisma.event.count({
+      where: { clientId, eventName: "campaign.recipient.opt_out_blocked", waIdCanonical: recipientCanonical },
     }),
     1
   );

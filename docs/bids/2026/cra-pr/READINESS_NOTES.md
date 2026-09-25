@@ -999,6 +999,16 @@ opt-out/alias blocking is enforced for both forms before provider. Focused
 normalizer and campaign route tests plus backend build passed. Status:
 LOCAL VALIDATED / NOT DEPLOYED; not CRA formal acceptance.
 
+Focused local audit on 2026-09-25 covered ordinary campaign sends in addition
+to test-send. CSV/import, CRM static/dynamic selections, reused recipients and
+scheduled execution normalize Brazilian DDD `55` and full `55` forms before
+opt-out and provider dispatch, preserve other Brazilian DDDs, avoid duplicate
+destinations and block alias opt-out/exclusion before provider. CSV/import
+continues to reject unsupported international input with controlled validation
+and zero provider calls; CRM/Inbox template sends are identity/conversation
+backed and not free-form phone entry points. Provider calls were simulated only.
+Status: LOCAL VALIDATED / NOT DEPLOYED; not CRA formal acceptance.
+
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING /

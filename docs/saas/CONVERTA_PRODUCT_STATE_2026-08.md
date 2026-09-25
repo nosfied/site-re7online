@@ -259,6 +259,17 @@ destination, selected-recipient data remains correct, and opt-out/alias checks
 block both forms before provider. Focused normalizer and campaign route tests
 plus backend build passed. Status: LOCAL VALIDATED / NOT DEPLOYED.
 
+Focused local audit on 2026-09-25 extended the same `55` guarantee beyond
+test-send: ordinary campaign execution now normalizes CSV/import recipients,
+CRM static/dynamic selections, reused campaign recipients and scheduled runs
+before opt-out and provider dispatch. DDD `55`, another Brazilian DDD and their
+full `55` forms converge without duplicates; alias opt-out/exclusion blocks
+before provider. CSV/import still rejects unsupported international input as a
+controlled row error with zero provider calls. CRM/Inbox ordinary template
+sends use existing conversation/contact identities and are not arbitrary
+typed-phone surfaces. Provider calls were simulated only. Status:
+LOCAL VALIDATED / NOT DEPLOYED.
+
 Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
 counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
 VALIDATED / OWNER UI PENDING no head

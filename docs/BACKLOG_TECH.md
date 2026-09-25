@@ -2089,6 +2089,17 @@ OWNER UI PENDING.
   recipient data and opt-out/alias blocking for both forms before provider.
   Focused normalizer and campaign route tests plus backend build passed. Status:
   LOCAL VALIDATED / NOT DEPLOYED.
+- Focused local audit, 2026-09-25: ordinary campaign execution paths now reuse
+  the canonical CRM WhatsApp normalizer before opt-out and provider dispatch.
+  CSV/import, persisted CRM static/dynamic recipients, reuse and scheduled runs
+  converge national DDD `55` input and full `55` input to the same destination,
+  preserve other Brazilian DDDs, block alias opt-out/exclusion before provider
+  and avoid duplicate recipients. CSV/import remains a typed-input surface and
+  continues to reject unsupported international input as controlled row
+  validation with zero provider calls; CRM/Inbox template sends are
+  conversation/identity-backed paths, not arbitrary typed-phone entry points.
+  Provider calls were simulated only. Status:
+  LOCAL VALIDATED / NOT DEPLOYED.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 

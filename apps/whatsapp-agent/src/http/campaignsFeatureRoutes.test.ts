@@ -14698,8 +14698,10 @@ test("scheduled campaign execution revalidates opt-out before provider", async (
       content: "Aviso sem variaveis.",
     },
   });
-  const blockedWaId = "5541991189401";
-  const allowedWaId = "5541991189402";
+  const blockedWaId = "55991400401";
+  const blockedWaIdCanonical = "5555991400401";
+  const allowedWaId = "55991400402";
+  const allowedWaIdCanonical = "5555991400402";
   const blockedLead = await prisma.lead.create({
     data: {
       tenantId: businessClientId,
@@ -14746,7 +14748,7 @@ test("scheduled campaign execution revalidates opt-out before provider", async (
 
   await recordContactOptOut({
     clientId: businessClientId,
-    waId: blockedWaId,
+    waId: blockedWaIdCanonical,
     source: "test",
     reason: "scheduled post-block",
   });
@@ -14783,7 +14785,7 @@ test("scheduled campaign execution revalidates opt-out before provider", async (
     });
     return campaign?.status === "completed" && campaign.sentCount === 1 && campaign.blockedCount === 1;
   });
-  assert.deepEqual(metaRecipients, [allowedWaId]);
+  assert.deepEqual(metaRecipients, [allowedWaIdCanonical]);
   assert.equal(
     await prisma.outboundMessage.count({ where: { clientId: businessClientId, waId: blockedWaId } }),
     countsBeforeDue.blockedOutbound
@@ -14802,6 +14804,7 @@ test("scheduled campaign execution revalidates opt-out before provider", async (
         clientId: businessClientId,
         messageId: draft.body.campaign.id,
         eventName: "campaign.recipient.opt_out_blocked",
+        waIdCanonical: blockedWaIdCanonical,
       },
     }),
     1

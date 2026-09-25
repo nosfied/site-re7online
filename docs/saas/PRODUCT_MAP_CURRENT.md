@@ -795,6 +795,17 @@ selected-recipient data is preserved, and opt-out/alias blocking applies to both
 forms before provider. Focused tests and backend build passed. Status:
 LOCAL VALIDATED / NOT DEPLOYED.
 
+Focused ordinary-send audit on 2026-09-25 confirmed and extended the same
+normalization contract to campaign CSV/import, CRM static/dynamic recipients,
+campaign reuse and scheduled execution. Campaign runner inputs are normalized
+before opt-out and provider dispatch, so national DDD `55`, another Brazilian
+DDD and full `55` forms converge, destination duplication is avoided, and alias
+opt-out/exclusion blocks before provider. CSV/import remains a typed-file
+surface and rejects unsupported international input as controlled validation;
+CRM/Inbox sends use stored conversation/contact identities instead of accepting
+free-form phone entry. Provider calls were simulated only. Status:
+LOCAL VALIDATED / NOT DEPLOYED.
+
 CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
 PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was
 fast-forwarded to `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`;

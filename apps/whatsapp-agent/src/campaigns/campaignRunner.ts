@@ -42,6 +42,7 @@ import {
   readPrivateCampaignSeedFields,
 } from "./campaignSeedPrivacy.js";
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
+import { normalizeCrmWhatsappIdentity } from "../crm/crmWhatsappIdentity.js";
 
 const CAMPAIGN_THROTTLE_MS = 1000;
 const CAMPAIGN_SCHEDULE_TICK_MS = 60_000;
@@ -98,6 +99,14 @@ type DynamicLeadRecipient = {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeCampaignRunRecipientWaId(value: string) {
+  const raw = value.trim();
+  const digits = normalizeWaIdDigits(raw);
+  if (!digits) return "";
+  if (raw.startsWith("+") && digits.length >= 8) return digits;
+  return normalizeCrmWhatsappIdentity(raw)?.crmCanonicalPhone ?? digits;
 }
 
 export function startCampaignRun(params: StartCampaignRunParams) {
@@ -296,8 +305,8 @@ async function materializeDynamicCampaignSnapshot(params: {
   const blocked: Array<{ leadId: string; reason: string }> = [];
   const seen = new Set<string>();
   for (const lead of leads) {
-    const rawWaId = normalizeWaIdDigits(lead.waIdCanonical || lead.waId);
-    const canonical = canonicalizeBrazilWaId(rawWaId);
+    const rawWaId = normalizeCampaignRunRecipientWaId(lead.waIdCanonical || lead.waId);
+    const canonical = normalizeCampaignRunRecipientWaId(rawWaId);
     const dedupeKey = canonical || rawWaId;
     if (!rawWaId || !canonical) {
       blocked.push({ leadId: lead.id, reason: "blocked_identity" });
@@ -542,7 +551,9 @@ async function runCampaignInBackground(
     return;
   }
   const usageSource = params.source ?? "campaign";
-  const requestedWaIds = Array.from(new Set(params.waIds.map((waId) => waId.trim()).filter(Boolean)));
+  const requestedWaIds = Array.from(
+    new Set(params.waIds.map((waId) => normalizeCampaignRunRecipientWaId(waId)).filter(Boolean))
+  );
   const filteredRecipients = await filterOptedOutCampaignRecipients(prisma, {
     clientId: params.clientId,
     waIds: requestedWaIds,
