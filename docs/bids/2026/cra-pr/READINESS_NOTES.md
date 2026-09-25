@@ -930,6 +930,18 @@ schedule, test-send, send campaigns, change opt-out, call providers, change
 schema or run migrations. Authenticated CRA/owner UI validation remains pending;
 this is production health validation, not CRA formal acceptance.
 
+Owner feedback after this deployment: visual campaign refinements passed. The
+remaining local follow-up is campaign test-send with automatic campaign sample
+data. The authorized contract is tenant-scoped and non-mutating for campaign
+participation: use the typed destination only, reuse existing seed/component
+resolution, choose the first eligible complete campaign recipient as sample for
+external destinations, block before provider if no complete sample exists, and
+revalidate destination opt-out/exclusion including aliases. The same local lot
+removes the duplicated draft-detail summary block and its technical reason
+chips while preserving campaign counters, recipient review and eligibility
+truth. Status: LOCAL FIX PREPARED / NOT DEPLOYED / OWNER UI PENDING; not CRA
+formal acceptance.
+
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING /

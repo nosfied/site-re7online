@@ -4089,35 +4089,6 @@ export default function AppCampaignsPage() {
                           </button>
                         </div>
                       </div>
-                      {selectedCampaign.draftReview ? (
-                        <div className="grid gap-2 sm:grid-cols-4">
-                          <div className="rounded-md border border-white/10 bg-white/5 p-2">
-                            <p className="text-xs text-white/60">Solicitados</p>
-                            <p className="font-semibold">{selectedCampaign.draftReview.summary.requested}</p>
-                          </div>
-                          <div className="rounded-md border border-white/10 bg-white/5 p-2">
-                            <p className="text-xs text-white/60">Aceitos</p>
-                            <p className="font-semibold text-emerald-100">{selectedCampaign.draftReview.summary.accepted}</p>
-                          </div>
-                          <div className="rounded-md border border-white/10 bg-white/5 p-2">
-                            <p className="text-xs text-white/60">Bloqueados</p>
-                            <p className="font-semibold text-amber-100">{selectedCampaign.draftReview.summary.blocked}</p>
-                          </div>
-                          <div className="rounded-md border border-white/10 bg-white/5 p-2">
-                            <p className="text-xs text-white/60">Duplicados</p>
-                            <p className="font-semibold">{selectedCampaign.draftReview.summary.duplicatesRemoved}</p>
-                          </div>
-                        </div>
-                      ) : null}
-                      {selectedCampaign.draftReview?.summary.blockedByReason.length ? (
-                        <div className="flex flex-wrap gap-2 text-xs">
-                          {selectedCampaign.draftReview.summary.blockedByReason.map((item) => (
-                            <span key={item.reason} className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-white/75">
-                              {getFriendlyCampaignError(item.reason)?.summary ?? item.label}: {item.count}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
                       {selectedCampaign.draftReview?.recipients?.length ? (
                         <div className="rounded-md border border-white/10 bg-white/5 p-3">
                           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -4195,7 +4166,7 @@ export default function AppCampaignsPage() {
                           </div>
                           {selectedCampaignTestVariableLabels.length > 0 ? (
                             <p className="rounded-md border border-white/10 bg-white/5 p-2 text-xs text-white/65">
-                              O sistema tentará resolver {selectedCampaignTestVariableLabels.length} variável(is) a partir dos dados do destinatário ou da definição salva da campanha. Se não houver fonte suficiente, o teste será bloqueado com orientação específica.
+                              O teste usa dados de um destinatário da campanha e envia somente ao número informado.
                             </p>
                           ) : null}
                         </div>

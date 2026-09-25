@@ -16182,7 +16182,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             testSend.error === WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED
               ? WHATSAPP_TEMPLATE_CATEGORY_NOT_ALLOWED_LABEL
               : testSend.error === "campaign_test_variables_required"
-                ? "Informe os valores das variáveis para enviar o teste."
+                ? "Não há amostra completa da campanha para enviar o teste."
+              : testSend.error === "campaign_test_recipient_blocked"
+                ? "O número informado não está elegível para envio ativo."
               : testSend.error
           )
         );
@@ -29782,6 +29784,18 @@ type CampaignDraftMessageReadiness =
       recipients?: CampaignDraftRecipientResolution;
     };
 
+type CampaignTestComponentResolution =
+  | {
+      ok: true;
+      components?: CampaignTemplateComponents;
+      source: "explicit" | "own_recipient" | "fixed_params" | "sample_recipient" | "none_required";
+      sampleWaId?: string | null;
+    }
+  | {
+      ok: false;
+      error: "campaign_test_variables_required";
+    };
+
 function hasCompleteTemplateComponents(components: CampaignTemplateComponents | undefined, requiredPositions: string[]) {
   const required = requiredPositions
     .map((position) => Number(position))
@@ -29801,6 +29815,183 @@ function buildFixedTemplateComponentsFromSeed(seed: CampaignDraftSeed, requiredP
       ? [{ type: "body" as const, parameters: seed.templateParams.map((text) => ({ type: "text" as const, text })) }]
       : undefined;
   return hasCompleteTemplateComponents(components, requiredPositions) ? components : undefined;
+}
+
+async function resolveDynamicCampaignTestRecipients(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    seed: CampaignDraftSeed;
+  }
+): Promise<CampaignDraftRecipientResolution> {
+  const statusId = params.seed.dynamicFilter?.crmBusinessStatusId;
+  if (!statusId) {
+    return {
+      acceptedWaIds: [],
+      safeRecipients: [],
+      acceptedVariableValues: [],
+      blocked: [],
+      summary: { requested: 0, accepted: 0, blocked: 0, duplicatesRemoved: 0, blockedByReason: [] },
+    };
+  }
+  const tenants = await getTenants();
+  const tenant = tenants[params.clientKey] ?? null;
+  const resolvedStatuses = await resolveCrmBusinessStatuses({
+    prisma,
+    clientId: params.clientId,
+    tenant,
+  });
+  const status = resolvedStatuses.statuses.find((item) => item.id === statusId && item.isActive !== false);
+  if (!status) {
+    return {
+      acceptedWaIds: [],
+      safeRecipients: [],
+      acceptedVariableValues: [],
+      blocked: [],
+      summary: { requested: 0, accepted: 0, blocked: 0, duplicatesRemoved: 0, blockedByReason: [] },
+    };
+  }
+  const leads = await prisma.lead.findMany({
+    where: {
+      tenantId: params.clientId,
+      status: statusId,
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
+    take: 1000,
+    select: { id: true },
+  });
+  return resolveCampaignDraftRecipientsFromLeadIds(prisma, {
+    clientId: params.clientId,
+    selectedLeadIds: leads.map((lead) => lead.id),
+  });
+}
+
+async function resolveCampaignTestSeedRecipients(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    seed: CampaignDraftSeed;
+  }
+): Promise<CampaignDraftRecipientResolution> {
+  if (params.seed.selectionMode === "DYNAMIC_CRM_FILTER") {
+    return resolveDynamicCampaignTestRecipients(prisma, params);
+  }
+  if (params.seed.leadIds && params.seed.leadIds.length > 0) {
+    return resolveCampaignDraftRecipientsFromLeadIds(prisma, {
+      clientId: params.clientId,
+      selectedLeadIds: params.seed.leadIds,
+    });
+  }
+  const optOutFiltered = await buildOptOutFilteredCampaignRecipients(prisma, {
+    clientId: params.clientId,
+    waIds: params.seed.recipients,
+  });
+  const operationallyExcludedWaIds = await loadOperationallyExcludedWaIds(prisma, {
+    clientId: params.clientId,
+    waIds: optOutFiltered.waIds,
+  });
+  const acceptedWaIds = optOutFiltered.waIds.filter((waId) => !operationallyExcludedWaIds.has(waId));
+  const operationallyBlocked = optOutFiltered.waIds.length - acceptedWaIds.length;
+  const blockedByReason = [...optOutFiltered.summary.blockedByReason];
+  if (operationallyBlocked > 0) {
+    blockedByReason.push({
+      reason: "operationally_excluded_contact",
+      label: getCampaignBlockedReasonLabel("operationally_excluded_contact"),
+      count: operationallyBlocked,
+    });
+  }
+  return {
+    acceptedWaIds,
+    safeRecipients: [],
+    blocked: [],
+    acceptedVariableValues: acceptedWaIds.map((waId) => ({
+      leadId: "",
+      waId,
+      displayName: null,
+      companyName: null,
+      city: null,
+    })),
+    summary: {
+      requested: params.seed.recipients.length,
+      accepted: acceptedWaIds.length,
+      blocked: optOutFiltered.summary.blocked + operationallyBlocked,
+      duplicatesRemoved: 0,
+      blockedByReason,
+    },
+  };
+}
+
+function resolveCampaignTestComponents(params: {
+  seed: CampaignDraftSeed;
+  requiredPositions: string[];
+  waId: string;
+  explicitComponents?: CampaignTemplateComponents;
+  seedRecipients: CampaignDraftRecipientResolution;
+}): CampaignTestComponentResolution {
+  const requiredPositions = Array.from(new Set(params.requiredPositions.map((value) => value.trim()).filter(Boolean)));
+  if (requiredPositions.length === 0) {
+    return { ok: true, source: "none_required", components: undefined, sampleWaId: null };
+  }
+  if (params.explicitComponents) {
+    return { ok: true, source: "explicit", components: params.explicitComponents, sampleWaId: null };
+  }
+  const ownComponents = params.seed.componentsByWaId?.[params.waId];
+  if (
+    params.seedRecipients.acceptedWaIds.includes(params.waId) &&
+    hasCompleteTemplateComponents(ownComponents, requiredPositions)
+  ) {
+    return { ok: true, source: "own_recipient", components: ownComponents, sampleWaId: params.waId };
+  }
+  const fixedComponents = buildFixedTemplateComponentsFromSeed(params.seed, requiredPositions);
+  if (fixedComponents) {
+    return { ok: true, source: "fixed_params", components: fixedComponents, sampleWaId: null };
+  }
+  const readiness = resolveCampaignDraftMessageReadiness({
+    seed: params.seed,
+    requiredPositions,
+    recipients: params.seedRecipients,
+  });
+  if (!readiness.ready) return { ok: false, error: "campaign_test_variables_required" };
+  for (const candidateWaId of readiness.recipients.acceptedWaIds) {
+    const components = readiness.componentsByWaId?.[candidateWaId] ?? readiness.components;
+    if (hasCompleteTemplateComponents(components, requiredPositions)) {
+      return { ok: true, source: "sample_recipient", components, sampleWaId: candidateWaId };
+    }
+  }
+  return { ok: false, error: "campaign_test_variables_required" };
+}
+
+async function validateCampaignTestRecipient(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    waId: string;
+  }
+): Promise<
+  | { ok: true }
+  | { ok: false; status: 409; error: "campaign_test_recipient_blocked" }
+> {
+  const optOuts = await filterOptedOutCampaignRecipients(prisma, {
+    clientId: params.clientId,
+    waIds: [params.waId],
+  });
+  if (optOuts.blocked.length > 0) {
+    return { ok: false, status: 409, error: "campaign_test_recipient_blocked" };
+  }
+  const operationallyExcludedWaIds = await loadOperationallyExcludedWaIds(prisma, {
+    clientId: params.clientId,
+    waIds: [params.waId],
+  });
+  const normalized = normalizeOptOutWaId(params.waId);
+  const aliases = [params.waId, normalized?.waIdCanonical, normalized?.waId].filter(
+    (value): value is string => Boolean(value)
+  );
+  if (aliases.some((value) => operationallyExcludedWaIds.has(value))) {
+    return { ok: false, status: 409, error: "campaign_test_recipient_blocked" };
+  }
+  return { ok: true };
 }
 
 function resolveCampaignDraftMessageReadiness(params: {
@@ -36601,6 +36792,11 @@ async function sendScopedCampaignTest(params: {
   });
   const waId = normalizeWaId(params.waId);
   if (!waId) return { ok: false as const, status: 400 as const, error: "invalid_test_recipient" as const };
+  const recipientValidation = await validateCampaignTestRecipient(prisma, {
+    clientId: params.clientId,
+    waId,
+  });
+  if (!recipientValidation.ok) return recipientValidation;
   const explicitVariables = normalizeCampaignTestVariables(params.variables);
   const hasCompleteExplicitVariables = resolvedTemplate.variableKeys.every((key) =>
     Boolean(String(explicitVariables[key] ?? "").trim())
@@ -36611,16 +36807,22 @@ async function sendScopedCampaignTest(params: {
         variables: explicitVariables,
       })
     : undefined;
-  const isSeedRecipient = seed.recipients.includes(waId);
-  const recipientComponents = isSeedRecipient ? seed.componentsByWaId?.[waId] : undefined;
-  const components = resolvedTemplate.variableKeys.length > 0
-    ? explicitComponents ?? recipientComponents
-    : recipientComponents ?? explicitComponents ?? (seed.templateParams.length > 0
-        ? [{ type: "body" as const, parameters: seed.templateParams.map((text) => ({ type: "text" as const, text })) }]
-        : undefined);
-  if (resolvedTemplate.variableKeys.length > 0 && !components) {
-    return { ok: false as const, status: 400 as const, error: "campaign_test_variables_required" as const };
+  const seedRecipients = await resolveCampaignTestSeedRecipients(prisma, {
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    seed,
+  });
+  const componentResolution = resolveCampaignTestComponents({
+    seed,
+    requiredPositions: resolvedTemplate.variableKeys,
+    waId,
+    explicitComponents,
+    seedRecipients,
+  });
+  if (!componentResolution.ok) {
+    return { ok: false as const, status: 400 as const, error: componentResolution.error };
   }
+  const components = componentResolution.components;
   const tenants = await getTenants();
   const tenant = tenants[params.clientKey] ?? null;
   const language = tenant?.defaultLanguage || "pt_BR";
@@ -36637,6 +36839,8 @@ async function sendScopedCampaignTest(params: {
       requestedBy: params.userId,
       waIdLast4: waId.slice(-4),
       waIdLength: waId.length,
+      componentSource: componentResolution.source,
+      sampleWaIdLast4: componentResolution.sampleWaId ? componentResolution.sampleWaId.slice(-4) : null,
     },
   });
   const result = await sendTemplate({
@@ -36680,6 +36884,8 @@ async function sendScopedCampaignTest(params: {
       campaignTestSend: true,
       templateName: resolvedTemplate.templateName,
       components: components ?? null,
+      componentSource: componentResolution.source,
+      sampleWaIdLast4: componentResolution.sampleWaId ? componentResolution.sampleWaId.slice(-4) : null,
       metaUsage: {
         source: "manual_campaign_send",
         campaignTestSend: true,
@@ -36696,6 +36902,8 @@ async function sendScopedCampaignTest(params: {
       outboundMessageId: messageId,
       waIdLast4: waId.slice(-4),
       waIdLength: waId.length,
+      componentSource: componentResolution.source,
+      sampleWaIdLast4: componentResolution.sampleWaId ? componentResolution.sampleWaId.slice(-4) : null,
       status: result.status ?? null,
       errorBody: result.errorBody ?? null,
     },

@@ -613,11 +613,12 @@ fields do not mutate CRM name/status. Authenticated preview/report shows full
 normalized WhatsApp identifiers and one table with ready, blocked and error
 rows plus copy/export evidence. Campaign name uniqueness is tenant-scoped and
 normalized by trim/case/whitespace. Draft reopen, send, schedule and scheduled
-execution use persisted seed truth. Variable-template test-send requires
-explicit variables when the test target is not a saved recipient and stops
-before provider/aggregate mutation when incomplete. CRM campaign relationship
-history remains actual-send-only; draft, import, test-send and scheduled
-not-run records stay excluded.
+execution use persisted seed truth. Variable-template test-send resolves the
+test target's own campaign values when present, or a deterministic eligible
+sample from the same campaign seed for external test numbers, and stops before
+provider/aggregate mutation when incomplete. CRM campaign relationship history
+remains actual-send-only; draft, import, test-send and scheduled not-run records
+stay excluded.
 
 Campaign flow follow-up (2026-09-22): LOCAL FIX PREPARED / NOT DEPLOYED.
 Campaign CSV mapping is expanded to required `Contato` plus optional
@@ -724,6 +725,19 @@ the worker compile graph. Health/db and basic campaign/CRM/Inbox routes passed.
 Authenticated owner UI smoke for the detailed campaign/refinement cases was NOT
 EXERCISED from the deploy shell. Validation caused no draft, schedule, test
 send, campaign send, opt-out mutation, provider call, schema change or migration.
+
+Local follow-up, 2026-09-25: owner confirmed the deployed visual refinements as
+PASS and authorized campaign test-send to use a campaign recipient sample. The
+UI still asks only for the destination number; backend resolution reuses current
+seed/component/mapping and block-check mechanisms. A test number inside the
+audience uses its own data. An external test number uses the first eligible
+complete sample from the campaign in deterministic order and sends only to the
+typed number. No valid sample or blocked test destination stops before provider.
+The same local lot removes the duplicated draft-detail summary block
+(`Solicitados`, `Aceitos`, `Bloqueados`, `Duplicados` and technical reason
+chips) while preserving campaign main counters, recipient review, eligibility
+and backend validation. Status: LOCAL FIX PREPARED / NOT DEPLOYED / OWNER UI
+PENDING.
 
 CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
 PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was

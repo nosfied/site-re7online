@@ -847,10 +847,14 @@ CRM situation. Authenticated preview/report shows full normalized WhatsApp
 identifiers, one table for ready/blocked/error rows and copy/export evidence.
 Campaign names are unique within a tenant after normalized comparison. The
 saved campaign seed is canonical for reopen, send, schedule and scheduled
-execution. Variable-template test sends require explicit values when the test
-number is outside the saved recipients and fail before provider calls if
-incomplete. Contact campaign history is based only on actual send evidence, not
-drafts, import seeds, test sends or scheduled-not-run campaigns.
+execution. Variable-template test sends now use the campaign recipient's own
+data when the test number belongs to the audience, or an owner-authorized
+deterministic sample from the same campaign seed for external test numbers, and
+fail before provider calls if no eligible complete sample exists. Contact
+campaign history is based only on actual send evidence, not drafts, import
+seeds, test sends or scheduled-not-run campaigns. The draft detail UI no longer
+duplicates the backend draft-review summary block or technical reason chips;
+campaign counters and recipient review remain the canonical operator surfaces.
 
 Follow-up local correction, 2026-09-22: Campaign CSV readiness/UX is LOCAL FIX
 PREPARED / NOT DEPLOYED. The generic CSV mapping model is now `Contato`

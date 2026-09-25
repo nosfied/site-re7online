@@ -185,6 +185,21 @@ rascunho, agendamento, teste, envio, opt-out, provider call, schema ou migration
 foi executado na validacao. Status: DEPLOYED / PRODUCTION HEALTH VALIDATED /
 OWNER UI PENDING.
 
+Atualizacao local de 2026-09-25: o owner confirmou PASS visual dos refinamentos
+implantados em `d172b0e65a...`; a pendencia restante e o teste de campanha com
+variaveis. O backend agora reutiliza os resolvedores existentes de seed,
+mapeamento de variaveis, componentes por destinatario, opt-out e exclusao
+operacional: se o numero digitado pertence a audiencia, usa seus dados; se for
+externo, usa uma amostra deterministica do primeiro destinatario elegivel com
+dados completos; se nao houver amostra, bloqueia antes do provider com
+`campaign_test_variables_required`. A UI mantem somente o campo de numero e
+informa que o teste usa dados de um destinatario da campanha, mas envia somente
+ao numero informado. O mesmo lote local remove o bloco visual duplicado do
+detalhe de rascunho (`Solicitados`, `Aceitos`, `Bloqueados`, `Duplicados` e
+chips tecnicos de motivo), mantendo os contadores principais da campanha,
+tabela de destinatarios, elegibilidade e validacoes backend. Status: LOCAL FIX
+PREPARED / NOT DEPLOYED / OWNER UI PENDING.
+
 Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
 counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
 VALIDATED / OWNER UI PENDING no head
@@ -496,11 +511,13 @@ normalized WhatsApp identifiers, ready/blocked/error rows in the same table, and
 copy/export evidence. Campaign names are unique per tenant by trim,
 case-insensitive and whitespace-normalized comparison. Reopened drafts, send,
 schedule and scheduled execution use the persisted seed as canonical truth.
-Variable-template test sends require explicit variable values when the test
-number is not an existing campaign recipient and stop before provider call or
-aggregate mutation when incomplete. CRM campaign relationship/history is
-actual-send evidence only; draft, seed, import, test-send and scheduled-not-run
-records are not shown as contact campaign history.
+Variable-template test sends use the target recipient's own campaign values
+when that number belongs to the audience, or an authorized deterministic sample
+from the campaign seed for external test numbers. They stop before provider
+call or aggregate mutation when neither the campaign nor an eligible sample has
+complete data. CRM campaign relationship/history is actual-send evidence only;
+draft, seed, import, test-send and scheduled-not-run records are not shown as
+contact campaign history.
 
 Campaign execution truth + CRM UX follow-up, 2026-09-22: LOCAL FIX PREPARED /
 NOT DEPLOYED. Campaign CSV import now persists only campaign-owned audience

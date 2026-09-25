@@ -284,7 +284,7 @@ test("campaign detail uses localized block reasons and distinct refresh/reuse ic
 
 test("campaign test send uses only recipient number and lets backend resolve variables", () => {
   assert.ok(pageSource.includes("selectedCampaignTestVariableLabels"));
-  assert.ok(pageSource.includes("O sistema tentará resolver"));
+  assert.ok(pageSource.includes("O teste usa dados de um destinatário da campanha e envia somente ao número informado."));
   assert.ok(pageSource.includes("sendAppCampaignTest(session, selectedCampaign.id, waId)"));
   assert.ok(pageSource.includes("disabled={testingCampaign || !testRecipientInput.trim()}"));
   assert.ok(!pageSource.includes("testVariableValues"));
@@ -298,6 +298,9 @@ test("campaign detail layout keeps status badge actions progress and draft table
   assert.ok(!pageSource.includes("Rascunho pronto — clique em Enviar para iniciar"));
   assert.ok(pageSource.includes("max-h-[300px] overflow-auto"));
   assert.ok(pageSource.includes("Dado do rascunho"));
+  assert.ok(!pageSource.includes("selectedCampaign.draftReview.summary.requested"));
+  assert.ok(!pageSource.includes("selectedCampaign.draftReview.summary.duplicatesRemoved"));
+  assert.ok(!pageSource.includes("selectedCampaign.draftReview.summary.blockedByReason.map"));
   assert.ok(!pageSource.includes("Mapeamento de variáveis"));
   assert.ok(!pageSource.includes("Nenhuma situação detalhada da Meta disponível ainda para esta campanha."));
   assert.ok(!pageSource.includes("formatRelativeTime(selectedCampaign.updatedAt)"));

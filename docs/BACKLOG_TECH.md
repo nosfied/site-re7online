@@ -231,11 +231,12 @@ Fechado / validado:
   copy/export evidence. Campaign names are unique per tenant after trim,
   case-insensitive and whitespace-normalized comparison, returning
   `campaign_name_conflict` with PT-BR UX copy. Draft reopen/send/schedule and
-  runner use persisted seed truth. Variable-template test-send requires
-  explicit variables when the test number is not a saved recipient; incomplete
-  tests stop before provider calls or campaign aggregate mutation. CRM campaign
-  history remains actual-send evidence only: draft, seed, import, test-send and
-  scheduled-not-run data stay excluded.
+  runner use persisted seed truth. Variable-template test-send uses the target
+  recipient's own values when the test number belongs to the campaign audience,
+  or an authorized deterministic sample from the campaign seed when the target
+  is external; incomplete tests stop before provider calls or campaign aggregate
+  mutation. CRM campaign history remains actual-send evidence only: draft, seed,
+  import, test-send and scheduled-not-run data stay excluded.
 - Campaign flow follow-up CSV readiness, 2026-09-22: LOCAL FIX PREPARED /
   NOT DEPLOYED. Owner production feedback after head
   `77e087a724fd53bcf06ed6d19267a655a06118b8` found that Campaign CSV generic
@@ -1960,7 +1961,8 @@ OWNER UI PENDING.
   mensagem" when real provider/result evidence exists. Test-send now accepts
   only the recipient number in the UI and relies on the backend resolver for
   explicit variables, seed recipient components or fixed template params;
-  insufficient external variables still return `campaign_test_variables_required`.
+  insufficient campaign sample data still returns `campaign_test_variables_required`
+  before any provider call.
   Reuse now loads full campaign detail with `getAppCampaign` before deciding
   mode when the list item lacks `draftSeed`, avoiding silent fallback to manual.
   Historical static filters remain unrecoverable when not persisted; draft
@@ -2015,6 +2017,19 @@ OWNER UI PENDING.
   test send, campaign send, opt-out mutation, provider call, schema change or
   migration was performed by validation. Status:
   DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
+- Owner visual validation, 2026-09-25: owner confirmed PASS for the deployed
+  campaign detail/reuse visual refinements at `d172b0e65a...`. Remaining local
+  follow-up is test-send sample resolution: the UI keeps only the destination
+  number field and the backend may use values from the same campaign's first
+  eligible complete recipient as a deterministic sample, sending exclusively to
+  the number typed by the operator. The sample is not added to campaign
+  participation/history, destination opt-out/exclusion is revalidated, and lack
+  of a complete sample blocks before provider. The same local lot removes the
+  duplicated draft-detail summary block (`Solicitados`, `Aceitos`,
+  `Bloqueados`, `Duplicados` and technical reason chips) while preserving
+  campaign main counters, draft recipient review, backend validation and
+  eligibility data. Status:
+  LOCAL FIX PREPARED / NOT DEPLOYED / OWNER UI PENDING.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 

@@ -13329,15 +13329,6 @@ test("app CSV import previews and creates draft without sending", async (t) => {
   assert.equal(created.body.campaign.sentCount, 0);
   assert.equal(created.body.draft.summary.readyToImport, 2);
 
-  const missingTestVariables = await request<ErrorPayload>(
-    "POST",
-    `/app/campaigns/${created.body.campaign.id}/test-send`,
-    businessAdmin,
-    { waId: "5541991300999" }
-  );
-  assert.equal(missingTestVariables.status, 400);
-  assert.equal(getErrorCode(missingTestVariables.body), "campaign_test_variables_required");
-
   const outboundAfter = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
   const sendEvents = await prisma.event.count({
     where: {
@@ -13387,6 +13378,18 @@ test("app CSV import previews and creates draft without sending", async (t) => {
     globalThis.fetch = originalFetch;
   });
 
+  const externalSampleTest = await request<{ ok: true; messageId: string }>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: "5541991300999" }
+  );
+  assert.equal(externalSampleTest.status, 200, JSON.stringify(externalSampleTest.body));
+  assert.equal(metaPayloads.length, 1);
+  assert.match(JSON.stringify(metaPayloads[0]), /Ana/);
+  assert.match(JSON.stringify(metaPayloads[0]), /5541991300999/);
+  assert.doesNotMatch(JSON.stringify(metaPayloads[0]), /5541991300001|João|Teste explicito/);
+
   const seedRecipientTest = await request<{ ok: true; messageId: string }>(
     "POST",
     `/app/campaigns/${created.body.campaign.id}/test-send`,
@@ -13394,9 +13397,10 @@ test("app CSV import previews and creates draft without sending", async (t) => {
     { waId: "5541991300001" }
   );
   assert.equal(seedRecipientTest.status, 200, JSON.stringify(seedRecipientTest.body));
-  assert.equal(metaPayloads.length, 1);
-  assert.match(JSON.stringify(metaPayloads[0]), /Ana/);
-  assert.doesNotMatch(JSON.stringify(metaPayloads[0]), /João|Teste explicito/);
+  assert.equal(metaPayloads.length, 2);
+  assert.match(JSON.stringify(metaPayloads[1]), /Ana/);
+  assert.match(JSON.stringify(metaPayloads[1]), /5541991300001/);
+  assert.doesNotMatch(JSON.stringify(metaPayloads[1]), /João|Teste explicito/);
 
   const validTest = await request<{ ok: true; messageId: string }>(
     "POST",
@@ -13405,9 +13409,80 @@ test("app CSV import previews and creates draft without sending", async (t) => {
     { waId: "5541991300999", variables: { "1": "Teste explicito" } }
   );
   assert.equal(validTest.status, 200, JSON.stringify(validTest.body));
-  assert.equal(metaPayloads.length, 2);
-  assert.match(JSON.stringify(metaPayloads[1]), /Teste explicito/);
-  assert.doesNotMatch(JSON.stringify(metaPayloads[1]), /Ana|João/);
+  assert.equal(metaPayloads.length, 3);
+  assert.match(JSON.stringify(metaPayloads[2]), /Teste explicito/);
+  assert.match(JSON.stringify(metaPayloads[2]), /5541991300999/);
+  assert.doesNotMatch(JSON.stringify(metaPayloads[2]), /Ana|João/);
+
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: "5541991300001",
+    source: "test",
+    reason: "test-send sample skips blocked candidate",
+  });
+  const nextSampleTest = await request<{ ok: true; messageId: string }>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: "5541991300888" }
+  );
+  assert.equal(nextSampleTest.status, 200, JSON.stringify(nextSampleTest.body));
+  assert.equal(metaPayloads.length, 4);
+  assert.match(JSON.stringify(metaPayloads[3]), /João/);
+  assert.match(JSON.stringify(metaPayloads[3]), /5541991300888/);
+  assert.doesNotMatch(JSON.stringify(metaPayloads[3]), /Ana|5541991300001/);
+
+  const providerCallsBeforeBlockedDestination = metaPayloads.length;
+  const outboundsBeforeBlockedDestination = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+  const blockedDestination = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: "5541991300001" }
+  );
+  assert.equal(blockedDestination.status, 409);
+  assert.equal(getErrorCode(blockedDestination.body), "campaign_test_recipient_blocked");
+  assert.equal(metaPayloads.length, providerCallsBeforeBlockedDestination);
+  assert.equal(
+    await prisma.outboundMessage.count({ where: { clientId: businessClientId } }),
+    outboundsBeforeBlockedDestination
+  );
+
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: "5541991300002",
+    source: "test",
+    reason: "test-send no sample available",
+  });
+  const providerCallsBeforeNoSample = metaPayloads.length;
+  const outboundsBeforeNoSample = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+  const noSample = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: "5541991300777" }
+  );
+  assert.equal(noSample.status, 400);
+  assert.equal(getErrorCode(noSample.body), "campaign_test_variables_required");
+  assert.equal(metaPayloads.length, providerCallsBeforeNoSample);
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId: businessClientId } }), outboundsBeforeNoSample);
+
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: "551149806683",
+    source: "test",
+    reason: "test-send alias block",
+  });
+  const providerCallsBeforeAliasBlock = metaPayloads.length;
+  const aliasBlockedDestination = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: "5511949806683" }
+  );
+  assert.equal(aliasBlockedDestination.status, 409);
+  assert.equal(getErrorCode(aliasBlockedDestination.body), "campaign_test_recipient_blocked");
+  assert.equal(metaPayloads.length, providerCallsBeforeAliasBlock);
   const campaignAfterTest = await prisma.campaign.findUniqueOrThrow({
     where: { id: created.body.campaign.id },
     select: { status: true, sentCount: true, totalRecipients: true },
