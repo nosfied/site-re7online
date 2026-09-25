@@ -1978,6 +1978,25 @@ OWNER UI PENDING.
   reuse mode selection and no silent manual fallback. Evidence stored in
   `.codex/evidence/campaign-refinement-2026-09-25/`. Status: LOCAL FIX
   PREPARED / NOT DEPLOYED / OWNER UI PENDING.
+- Review follow-up for `efbcc62`, 2026-09-25: reuse now advances the
+  generation guard before the initial `getAppCampaign` detail fetch, so a late
+  response/error from campaign A cannot update selected campaign, form, mode,
+  tab, modal or toast after campaign B or cancel/reset. Draft confidence copy is
+  neutral ("Rascunho — envio ainda não iniciado") and no longer claims send
+  readiness from `status=draft` alone. Detail-result evidence no longer depends
+  on matching the Portuguese missing-history text: the backend marks seed rows
+  without individual history as `missing_individual_history`, while real
+  `failed_or_blocked`, `status_unconfirmed` and provider result evidence
+  remains visible. `pricingBillable` counts as evidence only when it is an
+  explicit boolean. Validation: campaign page/reuse contracts 32/32 PASS;
+  backend focused campaign routes 3/3 PASS on local DB
+  `127.0.0.1:55432/re7_contacts_campaigns_ux_test`; frontend build PASS;
+  backend build PASS. Authenticated local smoke on frontend `3068` / backend
+  `3067` confirmed no draft readiness claim, no result section for missing
+  individual history placeholder, reuse opening without silent manual fallback
+  and bounded draft table. Evidence stored in
+  `.codex/evidence/campaign-review-efbcc62-2026-09-25/`. Status: LOCAL FIX
+  PREPARED / NOT DEPLOYED / OWNER UI PENDING.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 

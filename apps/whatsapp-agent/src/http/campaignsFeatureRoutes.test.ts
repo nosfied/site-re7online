@@ -16244,7 +16244,7 @@ test("campaign detail keeps genuine missing-history fallback", async () => {
   const detail = await request<{
     campaign: {
       metaSummary: { totalFailed: number };
-      messagesMetaStatus: Array<{ waId: string; status: string; error: string | null }>;
+      messagesMetaStatus: Array<{ waId: string; status: string; nonBillingReason: string | null; pricingBillable: boolean | null; error: string | null }>;
     };
   }>("GET", `/app/campaigns/${campaign.id}`, businessAdmin);
 
@@ -16254,11 +16254,15 @@ test("campaign detail keeps genuine missing-history fallback", async () => {
     {
       waId: detail.body.campaign.messagesMetaStatus[0]?.waId,
       status: detail.body.campaign.messagesMetaStatus[0]?.status,
+      nonBillingReason: detail.body.campaign.messagesMetaStatus[0]?.nonBillingReason,
+      pricingBillable: detail.body.campaign.messagesMetaStatus[0]?.pricingBillable,
       error: detail.body.campaign.messagesMetaStatus[0]?.error,
     },
     {
       waId,
       status: "failed",
+      nonBillingReason: "missing_individual_history",
+      pricingBillable: null,
       error: "Envio individual nao encontrado no historico preservado.",
     }
   );

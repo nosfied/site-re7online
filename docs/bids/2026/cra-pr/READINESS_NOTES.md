@@ -900,6 +900,19 @@ smoke on 2026-09-25 covered desktop and narrow viewport with local tenant
 provider call, real send, schema or migration. Status: LOCAL FIX PREPARED / NOT
 DEPLOYED / OWNER UI PENDING; not CRA formal acceptance.
 
+Review follow-up `efbcc62`, 2026-09-25: the local reuse correction now guards
+stale responses before the initial detail fetch, neutralizes draft readiness
+language and replaces text-matching of missing individual history with the
+structured `missing_individual_history` marker. Genuine failed/blocked
+historical evidence remains visible, and `pricingBillable` only counts when the
+API returns a boolean. Validation in this complement: campaign page/reuse
+contracts 32/32 PASS and focused backend campaign routes 3/3 PASS against the
+local dedicated DB; frontend/backend builds PASS; authenticated local smoke on
+frontend `3068` / backend `3067` PASS for neutral draft copy, hidden missing-history
+placeholder section, reuse without silent manual fallback and bounded draft
+table. Evidence: `.codex/evidence/campaign-review-efbcc62-2026-09-25/`. Status:
+LOCAL FIX PREPARED / NOT DEPLOYED / OWNER UI PENDING; not CRA formal acceptance.
+
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING /

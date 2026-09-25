@@ -695,6 +695,20 @@ simulated providers and evidence in
 production deploy remain pending. Status: LOCAL FIX PREPARED / NOT DEPLOYED /
 OWNER UI PENDING.
 
+Review follow-up `efbcc62`, 2026-09-25: local campaign reuse hardening now
+starts the stale-response guard before the first detail fetch, preventing late
+campaign A responses/errors from changing state after campaign B or cancel.
+Draft copy is neutral unless readiness is actually validated. Campaign result
+visibility uses structured `missing_individual_history` for seed placeholders
+and treats `pricingBillable` as evidence only when boolean, so genuine failures
+remain visible while draft/no-history placeholders stay hidden. Validation so
+far: page/reuse contracts 32/32 PASS and focused backend campaign routes 3/3
+PASS on local DB; frontend/backend builds PASS; authenticated local smoke on
+frontend `3068` / backend `3067` PASS for neutral draft copy, hidden placeholder
+result section, reuse without silent manual fallback and bounded draft table.
+Evidence: `.codex/evidence/campaign-review-efbcc62-2026-09-25/`. Status: LOCAL
+FIX PREPARED / NOT DEPLOYED / OWNER UI PENDING.
+
 CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
 PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was
 fast-forwarded to `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`;

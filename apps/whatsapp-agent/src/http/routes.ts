@@ -30102,7 +30102,11 @@ function buildCampaignSeedFallbackStatusItems(
       sentAt: null,
       deliveredAt: null,
       billable: false,
-      nonBillingReason: wasSent ? "status_unconfirmed" : "failed_or_blocked",
+      nonBillingReason: wasSent
+        ? "status_unconfirmed"
+        : wasBlockedOrFailed
+          ? "failed_or_blocked"
+          : "missing_individual_history",
       pricingCategory: null,
       pricingBillable: null,
       pricingModel: null,

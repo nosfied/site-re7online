@@ -147,6 +147,10 @@ test("campaign result filtered actions only operate on the visible result set", 
 test("campaign reuse hydrates static preview from current CRM contacts without expanding selection", () => {
   assert.ok(pageSource.includes("buildHydratedAudiencePreviewFromDraftSeed"));
   assert.ok(pageSource.includes("buildHydratedCampaignReusePreview({"));
+  assert.ok(pageSource.includes("audienceRequestGenerationRef.current += 1;\n    const reuseGeneration = audienceRequestGenerationRef.current;\n    let sourceCampaign = campaign;"));
+  assert.ok(pageSource.includes("const detail = await getAppCampaign(session, campaign.id);\n        if (audienceRequestGenerationRef.current !== reuseGeneration) return;"));
+  assert.ok(pageSource.includes("} catch (err) {\n        if (audienceRequestGenerationRef.current !== reuseGeneration) return;"));
+  assert.ok(pageSource.includes("resetCampaignComposer({ preserveAudienceGeneration: true })"));
   assert.ok(pageSource.includes("fetchContactDetail: async (leadId) => (await fetchAppCrmContactDetail(activeSession, leadId)).item"));
   assert.ok(pageSource.includes("resolveBlockedReason: resolveAudienceBlockedReasonFromCrmContact"));
   assert.ok(campaignReusePreviewSource.includes("CAMPAIGN_REUSE_PREVIEW_CONCURRENCY = 4"));
@@ -289,7 +293,8 @@ test("campaign test send uses only recipient number and lets backend resolve var
 
 test("campaign detail layout keeps status badge actions progress and draft table aligned", () => {
   assert.ok(!pageSource.includes("<p className=\"text-[11px] uppercase tracking-wide text-white/60\">Situação</p>"));
-  assert.ok(pageSource.includes("Rascunho pronto — clique em Enviar para iniciar"));
+  assert.ok(pageSource.includes("Rascunho — envio ainda não iniciado"));
+  assert.ok(!pageSource.includes("Rascunho pronto — clique em Enviar para iniciar"));
   assert.ok(pageSource.includes("max-h-[300px] overflow-auto"));
   assert.ok(pageSource.includes("Dado do rascunho"));
   assert.ok(!pageSource.includes("Mapeamento de variáveis"));
@@ -298,6 +303,9 @@ test("campaign detail layout keeps status badge actions progress and draft table
   assert.ok(!pageSource.includes("formatRelativeTime(selectedCampaign.createdAt)"));
   assert.ok(pageSource.includes('id="campaign-schedule-at"'));
   assert.ok(pageSource.includes("hasRealCampaignResultEvidence"));
+  assert.ok(pageSource.includes('item.nonBillingReason === "missing_individual_history"'));
+  assert.ok(pageSource.includes('typeof item.pricingBillable === "boolean"'));
+  assert.ok(!pageSource.includes('pricingBillable !== null'));
   assert.ok(pageSource.includes("hasRealCampaignResultItems ? ("));
 });
 

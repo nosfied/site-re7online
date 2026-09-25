@@ -90,26 +90,25 @@ type CampaignResultItem = NonNullable<CampaignItem["messagesMetaStatus"]>[number
 type CsvGenericFieldKey = `field${number}`;
 
 function hasRealCampaignResultEvidence(item: CampaignResultItem) {
-  const error = String(item.error ?? "").toLowerCase();
-  const isMissingHistoryFallback =
-    error.includes("envio individual nao encontrado") ||
-    error.includes("envio individual não encontrado");
+  const isMissingHistoryFallback = item.nonBillingReason === "missing_individual_history";
   if (isMissingHistoryFallback) return false;
   return Boolean(
     item.sentAt ||
       item.deliveredAt ||
       item.conversationId ||
       item.pricingCategory ||
-      item.pricingBillable !== null ||
+      typeof item.pricingBillable === "boolean" ||
       item.pricingModel ||
       item.nonBillingReason === "opt_out" ||
       item.nonBillingReason === "recipient_blocked" ||
+      item.nonBillingReason === "failed_or_blocked" ||
+      item.nonBillingReason === "status_unconfirmed" ||
       item.status === "delivered" ||
       item.status === "read" ||
       item.status === "sent" ||
       item.status === "blocked" ||
       item.status === "opt_out" ||
-      (item.status === "failed" && item.error && !isMissingHistoryFallback)
+      (item.status === "failed" && item.error)
   );
 }
 
@@ -544,7 +543,7 @@ function getMetaStatusLabel(status: string) {
 function getCampaignConfidence(campaign: CampaignItem) {
   if (campaign.status === "draft") {
     return {
-      label: "Rascunho pronto — clique em Enviar para iniciar",
+      label: "Rascunho — envio ainda não iniciado",
       icon: "INFO",
       classes: "campaign-panel-info",
     };
@@ -1297,8 +1296,8 @@ export default function AppCampaignsPage() {
   const composerBusy =
     loadingAudiencePreview || loadingCsvPreview || creatingDraft || creatingCsvDraft || creating;
 
-  const resetCampaignComposer = useCallback(() => {
-    audienceRequestGenerationRef.current += 1;
+  const resetCampaignComposer = useCallback((options: { preserveAudienceGeneration?: boolean } = {}) => {
+    if (!options.preserveAudienceGeneration) audienceRequestGenerationRef.current += 1;
     csvRequestGenerationRef.current += 1;
     setForm(EMPTY_FORM);
     setAudienceFilters(EMPTY_AUDIENCE_FILTERS);
@@ -2086,13 +2085,17 @@ export default function AppCampaignsPage() {
     campaign: CampaignItem,
     options: { recipientOverride?: { mode: "filtered_results"; recipients: CampaignResultItem[] } } = {}
   ) => {
+    audienceRequestGenerationRef.current += 1;
+    const reuseGeneration = audienceRequestGenerationRef.current;
     let sourceCampaign = campaign;
     if (!sourceCampaign.draftSeed && session) {
       try {
         const detail = await getAppCampaign(session, campaign.id);
+        if (audienceRequestGenerationRef.current !== reuseGeneration) return;
         sourceCampaign = detail.campaign;
         setSelectedCampaign(sourceCampaign);
       } catch (err) {
+        if (audienceRequestGenerationRef.current !== reuseGeneration) return;
         const typed = err as { status?: number; message?: string };
         if (typed.status === 401) {
           handleUnauthorized();
@@ -2125,8 +2128,7 @@ export default function AppCampaignsPage() {
     const syncedFixedVariables = syncTemplateVariables(fixedVariableValues, labels.length);
     const restoredMappings = buildTemplateVariableMappingsFormState(labels, draftSeed?.templateVariableMappings);
     const returnDestination = draftSeed?.returnDestination;
-    resetCampaignComposer();
-    const reuseGeneration = audienceRequestGenerationRef.current;
+    resetCampaignComposer({ preserveAudienceGeneration: true });
     setAudiencePreview(null);
     setAudiencePreviewError(null);
     setCampaignReusePreviewState("idle");
@@ -4142,7 +4144,7 @@ export default function AppCampaignsPage() {
                               Destinatários do rascunho
                             </p>
                             <span className="rounded-full border border-sky-300/25 bg-sky-900/20 px-2 py-1 text-xs text-sky-100">
-                              Rascunho pronto — clique em Enviar para iniciar
+                              Rascunho — envio ainda não iniciado
                             </span>
                           </div>
                           <div className="max-h-[300px] overflow-auto">
