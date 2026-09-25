@@ -1033,6 +1033,24 @@ known backup retention cleanup permission issue remains separate from the valid
 new backup. Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING;
 not CRA formal acceptance.
 
+Owner validation on 2026-09-25: owner confirmed PASS for the deployed
+normalization/settings/contrast lot. Status is now DEPLOYED / OWNER VALIDATED /
+CLOSED at functional head `5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e`; this is
+product-owner validation, not CRA formal contractual acceptance. The
+old-snapshot backup-retention permission issue remains a separate operational
+follow-up, and the transient Prisma reload error recovered with health/db OK.
+
+Audience >1,000 audit on 2026-09-25: if a CRM filter finds 3,000 contacts, the
+static-audience path does not silently select all 3,000. The UI preview is
+paginated (`limit=25`) and the static draft stores only the eligible Lead IDs in
+the current preview response; backend creation rejects more than 1,000 explicit
+selected Lead IDs. Dynamic CRM-filter campaigns keep the filter until
+execution; if current matches exceed 1,000, the runner fails with
+`dynamic_match_limit_exceeded` before provider calls instead of truncating or
+batching. Readiness gap: add explicit operator-facing preflight/UX copy for the
+1,000-recipient limit and dynamic overflow before treating large-audience
+campaigns as fully transparent to operators.
+
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING /

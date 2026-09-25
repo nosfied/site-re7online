@@ -295,6 +295,27 @@ was performed. The backup retention cleanup permission issue remains recorded
 as an operational follow-up and did not invalidate the new backup. Status:
 DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
 
+Owner validation on 2026-09-25: the owner confirmed PASS for the deployed
+phone-normalization, recipient-variable preservation, expandable CRM settings
+layout and campaign contrast lot. Status is now DEPLOYED / OWNER VALIDATED /
+CLOSED at functional head `5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e`. This is
+product-owner validation only, not formal CRA contractual acceptance. The
+old-snapshot backup-retention permission issue remains separate, and the
+transient Prisma reload error recovered with health/db OK.
+
+Campaign audience size audit on 2026-09-25: a CRM filter matching 3,000 contacts
+does not automatically mean 3,000 selected recipients. Static CRM preview uses a
+paginated `/app/campaigns/audience-preview` response (`limit=25` in the UI);
+the draft action persists only the eligible Lead IDs present in that preview
+response and backend draft creation rejects more than 1,000 explicit Lead IDs.
+Dynamic CRM-filter campaigns store the filter, not recipients; when a scheduled
+dynamic campaign executes, the runner reads up to 1,001 current matches and
+fails explicitly with `dynamic_match_limit_exceeded` if the match set exceeds
+1,000 before any provider call. There is no automatic batching. Product gap:
+the UI should make the 1,000-recipient limit and dynamic overflow consequence
+clearer before draft/schedule; static filters from legacy persisted seeds remain
+limited by what was actually stored.
+
 Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
 counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
 VALIDATED / OWNER UI PENDING no head

@@ -2126,6 +2126,29 @@ OWNER UI PENDING.
   has the previously documented old-snapshot permission issue, separate from
   the validated new backup. Status:
   DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
+- Owner validation, 2026-09-25: owner confirmed PASS for the deployed
+  normalization/settings/contrast lot. This closes the product lot as
+  DEPLOYED / OWNER VALIDATED / CLOSED at functional head
+  `5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e`; it is product-owner acceptance,
+  not formal CRA contractual acceptance. The old backup-retention permission
+  issue remains a separate operational follow-up, and the transient Prisma
+  reload error recovered with health/db OK and did not require rollback.
+- Audience size audit, 2026-09-25: CRM static audience preview requests
+  `/app/campaigns/audience-preview` with `limit=25`; backend analyzes up to
+  5,000 CRM rows but returns paginated eligible items, and `Criar rascunho com
+  audiencia` sends only the eligible items currently present in that preview
+  response. Static draft creation rejects `selectedLeadIds.length > 1000`, and
+  the shared resolver also caps sanitized selected IDs at 1,000. There is no
+  implicit "all 3,000" selection and no automatic batching.
+- Dynamic CRM-filter audit, 2026-09-25: dynamic scheduling stores only
+  `selectionMode=DYNAMIC_CRM_FILTER` plus the same-tenant CRM status filter; it
+  does not freeze recipients at schedule time. At execution, the runner queries
+  `take: 1001` and fails explicitly with `dynamic_match_limit_exceeded` when
+  more than 1,000 leads match, before provider dispatch. There is no silent
+  truncation in the runner and no automatic split into batches. UX gap remains:
+  the preview/estimate can show the current count, but the product should make
+  the 1,000-recipient campaign/execution limit and dynamic overflow failure
+  clearer before draft/schedule. Status: OPEN / P2 CAMPAIGN UX PREFLIGHT.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 

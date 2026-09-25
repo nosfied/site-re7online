@@ -828,6 +828,24 @@ authenticated owner UI smoke was NOT EXERCISED from shell. No provider call,
 real send, business-data mutation, schema change or migration occurred during
 validation.
 
+Owner validation, 2026-09-25: owner confirmed PASS for that deployed lot, so the
+functional head `5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e` is now recorded as
+DEPLOYED / OWNER VALIDATED / CLOSED for product purposes. This does not replace
+formal CRA acceptance. Backup-retention permission cleanup remains an
+operational follow-up, and the transient Prisma reload error recovered with
+health/db OK.
+
+Audience above 1,000 audit, 2026-09-25: static CRM audience selection is
+preview-driven and paginated. The UI requests `/app/campaigns/audience-preview`
+with `limit=25`; "Criar rascunho com audiencia" persists only the eligible
+Lead IDs in the current preview response, and backend draft creation rejects
+more than 1,000 explicit selected Lead IDs. Dynamic CRM-filter scheduling stores
+only the filter and resolves recipients at execution; the runner queries
+`take: 1001` and fails with `dynamic_match_limit_exceeded` when current matches
+exceed 1,000, before provider dispatch. No automatic batching exists. Product
+map gap: add a clearer preflight/UX warning for the 1,000-recipient limit and
+dynamic overflow behavior.
+
 CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
 PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was
 fast-forwarded to `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`;
