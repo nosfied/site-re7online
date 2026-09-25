@@ -1016,6 +1016,23 @@ national/full duplicate forms produce one send and no variable mixing. Focused
 runner and route tests plus backend build passed with provider mocked. Status:
 LOCAL VALIDATED / NOT DEPLOYED; not CRA formal acceptance.
 
+Production deploy on 2026-09-25: the normalization/settings/contrast lot was
+deployed to functional head `5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e` from
+`aba600989eda77f6cb1258256f5aa0ba2f40ba03` after persistent backup
+`/opt/re7online/backups/converta-persistent/snapshots/20260925T161546Z`
+(`database/database.dump`, 22,438,545 bytes, SHA256
+`a7812cccd56a5f398ee7664aea44591b933997d74fc8199bc1a9ea6c2a5a2860`, 581
+manifest objects). Backend/frontend production builds passed; only
+`re7-whatsapp-agent` and `re7-admin-front` were reloaded, preserving
+`re7-whatsapp-web-worker` and `.data/`. Health/db and unauthenticated route
+reachability for campaigns, CRM, Inbox, CRM settings and login passed.
+Authenticated owner UI smoke was NOT EXERCISED due no legitimate shell session,
+so OWNER UI remains pending. No test-send, draft creation, schedule, send, CRM
+settings save, provider call, schema change or migration was executed. The
+known backup retention cleanup permission issue remains separate from the valid
+new backup. Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING;
+not CRA formal acceptance.
+
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING /

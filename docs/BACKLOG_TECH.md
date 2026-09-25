@@ -2108,6 +2108,24 @@ OWNER UI PENDING.
   mixing data from another recipient. Focused runner and route tests plus
   backend build passed with providers mocked. Status:
   LOCAL VALIDATED / NOT DEPLOYED.
+- Production deploy, 2026-09-25: functional head
+  `5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e` was deployed by FF-only from
+  `aba600989eda77f6cb1258256f5aa0ba2f40ba03` after persistent backup
+  `/opt/re7online/backups/converta-persistent/snapshots/20260925T161546Z`
+  (`database/database.dump`, 22,438,545 bytes, SHA256
+  `a7812cccd56a5f398ee7664aea44591b933997d74fc8199bc1a9ea6c2a5a2860`,
+  581 manifest objects). Backend and frontend production builds PASS; `git
+  diff --check` PASS. Only `re7-whatsapp-agent` and `re7-admin-front` were
+  reloaded; `re7-whatsapp-web-worker` and `.data/` were preserved. Health/db
+  and unauthenticated route reachability for `/app/campaigns`, `/app/crm`,
+  `/app/inbox`, `/app/settings/crm` and `/app/login` PASS. Authenticated
+  read-only UI smoke was NOT EXERCISED because no legitimate session was
+  available in shell; OWNER UI remains pending. Validation did not click
+  test-send, create drafts, schedule, send campaigns, save CRM settings, call
+  providers, change schema or run migrations. Backup retention cleanup still
+  has the previously documented old-snapshot permission issue, separate from
+  the validated new backup. Status:
+  DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 

@@ -278,6 +278,23 @@ to one provider call without mixing variables. Focused runner and route tests
 plus backend build passed with provider mocked. Status:
 LOCAL VALIDATED / NOT DEPLOYED.
 
+Production deploy on 2026-09-25: the normalization/settings/contrast lot was
+deployed at functional head `5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e`, by
+FF-only from `aba600989eda77f6cb1258256f5aa0ba2f40ba03`, after persistent
+backup `/opt/re7online/backups/converta-persistent/snapshots/20260925T161546Z`
+(`database/database.dump`, 22,438,545 bytes, SHA256
+`a7812cccd56a5f398ee7664aea44591b933997d74fc8199bc1a9ea6c2a5a2860`, 581
+manifest objects). Backend and frontend production builds passed; only
+`re7-whatsapp-agent` and `re7-admin-front` were reloaded, while
+`re7-whatsapp-web-worker` and `.data/` were preserved. Health/db and
+unauthenticated reachability for campaigns, CRM, Inbox, CRM settings and login
+passed. Authenticated read-only UI smoke was NOT EXERCISED due absence of a
+legitimate shell session; OWNER UI PENDING. No test-send click, draft creation,
+scheduling, send, CRM settings save, provider call, schema change or migration
+was performed. The backup retention cleanup permission issue remains recorded
+as an operational follow-up and did not invalidate the new backup. Status:
+DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
+
 Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
 counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
 VALIDATED / OWNER UI PENDING no head

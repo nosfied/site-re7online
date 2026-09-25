@@ -813,6 +813,21 @@ full canonical form; national/full duplicate entries are sent once and do not
 mix another recipient's data. Focused runner and route tests plus backend build
 passed with providers mocked. Status: LOCAL VALIDATED / NOT DEPLOYED.
 
+Production deploy, 2026-09-25: the phone-normalization, recipient-variable
+preservation, CRM settings layout and campaign light-theme contrast lot is now
+DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING at functional head
+`5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e`. Production moved FF-only from
+`aba600989eda77f6cb1258256f5aa0ba2f40ba03` after backup
+`/opt/re7online/backups/converta-persistent/snapshots/20260925T161546Z`
+(`database/database.dump`, 22,438,545 bytes, SHA256
+`a7812cccd56a5f398ee7664aea44591b933997d74fc8199bc1a9ea6c2a5a2860`, 581
+objects). Backend/frontend builds and `git diff --check` passed. Reload scope:
+`re7-whatsapp-agent` and `re7-admin-front` only; worker preserved. Health and
+page reachability for campaigns, CRM, Inbox, CRM settings and login passed, but
+authenticated owner UI smoke was NOT EXERCISED from shell. No provider call,
+real send, business-data mutation, schema change or migration occurred during
+validation.
+
 CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
 PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was
 fast-forwarded to `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`;
