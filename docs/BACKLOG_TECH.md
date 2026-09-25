@@ -1949,6 +1949,35 @@ OWNER UI PENDING.
   reuse smoke for `Campanha teste set.27` was NOT EXERCISED from the deploy
   shell because no genuine session was available. Status:
   DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
+- Local refinement, 2026-09-25: campaign detail/reuse UX was tightened without
+  schema/runtime changes. CRM audience preview now separates filter controls
+  from result counters; campaign detail removes the redundant status counter
+  card, places the state badge beside refresh, groups send/schedule/discard
+  actions separately from test-send and keeps the progress area adjacent to the
+  action group. Draft detail no longer shows the composer-only variable mapping
+  block, shows real draft recipient data in a fixed-height scroll area, removes
+  relative timestamps from this context and only renders "Situacao real por
+  mensagem" when real provider/result evidence exists. Test-send now accepts
+  only the recipient number in the UI and relies on the backend resolver for
+  explicit variables, seed recipient components or fixed template params;
+  insufficient external variables still return `campaign_test_variables_required`.
+  Reuse now loads full campaign detail with `getAppCampaign` before deciding
+  mode when the list item lacks `draftSeed`, avoiding silent fallback to manual.
+  Historical static filters remain unrecoverable when not persisted; draft
+  recipient current-vs-historical provenance is not invented when the API does
+  not expose it. Validation: campaign page/reuse contracts 32/32 PASS,
+  backend focused campaign routes 2/2 PASS, frontend build PASS, backend build
+  PASS. Authenticated local browser smoke on 2026-09-25 used backend `3047`,
+  frontend `3048`, tenant `campaign-refinement-local`, simulated providers and
+  local DB `127.0.0.1:55432/re7_contacts_campaigns_ux_test`: desktop and narrow
+  screenshots confirmed no redundant Situation counter, status badge adjacent
+  to refresh, send/discard/schedule grouped with progress below, test-send
+  separated with only a recipient-number field, no detail variable-mapping
+  block, no relative timestamps, hidden real-message status when only fallback
+  seed data exists, draft recipient scroll above five rows, detail fetch before
+  reuse mode selection and no silent manual fallback. Evidence stored in
+  `.codex/evidence/campaign-refinement-2026-09-25/`. Status: LOCAL FIX
+  PREPARED / NOT DEPLOYED / OWNER UI PENDING.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 

@@ -882,6 +882,24 @@ Authenticated owner reuse validation remains pending; no draft, schedule, send,
 provider call, schema change or migration was performed by the deploy smoke.
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
 
+Local product refinement, 2026-09-25: campaign detail/reuse UX received a
+non-deployed local correction. The detail view removes redundant status and
+mapping visuals, groups operational actions apart from test-send, shows result
+message status only when real data exists, and keeps draft recipients in a
+bounded scroll table with only data actually exposed by the API. Test-send in
+the UI now asks only for the destination number; backend behavior remains the
+source of truth for variable resolution and still blocks insufficient external
+tests. Reuse now fetches the full campaign detail before deciding the composer
+mode when the list item is incomplete, avoiding an incorrect manual fallback.
+Static filters absent from historical seeds remain a known limitation. Local
+validation: campaign page/reuse contracts 32/32 PASS, backend focused campaign
+routes 2/2 PASS, frontend/backend builds PASS. Authenticated local browser
+smoke on 2026-09-25 covered desktop and narrow viewport with local tenant
+`campaign-refinement-local`, simulated providers and evidence in
+`.codex/evidence/campaign-refinement-2026-09-25/`. No production access,
+provider call, real send, schema or migration. Status: LOCAL FIX PREPARED / NOT
+DEPLOYED / OWNER UI PENDING; not CRA formal acceptance.
+
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING /

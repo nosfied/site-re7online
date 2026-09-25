@@ -121,6 +121,34 @@ com `re7-whatsapp-agent` e worker preservados. Health, `/app/campaigns`,
 terminal de deploy. Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI
 PENDING.
 
+Refinamento local de 2026-09-25: P2 Guided Builder permanece pausado enquanto
+o detalhe/reaproveitamento de campanhas recebe ajuste pontual. A previa de
+audiencia CRM separa filtros e contadores; o detalhe remove o card redundante
+de situacao, mostra a badge de estado ao lado de atualizar, agrupa
+enviar/agendar/descartar separadamente do teste, remove o bloco visual de
+Mapeamento de variaveis fora do composer, limita a tabela de destinatarios do
+rascunho a uma area rolavel e evita timestamp relativo neste contexto. "Situacao
+real por mensagem" aparece somente com evidencia real de resultado/provider.
+Teste com numero nao exige mais preenchimento duplicado de variaveis na UI: o
+backend continua resolvendo variaveis por parametros explicitos, componentes do
+seed ou parametros fixos, e bloqueia externo insuficiente com
+`campaign_test_variables_required`. Reaproveitar uma campanha de listagem que
+nao traz `draftSeed` agora carrega o detalhe completo antes de decidir o modo,
+evitando fallback silencioso para manual. Filtros estaticos historicos ausentes
+do seed continuam nao recuperaveis e a tela nao inventa origem atual/historica
+quando a API nao fornece essa evidencia. Validacao local: contratos de pagina e
+reuso 32/32 PASS, rotas backend focadas 2/2 PASS, build frontend PASS e build
+backend PASS. Smoke autenticado local em navegador real, 2026-09-25, usou
+backend `3047`, frontend `3048`, tenant `campaign-refinement-local`, providers
+simulados e banco local `127.0.0.1:55432/re7_contacts_campaigns_ux_test`:
+desktop e tela estreita confirmaram agrupamento de acoes, progresso abaixo,
+teste separado apenas com numero, tabela de rascunho rolavel, ausencia de
+timestamp relativo/bloco de variaveis no detalhe, situacao real por mensagem
+oculta quando so ha fallback de seed, carregamento de detalhe antes do modo de
+reuso e ausencia de fallback manual silencioso. Evidencias locais:
+`.codex/evidence/campaign-refinement-2026-09-25/`. Status: LOCAL FIX PREPARED
+/ NOT DEPLOYED / OWNER UI PENDING.
+
 Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
 counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
 VALIDATED / OWNER UI PENDING no head

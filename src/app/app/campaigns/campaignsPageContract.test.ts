@@ -138,7 +138,7 @@ test("campaign result filtered actions only operate on the visible result set", 
   assert.ok(pageSource.includes("const handleReuseFilteredResults"));
   assert.ok(pageSource.includes("applyCampaignReuse(selectedCampaign, {"));
   assert.ok(pageSource.includes('mode: "filtered_results"'));
-  assert.ok(pageSource.includes("buildCampaignReuseState(campaign, options)"));
+  assert.ok(pageSource.includes("buildCampaignReuseState(sourceCampaign, options)"));
   assert.ok(pageSource.includes("buildAudiencePreviewFromCampaignResults"));
   assert.ok(pageSource.includes("buildAudiencePreviewFromDraftSeed"));
   assert.ok(pageSource.includes('setActiveTab("create")'));
@@ -270,19 +270,35 @@ test("campaign detail uses localized block reasons and distinct refresh/reuse ic
   assert.ok(campaignDraftsSource.includes('template_variables_required: "Preencha todas as variáveis obrigatórias do modelo antes de enviar."'));
   assert.ok(pageSource.includes('label={refreshingDetail ? "Atualizando detalhe" : "Atualizar detalhe"}'));
   assert.ok(pageSource.includes('icon={refreshingDetail ? "…" : "↺"}'));
+  assert.ok(pageSource.includes("getStatusClasses(selectedCampaign.status)"));
+  assert.ok(pageSource.includes("getStatusLabel(selectedCampaign.status)"));
   assert.ok(pageSource.includes('label="Nova campanha com filtrados"'));
   assert.ok(pageSource.includes('icon="＋"'));
   assert.ok(!pageSource.includes('label="Nova campanha com filtrados"\\n                            icon="↺"'));
 });
 
-test("campaign test send requires explicit variables for variable templates", () => {
-  assert.ok(pageSource.includes("testVariableValues"));
+test("campaign test send uses only recipient number and lets backend resolve variables", () => {
   assert.ok(pageSource.includes("selectedCampaignTestVariableLabels"));
-  assert.ok(pageSource.includes("Variável {{"));
-  assert.ok(pageSource.includes("Object.fromEntries("));
-  assert.ok(pageSource.includes("sendAppCampaignTest(session, selectedCampaign.id, waId, variables)"));
-  assert.ok(pageSource.includes("campaignTestVariablesIncomplete"));
-  assert.ok(pageSource.includes("disabled={testingCampaign || !testRecipientInput.trim() || campaignTestVariablesIncomplete}"));
+  assert.ok(pageSource.includes("O sistema tentará resolver"));
+  assert.ok(pageSource.includes("sendAppCampaignTest(session, selectedCampaign.id, waId)"));
+  assert.ok(pageSource.includes("disabled={testingCampaign || !testRecipientInput.trim()}"));
+  assert.ok(!pageSource.includes("testVariableValues"));
+  assert.ok(!pageSource.includes("campaignTestVariablesIncomplete"));
+  assert.ok(!pageSource.includes("Valor usado apenas no teste"));
+});
+
+test("campaign detail layout keeps status badge actions progress and draft table aligned", () => {
+  assert.ok(!pageSource.includes("<p className=\"text-[11px] uppercase tracking-wide text-white/60\">Situação</p>"));
+  assert.ok(pageSource.includes("Rascunho pronto — clique em Enviar para iniciar"));
+  assert.ok(pageSource.includes("max-h-[300px] overflow-auto"));
+  assert.ok(pageSource.includes("Dado do rascunho"));
+  assert.ok(!pageSource.includes("Mapeamento de variáveis"));
+  assert.ok(!pageSource.includes("Nenhuma situação detalhada da Meta disponível ainda para esta campanha."));
+  assert.ok(!pageSource.includes("formatRelativeTime(selectedCampaign.updatedAt)"));
+  assert.ok(!pageSource.includes("formatRelativeTime(selectedCampaign.createdAt)"));
+  assert.ok(pageSource.includes('id="campaign-schedule-at"'));
+  assert.ok(pageSource.includes("hasRealCampaignResultEvidence"));
+  assert.ok(pageSource.includes("hasRealCampaignResultItems ? ("));
 });
 
 test("campaign actions use the compact Inbox action-button language", () => {

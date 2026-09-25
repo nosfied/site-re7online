@@ -89,6 +89,30 @@ type CampaignResultStatusFilter = "all" | "delivered" | "sent" | "read" | "block
 type CampaignResultItem = NonNullable<CampaignItem["messagesMetaStatus"]>[number];
 type CsvGenericFieldKey = `field${number}`;
 
+function hasRealCampaignResultEvidence(item: CampaignResultItem) {
+  const error = String(item.error ?? "").toLowerCase();
+  const isMissingHistoryFallback =
+    error.includes("envio individual nao encontrado") ||
+    error.includes("envio individual não encontrado");
+  if (isMissingHistoryFallback) return false;
+  return Boolean(
+    item.sentAt ||
+      item.deliveredAt ||
+      item.conversationId ||
+      item.pricingCategory ||
+      item.pricingBillable !== null ||
+      item.pricingModel ||
+      item.nonBillingReason === "opt_out" ||
+      item.nonBillingReason === "recipient_blocked" ||
+      item.status === "delivered" ||
+      item.status === "read" ||
+      item.status === "sent" ||
+      item.status === "blocked" ||
+      item.status === "opt_out" ||
+      (item.status === "failed" && item.error && !isMissingHistoryFallback)
+  );
+}
+
 type CampaignToastTone = "success" | "warning" | "error" | "info" | "reuse";
 
 type CampaignToast = {
@@ -468,18 +492,6 @@ function getStatusLabel(status: string) {
   return getCampaignStatusUxLabel(status);
 }
 
-function formatRelativeTime(date: string) {
-  const value = new Date(date).getTime();
-  if (!Number.isFinite(value)) return formatDateTime(date);
-  const diffSeconds = Math.max(Math.floor((Date.now() - value) / 1000), 0);
-  if (diffSeconds < 60) return `há ${diffSeconds} segundo${diffSeconds === 1 ? "" : "s"}`;
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  if (diffMinutes < 60) return `há ${diffMinutes} minuto${diffMinutes === 1 ? "" : "s"}`;
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `há ${diffHours} hora${diffHours === 1 ? "" : "s"}`;
-  return formatDateTime(date);
-}
-
 function getProgressPct(campaign: CampaignItem) {
   if (!campaign.totalRecipients || campaign.totalRecipients <= 0) return 0;
   const completed = campaign.sentCount + campaign.blockedCount;
@@ -532,7 +544,7 @@ function getMetaStatusLabel(status: string) {
 function getCampaignConfidence(campaign: CampaignItem) {
   if (campaign.status === "draft") {
     return {
-      label: "Aguardando envio explícito",
+      label: "Rascunho pronto — clique em Enviar para iniciar",
       icon: "INFO",
       classes: "campaign-panel-info",
     };
@@ -741,7 +753,6 @@ export default function AppCampaignsPage() {
   const [testingCampaign, setTestingCampaign] = useState(false);
   const [scheduleInput, setScheduleInput] = useState("");
   const [testRecipientInput, setTestRecipientInput] = useState("");
-  const [testVariableValues, setTestVariableValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -929,15 +940,6 @@ export default function AppCampaignsPage() {
     () => getTemplateVariablePositions(selectedCampaignTemplate),
     [selectedCampaignTemplate]
   );
-  const campaignTestVariablesIncomplete = selectedCampaignTestVariableLabels.some(
-    (label) => !(testVariableValues[label] ?? "").trim()
-  );
-
-  useEffect(() => {
-    setTestVariableValues((previous) =>
-      Object.fromEntries(selectedCampaignTestVariableLabels.map((label) => [label, previous[label] ?? ""]))
-    );
-  }, [selectedCampaign?.id, selectedCampaignTestVariableLabels]);
 
   const audienceEligibleItems = useMemo(
     () => audiencePreview?.items.filter((item) => item.eligible) ?? [],
@@ -1518,6 +1520,10 @@ export default function AppCampaignsPage() {
     () => selectedCampaign?.messagesMetaStatus ?? [],
     [selectedCampaign?.messagesMetaStatus]
   );
+  const hasRealCampaignResultItems = useMemo(
+    () => campaignResultItems.some(hasRealCampaignResultEvidence),
+    [campaignResultItems]
+  );
 
   const resultStatusOptions = useMemo(() => {
     const existing = new Set(campaignResultItems.map((item) => item.status));
@@ -2080,10 +2086,30 @@ export default function AppCampaignsPage() {
     campaign: CampaignItem,
     options: { recipientOverride?: { mode: "filtered_results"; recipients: CampaignResultItem[] } } = {}
   ) => {
-    const reuseState = buildCampaignReuseState(campaign, options);
+    let sourceCampaign = campaign;
+    if (!sourceCampaign.draftSeed && session) {
+      try {
+        const detail = await getAppCampaign(session, campaign.id);
+        sourceCampaign = detail.campaign;
+        setSelectedCampaign(sourceCampaign);
+      } catch (err) {
+        const typed = err as { status?: number; message?: string };
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        showToast(
+          "error",
+          "Reaproveitamento não carregado",
+          getCampaignUserFacingError(typed, "Não foi possível carregar os dados completos da campanha.")
+        );
+        return;
+      }
+    }
+    const reuseState = buildCampaignReuseState(sourceCampaign, options);
     const replayForm = reuseState.form;
-    const draftSeed = campaign.draftSeed;
-    const replayTemplateId = campaign.draftSeed?.templateId || campaign.templateId || "";
+    const draftSeed = sourceCampaign.draftSeed;
+    const replayTemplateId = sourceCampaign.draftSeed?.templateId || sourceCampaign.templateId || "";
     const matchedTemplate =
       templates.find((item) => replayTemplateId && item.id === replayTemplateId) ??
       templates.find((item) => item.name === replayForm.templateName) ??
@@ -2131,7 +2157,7 @@ export default function AppCampaignsPage() {
       if (reuseState.mode === "crm_static") {
         if (options.recipientOverride?.mode === "filtered_results") {
           const preview = buildAudiencePreviewFromCampaignResults(
-            campaign,
+            sourceCampaign,
             options.recipientOverride.recipients as CampaignResultItem[],
             "campaign-result-filter"
           );
@@ -2140,13 +2166,13 @@ export default function AppCampaignsPage() {
           setLoadingAudiencePreview(true);
           setCampaignReusePreviewState("loading");
           try {
-            const result = await buildHydratedAudiencePreviewFromDraftSeed(session, campaign, reuseGeneration);
+            const result = await buildHydratedAudiencePreviewFromDraftSeed(session, sourceCampaign, reuseGeneration);
             if (audienceRequestGenerationRef.current !== reuseGeneration || !result) return;
             setAudiencePreview(result.preview);
             setCampaignReusePreviewState(result.state);
           } catch {
             if (audienceRequestGenerationRef.current === reuseGeneration) {
-              const fallbackPreview = buildAudiencePreviewFromDraftSeed(campaign);
+              const fallbackPreview = buildAudiencePreviewFromDraftSeed(sourceCampaign);
               if (fallbackPreview) setAudiencePreview(fallbackPreview);
               setCampaignReusePreviewState("failed");
               setAudiencePreviewError(
@@ -2157,7 +2183,7 @@ export default function AppCampaignsPage() {
             if (audienceRequestGenerationRef.current === reuseGeneration) setLoadingAudiencePreview(false);
           }
         } else {
-          const preview = buildAudiencePreviewFromDraftSeed(campaign);
+          const preview = buildAudiencePreviewFromDraftSeed(sourceCampaign);
           if (preview) setAudiencePreview(preview);
           setCampaignReusePreviewState("failed");
         }
@@ -2738,10 +2764,7 @@ export default function AppCampaignsPage() {
     setTestingCampaign(true);
     setDetailError(null);
     try {
-      const variables = Object.fromEntries(
-        selectedCampaignTestVariableLabels.map((label) => [label, testVariableValues[label] ?? ""])
-      );
-      await sendAppCampaignTest(session, selectedCampaign.id, waId, variables);
+      await sendAppCampaignTest(session, selectedCampaign.id, waId);
       showToast("success", "Teste enviado", "Uma mensagem de teste foi enviada sem alterar os agregados da campanha.");
     } catch (err) {
       const typed = err as { status?: number; message?: string };
@@ -3105,7 +3128,7 @@ export default function AppCampaignsPage() {
           ) : null}
 
           {audiencePreview ? (
-            <div className="grid gap-3">
+            <div className="mt-4 grid gap-3">
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="rounded-md border border-white/10 bg-white/5 p-3">
                   <p className="text-xs uppercase tracking-wide text-white/60">Total</p>
@@ -3837,7 +3860,7 @@ export default function AppCampaignsPage() {
                               </span>
                             ) : null}
                           </div>
-                          <p className="mt-1 text-xs text-white/55">{formatRelativeTime(campaign.updatedAt)}</p>
+                          <p className="mt-1 text-xs text-white/55">{formatDateTime(campaign.updatedAt)}</p>
                         </div>
                       </td>
                       <td className="px-2 py-2 align-top">
@@ -3845,7 +3868,6 @@ export default function AppCampaignsPage() {
                           <span className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(campaign.status)}`}>
                             {getStatusLabel(campaign.status)}
                           </span>
-                          <span className="text-xs text-white/60">{formatRelativeTime(campaign.updatedAt)}</span>
                         </div>
                       </td>
                       <td className="px-2 py-2 text-center">{campaign.sentCount}</td>
@@ -3854,7 +3876,6 @@ export default function AppCampaignsPage() {
                       <td className="hidden px-2 py-2 xl:table-cell">
                         <div className="flex flex-col gap-1">
                           <span>{formatDateTime(campaign.createdAt)}</span>
-                          <span className="text-xs text-white/60">{formatRelativeTime(campaign.createdAt)}</span>
                         </div>
                       </td>
                       <td className="px-2 py-2 align-top">
@@ -3927,6 +3948,11 @@ export default function AppCampaignsPage() {
                       </p>
                     </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {selectedCampaign ? (
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClasses(selectedCampaign.status)}`}>
+                        {getStatusLabel(selectedCampaign.status)}
+                      </span>
+                    ) : null}
                     <ActionIconButton
                       label={refreshingDetail ? "Atualizando detalhe" : "Atualizar detalhe"}
                       icon={refreshingDetail ? "…" : "↺"}
@@ -3958,12 +3984,6 @@ export default function AppCampaignsPage() {
               {selectedCampaign ? (
                 <>
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-wide text-white/60">Situação</p>
-                      <p className={`mt-1 inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(selectedCampaign.status)}`}>
-                        {getStatusLabel(selectedCampaign.status)}
-                      </p>
-                    </div>
                     <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
                       <p className="text-[11px] uppercase tracking-wide text-white/60">Total</p>
                       <p className="mt-1 font-semibold">{selectedCampaign.totalRecipients}</p>
@@ -4049,7 +4069,25 @@ export default function AppCampaignsPage() {
                             Este rascunho ainda não enviou mensagens. Revise modelo e público antes de iniciar.
                           </p>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap items-end gap-2">
+                          <label className="grid min-w-[220px] flex-1 gap-1 text-xs font-semibold uppercase tracking-wide text-sky-100/75" htmlFor="campaign-schedule-at">
+                            Agendar envio
+                            <input
+                              id="campaign-schedule-at"
+                              type="datetime-local"
+                              value={scheduleInput}
+                              onChange={(event) => setScheduleInput(event.target.value)}
+                              className="rounded-md border border-white/15 bg-re7-navy/50 px-3 py-2 text-sm normal-case text-white outline-none focus:border-re7-sky"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            disabled={schedulingDraft || sendingDraft || discardingDraft || !scheduleInput}
+                            onClick={handleScheduleDraftCampaign}
+                            className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {schedulingDraft ? "Agendando..." : "Agendar"}
+                          </button>
                           <button
                             type="button"
                             disabled={discardingDraft || sendingDraft}
@@ -4097,32 +4135,6 @@ export default function AppCampaignsPage() {
                           ))}
                         </div>
                       ) : null}
-                      {selectedCampaign.draftSeed?.templateVariableMappings?.length ? (
-                        <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
-                            Mapeamento de variáveis
-                          </p>
-                          <div className="mt-2 grid gap-2 md:grid-cols-2">
-                            {selectedCampaign.draftSeed.templateVariableMappings.map((mapping) => (
-                              <div
-                                key={mapping.position}
-                                className="rounded-md border border-white/10 bg-re7-navy/40 px-3 py-2 text-xs text-white/75"
-                              >
-                                <p className="font-semibold text-white">{`{{${mapping.position}}}`}</p>
-                                <p className="mt-1">
-                                  Origem: {getVariableSourceLabel(mapping.source as TemplateVariableSource)}
-                                </p>
-                                {mapping.source === "fixed" && mapping.value ? (
-                                  <p className="mt-1">Valor fixo: {mapping.value}</p>
-                                ) : null}
-                                {mapping.fallback ? (
-                                  <p className="mt-1">Fallback: {mapping.fallback}</p>
-                                ) : null}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
                       {selectedCampaign.draftReview?.recipients?.length ? (
                         <div className="rounded-md border border-white/10 bg-white/5 p-3">
                           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -4130,24 +4142,28 @@ export default function AppCampaignsPage() {
                               Destinatários do rascunho
                             </p>
                             <span className="rounded-full border border-sky-300/25 bg-sky-900/20 px-2 py-1 text-xs text-sky-100">
-                              Aguardando envio explícito
+                              Rascunho pronto — clique em Enviar para iniciar
                             </span>
                           </div>
-                          <div className="overflow-x-auto">
+                          <div className="max-h-[300px] overflow-auto">
                             <table className="w-full min-w-[620px] text-sm">
-                              <thead className="bg-white/10 text-left">
+                              <thead className="sticky top-0 bg-white/10 text-left backdrop-blur">
                                 <tr>
                                   <th className="px-3 py-2">Contato</th>
                                   <th className="px-3 py-2">Referência</th>
+                                  <th className="px-3 py-2">Dados</th>
                                   <th className="px-3 py-2">Situação</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {selectedCampaign.draftReview.recipients.map((recipient, index) => (
                                   <tr key={`${recipient.identifierDisplay}-${index}`} className="border-t border-white/10">
-                                    <td className="px-3 py-2">Contato {index + 1}</td>
+                                    <td className="px-3 py-2">{recipient.identifierDisplay || "Sem nome atual"}</td>
                                     <td className="px-3 py-2 font-mono text-xs text-white/75">
                                       {recipient.phoneDisplay || recipient.identifierDisplay}
+                                    </td>
+                                    <td className="px-3 py-2 text-xs text-white/65">
+                                      Dado do rascunho
                                     </td>
                                     <td className="px-3 py-2">
                                       <span className="inline-flex rounded-full border border-sky-300/25 bg-sky-900/20 px-2 py-1 text-xs font-semibold text-sky-100">
@@ -4172,7 +4188,7 @@ export default function AppCampaignsPage() {
                           O teste envia uma única mensagem e não altera os agregados da campanha.
                         </p>
                       </div>
-                      <div className="grid gap-3 lg:grid-cols-2">
+                      <div className="grid gap-3">
                         <div className="grid gap-2">
                           <label className="text-xs font-semibold uppercase tracking-wide text-white/60" htmlFor="campaign-test-recipient">
                             Destinatário de teste
@@ -4187,7 +4203,7 @@ export default function AppCampaignsPage() {
                             />
                             <button
                               type="button"
-                              disabled={testingCampaign || !testRecipientInput.trim() || campaignTestVariablesIncomplete}
+                              disabled={testingCampaign || !testRecipientInput.trim()}
                               onClick={handleTestSendCampaign}
                               className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                             >
@@ -4195,57 +4211,19 @@ export default function AppCampaignsPage() {
                             </button>
                           </div>
                           {selectedCampaignTestVariableLabels.length > 0 ? (
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              {selectedCampaignTestVariableLabels.map((label) => (
-                                <label key={label} className="grid gap-1 text-sm">
-                                  <span className="text-xs font-semibold uppercase tracking-wide text-white/55">{`Variável {{${label}}}`}</span>
-                                  <input
-                                    value={testVariableValues[label] ?? ""}
-                                    onChange={(event) =>
-                                      setTestVariableValues((previous) => ({
-                                        ...previous,
-                                        [label]: event.target.value,
-                                      }))
-                                    }
-                                    placeholder="Valor usado apenas no teste"
-                                    className="w-full rounded-md border border-white/15 bg-re7-navy/50 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                                  />
-                                </label>
-                              ))}
-                            </div>
+                            <p className="rounded-md border border-white/10 bg-white/5 p-2 text-xs text-white/65">
+                              O sistema tentará resolver {selectedCampaignTestVariableLabels.length} variável(is) a partir dos dados do destinatário ou da definição salva da campanha. Se não houver fonte suficiente, o teste será bloqueado com orientação específica.
+                            </p>
                           ) : null}
                         </div>
-                        {selectedCampaign.status === "draft" ? (
-                          <div className="grid gap-2">
-                            <label className="text-xs font-semibold uppercase tracking-wide text-white/60" htmlFor="campaign-schedule-at">
-                              Agendar envio
-                            </label>
-                            <div className="flex flex-wrap gap-2">
-                              <input
-                                id="campaign-schedule-at"
-                                type="datetime-local"
-                                value={scheduleInput}
-                                onChange={(event) => setScheduleInput(event.target.value)}
-                                className="min-w-[220px] flex-1 rounded-md border border-white/15 bg-re7-navy/50 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                              />
-                              <button
-                                type="button"
-                                disabled={schedulingDraft || sendingDraft || discardingDraft || !scheduleInput}
-                                onClick={handleScheduleDraftCampaign}
-                                className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                {schedulingDraft ? "Agendando..." : "Agendar"}
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
+                        {selectedCampaign.status === "scheduled" ? (
                           <div className="rounded-md border border-indigo-300/25 bg-indigo-900/20 p-3">
                             <p className="text-xs font-semibold uppercase tracking-wide text-indigo-100/80">Envio agendado</p>
                             <p className="mt-1 text-sm text-white">
                               {selectedCampaign.scheduledAt ? formatDateTime(selectedCampaign.scheduledAt) : "Sem horário definido"}
                             </p>
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   ) : null}
@@ -4307,14 +4285,13 @@ export default function AppCampaignsPage() {
                     <p><span className="text-white/70">Total de destinatários:</span> {selectedCampaign.totalRecipients}</p>
                     <p>
                       <span className="text-white/70">Atualizada em:</span> {formatDateTime(selectedCampaign.updatedAt)}
-                      <span className="ml-2 text-xs text-white/60">({formatRelativeTime(selectedCampaign.updatedAt)})</span>
                     </p>
                     <p>
                       <span className="text-white/70">Criada em:</span> {formatDateTime(selectedCampaign.createdAt)}
-                      <span className="ml-2 text-xs text-white/60">({formatRelativeTime(selectedCampaign.createdAt)})</span>
                     </p>
                   </div>
 
+                  {hasRealCampaignResultItems ? (
                   <div className="rounded-md border border-white/10 bg-white/5">
                     <div className="grid gap-3 border-b border-white/10 px-4 py-3">
                       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -4377,7 +4354,6 @@ export default function AppCampaignsPage() {
                         </label>
                       </div>
                     </div>
-                    {campaignResultItems.length ? (
                       <div className="overflow-x-auto">
                         <table className="w-full min-w-[780px] text-sm">
                           <thead className="bg-white/10 text-left">
@@ -4426,10 +4402,8 @@ export default function AppCampaignsPage() {
                           </tbody>
                         </table>
                       </div>
-                    ) : (
-                      <p className="px-4 py-3 text-sm text-white/70">Nenhuma situação detalhada da Meta disponível ainda para esta campanha.</p>
-                    )}
                   </div>
+                  ) : null}
 
                   {selectedCampaign.status === "sending" ? (
                     <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-end border-t border-white/10 bg-re7-navy px-4 py-3">

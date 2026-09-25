@@ -13387,6 +13387,17 @@ test("app CSV import previews and creates draft without sending", async (t) => {
     globalThis.fetch = originalFetch;
   });
 
+  const seedRecipientTest = await request<{ ok: true; messageId: string }>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: "5541991300001" }
+  );
+  assert.equal(seedRecipientTest.status, 200, JSON.stringify(seedRecipientTest.body));
+  assert.equal(metaPayloads.length, 1);
+  assert.match(JSON.stringify(metaPayloads[0]), /Ana/);
+  assert.doesNotMatch(JSON.stringify(metaPayloads[0]), /João|Teste explicito/);
+
   const validTest = await request<{ ok: true; messageId: string }>(
     "POST",
     `/app/campaigns/${created.body.campaign.id}/test-send`,
@@ -13394,9 +13405,9 @@ test("app CSV import previews and creates draft without sending", async (t) => {
     { waId: "5541991300999", variables: { "1": "Teste explicito" } }
   );
   assert.equal(validTest.status, 200, JSON.stringify(validTest.body));
-  assert.equal(metaPayloads.length, 1);
-  assert.match(JSON.stringify(metaPayloads[0]), /Teste explicito/);
-  assert.doesNotMatch(JSON.stringify(metaPayloads[0]), /Ana|João/);
+  assert.equal(metaPayloads.length, 2);
+  assert.match(JSON.stringify(metaPayloads[1]), /Teste explicito/);
+  assert.doesNotMatch(JSON.stringify(metaPayloads[1]), /Ana|João/);
   const campaignAfterTest = await prisma.campaign.findUniqueOrThrow({
     where: { id: created.body.campaign.id },
     select: { status: true, sentCount: true, totalRecipients: true },
@@ -15584,8 +15595,9 @@ test("campaign reuse candidates blocked after original participation cannot be s
       content: "Aviso sem variaveis.",
     },
   });
-  const originalWaId = "5511949806683";
-  const aliasWaId = "551149806683";
+  const aliasTail = safeTemplatePrefix.replace(/\D/g, "").slice(-8).padStart(8, "0");
+  const originalWaId = `55119${aliasTail}`;
+  const aliasWaId = `5511${aliasTail}`;
   const stalePreviewWaId = "5541991189302";
   const originalLead = await prisma.lead.create({
     data: {

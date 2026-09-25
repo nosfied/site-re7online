@@ -678,6 +678,23 @@ agent e worker preservados. Health e rotas `/app/campaigns`, `/app/crm` e
 `/app/inbox` PASS. Validacao visual autenticada do owner segue pendente.
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
 
+Local campaign refinement, 2026-09-25: campaign reuse/detail remains
+production-deployed at `1ea1fef...`, but a new local correction is prepared and
+not deployed. It cleans the campaign detail layout, removes duplicated
+composer-only variable mapping from detail, keeps real result-message status
+conditional on actual evidence, accepts only a phone number for UI test-send
+while preserving backend variable resolution/error contracts, and loads full
+campaign detail before reuse mode selection when list payload lacks `draftSeed`.
+Static historical filters still are not reconstructed if not persisted; the
+draft recipient table does not fabricate current/historical provenance that the
+API does not expose. Validation: campaign page/reuse contracts 32/32 PASS,
+focused backend campaign routes 2/2 PASS, frontend/backend builds PASS.
+Authenticated local browser smoke on desktop and narrow viewport PASS with
+simulated providers and evidence in
+`.codex/evidence/campaign-refinement-2026-09-25/`; owner UI validation and
+production deploy remain pending. Status: LOCAL FIX PREPARED / NOT DEPLOYED /
+OWNER UI PENDING.
+
 CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
 PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was
 fast-forwarded to `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`;
