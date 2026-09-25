@@ -168,6 +168,23 @@ silencioso e tabela de rascunho rolavel. Evidencias:
 `.codex/evidence/campaign-review-efbcc62-2026-09-25/`. Status: LOCAL FIX
 PREPARED / NOT DEPLOYED / OWNER UI PENDING.
 
+Deploy de producao, 2026-09-25: o refinamento de campanhas foi implantado no
+head funcional `d172b0e65a5237d835acd6ef5ece7ee50af5d241`, por fast-forward a
+partir de `1ea1fef7556e161a9cf938dbbf23442fdfd1e1f6`, apos backup persistente
+`/opt/re7online/backups/converta-persistent/snapshots/20260925T102510Z`
+(`database.dump` sha256
+`33003b892ae5b4f8d0228177017aa7c3c68707b910c36b7da6eb39affc070c13`,
+22.330.663 bytes, 581 objetos, `SHA256SUMS` verificado). Builds backend e
+frontend passaram. Foram recarregados apenas `re7-whatsapp-agent` e
+`re7-admin-front`; `re7-whatsapp-web-worker` foi preservado apos confirmar que
+`routes.ts`/testes alterados nao entram no grafo de compilacao do worker.
+Health/db e rotas `/app/campaigns`, `/app/crm`, `/app/inbox` passaram. Smoke
+autenticado especifico de detalhe/reaproveitamento ficou NOT EXERCISED por
+ausencia de sessao legitima/caso disponivel no terminal de deploy. Nenhum
+rascunho, agendamento, teste, envio, opt-out, provider call, schema ou migration
+foi executado na validacao. Status: DEPLOYED / PRODUCTION HEALTH VALIDATED /
+OWNER UI PENDING.
+
 Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
 counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
 VALIDATED / OWNER UI PENDING no head

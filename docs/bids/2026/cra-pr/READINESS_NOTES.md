@@ -915,6 +915,21 @@ draft/seed-only placeholder section, reuse without silent manual fallback and
 bounded draft table. Evidence: `.codex/evidence/campaign-review-efbcc62-2026-09-25/`. Status:
 LOCAL FIX PREPARED / NOT DEPLOYED / OWNER UI PENDING; not CRA formal acceptance.
 
+Production deployment on 2026-09-25 advanced the campaign refinement functional
+head from `1ea1fef7556e161a9cf938dbbf23442fdfd1e1f6` to
+`d172b0e65a5237d835acd6ef5ece7ee50af5d241` after persistent backup snapshot
+`/opt/re7online/backups/converta-persistent/snapshots/20260925T102510Z`
+(`database.dump` sha256
+`33003b892ae5b4f8d0228177017aa7c3c68707b910c36b7da6eb39affc070c13`,
+22,330,663 bytes, 581 objects, checksum verified). Backend and frontend builds
+passed; `re7-whatsapp-agent` and `re7-admin-front` were reloaded, and the web
+worker was preserved after confirming the changed route/test files are not in
+its compile graph. Health/db and basic `/app/campaigns`, `/app/crm`,
+`/app/inbox` route checks passed. The deploy smoke did not create drafts,
+schedule, test-send, send campaigns, change opt-out, call providers, change
+schema or run migrations. Authenticated CRA/owner UI validation remains pending;
+this is production health validation, not CRA formal acceptance.
+
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING /

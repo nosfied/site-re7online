@@ -1999,6 +1999,22 @@ OWNER UI PENDING.
   inconsistency, not as proven provider failure. Evidence stored in
   `.codex/evidence/campaign-review-efbcc62-2026-09-25/`. Status: LOCAL FIX
   PREPARED / NOT DEPLOYED / OWNER UI PENDING.
+- Production deploy, 2026-09-25: functional head
+  `d172b0e65a5237d835acd6ef5ece7ee50af5d241` was deployed by FF-only from
+  `1ea1fef7556e161a9cf938dbbf23442fdfd1e1f6` after persistent backup snapshot
+  `/opt/re7online/backups/converta-persistent/snapshots/20260925T102510Z`
+  (`database.dump` sha256
+  `33003b892ae5b4f8d0228177017aa7c3c68707b910c36b7da6eb39affc070c13`,
+  22,330,663 bytes, 581 objects, `SHA256SUMS` verified). Backend and frontend
+  builds PASS; `re7-whatsapp-agent` and `re7-admin-front` were reloaded, while
+  `re7-whatsapp-web-worker` was preserved after confirming the changed backend
+  route/test files are not in the worker compile graph. Health/db and basic
+  `/app/campaigns`, `/app/crm`, `/app/inbox` route checks PASS. Authenticated
+  campaign-detail/reuse UI smoke was NOT EXERCISED from the deploy shell because
+  no legitimate owner session/case was available there. No draft, schedule,
+  test send, campaign send, opt-out mutation, provider call, schema change or
+  migration was performed by validation. Status:
+  DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 
