@@ -210,6 +210,23 @@ primeira amostra elegivel completa. Validacao local focada passou para audiencia
 CRM estatica, filtro CRM dinamico, alias, destino exato e campanha preservada.
 Status: LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
 
+Deploy de producao em 2026-09-25: o lote test-send com amostra + limpeza do
+detalhe de rascunho foi implantado no head funcional
+`aba600989eda77f6cb1258256f5aa0ba2f40ba03`, a partir de
+`d172b0e65a5237d835acd6ef5ece7ee50af5d241`, apos backup persistente
+`/opt/re7online/backups/converta-persistent/snapshots/20260925T130420Z`
+(`database.dump` 22.377.789 bytes, SHA256
+`1ed097a1ded0c14c0e75dc97ba6af1ba3ccadf985080bc612ff3cd4db0df3bb5`,
+581 objetos no manifest). Builds backend/frontend passaram; PM2 recarregou
+somente `re7-whatsapp-agent` e `re7-admin-front`, preservando o worker.
+Health/db e rotas `/app/campaigns`, `/app/crm`, `/app/inbox`, `/app/login`
+passaram. Smoke autenticado especifico do detalhe de rascunho ficou NOT
+EXERCISED por ausencia de sessao legitima no shell; OWNER UI PENDING. A
+validacao nao clicou em enviar teste, nao criou rascunho, nao agendou, nao
+enviou campanha, nao alterou opt-out e nao chamou provider real. Schema
+UNCHANGED; migration NONE. Status: DEPLOYED / PRODUCTION HEALTH VALIDATED /
+OWNER UI PENDING.
+
 Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
 counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
 VALIDATED / OWNER UI PENDING no head

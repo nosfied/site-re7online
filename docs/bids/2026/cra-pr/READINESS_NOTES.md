@@ -952,7 +952,22 @@ incomplete candidates. Focused local coverage passed for static CRM audience,
 dynamic CRM filter, alias matching, exact destination, zero provider call on
 incomplete known recipient, and unchanged draft campaign status. Status: LOCAL
 VALIDATED / NOT DEPLOYED / OWNER UI PENDING; not CRA formal acceptance.
-formal acceptance.
+
+Production deploy on 2026-09-25: the test-send sample + draft-detail cleanup
+lot was deployed to functional head
+`aba600989eda77f6cb1258256f5aa0ba2f40ba03` from
+`d172b0e65a5237d835acd6ef5ece7ee50af5d241` after persistent backup
+`/opt/re7online/backups/converta-persistent/snapshots/20260925T130420Z`
+(`database.dump`, 22,377,789 bytes, SHA256
+`1ed097a1ded0c14c0e75dc97ba6af1ba3ccadf985080bc612ff3cd4db0df3bb5`,
+581 manifest objects). Backend/frontend builds passed; only
+`re7-whatsapp-agent` and `re7-admin-front` were reloaded, and the worker was
+preserved. Health/db and basic campaigns/CRM/Inbox/Login routes passed. The
+deploy smoke did not click test-send, create drafts, schedule, send campaigns,
+change opt-out or call providers. Authenticated draft-detail UI inspection was
+NOT EXERCISED from the deploy shell; OWNER UI PENDING. Status:
+DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING; not CRA formal
+acceptance.
 
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 

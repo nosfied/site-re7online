@@ -2041,6 +2041,23 @@ OWNER UI PENDING.
   destination, zero provider call on incomplete known recipient, and unchanged
   draft campaign status. Status:
   LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+- Production deploy, 2026-09-25: functional head
+  `aba600989eda77f6cb1258256f5aa0ba2f40ba03` was deployed by exact checkout
+  from `d172b0e65a5237d835acd6ef5ece7ee50af5d241` after persistent backup
+  `/opt/re7online/backups/converta-persistent/snapshots/20260925T130420Z`
+  (`database/database.dump`, 22,377,789 bytes, SHA256
+  `1ed097a1ded0c14c0e75dc97ba6af1ba3ccadf985080bc612ff3cd4db0df3bb5`,
+  581 objects in manifest). Backend and frontend builds PASS; only
+  `re7-whatsapp-agent` and `re7-admin-front` were reloaded, with
+  `re7-whatsapp-web-worker` preserved. Health/db and `/app/campaigns`,
+  `/app/crm`, `/app/inbox`, `/app/login` route checks PASS. Authenticated
+  draft-detail UI inspection was NOT EXERCISED from the deploy shell; owner UI
+  remains pending. Validation did not click test-send, create drafts, schedule,
+  send campaigns, change opt-out, call providers, change schema or run
+  migrations. Backup script reported a retention-cleanup permission issue for
+  an old snapshot after the new backup was created and validated; deploy used
+  the valid new snapshot. Status:
+  DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 

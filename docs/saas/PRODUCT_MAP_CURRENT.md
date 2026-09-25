@@ -751,6 +751,20 @@ destination, no provider call for incomplete known recipient, and preserved
 draft campaign status. Status: LOCAL VALIDATED / NOT DEPLOYED / OWNER UI
 PENDING.
 
+Production deploy on 2026-09-25: this lot is now deployed at functional head
+`aba600989eda77f6cb1258256f5aa0ba2f40ba03` after persistent backup
+`/opt/re7online/backups/converta-persistent/snapshots/20260925T130420Z`
+(`database.dump`, 22,377,789 bytes, SHA256
+`1ed097a1ded0c14c0e75dc97ba6af1ba3ccadf985080bc612ff3cd4db0df3bb5`,
+581 manifest objects). Backend and frontend builds passed. PM2 reloaded only
+`re7-whatsapp-agent` and `re7-admin-front`; `re7-whatsapp-web-worker` was
+preserved. Health/db and `/app/campaigns`, `/app/crm`, `/app/inbox`,
+`/app/login` route checks passed. Authenticated draft-detail UI smoke was NOT
+EXERCISED from the deploy shell and remains OWNER UI PENDING. Validation did
+not click test-send, create drafts, schedule, send, mutate opt-out or call a
+real provider. Schema unchanged; no migration. Status:
+DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
+
 CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
 PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was
 fast-forwarded to `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`;

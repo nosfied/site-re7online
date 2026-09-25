@@ -892,3 +892,18 @@ submitted/accepted count, not delivered/read/final success evidence. Real
 `9a07b043-6657-4dc3-9e7f-2b904caf939c`. Campaign RBAC/active-send
 authorization is P1 backlog only, not implemented here. No real send, provider
 call, production repair or deploy occurred in this local gate.
+
+Campaign test-send sample follow-up, 2026-09-25: deployed to Converta
+production at functional head `aba600989eda77f6cb1258256f5aa0ba2f40ba03`
+after backup
+`/opt/re7online/backups/converta-persistent/snapshots/20260925T130420Z`.
+The operator-facing test-send contract now uses only the typed destination
+number while reusing existing campaign recipient data as sample. If the typed
+number belongs to the audience, including 12/13 digit aliases, it uses that
+recipient's own current data after CRM mappings are resolved; incomplete known
+recipients block before provider instead of borrowing another person's data.
+External test numbers may use the first eligible complete sample. Draft detail
+also no longer duplicates the requested/accepted/blocked/duplicate technical
+summary block. Production smoke was health/read-only only and did not click
+test-send, create drafts, schedule, send, change opt-out or call providers.
+Owner UI validation remains pending; this is not CRA formal acceptance.
