@@ -907,3 +907,12 @@ also no longer duplicates the requested/accepted/blocked/duplicate technical
 summary block. Production smoke was health/read-only only and did not click
 test-send, create drafts, schedule, send, change opt-out or call providers.
 Owner UI validation remains pending; this is not CRA formal acceptance.
+
+Test-send normalization follow-up, 2026-09-25: local implementation now accepts
+valid Brazilian national numbers with DDD and no explicit `55` by reusing the
+canonical CRM WhatsApp identity normalizer before provider dispatch. Full
+international inputs, 12/13 aliases, destination blocking and sample-selection
+rules remain preserved. Incomplete or ambiguous national input blocks before
+provider with a specific message. Focused local coverage also confirms
+international destination preservation and alias opt-out blocking with provider
+mocked. Status: LOCAL VALIDATED / NOT DEPLOYED; not CRA formal acceptance.

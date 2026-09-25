@@ -227,6 +227,30 @@ enviou campanha, nao alterou opt-out e nao chamou provider real. Schema
 UNCHANGED; migration NONE. Status: DEPLOYED / PRODUCTION HEALTH VALIDATED /
 OWNER UI PENDING.
 
+Owner validation on 2026-09-25 confirmed PASS for the deployed test-send sample
+and draft-detail cleanup lot at `aba600989eda77f6cb1258256f5aa0ba2f40ba03`.
+
+Local follow-up on 2026-09-25: campaign test-send accepts valid Brazilian
+national numbers with DDD and without `55` by reusing the canonical CRM
+WhatsApp identity normalizer before provider dispatch. Existing full
+international inputs, 12/13 aliases, destination opt-out/exclusion checks and
+sample-selection rules remain unchanged; incomplete/ambiguous national input
+receives a specific validation message and zero provider calls. `/app/settings/crm`
+now follows the department-style expandable administrative row pattern, keeps
+`Situação no CRM` separate from active-send blocking, and preserves editing,
+save and tenant permissions. Campaign light-theme select/options and the
+`Envio manual` label use theme-aware classes. Follow-up smoke diagnosed the
+previous CRM load error as local environment configuration: the test process was
+missing the legacy `.data/tenants.json` entry required by `/app/crm/settings`.
+After restoring a minimal ignored local entry for the test tenant, the endpoint
+returned 200 with `configSource.crmBusinessStatuses=db`; browser smoke validated
+mouse/keyboard expansion, save persistence after reload, abandoning unsaved
+edits by reload, desktop/narrow and light/dark. Focused backend coverage also
+confirms BR national number without `55`, full `55` form, international
+destination preservation, incomplete/ambiguous rejection and alias opt-out
+blocking with provider mocked. Status: LOCAL VALIDATED / NOT DEPLOYED /
+OWNER UI PENDING.
+
 Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
 counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
 VALIDATED / OWNER UI PENDING no head

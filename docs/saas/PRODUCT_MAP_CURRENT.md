@@ -765,6 +765,29 @@ not click test-send, create drafts, schedule, send, mutate opt-out or call a
 real provider. Schema unchanged; no migration. Status:
 DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING.
 
+Owner validation on 2026-09-25 confirmed PASS for the deployed test-send sample
+and draft-detail cleanup lot at `aba600989eda77f6cb1258256f5aa0ba2f40ba03`.
+
+Local campaign/settings follow-up on 2026-09-25: test-send destination
+normalization now reuses the canonical CRM WhatsApp identity normalizer so a
+valid Brazilian number with DDD and no `55` resolves to the same canonical
+destination as the full form. Incomplete/ambiguous input blocks before provider
+with a specific PT-BR message, while full international inputs, 12/13 aliases,
+opt-out/exclusion and sample selection remain preserved. CRM settings now use
+expandable administrative rows aligned with Departments, without changing CRM
+rules or persistence; `Situação no CRM` remains distinct from active-send
+blocking. Campaign light-theme select/options and manual-send label contrast
+were corrected with theme-aware classes. Follow-up smoke diagnosed the previous
+CRM load error as a local fixture issue: the process lacked the legacy
+`.data/tenants.json` entry required by `/app/crm/settings`. A minimal ignored
+local entry restored the supported smoke path; the endpoint returned 200 from
+DB-backed CRM statuses and browser smoke validated mouse/keyboard expansion,
+save persistence after reload, abandoning unsaved edits by reload,
+desktop/narrow and light/dark. Focused backend coverage confirms BR national
+number without `55`, full `55` form, international preservation,
+incomplete/ambiguous rejection and alias opt-out blocking. Status:
+LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+
 CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
 PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was
 fast-forwarded to `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`;

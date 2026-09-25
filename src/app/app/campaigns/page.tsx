@@ -135,9 +135,9 @@ const EMPTY_AUDIENCE_FILTERS: AudiencePreviewFilters = {
 const PAGE_SIZE = 5;
 const CSV_GENERIC_FIELD_COUNT = 10;
 const DARK_SELECT_CLASS =
-  "w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky [&>option]:bg-slate-950 [&>option]:text-white";
+  "theme-select w-full min-w-0 rounded-md px-3 py-2 text-sm outline-none focus:border-re7-sky";
 const DARK_RESULT_SELECT_CLASS =
-  "rounded-md border border-white/15 bg-slate-950 px-3 py-2 text-sm normal-case text-white outline-none focus:border-re7-sky [&>option]:bg-slate-950 [&>option]:text-white";
+  "theme-select rounded-md px-3 py-2 text-sm normal-case outline-none focus:border-re7-sky";
 const CSV_GENERIC_FIELDS = Array.from({ length: CSV_GENERIC_FIELD_COUNT }, (_, index) => ({
   index: index + 1,
   key: `field${index + 1}` as CsvGenericFieldKey,
@@ -654,7 +654,7 @@ function getToastClasses(tone: CampaignToastTone) {
 }
 
 const campaignComposerControlClasses =
-  "h-10 w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 text-sm leading-10 text-white outline-none focus:border-re7-sky";
+  "theme-select h-10 w-full min-w-0 rounded-md px-3 text-sm leading-10 outline-none focus:border-re7-sky";
 
 function getTabStatusFilter(tab: CampaignCenterTab): CampaignStatusFilter {
   switch (tab) {
@@ -3616,8 +3616,8 @@ export default function AppCampaignsPage() {
               className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-white/10 bg-white/[0.075] px-3 py-3 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-amber-300/60 md:px-4"
             >
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-amber-100/80">Envio manual</p>
-                <h3 className="mt-1 text-sm font-semibold text-amber-100">Envio imediato manual (avançado)</h3>
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/75">Envio manual</p>
+                <h3 className="mt-1 text-sm font-semibold text-white">Envio imediato manual (avançado)</h3>
                 <p className="mt-1 text-xs text-white/60">
                   Uso técnico para informar destinatários e iniciar o envio imediatamente após confirmação.
                 </p>

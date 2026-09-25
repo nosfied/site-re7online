@@ -402,7 +402,7 @@ import {
   type OperationsBoardStatus,
 } from "../operations/operationsBoardReadModel.js";
 import { buildCrmContactDetailPayload, buildCrmContactsPayload } from "../crm/crmContactsReadModel.js";
-import { buildCrmWhatsappIdentityCandidates } from "../crm/crmWhatsappIdentity.js";
+import { buildCrmWhatsappIdentityCandidates, normalizeCrmWhatsappIdentity } from "../crm/crmWhatsappIdentity.js";
 import {
   resolveEffectiveWhatsappOutboundTransport,
   isWhatsappFreeformStartTransportReady,
@@ -36813,7 +36813,7 @@ async function sendScopedCampaignTest(params: {
     templateName: campaign.templateName,
     outboundMessages: [],
   });
-  const waId = normalizeWaId(params.waId);
+  const waId = normalizeCampaignTestRecipientWaId(params.waId);
   if (!waId) return { ok: false as const, status: 400 as const, error: "invalid_test_recipient" as const };
   const recipientValidation = await validateCampaignTestRecipient(prisma, {
     clientId: params.clientId,
@@ -36935,6 +36935,15 @@ async function sendScopedCampaignTest(params: {
     return { ok: false as const, status: 502 as const, error: "campaign_test_send_failed" as const };
   }
   return { ok: true as const, messageId };
+}
+
+function normalizeCampaignTestRecipientWaId(value: string) {
+  const raw = value.trim();
+  const direct = normalizeWaId(value);
+  if (raw.startsWith("+") && direct.length >= 8) return direct;
+  if (direct.length >= 12) return direct;
+  const identity = normalizeCrmWhatsappIdentity(value);
+  return identity?.crmCanonicalPhone ?? "";
 }
 
 async function resolveCampaignDraftRecipientsFromLeadIds(

@@ -52,6 +52,24 @@ function formatCount(count: number | undefined) {
   return new Intl.NumberFormat("pt-BR").format(count ?? 0);
 }
 
+function CrmStatusBadge({
+  label,
+  tone = "default",
+}: {
+  label: string;
+  tone?: "default" | "success" | "warning" | "info";
+}) {
+  const toneClass =
+    tone === "success"
+      ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
+      : tone === "warning"
+        ? "border-amber-300/30 bg-amber-500/15 text-amber-100"
+        : tone === "info"
+          ? "border-sky-300/30 bg-sky-500/15 text-sky-100"
+          : "border-white/15 bg-white/5 text-white/80";
+  return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${toneClass}`}>{label}</span>;
+}
+
 export default function AppCrmSettingsPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
@@ -62,6 +80,7 @@ export default function AppCrmSettingsPage() {
   const [recipients, setRecipients] = useState<AppCrmCampaignRecipient[]>([]);
   const [statusSearch, setStatusSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "campaign">("all");
+  const [expandedStatusId, setExpandedStatusId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [preparing, setPreparing] = useState(false);
@@ -150,6 +169,24 @@ export default function AppCrmSettingsPage() {
   const resetForm = () => {
     setForm(EMPTY_STATUS);
   };
+
+  const openStatusRow = useCallback((status: CrmBusinessStatusConfig) => {
+    setExpandedStatusId((current) => {
+      const next = current === status.id ? null : status.id;
+      if (next) {
+        window.requestAnimationFrame(() => {
+          document.getElementById(`crm-status-row-${status.id}`)?.scrollIntoView({ block: "nearest" });
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (expandedStatusId && !filteredStatuses.some((item) => item.id === expandedStatusId)) {
+      setExpandedStatusId(null);
+    }
+  }, [expandedStatusId, filteredStatuses]);
 
   const handleAddStatus = () => {
     const label = form.label.trim();
@@ -481,52 +518,128 @@ export default function AppCrmSettingsPage() {
           <div className="space-y-2 min-[1441px]:space-y-3">
             {filteredStatuses.map((status, index) => {
               const isSystemNew = status.id === "NEW";
+              const isExpanded = expandedStatusId === status.id;
               return (
               <article
+                id={`crm-status-row-${status.id}`}
                 key={status.id}
                 className={`theme-list-row ${
                   index % 2 === 0 ? "theme-list-row-even" : "theme-list-row-odd"
-                } rounded-xl border p-2.5 min-[1441px]:p-4`}
+                } scroll-mt-24 overflow-hidden rounded-xl border transition-colors`}
               >
-                <div className="grid gap-2 lg:grid-cols-[130px_minmax(0,1fr)_minmax(0,1.2fr)_auto] lg:items-center min-[1441px]:gap-3 min-[1441px]:lg:grid-cols-[170px_minmax(0,1fr)_minmax(0,1.2fr)_auto]">
-                  <div>
-                    <p className="font-mono text-xs text-white/60">{status.id}</p>
-                    {isSystemNew ? <p className="mt-1 text-xs font-semibold text-re7-sky">Status sistêmico obrigatório.</p> : null}
-                    <p className="theme-soft mt-1 text-xs">{formatCount(counts[status.id])} contato(s)</p>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isExpanded}
+                  aria-controls={`crm-status-panel-${status.id}`}
+                  onClick={() => openStatusRow(status)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openStatusRow(status);
+                    }
+                  }}
+                  className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-white/10 bg-white/[0.075] px-3 py-3 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 md:px-4"
+                >
+                  <div className="min-w-0 space-y-1.5">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <h3 className="text-base font-semibold text-white">{status.label || status.id}</h3>
+                      <span className="font-mono text-xs text-white/55">{status.id}</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <CrmStatusBadge
+                        label={isSystemNew ? "Sistêmica" : status.isActive ? "Ativa" : "Inativa"}
+                        tone={isSystemNew ? "info" : status.isActive ? "success" : "warning"}
+                      />
+                      <CrmStatusBadge
+                        label={status.campaignEligible ? "Elegível para campanha" : "Não entra em campanha"}
+                        tone={status.campaignEligible ? "success" : "default"}
+                      />
+                      <CrmStatusBadge label={`${formatCount(counts[status.id])} contato(s)`} />
+                    </div>
+                    {status.description ? (
+                      <p className="theme-muted text-xs">{status.description}</p>
+                    ) : null}
                   </div>
-                  <input
-                    value={status.label}
-                    onChange={(event) => patchStatus(status.id, { label: event.target.value })}
-                    className="theme-select w-full rounded-md px-2.5 py-1.5 text-xs outline-none min-[1441px]:px-3 min-[1441px]:py-2 min-[1441px]:text-sm"
-                  />
-                  <input
-                    value={status.description ?? ""}
-                    onChange={(event) => patchStatus(status.id, { description: event.target.value })}
-                    placeholder="Descricao"
-                    className="theme-select w-full rounded-md px-2.5 py-1.5 text-xs outline-none min-[1441px]:px-3 min-[1441px]:py-2 min-[1441px]:text-sm"
-                  />
-                  <div className="flex flex-wrap items-center gap-2 text-xs min-[1441px]:gap-3 min-[1441px]:text-sm">
-                    <label className="inline-flex items-center gap-1.5 text-white/75 min-[1441px]:gap-2">
-                      <input
-                        type="checkbox"
-                        checked={isSystemNew ? true : status.isActive}
-                        disabled={isSystemNew}
-                        onChange={(event) => patchStatus(status.id, { isActive: event.target.checked })}
-                      />
-                      Ativa
-                    </label>
-                    <label className="inline-flex items-center gap-1.5 text-white/75 min-[1441px]:gap-2">
-                      <input
-                        type="checkbox"
-                        checked={status.campaignEligible}
-                        onChange={(event) =>
-                          patchStatus(status.id, { campaignEligible: event.target.checked })
-                        }
-                      />
-                      Campanha
-                    </label>
+                  <div className="expand-row-action-slot flex min-w-max shrink-0 items-center justify-end gap-3 justify-self-end whitespace-nowrap">
+                    <button
+                      type="button"
+                      aria-expanded={isExpanded}
+                      aria-controls={`crm-status-panel-${status.id}`}
+                      aria-label={isExpanded ? "Recolher linha" : "Expandir linha"}
+                      title={isExpanded ? "Recolher linha" : "Expandir linha"}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openStatusRow(status);
+                      }}
+                      className={`grid h-8 w-8 place-items-center rounded-full border text-base font-semibold leading-none transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-re7-sky/70 ${isExpanded ? "rotate-90 border-re7-sky/50 bg-re7-sky/20 text-sky-50" : "border-white/15 text-white/70"}`}
+                    >
+                      ›
+                    </button>
                   </div>
                 </div>
+
+                {isExpanded ? (
+                  <div id={`crm-status-panel-${status.id}`} className="bg-black/10 px-3 py-3 md:px-4">
+                    <div className="grid min-w-0 gap-2 border-b border-white/10 pb-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+                      <label className="flex flex-col gap-1.5 text-xs text-white/75">
+                        <span>Rótulo exibido no CRM</span>
+                        <input
+                          value={status.label}
+                          onChange={(event) => patchStatus(status.id, { label: event.target.value })}
+                          className="theme-select w-full rounded-md px-2.5 py-1.5 text-xs outline-none min-[1441px]:px-3 min-[1441px]:py-2 min-[1441px]:text-sm"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5 text-xs text-white/75">
+                        <span>Descrição operacional</span>
+                        <input
+                          value={status.description ?? ""}
+                          onChange={(event) => patchStatus(status.id, { description: event.target.value })}
+                          placeholder="Quando usar esta situação no CRM."
+                          className="theme-select w-full rounded-md px-2.5 py-1.5 text-xs outline-none min-[1441px]:px-3 min-[1441px]:py-2 min-[1441px]:text-sm"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                      <div className="rounded-lg border border-white/10 bg-re7-navy/35 p-3">
+                        <label className="flex items-start gap-2 text-sm text-white/75">
+                          <input
+                            type="checkbox"
+                            checked={isSystemNew ? true : status.isActive}
+                            disabled={isSystemNew}
+                            onChange={(event) => patchStatus(status.id, { isActive: event.target.checked })}
+                            className="mt-1"
+                          />
+                          <span>
+                            <span className="block font-semibold text-white">Usar no CRM</span>
+                            <span className="theme-muted text-xs">
+                              Situações inativas deixam de aparecer para classificação operacional. A situação Novo permanece ativa por ser padrão do sistema.
+                            </span>
+                          </span>
+                        </label>
+                      </div>
+                      <div className="rounded-lg border border-white/10 bg-re7-navy/35 p-3">
+                        <label className="flex items-start gap-2 text-sm text-white/75">
+                          <input
+                            type="checkbox"
+                            checked={status.campaignEligible}
+                            onChange={(event) =>
+                              patchStatus(status.id, { campaignEligible: event.target.checked })
+                            }
+                            className="mt-1"
+                          />
+                          <span>
+                            <span className="block font-semibold text-white">Pode compor audiência de campanha</span>
+                            <span className="theme-muted text-xs">
+                              Isto controla seleção por Situação no CRM. Bloqueio de envio ativo, opt-out e retirada da operação continuam sendo regras separadas.
+                            </span>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </article>
               );
             })}

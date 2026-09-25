@@ -50,6 +50,18 @@ test("invalid manual WhatsApp phone uses a specific PT-BR validation message", (
   );
 });
 
+test("invalid campaign test recipient explains national Brazilian input", () => {
+  assert.equal(
+    getAppErrorUxMessage({
+      status: 400,
+      errorCode: "invalid_test_recipient",
+      message: "invalid_test_recipient",
+      fallback: "Não foi possível enviar o teste.",
+    }),
+    "Informe um número de WhatsApp válido. Para números do Brasil, use DDD; o 55 pode ser omitido."
+  );
+});
+
 test("contact operationally excluded message remains specific", () => {
   assert.equal(
     getAppErrorUxMessage({

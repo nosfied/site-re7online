@@ -98,6 +98,8 @@ export function getAppErrorUxMessage(input: {
       return "Este contato optou por não receber envios ativos.";
     case "invalid_phone":
       return "Informe um número de WhatsApp válido com código do país 55 e DDD.";
+    case "invalid_test_recipient":
+      return "Informe um número de WhatsApp válido. Para números do Brasil, use DDD; o 55 pode ser omitido.";
     case "campaign_name_conflict":
       return "Já existe uma campanha com este nome. Use outro nome para continuar.";
     case "contact_already_provisional":

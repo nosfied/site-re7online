@@ -246,6 +246,11 @@ html {
     color: var(--app-text);
   }
 
+  .theme-select option {
+    background: var(--app-surface-strong);
+    color: var(--app-text);
+  }
+
   .theme-select:focus {
     border-color: rgba(127, 196, 229, 0.75);
     box-shadow: 0 0 0 3px rgba(127, 196, 229, 0.18);

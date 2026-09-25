@@ -13656,6 +13656,18 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
   assert.match(JSON.stringify(metaPayloads[0]), /Segundo Mapeado/);
   assert.doesNotMatch(JSON.stringify(metaPayloads[0]), /Primeiro Mapeado|Alias Mapeado/);
 
+  const nationalRecipientTest = await request<{ ok: true; messageId: string }>(
+    "POST",
+    `/app/campaigns/${staticDraft.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: "41991400002" }
+  );
+  assert.equal(nationalRecipientTest.status, 200, JSON.stringify(nationalRecipientTest.body));
+  assert.equal(metaPayloads.length, 2);
+  assert.match(JSON.stringify(metaPayloads[1]), /Segundo Mapeado/);
+  assert.match(JSON.stringify(metaPayloads[1]), new RegExp(secondWaId));
+  assert.doesNotMatch(JSON.stringify(metaPayloads[1]), /Primeiro Mapeado|Alias Mapeado/);
+
   const aliasRecipientTest = await request<{ ok: true; messageId: string }>(
     "POST",
     `/app/campaigns/${staticDraft.body.campaign.id}/test-send`,
@@ -13663,10 +13675,10 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
     { waId: aliasTypedWaId }
   );
   assert.equal(aliasRecipientTest.status, 200, JSON.stringify(aliasRecipientTest.body));
-  assert.equal(metaPayloads.length, 2);
-  assert.match(JSON.stringify(metaPayloads[1]), /Alias Mapeado/);
-  assert.match(JSON.stringify(metaPayloads[1]), new RegExp(aliasTypedWaId));
-  assert.doesNotMatch(JSON.stringify(metaPayloads[1]), /Primeiro Mapeado|Segundo Mapeado/);
+  assert.equal(metaPayloads.length, 3);
+  assert.match(JSON.stringify(metaPayloads[2]), /Alias Mapeado/);
+  assert.match(JSON.stringify(metaPayloads[2]), new RegExp(aliasTypedWaId));
+  assert.doesNotMatch(JSON.stringify(metaPayloads[2]), /Primeiro Mapeado|Segundo Mapeado/);
 
   const incompleteRecipientCalls = metaPayloads.length;
   const incompleteKnownRecipient = await request<ErrorPayload>(
@@ -13686,10 +13698,23 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
     { waId: externalWaId }
   );
   assert.equal(externalTest.status, 200, JSON.stringify(externalTest.body));
-  assert.equal(metaPayloads.length, 3);
-  assert.match(JSON.stringify(metaPayloads[2]), /Primeiro Mapeado/);
-  assert.match(JSON.stringify(metaPayloads[2]), new RegExp(externalWaId));
-  assert.doesNotMatch(JSON.stringify(metaPayloads[2]), /Segundo Mapeado|Alias Mapeado/);
+  assert.equal(metaPayloads.length, 4);
+  assert.match(JSON.stringify(metaPayloads[3]), /Primeiro Mapeado/);
+  assert.match(JSON.stringify(metaPayloads[3]), new RegExp(externalWaId));
+  assert.doesNotMatch(JSON.stringify(metaPayloads[3]), /Segundo Mapeado|Alias Mapeado/);
+
+  const internationalWaId = "12025550199";
+  const internationalTest = await request<{ ok: true; messageId: string }>(
+    "POST",
+    `/app/campaigns/${staticDraft.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: `+${internationalWaId}` }
+  );
+  assert.equal(internationalTest.status, 200, JSON.stringify(internationalTest.body));
+  assert.equal(metaPayloads.length, 5);
+  assert.match(JSON.stringify(metaPayloads[4]), /Primeiro Mapeado/);
+  assert.match(JSON.stringify(metaPayloads[4]), new RegExp(internationalWaId));
+  assert.doesNotMatch(JSON.stringify(metaPayloads[4]), /Segundo Mapeado|Alias Mapeado/);
 
   const incompleteFirstDraft = await request<{
     ok: true;
@@ -13709,10 +13734,10 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
     { waId: "5541991400888" }
   );
   assert.equal(externalSkipsIncomplete.status, 200, JSON.stringify(externalSkipsIncomplete.body));
-  assert.equal(metaPayloads.length, 4);
-  assert.match(JSON.stringify(metaPayloads[3]), /Segundo Mapeado/);
-  assert.match(JSON.stringify(metaPayloads[3]), /5541991400888/);
-  assert.doesNotMatch(JSON.stringify(metaPayloads[3]), /Primeiro Mapeado/);
+  assert.equal(metaPayloads.length, 6);
+  assert.match(JSON.stringify(metaPayloads[5]), /Segundo Mapeado/);
+  assert.match(JSON.stringify(metaPayloads[5]), /5541991400888/);
+  assert.doesNotMatch(JSON.stringify(metaPayloads[5]), /Primeiro Mapeado/);
 
   const dynamicDraft = await request<{
     ok: true;
@@ -13733,10 +13758,38 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
     { waId: dynamicSecondWaId }
   );
   assert.equal(dynamicRecipientTest.status, 200, JSON.stringify(dynamicRecipientTest.body));
-  assert.equal(metaPayloads.length, 5);
-  assert.match(JSON.stringify(metaPayloads[4]), /Dinamico Segundo/);
-  assert.match(JSON.stringify(metaPayloads[4]), new RegExp(dynamicSecondWaId));
-  assert.doesNotMatch(JSON.stringify(metaPayloads[4]), /Dinamico Primeiro|Primeiro Mapeado|Alias Mapeado/);
+  assert.equal(metaPayloads.length, 7);
+  assert.match(JSON.stringify(metaPayloads[6]), /Dinamico Segundo/);
+  assert.match(JSON.stringify(metaPayloads[6]), new RegExp(dynamicSecondWaId));
+  assert.doesNotMatch(JSON.stringify(metaPayloads[6]), /Dinamico Primeiro|Primeiro Mapeado|Alias Mapeado/);
+
+  const invalidRecipientCalls = metaPayloads.length;
+  const invalidRecipient = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${staticDraft.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: "991400002" }
+  );
+  assert.equal(invalidRecipient.status, 400);
+  assert.equal(getErrorCode(invalidRecipient.body), "invalid_test_recipient");
+  assert.equal(metaPayloads.length, invalidRecipientCalls);
+
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: "5541991400013",
+    source: "test",
+    reason: "test-send national blocked destination",
+  });
+  const nationalBlockedCalls = metaPayloads.length;
+  const nationalBlockedDestination = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${staticDraft.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: "41991400013" }
+  );
+  assert.equal(nationalBlockedDestination.status, 409);
+  assert.equal(getErrorCode(nationalBlockedDestination.body), "campaign_test_recipient_blocked");
+  assert.equal(metaPayloads.length, nationalBlockedCalls);
 
   for (const campaignId of [staticDraft.body.campaign.id, incompleteFirstDraft.body.campaign.id, dynamicDraft.body.campaign.id]) {
     const campaign = await prisma.campaign.findUniqueOrThrow({

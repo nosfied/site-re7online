@@ -79,7 +79,7 @@ them by owner decision.
 | Variables | Required placeholders mapped per recipient or blocked | PRODUCT SUPPORTED / NEEDS CRA RUN |
 | Draft | Campaign can be created without sending | PRODUCT SUPPORTED / NEEDS CRA RUN |
 | Response destination | New campaign draft/import requires explicit response destination: human department with concrete queue, or active principal automated flow | IMPLEMENTED LOCALLY / NEEDS CRA RUN |
-| Test send | Formal test-send excluded from contractual active-message billing | TESTED LOCALLY |
+| Test send | Formal test-send excluded from contractual active-message billing; local follow-up accepts valid Brazilian national numbers with DDD and no explicit `55` through the canonical CRM WhatsApp identity normalizer, preserving destination block checks and sample-selection rules | TESTED LOCALLY / NORMALIZATION FOLLOW-UP LOCAL VALIDATED / NOT CRA RUN |
 | Schedule/send | Explicit operator action only | PRODUCT SUPPORTED / NEEDS OWNER APPROVAL |
 | Pause/resume/cancel | Supported by campaign lifecycle and app API | TESTED LOCALLY FOR LIFECYCLE |
 | Opt-out | Active opt-out blocks campaign recipient and records event | DEMO VALIDATED / CRA ACCEPTANCE STILL NEEDED |

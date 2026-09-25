@@ -969,6 +969,28 @@ NOT EXERCISED from the deploy shell; OWNER UI PENDING. Status:
 DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI PENDING; not CRA formal
 acceptance.
 
+Owner validation on 2026-09-25 confirmed PASS for the deployed test-send sample
+and draft-detail cleanup lot at `aba600989eda77f6cb1258256f5aa0ba2f40ba03`;
+this records product owner acceptance, not CRA formal acceptance.
+
+Local follow-up on 2026-09-25: test-send now accepts valid Brazilian national
+numbers with DDD and no `55` through the existing canonical CRM WhatsApp
+normalizer, preserving full international numbers, 12/13 aliases and
+destination block checks. Invalid or ambiguous national input blocks before
+provider with a specific PT-BR message. CRM settings were reorganized into the
+same expandable-row pattern used by Departments, with `Situação no CRM`
+clearly separated from active-send blocking. Campaign light-theme select/options
+and manual-send label contrast were corrected. Focused local tests/builds
+passed. Follow-up smoke diagnosed the CRM load error as local environment
+configuration: `/app/crm/settings` needed the legacy `.data/tenants.json` entry
+for the test tenant. A minimal ignored local entry restored endpoint 200 with
+DB-backed CRM statuses, and browser smoke validated mouse/keyboard
+expand/collapse, save persistence, abandoning unsaved edits, desktop/narrow and
+light/dark. Backend coverage includes BR national input without `55`, full `55`,
+international preservation, incomplete rejection and alias opt-out blocking with
+provider mocked. Status: LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING; not
+CRA formal acceptance.
+
 ## CRM origin + Contacts CSV + campaign block guards - 2026-09-23
 
 Status: DEPLOYED / PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING /
