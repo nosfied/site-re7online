@@ -251,6 +251,14 @@ destination preservation, incomplete/ambiguous rejection and alias opt-out
 blocking with provider mocked. Status: LOCAL VALIDATED / NOT DEPLOYED /
 OWNER UI PENDING.
 
+Pre-deploy review correction on 2026-09-25: the shared CRM WhatsApp identity
+parser now treats `55` as Brazilian country code only for 12/13-digit BR
+international inputs, preserving national numbers whose DDD is `55`.
+`55 99140-0002` and `55 55 99140-0002` converge to the same canonical
+destination, selected-recipient data remains correct, and opt-out/alias checks
+block both forms before provider. Focused normalizer and campaign route tests
+plus backend build passed. Status: LOCAL VALIDATED / NOT DEPLOYED.
+
 Atualizacao de 2026-09-23: Zero-eligible campaign + CRM eligibility
 counts esta DEPLOYED / PRODUCTION HEALTH VALIDATED / READ-ONLY DOMAIN
 VALIDATED / OWNER UI PENDING no head

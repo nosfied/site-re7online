@@ -32,7 +32,9 @@ function isValidBrazilDdd(value: string) {
 }
 
 function parseBrazilSubscriber(digits: string) {
-  const national = digits.startsWith(BRAZIL_COUNTRY_CODE) ? digits.slice(2) : digits;
+  const hasBrazilCountryCode =
+    digits.startsWith(BRAZIL_COUNTRY_CODE) && (digits.length === 12 || digits.length === 13);
+  const national = hasBrazilCountryCode ? digits.slice(2) : digits;
   if (national.length !== 10 && national.length !== 11) return null;
   const ddd = national.slice(0, 2);
   if (!isValidBrazilDdd(ddd)) return null;

@@ -788,6 +788,13 @@ number without `55`, full `55` form, international preservation,
 incomplete/ambiguous rejection and alias opt-out blocking. Status:
 LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
 
+Pre-deploy review correction on 2026-09-25: CRM/test-send normalization now
+distinguishes DDD `55` from country code `55` using the canonical parser's
+input length. National `55 99140-0002` and full `55 55 99140-0002` converge,
+selected-recipient data is preserved, and opt-out/alias blocking applies to both
+forms before provider. Focused tests and backend build passed. Status:
+LOCAL VALIDATED / NOT DEPLOYED.
+
 CRM origin + full Contacts CSV + campaign block guards (2026-09-23): DEPLOYED /
 PRODUCTION HEALTH VALIDATED / OWNER UI VALIDATION PENDING. Production was
 fast-forwarded to `2a652e693a4bce5cfaa7e0a1fa5ef667537f154a`;

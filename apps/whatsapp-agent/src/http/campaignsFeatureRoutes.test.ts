@@ -13507,6 +13507,7 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
   const secondWaId = "5541991400002";
   const incompleteWaId = "5541991400003";
   const externalWaId = "5541991400999";
+  const ddd55WaId = "5555991400002";
   const aliasCanonicalWaId = "5511949806684";
   const aliasTypedWaId = "551149806684";
   const dynamicFirstWaId = "5541991400011";
@@ -13559,6 +13560,18 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
       status: "RETORNO_FUTURO",
     },
   });
+  const ddd55Lead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: ddd55WaId,
+      waIdCanonical: ddd55WaId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "DDD Cinquenta e Cinco",
+      phone: ddd55WaId,
+      status: "RETORNO_FUTURO",
+    },
+  });
   await prisma.lead.create({
     data: {
       tenantId: businessClientId,
@@ -13590,7 +13603,7 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
   }>("POST", "/app/campaigns/drafts", businessAdmin, {
     name: "Rascunho test-send CRM",
     templateId: template.id,
-    selectedLeadIds: [firstLead.id, secondLead.id, incompleteLead.id, aliasLead.id],
+    selectedLeadIds: [firstLead.id, secondLead.id, incompleteLead.id, aliasLead.id, ddd55Lead.id],
     returnDestination: defaultCampaignReturnDestination(),
     templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
   });
@@ -13668,6 +13681,18 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
   assert.match(JSON.stringify(metaPayloads[1]), new RegExp(secondWaId));
   assert.doesNotMatch(JSON.stringify(metaPayloads[1]), /Primeiro Mapeado|Alias Mapeado/);
 
+  const ddd55NationalTest = await request<{ ok: true; messageId: string }>(
+    "POST",
+    `/app/campaigns/${staticDraft.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: "55991400002" }
+  );
+  assert.equal(ddd55NationalTest.status, 200, JSON.stringify(ddd55NationalTest.body));
+  assert.equal(metaPayloads.length, 3);
+  assert.match(JSON.stringify(metaPayloads[2]), /DDD Cinquenta e Cinco/);
+  assert.match(JSON.stringify(metaPayloads[2]), new RegExp(ddd55WaId));
+  assert.doesNotMatch(JSON.stringify(metaPayloads[2]), /Primeiro Mapeado|Segundo Mapeado|Alias Mapeado/);
+
   const aliasRecipientTest = await request<{ ok: true; messageId: string }>(
     "POST",
     `/app/campaigns/${staticDraft.body.campaign.id}/test-send`,
@@ -13675,10 +13700,10 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
     { waId: aliasTypedWaId }
   );
   assert.equal(aliasRecipientTest.status, 200, JSON.stringify(aliasRecipientTest.body));
-  assert.equal(metaPayloads.length, 3);
-  assert.match(JSON.stringify(metaPayloads[2]), /Alias Mapeado/);
-  assert.match(JSON.stringify(metaPayloads[2]), new RegExp(aliasTypedWaId));
-  assert.doesNotMatch(JSON.stringify(metaPayloads[2]), /Primeiro Mapeado|Segundo Mapeado/);
+  assert.equal(metaPayloads.length, 4);
+  assert.match(JSON.stringify(metaPayloads[3]), /Alias Mapeado/);
+  assert.match(JSON.stringify(metaPayloads[3]), new RegExp(aliasTypedWaId));
+  assert.doesNotMatch(JSON.stringify(metaPayloads[3]), /Primeiro Mapeado|Segundo Mapeado/);
 
   const incompleteRecipientCalls = metaPayloads.length;
   const incompleteKnownRecipient = await request<ErrorPayload>(
@@ -13698,10 +13723,10 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
     { waId: externalWaId }
   );
   assert.equal(externalTest.status, 200, JSON.stringify(externalTest.body));
-  assert.equal(metaPayloads.length, 4);
-  assert.match(JSON.stringify(metaPayloads[3]), /Primeiro Mapeado/);
-  assert.match(JSON.stringify(metaPayloads[3]), new RegExp(externalWaId));
-  assert.doesNotMatch(JSON.stringify(metaPayloads[3]), /Segundo Mapeado|Alias Mapeado/);
+  assert.equal(metaPayloads.length, 5);
+  assert.match(JSON.stringify(metaPayloads[4]), /Primeiro Mapeado/);
+  assert.match(JSON.stringify(metaPayloads[4]), new RegExp(externalWaId));
+  assert.doesNotMatch(JSON.stringify(metaPayloads[4]), /Segundo Mapeado|Alias Mapeado/);
 
   const internationalWaId = "12025550199";
   const internationalTest = await request<{ ok: true; messageId: string }>(
@@ -13711,10 +13736,10 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
     { waId: `+${internationalWaId}` }
   );
   assert.equal(internationalTest.status, 200, JSON.stringify(internationalTest.body));
-  assert.equal(metaPayloads.length, 5);
-  assert.match(JSON.stringify(metaPayloads[4]), /Primeiro Mapeado/);
-  assert.match(JSON.stringify(metaPayloads[4]), new RegExp(internationalWaId));
-  assert.doesNotMatch(JSON.stringify(metaPayloads[4]), /Segundo Mapeado|Alias Mapeado/);
+  assert.equal(metaPayloads.length, 6);
+  assert.match(JSON.stringify(metaPayloads[5]), /Primeiro Mapeado/);
+  assert.match(JSON.stringify(metaPayloads[5]), new RegExp(internationalWaId));
+  assert.doesNotMatch(JSON.stringify(metaPayloads[5]), /Segundo Mapeado|Alias Mapeado/);
 
   const incompleteFirstDraft = await request<{
     ok: true;
@@ -13734,10 +13759,10 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
     { waId: "5541991400888" }
   );
   assert.equal(externalSkipsIncomplete.status, 200, JSON.stringify(externalSkipsIncomplete.body));
-  assert.equal(metaPayloads.length, 6);
-  assert.match(JSON.stringify(metaPayloads[5]), /Segundo Mapeado/);
-  assert.match(JSON.stringify(metaPayloads[5]), /5541991400888/);
-  assert.doesNotMatch(JSON.stringify(metaPayloads[5]), /Primeiro Mapeado/);
+  assert.equal(metaPayloads.length, 7);
+  assert.match(JSON.stringify(metaPayloads[6]), /Segundo Mapeado/);
+  assert.match(JSON.stringify(metaPayloads[6]), /5541991400888/);
+  assert.doesNotMatch(JSON.stringify(metaPayloads[6]), /Primeiro Mapeado/);
 
   const dynamicDraft = await request<{
     ok: true;
@@ -13758,10 +13783,10 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
     { waId: dynamicSecondWaId }
   );
   assert.equal(dynamicRecipientTest.status, 200, JSON.stringify(dynamicRecipientTest.body));
-  assert.equal(metaPayloads.length, 7);
-  assert.match(JSON.stringify(metaPayloads[6]), /Dinamico Segundo/);
-  assert.match(JSON.stringify(metaPayloads[6]), new RegExp(dynamicSecondWaId));
-  assert.doesNotMatch(JSON.stringify(metaPayloads[6]), /Dinamico Primeiro|Primeiro Mapeado|Alias Mapeado/);
+  assert.equal(metaPayloads.length, 8);
+  assert.match(JSON.stringify(metaPayloads[7]), /Dinamico Segundo/);
+  assert.match(JSON.stringify(metaPayloads[7]), new RegExp(dynamicSecondWaId));
+  assert.doesNotMatch(JSON.stringify(metaPayloads[7]), /Dinamico Primeiro|Primeiro Mapeado|Alias Mapeado/);
 
   const invalidRecipientCalls = metaPayloads.length;
   const invalidRecipient = await request<ErrorPayload>(
@@ -13790,6 +13815,32 @@ test("campaign test-send prioritizes resolved audience recipient data", async (t
   assert.equal(nationalBlockedDestination.status, 409);
   assert.equal(getErrorCode(nationalBlockedDestination.body), "campaign_test_recipient_blocked");
   assert.equal(metaPayloads.length, nationalBlockedCalls);
+
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: ddd55WaId,
+    source: "test",
+    reason: "test-send ddd 55 blocked destination",
+  });
+  const ddd55BlockedCalls = metaPayloads.length;
+  const ddd55NationalBlockedDestination = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${staticDraft.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: "55991400002" }
+  );
+  assert.equal(ddd55NationalBlockedDestination.status, 409);
+  assert.equal(getErrorCode(ddd55NationalBlockedDestination.body), "campaign_test_recipient_blocked");
+  assert.equal(metaPayloads.length, ddd55BlockedCalls);
+  const ddd55FullBlockedDestination = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${staticDraft.body.campaign.id}/test-send`,
+    businessAdmin,
+    { waId: ddd55WaId }
+  );
+  assert.equal(ddd55FullBlockedDestination.status, 409);
+  assert.equal(getErrorCode(ddd55FullBlockedDestination.body), "campaign_test_recipient_blocked");
+  assert.equal(metaPayloads.length, ddd55BlockedCalls);
 
   for (const campaignId of [staticDraft.body.campaign.id, incompleteFirstDraft.body.campaign.id, dynamicDraft.body.campaign.id]) {
     const campaign = await prisma.campaign.findUniqueOrThrow({

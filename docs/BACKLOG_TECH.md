@@ -2082,6 +2082,13 @@ OWNER UI PENDING.
   international destination preservation, incomplete/ambiguous rejection and
   alias opt-out blocking with provider mocked. Status:
   LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+- Pre-deploy review correction, 2026-09-25: the shared CRM WhatsApp identity
+  parser now distinguishes Brazilian DDD `55` from country code `55` by input
+  length. National `55 99140-0002` and full `55 55 99140-0002` converge to the
+  same canonical destination; campaign test-send preserves the selected
+  recipient data and opt-out/alias blocking for both forms before provider.
+  Focused normalizer and campaign route tests plus backend build passed. Status:
+  LOCAL VALIDATED / NOT DEPLOYED.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 
