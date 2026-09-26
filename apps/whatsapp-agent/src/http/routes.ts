@@ -1,3 +1,4 @@
+import { campaignTask, campaignProviderAttempt, CampaignOperationsClosed, isCampaignMutation, campaignOperationsStatus, setCampaignOperations } from "../campaigns/campaignOperations.js";
 import { lockCampaignExecutionBatch } from "../campaigns/campaignExecutionQueue.js";
 import { applyCampaignExecutionBatchAction } from "../campaigns/campaignBatchControl.js";
 import { createCsvCampaignBatch, CampaignBatchIdempotencyConflict } from "../campaigns/campaignCsvBatch.js";
@@ -1252,6 +1253,15 @@ async function handleInternalWebSessionHandoffRealtime(
 }
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
+  const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+  if (!isCampaignMutation(req.method, pathname)) return handleRequestWithCampaignAdmission(req, res);
+  try { return await campaignTask("http-prevalidation", () => handleRequestWithCampaignAdmission(req, res)); }
+  catch (error) {
+    if (!(error instanceof CampaignOperationsClosed)) throw error;
+    if (!res.headersSent) json(res, 503, { error: "campaign_operations_closed" });
+  }
+}
+async function handleRequestWithCampaignAdmission(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
   const requestId = crypto.randomUUID();
   const parsedUrl = new URL(url, `http://${req.headers.host ?? "localhost"}`);
@@ -16489,6 +16499,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       json(res, 200, { ok: true, messageId: testSend.messageId });
     } catch (error) {
+      if (error instanceof CampaignOperationsClosed) { json(res, 503, { error: "campaign_operations_closed" }); return; }
       logger.error({
         event: "app.campaign.lifecycle.error",
         message: (error as Error).message,
@@ -16990,6 +17001,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 500, httpError("server_error", "Server error"));
       }
       return;
+    }
+
+    if (pathname === "/admin/ops/campaign-execution") {
+      if (requireSuperadmin()) return;
+      if (req.method === "GET") { json(res, 200, campaignOperationsStatus()); return; }
+      if (req.method === "POST") {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        if (typeof body.open !== "boolean" || !Number.isInteger(body.generation) || typeof body.reason !== "string" || !body.reason.trim()) {
+          json(res, 400, { error: "operation_input_invalid" }); return;
+        }
+        try { json(res, 200, setCampaignOperations(body.open, Number(body.generation), "platform-superadmin", body.reason)); }
+        catch { json(res, 409, { error: "operation_unavailable_or_not_drained" }); }
+        return;
+      }
+      json(res, 405, { error: "method_not_allowed" }); return;
     }
 
     if (req.method === "GET" && pathname === "/admin/ops/metrics") {
@@ -37917,7 +37944,7 @@ async function sendScopedCampaignTest(params: {
   const phoneNumberId = tenant?.metaPhoneNumberId || undefined;
   const requestId = crypto.randomUUID();
   const messageId = `campaign-test.${campaign.id}.${crypto.randomUUID()}`;
-  await persistEvent({
+  const attempt = await campaignProviderAttempt(() => persistEvent({
     clientId: params.clientId,
     messageId: campaign.id,
     requestId: `campaign-test-requested:${campaign.id}:${requestId}`,
@@ -37930,8 +37957,7 @@ async function sendScopedCampaignTest(params: {
       componentSource: componentResolution.source,
       sampleWaIdLast4: componentResolution.sampleWaId ? componentResolution.sampleWaId.slice(-4) : null,
     },
-  });
-  const result = await sendTemplate({
+  }).then(() => undefined), () => sendTemplate({
     toE164: waId,
     waId,
     intent: undefined,
@@ -37943,7 +37969,8 @@ async function sendScopedCampaignTest(params: {
     messageId,
     clientId: params.clientId,
     clientKey: params.clientKey,
-  });
+  }), { clientId: params.clientId, campaignId: campaign.id, messageId });
+  const result = attempt.result;
   const status = result.ok ? MessageStatus.SENT : MessageStatus.FAILED;
   const template = await prisma.template.findFirst({
     where: {
@@ -37996,6 +38023,7 @@ async function sendScopedCampaignTest(params: {
       errorBody: result.errorBody ?? null,
     },
   });
+  attempt.persisted();
   if (!result.ok) {
     return { ok: false as const, status: 502 as const, error: "campaign_test_send_failed" as const };
   }

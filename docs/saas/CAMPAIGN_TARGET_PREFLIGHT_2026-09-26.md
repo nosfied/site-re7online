@@ -157,7 +157,7 @@ interromper campanha/test-send. Scheduler interno e requisições já admitidas
 continuam sendo fontes de trabalho. Ausência de eventos de incerteza na fotografia
 anterior não fecha essa lacuna.
 
-### Menor mecanismo proposto — NÃO implementado
+### Desenho registrado em `2b5697b6` — implementação local descrita ao final
 
 Uma guarda operacional de campanhas, sem alterar permissões do banco compartilhado,
 com o mesmo contrato no código pré-fila de recuperação e no candidato:
@@ -199,7 +199,7 @@ Qualquer chamada cujo término não possa ser demonstrado deve ser tratada como
 incerta, com decisão de reconciliação antes de prosseguir. Não se elimina esse
 problema apenas adicionando instrumentação e reiniciando.
 
-## Recomendação única e retorno do atendimento
+## Decisão registrada em `2b5697b6` e retorno do atendimento
 
 **NÃO avançar ao rollout da fila agora.** Preparar e ensaiar primeiro o mecanismo
 mínimo de fechamento/drain e um artefato de recuperação baseado no SHA funcional
@@ -265,7 +265,7 @@ guarda e do artefato de recuperação; nomear responsável por reconciliação e
 critérios de inbound/atendimento sem garantia de retry. Só depois dessas provas
 se define janela e autorização de mudança. Não se pede aprovação de deploy aqui.
 
-## Status e preservação
+## Status do preflight antes da implementação local
 
 **CONDIÇÕES OPERACIONAIS AINDA NÃO FECHADAS / NOT DEPLOYED / OWNER UI PENDING**.
 Portas externas e risco de resurrect comprovados; configuração carregada/firewall
@@ -273,3 +273,96 @@ privilegiados e drain/retorno seletivo ainda pendentes. Leitura complementar nã
 consultou novamente migration, drift ou dados de campanhas, nem repetiu ensaio,
 build/testes/smokes. Worker/sessões preservados. Owner PASS anterior, 6683 CLOSED,
 aceite CRA pendente e DELIVERED/READ → HUMAN/WAITING separados e sem alteração.
+
+
+## Atualização: guarda/drain e recuperação implementados SOMENTE LOCAL
+
+O desenho acima deixa de ser apenas proposta no worktree da revisão; os fatos
+observados em produção não mudaram. Implementação, configuração, diagnóstico e
+primeira transição estão no [runbook](../RUNBOOK_WHATSAPP_AGENT.md#guarda-operacional-de-campanhas--implementação-local-2026-09-26).
+A guarda usa armazenamento persistente local e autorização superadmin existentes,
+sem migration nem alteração de privilégios compartilhados. Não altera a fila ou
+intenção de pause/cancel; separa suspensão administrativa de ação do usuário.
+
+Artefato separado em `tmp/worktrees/re7-campaign-service-recovery-20260926`, base
+`5ee2de6b`, mantém campanhas fechadas incondicionalmente e preserva atendimento.
+Configuração aberta não contorna esse build. Client antigo privado, worker/sessões
+intocados. Evidência local em `local-evidence/recovery/operational-guard/`; dumps
+sintéticos anteriores foram restaurados em novos DBs, não alterados nem recriados
+por migration. Não houve consulta a produção nesta etapa.
+
+Recomendação permanece: não implantar antes de fechar as condições da PRIMEIRA
+transição do código sem instrumentação. O novo diagnóstico não prova ausência
+retroativa de chamadas; file paths compartilhados e inventário de executores são
+condições de confiança. Lacunas de Nginx/firewall privilegiados e respawn continuam
+exatamente as do preflight. Retorno do atendimento tem evidência local específica,
+sem promessa de retries/inbound em produção. Janela e owner/CRA continuam pendentes.
+Não há limpeza automática de locks/tarefas incertas nem abertura por timeout.
+
+
+### Resultados comprovados do ensaio local
+
+- Suítes afetadas de fila/runner/grupos/guarda: **40/40**; inclui snapshot único,
+  3.001 → quatro lotes, variáveis por destinatário, exclusividade, perda de lease,
+  pause/cancel durante chamada e retorno administrativo sem duplicação.
+- Rotas afetadas: **44/44**; caso final adicional de fechamento durante a
+  pré-validação real de test-send: **1/1**. Controle global por superadmin e
+  rejeição de tokens/usuários tenant comprovados (subconjunto focado: **3/3**).
+- Guarda final: **8/8**, incluindo crash real com exit 73, identidade de
+  boot/processo (sem confiar apenas no PID), falha/persistência lenta, arquivo
+  inválido e fechamento observado por outro processo na mesma geração.
+  Fila após o último ajuste de aquisição interna de lease: **8/8**.
+- Artefato de recuperação: **4/4** casos de Inbox/CRM/auth/webhook no DB sem
+  tabelas novas; **5/5** com tabelas novas, incluindo inbound sintético. Probe de
+  bloqueio direto/runner/scheduler: **1/1 em cada DB**. Provider sempre simulado.
+- Troca candidato → subprocesso do artefato fechado → candidato: **1/1**,
+  mesmo arquivo de guarda/geração e DB; snapshots de Campaign/jobs/batches/Event/
+  OutboundMessage idênticos durante o probe antigo, três submissões simuladas
+  únicas após retorno, sem repetir o primeiro aceite.
+- Builds backend candidato e recuperação: **PASS**. Sem alterações de frontend,
+  worker, schema/migration ou transportes; não repetidos builds/smokes desses
+  componentes, migration ou inventário de drift. `git diff --check`: PASS.
+
+Os números acima identificam execuções/subconjuntos e não devem ser somados como
+casos únicos. Durante desenvolvimento, foi corrigido fechamento indevido ao
+finalizar scheduler com runner filho ativo. O primeiro build antigo usava Client
+novo compartilhado e falhou em UuidFilter; foi corrigido com Client privado do
+schema antigo, sem alteração funcional incidental. Erros de caminho/helper de
+fixtures foram corrigidos sem remover assertions. Logs anteriores preservados
+quando disponíveis; resultados finais e fontes têm manifesto local.
+
+Ambiente: dois DBs sintéticos exclusivos no cluster loopback local: um com fila,
+outro restaurado do dump anterior sem fila. Sem reset, db push, migration ou
+alteração dos dumps anteriores. Launcher usa env limpo e credenciais fictícias;
+`apps/whatsapp-agent/scripts/campaign-guard-local-isolation.mjs` recusa DB fora dos
+dois destinos locais e bloqueia fetch/HTTP externo. Testes substituem provider
+por respostas simuladas. Evidências/patches/hashes em
+`local-evidence/recovery/operational-guard/` (não versionadas).
+
+
+### Publicação para revisão e reforço de topologia — 2026-09-26
+
+Candidato `review/campaign-recovery-20260926` sobre `2b5697b6`; recuperação
+`review/campaign-service-recovery-20260926` em `e6a12bc9f4ae77ada191f7bdc7d835ee704d5bac`, parent direto
+`5ee2de6b`. Artefato antigo separado, campanhas permanentemente fechadas e
+atendimento compatível com DB anterior/posterior conforme ensaios acima.
+[Configuração, proteção, limites e procedimento dos dois artefatos](../RUNBOOK_WHATSAPP_AGENT.md#publicação-dos-dois-artefatos-para-revisão--2026-09-26).
+
+Lacuna documental corrigida em código: abertura agora exige atestado de host único
++ identidade local, e ledger é vinculado ao host. Configuração desconhecida,
+multi-host ou identidade divergente impede abrir/admitir/provider; inventário
+verdadeiro continua necessário, sem coordenação entre hosts. Estado legado aberto
+sem vínculo não fica implicitamente aberto. Não configurar single-host diante de
+inventário incompleto. Primeiro provisionamento/primeira transição ainda pendentes.
+
+Validação incremental: guarda **11/11** (8 anteriores + 3 cenários de topologia),
+build backend candidato **PASS**. Nenhuma mudança funcional no recovery, schema,
+migration, frontend ou worker; respectivos resultados anteriores preservados.
+Novo probe aceita SHA completo verificado e ancestralidade, para reproduzir o
+ensaio com o artefato commitado. Resultado dessa troca registrado na evidência
+local `guard-publication/return-published-artifact.log`: **1/1 PASS**, mesmo estado
+compartilhado, retorno sem duplicar o aceite simulado.
+Backups/patches/hashes anteriores preservados; staging exclui todo estado privado.
+CI push restrito main/develop, sem deploy; Vercel com exclusão nominal das duas
+branches. NOT DEPLOYED / OWNER UI PENDING; CRA/primeira transição pendentes.
+Não há quiescência retroativa; 6683 CLOSED e materialização separada.

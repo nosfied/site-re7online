@@ -1,3 +1,4 @@
+import "../campaigns/campaignOperationsTestSupport.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer, type Server } from "node:http";
@@ -18358,4 +18359,50 @@ test("review grouped CSV API rejects reused content key and serializes concurren
   const conflict = await request<ErrorPayload>("POST", "/app/campaigns/drafts/csv", businessAdmin, { ...payload, name: "Different payload" });
   assert.equal(conflict.status, 409, JSON.stringify(conflict.body));
   assert.equal(getErrorCode(conflict.body), "campaign_batch_idempotency_conflict");
+});
+
+test("global campaign operations require platform superadmin; tenant tokens cannot open or close", async () => {
+  const { campaignOperationsStatus } = await import("../campaigns/campaignOperations.js");
+  const before = campaignOperationsStatus();
+  for (const user of [businessAgent, businessSupervisor, businessAdmin]) {
+    const result = await request("POST", "/admin/ops/campaign-execution", user, { open: false, generation: before.generation, reason: "tenant must not control global maintenance" });
+    assert.ok([401, 403].includes(result.status), JSON.stringify(result.body));
+  }
+  const tenantTokenResponse = await fetch(`${baseUrl}/admin/ops/campaign-execution`, { method: "POST", headers: { "x-admin-token": businessAdminToken, "content-type": "application/json" }, body: JSON.stringify({ open: false, generation: before.generation, reason: "tenant token" }) });
+  assert.equal(tenantTokenResponse.status, 403);
+  const globalResponse = await fetch(`${baseUrl}/admin/ops/campaign-execution`, { headers: { "x-admin-token": process.env.ADMIN_TOKEN! } });
+  assert.equal(globalResponse.status, 200);
+  assert.equal(campaignOperationsStatus().generation, before.generation);
+});
+
+test("operational close during real test-send prevalidation blocks provider and drains HTTP work", async t => {
+  const { campaignOperationsStatus, setCampaignOperations } = await import("../campaigns/campaignOperations.js");
+  const template = await prisma.template.create({ data: { clientId: businessClientId, name: `guard_test_${safeTemplatePrefix}`, category: "UTILITY", language: "pt_BR", status: "approved", content: "Aviso local" } });
+  const waId = "5541991189791";
+  const lead = await prisma.lead.create({ data: { tenantId: businessClientId, waId, waIdCanonical: waId, channel: "whatsapp", provider: "meta", name: "Synthetic guard", phone: waId, status: "RETORNO_FUTURO" } });
+  const created = await request<{ campaign: { id: string } }>("POST", "/app/campaigns/drafts", businessAdmin, { name: "Guard prevalidation", templateId: template.id, selectedLeadIds: [lead.id], returnDestination: defaultCampaignReturnDestination() });
+  assert.equal(created.status, 200, JSON.stringify(created.body));
+  const id = created.body.campaign.id;
+  let reached!: () => void, release!: () => void;
+  const atValidation = new Promise<void>(r => { reached = r; }), gate = new Promise<void>(r => { release = r; });
+  const delegate = prisma.campaign as unknown as { findFirst: (args: { where?: { id?: string } }) => Promise<unknown> };
+  const originalFind = delegate.findFirst.bind(prisma.campaign);
+  delegate.findFirst = async args => { if (args.where?.id === id) { reached(); await gate; } return originalFind(args); };
+  const originalFetch = globalThis.fetch; let calls = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) { calls++; throw new Error("unexpected_provider"); }
+    return originalFetch(input, init);
+  };
+  t.after(() => { delegate.findFirst = originalFind; globalThis.fetch = originalFetch; release(); });
+  const pending = request("POST", `/app/campaigns/${id}/test-send`, businessAdmin, { waId });
+  await atValidation;
+  const close = await fetch(`${baseUrl}/admin/ops/campaign-execution`, { method: "POST", headers: { "x-admin-token": process.env.ADMIN_TOKEN!, "content-type": "application/json" }, body: JSON.stringify({ open: false, generation: campaignOperationsStatus().generation, reason: "local prevalidation drain" }) });
+  assert.equal(close.status, 200);
+  assert.equal(campaignOperationsStatus().drained, false);
+  release(); const response = await pending;
+  assert.equal(response.status, 503, JSON.stringify(response.body));
+  assert.equal(calls, 0);
+  assert.equal(campaignOperationsStatus().drained, true);
+  setCampaignOperations(true, campaignOperationsStatus().generation!, "local-test-operator", "test finished");
 });

@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+import "./campaignOperationsTestSupport.js";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import test from "node:test";
@@ -247,3 +249,63 @@ test("group first effective start survives chunk claims and pause/resume; job st
   assert.deepEqual(jobs.map((job) => job.startedAt?.toISOString()), [f.now.toISOString(), secondStart.toISOString()]);
   await finishCampaignExecutionJob({ clientId: f.c.id, jobId: two!.id, leaseToken: two!.leaseToken, status: "completed" });
 });
+
+import { campaignOperationsStatus, setCampaignOperations } from "./campaignOperations.js";
+test("operational close drains accepted call, preserves intent/snapshot and returns through existing queue without duplicate", async t => {
+  const f = await fixture(t);
+  const first = await f.child(1, ["5541941000801", "5541941000802"]);
+  await f.child(2, ["5541941000803"]);
+  t.after(setCampaignRunnerSleepForTests(async () => undefined));
+  let release!: () => void; const gate = new Promise<void>(r => { release = r; });
+  const sent: string[] = []; const original = globalThis.fetch;
+  globalThis.fetch = async (_input, init) => {
+    sent.push(JSON.parse(String(init?.body)).to);
+    if (sent.length === 1) await gate;
+    return new Response(JSON.stringify({ messages: [{ id: `wamid.operational.${sent.length}` }] }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  t.after(() => { globalThis.fetch = original; release(); });
+  const seedsBefore = await prisma.event.findMany({ where: { clientId: f.c.id, eventName: "campaign.seed.saved" }, orderBy: { id: "asc" } });
+  await processDueScheduledCampaigns({ now: f.now, limit: 1 });
+  const task = getRunningCampaignPromiseForTests(first.id); assert.ok(task);
+  await waitUntil(async () => sent.length === 1);
+  setCampaignOperations(false, campaignOperationsStatus().generation!, "local-operator", "drain active group");
+  assert.equal(campaignOperationsStatus().drained, false);
+  release(); await task;
+  assert.equal(campaignOperationsStatus().drained, true);
+  assert.equal((await prisma.campaign.findUniqueOrThrow({ where: { id: first.id } })).status, "sending", "admin suspension must not change user intention");
+  assert.equal((await prisma.campaignExecutionBatch.findUniqueOrThrow({ where: { id: f.batch.id } })).status, "running");
+  assert.equal(await prisma.campaignExecutionJob.count({ where: { batchId: f.batch.id, status: "queued" } }), 2);
+  assert.equal((await processDueScheduledCampaigns()).claimed, 0); assert.equal(sent.length, 1);
+  if (process.env.CAMPAIGN_RECOVERY_WORKTREE) {
+    const probe = spawnSync(process.execPath, ["--import", new URL("../../node_modules/tsx/dist/loader.mjs", import.meta.url).href,
+      new URL("../../scripts/campaign-guard-recovery-probe.ts", import.meta.url).pathname], {
+      env: { ...process.env, LOCAL_CAMPAIGN_REHEARSAL: "synthetic-only" }, encoding: "utf8",
+    });
+    assert.equal(probe.status, 0, probe.stderr);
+    assert.match(probe.stdout, /"unchanged":true/);
+  }
+  setCampaignOperations(true, campaignOperationsStatus().generation!, "local-operator", "resume validated candidate");
+  await processDueScheduledCampaigns({ limit: 1 });
+  await waitUntil(async () => (await prisma.campaignExecutionBatch.findUnique({ where: { id: f.batch.id } }))?.status === "completed");
+  assert.deepEqual(sent, ["5541941000801", "5541941000802", "5541941000803"]);
+  assert.deepEqual(await prisma.event.findMany({ where: { clientId: f.c.id, eventName: "campaign.seed.saved" }, orderBy: { id: "asc" } }), seedsBefore);
+});
+
+for (const stop of ["paused", "cancelled"] as const) {
+  test(`standalone user ${stop} during provider preserves acceptance and prevents remaining attempts`, async t => {
+    const f = await fixture(t); const first = await f.child(1, ["5541941000901", "5541941000902"], true);
+    t.after(setCampaignRunnerSleepForTests(async () => undefined));
+    let release!: () => void; const gate = new Promise<void>(r => { release = r; }); let calls = 0;
+    const original = globalThis.fetch;
+    globalThis.fetch = async () => { calls++; await gate; return new Response(JSON.stringify({ messages: [{ id: `wamid.standalone.${calls}` }] }), { status: 200, headers: { "content-type": "application/json" } }); };
+    t.after(() => { globalThis.fetch = original; release(); });
+    await processDueScheduledCampaigns({ limit: 1 }); const work = getRunningCampaignPromiseForTests(first.id); assert.ok(work);
+    await waitUntil(async () => calls === 1);
+    await prisma.campaign.update({ where: { id: first.id }, data: { status: stop } });
+    release(); await work;
+    assert.equal(calls, 1); assert.equal(await prisma.event.count({ where: { clientId: f.c.id, eventName: "campaign.message.provider_accepted" } }), 1);
+    assert.equal((await prisma.campaign.findUniqueOrThrow({ where: { id: first.id } })).status, stop);
+    assert.equal((await prisma.campaignExecutionJob.findFirstOrThrow({ where: { campaignId: first.id } })).status, stop);
+    await processDueScheduledCampaigns({ limit: 1 }); assert.equal(calls, 1);
+  });
+}

@@ -919,3 +919,204 @@ Produção `5ee2de6b`; candidato `2ecfc91a`: **NOT DEPLOYED / OWNER UI PENDING**
 [Preflight único, condições de parada e recuperação](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md) atualizado após `66b9cf2b`: portas 3000/3001 alcançáveis externamente, rewrite público do frontend e risco PM2 resurrect confirmados. Leituras privilegiadas de Nginx/firewall negadas; comandos exatos para o operador constam no preflight.
 
 Recomendação: não avançar à migration; preparar e ensaiar guarda de admissão/drain e artefato de recuperação do atendimento com campanhas fechadas, em tarefa separada. Código atual não comprova quiescência de test-send/runners, nem retorno seletivo seguro. A estimativa preliminar de 30–60 min não constitui janela proposta para aprovação. Sem promessa de inbound/retries; sem REVOKE do papel compartilhado. Migration/drift/ensaio anteriores não repetidos; nenhuma alteração de runtime. Owner PASS anterior preservado, 6683 CLOSED, CRA pendente e DELIVERED/READ → HUMAN/WAITING separados.
+
+
+## Guarda operacional de campanhas — implementação local, 2026-09-26
+
+Base `2b5697b6`, sem commit/push/deploy. A leitura remota anterior está no
+[preflight único](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md); não houve nova
+consulta a produção nesta implementação. NOT DEPLOYED / OWNER UI PENDING.
+
+### Configuração e autorização
+
+`CAMPAIGN_OPERATIONS_FILE` deve ser um caminho absoluto persistente no volume
+local de `.data`, **o mesmo arquivo** para todas as instâncias e diretórios de
+release/recuperação. Ausência da variável, arquivo inválido, erro de leitura ou
+lock indisponível fecham campanhas. Arquivo inexistente começa fechado. Não usar
+um arquivo por release nem storage efêmero. Implementação para processos no mesmo
+host/filesystem local Linux (identidade de boot + início do processo em `/proc`); não foi validada para NFS ou múltiplos hosts. Configurar
+`CAMPAIGN_BUILD_ID` com a identificação do artefato; na ausência é exposto o SHA256
+do módulo da guarda (não uma alegação de hash do release completo).
+
+Reutiliza a persistência JSON/rename da convenção de armazenamento local e o
+superadmin operacional existente. Manutenções em memória não são usadas como
+fence. Escrita usa lock exclusivo por mkdir, fsync do arquivo, rename e fsync do
+diretório. Nenhum timeout remove lock abandonado ou tarefa. Não há nova fila,
+tabela, migration, mudança de papel SQL nem bloqueio do outbound genérico Inbox.
+
+API autenticada existente: `GET /admin/ops/campaign-execution` retorna estado,
+geração, instância/build, tarefas/fases e últimas ações auditadas. POST no mesmo
+path recebe `{ "open": false, "generation": <geração lida>, "reason": "motivo" }`.
+Abertura usa `open:true`, geração atual e motivo obrigatório; exige ausência de
+pendências. Token tenant e usuários app (inclusive supervisor/admin tenant) não
+controlam esse endpoint. A identidade operacional segue o token superadmin já
+existente, não inventa identidade pessoal quando o token é compartilhado.
+
+O registro é metadado de execução, não prova de entrega: intents, aceites,
+OutboundMessage e eventos de domínio continuam sendo a evidência. Diagnóstico
+não inclui telefone, payload, variáveis ou credenciais; referências técnicas
+permitem correlacionar tenant/campanha/messageId para revisão autorizada.
+
+### Fechamento e drain
+
+Admissão de mutações app/admin/public-api ocorre antes da pré-validação assíncrona.
+Scheduler, claim e runner desacoplado têm registros próprios. Uma resposta HTTP
+concluída não apaga o runner; a finalização do scheduler não confunde esse filho
+ativo com erro. Antes da invocação de outbound de campanha, registra intento e
+serializa a invocação com o fechamento. Se fechar durante persistência do intento,
+provider não é invocado; o intento fica pendente para revisão conservadora.
+
+Chamada já iniciada pode concluir e gravar aceitação/resultado. Pendência de
+provider/persistência não é liberada por timeout. Falha/crash mantém registro;
+restart com registros de executor encerrado fecha admissão, não zera evidência.
+`drained=true` exige estado fechado legível e nenhum trabalho pendente no arquivo
+compartilhado. Isso só cobre executores instrumentados e o arquivo configurado:
+não prova drain de código antigo, outro host ou arquivo de configuração divergente.
+
+Suspensão administrativa devolve o job à fila existente sem mudar a intenção
+sending/running da campanha/grupo. Pausa/cancelamento do usuário continuam com
+RBAC e precedem o requeue: job não é reaberto se o usuário interrompeu a campanha.
+As rotas de pause/cancel continuam disponíveis com a guarda fechada. Abertura
+explícita permite o scheduler existente retomar com snapshot/intents/aceites
+preservados; nenhum contador é usado como autorização para reenvio cego.
+
+Se houver tarefa/lock abandonado, NÃO apagar arquivo, expirar lease nem trocar
+por um arquivo vazio para abrir. Manter fechado, preservar cópia/hash e estado
+SQL, identificar o processo/geração e correlacionar intent/aceite/resultado.
+A reconciliação requer decisão operacional e evidência externa quando aplicável;
+não há endpoint de “limpar pendências” ou reconciliação automática nesta entrega.
+O ensaio não transforma submissão incerta em entregue/não entregue.
+
+### Artefato de recuperação do atendimento
+
+Worktree separado `tmp/worktrees/re7-campaign-service-recovery-20260926`, detached
+em `5ee2de6b`, com guarda compilada permanentemente fechada: nem variável de
+ambiente, arquivo aberto ou POST superadmin liberam campanhas. Rotas de mutação,
+scheduler e runner interno são impedidos; atendimento não é cercado pelo guard.
+Client Prisma privado gerado do schema desse SHA; nenhuma migration executada.
+Não compartilhar o Client gerado entre versões. Worker, módulos de sessão e
+transportes não foram alterados. Patch/hashes locais preservam as diferenças do
+artefato; não houve commit do worktree de recuperação.
+
+Em recuperação futura: manter arquivo/generation fechado, confirmar ausência de
+executor anterior e respawn, iniciar apenas artefato identificado, verificar
+atendimento por critérios funcionais e conservar tabelas novas/jobs/snapshots/
+aceites. Nunca executar down migration/restore destrutivo para fazer o antigo
+funcionar. Retorno ao candidato mantém o mesmo fence fechado; abrir explicitamente
+só após diagnóstico sem pendências e revisão de incertezas. Resultado de health
+isolado não aceita recuperação de atendimento.
+
+### Primeira instalação: condição ainda externa ao ensaio
+
+O SHA hoje vivo não tem instrumentação. Instalar a guarda por restart NÃO prova
+retroativamente que a API antiga terminou chamadas. Antes de qualquer janela,
+operador deve conferir Nginx efetivo, portas diretas/IPv4/IPv6, frontend/aliases e
+PM2 saved state/boot conforme comandos do preflight. Bloquear admissão antiga em
+todas as entradas exige autorização própria; scheduler antigo continua sendo
+fonte interna até cessar o processo. Não usar REVOKE, pm2 kill ou reload all.
+
+É necessária decisão explícita do owner sobre a primeira troca de API e sobre
+chamadas potencialmente incertas. Preservar logs/intents/resultados e marco da
+transição; comprovar que não resta processo antigo ou mecanismo que o ressuscite.
+Onde o código antigo não permite demonstrar término, classificar a pendência para
+reconciliação, não presumir quiescência por status sending=0 ou espera. Subir o
+artefato guardado inicialmente fechado pode recuperar atendimento, mas não apaga
+a incerteza anterior. Não avançar à migration/abertura enquanto houver essa lacuna.
+
+API parada afeta Inbox/CRM/autenticação/realtime/webhooks; worker/sessões devem
+ficar preservados, mas callbacks dependentes da API degradam. Não há promessa de
+preservação integral de inbound, retry/replay ou risco zero. Esta primeira
+transição, acesso privilegiado, janela/aceitação de impacto, owner UI e CRA não
+foram autorizados/exercidos por esta tarefa local.
+
+
+Validação final e resultados exatos, sem duplicar o relatório:
+[ensaios da guarda e recuperação](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#resultados-comprovados-do-ensaio-local).
+Para repetir apenas um caso relevante, usar env limpo com DATABASE_URL do DB
+sintético, NODE_ENV=test, segredos fictícios, loader tsx e
+`--import ./apps/whatsapp-agent/scripts/campaign-guard-local-isolation.mjs`.
+As quatro suítes afetadas abrem arquivos temporários exclusivos pela API real
+na fixture `campaignOperationsTestSupport.ts`; não existe bypass de produção.
+O teste de retorno usa `CAMPAIGN_RECOVERY_WORKTREE` apontando para o worktree
+separado e chama o probe estritamente local `campaign-guard-recovery-probe.ts`.
+Não reutilizar esses nomes/URLs de teste em produção nem inferir que um arquivo
+local fechado protege outro processo com configuração diferente.
+
+
+## Publicação dos dois artefatos para revisão — 2026-09-26
+
+NOT DEPLOYED / OWNER UI PENDING. Esta seção sucede o estado local sem commit
+registrado acima; não substitui nem apaga os ensaios ou encerramentos anteriores.
+
+- Candidato: `review/campaign-recovery-20260926`, parent documental `2b5697b6`,
+  preserva candidato funcional `2ecfc91a` e histórico owner PASS. Guarda/drain,
+  integração à fila existente e testes; não é autorização de deploy ou aceite CRA.
+- Recuperação: `review/campaign-service-recovery-20260926`, commit `e6a12bc9f4ae77ada191f7bdc7d835ee704d5bac`,
+  parent direto `5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e`. Atendimento antigo com
+  campanhas permanentemente fechadas em código. Não misturar sua implementação
+  com o candidato nem voltar ao runner original desprotegido.
+  [Procedimento do artefato](https://github.com/nosfied/site-re7online/blob/e6a12bc9f4ae77ada191f7bdc7d835ee704d5bac/docs/CAMPAIGN_SERVICE_RECOVERY_REVIEW.md).
+
+### Configuração e limite efetivamente imposto
+
+`CAMPAIGN_OPERATIONS_FILE` é absoluto, persistente, fora do release, idêntico em
+TODAS as instâncias/versões do mesmo host. Proposta a provisionar no alvo:
+`/var/lib/re7/campaign-operations/state.json`; não foi configurada remotamente.
+Não usar caminho por release nem arquivos separados. Exigir filesystem local
+Linux, sem NFS, hostnames/container namespaces com visão divergente de /proc ou
+múltiplos hosts. Abertura exige `CAMPAIGN_OPERATIONS_TOPOLOGY=single-host` e
+`CAMPAIGN_OPERATIONS_HOST_ID` igual à identidade local de `/etc/machine-id`.
+Não publicar o valor dessa identidade. Estado aberto fica vinculado a esse host.
+Configuração ausente, identidade divergente ou topologia diferente fecha a leitura
+operacional e impede nova admissão/provider; POST open é recusado se configuração
+não validada. Ledger legado sem vínculo exige abertura explícita após revisão.
+Fechamento/diagnóstico e finalização de trabalho já admitido permanecem disponíveis.
+
+Esse atestado é configuração operacional, não descoberta de hosts: inventário
+completo de executores continua obrigatório. Se houver host adicional, arquivo
+diferente, filesystem/namespace não validado ou inventário inconclusivo, NÃO
+atestar single-host/NÃO abrir. Configuração indevidamente replicada ou inventário
+falso não são detectáveis integralmente pelo arquivo. Não há coordenação entre
+hosts. A recuperação não pode abrir sob nenhuma topologia/configuração.
+
+Diretório privado 0700/arquivo 0600 são criados com esses modos; diretórios já
+existentes não têm permissões reparadas. Antes de provisionar, verificar dono,
+ancestrais, ausência de symlinks e ausência de escrita por terceiros. Não alterar
+permissões compartilhadas. Mesmo UID/root continua capaz de modificar estado;
+o arquivo não é proteção contra runtime/host comprometido. Controle via backend
+exige superadmin; tenant-admin é recusado, audit usa o ator técnico do mecanismo
+existente, sem inventar identificação pessoal para token compartilhado.
+
+Arquivo ausente inicia fechado; ilegível/corrompido recusa operação e não comprova
+drain. Lock exclusivo por mkdir, temp 0600, fsync/rename/fsync serializam alterações
+no filesystem validado. Colisão recusa operação, sem espera/retry que abra janela.
+Crash pode deixar lock/temp; não apagar nem expirar automaticamente. Restart e
+resurrect preservam ledger de trabalho incerto; identidade boot/processo impede
+confundir reutilização de PID com executor vivo. Investigar pendências correlacionando
+intents/aceites/resultados SQL. Não inferir entrega nem reenviar por timeout.
+
+Primeira transição permanece pendente e não há quiescência retroativa. Necessários:
+verificações privilegiadas de entradas/supervisores, provisionamento privado do
+estado/mesma configuração, decisão owner sobre janela/impacto e tratamento de
+chamadas antigas incertas. Recuperação do atendimento mantém campanhas suspensas;
+health sozinho não aceita rollback. Sem promessa de preservação inbound/retries.
+6683 CLOSED; DELIVERED/READ → HUMAN/WAITING separado; owner UI/CRA pendentes.
+
+### Publicação Git e evidências
+
+Backups anteriores intactos; novos patches, arquivos e hashes em
+`local-evidence/recovery/guard-publication/` (fora do Git). Staging explícito exclui
+estado operacional, .data, dumps, evidências, credenciais e configurações privadas.
+Ambos `vercel.json` recusam auto-deploy para os dois nomes exatos de branches
+([semântica oficial](https://vercel.com/docs/project-configuration/git-configuration)).
+Único workflow nas duas árvores: CI em push main/develop e PR para main/develop,
+sem job de implantação. Scripts VPS são manuais, não invocados pelo workflow.
+Nenhum merge/force/deploy. Leitura do projeto/lista Vercel antes do push não mostrou
+implantação das branches de revisão; consulta detalhada get_project indisponível
+por incompatibilidade de schema do connector, sem alteração de configuração.
+
+Resultados incrementais e evidências anteriores ficam no preflight único.
+Para o probe de recuperação commitada, informar `CAMPAIGN_RECOVERY_EXPECTED_SHA`
+com SHA completo e `CAMPAIGN_RECOVERY_WORKTREE`; o script exige HEAD exato e
+ancestralidade em 5ee2de6b. Provider/rede externos continuam bloqueados pelo
+launcher sintético. Não repetir suítes completas sem alteração pertinente.

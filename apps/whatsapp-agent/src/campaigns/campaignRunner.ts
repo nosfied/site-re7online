@@ -1,3 +1,4 @@
+import { campaignTask, campaignOperationsAreOpen, campaignProviderAttempt, CampaignOperationsClosed } from "./campaignOperations.js";
 import crypto from "node:crypto";
 import { MessageStatus, MessageType } from "@prisma/client";
 import { getTenant } from "../config/tenantConfig.js";
@@ -44,6 +45,7 @@ import {
 import { canonicalizeBrazilWaId, normalizeWaIdDigits } from "../utils/waid.js";
 import { normalizeCrmWhatsappIdentity } from "../crm/crmWhatsappIdentity.js";
 import {
+  suspendCampaignExecutionJob,
   CAMPAIGN_EXECUTION_RENEW_MS,
   lockCampaignExecutionBatch,
   assertCampaignExecutionLease,
@@ -81,6 +83,7 @@ export type StartCampaignRunParams = {
   returnDestination?: OutboundReturnDestination | null;
   source?: Extract<MetaUsageSource, "campaign" | "manual_campaign_send">;
   executionJob?: ClaimedCampaignExecutionJob;
+  operationallySuspended?: boolean;
 };
 
 type ScheduledCampaignSeed = {
@@ -160,9 +163,10 @@ export function startCampaignRun(params: StartCampaignRunParams) {
   }
 
   const campaignRunId = crypto.randomUUID();
-  const task = runCampaignInBackground(params, campaignRunId).finally(async () => {
+  const task = campaignTask("runner", () => runCampaignInBackground(params, campaignRunId).finally(async () => {
     runningCampaigns.delete(params.campaignId);
     if (params.executionJob) {
+      if (params.operationallySuspended) { await suspendCampaignExecutionJob(params.executionJob); return; }
       const prisma = getPrisma();
       const campaign = await prisma.campaign.findFirst({
         where: { id: params.campaignId, clientId: params.clientId },
@@ -209,7 +213,7 @@ export function startCampaignRun(params: StartCampaignRunParams) {
         });
       });
     }
-  });
+  }), true);
   runningCampaigns.set(params.campaignId, task);
   return campaignRunId;
 }
@@ -911,7 +915,7 @@ async function materializeDynamicBatchJob(params: {
   });
 }
 
-export async function processDueScheduledCampaigns(params: { now?: Date; limit?: number } = {}) {
+async function processDueScheduledCampaignsAdmitted(params: { now?: Date; limit?: number } = {}) {
   const prisma = getPrisma();
   const now = params.now ?? new Date();
   await recoverInterruptedBatchMaterializations(now);
@@ -1141,6 +1145,7 @@ async function runCampaignInBackground(
   params: StartCampaignRunParams,
   campaignRunId: string
 ) {
+  if (!campaignOperationsAreOpen()) { params.operationallySuspended = true; return; }
   const prisma = getPrisma();
   let lastLeaseRenewedAt = 0;
   const ensureLease = async () => {
@@ -1619,7 +1624,7 @@ async function runCampaignInBackground(
               return;
             }
           }
-          await persistEvent({
+          const attempt = await campaignProviderAttempt(() => persistEvent({
             clientId: params.clientId,
             conversationId: resolvedRecipient.conversationId ?? null,
             waId,
@@ -1634,8 +1639,7 @@ async function runCampaignInBackground(
               waIdLast4: waId.slice(-4),
               waIdLength: waId.length,
             },
-          });
-          const result = await sendTemplate({
+          }).then(() => undefined), () => sendTemplate({
             toE164: waId,
             waId,
             intent: undefined,
@@ -1647,7 +1651,8 @@ async function runCampaignInBackground(
             messageId,
             clientId: params.clientId,
             clientKey: params.clientKey,
-          });
+          }), { clientId: params.clientId, campaignId: params.campaignId, messageId });
+          const result = attempt.result;
           let stopAfterCurrentProviderResult = false;
           if (params.executionJob) {
             const stillOwner = await assertCampaignExecutionLease({
@@ -1678,6 +1683,7 @@ async function runCampaignInBackground(
                 sentCount,
               },
             });
+            attempt.persisted();
             logger.warn({
               event: "campaign.blocked_by_limit",
               campaignId: params.campaignId,
@@ -1813,6 +1819,7 @@ async function runCampaignInBackground(
             },
           });
 
+          attempt.persisted();
           if (!result.ok) {
             await prisma.campaign.updateMany({
               where: { id: params.campaignId, status: { in: ["sending", "paused"] } },
@@ -1892,6 +1899,7 @@ async function runCampaignInBackground(
       });
     }
   ).catch(async (error) => {
+    if (error instanceof CampaignOperationsClosed) { params.operationallySuspended = true; return; }
     await prisma.campaign.updateMany({
       where: { id: params.campaignId, status: "sending" },
       data: { status: "failed" },
@@ -1905,4 +1913,9 @@ async function runCampaignInBackground(
       message: (error as Error).message,
     });
   });
+}
+
+export async function processDueScheduledCampaigns(params: { now?: Date; limit?: number } = {}) {
+  try { return await campaignTask("scheduler", () => processDueScheduledCampaignsAdmitted(params)); }
+  catch (error) { if (error instanceof CampaignOperationsClosed) return { checked: 0, claimed: 0 }; throw error; }
 }

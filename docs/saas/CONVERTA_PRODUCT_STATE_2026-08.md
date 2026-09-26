@@ -1957,3 +1957,41 @@ Produção `5ee2de6b`; candidato `2ecfc91a`: **NOT DEPLOYED / OWNER UI PENDING**
 [Preflight único, condições de parada e recuperação](CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md) atualizado após `66b9cf2b`: portas 3000/3001 alcançáveis externamente, rewrite público do frontend e risco PM2 resurrect confirmados. Leituras privilegiadas de Nginx/firewall negadas; comandos exatos para o operador constam no preflight.
 
 Recomendação: não avançar à migration; preparar e ensaiar guarda de admissão/drain e artefato de recuperação do atendimento com campanhas fechadas, em tarefa separada. Código atual não comprova quiescência de test-send/runners, nem retorno seletivo seguro. A estimativa preliminar de 30–60 min não constitui janela proposta para aprovação. Sem promessa de inbound/retries; sem REVOKE do papel compartilhado. Migration/drift/ensaio anteriores não repetidos; nenhuma alteração de runtime. Owner PASS anterior preservado, 6683 CLOSED, CRA pendente e DELIVERED/READ → HUMAN/WAITING separados.
+
+
+### Guarda operacional e recuperação — implementação local 2026-09-26
+
+Base `2b5697b6`, sem commit/push/deploy. Guarda persistente fechada por padrão,
+controle superadmin e drain durável integram as entradas de campanha e a fila
+existente; suspensão administrativa preserva intenção, snapshot e aceites.
+Pause/cancel em execução, RBAC e exclusividade preservados; Inbox outbound não
+foi bloqueado. Worktree de recuperação separado em `5ee2de6b` com campanhas
+permanentemente fechadas e Client privado, sem dependência das tabelas novas
+para atendimento. [Resultados exatos e limites do ensaio](CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md#resultados-comprovados-do-ensaio-local): execução 40/40, rotas 44/44 + caso final 1/1; guarda final 8/8;
+atendimento antigo 4/4 sem fila e 5/5 com fila; retorno entre artefatos 1/1;
+ambos builds backend PASS. Subconjuntos não são soma de casos únicos.
+
+LOCAL IMPLEMENTED / TECHNICALLY VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+Primeira instalação ainda exige acesso/inventário operacional, decisão sobre
+interrupção da API antiga e reconciliação de chamadas sem observabilidade;
+a guarda nova não fornece prova retroativa. Sem promessa de inbound/retries,
+sem nova migration ou mudança de privilégios. Owner PASS anterior preservado,
+aceite CRA pendente, Guided Builder pausado, 6683 CLOSED e DELIVERED/READ →
+HUMAN/WAITING separados, sem mudança funcional desses contratos.
+
+
+### Publicação dos artefatos de guarda e recuperação — 2026-09-26
+
+NOT DEPLOYED / OWNER UI PENDING. Candidato em `review/campaign-recovery-20260926`
+(parent `2b5697b6`, histórico funcional `2ecfc91a` preservado); recuperação separada
+em `review/campaign-service-recovery-20260926`, commit `e6a12bc9f4ae77ada191f7bdc7d835ee704d5bac`,
+parent direto `5ee2de6b`, atendimento funcional com campanhas fechadas em código.
+Guarda candidata exige host único declarado e identidade local compatível; não
+coordena hosts nem substitui inventário. 11/11 testes da guarda e build candidato
+PASS; demais resultados anteriores preservados no preflight único
+`docs/saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md`; procedimento/configuração em
+`docs/RUNBOOK_WHATSAPP_AGENT.md`, seção de publicação dos dois artefatos.
+Backups e estado privado permanecem locais; branches excluídas de auto-deploy.
+Primeira transição, acessos operacionais, janela/impacto, owner UI e CRA pendentes.
+Sem quiescência retroativa. Histórico owner PASS preservado, 6683 CLOSED,
+Guided Builder pausado e DELIVERED/READ → HUMAN/WAITING separado.

@@ -1,3 +1,4 @@
+import { campaignTask, campaignOperationsAreOpen, CampaignOperationsClosed } from "./campaignOperations.js";
 import crypto from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { getPrisma } from "../db.js";
@@ -86,6 +87,7 @@ export async function acquireTemporaryTenantCampaignExecutionLease(params: {
   now?: Date;
   leaseMs?: number;
 }): Promise<{ ok: true; jobId: string; leaseToken: string } | { ok: false }> {
+  if (!campaignOperationsAreOpen()) throw new CampaignOperationsClosed();
   const prisma = getPrisma();
   const now = params.now ?? new Date();
   const jobId = `${params.purpose}:${crypto.randomUUID()}`;
@@ -166,7 +168,7 @@ async function tryAcquireTenantLease(
   }
 }
 
-export async function claimNextCampaignExecutionJob(params: {
+async function claimNextCampaignExecutionJobAdmitted(params: {
   now?: Date;
   limit?: number;
   leaseMs?: number;
@@ -432,4 +434,22 @@ export async function releaseCampaignExecutionLease(params: {
 /** Actions, materialization and progress serialize on the same aggregate row. */
 export async function lockCampaignExecutionBatch(tx: Prisma.TransactionClient, clientId: string, batchId: string) {
   await tx.$executeRaw`SELECT id FROM "CampaignExecutionBatch" WHERE id = ${batchId} AND "clientId" = ${clientId}::uuid FOR UPDATE`;
+}
+
+export async function claimNextCampaignExecutionJob(params: Parameters<typeof claimNextCampaignExecutionJobAdmitted>[0] = {}) {
+  try { return await campaignTask("claim", () => claimNextCampaignExecutionJobAdmitted(params)); }
+  catch (error) { if (error instanceof CampaignOperationsClosed) return null; throw error; }
+}
+// Administrative suspension preserves campaign/batch user intent. This is not
+// pause/cancel and does not expire/replay an uncertain provider attempt.
+export async function suspendCampaignExecutionJob(job: ClaimedCampaignExecutionJob) {
+  const prisma = getPrisma();
+  await prisma.$transaction(async tx => {
+    if (job.batchId) await lockCampaignExecutionBatch(tx, job.clientId, job.batchId);
+    const campaign = job.campaignId ? await tx.campaign.findFirst({ where: { id: job.campaignId, clientId: job.clientId } }) : null;
+    const stopped = campaign && ["paused", "cancelled", "failed", "blocked", "completed"].includes(campaign.status);
+    await tx.campaignExecutionJob.updateMany({ where: { id: job.id, clientId: job.clientId, leaseToken: job.leaseToken, status: "running" },
+      data: { status: stopped ? campaign.status : "queued", leaseToken: null, leaseOwner: null, leaseExpiresAt: null, failureReason: stopped ? campaign.status : "operational_suspension" } });
+    await tx.tenantCampaignExecutionLease.updateMany({ where: { clientId: job.clientId, jobId: job.id, leaseToken: job.leaseToken }, data: { jobId: null, expiresAt: new Date() } });
+  });
 }
