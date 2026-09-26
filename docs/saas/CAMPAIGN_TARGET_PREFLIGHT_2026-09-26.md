@@ -3,6 +3,9 @@
 Candidato: `2ecfc91a35775326ffa90693b3ff4f77ac37c9ca`; branch
 `review/campaign-recovery-20260926`. **NOT DEPLOYED / OWNER UI PENDING**.
 Este documento registra leitura do alvo, não autorização nem execução de rollout.
+Complemento operacional ao documental `66b9cf2b`: substitui a proposta preliminar
+de janela de 30–60 minutos por condições verificáveis. Não há janela aprovada ou
+duração comprovada. Migration, drift e ensaio não foram repetidos.
 
 ## Ambiente observado
 
@@ -20,13 +23,62 @@ Scheduler habilitado, intervalo padrão 60 s e execução no startup. Desabilita
 `CAMPAIGN_SCHEDULE_PROCESSOR_DISABLED=true` exige novo processo e não impede envio
 manual. Admissão inclui `/app/campaigns`, drafts/CSV, send/resume/schedule/test-send
 e `/admin/campaigns` / `run`; o candidato acrescenta ações de execution-batches.
-Nginx publica a API por `/agent-api/` e webhooks pelo host de API; frontend pode
-intermediar chamadas. Portas 3000/3001 escutam em wildcard, não só loopback.
-Leitura privilegiada do firewall indisponível: acesso direto externo NÃO foi
-comprovado nem descartado. Há arquivo de backup com server_name duplicado em
-sites-enabled; precedência efetivamente carregada precisa ser conferida pelo
-operador antes de qualquer fence. Não houve reload nem alteração desse arquivo.
-Crons lidos executam backup, retenção e limpeza; nenhum deles inicia campanhas.
+
+### Entradas e supervisores — leitura complementar
+
+| Caminho | Evidência e limite |
+| --- | --- |
+| Nginx / host operacional | Arquivos em disco encaminham `/agent-api/` à API e `/` ao frontend; realtime tem location próprio. Não confundir leitura em disco com configuração carregada. |
+| Alias admin | Em disco, HTTP/HTTPS redirecionam 301 para o host operacional preservando request_uri. Não é um backend separado. |
+| Host de API | Em disco, `/health` e `/webhook` vão à API; `/` responde 404. Não presumir que todo host publicado encaminha campanhas. |
+| Frontend compilado | `.next/routes-manifest.json` confirma rewrite `/public-api/:path*` para a API local; não há rewrite de `/agent-api` nesse build de produção. Código atual oferece criação de draft e importação de recipients por `/public-api/v1/campaigns`; essas mutações também entram no fence, embora não iniciem envio diretamente. UI usa `/agent-api` para app/admin. |
+| Portas diretas | **3000 e 3001 aceitaram TCP de fora do VPS**, além de loopback e endereço do host. Não foi enviado payload HTTP nem credencial. A API direta contorna Nginx; a porta do frontend alcança o rewrite público. Prova de alcance a partir da origem consultada, não de todas as redes/IPv6. |
+| Acesso local | Loopback alcança ambas as portas. Scripts/operadores no host e scheduler interno contornam controles de borda. RBAC existente não é um modo de manutenção. |
+
+`nginx.conf` inclui `sites-enabled/*`: tanto o arquivo principal quanto
+`converta.re7online.com.bak-20260810-support-upload` entram no glob e declaram
+os mesmos server_name/listeners. Não foi removido nada. `sudo -n nginx -T`,
+`sudo -n nft list ruleset`, `sudo -n iptables-save` e `sudo -n ufw status verbose`
+foram negados por exigirem senha. Não houve tentativa de contornar esse controle.
+Não afirmar qual bloco prevalece na configuração em memória. Mesmo `nginx -T`
+mostra o que seria carregado do disco; é necessário correlacionar com último
+start/reload bem-sucedido e mudanças posteriores. Nenhum reload foi feito.
+
+PM2 vivo: API/frontend/worker, uma instância fork cada, autorestart=true,
+watch=false, sem cron_restart. `dump.pm2` e backups incluem API antiga e worker.
+`pm2-deploy.service` está **enabled, inactive/dead**, Restart=on-failure;
+ExecStart executa `pm2 resurrect`, ExecReload executa `pm2 reload all`, ExecStop
+executa `pm2 kill`. Portanto boot/start/resurrect pode restaurar a API salva;
+parar ou recarregar a unidade inteira atingiria o worker e NÃO serve de fence.
+Não confundir serviço systemd inativo com daemon PM2 ausente: o daemon está vivo.
+Listagens acessíveis de units/timers não revelaram outro supervisor específico;
+crontab do deploy contém backup/limpeza/retenção. Crontabs privilegiadas,
+automações externas e política de boot permanecem sob confirmação do operador.
+
+### Leituras exatas a cargo do operador privilegiado
+
+Executar somente leitura no alvo; manter dumps integrais privados, retornar
+apenas trechos de roteamento, políticas e metadados sanitizados:
+
+- `sudo nginx -T`: includes, warnings de conflicting server name, listen,
+  server_name, location, proxy_pass e redirects. Correlacionar
+  `sudo journalctl -u nginx --since '2026-08-10' --no-pager` e o error_log
+  configurado com start/reload e mtimes dos arquivos incluídos. Se não houver
+  trilha suficiente para provar disco = memória, registrar a lacuna; não executar
+  reload para fazer a leitura passar.
+- `sudo nft list ruleset`, `sudo iptables-save`, `sudo ip6tables-save`,
+  `sudo ufw status verbose`: políticas INPUT/FORWARD/Docker e regras IPv4/IPv6
+  de 3000/3001. Consultar também firewall/security-group do provedor e DNS/aliases
+  no painel, somente leitura. O TCP externo já comprova que não há bloqueio
+  universal das duas portas; falta identificar o controle exato a ser corrigido.
+- `sudo systemctl cat pm2-deploy.service`,
+  `sudo systemctl show pm2-deploy.service -p Restart -p ExecStart -p ExecStop -p ExecReload`,
+  `sudo systemctl list-unit-files`, `sudo systemctl list-timers --all`,
+  `sudo crontab -l` e leitura de `/etc/cron.d/`, `/etc/rc.local` quando existir.
+  Conferir outros usuários/daemons PM2 e inventário de automações de deploy/boot
+  com o operador. Não imprimir env/credenciais dos dumps PM2.
+
+Nenhum dado, regra, supervisor, processo ou sessão foi modificado.
 
 ## Banco, migration e drift
 
@@ -83,68 +135,141 @@ Offsite não configurado no manifest. Backup atualizado imediatamente antes da
 janela e verificação de restauração/segredos de recuperação continuam condições
 de entrada; espaço atual não é garantia indefinida.
 
-## Procedimento proposto — depende de aprovação operacional
+## Quiescência: evidência atual insuficiente
 
-Reserva sugerida: **30–60 minutos de manutenção**, após preparar artefatos e
-backup fora da janela; estimativa de planejamento, não SLA medido. Se houver
-chamada em andamento ou submissão incerta, duração indeterminada até reconciliação.
-Não usar reload rolling: sobrepor runner antigo/novo rompe a garantia da fila.
+No SHA vivo `5ee2de6b`, `campaignRunner.ts:133` inicia Promise desacoplada da
+resposta HTTP e guarda `runningCampaigns` em memória, removendo em finally.
+Não há endpoint de drain/contagem nem espera de shutdown demonstrada. A função
+que limpa o timer não aguarda ticks já iniciados; startup e intervalos podem
+admitir novos runners. Encerrar conexões HTTP não prova que as Promises acabaram.
 
-1. Operador com acesso ao proxy/firewall confirma todas as entradas, inclusive
-   portas diretas, aliases, frontend e acessos locais; aprova o impacto abaixo.
-   Preparar artefatos do candidato e do SHA funcional em diretórios separados,
-   preservando o worker em execução e seus módulos/dados de sessão. Conferir
-   supervisores/autorestart para não ressuscitar API antiga durante a janela.
-2. Fazer backup fresco verificado e registrar baseline de contagens, migrations
-   e eventos. Em janela sem campanhas agendadas/ativas, fechar admissão nos caminhos
-   de campanha/test-send em todas as entradas. Só o proxy não interrompe scheduler.
-   Reconsultar estados e tráfego em andamento; não prosseguir com chamadas pendentes.
-   Não existe drain administrativo comprovado no código antigo: se não for possível
-   demonstrar quiescência de test-send, ABORTAR a transição, não matar chamadas para
-   alegar drain. Qualquer dúvida pós-interrupção exige reconciliação, nunca reenvio.
-3. Parar somente a API antiga via supervisor e confirmar ausência de TODOS os seus
-   processos/listeners e possibilidade de respawn. Essa parada é o fence efetivo
-   disponível para o papel superuser, sem revogar acesso do worker. Frontend pode
-   mostrar manutenção; worker e PostgreSQL permanecem ativos. Executar migration
-   Prisma apenas depois dessa comprovação; usar timeout de lock definido na janela
-   e abortar se houver contenção em Client/Campaign, sem matar sessões incidentalmente.
-4. Subir o candidato inicialmente sem scheduler, mantendo admissão de campanhas
-   bloqueada inclusive em acessos diretos; validar migrations, fila e leituras antes
-   de liberar. Flag sozinha NÃO é fence das rotas. Ativar processamento e retirar
-   bloqueios somente com owner presente e após confirmar que nenhum runner antigo
-   pode retornar. Não usar envio real como verificação automática deste procedimento.
-5. Se houver falha após migration ou após novas submissões, manter o fence,
-   preservar tabelas, snapshots, jobs, leases, accepted/results e incertezas.
-   Não executar down migration/restaurar dump sobre dados novos. Preferir correção
-   e retorno ao código novo; validar ausência de duplicação antes de reabrir.
+`routes.ts:36783` (`sendScopedCampaignTest`) faz awaits de pré-validação antes
+de `campaign.test_send.requested`; só depois chama provider e persiste resultado.
+Eventos requested/sent/failed permitem correlacionar sinais já registrados por
+requestId, mas não revelam uma chamada ainda em pré-validação e não oferecem
+barreira contra outra execução. Exceção/crash entre provider e persistência deixa
+incerteza. Campanhas sem status sending, sockets vazios, logs silenciosos ou
+esperar N segundos NÃO demonstram quiescência. Não executar envio para sondá-la.
 
-**Impacto do caminho comprovável:** com API parada, Inbox/CRM/autenticação e APIs
-operacionais ficam indisponíveis; realtime cai; webhook Meta não é processado e
-pode depender de retry externo (janela/garantia não verificada). Worker Web fica
-conectado e pode persistir inbound diretamente no banco, mas callbacks realtime,
-handoff e integrações com a API falham; não prometer recebimento completo ou
-atendimento normal. Site institucional Vercel não precisa ser desligado. O diff
-entre produção e candidato não muda worker nem os módulos compartilhados
-inspecionados (db, web-session, crypto, features, logger).
+**Conclusão:** após bloquear novas entradas externas, ainda não existe prova
+observável suficiente no código atual para autorizar a parada sem risco de
+interromper campanha/test-send. Scheduler interno e requisições já admitidas
+continuam sendo fontes de trabalho. Ausência de eventos de incerteza na fotografia
+anterior não fecha essa lacuna.
 
-**Rollback seguro comprovado:** deixar a API antiga PARADA e campanhas suspensas;
-frontend de manutenção e worker preservado. Não é rollback funcional do atendimento.
-Reiniciar código antigo com scheduler=false + apenas bloqueio de proxy NÃO foi
-comprovado seguro (rotas manuais, portas diretas, ausência de exclusividade da fila).
-Para recuperar Inbox/CRM com código antigo enquanto campanhas ficam isoladas, é
-necessário comprovar um fence seletivo completo em todas as entradas e impedir
-scheduler; isso NÃO está implementado/ensaiado no alvo e fica fora deste preflight.
-A indisponibilidade da API pode ultrapassar a reserva de 60 min em rollback.
+### Menor mecanismo proposto — NÃO implementado
 
-## Decisão e limitações
+Uma guarda operacional de campanhas, sem alterar permissões do banco compartilhado,
+com o mesmo contrato no código pré-fila de recuperação e no candidato:
 
-Sem impedimento identificado nos 16 objetos de drift nem nos checksums aplicados.
-Impedimentos operacionais: aprovação da indisponibilidade ampla; acesso para
-conferir proxy/firewall/portas diretas e controle de todos os supervisores; drain
-comprovado (incluindo test-send); backup fresco; estratégia de retorno sem API
-antiga executando campanhas. O alvo não possui o fence de privilégios do ensaio.
-Não há autorização de deploy decorrente deste documento. Nenhuma suíte/build/smoke
-local repetida; somente leitura remota e revisão documental. Owner validation e
-aceite CRA desta frente pendentes. Encerramento owner PASS do SHA funcional
-anterior preservado; reparo 6683 CLOSED; divergência DELIVERED/READ → HUMAN/WAITING
-permanece separada e sem alteração funcional.
+1. Modo fechado por padrão no startup e comando administrativo autenticado de
+   fechamento em runtime; estado/geração de fechamento persistente, independente
+   do processo, para que crash/PM2 resurrect não reabra campanhas. Falha em ler o
+   estado mantém campanhas fechadas. Nenhum bypass por acesso loopback/direto.
+2. Admissão atômica + registro de trabalho antes do primeiro await para rotas
+   app/admin/public-api de campanha, test-send, scheduler/claim, runner e
+   materialização/enqueue. Fechar a admissão e obter a geração deve ser atômico
+   com esse registro. Resposta HTTP concluída não remove tarefa desacoplada;
+   registrar até terminar persistência/finally. Contar também tick do scheduler.
+3. Ao drenar, impedir início de outro destinatário/lote, deixando uma chamada
+   provider já iniciada concluir e persistir aceitação/resultado. Preservar a
+   pendência restante de modo recuperável; nunca marcar campanha concluída só
+   para zerar contador. Test-send já admitido pode terminar; nenhum novo inicia.
+4. Leitura administrativa sanitizada por instância/PID/build/geração: admissão
+   fechada confirmada, tarefas admitidas, runners, ticks/claims, provider calls
+   e persistências pendentes; zero de todos, nenhum resultado incerto não tratado
+   e cobertura de TODAS as instâncias são a condição de drain, não um timeout.
+   Contador zero após restart/crash não vale como prova do processo anterior:
+   intents/resultados duráveis e reconciliação explícita são necessários.
+
+O registro durável de intento/resultado de test-send deve fechar a lacuna de
+crash; reutilizar o armazenamento de eventos existente se suficiente, sem presumir
+uma migration nova. A guarda deve ser específica para campanhas: não bloquear o
+serviço genérico de envio usado pelo atendimento Inbox. Isso exige revisão dos
+call sites, inclusive chamadas internas ao runner, não só um if nas rotas.
+
+Validação futura focada: fechar durante pré-validação, chamada simulada em voo,
+persistência lenta/falha e concorrência scheduler/manual; confirmar nenhum novo
+provider após fechamento, preservação de aceitos/pendências e não reenvio em crash.
+Cobrir acesso direto/loopback, rotas públicas, PM2 restart/resurrect e todas as
+instâncias; regressão limitada de Inbox/CRM/webhooks com fixtures/provider simulado.
+Sem repetir migration/drift. A primeira instalação desse mecanismo no código vivo
+TAMBÉM requer transição controlada: a versão atual não fornece drain retroativo.
+Qualquer chamada cujo término não possa ser demonstrado deve ser tratada como
+incerta, com decisão de reconciliação antes de prosseguir. Não se elimina esse
+problema apenas adicionando instrumentação e reiniciando.
+
+## Recomendação única e retorno do atendimento
+
+**NÃO avançar ao rollout da fila agora.** Preparar e ensaiar primeiro o mecanismo
+mínimo de fechamento/drain e um artefato de recuperação baseado no SHA funcional
+com campanhas fechadas, mantendo a produção atual viva nesta etapa. Trata-se de
+trabalho posterior a autorizar, não de solução pronta nem mudança implementada.
+Não solicitar aprovação genérica de 30–60 min: duração depende do drain comprovado
+e do ensaio da recuperação, ainda inexistentes.
+
+Não há atualmente caminho comprovado para restaurar Inbox/CRM/webhooks com o
+código antigo e simultaneamente impedir campanhas por todas as entradas. Somente
+scheduler=false + Nginx é insuficiente, dadas portas diretas, acesso local e rotas
+manuais. REVOKE é inválido para o papel compartilhado superuser/owner. Parar API
+impede execução daquele processo, mas também para o atendimento e não substitui
+drain nem protege contra resurrect. O artefato antigo sem guarda NÃO é rollback
+operacional aceitável.
+
+Procedimento de recuperação a ENSAIAR, depois de autorizar o mecanismo acima:
+
+1. Confirmar admissão fechada em todas as instâncias/gerações, concluir drain e
+   excluir respawn da versão sem guarda, preservando o supervisor/processo do worker.
+   Manter controles externos como defesa adicional, não como única barreira.
+2. Se candidato falhar, conservar a migration aditiva e todos os jobs/snapshots/
+   aceites/incertezas. Nenhum down, restore destrutivo ou reenvio automático.
+3. Iniciar apenas o artefato de recuperação instrumentado em modo campanhas
+   fechadas, scheduler/runner impedidos antes do primeiro claim/provider. Comprovar
+   que não depende das tabelas novas para servir atendimento e que ignora os jobs
+   sem executá-los. Rodar verificações locais do atendimento e leitura de health;
+   health sozinho não aceita rollback. Esse artefato ainda NÃO existe validado.
+4. Reabrir exclusivamente atendimento depois de verificar Inbox/CRM/autenticação,
+   recebimento e webhooks em ambiente isolado e obter critérios de aceitação para
+   o alvo. Campanhas continuam bloqueadas. Retomar candidato posteriormente mantendo
+   idempotência, resultados aceitos e reconciliação das incertezas.
+
+| Serviço | Alcance da manutenção e recuperação proposta |
+| --- | --- |
+| Campanhas de todos os tenants | Admissão e execução suspensas até liberação explícita; drafts/import/test-send também cercados. |
+| API / Inbox / CRM / autenticação / realtime | Sem API ficam indisponíveis. A guarda proposta permitiria retorno com campanhas fechadas, mas exige implementação e ensaio. |
+| Webhooks Meta e integrações API | API parada impede processamento; não há prova de retenção/retry completo nem promessa de replay. Definir com owner risco de perda/atraso antes da janela. |
+| Worker Web / sessões | Não parar/recarregar nem usar pm2 kill/reload all. Pode seguir conectado e persistir parte do inbound, mas callbacks/handoff dependentes da API degradam; integridade integral do inbound não foi provada. |
+| PostgreSQL | Permanece ativo; nenhum REVOKE/mudança de papel compartilhado. |
+| Frontend | Pode continuar servindo páginas, mas atendimento depende da API; não confundir página carregada com serviço recuperado. |
+| Site institucional Vercel | Não requer alteração para este procedimento. |
+
+### Abortar ANTES da migration se qualquer condição ocorrer
+
+- Configuração carregada/entradas/IPv4/IPv6 ou supervisores continuam sem inventário
+  suficiente; alguma instância sem guarda pode receber trabalho ou reaparecer.
+- Não há confirmação de fechamento na mesma geração em todas as instâncias, há
+  tarefa/provider/persistência ativa, estado de crash desconhecido, ou test-send
+  não observável. Timeout não transforma pendência em sucesso.
+- Artefato de recuperação de atendimento com campanhas fechadas não foi validado,
+  ou sua primeira instalação segura no código atual não foi definida.
+- Backup fresco/verificação de restauração/segredos de recuperação não estão
+  disponíveis na janela, ou o owner não definiu tratamento de incerteza/inbound
+  sem garantia de replay. Reutilizar evidência de migration/drift, sem refazer auditoria.
+
+### Acessos e decisões necessários — específicos
+
+Operador privilegiado precisa fornecer as leituras listadas acima e confirmar
+controle de PM2 saved state/boot e automações externas, sem compartilhar senha.
+Owner precisa decidir se autoriza, em tarefa separada, implementação/ensaio da
+guarda e do artefato de recuperação; nomear responsável por reconciliação e aceitar
+critérios de inbound/atendimento sem garantia de retry. Só depois dessas provas
+se define janela e autorização de mudança. Não se pede aprovação de deploy aqui.
+
+## Status e preservação
+
+**CONDIÇÕES OPERACIONAIS AINDA NÃO FECHADAS / NOT DEPLOYED / OWNER UI PENDING**.
+Portas externas e risco de resurrect comprovados; configuração carregada/firewall
+privilegiados e drain/retorno seletivo ainda pendentes. Leitura complementar não
+consultou novamente migration, drift ou dados de campanhas, nem repetiu ensaio,
+build/testes/smokes. Worker/sessões preservados. Owner PASS anterior, 6683 CLOSED,
+aceite CRA pendente e DELIVERED/READ → HUMAN/WAITING separados e sem alteração.
