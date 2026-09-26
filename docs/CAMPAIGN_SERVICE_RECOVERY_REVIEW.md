@@ -63,3 +63,28 @@ por nome exato ([documentação oficial](https://vercel.com/docs/project-configu
 Estado operacional, .data, evidências, dumps, credenciais e configs privadas excluídos.
 Runbook/preflight e quatro documentos canônicos atualizados na branch candidata,
 com histórico preservado: [preflight](https://github.com/nosfied/site-re7online/blob/review/campaign-recovery-20260926/docs/saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md).
+
+
+## Correção incremental sobre e6a12bc9 — 2026-09-26
+
+Consentimento POST /app/campaigns/opt-out e POST /app/campaigns/opt-out/revoke
+alcança os handlers/políticas existentes mesmo com guarda fechada. Exceção exata
+por método/caminho; envio/test-send/scheduler continuam bloqueados em código.
+CRM atual usa POST/DELETE /app/crm/contacts/:id/opt-out, já fora da guarda.
+Autenticação, feature e isolamento tenant intactos. Nenhum transporte/runner novo.
+
+Diagnóstico também reconhece `${CAMPAIGN_OPERATIONS_FILE}.uncertain` do candidato:
+não declara drain sobre esse marcador. Preservá-lo junto do arquivo e locks nas
+trocas/backups. Falha de ledger pós-aceite no candidato não impede persistência
+SQL; a pendência não expira e requer revisão. Se banco e filesystem estiverem
+indisponíveis, resposta pode ficar apenas em memória; não assumir rejeição/retry
+seguro nem retomada automática. Manter executores sem admissão durante reparo e
+reconciliar antes de retomar. Recovery não habilita nenhuma campanha.
+
+Validação afetada: consentimento/política/tenant 1/1; consumidores CRM 4/4;
+fechamento e diagnóstico 2/2; build backend PASS. DB local anterior à migration,
+provider simulado/nenhuma chamada real. Evidência anterior compatível com DB após
+migration preservada, sem repetição incidental. Novos testes de ledger pertencem
+somente ao candidato; resultado detalhado no preflight da branch candidata.
+NOT DEPLOYED / OWNER UI PENDING; primeira transição continua pendente, sem
+quiescência retroativa. 6683 CLOSED; materialização permanece separada.

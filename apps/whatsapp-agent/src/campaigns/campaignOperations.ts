@@ -64,7 +64,7 @@ function locked<T>(fn: (state: State) => T, write = true): T {
 export function campaignOperationsStatus() {
   try {
     return locked(s => ({ available: true, open: true /* recovery artifact: campaigns cannot open */ ? false : s.open, generation: s.generation,
-      drained: (!s.open || true /* recovery artifact: campaigns cannot open */) && Object.keys(s.tasks).length === 0,
+      drained: (!s.open || true /* recovery artifact: campaigns cannot open */) && Object.keys(s.tasks).length === 0 && !fs.existsSync(`${filename()}.uncertain`),
       instance, build, tasks: Object.entries(s.tasks).map(([id, task]) => ({ id, ...task })),
       audit: s.audit.slice(-20) }), false);
   } catch { return { available: false, open: false, generation: null, drained: false, instance, build, tasks: [], audit: [] }; }
@@ -129,6 +129,9 @@ export async function campaignProviderAttempt<T>(intent: () => Promise<void>, su
 }
 export function isCampaignMutation(method: string | undefined, pathname: string) {
   if (["GET", "HEAD", "OPTIONS"].includes(method || "GET")) return false;
+  // Exact consent-management endpoints retain their own authentication, feature
+  // policy and tenant scope. No suffix/prefix exception may admit a send route.
+  if (method === "POST" && ["/app/campaigns/opt-out", "/app/campaigns/opt-out/revoke"].includes(pathname)) return false;
   // User stop actions remain available under maintenance; existing RBAC applies.
   if (/\/(pause|cancel)$/.test(pathname)) return false;
   return /^\/(app|admin)\/(campaigns|campaign-batches)(\/|$)/.test(pathname) || /^\/public-api\/v1\/campaigns(\/|$)/.test(pathname);

@@ -33,3 +33,13 @@ test("recovery artifact blocks direct routes, internal runner and scheduler even
     assert.deepEqual(await prisma.campaign.findMany({ orderBy: { id: "asc" } }), before);
   } finally { await new Promise<void>(r => server.close(() => r())); await prisma.$disconnect(); }
 });
+
+
+test("recovery diagnostics never report drain over the candidate shared uncertain fence", () => {
+  process.env.CAMPAIGN_OPERATIONS_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "recovery-fence-")), "state.json");
+  fs.writeFileSync(process.env.CAMPAIGN_OPERATIONS_FILE, JSON.stringify({ version: 1, open: false, generation: 2, tasks: {}, audit: [] }));
+  fs.mkdirSync(`${process.env.CAMPAIGN_OPERATIONS_FILE}.uncertain`, { mode: 0o700 });
+  assert.equal(campaignOperationsStatus().open, false);
+  assert.equal(campaignOperationsStatus().drained, false);
+  assert.throws(() => setCampaignOperations(true, 2, "test", "cannot bypass sticky fence"));
+});

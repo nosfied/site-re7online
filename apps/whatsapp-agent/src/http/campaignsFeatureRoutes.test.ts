@@ -18089,3 +18089,30 @@ test("tenant admins manage department schedule exceptions with RBAC and tenant i
   });
   assert.ok(auditEvents.some((event) => JSON.stringify(event.payloadJson).includes(businessAdmin.id)));
 });
+
+
+test("closed guard preserves exact opt-out and revoke authorization without admitting campaigns", async t => {
+  const guard = await import("../campaigns/campaignOperations.js");
+  const originalFile = process.env.CAMPAIGN_OPERATIONS_FILE;
+  process.env.CAMPAIGN_OPERATIONS_FILE = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "consent-closed-")), "state.json");
+  t.after(() => { if (originalFile === undefined) delete process.env.CAMPAIGN_OPERATIONS_FILE; else process.env.CAMPAIGN_OPERATIONS_FILE = originalFile; });
+  const waId = "5541999981991";
+  for (const [route, expectedStatus] of [["/app/campaigns/opt-out", "recorded"], ["/app/campaigns/opt-out/revoke", "revoked"]]) {
+    const unauthenticated = await requestUnauth("POST", route, { waId });
+    assert.equal(unauthenticated.status, 401);
+    const disabledFeature = await request<ErrorPayload>("POST", route, governmentAdmin, { waId });
+    assert.equal(disabledFeature.status, 403); assert.equal(getErrorCode(disabledFeature.body), "feature_not_enabled");
+    const permitted = await request<{ status: string }>("POST", route, businessAdmin, { waId, reason: "synthetic consent" });
+    assert.equal(permitted.status, 200, JSON.stringify(permitted.body)); assert.equal(permitted.body.status, expectedStatus);
+    const own = await filterOptedOutCampaignRecipients(prisma, { clientId: businessClientId, waIds: [waId] });
+    assert.equal(own.blocked.length, expectedStatus === "recorded" ? 1 : 0);
+    const other = await filterOptedOutCampaignRecipients(prisma, { clientId: overrideClientId, waIds: [waId] });
+    assert.equal(other.blocked.length, 0);
+  }
+  for (const route of ["/app/campaigns", "/app/campaigns/x/send", "/app/campaigns/x/test-send", "/app/campaigns/opt-out/send", "/app/campaigns/opt-out/revoke/test-send"]) {
+    assert.equal((await request("POST", route, businessAdmin, {})).status, 503, route);
+  }
+  const { processDueScheduledCampaigns } = await import("../campaigns/campaignRunner.js");
+  assert.equal((await processDueScheduledCampaigns()).claimed, 0);
+  assert.equal(guard.campaignOperationsStatus().open, false);
+});

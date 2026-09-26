@@ -476,3 +476,11 @@ Artefato separado baseado em `5ee2de6b`, NOT DEPLOYED / OWNER UI PENDING.
 Procedimento, compatibilidade local e limitações em
 [artefato de recuperação](CAMPAIGN_SERVICE_RECOVERY_REVIEW.md).
 Não ressuscitar o runner original, apagar estado ou inferir quiescência retroativa.
+
+
+Correção incremental da guarda (revisão e6a12bc9): consentimento opt-out/revoke
+mantém handlers/políticas existentes; nenhum envio habilitado. Diagnóstico recusa
+drain sobre marcador compartilhado `.uncertain`, que deve ser preservado nas
+trocas/backups. Não remover lock/tarefa/marcador por timeout ou retomar cegamente.
+[Resultados e limites atualizados](CAMPAIGN_SERVICE_RECOVERY_REVIEW.md#correção-incremental-sobre-e6a12bc9--2026-09-26).
+Primeira transição pendente; NOT DEPLOYED / OWNER UI PENDING; 6683 CLOSED.
