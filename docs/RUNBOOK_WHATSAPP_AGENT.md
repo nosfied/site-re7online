@@ -1198,3 +1198,330 @@ Resultados exatos no preflight único; evidências sanitizadas/local sintéticas
 provisionamento/inventário do alvo, owner UI/CRA e tratamento de incerteza antiga
 continuam pendentes. Não há quiescência retroativa. 6683 CLOSED; divergência
 DELIVERED/READ → HUMAN/WAITING separada.
+
+
+## Primeira transição — plano condicionado às evidências do operador
+
+Artefatos fixos: candidato `a1cc380eddcd1467b8e0d3a8e405f82689a25b3d`;
+recuperação `03f930e5453efd313a91a16de3e22057a0573d9c`. O commit documental que
+contém este plano não muda esses artefatos funcionais. **NÃO EXECUTAR os comandos
+mutáveis abaixo sem uma autorização operacional posterior e passagem de G0.**
+Esta tarefa somente leu e documentou: nenhum backup, provisionamento, migration,
+restart/reload, firewall, provider ou envio foi executado.
+
+### G0 — evidência antes de pedir janela
+
+Não foram localizados os novos resultados privilegiados anunciados. O owner
+informou que não sabe localizá-los. Acesso SSH existente funcionou e reconfirmou
+HEAD `5ee2de6b`; as tentativas exatas `sudo -n nginx -T`, nft, iptables, ip6tables,
+ufw e crontab root continuam exigindo senha. Não pedir senha ao owner, ampliar
+sudoers ou tentar outro usuário para contornar isso. Unit PM2 reconfirmada enabled,
+inactive; ExecStart resurrect, ExecReload reload all, ExecStop kill. Demais fatos
+anteriores conservam sua data de observação; não são uma nova fotografia completa.
+
+O operador com privilégio deve executar o bloco abaixo em sessão própria, guardar
+a saída integral PRIVADAMENTE e entregar apenas a matriz sanitizada indicada.
+Não encaminhar .env, dumps PM2 completos, chaves, cookies ou tokens ao chat/Git.
+Este bloco coleta leituras; não habilita privilégios para o Codex:
+
+```bash
+sudo nginx -T
+sudo journalctl -u nginx --since '2026-08-10' --no-pager
+sudo nft list ruleset
+sudo iptables-save
+sudo ip6tables-save
+sudo ufw status verbose
+sudo systemctl cat pm2-deploy.service
+sudo systemctl show pm2-deploy.service -p ActiveState -p UnitFileState -p Restart -p ExecStart -p ExecStop -p ExecReload
+sudo systemctl list-unit-files
+sudo systemctl list-timers --all
+sudo crontab -l
+sudo ls -l /etc/cron.d /etc/cron.daily /etc/cron.hourly
+```
+
+Complementos dirigidos: ler comandos dos cron jobs relevantes e rc.local, quando
+existir; metadados/mtime dos includes e error_log Nginx identificado em nginx -T;
+inventário de PM2 de outros usuários, agentes externos e painel de firewall/DNS.
+Não inferir ausência de supervisores pela crontab de um único usuário. Saída
+nginx -T é configuração de disco: correlacionar último reload/start bem-sucedido,
+logs/mtimes e workers vivos. Sem essa trilha, disco = memória continua inconclusivo.
+
+Entrega sanitizada exigida do operador: timestamp/origem; includes efetivos e
+tratamento do server_name duplicado; rota upstream de cada host/alias/frontend;
+política/regra IPv4 e IPv6 de portas diretas e firewall do provedor; todos os
+iniciadores (PM2 vivo/saved/backup/boot/crons/CI externos) e responsável capaz de
+suspendê-los. Acrescentar nomes/scripts/cwd/status dos processos, não seus envs.
+Se faltar qualquer item, manter G0 **PENDENTE** e não pedir aprovação genérica de
+janela. A documentação não transforma a indisponibilidade de acesso em PASS.
+
+### Recomendação única e decisões do owner
+
+Primeira troca por **parada controlada da API antiga inteira**, com retorno
+primeiro pelo artefato de recuperação fechado; depois migration/candidato também
+fechado. Não depender de uma regra Nginx para isolar campanhas enquanto o runner
+antigo continua vivo. Essa parada cobre o processo que atende portas diretas,
+frontend/aliases e scheduler, mas não prova que o provider já encerrou chamadas.
+Ela só é admissível após inventário completo e decisão expressa sobre incerteza.
+
+Responsáveis: operador privilegiado (entrada/supervisores/provisionamento), operador
+de aplicação no usuário deploy (PM2/releases), DBA (backup/migration/reconciliação),
+owner (janela, impacto, incerteza e liberação funcional). Codex apresenta evidências
+e prepara comandos; execução futura depende de autorização específica. Registrar
+quem ocupa cada função antes de G0 PASS, inclusive responsável por abortar.
+
+Duas autorizações separadas: (A) interromper a API antiga aceitando ou recusando a
+incerteza residual identificada; (B) liberar campanhas após verificação. A não
+implica B. Se owner exigir prova de zero chamadas antigas, **A não pode ocorrer
+com a instrumentação atual**: status sending=0, silêncio/espera e sockets não
+fornecem essa prova. Não prometer janela numérica sem medidas de backup/restauração,
+provisionamento e startup. Owner define limite de indisponibilidade e horário de
+acionar recuperação; ultrapassá-lo não autoriza reabrir campanhas.
+
+### Sequência de execução futura e pontos de parada
+
+Preparar releases fora do checkout ativo, com artefatos compilados identificados
+pelos SHAs acima e Prisma Client próprio de cada versão. Não usar git checkout,
+npm ci/build ou deploy-vps.sh no diretório de processos vivos: o script genérico
+pode aplicar migration/reload fora desta sequência. Evidência local aprovada é
+reutilizada; preparação do artefato no alvo deve comprovar hash, dependências,
+configuração privada, paths persistentes e compatibilidade, sem iniciar runner.
+Os caminhos de release abaixo são PROPOSTOS, não provisionados/validados no alvo.
+
+```bash
+umask 077
+CANDIDATE=/opt/re7online/releases/a1cc380eddcd1467b8e0d3a8e405f82689a25b3d
+RECOVERY=/opt/re7online/releases/03f930e5453efd313a91a16de3e22057a0573d9c
+GUARD=/var/lib/re7/campaign-operations/state.json
+# OPS_CURL: arquivo privado 0600 com header superadmin; nunca imprimir seu conteúdo.
+# EVIDENCE: diretório privado exclusivo da janela, fora de qualquer restore automático.
+```
+
+1. **Operador + DBA, antes da parada:** G0 PASS; releases e acesso superadmin
+   conferidos; checklist de backup/restauração abaixo aprovado; capturar baseline
+   de processos/worker/sessões e registros antigos. Inventariar todos os executores
+   em host único e mesmo namespace Linux; não atestar single-host por conveniência.
+   Se houver outro host, versão não instrumentada ou caminho de estado diferente,
+   ABORTAR. Frontend/worker atuais continuam no checkout original.
+2. **DBA, marco T0:** em transação READ ONLY, registrar agregados por tenant e
+   correlação técnica tenant+campaign/message/requestId de submit_started,
+   provider_accepted, OutboundMessage e test_send.requested/sent/failed. Conferir
+   também logs de falha/persistência desde antes de T0 até a parada. Guardar IDs e
+   logs privadamente, publicar somente contagens/estados. Reutilizar consultas do
+   preflight; não refazer inventário de drift. Campanhas sending/scheduled são
+   sinais, não inventário completo. Requisições em pré-validação e aceites sem
+   registro podem não aparecer: registrar explicitamente **quantidade desconhecida**.
+   Owner recebe essa evidência ANTES de decidir A.
+3. **Operador privilegiado, após A:** congelar deploys/resurrect manuais e todos
+   os iniciadores identificados em G0. Para a unit conhecida, se o estado ainda
+   for enabled/inactive como documentado, `sudo systemctl disable pm2-deploy.service`
+   SEM --now impede seu boot automático durante a troca sem parar daemon/worker.
+   Conferir `systemctl is-enabled pm2-deploy.service` (esperado disabled, exit 1)
+   e `systemctl is-active pm2-deploy.service` (continua inactive).
+   Isso NÃO bloqueia start manual ou outros supervisores: controle deles é uma
+   condição anterior, não presunção. Se estado divergente, ABORTAR sem usar
+   stop/reload/restart da unit, kill ou reload all.
+4. **Operador deploy, ponto de interrupção T1:** preservar dumps PM2 atuais e seus
+   backups fora dos paths de resurrect, com ACL privada; então retirar SOMENTE a API:
+
+   ```bash
+   # EVIDENCE deve ser novo, privado e exclusivo desta janela; preservar antes da parada.
+   install -m 600 /home/deploy/.pm2/dump.pm2 "$EVIDENCE/dump.pm2.before"
+   # Se dump.pm2.bak existir, preservar também; nunca recriar histórico ausente.
+   install -m 600 /home/deploy/.pm2/dump.pm2.bak "$EVIDENCE/dump.pm2.bak.before"
+   pm2 delete re7-whatsapp-agent
+   pm2 save
+   ```
+
+   Delete é a parada/removal intencional desta entrada PM2, não exclusão de dados.
+   Não há drain antigo: uma chamada pode ser interrompida. Conferir que todos os
+   PIDs/filhos antigos identificados cessaram, nenhuma API permanece em 3001 ou
+   outras portas inventariadas, nenhum job/supervisor a recria, e worker/front
+   mantêm PIDs/status. Usar `ss -ltnp` e projeção sanitizada de `pm2 jlist`; não
+   imprimir env. Saved dump deve conter worker/front e NÃO a API antiga. Preservar
+   o dump.pm2.bak anterior em EVIDENCE e substituir a cópia ativa de fallback pela
+   cópia salva já verificada, para que fallback também não ressuscite 5ee2de6b:
+
+   ```bash
+   # PM2_HOME é o HOME real do daemon confirmado em G0; não inferir se divergente.
+   # Após preservar originais e conferir conteúdo sem segredos:
+   install -m 600 /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
+   ```
+
+   Não reabilitar boot ainda. Identificar processo sobrevivente exige investigação,
+   não kill genérico por nome. Se não provar cessação/ausência de respawn, ABORTAR:
+   não subir outro executor, não migrar, não restaurar automaticamente a API antiga.
+   Conexão recusada prova apenas ausência daquele listener, não fim de envio remoto.
+5. **Operador privilegiado/deploy:** validar dono, ancestrais, filesystem local e
+   inexistência de symlinks no path GUARD. Se já houver ledger/lock/.uncertain,
+   preservar e investigar; NÃO sobrescrever com estado vazio. Para caminho realmente
+   novo, somente após verificação de que não existe estado de campanha em outro path:
+
+   ```bash
+   sudo install -d -o deploy -g "$(id -gn deploy)" -m 700 /var/lib/re7/campaign-operations
+   sudo -u deploy python3 - <<'PYGUARD'
+   import os, json
+   p = '/var/lib/re7/campaign-operations/state.json'
+   fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+   with os.fdopen(fd, 'w') as f:
+       json.dump(dict(version=1, open=False, generation=0, tasks={}, audit=[]), f)
+       f.flush(); os.fsync(f.fileno())
+   fd = os.open(os.path.dirname(p), os.O_RDONLY)
+   os.fsync(fd); os.close(fd)
+   PYGUARD
+   ```
+
+   Estado inicial vazio descreve somente o NOVO mecanismo; não encerra registros
+   antigos incertos. Registrar inventário/identidade privada do host; não publicar
+   machine-id. Compartilhar o mesmo arquivo e diretórios auxiliares entre releases.
+6. **Operador deploy, recuperação imediata do atendimento:** configuração privada
+   completa já preparada, cwd e storages conferidos, Client antigo próprio. Exportar
+   guard explicitamente no ambiente PM2 (sem imprimir segredos) e iniciar somente
+   o artefato de recuperação. O ecosystem versionado contém só a API:
+
+   ```bash
+   export CAMPAIGN_OPERATIONS_FILE="$GUARD"
+   export CAMPAIGN_OPERATIONS_TOPOLOGY=single-host
+   export CAMPAIGN_OPERATIONS_HOST_ID="$(cat /etc/machine-id)"
+   export CAMPAIGN_BUILD_ID=03f930e5453efd313a91a16de3e22057a0573d9c
+   export CAMPAIGN_RECOVERY_ONLY=true
+   export CAMPAIGN_SCHEDULE_PROCESSOR_DISABLED=true
+   pm2 start "$RECOVERY/apps/whatsapp-agent/ecosystem.config.cjs" --only re7-whatsapp-agent --env production --update-env
+   curl --fail --silent --show-error http://127.0.0.1:3001/health
+   curl --fail --silent --show-error --config "$OPS_CURL" http://127.0.0.1:3001/admin/ops/campaign-execution | jq '{available,open,drained,generation,build,taskCount:(.tasks|length)}'
+   ```
+
+   Exigir build correto/closed, e testar atendimento pelos critérios abaixo; health
+   isolado não aceita recuperação. `drained=true` aqui NÃO prova nada sobre 5ee2de6b.
+   Se recuperação não servir atendimento, manter API parada e escalar; não voltar
+   ao SHA sem guarda. Se passar, salvar PM2 e atualizar backup ativo somente após
+   preservar o anterior; todas as referências de API devem apontar à recovery.
+   Reabilitar a unit de boot apenas após esses checks e inventário G0, sem start/reload
+   da unit (`sudo systemctl enable pm2-deploy.service`, se era enabled originalmente).
+7. **DBA + owner, antes da migration:** revisar correlação T0/T1 e resultados
+   recebidos depois da parada. Qualquer aceitação/snapshot/job incerto permanece
+   preservado; não reenfileirar nem classificar ausência como rejeição. Se não há
+   prova suficiente para liberação, continuar em recovery com campanhas fechadas.
+   Não migrar enquanto o gate de evidências/backup/decisão estiver incompleto.
+   Aplicar apenas migration já validada, com credencial provisionada privadamente:
+
+   ```bash
+   cd "$CANDIDATE/apps/whatsapp-agent"
+   ./node_modules/.bin/prisma migrate status --schema prisma/schema.prisma
+   # Exigir somente 20260925143000_add_campaign_execution_queue pendente.
+   ./node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma
+   ./node_modules/.bin/prisma migrate status --schema prisma/schema.prisma
+   ```
+
+   Nenhum db push/reset/manual DDL/resolve automático. DBA monitora locks/impacto
+   e limite de janela aprovado. Em erro, conservar saída privada e banco como está;
+   não rodar down/restore destrutivo. Recovery pode continuar se funcionalmente
+   compatível; migration parcial/bloqueante exige diagnóstico antes de prosseguir.
+8. **Operador deploy, segunda troca:** após migration confirmada e mesmos gates de
+   supervisores, repetir suspensão de boot pelo operador privilegiado
+   (`sudo systemctl disable pm2-deploy.service`, sem --now) e congelar iniciadores; parar/deletar só API recovery, conferir fim dos PIDs, preservar
+   arquivo/lock/.uncertain e iniciar candidato com admissão fechada. Recuperação
+   nunca enviou campanhas; atendimento também pode ter chamadas em voo: nenhuma
+   promessa de drain genérico de Inbox/webhooks.
+
+   ```bash
+   pm2 delete re7-whatsapp-agent
+   pm2 save
+   # Conferir saved sem API e preservar fallback anterior antes de substituí-lo.
+   install -m 600 /home/deploy/.pm2/dump.pm2 /home/deploy/.pm2/dump.pm2.bak
+   export CAMPAIGN_BUILD_ID=a1cc380eddcd1467b8e0d3a8e405f82689a25b3d
+   export CAMPAIGN_RECOVERY_ONLY=false
+   export CAMPAIGN_SCHEDULE_PROCESSOR_DISABLED=false
+   pm2 start "$CANDIDATE/apps/whatsapp-agent/ecosystem.config.cjs" --only re7-whatsapp-agent --env production --update-env
+   # Repetir GET health e diagnóstico acima: available=true, open=false, build esperado.
+   ```
+
+   Os exports anteriores de path/topologia/host continuam necessários em toda
+   sessão; ler configuração efetiva pela projeção autorizada, não imprimir env.
+   Conferir startup scheduler sem claim/provider com guarda fechada. Preservar
+   fila/snapshots/aceites e validar atendimento. Salvar estado PM2 e backup ativo
+   com API apontando ao candidato só depois de aprovado; jamais salvar a antiga.
+   Reabilitar boot somente após validar saved e fallback guardados, como no passo 6.
+   Frontend atual/worker não são alterados por esses comandos. A UI de campanhas
+   pode exigir frontend do mesmo candidato: preparar artefato e plano de troca do
+   frontend separadamente, conferir compatibilidade e obter owner UI antes de B;
+   não declarar publicação funcional da frente com apenas backend trocado.
+9. **Owner B, somente após evidências:** registro de todas as instâncias no mesmo
+   arquivo/build/topologia, open=false, tasks=0, sem `.lock` abandonado/`.uncertain`,
+   resultados incertos antigos resolvidos por evidência (ou política formal que
+   mantenha os destinatários afetados bloqueados, sem retry cego), atendimento
+   aprovado, frontend pertinente e saved/boot apontando só para artefatos guardados.
+   Contador vazio não basta. Nesta frente não há endpoint automático de reconciliação;
+   se a política exigisse implementação nova, B continua bloqueada.
+   Então obter geração atual por GET autenticado e POST
+   `/admin/ops/campaign-execution` com `{open:true,generation:<geração lida>,reason:<referência da decisão B>}`.
+   Exigir 200 e mesma geração avançada; 409/estado indisponível exige parar e investigar,
+   não repetir abertura cegamente. Esse POST pode iniciar agendamentos vencidos:
+   owner deve aprovar antecipadamente contagens/ordem/tenants elegíveis e budget.
+   Não usar test-send/provider como sondagem de manutenção.
+
+### Critérios de atendimento, impacto e recuperação
+
+| Serviço | Durante retirada da API | Critério para considerar recuperado |
+| --- | --- | --- |
+| Campanhas/test-send de todos tenants | Bloqueados pelo fim do executor; depois pela guarda | B separado, sem pendências; nunca reabrir para testar |
+| Inbox/CRM/auth/realtime | Indisponíveis/degradados apesar de frontend carregado | Login autorizado, lista/detalhe CRM e Inbox com escopo correto, histórico existente, conexão realtime; nenhum envio necessário |
+| Webhooks/integrações | Podem falhar/atrasar/perder chamadas na troca | Rota correta, logs sem erros e evidência de processamento de inbound natural autorizado; sem evento observado, recebimento permanece não comprovado |
+| Worker/sessões | Preservados, mas callbacks para API podem falhar | Mesmos processos/sessões, conectado sem novo QR; isso não prova replay/inbound integral |
+| PostgreSQL | Ativo; migration pode disputar locks | Migração concluída e atendimento funcional; não modificar papel compartilhado |
+| Frontend operacional | Continua servindo UI com API indisponível | Compatibilidade da UI/artefato aprovado pelo owner; troca frontend fora destes comandos |
+| Site institucional/Vercel | Sem mudança | Não integra esta manutenção |
+
+Recuperação após falha do candidato: fechar guarda quando disponível, não iniciar
+mais trabalho; usar drain instrumentado, preservar `.uncertain`/tasks e SQL, parar
+somente o candidato e iniciar recovery com mesmos paths/config (passo 6), sem
+reverter migration nem apagar tabelas/jobs/snapshots. Se candidato crashou, drain
+não é inferido; tratar incerteza. Se storage/SQL não permitem conservar estado,
+manter executores sem admissão, não reparar e permitir retomada automática.
+Worker/frontend nunca são parados via unit PM2 inteira. O SHA 5ee2de6b não é opção
+de rollback para campanhas. Registrar horas de T1, retorno recovery, migration,
+troca candidato, aceitação de atendimento e eventual B. Duração é medida por
+etapa e limitada pela decisão owner, não por espera arbitrária de drain.
+
+### Checklist de backup fresco e restauração — preparar, não executar nesta tarefa
+
+- DBA confirma destino real, espaço/inodes/ownership/ACL e capacidade para dump,
+  conteúdos e restauração isolada; os 42 GiB do preflight são fotografia antiga.
+  Preservar snapshots com retenção pendente por ownership root; não limpar ou
+  corrigir permissões incidentalmente. Offsite continua não comprovado.
+- Antes de T1, backup fresco com timestamp, SHA de código/migrations, checksum,
+  tamanho e catálogo; preservar os anteriores. Fazer outro ponto antes da migration
+  se atendimento/worker continuaram escrevendo. `pg_dump` consistente não equivale
+  a snapshot simultâneo de DB + filesystem. Definir RPO de writes pós-dump.
+- Credenciais por serviço PostgreSQL privado, nunca URL no shell/log. Exemplo
+  futuro, após DBA vincular `re7_transition_source` ao alvo conferido:
+
+  ```bash
+  pg_dump --dbname=service=re7_transition_source --format=custom --file="$EVIDENCE/pre-migration.dump"
+  pg_restore --list "$EVIDENCE/pre-migration.dump" > "$EVIDENCE/pre-migration.list"
+  sha256sum "$EVIDENCE/pre-migration.dump" > "$EVIDENCE/pre-migration.sha256"
+  ```
+
+  Lista/checksum não provam restore. Restaurar cópia em destino ISOLADO novo,
+  previamente identificado por DBA e sem provider/rotas de produção, usando
+  `pg_restore --exit-on-error --no-owner --no-privileges --dbname=service=re7_transition_restore_isolated "$EVIDENCE/pre-migration.dump"`.
+  Não usar --clean, drop/reset nem apontar esse serviço ao banco vivo. Medir duração
+  e validar leitura de dados/snapshots com chaves corretas. Se falta destino ou
+  configuração desses serviços, backup/restore continua um gate pendente.
+- Incluir configurações privadas/chaves de criptografia necessárias para ler
+  snapshots, conteúdos persistentes, ledger completo + auxiliares, manifests dos
+  dois artefatos e PM2 saved/backup originais em armazenamento seguro separado.
+  Não versionar nem imprimir. Cópia de sessões Web ativas não comprova consistência;
+  preservar worker in-place e definir backup consistente sem prometer restauração
+  de sessão que não foi validada. Não parar worker para fazer o checklist passar.
+- Scripts existentes backup-postgres.sh/backup-data.sh aplicam retenção; não usar
+  às cegas para esta captura preservadora. Operador deve confirmar a rotina real
+  de snapshots antes de invocá-la. Esta tarefa não executou esses scripts.
+- Restore do DB vivo NÃO é rollback normal: apagaria aceites/inbound/escritas de
+  outros serviços após o dump. Só em desastre com decisão separada de perda de
+  dados e reconciliação. Recuperação ordinária é código fechado sobre o DB atual.
+
+Gates pendentes concretos: G0 (leituras/inventário), responsáveis nominados,
+artefatos/config privada no alvo, backup/restore/segredos e tempos, decisão A com
+incerteza explicitada, aceitação do atendimento/frontend e decisão B. Não há
+aprovação final de implantação implícita. NOT DEPLOYED / OWNER UI PENDING;
+primeira transição pendente, 6683 CLOSED, DELIVERED/READ → HUMAN/WAITING separado.

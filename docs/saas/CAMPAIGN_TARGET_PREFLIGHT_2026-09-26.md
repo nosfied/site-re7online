@@ -403,3 +403,44 @@ retomada automática após reparo não é garantida segura: manter todos executo
 sem admissão e reconciliar. Nenhuma operação remota autorizada/executada nesta etapa.
 NOT DEPLOYED / OWNER UI PENDING. Primeira transição/CRA pendentes, sem quiescência
 retroativa. 6683 CLOSED e divergência de materialização separada.
+
+
+## Consolidação para a primeira transição — evidência ainda pendente
+
+Artefatos funcionais fixos: candidato `a1cc380eddcd1467b8e0d3a8e405f82689a25b3d`,
+recuperação `03f930e5453efd313a91a16de3e22057a0573d9c`. NOT DEPLOYED / OWNER UI PENDING.
+As seções anteriores são histórico, não confirmação de prontidão atual.
+
+Os novos resultados privilegiados anunciados não foram encontrados nos anexos ou
+nas evidências locais. O owner informou não saber localizá-los. Tentativa dirigida,
+sem bypass: SSH existente reconfirmou HEAD produção `5ee2de6b`; nginx -T, nft,
+iptables, ip6tables, ufw e crontab root via sudo -n ainda exigem senha. Unit PM2
+reconfirmada enabled/inactive, com resurrect/reload all/kill. Isso NÃO comprova
+configuração carregada, firewall ou ausência de outros supervisores.
+Evidências privadas e hashes em `local-evidence/recovery/first-transition/`.
+Nenhuma nova consulta DB, migration/drift, suíte/build ou probe de provider.
+
+| Item | Prova disponível | Pendência exata |
+| --- | --- | --- |
+| HEAD alvo | Reconfirmado 5ee2de6b por SSH | Revalidar status/PIDs no gate da janela |
+| Portas diretas 3000/3001 | TCP externo positivo do preflight anterior | Regras/políticas IPv4/IPv6 e painel do provedor pelo operador |
+| Nginx/aliases | Includes/rotas em disco e duplicidade documentados | nginx -T + logs de reload/start + mtimes para correlação com memória |
+| Frontend | Rewrite público do build anterior e UI /agent-api | Inventário atual de hosts/aliases; artefato frontend compatível antes de liberar campanhas |
+| Scheduler | Startup + timer do código antigo documentados | Parada de TODOS os executores antigos; configuração não é hot fence |
+| PM2 | Unit reconfirmada; dump/backup antigo observado no preflight | Inventário privilegiado de outros usuários/crons/automações; preservar e retirar referências antigas de saved/fallback/boot |
+| Chamadas antigas | Instrumentação insuficiente já comprovada | Correlacionar sinais na janela e apresentar desconhecidos ao owner; impossível provar drain retroativo |
+| Backup/restore | Snapshot antigo validado, retenção/offsite pendentes | Novo ponto fresco, restore isolado, segredos e duração medidos antes da janela |
+
+Recomendação única: interrupção explícita da API antiga, com impacto amplo aceito
+pelo owner e risco residual identificado, retorno inicial do atendimento pela
+recovery fechada; depois migration/candidato fechado. Não propor bloqueio seletivo
+Nginx como proteção suficiente do runner antigo. Decisão de interromper (A) e
+liberar campanhas (B) são separadas. Se owner não aceita incerteza residual, não
+prosseguir com A: o código antigo não permite comprová-la ausente.
+
+[Plano condicionado, comandos futuros, responsáveis, critérios de parada e checklist de backup](../RUNBOOK_WHATSAPP_AGENT.md#primeira-transição--plano-condicionado-às-evidências-do-operador).
+Esse plano contém comandos mutáveis somente como preparação; nada foi executado.
+G0 pendente impede solicitar janela genérica ou declarar pronto para aprovação
+final. Owner não precisa fornecer senha: operador executa pacote de leitura em
+sessão própria e entrega matriz sanitizada. Sem números arbitrários de manutenção.
+6683 CLOSED, owner UI/CRA pendentes, materialização separada, sem quiescência retroativa.

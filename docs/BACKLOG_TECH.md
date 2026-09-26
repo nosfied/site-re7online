@@ -2826,3 +2826,21 @@ e procedimento em `docs/RUNBOOK_WHATSAPP_AGENT.md` (seção de consentimento/ace
 Histórico/evidências preservados. NOT DEPLOYED / OWNER UI PENDING; primeira
 transição, owner UI/CRA e incertezas antigas pendentes. 6683 CLOSED; divergência
 DELIVERED/READ → HUMAN/WAITING separada, sem quiescência retroativa.
+
+
+### Preparação documental da primeira transição — 2026-09-26
+
+Candidato funcional a1cc380e e recovery 03f930e5 preservados; nenhum teste/build,
+implementação ou migration repetido. HEAD alvo 5ee2de6b e unit PM2 reconfirmados
+somente por leitura. Novas saídas privilegiadas não localizadas; tentativas
+sudo -n continuam exigindo senha. Configuração efetiva Nginx/IPv4/IPv6 e inventário
+completo de supervisores NÃO estão confirmados. Gate G0 pendente.
+Procedimento futuro e pedido preciso ao operador no runbook, seção “Primeira
+transição — plano condicionado às evidências do operador”; consolidação no
+preflight único `docs/saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md`.
+Recomendação: parada explícita da API antiga, recovery fechada para atendimento,
+depois candidato fechado. Owner decide interrupção/incerteza (A) e abertura (B)
+separadamente; backup fresco/restore e validação de atendimento são gates.
+NOT DEPLOYED / OWNER UI PENDING; primeira transição e CRA pendentes. Sem prova
+retroativa de drain, sem promessa inbound/retry. 6683 CLOSED, histórico owner
+PASS preservado e DELIVERED/READ → HUMAN/WAITING separado. Nenhuma operação mutável.
