@@ -814,7 +814,7 @@ async function materializeDynamicBatchJob(params: {
       where: { id: batch.id },
       data: {
         status: "running",
-        effectiveStartedAt: params.now,
+        effectiveStartedAt: current.effectiveStartedAt ?? params.now,
         totalRecipients: snapshot.recipients.length,
         blockedCount: snapshot.blockedCount,
         chunkCount: recipientChunks.length,

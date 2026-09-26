@@ -1,5 +1,49 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+## Inicio efetivo e ensaio operacional local — 2026-09-26
+
+Status: LOCAL ROLLOUT / SUSPENDED ROLLBACK REHEARSED; NOT DEPLOYED / OWNER UI PENDING.
+Base `fedef1e1965aa6a1e53222426c6b55424e2d83fa`, branch
+`review/campaign-recovery-20260926`; historico e owner PASS anteriores preservados.
+
+- `effectiveStartedAt` passa a ser preenchido somente quando nulo, sob lock do
+  grupo; materializacao/recuperacao preservam o valor. `job.startedAt` continua
+  informando o claim do lote/tentativa, ja exposto pela API/UI. Nenhum ajuste visual.
+- Testes focados: os dois casos reproduziram a sobrescrita e passaram apos a
+  correcao (2/2); fila afetada 8/8; build backend PASS. Sem repetir suites amplas,
+  build frontend ou smokes anteriores.
+- Cluster PostgreSQL local separado, `127.0.0.1:55434/re7_rollout_local`, com
+  ambiente limpo e provider em memoria. Base `6d664d0b`: 59 migrations e tres
+  campanhas antigas; migrate deploy aplicou apenas a fila, totalizando 60.
+  Campanhas antigas preservadas; checksum da migration conferido com Prisma.
+- Falha injetada apos migration/antes da ativacao: runtime sem permissao de
+  campanhas e admissao fechada; zero jobs criados. Banco migrado foi mantido.
+- Codigo novo processou fila; pausa drenou uma chamada com aceite conhecido.
+  Morte de outro processo apos submissao, antes da resposta local, deixou uma
+  pendencia explicitamente marcada needs_review. Snapshot sem filhos sobreviveu
+  a interrupcao e alteracao do CRM.
+- Rollback ensaiado **com processamento suspenso**, ingresso HTTP em manutencao
+  e papel runtime sem privilegios nas tabelas. Runner real de `6d664d0b` recebeu
+  permission denied; zero provider. Jobs, leases, snapshots, resultados e demais
+  registros permaneceram iguais no intervalo do rollback. Health nao foi usado
+  como prova de rollback funcional; o backend antigo nao e uma alternativa de envio.
+- Retorno exclusivo ao novo codigo: dois grupos completos, quatro aceites
+  conhecidos, uma submissao incerta ainda retida e zero duplicacoes entre cinco
+  submissoes simuladas. Todos os jobs/eventos anteriores e o inicio original dos
+  grupos foram preservados. Admissao permaneceu fechada ao final do ensaio.
+- Drift: 16 objetos do inventario anterior identicos antes/depois; diff somente
+  leitura igual ao ja registrado, sem diferenca nas tabelas de fila. Nao impede
+  este rollout aditivo, desde que defaults/indices/constraints sejam preservados.
+  Nenhuma correcao incidental de drift, down migration, reset ou limpeza de filas.
+
+Procedimento, condicoes de parada e limites: RUNBOOK_WHATSAPP_AGENT.md, secao
+"Ensaio operacional local da fila — procedimento executado". Evidencias preservadas
+em `local-evidence/recovery/rollout-local/`, incluindo tres dumps e manifestos.
+Pendencias para decisao: validar cercas/permissoes e parada de todas as instancias
+no ambiente alvo, reconciliacao de pendencias incertas, owner UI e aceite CRA.
+Nao houve deploy, banco/provider de producao ou envio real. DELIVERED/READ →
+Conversation/HUMAN/WAITING continua separado; reparo 6683 CLOSED.
+
 ## Correcoes da revisao Git 109c9f15 — 2026-09-26
 
 Status: LOCAL REVIEW FIXES VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
@@ -724,3 +768,146 @@ Backup pre-Git: `local-evidence/recovery/git-review/`, incluindo os deltas contr
 - Rollback operacional ainda nao ensaiado: antes de qualquer publicacao futura,
   registrar jobs/leases e aceites, interromper admissao e tratar chamadas em voo.
   Nao reverter schema ou limpar filas/snapshots para reexecutar envios aceitos.
+
+## Ensaio operacional local da fila — procedimento executado
+
+Esta secao substitui a pendencia de **ensaio local**, preservando os registros
+anteriores. Nao atesta rollback funcional com envio nem valida a infraestrutura
+de producao. O codigo antigo usado foi `6d664d0b` (anterior a fila); o novo foi
+`fedef1e1` com a correcao de inicio efetivo desta revisao.
+
+### Preparacao e isolamento
+
+Executado no worktree persistente
+`/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926`.
+Cluster exclusivo PostgreSQL 16, TCP somente 127.0.0.1:55434, DB
+`re7_rollout_local`; socket curto `/tmp/re7-rollout-socket-20260926`.
+O primeiro caminho de socket excedia 107 bytes e foi corrigido antes da criacao
+do banco; os logs dessa tentativa foram preservados. Nenhum DB anterior foi usado
+como destino de restore/reset. Dados do ensaio permanecem preservados.
+
+O harness versionado `apps/whatsapp-agent/scripts/campaign-rollout-rehearsal.ts`
+recusa outro host/porta/DB, parametros extras de URL, usuario ou cwd. Exige
+`LOCAL_CAMPAIGN_REHEARSAL=synthetic-only`; usa segredo/credenciais falsos, respostas
+em memoria e bloqueio de fetch/HTTP externo. O launcher usa ambiente sem variaveis
+herdadas, exceto PATH. O papel `rollout_runtime` nao e owner/superuser nem herda
+permissoes; `rollout_owner` e exclusivo da administracao deste cluster sintetico.
+
+Para repetir, usar outro worktree/diretorio de evidencias novo e uma instancia
+local livre na porta reservada; **nao apagar o ensaio existente**. Com dependencias
+ja instaladas no worktree, preparar o equivalente aos comandos abaixo:
+
+```bash
+task_worktree="$PWD"
+task_evidence="$task_worktree/local-evidence/recovery/rollout-local"
+# Exigir destino inexistente e porta livre; abortar se ja houver PG_VERSION/DB.
+mkdir -p "$task_evidence/old-source" "$task_evidence/runtime" /tmp/re7-rollout-socket-20260926
+git archive 6d664d0b apps/whatsapp-agent/src apps/whatsapp-agent/prisma | tar -x -C "$task_evidence/old-source"
+ln -s "$task_worktree/apps/whatsapp-agent/node_modules" "$task_evidence/old-source/apps/whatsapp-agent/node_modules"
+/usr/lib/postgresql/16/bin/initdb -D "$task_evidence/pgdata" --username=rollout_owner --auth=trust --encoding=UTF8 --no-locale
+/usr/lib/postgresql/16/bin/pg_ctl -D "$task_evidence/pgdata" -l "$task_evidence/postgres.log" -o '-p 55434 -h 127.0.0.1 -k /tmp/re7-rollout-socket-20260926' start
+createdb -h 127.0.0.1 -p 55434 -U rollout_owner re7_rollout_local
+env -i PATH="$PATH" DATABASE_URL=postgresql://rollout_owner@127.0.0.1:55434/re7_rollout_local "$task_worktree/apps/whatsapp-agent/node_modules/.bin/prisma" migrate deploy --schema "$task_evidence/old-source/apps/whatsapp-agent/prisma/schema.prisma"
+rehearse_phase() {
+  (cd "$task_evidence/runtime" && env -i PATH="$PATH" DATABASE_URL="postgresql://$2@127.0.0.1:55434/re7_rollout_local" LOCAL_CAMPAIGN_REHEARSAL=synthetic-only ENABLE_TENANTS_JSON_FALLBACK=false "$task_worktree/apps/whatsapp-agent/node_modules/.bin/tsx" "$task_worktree/apps/whatsapp-agent/scripts/campaign-rollout-rehearsal.ts" "$1")
+}
+rehearse_phase seed-base rollout_owner
+pg_dump -h 127.0.0.1 -p 55434 -U rollout_owner -Fc -f "$task_evidence/base-before-migration.dump" re7_rollout_local
+env -i PATH="$PATH" DATABASE_URL=postgresql://rollout_owner@127.0.0.1:55434/re7_rollout_local "$task_worktree/apps/whatsapp-agent/node_modules/.bin/prisma" migrate deploy --schema "$task_worktree/apps/whatsapp-agent/prisma/schema.prisma"
+rehearse_phase after-migration rollout_owner
+```
+
+### Sequencia de falha, suspensao e recuperacao
+
+Cada fase deve gravar log proprio. Interromper imediatamente diante de resultado
+inesperado; nao prosseguir para grant/resume se uma assert falhar. As saidas 72/73
+abaixo sao falhas deliberadas, verificadas pelo operador, nao erros a ignorar.
+
+1. `startup-fault rollout_runtime`: saida **72** esperada apos comprovar que o
+   runtime ainda nao pode consultar Campaign. Migration permanece aplicada; tres
+   campanhas antigas iguais, zero jobs. Falha de startup nao autoriza ativar o
+   runner antigo sobre o schema novo.
+2. `grant rollout_owner`, depois `drain rollout_runtime`: liberar somente o
+   runtime novo. Processar fila real com provider em memoria. Fechar ingresso
+   para todas as rotas, exceto health, pausar conjunto e aguardar retorno da
+   chamada em voo; um aceite conhecido permanece auditado. Interromper controlador
+   dinamico apos persistir snapshot, pausar e alterar o CRM de teste.
+3. `uncertain-crash rollout_runtime`: saida **73** esperada, terminando realmente
+   o processo apos submissao simulada e antes da resposta. O ledger do provider
+   e uma evidencia externa simulada, nao um aceite inventado no Event local.
+4. `fence rollout_owner`: marcar o job incerto via operacao needs_review, sem
+   reenfileirar. Revogar privilegios de tabelas/sequences do runtime e preservar
+   `rollback-preserved.json`; gerar `suspended-before-rollback.dump` com pg_dump.
+   Em ambiente alvo: fechar ingresso em todas as instancias, desabilitar
+   `CAMPAIGN_SCHEDULE_PROCESSOR_DISABLED=true`, parar workers/instancias e
+   confirmar inexistencia de conexoes/sessoes antigas antes de trocar versao.
+5. `old-probe rollout_runtime`: importar e invocar o runner real de `6d664d0b`;
+   a consulta e negada pelo DB. `verify-fence rollout_owner` compara todas as
+   campanhas, grupos, jobs, leases, eventos e outbound ao manifesto suspenso.
+   Resultado observado: igualdade integral e zero chamadas de provider.
+6. Confirmar processo antigo encerrado e zero conexoes `rollout_runtime` em
+   pg_stat_activity. Somente entao `grant rollout_owner` e
+   `resume-new rollout_runtime`. O controlador espera sua lease real expirar;
+   o snapshot anterior e reutilizado, sem apagar jobs, eventos ou tabelas.
+   Retomar apenas grupos sem incerteza; o grupo needs_review continua bloqueado.
+7. `verify-final rollout_runtime`: conferir quatro aceites conhecidos, uma
+   pendencia incerta, inicio original de todos os grupos e cinco rotas HTTP em
+   503, sem alteracao de estado. Gerar `after-return-new.dump`. Reabertura de
+   admissao nao foi automatizada nem executada neste ensaio.
+
+**Limite do rollback:** processamento de campanhas fica SUSPENSO. O ensaio usou
+manutencao de toda a API, exceto a passagem de health, e revogacao de acesso do
+runtime a todas as tabelas. Nao se declara disponibilidade funcional do backend
+antigo. Apenas desligar o scheduler e insuficiente: envio manual/API pode existir.
+Se o runtime alvo for owner/superuser, compartilhar credenciais privilegiadas ou
+possuir outro caminho de ingresso/provider sem bloqueio, **parar o rollout** ate
+haver cerca equivalente comprovada. Nao executar down migration/drop/reset nem
+restaurar dump anterior sobre aceites posteriores. Dumps servem para preservacao
+forense/recuperacao isolada, nunca para apagar historico e liberar reenvio.
+
+**Condicoes de parada:** migration falha/checksum divergente; perda das campanhas
+antigas; entrada de campanha durante manutencao; processo/conexao antiga viva;
+provider real acessivel; quebra de exclusividade; snapshot ilegivel; resultado
+incerto; duplicacao; divergencia de IDs/payloads no intervalo suspenso. Manter
+admissao fechada, salvar evidencias e investigar. Resultado incerto exige
+reconciliacao operacional com fonte autorizada; nunca converter em queued por
+expiracao da lease. A unica recuperacao automatica ensaiada e a do controlador
+sem chamada a provider, preservando o snapshot.
+
+### Drift: decisao por objeto e evidencia
+
+O inventario anterior permanece a referencia; o SQL de diff **nao foi aplicado**.
+`drift-before.json` e `drift-after.json` sao identicos nos 16 objetos abaixo.
+`drift-readonly.sql` coincide integralmente com o diff historico; nao ha diferenca
+nas quatro tabelas da fila. A migration aplicada foi exclusivamente aditiva.
+
+| Objetos historicos | Impedem este rollout? | Evidencia/condicao |
+|---|---|---|
+| Client.id, WaPhoneNumber.id, Contact.id, Conversation.id, Message.id, Event.id, InboundMessage.id, OutboundMessage.id | Nao | Oito defaults SQL gen_random_uuid preservados; IDs/FKs UUID aceitos no seed antigo e no processamento novo. Nao remover defaults para alinhar diff. |
+| AgentAvailability.updatedAt, ChatbotFlow.updatedAt, DepartmentBusinessHour.updatedAt, UserDepartmentMembership.updatedAt | Nao | Quatro defaults CURRENT_TIMESTAMP intactos; nova migration nao toca essas tabelas. Prisma @updatedAt continua compativel com defaults SQL. |
+| SearchIndex_searchVector_idx | Nao | GIN existente preservado no catalogo; fila nao exige sua remocao. |
+| WebhookEndpoint_clientId_signingSecretKeyVersion_idx | Nao | Indice adicional preservado, sem alteracao de consulta/estrutura. |
+| Department_operationalQueue_fkey | Nao | Definicao relacional identica; diferenca e o nome inferido pelo schema. |
+| CompletedServiceSnapshot_clientId_departmentId_assignedUserId_c | Nao | Colunas/definicao identicas; diferenca e o nome inferido do indice. |
+
+Essa conclusao vale para o rollout aditivo ensaiado sobre as 59 migrations
+anteriores, mantendo o catalogo existente. Nao autoriza aplicar o diff de drift,
+nem presume que um banco alvo desconhecido tenha o mesmo catalogo. Conferencia
+somente leitura do alvo e das permissoes/rotas de operacao permanece uma condicao
+para eventual decisao de implantacao, fora do escopo local autorizado.
+
+### Resultados e limites comprovados
+
+- Migrations 59 → 60 via Prisma; tres campanhas antigas preservadas.
+- Falha de startup 72; falha em voo 73; nenhum estado apagado para recuperar.
+- Admissao 503, rollback antigo sem acesso a Campaign e sem provider.
+- Retorno novo: dois grupos completos, cinco submissoes unicas simuladas,
+  quatro aceites locais conhecidos e uma pendencia needs_review retida.
+- Snapshot/variavel original preservados apesar da mudanca no CRM; IDs de jobs
+  e eventos anteriores preservados; inicios efetivos dos grupos inalterados.
+- 2/2 testes de horario/recuperacao, 8/8 fila e build backend PASS. UI ja usa
+  job.startedAt por lote; nenhum smoke visual/build frontend repetido.
+- Limites: uma instancia/cluster local, provider simulado, sem prova de capacidade,
+  HA, fences de producao, entrega real ou rollback com processamento ativo.
+  Owner UI e aceite CRA continuam pendentes; NOT DEPLOYED. Divergencia
+  DELIVERED/READ → HUMAN/WAITING separada; 6683 CLOSED.

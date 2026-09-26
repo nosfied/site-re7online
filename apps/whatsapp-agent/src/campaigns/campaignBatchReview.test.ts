@@ -207,6 +207,7 @@ test("review dynamic controller resumes without children and reuses snapshot acr
   assert.deepEqual((await prisma.campaignExecutionBatchCampaign.findMany({ where: { batchId: f.batch.id } })).map((link) => link.campaignId), children.map((link) => link.campaignId));
   assert.equal(await prisma.campaignExecutionJob.count({ where: { batchId: f.batch.id, campaignId: { not: null } } }), 1);
   assert.equal(await prisma.event.count({ where: { clientId: f.c.id, eventName: "campaign.dynamic_batch_snapshot.created" } }), 1);
+  assert.equal((await prisma.campaignExecutionBatch.findUniqueOrThrow({ where: { id: f.batch.id } })).effectiveStartedAt?.toISOString(), f.now.toISOString(), "materialization/recovery must preserve the first controller claim");
   assert.equal(providerCalls, 0);
 });
 
@@ -224,4 +225,25 @@ test("review concurrent claims have one tenant winner and test-send cannot take 
   assert.equal(second?.batchId, f.batch.id);
   assert.equal(second?.chunkIndex, 2);
   await finishCampaignExecutionJob({ clientId: f.c.id, jobId: second!.id, leaseToken: second!.leaseToken, status: "completed" });
+});
+
+
+test("group first effective start survives chunk claims and pause/resume; job starts remain individual", async (t) => {
+  const f = await fixture(t);
+  const first = await f.child(1, ["5541941000501"]);
+  await f.child(2, ["5541941000502"]);
+  const one = await claimNextCampaignExecutionJob({ now: f.now });
+  assert.equal(one?.batchId, f.batch.id);
+  await prisma.campaign.update({ where: { id: first.id }, data: { status: "completed" } });
+  await finishCampaignExecutionJob({ clientId: f.c.id, jobId: one!.id, leaseToken: one!.leaseToken, status: "completed" });
+  assert.equal((await f.action("pause")).ok, true);
+  assert.equal((await f.action("resume")).ok, true);
+  const secondStart = new Date(f.now.getTime() + 20000);
+  const two = await claimNextCampaignExecutionJob({ now: secondStart });
+  assert.equal(two?.chunkIndex, 2);
+  const batch = await prisma.campaignExecutionBatch.findUniqueOrThrow({ where: { id: f.batch.id } });
+  assert.equal(batch.effectiveStartedAt?.toISOString(), f.now.toISOString());
+  const jobs = await prisma.campaignExecutionJob.findMany({ where: { batchId: f.batch.id }, orderBy: { chunkIndex: "asc" } });
+  assert.deepEqual(jobs.map((job) => job.startedAt?.toISOString()), [f.now.toISOString(), secondStart.toISOString()]);
+  await finishCampaignExecutionJob({ clientId: f.c.id, jobId: two!.id, leaseToken: two!.leaseToken, status: "completed" });
 });

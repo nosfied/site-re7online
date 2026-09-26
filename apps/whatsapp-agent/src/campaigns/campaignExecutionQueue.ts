@@ -244,8 +244,13 @@ export async function claimNextCampaignExecutionJob(params: {
         return null;
       }
       if (candidate.batchId) {
+        // The batch lock serializes the first start; later chunks/retries keep it.
+        await tx.campaignExecutionBatch.updateMany({
+          where: { id: candidate.batchId, effectiveStartedAt: null },
+          data: { effectiveStartedAt: now },
+        });
         await tx.campaignExecutionBatch.update({ where: { id: candidate.batchId }, data: {
-          status: "running", effectiveStartedAt: now, currentChunkIndex: candidate.chunkIndex,
+          status: "running", currentChunkIndex: candidate.chunkIndex,
         } });
       }
       return {

@@ -1,5 +1,49 @@
 # Product Map Current
 
+## Inicio efetivo e ensaio operacional local — 2026-09-26
+
+Status: LOCAL ROLLOUT / SUSPENDED ROLLBACK REHEARSED; NOT DEPLOYED / OWNER UI PENDING.
+Base `fedef1e1965aa6a1e53222426c6b55424e2d83fa`, branch
+`review/campaign-recovery-20260926`; historico e owner PASS anteriores preservados.
+
+- `effectiveStartedAt` passa a ser preenchido somente quando nulo, sob lock do
+  grupo; materializacao/recuperacao preservam o valor. `job.startedAt` continua
+  informando o claim do lote/tentativa, ja exposto pela API/UI. Nenhum ajuste visual.
+- Testes focados: os dois casos reproduziram a sobrescrita e passaram apos a
+  correcao (2/2); fila afetada 8/8; build backend PASS. Sem repetir suites amplas,
+  build frontend ou smokes anteriores.
+- Cluster PostgreSQL local separado, `127.0.0.1:55434/re7_rollout_local`, com
+  ambiente limpo e provider em memoria. Base `6d664d0b`: 59 migrations e tres
+  campanhas antigas; migrate deploy aplicou apenas a fila, totalizando 60.
+  Campanhas antigas preservadas; checksum da migration conferido com Prisma.
+- Falha injetada apos migration/antes da ativacao: runtime sem permissao de
+  campanhas e admissao fechada; zero jobs criados. Banco migrado foi mantido.
+- Codigo novo processou fila; pausa drenou uma chamada com aceite conhecido.
+  Morte de outro processo apos submissao, antes da resposta local, deixou uma
+  pendencia explicitamente marcada needs_review. Snapshot sem filhos sobreviveu
+  a interrupcao e alteracao do CRM.
+- Rollback ensaiado **com processamento suspenso**, ingresso HTTP em manutencao
+  e papel runtime sem privilegios nas tabelas. Runner real de `6d664d0b` recebeu
+  permission denied; zero provider. Jobs, leases, snapshots, resultados e demais
+  registros permaneceram iguais no intervalo do rollback. Health nao foi usado
+  como prova de rollback funcional; o backend antigo nao e uma alternativa de envio.
+- Retorno exclusivo ao novo codigo: dois grupos completos, quatro aceites
+  conhecidos, uma submissao incerta ainda retida e zero duplicacoes entre cinco
+  submissoes simuladas. Todos os jobs/eventos anteriores e o inicio original dos
+  grupos foram preservados. Admissao permaneceu fechada ao final do ensaio.
+- Drift: 16 objetos do inventario anterior identicos antes/depois; diff somente
+  leitura igual ao ja registrado, sem diferenca nas tabelas de fila. Nao impede
+  este rollout aditivo, desde que defaults/indices/constraints sejam preservados.
+  Nenhuma correcao incidental de drift, down migration, reset ou limpeza de filas.
+
+Procedimento, condicoes de parada e limites: RUNBOOK_WHATSAPP_AGENT.md, secao
+"Ensaio operacional local da fila — procedimento executado". Evidencias preservadas
+em `local-evidence/recovery/rollout-local/`, incluindo tres dumps e manifestos.
+Pendencias para decisao: validar cercas/permissoes e parada de todas as instancias
+no ambiente alvo, reconciliacao de pendencias incertas, owner UI e aceite CRA.
+Nao houve deploy, banco/provider de producao ou envio real. DELIVERED/READ →
+Conversation/HUMAN/WAITING continua separado; reparo 6683 CLOSED.
+
 ## Correcoes da revisao Git 109c9f15 — 2026-09-26
 
 Status: LOCAL REVIEW FIXES VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
