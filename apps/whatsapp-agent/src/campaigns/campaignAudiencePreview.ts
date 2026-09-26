@@ -250,6 +250,7 @@ export async function buildCampaignAudiencePreviewPayload(
     statuses: params.statuses,
     now: params.now,
     includeAnonymized: true,
+    audienceAnalysisLimit: MAX_ANALYSIS_ITEMS,
   });
 
   const totalPages = firstPage.pagination.totalPages;

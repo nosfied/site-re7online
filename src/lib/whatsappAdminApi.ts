@@ -524,6 +524,62 @@ export type CampaignItem = {
     blockedCount: number;
     pendingCount: number;
   };
+  executionQueue?: {
+    jobId: string;
+    status: string;
+    kind: string;
+    eligibleAt: string;
+    requestedAt: string;
+    startedAt: string | null;
+    finishedAt: string | null;
+    failureReason: string | null;
+    position: number | null;
+    batchId: string | null;
+    batchStatus: string | null;
+    batchName: string | null;
+    chunkIndex: number | null;
+    chunkCount: number | null;
+  } | null;
+  executionBatch?: {
+    id: string;
+    name: string;
+    sourceMode: string;
+    status: string;
+    requestedAt: string | null;
+    eligibleAt: string | null;
+    effectiveStartedAt: string | null;
+    completedAt: string | null;
+    totalRecipients: number;
+    blockedCount: number;
+    chunkCount: number;
+    currentChunkIndex: number | null;
+    failureReason: string | null;
+    progress: {
+      totalRecipients: number;
+      sentCount: number;
+      blockedCount: number;
+      pendingCount: number;
+      completedChunks: number;
+      runningChunks: number;
+      queuedChunks: number;
+      failedChunks: number;
+    };
+    chunks: Array<{
+      campaignId: string;
+      name: string;
+      status: string;
+      chunkIndex: number;
+      recipientCount: number;
+      sentCount: number;
+      blockedCount: number;
+      totalRecipients: number;
+      queueStatus: string | null;
+      queuePosition: number | null;
+      startedAt: string | null;
+      finishedAt: string | null;
+      failureReason: string | null;
+    }>;
+  } | null;
   metaSummary?: {
     totalSent: number;
     totalDelivered: number;

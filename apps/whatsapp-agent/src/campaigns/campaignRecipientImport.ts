@@ -545,17 +545,17 @@ export async function resolveCampaignRecipientImportPlan(
 
   const lifecycleLookupKeys = Array.from(new Set(normalizedCandidates.flatMap((item) => item.identityCandidates).filter(Boolean)));
   const existingContacts = lifecycleLookupKeys.length
-    ? await prisma.contact.findMany({
+    ? (await Promise.all(Array.from({ length: Math.ceil(lifecycleLookupKeys.length / 1000) }, (_, index) => prisma.contact.findMany({
         where: {
           clientId: params.clientId,
           OR: [
-            { waId: { in: lifecycleLookupKeys } },
-            { externalUserRef: { in: lifecycleLookupKeys } },
-            { legacyWaId: { in: lifecycleLookupKeys } },
+            { waId: { in: lifecycleLookupKeys.slice(index * 1000, (index + 1) * 1000) } },
+            { externalUserRef: { in: lifecycleLookupKeys.slice(index * 1000, (index + 1) * 1000) } },
+            { legacyWaId: { in: lifecycleLookupKeys.slice(index * 1000, (index + 1) * 1000) } },
           ],
         },
         select: { waId: true, externalUserRef: true, legacyWaId: true, lifecycle: true, operationallyExcludedAt: true },
-      })
+      })))).flat()
     : [];
   const operationallyExcludedWaIds = await loadOperationallyExcludedWaIds(prisma, {
     clientId: params.clientId,

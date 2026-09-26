@@ -1,5 +1,37 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
+## Persistencia para revisao Git — 2026-09-26
+
+Status desta frente: TECHNICAL LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+Branch dedicada `review/campaign-recovery-20260926`, com parent/base `6d664d0b9ffcf52f5315bfeca96f0622f4d25792`.
+A base de reconstrucao foi `5d925973`; os 80 acrescimos documentais de `6d664d0b`
+foram conferidos e seu historico permanece ancestral. O owner PASS do lote anterior
+(normalizacao/settings/contraste, head funcional `5ee2de6b`) continua OWNER VALIDATED / CLOSED;
+nao se estende automaticamente a esta frente de lotes/fila.
+
+Delta e fontes foram arquivados antes da troca de branch. Reaplicacao sobre `6d664d0b`
+restaurou os mesmos 23 arquivos, com hashes conferidos; nao houve conflito funcional,
+reset/clean ou alteracao da branch original. Implementacao, testes, schema/migration,
+os quatro docs e este runbook compoem o escopo; .data, evidencias, dumps, arquivos
+compactados, credenciais e fixtures de ambiente ficam fora do Git.
+
+As 18 anotacoes UUID correspondem a tipos SQL ja existentes, sem ALTER TYPE novo.
+O inventario por objeto e impacto do drift residual anterior esta no
+`docs/RUNBOOK_WHATSAPP_AGENT.md`, secao "Drift historico residual — revisao da fila".
+Nenhum desses defaults, indices ou nomes foi corrigido nesta frente.
+
+Validacao preservada: fila/runner/rotas 144/144, apoio 41/41 e rechecagem dos casos
+falhos 4/4; builds e Prisma validados anteriormente. Sem repeticao de testes/builds
+porque esta persistencia nao muda comportamento funcional. Staging e whitespace
+sao conferidos separadamente. CI versionada: push apenas main/develop; PR apenas
+com destino main/develop. `vercel.json` bloqueia auto-deploy somente desta branch
+via git.deploymentEnabled=false para seu nome exato; demais branches inalteradas.
+Push de revisao nao autoriza merge, deploy, producao DB, provider ou envio real.
+
+Pendencias: ensaio operacional de rollout/rollback, drift residual anterior,
+owner UI e aceite CRA. Divergencia DELIVERED/READ → Conversation/HUMAN/WAITING
+permanece separada e sem alteracao funcional. Reparo 6683 continua CLOSED.
+
 ## Objetivo
 Padronizar o fluxo manual-controlado do `apps/whatsapp-agent` no modelo atual:
 
@@ -448,6 +480,51 @@ Observacao:
 - rollback de codigo nao reverte automaticamente migration destrutiva
 - se o patch tiver migration sensivel, avaliar impacto antes do deploy
 
+## Campanhas - fila por tenant e execucao incerta
+
+Quando a fila duravel de campanhas por tenant estiver habilitada, uma execucao
+`running` com resultado incerto nao deve ser liberada apenas por expiracao de
+lease. O tenant permanece bloqueado para novas campanhas/test-send ate:
+
+1. o runner finalizar o job normalmente; ou
+2. uma revisao operacional classificar o job como `needs_review`, registrando
+   motivo auditavel e liberando a lease sem reenviar automaticamente o trabalho.
+
+Esse procedimento preserva a regra de nao executar duas campanhas simultaneas
+para o mesmo tenant e evita reenvio automatico quando o processo caiu durante ou
+logo apos uma chamada ao provider. Antes de classificar `needs_review`, conferir
+logs, OutboundMessage/resultados ja persistidos, eventos tecnicos, estado do
+provider quando disponivel e ausencia de runner ativo com posse valida. Apos a
+classificacao, a campanha deve aparecer como "Revisao operacional" na lista,
+com o motivo do bloqueio. A retomada/reexecucao deve ser decidida por gate
+operacional separado, nunca por retry automatico cego.
+
+Se o provider retornar sucesso/aceite e o executor perder a lease antes de
+continuar, preservar primeiro a evidencia ja recebida de forma idempotente
+(`OutboundMessage`, eventos e contadores aplicaveis) e impedir novas chamadas
+do executor antigo. O proximo job do tenant so deve iniciar depois que o estado
+do job atual estiver terminal ou classificado para revisao operacional. Nao
+reenviar destinatario aceito apenas porque a lease expirou ou mudou de token.
+
+Validacao local de integracao UI/API em 2026-09-26: o detalhe de campanha passa
+a carregar `executionBatch` para exibir conjunto, chunks numerados, progresso
+agregado/por lote, fila do tenant, horarios e motivos operacionais. Evidencia
+tecnica: `campaignExecutionQueue` 8/8, `campaignRunner` 10/10,
+`campaignsFeatureRoutes` 125/125, `campaignsPageContract` 29/29, backend build,
+frontend build e `git diff --check` passaram. Smoke autenticado por API em
+portas isoladas confirmou SUPERVISOR/ADMIN lendo um conjunto local de
+3.001 destinatarios / quatro chunks e AGENT recebendo 403; a evidencia
+sanitizada fica em `local-evidence/20260926-batch-ui-smoke/` e nao deve ser
+versionada. Smoke visual estrito permanece pendente quando nao houver
+	automacao disponivel; nesta frente foi possivel usar Chrome headless/CDP para
+	validar detalhe do conjunto em desktop/tela estreita, SUPERVISOR/ADMIN
+	autorizados e AGENT restrito. Complemento local tambem clicou pause/resume/cancel
+	agregado e confirmou persistencia no DB local. Isso nao substitui smoke visual
+	completo de criacao agrupada CRM/CSV nem toast de test-send ocupado por clique
+	de UI. Em validacoes locais, evitar subir o processador de agendamento
+com fixtures cujo `eligibleAt` ja venceu, pois ele pode consumir a fila local
+antes do smoke visual.
+
 ## Observacoes praticas
 - Compare link pode continuar sendo usado para revisao rapida, mas nao substitui o registro do commit exato deployado.
 - O repositorio da VPS continua em:
@@ -468,3 +545,117 @@ Observacao:
 - deploy manual na VPS
 - valide `/health` e o fluxo afetado
 - registre branch, commit, horario e resultado
+
+## Recuperacao local apos reboot — campanhas em lotes, 2026-09-26
+
+O worktree de desenvolvimento em `/tmp` foi perdido. O delta foi reconstruido
+por edicoes registradas na sessao e deve permanecer em caminho persistente:
+`tmp/worktrees/re7-campaign-recovery-20260926`, dentro do checkout principal.
+Nao confiar em `/tmp` para preservar codigo, banco, fixtures ou evidencias.
+O checkout principal e o trabalho pausado de Guided Builder foram preservados.
+
+A validacao local usou frontend 127.0.0.1:3062, API 127.0.0.1:3008 e PostgreSQL
+127.0.0.1:55432. O harness local bloqueia fetch externo e nao inicia scheduler
+periodico. Para snapshot dinamico, executar apenas um job de materializacao
+com relogio de teste; verificar zero outbound e zero chamadas externas antes
+de liberar qualquer etapa seguinte. Nao copiar configuracao sintetica para
+producao. Scripts, fixture e dados locais nao devem ser versionados.
+
+Para retomar, usar `start-api.sh` e `start-front.sh` em `local-evidence/recovery/`.
+O banco correto e `re7_recovery_audit`, criado por migrations no PostgreSQL local
+127.0.0.1:55432. As copias `re7_recovery_smoke` e `re7_recovery_regression` foram
+preservadas como evidencias do erro de setup; nao sao baseline de schema nem destino
+para o Client alinhado. Nao usar schema.test/compat, db push, reset ou SQL manual.
+Em outro banco local vazio, executar `DATABASE_URL=<URL_LOCAL_ISOLADA> npm --prefix
+apps/whatsapp-agent run db:deploy`, seguido de db:generate. Conferir todos os
+checksums de `_prisma_migrations` e o schema incorporado no Client antes dos testes.
+Os defaults/indices historicos listados no diff de auditoria nao foram removidos.
+O migrate deploy valida a migration; ensaio operacional de rollout/rollback e separado.
+
+Fechamento: os quatro fluxos UI/DB passaram (CRM estatico/dinamico, CSV,
+agendamento/pausa/retomada/cancelamento agregado, test-send ocupado). Consultar
+`RESULT_REPORT.md` e `result-summary.json` no diretorio local de evidencias.
+O delta continua sem commit/push/deploy. Owner validation, aceite CRA, ensaio
+operacional de rollout/rollback e decisao sobre materializacao DELIVERED/READ permanecem
+pendentes. Manter o reparo 6683 encerrado e webhook/runtime preservados.
+
+## Auditoria da recuperacao — 2026-09-26
+
+Status tecnico: PRONTO PARA COMMIT DE REVISAO / NOT DEPLOYED / OWNER VALIDATION PENDING.
+Esta nota atualiza o fechamento local abaixo; nao declara prontidao para deploy ou aceite CRA.
+
+- Worktree persistente: `/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926`. HEAD detached `5d9259739754816d570470a30d52eb7eb53541bc`;
+  referencia do ultimo HEAD anterior `6d664d0b9ffcf52f5315bfeca96f0622f4d25792`
+  (branch original `zero-eligible-crm-eligibility-20260923`). Nao houve novo commit.
+- Integridade: SHA-256 do patch e tar original conferidos; ambos coincidiam com
+  o codigo no inicio desta auditoria. Replay independente das edicoes historicas
+  confirmou migration, fila, runner e testes. API/UI e consultas CRM receberam
+  as correcoes posteriores discriminadas em `local-evidence/recovery/audit/`.
+  Nao existe snapshot integral do filesystem anterior: DB e capturas perdidos
+  nao sao declarados recuperados byte a byte. Comportamentos criticos foram testados.
+- Falhas fechadas: `CompletedServiceSnapshot.clientId` text versus cast SQL uuid;
+  joins Client.id/WaPhoneNumber.clientId e Conversation.id/ConversationMetrics.conversationId
+  com uuid/text na copia parcialmente criada. Banco novo `re7_recovery_audit`,
+  127.0.0.1:55432, criado exclusivamente por `prisma migrate deploy`, corrigiu o ambiente.
+  A fixture de agendamento ja teve o `idempotencyKey` obrigatorio reposto na retomada.
+  Nenhuma assertion removida ou relaxada; concorrencia preservada.
+- Schema: 18 anotacoes `@db.Uuid` alinhadas aos tipos das migrations existentes;
+  Prisma Client 6.19.2 regenerado e semanticamente correspondente. SQL da fila intacto.
+  Diff somente leitura ainda registra defaults, indices e nomes historicos;
+  nao foi aplicado e nao ha diferenca de tipos ou estrutura da fila nesse diff.
+- Migration validada: registro anterior de 60 migrations PASS recuperado; novo
+  `migrate deploy` 60/60 PASS necessario porque o DB de teste recuperado havia
+  sido substituido por schemas divergentes. Checksums de 60 SQLs iguais ao ledger.
+  "Ensaio pendente" dizia respeito a rollout/rollback operacional, nao a falha
+  da migration. Nao foi usado db push, reset ou SQL manual nesta auditoria.
+- Testes finais: casos anteriormente falhos 4/4; fila 8/8 + runner 10/10 + rotas
+  126/126 = 144/144; importacao/exclusao/contratos UI 41/41; zero skips/falhas.
+  Backend build e prisma validate/generate PASS. Build frontend anterior preservado
+  porque UI nao mudou nesta auditoria. Os quatro smokes aprovados nao foram repetidos.
+- Contratos: 3.001 → quatro lotes, snapshot unico, variaveis CRM/CSV, isolamento por
+  tenant/exclusividade, scheduler concorrente, retomada, aceite apos perda de lease
+  e bloqueios antes do provider cobertos. Provider apenas simulado nos testes.
+- Pendencias efetivas: rollout/rollback operacional, drift residual historico de
+  defaults/indices, owner validation, aceite CRA e decisao de dominio DELIVERED/READ →
+  Conversation/HUMAN/WAITING. Divergencia de dominio permanece separada e sem alteracao
+  funcional; 6683 segue encerrado. Sem commit/push/deploy, producao DB ou envio real.
+
+## Drift historico residual — revisao da fila
+
+Inventario do diff somente leitura entre o DB criado pelas 60 migrations e o
+schema alinhado. Todos os objetos abaixo sao anteriores a
+`20260925143000_add_campaign_execution_queue`. O diff nao foi executado.
+Nao ha ALTER TYPE nem diferenca nas quatro tabelas de batch/job/lease.
+
+| Objeto existente no SQL | Diferenca no schema / impacto de aplicar o diff incidentalmente |
+|---|---|
+| Client.id — DEFAULT gen_random_uuid() | @default(uuid()) gera UUID pelo Prisma; remover default SQL prejudicaria inserts SQL que omitem id. Default preservado. |
+| WaPhoneNumber.id — DEFAULT gen_random_uuid() | Mesmo caso; default SQL preservado. |
+| Contact.id — DEFAULT gen_random_uuid() | Mesmo caso; default SQL preservado. |
+| Conversation.id — DEFAULT gen_random_uuid() | Mesmo caso; default SQL preservado. |
+| Message.id — DEFAULT gen_random_uuid() | Mesmo caso; default SQL preservado. |
+| Event.id — DEFAULT gen_random_uuid() | Mesmo caso; default SQL preservado. |
+| InboundMessage.id — DEFAULT gen_random_uuid() | Mesmo caso; default SQL preservado. |
+| OutboundMessage.id — DEFAULT gen_random_uuid() | Mesmo caso; default SQL preservado. |
+| AgentAvailability.updatedAt — DEFAULT CURRENT_TIMESTAMP | Schema usa @updatedAt, sem default SQL declarado; retirar default mudaria inserts externos ao Prisma. Preservado. |
+| ChatbotFlow.updatedAt — DEFAULT CURRENT_TIMESTAMP | Mesmo caso; default SQL preservado. |
+| DepartmentBusinessHour.updatedAt — DEFAULT CURRENT_TIMESTAMP | Mesmo caso; default SQL preservado. |
+| UserDepartmentMembership.updatedAt — DEFAULT CURRENT_TIMESTAMP | Mesmo caso; default SQL preservado. |
+| SearchIndex_searchVector_idx — GIN(searchVector) | Indice SQL adicional, sobre coluna tsvector; removê-lo poderia degradar busca textual. Preservado. |
+| WebhookEndpoint_clientId_signingSecretKeyVersion_idx | Indice SQL adicional; removê-lo poderia degradar consultas por tenant/versao de chave. Preservado. |
+| Department_operationalQueue_fkey | Nome do SQL difere do inferido Department_clientId_id_operationalQueueId_fkey; renomeacao de catalogo, sem mudar relacao. Preservado. |
+| CompletedServiceSnapshot_clientId_departmentId_assignedUserId_c | Nome SQL difere de CompletedServiceSnapshot_clientId_departmentId_assignedUser_idx; renomeacao de catalogo, sem mudar colunas. Preservado. |
+
+As 18 anotacoes @db.Uuid apenas alinham o Client aos tipos preexistentes:
+`20260215133500_fix_uuid_ids` ja define Client.id, WaPhoneNumber.id/clientId,
+Contact.id/clientId, Conversation.id/clientId, Message.id/conversationId,
+Event.id/clientId, InboundMessage.id/clientId e OutboundMessage.id/clientId (15 campos).
+`20260412233000_add_sla_and_conversation_metrics` define
+ConversationMetrics.clientId/conversationId e SLAConfig.clientId (3 campos).
+A migration da fila permanece byte a byte igual a validada; nenhuma migration
+historica foi editada. Defaults SQL e geracao UUID no Prisma sao aspectos distintos.
+
+Evidencias locais nao versionadas: `local-evidence/recovery/audit/schema-db-diff.sql`,
+`db-uuid-columns.tsv`, `migration-checksums.json` e `validated-source-hashes.json`.
+Backup pre-Git: `local-evidence/recovery/git-review/`, incluindo os deltas contra
+5d925973 e 6d664d0b, tar dos fontes, hashes e referencia de stash mantida.

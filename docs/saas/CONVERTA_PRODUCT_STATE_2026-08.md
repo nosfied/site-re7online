@@ -1,10 +1,187 @@
 # Converta Product State - 2026-08
 
+## Persistencia para revisao Git — 2026-09-26
+
+Status desta frente: TECHNICAL LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+Branch dedicada `review/campaign-recovery-20260926`, com parent/base `6d664d0b9ffcf52f5315bfeca96f0622f4d25792`.
+A base de reconstrucao foi `5d925973`; os 80 acrescimos documentais de `6d664d0b`
+foram conferidos e seu historico permanece ancestral. O owner PASS do lote anterior
+(normalizacao/settings/contraste, head funcional `5ee2de6b`) continua OWNER VALIDATED / CLOSED;
+nao se estende automaticamente a esta frente de lotes/fila.
+
+Delta e fontes foram arquivados antes da troca de branch. Reaplicacao sobre `6d664d0b`
+restaurou os mesmos 23 arquivos, com hashes conferidos; nao houve conflito funcional,
+reset/clean ou alteracao da branch original. Implementacao, testes, schema/migration,
+os quatro docs e este runbook compoem o escopo; .data, evidencias, dumps, arquivos
+compactados, credenciais e fixtures de ambiente ficam fora do Git.
+
+As 18 anotacoes UUID correspondem a tipos SQL ja existentes, sem ALTER TYPE novo.
+O inventario por objeto e impacto do drift residual anterior esta no
+`docs/RUNBOOK_WHATSAPP_AGENT.md`, secao "Drift historico residual — revisao da fila".
+Nenhum desses defaults, indices ou nomes foi corrigido nesta frente.
+
+Validacao preservada: fila/runner/rotas 144/144, apoio 41/41 e rechecagem dos casos
+falhos 4/4; builds e Prisma validados anteriormente. Sem repeticao de testes/builds
+porque esta persistencia nao muda comportamento funcional. Staging e whitespace
+sao conferidos separadamente. CI versionada: push apenas main/develop; PR apenas
+com destino main/develop. `vercel.json` bloqueia auto-deploy somente desta branch
+via git.deploymentEnabled=false para seu nome exato; demais branches inalteradas.
+Push de revisao nao autoriza merge, deploy, producao DB, provider ou envio real.
+
+Pendencias: ensaio operacional de rollout/rollback, drift residual anterior,
+owner UI e aceite CRA. Divergencia DELIVERED/READ → Conversation/HUMAN/WAITING
+permanece separada e sem alteracao funcional. Reparo 6683 continua CLOSED.
+
+## Auditoria da recuperacao — 2026-09-26
+
+Status tecnico: PRONTO PARA COMMIT DE REVISAO / NOT DEPLOYED / OWNER VALIDATION PENDING.
+Esta nota atualiza o fechamento local abaixo; nao declara prontidao para deploy ou aceite CRA.
+
+- Worktree persistente: `/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926`. HEAD detached `5d9259739754816d570470a30d52eb7eb53541bc`;
+  referencia do ultimo HEAD anterior `6d664d0b9ffcf52f5315bfeca96f0622f4d25792`
+  (branch original `zero-eligible-crm-eligibility-20260923`). Nao houve novo commit.
+- Integridade: SHA-256 do patch e tar original conferidos; ambos coincidiam com
+  o codigo no inicio desta auditoria. Replay independente das edicoes historicas
+  confirmou migration, fila, runner e testes. API/UI e consultas CRM receberam
+  as correcoes posteriores discriminadas em `local-evidence/recovery/audit/`.
+  Nao existe snapshot integral do filesystem anterior: DB e capturas perdidos
+  nao sao declarados recuperados byte a byte. Comportamentos criticos foram testados.
+- Falhas fechadas: `CompletedServiceSnapshot.clientId` text versus cast SQL uuid;
+  joins Client.id/WaPhoneNumber.clientId e Conversation.id/ConversationMetrics.conversationId
+  com uuid/text na copia parcialmente criada. Banco novo `re7_recovery_audit`,
+  127.0.0.1:55432, criado exclusivamente por `prisma migrate deploy`, corrigiu o ambiente.
+  A fixture de agendamento ja teve o `idempotencyKey` obrigatorio reposto na retomada.
+  Nenhuma assertion removida ou relaxada; concorrencia preservada.
+- Schema: 18 anotacoes `@db.Uuid` alinhadas aos tipos das migrations existentes;
+  Prisma Client 6.19.2 regenerado e semanticamente correspondente. SQL da fila intacto.
+  Diff somente leitura ainda registra defaults, indices e nomes historicos;
+  nao foi aplicado e nao ha diferenca de tipos ou estrutura da fila nesse diff.
+- Migration validada: registro anterior de 60 migrations PASS recuperado; novo
+  `migrate deploy` 60/60 PASS necessario porque o DB de teste recuperado havia
+  sido substituido por schemas divergentes. Checksums de 60 SQLs iguais ao ledger.
+  "Ensaio pendente" dizia respeito a rollout/rollback operacional, nao a falha
+  da migration. Nao foi usado db push, reset ou SQL manual nesta auditoria.
+- Testes finais: casos anteriormente falhos 4/4; fila 8/8 + runner 10/10 + rotas
+  126/126 = 144/144; importacao/exclusao/contratos UI 41/41; zero skips/falhas.
+  Backend build e prisma validate/generate PASS. Build frontend anterior preservado
+  porque UI nao mudou nesta auditoria. Os quatro smokes aprovados nao foram repetidos.
+- Contratos: 3.001 → quatro lotes, snapshot unico, variaveis CRM/CSV, isolamento por
+  tenant/exclusividade, scheduler concorrente, retomada, aceite apos perda de lease
+  e bloqueios antes do provider cobertos. Provider apenas simulado nos testes.
+- Pendencias efetivas: rollout/rollback operacional, drift residual historico de
+  defaults/indices, owner validation, aceite CRA e decisao de dominio DELIVERED/READ →
+  Conversation/HUMAN/WAITING. Divergencia de dominio permanece separada e sem alteracao
+  funcional; 6683 segue encerrado. Sem commit/push/deploy, producao DB ou envio real.
+
+## Atualizacao de recuperacao e fechamento local — 2026-09-26
+
+Status: TECHNICAL LOCAL VALIDATED / OWNER VALIDATION PENDING / NOT DEPLOYED.
+Esta atualizacao substitui, para o smoke tecnico local, as lacunas visuais
+registradas anteriormente; preserva o historico e nao representa aceite CRA.
+
+- CRM estatico: selecao/filtro, previa e confirmacao clicados na UI; 3.001
+  destinatarios persistidos em quatro filhos (1.000 / 1.000 / 1.000 / 1).
+- CRM dinamico: estimativa e confirmacao de agendamento exercitadas na UI;
+  zero filhos antes da execucao. Uma etapa do processador com relogio local
+  controlado criou o snapshot de 3.001 destinatarios/quatro filhos, sem envio.
+- CSV: upload, mapeamento, previa e confirmacao pela UI; um unico conjunto,
+  3.001 destinatarios/quatro filhos. A UI trata a resposta agrupada; timeout
+  especifico e chave de idempotencia reutilizada protegem a repeticao local.
+- Acoes agregadas: agendamento atomico dos quatro lotes, reload, pausa,
+  retomada e cancelamento confirmados no DB. Nenhum outbound foi criado.
+- Test-send ocupado: clique real com input React preenchido, mensagem PT-BR,
+  zero chamadas adicionais ao provider simulado, zero outbound e zero job novo.
+- Corrigidos limites de parametros SQL em consultas de identidades CRM/CSV e
+  exclusao operacional; a previa de campanha deixa de limitar a contagem a
+  janela inicial de 800 contatos. Leitura de audiencia limitada a 5.000.
+- Evidencias locais: `local-evidence/recovery/result-summary.json`, capturas e
+  logs no worktree persistente `tmp/worktrees/re7-campaign-recovery-20260926`.
+  Capturas antigas que estavam somente em `/tmp` nao sobreviveram ao reboot;
+  seus resultados historicos foram recuperados do registro da sessao.
+- Resultado historico da primeira retomada: builds PASS, suites 41/41 e 43/43;
+  a suite ampla entao falhou nos bancos divergentes. Essas falhas foram diagnosticadas
+  e fechadas na auditoria acima. O drift residual de defaults/indices continua documentado.
+- Sem commit, push, deploy, banco de producao ou provider real. Guided Builder
+  permanece pausado. Owner validation, aceite CRA e ensaio controlado de
+  rollout/rollback da migration continuam pendentes.
+
+
 Status: fotografia documental do produto em agosto de 2026. Este documento nao altera runtime, configuracao, dados ou comportamento operacional.
 
 ## Visao geral
 
 O Converta e um SaaS multitenant de atendimento omnichannel para operacoes B2B e B2G. A unidade operacional principal continua sendo `Conversation`, com suporte a Inbox humano, CRM operacional, campanhas com rascunho e envio explicito, catalogo de modelos Meta, mensagens prontas, auditoria por eventos e controles LGPD.
+
+Atualizacao local de 2026-09-25: a divisao de audiencia CRM em rascunhos esta
+LOCAL PARTIAL IMPLEMENTATION / FOCUSED TEST VALIDATED / NOT DEPLOYED / OWNER UI
+PENDING. Quando a audiencia CRM escolhida ultrapassa a capacidade de 1.000
+destinatarios por campanha, o app oferece uma etapa explicita para preparar a
+divisao. O backend resolve novamente a audiencia completa do mesmo tenant, com
+ordenacao deterministica, deduplicacao, elegibilidade atual e teto de analise de
+5.000; nao usa os 25 itens da pagina de previa como conjunto final. A
+confirmacao cria somente rascunhos estaticos numerados (`Nome — 01/03`, etc.),
+preservando modelo, mapeamentos, variaveis por destinatario e destino de
+retorno. Nao ha envio, agendamento, Outbound, Conversation, Runtime ou provider
+call. Filtros dinamicos podem ser convertidos explicitamente para selecao
+estatica no momento da divisao; novos contatos futuros nao entram
+automaticamente nesses rascunhos. Se a audiencia mudar entre previa e
+confirmacao, a criacao e bloqueada para nova revisao. Filtros de
+pos-processamento ainda nao suportados para divisao completa bloqueiam com
+mensagem controlada em vez de truncar silenciosamente. Auditoria posterior
+classificou isto como preparacao parcial, nao como controle completo de lotes
+CRA: falta identidade duravel de conjunto, snapshot dinamico dividido em lotes,
+coordenacao de throughput por tenant, acoes/progresso agregados e recuperacao
+de falha parcial. A solucao minima coerente provavelmente exige novo dominio
+persistido `CampaignBatch`/`CampaignGroup`, reutilizando os `Campaign` filhos e
+o runner atual por chunk.
+
+Decisao explicita do owner em 2026-09-25: nunca executar mais de uma campanha
+simultaneamente para o mesmo tenant. Isso inclui campanhas avulsas, lotes,
+envios imediatos e agendados; tenants diferentes podem executar
+independentemente. Atualizacao local de 2026-09-26: a frente de lotes/fila esta
+BACKEND CORE + GROUP UI INTEGRATED LOCALLY / FOCUSED VALIDATED / NOT DEPLOYED /
+OWNER UI PENDING.
+Foram adicionados modelos aditivos de batch, vinculo de filho, job e lease por
+tenant; `Campaign` permanece o lote executavel. Enviar agora, agendamento e
+retomada passam a enfileirar jobs; o runner atual so inicia apos claim do tenant
+e renova/verifica lease antes de tentativa de provider. Test-send usa job/lease
+tecnico duravel e bloqueia quando ha execucao ativa ou incerta do tenant.
+Complemento local de 2026-09-26: chunks passam a entrar na fila com sequencia
+deterministica e o runner revalida a posse da lease depois do retorno do
+provider. Resultado aceito simulado apos perda de posse e preservado de forma
+idempotente; o executor para antes do proximo destinatario. Execucao
+CRM dinamica agendada com 3.001 elegiveis gerou snapshot unico e quatro chunks
+sequenciais. CSV agrupado com 3.001 elegiveis gerou quatro chunks, preservou
+variaveis por destinatario e excluiu bloqueio posterior antes do provider.
+Validacao local: campaignExecutionQueue 8/8 PASS, campaignRunner 10/10 PASS,
+campaignsFeatureRoutes 125/125 PASS antes da UI e 125/125 PASS apos expor
+`executionBatch` no detalhe, backend build PASS, campaignsPageContract 29/29
+PASS, frontend build PASS e git diff --check PASS. `prisma migrate deploy`
+passou em banco local isolado e Prisma Client leu as novas tabelas. A UI local
+do detalhe de campanha agora mostra resumo do conjunto, lotes numerados,
+progresso agregado/por lote, estado da fila do tenant, horarios solicitados e
+inicio efetivo, e motivo de revisao/bloqueio. Smoke tecnico autenticado por API
+em portas isoladas confirmou SUPERVISOR/ADMIN lendo o lote de 3.001/4 chunks e
+AGENT recebendo 403; evidencia sanitizada fica fora do Git em
+`local-evidence/20260926-batch-ui-smoke/`. Chrome headless/CDP validou
+	visualmente o detalhe do conjunto em desktop e tela estreita: SUPERVISOR/ADMIN
+	viram conjunto, quatro chunks, fila do tenant e progresso; AGENT recebeu tela
+	restrita sem detalhe de lote. Complemento CDP local clicou `Pausar conjunto`,
+	`Retomar conjunto` e `Cancelar conjunto` e confirmou persistencia no DB local:
+	jobs pausados=4, retomados em fila=4 e cancelados=4. Test-send ocupado ficou
+	sem novo Outbound enquanto o tenant estava ocupado, mas o toast visual por
+	clique segue inconclusivo porque o input controlado nao atualizou no script.
+	Ainda nao foram exercitados visualmente: confirmacao de criacao agrupada
+	CRM/CSV e toast de test-send ocupado por clique de UI. Nao ha deploy, migration de producao,
+	validacao visual do owner ou aceite CRA.
+
+Auditoria de contrato em 2026-09-26: o baseline funcional de producao
+`5ee2de6...` ja cria `Conversation`/`ConversationRuntimeState` para campanha
+quando o webhook Meta confirma `DELIVERED`/`READ`, sem inbound humano
+(`lastInboundAt=null`). O lote local de campanhas em lotes nao introduziu essa
+rota, mas a divergencia deve ser decidida antes de promover a frente se o
+principio canonico continuar sendo que tentativa outbound de campanha nao cria
+conversa operacional.
 
 Atualizacao de 2026-09-19: Contacts/Campaigns receberam acabamento UX e
 hardening de telefone/importacao com OWNER PASS / DEPLOYED / PRODUCTION
@@ -303,9 +480,10 @@ product-owner validation only, not formal CRA contractual acceptance. The
 old-snapshot backup-retention permission issue remains separate, and the
 transient Prisma reload error recovered with health/db OK.
 
-Campaign audience size audit on 2026-09-25: a CRM filter matching 3,000 contacts
-does not automatically mean 3,000 selected recipients. Static CRM preview uses a
-paginated `/app/campaigns/audience-preview` response (`limit=25` in the UI);
+Campaign audience size audit on 2026-09-25, published behavior before the local
+batch backend: a CRM filter matching 3,000 contacts does not automatically mean
+3,000 selected recipients. Static CRM preview uses a paginated
+`/app/campaigns/audience-preview` response (`limit=25` in the UI);
 the draft action persists only the eligible Lead IDs present in that preview
 response and backend draft creation rejects more than 1,000 explicit Lead IDs.
 Dynamic CRM-filter campaigns store the filter, not recipients; when a scheduled

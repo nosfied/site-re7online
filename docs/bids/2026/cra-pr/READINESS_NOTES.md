@@ -1,5 +1,111 @@
 # CRA-PR Readiness Notes
 
+## Persistencia para revisao Git — 2026-09-26
+
+Status desta frente: TECHNICAL LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+Branch dedicada `review/campaign-recovery-20260926`, com parent/base `6d664d0b9ffcf52f5315bfeca96f0622f4d25792`.
+A base de reconstrucao foi `5d925973`; os 80 acrescimos documentais de `6d664d0b`
+foram conferidos e seu historico permanece ancestral. O owner PASS do lote anterior
+(normalizacao/settings/contraste, head funcional `5ee2de6b`) continua OWNER VALIDATED / CLOSED;
+nao se estende automaticamente a esta frente de lotes/fila.
+
+Delta e fontes foram arquivados antes da troca de branch. Reaplicacao sobre `6d664d0b`
+restaurou os mesmos 23 arquivos, com hashes conferidos; nao houve conflito funcional,
+reset/clean ou alteracao da branch original. Implementacao, testes, schema/migration,
+os quatro docs e este runbook compoem o escopo; .data, evidencias, dumps, arquivos
+compactados, credenciais e fixtures de ambiente ficam fora do Git.
+
+As 18 anotacoes UUID correspondem a tipos SQL ja existentes, sem ALTER TYPE novo.
+O inventario por objeto e impacto do drift residual anterior esta no
+`docs/RUNBOOK_WHATSAPP_AGENT.md`, secao "Drift historico residual — revisao da fila".
+Nenhum desses defaults, indices ou nomes foi corrigido nesta frente.
+
+Validacao preservada: fila/runner/rotas 144/144, apoio 41/41 e rechecagem dos casos
+falhos 4/4; builds e Prisma validados anteriormente. Sem repeticao de testes/builds
+porque esta persistencia nao muda comportamento funcional. Staging e whitespace
+sao conferidos separadamente. CI versionada: push apenas main/develop; PR apenas
+com destino main/develop. `vercel.json` bloqueia auto-deploy somente desta branch
+via git.deploymentEnabled=false para seu nome exato; demais branches inalteradas.
+Push de revisao nao autoriza merge, deploy, producao DB, provider ou envio real.
+
+Pendencias: ensaio operacional de rollout/rollback, drift residual anterior,
+owner UI e aceite CRA. Divergencia DELIVERED/READ → Conversation/HUMAN/WAITING
+permanece separada e sem alteracao funcional. Reparo 6683 continua CLOSED.
+
+## Auditoria da recuperacao — 2026-09-26
+
+Status tecnico: PRONTO PARA COMMIT DE REVISAO / NOT DEPLOYED / OWNER VALIDATION PENDING.
+Esta nota atualiza o fechamento local abaixo; nao declara prontidao para deploy ou aceite CRA.
+
+- Worktree persistente: `/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926`. HEAD detached `5d9259739754816d570470a30d52eb7eb53541bc`;
+  referencia do ultimo HEAD anterior `6d664d0b9ffcf52f5315bfeca96f0622f4d25792`
+  (branch original `zero-eligible-crm-eligibility-20260923`). Nao houve novo commit.
+- Integridade: SHA-256 do patch e tar original conferidos; ambos coincidiam com
+  o codigo no inicio desta auditoria. Replay independente das edicoes historicas
+  confirmou migration, fila, runner e testes. API/UI e consultas CRM receberam
+  as correcoes posteriores discriminadas em `local-evidence/recovery/audit/`.
+  Nao existe snapshot integral do filesystem anterior: DB e capturas perdidos
+  nao sao declarados recuperados byte a byte. Comportamentos criticos foram testados.
+- Falhas fechadas: `CompletedServiceSnapshot.clientId` text versus cast SQL uuid;
+  joins Client.id/WaPhoneNumber.clientId e Conversation.id/ConversationMetrics.conversationId
+  com uuid/text na copia parcialmente criada. Banco novo `re7_recovery_audit`,
+  127.0.0.1:55432, criado exclusivamente por `prisma migrate deploy`, corrigiu o ambiente.
+  A fixture de agendamento ja teve o `idempotencyKey` obrigatorio reposto na retomada.
+  Nenhuma assertion removida ou relaxada; concorrencia preservada.
+- Schema: 18 anotacoes `@db.Uuid` alinhadas aos tipos das migrations existentes;
+  Prisma Client 6.19.2 regenerado e semanticamente correspondente. SQL da fila intacto.
+  Diff somente leitura ainda registra defaults, indices e nomes historicos;
+  nao foi aplicado e nao ha diferenca de tipos ou estrutura da fila nesse diff.
+- Migration validada: registro anterior de 60 migrations PASS recuperado; novo
+  `migrate deploy` 60/60 PASS necessario porque o DB de teste recuperado havia
+  sido substituido por schemas divergentes. Checksums de 60 SQLs iguais ao ledger.
+  "Ensaio pendente" dizia respeito a rollout/rollback operacional, nao a falha
+  da migration. Nao foi usado db push, reset ou SQL manual nesta auditoria.
+- Testes finais: casos anteriormente falhos 4/4; fila 8/8 + runner 10/10 + rotas
+  126/126 = 144/144; importacao/exclusao/contratos UI 41/41; zero skips/falhas.
+  Backend build e prisma validate/generate PASS. Build frontend anterior preservado
+  porque UI nao mudou nesta auditoria. Os quatro smokes aprovados nao foram repetidos.
+- Contratos: 3.001 → quatro lotes, snapshot unico, variaveis CRM/CSV, isolamento por
+  tenant/exclusividade, scheduler concorrente, retomada, aceite apos perda de lease
+  e bloqueios antes do provider cobertos. Provider apenas simulado nos testes.
+- Pendencias efetivas: rollout/rollback operacional, drift residual historico de
+  defaults/indices, owner validation, aceite CRA e decisao de dominio DELIVERED/READ →
+  Conversation/HUMAN/WAITING. Divergencia de dominio permanece separada e sem alteracao
+  funcional; 6683 segue encerrado. Sem commit/push/deploy, producao DB ou envio real.
+
+## Atualizacao de recuperacao e fechamento local — 2026-09-26
+
+Status: TECHNICAL LOCAL VALIDATED / OWNER VALIDATION PENDING / NOT DEPLOYED.
+Esta atualizacao substitui, para o smoke tecnico local, as lacunas visuais
+registradas anteriormente; preserva o historico e nao representa aceite CRA.
+
+- CRM estatico: selecao/filtro, previa e confirmacao clicados na UI; 3.001
+  destinatarios persistidos em quatro filhos (1.000 / 1.000 / 1.000 / 1).
+- CRM dinamico: estimativa e confirmacao de agendamento exercitadas na UI;
+  zero filhos antes da execucao. Uma etapa do processador com relogio local
+  controlado criou o snapshot de 3.001 destinatarios/quatro filhos, sem envio.
+- CSV: upload, mapeamento, previa e confirmacao pela UI; um unico conjunto,
+  3.001 destinatarios/quatro filhos. A UI trata a resposta agrupada; timeout
+  especifico e chave de idempotencia reutilizada protegem a repeticao local.
+- Acoes agregadas: agendamento atomico dos quatro lotes, reload, pausa,
+  retomada e cancelamento confirmados no DB. Nenhum outbound foi criado.
+- Test-send ocupado: clique real com input React preenchido, mensagem PT-BR,
+  zero chamadas adicionais ao provider simulado, zero outbound e zero job novo.
+- Corrigidos limites de parametros SQL em consultas de identidades CRM/CSV e
+  exclusao operacional; a previa de campanha deixa de limitar a contagem a
+  janela inicial de 800 contatos. Leitura de audiencia limitada a 5.000.
+- Evidencias locais: `local-evidence/recovery/result-summary.json`, capturas e
+  logs no worktree persistente `tmp/worktrees/re7-campaign-recovery-20260926`.
+  Capturas antigas que estavam somente em `/tmp` nao sobreviveram ao reboot;
+  seus resultados historicos foram recuperados do registro da sessao.
+- Resultado historico da primeira retomada: builds PASS, suites 41/41 e 43/43;
+  a suite ampla entao falhou nos bancos divergentes. Essas falhas foram diagnosticadas
+  e fechadas na auditoria acima. O drift residual de defaults/indices continua documentado.
+- Sem commit, push, deploy, banco de producao ou provider real. Guided Builder
+  permanece pausado. Owner validation, aceite CRA e ensaio controlado de
+  rollout/rollback da migration continuam pendentes.
+
+
 Status: notas de prontidao para avaliacao contratual. Usar junto ao edital,
 termo de referencia, matriz contratual canonica e decisoes ja registradas.
 
@@ -64,6 +170,75 @@ Pendencias criticas para prontidao contratual:
    backup/restore e comprovacao Meta oficial.
 7. Instagram, Facebook Messenger e Webchat/site seguem contratados, mas estao
    CUSTOMER-DEFERRED / DELIVERY WINDOW PENDING e nao bloqueiam a frente atual.
+
+Atualizacao local de 2026-09-25: a divisao de audiencia CRM em rascunhos foi
+implementada localmente como melhoria operacional parcial de preparacao, ainda
+NOT DEPLOYED / OWNER UI PENDING e sem aceite formal CRA. Quando a audiencia CRM
+escolhida excede 1.000 destinatarios, o backend pode calcular a audiencia
+completa do mesmo tenant ate o teto de analise de 5.000, apresentar total,
+quantidade de rascunhos e distribuicao, e criar rascunhos estaticos numerados
+sem envio/agendamento. O comportamento evita truncamento silencioso da previa
+paginada, preserva modelo/mapeamentos/destino de retorno e bloqueia a criacao
+se a audiencia mudar antes da confirmacao. Filtros dinamicos exigem conversao
+explicita para selecao estatica; contatos futuros nao entram automaticamente
+nesses rascunhos. Filtros completos ainda nao suportados para divisao
+(conversa/origem/cidade) devem refinar ou bloquear a operacao com mensagem
+controlada. Auditoria CRA posterior concluiu que isto nao e suficiente para a
+operacao contratual de campanhas em lotes acima de 3.000 com agendamento: falta
+modelo duravel de conjunto de lotes, snapshot dinamico dividido em chunks,
+coordenacao de envio por tenant/transporte, progresso/acoes agregadas e
+recuperacao/idempotencia concorrente. Proxima frente recomendada: desenhar e
+implementar `CampaignBatch`/`CampaignGroup` ou dominio equivalente com schema
+controlado, mantendo `Campaign` como lote filho e reaproveitando o runner,
+delivery truth, billing, opt-out e identidade existentes.
+
+Decisao adicional do owner em 2026-09-25: a operacao CRA-ready nao deve executar
+duas campanhas simultaneamente para o mesmo tenant. Atualizacao local de
+2026-09-26: a frente de lotes/fila esta BACKEND CORE + GROUP UI INTEGRATED
+LOCALLY / FOCUSED VALIDATED / NOT DEPLOYED / OWNER UI PENDING / sem aceite formal CRA. A fila
+duravel por tenant foi implementada localmente com migration aditiva,
+batch/chunk/job/lease, claim transacional e bloqueio atomico de test-send
+durante execucao ativa ou incerta do tenant. A validacao tecnica local cobriu
+exclusividade por tenant, independencia entre tenants, job running com lease
+expirado ainda bloqueando o tenant, test-send expirado bloqueando ate release
+explicito, estado `needs_review` com motivo auditavel para liberar fila sem
+reenviar resultado incerto, invalidacao do token do executor antigo apos
+`needs_review`, ordem deterministica de chunks por `chunkIndex`, split de 3.000
+em tres rascunhos com vinculo batch/chunk, ciclo
+pause/resume/cancel/test-send e revalidacao de opt-out agendado. Complemento
+backend integrado: campanha CRM dinamica agendada com 3.001 elegiveis criou um
+snapshot unico e quatro chunks sequenciais; CSV agrupado com 3.001 elegiveis
+criou quatro chunks, preservou variaveis por destinatario e excluiu bloqueio
+posterior antes do provider; resultado aceito apos perda de lease foi preservado
+sem avancar para o proximo destinatario. `campaignExecutionQueue` 8/8,
+`campaignRunner` 10/10, `campaignsFeatureRoutes` 125/125, backend build e
+`git diff --check` passaram. `prisma migrate deploy` passou em banco local
+isolado e Prisma Client leu as tabelas novas. Complemento UI local: detalhe de
+campanha mostra conjunto, lotes numerados, progresso agregado/por lote, fila do
+tenant, horario solicitado/inicio efetivo e motivos operacionais. Validacao
+focada depois da UI: `campaignsPageContract.test.ts` 29/29, frontend build,
+backend build, `campaignsFeatureRoutes.test.ts` 125/125 e `git diff --check`
+passaram. Smoke tecnico autenticado por API confirmou SUPERVISOR/ADMIN lendo o
+fixture 3.001/4 chunks e AGENT 403. Chrome headless/CDP validou visualmente
+	detalhe do conjunto em desktop/tela estreita com fixture futura
+	`batch-visual-20260926`: SUPERVISOR/ADMIN viram conjunto, quatro chunks, fila do
+	tenant e progresso; AGENT viu restricao de campanhas sem detalhe de lote.
+	Complemento CDP clicou pause/resume/cancel agregado e confirmou persistencia
+	local: jobs pausados=4, retomados em fila=4, cancelados=4. Test-send ocupado
+	foi bloqueado sem novo Outbound, mas o toast visual por clique segue
+	inconclusivo porque o input controlado nao atualizou no script. Nao ha OWNER UI
+	validation. Lacunas para readiness contratual: confirmacao visual completa de
+	criacao agrupada CRM/CSV, toast de test-send ocupado clicado pela UI, deploy e rollout/rollback com migration em ambiente
+	controlado. Portanto a frente nao deve ser classificada como aceita formalmente
+para CRA enquanto essas evidencias operacionais nao existirem.
+
+Auditoria de contrato em 2026-09-26: producao `5ee2de6...` ja materializa
+`Conversation`/`ConversationRuntimeState` quando webhook Meta marca campanha
+como `DELIVERED`/`READ`, mesmo sem inbound (`lastInboundAt=null`). A frente de
+lotes nao introduziu esse comportamento, mas ha conflito potencial com o
+principio "tentativa de campanha nao e conversa operacional" caso ele se aplique
+a qualquer tentativa outbound-only. Requer decisao owner/arquitetura antes de
+publicar lotes como frente operacional; nao reabrir o reparo `6683`.
 
 Nao reabrir:
 

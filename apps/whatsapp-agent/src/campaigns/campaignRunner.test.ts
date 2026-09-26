@@ -3,7 +3,18 @@ import crypto from "node:crypto";
 import test from "node:test";
 import { MessageStatus } from "@prisma/client";
 import { getPrisma } from "../db.js";
-import { startCampaignRun } from "./campaignRunner.js";
+import { buildPrivateCampaignSeedFields, readPrivateCampaignSeedFields } from "./campaignSeedPrivacy.js";
+import {
+  getRunningCampaignPromiseForTests,
+  processDueScheduledCampaigns,
+  setCampaignRunnerSleepForTests,
+  startCampaignRun,
+} from "./campaignRunner.js";
+import {
+  claimNextCampaignExecutionJob,
+  enqueueCampaignExecutionJob,
+  markCampaignExecutionJobNeedsReview,
+} from "./campaignExecutionQueue.js";
 import { recordContactOptOut } from "./optOutRegistry.js";
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "campaign-runner-test-secret";
@@ -22,6 +33,10 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 5000) {
 }
 
 async function cleanup(clientId: string) {
+  await prisma.tenantCampaignExecutionLease.deleteMany({ where: { clientId } });
+  await prisma.campaignExecutionJob.deleteMany({ where: { clientId } });
+  await prisma.campaignExecutionBatchCampaign.deleteMany({ where: { clientId } });
+  await prisma.campaignExecutionBatch.deleteMany({ where: { clientId } });
   await prisma.conversationRuntimeState.deleteMany({ where: { clientId } });
   await prisma.conversation.deleteMany({ where: { clientId } });
   await prisma.queue.deleteMany({ where: { clientId } });
@@ -30,7 +45,9 @@ async function cleanup(clientId: string) {
   await prisma.outboundMessage.deleteMany({ where: { clientId } });
   await prisma.campaign.deleteMany({ where: { clientId } });
   await prisma.template.deleteMany({ where: { clientId } });
+  await prisma.lead.deleteMany({ where: { tenantId: clientId } });
   await prisma.contact.deleteMany({ where: { clientId } });
+  await prisma.contactChannelIdentity.deleteMany({ where: { clientId } });
   await prisma.tenantOperationalConfig.deleteMany({ where: { clientId } });
   await prisma.client.deleteMany({ where: { id: clientId } });
 }
@@ -780,4 +797,509 @@ test("campaign runner does not resend a recipient with provider acceptance but m
     }),
     0
   );
+});
+
+test("campaign runner preserves accepted provider result after losing queue ownership", async (t) => {
+  const clientId = crypto.randomUUID();
+  const clientKey = `campaign-runner-lease-loss-${process.pid}-${Date.now()}`;
+  const templateName = `campaign_runner_lease_loss_${Date.now()}`;
+  const recipients = ["5541991100601", "5541991100602"];
+  await cleanup(clientId).catch(() => undefined);
+  t.after(() => {
+    void cleanup(clientId).catch(() => undefined);
+  });
+
+  await prisma.client.create({
+    data: {
+      id: clientId,
+      clientKey,
+      name: "Campaign Runner Lease Loss Test",
+      profile: "business",
+      features: { campaigns: true },
+    },
+  });
+  await prisma.template.create({
+    data: {
+      clientId,
+      name: templateName,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso",
+    },
+  });
+  const campaign = await prisma.campaign.create({
+    data: {
+      clientId,
+      name: "Provider accepted during lease loss",
+      templateName,
+      status: "scheduled",
+      totalRecipients: recipients.length,
+      scheduledAt: new Date(Date.now() - 1000),
+    },
+  });
+  await enqueueCampaignExecutionJob({
+    prisma,
+    clientId,
+    campaignId: campaign.id,
+    eligibleAt: new Date(Date.now() - 1000),
+    idempotencyKey: `lease-loss:${campaign.id}`,
+  });
+  const claimed = await claimNextCampaignExecutionJob({ now: new Date(), leaseMs: 90_000 });
+  assert.ok(claimed);
+  assert.equal(claimed.campaignId, campaign.id);
+  await prisma.campaign.update({ where: { id: campaign.id }, data: { status: "sending", scheduledAt: null } });
+
+  let releaseProvider!: () => void;
+  const providerReturned = new Promise<void>((resolve) => {
+    releaseProvider = resolve;
+  });
+  const originalFetch = globalThis.fetch;
+  const metaRecipients: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      const request = JSON.parse(String(init?.body ?? "{}")) as { to?: string };
+      if (request.to) metaRecipients.push(request.to);
+      await providerReturned;
+      return new Response(JSON.stringify({ messages: [{ id: "wamid.lease-loss.accepted" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const runId = startCampaignRun({
+    campaignId: campaign.id,
+    clientId,
+    clientKey,
+    name: campaign.name,
+    templateName,
+    waIds: recipients,
+    executionJob: claimed,
+  });
+  assert.ok(runId);
+  const runningPromise = getRunningCampaignPromiseForTests(campaign.id);
+  assert.ok(runningPromise);
+
+  await waitFor(async () => metaRecipients.length === 1);
+  assert.equal(
+    await markCampaignExecutionJobNeedsReview({
+      clientId,
+      jobId: claimed.id,
+      reason: "provider_result_uncertain_after_restart",
+    }),
+    true
+  );
+  releaseProvider();
+  await runningPromise;
+
+  await waitFor(async () => {
+    const accepted = await prisma.event.count({
+      where: {
+        clientId,
+        eventName: "campaign.message.provider_accepted",
+        messageId: `campaign.${campaign.id}.1`,
+      },
+    });
+    const outbound = await prisma.outboundMessage.count({
+      where: { clientId, messageId: `campaign.${campaign.id}.1`, status: MessageStatus.SENT },
+    });
+    return accepted === 1 && outbound === 1;
+  });
+
+  assert.deepEqual(metaRecipients, [recipients[0]]);
+  assert.equal(
+    await prisma.outboundMessage.count({ where: { clientId, messageId: `campaign.${campaign.id}.2` } }),
+    0
+  );
+  assert.equal(
+    await prisma.event.count({ where: { clientId, eventName: "campaign.message.submit_started", messageId: `campaign.${campaign.id}.2` } }),
+    0
+  );
+  const reviewedJob = await prisma.campaignExecutionJob.findUniqueOrThrow({
+    where: { id: claimed.id },
+    select: { status: true, failureReason: true },
+  });
+  assert.equal(reviewedJob.status, "needs_review");
+  assert.equal(reviewedJob.failureReason, "provider_result_uncertain_after_restart");
+  const campaignAfterLoss = await prisma.campaign.findUniqueOrThrow({
+    where: { id: campaign.id },
+    select: { status: true, sentCount: true },
+  });
+  assert.equal(campaignAfterLoss.status, "sending");
+  assert.equal(campaignAfterLoss.sentCount, 1);
+});
+
+function buildBrazilMobileWaIdRange(areaCode: string, start: number, count: number) {
+  return Array.from({ length: count }, (_, index) => `55${areaCode}9${String(start + index).padStart(8, "0")}`);
+}
+
+async function runQueueUntilBatchCompleted(params: { batchId: string; now: Date; timeoutMs?: number }) {
+  const deadline = Date.now() + (params.timeoutMs ?? 30_000);
+  while (Date.now() < deadline) {
+    await processDueScheduledCampaigns({ now: params.now, limit: 10 });
+    const batch = await prisma.campaignExecutionBatch.findUnique({
+      where: { id: params.batchId },
+      select: { status: true },
+    });
+    if (batch?.status === "completed" || batch?.status === "failed" || batch?.status === "blocked") {
+      if (batch.status !== "completed") {
+        const links = await prisma.campaignExecutionBatchCampaign.findMany({
+          where: { batchId: params.batchId },
+          orderBy: { chunkIndex: "asc" },
+          include: { campaign: { select: { status: true, sentCount: true, blockedCount: true } } },
+        });
+        const jobs = await prisma.campaignExecutionJob.findMany({
+          where: { batchId: params.batchId },
+          orderBy: [{ createdAt: "asc" }, { chunkIndex: "asc" }],
+          select: { kind: true, status: true, campaignId: true, chunkIndex: true, failureReason: true },
+        });
+        assert.fail(
+          `Batch ${params.batchId} ended as ${batch.status}; links=${JSON.stringify(
+            links.map((link) => ({
+              chunkIndex: link.chunkIndex,
+              linkStatus: link.status,
+              campaignStatus: link.campaign.status,
+              sentCount: link.campaign.sentCount,
+              blockedCount: link.campaign.blockedCount,
+            }))
+          )}; jobs=${JSON.stringify(jobs)}`
+        );
+      }
+      return batch.status;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.fail("Timed out waiting for batch completion");
+}
+
+test("dynamic CRM batch execution snapshots 3001 recipients into sequential chunks", async (t) => {
+  const restoreSleep = setCampaignRunnerSleepForTests(async () => undefined);
+  t.after(restoreSleep);
+  const clientId = crypto.randomUUID();
+  const clientKey = `campaign-runner-dynamic-batch-${process.pid}-${Date.now()}`;
+  const templateName = `campaign_runner_dynamic_batch_${Date.now()}`;
+  const now = new Date();
+  await cleanup(clientId).catch(() => undefined);
+  t.after(() => {
+    void cleanup(clientId).catch(() => undefined);
+  });
+
+  await prisma.client.create({
+    data: {
+      id: clientId,
+      clientKey,
+      name: "Campaign Runner Dynamic Batch Test",
+      profile: "business",
+      features: { campaigns: true },
+    },
+  });
+  const template = await prisma.template.create({
+    data: {
+      clientId,
+      name: templateName,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso {{1}}",
+      variables: ["1"],
+    },
+  });
+  const waIds = buildBrazilMobileWaIdRange("41", 10000000, 3001);
+  await prisma.lead.createMany({
+    data: waIds.map((waId, index) => ({
+      tenantId: clientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: `Dynamic ${String(index + 1).padStart(4, "0")}`,
+      phone: waId,
+      status: "QUALIFIED",
+    })),
+  });
+  const parent = await prisma.campaign.create({
+    data: {
+      clientId,
+      templateId: template.id,
+      name: "Dynamic grouped batch",
+      templateName,
+      status: "scheduled",
+      scheduledAt: now,
+      totalRecipients: 0,
+    },
+  });
+  await prisma.event.create({
+    data: {
+      clientId,
+      messageId: parent.id,
+      requestId: `campaign-seed:${parent.id}:dynamic`,
+      eventName: "campaign.seed.saved",
+      payloadJson: {
+        campaignId: parent.id,
+        templateId: template.id,
+        name: parent.name,
+        templateName,
+        templateParams: [],
+        templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+        returnDestination: null,
+        source: "dynamic_crm_filter",
+        selectionMode: "DYNAMIC_CRM_FILTER",
+        dynamicFilter: { version: 1, crmBusinessStatusId: "QUALIFIED" },
+        summary: { requested: 0, accepted: 0, blocked: 0, duplicatesRemoved: 0, blockedByReason: [] },
+        ...buildPrivateCampaignSeedFields({ clientId, waIds: [] }),
+      },
+    },
+  });
+  const batch = await prisma.campaignExecutionBatch.create({
+    data: {
+      clientId,
+      name: parent.name,
+      sourceMode: "DYNAMIC_CRM_FILTER",
+      status: "scheduled",
+      requestedAt: now,
+      eligibleAt: now,
+      chunkCount: 0,
+      idempotencyKey: `dynamic:${parent.id}`,
+      metadata: { parentCampaignId: parent.id, clientKey, createdFrom: "test_dynamic_batch" },
+    },
+  });
+  await prisma.event.create({
+    data: {
+      clientId,
+      messageId: parent.id,
+      requestId: `campaign-batch-controller:${parent.id}`,
+      eventName: "campaign.batch.controller.created",
+      payloadJson: { campaignId: parent.id, batchId: batch.id, sourceMode: "DYNAMIC_CRM_FILTER" },
+    },
+  });
+  await enqueueCampaignExecutionJob({
+    prisma,
+    clientId,
+    campaignId: null,
+    batchId: batch.id,
+    eligibleAt: now,
+    kind: "batch_chunk",
+    idempotencyKey: `dynamic-batch:${batch.id}:materialize`,
+    metadata: { source: "dynamic_batch_materialize", parentCampaignId: parent.id },
+  });
+
+  const originalFetch = globalThis.fetch;
+  const metaRecipients: string[] = [];
+  const renderedNames = new Map<string, string>();
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      const payload = JSON.parse(String(init?.body ?? "{}")) as {
+        to?: string;
+        template?: { components?: Array<{ parameters?: Array<{ text?: string }> }> };
+      };
+      if (payload.to) {
+        metaRecipients.push(payload.to);
+        renderedNames.set(payload.to, payload.template?.components?.[0]?.parameters?.[0]?.text ?? "");
+      }
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.dynamic.${metaRecipients.length}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  assert.equal(await runQueueUntilBatchCompleted({ batchId: batch.id, now, timeoutMs: 600_000 }), "completed");
+  const snapshotCount = await prisma.event.count({
+    where: { clientId, messageId: parent.id, eventName: "campaign.dynamic_batch_snapshot.created" },
+  });
+  assert.equal(snapshotCount, 1);
+  const links = await prisma.campaignExecutionBatchCampaign.findMany({
+    where: { clientId, batchId: batch.id },
+    orderBy: { chunkIndex: "asc" },
+    select: { chunkIndex: true, recipientCount: true, status: true, campaignId: true },
+  });
+  assert.deepEqual(links.map((link) => link.recipientCount), [1000, 1000, 1000, 1]);
+  assert.ok(links.every((link) => link.status === "completed"));
+  assert.equal(metaRecipients.length, 3001);
+  assert.equal(new Set(metaRecipients).size, 3001);
+  assert.deepEqual(new Set(metaRecipients), new Set(waIds));
+  assert.equal(renderedNames.get(waIds[0]), "Dynamic 0001");
+  assert.equal(renderedNames.get(waIds[3000]), "Dynamic 3001");
+  const completedParent = await prisma.campaign.findUniqueOrThrow({
+    where: { id: parent.id },
+    select: { status: true, sentCount: true, blockedCount: true },
+  });
+  assert.equal(completedParent.status, "completed");
+  assert.equal(completedParent.sentCount, 3001);
+  assert.equal(completedParent.blockedCount, 0);
+});
+
+test("CSV grouped batch execution preserves chunk variables and excludes post-blocked recipients", async (t) => {
+  const restoreSleep = setCampaignRunnerSleepForTests(async () => undefined);
+  t.after(restoreSleep);
+  const clientId = crypto.randomUUID();
+  const clientKey = `campaign-runner-csv-batch-${process.pid}-${Date.now()}`;
+  const templateName = `campaign_runner_csv_batch_${Date.now()}`;
+  const now = new Date();
+  await cleanup(clientId).catch(() => undefined);
+  t.after(() => {
+    void cleanup(clientId).catch(() => undefined);
+  });
+
+  await prisma.client.create({
+    data: {
+      id: clientId,
+      clientKey,
+      name: "Campaign Runner CSV Batch Test",
+      profile: "business",
+      features: { campaigns: true },
+    },
+  });
+  const template = await prisma.template.create({
+    data: {
+      clientId,
+      name: templateName,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "CSV {{1}}",
+      variables: ["1"],
+    },
+  });
+  const waIds = buildBrazilMobileWaIdRange("42", 10000000, 3001);
+  const blockedWaId = waIds[1500];
+  await recordContactOptOut({ clientId, waId: blockedWaId, source: "test", reason: "csv batch post-block" });
+  const batch = await prisma.campaignExecutionBatch.create({
+    data: {
+      clientId,
+      name: "CSV grouped batch",
+      sourceMode: "CSV_IMPORT",
+      status: "running",
+      requestedAt: now,
+      eligibleAt: now,
+      effectiveStartedAt: now,
+      totalRecipients: waIds.length,
+      chunkCount: 4,
+      currentChunkIndex: 1,
+      idempotencyKey: `csv:${crypto.randomUUID()}`,
+      metadata: { createdFrom: "test_csv_grouped_batch" },
+    },
+  });
+  const chunks = [waIds.slice(0, 1000), waIds.slice(1000, 2000), waIds.slice(2000, 3000), waIds.slice(3000)];
+  for (const [index, recipients] of chunks.entries()) {
+    const chunkIndex = index + 1;
+    const campaign = await prisma.campaign.create({
+      data: {
+        clientId,
+        templateId: template.id,
+        name: `CSV grouped batch — ${String(chunkIndex).padStart(2, "0")}/04`,
+        templateName,
+        status: "scheduled",
+        scheduledAt: null,
+        totalRecipients: recipients.length,
+      },
+    });
+    await prisma.campaignExecutionBatchCampaign.create({
+      data: {
+        clientId,
+        batchId: batch.id,
+        campaignId: campaign.id,
+        chunkIndex,
+        recipientCount: recipients.length,
+        status: "scheduled",
+      },
+    });
+    const componentsByWaId = Object.fromEntries(
+      recipients.map((waId, recipientIndex) => [
+        waId,
+        [{ type: "body" as const, parameters: [{ type: "text" as const, text: `CSV ${chunkIndex}-${recipientIndex + 1}` }] }],
+      ])
+    );
+    await prisma.event.create({
+      data: {
+        clientId,
+        messageId: campaign.id,
+        requestId: `campaign-csv-batch-seed:${batch.id}:${chunkIndex}`,
+        eventName: "campaign.seed.saved",
+        payloadJson: {
+          campaignId: campaign.id,
+          templateId: template.id,
+          name: campaign.name,
+          templateName,
+          templateParams: [],
+          templateVariableMappings: [],
+          returnDestination: null,
+          source: `csv_group:${batch.id}`,
+          selectionMode: "STATIC_RECIPIENTS",
+          dynamicFilter: null,
+          summary: { requested: recipients.length, accepted: recipients.length, blocked: 0, duplicatesRemoved: 0, blockedByReason: [] },
+          ...buildPrivateCampaignSeedFields({ clientId, waIds: recipients, componentsByWaId }),
+        },
+      },
+    });
+    await enqueueCampaignExecutionJob({
+      prisma,
+      clientId,
+      campaignId: campaign.id,
+      batchId: batch.id,
+      chunkIndex,
+      kind: "batch_chunk",
+      eligibleAt: now,
+      idempotencyKey: `batch:${batch.id}:chunk:${chunkIndex}`,
+      metadata: { source: "test_csv_grouped_batch", recipientCount: recipients.length },
+    });
+  }
+
+  const originalFetch = globalThis.fetch;
+  const metaRecipients: string[] = [];
+  const renderedValues = new Map<string, string>();
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      const payload = JSON.parse(String(init?.body ?? "{}")) as {
+        to?: string;
+        template?: { components?: Array<{ parameters?: Array<{ text?: string }> }> };
+      };
+      if (payload.to) {
+        metaRecipients.push(payload.to);
+        renderedValues.set(payload.to, payload.template?.components?.[0]?.parameters?.[0]?.text ?? "");
+      }
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.csv.${metaRecipients.length}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  assert.equal(await runQueueUntilBatchCompleted({ batchId: batch.id, now, timeoutMs: 600_000 }), "completed");
+  assert.equal(metaRecipients.length, 3000);
+  assert.equal(metaRecipients.includes(blockedWaId), false);
+  assert.equal(new Set(metaRecipients).size, 3000);
+  assert.equal(renderedValues.get(waIds[0]), "CSV 1-1");
+  assert.equal(renderedValues.get(waIds[999]), "CSV 1-1000");
+  assert.equal(renderedValues.get(waIds[1000]), "CSV 2-1");
+  assert.equal(renderedValues.get(waIds[3000]), "CSV 4-1");
+  const links = await prisma.campaignExecutionBatchCampaign.findMany({
+    where: { clientId, batchId: batch.id },
+    orderBy: { chunkIndex: "asc" },
+    include: { campaign: { select: { status: true, sentCount: true, blockedCount: true } } },
+  });
+  assert.deepEqual(links.map((link) => link.recipientCount), [1000, 1000, 1000, 1]);
+  assert.ok(links.every((link) => link.status === "completed"));
+  assert.deepEqual(links.map((link) => link.campaign.sentCount), [1000, 999, 1000, 1]);
+  assert.deepEqual(links.map((link) => link.campaign.blockedCount), [0, 1, 0, 0]);
+  const blockedOutbound = await prisma.outboundMessage.count({
+    where: { clientId, waId: blockedWaId },
+  });
+  assert.equal(blockedOutbound, 0);
 });

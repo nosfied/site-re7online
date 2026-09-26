@@ -1355,7 +1355,10 @@ test("campaign app routes require supervisor or admin before campaign payload pr
       user
     );
     assert.equal(validResume.status, 200, `${label} valid resume: ${JSON.stringify(validResume.body)}`);
-    assert.equal(validResume.body.campaign.status, "sending");
+    assert.ok(
+      ["scheduled", "sending", "completed"].includes(validResume.body.campaign.status),
+      `${label} valid resume returned actionable campaign status: ${validResume.body.campaign.status}`
+    );
   }
 
   const managerProviderCallsBefore = providerCalls;
@@ -13263,6 +13266,199 @@ test("public campaign API creates draft and imports recipients without sending",
   assert.equal(sendEvents, 0);
 });
 
+test("campaign audience split creates numbered static drafts without sending", async () => {
+  const splitRunLabel = `Split ${safeTemplatePrefix}`;
+  const splitOneThousandLabel = `${splitRunLabel} Mil`;
+  const splitOneThousandOneLabel = `${splitRunLabel} Mil e Um`;
+  const splitThreeThousandLabel = `${splitRunLabel} Tres Mil`;
+  const splitRequestId = `split-three-thousand-${safeTemplatePrefix}`;
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `split_template_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Olá {{1}}",
+      variables: ["1"],
+    },
+  });
+  const makeLeadRows = (label: string, count: number, start: number) =>
+    Array.from({ length: count }, (_, index) => {
+      const waId = `5541${String(start + index).padStart(9, "0")}`;
+      return {
+        tenantId: businessClientId,
+        waId,
+        waIdCanonical: waId,
+        channel: "whatsapp",
+        provider: "meta",
+        name: `${label} ${String(index + 1).padStart(4, "0")}`,
+        phone: waId,
+        status: "RETORNO_FUTURO",
+      };
+    });
+
+  await prisma.lead.createMany({ data: makeLeadRows(splitOneThousandLabel, 1000, 930000000) });
+  const oneThousandLeads = await prisma.lead.findMany({
+    where: { tenantId: businessClientId, name: { startsWith: splitOneThousandLabel } },
+    orderBy: { name: "asc" },
+    select: { id: true },
+  });
+  const existingDraft = await request<{ ok: true; campaign: { status: string; totalRecipients: number } }>(
+    "POST",
+    "/app/campaigns/drafts",
+    businessAdmin,
+    {
+      name: "Campanha Split Mil",
+      templateId: template.id,
+      selectedLeadIds: oneThousandLeads.map((lead) => lead.id),
+      returnDestination: defaultCampaignReturnDestination(),
+      templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+    }
+  );
+  assert.equal(existingDraft.status, 200, JSON.stringify(existingDraft.body));
+  assert.equal(existingDraft.body.campaign.status, "draft");
+  assert.equal(existingDraft.body.campaign.totalRecipients, 1000);
+
+  await prisma.lead.createMany({ data: makeLeadRows(splitOneThousandOneLabel, 1001, 931000000) });
+  const split1001Preview = await request<{
+    ok: true;
+    plan: { totalEligible: number; draftCount: number; chunkSizes: number[]; audienceSignature: string };
+  }>("POST", "/app/campaigns/drafts/split-preview", businessAdmin, {
+    name: "Campanha Split Mil e Um",
+    templateId: template.id,
+    splitMode: "STATIC_FILTER",
+    filters: { q: splitOneThousandOneLabel, status: "RETORNO_FUTURO", limit: 25 },
+    returnDestination: defaultCampaignReturnDestination(),
+    templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+  });
+  assert.equal(split1001Preview.status, 200, JSON.stringify(split1001Preview.body));
+  assert.equal(split1001Preview.body.plan.totalEligible, 1001);
+  assert.deepEqual(split1001Preview.body.plan.chunkSizes, [1000, 1]);
+
+  await prisma.lead.createMany({ data: makeLeadRows(splitThreeThousandLabel, 3000, 932000000) });
+  await prisma.lead.create({
+    data: {
+      tenantId: overrideClientId,
+      waId: "5541932999999",
+      waIdCanonical: "5541932999999",
+      channel: "whatsapp",
+      provider: "meta",
+      name: `${splitThreeThousandLabel} Outro Tenant`,
+      phone: "5541932999999",
+      status: "RETORNO_FUTURO",
+    },
+  });
+  const threeThousandLeads = await prisma.lead.findMany({
+    where: { tenantId: businessClientId, name: { startsWith: splitThreeThousandLabel } },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
+    select: { id: true },
+  });
+  assert.equal(threeThousandLeads.length, 3000);
+  const fullPreview = await request<{ summary: { total: number } }>("GET", `/app/campaigns/audience-preview?q=${encodeURIComponent(splitThreeThousandLabel)}&limit=25`, businessAdmin);
+  assert.equal(fullPreview.status, 200, JSON.stringify(fullPreview.body));
+  assert.equal(fullPreview.body.summary.total, 3000, "campaign preview must not truncate at the first CRM candidate window");
+
+
+  const before = {
+    campaigns: await prisma.campaign.count({ where: { clientId: businessClientId } }),
+    outbound: await prisma.outboundMessage.count({ where: { clientId: businessClientId } }),
+    conversations: await prisma.conversation.count({ where: { clientId: businessClientId } }),
+    runtime: await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId } }),
+  };
+  const split3000Preview = await request<{
+    ok: true;
+    plan: { totalEligible: number; draftCount: number; chunkSizes: number[]; audienceSignature: string };
+  }>("POST", "/app/campaigns/drafts/split-preview", businessAdmin, {
+    name: "Campanha Split Tres Mil",
+    templateId: template.id,
+    splitMode: "STATIC_FILTER",
+    filters: { q: splitThreeThousandLabel, status: "RETORNO_FUTURO", limit: 25 },
+    returnDestination: defaultCampaignReturnDestination(),
+    templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+  });
+  assert.equal(split3000Preview.status, 200, JSON.stringify(split3000Preview.body));
+  assert.equal(split3000Preview.body.plan.totalEligible, 3000);
+  assert.deepEqual(split3000Preview.body.plan.chunkSizes, [1000, 1000, 1000]);
+
+  const created = await request<{
+    ok: true;
+    campaigns: Array<{ id: string; name: string; status: string; totalRecipients: number }>;
+  }>("POST", "/app/campaigns/drafts/split", businessAdmin, {
+    name: "Campanha Split Tres Mil",
+    templateId: template.id,
+    splitMode: "STATIC_FILTER",
+    filters: { q: splitThreeThousandLabel, status: "RETORNO_FUTURO", limit: 25 },
+    audienceSignature: split3000Preview.body.plan.audienceSignature,
+    requestId: splitRequestId,
+    returnDestination: defaultCampaignReturnDestination(),
+    templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+  });
+  assert.equal(created.status, 200, JSON.stringify(created.body));
+  assert.equal(created.body.campaigns.length, 3);
+  assert.deepEqual(created.body.campaigns.map((campaign) => campaign.name), [
+    "Campanha Split Tres Mil — 01/03",
+    "Campanha Split Tres Mil — 02/03",
+    "Campanha Split Tres Mil — 03/03",
+  ]);
+  assert.deepEqual(created.body.campaigns.map((campaign) => campaign.totalRecipients), [1000, 1000, 1000]);
+  assert.ok(created.body.campaigns.every((campaign) => campaign.status === "draft"));
+
+  const seeds = await prisma.event.findMany({
+    where: {
+      clientId: businessClientId,
+      eventName: "campaign.seed.saved",
+      messageId: { in: created.body.campaigns.map((campaign) => campaign.id) },
+    },
+    select: { payloadJson: true },
+  });
+  const seededLeadIds = seeds.flatMap((seed) => {
+    const payload = seed.payloadJson as Record<string, unknown>;
+    return Array.isArray(payload.leadIds) ? payload.leadIds.map((value) => String(value)) : [];
+  });
+  assert.equal(seededLeadIds.length, 3000);
+  assert.equal(new Set(seededLeadIds).size, 3000);
+  assert.deepEqual(new Set(seededLeadIds), new Set(threeThousandLeads.map((lead) => lead.id)));
+  const batchLinks = await prisma.campaignExecutionBatchCampaign.findMany({
+    where: { clientId: businessClientId, campaignId: { in: created.body.campaigns.map((campaign) => campaign.id) } },
+    include: { batch: true },
+    orderBy: { chunkIndex: "asc" },
+  });
+  assert.equal(batchLinks.length, 3);
+  assert.deepEqual(batchLinks.map((link) => link.chunkIndex), [1, 2, 3]);
+  assert.deepEqual(batchLinks.map((link) => link.recipientCount), [1000, 1000, 1000]);
+  assert.equal(new Set(batchLinks.map((link) => link.batchId)).size, 1);
+  assert.equal(batchLinks[0]?.batch.chunkCount, 3);
+  assert.equal(batchLinks[0]?.batch.totalRecipients, 3000);
+  assert.equal(batchLinks[0]?.batch.status, "draft");
+
+  const retry = await request<{ ok: true; idempotent: boolean; campaigns: Array<{ id: string }> }>(
+    "POST",
+    "/app/campaigns/drafts/split",
+    businessAdmin,
+    {
+      name: "Campanha Split Tres Mil",
+      templateId: template.id,
+      splitMode: "STATIC_FILTER",
+      filters: { q: splitThreeThousandLabel, status: "RETORNO_FUTURO", limit: 25 },
+      audienceSignature: split3000Preview.body.plan.audienceSignature,
+      requestId: splitRequestId,
+      returnDestination: defaultCampaignReturnDestination(),
+      templateVariableMappings: [{ position: "1", source: "contact.displayName" }],
+    }
+  );
+  assert.equal(retry.status, 200, JSON.stringify(retry.body));
+  assert.equal(retry.body.idempotent, true);
+  assert.deepEqual(
+    retry.body.campaigns.map((campaign) => campaign.id).sort(),
+    created.body.campaigns.map((campaign) => campaign.id).sort()
+  );
+  assert.equal(await prisma.campaign.count({ where: { clientId: businessClientId } }), before.campaigns + 3);
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId: businessClientId } }), before.outbound);
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId } }), before.conversations);
+  assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId } }), before.runtime);
+});
+
 test("app CSV import previews and creates draft without sending", async (t) => {
   const template = await prisma.template.create({
     data: {
@@ -14055,13 +14251,13 @@ test("manual immediate campaign rejects zero eligible recipients before campaign
   );
   assert.equal(mixed.status, 200, JSON.stringify(mixed.body));
   assert.equal(mixed.body.campaign.totalRecipients, 2);
-  await waitFor(async () => providerCalls === 1);
-  assert.equal(
-    await prisma.outboundMessage.count({
+  await waitFor(async () => {
+    const count = await prisma.outboundMessage.count({
       where: { clientId: businessClientId, messageId: { startsWith: `campaign.${mixed.body.campaign.id}.` } },
-    }),
-    1
-  );
+    });
+    return count === 1;
+  });
+  assert.equal(providerCalls, 1);
 });
 
 test("campaign lifecycle supports schedule pause resume cancel and formal test-send", async (t) => {
@@ -14390,6 +14586,13 @@ test("campaign lifecycle supports schedule pause resume cancel and formal test-s
       where: { clientId: businessClientId, messageId: { startsWith: `campaign.${pausedCampaign.id}.` } },
     });
     return count === 1;
+  });
+  await waitFor(async () => {
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: pausedCampaign.id },
+      select: { status: true },
+    });
+    return campaign?.status === "completed";
   });
   const resumeAgain = await request<ErrorPayload>("POST", `/app/campaigns/${pausedCampaign.id}/resume`, businessAdmin);
   assert.equal(resumeAgain.status, 409);
@@ -14758,16 +14961,16 @@ test("scheduled campaign execution revalidates opt-out before provider", async (
     blockedRuntime: await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId: blockedWaId } }),
   };
   const originalFetch = globalThis.fetch;
-  const metaRecipients: string[] = [];
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    if (url.startsWith("https://graph.facebook.com/")) {
-      const payload = JSON.parse(String(init?.body ?? "{}")) as { to?: string };
-      if (payload.to) metaRecipients.push(payload.to);
-      return new Response(JSON.stringify({ messages: [{ id: `wamid.scheduled.${metaRecipients.length + 1}` }] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+	  const metaRecipients: string[] = [];
+	  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+	    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+	    if (url.startsWith("https://graph.facebook.com/")) {
+	      const payload = JSON.parse(String(init?.body ?? "{}")) as { to?: string; template?: { name?: string } };
+	      if (payload.to && payload.template?.name === template.name) metaRecipients.push(payload.to);
+	      return new Response(JSON.stringify({ messages: [{ id: `wamid.scheduled.${metaRecipients.length + 1}` }] }), {
+	        status: 200,
+	        headers: { "content-type": "application/json" },
+	      });
     }
     return originalFetch(input, init);
   }) as typeof fetch;
@@ -14776,15 +14979,18 @@ test("scheduled campaign execution revalidates opt-out before provider", async (
   });
 
   const { processDueScheduledCampaigns } = await import("../campaigns/campaignRunner.js");
-  const due = await processDueScheduledCampaigns({ now: new Date(Date.now() + 2 * 60 * 60 * 1000), limit: 5 });
-  assert.equal(due.claimed, 1);
+  const dueNow = new Date(Date.now() + 2 * 60 * 60 * 1000);
+  let claimed = 0;
   await waitFor(async () => {
+    const due = await processDueScheduledCampaigns({ now: dueNow, limit: 5 });
+    claimed += due.claimed;
     const campaign = await prisma.campaign.findUnique({
       where: { id: draft.body.campaign.id },
       select: { status: true, sentCount: true, blockedCount: true },
     });
     return campaign?.status === "completed" && campaign.sentCount === 1 && campaign.blockedCount === 1;
-  });
+  }, 10_000);
+  assert.ok(claimed >= 1);
   assert.deepEqual(metaRecipients, [allowedWaIdCanonical]);
   assert.equal(
     await prisma.outboundMessage.count({ where: { clientId: businessClientId, waId: blockedWaId } }),
@@ -16013,7 +16219,7 @@ test("campaign recipient bridge does not cross tenants and skips ambiguous match
   assert.equal(usageEvents.length, 2);
   for (const event of usageEvents) {
     const payload = event.payloadJson as Record<string, unknown>;
-    assert.equal(payload.source, "manual_campaign_send");
+    assert.equal(payload.source, "campaign");
     assert.equal(payload.messageKind, "template");
     assert.equal(payload.metaCategory, "utility");
     assert.equal(payload.campaignId === crossTenant.body.campaign.id || payload.campaignId === ambiguous.body.campaign.id, true);
@@ -16036,7 +16242,7 @@ test("campaign reuse candidates blocked after original participation cannot be s
   const aliasTail = safeTemplatePrefix.replace(/\D/g, "").slice(-8).padStart(8, "0");
   const originalWaId = `55119${aliasTail}`;
   const aliasWaId = `5511${aliasTail}`;
-  const stalePreviewWaId = "5541991189302";
+  const stalePreviewWaId = `5541991${aliasTail.slice(-6)}`;
   const originalLead = await prisma.lead.create({
     data: {
       tenantId: businessClientId,
@@ -18088,4 +18294,29 @@ test("tenant admins manage department schedule exceptions with RBAC and tenant i
     select: { payloadJson: true },
   });
   assert.ok(auditEvents.some((event) => JSON.stringify(event.payloadJson).includes(businessAdmin.id)));
+});
+
+test("aggregate scheduling is tenant scoped, atomic and does not start outbound work", async () => {
+  const batch = await prisma.campaignExecutionBatch.create({ data: { clientId: businessClientId, name: "Schedule recovery regression", idempotencyKey: `${prefix}:schedule-recovery`, sourceMode: "CSV_IMPORT", status: "draft", chunkCount: 2, totalRecipients: 1001 } });
+  const children = [];
+  for (let index = 1; index <= 2; index++) {
+    const campaign = await prisma.campaign.create({ data: { clientId: businessClientId, name: `Recovery ${index}`, templateName: "test", status: "draft", totalRecipients: index === 1 ? 1000 : 1 } });
+    children.push(campaign.id);
+    await prisma.campaignExecutionBatchCampaign.create({ data: { clientId: businessClientId, batchId: batch.id, campaignId: campaign.id, chunkIndex: index, recipientCount: campaign.totalRecipients } });
+  }
+  const route = `/app/campaign-batches/${batch.id}/schedule`;
+  const scheduledAt = new Date(Date.now() + 86400000).toISOString();
+  const outbound = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+  assert.equal((await request("POST", route, businessAgent, { scheduledAt })).status, 403);
+  assert.equal((await request("POST", route, overrideAdmin, { scheduledAt })).status, 404);
+  assert.equal((await request("POST", route, businessAdmin, { scheduledAt: "invalid" })).status, 400);
+  assert.equal(await prisma.campaignExecutionJob.count({ where: { batchId: batch.id } }), 0);
+  const scheduled = await request("POST", route, businessAdmin, { scheduledAt });
+  assert.equal(scheduled.status, 200, JSON.stringify(scheduled.body));
+  const jobs = await prisma.campaignExecutionJob.findMany({ where: { batchId: batch.id }, orderBy: { chunkIndex: "asc" } });
+  assert.deepEqual(jobs.map((job) => [job.chunkIndex, job.status, job.eligibleAt.toISOString()]), [[1, "queued", scheduledAt], [2, "queued", scheduledAt]]);
+  assert.equal(await prisma.campaign.count({ where: { id: { in: children }, status: "scheduled" } }), 2);
+  assert.equal((await request("POST", route, businessAdmin, { scheduledAt })).status, 409);
+  assert.equal(await prisma.campaignExecutionJob.count({ where: { batchId: batch.id } }), 2);
+  assert.equal(await prisma.outboundMessage.count({ where: { clientId: businessClientId } }), outbound);
 });

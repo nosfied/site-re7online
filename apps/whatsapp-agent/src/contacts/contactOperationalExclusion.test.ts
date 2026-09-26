@@ -92,3 +92,19 @@ test("event deletion or anonymization cannot change Contact operational exclusio
 
   assert.equal(excluded.has("5584951957784"), true);
 });
+
+test("large audiences bound bind parameters without losing excluded identities or tenant scope", async () => {
+  const waIds = Array.from({ length: 12001 }, (_, index) => `55419${String(index).padStart(8, "0")}`);
+  const visited = new Set<string>();
+  const excludedIds = new Set([waIds[0], waIds[1000], waIds[12000]]);
+  const prisma = { contact: { findMany: async ({ where }: { where: { clientId: string; OR: Array<Record<string, { in: string[] }>> } }) => {
+    assert.equal(where.clientId, "tenant-only");
+    const values = where.OR.flatMap((clause) => Object.values(clause)[0].in);
+    assert.ok(values.length <= 3000, "query must stay well below PostgreSQL bind limit");
+    for (const value of values) visited.add(value);
+    return values.filter((value) => excludedIds.has(value)).map((waId) => ({ waId, externalUserRef: waId, legacyWaId: waId, operationallyExcludedAt: new Date() }));
+  } } };
+  const result = await loadOperationallyExcludedWaIds(prisma, { clientId: "tenant-only", waIds });
+  assert.deepEqual(visited, new Set(waIds));
+  assert.deepEqual(result, excludedIds);
+});

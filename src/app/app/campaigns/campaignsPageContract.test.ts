@@ -230,6 +230,35 @@ test("campaign creation exposes dynamic CRM-filter scheduling without freezing p
   assert.ok(pageSource.includes("scheduleAppCampaignDraft(session, created.campaign.id, scheduledAt.toISOString())"));
 });
 
+test("campaign audience split is explicit and creates only static numbered drafts", () => {
+  assert.ok(pageSource.includes("createAppCampaignDraftSplit"));
+  assert.ok(pageSource.includes("previewAppCampaignDraftSplit"));
+  assert.ok(pageSource.includes("Audiência acima de 1.000 destinatários"));
+  assert.ok(pageSource.includes("O rascunho atual usa apenas a prévia carregada."));
+  assert.ok(pageSource.includes("Preparar divisão"));
+  assert.ok(pageSource.includes("Criar ${audienceSplitPlan.draftCount} rascunho(s)"));
+  assert.ok(pageSource.includes('splitMode: audienceRecipientMode === "DYNAMIC_CRM_FILTER" ? "DYNAMIC_FILTER_AS_STATIC"'));
+  assert.ok(pageSource.includes("Novos contatos futuros não entram automaticamente nesses rascunhos."));
+  assert.ok(pageSource.includes("audienceSignature: audienceSplitPlan.audienceSignature"));
+  assert.ok(pageSource.includes("requestId: audienceSplitRequestId"));
+  assert.ok(pageSource.includes("Nenhuma mensagem será enviada ou agendada."));
+});
+
+test("campaign detail exposes batch group progress without bypassing tenant queue", () => {
+  assert.ok(pageSource.includes("Conjunto de campanhas"));
+  assert.ok(pageSource.includes("getCampaignBatchSourceLabel(selectedCampaign.executionBatch.sourceMode)"));
+  assert.ok(pageSource.includes("dividido em lotes numerados. A fila do tenant executa um lote por vez."));
+  assert.ok(pageSource.includes("Destinatários do conjunto"));
+  assert.ok(pageSource.includes("Progresso do conjunto"));
+  assert.ok(pageSource.includes("Pausar conjunto"));
+  assert.ok(pageSource.includes("Retomar conjunto"));
+  assert.ok(pageSource.includes("Cancelar conjunto"));
+  assert.ok(pageSource.includes("selectedCampaign.executionBatch.chunks.map"));
+  assert.ok(pageSource.includes("getCampaignQueueStatusLabel(chunk.queueStatus, chunk.queuePosition)"));
+  assert.ok(pageSource.includes("As ações acima atuam no conjunto. Ações individuais abaixo continuam restritas ao lote selecionado."));
+  assert.ok(campaignDraftsSource.includes("Este tenant já tem uma campanha em execução. Aguarde a fila liberar antes de testar ou iniciar outro envio."));
+});
+
 test("campaign CRM audience panel uses neutral administrative tone", () => {
   const audienceBlock = pageSource.slice(
     pageSource.indexOf(">Audiência CRM<") - 1200,

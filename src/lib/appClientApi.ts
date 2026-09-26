@@ -685,6 +685,20 @@ export type AppCampaignAudiencePreviewResponse = {
   generatedAt: string;
 };
 
+export type AppCampaignAudienceSplitMode = "STATIC_FILTER" | "DYNAMIC_FILTER_AS_STATIC";
+
+export type AppCampaignAudienceSplitPlan = {
+  mode: AppCampaignAudienceSplitMode;
+  totalEligible: number;
+  draftCount: number;
+  chunkSizes: number[];
+  limit: number;
+  analysisLimit: number;
+  truncated: boolean;
+  audienceSignature: string;
+  sourceDescription: string;
+};
+
 export type AppMetaCostPreview = {
   source: "campaign" | "manual_campaign_send" | "inbox_template" | "canned_reply" | "inbox_text" | "unknown";
   messageKind: "template" | "canned_reply" | "free_text" | "unknown";
@@ -5187,6 +5201,71 @@ export async function createAppCampaignDraft(
   });
 }
 
+export async function previewAppCampaignDraftSplit(
+  session: AppSession,
+  payload: {
+    name: string;
+    templateId: string;
+    splitMode: AppCampaignAudienceSplitMode;
+    filters?: AppCampaignAudiencePreviewFilter;
+    dynamicFilter?: {
+      version: 1;
+      crmBusinessStatusId: string;
+    } | null;
+    returnDestination: AppCampaignReturnDestination;
+    templateVariableMappings?: Array<{
+      position: string;
+      source: "contact.displayName" | "lead.companyName" | "lead.city" | "fixed" | "";
+      value?: string;
+      fallback?: string;
+    }>;
+  }
+): Promise<{
+  ok: true;
+  plan: AppCampaignAudienceSplitPlan;
+  summary: CampaignDraftSummary;
+}> {
+  return requestAppJson(session, "/app/campaigns/drafts/split-preview", {
+    method: "POST",
+    timeoutMs: 120000,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createAppCampaignDraftSplit(
+  session: AppSession,
+  payload: {
+    name: string;
+    templateId: string;
+    splitMode: AppCampaignAudienceSplitMode;
+    filters?: AppCampaignAudiencePreviewFilter;
+    dynamicFilter?: {
+      version: 1;
+      crmBusinessStatusId: string;
+    } | null;
+    audienceSignature: string;
+    requestId: string;
+    returnDestination: AppCampaignReturnDestination;
+    templateVariableMappings?: Array<{
+      position: string;
+      source: "contact.displayName" | "lead.companyName" | "lead.city" | "fixed" | "";
+      value?: string;
+      fallback?: string;
+    }>;
+  }
+): Promise<{
+  ok: true;
+  idempotent: boolean;
+  plan: AppCampaignAudienceSplitPlan;
+  campaigns: Array<CampaignItem & { campaignId: string }>;
+}> {
+  return requestAppJson(session, "/app/campaigns/drafts/split", {
+    method: "POST",
+    timeoutMs: 120000,
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function previewAppCampaignCsv(
   session: AppSession,
   payload: {
@@ -5207,6 +5286,7 @@ export async function previewAppCampaignCsv(
 ): Promise<AppCampaignImportPreview> {
   return requestAppJson(session, "/app/campaigns/csv-preview", {
     method: "POST",
+    timeoutMs: 120000,
     body: JSON.stringify(payload),
   });
 }
@@ -5217,6 +5297,7 @@ export async function createAppCampaignDraftFromCsv(
     name: string;
     templateId: string;
     csvText: string;
+    requestId?: string;
     mapping: {
       contactColumn?: string | null;
       field1Column?: string | null;
@@ -5232,7 +5313,10 @@ export async function createAppCampaignDraftFromCsv(
   }
 ): Promise<{
   ok: true;
-  campaign: CampaignItem & { campaignId: string };
+  campaign?: CampaignItem & { campaignId: string };
+  grouped?: boolean;
+  batchId?: string;
+  campaigns?: Array<CampaignItem & { campaignId: string }>;
   draft: {
     summary: AppCampaignImportSummary;
     recipients: AppCampaignImportPreview["recipients"];
@@ -5245,6 +5329,7 @@ export async function createAppCampaignDraftFromCsv(
 }> {
   return requestAppJson(session, "/app/campaigns/drafts/csv", {
     method: "POST",
+    timeoutMs: 120000,
     body: JSON.stringify(payload),
   });
 }
@@ -5325,6 +5410,33 @@ export async function cancelAppCampaign(
   campaignId: string
 ): Promise<{ ok: true; campaign: CampaignItem }> {
   return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}/cancel`, {
+    method: "POST",
+  });
+}
+
+export async function pauseAppCampaignBatch(
+  session: AppSession,
+  batchId: string
+): Promise<{ ok: true; batchId: string }> {
+  return requestAppJson(session, `/app/campaign-batches/${encodeURIComponent(batchId)}/pause`, {
+    method: "POST",
+  });
+}
+
+export async function resumeAppCampaignBatch(
+  session: AppSession,
+  batchId: string
+): Promise<{ ok: true; batchId: string }> {
+  return requestAppJson(session, `/app/campaign-batches/${encodeURIComponent(batchId)}/resume`, {
+    method: "POST",
+  });
+}
+
+export async function cancelAppCampaignBatch(
+  session: AppSession,
+  batchId: string
+): Promise<{ ok: true; batchId: string }> {
+  return requestAppJson(session, `/app/campaign-batches/${encodeURIComponent(batchId)}/cancel`, {
     method: "POST",
   });
 }
@@ -5474,5 +5586,11 @@ export async function syncAppTemplates(
   return requestAppJson(session, "/app/templates/sync", {
     method: "POST",
     timeoutMs: 30000,
+  });
+}
+
+export async function scheduleAppCampaignBatch(session: AppSession, batchId: string, scheduledAt: string): Promise<{ ok: true; batchId: string }> {
+  return requestAppJson(session, `/app/campaign-batches/${encodeURIComponent(batchId)}/schedule`, {
+    method: "POST", body: JSON.stringify({ scheduledAt }),
   });
 }

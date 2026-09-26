@@ -56,6 +56,14 @@ export async function loadOperationallyExcludedWaIds(
   const waIds = Array.from(new Set(params.waIds.map(normalizeOperationalContactIdentity).filter(Boolean)));
   if (waIds.length === 0) return new Set<string>();
   if (!prisma.contact?.findMany) return new Set<string>();
+  if (waIds.length > 1000) {
+    const excluded = new Set<string>();
+    for (let offset = 0; offset < waIds.length; offset += 1000) {
+      const chunk = await loadOperationallyExcludedWaIds(prisma, { clientId: params.clientId, waIds: waIds.slice(offset, offset + 1000) });
+      for (const waId of chunk) excluded.add(waId);
+    }
+    return excluded;
+  }
   const contacts = await prisma.contact.findMany({
     where: {
       clientId: params.clientId,

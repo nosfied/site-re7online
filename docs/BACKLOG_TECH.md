@@ -1,5 +1,111 @@
 # BACKLOG — RE7ONLINE WHATSAPP AGENT
 
+## Persistencia para revisao Git — 2026-09-26
+
+Status desta frente: TECHNICAL LOCAL VALIDATED / NOT DEPLOYED / OWNER UI PENDING.
+Branch dedicada `review/campaign-recovery-20260926`, com parent/base `6d664d0b9ffcf52f5315bfeca96f0622f4d25792`.
+A base de reconstrucao foi `5d925973`; os 80 acrescimos documentais de `6d664d0b`
+foram conferidos e seu historico permanece ancestral. O owner PASS do lote anterior
+(normalizacao/settings/contraste, head funcional `5ee2de6b`) continua OWNER VALIDATED / CLOSED;
+nao se estende automaticamente a esta frente de lotes/fila.
+
+Delta e fontes foram arquivados antes da troca de branch. Reaplicacao sobre `6d664d0b`
+restaurou os mesmos 23 arquivos, com hashes conferidos; nao houve conflito funcional,
+reset/clean ou alteracao da branch original. Implementacao, testes, schema/migration,
+os quatro docs e este runbook compoem o escopo; .data, evidencias, dumps, arquivos
+compactados, credenciais e fixtures de ambiente ficam fora do Git.
+
+As 18 anotacoes UUID correspondem a tipos SQL ja existentes, sem ALTER TYPE novo.
+O inventario por objeto e impacto do drift residual anterior esta no
+`docs/RUNBOOK_WHATSAPP_AGENT.md`, secao "Drift historico residual — revisao da fila".
+Nenhum desses defaults, indices ou nomes foi corrigido nesta frente.
+
+Validacao preservada: fila/runner/rotas 144/144, apoio 41/41 e rechecagem dos casos
+falhos 4/4; builds e Prisma validados anteriormente. Sem repeticao de testes/builds
+porque esta persistencia nao muda comportamento funcional. Staging e whitespace
+sao conferidos separadamente. CI versionada: push apenas main/develop; PR apenas
+com destino main/develop. `vercel.json` bloqueia auto-deploy somente desta branch
+via git.deploymentEnabled=false para seu nome exato; demais branches inalteradas.
+Push de revisao nao autoriza merge, deploy, producao DB, provider ou envio real.
+
+Pendencias: ensaio operacional de rollout/rollback, drift residual anterior,
+owner UI e aceite CRA. Divergencia DELIVERED/READ → Conversation/HUMAN/WAITING
+permanece separada e sem alteracao funcional. Reparo 6683 continua CLOSED.
+
+## Auditoria da recuperacao — 2026-09-26
+
+Status tecnico: PRONTO PARA COMMIT DE REVISAO / NOT DEPLOYED / OWNER VALIDATION PENDING.
+Esta nota atualiza o fechamento local abaixo; nao declara prontidao para deploy ou aceite CRA.
+
+- Worktree persistente: `/home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/tmp/worktrees/re7-campaign-recovery-20260926`. HEAD detached `5d9259739754816d570470a30d52eb7eb53541bc`;
+  referencia do ultimo HEAD anterior `6d664d0b9ffcf52f5315bfeca96f0622f4d25792`
+  (branch original `zero-eligible-crm-eligibility-20260923`). Nao houve novo commit.
+- Integridade: SHA-256 do patch e tar original conferidos; ambos coincidiam com
+  o codigo no inicio desta auditoria. Replay independente das edicoes historicas
+  confirmou migration, fila, runner e testes. API/UI e consultas CRM receberam
+  as correcoes posteriores discriminadas em `local-evidence/recovery/audit/`.
+  Nao existe snapshot integral do filesystem anterior: DB e capturas perdidos
+  nao sao declarados recuperados byte a byte. Comportamentos criticos foram testados.
+- Falhas fechadas: `CompletedServiceSnapshot.clientId` text versus cast SQL uuid;
+  joins Client.id/WaPhoneNumber.clientId e Conversation.id/ConversationMetrics.conversationId
+  com uuid/text na copia parcialmente criada. Banco novo `re7_recovery_audit`,
+  127.0.0.1:55432, criado exclusivamente por `prisma migrate deploy`, corrigiu o ambiente.
+  A fixture de agendamento ja teve o `idempotencyKey` obrigatorio reposto na retomada.
+  Nenhuma assertion removida ou relaxada; concorrencia preservada.
+- Schema: 18 anotacoes `@db.Uuid` alinhadas aos tipos das migrations existentes;
+  Prisma Client 6.19.2 regenerado e semanticamente correspondente. SQL da fila intacto.
+  Diff somente leitura ainda registra defaults, indices e nomes historicos;
+  nao foi aplicado e nao ha diferenca de tipos ou estrutura da fila nesse diff.
+- Migration validada: registro anterior de 60 migrations PASS recuperado; novo
+  `migrate deploy` 60/60 PASS necessario porque o DB de teste recuperado havia
+  sido substituido por schemas divergentes. Checksums de 60 SQLs iguais ao ledger.
+  "Ensaio pendente" dizia respeito a rollout/rollback operacional, nao a falha
+  da migration. Nao foi usado db push, reset ou SQL manual nesta auditoria.
+- Testes finais: casos anteriormente falhos 4/4; fila 8/8 + runner 10/10 + rotas
+  126/126 = 144/144; importacao/exclusao/contratos UI 41/41; zero skips/falhas.
+  Backend build e prisma validate/generate PASS. Build frontend anterior preservado
+  porque UI nao mudou nesta auditoria. Os quatro smokes aprovados nao foram repetidos.
+- Contratos: 3.001 → quatro lotes, snapshot unico, variaveis CRM/CSV, isolamento por
+  tenant/exclusividade, scheduler concorrente, retomada, aceite apos perda de lease
+  e bloqueios antes do provider cobertos. Provider apenas simulado nos testes.
+- Pendencias efetivas: rollout/rollback operacional, drift residual historico de
+  defaults/indices, owner validation, aceite CRA e decisao de dominio DELIVERED/READ →
+  Conversation/HUMAN/WAITING. Divergencia de dominio permanece separada e sem alteracao
+  funcional; 6683 segue encerrado. Sem commit/push/deploy, producao DB ou envio real.
+
+## Atualizacao de recuperacao e fechamento local — 2026-09-26
+
+Status: TECHNICAL LOCAL VALIDATED / OWNER VALIDATION PENDING / NOT DEPLOYED.
+Esta atualizacao substitui, para o smoke tecnico local, as lacunas visuais
+registradas anteriormente; preserva o historico e nao representa aceite CRA.
+
+- CRM estatico: selecao/filtro, previa e confirmacao clicados na UI; 3.001
+  destinatarios persistidos em quatro filhos (1.000 / 1.000 / 1.000 / 1).
+- CRM dinamico: estimativa e confirmacao de agendamento exercitadas na UI;
+  zero filhos antes da execucao. Uma etapa do processador com relogio local
+  controlado criou o snapshot de 3.001 destinatarios/quatro filhos, sem envio.
+- CSV: upload, mapeamento, previa e confirmacao pela UI; um unico conjunto,
+  3.001 destinatarios/quatro filhos. A UI trata a resposta agrupada; timeout
+  especifico e chave de idempotencia reutilizada protegem a repeticao local.
+- Acoes agregadas: agendamento atomico dos quatro lotes, reload, pausa,
+  retomada e cancelamento confirmados no DB. Nenhum outbound foi criado.
+- Test-send ocupado: clique real com input React preenchido, mensagem PT-BR,
+  zero chamadas adicionais ao provider simulado, zero outbound e zero job novo.
+- Corrigidos limites de parametros SQL em consultas de identidades CRM/CSV e
+  exclusao operacional; a previa de campanha deixa de limitar a contagem a
+  janela inicial de 800 contatos. Leitura de audiencia limitada a 5.000.
+- Evidencias locais: `local-evidence/recovery/result-summary.json`, capturas e
+  logs no worktree persistente `tmp/worktrees/re7-campaign-recovery-20260926`.
+  Capturas antigas que estavam somente em `/tmp` nao sobreviveram ao reboot;
+  seus resultados historicos foram recuperados do registro da sessao.
+- Resultado historico da primeira retomada: builds PASS, suites 41/41 e 43/43;
+  a suite ampla entao falhou nos bancos divergentes. Essas falhas foram diagnosticadas
+  e fechadas na auditoria acima. O drift residual de defaults/indices continua documentado.
+- Sem commit, push, deploy, banco de producao ou provider real. Guided Builder
+  permanece pausado. Owner validation, aceite CRA e ensaio controlado de
+  rollout/rollback da migration continuam pendentes.
+
+
 ---
 
 ## FASE ATUAL DO PRODUTO
@@ -23,6 +129,189 @@ Produto SaaS operacional validado com:
 Produto operacional com observabilidade real da Meta e área do cliente funcional.
 
 O onboarding interno foi implementado, porém ainda não validado com novo tenant via UI.
+
+### Campaign CRM audience split into numbered drafts - 2026-09-25
+
+Status: LOCAL PARTIAL IMPLEMENTATION / FOCUSED TEST VALIDATED / NOT DEPLOYED /
+OWNER UI PENDING / NOT CRA-READY FOR COMPLETE BATCH OPERATION. New local
+campaign draft split flow keeps the existing 1,000-recipient campaign draft
+limit and adds an explicit backend-authoritative split path for CRM audiences
+that exceed that capacity. The normal paginated preview remains a preview
+surface; the split preview/confirmation resolves the selected CRM audience
+again in the backend, same tenant, deterministic order, up to the existing
+5,000 analysis ceiling. It returns the eligible total, draft count and planned
+distribution before confirmation. Confirmation creates static draft chunks named
+`Campanha X — 01/03`, `02/03`, etc., preserving template, variable mappings and
+return destination, without sending, scheduling, Outbound, Conversation,
+Runtime or provider calls.
+
+Dynamic CRM filters are not cloned as dynamic filters across multiple drafts.
+The UI offers explicit conversion to static selection at split time and informs
+the operator that future matching contacts will not be added automatically.
+If the audience signature changes between split preview and confirmation, the
+backend returns `audience_changed` and requires review. Unsupported full-split
+post-filters such as conversation/origin/city currently block with a controlled
+message instead of truncating silently. This front is separate from the previous
+normalization/settings/contrast lot, which is already DEPLOYED / OWNER
+VALIDATED / CLOSED at functional production head
+`5ee2de6b8878aefa733a6fbe1b7f1553fd78ae2e`.
+Validation on the dedicated local DB covered 1,000 existing behavior, 1,001
+split into two drafts, 3,000 split into three drafts, union/no overlap, `limit:
+25` not reducing the split set, no Outbound/Conversation/Runtime/provider side
+effects and idempotent retry. `campaignsPageContract.test.ts` 28/28 PASS,
+backend/frontend builds PASS and `git diff --check` PASS. Authenticated browser
+smoke was not exercised in this step because no isolated local frontend/session
+was available; OWNER UI validation remains pending.
+
+Audit follow-up for CRA operation above 3,000 recipients: the current local
+split is a preparation convenience, not a complete batch-campaign control
+model. Current code has these effective limits/contracts:
+
+| Modality | Current behavior | Limit / batching status | Gap |
+| --- | --- | --- | --- |
+| CRM static current preview | `Criar rascunho com audiencia` uses the eligible items already loaded by `/app/campaigns/audience-preview` | UI preview is paginated (`limit=25` in the current screen); draft route rejects `selectedLeadIds.length > 1000` | Operator can confuse preview page with complete filter result. |
+| CRM static all eligible filter | Local split preview/confirm resolves Leads directly by basic CRM filters and creates numbered static drafts | Up to 5,000 analyzed; creates independent campaigns of <=1,000 | No durable parent batch identity; unsupported full filters such as conversation/origin/city currently block. |
+| CRM dynamic schedule | Existing production contract stores `selectionMode=DYNAMIC_CRM_FILTER`; scheduler snapshots once at execution | `materializeDynamicCampaignSnapshot` queries `take: 1001` and fails `dynamic_match_limit_exceeded` over 1,000 | No dynamic batch snapshot splitting; conversion to static is optional but not equivalent to true dynamic scheduling. |
+| CSV | CSV import accepts up to `CAMPAIGN_IMPORT_MAX_ROWS = 10_000`; draft/send still constrained by campaign recipient limit | No automatic CSV split into grouped campaigns | Need chunking from validated import plan without re-parsing or duplicating recipients. |
+| Manual | Manual immediate route dedupes and rejects over 1,000 recipients | No batching | Manual remains small-list operation. |
+| Reuse | Reuses stored `draftSeed`; static/dynamic/CSV restoration depends on persisted evidence | No batch-group awareness | Reusing one numbered draft does not mean reusing the whole batch set. |
+| Send/schedule | Send/schedule operate per Campaign; scheduler claims up to 10 due campaigns per tick and starts each campaign run | `runningCampaigns` dedupes only by `campaignId`; throttle is per campaign run (`CAMPAIGN_THROTTLE_MS = 1000`) | Scheduling many chunks for the same time can multiply tenant throughput. |
+| Test-send | Sends one test message from one campaign seed using simulated or real transport depending environment | Not a batch operation | Must remain single-destination and not mark participation. |
+
+Minimum architecture recommendation for CRA-ready large audiences: introduce a
+durable `CampaignBatch`/`CampaignGroup` domain (schema migration likely needed)
+instead of using numbered names as identity. It should own the operator intent,
+tenant, source mode, filter/import signature, requested execution time,
+recipient snapshot id/version, chunk membership/order, aggregate progress,
+pause/resume/cancel state and idempotency key. For dynamic campaigns, the group
+must keep the filter until due time, create one immutable recipient snapshot at
+execution, split that snapshot into disjoint chunks, then coordinate chunk
+dispatch with a tenant-level scheduler/throughput guard. Existing Campaign,
+seed, runner, opt-out, operational exclusion, identity alias, delivery truth,
+billing and provider mechanics should be reused per child chunk. Acceptance
+requires proving no duplicate sends under concurrent confirm/retry/restart,
+no provider call during split/schedule preparation, no artificial Conversation,
+batch-wide and per-chunk progress/actions, and preserved zero-eligible behavior.
+
+Owner decision added on 2026-09-25: campaign execution must be sequential per
+tenant. The platform must never run more than one campaign executor at the same
+time for the same tenant, including standalone campaigns and grouped chunks,
+immediate and scheduled. Different tenants may execute independently.
+
+Local implementation update on 2026-09-26: the batch/tenant-queue front is
+BACKEND CORE IMPLEMENTED / INTEGRATED FOCUSED VALIDATED / NOT DEPLOYED /
+OWNER UI PENDING.
+Additive schema models were introduced for `CampaignExecutionBatch`,
+`CampaignExecutionBatchCampaign`, `CampaignExecutionJob` and
+`TenantCampaignExecutionLease`. `Campaign` remains the execution chunk. Send
+now, scheduled execution and resume now enqueue a job and reuse the existing
+runner after a tenant-level claim. Test-send acquires a temporary tenant lease
+and persists a running technical job so it is blocked while the tenant has any
+running campaign/test execution. Follow-up on 2026-09-26 added deterministic
+chunk sequencing and a post-provider lease check so an executor that lost
+ownership stops before persisting/continuing after a provider return.
+`campaignExecutionQueue.test.ts` PASS 8/8 proved: only one job is claimed for
+one tenant, different tenants claim independently, test-send blocks a campaign
+claim atomically, expired running campaign jobs still block the tenant until
+explicit finish, expired test-send leases still block until explicit release,
+`needs_review` invalidates the old executor token before the next tenant job,
+and batch chunks are claimed in `chunkIndex` order. The backend orchestrator now
+executes grouped CRM dynamic and CSV jobs through the same tenant queue and
+runner. `campaignRunner.test.ts` PASS 10/10 proved: accepted provider evidence
+is preserved after lease loss without sending the next recipient; CRM dynamic
+scheduled 3,001 eligible recipients resolve one snapshot and execute four
+sequential chunks; CSV grouped 3,001 recipients execute four chunks, preserve
+per-recipient variables and exclude a recipient blocked after planning before
+provider. Focused `campaignsFeatureRoutes.test.ts` PASS 125/125 covered split
+3,000, lifecycle pause/resume/cancel/test-send and scheduled opt-out
+revalidation. Backend build PASS and `git diff --check` PASS. Frontend browser
+smoke and aggregate UX validation are explicitly pending. `prisma migrate
+deploy` was validated successfully on an isolated local database
+`127.0.0.1:55432/re7_campaign_batches_migrate_check`; Prisma Client read the
+new tables. The earlier generic local `Schema engine error` was isolated to
+the previously manipulated local test DB/workaround path and is not treated as
+proof against the migration.
+
+Implemented contract for that front:
+
+- `runningCampaigns` remains useful only as an in-process guard and is not a
+  correctness guarantee. A durable per-tenant queue is required, with jobs
+  claimed transactionally and protected by a tenant execution lease.
+- Additive model: `CampaignExecutionBatch` for operator intent and aggregate
+  state; `CampaignExecutionBatchCampaign` mapping ordered chunk index to
+  existing `Campaign` rows; `CampaignExecutionJob` for queued standalone or
+  chunk execution; and `TenantCampaignExecutionLease` keyed by `clientId`.
+- Claim: a worker selects the next due job for one tenant using deterministic
+  ordering, acquires or renews the tenant lease with a lease token and expiry,
+  marks the job running, then invokes the existing campaign runner with a guard
+  that checks the lease token before every provider attempt and again after the
+  provider returns, before persisting the result or advancing to another
+  recipient.
+- Renewal/loss: the runner heartbeats the lease periodically and before each
+  recipient. A running durable job blocks the tenant even if the lease timestamp
+  expires, so another executor does not start merely because a provider call was
+  slow. If a worker actually loses ownership, it must observe token mismatch
+  and stop before the next provider call. Terminal states, pause, cancel,
+  explicit release and controlled failure release the queue.
+- Ordering recommendation: `eligibleAt` ascending, then creation sequence/id.
+  Inside a group, chunks run by `chunkIndex` with group continuity: once a group
+  starts, its next chunk stays ahead of newly due standalone jobs until the
+  group completes, pauses, is cancelled or fails. A schedule that matures during
+  a group waits; it does not interrupt or run in parallel.
+- `Enviar agora` creates a queued job with `eligibleAt=now`. A scheduled
+  campaign/group uses `eligibleAt=scheduledAt` as the earliest execution time,
+  not a guarantee of immediate start when the tenant is busy.
+- Pause releases the tenant lease and keeps the campaign/group paused until
+  explicit resume. Resume creates/reenables a due queue job. Cancel removes
+  pending jobs and stops further chunks. Provider/system failure should default
+  to fail-stop for the group until operator action; empty chunks are skipped and
+  do not hold the queue. Paused or failed items must not pin the tenant lease.
+- CRM dynamic groups must resolve the filter only after acquiring the tenant's
+  turn, persist one immutable group snapshot, then split that snapshot. Resume
+  reuses the same snapshot. Static/CSV groups preserve the confirmed selection
+  and per-recipient variables, with opt-out/exclusion/identity revalidated
+  before provider dispatch.
+- Already accepted/submitted recipients must not be resent on resume. Result
+  uncertainty continues to use the existing campaign/result-truth mechanisms;
+  the product must not promise exactly-once delivery beyond proven provider
+  evidence.
+- Test-send remains unitary and does not dispatch a group. Proposed safety
+  policy: if the tenant has an active campaign execution lease, test-send is
+  blocked or queued as a distinct low-priority test job by explicit product
+  decision; it must not become an untracked provider-send path running in
+  parallel with campaign execution.
+- UX must show wait position/state, requested time versus effective start,
+  group/current chunk, aggregate and per-chunk progress, pause/block/failure
+  reason and available actions. Numbered names are presentation only, not group
+  identity. "Attempts completed" must remain distinct from delivery result.
+- Migration proposal: additive tables/indexes only. `CampaignBatch` indexed by
+  `(clientId, status, eligibleAt)` and unique `(clientId, idempotencyKey)`;
+  child links unique by `(batchId, chunkIndex)` and `(clientId, campaignId)`;
+  `CampaignExecutionJob` indexed by `(clientId, status, eligibleAt, sequence)`
+  plus lease expiry; `TenantCampaignExecutionLease` unique by `clientId`.
+  Existing campaigns without a group remain compatible.
+- Rollout/rollback requirement: queue-managed scheduled work must not be
+  visible to the old scheduler as normal due `Campaign.status=scheduled` rows.
+  Use an explicit queue-managed representation such as queue job `eligibleAt`
+  with legacy `scheduledAt` neutralized or guarded, and enable the queue only
+  after the old scheduler path is disabled. Rollback must restore the previous
+  code and executable build and must not let old code dispatch queued group work
+  in parallel.
+- Planned validation: two workers contending for one tenant, distinct tenants
+  independent, standalone competing with scheduled group, simultaneous
+  schedules, restart/expired lease without overlap, pause/resume/cancel/failure
+  release, one dynamic snapshot per group, zero-eligible chunks, no provider
+  call during preparation, no duplicate recipients, preserved opt-out/exclusion,
+  12/13 alias behavior, RBAC and tenant isolation.
+
+Remaining gaps before production: UI/smoke for the full group flow, aggregate
+browser experience for wait position/progress/actions, deploy runbook rehearsal
+with migration artifacts, owner UI validation and production rollout. Backend
+proof is local only; no production DB, provider real, real send, commit, push or
+deploy was performed in this step. Owner-approved policies now settled: no
+manual reprioritization, test-send is blocked rather than queued while tenant
+execution is active, and group continuity outranks newly due standalone
+campaigns until completion/pause/cancel/failure.
 
 ### Privacidade / LGPD por titular - 2026-09-20
 
@@ -2133,14 +2422,16 @@ OWNER UI PENDING.
   not formal CRA contractual acceptance. The old backup-retention permission
   issue remains a separate operational follow-up, and the transient Prisma
   reload error recovered with health/db OK and did not require rollback.
-- Audience size audit, 2026-09-25: CRM static audience preview requests
+- Audience size audit, 2026-09-25, published behavior before the local batch
+  backend: CRM static audience preview requests
   `/app/campaigns/audience-preview` with `limit=25`; backend analyzes up to
   5,000 CRM rows but returns paginated eligible items, and `Criar rascunho com
   audiencia` sends only the eligible items currently present in that preview
   response. Static draft creation rejects `selectedLeadIds.length > 1000`, and
   the shared resolver also caps sanitized selected IDs at 1,000. There is no
   implicit "all 3,000" selection and no automatic batching.
-- Dynamic CRM-filter audit, 2026-09-25: dynamic scheduling stores only
+- Dynamic CRM-filter audit, 2026-09-25, published behavior before the local
+  batch backend: dynamic scheduling stores only
   `selectionMode=DYNAMIC_CRM_FILTER` plus the same-tenant CRM status filter; it
   does not freeze recipients at schedule time. At execution, the runner queries
   `take: 1001` and fails explicitly with `dynamic_match_limit_exceeded` when
@@ -2149,6 +2440,60 @@ OWNER UI PENDING.
   the preview/estimate can show the current count, but the product should make
   the 1,000-recipient campaign/execution limit and dynamic overflow failure
   clearer before draft/schedule. Status: OPEN / P2 CAMPAIGN UX PREFLIGHT.
+- Campaign batches + tenant execution queue, local update 2026-09-26:
+  BACKEND CORE + GROUP UI INTEGRATED LOCALLY / FOCUSED VALIDATED / NOT DEPLOYED /
+  OWNER UI PENDING.
+  Additive Prisma migration was validated with `prisma migrate deploy` in an
+  isolated local DB. The local queue persists batch/chunk/job/lease records,
+  enqueues immediate/scheduled/resume paths, makes test-send acquire a durable
+  technical tenant job, and blocks new tenant execution while any running job is
+  active or uncertain even after lease expiry. New focused recovery coverage
+  proves that an expired running job does not unblock the tenant by timeout; an
+  explicit `needs_review` classification records the reason, releases the lease,
+  invalidates the old executor token and allows later queued work without
+  resending the uncertain job. Additional queue coverage proves batch chunks are
+  claimed in deterministic `chunkIndex` order, and the runner preserves accepted
+  provider evidence after lease loss while stopping before the next provider
+  call. Integrated local backend coverage proved CRM dynamic scheduled 3,001
+  recipients -> one snapshot -> four sequential chunks, and CSV grouped 3,001
+  recipients -> four sequential chunks with per-recipient variables preserved
+  and a post-plan blocked recipient excluded before provider. UI list displays
+  "Revisao operacional" and the block reason for that state. Local UI/API
+  integration now exposes the execution batch summary in Campaign detail:
+  group identity, source, total recipients, numbered chunks, per-chunk
+  status/progress, tenant queue state, requested/effective times and operational
+  block reasons. Focused validation after this UI hook: backend build PASS,
+  `campaignsPageContract.test.ts` 29/29 PASS, frontend build PASS,
+  `campaignsFeatureRoutes.test.ts` 125/125 PASS and `git diff --check` PASS.
+  Authenticated local API smoke on isolated ports `3007`/`3061` loaded
+  supervisor/admin campaign detail for fixture `batch-smoke-20260926`, confirmed
+  `executionBatch` with 3,001 recipients / four chunks and confirmed AGENT
+  403; sanitized evidence is stored in ignored local directory
+  `local-evidence/20260926-batch-ui-smoke/`. Follow-up Chrome headless/CDP
+  smoke used fixture `batch-visual-20260926` with future `eligibleAt` and
+	  captured desktop/narrow screenshots: SUPERVISOR and ADMIN saw the group
+	  detail, tenant queue copy, four chunks and progress; AGENT direct URL showed
+	  restricted campaign access and no batch detail. Follow-up CDP smoke clicked
+	  aggregate `Pausar conjunto`, `Retomar conjunto` and `Cancelar conjunto`,
+	  then confirmed persisted DB state: paused jobs=4, resumed queued jobs=4 and
+	  cancelled jobs/campaigns=4. Test-send occupied was confirmed as no outbound
+	  delta while tenant busy, but the UI toast click remains visually inconclusive
+	  because the controlled input did not update in the CDP script. Visual flows
+	  still NOT EXERCISED: CRM/CSV grouped creation confirmation and occupied
+	  test-send toast by UI click. Remaining blockers are production-safe
+  migration rollout/rollback rehearsal, complete browser flow smoke, owner UI
+  validation and deployment. Do not mark this CRA-ready until those operational
+  validations are complete.
+  Contract audit note: current production head `5ee2de6...` already calls
+  `ensureCampaignOutboundConversation(...)` from the Meta webhook path when a
+  campaign outbound receives `DELIVERED` or `READ`; tests using
+  `deliverCampaignOutbound(...)` assert `Conversation` and
+  `ConversationRuntimeState` creation with `lastInboundAt=null` and HUMAN/WAITING
+  runtime. This was not introduced by the batch lot, but it conflicts with the
+  stricter principle "campaign attempt does not equal operational conversation"
+  if that principle covers delivered outbound-only attempts. Publication of the
+  batch lot must remain blocked for owner/architecture decision on this contract;
+  do not reopen repair `6683` and do not legitimize the divergence as CRA-ready.
 
 ## P1 - Zero-Eligible Campaign + CRM Eligibility Counts - 2026-09-23
 
@@ -2317,3 +2662,13 @@ Next front audit - P2 Guided Builder BOT inactivity policy UX:
   each policy, review explains practical effect, Advanced JSON remains
   equivalent, existing reset/handoff tests pass, and no human service is closed
   automatically.
+
+## Decisao de dominio pendente — materializacao por DELIVERED/READ
+
+Status: OPEN / DOMAIN DECISION REQUIRED / PUBLICATION BLOCKED.
+O webhook historico pode materializar Conversation/Runtime HUMAN/WAITING ao
+receber DELIVERED/READ de outbound de campanha, mesmo com lastInboundAt=null.
+Este comportamento e anterior ao lote e conflita com o principio de que uma
+tentativa de campanha nao equivale a conversa operacional. Nao foi resolvido
+nem legitimado por esta entrega. Webhook e campaignOutboundConversation foram
+preservados. A decisao permanece explicita para revisao final; reparo 6683 fechado.

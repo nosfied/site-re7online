@@ -156,10 +156,11 @@ export function getCampaignUserFacingError(error: CampaignApiErrorLike, fallback
     invalid_recipients: "Selecione ao menos um contato elegível.",
     return_destination_required: "Defina o destino das respostas antes de continuar.",
     return_destination_invalid: "Revise o destino das respostas antes de continuar.",
-    crm_status_not_found: "Situação no CRM não encontrada para este tenant.",
-    invalid_dynamic_filter: "Selecione uma Situação no CRM para o filtro dinâmico.",
-    campaign_name_conflict: "Já existe uma campanha com este nome.",
-  };
+	    crm_status_not_found: "Situação no CRM não encontrada para este tenant.",
+	    invalid_dynamic_filter: "Selecione uma Situação no CRM para o filtro dinâmico.",
+	    campaign_name_conflict: "Já existe uma campanha com este nome.",
+	    campaign_execution_in_progress: "Este tenant já tem uma campanha em execução. Aguarde a fila liberar antes de testar ou iniciar outro envio.",
+	  };
   if (messages[normalizedCode]) {
     if (normalizedCode === "no_eligible_recipients" && blockedByReason.length > 0) {
       const reasonLines = blockedByReason

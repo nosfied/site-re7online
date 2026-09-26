@@ -15,6 +15,8 @@ import {
 import {
   AppCampaignAudiencePreviewResponse,
   AppCampaignAudiencePreviewItem,
+  AppCampaignAudiencePreviewFilter,
+  AppCampaignAudienceSplitPlan,
   AppCampaignImportReport,
   AppCampaignImportPreview,
   AppCampaignReturnDestination,
@@ -23,9 +25,11 @@ import {
   AppTemplateItem,
   CrmBusinessStatusConfig,
   cancelAppCampaign,
+  cancelAppCampaignBatch,
   clearAppSession,
   createAppCampaign,
   createAppCampaignDraft,
+  createAppCampaignDraftSplit,
   createAppCampaignDraftFromCsv,
   discardAppCampaignDraft,
   fetchAppCampaignAudiencePreview,
@@ -37,9 +41,13 @@ import {
   listAppTemplates,
   loadAppSession,
   pauseAppCampaign,
+  pauseAppCampaignBatch,
+  previewAppCampaignDraftSplit,
   previewAppCampaignCsv,
   resumeAppCampaign,
+  resumeAppCampaignBatch,
   scheduleAppCampaignDraft,
+  scheduleAppCampaignBatch,
   saveAppSession,
   sendAppCampaignDraft,
   sendAppCampaignTest,
@@ -478,6 +486,32 @@ function getProgressPct(campaign: CampaignItem) {
   return Math.max(0, Math.min(Math.round((completed / campaign.totalRecipients) * 100), 100));
 }
 
+function getCampaignBatchProgressPct(campaign: CampaignItem) {
+  const batch = campaign.executionBatch;
+  if (!batch || batch.progress.totalRecipients <= 0) return 0;
+  const completed = batch.progress.sentCount + batch.progress.blockedCount;
+  return Math.max(0, Math.min(Math.round((completed / batch.progress.totalRecipients) * 100), 100));
+}
+
+function getCampaignBatchSourceLabel(sourceMode?: string | null) {
+  if (sourceMode === "DYNAMIC_CRM_FILTER") return "CRM dinâmico";
+  if (sourceMode === "CSV_IMPORT") return "Importação CSV";
+  if (sourceMode === "STATIC_RECIPIENTS") return "Audiência CRM";
+  return "Conjunto";
+}
+
+function getCampaignOperationalReasonLabel(reason?: string | null) {
+  if (!reason) return null;
+  if (reason.includes("lease") || reason.includes("review")) {
+    return "A execução precisa de revisão operacional antes de continuar.";
+  }
+  if (reason.includes("cancel")) return "A execução foi cancelada.";
+  if (reason.includes("pause")) return "A execução foi pausada.";
+  if (reason.includes("blocked")) return "Há destinatários bloqueados pelas regras atuais.";
+  if (reason.includes("provider")) return "O provedor retornou uma falha durante a tentativa.";
+  return "A execução precisa de revisão antes de continuar.";
+}
+
 function getMetaStatusClasses(status: string) {
   switch (status) {
     case "read":
@@ -522,6 +556,15 @@ function getMetaStatusLabel(status: string) {
 }
 
 function getCampaignConfidence(campaign: CampaignItem) {
+  if (campaign.executionQueue?.status === "queued") {
+    return {
+      label: campaign.executionQueue.position
+        ? `Aguardando na fila do tenant — posição ${campaign.executionQueue.position}`
+        : "Aguardando na fila do tenant",
+      icon: "INFO",
+      classes: "campaign-panel-info",
+    };
+  }
   if (campaign.status === "draft") {
     return {
       label: "Rascunho — envio ainda não iniciado",
@@ -569,6 +612,29 @@ function getCampaignConfidence(campaign: CampaignItem) {
     icon: "!",
     classes: "campaign-panel-warning",
   };
+}
+
+function getCampaignQueueLabel(campaign: CampaignItem) {
+  const queue = campaign.executionQueue;
+  if (!queue) return null;
+  if (queue.status === "queued") {
+    return queue.position ? `Fila ${queue.position}` : "Na fila";
+  }
+  if (queue.status === "running") return "Executando";
+  if (queue.status === "needs_review") return "Revisão operacional";
+  if (queue.status === "paused") return "Fila pausada";
+  if (queue.status === "failed") return "Fila com falha";
+  return null;
+}
+
+function getCampaignQueueStatusLabel(status?: string | null, position?: number | null) {
+  if (status === "queued") return position ? `Fila ${position}` : "Na fila";
+  if (status === "running") return "Executando";
+  if (status === "needs_review") return "Revisão operacional";
+  if (status === "paused") return "Fila pausada";
+  if (status === "failed") return "Fila com falha";
+  if (status === "completed") return "Concluída";
+  return status ? getCampaignStatusUxLabel(status) : "-";
 }
 
 function formatCampaignRecipientReference(value: string) {
@@ -693,7 +759,12 @@ export default function AppCampaignsPage() {
   const [audiencePage, setAudiencePage] = useState(1);
   const [loadingAudiencePreview, setLoadingAudiencePreview] = useState(false);
   const [audiencePreviewError, setAudiencePreviewError] = useState<string | null>(null);
+  const [audienceSplitPlan, setAudienceSplitPlan] = useState<AppCampaignAudienceSplitPlan | null>(null);
+  const [audienceSplitRequestId, setAudienceSplitRequestId] = useState<string | null>(null);
+  const [loadingAudienceSplitPlan, setLoadingAudienceSplitPlan] = useState(false);
+  const [creatingAudienceSplitDrafts, setCreatingAudienceSplitDrafts] = useState(false);
   const [campaignReusePreviewState, setCampaignReusePreviewState] = useState<CampaignReusePreviewState>("idle");
+  const csvCreationRequestRef = useRef<{ key: string; id: string } | null>(null);
   const [csvText, setCsvText] = useState("");
   const [csvFileName, setCsvFileName] = useState("");
   const [csvInputKey, setCsvInputKey] = useState(0);
@@ -730,6 +801,7 @@ export default function AppCampaignsPage() {
   const [schedulingDraft, setSchedulingDraft] = useState(false);
   const [pausingCampaign, setPausingCampaign] = useState(false);
   const [resumingCampaign, setResumingCampaign] = useState(false);
+  const [batchAction, setBatchAction] = useState<"pause" | "resume" | "cancel" | null>(null);
   const [testingCampaign, setTestingCampaign] = useState(false);
   const [scheduleInput, setScheduleInput] = useState("");
   const [testRecipientInput, setTestRecipientInput] = useState("");
@@ -934,6 +1006,20 @@ export default function AppCampaignsPage() {
     setCsvPreview(null);
     setCsvPreviewError(null);
   }, [templateVariableLabels]);
+
+  useEffect(() => {
+    setAudienceSplitPlan(null);
+    setAudienceSplitRequestId(null);
+  }, [
+    audienceFilters,
+    audienceRecipientMode,
+    form.name,
+    form.returnDepartmentId,
+    form.returnDestinationType,
+    form.returnFlowId,
+    form.templateId,
+    form.templateVariableMappings,
+  ]);
 
   const selectedReturnDepartment = useMemo(
     () => returnDestinations?.departments.find((item) => item.id === form.returnDepartmentId) ?? null,
@@ -1813,6 +1899,8 @@ export default function AppCampaignsPage() {
       const requestGeneration = audienceRequestGenerationRef.current;
       setLoadingAudiencePreview(true);
       setAudiencePreviewError(null);
+      setAudienceSplitPlan(null);
+      setAudienceSplitRequestId(null);
       setCampaignReusePreviewState("idle");
       try {
         const dynamicPreview = audienceRecipientMode === "DYNAMIC_CRM_FILTER";
@@ -1865,6 +1953,10 @@ export default function AppCampaignsPage() {
     setAudiencePage(1);
     setAudiencePreview(null);
     setAudiencePreviewError(null);
+    setAudienceSplitPlan(null);
+    setAudienceSplitRequestId(null);
+    setLoadingAudienceSplitPlan(false);
+    setCreatingAudienceSplitDrafts(false);
     setLoadingAudiencePreview(false);
     setCampaignReusePreviewState("idle");
     setToast(null);
@@ -2302,6 +2394,129 @@ export default function AppCampaignsPage() {
     }
   };
 
+  const buildAudienceSplitFiltersPayload = (): AppCampaignAudiencePreviewFilter => ({
+    q: audienceRecipientMode === "DYNAMIC_CRM_FILTER" ? "" : audienceFilters.q,
+    status: audienceFilters.status,
+    channel: audienceRecipientMode === "DYNAMIC_CRM_FILTER" || audienceFilters.channel === "all" ? null : audienceFilters.channel,
+    optOut: audienceRecipientMode === "DYNAMIC_CRM_FILTER" || audienceFilters.optOut === "all"
+      ? null
+      : audienceFilters.optOut === "true",
+    hasConversation: audienceRecipientMode === "DYNAMIC_CRM_FILTER" || audienceFilters.hasConversation === "all"
+      ? null
+      : audienceFilters.hasConversation === "true",
+    page: 1,
+    limit: 200,
+  });
+
+  const buildAudienceSplitPayload = () => {
+    const name = form.name.trim() || defaultDraftName;
+    const templateId = form.templateId.trim();
+    if (!templateId) return { ok: false as const, message: "Selecione um modelo aprovado antes de dividir a audiência." };
+    if (templateVariableMappingError) return { ok: false as const, message: templateVariableMappingError };
+    const returnDestination = buildReturnDestinationPayload();
+    if (!returnDestination.ok) return { ok: false as const, message: returnDestination.message };
+    if (audienceRecipientMode === "DYNAMIC_CRM_FILTER" && !audienceFilters.status) {
+      return { ok: false as const, message: "Selecione uma Situação no CRM para converter o filtro dinâmico em rascunhos estáticos." };
+    }
+    return {
+      ok: true as const,
+      value: {
+        name,
+        templateId,
+        splitMode: audienceRecipientMode === "DYNAMIC_CRM_FILTER" ? "DYNAMIC_FILTER_AS_STATIC" as const : "STATIC_FILTER" as const,
+        filters: buildAudienceSplitFiltersPayload(),
+        dynamicFilter: audienceRecipientMode === "DYNAMIC_CRM_FILTER"
+          ? { version: 1 as const, crmBusinessStatusId: audienceFilters.status }
+          : null,
+        returnDestination: returnDestination.value,
+        ...(templateVariableLabels.length > 0
+          ? { templateVariableMappings: buildTemplateVariableMappingsPayload(form.templateVariableMappings) }
+          : {}),
+      },
+    };
+  };
+
+  const handlePreviewAudienceSplit = async () => {
+    if (!session) return;
+    const payload = buildAudienceSplitPayload();
+    if (!payload.ok) {
+      setAudiencePreviewError(payload.message);
+      showToast("error", "Divisão incompleta", payload.message);
+      return;
+    }
+    setLoadingAudienceSplitPlan(true);
+    setAudiencePreviewError(null);
+    setAudienceSplitPlan(null);
+    setAudienceSplitRequestId(null);
+    try {
+      const response = await previewAppCampaignDraftSplit(session, payload.value);
+      setAudienceSplitPlan(response.plan);
+      setAudienceSplitRequestId(globalThis.crypto?.randomUUID?.() ?? `split-${Date.now()}`);
+      showToast(
+        "success",
+        "Divisão preparada",
+        `${response.plan.totalEligible} destinatário(s) em ${response.plan.draftCount} rascunho(s).`
+      );
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const message = getCampaignUserFacingError(typed, "Não foi possível preparar a divisão da audiência.");
+      setAudiencePreviewError(message);
+      showToast("error", "Divisão não preparada", message);
+    } finally {
+      setLoadingAudienceSplitPlan(false);
+    }
+  };
+
+  const handleConfirmAudienceSplit = async () => {
+    if (!session || !audienceSplitPlan || !audienceSplitRequestId) return;
+    const payload = buildAudienceSplitPayload();
+    if (!payload.ok) {
+      setAudiencePreviewError(payload.message);
+      showToast("error", "Divisão incompleta", payload.message);
+      return;
+    }
+    setCreatingAudienceSplitDrafts(true);
+    setAudiencePreviewError(null);
+    try {
+      const response = await createAppCampaignDraftSplit(session, {
+        ...payload.value,
+        audienceSignature: audienceSplitPlan.audienceSignature,
+        requestId: audienceSplitRequestId,
+      });
+      await refreshCampaigns(session, response.campaigns[0]?.id);
+      setActiveTab("drafts");
+      setStatusFilter("draft");
+      setCurrentPage(1);
+      resetCampaignComposer();
+      setAudienceSplitPlan(null);
+      setAudienceSplitRequestId(null);
+      showToast(
+        "success",
+        "Rascunhos criados",
+        `${response.campaigns.length} rascunho(s) criados sem envio automático.`
+      );
+    } catch (err) {
+      const typed = err as { status?: number; message?: string; details?: { plan?: AppCampaignAudienceSplitPlan } };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (typed.status === 409 && typed.details?.plan) {
+        setAudienceSplitPlan(typed.details.plan);
+        setAudienceSplitRequestId(null);
+      }
+      const message = getCampaignUserFacingError(typed, "Não foi possível criar os rascunhos divididos.");
+      setAudiencePreviewError(message);
+      showToast("error", "Rascunhos não criados", message);
+    } finally {
+      setCreatingAudienceSplitDrafts(false);
+    }
+  };
+
   const handleCreateDynamicScheduledCampaign = async () => {
     if (!session) return;
     const name = form.name.trim() || defaultDraftName;
@@ -2338,6 +2553,7 @@ export default function AppCampaignsPage() {
       return;
     }
 
+    if (!window.confirm(`Agendar conjunto dinâmico? Estimativa atual: ${audiencePreview?.summary.total ?? 0} contatos. A audiência e os lotes serão definidos na execução, sem criar filhos agora.`)) return;
     setCreatingDraft(true);
     setAudiencePreviewError(null);
     try {
@@ -2584,23 +2800,38 @@ export default function AppCampaignsPage() {
       showToast("error", "Destino das respostas incompleto", returnDestination.message);
       return;
     }
-    const confirmed = window.confirm("Criar rascunho com os destinatários elegíveis do CSV? Nenhuma mensagem será enviada.");
+    if (!csvPreview) {
+      showToast("warning", "Prévia necessária", "Gere a prévia do CSV antes de confirmar os destinatários.");
+      return;
+    }
+    const eligible = csvPreview.summary.readyToImport;
+    const chunks = Math.ceil(eligible / 1000);
+    const confirmed = window.confirm(chunks > 1
+      ? `Criar conjunto com ${eligible} destinatários em ${chunks} lotes de até 1.000? Nenhuma mensagem será enviada.`
+      : `Criar rascunho com ${eligible} destinatários elegíveis do CSV? Nenhuma mensagem será enviada.`);
     if (!confirmed) return;
 
     setCreatingCsvDraft(true);
     setCsvPreviewError(null);
     try {
+      const creationKey = JSON.stringify({ name, templateId, csvText, mapping: buildCsvMappingPayload(), returnDestination: returnDestination.value });
+      if (csvCreationRequestRef.current?.key !== creationKey) {
+        csvCreationRequestRef.current = { key: creationKey, id: globalThis.crypto.randomUUID() };
+      }
       const created = await createAppCampaignDraftFromCsv(session, {
         name,
         templateId,
         csvText,
+        requestId: csvCreationRequestRef.current.id,
         mapping: buildCsvMappingPayload(),
         returnDestination: returnDestination.value,
       });
-      await refreshCampaigns(session, created.campaign.id);
-      const detail = await getAppCampaign(session, created.campaign.id);
+      const firstCampaign = created.campaign ?? created.campaigns?.[0];
+      if (!firstCampaign) throw new Error("O conjunto não retornou uma campanha para revisão.");
+      await refreshCampaigns(session, firstCampaign.id);
+      const detail = await getAppCampaign(session, firstCampaign.id);
       setSelectedCampaign(detail.campaign);
-      setSelectedCampaignId(created.campaign.id);
+      setSelectedCampaignId(firstCampaign.id);
       setDetailModalOpen(true);
       resetCampaignComposer();
       setStatusFilter("draft");
@@ -2608,7 +2839,7 @@ export default function AppCampaignsPage() {
       setCurrentPage(1);
       showToast(
         "success",
-        "Rascunho CSV criado",
+        created.grouped ? "Conjunto CSV criado" : "Rascunho CSV criado",
         `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.readyToImport} destinatários elegíveis.`
       );
     } catch (err) {
@@ -2669,6 +2900,16 @@ export default function AppCampaignsPage() {
     setSchedulingDraft(true);
     setDetailError(null);
     try {
+      if (selectedCampaign.executionBatch) {
+        await scheduleAppCampaignBatch(session, selectedCampaign.executionBatch.id, scheduledAt.toISOString());
+        const detail = await getAppCampaign(session, selectedCampaign.id);
+        setSelectedCampaign(detail.campaign);
+        await refreshCampaigns(session, selectedCampaign.id);
+        setActiveTab("scheduled");
+        setStatusFilter("scheduled");
+        showToast("success", "Conjunto agendado", "Todos os lotes foram agendados para execução sequencial.");
+        return;
+      }
       const response = await scheduleAppCampaignDraft(session, selectedCampaign.id, scheduledAt.toISOString());
       setSelectedCampaign(response.campaign);
       await refreshCampaigns(session, response.campaign.id);
@@ -2734,6 +2975,48 @@ export default function AppCampaignsPage() {
       showToast("error", "Retomada não concluída", message);
     } finally {
       setResumingCampaign(false);
+    }
+  };
+
+  const handleCampaignBatchAction = async (action: "pause" | "resume" | "cancel") => {
+    if (!session || !selectedCampaign?.executionBatch) return;
+    if (action === "cancel" && !window.confirm("Tem certeza que deseja cancelar este conjunto de campanhas?")) return;
+    setBatchAction(action);
+    setDetailError(null);
+    const batchId = selectedCampaign.executionBatch.id;
+    try {
+      if (action === "pause") {
+        await pauseAppCampaignBatch(session, batchId);
+      } else if (action === "resume") {
+        await resumeAppCampaignBatch(session, batchId);
+      } else {
+        await cancelAppCampaignBatch(session, batchId);
+      }
+      const refreshed = await getAppCampaign(session, selectedCampaign.id);
+      setSelectedCampaign(refreshed.campaign);
+      await refreshCampaigns(session, selectedCampaign.id);
+      const title =
+        action === "pause"
+          ? "Conjunto pausado"
+          : action === "resume"
+            ? "Conjunto retomado"
+            : "Conjunto cancelado";
+      const description =
+        action === "cancel"
+          ? "Lotes pendentes foram cancelados; chamadas em andamento permanecem sob revisão operacional."
+          : "A fila sequencial do tenant foi atualizada para todos os lotes aplicáveis.";
+      showToast("success", title, description);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const message = getCampaignUserFacingError(typed, "Não foi possível atualizar o conjunto.");
+      setDetailError(message);
+      showToast("error", "Ação do conjunto não concluída", message);
+    } finally {
+      setBatchAction(null);
     }
   };
 
@@ -3172,8 +3455,52 @@ export default function AppCampaignsPage() {
                         : "Criar rascunho com audiência"}
                   </button>
                 </div>
-              </div>
-              <div className="overflow-x-auto rounded-md border border-white/10">
+	              </div>
+	              {audiencePreview.summary.total > 1000 ? (
+	                <div className="rounded-md border border-amber-300/25 bg-amber-950/20 p-3 text-sm text-amber-50">
+	                  <div className="flex flex-wrap items-start justify-between gap-3">
+	                    <div className="grid gap-1">
+	                      <p className="font-semibold">Audiência acima de 1.000 destinatários</p>
+	                      <p className="text-xs text-amber-100/80">
+	                        O rascunho atual usa apenas a prévia carregada. Para incluir todos os elegíveis do filtro, prepare a divisão em rascunhos numerados de até 1.000 destinatários.
+	                      </p>
+	                      {audienceRecipientMode === "DYNAMIC_CRM_FILTER" ? (
+	                        <p className="text-xs text-amber-100/80">
+	                          A divisão converte o filtro dinâmico em seleção estática neste momento. Novos contatos futuros não entram automaticamente nesses rascunhos.
+	                        </p>
+	                      ) : null}
+	                    </div>
+	                    <button
+	                      type="button"
+	                      onClick={handlePreviewAudienceSplit}
+	                      disabled={loadingAudienceSplitPlan || creatingAudienceSplitDrafts || campaignReusePreviewState === "loading"}
+	                      className="rounded-md border border-amber-200/40 px-3 py-2 text-xs font-semibold text-amber-50 hover:bg-amber-200/10 disabled:cursor-not-allowed disabled:opacity-50"
+	                    >
+	                      {loadingAudienceSplitPlan ? "Calculando..." : "Preparar divisão"}
+	                    </button>
+	                  </div>
+	                  {audienceSplitPlan ? (
+	                    <div className="mt-3 rounded-md border border-amber-200/25 bg-black/10 p-3">
+	                      <p className="text-xs text-amber-100/80">Confirme antes de criar. Nenhuma mensagem será enviada ou agendada.</p>
+	                      <p className="mt-1 font-semibold">
+	                        {audienceSplitPlan.totalEligible} destinatário(s) elegível(is) em {audienceSplitPlan.draftCount} rascunho(s).
+	                      </p>
+	                      <p className="mt-1 text-xs text-amber-100/80">
+	                        Distribuição: {audienceSplitPlan.chunkSizes.join(" / ")}
+	                      </p>
+	                      <button
+	                        type="button"
+	                        onClick={handleConfirmAudienceSplit}
+	                        disabled={creatingAudienceSplitDrafts || loadingAudienceSplitPlan || !audienceSplitRequestId}
+	                        className="mt-3 rounded-md bg-re7-orange px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+	                      >
+	                        {creatingAudienceSplitDrafts ? "Criando..." : `Criar ${audienceSplitPlan.draftCount} rascunho(s)`}
+	                      </button>
+	                    </div>
+	                  ) : null}
+	                </div>
+	              ) : null}
+	              <div className="overflow-x-auto rounded-md border border-white/10">
                 <table className="w-full min-w-[860px] text-sm">
                   <thead className="bg-white/10 text-left">
                     <tr>
@@ -3808,6 +4135,7 @@ export default function AppCampaignsPage() {
                 {paginatedCampaigns.map((campaign) => {
                   const isSelected = campaign.id === selectedCampaignId;
                   const isSending = campaign.status === "sending";
+                  const queueLabel = getCampaignQueueLabel(campaign);
                   const isDynamicCampaign =
                     campaign.selectionMode === "DYNAMIC_CRM_FILTER" ||
                     campaign.draftSeed?.selectionMode === "DYNAMIC_CRM_FILTER";
@@ -3842,7 +4170,22 @@ export default function AppCampaignsPage() {
                                 Dinâmica
                               </span>
                             ) : null}
+                            {queueLabel ? (
+                              <span className="rounded-full border border-sky-300/30 bg-sky-500/15 px-2 py-0.5 text-[11px] font-semibold text-sky-100">
+                                {queueLabel}
+                              </span>
+                            ) : null}
+                            {campaign.executionQueue?.chunkIndex && campaign.executionQueue.chunkCount ? (
+                              <span className="rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/80">
+                                Lote {campaign.executionQueue.chunkIndex}/{campaign.executionQueue.chunkCount}
+                              </span>
+                            ) : null}
                           </div>
+                          {campaign.executionQueue?.status === "needs_review" && campaign.executionQueue.failureReason ? (
+                            <p className="mt-1 text-xs text-amber-100">
+                              Bloqueio: {campaign.executionQueue.failureReason}
+                            </p>
+                          ) : null}
                           <p className="mt-1 text-xs text-white/55">{formatDateTime(campaign.updatedAt)}</p>
                         </div>
                       </td>
@@ -4005,7 +4348,173 @@ export default function AppCampaignsPage() {
                     <p className="font-semibold">{getCampaignConfidence(selectedCampaign).icon} {getCampaignConfidence(selectedCampaign).label}</p>
                   </div>
 
-                  {selectedCampaign.draftSeed?.selectionMode === "DYNAMIC_CRM_FILTER" ? (
+	                  {selectedCampaign.executionQueue ? (
+	                    <div className="grid gap-3 rounded-md border border-sky-300/25 bg-sky-950/20 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-sky-100">Fila sequencial do tenant</p>
+                          <p className="mt-1 text-xs text-sky-100/75">
+                            Este tenant executa somente uma campanha ou lote por vez. Outros tenants seguem independentes.
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-sky-300/30 bg-sky-500/15 px-2.5 py-1 text-xs font-semibold text-sky-100">
+                          {getCampaignQueueLabel(selectedCampaign) ?? selectedCampaign.executionQueue.status}
+                        </span>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-4">
+                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
+                          <p className="text-xs text-white/60">Horário solicitado</p>
+                          <p className="font-semibold">{formatDateTime(selectedCampaign.executionQueue.requestedAt)}</p>
+                        </div>
+                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
+                          <p className="text-xs text-white/60">Pode executar a partir de</p>
+                          <p className="font-semibold">{formatDateTime(selectedCampaign.executionQueue.eligibleAt)}</p>
+                        </div>
+                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
+                          <p className="text-xs text-white/60">Início efetivo</p>
+                          <p className="font-semibold">
+                            {selectedCampaign.executionQueue.startedAt ? formatDateTime(selectedCampaign.executionQueue.startedAt) : "Aguardando"}
+                          </p>
+                        </div>
+                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
+                          <p className="text-xs text-white/60">Grupo / lote</p>
+                          <p className="font-semibold">
+                            {selectedCampaign.executionQueue.chunkIndex && selectedCampaign.executionQueue.chunkCount
+                              ? `${selectedCampaign.executionQueue.chunkIndex}/${selectedCampaign.executionQueue.chunkCount}`
+                              : "Campanha avulsa"}
+                          </p>
+                        </div>
+                      </div>
+	                    </div>
+	                  ) : null}
+
+	                  {selectedCampaign.executionBatch ? (
+	                    <div className="grid gap-3 rounded-md border border-cyan-300/25 bg-cyan-950/20 p-3">
+	                      <div className="flex flex-wrap items-start justify-between gap-3">
+	                        <div>
+	                          <p className="text-sm font-semibold text-cyan-100">Conjunto de campanhas</p>
+	                          <p className="mt-1 text-xs text-cyan-100/75">
+	                            {getCampaignBatchSourceLabel(selectedCampaign.executionBatch.sourceMode)} dividido em lotes numerados. A fila do tenant executa um lote por vez.
+	                          </p>
+	                        </div>
+		                        <div className="flex flex-wrap gap-2">
+		                          <span className="rounded-full border border-cyan-300/30 bg-cyan-500/15 px-2.5 py-1 text-xs font-semibold text-cyan-100">
+		                            {selectedCampaign.executionBatch.name}
+		                          </span>
+		                          <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-xs font-semibold text-white/80">
+		                            {selectedCampaign.executionBatch.chunkCount} lote(s)
+		                          </span>
+		                        </div>
+		                      </div>
+		                      <div className="flex flex-wrap items-center gap-2">
+		                        {selectedCampaign.executionBatch.status !== "paused" &&
+		                        selectedCampaign.executionBatch.status !== "cancelled" &&
+		                        selectedCampaign.executionBatch.progress.completedChunks < selectedCampaign.executionBatch.chunkCount ? (
+		                          <button
+		                            type="button"
+		                            onClick={() => void handleCampaignBatchAction("pause")}
+		                            disabled={batchAction !== null}
+		                            className="rounded-md border border-cyan-200/30 bg-cyan-500/15 px-3 py-2 text-xs font-semibold text-cyan-50 hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+		                          >
+		                            {batchAction === "pause" ? "Pausando..." : "Pausar conjunto"}
+		                          </button>
+		                        ) : null}
+		                        {selectedCampaign.executionBatch.status === "paused" ? (
+		                          <button
+		                            type="button"
+		                            onClick={() => void handleCampaignBatchAction("resume")}
+		                            disabled={batchAction !== null}
+		                            className="rounded-md border border-emerald-200/30 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-50 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+		                          >
+		                            {batchAction === "resume" ? "Retomando..." : "Retomar conjunto"}
+		                          </button>
+		                        ) : null}
+		                        {selectedCampaign.executionBatch.status !== "cancelled" &&
+		                        selectedCampaign.executionBatch.progress.completedChunks < selectedCampaign.executionBatch.chunkCount ? (
+		                          <button
+		                            type="button"
+		                            onClick={() => void handleCampaignBatchAction("cancel")}
+		                            disabled={batchAction !== null}
+		                            className="rounded-md border border-red-200/30 bg-red-500/15 px-3 py-2 text-xs font-semibold text-red-50 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+		                          >
+		                            {batchAction === "cancel" ? "Cancelando..." : "Cancelar conjunto"}
+		                          </button>
+		                        ) : null}
+		                      </div>
+		                      <div className="grid gap-2 sm:grid-cols-4">
+	                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
+	                          <p className="text-xs text-white/60">Destinatários do conjunto</p>
+	                          <p className="font-semibold">{selectedCampaign.executionBatch.progress.totalRecipients}</p>
+	                        </div>
+	                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
+	                          <p className="text-xs text-white/60">Processados</p>
+	                          <p className="font-semibold">{selectedCampaign.executionBatch.progress.sentCount}</p>
+	                        </div>
+	                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
+	                          <p className="text-xs text-white/60">Bloqueados</p>
+	                          <p className="font-semibold">{selectedCampaign.executionBatch.progress.blockedCount}</p>
+	                        </div>
+	                        <div className="rounded-md border border-white/10 bg-white/5 p-2">
+	                          <p className="text-xs text-white/60">Lotes concluídos</p>
+	                          <p className="font-semibold">
+	                            {selectedCampaign.executionBatch.progress.completedChunks}/{selectedCampaign.executionBatch.chunkCount}
+	                          </p>
+	                        </div>
+	                      </div>
+	                      <div>
+	                        <div className="flex flex-wrap items-center justify-between gap-3">
+	                          <p className="text-xs uppercase tracking-wide text-white/60">Progresso do conjunto</p>
+	                          <p className="text-sm font-semibold">{getCampaignBatchProgressPct(selectedCampaign)}%</p>
+	                        </div>
+	                        <div className="mt-2 h-3 overflow-hidden rounded-full bg-white/10">
+	                          <div
+	                            className="h-full rounded-full bg-cyan-300 transition-all duration-300"
+	                            style={{ width: `${getCampaignBatchProgressPct(selectedCampaign)}%` }}
+	                          />
+	                        </div>
+	                      </div>
+	                      {selectedCampaign.executionBatch.failureReason ? (
+	                        <p className="rounded-md border border-amber-300/25 bg-amber-900/20 p-2 text-xs text-amber-100">
+	                          {getCampaignOperationalReasonLabel(selectedCampaign.executionBatch.failureReason)}
+	                        </p>
+	                      ) : null}
+	                      <div className="overflow-auto rounded-md border border-white/10">
+	                        <table className="w-full min-w-[720px] text-sm">
+	                          <thead className="bg-white/10 text-left text-xs uppercase tracking-wide text-white/60">
+	                            <tr>
+	                              <th className="px-3 py-2">Lote</th>
+	                              <th className="px-3 py-2">Nome</th>
+	                              <th className="px-3 py-2">Estado</th>
+	                              <th className="px-3 py-2">Fila</th>
+	                              <th className="px-3 py-2">Destinatários</th>
+	                              <th className="px-3 py-2">Início efetivo</th>
+	                            </tr>
+	                          </thead>
+	                          <tbody>
+	                            {selectedCampaign.executionBatch.chunks.map((chunk) => (
+	                              <tr key={chunk.campaignId} className="border-t border-white/10">
+	                                <td className="px-3 py-2 font-semibold">
+	                                  {chunk.chunkIndex}/{selectedCampaign.executionBatch?.chunkCount ?? chunk.chunkIndex}
+	                                </td>
+	                                <td className="px-3 py-2">{chunk.name}</td>
+	                                <td className="px-3 py-2">{getStatusLabel(chunk.status)}</td>
+	                                <td className="px-3 py-2">
+	                                  {getCampaignQueueStatusLabel(chunk.queueStatus, chunk.queuePosition)}
+	                                </td>
+	                                <td className="px-3 py-2">{chunk.totalRecipients || chunk.recipientCount}</td>
+	                                <td className="px-3 py-2">{chunk.startedAt ? formatDateTime(chunk.startedAt) : "Aguardando"}</td>
+	                              </tr>
+	                            ))}
+	                          </tbody>
+	                        </table>
+	                      </div>
+		                      <p className="text-xs text-cyan-100/75">
+		                        As ações acima atuam no conjunto. Ações individuais abaixo continuam restritas ao lote selecionado. Testes unitários usam a mesma exclusividade e não entram na fila.
+		                      </p>
+	                    </div>
+	                  ) : null}
+
+	                  {selectedCampaign.draftSeed?.selectionMode === "DYNAMIC_CRM_FILTER" ? (
                     <div className="grid gap-3 rounded-md border border-emerald-300/25 bg-emerald-950/20 p-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
@@ -4069,11 +4578,11 @@ export default function AppCampaignsPage() {
                             onClick={handleScheduleDraftCampaign}
                             className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {schedulingDraft ? "Agendando..." : "Agendar"}
+                            {schedulingDraft ? "Agendando..." : selectedCampaign.executionBatch ? "Agendar conjunto" : "Agendar"}
                           </button>
                           <button
                             type="button"
-                            disabled={discardingDraft || sendingDraft}
+                            disabled={discardingDraft || sendingDraft || Boolean(selectedCampaign.executionBatch)}
                             onClick={handleDiscardDraft}
                             className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                           >
@@ -4081,7 +4590,7 @@ export default function AppCampaignsPage() {
                           </button>
                           <button
                             type="button"
-                            disabled={sendingDraft || discardingDraft}
+                            disabled={sendingDraft || discardingDraft || Boolean(selectedCampaign.executionBatch)}
                             onClick={handleSendDraftCampaign}
                             className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                           >

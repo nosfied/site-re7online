@@ -576,6 +576,7 @@ export async function buildCrmContactsPayload(
     now?: Date;
     includeAnonymized?: boolean;
     includeCampaignRelationships?: boolean;
+    audienceAnalysisLimit?: number;
   }
 ): Promise<CrmContactsPayload> {
   const q = normalizeOptionalText(params.query.q);
@@ -587,7 +588,7 @@ export async function buildCrmContactsPayload(
   const updatedFromDate = parseDateFilter(params.query.updatedFrom);
   const updatedToDate = parseDateFilter(params.query.updatedTo);
   const page = normalizePage(params.query.page);
-  const limit = normalizeLimit(params.query.limit);
+  const limit = params.audienceAnalysisLimit ? Math.min(5000, Math.max(1, params.audienceAnalysisLimit)) : normalizeLimit(params.query.limit);
   const statusLabelById = buildStatusLabelMap(params.statuses);
   const includeAnonymized = params.includeAnonymized === true;
   const requiresPostFilter = true;
@@ -601,7 +602,7 @@ export async function buildCrmContactsPayload(
     updatedTo: updatedToDate,
   });
 
-  const candidateTake =
+  const candidateTake = params.audienceAnalysisLimit ? limit :
     requiresPostFilter
       ? Math.min(MAX_LIMIT * 20, Math.max(limit * page * 4, limit))
       : limit;
@@ -674,26 +675,23 @@ export async function buildCrmContactsPayload(
   const contactIdentityIds = leads
     .map((lead) => lead.contactChannelIdentityId)
     .filter((value): value is string => Boolean(value));
-  const contactWhere = {
+  // Each identity may expand into several aliases and hashes. Bound the OR
+  // predicates so large campaign audiences stay below PostgreSQL's bind limit.
+  const contactWheres = Array.from({ length: Math.max(1, Math.ceil(Math.max(identityKeys.length, identityHashes.length) / 1000)) }, (_, index) => ({
     clientId: params.clientId,
     OR: [
-      { waId: { in: identityKeys } },
-      { externalUserRef: { in: identityKeys } },
-      { legacyWaId: { in: identityKeys } },
-      { externalUserHash: { in: identityHashes } },
+      { waId: { in: identityKeys.slice(index * 1000, (index + 1) * 1000) } },
+      { externalUserRef: { in: identityKeys.slice(index * 1000, (index + 1) * 1000) } },
+      { legacyWaId: { in: identityKeys.slice(index * 1000, (index + 1) * 1000) } },
+      { externalUserHash: { in: identityHashes.slice(index * 1000, (index + 1) * 1000) } },
     ],
-  };
-  const conversationWhere = {
-    clientId: params.clientId,
-    deletedAt: null,
-    anonymizedAt: null,
-    OR: [{ waId: { in: identityKeys } }, { waIdCanonical: { in: identityKeys } }],
-  };
+  }));
+  const identityKeyChunks = Array.from({ length: Math.max(1, Math.ceil(identityKeys.length / 1000)) }, (_, index) => identityKeys.slice(index * 1000, (index + 1) * 1000));
 
   const [contacts, identities, conversations, runtimeStates, optOutEvents, importEvents, operationallyExcludedWaIds] =
     await Promise.all([
-      prisma.contact.findMany({
-        where: contactWhere,
+      Promise.all(contactWheres.map((where) => prisma.contact.findMany({
+        where,
         select: {
           id: true,
           waId: true,
@@ -707,14 +705,14 @@ export async function buildCrmContactsPayload(
           lifecycle: true,
           updatedAt: true,
         },
-      }),
+      }))).then((groups) => Array.from(new Map(groups.flat().map((contact) => [contact.id, contact])).values())),
       contactIdentityIds.length > 0 || identityHashes.length > 0
-        ? prisma.contactChannelIdentity.findMany({
+        ? Promise.all(Array.from({ length: Math.max(1, Math.ceil(Math.max(contactIdentityIds.length, identityHashes.length) / 1000)) }, (_, index) => prisma.contactChannelIdentity.findMany({
             where: {
               clientId: params.clientId,
               OR: [
-                { id: { in: contactIdentityIds } },
-                ...(identityHashes.length > 0 ? [{ externalUserHash: { in: identityHashes } }] : []),
+                { id: { in: contactIdentityIds.slice(index * 1000, (index + 1) * 1000) } },
+                ...(identityHashes.length > 0 ? [{ externalUserHash: { in: identityHashes.slice(index * 1000, (index + 1) * 1000) } }] : []),
               ],
             },
             select: {
@@ -744,10 +742,10 @@ export async function buildCrmContactsPayload(
                 },
               },
             },
-          })
+          }))).then((groups) => Array.from(new Map(groups.flat().map((identity) => [identity.id, identity])).values()))
         : Promise.resolve([]),
-      prisma.conversation.findMany({
-        where: conversationWhere,
+      Promise.all(identityKeyChunks.map((keys) => prisma.conversation.findMany({
+        where: { clientId: params.clientId, deletedAt: null, anonymizedAt: null, OR: [{ waId: { in: keys } }, { waIdCanonical: { in: keys } }] },
         orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
         select: {
           id: true,
@@ -758,11 +756,11 @@ export async function buildCrmContactsPayload(
           createdAt: true,
           updatedAt: true,
         },
-      }),
-      prisma.conversationRuntimeState.findMany({
+      }))).then((groups) => Array.from(new Map(groups.flat().map((conversation) => [conversation.id, conversation])).values()).sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime() || b.createdAt.getTime() - a.createdAt.getTime())),
+      Promise.all(identityKeyChunks.map((keys) => prisma.conversationRuntimeState.findMany({
         where: {
           clientId: params.clientId,
-          OR: [{ waId: { in: identityKeys } }, { waIdCanonical: { in: identityKeys } }],
+          OR: [{ waId: { in: keys } }, { waIdCanonical: { in: keys } }],
         },
         select: {
           id: true,
@@ -780,7 +778,7 @@ export async function buildCrmContactsPayload(
           answers: true,
           updatedAt: true,
         },
-      }),
+      }))).then((groups) => Array.from(new Map(groups.flat().map((runtime) => [runtime.id, runtime])).values())),
       prisma.event.findMany({
         where: {
           clientId: params.clientId,
