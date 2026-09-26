@@ -911,3 +911,10 @@ para eventual decisao de implantacao, fora do escopo local autorizado.
   HA, fences de producao, entrega real ou rollback com processamento ativo.
   Owner UI e aceite CRA continuam pendentes; NOT DEPLOYED. Divergencia
   DELIVERED/READ → HUMAN/WAITING separada; 6683 CLOSED.
+
+
+### Preflight do alvo — 2026-09-26 (somente leitura)
+
+Produção permanece em `5ee2de6b`; candidato `2ecfc91a` **NOT DEPLOYED / OWNER UI PENDING**. [Procedimento, evidências e limites do preflight](saas/CAMPAIGN_TARGET_PREFLIGHT_2026-09-26.md): 59 migrations concluídas/checksums compatíveis; seis tentativas históricas revertidas, sem falha aberta; 16 objetos de drift iguais ao inventário. Nenhuma migration executada. API e worker compartilham papel superuser/owner: REVOKE do ensaio não é fence válido no alvo. Zero campanhas ativas/agendadas e zero sinais consultados de submissão incerta; fotografia não substitui drain na janela. Backup existente íntegro, 42 GiB livres, retenção histórica com erro de permissão e offsite pendente.
+
+Proposta para aprovação: janela de 30–60 min com API parada para excluir runner antigo; Inbox/CRM/realtime/webhooks afetados, worker/sessões preservados com integrações degradadas. Rollback comprovável mantém API antiga parada e pode estender indisponibilidade; rollback seletivo funcional ainda não comprovado. Portas diretas/firewall, quiescência de test-send e backup fresco são condições de entrada. Nenhuma configuração, dado ou processo remoto alterado; testes locais não repetidos. Owner PASS anterior preservado; CRA pendente, 6683 CLOSED e DELIVERED/READ → HUMAN/WAITING separados.
